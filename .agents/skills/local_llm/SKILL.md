@@ -1,6 +1,6 @@
 ---
 name: Local LLM
-description: Ability to offload coding and analysis tasks to a local LLM (Ollama)
+description: Ability to offload coding and analysis tasks to a local LLM (Ollama). Only use when explictly requested via the Antigravity IDE. OpenCoder calls Ollama directly when needed.
 ---
 
 # Local LLM Skill
@@ -25,3 +25,4 @@ python scripts/ask-local.py "<prompt>"
 1. **Privacy**: Use this skill when the user explicitly requests local execution for privacy-sensitive code.
 2. **Performance**: Use this skill for heavy-duty text transformations or code generation that doesn't require Gemini's multi-file context but benefits from the 4080's speed.
 3. **Hybrid Flow**: Always report the output of the local model back to the user or use it to inform your next steps in the Antigravity interface.
+4. **Antigravity IDE**: OpenCoder calls Ollama directly when needed. You do not need to use this skill in OpenCoder
