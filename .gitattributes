@@ -1,0 +1,25 @@
+# Set default behavior to handle line endings automatically.
+* text=auto
+
+# Force LF line endings for files that should always be LF (especially for Linux containers)
+*.sh text eol=lf
+*.bash text eol=lf
+.devcontainer/* text eol=lf
+Dockerfile text eol=lf
+docker-compose.yml text eol=lf
+.gitignore text eol=lf
+.gitattributes text eol=lf
+
+# Denotate all files that are truly binary and should not be modified.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.mov binary
+*.mp4 binary
+*.mp3 binary
+*.flac binary
+*.zip binary
+*.gz binary
+*.7z binary
