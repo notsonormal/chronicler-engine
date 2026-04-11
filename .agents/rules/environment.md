@@ -7,6 +7,7 @@ trigger: always_on
 ## Devcontainer Environment
 This project is configured to run inside a **Linux-based devcontainer**. 
 
+
 ## Access Restrictions
 - **Workspace Scoping**: Agents and users are restricted to the `/workspaces` directory. Access to the host system is not permitted.
 - **Privileges**: The current shell does not have root access. Attempts to read sensitive system files (e.g., `/etc/shadow`) or access `/root` will result in `Permission denied`.

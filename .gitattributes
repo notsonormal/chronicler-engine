@@ -1,5 +1,5 @@
-# Set default behavior to handle line endings automatically.
-* text=auto
+# Set default behavior to force LF line endings.
+* text eol=lf
 
 # Force LF line endings for files that should always be LF (especially for Linux containers)
 *.sh text eol=lf
