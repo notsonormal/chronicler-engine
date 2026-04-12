@@ -1,6 +1,6 @@
-use crate::model::state::GameState;
-use crate::model::map::Room;
 use crate::error::{EngineError, Result};
+use crate::model::map::Room;
+use crate::model::state::GameState;
 
 pub fn get_room_by_id<'a>(state: &'a GameState, target_id: &str) -> Option<&'a Room> {
     for region in &state.map.overworld.regions {
@@ -13,14 +13,13 @@ pub fn get_room_by_id<'a>(state: &'a GameState, target_id: &str) -> Option<&'a R
     None
 }
 
-pub fn get_current_room(state: &GameState) -> &Room {
-    get_room_by_id(state, &state.current_room_id).unwrap_or_else(|| {
-        panic!("Current room {} not found in map!", state.current_room_id)
-    })
+pub fn get_current_room(state: &GameState) -> Result<&Room> {
+    get_room_by_id(state, &state.current_room_id)
+        .ok_or_else(|| EngineError::RoomNotFound(state.current_room_id.clone()))
 }
 
 pub fn attempt_walk(state: &mut GameState, target: &str) -> Result<String> {
-    let current_room = get_current_room(&state);
+    let current_room = get_current_room(state)?;
     let target_lower = target.to_lowercase();
     let mut found_dest: Option<String> = None;
 
@@ -33,11 +32,11 @@ pub fn attempt_walk(state: &mut GameState, target: &str) -> Result<String> {
         }
 
         // 2. Check if they typed the semantic room name (e.g. "kitchen")
-        if let Some(dest_room) = get_room_by_id(state, room_id) {
-            if dest_room.name.to_lowercase().contains(&target_lower) {
-                found_dest = Some(room_id.clone());
-                break;
-            }
+        if let Some(dest_room) = get_room_by_id(state, room_id)
+            && dest_room.name.to_lowercase().contains(&target_lower)
+        {
+            found_dest = Some(room_id.clone());
+            break;
         }
     }
 
@@ -45,7 +44,9 @@ pub fn attempt_walk(state: &mut GameState, target: &str) -> Result<String> {
         state.current_room_id = next_room_id;
         Ok(format!("You walk to: {}.", target))
     } else {
-        Err(EngineError::Navigation("You don't see a way to go there.".to_string()))
+        Err(EngineError::Navigation(
+            "You don't see a way to go there.".to_string(),
+        ))
     }
 }
 
@@ -54,8 +55,8 @@ mod tests {
     use super::*;
     use crate::model::character::{CharacterSheet, PlayerCard};
     use crate::model::map::{Direction, MapDef, Overworld, Region, Room};
-    use crate::model::world::WorldCard;
     use crate::model::state::GameState;
+    use crate::model::world::WorldCard;
     use std::collections::HashMap;
     use std::sync::Arc;
 
@@ -135,7 +136,7 @@ mod tests {
             Arc::new(map),
             Arc::new(player),
             vec![],
-            "room1".to_string()
+            "room1".to_string(),
         )
     }
 
@@ -183,9 +184,10 @@ mod tests {
         let mut state = setup_test_state();
         // Manually introduce a dangling exit
         let mut room = state.map.overworld.regions[0].rooms[0].clone();
-        room.exits.insert(Direction::South, "non_existent_id".to_string());
-        
-        // This is a bit tricky since the map is in an Arc. 
+        room.exits
+            .insert(Direction::South, "non_existent_id".to_string());
+
+        // This is a bit tricky since the map is in an Arc.
         // For testing purposes, we test get_room_by_id logic directly on the bad ID.
         let res = get_room_by_id(&state, "non_existent_id");
         assert!(res.is_none());

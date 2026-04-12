@@ -212,3 +212,5 @@ docker/*_data/
 logs/
 /.opencode/index
 /chronicler_engine/sillytavern
+/.opencode/share
+/.opencode/data

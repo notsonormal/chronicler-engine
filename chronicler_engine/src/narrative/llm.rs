@@ -1,3 +1,4 @@
+use crate::error::EngineError;
 use crate::model::character::{NpcCard, PlayerCard};
 use crate::model::map::Room;
 use crate::model::world::WorldCard;
@@ -10,7 +11,7 @@ pub trait LlmBackend {
         room: &Room,
         npc: &NpcCard,
         user_message: &Option<String>,
-    ) -> String;
+    ) -> Result<String, EngineError>;
 
     fn narrate_action(
         &self,
@@ -19,7 +20,7 @@ pub trait LlmBackend {
         nearby_npcs: &[&NpcCard],
         player: &PlayerCard,
         player_input: &str,
-    ) -> String;
+    ) -> Result<String, EngineError>;
 
     fn narrate_arrival(
         &self,
@@ -27,7 +28,7 @@ pub trait LlmBackend {
         room: &Room,
         nearby_npcs: &[&NpcCard],
         player: &PlayerCard,
-    ) -> String;
+    ) -> Result<String, EngineError>;
 }
 
 #[derive(Clone, Copy)]
@@ -40,10 +41,11 @@ impl LlmBackend for OpenRouterBackend {
         room: &Room,
         npc: &NpcCard,
         user_message: &Option<String>,
-    ) -> String {
+    ) -> Result<String, EngineError> {
         let (system_prompt, user_text) = build_dialogue_prompts(world, room, npc, user_message);
-        let api_key = std::env::var("OPENROUTER_API_KEY").expect("OPENROUTER_API_KEY must be set");
-        call_openrouter(&api_key, &system_prompt, &user_text)
+        let api_key = std::env::var("OPENROUTER_API_KEY")
+            .map_err(|_| EngineError::Config("OPENROUTER_API_KEY not set".into()))?;
+        Ok(call_openrouter(&api_key, &system_prompt, &user_text))
     }
 
     fn narrate_action(
@@ -53,10 +55,12 @@ impl LlmBackend for OpenRouterBackend {
         nearby_npcs: &[&NpcCard],
         player: &PlayerCard,
         player_input: &str,
-    ) -> String {
-        let (system_prompt, user_text) = build_action_prompts(world, room, nearby_npcs, player, player_input);
-        let api_key = std::env::var("OPENROUTER_API_KEY").expect("OPENROUTER_API_KEY must be set");
-        call_openrouter(&api_key, &system_prompt, &user_text)
+    ) -> Result<String, EngineError> {
+        let (system_prompt, user_text) =
+            build_action_prompts(world, room, nearby_npcs, player, player_input);
+        let api_key = std::env::var("OPENROUTER_API_KEY")
+            .map_err(|_| EngineError::Config("OPENROUTER_API_KEY not set".into()))?;
+        Ok(call_openrouter(&api_key, &system_prompt, &user_text))
     }
 
     fn narrate_arrival(
@@ -65,10 +69,11 @@ impl LlmBackend for OpenRouterBackend {
         room: &Room,
         nearby_npcs: &[&NpcCard],
         player: &PlayerCard,
-    ) -> String {
+    ) -> Result<String, EngineError> {
         let (system_prompt, user_text) = build_arrival_prompts(world, room, nearby_npcs, player);
-        let api_key = std::env::var("OPENROUTER_API_KEY").expect("OPENROUTER_API_KEY must be set");
-        call_openrouter(&api_key, &system_prompt, &user_text)
+        let api_key = std::env::var("OPENROUTER_API_KEY")
+            .map_err(|_| EngineError::Config("OPENROUTER_API_KEY not set".into()))?;
+        Ok(call_openrouter(&api_key, &system_prompt, &user_text))
     }
 }
 
@@ -224,18 +229,15 @@ fn call_openrouter(api_key: &str, system_prompt: &str, user_text: &str) -> Strin
 
     match res {
         Ok(response) => {
-            if response.status().is_success() {
-                if let Ok(json_response) = response.json::<serde_json::Value>() {
-                    if let Some(content) =
-                        json_response["choices"][0]["message"]["content"].as_str()
-                    {
-                        return content.to_string();
-                    }
-                }
-                "The world seems to hold its breath (parse error).".to_string()
-            } else {
-                format!("Error communicating with OpenRouter: {}", response.status())
+            if !response.status().is_success() {
+                return format!("Error communicating with OpenRouter: {}", response.status());
             }
+            if let Ok(json_response) = response.json::<serde_json::Value>()
+                && let Some(content) = json_response["choices"][0]["message"]["content"].as_str()
+            {
+                return content.to_string();
+            }
+            "The world seems to hold its breath (parse error).".to_string()
         }
         Err(e) => format!("Request failed: {}", e),
     }
@@ -250,11 +252,11 @@ impl LlmBackend for MockBackend {
         _room: &Room,
         _npc: &NpcCard,
         user_message: &Option<String>,
-    ) -> String {
-        match user_message {
+    ) -> Result<String, EngineError> {
+        Ok(match user_message {
             Some(msg) => format!("[MockGenerated] Replying to: {}", msg),
             None => "[MockGenerated] Standard greeting.".to_string(),
-        }
+        })
     }
 
     fn narrate_action(
@@ -264,8 +266,8 @@ impl LlmBackend for MockBackend {
         _nearby_npcs: &[&NpcCard],
         _player: &PlayerCard,
         player_input: &str,
-    ) -> String {
-        format!("[MockNarration] {}", player_input)
+    ) -> Result<String, EngineError> {
+        Ok(format!("[MockNarration] {}", player_input))
     }
 
     fn narrate_arrival(
@@ -274,8 +276,8 @@ impl LlmBackend for MockBackend {
         room: &Room,
         _nearby_npcs: &[&NpcCard],
         _player: &PlayerCard,
-    ) -> String {
-        format!("[MockArrival] You enter the {}.", room.name)
+    ) -> Result<String, EngineError> {
+        Ok(format!("[MockArrival] You enter the {}.", room.name))
     }
 }
 
@@ -327,8 +329,10 @@ mod tests {
         let room = make_test_room();
         let player = make_test_player();
 
-        let result = backend.narrate_action(&world, &room, &[], &player, "I look around carefully.");
-        assert_eq!(result, "[MockNarration] I look around carefully.");
+        let result =
+            backend.narrate_action(&world, &room, &[], &player, "I look around carefully.");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "[MockNarration] I look around carefully.");
     }
 
     #[test]
@@ -339,7 +343,8 @@ mod tests {
         let player = make_test_player();
 
         let result = backend.narrate_arrival(&world, &room, &[], &player);
-        assert_eq!(result, "[MockArrival] You enter the Test Room.");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "[MockArrival] You enter the Test Room.");
     }
 
     #[test]
@@ -358,8 +363,9 @@ mod tests {
             },
             inventory: vec![],
         };
-        let (prompt, _user) = build_dialogue_prompts(&world, &room, &npc, &Some("Hello".to_string()));
-        
+        let (prompt, _user) =
+            build_dialogue_prompts(&world, &room, &npc, &Some("Hello".to_string()));
+
         // Assertions for prompt integrity
         assert!(prompt.contains("Carla"));
         assert!(prompt.contains("Strict"));

@@ -46,7 +46,10 @@ mod tests {
         let npc: NpcCard = serde_json::from_str(json).unwrap();
         assert_eq!(npc.id, "carla");
         assert_eq!(npc.sheet.name, "Carla");
-        assert_eq!(npc.sheet.image_path, Some("data/images/carla.png".to_string()));
+        assert_eq!(
+            npc.sheet.image_path,
+            Some("data/images/carla.png".to_string())
+        );
     }
 
     #[test]

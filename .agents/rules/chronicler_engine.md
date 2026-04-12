@@ -25,7 +25,7 @@ All non-trivial work follows a 5-stage pipeline. Do not skip stages or blend the
 - Get user approval on the plan before proceeding.
 
 ### Stage 3: Tasking
-- Decompose the plan into small, atomic, testable tasks in a `task.md` artifact.
+- Decompose the plan into small, atomic, testable tasks in `chronicler_engine/docs/specs/<feature>/task.md`.
 - Each task should touch as few files as possible to reduce drift.
 
 ### Stage 4: Implementation (TDD)
@@ -35,10 +35,10 @@ All non-trivial work follows a 5-stage pipeline. Do not skip stages or blend the
 - Mark the task complete and move to the next.
 
 ### Stage 5: Validation
-- Run `cargo fmt` and `cargo test` on the full project.
+- Run `cargo fmt`, `cargo clippy`, and `cargo test` on the full project.
 - Update spec statuses to `Completed`.
 - Produce a walkthrough artifact summarizing what changed.
 
 ## Rust Idioms and Best Practices
-- Ensure `cargo fmt` and `cargo test` pass successfully.
+- Ensure `cargo fmt`, `cargo clippy`, and `cargo test` pass successfully.
 - Prefer explicit error handling logic. Use `Result` heavily for parsing strings/data.
