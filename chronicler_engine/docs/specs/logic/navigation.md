@@ -1,13 +1,17 @@
 # Specification: Semantic Navigation
 
-**Status:** Completed
-
 ## Objective
 Migrate the engine's movement system from rigid, cardinal directions (`go north`, `go south`) to a semantic parsing model (`walk to kitchen`, `go to the grand hall`). 
 
 ## Changes to Player Actions
 1. **Parser Additions**: The parser will understand the prefix `walk to [target]`, `go to [target]`. 
-2. **Action Enum Modification**: The legacy `Action::Navigate(Direction)` is formally deprecated. It will be replaced by `Action::WalkTo(String)`.
+2. **The `WalkTo` Action**: Navigation is handled via the `Action::WalkTo(Target)` variant. The `Target` string is parsed from natural language input.
+
+### Parsing Examples
+- "Go north" -> `Action::WalkTo("north")`
+- "Walk to the mansion" -> `Action::WalkTo("the mansion")`
+- "Go to front_gates" -> `Action::WalkTo("front_gates")`
+
 3. **Cardinal Directions**: Cardinal directions like "north" will still be supported via `Action::WalkTo("north".to_string())`.
 
 ## Resolution Algorithm

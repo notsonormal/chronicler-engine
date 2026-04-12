@@ -10,9 +10,18 @@ The engine uses a data-driven model inspired by NetAF, ADRIFT, and SillyTavern c
 - **Map Definition**: `Overworld -> Region -> Room` locations and navigation.
 - **Character Cards**: AI-ready NPC properties and player state.
 
-## AI-First Development
+## Documentation & Memory
+The Chronicler Engine uses a tiered **Spec-Driven Development (SDD 2.0)** approach. Documentation is organized to provide the best possible context for both humans and AI agents:
 
-This project leverages strict Spec-Driven and Test-Driven Development (TDD).
-If you are an AI working on this repository, you **must** adhere to the rules defined in `../.agents/rules/chronicler_engine.md`.
+- **[Contracts](file:///workspaces/mrn-general/chronicler_engine/docs/specs/contract/)**: Data schemas, traits, and API boundaries.
+- **[Logic](file:///workspaces/mrn-general/chronicler_engine/docs/specs/logic/)**: Behavioral rules, narration logic, and LLM processing.
+- **[UI](file:///workspaces/mrn-general/chronicler_engine/docs/specs/ui/)**: Blueprints for the TUI dashboard and visual semantics.
+- **[Blueprints](file:///workspaces/mrn-general/chronicler_engine/docs/specs/blueprints/)**: Archival records of completed major migrations.
+- **[Learnings](file:///workspaces/mrn-general/.ag-memory/CHRONICLER_LEARNINGS.md)**: Persistent memory of breakthroughs and repeating mistakes.
 
-Specifications for new features are stored in `docs/specs/`.
+## Environment Variables
+
+The engine requires a `.env` file or environment variables to be set for AI functionality:
+
+- `OPENROUTER_API_KEY`: **(Required)** Your API key from OpenRouter.
+- `LLM_MODEL`: The OpenRouter model ID to use. Defaults to `z-ai/glm-4.5-air:free` if unset.

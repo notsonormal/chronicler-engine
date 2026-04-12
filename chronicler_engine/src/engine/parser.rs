@@ -1,4 +1,4 @@
-use crate::action::Action;
+use crate::engine::action::Action;
 
 pub fn parse_command(input: &str) -> Action {
     // Handle quoted string for messages (e.g. talk carla "hello")
@@ -22,7 +22,7 @@ pub fn parse_command(input: &str) -> Action {
     let tokens: Vec<&str> = lower.split_whitespace().collect();
 
     if tokens.is_empty() {
-        return Action::FreeAction(String::new());
+        return Action::FreeAction(input.to_string());
     }
 
     match tokens[0] {
@@ -33,7 +33,7 @@ pub fn parse_command(input: &str) -> Action {
         "w" if tokens.len() == 1 => Action::WalkTo("west".to_string()),
         "u" if tokens.len() == 1 => Action::WalkTo("up".to_string()),
         "d" if tokens.len() == 1 => Action::WalkTo("down".to_string()),
-        "go" | "walk" if tokens.len() > 1 => {
+        "go" | "walk" | "move" if tokens.len() > 1 => {
             // Check if they typed "go to X" or "walk to X"
             if tokens[1] == "to" && tokens.len() >= 3 {
                 Action::WalkTo(tokens[2..].join(" "))
@@ -123,5 +123,14 @@ mod tests {
         );
         // Empty input should also become FreeAction (handled silently in the REPL)
         assert_eq!(parse_command(""), Action::FreeAction(String::new()));
+    }
+
+    #[test]
+    fn test_parse_quoted_dialogue_free_action() {
+        // This was previously failing because it extracted the quote and left the base empty
+        assert_eq!(
+            parse_command("\"Who is this lady?\" you ask Carla"),
+            Action::FreeAction("\"Who is this lady?\" you ask Carla".to_string())
+        );
     }
 }

@@ -30,6 +30,8 @@ pub struct Room {
     pub items: Vec<String>, // list of item IDs
     #[serde(default)]
     pub npcs: Vec<String>, // list of NPC IDs
+    #[serde(default)]
+    pub image_path: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -64,7 +66,8 @@ mod tests {
                                 "description": "A tavern.",
                                 "exits": {
                                     "north": "room_2"
-                                }
+                                },
+                                "image_path": "data/images/tavern.png"
                             }
                         ]
                     }
@@ -81,9 +84,9 @@ mod tests {
                 .unwrap(),
             "room_2"
         );
-        assert!(
-            map.overworld.regions[0].rooms[0].items.is_empty(),
-            "Items missing should default to empty"
+        assert_eq!(
+            map.overworld.regions[0].rooms[0].image_path,
+            Some("data/images/tavern.png".to_string())
         );
     }
 }

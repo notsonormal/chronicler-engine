@@ -1,7 +1,5 @@
 # Specification: Redmist Estate Map and Data Parsing
 
-**Status:** Completed
-
 ## Objective
 Normalize legacy character cards (which bundle multiple disparate fields like Personality and Background into the standard `description` field) to match the separated field model established in the Chronicler Engine `NpcCard`. 
 Create a global dynamic map to place these characters inside the engine.

@@ -1,7 +1,5 @@
 # Specification: Testing Strategy and Architecture
 
-**Status:** Completed
-
 ## Objective
 Establish a formal policy and architectural design pattern for ensuring the Chronicler Engine remains heavily tested locally without incurring financial costs or massive latency from interacting with external LLM APIs (like OpenRouter).
 
