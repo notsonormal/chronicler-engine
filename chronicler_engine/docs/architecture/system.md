@@ -23,10 +23,10 @@ The interface between the synchronous engine and stochastic LLM generation.
 - **`llm`**: Traits (`LlmBackend`) and implementations (OpenRouter) for Game Master narration.
 
 ### 4. The Server Tier (`crate::server::*`)
-The HTTP and WebSocket layer for the HTMX web dashboard.
-- **`mod`**: Axum router, WebSocket handler, state management.
-- **`hub`**: Broadcast channel for real-time client updates.
+The HTTP layer for the HTMX web dashboard with polling-based real-time updates.
+- **`mod`**: Axum router, request handlers.
 - **`fragments`**: HTML fragment generators for HTMX partial updates.
+  - Uses `pulldown-cmark` for markdown→HTML conversion of LLM narrative text.
 
 ### 5. The Presentation Tier (`assets/`)
 Static web assets served by the server.
@@ -44,8 +44,7 @@ Static web assets served by the server.
 | `src/engine/action.rs` | `crate::engine::action` | |
 | `src/engine/logic.rs` | `crate::engine::logic` | |
 | `src/narrative/llm.rs` | `crate::narrative::llm` | |
-| `src/server/mod.rs` | `crate::server` | HTTP + WebSocket |
-| `src/server/hub.rs` | `crate::server` | Broadcast channel |
+| `src/server/mod.rs` | `crate::server` | HTTP server + HTMX endpoints |
 | `src/server/fragments.rs` | `crate::server` | HTML fragments |
 | `assets/index.html` | Presentation | HTMX frontend |
 
@@ -59,7 +58,7 @@ The engine presents a web-based HTMX dashboard:
   - Visual sidebar shows location image + NPC portraits
 - **Action Area**: Command input + status indicator (Ready/Thinking)
 
-Real-time updates via Server-Sent Events (SSE).
+Real-time updates via HTMX polling (5s interval for story-log, 5s for status-display).
 
 ## Error Strategy
 A unified error type (`crate::error::EngineError`) is shared across all tiers to provide consistent error propagation from data loading through LLM failures to the final UI report.

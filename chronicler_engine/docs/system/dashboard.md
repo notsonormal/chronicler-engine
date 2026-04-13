@@ -36,15 +36,16 @@ Interactive zone for player input.
   - "Thinking..." - Yellow (#ffff00) with pulse animation, LLM generating response
 
 ## Real-Time Updates
-The dashboard uses WebSocket for live updates:
+The dashboard uses HTMX polling for live updates:
+- Story-log polls `/fragment/story-log` every 5 seconds for new content
+- Status-display polls `/status/generating` every 5 seconds to update button state
 - New narration appears automatically with fade-in effect
 - Button changes state during LLM processing
-- Status indicator updates when LLM is processing
 - No manual refresh required
 
 ## Frontend Implementation
 - **HTMX**: Handles partial page updates via `hx-post` and `hx-target`
-- **WebSocket**: `ws-connect="/ws"` for real-time broadcasts
+- **HTMX Polling**: `hx-trigger="load, every 5s"` for real-time updates
 - **Styling**: Modern chat-app aesthetic with chat bubbles, fade animations
 
 ## Data Model

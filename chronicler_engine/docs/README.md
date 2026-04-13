@@ -58,7 +58,10 @@ When adding a new feature:
 1. **Create a plan** in `docs/plans/` (or update existing)
 2. **Update architecture** - Modify `architecture/system.md` to reflect changes
 3. **Implement** - Write the code
-4. **Validate** - Run tests, format, clippy
+4. **Validate** - Run the full build and test suite:
+   ```bash
+   python build.py  # Or manually: cargo fmt && cargo clippy && cargo test
+   ```
 5. **Archive** - Move completed plans to `plans/archived/`
 
 ---

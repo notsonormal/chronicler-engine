@@ -1,11 +1,8 @@
 pub mod fragments;
-pub mod hub;
 
 use axum::{
     Router,
-    extract::Path,
     response::Html,
-    response::IntoResponse,
     routing::{get, post},
 };
 use std::sync::Arc;
@@ -13,8 +10,6 @@ use tower_http::services::ServeDir;
 
 use crate::error::{EngineError, Result};
 use crate::model::state::GameState;
-
-pub use hub::Hub;
 
 #[derive(Clone)]
 pub struct ServerConfig {
@@ -30,19 +25,17 @@ impl Default for ServerConfig {
 #[derive(Clone)]
 pub struct AppState {
     pub state: Arc<std::sync::Mutex<GameState>>,
-    pub hub: Hub,
 }
 
-pub async fn run_server(state: Arc<std::sync::Mutex<GameState>>, hub: Hub) -> Result<()> {
-    run_server_with_config(state, hub, ServerConfig::default()).await
+pub async fn run_server(state: Arc<std::sync::Mutex<GameState>>) -> Result<()> {
+    run_server_with_config(state, ServerConfig::default()).await
 }
 
 pub async fn run_server_with_config(
     state: Arc<std::sync::Mutex<GameState>>,
-    hub: Hub,
     config: ServerConfig,
 ) -> Result<()> {
-    let app_state = AppState { state, hub };
+    let app_state = AppState { state };
 
     let app = Router::new()
         .route("/", get(index_handler))
@@ -63,7 +56,6 @@ pub async fn run_server_with_config(
             "/status/generating",
             get(fragments::generating_status_handler),
         )
-        .route("/data/images/:file", get(serve_image))
         .nest_service("/assets", ServeDir::new("assets"))
         .nest_service("/data", ServeDir::new("data"))
         .fallback_service(ServeDir::new("assets"))
@@ -125,26 +117,6 @@ fn kill_process(pid: u32) -> std::io::Result<std::process::Output> {
     std::process::Command::new("taskkill")
         .args(["/F", "/PID", &pid.to_string()])
         .output()
-}
-
-async fn serve_image(Path(file): Path<String>) -> impl IntoResponse {
-    let path = format!("data/images/{file}");
-    match tokio::fs::read(&path).await {
-        Ok(data) => {
-            let mime = if path.ends_with(".png") {
-                "image/png"
-            } else if path.ends_with(".jpg") || path.ends_with(".jpeg") {
-                "image/jpeg"
-            } else {
-                "application/octet-stream"
-            };
-            axum::response::Response::builder()
-                .header("Content-Type", mime)
-                .body(axum::body::Body::from(data))
-                .map_err(|_| EngineError::Internal("Failed to build image response".into()))?
-        }
-        Err(_) => (axum::http::StatusCode::NOT_FOUND, "Not found").into_response(),
-    }
 }
 
 async fn index_handler() -> Html<String> {

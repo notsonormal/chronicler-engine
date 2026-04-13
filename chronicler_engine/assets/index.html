@@ -110,21 +110,21 @@
         /* Visual sidebar styles */
         .visual-sidebar { display: flex; flex-direction: column; overflow: hidden; }
         .image-container { max-width: 100%; max-height: 200px; overflow: hidden; position: relative; box-sizing: border-box; }
-        .image-container img { width: 100%; height: 100%; object-fit: contain; max-width: 100%; max-height: 180px; box-sizing: border-box; }
+        .image-container img { width: 100%; height: 100%; object-fit: contain; max-width: 100%; max-height: 300px; box-sizing: border-box; }
         .image-container .image-label { font-size: 12px; color: #888; text-align: center; padding: 4px; }
         .image-container.no-image { min-height: 60px; display: flex; align-items: center; justify-content: center; }
         .image-container.no-image .placeholder { color: #555; font-size: 12px; }
         .npc-portraits { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; align-items: flex-start; overflow-y: auto; flex: 1; box-sizing: border-box; }
         .npc-portrait { 
-            width: 48%; 
-            max-width: 48%;
+            width: 80%; 
+            max-width: 80%;
             box-sizing: border-box; 
         }
         
         /* Action area */
         .action-area { background: #1a1a1a; border: 1px solid #333; border-bottom: none; padding: 10px 16px; display: flex; align-items: center; gap: 16px; height: 64px; flex-shrink: 0; }
-        .command-form { display: flex; flex: 1; gap: 8px; align-items: center; }
-        .command-form input { 
+        #command-form { display: flex; flex: 1; gap: 8px; align-items: center; }
+        #command-form input { 
             flex: 1; 
             min-width: 200px; 
             background: #0d0d0d; 
@@ -138,12 +138,12 @@
             outline: none;
             transition: border-color 0.2s, box-shadow 0.2s;
         }
-        .command-form input:focus { 
+        #command-form input:focus { 
             border-color: #00ff00; 
             box-shadow: 0 0 8px rgba(0, 255, 0, 0.2);
         }
-        .command-form input::placeholder { color: #555; }
-        .command-form button { 
+        #command-form input::placeholder { color: #555; }
+        #command-form button { 
             background: linear-gradient(180deg, #00aa00 0%, #006600 100%); 
             border: 1px solid #00ff00; 
             border-radius: 4px;
@@ -162,16 +162,16 @@
             justify-content: center;
             gap: 6px;
         }
-        .command-form button:hover { 
+        #command-form button:hover { 
             background: linear-gradient(180deg, #00cc00 0%, #008800 100%); 
             border-color: #00ff00; 
             box-shadow: 0 0 12px rgba(0, 255, 0, 0.5);
         }
-        .command-form button:active {
+        #command-form button:active {
             background: linear-gradient(180deg, #006600 0%, #004400 100%);
             box-shadow: 0 0 4px rgba(0, 255, 0, 0.3);
         }
-        .command-form button:disabled { 
+        #command-form button:disabled { 
             opacity: 0.5; 
             cursor: not-allowed; 
             box-shadow: none; 
@@ -186,28 +186,52 @@
         .status.ready { color: #00ff00; }
         .status.thinking { color: #ffff00; }
         .status.error { color: #ff4444; }
+        
+        /* Error notification */
+        .error-notification {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(180deg, #ff4444 0%, #cc0000 100%);
+            color: white;
+            padding: 12px 20px;
+            text-align: center;
+            font-weight: bold;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+            z-index: 1000;
+            transform: translateY(-100%);
+            transition: transform 0.3s ease-in-out;
+        }
+        .error-notification.visible {
+            transform: translateY(0);
+        }
     </style>
 </head>
 <body>
+    <div class="error-notification" id="error-notification"></div>
     <div class="header" id="header" hx-get="/fragment/header" hx-trigger="load"></div>
     <div class="main-container">
         <div class="story-log" id="story-log" hx-get="/fragment/story-log" hx-trigger="load, every 5s" hx-swap="innerHTML" hx-on::after-swap="this.scrollTop = this.scrollHeight"></div>
-        <div class="visual-sidebar" hx-get="/fragment/visual-sidebar" hx-trigger="load"></div>
+        <div class="visual-sidebar" hx-get="/fragment/visual-sidebar" hx-trigger="load, every 5s"></div>
     </div>
     <!-- Static shell: form stays in DOM, never replaced -->
-    <div class="action-area">
+        <div class="action-area" id="action-area">
         <!-- Form targets hidden div, status updates via WS + JS -->
         <form id="command-form" 
               hx-post="/action" 
-              hx-target="#action-response" 
+              hx-target="#status-display" 
               hx-swap="innerHTML" 
-              hx-on::after-request="this.reset(); updateToThinking();">
+              hx-on::after-request="this.reset(); updateButtonState();">
             <input type="text" name="command" placeholder="Enter command..." required minlength="1" autocomplete="off" />
             <button type="submit" id="submit-btn"><span class="btn-icon">&#9654;</span> Send</button>
         </form>
-        <div id="action-response" style="display:none;"></div>
-        <div class="action-hints" id="action-hints" hx-get="/hints" hx-trigger="load"></div>
-        <div class="status ready" id="status-display"><span class="status ready">Ready</span></div>
+        <div class="action-hints" id="action-hints" hx-get="/hints" hx-trigger="load, every 5s"></div>
+        <div class="status ready" id="status-display" 
+             hx-get="/status/generating" 
+             hx-trigger="load, every 5s" 
+             hx-swap="innerHTML"
+             hx-on::after-swap="onStatusPoll(this)"><span class="status ready">Ready</span></div>
     </div>
     <script>
         console.log('[HTMX] Initializing...');
@@ -234,18 +258,56 @@
             }
         }
         
+        // Called after form submission to disable button immediately
+        // The server returns status and MutationObserver will re-enable it
+        function updateButtonState() {
+            setButtonState(true); // Immediately disable button on submit
+        }
+        
+        // Called after HTMX polls /status/generating
+        // The endpoint returns "generating" or "idle" (plain text)
+        function onStatusPoll(el) {
+            const text = el.textContent.trim();
+            if (text === 'idle') {
+                el.innerHTML = '<span class="status ready">Ready</span>';
+                setButtonState(false);
+            } else if (text === 'generating') {
+                el.innerHTML = '<span class="status thinking">Thinking...</span>';
+                setButtonState(true);
+            }
+            // If text is empty or unexpected, do nothing
+        }
+        
         // Watch status display for changes
         const statusDisplay = document.getElementById('status-display');
+        const errorNotification = document.getElementById('error-notification');
+        
+        // Show error notification at top of screen
+        function showError(message) {
+            if (errorNotification) {
+                errorNotification.textContent = message;
+                errorNotification.classList.add('visible');
+                // Auto-hide after 5 seconds
+                setTimeout(() => {
+                    errorNotification.classList.remove('visible');
+                }, 5000);
+            }
+        }
         
         // Create a MutationObserver to watch for status changes
         const statusObserver = new MutationObserver(function(mutations) {
             mutations.forEach(function(mutation) {
                 if (mutation.type === 'childList' || mutation.type === 'characterData') {
                     const statusText = statusDisplay.textContent;
+                    // Re-enable button on ANY state that isn't thinking (Ready, Error, etc.)
                     if (statusText.includes('Thinking')) {
                         setButtonState(true);
-                    } else if (statusText.includes('Ready')) {
+                    } else {
                         setButtonState(false);
+                    }
+                    // Show error notification for error states
+                    if (statusText.includes('Error')) {
+                        showError(statusText);
                     }
                 }
             });

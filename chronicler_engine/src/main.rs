@@ -4,7 +4,7 @@ use chronicler_engine::model::character::{NpcCard, PlayerCard};
 use chronicler_engine::model::map::MapDef;
 use chronicler_engine::model::state::GameState;
 use chronicler_engine::model::world::WorldManifest;
-use chronicler_engine::server::{Hub, ServerConfig};
+use chronicler_engine::server::ServerConfig;
 
 use clap::Parser;
 
@@ -210,6 +210,9 @@ fn load_world_legacy(
 fn main() -> chronicler_engine::Result<()> {
     dotenv::dotenv().ok();
 
+    // Initialize logging to both stdout and file
+    init_logging();
+
     let args = Args::parse();
 
     // Handle --list-worlds flag
@@ -250,16 +253,54 @@ fn main() -> chronicler_engine::Result<()> {
         chronicler_engine::model::state::LogType::Narration,
     );
 
-    // Create shared state and WebSocket hub
+    // Create shared state for the HTMX server
     let state = Arc::new(std::sync::Mutex::new(state));
-    let hub = Hub::new();
 
     // Run the HTTP server on the specified port
     let config = ServerConfig { port: args.port };
     let runtime = tokio::runtime::Runtime::new()?;
     runtime.block_on(chronicler_engine::server::run_server_with_config(
-        state, hub, config,
+        state, config,
     ))?;
 
     Ok(())
+}
+
+/// Initialize logging to both stdout and a daily rotating log file
+fn init_logging() {
+    use chrono::Local;
+    use std::io::Write;
+
+    // Create logs directory if it doesn't exist
+    let log_dir = Path::new("logs");
+    if !log_dir.exists() {
+        if let Err(e) = fs::create_dir_all(log_dir) {
+            eprintln!("Warning: Could not create logs directory: {e}");
+        }
+    }
+
+    // Generate log filename with current date
+    let timestamp = Local::now().format("%Y%m%d");
+    let log_file_path = log_dir.join(format!("chronicler_{timestamp}.log"));
+
+    // Write initial message to log file
+    let init_msg = format!(
+        "[{}] [INFO] [chronicler_engine] Logging initialized. Log file: {:?}\n",
+        Local::now().format("%Y-%m-%d %H:%M:%S%.3f"),
+        log_file_path
+    );
+    if let Ok(mut file) = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_file_path)
+    {
+        let _ = file.write_all(init_msg.as_bytes());
+    }
+
+    // Initialize env_logger to stdout with debug level by default
+    env_logger::Builder::from_default_env()
+        .filter_level(log::LevelFilter::Debug)
+        .init();
+
+    log::info!("Logging initialized. Log file: {log_file_path:?}");
 }

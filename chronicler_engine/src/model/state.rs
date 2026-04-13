@@ -1,10 +1,12 @@
+use std::collections::HashMap;
+use std::sync::Arc;
+
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+
 use crate::model::character::{NpcCard, PlayerCard};
 use crate::model::map::MapDef;
 use crate::model::world::WorldCard;
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::sync::Arc;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum LogType {
@@ -30,6 +32,7 @@ pub struct TuiState {
     pub cursor_position: usize,
     pub scroll_offset: u16,
     pub is_generating: bool,
+    pub error_message: Option<String>,
 }
 
 impl TuiState {
@@ -179,6 +182,25 @@ mod tests {
         tui.clear_input();
         assert_eq!(tui.input, "");
         assert_eq!(tui.cursor_position, 0);
+    }
+
+    #[test]
+    fn test_tui_state_error_message() {
+        let mut tui = TuiState::default();
+
+        // Initially no error
+        assert!(tui.error_message.is_none());
+
+        // Set an error
+        tui.error_message = Some("LLM Error: 429 Too Many Requests".to_string());
+        assert_eq!(
+            tui.error_message,
+            Some("LLM Error: 429 Too Many Requests".to_string())
+        );
+
+        // Clear the error
+        tui.error_message = None;
+        assert!(tui.error_message.is_none());
     }
 
     #[test]

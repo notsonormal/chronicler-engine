@@ -73,10 +73,12 @@ impl LlmBackend for OpenRouterBackend {
         npc: &NpcCard,
         user_message: &Option<String>,
     ) -> Result<String, EngineError> {
+        log::info!("[LLM] Generating dialogue for NPC: {}", npc.sheet.name);
         let (system_prompt, user_text) = build_dialogue_prompts(world, room, npc, user_message);
         let api_key = std::env::var("OPENROUTER_API_KEY")
             .map_err(|_| EngineError::Config("OPENROUTER_API_KEY not set".into()))?;
-        Ok(call_openrouter(&api_key, &system_prompt, &user_text))
+
+        call_openrouter(&api_key, &system_prompt, &user_text).map_err(EngineError::Narrative)
     }
 
     fn narrate_action(
@@ -87,11 +89,13 @@ impl LlmBackend for OpenRouterBackend {
         player: &PlayerCard,
         player_input: &str,
     ) -> Result<String, EngineError> {
+        log::info!("[LLM] Generating action narration for: {player_input}");
         let (system_prompt, user_text) =
             build_action_prompts(world, room, nearby_npcs, player, player_input);
         let api_key = std::env::var("OPENROUTER_API_KEY")
             .map_err(|_| EngineError::Config("OPENROUTER_API_KEY not set".into()))?;
-        Ok(call_openrouter(&api_key, &system_prompt, &user_text))
+
+        call_openrouter(&api_key, &system_prompt, &user_text).map_err(EngineError::Narrative)
     }
 
     fn narrate_arrival(
@@ -101,10 +105,19 @@ impl LlmBackend for OpenRouterBackend {
         nearby_npcs: &[&NpcCard],
         player: &PlayerCard,
     ) -> Result<String, EngineError> {
+        log::info!("[LLM] Generating arrival narration for room: {}", room.name);
         let (system_prompt, user_text) = build_arrival_prompts(world, room, nearby_npcs, player);
         let api_key = std::env::var("OPENROUTER_API_KEY")
             .map_err(|_| EngineError::Config("OPENROUTER_API_KEY not set".into()))?;
-        Ok(call_openrouter(&api_key, &system_prompt, &user_text))
+
+        let result = call_openrouter(&api_key, &system_prompt, &user_text);
+        match result {
+            Ok(text) => Ok(text),
+            Err(err) => {
+                log::error!("[LLM] Arrival narration failed: {err}");
+                Err(EngineError::Narrative(err))
+            }
+        }
     }
 
     fn name(&self) -> &str {
@@ -238,9 +251,13 @@ Never act or speak on behalf of the player.\n\n",
     (system_prompt, user_text)
 }
 
-fn call_openrouter(api_key: &str, system_prompt: &str, user_text: &str) -> String {
+fn call_openrouter(api_key: &str, system_prompt: &str, user_text: &str) -> Result<String, String> {
     let client = reqwest::blocking::Client::new();
     let model = std::env::var("LLM_MODEL").unwrap_or_else(|_| "z-ai/glm-4.5-air:free".to_string());
+
+    log::info!("[LLM] Using model: {model}");
+    log::debug!("[LLM] System prompt: {system_prompt}");
+    log::debug!("[LLM] User text: {user_text}");
 
     let payload = json!({
         "model": model,
@@ -264,17 +281,64 @@ fn call_openrouter(api_key: &str, system_prompt: &str, user_text: &str) -> Strin
 
     match res {
         Ok(response) => {
-            if !response.status().is_success() {
-                return format!("Error communicating with OpenRouter: {}", response.status());
+            let status = response.status();
+            log::info!("[LLM] Response status: {status}");
+
+            if !status.is_success() {
+                log::error!("[LLM] Non-success HTTP status: {status}");
+                return Err(format!("Error communicating with OpenRouter: {status}"));
             }
-            if let Ok(json_response) = response.json::<serde_json::Value>()
-                && let Some(content) = json_response["choices"][0]["message"]["content"].as_str()
-            {
-                return content.to_string();
+
+            // Try to parse JSON response
+            match response.json::<serde_json::Value>() {
+                Ok(json_response) => {
+                    log::debug!("[LLM] Raw JSON response: {json_response:?}");
+
+                    // Check for API-level errors in response
+                    if let Some(error) = json_response.get("error") {
+                        let error_msg = error
+                            .get("message")
+                            .and_then(|m| m.as_str())
+                            .unwrap_or("Unknown API error");
+                        log::error!("[LLM] API error: {error_msg}");
+                        return Err(format!("LLM API error: {error_msg}"));
+                    }
+
+                    // Try to extract content from the standard response format
+                    if let Some(content) = json_response["choices"]
+                        .get(0)
+                        .and_then(|c| c.get("message"))
+                        .and_then(|m| m.get("content"))
+                        .and_then(|c| c.as_str())
+                    {
+                        log::info!(
+                            "[LLM] Successfully parsed content ({} chars)",
+                            content.len()
+                        );
+                        return Ok(content.to_string());
+                    }
+
+                    // If we got here, the response structure was unexpected
+                    log::error!("[LLM] Parse error: Could not find content in response structure");
+                    log::error!(
+                        "[LLM] Response had keys: {:?}",
+                        json_response
+                            .as_object()
+                            .map(|m| m.keys().cloned().collect::<Vec<_>>())
+                            .unwrap_or_default()
+                    );
+                    Err("The world seems to hold its breath (parse error).".to_string())
+                }
+                Err(e) => {
+                    log::error!("[LLM] JSON parse error: {e}");
+                    Err(format!("Failed to parse LLM response: {e}"))
+                }
             }
-            "The world seems to hold its breath (parse error).".to_string()
         }
-        Err(e) => format!("Request failed: {e}"),
+        Err(e) => {
+            log::error!("[LLM] Request failed: {e}");
+            Err(format!("Request failed: {e}"))
+        }
     }
 }
 

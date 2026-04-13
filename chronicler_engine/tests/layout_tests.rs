@@ -16,12 +16,12 @@ mod tests {
     use super::*;
     use playwright_rs::Playwright;
 
-    const TEST_PORT: u16 = 3002;
+    const TEST_PORT: u16 = 3001;
     const TEST_WORLD: &str = "test";
 
     #[tokio::test]
     async fn test_image_containers_have_max_size() {
-        let _server = TestServer::new(TEST_PORT, TEST_WORLD);
+        let _server = TestServer::new_with_mock(TEST_PORT, TEST_WORLD);
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
@@ -84,7 +84,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_npc_portraits_alignment() {
-        let _server = TestServer::new(TEST_PORT, TEST_WORLD);
+        let _server = TestServer::new_with_mock(TEST_PORT, TEST_WORLD);
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
@@ -151,7 +151,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_no_horizontal_overflow() {
-        let _server = TestServer::new(TEST_PORT, TEST_WORLD);
+        let _server = TestServer::new_with_mock(TEST_PORT, TEST_WORLD);
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
@@ -224,7 +224,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_element_positioning() {
-        let _server = TestServer::new(TEST_PORT, TEST_WORLD);
+        let _server = TestServer::new_with_mock(TEST_PORT, TEST_WORLD);
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
@@ -279,7 +279,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_images_have_object_fit() {
-        let _server = TestServer::new(TEST_PORT, TEST_WORLD);
+        let _server = TestServer::new_with_mock(TEST_PORT, TEST_WORLD);
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
@@ -328,7 +328,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_visual_sidebar_stays_within_bounds() {
-        let _server = TestServer::new(TEST_PORT, TEST_WORLD);
+        let _server = TestServer::new_with_mock(TEST_PORT, TEST_WORLD);
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
@@ -383,7 +383,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_npc_portraits_container_flex_layout() {
-        let _server = TestServer::new(TEST_PORT, TEST_WORLD);
+        let _server = TestServer::new_with_mock(TEST_PORT, TEST_WORLD);
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
@@ -436,7 +436,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_all_images_within_viewport() {
-        let _server = TestServer::new(TEST_PORT, TEST_WORLD);
+        let _server = TestServer::new_with_mock(TEST_PORT, TEST_WORLD);
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
@@ -498,7 +498,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_story_log_scrollable() {
-        let _server = TestServer::new(TEST_PORT, TEST_WORLD);
+        let _server = TestServer::new_with_mock(TEST_PORT, TEST_WORLD);
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
@@ -544,7 +544,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_css_box_sizing_consistent() {
-        let _server = TestServer::new(TEST_PORT, TEST_WORLD);
+        let _server = TestServer::new_with_mock(TEST_PORT, TEST_WORLD);
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();

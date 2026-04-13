@@ -63,7 +63,7 @@ cargo test -- --test-threads=1
 |-----------|---------|-------------|
 | `flow_mock_tests.rs` | Core game loop, polling, real-time updates | Mock |
 | `flow_llm_tests.rs` | LLM narrative generation | Real (OpenRouter) |
-| `behavior_tests.rs` | Form submission, WebSocket, UI behavior | Real |
+| `behavior_tests.rs` | Form submission, button re-enable, UI behavior | Real |
 | `layout_tests.rs` | CSS, element sizing, scrolling | Real |
 | `spec_tests.rs` | Page structure, HTMX, element presence | Real |
 
@@ -85,7 +85,7 @@ cargo test -- --test-threads=1
 ### Known Limitations
 
 1. **Sequential Test Execution**: Some tests share ports and must run sequentially (`--test-threads=1`)
-2. **Headless Browser**: WebSocket connections may be unreliable in headless mode; polling provides fallback
+2. **Headless Browser**: HTMX polling is reliable in headless mode; 5-second delay is acceptable for tests
 3. **LLM Response Time**: Real LLM tests may be slow; use mock tests for fast iteration
 
 ### Smart Waiting Patterns
@@ -108,5 +108,36 @@ if llm_result.is_err() {
 }
 sleep(Duration::from_millis(1000)).await; // Brief wait for poll to catch update
 ```
+
+## Code Coverage
+
+Coverage is verified using `cargo-llvm-cov`. This tool instruments the code and reports which lines are executed during tests.
+
+### Running Coverage
+
+```bash
+# Install cargo-llvm-cov (once)
+cargo +stable install cargo-llvm-cov --locked
+
+# Run coverage (after tests pass)
+cargo llvm-cov test --json --output-path coverage.json
+```
+
+### Coverage Thresholds
+
+| Module Type | Minimum Coverage |
+|------------|------------------|
+| Core logic (`engine/logic.rs`) | 90% |
+| Parser (`engine/parser.rs`) | 85% |
+| Data models (`model/*.rs`) | 70% |
+| LLM prompts (`narrative/llm.rs`) | 50% |
+| Server HTTP (`server/*.rs`) | N/A (integration only) |
+
+### Known Gaps (Acceptable)
+
+These have low coverage but are acceptable:
+- **Runtime env detection** (`LlmBackendType::from_env()`) - cannot be unit tested
+- **API client code** (`OpenRouterBackend`) - requires API key
+- **`add_log` overflow** - requires >1000 log entries
 
 See `docs/adr/` for detailed rationale behind these patterns.

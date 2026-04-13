@@ -178,6 +178,10 @@ mod tests {
         let res = attempt_walk(&mut state, "bathroom");
         assert!(res.is_err());
         assert_eq!(state.current_room_id, "room1"); // did not move
+
+        // Verify error message content
+        let err = res.unwrap_err();
+        assert!(err.to_string().contains("don't see a way"));
     }
 
     #[test]

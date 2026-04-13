@@ -19,7 +19,7 @@ mod tests {
     use playwright_rs::Playwright;
     use tokio::time::Duration;
 
-    const TEST_PORT: u16 = 3007;
+    const TEST_PORT: u16 = 3001;
     const TEST_WORLD: &str = "test";
 
     // Check if real LLM is available

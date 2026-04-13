@@ -13,9 +13,17 @@ use crate::error::Result;
 use crate::model::state::{GameState, LogEntry, LogType};
 use crate::narrative::llm::get_llm_backend;
 use crate::server::AppState;
-use crate::server::Hub;
+use pulldown_cmark::{Parser, html};
 
 const MAX_LOG_DISPLAY: usize = 50;
+
+/// Render an error message for the UI
+fn render_error(message: &str) -> String {
+    format!(
+        "<div class=\"error-message\">Error: {}</div>",
+        html_escape(message)
+    )
+}
 
 fn render_header_unlocked(state: &GameState) -> Result<String> {
     let room = get_current_room(state)?;
@@ -51,7 +59,11 @@ pub fn render_story_log(state: &AppState) -> Result<String> {
         .map(render_log_entry)
         .collect();
 
-    Ok(logs)
+    // Return the container div WITH the ID - this is what HTMX needs to target
+    // hx-swap="innerHTML" will replace the inside of #story-log, keeping the outer div intact
+    Ok(format!(
+        "<div class=\"story-log\" id=\"story-log\">{logs}</div>"
+    ))
 }
 
 fn render_log_entry(entry: &LogEntry) -> String {
@@ -72,12 +84,15 @@ fn render_log_entry(entry: &LogEntry) -> String {
         .map(|s| format!("<span class=\"sender\">{s}:</span> "))
         .unwrap_or_default();
 
+    // Parse markdown and format paragraphs (LLM returns markdown, not raw HTML)
+    let formatted_text = format_text_with_newlines(&parse_markdown(&entry.text));
+
     format!(
-        "<div class=\"log-entry {}\">{}{}<span class=\"text\">{}</span></div>",
+        r#"<div class="log-entry {}">{}<span class="sender">{}</span> <span class="text">{}</span></div>"#,
         color_class,
         timestamp_html,
-        sender_html,
-        html_escape(&entry.text)
+        sender_html.trim_end(),
+        formatted_text
     )
 }
 
@@ -182,66 +197,55 @@ pub fn render_action_area(state: &AppState) -> Result<String> {
     ))
 }
 
-fn render_action_area_unlocked(state: &GameState) -> Result<String> {
-    let is_generating = state.tui_state.is_generating;
-
-    // Get available exits for action hints
-    let exits = get_available_exits(state);
-    let available_actions = if exits.is_empty() {
-        String::from("<span class=\"action-hint\">[Look] [Inventory]</span>")
-    } else {
-        let exit_hints: String = exits
-            .iter()
-            .map(|e| format!("[{e}]"))
-            .collect::<Vec<_>>()
-            .join(" ");
-        format!("<span class=\"action-hint\">[Look] [Inventory] {exit_hints}</span>")
-    };
-
-    let status_class = if is_generating {
-        "status thinking"
-    } else {
-        "status ready"
-    };
-    let status_text = if is_generating {
-        "Thinking..."
-    } else {
-        "Ready"
-    };
-    let disabled_attr = if is_generating { "disabled" } else { "" };
-
-    Ok(format!(
-        "<div class=\"action-area\" id=\"action-area\">\
-            <form hx-post=\"/action\" hx-target=\"#action-area\" hx-swap=\"outerHTML\" class=\"command-form\">\
-                <input type=\"text\" name=\"command\" placeholder=\"Enter command...\" value=\"\" {disabled_attr} autocomplete=\"off\" />\
-                <button type=\"submit\" {disabled_attr}>Send</button>\
-            </form>\
-            <div class=\"action-hints\">{available_actions}</div>\
-            <div class=\"{status_class}\">{status_text}</div>\
-        </div>"
-    ))
-}
-
 pub async fn header_fragment(State(state): State<AppState>) -> Html<String> {
-    Html(render_header(&state).unwrap_or_else(|_| String::new()))
+    match render_header(&state) {
+        Ok(html) => Html(html),
+        Err(e) => {
+            log::error!("header_fragment failed: {e}");
+            Html(render_error(&e.to_string()))
+        }
+    }
 }
 
 pub async fn story_log_fragment(State(state): State<AppState>) -> Html<String> {
-    Html(render_story_log(&state).unwrap_or_else(|_| String::new()))
+    match render_story_log(&state) {
+        Ok(html) => Html(html),
+        Err(e) => {
+            log::error!("story_log_fragment failed: {e}");
+            Html(render_error(&e.to_string()))
+        }
+    }
 }
 
 pub async fn visual_sidebar_fragment(State(state): State<AppState>) -> Html<String> {
-    Html(render_visual_sidebar(&state).unwrap_or_else(|_| String::new()))
+    match render_visual_sidebar(&state) {
+        Ok(html) => Html(html),
+        Err(e) => {
+            log::error!("visual_sidebar_fragment failed: {e}");
+            Html(render_error(&e.to_string()))
+        }
+    }
 }
 
 pub async fn action_area_fragment(State(state): State<AppState>) -> Html<String> {
-    Html(render_action_area(&state).unwrap_or_else(|_| String::new()))
+    match render_action_area(&state) {
+        Ok(html) => Html(html),
+        Err(e) => {
+            log::error!("action_area_fragment failed: {e}");
+            Html(render_error(&e.to_string()))
+        }
+    }
 }
 
 /// Handler for action hints - returns just the hints HTML
 pub async fn hints_handler(State(state): State<AppState>) -> Html<String> {
-    let hints = render_action_hints(&state).unwrap_or_else(|_| String::new());
-    Html(hints)
+    match render_action_hints(&state) {
+        Ok(hints) => Html(hints),
+        Err(e) => {
+            log::error!("hints_handler failed: {e}");
+            Html(render_error(&e.to_string()))
+        }
+    }
 }
 
 /// Handler for status ready reset
@@ -251,13 +255,20 @@ pub async fn status_ready_handler(State(_state): State<AppState>) -> Html<String
 
 /// Handler for generating status - returns whether LLM is currently generating
 pub async fn generating_status_handler(State(state): State<AppState>) -> Html<String> {
-    let is_generating = state
+    let (is_generating, error_message) = state
         .state
         .lock()
-        .map(|guard| guard.tui_state.is_generating)
-        .unwrap_or(false);
+        .map(|guard| {
+            (
+                guard.tui_state.is_generating,
+                guard.tui_state.error_message.clone(),
+            )
+        })
+        .unwrap_or((false, None));
 
-    if is_generating {
+    if let Some(err) = error_message {
+        Html(format!("<span class=\"status error\">Error: {err}</span>"))
+    } else if is_generating {
         Html("generating".to_string())
     } else {
         Html("idle".to_string())
@@ -306,7 +317,7 @@ pub async fn action_handler(
     }
 
     // Get mutable state and add the input to the log
-    let player_name = {
+    let (player_name, is_sync) = {
         let mut state_guard = match state.state.lock() {
             Ok(g) => g,
             Err(_) => return Html(String::new()),
@@ -314,43 +325,74 @@ pub async fn action_handler(
 
         let name = state_guard.player.sheet.name.clone();
         state_guard.add_log(command.clone(), Some(name.clone()), LogType::Input);
-        state_guard.tui_state.is_generating = true;
-        name
+
+        // For synchronous commands (look, inventory, quit), set generating=false immediately
+        // For async commands (free actions), keep generating=true until LLM completes
+        let action = parse_command(&command);
+        let is_sync = matches!(
+            action,
+            crate::engine::action::Action::Look
+                | crate::engine::action::Action::Inventory
+                | crate::engine::action::Action::Quit
+        );
+
+        if is_sync {
+            // Add the output immediately for sync commands
+            process_sync_action(&mut state_guard, &action);
+            state_guard.tui_state.is_generating = false;
+        } else {
+            state_guard.tui_state.is_generating = true;
+        }
+        state_guard.tui_state.error_message = None;
+
+        (name, is_sync)
     };
 
-    // Broadcast the new input
-    if let Ok(html) = render_story_log(&state) {
-        state.hub.broadcast(
-            serde_json::json!({
-                "type": "update",
-                "event": "story-log",
-                "fragment": "story-log",
-                "html": html
-            })
-            .to_string(),
-        );
+    // For async actions, spawn a thread to process them
+    if !is_sync {
+        let state_clone = state.state.clone();
+        let cmd = command;
+        let pname = player_name;
+        std::thread::spawn(move || {
+            process_action(state_clone, cmd, pname);
+        });
     }
 
-    // Process the action asynchronously
-    let state_clone = state.state.clone();
-    let hub_clone = state.hub.clone();
-    let cmd = command;
-    let pname = player_name;
-
-    std::thread::spawn(move || {
-        process_action(state_clone, hub_clone, cmd, pname);
-    });
-
-    // Return thinking status - goes into #status-display div
-    Html("<span class=\"status thinking\">Thinking...</span>".to_string())
+    // Return the current status immediately
+    if is_sync {
+        Html("<span class=\"status ready\">Ready</span>".to_string())
+    } else {
+        Html("<span class=\"status thinking\">Thinking...</span>".to_string())
+    }
 }
 
-fn process_action(
-    state: Arc<std::sync::Mutex<GameState>>,
-    hub: Hub,
-    input: String,
-    _player_name: String,
-) {
+/// Process synchronous actions (Look, Inventory, Quit) immediately
+fn process_sync_action(state: &mut GameState, action: &crate::engine::action::Action) {
+    match action {
+        crate::engine::action::Action::Look => {
+            if let Ok(room) = get_current_room(state) {
+                state.add_log(
+                    room.description.clone(),
+                    Some(room.name.clone()),
+                    LogType::Narration,
+                );
+            }
+        }
+        crate::engine::action::Action::Inventory => {
+            state.add_log(
+                "Your inventory is empty.".to_string(),
+                None,
+                LogType::System,
+            );
+        }
+        crate::engine::action::Action::Quit => {
+            state.add_log("Goodbye!".to_string(), None, LogType::System);
+        }
+        _ => {} // Other actions handled by process_action
+    }
+}
+
+fn process_action(state: Arc<std::sync::Mutex<GameState>>, input: String, _player_name: String) {
     let action = parse_command(&input);
 
     let mut state_guard = match state.lock() {
@@ -377,16 +419,12 @@ fn process_action(
                 }
             }
             state_guard.tui_state.is_generating = false;
-            drop(state_guard);
-            broadcast_state(&state, &hub);
         }
         crate::engine::action::Action::WalkTo(target) => {
             let result = crate::engine::logic::attempt_walk(&mut state_guard, &target);
             if let Err(e) = result {
                 state_guard.add_log(e.to_string(), None, LogType::System);
                 state_guard.tui_state.is_generating = false;
-                drop(state_guard);
-                broadcast_state(&state, &hub);
                 return;
             }
 
@@ -411,7 +449,6 @@ fn process_action(
             drop(state_guard);
 
             let state_for_thread = state.clone();
-            let hub_for_thread = hub.clone();
             thread::spawn(move || {
                 let room = map
                     .overworld
@@ -433,14 +470,13 @@ fn process_action(
                                 );
                                 state.tui_state.is_generating = false;
                             }
-                            broadcast_state(&state_for_thread, &hub_for_thread);
                         }
                         Err(e) => {
                             if let Ok(mut state) = state_for_thread.lock() {
-                                state.add_log(format!("Error: {e}"), None, LogType::System);
+                                // Set error message for UI instead of adding to chat log
+                                state.tui_state.error_message = Some(format!("LLM Error: {e}"));
                                 state.tui_state.is_generating = false;
                             }
-                            broadcast_state(&state_for_thread, &hub_for_thread);
                         }
                     }
                 }
@@ -455,8 +491,6 @@ fn process_action(
                 LogType::System,
             );
             state_guard.tui_state.is_generating = false;
-            drop(state_guard);
-            broadcast_state(&state, &hub);
         }
         crate::engine::action::Action::Inventory => {
             state_guard.add_log(
@@ -465,8 +499,6 @@ fn process_action(
                 LogType::System,
             );
             state_guard.tui_state.is_generating = false;
-            drop(state_guard);
-            broadcast_state(&state, &hub);
         }
         crate::engine::action::Action::FreeAction(text) => {
             // Generate LLM response for free action
@@ -477,7 +509,6 @@ fn process_action(
             drop(state_guard);
 
             let state_for_thread = state.clone();
-            let hub_for_thread = hub.clone();
             thread::spawn(move || {
                 let room = map
                     .overworld
@@ -499,96 +530,19 @@ fn process_action(
                                 );
                                 state.tui_state.is_generating = false;
                             }
-                            broadcast_state(&state_for_thread, &hub_for_thread);
                         }
                         Err(e) => {
                             if let Ok(mut state) = state_for_thread.lock() {
-                                state.add_log(format!("Error: {e}"), None, LogType::System);
+                                // Set error message for UI instead of adding to chat log
+                                state.tui_state.error_message = Some(format!("LLM Error: {e}"));
                                 state.tui_state.is_generating = false;
                             }
-                            broadcast_state(&state_for_thread, &hub_for_thread);
                         }
                     }
                 }
             });
         }
     }
-
-    // Initial broadcast after action processing
-    broadcast_state(&state, &hub);
-}
-
-fn broadcast_state(state: &Arc<std::sync::Mutex<GameState>>, hub: &Hub) {
-    // Get a snapshot of state for rendering
-    let (logs_html, header_html, action_html, sidebar_html) = {
-        let state_guard = match state.lock() {
-            Ok(g) => g,
-            Err(_) => return,
-        };
-
-        let logs: String = state_guard
-            .narration_history
-            .iter()
-            .take(MAX_LOG_DISPLAY)
-            .map(render_log_entry)
-            .collect();
-        let logs_html = format!("<div class=\"story-log\" id=\"story-log\">{logs}</div>");
-
-        // Render header
-        let header_html = render_header_unlocked(&state_guard).unwrap_or_default();
-
-        // Render action area
-        let action_html = render_action_area_unlocked(&state_guard).unwrap_or_default();
-
-        // Render sidebar (needs state but we've released the lock)
-        let sidebar_html = render_visual_sidebar_unlocked(&state_guard).unwrap_or_default();
-
-        (logs_html, header_html, action_html, sidebar_html)
-    };
-
-    // Broadcast story log update
-    hub.broadcast(
-        serde_json::json!({
-            "type": "update",
-            "event": "story-log",
-            "fragment": "story-log",
-            "html": logs_html
-        })
-        .to_string(),
-    );
-
-    // Broadcast header update
-    hub.broadcast(
-        serde_json::json!({
-            "type": "update",
-            "event": "header",
-            "fragment": "header",
-            "html": header_html
-        })
-        .to_string(),
-    );
-
-    // Broadcast action area update
-    hub.broadcast(
-        serde_json::json!({
-            "type": "update",
-            "event": "action-area",
-            "fragment": "action-area",
-            "html": action_html
-        })
-        .to_string(),
-    );
-
-    // Broadcast sidebar update
-    hub.broadcast(
-        serde_json::json!({
-            "type": "update",
-            "event": "visual-sidebar",
-            "fragment": "visual-sidebar",
-            "html": sidebar_html
-        })
-        .to_string(),
-    );
 }
 
 fn html_escape(s: &str) -> String {
@@ -596,4 +550,40 @@ fn html_escape(s: &str) -> String {
         .replace('<', "&lt;")
         .replace('>', "&gt;")
         .replace('"', "&quot;")
+}
+
+/// Convert markdown text to HTML using pulldown-cmark
+/// Parses CommonMark: *italic*, **bold**, blockquotes, etc.
+///
+/// Security: For chat apps, we accept pulldown-cmark output as it only produces
+/// known safe tags (em, strong, blockquote, p, br, etc.). Raw HTML from LLM input
+/// would appear as text since it's not valid markdown syntax.
+fn parse_markdown(text: &str) -> String {
+    let parser = Parser::new(text);
+    let mut html_output = String::new();
+    html::push_html(&mut html_output, parser);
+    html_output
+}
+
+/// Convert plain text with newlines to HTML paragraph formatting
+/// - Double newlines (\n\n) become paragraph breaks
+/// - Single newlines (\n) become line breaks
+///
+/// IMPORTANT: Call html_escape BEFORE this function to prevent XSS
+fn format_text_with_newlines(text: &str) -> String {
+    // Split by double newlines to get paragraphs
+    let paragraphs: Vec<String> = text
+        .split("\n\n")
+        .map(|p| {
+            // Within each paragraph, convert single newlines to <br>
+            p.replace('\n', "<br>")
+        })
+        .collect();
+
+    // Wrap each paragraph in <p> tags
+    paragraphs
+        .iter()
+        .map(|p| format!("<p>{p}</p>"))
+        .collect::<Vec<_>>()
+        .join("\n")
 }

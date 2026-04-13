@@ -14,6 +14,9 @@ pub enum EngineError {
     #[error("LLM error: {0}")]
     Llm(String),
 
+    #[error("Narrative generation error: {0}")]
+    Narrative(String),
+
     #[error("Room not found: {0}")]
     RoomNotFound(String),
 
@@ -22,6 +25,9 @@ pub enum EngineError {
 
     #[error("Configuration error: {0}")]
     Config(String),
+
+    #[error("Internal error: {0}")]
+    Internal(String),
 }
 
 pub type Result<T> = std::result::Result<T, EngineError>;

@@ -4,6 +4,7 @@
 
 #![allow(dead_code)]
 
+use playwright_rs::Playwright;
 use std::process::{Child, Command};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
@@ -234,6 +235,72 @@ pub async fn wait_for_element_text(page: &playwright_rs::Page, selector: &str) -
     String::new()
 }
 
+/// Wait for LLM backend to finish processing (direct HTTP check, not UI)
+/// Returns Ok(()) if LLM became idle within timeout, Err(()) if timeout exceeded.
+pub async fn wait_for_llm_backend_idle(port: u16, timeout: Duration) -> Result<(), ()> {
+    let start = std::time::Instant::now();
+    let client = reqwest::Client::new();
+
+    while start.elapsed() < timeout {
+        match client
+            .get(&format!("http://127.0.0.1:{}/status/generating", port))
+            .send()
+            .await
+        {
+            Ok(resp) => {
+                if let Ok(text) = resp.text().await {
+                    if text == "idle" {
+                        return Ok(());
+                    }
+                }
+            }
+            Err(_) => {}
+        }
+        tokio::time::sleep(Duration::from_millis(200)).await;
+    }
+    Err(())
+}
+
+/// Poll until status display shows "Ready" (not "Thinking")
+/// This indicates synchronous action processing is complete
+pub async fn wait_for_status_ready(page: &playwright_rs::Page) {
+    use tokio::time::sleep;
+
+    for i in 0..50 {
+        let status: String = page
+            .evaluate::<(), String>(
+                "document.querySelector('#status-display')?.innerText || ''",
+                None,
+            )
+            .await
+            .unwrap_or_default();
+
+        if status.contains("Ready") {
+            return;
+        }
+        if i == 49 {
+            println!("WAIT_FOR_STATUS_READY TIMEOUT - status: '{}'", status);
+        }
+        sleep(Duration::from_millis(100)).await;
+    }
+}
+
+/// Launch Chrome browser for testing
+pub async fn launch_chrome() -> (playwright_rs::Playwright, playwright_rs::Browser) {
+    use playwright_rs::LaunchOptions;
+
+    let playwright = Playwright::launch().await.unwrap();
+    let browser = playwright
+        .chromium()
+        .launch_with_options(LaunchOptions {
+            channel: Some("chrome".to_string()),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    (playwright, browser)
+}
+
 pub struct TestServer {
     child: Child,
 }
@@ -264,10 +331,10 @@ impl TestServer {
 impl Drop for TestServer {
     fn drop(&mut self) {
         let _ = self.child.kill();
-        std::thread::sleep(std::time::Duration::from_millis(200));
+        std::thread::sleep(std::time::Duration::from_millis(500));
         let _ = self.child.kill();
         let _ = self.child.wait();
         SERVER_MANAGED.store(false, Ordering::SeqCst);
-        std::thread::sleep(std::time::Duration::from_millis(100));
+        std::thread::sleep(std::time::Duration::from_millis(500));
     }
 }

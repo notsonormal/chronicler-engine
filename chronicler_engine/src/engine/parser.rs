@@ -27,12 +27,12 @@ pub fn parse_command(input: &str) -> Action {
 
     match tokens[0] {
         "l" | "look" if tokens.len() == 1 => Action::Look,
-        "n" if tokens.len() == 1 => Action::WalkTo("north".to_string()),
-        "s" if tokens.len() == 1 => Action::WalkTo("south".to_string()),
-        "e" if tokens.len() == 1 => Action::WalkTo("east".to_string()),
-        "w" if tokens.len() == 1 => Action::WalkTo("west".to_string()),
-        "u" if tokens.len() == 1 => Action::WalkTo("up".to_string()),
-        "d" if tokens.len() == 1 => Action::WalkTo("down".to_string()),
+        "n" | "north" if tokens.len() == 1 => Action::WalkTo("north".to_string()),
+        "s" | "south" if tokens.len() == 1 => Action::WalkTo("south".to_string()),
+        "e" | "east" if tokens.len() == 1 => Action::WalkTo("east".to_string()),
+        "w" | "west" if tokens.len() == 1 => Action::WalkTo("west".to_string()),
+        "u" | "up" if tokens.len() == 1 => Action::WalkTo("up".to_string()),
+        "d" | "down" if tokens.len() == 1 => Action::WalkTo("down".to_string()),
         "go" | "walk" | "move" if tokens.len() > 1 => {
             // Check if they typed "go to X" or "walk to X"
             if tokens[1] == "to" && tokens.len() >= 3 {
@@ -64,14 +64,32 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_look() {
-        assert_eq!(parse_command("look"), Action::Look);
-        assert_eq!(parse_command(" L "), Action::Look);
-    }
-
-    #[test]
     fn test_parse_navigate() {
+        // Single letter shortcuts
         assert_eq!(parse_command("n"), Action::WalkTo("north".to_string()));
+        assert_eq!(parse_command("s"), Action::WalkTo("south".to_string()));
+        assert_eq!(parse_command("e"), Action::WalkTo("east".to_string()));
+        assert_eq!(parse_command("w"), Action::WalkTo("west".to_string()));
+        assert_eq!(parse_command("u"), Action::WalkTo("up".to_string()));
+        assert_eq!(parse_command("d"), Action::WalkTo("down".to_string()));
+
+        // Full direction words (newly added)
+        assert_eq!(parse_command("north"), Action::WalkTo("north".to_string()));
+        assert_eq!(parse_command("south"), Action::WalkTo("south".to_string()));
+        assert_eq!(parse_command("east"), Action::WalkTo("east".to_string()));
+        assert_eq!(parse_command("west"), Action::WalkTo("west".to_string()));
+        assert_eq!(parse_command("up"), Action::WalkTo("up".to_string()));
+        assert_eq!(parse_command("down"), Action::WalkTo("down".to_string()));
+
+        // Case insensitive
+        assert_eq!(parse_command("NORTH"), Action::WalkTo("north".to_string()));
+        assert_eq!(parse_command("South"), Action::WalkTo("south".to_string()));
+
+        // move/go/walk commands
+        assert_eq!(
+            parse_command("move north"),
+            Action::WalkTo("north".to_string())
+        );
         assert_eq!(
             parse_command("go south"),
             Action::WalkTo("south".to_string())

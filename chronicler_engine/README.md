@@ -13,11 +13,12 @@ The engine uses a data-driven model inspired by NetAF, ADRIFT, and SillyTavern c
 ## Documentation & Memory
 The Chronicler Engine uses a tiered **Spec-Driven Development (SDD 2.0)** approach. Documentation is organized to provide the best possible context for both humans and AI agents:
 
-- **[Contracts](docs/specs/contract/)**: Data schemas, traits, and API boundaries.
-- **[Logic](docs/specs/logic/)**: Behavioral rules, narration logic, and LLM processing.
-- **[UI](docs/specs/ui/)**: Blueprints for the TUI dashboard and visual semantics.
-- **[Blueprints](docs/specs/blueprints/)**: Archival records of completed major migrations.
-- **[Learnings](../.ag-memory/CHRONICLER_LEARNINGS.md)**: Persistent memory of breakthroughs and repeating mistakes.
+- **[Architecture](docs/architecture/)**: System definition - single source of truth.
+- **[System](docs/system/)**: Domain documentation - explains subsystems.
+- **[Plans](docs/plans/)**: Implementation blueprints (active or archived).
+- **[ADR](docs/adr/)**: Architecture Decision Records with context and rationale.
+- **[Reference](docs/reference/)**: Data schemas and API specs.
+- **[Learnings](../.ag-memory/CHRONICLER_LEARNINGS.md)**: Persistent memory of breakthroughs.
 
 ## Environment Variables
 

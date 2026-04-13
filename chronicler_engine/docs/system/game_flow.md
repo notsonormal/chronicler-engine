@@ -87,7 +87,7 @@ The engine uses **HTMX polling** for real-time updates instead of WebSockets.
 ### Alternative Considered: WebSocket
 WebSocket was attempted but had issues in test environments. The polling approach provides 100% reliable updates at the cost of a 5-second maximum delay.
 
-> **Note**: WebSocket is still connected for status indicator but polling handles main content updates.
+> **Note**: HTMX polling handles all real-time updates including status-display
 
 ## Phase Details
 
@@ -100,7 +100,7 @@ WebSocket was attempted but had issues in test environments. The polling approac
    - Empty narration history
    - Player character
 3. Renders initial HTML fragments
-4. WebSocket connects, receives initial state
+4. HTMX polling starts (story-log and status-display poll every 5s)
 
 **Expected UI State:**
 - Header shows: "Chronicler Engine | <starting_room_name>"
@@ -150,23 +150,18 @@ WebSocket was attempted but had issues in test environments. The polling approac
 - Natural language narration
 - Added to history as `Narration` type (cyan text)
 
-### Phase 5: Broadcast
+### Phase 5: Polling Update
 
 **Steps:**
 1. After action completes (sync or async), render all fragments
-2. Send JSON messages via WebSocket:
-   ```json
-   {"type": "update", "fragment": "story-log", "html": "..."}
-   {"type": "update", "fragment": "header", "html": "..."}
-   {"type": "update", "fragment": "visual-sidebar", "html": "..."}
-   ```
-3. Client JavaScript receives and updates DOM
+2. Server stores updated fragments (story-log, header, visual-sidebar)
+3. HTMX polling (every 5s) fetches updated story-log automatically
 
 **Expected UI State:**
-- New narration appears in story-log (no reload)
-- Location updates in header (if moved)
-- Visual sidebar updates (if NPCs changed)
-- Status returns to "Ready"
+- New narration appears in story-log (via polling, no reload)
+- Location updates in header (via polling)
+- Visual sidebar updates (via polling)
+- Status returns to "Ready" (via status-display polling)
 
 ## Test Scenarios
 
@@ -220,14 +215,13 @@ And the status shows "Ready"
 - Show helpful error in story-log
 - Status returns to "Ready"
 
-### WebSocket Disconnect
-- Show "Disconnected" in connection status
-- Attempt reconnection automatically
-- UI continues to work via HTMX fallback
+### Polling-based Updates
+- HTMX automatically polls every 5 seconds for story-log updates
+- Status-display polls `/status/generating` for button state
+- No manual reconnection needed
 
 ## Reference Implementation
 
-- **Server**: `src/server/fragments.rs` - `action_handler`, `process_action`, `broadcast_state`
-- **WebSocket**: `src/server/mod.rs` - `ws_handler`, `handle_socket`
-- **Client**: `assets/index.html` - WebSocket message handling in `<script>`
+- **Server**: `src/server/fragments.rs` - `action_handler`, `process_action`
+- **HTMX Polling**: `assets/index.html` - `hx-trigger="load, every 5s"`
 - **LLM**: `src/narrative/llm.rs` - `narrate_action`, `narrate_arrival`

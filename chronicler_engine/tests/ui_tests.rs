@@ -17,7 +17,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_page_loads() {
-        let _server = TestServer::new(TEST_PORT, TEST_WORLD);
+        let _server = TestServer::new_with_mock(TEST_PORT, TEST_WORLD);
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
@@ -56,7 +56,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_htmx_loaded() {
-        let _server = TestServer::new(TEST_PORT, TEST_WORLD);
+        let _server = TestServer::new_with_mock(TEST_PORT, TEST_WORLD);
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
@@ -80,7 +80,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_ws_extension_loaded() {
-        let _server = TestServer::new(TEST_PORT, TEST_WORLD);
+        let _server = TestServer::new_with_mock(TEST_PORT, TEST_WORLD);
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
@@ -107,7 +107,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_connection_status_visible() {
-        let _server = TestServer::new(TEST_PORT, TEST_WORLD);
+        let _server = TestServer::new_with_mock(TEST_PORT, TEST_WORLD);
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
@@ -134,7 +134,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_action_area_has_input() {
-        let _server = TestServer::new(TEST_PORT, TEST_WORLD);
+        let _server = TestServer::new_with_mock(TEST_PORT, TEST_WORLD);
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
@@ -170,7 +170,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_action_hints_visible() {
-        let _server = TestServer::new(TEST_PORT, TEST_WORLD);
+        let _server = TestServer::new_with_mock(TEST_PORT, TEST_WORLD);
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
@@ -194,7 +194,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_move_north_command() {
-        let _server = TestServer::new(TEST_PORT, TEST_WORLD);
+        let _server = TestServer::new_with_mock(TEST_PORT, TEST_WORLD);
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
@@ -243,7 +243,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_images_load() {
-        let _server = TestServer::new(TEST_PORT, TEST_WORLD);
+        let _server = TestServer::new_with_mock(TEST_PORT, TEST_WORLD);
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
@@ -278,7 +278,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_npc_image_visible() {
-        let _server = TestServer::new(TEST_PORT, TEST_WORLD);
+        let _server = TestServer::new_with_mock(TEST_PORT, TEST_WORLD);
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
@@ -288,9 +288,11 @@ mod tests {
             .await
             .unwrap();
 
-        // Wait for initial content to load
-        let _ = wait_for_element_children(&page, "#story-log .log-entry", 1).await;
+        // Wait for visual sidebar to load
+        let _ = wait_for_element_children(&page, ".npc-portraits", 1).await;
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
+        // Check NPC image renders
         let img_src: String = page
             .evaluate::<(), String>(
                 "document.querySelector('.npc-portrait img')?.src || ''",
@@ -305,6 +307,7 @@ mod tests {
             img_src
         );
 
+        // Check image is visible (in DOM and visible)
         let img_visible: bool = page
             .evaluate::<(), bool>(
                 "(() => {
