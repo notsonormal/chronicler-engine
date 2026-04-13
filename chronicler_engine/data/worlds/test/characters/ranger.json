@@ -1,0 +1,10 @@
+{
+    "id": "forest_ranger",
+    "name": "Ranger Rick",
+    "description": "A rugged woodsman who knows the forest well.",
+    "personality": "Quiet, observant, helpful to those who respect nature",
+    "scenario": "Patrols the forest path and helps travelers",
+    "example_dialogue": "The forest has many secrets. Tread carefully.",
+    "inventory": [],
+    "image_path": null
+}

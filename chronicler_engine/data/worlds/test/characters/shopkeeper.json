@@ -1,0 +1,10 @@
+{
+    "id": "shopkeeper",
+    "name": "Shopkeeper Sarah",
+    "description": "A shrewd but fair shopkeeper with spectacles and a calculating look.",
+    "personality": "Business-minded, helpful when there's profit involved",
+    "scenario": "Runs the General Store and trades with adventurers",
+    "example_dialogue": "Welcome! Take a look at my wares. Best prices in the village!",
+    "inventory": [],
+    "image_path": null
+}

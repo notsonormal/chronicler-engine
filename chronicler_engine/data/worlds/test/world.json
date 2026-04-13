@@ -1,0 +1,12 @@
+{
+    "id": "test",
+    "name": "Test Realm",
+    "description": "A small testing kingdom for UI tests",
+    "global_rules": [
+        "Test rule 1: Be respectful",
+        "Test rule 2: Have fun"
+    ],
+    "starting_room_id": "start",
+    "map_file": "map.json",
+    "player_file": "player.json"
+}

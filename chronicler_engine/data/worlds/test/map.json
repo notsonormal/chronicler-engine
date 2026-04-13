@@ -1,0 +1,56 @@
+{
+    "overworld": {
+        "id": "test_map",
+        "name": "Test World",
+        "regions": [
+            {
+                "id": "test_region",
+                "name": "Test Region",
+                "rooms": [
+                    {
+                        "id": "start",
+                        "name": "Test Tavern",
+                        "description": "A cozy tavern with wooden beams and a warm fire. Good place to start testing.",
+                        "exits": {
+                            "north": "village_square"
+                        },
+                        "items": [],
+                        "npcs": ["innkeeper"]
+                    },
+                    {
+                        "id": "village_square",
+                        "name": "Village Square",
+                        "description": "A bustling village square with a fountain in the center.",
+                        "exits": {
+                            "south": "start",
+                            "east": "forest_path",
+                            "west": "shop"
+                        },
+                        "items": [],
+                        "npcs": []
+                    },
+                    {
+                        "id": "forest_path",
+                        "name": "Forest Path",
+                        "description": "A quiet path through the woods. Birds sing in the distance.",
+                        "exits": {
+                            "west": "village_square"
+                        },
+                        "items": [],
+                        "npcs": []
+                    },
+                    {
+                        "id": "shop",
+                        "name": "General Store",
+                        "description": "A small shop selling various adventuring supplies.",
+                        "exits": {
+                            "east": "village_square"
+                        },
+                        "items": [],
+                        "npcs": []
+                    }
+                ]
+            }
+        ]
+    }
+}

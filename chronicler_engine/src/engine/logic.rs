@@ -18,6 +18,14 @@ pub fn get_current_room(state: &GameState) -> Result<&Room> {
         .ok_or_else(|| EngineError::RoomNotFound(state.current_room_id.clone()))
 }
 
+pub fn get_available_exits(state: &GameState) -> Vec<String> {
+    if let Ok(room) = get_current_room(state) {
+        room.exits.keys().map(|d| format!("{d:?}")).collect()
+    } else {
+        vec![]
+    }
+}
+
 pub fn attempt_walk(state: &mut GameState, target: &str) -> Result<String> {
     let current_room = get_current_room(state)?;
     let target_lower = target.to_lowercase();
@@ -25,7 +33,7 @@ pub fn attempt_walk(state: &mut GameState, target: &str) -> Result<String> {
 
     for (dir, room_id) in &current_room.exits {
         // 1. Check if they typed the direction literal (e.g. "north")
-        let dir_str = format!("{:?}", dir).to_lowercase();
+        let dir_str = format!("{dir:?}").to_lowercase();
         if dir_str == target_lower {
             found_dest = Some(room_id.clone());
             break;
@@ -42,7 +50,7 @@ pub fn attempt_walk(state: &mut GameState, target: &str) -> Result<String> {
 
     if let Some(next_room_id) = found_dest {
         state.current_room_id = next_room_id;
-        Ok(format!("You walk to: {}.", target))
+        Ok(format!("You walk to: {target}."))
     } else {
         Err(EngineError::Navigation(
             "You don't see a way to go there.".to_string(),
@@ -181,7 +189,7 @@ mod tests {
 
     #[test]
     fn test_attempt_walk_dangling_exit() {
-        let mut state = setup_test_state();
+        let state = setup_test_state();
         // Manually introduce a dangling exit
         let mut room = state.map.overworld.regions[0].rooms[0].clone();
         room.exits

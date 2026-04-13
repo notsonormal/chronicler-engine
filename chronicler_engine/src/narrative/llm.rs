@@ -4,7 +4,7 @@ use crate::model::map::Room;
 use crate::model::world::WorldCard;
 use serde_json::json;
 
-pub trait LlmBackend {
+pub trait LlmBackend: Send + Sync {
     fn generate_dialogue(
         &self,
         world: &WorldCard,
@@ -29,6 +29,37 @@ pub trait LlmBackend {
         nearby_npcs: &[&NpcCard],
         player: &PlayerCard,
     ) -> Result<String, EngineError>;
+
+    fn name(&self) -> &str;
+}
+
+/// Enum for available LLM backends
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LlmBackendType {
+    OpenRouter,
+    DeepSeek,
+    Mock,
+}
+
+impl LlmBackendType {
+    /// Get the configured LLM backend from environment
+    /// Default to OpenRouter if not set
+    pub fn from_env() -> Self {
+        match std::env::var("LLM_BACKEND").as_deref() {
+            Ok("deepseek") => LlmBackendType::DeepSeek,
+            Ok("mock") => LlmBackendType::Mock,
+            _ => LlmBackendType::OpenRouter, // default
+        }
+    }
+}
+
+/// Get the configured LLM backend instance
+pub fn get_llm_backend() -> Box<dyn LlmBackend> {
+    match LlmBackendType::from_env() {
+        LlmBackendType::Mock => Box::new(MockBackend),
+        LlmBackendType::DeepSeek => Box::new(DeepSeekBackend),
+        LlmBackendType::OpenRouter => Box::new(OpenRouterBackend),
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -75,6 +106,10 @@ impl LlmBackend for OpenRouterBackend {
             .map_err(|_| EngineError::Config("OPENROUTER_API_KEY not set".into()))?;
         Ok(call_openrouter(&api_key, &system_prompt, &user_text))
     }
+
+    fn name(&self) -> &str {
+        "OpenRouter"
+    }
 }
 
 pub fn build_dialogue_prompts(
@@ -98,13 +133,13 @@ pub fn build_dialogue_prompts(
 
     system_prompt.push_str("World Rules:\n");
     for rule in &world.global_rules {
-        system_prompt.push_str(&format!("- {}\n", rule));
+        system_prompt.push_str(&format!("- {rule}\n"));
     }
 
     system_prompt.push_str("\nInstructions: Roleplay as your character and respond to the player's action. Reply primarily with dialogue, and do not act or speak on behalf of the player.");
 
     let user_text = match user_message {
-        Some(msg) => format!("The player says: \"{}\"", msg),
+        Some(msg) => format!("The player says: \"{msg}\""),
         None => "The player approaches you in silence, waiting for you to speak.".to_string(),
     };
 
@@ -149,10 +184,10 @@ Never act or speak on behalf of the player.\n\n",
 
     system_prompt.push_str("World Lore:\n");
     for rule in &world.global_rules {
-        system_prompt.push_str(&format!("- {}\n", rule));
+        system_prompt.push_str(&format!("- {rule}\n"));
     }
 
-    let user_text = format!("The player does the following: {}", player_input);
+    let user_text = format!("The player does the following: {player_input}");
 
     (system_prompt, user_text)
 }
@@ -195,7 +230,7 @@ Never act or speak on behalf of the player.\n\n",
 
     system_prompt.push_str("World Lore:\n");
     for rule in &world.global_rules {
-        system_prompt.push_str(&format!("- {}\n", rule));
+        system_prompt.push_str(&format!("- {rule}\n"));
     }
 
     let user_text = format!("{} enters the {}.", player.sheet.name, room.name);
@@ -223,7 +258,7 @@ fn call_openrouter(api_key: &str, system_prompt: &str, user_text: &str) -> Strin
 
     let res = client
         .post("https://openrouter.ai/api/v1/chat/completions")
-        .header("Authorization", format!("Bearer {}", api_key))
+        .header("Authorization", format!("Bearer {api_key}"))
         .json(&payload)
         .send();
 
@@ -239,7 +274,7 @@ fn call_openrouter(api_key: &str, system_prompt: &str, user_text: &str) -> Strin
             }
             "The world seems to hold its breath (parse error).".to_string()
         }
-        Err(e) => format!("Request failed: {}", e),
+        Err(e) => format!("Request failed: {e}"),
     }
 }
 
@@ -254,7 +289,7 @@ impl LlmBackend for MockBackend {
         user_message: &Option<String>,
     ) -> Result<String, EngineError> {
         Ok(match user_message {
-            Some(msg) => format!("[MockGenerated] Replying to: {}", msg),
+            Some(msg) => format!("[MockGenerated] Replying to: {msg}"),
             None => "[MockGenerated] Standard greeting.".to_string(),
         })
     }
@@ -267,7 +302,7 @@ impl LlmBackend for MockBackend {
         _player: &PlayerCard,
         player_input: &str,
     ) -> Result<String, EngineError> {
-        Ok(format!("[MockNarration] {}", player_input))
+        Ok(format!("[MockNarration] {player_input}"))
     }
 
     fn narrate_arrival(
@@ -278,6 +313,50 @@ impl LlmBackend for MockBackend {
         _player: &PlayerCard,
     ) -> Result<String, EngineError> {
         Ok(format!("[MockArrival] You enter the {}.", room.name))
+    }
+
+    fn name(&self) -> &str {
+        "Mock"
+    }
+}
+
+/// DeepSeek backend - placeholder for future implementation
+pub struct DeepSeekBackend;
+
+impl LlmBackend for DeepSeekBackend {
+    fn generate_dialogue(
+        &self,
+        _world: &WorldCard,
+        _room: &Room,
+        _npc: &NpcCard,
+        _user_message: &Option<String>,
+    ) -> Result<String, EngineError> {
+        Ok("[DeepSeek] Dialogue not yet implemented. Use OpenRouter for now.".to_string())
+    }
+
+    fn narrate_action(
+        &self,
+        _world: &WorldCard,
+        _room: &Room,
+        _nearby_npcs: &[&NpcCard],
+        _player: &PlayerCard,
+        _player_input: &str,
+    ) -> Result<String, EngineError> {
+        Ok("[DeepSeek] Narration not yet implemented. Use OpenRouter for now.".to_string())
+    }
+
+    fn narrate_arrival(
+        &self,
+        _world: &WorldCard,
+        _room: &Room,
+        _nearby_npcs: &[&NpcCard],
+        _player: &PlayerCard,
+    ) -> Result<String, EngineError> {
+        Ok("[DeepSeek] Arrival not yet implemented. Use OpenRouter for now.".to_string())
+    }
+
+    fn name(&self) -> &str {
+        "DeepSeek"
     }
 }
 

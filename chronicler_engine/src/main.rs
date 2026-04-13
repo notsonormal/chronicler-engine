@@ -1,341 +1,265 @@
-use std::io::stdout;
-use std::sync::mpsc::{self, Receiver, Sender};
-use std::thread;
-use std::time::Duration;
+use std::{fs, path::Path, sync::Arc};
 
-use crossterm::{
-    event::{self, Event, KeyCode, KeyEventKind},
-    execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
-};
-use ratatui::{backend::CrosstermBackend, Terminal};
-
-use chronicler_engine::engine::action::Action;
-use chronicler_engine::engine::parser::parse_command;
-use chronicler_engine::error::Result;
 use chronicler_engine::model::character::{NpcCard, PlayerCard};
 use chronicler_engine::model::map::MapDef;
-use chronicler_engine::model::state::{GameState, LogType};
-use chronicler_engine::model::world::WorldCard;
-use chronicler_engine::narrative::llm::{LlmBackend, OpenRouterBackend};
-use std::sync::Arc;
+use chronicler_engine::model::state::GameState;
+use chronicler_engine::model::world::WorldManifest;
+use chronicler_engine::server::{Hub, ServerConfig};
 
-use std::fs;
-use std::path::Path;
+use clap::Parser;
 
-enum Message {
-    LlmResponse(String, String, LogType),
-    SystemMessage(String),
+/// Command-line arguments for the Chronicler Engine
+#[derive(Parser, Debug)]
+#[command(name = "chronicler-engine")]
+#[command(version = "0.1.0")]
+#[command(about = "Text adventure engine with HTMX dashboard")]
+struct Args {
+    /// Specify which world to load
+    #[arg(long, default_value = "redmist_estate")]
+    world: String,
+
+    /// List all available worlds and exit
+    #[arg(long)]
+    list_worlds: bool,
+
+    /// Port to run the HTTP server on
+    #[arg(long, default_value = "3000")]
+    port: u16,
 }
 
-fn main() -> Result<()> {
-    dotenv::dotenv().ok();
+/// Load world manifest from file
+fn load_world_manifest(world_id: &str) -> chronicler_engine::Result<WorldManifest> {
+    let path = Path::new("data/worlds").join(world_id).join("world.json");
+    let json = fs::read_to_string(&path)?;
+    let manifest: WorldManifest = serde_json::from_str(&json)?;
+    Ok(manifest)
+}
 
-    let world_json = fs::read_to_string("data/world/redmist_estate.json")?;
-    let world: WorldCard = serde_json::from_str(&world_json)?;
+/// List all available worlds
+fn list_available_worlds() -> chronicler_engine::Result<()> {
+    let worlds_dir = Path::new("data/worlds");
+    if !worlds_dir.exists() {
+        println!("No worlds found in data/worlds/");
+        return Ok(());
+    }
 
-    let map_json = fs::read_to_string("data/maps/redmist_estate.json")?;
+    let mut worlds = Vec::new();
+    for entry in fs::read_dir(worlds_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir() {
+            let world_file = path.join("world.json");
+            if world_file.exists() {
+                if let Ok(json) = fs::read_to_string(&world_file) {
+                    if let Ok(manifest) = serde_json::from_str::<WorldManifest>(&json) {
+                        worlds.push((manifest.id.clone(), manifest.name.clone()));
+                    }
+                }
+            }
+        }
+    }
+
+    if worlds.is_empty() {
+        println!("No worlds found in data/worlds/");
+    } else {
+        println!("Available worlds:");
+        for (id, name) in &worlds {
+            println!("  {id} - {name}");
+        }
+    }
+
+    Ok(())
+}
+
+/// Verify that a world can be loaded (for testing purposes)
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_load_redmist_estate_world() {
+        let result = load_world("redmist_estate");
+        assert!(
+            result.is_ok(),
+            "Failed to load redmist_estate: {:?}",
+            result
+        );
+        let (manifest, _map, _player, npcs) = result.unwrap();
+        assert_eq!(manifest.id, "redmist_estate");
+        assert_eq!(manifest.name, "Redmist Estate");
+        assert_eq!(manifest.starting_room_id, "front_gates");
+        assert!(!npcs.is_empty(), "Should have NPCs");
+    }
+
+    #[test]
+    fn test_load_test_world() {
+        let result = load_world("test");
+        assert!(result.is_ok(), "Failed to load test world: {:?}", result);
+        let (manifest, _map, player, npcs) = result.unwrap();
+        assert_eq!(manifest.id, "test");
+        assert_eq!(manifest.name, "Test Realm");
+        assert_eq!(player.sheet.name, "Test Player");
+        // Test world has 3 NPCs: ranger, shopkeeper, bartender
+        assert_eq!(npcs.len(), 3, "Test world should have 3 NPCs");
+    }
+
+    #[test]
+    fn test_list_worlds() {
+        let result = list_available_worlds();
+        assert!(result.is_ok(), "list_available_worlds should not fail");
+    }
+}
+
+/// Load a complete game world from the worlds directory structure
+fn load_world(
+    world_id: &str,
+) -> chronicler_engine::Result<(WorldManifest, MapDef, PlayerCard, Vec<NpcCard>)> {
+    // Try new directory structure first: data/worlds/<world_id>/
+    let world_dir = Path::new("data/worlds").join(world_id);
+
+    if !world_dir.exists() {
+        // Fall back to legacy structure for backward compatibility
+        return load_world_legacy(world_id);
+    }
+
+    // Load world manifest
+    let manifest = load_world_manifest(world_id)?;
+
+    // Load map
+    let map_path = world_dir.join(&manifest.map_file);
+    let map_json = fs::read_to_string(&map_path)?;
     let map: MapDef = serde_json::from_str(&map_json)?;
 
+    // Load player
+    let player_path = world_dir.join(&manifest.player_file);
+    let player_json = fs::read_to_string(&player_path)?;
+    let player: PlayerCard = serde_json::from_str(&player_json)?;
+
+    // Load NPCs from characters directory
+    let mut npcs = Vec::new();
+    let chars_dir = world_dir.join("characters");
+    if chars_dir.is_dir() {
+        for entry in fs::read_dir(&chars_dir)?.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) == Some("json") {
+                let char_json = fs::read_to_string(&path)?;
+                match serde_json::from_str::<NpcCard>(&char_json) {
+                    Ok(npc) => npcs.push(npc),
+                    Err(e) => {
+                        eprintln!("Warning: Failed to parse NPC file {path:?}: {e}");
+                    }
+                }
+            }
+        }
+    }
+
+    Ok((manifest, map, player, npcs))
+}
+
+/// Load world using legacy file structure (backward compatibility)
+fn load_world_legacy(
+    world_id: &str,
+) -> chronicler_engine::Result<(WorldManifest, MapDef, PlayerCard, Vec<NpcCard>)> {
+    // Load world from data/world/<id>.json
+    let world_path = Path::new("data/world").join(format!("{world_id}.json"));
+    let world_json = fs::read_to_string(&world_path)?;
+    let mut manifest: WorldManifest = serde_json::from_str(&world_json)?;
+    manifest.id = world_id.to_string();
+
+    // Load map from data/maps/<id>.json
+    let map_path = Path::new("data/maps").join(format!("{world_id}.json"));
+    let map_json = fs::read_to_string(&map_path)?;
+    let map: MapDef = serde_json::from_str(&map_json)?;
+
+    // For player, try personas/<id>.json or default to Julian
+    let player_path = Path::new("data/personas").join(format!("{world_id}.json"));
+    let player_json = if player_path.exists() {
+        fs::read_to_string(&player_path)?
+    } else {
+        // Default to Julian
+        fs::read_to_string("data/personas/julian.json")?
+    };
+    let player: PlayerCard = serde_json::from_str(&player_json)?;
+
+    // Load NPCs from data/characters/
     let mut npcs = Vec::new();
     let chars_dir = Path::new("data/characters");
     if chars_dir.is_dir() {
         for entry in fs::read_dir(chars_dir)?.flatten() {
             let path = entry.path();
-            if path.extension().unwrap_or_default() == "json" {
+            if path.extension().and_then(|s| s.to_str()) == Some("json") {
                 let char_json = fs::read_to_string(&path)?;
                 match serde_json::from_str::<NpcCard>(&char_json) {
                     Ok(npc) => npcs.push(npc),
                     Err(e) => {
-                        eprintln!("Warning: Failed to parse NPC file {:?}: {}", path, e);
+                        eprintln!("Warning: Failed to parse NPC file {path:?}: {e}");
                     }
                 }
             }
         }
     }
 
-    let player_json = fs::read_to_string("data/personas/julian.json")?;
-    let player: PlayerCard = serde_json::from_str(&player_json)?;
+    // Set defaults for legacy worlds
+    if manifest.starting_room_id.is_empty() {
+        manifest.starting_room_id = "front_gates".to_string();
+    }
 
+    Ok((manifest, map, player, npcs))
+}
+
+fn main() -> chronicler_engine::Result<()> {
+    dotenv::dotenv().ok();
+
+    let args = Args::parse();
+
+    // Handle --list-worlds flag
+    if args.list_worlds {
+        list_available_worlds()?;
+        return Ok(());
+    }
+
+    // Load the world
+    let (manifest, map, player, npcs) = load_world(&args.world)?;
+
+    // Create game state with the starting room from manifest
     let mut state = GameState::new(
-        Arc::new(world),
+        Arc::new(manifest.clone().into()),
         Arc::new(map),
         Arc::new(player),
         npcs,
-        "front_gates".to_string(),
+        manifest.starting_room_id.clone(),
     );
-    let llm_backend = OpenRouterBackend;
 
+    // Initialize game state with welcome messages
     state.add_log(
         format!("Welcome to {}.", state.world.name),
         None,
-        LogType::System,
+        chronicler_engine::model::state::LogType::System,
     );
     state.add_log(
         format!("Logged in as: {}", state.player.sheet.name),
         None,
-        LogType::System,
+        chronicler_engine::model::state::LogType::System,
     );
 
     let current_room = chronicler_engine::engine::logic::get_current_room(&state)
-        .expect("Starting room not found");
+        .map_err(|e| chronicler_engine::EngineError::RoomNotFound(e.to_string()))?;
     state.add_log(
         current_room.description.clone(),
         Some(current_room.name.clone()),
-        LogType::Narration,
+        chronicler_engine::model::state::LogType::Narration,
     );
 
-    enable_raw_mode()?;
-    let mut stdout = stdout();
-    execute!(stdout, EnterAlternateScreen)?;
-    let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
+    // Create shared state and WebSocket hub
+    let state = Arc::new(std::sync::Mutex::new(state));
+    let hub = Hub::new();
 
-    let (tx, rx): (Sender<Message>, Receiver<Message>) = mpsc::channel();
-
-    loop {
-        terminal.draw(|f| chronicler_engine::ui::dashboard::draw(f, &state))?;
-
-        while let Ok(msg) = rx.try_recv() {
-            match msg {
-                Message::LlmResponse(sender, text, log_type) => {
-                    state.add_log(text, Some(sender), log_type);
-                    state.tui_state.is_generating = false;
-                }
-                Message::SystemMessage(text) => {
-                    state.add_log(text, None, LogType::System);
-                    state.tui_state.is_generating = false;
-                }
-            }
-        }
-
-        if event::poll(Duration::from_millis(100))?
-            && let Event::Key(key) = event::read()?
-            && key.kind == KeyEventKind::Press
-        {
-            if state.tui_state.is_generating {
-                continue;
-            }
-
-            match key.code {
-                KeyCode::Char(c) => {
-                    state.tui_state.push_char(c);
-                }
-                KeyCode::Backspace => {
-                    state.tui_state.pop_char();
-                }
-                KeyCode::Enter => {
-                    let input = state.tui_state.input.clone();
-                    state.tui_state.clear_input();
-
-                    if !input.trim().is_empty() {
-                        handle_action(&mut state, input, llm_backend, tx.clone());
-                    }
-                }
-                KeyCode::Esc => break,
-                KeyCode::Up => {
-                    if state.tui_state.scroll_offset > 0 {
-                        state.tui_state.scroll_offset -= 1;
-                    }
-                }
-                KeyCode::Down => {
-                    state.tui_state.scroll_offset += 1;
-                }
-                _ => {}
-            }
-        }
-    }
-
-    disable_raw_mode()?;
-    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
-    terminal.show_cursor()?;
+    // Run the HTTP server on the specified port
+    let config = ServerConfig { port: args.port };
+    let runtime = tokio::runtime::Runtime::new()?;
+    runtime.block_on(chronicler_engine::server::run_server_with_config(
+        state, hub, config,
+    ))?;
 
     Ok(())
-}
-
-fn find_room(state: &GameState) -> Option<(&str, &str, Vec<String>)> {
-    let room_id = &state.current_room_id;
-    for region in &state.map.overworld.regions {
-        for room in &region.rooms {
-            if &room.id == room_id {
-                return Some((&room.name, &room.description, room.npcs.clone()));
-            }
-        }
-    }
-    None
-}
-
-fn handle_action(
-    state: &mut GameState,
-    input: String,
-    llm: OpenRouterBackend,
-    tx: Sender<Message>,
-) {
-    state.add_log(
-        input.clone(),
-        Some(state.player.sheet.name.clone()),
-        LogType::Input,
-    );
-
-    let action = parse_command(&input);
-    match action {
-        Action::Quit => {
-            let _ = tx.send(Message::SystemMessage("Goodbye!".to_string()));
-        }
-        Action::Look => {
-            if let Some((name, desc, _)) = find_room(state) {
-                state.add_log(desc.to_string(), Some(name.to_string()), LogType::Narration);
-            }
-        }
-        Action::WalkTo(target) => {
-            let walk_result = chronicler_engine::engine::logic::attempt_walk(state, &target);
-            if let Err(e) = walk_result {
-                state.add_log(e.to_string(), None, LogType::System);
-                return;
-            }
-
-            let room_data = find_room(state);
-            let (room_name, room_desc, room_npcs) = match room_data {
-                Some(d) => d,
-                None => return,
-            };
-
-            let room_name = room_name.to_string();
-            let room_desc = room_desc.to_string();
-
-            let world = Arc::clone(&state.world);
-            let player = Arc::clone(&state.player);
-            let npcs_clone = Arc::new(state.npcs.clone());
-
-            state.tui_state.is_generating = true;
-            state.add_log(
-                room_desc.clone(),
-                Some(room_name.clone()),
-                LogType::Narration,
-            );
-
-            let tx = tx.clone();
-            let map = Arc::clone(&state.map);
-            let room_id = state.current_room_id.clone();
-            thread::spawn(move || {
-                let room = map
-                    .overworld
-                    .regions
-                    .iter()
-                    .flat_map(|r| r.rooms.iter())
-                    .find(|r| r.id == room_id);
-                let room = match room {
-                    Some(r) => r,
-                    None => return,
-                };
-                let npc_refs: Vec<NpcCard> = room_npcs
-                    .iter()
-                    .filter_map(|id| npcs_clone.get(id).cloned())
-                    .collect();
-                let npc_ptrs: Vec<&NpcCard> = npc_refs.iter().collect();
-                let narration = llm.narrate_arrival(&world, room, &npc_ptrs, &player);
-                let _ = tx.send(Message::LlmResponse(
-                    "Game Master".to_string(),
-                    narration.unwrap_or_else(|e| e.to_string()),
-                    LogType::Narration,
-                ));
-            });
-        }
-        Action::Talk(name, msg) => {
-            let room_data = find_room(state);
-            let (_, _, room_npcs_ref) = match room_data {
-                Some(d) => d,
-                None => return,
-            };
-            let lower_name = name.to_lowercase();
-
-            let npc = room_npcs_ref
-                .iter()
-                .filter_map(|id| state.npcs.get(id))
-                .find(|n| n.sheet.name.to_lowercase() == lower_name)
-                .cloned();
-
-            if let Some(npc) = npc {
-                let npc_name = npc.sheet.name.clone();
-                let world = Arc::clone(&state.world);
-                let tx = tx.clone();
-
-                let room_id = state.current_room_id.clone();
-                let map = Arc::clone(&state.map);
-
-                state.tui_state.is_generating = true;
-                thread::spawn(move || {
-                    let room = map
-                        .overworld
-                        .regions
-                        .iter()
-                        .flat_map(|r| r.rooms.iter())
-                        .find(|r| r.id == room_id);
-                    let room = match room {
-                        Some(r) => r,
-                        None => return,
-                    };
-                    let reply = llm.generate_dialogue(&world, room, &npc, &msg);
-                    let _ = tx.send(Message::LlmResponse(
-                        npc_name,
-                        reply.unwrap_or_else(|e| e.to_string()),
-                        LogType::Dialogue,
-                    ));
-                });
-            } else {
-                state.add_log(
-                    "There is no one here by that name.".to_string(),
-                    None,
-                    LogType::System,
-                );
-            }
-        }
-        Action::Inventory => {
-            state.add_log(
-                "Your inventory is empty.".to_string(),
-                None,
-                LogType::System,
-            );
-        }
-        Action::FreeAction(text) => {
-            let room_data = find_room(state);
-            let (_, _, room_npcs_ref) = match room_data {
-                Some(d) => d,
-                None => return,
-            };
-            let room_npcs = room_npcs_ref.clone();
-            let world = Arc::clone(&state.world);
-            let player = Arc::clone(&state.player);
-            let npcs_clone = Arc::new(state.npcs.clone());
-            let tx = tx.clone();
-
-            let room_id = state.current_room_id.clone();
-            let map = Arc::clone(&state.map);
-
-            state.tui_state.is_generating = true;
-            thread::spawn(move || {
-                let room = map
-                    .overworld
-                    .regions
-                    .iter()
-                    .flat_map(|r| r.rooms.iter())
-                    .find(|r| r.id == room_id);
-                let room = match room {
-                    Some(r) => r,
-                    None => return,
-                };
-                let npc_refs: Vec<NpcCard> = room_npcs
-                    .iter()
-                    .filter_map(|id| npcs_clone.get(id).cloned())
-                    .collect();
-                let npc_ptrs: Vec<&NpcCard> = npc_refs.iter().collect();
-                let narration = llm.narrate_action(&world, room, &npc_ptrs, &player, &text);
-                let _ = tx.send(Message::LlmResponse(
-                    "Game Master".to_string(),
-                    narration.unwrap_or_else(|e| e.to_string()),
-                    LogType::Narration,
-                ));
-            });
-        }
-    }
 }

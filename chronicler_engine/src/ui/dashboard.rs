@@ -1,18 +1,22 @@
+// DEAD CODE: TUI removed in favor of HTMX web dashboard (see server/ module)
+// This file is kept for reference only - not compiled
+
+#![allow(dead_code)]
+
 use crate::engine::logic::get_current_room;
 use crate::model::map::Room;
 use crate::model::state::{GameState, LogType};
 use image::GenericImageView;
 use lazy_static::lazy_static;
 use ratatui::{
+    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph, Wrap},
-    Frame,
 };
 use ratatui_image::protocol::Protocol;
 use ratatui_image::{Image, Resize};
-use std::collections::HashMap;
 use std::sync::Mutex;
 
 lazy_static! {
@@ -30,7 +34,12 @@ pub fn draw(f: &mut Frame, state: &GameState) {
         ])
         .split(f.area());
 
-    let room = get_current_room(state).expect("Current room not found");
+    // Get current room, handle error gracefully
+    let Ok(room) = get_current_room(state) else {
+        // If no valid room, just render header and input areas
+        draw_input(f, chunks[2], state);
+        return;
+    };
 
     draw_header(f, chunks[0], room);
 
@@ -182,7 +191,9 @@ fn render_sidebar_image(f: &mut Frame, area: Rect, path: &str, title: &str, is_p
     f.render_widget(block, area);
 
     // Try to load and cache protocol
-    let mut cache = (*PROTOCOL_CACHE).lock().unwrap();
+    let Ok(mut cache) = (*PROTOCOL_CACHE).lock() else {
+        return;
+    };
     if !cache.contains_key(path)
         && let Ok(mut raw_img) = image::open(path)
         && is_portrait

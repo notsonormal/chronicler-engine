@@ -22,3 +22,18 @@ The layout for the initial demo map features an Overworld with a single region (
 ## Implementation Requirements
 - Create `data/world/map.json`.
 - Modify `main.rs` to load the `.json` files from disk upon game boot (using `std::fs::read_to_string` and `serde_json`), deprecating the hardcoded "Aethelgard" mock data.
+
+## CharacterSheet Schema (Proposed)
+A unified structure for both `PlayerCard` and `NpcCard` narrative fields:
+
+```json
+{
+  "name": "string",
+  "description": "string (physical appearance + general intro)",
+  "personality": "string (e.g., 'Arrogant, brave, tech-savvy')",
+  "scenario": "string (background or current motivation)",
+  "inventory": ["item_id_1", "item_id_2"]
+}
+```
+
+This schema allows the LLM Game Master to treat player and NPCs with equal granular detail.

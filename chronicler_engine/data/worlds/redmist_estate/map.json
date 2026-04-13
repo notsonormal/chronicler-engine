@@ -1,0 +1,67 @@
+{
+    "overworld": {
+        "id": "redmist_estate",
+        "name": "Redmist Estate",
+        "regions": [
+            {
+                "id": "reg_mansion",
+                "name": "Redmist Mansion",
+                "rooms": [
+                    {
+                        "id": "front_gates",
+                        "name": "Front Gates",
+                        "description": "The imposing wrought iron gates of the Redmist Estate. Security is tight here.",
+                        "exits": {
+                            "north": "entrance_hall"
+                        },
+                        "items": [],
+                        "npcs": ["carla"]
+                    },
+                    {
+                        "id": "entrance_hall",
+                        "name": "Entrance Hall",
+                        "description": "A grand and luxurious foyer, decorated with expensive portraits of the Redmist ancestry.",
+                        "exits": {
+                            "south": "front_gates",
+                            "west": "kitchen",
+                            "east": "financial_office",
+                            "north": "master_quarters"
+                        },
+                        "items": [],
+                        "npcs": ["gabriella"]
+                    },
+                    {
+                        "id": "kitchen",
+                        "name": "Mansion Kitchen",
+                        "description": "An incredibly clean and extravagantly stocked stainless steel kitchen.",
+                        "exits": {
+                            "east": "entrance_hall"
+                        },
+                        "items": [],
+                        "npcs": ["louise"]
+                    },
+                    {
+                        "id": "financial_office",
+                        "name": "Financial Office",
+                        "description": "A quiet office with plush leather seating and a heavy mahogany desk stacked with financial records.",
+                        "exits": {
+                            "west": "entrance_hall"
+                        },
+                        "items": [],
+                        "npcs": ["jezebel"]
+                    },
+                    {
+                        "id": "master_quarters",
+                        "name": "Master Quarters",
+                        "description": "Your luxurious bedroom. A massive bed sits in the center overlooking the estate gardens.",
+                        "exits": {
+                            "south": "entrance_hall"
+                        },
+                        "items": [],
+                        "npcs": ["lisette"]
+                    }
+                ]
+            }
+        ]
+    }
+}

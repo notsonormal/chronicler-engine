@@ -21,6 +21,9 @@ The engine anchors roleplay output by constructing a context window comprising:
 - **Local Context**: Current room name, description, and list of present NPCs.
 - **Participant Context**: Player and target NPC personalities/scenarios.
 
+### Module Location
+- **Crate path**: `crate::narrative::llm` (see `architecture/system.md`)
+
 ## Implementation Standards
 - Use the `LlmBackend` trait for all implementation.
 - Maintain a `MockBackend` for test environments to ensure zero-network unit testing.

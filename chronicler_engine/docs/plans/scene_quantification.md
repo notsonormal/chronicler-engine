@@ -1,7 +1,7 @@
 # Blueprint: Scene Quantification Architecture (Dual-LLM)
 
 > [!NOTE]
-> This is a **Hypothetical Specification** stored in the `/blueprints/` directory. It defines the proposed architecture for Phase 3 of the roadmap and is currently NOT implemented.
+> This is a **Hypothetical Specification**. It defines the proposed architecture for Phase 3 of the roadmap and is currently NOT implemented.
 
 ## Objective
 To enable complex physical world interactions (Pushing, Grabbing, Brawling) by separating natural language understanding from deterministic state changes.

@@ -16,7 +16,7 @@ The player character requires the same depth as an NPC for the LLM Game Master t
 - `inventory`: A list of item IDs.
 
 ### 2. Unified Character Logic
-To avoid code duplication, `PlayerCard` and `NpcCard` should leverage a shared data structure (e.g., `CharacterSheet`) for narrative fields. This ensures that the Game Master's narration logic can treat the player and NPCs with equal granular detail.
+To avoid code duplication, `PlayerCard` and `NpcCard` should leverage a shared data structure (e.g., `CharacterSheet` - see `data_schemas.md` for proposed schema) for narrative fields. This ensures that the Game Master's narration logic can treat the player and NPCs with equal granular detail.
 
 ### 3. Persona Management
 The engine will look for persona files in `data/personas/`.

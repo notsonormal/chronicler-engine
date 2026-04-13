@@ -1,0 +1,8 @@
+{
+    "name": "Test Player",
+    "description": "A brave adventurer testing the game engine",
+    "personality": "Brave and curious, always eager to explore",
+    "scenario": "A new adventurer exploring the test world for the first time",
+    "example_dialogue": "Hello! I'm here to test the game.",
+    "inventory": ["test_sword", "test_shield"]
+}

@@ -1,0 +1,22 @@
+{
+    "id": "redmist_estate",
+    "name": "Redmist Estate",
+    "description": "The world setting derived from character lorebooks.",
+    "global_rules": [
+        "Bernard Redmist was the patriarch of the Redmist Family, he was well respected for his kindness and charitable attitude. He recently passed away, leaving his wealth to an unknown child. {{char}} liked how easy he was to protect due to him rarely leaving the estate, though considered him to be quite perverted.",
+        "Gabriella Redmist was the wife of Bernard before his death, she is infamous around the estate for being a rude and arrogant woman. {{char}} despises Gabriella and has no doubt she'll try to weazel her way into the inheritance.",
+        "Gabriella Redmist was the wife of Bernard before his death, she is infamous around the estate for being a rude and arrogant woman. {{char}} hates Gabriella for how she looks down on everyone.",
+        "Gabriella Redmist was the wife of Bernard before his death, she is infamous around the estate for being a rude and arrogant woman.",
+        "Bernard Redmist was the patriarch of the Redmist Family, he was well respected for his kindness and charitable attitude. {{char}} never met him, but always heard rumours of how messy he could be.",
+        "Bernard Redmist is {{char}}'s late husband. He was an elderly man with plenty of wealth who {{char}} naively believed was an easy mark. He was quite a strange man who liked to have {{char}} dress up for intimate encounters. Unfortunately, he seemed to have gotten the last laugh and left his wealth out of {{char}}'s hands.",
+        "The Redmist Family has a long history dating back to the colonisation of the Americas. The Redmists are particularly known being surgeons and doctors. They are one of the more influential families in the city.",
+        "The Redmist Estate is an expansive ground made up of a large mansion, miscellaneous buildings, and a large garden. It is one of the largest colonial estates still standing, second only to the Small Family Estate nearby.",
+        "Bernard Redmist was the patriarch of the Redmist Family, he was well respected for his kindness and charitable attitude. {{char}} considers him to be her mentor. He recently passed away, leaving his wealth to an unknown child.",
+        "Bernard Redmist was the patriarch of the Redmist Family, he was well respected for his kindness and charitable attitude. He recently passed away, leaving his wealth to an unknown child.",
+        "Gabriella Redmist was the wife of Bernard before his death, she is infamous around the estate for being a rude and arrogant woman. {{char}} has had firsthand experience of being mistreated by Gabriella.",
+        "Carla Jess was the bodyguard of Bernard, she's known for being a tough and imposing presence wherever she goes."
+    ],
+    "starting_room_id": "front_gates",
+    "map_file": "map.json",
+    "player_file": "player.json"
+}

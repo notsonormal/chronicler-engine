@@ -1,8 +1,10 @@
 use crate::model::character::{NpcCard, PlayerCard};
 use crate::model::map::MapDef;
 use crate::model::world::WorldCard;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum LogType {
@@ -17,6 +19,7 @@ pub struct LogEntry {
     pub sender: Option<String>,
     pub text: String,
     pub log_type: LogType,
+    pub timestamp: DateTime<Utc>,
 }
 
 const MAX_LOG_ENTRIES: usize = 1000;
@@ -47,8 +50,6 @@ impl TuiState {
         self.cursor_position = 0;
     }
 }
-
-use std::sync::Arc;
 
 #[derive(Debug)]
 pub struct GameState {
@@ -92,6 +93,7 @@ impl GameState {
             sender,
             text,
             log_type,
+            timestamp: Utc::now(),
         });
     }
 }

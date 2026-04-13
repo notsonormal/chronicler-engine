@@ -1,4 +1,6 @@
-# Specification: TUI Dashboard Migration
+# Specification: TUI Dashboard Migration (SUPERSEDED)
+
+> This spec has been superseded by `system/dashboard.md` (HTMX web dashboard).
 
 ## Objective
 Transform the Chronicler Engine from a line-buffered REPL into a structured Terminal User Interface (TUI) Dashboard. This will provide a fixed layout for visuals, narration history, and character status, significantly improving immersion and portability.

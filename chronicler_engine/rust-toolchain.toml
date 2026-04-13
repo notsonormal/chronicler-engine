@@ -1,0 +1,8 @@
+# Rust toolchain configuration for Chronicler Engine
+# Ensures reproducible builds across machines
+
+[toolchain]
+# Rust 2024 edition requires 1.85+, image crate requires 1.88+
+channel = "1.88.0"
+components = ["rustfmt", "clippy", "rust-src"]
+targets = ["x86_64-pc-windows-msvc", "x86_64-unknown-linux-gnu"]
