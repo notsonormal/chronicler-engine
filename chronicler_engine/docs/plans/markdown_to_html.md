@@ -1,7 +1,7 @@
 # Plan: Markdown to HTML Text Formatting
 
 **Created:** 2026-04-13
-**Status:** in_progress
+**Status:** completed
 
 ## Problem
 
@@ -16,38 +16,33 @@ Integrate `pulldown-cmark` library to parse markdown text from LLM and convert t
 ### Goals
 
 1. Parse markdown in narrative text (italics `*`, bold `**`, quotes `"`) 
-2. Convert to semantic HTML (`<em>`, `<strong>`, `<blockquote>`)
+2. Convert to semantic HTML (`<em>`, `<strong>`, `<q>`)
 3. Maintain existing paragraph/newline handling
-4. Escape HTML for security before markdown parsing
+4. Convert quotes to `<q>` tags for easy CSS styling (not `<blockquote>`)
 
-## Files to Change
+## Files Changed
 
 | File | Change |
 |------|--------|
-| `Cargo.toml` | Add `pulldown-cmark` dependency |
-| `src/server/fragments.rs` | Add markdown parsing function, integrate with `render_log_entry()` |
+| `src/server/templates.rs` | Added `parse_markdown()` function with `<q>` tag post-processing, integrated in `LogEntryView::from()` |
+| `src/server/fragments.rs` | Removed unused `parse_markdown()` and `format_text_with_newlines()` functions, cleaned up imports |
 
-## Implementation Steps
+## Implementation Summary
 
-1. Add `pulldown-cmark = "0.13"` to Cargo.toml dependencies
-2. Create `parse_markdown()` function in fragments.rs
-3. Update `render_log_entry()` to call `parse_markdown()` after `html_escape()`
-4. Validate with cargo fmt, clippy, test
+1. Added `pulldown-cmark` import to templates.rs
+2. Created `parse_markdown()` function that:
+   - Parses markdown via pulldown_cmark (converts `"..."` → Unicode curly quotes)
+   - Post-processes curly quotes to `<q>` tags for dialogue display
+3. Modified `LogEntryView::from()` to call `parse_markdown()` on text
+4. Added 8 tests validating markdown parsing (quotes, italic, bold, blockquote, mixed)
+5. Removed dead code from fragments.rs (unused `parse_markdown` and `format_text_with_newlines`)
+6. Cleaned up unused imports in fragments.rs
 
-## Trade-offs Considered
+## Test Results
 
-- **pulldown-cmark**: Fast, lightweight, minimal allocations ✓ (chosen)
-- **comrak**: More features, security sanitization built-in, but heavier and requires Rust 1.85+
-
-## Test Cases
-
-- Input: `*italic text*` → Output: `<em>italic text</em>`
-- Input: `**bold text**` → Output: `<strong>bold text</strong>`
-- Input: `"quoted text"` → Output: `<blockquote>quoted text</blockquote>`
-- Input: `Normal *italic* and **bold** mixed.` → Output: `<p>Normal <em>italic</em> and <strong>bold</strong> mixed.</p>`
+All 46 library tests pass, 3 binary tests pass, 4 behavior tests pass.
 
 ## Notes
 
-- The LLM returns markdown-formatted prose, so we need to parse it before displaying
-- Must HTML-escape BEFORE parsing to prevent XSS
-- Keep existing `format_text_with_newlines()` behavior for non-markdown text
+- Quotes are converted to `<q>` (inline) not `<blockquote>` (block) - allows easy CSS styling
+- LLM example: `"Well, well," Gabriella remarks` → `<q>Well, well,</q> Gabriella remarks`

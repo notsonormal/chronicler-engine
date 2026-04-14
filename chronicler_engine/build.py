@@ -74,6 +74,7 @@ def main():
         "ui_tests",
         "behavior_tests",
         "flow_mock_tests",
+        "fragment_tests",
         "layout_tests",
         "spec_tests",
     ]
@@ -83,8 +84,9 @@ def main():
     for test_name in test_suites:
         run(f"cargo test --test {test_name}")
 
-    print("[6/6] Running coverage check...")
+    print("[6/6] Running coverage check (full test suite)...")
     run("cargo llvm-cov test --text", check=False)
+    # Note: server/* handlers and main.rs CLI will show 0% - they need different test approaches
 
     print("=== Build Complete ===")
     return 0

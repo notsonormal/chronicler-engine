@@ -73,7 +73,7 @@ mod tests {
         assert_eq!(parse_command("u"), Action::WalkTo("up".to_string()));
         assert_eq!(parse_command("d"), Action::WalkTo("down".to_string()));
 
-        // Full direction words (newly added)
+        // Direction words
         assert_eq!(parse_command("north"), Action::WalkTo("north".to_string()));
         assert_eq!(parse_command("south"), Action::WalkTo("south".to_string()));
         assert_eq!(parse_command("east"), Action::WalkTo("east".to_string()));

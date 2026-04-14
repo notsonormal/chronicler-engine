@@ -15,7 +15,7 @@ pub trait LlmBackend {
     fn generate_dialogue(&self, world: &WorldCard, room: &Room, npc: &NpcCard, user_message: &Option<String>) -> String;
     fn narrate_action(&self, world: &WorldCard, room: &Room, nearby_npcs: &[&NpcCard], player: &PlayerCard, player_input: &str) -> String;
 }
-```
+```rust
 
 The engine will provide multiple implementations of this trait:
 - `OpenRouterBackend`: Used by the live executable. Contacts the HTTP API using `reqwest` and parses the JSON response.

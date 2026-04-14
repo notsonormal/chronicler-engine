@@ -26,6 +26,9 @@ pub enum EngineError {
     #[error("Configuration error: {0}")]
     Config(String),
 
+    #[error("Template error: {0}")]
+    Template(String),
+
     #[error("Internal error: {0}")]
     Internal(String),
 }

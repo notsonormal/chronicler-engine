@@ -31,7 +31,6 @@ The Send/Stop button in the HTMX dashboard never gets re-enabled after submittin
 ## Implementation
 
 ### index.html Changes
-
 ```html
 <div class="status ready" id="status-display" 
      hx-get="/status/generating" 
@@ -61,7 +60,6 @@ Test verifies:
 3. Button is re-enabled after LLM responds (via wait_for_llm_idle polling)
 
 ## Validation
-
 ```bash
 cargo fmt      # Pass
 cargo clippy  # Pass

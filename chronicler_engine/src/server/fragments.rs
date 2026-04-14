@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::thread;
 
+use askama::Template;
 use axum::{
     extract::{Form, State},
     response::Html,
@@ -10,10 +11,12 @@ use serde::Deserialize;
 use crate::engine::logic::{get_available_exits, get_current_room};
 use crate::engine::parser::parse_command;
 use crate::error::Result;
-use crate::model::state::{GameState, LogEntry, LogType};
+use crate::model::state::{GameState, LogType};
 use crate::narrative::llm::get_llm_backend;
 use crate::server::AppState;
-use pulldown_cmark::{Parser, html};
+use crate::server::templates::{
+    ActionAreaTemplate, HeaderTemplate, StoryLogTemplate, VisualSidebarTemplate,
+};
 
 const MAX_LOG_DISPLAY: usize = 50;
 
@@ -27,15 +30,12 @@ fn render_error(message: &str) -> String {
 
 fn render_header_unlocked(state: &GameState) -> Result<String> {
     let room = get_current_room(state)?;
-
-    Ok(format!(
-        "<div class=\"header\">\
-            <span class=\"game-title\">Chronicler Engine</span>\
-            <span class=\"location\">| {}</span>\
-            <span class=\"connection-status connected\" id=\"connection-status\">Connected</span>\
-        </div>",
-        html_escape(&room.name)
-    ))
+    let template = HeaderTemplate {
+        room_name: room.name.clone(),
+    };
+    template
+        .render()
+        .map_err(|e| crate::error::EngineError::Template(e.to_string()))
 }
 
 pub fn render_header(state: &AppState) -> Result<String> {
@@ -52,91 +52,38 @@ pub fn render_story_log(state: &AppState) -> Result<String> {
         .lock()
         .map_err(|_| crate::error::EngineError::Config("Lock poisoned".into()))?;
 
-    let logs: String = state_guard
+    // Use Askama template for compile-time validation
+    let entries: Vec<_> = state_guard
         .narration_history
         .iter()
         .take(MAX_LOG_DISPLAY)
-        .map(render_log_entry)
+        .cloned()
         .collect();
-
-    // Return the container div WITH the ID - this is what HTMX needs to target
-    // hx-swap="innerHTML" will replace the inside of #story-log, keeping the outer div intact
-    Ok(format!(
-        "<div class=\"story-log\" id=\"story-log\">{logs}</div>"
-    ))
-}
-
-fn render_log_entry(entry: &LogEntry) -> String {
-    let color_class = match entry.log_type {
-        LogType::Narration => "narration",
-        LogType::Dialogue => "dialogue",
-        LogType::System => "system",
-        LogType::Input => "input",
-    };
-
-    // Format timestamp as HH:MM
-    let timestamp = entry.timestamp.format("%H:%M").to_string();
-    let timestamp_html = format!("<span class=\"timestamp\">{timestamp}</span>");
-
-    let sender_html = entry
-        .sender
-        .as_ref()
-        .map(|s| format!("<span class=\"sender\">{s}:</span> "))
-        .unwrap_or_default();
-
-    // Parse markdown and format paragraphs (LLM returns markdown, not raw HTML)
-    let formatted_text = format_text_with_newlines(&parse_markdown(&entry.text));
-
-    format!(
-        r#"<div class="log-entry {}">{}<span class="sender">{}</span> <span class="text">{}</span></div>"#,
-        color_class,
-        timestamp_html,
-        sender_html.trim_end(),
-        formatted_text
-    )
+    let template = StoryLogTemplate::new(&entries);
+    template
+        .render()
+        .map_err(|e| crate::error::EngineError::Template(e.to_string()))
 }
 
 fn render_visual_sidebar_unlocked(state: &GameState) -> Result<String> {
     let room = get_current_room(state)?;
 
-    let room_image = if let Some(path) = &room.image_path {
-        format!(
-            "<div class=\"image-container location-image\">\
-                <img src=\"{}\" alt=\"{}\" />\
-                <div class=\"image-label\">Location</div>\
-            </div>",
-            path,
-            html_escape(&room.name)
-        )
-    } else {
-        "<div class=\"image-container no-image\">\
-            <div class=\"placeholder\">No Location Image</div>\
-        </div>"
-            .to_string()
-    };
-
-    let npc_images: String = room
+    // Collect NPC data: (image_path, name) pairs
+    let npc_data: Vec<(String, String)> = room
         .npcs
         .iter()
         .filter_map(|npc_id| {
             let npc = state.npcs.get(npc_id)?;
-            let image_path = npc.sheet.image_path.as_ref()?;
-            let name = html_escape(&npc.sheet.name);
-            Some(format!(
-                "<div class=\"image-container npc-portrait\">\
-                    <img src=\"{image_path}\" alt=\"{name}\" />\
-                    <div class=\"image-label\">{name}</div>\
-                </div>"
-            ))
+            let image_path = npc.sheet.image_path.as_ref()?.clone();
+            let name = npc.sheet.name.clone();
+            Some((image_path, name))
         })
         .collect();
 
-    Ok(format!(
-        "<div class=\"visual-sidebar\" id=\"visual-sidebar\">\
-            {room_image}\
-            <div class=\"npc-portraits\">{npc_images}</div>\
-        </div>"
-    ))
+    let template = VisualSidebarTemplate::new(room.image_path.clone(), room.name.clone(), npc_data);
+    template
+        .render()
+        .map_err(|e| crate::error::EngineError::Template(e.to_string()))
 }
 
 pub fn render_visual_sidebar(state: &AppState) -> Result<String> {
@@ -152,49 +99,16 @@ pub fn render_action_area(state: &AppState) -> Result<String> {
         .state
         .lock()
         .map_err(|_| crate::error::EngineError::Config("Lock poisoned".into()))?;
-    let is_generating = state_guard.tui_state.is_generating;
-    let _input_text = if is_generating {
-        "...The Game Master is thinking...".to_string()
-    } else {
-        state_guard.tui_state.input.clone()
-    };
 
-    // Get available exits for action hints
+    let is_generating = state_guard.tui_state.is_generating;
     let exits = get_available_exits(&state_guard);
-    let available_actions = if exits.is_empty() {
-        String::from("<span class=\"action-hint\">[Look] [Inventory]</span>")
-    } else {
-        let exit_hints: String = exits
-            .iter()
-            .map(|e| format!("[{e}]"))
-            .collect::<Vec<_>>()
-            .join(" ");
-        format!("<span class=\"action-hint\">[Look] [Inventory] {exit_hints}</span>")
-    };
     drop(state_guard);
 
-    let status_class = if is_generating {
-        "status thinking"
-    } else {
-        "status ready"
-    };
-    let status_text = if is_generating {
-        "Thinking..."
-    } else {
-        "Ready"
-    };
-    let disabled_attr = if is_generating { "disabled" } else { "" };
-
-    Ok(format!(
-        "<div class=\"action-area\" id=\"action-area\">\
-            <form hx-post=\"/action\" hx-target=\"#action-area\" hx-swap=\"outerHTML\" class=\"command-form\">\
-                <input type=\"text\" name=\"command\" placeholder=\"Enter command...\" value=\"\" {disabled_attr} autocomplete=\"off\" />\
-                <button type=\"submit\" {disabled_attr}>Send</button>\
-            </form>\
-            <div class=\"action-hints\">{available_actions}</div>\
-            <div class=\"{status_class}\">{status_text}</div>\
-        </div>"
-    ))
+    // Use Askama template for compile-time validation
+    let template = ActionAreaTemplate::new(is_generating, &exits);
+    template
+        .render()
+        .map_err(|e| crate::error::EngineError::Template(e.to_string()))
 }
 
 pub async fn header_fragment(State(state): State<AppState>) -> Html<String> {
@@ -550,40 +464,4 @@ fn html_escape(s: &str) -> String {
         .replace('<', "&lt;")
         .replace('>', "&gt;")
         .replace('"', "&quot;")
-}
-
-/// Convert markdown text to HTML using pulldown-cmark
-/// Parses CommonMark: *italic*, **bold**, blockquotes, etc.
-///
-/// Security: For chat apps, we accept pulldown-cmark output as it only produces
-/// known safe tags (em, strong, blockquote, p, br, etc.). Raw HTML from LLM input
-/// would appear as text since it's not valid markdown syntax.
-fn parse_markdown(text: &str) -> String {
-    let parser = Parser::new(text);
-    let mut html_output = String::new();
-    html::push_html(&mut html_output, parser);
-    html_output
-}
-
-/// Convert plain text with newlines to HTML paragraph formatting
-/// - Double newlines (\n\n) become paragraph breaks
-/// - Single newlines (\n) become line breaks
-///
-/// IMPORTANT: Call html_escape BEFORE this function to prevent XSS
-fn format_text_with_newlines(text: &str) -> String {
-    // Split by double newlines to get paragraphs
-    let paragraphs: Vec<String> = text
-        .split("\n\n")
-        .map(|p| {
-            // Within each paragraph, convert single newlines to <br>
-            p.replace('\n', "<br>")
-        })
-        .collect();
-
-    // Wrap each paragraph in <p> tags
-    paragraphs
-        .iter()
-        .map(|p| format!("<p>{p}</p>"))
-        .collect::<Vec<_>>()
-        .join("\n")
 }

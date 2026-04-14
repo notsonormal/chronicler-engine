@@ -32,14 +32,12 @@ pub fn attempt_walk(state: &mut GameState, target: &str) -> Result<String> {
     let mut found_dest: Option<String> = None;
 
     for (dir, room_id) in &current_room.exits {
-        // 1. Check if they typed the direction literal (e.g. "north")
         let dir_str = format!("{dir:?}").to_lowercase();
         if dir_str == target_lower {
             found_dest = Some(room_id.clone());
             break;
         }
 
-        // 2. Check if they typed the semantic room name (e.g. "kitchen")
         if let Some(dest_room) = get_room_by_id(state, room_id)
             && dest_room.name.to_lowercase().contains(&target_lower)
         {

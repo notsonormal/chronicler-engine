@@ -6,7 +6,7 @@ This document defines the core game loop - the play-by-play experience from star
 
 ## The Game Flow
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        START GAME                                    │
 │                  (Server starts, loads world)                       │
@@ -65,103 +65,10 @@ This document defines the core game loop - the play-by-play experience from star
 └─────────────────────────────────┬───────────────────────────────────┘
                                   │
                                   ▼
-                          ┌───────────────┐
-                          │  BACK TO 2    │
-                          └───────────────┘
+                           ┌───────────────┐
+                           │  BACK TO 2    │
+                           └───────────────┘
 ```
-
-## Real-Time Updates: Polling vs WebSocket
-
-The engine uses **HTMX polling** for real-time updates instead of WebSockets.
-
-### Why Polling?
-- **Reliability**: WebSocket connections are unreliable in headless browser testing (Playwright)
-- **Simplicity**: No additional server infrastructure needed
-- **Fallback**: Works even if JavaScript fails
-
-### Implementation
-- **Polling Interval**: 5 seconds (`hx-trigger="load, every 5s"`)
-- **Endpoint**: `/fragment/story-log` returns log entries
-- **Swap**: `hx-swap="innerHTML"` replaces content without wrapper
-
-### Alternative Considered: WebSocket
-WebSocket was attempted but had issues in test environments. The polling approach provides 100% reliable updates at the cost of a 5-second maximum delay.
-
-> **Note**: HTMX polling handles all real-time updates including status-display
-
-## Phase Details
-
-### Phase 1: Initialize
-
-**Steps:**
-1. Server loads world from `worlds/<world_name>/world.yaml`
-2. Creates `GameState` with:
-   - Current room from world manifest
-   - Empty narration history
-   - Player character
-3. Renders initial HTML fragments
-4. HTMX polling starts (story-log and status-display poll every 5s)
-
-**Expected UI State:**
-- Header shows: "Chronicler Engine | <starting_room_name>"
-- Story Log shows: Room description as first narration entry
-- Visual Sidebar shows: Room image + NPCs in room
-- Status: "Ready"
-
-### Phase 2: Await Input
-
-**Steps:**
-1. User types command in input field
-2. User clicks "Send" or presses Enter
-3. Form submits via HTMX POST to `/action`
-4. Input field clears
-
-**Expected UI State:**
-- Form input is cleared (after request completes)
-- Status transitions to "Thinking..." (from response)
-
-### Phase 3: Process Action
-
-**Steps:**
-1. Parse command into `Action` enum
-2. Execute action:
-   - **Look**: Get current room description
-   - **WalkTo**: Update player position, check exits
-   - **Talk**: Record dialogue intent
-   - **Inventory**: Show player items
-   - **FreeAction**: Pass to LLM for narration
-3. Add user input to narration history as `Input` type
-4. If LLM needed, spawn async thread
-5. Return "Thinking..." status to client immediately
-
-**Expected UI State:**
-- Status shows "Thinking..."
-- Input entry appears in story-log (gray text)
-
-### Phase 4: LLM Generation
-
-**Context sent to LLM:**
-- Current room (name, description, atmosphere)
-- NPCs present in room
-- Player character summary
-- The action being taken
-
-**Response:**
-- Natural language narration
-- Added to history as `Narration` type (cyan text)
-
-### Phase 5: Polling Update
-
-**Steps:**
-1. After action completes (sync or async), render all fragments
-2. Server stores updated fragments (story-log, header, visual-sidebar)
-3. HTMX polling (every 5s) fetches updated story-log automatically
-
-**Expected UI State:**
-- New narration appears in story-log (via polling, no reload)
-- Location updates in header (via polling)
-- Visual sidebar updates (via polling)
-- Status returns to "Ready" (via status-display polling)
 
 ## Test Scenarios
 
@@ -171,6 +78,37 @@ Given the server is running with "test" world
 When the user opens http://127.0.0.1:3000
 Then the header shows "Chronicler Engine | <starting_room>"
 And the story-log contains the starting room description
+And the status shows "Ready"
+```
+
+### Scenario 2: Look Command
+```gherkin
+Given the game is loaded
+When the user enters "look" and submits
+Then the status shows "Thinking..."
+And after processing, the story-log shows the room description again
+And the status shows "Ready"
+```
+
+### Scenario 3: Move to New Location
+```gherkin
+Given the game is loaded at starting room
+When the user enters "go north" and submits
+Then the status shows "Thinking..."
+And after LLM generates response:
+  And the header shows the new room name
+  And the story-log shows the LLM narration for arrival
+  And the visual-sidebar shows the new room's image and NPCs
+And the status shows "Ready"
+```
+
+### Scenario 4: Free Action (LLM Narration)
+```gherkin
+Given the game is loaded
+When the user enters "examine the mysterious orb" and submits
+Then the status shows "Thinking..."
+And after LLM generates response:
+  And the story-log shows the LLM's description of the orb
 And the status shows "Ready"
 ```
 

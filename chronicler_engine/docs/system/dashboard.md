@@ -47,6 +47,7 @@ The dashboard uses HTMX polling for live updates:
 - **HTMX**: Handles partial page updates via `hx-post` and `hx-target`
 - **HTMX Polling**: `hx-trigger="load, every 5s"` for real-time updates
 - **Styling**: Modern chat-app aesthetic with chat bubbles, fade animations
+- **Templates**: Uses `askama` for compile-time validated HTML fragments (pilot)
 
 ## Data Model
 

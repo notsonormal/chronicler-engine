@@ -16,10 +16,7 @@ mod tests {
     const TEST_PORT: u16 = 3001;
     const TEST_WORLD: &str = "test";
 
-    // ========================================================================
     // HEADER TESTS (dashboard.md Section 1)
-    // Height: 48px, Content: Game title + current location
-    // ========================================================================
 
     #[tokio::test]
     async fn test_header_displays_game_title() {
@@ -81,10 +78,7 @@ mod tests {
         browser.close().await.unwrap();
     }
 
-    // ========================================================================
     // STORY LOG TESTS (dashboard.md Section 2)
-    // Width: 70%, Scrollable, Styles: Narration/Cialogue/System/Input
-    // ========================================================================
 
     #[tokio::test]
     async fn test_story_log_populated_on_load() {
@@ -200,10 +194,7 @@ mod tests {
         browser.close().await.unwrap();
     }
 
-    // ========================================================================
     // VISUAL SIDEBAR TESTS (dashboard.md Section 2)
-    // Width: 30%, Location Image (40%) + NPC Portraits (60%)
-    // ========================================================================
 
     #[tokio::test]
     async fn test_visual_sidebar_exists() {
@@ -283,11 +274,7 @@ mod tests {
         browser.close().await.unwrap();
     }
 
-    // ========================================================================
     // ACTION AREA TESTS (dashboard.md Section 3)
-    // Height: 60px, Text input + Status indicator
-    // Status: Ready (green) / Thinking (yellow)
-    // ========================================================================
 
     #[tokio::test]
     async fn test_action_area_has_input() {
@@ -434,10 +421,7 @@ mod tests {
         browser.close().await.unwrap();
     }
 
-    // ========================================================================
     // REAL-TIME UPDATES TESTS (dashboard.md Section 4)
-    // HTMX polling for live updates
-    // ========================================================================
 
     #[tokio::test]
     async fn test_connection_status_indicator_exists() {
@@ -467,10 +451,7 @@ mod tests {
         browser.close().await.unwrap();
     }
 
-    // ========================================================================
     // HTMX LOADED TESTS
-    // Required for partial page updates
-    // ========================================================================
 
     #[tokio::test]
     async fn test_htmx_loaded() {
@@ -497,10 +478,7 @@ mod tests {
         browser.close().await.unwrap();
     }
 
-    // ========================================================================
     // STATIC SHELL VERIFICATION
-    // Verifies the static shell architecture is working
-    // ========================================================================
 
     #[tokio::test]
     async fn test_form_stays_static_after_submission() {

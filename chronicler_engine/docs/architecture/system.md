@@ -27,6 +27,10 @@ The HTTP layer for the HTMX web dashboard with polling-based real-time updates.
 - **`mod`**: Axum router, request handlers.
 - **`fragments`**: HTML fragment generators for HTMX partial updates.
   - Uses `pulldown-cmark` for markdown→HTML conversion of LLM narrative text.
+  - Uses `askama` for all 4 templates (header, story_log, visual_sidebar, action_area).
+- **`templates`**: Askama template definitions with type-safe rendering.
+  - Templates declare required data shapes at compile time.
+  - Missing fields = compiler error (not runtime failure).
 
 ### 5. The Presentation Tier (`assets/`)
 Static web assets served by the server.
@@ -46,6 +50,7 @@ Static web assets served by the server.
 | `src/narrative/llm.rs` | `crate::narrative::llm` | |
 | `src/server/mod.rs` | `crate::server` | HTTP server + HTMX endpoints |
 | `src/server/fragments.rs` | `crate::server` | HTML fragments |
+| `src/server/templates.rs` | `crate::server` | Askama templates (NEW) |
 | `assets/index.html` | Presentation | HTMX frontend |
 
 ## UI Specification

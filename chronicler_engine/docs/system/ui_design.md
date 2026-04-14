@@ -1,4 +1,4 @@
-# UI Design Specification
+# Specification: UI Design
 
 ## Design Tokens
 
@@ -88,7 +88,7 @@
 - Overflow: hidden
 
 ### Story Log
-- Width: 70%
+- Width: 80%
 - Background: #111
 - Border: 1px solid #333
 - Padding: 16px
@@ -96,7 +96,7 @@
 - Auto-scrolls to bottom on new content
 
 ### Visual Sidebar
-- Width: 30%
+- Width: 20%
 - Background: #0f0f0f
 - Border: 1px solid #333
 - Display: flex, flex-direction: column
@@ -130,16 +130,17 @@
 - Placeholder color: #555
 
 ### Send Button
-- Background: linear-gradient(180deg, #2a2a2a 0%, #1a1a1a 100%)
-- Border: 1px solid #555
+- Background: linear-gradient(180deg, #00aa00 0%, #006600 100%)
+- Border: 1px solid #00ff00
 - Border radius: 4px
 - Color: #e0e0e0
 - Padding: 8px 20px
 - Height: 40px, min-width: 90px
 - Font: inherit, 14px, bold
-- Hover: gradient #333-#222, border-color #00ff00
-- Active: gradient #222-#1a1a1a
-- Disabled: opacity 0.5, cursor not-allowed
+- Box-shadow: 0 0 8px rgba(0, 255, 0, 0.3)
+- Hover: background linear-gradient(180deg, #00cc00 0%, #008800 100%), border-color #00ff00, box-shadow 0 0 12px rgba(0, 255, 0, 0.4)
+- Active: gradient #008800-#006600
+- Disabled: opacity 0.5, cursor not-allowed, box-shadow none
 
 ### Action Hints
 - Font size: 12px
@@ -154,6 +155,17 @@
   - Ready: #00ff00
   - Thinking: #ffff00
   - Error: #ff4444
+
+### Error Notification
+- Position: fixed top, full width
+- Background: linear-gradient(180deg, #ff4444 0%, #cc0000 100%)
+- Color: white
+- Padding: 12px 20px
+- Box-shadow: 0 2px 8px rgba(0,0,0,0.5)
+- Z-index: 1000
+- Transform: translateY(-100%) (hidden by default)
+- Visible state: transform translateY(0)
+- Auto-hide: 5 seconds
 
 ### Log Entries
 
@@ -170,3 +182,19 @@
 
 #### Input
 - Color: #888888
+
+## JavaScript Features
+
+### Status Polling
+- Polls `/status/generating` every 5 seconds
+- Updates button state based on response ("generating" vs "idle")
+
+### Button State Management
+- Ready: Shows "▶ Send", enabled
+- Thinking: Shows "■ Stop", disabled, green gradient
+- Uses MutationObserver to watch status changes
+
+### Error Notification System
+- Shows slide-down banner for LLM errors
+- Auto-hides after 5 seconds
+- Z-index above all content

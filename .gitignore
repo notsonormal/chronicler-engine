@@ -215,3 +215,5 @@ logs/
 /.opencode/share
 /.opencode/data
 /tmp
+chronicler_engine/coverage.json
+chronicler_engine/coverage.txt

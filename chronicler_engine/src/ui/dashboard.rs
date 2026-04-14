@@ -28,15 +28,13 @@ pub fn draw(f: &mut Frame, state: &GameState) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3), // Header
-            Constraint::Min(0),    // Main Body
-            Constraint::Length(5), // Input Area
+            Constraint::Length(3),
+            Constraint::Min(0),
+            Constraint::Length(5),
         ])
         .split(f.area());
 
-    // Get current room, handle error gracefully
     let Ok(room) = get_current_room(state) else {
-        // If no valid room, just render header and input areas
         draw_input(f, chunks[2], state);
         return;
     };

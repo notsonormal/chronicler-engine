@@ -11,8 +11,6 @@ use test_utils::*;
 mod tests {
     use super::*;
     use playwright_rs::Playwright;
-    use std::time::Duration;
-    use tokio::time::sleep;
 
     const TEST_PORT: u16 = 3001;
     const TEST_WORLD: &str = "test";

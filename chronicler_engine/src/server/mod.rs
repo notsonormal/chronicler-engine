@@ -1,4 +1,35 @@
 pub mod fragments;
+pub mod templates;
+
+/// Test helper - create the Axum app without running a server.
+/// This allows same-process testing with coverage.
+pub fn create_app_for_testing(state: Arc<std::sync::Mutex<GameState>>) -> Router {
+    let app_state = AppState { state };
+
+    Router::new()
+        .route("/", get(index_handler))
+        .route("/fragment/header", get(fragments::header_fragment))
+        .route("/fragment/story-log", get(fragments::story_log_fragment))
+        .route(
+            "/fragment/visual-sidebar",
+            get(fragments::visual_sidebar_fragment),
+        )
+        .route(
+            "/fragment/action-area",
+            get(fragments::action_area_fragment),
+        )
+        .route("/action", post(fragments::action_handler))
+        .route("/hints", get(fragments::hints_handler))
+        .route("/status/ready", get(fragments::status_ready_handler))
+        .route(
+            "/status/generating",
+            get(fragments::generating_status_handler),
+        )
+        .nest_service("/assets", ServeDir::new("assets"))
+        .nest_service("/data", ServeDir::new("data"))
+        .fallback_service(ServeDir::new("assets"))
+        .with_state(app_state)
+}
 
 use axum::{
     Router,

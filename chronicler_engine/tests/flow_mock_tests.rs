@@ -17,14 +17,11 @@ use test_utils::*;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tokio::time::Duration;
 
     const TEST_PORT: u16 = 3001;
     const TEST_WORLD: &str = "test";
 
-    // ========================================================================
     // Initial Load Tests - No LLM needed
-    // ========================================================================
 
     #[tokio::test]
     async fn test_initial_load_header_shows_location() {
@@ -97,9 +94,7 @@ mod tests {
         browser.close().await.unwrap();
     }
 
-    // ========================================================================
     // Command Submission Tests - Status updates, no LLM needed
-    // ========================================================================
 
     #[tokio::test]
     async fn test_look_command_shows_thinking() {
@@ -151,10 +146,7 @@ mod tests {
         browser.close().await.unwrap();
     }
 
-    // ========================================================================
-    // ========================================================================
     // Connection Status Tests - No LLM needed
-    // ========================================================================
 
     #[tokio::test]
     async fn test_connection_indicator_present() {
