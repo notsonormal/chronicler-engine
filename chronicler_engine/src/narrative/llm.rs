@@ -289,8 +289,13 @@ fn call_openrouter(api_key: &str, system_prompt: &str, user_text: &str) -> Resul
                 return Err(format!("Error communicating with OpenRouter: {status}"));
             }
 
-            // Try to parse JSON response
-            match response.json::<serde_json::Value>() {
+            // Try to parse JSON response - get raw text first to log on failure
+            let raw_response = response.text().map_err(|e| {
+                log::error!("[LLM] Failed to read response body: {e}");
+                format!("Failed to read response body: {e}")
+            })?;
+
+            match serde_json::from_str::<serde_json::Value>(&raw_response) {
                 Ok(json_response) => {
                     log::debug!("[LLM] Raw JSON response: {json_response:?}");
 
@@ -331,6 +336,7 @@ fn call_openrouter(api_key: &str, system_prompt: &str, user_text: &str) -> Resul
                 }
                 Err(e) => {
                     log::error!("[LLM] JSON parse error: {e}");
+                    log::error!("[LLM] Raw response that failed to parse: {raw_response}");
                     Err(format!("Failed to parse LLM response: {e}"))
                 }
             }
