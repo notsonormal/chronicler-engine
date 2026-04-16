@@ -200,6 +200,33 @@ pub async fn wait_for_non_loading_value(page: &playwright_rs::Page, selector: &s
     String::new()
 }
 
+/// Poll until element has a specific class
+/// Returns true if class found, false if timeout
+pub async fn wait_for_element_class(
+    page: &playwright_rs::Page,
+    selector: &str,
+    class_name: &str,
+    max_attempts: u32,
+) -> bool {
+    use tokio::time::sleep;
+
+    for _ in 0..max_attempts {
+        let has_class: bool = page
+            .evaluate::<(), bool>(
+                &format!("document.querySelector('{selector}')?.classList.contains('{class_name}') ?? false"),
+                None,
+            )
+            .await
+            .unwrap_or(false);
+
+        if has_class {
+            return true;
+        }
+        sleep(Duration::from_millis(250)).await;
+    }
+    false
+}
+
 /// Poll until element exists and has at least min_count children
 /// Returns the count of children, or 0 if timeout
 pub async fn wait_for_element_children(

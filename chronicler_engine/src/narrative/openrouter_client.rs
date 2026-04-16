@@ -48,21 +48,21 @@ pub fn call_openrouter(
     match res {
         Ok(response) => {
             let status = response.status();
-            log::info!("[LLM] Response status: {}", status);
+            log::info!("[LLM] Response status: {status}");
 
             // Log response headers for debugging
             log::debug!("[LLM] Response headers: {:?}", response.headers());
 
             if !status.is_success() {
-                log::error!("[LLM] Non-success HTTP status: {}", status);
-                return Err(format!("Error communicating with OpenRouter: {}", status));
+                log::error!("[LLM] Non-success HTTP status: {status}");
+                return Err(format!("Error communicating with OpenRouter: {status}"));
             }
 
             // Try to parse JSON response - get raw text first to log on failure
             let raw_response = response.text().map_err(|e| {
-                log::error!("[LLM] Failed to read response body: {}", e);
+                log::error!("[LLM] Failed to read response body: {e}");
                 log::error!("[LLM] This usually means: 1) Network issue, 2) Invalid encoding, 3) Server closed connection");
-                format!("Failed to read response body: {}", e)
+                format!("Failed to read response body: {e}")
             })?;
 
             log::debug!("[LLM] Raw response length: {} bytes", raw_response.len());
@@ -73,7 +73,7 @@ pub fn call_openrouter(
 
             match serde_json::from_str::<serde_json::Value>(&raw_response) {
                 Ok(json_response) => {
-                    log::debug!("[LLM] Raw JSON response: {:?}", json_response);
+                    log::debug!("[LLM] Raw JSON response: {json_response:?}");
 
                     // Check for API-level errors in response
                     if let Some(error) = json_response.get("error") {
@@ -81,8 +81,8 @@ pub fn call_openrouter(
                             .get("message")
                             .and_then(|m| m.as_str())
                             .unwrap_or("Unknown API error");
-                        log::error!("[LLM] API error: {}", error_msg);
-                        return Err(format!("LLM API error: {}", error_msg));
+                        log::error!("[LLM] API error: {error_msg}");
+                        return Err(format!("LLM API error: {error_msg}"));
                     }
 
                     // Try to extract content from the standard response format
@@ -111,15 +111,15 @@ pub fn call_openrouter(
                     Err("The world seems to hold its breath (parse error).".to_string())
                 }
                 Err(e) => {
-                    log::error!("[LLM] JSON parse error: {}", e);
-                    log::error!("[LLM] Raw response that failed to parse: {}", raw_response);
-                    Err(format!("Failed to parse LLM response: {}", e))
+                    log::error!("[LLM] JSON parse error: {e}");
+                    log::error!("[LLM] Raw response that failed to parse: {raw_response}");
+                    Err(format!("Failed to parse LLM response: {e}"))
                 }
             }
         }
         Err(e) => {
-            log::error!("[LLM] Request failed: {}", e);
-            Err(format!("Request failed: {}", e))
+            log::error!("[LLM] Request failed: {e}");
+            Err(format!("Request failed: {e}"))
         }
     }
 }

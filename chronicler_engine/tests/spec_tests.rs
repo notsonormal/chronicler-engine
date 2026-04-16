@@ -139,14 +139,9 @@ mod tests {
         // Wait for initial content to load
         let _ = wait_for_element_children(&page, "#story-log .log-entry", 1).await;
 
-        // Check for narration style
-        let has_narration: bool = page
-            .evaluate::<(), bool>(
-                "document.querySelector('#story-log .log-entry.narration') !== null",
-                None,
-            )
-            .await
-            .unwrap();
+        // Wait specifically for narration class (HTMX applies it after load)
+        let has_narration =
+            wait_for_element_class(&page, "#story-log .log-entry", "narration", 20).await;
 
         assert!(has_narration, "Story log should have narration entries");
 
