@@ -11,6 +11,7 @@ use serde::Deserialize;
 use crate::engine::logic::{get_available_exits, get_current_room};
 use crate::engine::parser::parse_command;
 use crate::error::Result;
+use crate::model::character::NpcCard;
 use crate::model::state::{GameState, LogType};
 use crate::narrative::llm::get_llm_backend;
 use crate::server::AppState;
@@ -342,16 +343,23 @@ fn process_action(state: Arc<std::sync::Mutex<GameState>>, input: String, _playe
                 return;
             }
 
-            let room_name;
-            let room_desc;
+            let (room_name, room_npc_ids);
             {
                 let room = get_current_room(&state_guard).ok();
                 room_name = room.as_ref().map(|r| r.name.clone());
-                room_desc = room.map(|r| r.description.clone());
+                room_npc_ids = room.map(|r| r.npcs.clone()).unwrap_or_default();
             }
+
+            // Add location entry (sender + empty text for is_location detection)
             if let Some(name) = room_name {
-                if let Some(desc) = room_desc {
-                    state_guard.add_log(desc, Some(name), LogType::Narration);
+                state_guard.add_log(String::new(), Some(name), LogType::Narration);
+            }
+
+            // Fetch NPCs from room's NPC IDs via state.npcs HashMap
+            let mut nearby_npcs: Vec<NpcCard> = Vec::new();
+            for npc_id in &room_npc_ids {
+                if let Some(npc) = state_guard.npcs.get(npc_id) {
+                    nearby_npcs.push(npc.clone());
                 }
             }
 
@@ -360,6 +368,7 @@ fn process_action(state: Arc<std::sync::Mutex<GameState>>, input: String, _playe
             let map = Arc::clone(&state_guard.map);
             let player = Arc::clone(&state_guard.player);
             let room_id = state_guard.current_room_id.clone();
+            let history = state_guard.narration_history.clone();
             drop(state_guard);
 
             let state_for_thread = state.clone();
@@ -373,21 +382,18 @@ fn process_action(state: Arc<std::sync::Mutex<GameState>>, input: String, _playe
 
                 if let Some(room) = room {
                     let backend = get_llm_backend();
-                    let narration = backend.narrate_arrival(&world, room, &[], &player);
+                    let narration =
+                        backend.narrate_arrival(&world, room, &nearby_npcs, &player, &history);
                     match narration {
                         Ok(text) => {
                             if let Ok(mut state) = state_for_thread.lock() {
-                                state.add_log(
-                                    text,
-                                    Some("Game Master".to_string()),
-                                    LogType::Narration,
-                                );
+                                // Location entry already added above, just add narration text
+                                state.add_log(text, None, LogType::Narration);
                                 state.tui_state.is_generating = false;
                             }
                         }
                         Err(e) => {
                             if let Ok(mut state) = state_for_thread.lock() {
-                                // Set error message for UI instead of adding to chat log
                                 state.tui_state.error_message = Some(format!("LLM Error: {e}"));
                                 state.tui_state.is_generating = false;
                             }
@@ -420,6 +426,10 @@ fn process_action(state: Arc<std::sync::Mutex<GameState>>, input: String, _playe
             let map = Arc::clone(&state_guard.map);
             let player = Arc::clone(&state_guard.player);
             let room_id = state_guard.current_room_id.clone();
+            let history = state_guard.narration_history.clone();
+            // Get nearby NPCs (empty for now - in full implementation would fetch from room)
+            let nearby_npcs: Vec<NpcCard> = vec![];
+            let text = text.clone();
             drop(state_guard);
 
             let state_for_thread = state.clone();
@@ -433,7 +443,14 @@ fn process_action(state: Arc<std::sync::Mutex<GameState>>, input: String, _playe
 
                 if let Some(room) = room {
                     let backend = get_llm_backend();
-                    let narration = backend.narrate_action(&world, room, &[], &player, &text);
+                    let narration = backend.narrate_action(
+                        &world,
+                        room,
+                        &nearby_npcs,
+                        &player,
+                        &text,
+                        &history,
+                    );
                     match narration {
                         Ok(text) => {
                             if let Ok(mut state) = state_for_thread.lock() {

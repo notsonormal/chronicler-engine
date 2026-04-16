@@ -13,20 +13,21 @@ mod tests {
     use super::*;
     use playwright_rs::Playwright;
 
-    const TEST_PORT: u16 = 3001;
     const TEST_WORLD: &str = "test";
+    const CONFIG_PATH: &str = "tests/test_config.json";
 
     // HEADER TESTS (dashboard.md Section 1)
 
     #[tokio::test]
     async fn test_header_displays_game_title() {
-        let _server = TestServer::new_with_mock(TEST_PORT, TEST_WORLD);
+        let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
+        let _server = TestServer::new_with_mock(port, TEST_WORLD);
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", TEST_PORT), None)
+        page.goto(&format!("http://127.0.0.1:{}", port), None)
             .await
             .unwrap();
 
@@ -51,28 +52,38 @@ mod tests {
 
     #[tokio::test]
     async fn test_header_displays_location() {
-        let _server = TestServer::new_with_mock(TEST_PORT, TEST_WORLD);
+        let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
+        let _server = TestServer::new_with_mock(port, TEST_WORLD);
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", TEST_PORT), None)
+        page.goto(&format!("http://127.0.0.1:{}", port), None)
             .await
             .unwrap();
 
         // Wait for initial content to load
         let _ = wait_for_element_children(&page, "#story-log .log-entry", 1).await;
 
+        // Location is now in story log, not header - check for location-header class
         let location: String = page
-            .evaluate::<(), String>("document.querySelector('.location')?.innerText || ''", None)
+            .evaluate::<(), String>(
+                "document.querySelector('.location-header')?.innerText || ''",
+                None,
+            )
             .await
             .unwrap();
 
-        assert!(location.len() > 0, "Header should display current location");
+        assert!(
+            location.len() > 0,
+            "Story log should display current location"
+        );
+        // The location should display the room NAME (e.g., "Test Tavern"), not the ID (e.g., "start")
         assert!(
             location.contains("Test Tavern"),
-            "Location should be Test Tavern"
+            "Location should be 'Test Tavern' (the room name from map.json), got: {}",
+            location
         );
 
         browser.close().await.unwrap();
@@ -82,13 +93,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_story_log_populated_on_load() {
-        let _server = TestServer::new_with_mock(TEST_PORT, TEST_WORLD);
+        let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
+        let _server = TestServer::new_with_mock(port, TEST_WORLD);
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", TEST_PORT), None)
+        page.goto(&format!("http://127.0.0.1:{}", port), None)
             .await
             .unwrap();
 
@@ -113,13 +125,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_story_log_has_correct_styles() {
-        let _server = TestServer::new_with_mock(TEST_PORT, TEST_WORLD);
+        let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
+        let _server = TestServer::new_with_mock(port, TEST_WORLD);
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", TEST_PORT), None)
+        page.goto(&format!("http://127.0.0.1:{}", port), None)
             .await
             .unwrap();
 
@@ -162,13 +175,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_story_log_is_scrollable() {
-        let _server = TestServer::new_with_mock(TEST_PORT, TEST_WORLD);
+        let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
+        let _server = TestServer::new_with_mock(port, TEST_WORLD);
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", TEST_PORT), None)
+        page.goto(&format!("http://127.0.0.1:{}", port), None)
             .await
             .unwrap();
 
@@ -198,13 +212,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_visual_sidebar_exists() {
-        let _server = TestServer::new_with_mock(TEST_PORT, TEST_WORLD);
+        let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
+        let _server = TestServer::new_with_mock(port, TEST_WORLD);
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", TEST_PORT), None)
+        page.goto(&format!("http://127.0.0.1:{}", port), None)
             .await
             .unwrap();
 
@@ -223,13 +238,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_location_image_loads() {
-        let _server = TestServer::new_with_mock(TEST_PORT, TEST_WORLD);
+        let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
+        let _server = TestServer::new_with_mock(port, TEST_WORLD);
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", TEST_PORT), None)
+        page.goto(&format!("http://127.0.0.1:{}", port), None)
             .await
             .unwrap();
 
@@ -251,13 +267,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_npc_portraits_display() {
-        let _server = TestServer::new_with_mock(TEST_PORT, TEST_WORLD);
+        let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
+        let _server = TestServer::new_with_mock(port, TEST_WORLD);
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", TEST_PORT), None)
+        page.goto(&format!("http://127.0.0.1:{}", port), None)
             .await
             .unwrap();
 
@@ -278,13 +295,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_action_area_has_input() {
-        let _server = TestServer::new_with_mock(TEST_PORT, TEST_WORLD);
+        let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
+        let _server = TestServer::new_with_mock(port, TEST_WORLD);
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", TEST_PORT), None)
+        page.goto(&format!("http://127.0.0.1:{}", port), None)
             .await
             .unwrap();
 
@@ -306,13 +324,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_action_area_has_submit_button() {
-        let _server = TestServer::new_with_mock(TEST_PORT, TEST_WORLD);
+        let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
+        let _server = TestServer::new_with_mock(port, TEST_WORLD);
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", TEST_PORT), None)
+        page.goto(&format!("http://127.0.0.1:{}", port), None)
             .await
             .unwrap();
 
@@ -334,13 +353,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_status_display_exists() {
-        let _server = TestServer::new_with_mock(TEST_PORT, TEST_WORLD);
+        let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
+        let _server = TestServer::new_with_mock(port, TEST_WORLD);
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", TEST_PORT), None)
+        page.goto(&format!("http://127.0.0.1:{}", port), None)
             .await
             .unwrap();
 
@@ -359,13 +379,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_status_shows_ready_initially() {
-        let _server = TestServer::new_with_mock(TEST_PORT, TEST_WORLD);
+        let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
+        let _server = TestServer::new_with_mock(port, TEST_WORLD);
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", TEST_PORT), None)
+        page.goto(&format!("http://127.0.0.1:{}", port), None)
             .await
             .unwrap();
 
@@ -391,13 +412,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_empty_input_validation() {
-        let _server = TestServer::new_with_mock(TEST_PORT, TEST_WORLD);
+        let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
+        let _server = TestServer::new_with_mock(port, TEST_WORLD);
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", TEST_PORT), None)
+        page.goto(&format!("http://127.0.0.1:{}", port), None)
             .await
             .unwrap();
 
@@ -425,13 +447,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_connection_status_indicator_exists() {
-        let _server = TestServer::new_with_mock(TEST_PORT, TEST_WORLD);
+        let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
+        let _server = TestServer::new_with_mock(port, TEST_WORLD);
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", TEST_PORT), None)
+        page.goto(&format!("http://127.0.0.1:{}", port), None)
             .await
             .unwrap();
 
@@ -455,13 +478,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_htmx_loaded() {
-        let _server = TestServer::new_with_mock(TEST_PORT, TEST_WORLD);
+        let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
+        let _server = TestServer::new_with_mock(port, TEST_WORLD);
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", TEST_PORT), None)
+        page.goto(&format!("http://127.0.0.1:{}", port), None)
             .await
             .unwrap();
 
@@ -482,13 +506,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_form_stays_static_after_submission() {
-        let _server = TestServer::new_with_mock(TEST_PORT, TEST_WORLD);
+        let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
+        let _server = TestServer::new_with_mock(port, TEST_WORLD);
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", TEST_PORT), None)
+        page.goto(&format!("http://127.0.0.1:{}", port), None)
             .await
             .unwrap();
 

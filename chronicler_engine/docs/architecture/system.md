@@ -7,10 +7,11 @@ Establish a domain-driven modular architecture for the Chronicler Engine. This s
 
 ### 1. The Model Tier (`crate::model::*`)
 Contains pure data structures, serialization schemas, and the "Single Source of Truth" for game state. This tier has zero knowledge of the UI or LLM logic.
-- **`world`**: Setting lore and global rules.
+- **`world`**: Setting lore, global rules, and starting scenarios.
 - **`map`**: Room/Region hierarchy and cardinal direction definitions.
 - **`character`**: NPC attributes and Player inventory.
 - **`state`**: The `GameState` aggregation, narration history logs, and TUI state.
+- **`scenario`**: Starting scenario definitions for narrative introductions.
 
 ### 2. The Engine Tier (`crate::engine::*`)
 Contains the mechanics that drive the simulation. It translates user intent and state into outcomes.
@@ -20,7 +21,8 @@ Contains the mechanics that drive the simulation. It translates user intent and 
 
 ### 3. The Narrative Tier (`crate::narrative::*`)
 The interface between the synchronous engine and stochastic LLM generation.
-- **`llm`**: Traits (`LlmBackend`) and implementations (OpenRouter) for Game Master narration.
+- **`llm`**: Traits (`LlmBackend`) and implementations (OpenRouter, DeepSeek) for Game Master narration.
+- **`prompt`**: PromptBuilder module for SillyTavern-style layered prompt construction with token budget management.
 
 ### 4. The Server Tier (`crate::server::*`)
 The HTTP layer for the HTMX web dashboard with polling-based real-time updates.
@@ -44,10 +46,13 @@ Static web assets served by the server.
 | `src/model/map.rs` | `crate::model::map` | |
 | `src/model/character.rs` | `crate::model::character` | |
 | `src/model/state.rs` | `crate::model::state` | |
+| `src/model/scenario.rs` | `crate::model::scenario` | Starting scenarios (NEW) |
 | `src/engine/parser.rs` | `crate::engine::parser` | |
 | `src/engine/action.rs` | `crate::engine::action` | |
 | `src/engine/logic.rs` | `crate::engine::logic` | |
-| `src/narrative/llm.rs` | `crate::narrative::llm` | |
+| `src/narrative/llm.rs` | `crate::narrative::llm` | LLM backend implementations |
+| `src/narrative/prompt.rs` | `crate::narrative::prompt` | PromptBuilder with layered prompts |
+| `src/server/mod.rs` | `crate::server` | HTTP server + HTMX endpoints |
 | `src/server/mod.rs` | `crate::server` | HTTP server + HTMX endpoints |
 | `src/server/fragments.rs` | `crate::server` | HTML fragments |
 | `src/server/templates.rs` | `crate::server` | Askama templates (NEW) |
@@ -57,13 +62,30 @@ Static web assets served by the server.
 
 The engine presents a web-based HTMX dashboard:
 
-- **Header**: Game title + current location (green bold)
-- **Main Body**: 70% story log / 30% visual sidebar
-  - Story log shows narration (cyan), dialogue (white), system (yellow), input (gray)
-  - Visual sidebar shows location image + NPC portraits
+- **Header**: Game title only (location displayed in story log as inline header)
+- **Main Body**: 50% story log / 50% visual sidebar
+  - Story log shows:
+    - **Location headers**: Inline as "Room Name - HH:MM" (e.g., "Entrance Hall - 18:57"), green color (#4ade80), bold
+    - **Narration** (cyan): LLM-generated descriptions
+    - **Dialogue** (orange): NPC speech, italicized
+    - **System** (yellow): Game status messages
+    - **Input** (gray): Player commands
+  - Location entries detected when `sender` is present with empty `text` (sender = room name)
+  - Visual sidebar shows location image, room exits, and NPC portraits
 - **Action Area**: Command input + status indicator (Ready/Thinking)
 
 Real-time updates via HTMX polling (5s interval for story-log, 5s for status-display).
+
+## Location Tracking
+
+The game tracks the player's current location via `GameState.current_room_id`:
+- **Initial spawn**: Set to `starting_room_id` from world.json when game starts
+- **Movement**: Updated via `WalkTo` action through `attempt_walk()` in engine/logic.rs
+- **Location entries**: Created in narration history when:
+  1. Player starts game with scenario: location entry + scenario text
+  2. Player uses WalkTo action: location entry + LLM narration
+- **Format**: `LogEntry { sender: Some(room_name), text: "", log_type: Narration }`
+- **Rendering**: Inline "Room Name - HH:MM" with green color
 
 ## Error Strategy
 A unified error type (`crate::error::EngineError`) is shared across all tiers to provide consistent error propagation from data loading through LLM failures to the final UI report.

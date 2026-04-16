@@ -18,34 +18,35 @@ use test_utils::*;
 mod tests {
     use super::*;
 
-    const TEST_PORT: u16 = 3001;
+    // Use config-based server - no hardcoded port
     const TEST_WORLD: &str = "test";
+    const CONFIG_PATH: &str = "tests/test_config.json";
 
     // Initial Load Tests - No LLM needed
 
     #[tokio::test]
     async fn test_initial_load_header_shows_location() {
-        let _server = TestServer::new_with_mock(TEST_PORT, TEST_WORLD);
+        let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
+        let _server = TestServer::new_with_mock(port, TEST_WORLD);
 
         let (_playwright, browser) = launch_chrome().await;
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", TEST_PORT), None)
+        page.goto(&format!("http://127.0.0.1:{}", port), None)
             .await
             .unwrap();
 
-        // Poll until location is loaded (not "Loading...")
-        let location = wait_for_non_loading_value(&page, ".location").await;
+        // Wait for story log entries
+        let _ = wait_for_element_children(&page, "#story-log .log-entry", 1).await;
+
+        // Location is now in story log as location-header, not in header
+        let location = wait_for_non_loading_value(&page, ".location-header").await;
 
         println!("Initial location: {}", location);
 
         assert!(
-            !location.contains("Loading"),
-            "Location should not show 'Loading...'"
-        );
-        assert!(
-            location.contains('|'),
-            "Location should contain '|' separator"
+            !location.is_empty(),
+            "Story log should display current location"
         );
 
         browser.close().await.unwrap();
@@ -53,12 +54,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_initial_load_story_log_has_content() {
-        let _server = TestServer::new_with_mock(TEST_PORT, TEST_WORLD);
+        let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
+        let _server = TestServer::new_with_mock(port, TEST_WORLD);
 
         let (_playwright, browser) = launch_chrome().await;
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", TEST_PORT), None)
+        page.goto(&format!("http://127.0.0.1:{}", port), None)
             .await
             .unwrap();
 
@@ -76,12 +78,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_initial_load_status_is_ready() {
-        let _server = TestServer::new_with_mock(TEST_PORT, TEST_WORLD);
+        let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
+        let _server = TestServer::new_with_mock(port, TEST_WORLD);
 
         let (_playwright, browser) = launch_chrome().await;
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", TEST_PORT), None)
+        page.goto(&format!("http://127.0.0.1:{}", port), None)
             .await
             .unwrap();
 
@@ -98,12 +101,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_look_command_shows_thinking() {
-        let _server = TestServer::new_with_mock(TEST_PORT, TEST_WORLD);
+        let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
+        let _server = TestServer::new_with_mock(port, TEST_WORLD);
 
         let (_playwright, browser) = launch_chrome().await;
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", TEST_PORT), None)
+        page.goto(&format!("http://127.0.0.1:{}", port), None)
             .await
             .unwrap();
 
@@ -150,12 +154,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_connection_indicator_present() {
-        let _server = TestServer::new_with_mock(TEST_PORT, TEST_WORLD);
+        let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
+        let _server = TestServer::new_with_mock(port, TEST_WORLD);
 
         let (_playwright, browser) = launch_chrome().await;
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", TEST_PORT), None)
+        page.goto(&format!("http://127.0.0.1:{}", port), None)
             .await
             .unwrap();
 

@@ -60,11 +60,11 @@ fn markdown_to_html(text: &str) -> String {
 /// Room name is automatically HTML-escaped by Askama.
 #[derive(Template)]
 #[template(
-    source = r#"<div class="header"><span class="game-title">Chronicler Engine</span><span class="location">| {{ room_name }}</span><span class="connection-status connected" id="connection-status">Connected</span></div>"#,
+    source = r#"<div class="header"><span class="game-title">Chronicler Engine</span><span class="connection-status connected" id="connection-status">Connected</span></div>"#,
     ext = "html"
 )]
 pub struct HeaderTemplate {
-    /// The current room name to display in the header.
+    /// The current room name - now displayed in story log, not header.
     pub room_name: String,
 }
 
@@ -79,12 +79,16 @@ pub struct LogEntryView {
     /// Pre-parsed HTML text (wrapped in SafeHtml to prevent escaping).
     pub text: SafeHtml,
     pub log_type: String,
+    /// True if this is a location entry (sender present + empty text)
+    pub is_location: bool,
 }
 
 impl From<&LogEntry> for LogEntryView {
     fn from(entry: &LogEntry) -> Self {
         // Parse markdown BEFORE Askama escapes (converts "..." to <q>, etc.)
         let parsed_text = markdown_to_html(&entry.text);
+        // Detect location entries: sender present + empty text
+        let is_location = entry.sender.is_some() && entry.text.is_empty();
         Self {
             timestamp: entry.timestamp.format("%H:%M").to_string(),
             sender: entry.sender.clone().unwrap_or_default(),
@@ -95,6 +99,7 @@ impl From<&LogEntry> for LogEntryView {
                 LogType::System => "system".to_string(),
                 LogType::Input => "input".to_string(),
             },
+            is_location,
         }
     }
 }
@@ -108,7 +113,7 @@ impl From<&LogEntry> for LogEntryView {
 /// Askama from escaping the HTML.
 #[derive(Template)]
 #[template(
-    source = r#"<div class="story-log" id="story-log">{% for entry in entries %}<div class="log-entry {{ entry.log_type }}"><span class="timestamp">{{ entry.timestamp }}</span>{% if entry.sender != "" %}<span class="sender">{{ entry.sender }}:</span> {% endif %}<span class="text">{{ entry.text }}</span></div>{% endfor %}</div>"#,
+    source = r#"<div class="story-log" id="story-log">{% for entry in entries %}<div class="log-entry {{ entry.log_type }}">{% if entry.is_location %}<span class="location-header">{{ entry.sender }}</span><span class="location-timestamp">- {{ entry.timestamp }}</span>{% else %}<span class="timestamp">{{ entry.timestamp }}</span>{% if entry.sender != "" %}<span class="sender">{{ entry.sender }}:</span> {% endif %}{% endif %}<span class="text">{{ entry.text }}</span></div>{% endfor %}</div>"#,
     ext = "html"
 )]
 pub struct StoryLogTemplate {
@@ -227,7 +232,8 @@ mod tests {
             room_name: "Test Room".to_string(),
         };
         let rendered = template.render().unwrap();
-        assert!(rendered.contains("Test Room"));
+        // Room name is now in story log, not header
+        assert!(rendered.contains("Chronicler Engine"));
         assert!(rendered.contains(r#"class="header""#));
     }
 
@@ -237,9 +243,8 @@ mod tests {
             room_name: "<script>alert('xss')</script>".to_string(),
         };
         let rendered = template.render().unwrap();
-        assert!(!rendered.contains("<script>"));
-        // Askama 0.15+ uses numeric HTML entities (&#60; for <) instead of named entities
-        assert!(rendered.contains("&#60;script&#62;"));
+        // Room name no longer in header output, just verify it doesn't cause errors
+        assert!(rendered.contains("Chronicler Engine"));
     }
 
     #[test]

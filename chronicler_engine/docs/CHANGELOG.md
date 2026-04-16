@@ -1,6 +1,77 @@
 # Changelog
 
+## 2026-04-16
+
+### Changed
+- **Location Display** - Location now shown in story log as inline header
+  - Template modified: location entries rendered as "Room Name - HH:MM" inline
+  - Added `is_location` field to `LogEntryView` for detection (sender + empty text)
+  - Location removed from header template to story log
+  - Green color (#4ade80) with bold styling
+  - CSS classes `.location-header` and `.location-timestamp` added
+
+### Changed
+- **Game Start Flow** - Simplified startup
+  - Removed "Welcome to..." and "Logged in as..." system messages
+  - Scenario text directly shows without extra system entries
+  - Location entry created when using WalkTo action
+
+### Fixed
+- **Tests Updated** - Updated tests for new location display behavior
+  - `tests/template_tests.rs` - check connection-status instead of location in header
+  - `tests/spec_tests.rs` - check `.location-header` in story log
+  - `tests/flow_mock_tests.rs` - check `.location-header`
+  - `tests/ui_tests.rs` - check `.location-header`
+
+### Added  
+- **build.py** - New build script in `scripts/build.py`
+  - Runs: cargo build, cargo clippy, cargo test, cargo llvm-cov
+
+## 2026-04-14
+
+### Added
+- **Starting Scenarios** - Configurable narrative introductions that play at game start
+  - New `src/model/scenario.rs` with `StartingScenario` struct
+  - New `scenarios` field in `WorldManifest` (in `world.json`)
+  - Template variable `{{user}}` substituted with player name
+  - Scenario text replaces LLM call for first response
+  - Backward compatible (worlds without scenarios use LLM fallback)
+  - Example scenarios added to `redmist_estate` and `test` worlds
+  - Auto-selects first scenario in array
+
+### Added
+- **Integration Test Infrastructure** - Dynamic port allocation and config-based LLM backend
+  - New `tests/test_config.json` with port range (3010-3030) and backend settings
+  - New `TestConfig`, `get_available_port()`, `get_config_port()` in test_utils.rs
+  - All 6 test files now use dynamic port allocation
+  - Config-based LLM backend selection with test-specific overrides
+  - Backward compatibility with LLM_BACKEND env var
+
+### Changed
+- **Room Entry LLM** - Room entry now shows LLM-generated narration
+  - WalkTo shows minimal header (room name) instead of static description
+  - LLM auto-triggers on first game load
+  - NPCs from target room now included in LLM prompts
+
 ## 2025-04-14
+
+### Added
+- **System Prompt XML Refactor** - Converted prompt sections from `=== HEADER ===` to XML-wrapped format
+  - All 8 prompt sections now use `<Header>content</Header>` format
+  - Updated `src/narrative/prompt.rs` with opening and closing XML tags
+  - All 108 tests pass
+  - Sections: SystemPrompt, GameState, NpcPresence, PlayerCharacter, WorldLore, ConversationHistory, PlayerInput, AuxiliaryInstructions
+
+### Changed
+- **LLM Context Pipeline** - SillyTavern-style layered prompt system
+  - New `src/narrative/prompt.rs` module with `PromptBuilder`
+  - 8-layer prompt construction (System, Game State, NPC Cards, Player, World Info, History, User Input, PHI)
+  - Token budget management with hard truncation
+  - Prompt injection sanitization
+  - Updated `src/narrative/llm.rs` to use PromptBuilder with full history
+  - Support for OpenRouter and DeepSeek backends
+  - 30+ unit tests for prompt building and sanitization
+  - See `docs/architecture/system.md` and `docs/system/llm_processing.md` for specs
 
 ### Added
 - **Askama template migration (pilot)** - Migrated header template from manual `format!` strings to Askama

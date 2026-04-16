@@ -1,9 +1,10 @@
-use std::{fs, path::Path, sync::Arc};
+use std::{fs, path::Path, sync::Arc, thread};
 
 use chronicler_engine::model::character::{NpcCard, PlayerCard};
 use chronicler_engine::model::map::MapDef;
 use chronicler_engine::model::state::GameState;
 use chronicler_engine::model::world::WorldManifest;
+use chronicler_engine::narrative::llm::get_llm_backend;
 use chronicler_engine::server::ServerConfig;
 
 use clap::Parser;
@@ -228,33 +229,103 @@ fn main() -> chronicler_engine::Result<()> {
     let mut state = GameState::new(
         Arc::new(manifest.clone().into()),
         Arc::new(map),
-        Arc::new(player),
+        Arc::new(player.clone()),
         npcs,
         manifest.starting_room_id.clone(),
     );
 
-    // Initialize game state with welcome messages
-    state.add_log(
-        format!("Welcome to {}.", state.world.name),
-        None,
-        chronicler_engine::model::state::LogType::System,
-    );
-    state.add_log(
-        format!("Logged in as: {}", state.player.sheet.name),
-        None,
-        chronicler_engine::model::state::LogType::System,
-    );
+    // Check for starting scenario - use scenario text instead of LLM if available
+    let use_scenario = if let Some(scenario) = manifest.default_scenario() {
+        !scenario.text.is_empty()
+    } else {
+        false
+    };
+
+    // If scenario exists with text, add it to the log (skip LLM call)
+    if use_scenario {
+        if let Some(scenario) = manifest.default_scenario() {
+            // Look up room name from map (not raw ID)
+            let room_name = chronicler_engine::engine::logic::get_room_by_id(
+                &state,
+                &manifest.starting_room_id,
+            )
+            .map(|r| r.name.clone())
+            .unwrap_or_else(|| manifest.starting_room_id.clone());
+
+            // Add location entry first (sender + empty text = is_location detection)
+            state.add_log(
+                String::new(),
+                Some(room_name),
+                chronicler_engine::model::state::LogType::Narration,
+            );
+            // Then add scenario text
+            let text = scenario.text.replace("{{user}}", &player.sheet.name);
+            state.add_log(
+                text,
+                Some("Game Master".to_string()),
+                chronicler_engine::model::state::LogType::Narration,
+            );
+        }
+    }
 
     let current_room = chronicler_engine::engine::logic::get_current_room(&state)
         .map_err(|e| chronicler_engine::EngineError::RoomNotFound(e.to_string()))?;
-    state.add_log(
-        current_room.description.clone(),
-        Some(current_room.name.clone()),
-        chronicler_engine::model::state::LogType::Narration,
-    );
+
+    // Fetch NPCs from room's NPC IDs via state.npcs HashMap (before mutating state)
+    let room_npc_ids = current_room.npcs.clone();
+    let mut nearby_npcs: Vec<NpcCard> = Vec::new();
+    for npc_id in &room_npc_ids {
+        if let Some(npc) = state.npcs.get(npc_id) {
+            nearby_npcs.push(npc.clone());
+        }
+    }
+
+    // Clone data for the background thread
+    let world = state.world.clone();
+    let map = state.map.clone();
+    let player = state.player.clone();
+    let room_id = state.current_room_id.clone();
+    let history: Vec<chronicler_engine::model::state::LogEntry> = Vec::new();
 
     // Create shared state for the HTMX server
     let state = Arc::new(std::sync::Mutex::new(state));
+
+    // Trigger LLM narration in background ONLY if no scenario was used
+    if !use_scenario {
+        let state_for_thread = state.clone();
+        thread::spawn(move || {
+            let room = map
+                .overworld
+                .regions
+                .iter()
+                .flat_map(|r| r.rooms.iter())
+                .find(|r| r.id == room_id);
+
+            if let Some(room) = room {
+                let backend = get_llm_backend();
+                let narration =
+                    backend.narrate_arrival(&world, room, &nearby_npcs, &player, &history);
+                match narration {
+                    Ok(text) => {
+                        if let Ok(mut state) = state_for_thread.lock() {
+                            state.add_log(
+                                text,
+                                Some("Game Master".to_string()),
+                                chronicler_engine::model::state::LogType::Narration,
+                            );
+                            state.tui_state.is_generating = false;
+                        }
+                    }
+                    Err(e) => {
+                        if let Ok(mut state) = state_for_thread.lock() {
+                            state.tui_state.error_message = Some(format!("LLM Error: {e}"));
+                            state.tui_state.is_generating = false;
+                        }
+                    }
+                }
+            }
+        });
+    } // end if !use_scenario
 
     // Run the HTTP server on the specified port
     let config = ServerConfig { port: args.port };
