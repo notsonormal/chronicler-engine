@@ -7,14 +7,14 @@ The Chronicler Engine presents a web-based HTMX dashboard for player interaction
 
 ### 1. Header (48px height)
 Displays system-level context.
-- **Content**: Game title + current location name
-- **Style**: Location name in green bold (#00ff00)
+- **Content**: Game title only (location displayed in story log)
 
 ### 2. Main Body (Flex: 1)
 Horizontal split into story context and visual context:
 
 - **Story Log (80%)**: Scrollable history of narration with chat-bubble styling
   - **Styles**:
+    - **Location headers**: Inline "Room Name - HH:MM", green color (#4ade80), bold
     - User input (right-aligned, darker gray background #2a2a2a)
     - AI/Narration (left-aligned, dark cyan background #1a3a3a)
     - System messages (center-aligned, yellow #ffff00)
@@ -72,6 +72,8 @@ pub struct LogEntry {
    - Change button text back to "▶ Send"
 
 ## CSS Classes
+- `.location-header` - Room name in location entry, inline, green bold (#4ade80)
+- `.location-timestamp` - Timestamp for location entry, inline after room name
 - `.log-entry.narration` - AI narration, left-aligned, cyan-tinted bubble
 - `.log-entry.dialogue` - Character dialogue, left-aligned, orange-tinted
 - `.log-entry.system` - System messages, centered, yellow

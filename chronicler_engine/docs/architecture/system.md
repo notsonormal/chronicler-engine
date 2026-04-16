@@ -62,30 +62,13 @@ Static web assets served by the server.
 
 The engine presents a web-based HTMX dashboard:
 
-- **Header**: Game title only (location displayed in story log as inline header)
-- **Main Body**: 50% story log / 50% visual sidebar
-  - Story log shows:
-    - **Location headers**: Inline as "Room Name - HH:MM" (e.g., "Entrance Hall - 18:57"), green color (#4ade80), bold
-    - **Narration** (cyan): LLM-generated descriptions
-    - **Dialogue** (orange): NPC speech, italicized
-    - **System** (yellow): Game status messages
-    - **Input** (gray): Player commands
-  - Location entries detected when `sender` is present with empty `text` (sender = room name)
-  - Visual sidebar shows location image, room exits, and NPC portraits
+- **Header**: Game title only
+- **Main Body**: Story log + visual sidebar (see `docs/system/dashboard.md`)
+  - Story log shows location entries, narration, dialogue, system messages, and input
+  - Location entries appear inline in story log with room name and timestamp
 - **Action Area**: Command input + status indicator (Ready/Thinking)
 
 Real-time updates via HTMX polling (5s interval for story-log, 5s for status-display).
-
-## Location Tracking
-
-The game tracks the player's current location via `GameState.current_room_id`:
-- **Initial spawn**: Set to `starting_room_id` from world.json when game starts
-- **Movement**: Updated via `WalkTo` action through `attempt_walk()` in engine/logic.rs
-- **Location entries**: Created in narration history when:
-  1. Player starts game with scenario: location entry + scenario text
-  2. Player uses WalkTo action: location entry + LLM narration
-- **Format**: `LogEntry { sender: Some(room_name), text: "", log_type: Narration }`
-- **Rendering**: Inline "Room Name - HH:MM" with green color
 
 ## Error Strategy
 A unified error type (`crate::error::EngineError`) is shared across all tiers to provide consistent error propagation from data loading through LLM failures to the final UI report.
