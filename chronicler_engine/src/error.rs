@@ -31,6 +31,9 @@ pub enum EngineError {
 
     #[error("Internal error: {0}")]
     Internal(String),
+
+    #[error("Context overflow: requested {requested} tokens exceeds max {max}")]
+    ContextOverflow { requested: usize, max: usize },
 }
 
 pub type Result<T> = std::result::Result<T, EngineError>;

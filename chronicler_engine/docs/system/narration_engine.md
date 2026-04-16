@@ -10,12 +10,13 @@ The engine recognizes two categories of player input:
 2. **Free Actions**: Everything else. The player's raw text is forwarded to the Game Master LLM for narrative interpretation. The engine must never respond with an error message for non-empty free-text input.
 
 ## Game Master Role
-The LLM operates as a Game Master / Narrator for the text adventure. Its context window is constructed from the current game state:
+The LLM operates as a Game Master / Narrator for the text adventure. Its context window is constructed using the **PromptBuilder** (see `llm_processing.md`) from the current game state:
 
 - **World Lore**: The `WorldCard.global_rules` provide persistent setting and lore context.
 - **Room Context**: The current `Room.name` and `Room.description` ground the scene.
 - **Present NPCs**: All `NpcCard`s located in the current room, including their `personality`, `scenario`, and `description`.
 - **Player Identity**: The `PlayerCard.name` and `PlayerCard.description` for reference.
+- **Conversation History**: Full narration_history (up to 1000 entries) is sent to maintain continuity.
 
 ### Narrative Modes
 The Game Master responds to three primary events:

@@ -23,12 +23,23 @@ The engine will provide multiple implementations of this trait:
 - `DeepSeekBackend`: Placeholder for future implementation.
 
 ### Backend Selection
-The LLM backend is selected at runtime via the `LLM_BACKEND` environment variable:
-- `LLM_BACKEND=mock` - Uses MockBackend for fast, no-network tests
-- `LLM_BACKEND=openrouter` (default) - Uses OpenRouterBackend for real LLM responses
-- `LLM_BACKEND=deepseek` - Uses DeepSeekBackend (not yet implemented)
+The LLM backend can be selected in two ways:
 
-The `get_llm_backend()` function in `src/narrative/llm.rs` reads this environment variable.
+1. **Config File** (`tests/test_config.json`): Priority method
+   ```json
+   {
+     "port_range": {"min": 3010, "max": 3030},
+     "default_backend": "mock",
+     "test_specific": {
+       "flow_llm_tests": {"backend": "real"}
+     }
+   }
+   ```
+2. **Environment Variable**: Fallback for backward compatibility
+   - `LLM_BACKEND=mock` - Uses MockBackend for fast, no-network tests
+   - `LLM_BACKEND=real` (or unset) - Uses OpenRouterBackend for real LLM responses
+
+The `get_llm_backend()` function in `src/narrative/llm.rs` reads the environment variable for backward compatibility.
 
 ## UI Tests
 
@@ -59,13 +70,16 @@ cargo test -- --test-threads=1
 
 ### Test Files
 
-| Test File | Purpose | LLM Backend |
-|-----------|---------|-------------|
-| `flow_mock_tests.rs` | Core game loop, polling, real-time updates | Mock |
-| `flow_llm_tests.rs` | LLM narrative generation | Real (OpenRouter) |
-| `behavior_tests.rs` | Form submission, button re-enable, UI behavior | Real |
-| `layout_tests.rs` | CSS, element sizing, scrolling | Real |
-| `spec_tests.rs` | Page structure, HTMX, element presence | Real |
+| Test File | Purpose | LLM Backend | Port Allocation |
+|----------|---------|-------------|-----------------|
+| `flow_mock_tests.rs` | Core game loop, polling, real-time updates | Mock (config) | Dynamic (3010-3030) |
+| `flow_llm_tests.rs` | LLM narrative generation | Real (config) | Dynamic |
+| `behavior_tests.rs` | Form submission, button re-enable, UI behavior | Mock (config) | Dynamic |
+| `layout_tests.rs` | CSS, element sizing, scrolling | Mock (config) | Dynamic |
+| `spec_tests.rs` | Page structure, HTMX, element presence | Mock (config) | Dynamic |
+| `ui_tests.rs` | HTMX, WebSocket, connection status | Mock (config) | Dynamic |
+
+**Dynamic Port Allocation**: Tests now use `tests/test_config.json` to allocate ports dynamically from range 3010-3030, eliminating port conflicts between test files.
 
 ### Test Coverage
 
@@ -84,9 +98,10 @@ cargo test -- --test-threads=1
 
 ### Known Limitations
 
-1. **Sequential Test Execution**: Some tests share ports and must run sequentially (`--test-threads=1`)
-2. **Headless Browser**: HTMX polling is reliable in headless mode; 5-second delay is acceptable for tests
-3. **LLM Response Time**: Real LLM tests may be slow; use mock tests for fast iteration
+1. **Headless Browser**: HTMX polling is reliable in headless mode; 5-second delay is acceptable for tests
+2. **LLM Response Time**: Real LLM tests may be slow; use mock tests for fast iteration
+
+**Port Conflicts Solved**: Dynamic port allocation (3010-3030) eliminates the need for sequential test execution (`--test-threads=1`).
 
 ### Smart Waiting Patterns
 

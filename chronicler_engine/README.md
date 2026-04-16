@@ -18,7 +18,7 @@ The Chronicler Engine uses a tiered **Spec-Driven Development (SDD 2.0)** approa
 - **[Plans](docs/plans/)**: Implementation blueprints (active or archived).
 - **[ADR](docs/adr/)**: Architecture Decision Records with context and rationale.
 - **[Reference](docs/reference/)**: Data schemas and API specs.
-- **[Learnings](../.ag-memory/CHRONICLER_LEARNINGS.md)**: Persistent memory of breakthroughs.
+- **[Learnings](CHRONICLER_LEARNINGS.md)**: Persistent memory of breakthroughs.
 
 ## Environment Variables
 

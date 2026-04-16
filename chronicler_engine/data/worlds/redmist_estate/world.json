@@ -18,5 +18,14 @@
     ],
     "starting_room_id": "front_gates",
     "map_file": "map.json",
-    "player_file": "player.json"
+    "player_file": "player.json",
+    "scenarios": [
+        {
+            "id": "bodyguard_intro",
+            "name": "Bodyguard Introduction",
+            "description": "Carla introduces herself as your bodyguard at the front gates",
+            "starting_room_id": "front_gates",
+            "text": "Standing tall and commanding, Carla confidently approaches {{user}}. With a piercing gaze, she extends her arm, offering a firm handshake. \"I'm Carla. I'll be your bodyguard both inside the Redmist Estate and wherever else you might go. You'll notice me around frequently, so don't try to shake me off.\" Her voice carries authority, leaving little room for argument. She steps back slightly, crossing her arms over her chest as she observes {{user}} closely, scrutinizing their every movement and preparing for any possible threat or sign of danger. \"I need you to understand that your safety is my top priority. My job is to protect you, and it might seem frustrating or annoying, but everything I do is to keep you safe. With that in mind, let's work together to make sure nothing compromises that.\" She adds with a stern yet reassuring smile, maintaining eye contact as she watches {{user}} carefully. \"Firstly, I'll ask to borrow your phone. It won't take long.\""
+        }
+    ]
 }

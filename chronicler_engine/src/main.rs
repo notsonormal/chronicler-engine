@@ -262,7 +262,7 @@ fn main() -> chronicler_engine::Result<()> {
             let text = scenario.text.replace("{{user}}", &player.sheet.name);
             state.add_log(
                 text,
-                Some("Game Master".to_string()),
+                None,
                 chronicler_engine::model::state::LogType::Narration,
             );
         }
@@ -310,7 +310,7 @@ fn main() -> chronicler_engine::Result<()> {
                         if let Ok(mut state) = state_for_thread.lock() {
                             state.add_log(
                                 text,
-                                Some("Game Master".to_string()),
+                                None,
                                 chronicler_engine::model::state::LogType::Narration,
                             );
                             state.tui_state.is_generating = false;

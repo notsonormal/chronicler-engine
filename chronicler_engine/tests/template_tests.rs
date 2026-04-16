@@ -12,9 +12,10 @@ fn test_header_template_renders_room_name() {
         room_name: "Test Room".to_string(),
     };
     let rendered = template.render().unwrap();
+    // Room name is now in story log, not header
     assert!(
-        rendered.contains("Test Room"),
-        "Expected rendered output to contain 'Test Room': {}",
+        rendered.contains("Chronicler Engine"),
+        "Expected rendered output to contain 'Chronicler Engine': {}",
         rendered
     );
     assert!(
@@ -27,9 +28,10 @@ fn test_header_template_renders_room_name() {
         "Expected game-title class: {}",
         rendered
     );
+    // Note: Location is now in story log, not header - updated test
     assert!(
-        rendered.contains(r#"class="location""#),
-        "Expected location class: {}",
+        rendered.contains("connection-status"),
+        "Expected connection-status in: {}",
         rendered
     );
 }
@@ -40,15 +42,10 @@ fn test_header_template_escapes_html() {
         room_name: "<script>alert('xss')</script>".to_string(),
     };
     let rendered = template.render().unwrap();
+    // Room name is no longer in header output, just verify it renders without errors
     assert!(
-        !rendered.contains("<script>"),
-        "Should not contain raw script tag: {}",
-        rendered
-    );
-    // Askama 0.15+ uses numeric HTML entities (&#60; for <) instead of named entities
-    assert!(
-        rendered.contains("&#60;script&#62;"),
-        "Should contain escaped script tag: {}",
+        rendered.contains("Chronicler Engine"),
+        "Should contain Chronicler Engine: {}",
         rendered
     );
 }
@@ -80,7 +77,7 @@ fn test_header_template_exact_output() {
     // Print actual output for debugging
     eprintln!("Rendered output: {:?}", rendered);
     // Verify contains key elements (whitespace may vary)
+    // Note: Location is now in story log, not header
     assert!(rendered.contains("class=\"header\""));
     assert!(rendered.contains("Chronicler Engine"));
-    assert!(rendered.contains("| Grand Hall"));
 }

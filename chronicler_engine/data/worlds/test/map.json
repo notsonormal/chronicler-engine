@@ -15,7 +15,7 @@
                             "north": "village_square"
                         },
                         "items": [],
-                        "npcs": ["innkeeper"]
+                        "npcs": ["bartender"]
                     },
                     {
                         "id": "village_square",

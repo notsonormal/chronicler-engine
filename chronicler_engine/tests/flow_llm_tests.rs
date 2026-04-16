@@ -19,8 +19,8 @@ mod tests {
     use playwright_rs::Playwright;
     use tokio::time::Duration;
 
-    const TEST_PORT: u16 = 3001;
     const TEST_WORLD: &str = "test";
+    const CONFIG_PATH: &str = "tests/test_config.json";
 
     // Check if real LLM is available
     fn has_llm_api_key() -> bool {
@@ -53,12 +53,13 @@ mod tests {
             return;
         }
 
-        let _server = TestServer::new(TEST_PORT, TEST_WORLD);
+        let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
+        let _server = TestServer::new(port, TEST_WORLD);
 
         let (_playwright, browser) = launch_chrome().await;
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", TEST_PORT), None)
+        page.goto(&format!("http://127.0.0.1:{}", port), None)
             .await
             .unwrap();
 
@@ -91,7 +92,7 @@ mod tests {
 
         // Wait for LLM response using smart polling
         println!("Waiting for LLM response...");
-        let llm_result = wait_for_llm_idle(TEST_PORT, Duration::from_secs(30)).await;
+        let llm_result = wait_for_llm_idle(port, Duration::from_secs(30)).await;
         if llm_result.is_err() {
             println!("Warning: LLM did not become idle within timeout");
         }
@@ -145,12 +146,13 @@ mod tests {
             return;
         }
 
-        let _server = TestServer::new(TEST_PORT, TEST_WORLD);
+        let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
+        let _server = TestServer::new(port, TEST_WORLD);
 
         let (_playwright, browser) = launch_chrome().await;
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", TEST_PORT), None)
+        page.goto(&format!("http://127.0.0.1:{}", port), None)
             .await
             .unwrap();
 
@@ -194,7 +196,7 @@ mod tests {
         );
 
         // Wait for LLM to complete and polling to catch it
-        let llm_result = wait_for_llm_idle(TEST_PORT, Duration::from_secs(30)).await;
+        let llm_result = wait_for_llm_idle(port, Duration::from_secs(30)).await;
         if llm_result.is_err() {
             println!("Warning: LLM did not become idle within timeout");
         }
@@ -239,12 +241,13 @@ mod tests {
             return;
         }
 
-        let _server = TestServer::new(TEST_PORT, TEST_WORLD);
+        let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
+        let _server = TestServer::new(port, TEST_WORLD);
 
         let (_playwright, browser) = launch_chrome().await;
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", TEST_PORT), None)
+        page.goto(&format!("http://127.0.0.1:{}", port), None)
             .await
             .unwrap();
 
@@ -264,7 +267,7 @@ mod tests {
         .unwrap();
 
         // Wait for LLM arrival narration
-        let llm_result = wait_for_llm_idle(TEST_PORT, Duration::from_secs(30)).await;
+        let llm_result = wait_for_llm_idle(port, Duration::from_secs(30)).await;
         if llm_result.is_err() {
             println!("Warning: LLM did not become idle within timeout");
         }

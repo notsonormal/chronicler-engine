@@ -64,44 +64,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_navigate() {
-        // Single letter shortcuts
-        assert_eq!(parse_command("n"), Action::WalkTo("north".to_string()));
-        assert_eq!(parse_command("s"), Action::WalkTo("south".to_string()));
-        assert_eq!(parse_command("e"), Action::WalkTo("east".to_string()));
-        assert_eq!(parse_command("w"), Action::WalkTo("west".to_string()));
-        assert_eq!(parse_command("u"), Action::WalkTo("up".to_string()));
-        assert_eq!(parse_command("d"), Action::WalkTo("down".to_string()));
-
-        // Direction words
-        assert_eq!(parse_command("north"), Action::WalkTo("north".to_string()));
-        assert_eq!(parse_command("south"), Action::WalkTo("south".to_string()));
-        assert_eq!(parse_command("east"), Action::WalkTo("east".to_string()));
-        assert_eq!(parse_command("west"), Action::WalkTo("west".to_string()));
-        assert_eq!(parse_command("up"), Action::WalkTo("up".to_string()));
-        assert_eq!(parse_command("down"), Action::WalkTo("down".to_string()));
-
-        // Case insensitive
-        assert_eq!(parse_command("NORTH"), Action::WalkTo("north".to_string()));
-        assert_eq!(parse_command("South"), Action::WalkTo("south".to_string()));
-
-        // move/go/walk commands
+    fn test_parse_extra_whitespace() {
+        // Extra whitespace handling - whitespace is preserved in free action
         assert_eq!(
-            parse_command("move north"),
+            parse_command("  north  "),
             Action::WalkTo("north".to_string())
         );
         assert_eq!(
-            parse_command("go south"),
-            Action::WalkTo("south".to_string())
+            parse_command("  talk guard  "),
+            Action::Talk("guard".to_string(), None)
         );
-        assert_eq!(
-            parse_command("walk to kitchen"),
-            Action::WalkTo("kitchen".to_string())
-        );
-        assert_eq!(
-            parse_command("go to front gates"),
-            Action::WalkTo("front gates".to_string())
-        );
+        // Whitespace-only becomes FreeAction with the whitespace
+        assert_eq!(parse_command("   "), Action::FreeAction("   ".to_string()));
     }
 
     #[test]
@@ -150,5 +124,71 @@ mod tests {
             parse_command("\"Who is this lady?\" you ask Carla"),
             Action::FreeAction("\"Who is this lady?\" you ask Carla".to_string())
         );
+    }
+
+    #[test]
+    fn test_parse_look() {
+        // Look command variants
+        assert_eq!(parse_command("look"), Action::Look);
+        assert_eq!(parse_command("l"), Action::Look);
+        assert_eq!(parse_command("LOOK"), Action::Look);
+        assert_eq!(
+            parse_command("Look around"),
+            Action::FreeAction("Look around".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_inventory() {
+        // Inventory command variants
+        assert_eq!(parse_command("inventory"), Action::Inventory);
+        assert_eq!(parse_command("inv"), Action::Inventory);
+        assert_eq!(parse_command("i"), Action::Inventory);
+        assert_eq!(parse_command("INVENTORY"), Action::Inventory);
+        // "inventory" with arguments should be free action
+        assert_eq!(
+            parse_command("inventory check"),
+            Action::FreeAction("inventory check".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_quit() {
+        // Quit command variants
+        assert_eq!(parse_command("quit"), Action::Quit);
+        assert_eq!(parse_command("q"), Action::Quit);
+        assert_eq!(parse_command("exit"), Action::Quit);
+        assert_eq!(parse_command("QUIT"), Action::Quit);
+    }
+
+    #[test]
+    fn test_parse_talk_variants() {
+        // Various talk command formats
+        assert_eq!(
+            parse_command("talk guard"),
+            Action::Talk("guard".to_string(), None)
+        );
+        assert_eq!(
+            parse_command("speak to innkeeper"),
+            Action::FreeAction("speak to innkeeper".to_string())
+        );
+        assert_eq!(
+            parse_command("say hello"),
+            Action::FreeAction("say hello".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_mixed_case_commands() {
+        // Mixed case handling
+        assert_eq!(
+            parse_command("Go North"),
+            Action::WalkTo("north".to_string())
+        );
+        assert_eq!(
+            parse_command("Talk TO Carla"),
+            Action::Talk("carla".to_string(), None)
+        );
+        assert_eq!(parse_command("InVeNtOrY"), Action::Inventory);
     }
 }

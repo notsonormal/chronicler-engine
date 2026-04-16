@@ -8,5 +8,14 @@
     ],
     "starting_room_id": "start",
     "map_file": "map.json",
-    "player_file": "player.json"
+    "player_file": "player.json",
+    "scenarios": [
+        {
+            "id": "test_intro",
+            "name": "Test World Introduction",
+            "description": "A simple test scenario for validation",
+            "starting_room_id": "start",
+            "text": "Welcome to the Test World, {{user}}! This is a simple scenario for testing the starting scenarios feature. Feel free to explore and test the game engine."
+        }
+    ]
 }

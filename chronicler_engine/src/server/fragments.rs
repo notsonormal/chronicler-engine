@@ -454,11 +454,7 @@ fn process_action(state: Arc<std::sync::Mutex<GameState>>, input: String, _playe
                     match narration {
                         Ok(text) => {
                             if let Ok(mut state) = state_for_thread.lock() {
-                                state.add_log(
-                                    text,
-                                    Some("Game Master".to_string()),
-                                    LogType::Narration,
-                                );
+                                state.add_log(text, None, LogType::Narration);
                                 state.tui_state.is_generating = false;
                             }
                         }

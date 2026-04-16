@@ -1,0 +1,12 @@
+{
+  "port_range": {
+    "min": 3010,
+    "max": 3030
+  },
+  "default_backend": "mock",
+  "test_specific": {
+    "flow_llm_tests": {
+      "backend": "real"
+    }
+  }
+}

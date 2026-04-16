@@ -202,4 +202,150 @@ mod tests {
         let res = get_room_by_id(&state, "non_existent_id");
         assert!(res.is_none());
     }
+
+    #[test]
+    fn test_get_available_exits() {
+        let state = setup_test_state();
+        let exits = get_available_exits(&state);
+        // room1 has exits to north (room2) and east (room3)
+        assert_eq!(exits.len(), 2);
+        assert!(exits.contains(&"north".to_string()) || exits.contains(&"North".to_string()));
+        assert!(exits.contains(&"east".to_string()) || exits.contains(&"East".to_string()));
+    }
+
+    #[test]
+    fn test_get_available_exits_no_exits() {
+        // Create a room with no exits
+        let world = Arc::new(WorldCard {
+            name: "W".into(),
+            description: "D".into(),
+            global_rules: vec![],
+        });
+
+        let room_no_exits = Room {
+            id: "empty".to_string(),
+            name: "Empty Room".to_string(),
+            description: "Nothing here.".to_string(),
+            exits: HashMap::new(),
+            items: vec![],
+            npcs: vec![],
+            image_path: None,
+        };
+
+        let map = MapDef {
+            overworld: Overworld {
+                id: "o".into(),
+                name: "W".into(),
+                regions: vec![Region {
+                    id: "r".into(),
+                    name: "R".into(),
+                    rooms: vec![room_no_exits],
+                }],
+            },
+        };
+
+        let state = GameState::new(
+            world,
+            Arc::new(map),
+            Arc::new(PlayerCard {
+                sheet: CharacterSheet {
+                    name: "P".into(),
+                    description: "P".into(),
+                    personality: "P".into(),
+                    scenario: "S".into(),
+                    example_dialogue: "".into(),
+                    image_path: None,
+                },
+                inventory: vec![],
+            }),
+            vec![],
+            "empty".to_string(),
+        );
+
+        let exits = get_available_exits(&state);
+        assert!(exits.is_empty());
+    }
+
+    #[test]
+    fn test_get_current_room_success() {
+        let state = setup_test_state();
+        let result = get_current_room(&state);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().name, "Grand Hall");
+    }
+
+    #[test]
+    fn test_get_current_room_failure() {
+        // Create a state with an invalid current room ID
+        let world = Arc::new(WorldCard {
+            name: "W".into(),
+            description: "D".into(),
+            global_rules: vec![],
+        });
+
+        let map = MapDef {
+            overworld: Overworld {
+                id: "o".into(),
+                name: "W".into(),
+                regions: vec![Region {
+                    id: "r".into(),
+                    name: "R".into(),
+                    rooms: vec![Room {
+                        id: "room1".into(),
+                        name: "Room".to_string(),
+                        description: "D".to_string(),
+                        exits: HashMap::new(),
+                        items: vec![],
+                        npcs: vec![],
+                        image_path: None,
+                    }],
+                }],
+            },
+        };
+
+        let state = GameState::new(
+            world,
+            Arc::new(map),
+            Arc::new(PlayerCard {
+                sheet: CharacterSheet {
+                    name: "P".into(),
+                    description: "P".into(),
+                    personality: "P".into(),
+                    scenario: "S".into(),
+                    example_dialogue: "".into(),
+                    image_path: None,
+                },
+                inventory: vec![],
+            }),
+            vec![],
+            "non_existent_room".to_string(), // Invalid room ID
+        );
+
+        let result = get_current_room(&state);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_get_room_by_id_existing() {
+        let state = setup_test_state();
+        let room = get_room_by_id(&state, "room1");
+        assert!(room.is_some());
+        assert_eq!(room.unwrap().name, "Grand Hall");
+    }
+
+    #[test]
+    fn test_attempt_walk_case_insensitive() {
+        let mut state = setup_test_state();
+        // Test case insensitivity
+        let res = attempt_walk(&mut state, "NORTH");
+        assert!(res.is_ok());
+        assert_eq!(state.current_room_id, "room2");
+
+        // Reset to room1
+        state.current_room_id = "room1".to_string();
+
+        let res = attempt_walk(&mut state, "North");
+        assert!(res.is_ok());
+        assert_eq!(state.current_room_id, "room2");
+    }
 }
