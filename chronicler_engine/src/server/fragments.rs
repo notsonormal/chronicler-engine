@@ -14,6 +14,7 @@ use crate::error::Result;
 use crate::model::character::NpcCard;
 use crate::model::state::{GameState, LogType};
 use crate::narrative::llm::get_llm_backend;
+use crate::narrative::prompt::PromptContext;
 use crate::server::AppState;
 use crate::server::templates::{
     ActionAreaTemplate, HeaderTemplate, StoryLogTemplate, VisualSidebarTemplate,
@@ -370,6 +371,9 @@ fn process_action(state: Arc<std::sync::Mutex<GameState>>, input: String, _playe
                 }
             }
 
+            // Get ALL NPCs from game state for prompt context
+            let all_npcs: Vec<NpcCard> = state_guard.npcs.values().cloned().collect();
+
             // Generate LLM narration for arrival
             let world = Arc::clone(&state_guard.world);
             let map = Arc::clone(&state_guard.map);
@@ -389,8 +393,16 @@ fn process_action(state: Arc<std::sync::Mutex<GameState>>, input: String, _playe
 
                 if let Some(room) = room {
                     let backend = get_llm_backend();
-                    let narration =
-                        backend.narrate_arrival(&world, room, &nearby_npcs, &player, &history);
+                    let context = PromptContext {
+                        world: &world,
+                        room,
+                        all_npcs: &all_npcs,
+                        npcs_in_area: &nearby_npcs,
+                        player: &player,
+                        user_message: "", // narrate_arrival creates its own message
+                        history: &history,
+                    };
+                    let narration = backend.narrate_arrival(&context);
                     match narration {
                         Ok(text) => {
                             if let Ok(mut state) = state_for_thread.lock() {
@@ -436,6 +448,8 @@ fn process_action(state: Arc<std::sync::Mutex<GameState>>, input: String, _playe
             let history = state_guard.narration_history.clone();
             // Get nearby NPCs (empty for now - in full implementation would fetch from room)
             let nearby_npcs: Vec<NpcCard> = vec![];
+            // Get ALL NPCs from game state for prompt context
+            let all_npcs: Vec<NpcCard> = state_guard.npcs.values().cloned().collect();
             let text = text.clone();
             drop(state_guard);
 
@@ -450,14 +464,16 @@ fn process_action(state: Arc<std::sync::Mutex<GameState>>, input: String, _playe
 
                 if let Some(room) = room {
                     let backend = get_llm_backend();
-                    let narration = backend.narrate_action(
-                        &world,
+                    let context = PromptContext {
+                        world: &world,
                         room,
-                        &nearby_npcs,
-                        &player,
-                        &text,
-                        &history,
-                    );
+                        all_npcs: &all_npcs,
+                        npcs_in_area: &nearby_npcs,
+                        player: &player,
+                        user_message: &text,
+                        history: &history,
+                    };
+                    let narration = backend.narrate_action(&context);
                     match narration {
                         Ok(text) => {
                             if let Ok(mut state) = state_for_thread.lock() {

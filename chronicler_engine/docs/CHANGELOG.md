@@ -2,6 +2,19 @@
 
 ## 2026-04-17
 
+### Added
+- **PromptContext Refactoring** - Unified context for LLM calls
+  - New `PromptContext` struct in `prompt.rs` containing all prompt fields
+  - `PromptBuilder::from_context()` method creates context from game state
+  - Simplified `LlmBackend` trait to use `PromptContext`
+  - All 3 LLM methods now take `&PromptContext` instead of individual fields
+  - Cleaner backend implementations (OpenRouter, Mock, DeepSeek)
+
+- **NPC Prompt Structure** - All characters now included in LLM prompts
+  - New fields in PromptBuilder: `all_npcs` and `npcs_in_area`
+  - Two output sections: `<Npcs>` (all characters with presence) and `<NpcsInRoom>` (room-specific)
+  - Presence status shows "(IN ROOM)" or "(elsewhere)"
+
 ### Changed
 - **OpenRouter Client** - Enhanced content extraction
   - Robust fallback chain: content → reasoning → reasoning_content

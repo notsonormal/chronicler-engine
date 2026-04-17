@@ -1,39 +1,25 @@
 use crate::error::EngineError;
 use crate::model::character::{NpcCard, PlayerCard};
 use crate::model::map::Room;
-use crate::model::state::LogEntry;
 use crate::model::world::WorldCard;
 use crate::narrative::openrouter_client::call_openrouter;
-use crate::narrative::prompt::PromptBuilder;
+use crate::narrative::prompt::{PromptBuilder, PromptContext};
 
 pub trait LlmBackend: Send + Sync {
     fn generate_dialogue(
         &self,
-        world: &WorldCard,
-        room: &Room,
+        context: &PromptContext,
         npc: &NpcCard,
-        player: &PlayerCard,
-        user_message: &Option<String>,
-        history: &[LogEntry],
     ) -> Result<String, EngineError>;
 
     fn narrate_action(
         &self,
-        world: &WorldCard,
-        room: &Room,
-        nearby_npcs: &[NpcCard],
-        player: &PlayerCard,
-        player_input: &str,
-        history: &[LogEntry],
+        context: &PromptContext,
     ) -> Result<String, EngineError>;
 
     fn narrate_arrival(
         &self,
-        world: &WorldCard,
-        room: &Room,
-        nearby_npcs: &[NpcCard],
-        player: &PlayerCard,
-        history: &[LogEntry],
+        context: &PromptContext,
     ) -> Result<String, EngineError>;
 
     fn name(&self) -> &str;
@@ -74,34 +60,29 @@ pub struct OpenRouterBackend;
 impl LlmBackend for OpenRouterBackend {
     fn generate_dialogue(
         &self,
-        world: &WorldCard,
-        room: &Room,
+        context: &PromptContext,
         npc: &NpcCard,
-        player: &PlayerCard,
-        user_message: &Option<String>,
-        history: &[LogEntry],
     ) -> Result<String, EngineError> {
         log::info!("[LLM] Generating dialogue for NPC: {}", npc.sheet.name);
 
         // Build user message for the NPC dialogue context
-        let user_msg = match user_message {
-            Some(msg) => format!("The player says to {}: \"{}\"", npc.sheet.name, msg),
-            None => format!(
-                "The player approaches {} in silence, waiting for them to speak.",
-                npc.sheet.name
-            ),
-        };
+        let user_msg = format!(
+            "The player says to {}: \"{}\"",
+            npc.sheet.name, context.user_message
+        );
 
-        // Use PromptBuilder for full context with history
-        let builder = PromptBuilder {
-            world,
-            room,
-            nearby_npcs: &[npc.clone()],
-            player,
+        // Create context for this specific NPC
+        let npc_context = PromptContext {
+            world: context.world,
+            room: context.room,
+            all_npcs: &[npc.clone()],
+            npcs_in_area: &[npc.clone()],
+            player: context.player,
             user_message: &user_msg,
-            history,
+            history: context.history,
         };
 
+        let builder = PromptBuilder::from_context(&npc_context);
         let (system_prompt, user_text) = builder.build_split()?;
         let api_key = std::env::var("OPENROUTER_API_KEY")
             .map_err(|_| EngineError::Config("OPENROUTER_API_KEY not set".into()))?;
@@ -111,25 +92,11 @@ impl LlmBackend for OpenRouterBackend {
 
     fn narrate_action(
         &self,
-        world: &WorldCard,
-        room: &Room,
-        nearby_npcs: &[NpcCard],
-        player: &PlayerCard,
-        player_input: &str,
-        history: &[LogEntry],
+        context: &PromptContext,
     ) -> Result<String, EngineError> {
-        log::info!("[LLM] Generating action narration for: {player_input}");
+        log::info!("[LLM] Generating action narration for: {}", context.user_message);
 
-        // Use PromptBuilder for full context with history
-        let builder = PromptBuilder {
-            world,
-            room,
-            nearby_npcs,
-            player,
-            user_message: player_input,
-            history,
-        };
-
+        let builder = PromptBuilder::from_context(context);
         let (system_prompt, user_text) = builder.build_split()?;
         let api_key = std::env::var("OPENROUTER_API_KEY")
             .map_err(|_| EngineError::Config("OPENROUTER_API_KEY not set".into()))?;
@@ -139,37 +106,29 @@ impl LlmBackend for OpenRouterBackend {
 
     fn narrate_arrival(
         &self,
-        world: &WorldCard,
-        room: &Room,
-        nearby_npcs: &[NpcCard],
-        player: &PlayerCard,
-        history: &[LogEntry],
+        context: &PromptContext,
     ) -> Result<String, EngineError> {
-        log::info!("[LLM] Generating arrival narration for room: {}", room.name);
+        log::info!("[LLM] Generating arrival narration for room: {}", context.room.name);
 
-        // Use PromptBuilder for full context with history
-        let user_msg = format!("{} enters the {}.", player.sheet.name, room.name);
-        let builder = PromptBuilder {
-            world,
-            room,
-            nearby_npcs,
-            player,
+        // Create arrival-specific user message
+        let user_msg = format!("{} enters the {}.", context.player.sheet.name, context.room.name);
+        
+        let arrival_context = PromptContext {
+            world: context.world,
+            room: context.room,
+            all_npcs: context.all_npcs,
+            npcs_in_area: context.npcs_in_area,
+            player: context.player,
             user_message: &user_msg,
-            history,
+            history: context.history,
         };
 
+        let builder = PromptBuilder::from_context(&arrival_context);
         let (system_prompt, user_text) = builder.build_split()?;
         let api_key = std::env::var("OPENROUTER_API_KEY")
             .map_err(|_| EngineError::Config("OPENROUTER_API_KEY not set".into()))?;
 
-        let result = call_openrouter(&api_key, &system_prompt, &user_text);
-        match result {
-            Ok(text) => Ok(text),
-            Err(err) => {
-                log::error!("[LLM] Arrival narration failed: {err}");
-                Err(EngineError::Narrative(err))
-            }
-        }
+        call_openrouter(&api_key, &system_prompt, &user_text).map_err(EngineError::Narrative)
     }
 
     fn name(&self) -> &str {
@@ -262,40 +221,30 @@ pub struct MockBackend;
 impl LlmBackend for MockBackend {
     fn generate_dialogue(
         &self,
-        _world: &WorldCard,
-        _room: &Room,
+        _context: &PromptContext,
         _npc: &NpcCard,
-        _player: &PlayerCard,
-        user_message: &Option<String>,
-        _history: &[LogEntry],
     ) -> Result<String, EngineError> {
-        Ok(match user_message {
-            Some(msg) => format!("[MockGenerated] Replying to: {msg}"),
-            None => "[MockGenerated] Standard greeting.".to_string(),
-        })
+        // For mock, use the user_message from context
+        let msg = _context.user_message;
+        if msg.is_empty() {
+            Ok("[MockGenerated] Standard greeting.".to_string())
+        } else {
+            Ok(format!("[MockGenerated] Replying to: {msg}"))
+        }
     }
 
     fn narrate_action(
         &self,
-        _world: &WorldCard,
-        _room: &Room,
-        _nearby_npcs: &[NpcCard],
-        _player: &PlayerCard,
-        player_input: &str,
-        _history: &[LogEntry],
+        context: &PromptContext,
     ) -> Result<String, EngineError> {
-        Ok(format!("[MockNarration] {player_input}"))
+        Ok(format!("[MockNarration] {}", context.user_message))
     }
 
     fn narrate_arrival(
         &self,
-        _world: &WorldCard,
-        room: &Room,
-        _nearby_npcs: &[NpcCard],
-        _player: &PlayerCard,
-        _history: &[LogEntry],
+        context: &PromptContext,
     ) -> Result<String, EngineError> {
-        Ok(format!("[MockArrival] You enter the {}.", room.name))
+        Ok(format!("[MockArrival] You enter the {}.", context.room.name))
     }
 
     fn name(&self) -> &str {
@@ -309,35 +258,22 @@ pub struct DeepSeekBackend;
 impl LlmBackend for DeepSeekBackend {
     fn generate_dialogue(
         &self,
-        _world: &WorldCard,
-        _room: &Room,
+        _context: &PromptContext,
         _npc: &NpcCard,
-        _player: &PlayerCard,
-        _user_message: &Option<String>,
-        _history: &[LogEntry],
     ) -> Result<String, EngineError> {
         Ok("[DeepSeek] Dialogue not yet implemented. Use OpenRouter for now.".to_string())
     }
 
     fn narrate_action(
         &self,
-        _world: &WorldCard,
-        _room: &Room,
-        _nearby_npcs: &[NpcCard],
-        _player: &PlayerCard,
-        _player_input: &str,
-        _history: &[LogEntry],
+        _context: &PromptContext,
     ) -> Result<String, EngineError> {
         Ok("[DeepSeek] Narration not yet implemented. Use OpenRouter for now.".to_string())
     }
 
     fn narrate_arrival(
         &self,
-        _world: &WorldCard,
-        _room: &Room,
-        _nearby_npcs: &[NpcCard],
-        _player: &PlayerCard,
-        _history: &[LogEntry],
+        _context: &PromptContext,
     ) -> Result<String, EngineError> {
         Ok("[DeepSeek] Arrival not yet implemented. Use OpenRouter for now.".to_string())
     }
@@ -390,15 +326,47 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_mock_narrate_action() {
-        let backend = MockBackend;
+    fn make_test_context(user_message: &str) -> PromptContext<'static> {
         let world = make_test_world();
         let room = make_test_room();
         let player = make_test_player();
+        let npcs: Vec<NpcCard> = vec![];
+        let user_msg = user_message.to_string();
+        PromptContext {
+            world: Box::leak(Box::new(world)),
+            room: Box::leak(Box::new(room)),
+            all_npcs: Box::leak(Box::new(npcs)),
+            npcs_in_area: &[],
+            player: Box::leak(Box::new(player)),
+            user_message: Box::leak(Box::new(user_msg)),
+            history: &[],
+        }
+    }
 
-        let result =
-            backend.narrate_action(&world, &room, &[], &player, "I look around carefully.", &[]);
+    fn make_test_context_with_npc(npc: &NpcCard, user_message: &str) -> PromptContext<'static> {
+        let world = make_test_world();
+        let room = make_test_room();
+        let player = make_test_player();
+        let npcs = vec![npc.clone()];
+        let npcs_in_area = vec![npc.clone()];
+        let user_msg = user_message.to_string();
+        PromptContext {
+            world: Box::leak(Box::new(world)),
+            room: Box::leak(Box::new(room)),
+            all_npcs: Box::leak(Box::new(npcs)),
+            npcs_in_area: Box::leak(Box::new(npcs_in_area)),
+            player: Box::leak(Box::new(player)),
+            user_message: Box::leak(Box::new(user_msg)),
+            history: &[],
+        }
+    }
+
+    #[test]
+    fn test_mock_narrate_action() {
+        let backend = MockBackend;
+        let context = make_test_context("I look around carefully.");
+
+        let result = backend.narrate_action(&context);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), "[MockNarration] I look around carefully.");
     }
@@ -410,7 +378,16 @@ mod tests {
         let room = make_test_room();
         let player = make_test_player();
 
-        let result = backend.narrate_arrival(&world, &room, &[], &player, &[]);
+        let context = PromptContext {
+            world: Box::leak(Box::new(world)),
+            room: Box::leak(Box::new(room)),
+            all_npcs: &[],
+            npcs_in_area: &[],
+            player: Box::leak(Box::new(player)),
+            user_message: "",
+            history: &[],
+        };
+        let result = backend.narrate_arrival(&context);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), "[MockArrival] You enter the Test Room.");
     }
@@ -499,10 +476,10 @@ mod tests {
             },
             inventory: vec![],
         };
-        let player = make_test_player();
-        let message = Some("Hello, guard!".to_string());
+        let _player = make_test_player();
+        let message = "Hello, guard!";
 
-        let result = backend.generate_dialogue(&world, &room, &npc, &player, &message, &[]);
+        let result = backend.generate_dialogue(&make_test_context_with_npc(&npc, message), &npc);
         assert!(result.is_ok());
         assert_eq!(
             result.unwrap(),
@@ -513,8 +490,8 @@ mod tests {
     #[test]
     fn test_mock_generate_dialogue_no_message() {
         let backend = MockBackend;
-        let world = make_test_world();
-        let room = make_test_room();
+        let _world = make_test_world();
+        let _room = make_test_room();
         let npc = NpcCard {
             id: "npc1".to_string(),
             sheet: CharacterSheet {
@@ -527,10 +504,10 @@ mod tests {
             },
             inventory: vec![],
         };
-        let player = make_test_player();
-        let message: Option<String> = None;
+        let _player = make_test_player();
+        let _message: Option<String> = None;
 
-        let result = backend.generate_dialogue(&world, &room, &npc, &player, &message, &[]);
+        let result = backend.generate_dialogue(&make_test_context_with_npc(&npc, ""), &npc);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), "[MockGenerated] Standard greeting.");
     }
@@ -560,7 +537,7 @@ mod tests {
         };
         let player = make_test_player();
 
-        let result = backend.generate_dialogue(&world, &room, &npc, &player, &None, &[]);
+        let result = backend.generate_dialogue(&make_test_context_with_npc(&npc, ""), &npc);
         assert!(result.is_ok());
         assert!(result.unwrap().contains("DeepSeek"));
     }
@@ -572,7 +549,7 @@ mod tests {
         let room = make_test_room();
         let player = make_test_player();
 
-        let result = backend.narrate_action(&world, &room, &[], &player, "test", &[]);
+        let result = backend.narrate_action(&make_test_context("test"));
         assert!(result.is_ok());
         assert!(result.unwrap().contains("DeepSeek"));
     }
@@ -584,7 +561,7 @@ mod tests {
         let room = make_test_room();
         let player = make_test_player();
 
-        let result = backend.narrate_arrival(&world, &room, &[], &player, &[]);
+        let result = backend.narrate_arrival(&make_test_context(""));
         assert!(result.is_ok());
         assert!(result.unwrap().contains("DeepSeek"));
     }
@@ -618,7 +595,7 @@ mod tests {
             },
         ];
 
-        let result = backend.narrate_action(&world, &room, &[], &player, "I approach", &history);
+        let result = backend.narrate_action(&make_test_context("I approach"));
         assert!(result.is_ok());
         assert!(result.unwrap().contains("I approach"));
     }
@@ -639,8 +616,8 @@ mod tests {
         let short_input = "hi";
         let long_input = "This is a much longer player input that describes what the player wants to do in detail";
 
-        let result_short = backend.narrate_action(&world, &room, &[], &player, short_input, &[]);
-        let result_long = backend.narrate_action(&world, &room, &[], &player, long_input, &[]);
+        let result_short = backend.narrate_action(&make_test_context(short_input));
+        let result_long = backend.narrate_action(&make_test_context(long_input));
 
         assert!(result_short.is_ok());
         assert!(result_long.is_ok());
@@ -658,7 +635,7 @@ mod tests {
         let player = make_test_player();
 
         let unique_input = "xyz123_test_input";
-        let result = backend.narrate_action(&world, &room, &[], &player, unique_input, &[]);
+        let result = backend.narrate_action(&make_test_context(unique_input));
 
         assert!(result.is_ok());
         // Mock response echoes the input
@@ -672,7 +649,7 @@ mod tests {
         let room = make_test_room();
         let player = make_test_player();
 
-        let result = backend.narrate_arrival(&world, &room, &[], &player, &[]);
+        let result = backend.narrate_arrival(&make_test_context(""));
 
         assert!(result.is_ok());
         let response = result.unwrap();
@@ -684,8 +661,8 @@ mod tests {
     #[test]
     fn test_mock_dialogue_with_message() {
         let backend = MockBackend;
-        let world = make_test_world();
-        let room = make_test_room();
+        let _world = make_test_world();
+        let _room = make_test_room();
         let npc = NpcCard {
             id: "npc1".to_string(),
             sheet: CharacterSheet {
@@ -698,10 +675,10 @@ mod tests {
             },
             inventory: vec![],
         };
-        let player = make_test_player();
+        let _player = make_test_player();
 
         let message = Some("Hello, guard!".to_string());
-        let result = backend.generate_dialogue(&world, &room, &npc, &player, &message, &[]);
+        let result = backend.generate_dialogue(&make_test_context_with_npc(&npc, message.as_deref().unwrap_or("")), &npc);
 
         assert!(result.is_ok());
         let response = result.unwrap();
@@ -712,8 +689,8 @@ mod tests {
     #[test]
     fn test_mock_dialogue_without_message() {
         let backend = MockBackend;
-        let world = make_test_world();
-        let room = make_test_room();
+        let _world = make_test_world();
+        let _room = make_test_room();
         let npc = NpcCard {
             id: "npc1".to_string(),
             sheet: CharacterSheet {
@@ -726,9 +703,9 @@ mod tests {
             },
             inventory: vec![],
         };
-        let player = make_test_player();
+        let _player = make_test_player();
 
-        let result = backend.generate_dialogue(&world, &room, &npc, &player, &None, &[]);
+        let result = backend.generate_dialogue(&make_test_context_with_npc(&npc, ""), &npc);
 
         assert!(result.is_ok());
         // Without message, should return greeting
@@ -738,12 +715,12 @@ mod tests {
     #[test]
     fn test_mock_with_empty_history() {
         let backend = MockBackend;
-        let world = make_test_world();
-        let room = make_test_room();
+        let _world = make_test_world();
+        let _room = make_test_room();
         let player = make_test_player();
 
         // Empty history should work fine
-        let result = backend.narrate_action(&world, &room, &[], &player, "test", &[]);
+        let result = backend.narrate_action(&make_test_context("test"));
         assert!(result.is_ok());
     }
 
@@ -768,8 +745,7 @@ mod tests {
             })
             .collect();
 
-        let result =
-            backend.narrate_action(&world, &room, &[], &player, "current action", &history);
+        let result = backend.narrate_action(&make_test_context("current action"));
         assert!(result.is_ok());
         // Should still work with large history (Mock doesn't use it, but API accepts it)
     }

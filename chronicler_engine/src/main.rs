@@ -5,6 +5,7 @@ use chronicler_engine::model::map::MapDef;
 use chronicler_engine::model::state::{GameState, GeneratingGuard};
 use chronicler_engine::model::world::WorldManifest;
 use chronicler_engine::narrative::llm::get_llm_backend;
+use chronicler_engine::narrative::prompt::PromptContext;
 use chronicler_engine::server::ServerConfig;
 
 use clap::Parser;
@@ -280,6 +281,9 @@ fn main() -> chronicler_engine::Result<()> {
         }
     }
 
+    // Get ALL NPCs from game state for prompt context
+    let all_npcs: Vec<NpcCard> = state.npcs.values().cloned().collect();
+
     // Clone data for the background thread
     let world = state.world.clone();
     let map = state.map.clone();
@@ -306,8 +310,16 @@ fn main() -> chronicler_engine::Result<()> {
 
             if let Some(room) = room {
                 let backend = get_llm_backend();
-                let narration =
-                    backend.narrate_arrival(&world, room, &nearby_npcs, &player, &history);
+                let context = PromptContext {
+                    world: &world,
+                    room,
+                    all_npcs: &all_npcs,
+                    npcs_in_area: &nearby_npcs,
+                    player: &player,
+                    user_message: "", // narrate_arrival creates its own message
+                    history: &history,
+                };
+                let narration = backend.narrate_arrival(&context);
                 match narration {
                     Ok(text) => {
                         if let Ok(mut state) = state_for_thread.lock() {
