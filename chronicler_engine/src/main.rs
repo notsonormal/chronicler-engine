@@ -2,7 +2,7 @@ use std::{fs, path::Path, sync::Arc, thread};
 
 use chronicler_engine::model::character::{NpcCard, PlayerCard};
 use chronicler_engine::model::map::MapDef;
-use chronicler_engine::model::state::GameState;
+use chronicler_engine::model::state::{GameState, GeneratingGuard};
 use chronicler_engine::model::world::WorldManifest;
 use chronicler_engine::narrative::llm::get_llm_backend;
 use chronicler_engine::server::ServerConfig;
@@ -294,6 +294,9 @@ fn main() -> chronicler_engine::Result<()> {
     if !use_scenario {
         let state_for_thread = state.clone();
         thread::spawn(move || {
+            // RAII guard ensures is_generating is reset even if room is None
+            let _guard = GeneratingGuard::new(state_for_thread.clone());
+            
             let room = map
                 .overworld
                 .regions
@@ -313,17 +316,18 @@ fn main() -> chronicler_engine::Result<()> {
                                 None,
                                 chronicler_engine::model::state::LogType::Narration,
                             );
-                            state.tui_state.is_generating = false;
+                            // Note: Guard will reset is_generating on drop
                         }
                     }
                     Err(e) => {
                         if let Ok(mut state) = state_for_thread.lock() {
                             state.tui_state.error_message = Some(format!("LLM Error: {e}"));
-                            state.tui_state.is_generating = false;
+                            // Note: Guard will reset is_generating on drop
                         }
                     }
                 }
             }
+            // Guard drops here, resetting is_generating = false
         });
     } // end if !use_scenario
 

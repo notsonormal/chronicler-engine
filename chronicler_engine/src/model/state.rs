@@ -54,6 +54,29 @@ impl TuiState {
     }
 }
 
+/// RAII guard that sets is_generating=true on creation and false on drop.
+pub struct GeneratingGuard {
+    state: Arc<std::sync::Mutex<GameState>>,
+}
+
+impl GeneratingGuard {
+    /// Create a new guard, setting is_generating=true immediately.
+    pub fn new(state: Arc<std::sync::Mutex<GameState>>) -> Self {
+        if let Ok(mut guard) = state.lock() {
+            guard.tui_state.is_generating = true;
+        }
+        Self { state }
+    }
+}
+
+impl Drop for GeneratingGuard {
+    fn drop(&mut self) {
+        if let Ok(mut guard) = self.state.lock() {
+            guard.tui_state.is_generating = false;
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct GameState {
     pub world: Arc<WorldCard>,

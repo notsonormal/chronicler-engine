@@ -85,13 +85,24 @@ pub fn call_openrouter(
                         return Err(format!("LLM API error: {error_msg}"));
                     }
 
-                    // Try to extract content from the standard response format
-                    if let Some(content) = json_response["choices"]
+                    // Try to extract content - some models (like Z-AI) return content as null
+                    // and put the actual response in the "reasoning" field instead
+                    let content = json_response["choices"]
                         .get(0)
                         .and_then(|c| c.get("message"))
                         .and_then(|m| m.get("content"))
-                        .and_then(|c| c.as_str())
-                    {
+                        .and_then(|c| c.as_str());
+
+                    // Fallback: check reasoning field if content is null
+                    let content = content.or_else(|| {
+                        json_response["choices"]
+                            .get(0)
+                            .and_then(|c| c.get("message"))
+                            .and_then(|m| m.get("reasoning"))
+                            .and_then(|r| r.as_str())
+                    });
+
+                    if let Some(content) = content {
                         log::info!(
                             "[LLM] Successfully parsed content ({} chars)",
                             content.len()

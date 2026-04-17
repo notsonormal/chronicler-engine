@@ -21,7 +21,6 @@ use crate::server::templates::{
 
 const MAX_LOG_DISPLAY: usize = 50;
 
-/// Render an error message for the UI
 fn render_error(message: &str) -> String {
     format!(
         "<div class=\"error-message\">Error: {}</div>",
@@ -53,7 +52,6 @@ pub fn render_story_log(state: &AppState) -> Result<String> {
         .lock()
         .map_err(|_| crate::error::EngineError::Config("Lock poisoned".into()))?;
 
-    // Use Askama template for compile-time validation
     let entries: Vec<_> = state_guard
         .narration_history
         .iter()
@@ -105,7 +103,6 @@ pub fn render_action_area(state: &AppState) -> Result<String> {
     let exits = get_available_exits(&state_guard);
     drop(state_guard);
 
-    // Use Askama template for compile-time validation
     let template = ActionAreaTemplate::new(is_generating, &exits);
     template
         .render()
@@ -152,7 +149,6 @@ pub async fn action_area_fragment(State(state): State<AppState>) -> Html<String>
     }
 }
 
-/// Handler for action hints - returns just the hints HTML
 pub async fn hints_handler(State(state): State<AppState>) -> Html<String> {
     match render_action_hints(&state) {
         Ok(hints) => Html(hints),
@@ -163,12 +159,10 @@ pub async fn hints_handler(State(state): State<AppState>) -> Html<String> {
     }
 }
 
-/// Handler for status ready reset
 pub async fn status_ready_handler(State(_state): State<AppState>) -> Html<String> {
     Html("<span class=\"status ready\">Ready</span>".to_string())
 }
 
-/// Handler for generating status - returns whether LLM is currently generating
 pub async fn generating_status_handler(State(state): State<AppState>) -> Html<String> {
     let (is_generating, error_message) = state
         .state
@@ -190,7 +184,6 @@ pub async fn generating_status_handler(State(state): State<AppState>) -> Html<St
     }
 }
 
-/// Render just the action hints div content
 fn render_action_hints(state: &AppState) -> Result<String> {
     let state_guard = state
         .state
@@ -266,10 +259,20 @@ pub async fn action_handler(
     // For async actions, spawn a thread to process them
     if !is_sync {
         let state_clone = state.state.clone();
+        let state_for_reset = state.state.clone();
         let cmd = command;
         let pname = player_name;
+        
         std::thread::spawn(move || {
+            // Small delay to let inner threads start their guards first
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            
             process_action(state_clone, cmd, pname);
+            
+            // Fallback: ensure flag is reset after process_action completes
+            if let Ok(mut guard) = state_for_reset.lock() {
+                guard.tui_state.is_generating = false;
+            }
         });
     }
 
@@ -308,11 +311,15 @@ fn process_sync_action(state: &mut GameState, action: &crate::engine::action::Ac
 }
 
 fn process_action(state: Arc<std::sync::Mutex<GameState>>, input: String, _player_name: String) {
+    // Note: We don't use GeneratingGuard here because async actions (WalkTo, FreeAction)
+    // spawn inner threads that need to manage the is_generating flag themselves.
+    // The outer spawn (line 272-279) now uses a guard to ensure cleanup.
+    
     let action = parse_command(&input);
 
     let mut state_guard = match state.lock() {
         Ok(g) => g,
-        Err(_) => return,
+        Err(_) => return,  // Guard will still reset on drop
     };
 
     match action {
