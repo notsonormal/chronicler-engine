@@ -18,6 +18,10 @@ pub fn create_app_for_testing(state: Arc<std::sync::Mutex<GameState>>) -> Router
             "/fragment/action-area",
             get(fragments::action_area_fragment),
         )
+        .route(
+            "/fragment/character-headshots",
+            get(fragments::character_headshots_fragment),
+        )
         .route("/action", post(fragments::action_handler))
         .route("/hints", get(fragments::hints_handler))
         .route("/status/ready", get(fragments::status_ready_handler))
@@ -79,6 +83,10 @@ pub async fn run_server_with_config(
         .route(
             "/fragment/action-area",
             get(fragments::action_area_fragment),
+        )
+        .route(
+            "/fragment/character-headshots",
+            get(fragments::character_headshots_fragment),
         )
         .route("/action", post(fragments::action_handler))
         .route("/hints", get(fragments::hints_handler))

@@ -132,15 +132,22 @@
         
         /* Visual sidebar styles */
         .visual-sidebar { display: flex; flex-direction: column; overflow: hidden; }
-        .image-container { max-width: 100%; max-height: 200px; overflow: hidden; position: relative; box-sizing: border-box; }
-        .image-container img { width: 100%; height: 100%; object-fit: contain; max-width: 100%; max-height: 300px; box-sizing: border-box; }
+        .image-container { max-width: 100%; overflow: hidden; position: relative; box-sizing: border-box; }
+        .image-container img { width: 100%; height: auto; max-width: 100%; object-fit: contain; box-sizing: border-box; }
         .image-container .image-label { font-size: 12px; color: #888; text-align: center; padding: 4px; }
         .image-container.no-image { min-height: 60px; display: flex; align-items: center; justify-content: center; }
         .image-container.no-image .placeholder { color: #555; font-size: 12px; }
-        .npc-portraits { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; align-items: flex-start; overflow-y: auto; flex: 1; box-sizing: border-box; }
+        .npc-portraits { 
+            display: grid; 
+            grid-template-columns: repeat(2, 1fr); 
+            gap: 8px; 
+            overflow-y: auto; 
+            flex: 1; 
+            box-sizing: border-box; 
+            padding: 4px;
+        }
         .npc-portrait { 
-            width: 80%; 
-            max-width: 80%;
+            width: 100%; 
             box-sizing: border-box; 
         }
         
@@ -229,6 +236,8 @@
         .error-notification.visible {
             transform: translateY(0);
         }
+        
+        
     </style>
 </head>
 <body>
@@ -238,6 +247,7 @@
         <div class="story-log" id="story-log" hx-get="/fragment/story-log" hx-trigger="load, every 5s" hx-swap="innerHTML" hx-on::after-swap="this.scrollTop = this.scrollHeight"></div>
         <div class="visual-sidebar" hx-get="/fragment/visual-sidebar" hx-trigger="load, every 5s"></div>
     </div>
+    
     <!-- Static shell: form stays in DOM, never replaced -->
         <div class="action-area" id="action-area">
         <!-- Form targets hidden div, status updates via WS + JS -->

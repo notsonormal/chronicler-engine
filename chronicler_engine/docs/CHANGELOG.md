@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-04-18
+
+### Added
+- **Headshot Image Support** - Enhanced character and room image handling
+  - New fields in `CharacterSheet`: `profile_image` and `headshot_image` (both Optional<String>)
+  - Room images use existing `image_path` field in map JSON
+  - Visual sidebar now displays NPC portraits in 2-column grid (per UI spec)
+  - Images in visual sidebar are clickable to toggle sidebar expand/collapse
+  - CSS added: cursor:pointer, hover states for images
+  - Integration tests added for world data loading with image paths
+
+### Changed
+- **Visual Sidebar Layout** - NPCs now displayed inside visual sidebar (20% column) with grid layout
+  - Removed separate character-headshots section that was blocking game text
+  - NPCs use headshot_image with fallback to image_path
+  - Grid: 2 columns desktop, responsive breakpoints
+
 ## 2026-04-17
 
 ### Added

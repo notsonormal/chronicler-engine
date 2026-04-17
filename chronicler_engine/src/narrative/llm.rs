@@ -321,6 +321,7 @@ mod tests {
                 scenario: "Generic Quest".to_string(),
                 example_dialogue: "".to_string(),
                 image_path: None,
+                headshot_image: None,
             },
             inventory: vec![],
         }
@@ -405,6 +406,7 @@ mod tests {
                 scenario: "Gate".to_string(),
                 example_dialogue: "Halt!".to_string(),
                 image_path: None,
+                headshot_image: None,
             },
             inventory: vec![],
         };
@@ -432,6 +434,7 @@ mod tests {
                 scenario: "Scene".to_string(),
                 example_dialogue: "".to_string(),
                 image_path: None,
+                headshot_image: None,
             },
             inventory: vec![],
         };
@@ -473,6 +476,7 @@ mod tests {
                 scenario: "Watching the gate".to_string(),
                 example_dialogue: "".to_string(),
                 image_path: None,
+                headshot_image: None,
             },
             inventory: vec![],
         };
@@ -501,6 +505,7 @@ mod tests {
                 scenario: "Watching the gate".to_string(),
                 example_dialogue: "".to_string(),
                 image_path: None,
+                headshot_image: None,
             },
             inventory: vec![],
         };
@@ -532,6 +537,7 @@ mod tests {
                 scenario: "Test".to_string(),
                 example_dialogue: "".to_string(),
                 image_path: None,
+                headshot_image: None,
             },
             inventory: vec![],
         };
@@ -672,6 +678,7 @@ mod tests {
                 scenario: "Watching".to_string(),
                 example_dialogue: "Halt!".to_string(),
                 image_path: None,
+                headshot_image: None,
             },
             inventory: vec![],
         };
@@ -700,6 +707,7 @@ mod tests {
                 scenario: "Watching".to_string(),
                 example_dialogue: "Halt!".to_string(),
                 image_path: None,
+                headshot_image: None,
             },
             inventory: vec![],
         };

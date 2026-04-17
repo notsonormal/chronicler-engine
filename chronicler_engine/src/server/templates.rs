@@ -170,6 +170,26 @@ impl VisualSidebarTemplate {
     }
 }
 
+// Character Headshots Template
+
+/// Template for character headshots grid.
+#[derive(Template)]
+#[template(
+    source = r#"{% for npc in npcs %}<div class="headshot" onclick="toggleVisualSidebar()"><img src="{{ npc.0 }}" alt="{{ npc.1 }}" /><div class="name">{{ npc.1 }}</div></div>{% endfor %}"#,
+    ext = "html"
+)]
+pub struct CharacterHeadshotsTemplate {
+    /// NPC images: (src, name) pairs.
+    pub npcs: Vec<(String, String)>,
+}
+
+impl CharacterHeadshotsTemplate {
+    /// Create from NPC image data.
+    pub fn new(npc_data: Vec<(String, String)>) -> Self {
+        Self { npcs: npc_data }
+    }
+}
+
 // Action Area Template
 
 /// Action area template with form and status indicators.

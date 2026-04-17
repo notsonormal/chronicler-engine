@@ -74,7 +74,11 @@ fn render_visual_sidebar_unlocked(state: &GameState) -> Result<String> {
         .iter()
         .filter_map(|npc_id| {
             let npc = state.npcs.get(npc_id)?;
-            let image_path = npc.sheet.image_path.as_ref()?.clone();
+            // Use headshot_image with fallback to image_path
+            let image_path = npc.sheet.headshot_image
+                .as_ref()
+                .or(npc.sheet.image_path.as_ref())?
+                .clone();
             let name = npc.sheet.name.clone();
             Some((image_path, name))
         })
@@ -145,6 +149,41 @@ pub async fn action_area_fragment(State(state): State<AppState>) -> Html<String>
         Ok(html) => Html(html),
         Err(e) => {
             log::error!("action_area_fragment failed: {e}");
+            Html(render_error(&e.to_string()))
+        }
+    }
+}
+
+fn render_character_headshots(state: &AppState) -> Result<String> {
+    use askama::Template;
+    use crate::server::templates::CharacterHeadshotsTemplate;
+    
+    let state_guard = state.state.lock()
+        .map_err(|_| crate::error::EngineError::Config("Lock poisoned".into()))?;
+    
+    // Collect NPC image data from game state
+    let npc_data: Vec<(String, String)> = state_guard
+        .npcs
+        .iter()
+        .filter_map(|(_npc_id, npc)| {
+            // Use headshot_image with fallback to image_path
+            let image = npc.sheet.headshot_image
+                .as_ref()
+                .or(npc.sheet.image_path.as_ref())?;
+            let name = npc.sheet.name.clone();
+            Some((image.clone(), name))
+        })
+        .collect();
+    
+    let template = CharacterHeadshotsTemplate::new(npc_data);
+    template.render().map_err(|e| crate::error::EngineError::Template(e.to_string()))
+}
+
+pub async fn character_headshots_fragment(State(state): State<AppState>) -> Html<String> {
+    match render_character_headshots(&state) {
+        Ok(html) => Html(html),
+        Err(e) => {
+            log::error!("character_headshots_fragment failed: {e}");
             Html(render_error(&e.to_string()))
         }
     }

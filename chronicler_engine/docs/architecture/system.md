@@ -9,7 +9,7 @@ Establish a domain-driven modular architecture for the Chronicler Engine. This s
 Contains pure data structures, serialization schemas, and the "Single Source of Truth" for game state. This tier has zero knowledge of the UI or LLM logic.
 - **`world`**: Setting lore, global rules, and starting scenarios.
 - **`map`**: Room/Region hierarchy and cardinal direction definitions.
-- **`character`**: NPC attributes and Player inventory.
+- **`character`**: NPC attributes (name, description, personality, scenario, image_path, **profile_image**, **headshot_image**) and Player inventory.
 - **`state`**: The `GameState` aggregation, narration history logs, and TUI state.
 - **`scenario`**: Starting scenario definitions for narrative introductions.
 
@@ -63,12 +63,26 @@ Static web assets served by the server.
 The engine presents a web-based HTMX dashboard:
 
 - **Header**: Game title only
-- **Main Body**: Story log + visual sidebar (see `docs/system/dashboard.md`)
+- **Main Body**: Story log (80%) + visual sidebar (20%) (see `docs/system/dashboard.md`)
   - Story log shows location entries, narration, dialogue, system messages, and input
   - Location entries appear inline in story log with room name and timestamp
+  - Visual sidebar displays:
+    - Room location image (from `Room.image_path`)
+    - NPC portraits in 2-column grid (from `CharacterSheet.headshot_image` with fallback to `image_path`)
 - **Action Area**: Command input + status indicator (Ready/Thinking)
 
 Real-time updates via HTMX polling (5s interval for story-log, 5s for status-display).
+
+### Image Handling
+
+Character images have two supported fields:
+- **`image_path`**: Legacy field, full body image
+- **`headshot_image`**: Preferred field for portraits (fallback to image_path)
+- **`profile_image`**: For character profile display
+
+Room images use `image_path` field in Room struct.
+
+Click handlers on images trigger visual sidebar toggle.
 
 ## Error Strategy
 A unified error type (`crate::error::EngineError`) is shared across all tiers to provide consistent error propagation from data loading through LLM failures to the final UI report.

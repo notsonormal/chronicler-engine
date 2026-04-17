@@ -153,6 +153,7 @@ mod tests {
                 scenario: "S".into(),
                 example_dialogue: "E".into(),
                 image_path: None,
+                headshot_image: None,
             },
             inventory: vec![],
         };
@@ -165,6 +166,7 @@ mod tests {
                 scenario: "S".into(),
                 example_dialogue: "E".into(),
                 image_path: None,
+                headshot_image: None,
             },
             inventory: vec![],
         };
@@ -241,7 +243,7 @@ mod tests {
                     regions: vec![],
                 },
             }),
-            Arc::new(PlayerCard {
+Arc::new(PlayerCard {
                 sheet: CharacterSheet {
                     name: "P".into(),
                     description: "D".into(),
@@ -249,11 +251,12 @@ mod tests {
                     scenario: "S".into(),
                     example_dialogue: "E".into(),
                     image_path: None,
+                    headshot_image: None,
                 },
                 inventory: vec![],
             }),
             vec![],
-            "room1".into(),
+            "room1".to_string(),
         );
 
         state.add_log("Message 1".into(), None, LogType::Narration);

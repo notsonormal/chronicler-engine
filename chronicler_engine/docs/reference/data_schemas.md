@@ -23,7 +23,7 @@ The layout for the initial demo map features an Overworld with a single region (
 - Create `data/world/map.json`.
 - Modify `main.rs` to load the `.json` files from disk upon game boot (using `std::fs::read_to_string` and `serde_json`), deprecating the hardcoded "Aethelgard" mock data.
 
-## CharacterSheet Schema (Proposed)
+## CharacterSheet Schema (Current)
 A unified structure for both `PlayerCard` and `NpcCard` narrative fields:
 
 ```json
@@ -32,8 +32,18 @@ A unified structure for both `PlayerCard` and `NpcCard` narrative fields:
   "description": "string (physical appearance + general intro)",
   "personality": "string (e.g., 'Arrogant, brave, tech-savvy')",
   "scenario": "string (background or current motivation)",
-  "inventory": ["item_id_1", "item_id_2"]
+  "example_dialogue": "string (optional example for LLM context)",
+  "inventory": ["item_id_1", "item_id_2"],
+  "image_path": "string (optional, legacy field - full body image)",
+  "profile_image": "string (optional, preferred profile image)",
+  "headshot_image": "string (optional, headshot/portrait for sidebar grid)"
 }
 ```
+
+### Image Field Usage
+- `image_path`: Legacy field, full body image
+- `profile_image`: Preferred for character profile display
+- `headshot_image**: Used for visual sidebar NPC portraits (2-column grid)
+  - Falls back to `image_path` if not set
 
 This schema allows the LLM Game Master to treat player and NPCs with equal granular detail.

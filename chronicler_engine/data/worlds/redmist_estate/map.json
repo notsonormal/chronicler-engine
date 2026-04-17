@@ -15,7 +15,8 @@
                             "north": "entrance_hall"
                         },
                         "items": [],
-                        "npcs": ["carla"]
+                        "npcs": ["carla"],
+                        "image_path": "data/images/Redmist Estate.png"
                     },
                     {
                         "id": "entrance_hall",
@@ -28,7 +29,8 @@
                             "north": "master_quarters"
                         },
                         "items": [],
-                        "npcs": ["gabriella"]
+                        "npcs": ["gabriella"],
+                        "image_path": "data/images/Redmist Estate.png"
                     },
                     {
                         "id": "kitchen",
@@ -38,7 +40,8 @@
                             "east": "entrance_hall"
                         },
                         "items": [],
-                        "npcs": ["louise"]
+                        "npcs": ["louise"],
+                        "image_path": "data/images/Redmist Estate.png"
                     },
                     {
                         "id": "financial_office",
@@ -48,7 +51,8 @@
                             "west": "entrance_hall"
                         },
                         "items": [],
-                        "npcs": ["jezebel"]
+                        "npcs": ["jezebel"],
+                        "image_path": "data/images/Redmist Estate.png"
                     },
                     {
                         "id": "master_quarters",
@@ -58,7 +62,8 @@
                             "south": "entrance_hall"
                         },
                         "items": [],
-                        "npcs": ["lisette"]
+                        "npcs": ["lisette"],
+                        "image_path": "data/images/Redmist Estate.png"
                     }
                 ]
             }

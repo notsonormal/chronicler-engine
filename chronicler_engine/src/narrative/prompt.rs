@@ -632,6 +632,7 @@ mod tests {
                 scenario: "Exploring the world".to_string(),
                 example_dialogue: String::new(),
                 image_path: None,
+                headshot_image: None,
             },
             inventory: vec!["sword".to_string(), "shield".to_string()],
         }
@@ -647,6 +648,7 @@ mod tests {
                 scenario: "Standing watch".to_string(),
                 example_dialogue: String::new(),
                 image_path: None,
+                headshot_image: None,
             },
             inventory: vec![],
         }]

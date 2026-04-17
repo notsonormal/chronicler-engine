@@ -25,6 +25,7 @@ pub fn create_test_player() -> PlayerCard {
             scenario: "Exploring the test realm".to_string(),
             example_dialogue: "Hello, world!".to_string(),
             image_path: None,
+            headshot_image: None,
         },
         inventory: vec![],
     }
@@ -95,6 +96,7 @@ pub fn create_test_npcs() -> Vec<NpcCard> {
             scenario: "Runs the local tavern".to_string(),
             example_dialogue: "Welcome, traveler!".to_string(),
             image_path: None,
+            headshot_image: None,
         },
         inventory: vec![],
     }]

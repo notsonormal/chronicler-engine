@@ -133,6 +133,7 @@ mod tests {
                 scenario: "S".into(),
                 example_dialogue: "E".into(),
                 image_path: None,
+                headshot_image: None,
             },
             inventory: vec![],
         };
@@ -255,6 +256,7 @@ mod tests {
                     scenario: "S".into(),
                     example_dialogue: "".into(),
                     image_path: None,
+                    headshot_image: None,
                 },
                 inventory: vec![],
             }),
@@ -314,6 +316,7 @@ mod tests {
                     scenario: "S".into(),
                     example_dialogue: "".into(),
                     image_path: None,
+                    headshot_image: None,
                 },
                 inventory: vec![],
             }),
