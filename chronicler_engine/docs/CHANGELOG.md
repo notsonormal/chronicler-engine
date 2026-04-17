@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-04-17
+
+### Changed
+- **OpenRouter Client** - Enhanced content extraction
+  - Robust fallback chain: content → reasoning → reasoning_content
+  - Added is_non_empty() helper to check both null and empty string
+  - Added logging to show which extraction path was used
+
 ## 2026-04-16
 
 ### Changed

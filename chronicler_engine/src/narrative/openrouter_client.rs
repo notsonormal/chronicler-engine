@@ -85,29 +85,62 @@ pub fn call_openrouter(
                         return Err(format!("LLM API error: {error_msg}"));
                     }
 
-                    // Try to extract content - some models (like Z-AI) return content as null
-                    // and put the actual response in the "reasoning" field instead
-                    let content = json_response["choices"]
-                        .get(0)
-                        .and_then(|c| c.get("message"))
-                        .and_then(|m| m.get("content"))
-                        .and_then(|c| c.as_str());
+                    // Helper to check if Option<&str> is both non-null and non-empty
+                    fn is_non_empty(s: Option<&str>) -> bool {
+                        s.map(|s| !s.is_empty()).unwrap_or(false)
+                    }
 
-                    // Fallback: check reasoning field if content is null
-                    let content = content.or_else(|| {
-                        json_response["choices"]
+                    // Extract content with robust fallback chain
+                    // Some models return empty string "", some return null - need to handle both
+                    let content_source: &str;
+                    let content: Option<String> = {
+                        // 1. Try content field (only if non-null AND non-empty)
+                        let c = json_response["choices"]
                             .get(0)
                             .and_then(|c| c.get("message"))
-                            .and_then(|m| m.get("reasoning"))
-                            .and_then(|r| r.as_str())
-                    });
+                            .and_then(|m| m.get("content"))
+                            .and_then(|c| c.as_str());
+
+                        if is_non_empty(c) {
+                            content_source = "content";
+                            Some(c.unwrap().to_string())
+                        } else {
+                            // 2. Try reasoning field (only if non-null AND non-empty)
+                            let r = json_response["choices"]
+                                .get(0)
+                                .and_then(|c| c.get("message"))
+                                .and_then(|m| m.get("reasoning"))
+                                .and_then(|r| r.as_str());
+
+                            if is_non_empty(r) {
+                                content_source = "reasoning";
+                                Some(r.unwrap().to_string())
+                            } else {
+                                // 3. Try reasoning_content field (OpenRouter extended field)
+                                let rc = json_response["choices"]
+                                    .get(0)
+                                    .and_then(|c| c.get("message"))
+                                    .and_then(|m| m.get("reasoning_content"))
+                                    .and_then(|rc| rc.as_str());
+
+                                if is_non_empty(rc) {
+                                    content_source = "reasoning_content";
+                                    Some(rc.unwrap().to_string())
+                                } else {
+                                    content_source = "none";
+                                    None
+                                }
+                            }
+                        }
+                    };
 
                     if let Some(content) = content {
                         log::info!(
-                            "[LLM] Successfully parsed content ({} chars)",
+                            "[LLM] Extracted content via: {} ({} chars)",
+                            content_source,
                             content.len()
                         );
-                        return Ok(content.to_string());
+                        return Ok(content);
                     }
 
                     // If we got here, the response structure was unexpected
