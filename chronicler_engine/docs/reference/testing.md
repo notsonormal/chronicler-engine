@@ -6,7 +6,7 @@ Establish a formal policy and architectural design pattern for ensuring the Chro
 ## Policy Rules
 1. **Isolated Unit Tests**: All modules (`parser`, `map`, `state`) must continue to maintain fully isolated, embedded unit tests `#[test]` that evaluate standard library behaviors with zero networking overhead.
 2. **Integration Capabilities**: As the engine develops, an overarching `tests/` directory will be required. These integration tests will evaluate the state graph moving from end-to-end.
-3. **LLM Abstraction (The Trait Pattern)**: No component outside of the executable `main.rs` loop should ever be hardcoded to contact OpenRouter. 
+3. **LLM Abstraction (The Trait Pattern)**: No component outside of the executable `main.rs` loop should ever be hardcoded to contact OpenRouter.
 
 ## The `LlmBackend` Interface
 To satisfy the LLM Abstraction policy, `llm.rs` must implement an interface:
@@ -15,7 +15,7 @@ pub trait LlmBackend {
     fn generate_dialogue(&self, world: &WorldCard, room: &Room, npc: &NpcCard, user_message: &Option<String>) -> String;
     fn narrate_action(&self, world: &WorldCard, room: &Room, nearby_npcs: &[&NpcCard], player: &PlayerCard, player_input: &str) -> String;
 }
-```rust
+```
 
 The engine will provide multiple implementations of this trait:
 - `OpenRouterBackend`: Used by the live executable. Contacts the HTTP API using `reqwest` and parses the JSON response.
@@ -55,10 +55,10 @@ npx playwright install chromium
 cargo test
 
 # Run specific test suites
-cargo test --test flow_mock_tests     # Fast tests with mock LLM
-cargo test --test flow_llm_tests      # Tests requiring real LLM
-cargo test --test behavior_tests       # UI behavior tests
-cargo test --test layout_tests         # CSS/layout tests
+cargo test --test component_tests   # In-process tests (fast)
+cargo test --test e2e_tests         # Browser tests
+cargo test --test flow_mock_tests   # Fast tests with mock LLM
+cargo test --test flow_llm_tests     # Tests requiring real LLM
 
 # Run with single thread (recommended for tests sharing ports)
 cargo test -- --test-threads=1
@@ -68,30 +68,39 @@ cargo test -- --test-threads=1
 - Node.js 18+ (for Playwright browser installation)
 - Chromium browser installed via `npx playwright install chromium`
 
-### Test Files
+### Test Files (Consolidated)
 
-| Test File | Purpose | LLM Backend | Port Allocation |
-|----------|---------|-------------|-----------------|
-| `flow_mock_tests.rs` | Core game loop, polling, real-time updates | Mock (config) | Dynamic (3010-3030) |
-| `flow_llm_tests.rs` | LLM narrative generation | Real (config) | Dynamic |
-| `behavior_tests.rs` | Form submission, button re-enable, UI behavior | Mock (config) | Dynamic |
-| `layout_tests.rs` | CSS, element sizing, scrolling | Mock (config) | Dynamic |
-| `spec_tests.rs` | Page structure, HTMX, element presence | Mock (config) | Dynamic |
-| `ui_tests.rs` | HTMX, WebSocket, connection status | Mock (config) | Dynamic |
-
-**Dynamic Port Allocation**: Tests now use `tests/test_config.json` to allocate ports dynamically from range 3010-3030, eliminating port conflicts between test files.
+| Test File | Purpose | Execution Model | Runtime |
+|----------|---------|---------------|---------|
+| `flow_mock_tests.rs` | Core game loop, polling | Browser + Mock LLM | Fast |
+| `flow_llm_tests.rs` | LLM narrative | Browser + Real LLM | Slow |
+| `component_tests.rs` | Templates, endpoints | In-process | Very Fast |
+| `e2e_tests.rs` | UI structure, layouts | Browser | Medium |
 
 ### Test Coverage
 
-**flow_mock_tests.rs** (8 tests):
+**component_tests.rs** (12 tests):
+- XSS security (template escaping)
+- Template rendering
+- HTTP endpoint responses
+- Validation (empty command rejection)
+
+**e2e_tests.rs** (13 tests):
+- Page loads, UI structure
+- Action area elements
+- Story log functionality
+- Layout positioning
+- Visual sidebar
+
+**flow_mock_tests.rs** (5 tests):
 - Initial load (header, story-log, status)
 - Connection status indicator
-- Command submission (look, free action)
-- Polling mechanism (updates without reload)
-- Message ordering (new messages at bottom)
+- Command submission
+- Polling mechanism
+- Message ordering
 
 **flow_llm_tests.rs** (4 tests):
-- LLM narration appears via polling
+- LLM narration via polling
 - LLM error handling
 - LLM arrival narration
 - LLM free action narration

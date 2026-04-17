@@ -71,12 +71,9 @@ def main():
     print("[5/5] Running integration tests...")
     # Run tests sequentially due to port conflicts between test binaries
     test_suites = [
-        "ui_tests",
-        "behavior_tests",
-        "flow_mock_tests",
-        "fragment_tests",
-        "layout_tests",
-        "spec_tests",
+        "component_tests",  # In-process tests (fast)
+        "e2e_tests",        # Browser tests
+        "flow_mock_tests",  # Mock LLM tests
     ]
     if os.environ.get("OPENROUTER_API_KEY"):
         test_suites.append("flow_llm_tests")
