@@ -480,4 +480,110 @@ mod tests {
 
         browser.close().await.unwrap();
     }
+
+    // ========================================================================
+    // CSS Tests
+    // ========================================================================
+
+    #[tokio::test]
+    async fn test_css_file_loads() {
+        let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
+        let _server = TestServer::new_with_mock(port, TEST_WORLD);
+
+        let playwright = Playwright::launch().await.unwrap();
+        let browser = playwright.chromium().launch().await.unwrap();
+        let page = browser.new_page().await.unwrap();
+
+        page.goto(&format!("http://127.0.0.1:{}", port), None)
+            .await
+            .unwrap();
+
+        // Fetch the CSS file via fetch API
+        let css_content: String = page
+            .evaluate::<(), String>(
+                r#"(async () => {
+                    const response = await fetch('/assets/styles.css');
+                    return await response.text();
+                })()"#,
+                None,
+            )
+            .await
+            .unwrap();
+
+        // Check :root exists in CSS (CSS custom properties declaration)
+        assert!(
+            css_content.contains(":root"),
+            "CSS should contain :root for CSS variables"
+        );
+
+        browser.close().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_css_variables_used() {
+        let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
+        let _server = TestServer::new_with_mock(port, TEST_WORLD);
+
+        let playwright = Playwright::launch().await.unwrap();
+        let browser = playwright.chromium().launch().await.unwrap();
+        let page = browser.new_page().await.unwrap();
+
+        page.goto(&format!("http://127.0.0.1:{}", port), None)
+            .await
+            .unwrap();
+
+        // Fetch the CSS file
+        let css_content: String = page
+            .evaluate::<(), String>(
+                r#"(async () => {
+                    const response = await fetch('/assets/styles.css');
+                    return await response.text();
+                })()"#,
+                None,
+            )
+            .await
+            .unwrap();
+
+        // Check CSS variables (var(-- ) are used
+        assert!(
+            css_content.contains("var(--"),
+            "CSS should use CSS custom properties (var())"
+        );
+
+        browser.close().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_responsive_breakpoints() {
+        let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
+        let _server = TestServer::new_with_mock(port, TEST_WORLD);
+
+        let playwright = Playwright::launch().await.unwrap();
+        let browser = playwright.chromium().launch().await.unwrap();
+        let page = browser.new_page().await.unwrap();
+
+        page.goto(&format!("http://127.0.0.1:{}", port), None)
+            .await
+            .unwrap();
+
+        // Fetch the CSS file
+        let css_content: String = page
+            .evaluate::<(), String>(
+                r#"(async () => {
+                    const response = await fetch('/assets/styles.css');
+                    return await response.text();
+                })()"#,
+                None,
+            )
+            .await
+            .unwrap();
+
+        // Check @media queries exist for responsive design
+        assert!(
+            css_content.contains("@media"),
+            "CSS should contain @media queries for responsive breakpoints"
+        );
+
+        browser.close().await.unwrap();
+    }
 }

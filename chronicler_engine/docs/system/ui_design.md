@@ -14,7 +14,8 @@
 | `--color-text-primary` | #e0e0e0 | Main text |
 | `--color-text-muted` | #888 | Muted text, input text |
 | `--color-text-placeholder` | #555 | Placeholder text |
-| `--color-accent-green` | #00ff00 | Location, Ready status, focus states |
+| `--color-accent-green` | #00ff00 | Ready status, focus states |
+| `--color-accent-green-bright` | #4ade80 | Location headers |
 | `--color-accent-cyan` | #00ffff | Narration text |
 | `--color-accent-orange` | #ffb347 | Dialogue text |
 | `--color-accent-yellow` | #ffff00 | System text, Thinking status |
@@ -28,7 +29,7 @@
 
 | Token | Value | Usage |
 |-------|-------|-------|
-| `--font-family` | 'Courier New', monospace | All text |
+| `--font-family` | -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif | All text |
 | `--font-size-base` | 14px | Body text, input, buttons |
 | `--font-size-small` | 12px | NPC labels, action hints, status |
 | `--font-size-xs` | 11px | Connection status |
@@ -73,7 +74,7 @@
 - Text: "Chronicler Engine"
 
 ### Location
-- Color: #00ff00
+- Color: #4ade80
 - Weight: bold
 
 ### Connection Status
@@ -101,15 +102,18 @@
 - Border: 1px solid #333
 - Display: flex, flex-direction: column
 
-### Image Container
-- Max height: 200px (180px for image)
-- Object-fit: contain
-- Contains: Location image with label
-- Placeholder state when no image: center-aligned "No image" text in #555
+### Location Image Container
+- Width: 100%
+- Min-height: 120px
+- Image max-height: 150px
+- Contains: Location image with "Location" label
+- No image state: center-aligned "No Location Image" text in #555
 
 ### NPC Portraits
-- Layout: flex-wrap, gap 8px
-- Each portrait: 45% width, min 100px, max 150px
+- Layout: CSS Grid, 2 columns
+- Gap: 8px
+- Each portrait: 50% width (1fr)
+- Shows present NPCs only
 
 ### Action Area
 - Height: 64px
@@ -169,6 +173,12 @@
 
 ### Log Entries
 
+#### Location Header
+- Color: #4ade80
+- Font-size: 1.1em
+- Weight: bold
+- Display: inline with timestamp
+
 #### Narration
 - Color: #00ffff
 
@@ -198,3 +208,32 @@
 - Shows slide-down banner for LLM errors
 - Auto-hides after 5 seconds
 - Z-index above all content
+
+---
+
+## Implementation
+
+### CSS Custom Properties
+
+The design tokens above are implemented as CSS custom properties (CSS variables) defined in a `:root` block.
+
+- **File**: `assets/styles.css`
+- **Approach**: All tokens are defined in the `:root` pseudo-class for global scope
+- **Usage**: Reference via `var(--token-name)` throughout stylesheets
+
+### Responsive Breakpoints
+
+Media queries handle responsive behavior:
+
+| Breakpoint | Width | Adjustments |
+|-----------|-------|-----------|
+| Mobile | < 640px | Stack sidebar below story log, reduce padding |
+| Tablet | 640px - 1024px | Adjust sidebar width to 25% |
+| Desktop | > 1024px | Full layout as specified above |
+
+- **Mobile-first**: Base styles target smallest screens, `@media (min-width: ...)` adds larger layouts
+- **Flexibility**: CSS variables enable theme changes without modifying component styles
+
+### Reference Implementation
+
+See `assets/styles.css` for the actual implementation containing the `:root` token definitions and component styles.
