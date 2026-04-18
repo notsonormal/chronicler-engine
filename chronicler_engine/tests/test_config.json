@@ -1,7 +1,7 @@
 {
   "port_range": {
     "min": 3010,
-    "max": 3030
+    "max": 3050
   },
   "default_backend": "mock",
   "test_specific": {
