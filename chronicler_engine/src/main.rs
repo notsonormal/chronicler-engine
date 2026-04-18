@@ -1,5 +1,6 @@
 use std::{fs, path::Path, sync::Arc, thread};
 
+use chronicler_engine::error::EngineError;
 use chronicler_engine::model::character::{NpcCard, PlayerCard};
 use chronicler_engine::model::map::MapDef;
 use chronicler_engine::model::state::{GameState, GeneratingGuard};
@@ -116,12 +117,11 @@ mod tests {
 fn load_world(
     world_id: &str,
 ) -> chronicler_engine::Result<(WorldManifest, MapDef, PlayerCard, Vec<NpcCard>)> {
-    // Try new directory structure first: data/worlds/<world_id>/
+    // Load from data/worlds/<world_id>/
     let world_dir = Path::new("data/worlds").join(world_id);
 
     if !world_dir.exists() {
-        // Fall back to legacy structure for backward compatibility
-        return load_world_legacy(world_id);
+        return Err(EngineError::WorldNotFound(world_id.to_string()));
     }
 
     // Load world manifest
@@ -153,57 +153,6 @@ fn load_world(
                 }
             }
         }
-    }
-
-    Ok((manifest, map, player, npcs))
-}
-
-/// Load world using legacy file structure (backward compatibility)
-fn load_world_legacy(
-    world_id: &str,
-) -> chronicler_engine::Result<(WorldManifest, MapDef, PlayerCard, Vec<NpcCard>)> {
-    // Load world from data/world/<id>.json
-    let world_path = Path::new("data/world").join(format!("{world_id}.json"));
-    let world_json = fs::read_to_string(&world_path)?;
-    let mut manifest: WorldManifest = serde_json::from_str(&world_json)?;
-    manifest.id = world_id.to_string();
-
-    // Load map from data/maps/<id>.json
-    let map_path = Path::new("data/maps").join(format!("{world_id}.json"));
-    let map_json = fs::read_to_string(&map_path)?;
-    let map: MapDef = serde_json::from_str(&map_json)?;
-
-    // For player, try personas/<id>.json or default to Julian
-    let player_path = Path::new("data/personas").join(format!("{world_id}.json"));
-    let player_json = if player_path.exists() {
-        fs::read_to_string(&player_path)?
-    } else {
-        // Default to Julian
-        fs::read_to_string("data/personas/julian.json")?
-    };
-    let player: PlayerCard = serde_json::from_str(&player_json)?;
-
-    // Load NPCs from data/characters/
-    let mut npcs = Vec::new();
-    let chars_dir = Path::new("data/characters");
-    if chars_dir.is_dir() {
-        for entry in fs::read_dir(chars_dir)?.flatten() {
-            let path = entry.path();
-            if path.extension().and_then(|s| s.to_str()) == Some("json") {
-                let char_json = fs::read_to_string(&path)?;
-                match serde_json::from_str::<NpcCard>(&char_json) {
-                    Ok(npc) => npcs.push(npc),
-                    Err(e) => {
-                        eprintln!("Warning: Failed to parse NPC file {path:?}: {e}");
-                    }
-                }
-            }
-        }
-    }
-
-    // Set defaults for legacy worlds
-    if manifest.starting_room_id.is_empty() {
-        manifest.starting_room_id = "front_gates".to_string();
     }
 
     Ok((manifest, map, player, npcs))

@@ -23,6 +23,9 @@ pub enum EngineError {
     #[error("NPC not found: {0}")]
     NpcNotFound(String),
 
+    #[error("World not found: {0}")]
+    WorldNotFound(String),
+
     #[error("Configuration error: {0}")]
     Config(String),
 
