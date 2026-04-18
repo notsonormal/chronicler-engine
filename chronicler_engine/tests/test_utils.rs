@@ -275,32 +275,6 @@ pub async fn wait_for_element_text(page: &playwright_rs::Page, selector: &str) -
     String::new()
 }
 
-/// Wait for LLM backend to finish processing (direct HTTP check, not UI)
-/// Returns Ok(()) if LLM became idle within timeout, Err(()) if timeout exceeded.
-pub async fn wait_for_llm_backend_idle(port: u16, timeout: Duration) -> Result<(), ()> {
-    let start = std::time::Instant::now();
-    let client = reqwest::Client::new();
-
-    while start.elapsed() < timeout {
-        match client
-            .get(&format!("http://127.0.0.1:{}/status/generating", port))
-            .send()
-            .await
-        {
-            Ok(resp) => {
-                if let Ok(text) = resp.text().await {
-                    if text == "idle" {
-                        return Ok(());
-                    }
-                }
-            }
-            Err(_) => {}
-        }
-        tokio::time::sleep(Duration::from_millis(200)).await;
-    }
-    Err(())
-}
-
 /// Poll until status display shows "Ready" (not "Thinking")
 /// This indicates synchronous action processing is complete
 pub async fn wait_for_status_ready(page: &playwright_rs::Page) {

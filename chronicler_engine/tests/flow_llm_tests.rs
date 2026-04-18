@@ -94,9 +94,6 @@ mod tests {
         .await
         .unwrap();
 
-        // Brief pause to allow form submission to process
-        tokio::time::sleep(Duration::from_millis(500)).await;
-
         // Wait for LLM response using smart polling
         println!("Waiting for LLM response...");
         let llm_result = wait_for_llm_idle(port, Duration::from_secs(30)).await;
@@ -311,9 +308,6 @@ mod tests {
         .await
         .unwrap();
 
-        // Wait for any status change
-        tokio::time::sleep(Duration::from_secs(2)).await;
-
         // Check if status shows "Thinking..." (LLM is processing)
         let status_during: String = page
             .evaluate::<(), String>(
@@ -324,12 +318,12 @@ mod tests {
             .unwrap();
         println!("Status during: {}", status_during);
 
-        // Wait longer for LLM to complete (if it was triggered)
+        // Wait for LLM to complete (if it was triggered) using smart polling
         let llm_result = wait_for_llm_idle(port, Duration::from_secs(30)).await;
 
-        // Wait for UI to poll and update the DOM after LLM completes
-        // Polling happens every 5 seconds, so we need to wait for the next poll
-        tokio::time::sleep(Duration::from_secs(6)).await;
+        // Smart wait for UI to update after LLM completes
+        // Use wait_for_more_messages to detect when the DOM has been refreshed
+        let _final_messages = wait_for_more_messages(&page, 0).await;
 
         // Final status check
         let status_after: String = page

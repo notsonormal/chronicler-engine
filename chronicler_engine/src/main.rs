@@ -284,7 +284,7 @@ fn main() -> chronicler_engine::Result<()> {
                     }
                     Err(e) => {
                         if let Ok(mut state) = state_for_thread.lock() {
-                            state.tui_state.error_message = Some(format!("LLM Error: {e}"));
+                            state.generation_state.error_message = Some(format!("LLM Error: {e}"));
                             // Note: Guard will reset is_generating on drop
                         }
                     }

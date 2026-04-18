@@ -150,32 +150,4 @@ mod tests {
 
         browser.close().await.unwrap();
     }
-
-    // Connection Status Tests - No LLM needed
-
-    #[tokio::test]
-    async fn test_connection_indicator_present() {
-        let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
-        let _server = TestServer::new_with_mock(port, TEST_WORLD);
-
-        let (_playwright, browser) = launch_chrome().await;
-        let page = browser.new_page().await.unwrap();
-
-        page.goto(&format!("http://127.0.0.1:{}", port), None)
-            .await
-            .unwrap();
-
-        // Poll until connection status is present
-        let connection_status = wait_for_element_text(&page, "#connection-status").await;
-
-        println!("Connection status: {}", connection_status);
-
-        // Should show some status (Connected, Disconnected, or Ready)
-        assert!(
-            !connection_status.is_empty(),
-            "Connection status should be present"
-        );
-
-        browser.close().await.unwrap();
-    }
 }

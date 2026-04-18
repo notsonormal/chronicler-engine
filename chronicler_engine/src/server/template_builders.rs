@@ -115,8 +115,8 @@ pub fn build_visual_sidebar_template(state: &GameState) -> Result<VisualSidebarT
 
 /// Build an ActionAreaTemplate from game state.
 pub fn build_action_area_template(state: &GameState) -> Result<ActionAreaTemplate> {
-    let is_generating = state.tui_state.is_generating;
-    let error_message = state.tui_state.error_message.clone();
+    let is_generating = state.generation_state.is_generating;
+    let error_message = state.generation_state.error_message.clone();
     let exits = get_available_exits(state);
     Ok(ActionAreaTemplate::new_with_error(is_generating, &exits, error_message))
 }

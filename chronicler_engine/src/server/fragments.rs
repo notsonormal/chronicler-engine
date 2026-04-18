@@ -208,8 +208,8 @@ pub fn render_action_area(state: &AppState) -> Result<String> {
         .lock()
         .map_err(|_| crate::error::EngineError::Config("Lock poisoned".into()))?;
 
-    let is_generating = state_guard.tui_state.is_generating;
-    let error_message = state_guard.tui_state.error_message.clone();
+    let is_generating = state_guard.generation_state.is_generating;
+    let error_message = state_guard.generation_state.error_message.clone();
     let exits = get_available_exits(&state_guard);
     drop(state_guard);
 
@@ -320,8 +320,8 @@ pub async fn generating_status_handler(State(state): State<AppState>) -> Html<St
         .lock()
         .map(|guard| {
             (
-                guard.tui_state.is_generating,
-                guard.tui_state.error_message.clone(),
+                guard.generation_state.is_generating,
+                guard.generation_state.error_message.clone(),
             )
         })
         .unwrap_or((false, None));
@@ -398,11 +398,11 @@ pub async fn action_handler(
         if is_sync {
             // Add the output immediately for sync commands
             process_sync_action(&mut state_guard, &action);
-            state_guard.tui_state.is_generating = false;
+            state_guard.generation_state.is_generating = false;
         } else {
-            state_guard.tui_state.is_generating = true;
+            state_guard.generation_state.is_generating = true;
         }
-        state_guard.tui_state.error_message = None;
+        state_guard.generation_state.error_message = None;
 
         (name, is_sync)
     };
@@ -470,7 +470,7 @@ fn process_action(state: Arc<std::sync::Mutex<GameState>>, input: String, _playe
     match action {
         crate::engine::action::Action::Quit => {
             state_guard.add_log("Goodbye!".to_string(), None, LogType::System);
-            state_guard.tui_state.is_generating = false;
+            state_guard.generation_state.is_generating = false;
         }
         crate::engine::action::Action::Look => {
             let room_name;
@@ -485,13 +485,13 @@ fn process_action(state: Arc<std::sync::Mutex<GameState>>, input: String, _playe
                     state_guard.add_log(desc, Some(name), LogType::Narration);
                 }
             }
-            state_guard.tui_state.is_generating = false;
+            state_guard.generation_state.is_generating = false;
         }
         crate::engine::action::Action::WalkTo(target) => {
             let result = crate::engine::logic::attempt_walk(&mut state_guard, &target);
             if let Err(e) = result {
                 state_guard.add_log(e.to_string(), None, LogType::System);
-                state_guard.tui_state.is_generating = false;
+                state_guard.generation_state.is_generating = false;
                 return;
             }
 
@@ -562,7 +562,7 @@ fn process_action(state: Arc<std::sync::Mutex<GameState>>, input: String, _playe
                             if let Ok(mut state) = state_for_thread.lock() {
                                 // Location entry already added above, just add narration text
                                 state.add_log(text.clone(), None, LogType::Narration);
-                                state.tui_state.is_generating = false;
+                                state.generation_state.is_generating = false;
 
                                 // Re-quantify NPCs after EVERY LLM generation
                                 // The LLM decides who should be in the room based on narrative context
@@ -582,8 +582,9 @@ fn process_action(state: Arc<std::sync::Mutex<GameState>>, input: String, _playe
                         Err(e) => {
                             log::error!("LLM arrival failed: {e}");
                             if let Ok(mut state) = state_for_thread.lock() {
-                                state.tui_state.error_message = Some(format!("LLM Error: {e}"));
-                                state.tui_state.is_generating = false;
+                                state.generation_state.error_message =
+                                    Some(format!("LLM Error: {e}"));
+                                state.generation_state.is_generating = false;
                             }
                         }
                     }
@@ -598,7 +599,7 @@ fn process_action(state: Arc<std::sync::Mutex<GameState>>, input: String, _playe
                 None,
                 LogType::System,
             );
-            state_guard.tui_state.is_generating = false;
+            state_guard.generation_state.is_generating = false;
         }
         crate::engine::action::Action::Inventory => {
             state_guard.add_log(
@@ -606,7 +607,7 @@ fn process_action(state: Arc<std::sync::Mutex<GameState>>, input: String, _playe
                 None,
                 LogType::System,
             );
-            state_guard.tui_state.is_generating = false;
+            state_guard.generation_state.is_generating = false;
         }
         crate::engine::action::Action::FreeAction(text) => {
             // Generate LLM response for free action
@@ -650,7 +651,7 @@ fn process_action(state: Arc<std::sync::Mutex<GameState>>, input: String, _playe
                         Ok(text) => {
                             if let Ok(mut state) = state_for_thread.lock() {
                                 state.add_log(text, None, LogType::Narration);
-                                state.tui_state.is_generating = false;
+                                state.generation_state.is_generating = false;
 
                                 // Re-quantify NPCs after EVERY LLM generation
                                 // The LLM decides who should be in the room based on narrative context
@@ -671,8 +672,9 @@ fn process_action(state: Arc<std::sync::Mutex<GameState>>, input: String, _playe
                             log::error!("LLM narration failed: {e}");
                             if let Ok(mut state) = state_for_thread.lock() {
                                 // Set error message for UI instead of adding to chat log
-                                state.tui_state.error_message = Some(format!("LLM Error: {e}"));
-                                state.tui_state.is_generating = false;
+                                state.generation_state.error_message =
+                                    Some(format!("LLM Error: {e}"));
+                                state.generation_state.is_generating = false;
                             }
                         }
                     }

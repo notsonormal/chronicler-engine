@@ -459,8 +459,8 @@ mod tests {
     #[test]
     fn test_mock_generate_dialogue_with_message() {
         let backend = MockBackend;
-        let world = make_test_world();
-        let room = make_test_room();
+        let _world = make_test_world();
+        let _room = make_test_room();
         let npc = NpcCard {
             id: "npc1".to_string(),
             sheet: CharacterSheet {
@@ -520,8 +520,8 @@ mod tests {
     #[test]
     fn test_deepseek_generate_dialogue() {
         let backend = DeepSeekBackend;
-        let world = make_test_world();
-        let room = make_test_room();
+        let _world = make_test_world();
+        let _room = make_test_room();
         let npc = NpcCard {
             id: "npc1".to_string(),
             sheet: CharacterSheet {
@@ -535,7 +535,7 @@ mod tests {
             },
             inventory: vec![],
         };
-        let player = make_test_player();
+        let _player = make_test_player();
 
         let result = backend.generate_dialogue(&make_test_context_with_npc(&npc, ""), &npc);
         assert!(result.is_ok());
@@ -545,9 +545,9 @@ mod tests {
     #[test]
     fn test_deepseek_narrate_action() {
         let backend = DeepSeekBackend;
-        let world = make_test_world();
-        let room = make_test_room();
-        let player = make_test_player();
+        let _world = make_test_world();
+        let _room = make_test_room();
+        let _player = make_test_player();
 
         let result = backend.narrate_action(&make_test_context("test"));
         assert!(result.is_ok());
@@ -557,9 +557,9 @@ mod tests {
     #[test]
     fn test_deepseek_narrate_arrival() {
         let backend = DeepSeekBackend;
-        let world = make_test_world();
-        let room = make_test_room();
-        let player = make_test_player();
+        let _world = make_test_world();
+        let _room = make_test_room();
+        let _player = make_test_player();
 
         let result = backend.narrate_arrival(&make_test_context(""));
         assert!(result.is_ok());
@@ -575,12 +575,12 @@ mod tests {
     #[test]
     fn test_mock_with_history() {
         let backend = MockBackend;
-        let world = make_test_world();
-        let room = make_test_room();
-        let player = make_test_player();
+        let _world = make_test_world();
+        let _room = make_test_room();
+        let _player = make_test_player();
 
         // Test that history parameter is accepted (doesn't cause error)
-        let history = vec![
+        let _history = vec![
             LogEntry {
                 sender: Some("Narrator".to_string()),
                 text: "You see a mysterious figure.".to_string(),
@@ -608,9 +608,9 @@ mod tests {
     #[test]
     fn test_mock_response_length_bounds() {
         let backend = MockBackend;
-        let world = make_test_world();
-        let room = make_test_room();
-        let player = make_test_player();
+        let _world = make_test_world();
+        let _room = make_test_room();
+        let _player = make_test_player();
 
         // Test various input lengths
         let short_input = "hi";
@@ -630,9 +630,9 @@ mod tests {
     #[test]
     fn test_mock_response_contains_input() {
         let backend = MockBackend;
-        let world = make_test_world();
-        let room = make_test_room();
-        let player = make_test_player();
+        let _world = make_test_world();
+        let _room = make_test_room();
+        let _player = make_test_player();
 
         let unique_input = "xyz123_test_input";
         let result = backend.narrate_action(&make_test_context(unique_input));
@@ -645,9 +645,9 @@ mod tests {
     #[test]
     fn test_mock_narrate_arrival_includes_room_name() {
         let backend = MockBackend;
-        let world = make_test_world();
+        let _world = make_test_world();
         let room = make_test_room();
-        let player = make_test_player();
+        let _player = make_test_player();
 
         let result = backend.narrate_arrival(&make_test_context(""));
 
@@ -722,7 +722,7 @@ mod tests {
         let backend = MockBackend;
         let _world = make_test_world();
         let _room = make_test_room();
-        let player = make_test_player();
+        let _player = make_test_player();
 
         // Empty history should work fine
         let result = backend.narrate_action(&make_test_context("test"));
@@ -732,12 +732,12 @@ mod tests {
     #[test]
     fn test_mock_with_substantial_history() {
         let backend = MockBackend;
-        let world = make_test_world();
-        let room = make_test_room();
-        let player = make_test_player();
+        let _world = make_test_world();
+        let _room = make_test_room();
+        let _player = make_test_player();
 
         // Substantial history (like real game would have)
-        let history: Vec<LogEntry> = (0..50)
+        let _history: Vec<LogEntry> = (0..50)
             .map(|i| LogEntry {
                 sender: Some(format!("Speaker{}", i % 3)),
                 text: format!("This is narration entry number {} in the game history.", i),

@@ -27,7 +27,7 @@ pub struct LogEntry {
 const MAX_LOG_ENTRIES: usize = 1000;
 
 #[derive(Debug, Default)]
-pub struct TuiState {
+pub struct GenerationState {
     pub input: String,
     pub cursor_position: usize,
     pub scroll_offset: u16,
@@ -35,7 +35,7 @@ pub struct TuiState {
     pub error_message: Option<String>,
 }
 
-impl TuiState {
+impl GenerationState {
     pub fn push_char(&mut self, c: char) {
         self.input.push(c);
         self.cursor_position += 1;
@@ -63,7 +63,7 @@ impl GeneratingGuard {
     /// Create a new guard, setting is_generating=true immediately.
     pub fn new(state: Arc<std::sync::Mutex<GameState>>) -> Self {
         if let Ok(mut guard) = state.lock() {
-            guard.tui_state.is_generating = true;
+            guard.generation_state.is_generating = true;
         }
         Self { state }
     }
@@ -72,7 +72,7 @@ impl GeneratingGuard {
 impl Drop for GeneratingGuard {
     fn drop(&mut self) {
         if let Ok(mut guard) = self.state.lock() {
-            guard.tui_state.is_generating = false;
+            guard.generation_state.is_generating = false;
         }
     }
 }
@@ -85,8 +85,8 @@ pub struct GameState {
     pub npcs: HashMap<String, NpcCard>,
     pub current_room_id: String,
     pub narration_history: Vec<LogEntry>,
-    pub tui_state: TuiState,
     pub npcs_in_area: Vec<NpcCard>,
+    pub generation_state: GenerationState,
 }
 
 impl GameState {
@@ -108,7 +108,7 @@ impl GameState {
             npcs: npcs_map,
             current_room_id: starting_room,
             narration_history: Vec::new(),
-            tui_state: TuiState::default(),
+            generation_state: GenerationState::default(),
             npcs_in_area: Vec::new(),
         }
     }
@@ -187,8 +187,8 @@ mod tests {
     }
 
     #[test]
-    fn test_tui_state_input_robustness() {
-        let mut tui = TuiState::default();
+    fn test_generation_state_input_robustness() {
+        let mut tui = GenerationState::default();
 
         // Test push
         tui.push_char('A');
@@ -212,8 +212,8 @@ mod tests {
     }
 
     #[test]
-    fn test_tui_state_error_message() {
-        let mut tui = TuiState::default();
+    fn test_generation_state_error_message() {
+        let mut tui = GenerationState::default();
 
         // Initially no error
         assert!(tui.error_message.is_none());

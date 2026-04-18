@@ -108,11 +108,6 @@ pub fn call_openrouter_with_model(
                         return Err(format!("LLM API error: {error_msg}"));
                     }
 
-                    // Helper to check if Option<&str> is both non-null and non-empty
-                    fn is_non_empty(s: Option<&str>) -> bool {
-                        s.map(|s| !s.is_empty()).unwrap_or(false)
-                    }
-
                     // Extract content with robust fallback chain
                     // Some models return empty string "", some return null - need to handle both
                     let content_source: &str;
@@ -124,9 +119,9 @@ pub fn call_openrouter_with_model(
                             .and_then(|m| m.get("content"))
                             .and_then(|c| c.as_str());
 
-                        if is_non_empty(c) {
+                        if let Some(c) = c {
                             content_source = "content";
-                            Some(c.unwrap().to_string())
+                            Some(c.to_string())
                         } else {
                             // 2. Try reasoning field (only if non-null AND non-empty)
                             let r = json_response["choices"]
@@ -135,9 +130,9 @@ pub fn call_openrouter_with_model(
                                 .and_then(|m| m.get("reasoning"))
                                 .and_then(|r| r.as_str());
 
-                            if is_non_empty(r) {
+                            if let Some(r) = r {
                                 content_source = "reasoning";
-                                Some(r.unwrap().to_string())
+                                Some(r.to_string())
                             } else {
                                 // 3. Try reasoning_content field (OpenRouter extended field)
                                 let rc = json_response["choices"]
@@ -146,9 +141,9 @@ pub fn call_openrouter_with_model(
                                     .and_then(|m| m.get("reasoning_content"))
                                     .and_then(|rc| rc.as_str());
 
-                                if is_non_empty(rc) {
+                                if let Some(rc) = rc {
                                     content_source = "reasoning_content";
-                                    Some(rc.unwrap().to_string())
+                                    Some(rc.to_string())
                                 } else {
                                     content_source = "none";
                                     None
