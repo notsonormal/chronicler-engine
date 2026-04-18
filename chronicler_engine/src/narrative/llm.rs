@@ -78,8 +78,10 @@ impl LlmBackend for OpenRouterBackend {
 
         let builder = PromptBuilder::from_context(&npc_context);
         let (system_prompt, user_text) = builder.build_split()?;
-        let api_key = std::env::var("OPENROUTER_API_KEY")
-            .map_err(|_| EngineError::Config("OPENROUTER_API_KEY not set".into()))?;
+        let api_key = std::env::var("OPENROUTER_API_KEY").map_err(|_| {
+            log::error!("OPENROUTER_API_KEY not set - cannot generate dialogue");
+            EngineError::Config("OPENROUTER_API_KEY not set".into())
+        })?;
 
         call_openrouter(&api_key, &system_prompt, &user_text).map_err(EngineError::Narrative)
     }
@@ -92,8 +94,10 @@ impl LlmBackend for OpenRouterBackend {
 
         let builder = PromptBuilder::from_context(context);
         let (system_prompt, user_text) = builder.build_split()?;
-        let api_key = std::env::var("OPENROUTER_API_KEY")
-            .map_err(|_| EngineError::Config("OPENROUTER_API_KEY not set".into()))?;
+        let api_key = std::env::var("OPENROUTER_API_KEY").map_err(|_| {
+            log::error!("OPENROUTER_API_KEY not set - cannot generate action narration");
+            EngineError::Config("OPENROUTER_API_KEY not set".into())
+        })?;
 
         call_openrouter(&api_key, &system_prompt, &user_text).map_err(EngineError::Narrative)
     }
@@ -122,8 +126,10 @@ impl LlmBackend for OpenRouterBackend {
 
         let builder = PromptBuilder::from_context(&arrival_context);
         let (system_prompt, user_text) = builder.build_split()?;
-        let api_key = std::env::var("OPENROUTER_API_KEY")
-            .map_err(|_| EngineError::Config("OPENROUTER_API_KEY not set".into()))?;
+        let api_key = std::env::var("OPENROUTER_API_KEY").map_err(|_| {
+            log::error!("OPENROUTER_API_KEY not set - cannot generate arrival narration");
+            EngineError::Config("OPENROUTER_API_KEY not set".into())
+        })?;
 
         call_openrouter(&api_key, &system_prompt, &user_text).map_err(EngineError::Narrative)
     }

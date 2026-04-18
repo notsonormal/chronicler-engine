@@ -107,10 +107,11 @@ pub fn render_action_area(state: &AppState) -> Result<String> {
         .map_err(|_| crate::error::EngineError::Config("Lock poisoned".into()))?;
 
     let is_generating = state_guard.tui_state.is_generating;
+    let error_message = state_guard.tui_state.error_message.clone();
     let exits = get_available_exits(&state_guard);
     drop(state_guard);
 
-    let template = ActionAreaTemplate::new(is_generating, &exits);
+    let template = ActionAreaTemplate::new_with_error(is_generating, &exits, error_message);
     template
         .render()
         .map_err(|e| crate::error::EngineError::Template(e.to_string()))
@@ -459,6 +460,7 @@ fn process_action(state: Arc<std::sync::Mutex<GameState>>, input: String, _playe
                             }
                         }
                         Err(e) => {
+                            log::error!("LLM arrival failed: {e}");
                             if let Ok(mut state) = state_for_thread.lock() {
                                 state.tui_state.error_message = Some(format!("LLM Error: {e}"));
                                 state.tui_state.is_generating = false;
@@ -529,6 +531,7 @@ fn process_action(state: Arc<std::sync::Mutex<GameState>>, input: String, _playe
                             }
                         }
                         Err(e) => {
+                            log::error!("LLM narration failed: {e}");
                             if let Ok(mut state) = state_for_thread.lock() {
                                 // Set error message for UI instead of adding to chat log
                                 state.tui_state.error_message = Some(format!("LLM Error: {e}"));

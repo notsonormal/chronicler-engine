@@ -88,7 +88,8 @@ mod tests {
             .await
             .unwrap();
 
-        // Poll until status is ready
+        // Wait for status to be stable (ready, not thinking)
+        wait_for_status_ready(&page).await;
         let status = wait_for_element_text(&page, "#status-display").await;
 
         println!("Initial status: {}", status);

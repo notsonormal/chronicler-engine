@@ -197,12 +197,14 @@ impl CharacterHeadshotsTemplate {
 /// Renders the command input form with action hints and status.
 #[derive(Template)]
 #[template(
-    source = r#"<div cmd-area id=cmd-area><form method=post hx-post=/action hx-target=#cmd-area hx-swap=outerHTML class=command-wrapper><input type=text name=command placeholder="Enter command..." value="" {% if is_disabled %}disabled{% endif %} autocomplete=off /><button type=submit {% if is_disabled %}disabled{% endif %}>Send</button></form><div class=command-hints>{% for action in available_actions %}<span class=action-hint>{{ action }}</span>{% endfor %}</div><div class="{{ status_class }}">{{ status_text }}</div></div>"#,
+    source = r#"<div cmd-area id=cmd-area><form method=post hx-post=/action hx-target=#cmd-area hx-swap=outerHTML class=command-wrapper><input type=text name=command placeholder="Enter command..." value="" {% if is_disabled %}disabled{% endif %} autocomplete=off /><button type=submit {% if is_disabled %}disabled{% endif %}>Send</button></form><div class=command-hints>{% for action in available_actions %}<span class=action-hint>{{ action }}</span>{% endfor %}</div><div id="error-message" class="error-message">{{ error_message }}</div><div class="{{ status_class }}" id="status-display">{{ status_text }}</div></div>"#,
     ext = "html"
 )]
 pub struct ActionAreaTemplate {
     /// Whether the form is disabled (while generating).
     pub is_disabled: bool,
+    /// Error message to display (empty string if none).
+    pub error_message: String,
     /// CSS class for status indicator.
     pub status_class: String,
     /// Status text to display.
@@ -214,9 +216,21 @@ pub struct ActionAreaTemplate {
 impl ActionAreaTemplate {
     /// Create with available exits.
     pub fn new(is_generating: bool, exits: &[String]) -> Self {
+        Self::new_with_error(is_generating, exits, None)
+    }
+
+    /// Create with available exits and error message.
+    pub fn new_with_error(
+        is_generating: bool,
+        exits: &[String],
+        error_message: Option<String>,
+    ) -> Self {
         let is_disabled = is_generating;
+        let error_msg = error_message.clone().unwrap_or_default();
         let status_class = if is_generating {
             "status thinking".to_string()
+        } else if error_message.is_some() {
+            "status error".to_string()
         } else {
             "status ready".to_string()
         };
@@ -231,6 +245,7 @@ impl ActionAreaTemplate {
 
         Self {
             is_disabled,
+            error_message: error_msg,
             status_class,
             status_text,
             available_actions,

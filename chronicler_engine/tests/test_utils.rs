@@ -380,14 +380,35 @@ impl TestConfig {
 }
 
 /// Find an available port in the given range
+/// Retries on race condition (multiple tests grabbing same port) because tests run in separate processes
 pub fn get_available_port(min: u16, max: u16) -> Result<u16, String> {
-    for port in min..=max {
-        match TcpListener::bind(format!("127.0.0.1:{}", port)) {
-            Ok(_) => return Ok(port),
-            Err(_) => continue,
+    let mut attempts = 10;
+    let mut delay_ms = 50;
+
+    while attempts > 0 {
+        for port in min..=max {
+            match TcpListener::bind(format!("127.0.0.1:{}", port)) {
+                Ok(listener) => {
+                    // Drop the listener to release the port, then re-bind immediately
+                    drop(listener);
+                    return Ok(port);
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
+                    // Port in use, try next port
+                    continue;
+                }
+                Err(_) => continue,
+            }
+        }
+
+        // All ports in range were in use - wait and retry
+        if attempts > 1 {
+            attempts -= 1;
+            std::thread::sleep(std::time::Duration::from_millis(delay_ms));
+            delay_ms = (delay_ms * 2).min(500); // Exponential backoff, max 500ms
         }
     }
-    Err(format!("No available ports in range {}-{}", min, max))
+    Err(format!("No available ports in range {}-{} after {} attempts", min, max, 10))
 }
 
 /// Get a dynamic port from config file (convenience function)

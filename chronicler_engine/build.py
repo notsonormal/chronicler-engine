@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Full build, validate, and test for Chronicler Engine."""
+"""Full build, validate, and test for Chronicler Engine.
+
+Uses cargo-nextest for parallel test execution.
+"""
 
 import subprocess
 import sys
@@ -58,18 +61,26 @@ def kill_by_name(name: str):
         print(f"Note: Could not search for processes: {e}")
 
 
-def run(cmd, cwd=None, check=True):
+def run(cmd, cwd=None, check=True, show_output=True):
     """Run a command and handle output."""
     print(f"$ {cmd}")
-    result = subprocess.run(cmd, shell=True, cwd=cwd or os.getcwd(), capture_output=True, text=True)
-    if result.stdout:
-        print(result.stdout)
-    if result.stderr and "warning" not in result.stderr.lower():
-        print(result.stderr, file=sys.stderr)
-    if check and result.returncode != 0:
-        print(f"FAILED with code {result.returncode}")
-        sys.exit(result.returncode)
-    return result.returncode
+    # Use live output for nextest (real-time progress), capture for others
+    if show_output:
+        result = subprocess.run(cmd, shell=True, cwd=cwd or os.getcwd())
+        if check and result.returncode != 0:
+            print(f"FAILED with code {result.returncode}")
+            sys.exit(result.returncode)
+        return result.returncode
+    else:
+        result = subprocess.run(cmd, shell=True, cwd=cwd or os.getcwd(), capture_output=True, text=True)
+        if result.stdout:
+            print(result.stdout)
+        if result.stderr and "warning" not in result.stderr.lower():
+            print(result.stderr, file=sys.stderr)
+        if check and result.returncode != 0:
+            print(f"FAILED with code {result.returncode}")
+            sys.exit(result.returncode)
+        return result.returncode
 
 
 def main():
@@ -94,23 +105,12 @@ def main():
     print("[3/5] Building...")
     run("cargo build")
 
-    print("[4/5] Running unit tests...")
-    run("cargo test --lib")
+    print("[4/5] Running all tests (parallel with nextest, limited concurrency + retries for port conflicts)...")
+    # Limit parallelism to 4 threads to avoid exhausting port range (20 ports)
+    # Combined with retries for flaky port collisions
+    run("cargo nextest run --retries 2 -j 4", show_output=True)
 
-    print("[5/5] Running integration tests...")
-    # Run tests sequentially due to port conflicts between test binaries
-    test_suites = [
-        "component_tests",  # In-process tests (fast)
-        "e2e_tests",        # Browser tests
-        "flow_mock_tests",  # Mock LLM tests
-    ]
-    if os.environ.get("OPENROUTER_API_KEY"):
-        test_suites.append("flow_llm_tests")
-
-    for test_name in test_suites:
-        run(f"cargo test --test {test_name}")
-
-    print("[6/6] Running coverage check (full test suite)...")
+    print("[5/5] Running coverage check (full test suite)...")
     run("cargo llvm-cov test --text", check=False)
     # Note: server/* handlers and main.rs CLI will show 0% - they need different test approaches
 
