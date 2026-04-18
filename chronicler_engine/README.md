@@ -8,7 +8,23 @@ The engine uses a data-driven model inspired by NetAF, ADRIFT, and SillyTavern c
 
 - **World Card**: High-level rules and universe facts.
 - **Map Definition**: `Overworld -> Region -> Room` locations and navigation.
-- **Character Cards**: AI-ready NPC properties and player state.
+- **Character Cards**: AI-ready NPC properties, images, and player state.
+
+The engine runs as an HTTP/WebSocket server with an HTMX-based dashboard for the web UI.
+
+## Data Structure
+
+```
+data/
+├── worlds/              # Game data (per world)
+│   ├── redmist_estate/  # Default world
+│   │   ├── world.json
+│   │   ├── map.json
+│   │   ├── player.json
+│   │   └── characters/
+│   └── test/            # Test world
+└── images/              # Character sprites and assets
+```
 
 ## Documentation & Memory
 The Chronicler Engine uses a tiered **Spec-Driven Development (SDD 2.0)** approach. Documentation is organized to provide the best possible context for both humans and AI agents:
@@ -17,12 +33,38 @@ The Chronicler Engine uses a tiered **Spec-Driven Development (SDD 2.0)** approa
 - **[System](docs/system/)**: Domain documentation - explains subsystems.
 - **[Plans](docs/plans/)**: Implementation blueprints (active or archived).
 - **[ADR](docs/adr/)**: Architecture Decision Records with context and rationale.
-- **[Reference](docs/reference/)**: Data schemas and API specs.
+- **[Reference](docs/reference/)**: Data schemas, API specs, testing strategy.
 - **[Learnings](CHRONICLER_LEARNINGS.md)**: Persistent memory of breakthroughs.
+
+## LLM Integration
+
+The engine uses a trait-based `LlmBackend` design for flexible LLM integration:
+
+- **Trait**: `LlmBackend` in `src/narrative/llm.rs`
+- **Implementations**: 
+  - `OpenRouterClient` - Real API calls to OpenRouter
+  - `MockLlmBackend` - For testing without API calls
+- **Configuration**: Set `LLM_BACKEND=mock` to use mock backend
 
 ## Environment Variables
 
 The engine requires a `.env` file or environment variables to be set for AI functionality:
 
-- `OPENROUTER_API_KEY`: **(Required)** Your API key from OpenRouter.
+- `OPENROUTER_API_KEY`: **(Required for real LLM)** Your API key from OpenRouter.
 - `LLM_MODEL`: The OpenRouter model ID to use. Defaults to `z-ai/glm-4.5-air:free` if unset.
+- `LLM_BACKEND`: Set to `mock` to use mock LLM backend (no API key needed for testing).
+
+## Quick Start
+
+```bash
+# Full build and test (recommended)
+python build.py
+
+# Or manual commands
+cargo build
+cargo run -- --world redmist_estate --port 3000
+
+# Run tests
+cargo test --test flow_mock_tests    # Fast - no API key needed
+cargo test --test flow_llm_tests     # Requires OPENROUTER_API_KEY
+```

@@ -33,6 +33,31 @@ def kill_port(port: int):
         print(f"Note: Could not check port {port}: {e}")
 
 
+def kill_by_name(name: str):
+    """Kill any process with the given name substring."""
+    try:
+        result = subprocess.run(
+            f"tasklist | findstr -i {name}",
+            shell=True,
+            capture_output=True,
+            text=True,
+        )
+        if result.stdout:
+            for line in result.stdout.splitlines():
+                # Format: image name PID session# mem usage
+                parts = line.split()
+                if len(parts) >= 2:
+                    pid = parts[1]
+                    if pid.isdigit():
+                        print(f"Killing process {parts[0]} (PID {pid})...")
+                        try:
+                            subprocess.run(f"taskkill /F /PID {pid}", shell=True, capture_output=True)
+                        except Exception as e:
+                            print(f"Failed to kill PID {pid}: {e}")
+    except Exception as e:
+        print(f"Note: Could not search for processes: {e}")
+
+
 def run(cmd, cwd=None, check=True):
     """Run a command and handle output."""
     print(f"$ {cmd}")
@@ -55,6 +80,10 @@ def main():
     print("Checking for processes on test ports...")
     for port in [3000, 3001, 3002]:
         kill_port(port)
+
+    # Also kill any lingering server processes by name
+    print("Checking for lingering server processes...")
+    kill_by_name("chronicler")
 
     print("[1/5] Checking formatting...")
     run("cargo fmt --check", check=False)
