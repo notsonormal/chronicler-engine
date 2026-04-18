@@ -52,7 +52,6 @@ fn determine_npcs_in_room(
 
     let all_npcs: Vec<NpcCard> = state.npcs.values().cloned().collect();
 
-    // Get the current room
     let room = match get_current_room(state) {
         Ok(r) => r,
         Err(_) => {
@@ -61,7 +60,6 @@ fn determine_npcs_in_room(
         }
     };
 
-    // Get last 4 history entries
     let recent_history: Vec<_> = state
         .narration_history
         .iter()
@@ -149,7 +147,7 @@ pub fn render_story_log(state: &AppState) -> Result<String> {
 fn render_visual_sidebar_unlocked(state: &GameState) -> Result<String> {
     let room = get_current_room(state)?;
 
-    // Collect NPC data: (profile_image, name) pairs
+    // Collect NPC data: (preferred_image, name) pairs
     // Use npcs_in_area from state if available, otherwise fallback to room.npcs
     let npc_data: Vec<(String, String)> = if !state.npcs_in_area.is_empty() {
         state
@@ -158,13 +156,7 @@ fn render_visual_sidebar_unlocked(state: &GameState) -> Result<String> {
             .filter_map(|npc| {
                 // Defensive: only include NPCs that exist in state.npcs
                 let npc = state.npcs.get(&npc.id)?;
-                // Use headshot_image with fallback to profile_image
-                let image_path = npc
-                    .sheet
-                    .headshot_image
-                    .as_ref()
-                    .or(npc.sheet.profile_image.as_ref())?
-                    .clone();
+                let image_path = npc.sheet.preferred_image()?.to_string();
                 let name = npc.sheet.name.clone();
                 Some((image_path, name))
             })
@@ -175,13 +167,7 @@ fn render_visual_sidebar_unlocked(state: &GameState) -> Result<String> {
             .iter()
             .filter_map(|npc_id| {
                 let npc = state.npcs.get(npc_id)?;
-                // Use headshot_image with fallback to profile_image
-                let image_path = npc
-                    .sheet
-                    .headshot_image
-                    .as_ref()
-                    .or(npc.sheet.profile_image.as_ref())?
-                    .clone();
+                let image_path = npc.sheet.preferred_image()?.to_string();
                 let name = npc.sheet.name.clone();
                 Some((image_path, name))
             })
@@ -268,19 +254,13 @@ fn render_character_headshots(state: &AppState) -> Result<String> {
         .lock()
         .map_err(|_| crate::error::EngineError::Config("Lock poisoned".into()))?;
 
-    // Collect NPC image data from game state
     let npc_data: Vec<(String, String)> = state_guard
         .npcs
         .iter()
         .filter_map(|(_npc_id, npc)| {
-            // Use headshot_image with fallback to profile_image
-            let image = npc
-                .sheet
-                .headshot_image
-                .as_ref()
-                .or(npc.sheet.profile_image.as_ref())?;
+            let image = npc.sheet.preferred_image()?;
             let name = npc.sheet.name.clone();
-            Some((image.clone(), name))
+            Some((image.to_string(), name))
         })
         .collect();
 

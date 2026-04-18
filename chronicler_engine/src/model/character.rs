@@ -14,6 +14,14 @@ pub struct CharacterSheet {
     pub headshot_image: Option<String>,
 }
 
+impl CharacterSheet {
+    pub fn preferred_image(&self) -> Option<&str> {
+        self.headshot_image
+            .as_deref()
+            .or(self.profile_image.as_deref())
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PlayerCard {
     #[serde(flatten)]
@@ -89,7 +97,6 @@ mod tests {
 
     #[test]
     fn test_npc_card_headshot_image_none() {
-        // When headshot_image is not present, it should be None
         let json = r#"{
             "id": "carla",
             "name": "Carla",
@@ -121,5 +128,47 @@ mod tests {
             player.sheet.headshot_image,
             Some("data/images/julian_headshot.png".to_string())
         );
+    }
+
+    #[test]
+    fn test_preferred_image_headshot_first() {
+        let sheet = CharacterSheet {
+            name: "Test".into(),
+            description: "Desc".into(),
+            personality: "Personality".into(),
+            scenario: "Scenario".into(),
+            example_dialogue: "Dialogue".into(),
+            profile_image: Some("profile.png".into()),
+            headshot_image: Some("headshot.png".into()),
+        };
+        assert_eq!(sheet.preferred_image(), Some("headshot.png"));
+    }
+
+    #[test]
+    fn test_preferred_image_fallback_to_profile() {
+        let sheet = CharacterSheet {
+            name: "Test".into(),
+            description: "Desc".into(),
+            personality: "Personality".into(),
+            scenario: "Scenario".into(),
+            example_dialogue: "Dialogue".into(),
+            profile_image: Some("profile.png".into()),
+            headshot_image: None,
+        };
+        assert_eq!(sheet.preferred_image(), Some("profile.png"));
+    }
+
+    #[test]
+    fn test_preferred_image_none_when_both_absent() {
+        let sheet = CharacterSheet {
+            name: "Test".into(),
+            description: "Desc".into(),
+            personality: "Personality".into(),
+            scenario: "Scenario".into(),
+            example_dialogue: "Dialogue".into(),
+            profile_image: None,
+            headshot_image: None,
+        };
+        assert_eq!(sheet.preferred_image(), None);
     }
 }
