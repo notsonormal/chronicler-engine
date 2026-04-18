@@ -27,10 +27,15 @@ The Game Master responds to three primary events:
 ### Arrival Logic Flow
 1. **Movement Intent**: The player issues a navigation command.
 2. **State Transition**: The engine validates the move and updates `state.current_room_id`.
-3. **Arrival Narration**: 
-   - The engine calls `llm_backend.narrate_arrival`.
+3. **Scene Quantification** (NEW):
+   - The engine calls `QuantifierBackend::quantify_room()` with a secondary LLM.
+   - The quantifier uses a separate model (`QUANTIFIER_MODEL` env var, defaults to free model).
+   - It dynamically determines which NPCs are present based on: previous room NPCs, recent conversation history, and the player's action.
+   - Falls back to static `room.npcs` from map.json if LLM fails or returns Low confidence.
+4. **Arrival Narration**:
+   - The engine calls `llm_backend.narrate_arrival` with the dynamic `npcs_in_area`.
    - The LLM generates a narrative paragraph describing the entrance and NPC reactions.
-4. **Scene Setup**: The engine prints the standard room dashboard *after* the narration to provide system context.
+5. **Scene Setup**: The engine prints the standard room dashboard *after* the narration to provide system context.
 
 ## LLM Prompts & Guidance
 The Game Master must:

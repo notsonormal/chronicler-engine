@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-04-18 (continued)
+
+### Added
+- **Scene Quantification (Dual-LLM Architecture)** - Dynamic NPC presence detection
+  - New `quantifier.rs` module with `QuantifierBackend`, `QuantifierPromptBuilder`, and response parser
+  - Secondary LLM model via `QUANTIFIER_MODEL` env var (defaults to free model)
+  - Quantifier prompt includes: room info, previous room NPCs, last 4 history entries, player action
+  - Response parsing: JSON-first → text fallback → validation against known NPCs
+  - Confidence levels: High (JSON), Medium (text fallback), Low (use static NPCs)
+  - Automatic fallback to static `room.npcs` when quantifier fails
+  - Integration in `fragments.rs` WalkTo action handler
+
+- **OpenRouter Client Enhancement** - Dual model support
+  - Added `call_openrouter_with_model()` for flexible model selection
+  - Added `get_llm_model()` and `get_quantifier_model()` helper functions
+  - Original `call_openrouter()` refactored to use the new helper
+
+- **FreeAction NPC Fix** - Fixed empty NPC list in free actions
+  - `fragments.rs` FreeAction handler now correctly fetches static NPCs from room
+
 ## 2026-04-18
 
 ### Changed

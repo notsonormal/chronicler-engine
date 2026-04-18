@@ -15,12 +15,93 @@ use crate::model::character::NpcCard;
 use crate::model::state::{GameState, LogType};
 use crate::narrative::llm::get_llm_backend;
 use crate::narrative::prompt::PromptContext;
+use crate::narrative::quantifier::{
+    QuantifierBackend, QuantifierConfidence, QuantifierPromptContext,
+};
 use crate::server::AppState;
 use crate::server::templates::{
     ActionAreaTemplate, HeaderTemplate, StoryLogTemplate, VisualSidebarTemplate,
 };
 
 const MAX_LOG_DISPLAY: usize = 50;
+
+/// Get NPCs from static room.npcs list in map.json.
+fn get_static_npcs(state: &GameState, room_npc_ids: &[String]) -> Vec<NpcCard> {
+    room_npc_ids
+        .iter()
+        .filter_map(|id| state.npcs.get(id).cloned())
+        .collect()
+}
+
+/// Determine which NPCs are in the current room using the quantifier LLM.
+/// Falls back to static room.npcs from map.json if the quantifier fails
+/// or returns Low confidence.
+fn determine_npcs_in_room(
+    state: &GameState,
+    room_npc_ids: &[String],
+    previous_room_npcs: &[NpcCard],
+    player_action: &str,
+) -> Vec<NpcCard> {
+    let api_key = match std::env::var("OPENROUTER_API_KEY") {
+        Ok(key) => key,
+        Err(_) => {
+            log::debug!("[Quantifier] No API key, using static NPCs");
+            return get_static_npcs(state, room_npc_ids);
+        }
+    };
+
+    let all_npcs: Vec<NpcCard> = state.npcs.values().cloned().collect();
+
+    // Get the current room
+    let room = match get_current_room(state) {
+        Ok(r) => r,
+        Err(_) => {
+            log::warn!("[Quantifier] Cannot get current room, using static NPCs");
+            return get_static_npcs(state, room_npc_ids);
+        }
+    };
+
+    // Get last 4 history entries
+    let recent_history: Vec<_> = state
+        .narration_history
+        .iter()
+        .rev()
+        .take(4)
+        .rev()
+        .cloned()
+        .collect();
+
+    let context = QuantifierPromptContext {
+        room,
+        previous_room_npcs,
+        all_known_npcs: &all_npcs,
+        player_name: &state.player.sheet.name,
+        recent_history: &recent_history,
+        player_action,
+    };
+
+    let backend = QuantifierBackend;
+    match backend.quantify_room(&api_key, &context, room_npc_ids) {
+        Ok(result) => match result.confidence {
+            QuantifierConfidence::High | QuantifierConfidence::Medium => {
+                log::info!("[Quantifier] Using dynamic NPCs: {:?}", result.npc_ids);
+                result
+                    .npc_ids
+                    .iter()
+                    .filter_map(|id| state.npcs.get(id).cloned())
+                    .collect()
+            }
+            QuantifierConfidence::Low => {
+                log::info!("[Quantifier] Low confidence, using static NPCs");
+                get_static_npcs(state, room_npc_ids)
+            }
+        },
+        Err(e) => {
+            log::warn!("[Quantifier] Failed: {e}, using static NPCs");
+            get_static_npcs(state, room_npc_ids)
+        }
+    }
+}
 
 fn render_error(message: &str) -> String {
     format!(
@@ -401,17 +482,24 @@ fn process_action(state: Arc<std::sync::Mutex<GameState>>, input: String, _playe
             }
 
             // Add location entry (sender + empty text for is_location detection)
-            if let Some(name) = room_name {
+            if let Some(name) = room_name.clone() {
                 state_guard.add_log(String::new(), Some(name), LogType::Narration);
             }
 
-            // Fetch NPCs from room's NPC IDs via state.npcs HashMap
-            let mut nearby_npcs: Vec<NpcCard> = Vec::new();
-            for npc_id in &room_npc_ids {
-                if let Some(npc) = state_guard.npcs.get(npc_id) {
-                    nearby_npcs.push(npc.clone());
-                }
-            }
+            // Determine NPCs in room using quantifier (with static fallback)
+            // Note: previous_room_npcs is empty for now; future work can track
+            // which NPCs were in the previous room for follow detection
+            let player_action = format!(
+                "{} enters the {}.",
+                state_guard.player.sheet.name,
+                room_name.as_deref().unwrap_or("room")
+            );
+            let nearby_npcs = determine_npcs_in_room(
+                &state_guard,
+                &room_npc_ids,
+                &[], // No previous room tracking yet
+                &player_action,
+            );
 
             // Get ALL NPCs from game state for prompt context
             let all_npcs: Vec<NpcCard> = state_guard.npcs.values().cloned().collect();
@@ -489,8 +577,11 @@ fn process_action(state: Arc<std::sync::Mutex<GameState>>, input: String, _playe
             let player = Arc::clone(&state_guard.player);
             let room_id = state_guard.current_room_id.clone();
             let history = state_guard.narration_history.clone();
-            // Get nearby NPCs (empty for now - in full implementation would fetch from room)
-            let nearby_npcs: Vec<NpcCard> = vec![];
+            // Get nearby NPCs from current room (static lookup for free actions)
+            let room_npc_ids = get_current_room(&state_guard)
+                .map(|r| r.npcs.clone())
+                .unwrap_or_default();
+            let nearby_npcs = get_static_npcs(&state_guard, &room_npc_ids);
             // Get ALL NPCs from game state for prompt context
             let all_npcs: Vec<NpcCard> = state_guard.npcs.values().cloned().collect();
             let text = text.clone();

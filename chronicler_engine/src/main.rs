@@ -223,12 +223,14 @@ fn main() -> chronicler_engine::Result<()> {
 
     // Fetch NPCs from room's NPC IDs via state.npcs HashMap (before mutating state)
     let room_npc_ids = current_room.npcs.clone();
-    let mut nearby_npcs: Vec<NpcCard> = Vec::new();
-    for npc_id in &room_npc_ids {
-        if let Some(npc) = state.npcs.get(npc_id) {
-            nearby_npcs.push(npc.clone());
-        }
-    }
+
+    // For initial arrival, use static NPCs from map.json.
+    // The quantifier is most useful during room transitions (handled in fragments.rs)
+    // where conversation history provides context about NPC following behavior.
+    let nearby_npcs: Vec<NpcCard> = room_npc_ids
+        .iter()
+        .filter_map(|id| state.npcs.get(id).cloned())
+        .collect();
 
     // Get ALL NPCs from game state for prompt context
     let all_npcs: Vec<NpcCard> = state.npcs.values().cloned().collect();

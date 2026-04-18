@@ -23,6 +23,7 @@ Contains the mechanics that drive the simulation. It translates user intent and 
 The interface between the synchronous engine and stochastic LLM generation.
 - **`llm`**: Traits (`LlmBackend`) and implementations (OpenRouter, DeepSeek) for Game Master narration.
 - **`prompt`**: PromptBuilder module for SillyTavern-style layered prompt construction with token budget management.
+- **`quantifier`**: Scene quantification module for dynamic room presence detection via secondary LLM (NEW).
 
 ### 4. The Server Tier (`crate::server::*`)
 The HTTP layer for the HTMX web dashboard with polling-based real-time updates.
@@ -52,7 +53,8 @@ Static web assets served by the server.
 | `src/engine/logic.rs` | `crate::engine::logic` | |
 | `src/narrative/llm.rs` | `crate::narrative::llm` | LLM backend implementations |
 | `src/narrative/prompt.rs` | `crate::narrative::prompt` | PromptBuilder with layered prompts |
-| `src/server/mod.rs` | `crate::server` | HTTP server + HTMX endpoints |
+| `src/narrative/quantifier.rs` | `crate::narrative::quantifier` | Scene quantification for dynamic NPC presence (NEW) |
+| `src/narrative/openrouter_client.rs` | `crate::narrative::openrouter_client` | OpenRouter HTTP client with dual-model support (NEW) |
 | `src/server/mod.rs` | `crate::server` | HTTP server + HTMX endpoints |
 | `src/server/fragments.rs` | `crate::server` | HTML fragments |
 | `src/server/templates.rs` | `crate::server` | Askama templates (NEW) |

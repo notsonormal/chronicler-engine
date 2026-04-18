@@ -2,20 +2,43 @@
 //!
 //! This module handles the actual HTTP communication with OpenRouter API.
 //! It's isolated to allow easy exclusion from coverage (requires external API).
+//!
+//! Two model configurations are supported:
+//! - `LLM_MODEL`: Primary model for narrative generation (default: `z-ai/glm-4.5-air:free`)
+//! - `QUANTIFIER_MODEL`: Secondary model for scene quantification (default: `z-ai/glm-4.5-air:free`)
 
 use serde_json::json;
 
-/// Call OpenRouter API and return the response content
-pub fn call_openrouter(
+/// Get the configured LLM model for narrative generation.
+///
+/// Reads the `LLM_MODEL` environment variable, defaulting to `z-ai/glm-4.5-air:free`.
+pub fn get_llm_model() -> String {
+    std::env::var("LLM_MODEL").unwrap_or_else(|_| "z-ai/glm-4.5-air:free".to_string())
+}
+
+/// Get the configured LLM model for scene quantification.
+///
+/// Reads the `QUANTIFIER_MODEL` environment variable, defaulting to `z-ai/glm-4.5-air:free`.
+/// The quantifier uses a separate model configuration so it can run on a
+/// different (typically cheaper/faster) model than the main narrative generator.
+pub fn get_quantifier_model() -> String {
+    std::env::var("QUANTIFIER_MODEL").unwrap_or_else(|_| "z-ai/glm-4.5-air:free".to_string())
+}
+
+/// Call OpenRouter API with a specific model and return the response content.
+///
+/// This is the core implementation that all OpenRouter calls route through.
+/// The `model` parameter specifies which LLM to use (e.g., `z-ai/glm-4.5-air:free`).
+pub fn call_openrouter_with_model(
     api_key: &str,
     system_prompt: &str,
     user_text: &str,
+    model: &str,
 ) -> Result<String, String> {
     let client = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(60))
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
-    let model = std::env::var("LLM_MODEL").unwrap_or_else(|_| "z-ai/glm-4.5-air:free".to_string());
 
     log::info!("[LLM] Using model: {model}");
     log::debug!("[LLM] System prompt length: {} chars", system_prompt.len());
@@ -164,6 +187,59 @@ pub fn call_openrouter(
         Err(e) => {
             log::error!("[LLM] Request failed: {e}");
             Err(format!("Request failed: {e}"))
+        }
+    }
+}
+
+/// Call OpenRouter API using the primary narrative model.
+///
+/// Convenience wrapper that reads `LLM_MODEL` from the environment
+/// and delegates to [`call_openrouter_with_model`].
+pub fn call_openrouter(
+    api_key: &str,
+    system_prompt: &str,
+    user_text: &str,
+) -> Result<String, String> {
+    let model = get_llm_model();
+    call_openrouter_with_model(api_key, system_prompt, user_text, &model)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_llm_model_default() {
+        // When LLM_MODEL is not set, should return default
+        let model = get_llm_model();
+        // The default may vary if env var is set in CI, so just check it's non-empty
+        assert!(!model.is_empty());
+    }
+
+    #[test]
+    fn test_get_quantifier_model_default() {
+        // When QUANTIFIER_MODEL is not set, should return default
+        let model = get_quantifier_model();
+        assert!(!model.is_empty());
+    }
+
+    #[test]
+    fn test_get_llm_model_returns_default_value() {
+        // Verify the expected default model string
+        // Note: This test may fail if LLM_MODEL is set in the environment
+        let default_model = std::env::var("LLM_MODEL");
+        if default_model.is_err() {
+            assert_eq!(get_llm_model(), "z-ai/glm-4.5-air:free");
+        }
+    }
+
+    #[test]
+    fn test_get_quantifier_model_returns_default_value() {
+        // Verify the expected default model string
+        // Note: This test may fail if QUANTIFIER_MODEL is set in the environment
+        let default_model = std::env::var("QUANTIFIER_MODEL");
+        if default_model.is_err() {
+            assert_eq!(get_quantifier_model(), "z-ai/glm-4.5-air:free");
         }
     }
 }
