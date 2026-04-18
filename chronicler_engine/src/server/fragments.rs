@@ -308,7 +308,6 @@ pub async fn action_handler(
     // For async actions, spawn a thread to process them
     if !is_sync {
         let state_clone = state.state.clone();
-        let state_for_reset = state.state.clone();
         let cmd = command;
         let pname = player_name;
 
@@ -317,11 +316,6 @@ pub async fn action_handler(
             std::thread::sleep(std::time::Duration::from_millis(50));
 
             process_action(state_clone, cmd, pname);
-
-            // Fallback: ensure flag is reset after process_action completes
-            if let Ok(mut guard) = state_for_reset.lock() {
-                guard.tui_state.is_generating = false;
-            }
         });
     }
 
