@@ -500,3 +500,98 @@ fn test_redmist_estate_room_image_path() {
         "Redmist Estate room image_path should be loaded"
     );
 }
+
+// =============================================================================
+// NPC Sidebar Tests - npcs_in_area feature
+// =============================================================================
+
+/// Test that GameState initializes with empty npcs_in_area
+#[test]
+fn test_npcs_in_area_initialization() {
+    let state = create_test_state();
+    let state_guard = state.lock().unwrap();
+
+    // Verify npcs_in_area starts empty
+    assert!(
+        state_guard.npcs_in_area.is_empty(),
+        "npcs_in_area should be empty on initialization"
+    );
+}
+
+/// Test that npcs_in_area can be populated
+#[test]
+fn test_npcs_in_area_can_be_populated() {
+    let state = create_test_state();
+    let mut state_guard = state.lock().unwrap();
+
+    // Get an NPC from the state
+    let npc: chronicler_engine::model::character::NpcCard = state_guard
+        .npcs
+        .get("npc_1")
+        .cloned()
+        .expect("Should have npc_1");
+
+    // Populate npcs_in_area
+    state_guard.npcs_in_area.push(npc);
+
+    assert_eq!(
+        state_guard.npcs_in_area.len(),
+        1,
+        "npcs_in_area should have 1 NPC after population"
+    );
+    assert_eq!(state_guard.npcs_in_area[0].id, "npc_1", "Should be npc_1");
+}
+
+/// Test that npcs_in_area can be cleared (for re-quantification)
+#[test]
+fn test_npcs_in_area_can_be_cleared() {
+    let state = create_test_state();
+    let mut state_guard = state.lock().unwrap();
+
+    // Get an NPC and populate npcs_in_area
+    let npc = state_guard
+        .npcs
+        .get("npc_1")
+        .cloned()
+        .expect("Should have npc_1");
+    state_guard.npcs_in_area.push(npc);
+
+    assert!(
+        !state_guard.npcs_in_area.is_empty(),
+        "npcs_in_area should be populated"
+    );
+
+    // Clear for re-quantification
+    state_guard.npcs_in_area.clear();
+
+    assert!(
+        state_guard.npcs_in_area.is_empty(),
+        "npcs_in_area should be empty after clear"
+    );
+}
+
+/// Test that npcs_in_area can be replaced entirely (for re-quantification)
+#[test]
+fn test_npcs_in_area_can_be_replaced() {
+    let state = create_test_state();
+    let mut state_guard = state.lock().unwrap();
+
+    // Add one NPC
+    let npc1 = state_guard
+        .npcs
+        .get("npc_1")
+        .cloned()
+        .expect("Should have npc_1");
+    state_guard.npcs_in_area.push(npc1);
+
+    assert_eq!(state_guard.npcs_in_area.len(), 1, "Should have 1 NPC");
+
+    // Replace with new list (simulating re-quantification)
+    let new_npcs = vec![]; // Empty list simulates no NPCs found
+    state_guard.npcs_in_area = new_npcs;
+
+    assert!(
+        state_guard.npcs_in_area.is_empty(),
+        "npcs_in_area should be empty after replacement"
+    );
+}

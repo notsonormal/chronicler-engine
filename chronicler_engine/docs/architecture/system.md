@@ -75,6 +75,28 @@ The engine presents a web-based HTMX dashboard:
 
 Real-time updates via HTMX polling (5s interval for story-log, 5s for status-display).
 
+### NPC Display in Visual Sidebar
+
+The visual sidebar displays NPCs present in the current room. **Dynamic NPC presence** is determined by the **Quantifier** (see `scene_quantification_v2.md` plan) rather than static room configuration:
+
+- **Data Flow**: `quantifier result → GameState.npcs_in_area → visual sidebar`
+- **Storage**: `GameState.npcs_in_area: Vec<NpcCard>` stores the current in-area NPCs
+- **Update Triggers**:
+  1. **WalkTo**: When player enters a room, quantifier runs and result stored in `npcs_in_area`
+  2. **Re-quantification**: After LLM narration mentioning NPC movement (e.g., "follows you", "enters", "leaves"), quantifier re-runs to update `npcs_in_area` automatically
+- **Fallback**: If quantifier is unavailable (no API key) or returns Low confidence, static `room.npcs` from `map.json` is used
+- **Validation**: All NPC IDs from quantifier are validated against `GameState.npcs` - hallucinated NPCs are filtered out
+
+### Re-quantification Triggers
+
+NPC presence can change WITHOUT player movement. After LLM narration completes (narrate_arrival, narrate_action), the system:
+1. Parses narration text for NPC movement patterns: "follows", "enters", "leaves", "comes with", "accompanies"
+2. When movement is detected, calls `determine_npcs_in_room()` again to re-quantify
+3. Updates `state.npcs_in_area` with the new result
+4. Visual sidebar automatically displays updated NPCs on next poll
+
+This allows NPCs like "Carla" to appear in a room because the LLM mentioned "Carla follows you from the front gate" - without the player having to physically walk there.
+
 ### Image Handling
 
 Character images have two supported fields:

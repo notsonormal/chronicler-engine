@@ -86,6 +86,7 @@ pub struct GameState {
     pub current_room_id: String,
     pub narration_history: Vec<LogEntry>,
     pub tui_state: TuiState,
+    pub npcs_in_area: Vec<NpcCard>,
 }
 
 impl GameState {
@@ -108,6 +109,7 @@ impl GameState {
             current_room_id: starting_room,
             narration_history: Vec::new(),
             tui_state: TuiState::default(),
+            npcs_in_area: Vec::new(),
         }
     }
 

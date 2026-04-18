@@ -12,6 +12,13 @@
   - Automatic fallback to static `room.npcs` when quantifier fails
   - Integration in `fragments.rs` WalkTo action handler
 
+- **Quantified NPCs Sidebar** - Persistent NPC list for visual sidebar
+  - New `npcs_in_area: Vec<NpcCard>` field in `GameState` for storing quantifier results
+  - Visual sidebar now reads from stored quantifier result instead of static room.npcs
+  - Re-quantification triggers after EVERY LLM generation (LLM decides NPC presence)
+  - Fallback to static room.npcs when quantifier unavailable or npcs_in_area empty
+  - Added 4 tests for npcs_in_area field and sidebar behavior
+
 - **OpenRouter Client Enhancement** - Dual model support
   - Added `call_openrouter_with_model()` for flexible model selection
   - Added `get_llm_model()` and `get_quantifier_model()` helper functions

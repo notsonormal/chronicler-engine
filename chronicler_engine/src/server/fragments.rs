@@ -150,22 +150,43 @@ fn render_visual_sidebar_unlocked(state: &GameState) -> Result<String> {
     let room = get_current_room(state)?;
 
     // Collect NPC data: (image_path, name) pairs
-    let npc_data: Vec<(String, String)> = room
-        .npcs
-        .iter()
-        .filter_map(|npc_id| {
-            let npc = state.npcs.get(npc_id)?;
-            // Use headshot_image with fallback to image_path
-            let image_path = npc
-                .sheet
-                .headshot_image
-                .as_ref()
-                .or(npc.sheet.image_path.as_ref())?
-                .clone();
-            let name = npc.sheet.name.clone();
-            Some((image_path, name))
-        })
-        .collect();
+    // Use npcs_in_area from state if available, otherwise fallback to room.npcs
+    let npc_data: Vec<(String, String)> = if !state.npcs_in_area.is_empty() {
+        state
+            .npcs_in_area
+            .iter()
+            .filter_map(|npc| {
+                // Defensive: only include NPCs that exist in state.npcs
+                let npc = state.npcs.get(&npc.id)?;
+                // Use headshot_image with fallback to image_path
+                let image_path = npc
+                    .sheet
+                    .headshot_image
+                    .as_ref()
+                    .or(npc.sheet.image_path.as_ref())?
+                    .clone();
+                let name = npc.sheet.name.clone();
+                Some((image_path, name))
+            })
+            .collect()
+    } else {
+        // Fallback to static room.npcs
+        room.npcs
+            .iter()
+            .filter_map(|npc_id| {
+                let npc = state.npcs.get(npc_id)?;
+                // Use headshot_image with fallback to image_path
+                let image_path = npc
+                    .sheet
+                    .headshot_image
+                    .as_ref()
+                    .or(npc.sheet.image_path.as_ref())?
+                    .clone();
+                let name = npc.sheet.name.clone();
+                Some((image_path, name))
+            })
+            .collect()
+    };
 
     let template = VisualSidebarTemplate::new(room.image_path.clone(), room.name.clone(), npc_data);
     template
@@ -501,6 +522,9 @@ fn process_action(state: Arc<std::sync::Mutex<GameState>>, input: String, _playe
                 &player_action,
             );
 
+            // Store quantifier result in game state for persistence
+            state_guard.npcs_in_area = nearby_npcs.clone();
+
             // Get ALL NPCs from game state for prompt context
             let all_npcs: Vec<NpcCard> = state_guard.npcs.values().cloned().collect();
 
@@ -537,8 +561,22 @@ fn process_action(state: Arc<std::sync::Mutex<GameState>>, input: String, _playe
                         Ok(text) => {
                             if let Ok(mut state) = state_for_thread.lock() {
                                 // Location entry already added above, just add narration text
-                                state.add_log(text, None, LogType::Narration);
+                                state.add_log(text.clone(), None, LogType::Narration);
                                 state.tui_state.is_generating = false;
+
+                                // Re-quantify NPCs after EVERY LLM generation
+                                // The LLM decides who should be in the room based on narrative context
+                                let room_npc_ids = get_current_room(&state)
+                                    .map(|r| r.npcs.clone())
+                                    .unwrap_or_default();
+                                let previous_room_npcs: Vec<NpcCard> = state.npcs_in_area.clone();
+                                let new_npcs = determine_npcs_in_room(
+                                    &state,
+                                    &room_npc_ids,
+                                    &previous_room_npcs,
+                                    "re-quantify after narration",
+                                );
+                                state.npcs_in_area = new_npcs;
                             }
                         }
                         Err(e) => {
@@ -613,6 +651,20 @@ fn process_action(state: Arc<std::sync::Mutex<GameState>>, input: String, _playe
                             if let Ok(mut state) = state_for_thread.lock() {
                                 state.add_log(text, None, LogType::Narration);
                                 state.tui_state.is_generating = false;
+
+                                // Re-quantify NPCs after EVERY LLM generation
+                                // The LLM decides who should be in the room based on narrative context
+                                let room_npc_ids = get_current_room(&state)
+                                    .map(|r| r.npcs.clone())
+                                    .unwrap_or_default();
+                                let previous_room_npcs: Vec<NpcCard> = state.npcs_in_area.clone();
+                                let new_npcs = determine_npcs_in_room(
+                                    &state,
+                                    &room_npc_ids,
+                                    &previous_room_npcs,
+                                    "re-quantify after narration",
+                                );
+                                state.npcs_in_area = new_npcs;
                             }
                         }
                         Err(e) => {
