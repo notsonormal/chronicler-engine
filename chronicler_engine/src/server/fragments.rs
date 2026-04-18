@@ -75,7 +75,9 @@ fn render_visual_sidebar_unlocked(state: &GameState) -> Result<String> {
         .filter_map(|npc_id| {
             let npc = state.npcs.get(npc_id)?;
             // Use headshot_image with fallback to image_path
-            let image_path = npc.sheet.headshot_image
+            let image_path = npc
+                .sheet
+                .headshot_image
                 .as_ref()
                 .or(npc.sheet.image_path.as_ref())?
                 .clone();
@@ -155,28 +157,34 @@ pub async fn action_area_fragment(State(state): State<AppState>) -> Html<String>
 }
 
 fn render_character_headshots(state: &AppState) -> Result<String> {
-    use askama::Template;
     use crate::server::templates::CharacterHeadshotsTemplate;
-    
-    let state_guard = state.state.lock()
+    use askama::Template;
+
+    let state_guard = state
+        .state
+        .lock()
         .map_err(|_| crate::error::EngineError::Config("Lock poisoned".into()))?;
-    
+
     // Collect NPC image data from game state
     let npc_data: Vec<(String, String)> = state_guard
         .npcs
         .iter()
         .filter_map(|(_npc_id, npc)| {
             // Use headshot_image with fallback to image_path
-            let image = npc.sheet.headshot_image
+            let image = npc
+                .sheet
+                .headshot_image
                 .as_ref()
                 .or(npc.sheet.image_path.as_ref())?;
             let name = npc.sheet.name.clone();
             Some((image.clone(), name))
         })
         .collect();
-    
+
     let template = CharacterHeadshotsTemplate::new(npc_data);
-    template.render().map_err(|e| crate::error::EngineError::Template(e.to_string()))
+    template
+        .render()
+        .map_err(|e| crate::error::EngineError::Template(e.to_string()))
 }
 
 pub async fn character_headshots_fragment(State(state): State<AppState>) -> Html<String> {
@@ -302,13 +310,13 @@ pub async fn action_handler(
         let state_for_reset = state.state.clone();
         let cmd = command;
         let pname = player_name;
-        
+
         std::thread::spawn(move || {
             // Small delay to let inner threads start their guards first
             std::thread::sleep(std::time::Duration::from_millis(50));
-            
+
             process_action(state_clone, cmd, pname);
-            
+
             // Fallback: ensure flag is reset after process_action completes
             if let Ok(mut guard) = state_for_reset.lock() {
                 guard.tui_state.is_generating = false;
@@ -354,12 +362,12 @@ fn process_action(state: Arc<std::sync::Mutex<GameState>>, input: String, _playe
     // Note: We don't use GeneratingGuard here because async actions (WalkTo, FreeAction)
     // spawn inner threads that need to manage the is_generating flag themselves.
     // The outer spawn (line 272-279) now uses a guard to ensure cleanup.
-    
+
     let action = parse_command(&input);
 
     let mut state_guard = match state.lock() {
         Ok(g) => g,
-        Err(_) => return,  // Guard will still reset on drop
+        Err(_) => return, // Guard will still reset on drop
     };
 
     match action {

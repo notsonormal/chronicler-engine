@@ -300,7 +300,7 @@ fn main() -> chronicler_engine::Result<()> {
         thread::spawn(move || {
             // RAII guard ensures is_generating is reset even if room is None
             let _guard = GeneratingGuard::new(state_for_thread.clone());
-            
+
             let room = map
                 .overworld
                 .regions

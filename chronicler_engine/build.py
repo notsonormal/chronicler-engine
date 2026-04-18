@@ -85,8 +85,8 @@ def main():
     print("Checking for lingering server processes...")
     kill_by_name("chronicler")
 
-    print("[1/5] Checking formatting...")
-    run("cargo fmt --check", check=False)
+    print("[1/5] Formatting...")
+    run("cargo fmt")
 
     print("[2/5] Running clippy...")
     run("cargo clippy -- -D warnings")

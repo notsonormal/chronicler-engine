@@ -243,7 +243,7 @@ mod tests {
                     regions: vec![],
                 },
             }),
-Arc::new(PlayerCard {
+            Arc::new(PlayerCard {
                 sheet: CharacterSheet {
                     name: "P".into(),
                     description: "D".into(),

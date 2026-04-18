@@ -243,10 +243,16 @@ mod tests {
             .unwrap();
         let body_str = String::from_utf8_lossy(&body);
         // Should contain the image, not "No Location Image"
-        assert!(body_str.contains("data/images/test_room.png"),
-            "Expected room image in sidebar: {}", body_str);
-        assert!(!body_str.contains("No Location Image"),
-            "Should not show placeholder when image exists: {}", body_str);
+        assert!(
+            body_str.contains("data/images/test_room.png"),
+            "Expected room image in sidebar: {}",
+            body_str
+        );
+        assert!(
+            !body_str.contains("No Location Image"),
+            "Should not show placeholder when image exists: {}",
+            body_str
+        );
     }
 
     #[tokio::test]
@@ -368,7 +374,9 @@ fn test_load_world_includes_room_image_path() {
     let map: chronicler_engine::model::map::MapDef = serde_json::from_str(&map_json).unwrap();
 
     // Find the start room and verify image_path
-    let start_room = map.overworld.regions[0].rooms.iter()
+    let start_room = map.overworld.regions[0]
+        .rooms
+        .iter()
         .find(|r| r.id == "start")
         .expect("Should have 'start' room");
 
@@ -396,11 +404,13 @@ async fn test_visual_sidebar_with_real_world_data() {
     let map: chronicler_engine::model::map::MapDef = serde_json::from_str(&map_json).unwrap();
 
     let world_json = std::fs::read_to_string("data/worlds/test/world.json").unwrap();
-    let manifest: chronicler_engine::model::world::WorldManifest = serde_json::from_str(&world_json).unwrap();
+    let manifest: chronicler_engine::model::world::WorldManifest =
+        serde_json::from_str(&world_json).unwrap();
     let world: chronicler_engine::model::world::WorldCard = manifest.clone().into();
 
     let player_json = std::fs::read_to_string("data/worlds/test/player.json").unwrap();
-    let player: chronicler_engine::model::character::PlayerCard = serde_json::from_str(&player_json).unwrap();
+    let player: chronicler_engine::model::character::PlayerCard =
+        serde_json::from_str(&player_json).unwrap();
 
     // Load NPCs from characters directory
     let chars_dir = std::path::Path::new("data/worlds/test/characters");
@@ -410,7 +420,9 @@ async fn test_visual_sidebar_with_real_world_data() {
             let path = entry.path();
             if path.extension().and_then(|s| s.to_str()) == Some("json") {
                 let char_json = std::fs::read_to_string(&path).unwrap();
-                if let Ok(npc) = serde_json::from_str::<chronicler_engine::model::character::NpcCard>(&char_json) {
+                if let Ok(npc) =
+                    serde_json::from_str::<chronicler_engine::model::character::NpcCard>(&char_json)
+                {
                     npcs.push(npc);
                 }
             }
@@ -429,10 +441,15 @@ async fn test_visual_sidebar_with_real_world_data() {
     // Verify the current room has image_path set BEFORE wrapping in Mutex
     {
         let state_guard = &state;
-        let room = state_guard.map.overworld.regions[0].rooms.iter()
+        let room = state_guard.map.overworld.regions[0]
+            .rooms
+            .iter()
             .find(|r| r.id == manifest.starting_room_id)
             .expect("Should find starting room");
-        assert!(room.image_path.is_some(), "Room should have image_path loaded");
+        assert!(
+            room.image_path.is_some(),
+            "Room should have image_path loaded"
+        );
         eprintln!("DEBUG: room.image_path = {:?}", room.image_path);
     }
 
@@ -446,14 +463,22 @@ async fn test_visual_sidebar_with_real_world_data() {
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
 
-    let body = axum::body::to_bytes(response.into_body(), 2048).await.unwrap();
+    let body = axum::body::to_bytes(response.into_body(), 2048)
+        .await
+        .unwrap();
     let body_str = String::from_utf8_lossy(&body);
 
     // Should show the room image, not the placeholder
-    assert!(body_str.contains("test_room.png"),
-        "Should contain room image: {}", body_str);
-    assert!(!body_str.contains("No Location Image"),
-        "Should not show placeholder: {}", body_str);
+    assert!(
+        body_str.contains("test_room.png"),
+        "Should contain room image: {}",
+        body_str
+    );
+    assert!(
+        !body_str.contains("No Location Image"),
+        "Should not show placeholder: {}",
+        body_str
+    );
 }
 
 /// Test that redmist_estate world loads with image_path correctly.
@@ -463,7 +488,9 @@ fn test_redmist_estate_room_image_path() {
     let map_json = std::fs::read_to_string("data/worlds/redmist_estate/map.json").unwrap();
     let map: chronicler_engine::model::map::MapDef = serde_json::from_str(&map_json).unwrap();
 
-    let front_gates = map.overworld.regions[0].rooms.iter()
+    let front_gates = map.overworld.regions[0]
+        .rooms
+        .iter()
         .find(|r| r.id == "front_gates")
         .expect("Should have 'front_gates' room");
 

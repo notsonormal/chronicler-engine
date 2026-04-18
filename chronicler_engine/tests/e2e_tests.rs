@@ -85,7 +85,10 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(title, "Chronicler Engine", "Header should display game title");
+        assert_eq!(
+            title, "Chronicler Engine",
+            "Header should display game title"
+        );
 
         browser.close().await.unwrap();
     }
@@ -180,7 +183,10 @@ mod tests {
             )
             .await
             .unwrap();
-        assert!(has_required, "Input should have required attribute for validation");
+        assert!(
+            has_required,
+            "Input should have required attribute for validation"
+        );
 
         browser.close().await.unwrap();
     }
@@ -245,7 +251,10 @@ mod tests {
             )
             .await
             .unwrap();
-        assert!(log_entries > 0, "Story log should have entries on initial load");
+        assert!(
+            log_entries > 0,
+            "Story log should have entries on initial load"
+        );
 
         browser.close().await.unwrap();
     }
@@ -357,8 +366,14 @@ mod tests {
             .await
             .unwrap();
 
-        assert!(story_log_top > header_top, "Story log should be below header");
-        assert!(action_area_top > story_log_top, "Action area should be below story log");
+        assert!(
+            story_log_top > header_top,
+            "Story log should be below header"
+        );
+        assert!(
+            action_area_top > story_log_top,
+            "Action area should be below story log"
+        );
 
         browser.close().await.unwrap();
     }

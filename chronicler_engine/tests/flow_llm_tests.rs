@@ -50,7 +50,7 @@ mod tests {
     async fn test_llm_generates_narration_for_free_action() {
         // Load .env before checking for API key
         dotenv::dotenv().ok();
-        
+
         if !has_llm_api_key() {
             eprintln!("Skipping: OPENROUTER_API_KEY not set");
             return;
@@ -145,7 +145,7 @@ mod tests {
     #[tokio::test]
     async fn test_llm_narration_appears_via_polling() {
         dotenv::dotenv().ok();
-        
+
         if !has_llm_api_key() {
             eprintln!("Skipping: OPENROUTER_API_KEY not set");
             return;
@@ -242,7 +242,7 @@ mod tests {
     #[tokio::test]
     async fn test_llm_handles_arrival_narration() {
         dotenv::dotenv().ok();
-        
+
         if !has_llm_api_key() {
             eprintln!("Skipping: OPENROUTER_API_KEY not set");
             return;
@@ -285,7 +285,7 @@ mod tests {
 
         // Wait for any status change
         tokio::time::sleep(Duration::from_secs(2)).await;
-        
+
         // Check if status shows "Thinking..." (LLM is processing)
         let status_during: String = page
             .evaluate::<(), String>(
@@ -298,11 +298,11 @@ mod tests {
 
         // Wait longer for LLM to complete (if it was triggered)
         let llm_result = wait_for_llm_idle(port, Duration::from_secs(30)).await;
-        
+
         // Wait for UI to poll and update the DOM after LLM completes
         // Polling happens every 5 seconds, so we need to wait for the next poll
         tokio::time::sleep(Duration::from_secs(6)).await;
-        
+
         // Final status check
         let status_after: String = page
             .evaluate::<(), String>(
@@ -311,16 +311,22 @@ mod tests {
             )
             .await
             .unwrap();
-        
-        println!("Status after (LLM result: {:?}): {}", llm_result, status_after);
-        
+
+        println!(
+            "Status after (LLM result: {:?}): {}",
+            llm_result, status_after
+        );
+
         // Key assertion: After LLM completes (or times out), status should NOT be stuck
         // Either "Ready" (success), "Error" (LLM error), or some other defined state
         // But NOT "Thinking..." which means the flag wasn't reset
         assert!(
-            !status_after.contains("Thinking") || status_after.contains("Ready") || status_after.contains("Error"),
+            !status_after.contains("Thinking")
+                || status_after.contains("Ready")
+                || status_after.contains("Error"),
             "Status should not be stuck on 'Thinking...'. Got: {} (LLM result: {:?})",
-            status_after, llm_result
+            status_after,
+            llm_result
         );
 
         browser.close().await.unwrap();

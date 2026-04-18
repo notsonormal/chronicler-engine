@@ -12,15 +12,9 @@ pub trait LlmBackend: Send + Sync {
         npc: &NpcCard,
     ) -> Result<String, EngineError>;
 
-    fn narrate_action(
-        &self,
-        context: &PromptContext,
-    ) -> Result<String, EngineError>;
+    fn narrate_action(&self, context: &PromptContext) -> Result<String, EngineError>;
 
-    fn narrate_arrival(
-        &self,
-        context: &PromptContext,
-    ) -> Result<String, EngineError>;
+    fn narrate_arrival(&self, context: &PromptContext) -> Result<String, EngineError>;
 
     fn name(&self) -> &str;
 }
@@ -90,11 +84,11 @@ impl LlmBackend for OpenRouterBackend {
         call_openrouter(&api_key, &system_prompt, &user_text).map_err(EngineError::Narrative)
     }
 
-    fn narrate_action(
-        &self,
-        context: &PromptContext,
-    ) -> Result<String, EngineError> {
-        log::info!("[LLM] Generating action narration for: {}", context.user_message);
+    fn narrate_action(&self, context: &PromptContext) -> Result<String, EngineError> {
+        log::info!(
+            "[LLM] Generating action narration for: {}",
+            context.user_message
+        );
 
         let builder = PromptBuilder::from_context(context);
         let (system_prompt, user_text) = builder.build_split()?;
@@ -104,15 +98,18 @@ impl LlmBackend for OpenRouterBackend {
         call_openrouter(&api_key, &system_prompt, &user_text).map_err(EngineError::Narrative)
     }
 
-    fn narrate_arrival(
-        &self,
-        context: &PromptContext,
-    ) -> Result<String, EngineError> {
-        log::info!("[LLM] Generating arrival narration for room: {}", context.room.name);
+    fn narrate_arrival(&self, context: &PromptContext) -> Result<String, EngineError> {
+        log::info!(
+            "[LLM] Generating arrival narration for room: {}",
+            context.room.name
+        );
 
         // Create arrival-specific user message
-        let user_msg = format!("{} enters the {}.", context.player.sheet.name, context.room.name);
-        
+        let user_msg = format!(
+            "{} enters the {}.",
+            context.player.sheet.name, context.room.name
+        );
+
         let arrival_context = PromptContext {
             world: context.world,
             room: context.room,
@@ -233,18 +230,15 @@ impl LlmBackend for MockBackend {
         }
     }
 
-    fn narrate_action(
-        &self,
-        context: &PromptContext,
-    ) -> Result<String, EngineError> {
+    fn narrate_action(&self, context: &PromptContext) -> Result<String, EngineError> {
         Ok(format!("[MockNarration] {}", context.user_message))
     }
 
-    fn narrate_arrival(
-        &self,
-        context: &PromptContext,
-    ) -> Result<String, EngineError> {
-        Ok(format!("[MockArrival] You enter the {}.", context.room.name))
+    fn narrate_arrival(&self, context: &PromptContext) -> Result<String, EngineError> {
+        Ok(format!(
+            "[MockArrival] You enter the {}.",
+            context.room.name
+        ))
     }
 
     fn name(&self) -> &str {
@@ -264,17 +258,11 @@ impl LlmBackend for DeepSeekBackend {
         Ok("[DeepSeek] Dialogue not yet implemented. Use OpenRouter for now.".to_string())
     }
 
-    fn narrate_action(
-        &self,
-        _context: &PromptContext,
-    ) -> Result<String, EngineError> {
+    fn narrate_action(&self, _context: &PromptContext) -> Result<String, EngineError> {
         Ok("[DeepSeek] Narration not yet implemented. Use OpenRouter for now.".to_string())
     }
 
-    fn narrate_arrival(
-        &self,
-        _context: &PromptContext,
-    ) -> Result<String, EngineError> {
+    fn narrate_arrival(&self, _context: &PromptContext) -> Result<String, EngineError> {
         Ok("[DeepSeek] Arrival not yet implemented. Use OpenRouter for now.".to_string())
     }
 
@@ -685,7 +673,10 @@ mod tests {
         let _player = make_test_player();
 
         let message = Some("Hello, guard!".to_string());
-        let result = backend.generate_dialogue(&make_test_context_with_npc(&npc, message.as_deref().unwrap_or("")), &npc);
+        let result = backend.generate_dialogue(
+            &make_test_context_with_npc(&npc, message.as_deref().unwrap_or("")),
+            &npc,
+        );
 
         assert!(result.is_ok());
         let response = result.unwrap();

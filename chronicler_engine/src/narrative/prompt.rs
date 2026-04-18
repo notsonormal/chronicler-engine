@@ -316,7 +316,7 @@ impl<'a> PromptBuilder<'a> {
             output.push_str("No characters in this world.\n");
         } else {
             // Build a set of NPC IDs in the current area for presence checking
-            let in_area_ids: std::collections::HashSet<_> = 
+            let in_area_ids: std::collections::HashSet<_> =
                 self.npcs_in_area.iter().map(|n| n.id.as_str()).collect();
 
             for npc in self.all_npcs {
