@@ -408,7 +408,10 @@ pub fn get_available_port(min: u16, max: u16) -> Result<u16, String> {
             delay_ms = (delay_ms * 2).min(500); // Exponential backoff, max 500ms
         }
     }
-    Err(format!("No available ports in range {}-{} after {} attempts", min, max, 10))
+    Err(format!(
+        "No available ports in range {}-{} after {} attempts",
+        min, max, 10
+    ))
 }
 
 /// Get a dynamic port from config file (convenience function)

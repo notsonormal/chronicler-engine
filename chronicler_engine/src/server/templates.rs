@@ -137,7 +137,7 @@ impl StoryLogTemplate {
 /// Renders location image and NPC portraits in the sidebar.
 #[derive(Template)]
 #[template(
-    source = r#"<div class="visual-sidebar" id="visual-sidebar">{% if room_has_image %}<div class="image-container location-image"><img src="{{ room_src }}" alt="{{ room_alt }}" /><div class="image-label">Location</div></div>{% else %}<div class="image-container no-image"><div class="placeholder">No Location Image</div></div>{% endif %}<div class="npc-portraits">{% for npc in npcs %}<div class="image-container npc-portrait"><img src="{{ npc.0 }}" alt="{{ npc.1 }}" /><div class="image-label">{{ npc.1 }}</div></div>{% endfor %}</div></div>"#,
+    source = r#"<div class="visual-sidebar" id="visual-sidebar">{% if room_has_image %}<div class="image-container location-image"><img src="{{ room_src }}" alt="{{ room_alt }}" /></div>{% else %}<div class="image-container no-image"><div class="placeholder">No Location Image</div></div>{% endif %}<div class="npc-portraits">{% for npc in npcs %}<div class="image-container npc-portrait"><img src="{{ npc.0 }}" alt="{{ npc.1 }}" /></div>{% endfor %}</div></div>"#,
     ext = "html"
 )]
 pub struct VisualSidebarTemplate {

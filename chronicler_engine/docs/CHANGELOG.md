@@ -2,6 +2,12 @@
 
 ## 2026-04-18
 
+### Changed
+- **Visual Sidebar Images** - Improved NPC portrait visibility
+  - Changed NPC grid from 2-column to single column layout
+  - Images now display at approximately double the previous width
+  - Makes character portraits more visible and easier to identify
+
 ### Added
 - **Headshot Image Support** - Enhanced character and room image handling
   - New fields in `CharacterSheet`: `profile_image` and `headshot_image` (both Optional<String>)
