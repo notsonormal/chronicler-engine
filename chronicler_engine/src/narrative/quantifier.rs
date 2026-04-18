@@ -338,7 +338,7 @@ mod tests {
                 personality: "Mysterious".to_string(),
                 scenario: "Investigating".to_string(),
                 example_dialogue: String::new(),
-                image_path: None,
+                profile_image: None,
                 headshot_image: None,
             },
             inventory: vec![],

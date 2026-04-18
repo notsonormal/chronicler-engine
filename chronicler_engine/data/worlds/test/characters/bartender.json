@@ -6,5 +6,5 @@
     "scenario": "Runs the Test Tavern and knows everyone in the village",
     "example_dialogue": "Welcome, traveler! What can I get you?",
     "inventory": [],
-    "image_path": "data/images/test.jpg"
+    "profile_image": "data/images/test.jpg"
 }

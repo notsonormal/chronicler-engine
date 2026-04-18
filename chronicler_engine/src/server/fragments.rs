@@ -149,7 +149,7 @@ pub fn render_story_log(state: &AppState) -> Result<String> {
 fn render_visual_sidebar_unlocked(state: &GameState) -> Result<String> {
     let room = get_current_room(state)?;
 
-    // Collect NPC data: (image_path, name) pairs
+    // Collect NPC data: (profile_image, name) pairs
     // Use npcs_in_area from state if available, otherwise fallback to room.npcs
     let npc_data: Vec<(String, String)> = if !state.npcs_in_area.is_empty() {
         state
@@ -158,12 +158,12 @@ fn render_visual_sidebar_unlocked(state: &GameState) -> Result<String> {
             .filter_map(|npc| {
                 // Defensive: only include NPCs that exist in state.npcs
                 let npc = state.npcs.get(&npc.id)?;
-                // Use headshot_image with fallback to image_path
+                // Use headshot_image with fallback to profile_image
                 let image_path = npc
                     .sheet
                     .headshot_image
                     .as_ref()
-                    .or(npc.sheet.image_path.as_ref())?
+                    .or(npc.sheet.profile_image.as_ref())?
                     .clone();
                 let name = npc.sheet.name.clone();
                 Some((image_path, name))
@@ -175,12 +175,12 @@ fn render_visual_sidebar_unlocked(state: &GameState) -> Result<String> {
             .iter()
             .filter_map(|npc_id| {
                 let npc = state.npcs.get(npc_id)?;
-                // Use headshot_image with fallback to image_path
+                // Use headshot_image with fallback to profile_image
                 let image_path = npc
                     .sheet
                     .headshot_image
                     .as_ref()
-                    .or(npc.sheet.image_path.as_ref())?
+                    .or(npc.sheet.profile_image.as_ref())?
                     .clone();
                 let name = npc.sheet.name.clone();
                 Some((image_path, name))
@@ -273,12 +273,12 @@ fn render_character_headshots(state: &AppState) -> Result<String> {
         .npcs
         .iter()
         .filter_map(|(_npc_id, npc)| {
-            // Use headshot_image with fallback to image_path
+            // Use headshot_image with fallback to profile_image
             let image = npc
                 .sheet
                 .headshot_image
                 .as_ref()
-                .or(npc.sheet.image_path.as_ref())?;
+                .or(npc.sheet.profile_image.as_ref())?;
             let name = npc.sheet.name.clone();
             Some((image.clone(), name))
         })

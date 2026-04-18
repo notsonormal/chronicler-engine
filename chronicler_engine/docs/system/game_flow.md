@@ -141,30 +141,6 @@ And the status shows "Ready"
 
 ## Error Handling
 
-### Scenario 3: Move to New Location
-```gherkin
-Given the game is loaded at starting room
-When the user enters "go north" and submits
-Then the status shows "Thinking..."
-And after LLM generates response:
-  And the header shows the new room name
-  And the story-log shows the LLM narration for arrival
-  And the visual-sidebar shows the new room's image and NPCs
-And the status shows "Ready"
-```
-
-### Scenario 4: Free Action (LLM Narration)
-```gherkin
-Given the game is loaded
-When the user enters "examine the mysterious orb" and submits
-Then the status shows "Thinking..."
-And after LLM generates response:
-  And the story-log shows the LLM's description of the orb
-And the status shows "Ready"
-```
-
-## Error Handling
-
 ### LLM Timeout
 - If LLM takes >30 seconds, show error in story-log
 - Status returns to "Ready"
