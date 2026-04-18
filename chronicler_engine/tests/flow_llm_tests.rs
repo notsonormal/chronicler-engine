@@ -1,7 +1,6 @@
 //! Game Flow Tests - Real LLM Version
 //!
 //! End-to-end tests verifying the game loop with real LLM API calls.
-//! These tests require OPENROUTER_API_KEY to be set and will be skipped if not available.
 //!
 //! Tests here focus on LLM-specific functionality:
 //! - LLM generates actual narrative responses
@@ -55,6 +54,8 @@ mod tests {
             eprintln!("Skipping: OPENROUTER_API_KEY not set");
             return;
         }
+
+        eprintln!("Running test: OPENROUTER_API_KEY is set");
 
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
         let _server = TestServer::new(port, TEST_WORLD);
@@ -153,6 +154,8 @@ mod tests {
             eprintln!("Skipping: OPENROUTER_API_KEY not set");
             return;
         }
+
+        eprintln!("Running test: OPENROUTER_API_KEY is set");
 
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
         let _server = TestServer::new(port, TEST_WORLD);
@@ -270,6 +273,8 @@ mod tests {
             eprintln!("Skipping: OPENROUTER_API_KEY not set");
             return;
         }
+
+        eprintln!("Running test: OPENROUTER_API_KEY is set");
 
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
         let _server = TestServer::new(port, TEST_WORLD);
