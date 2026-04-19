@@ -6,8 +6,8 @@ Transform the engine from a strict command parser into a hybrid free-text narrat
 ## System Commands vs Free Actions
 The engine recognizes two categories of player input:
 
-1. **System Commands**: Hard-coded actions that directly mutate engine state. These are not sent to the LLM. Examples: `look`, `walk to <target>`, `inventory`, `quit`.
-2. **Free Actions**: Everything else. The player's raw text is forwarded to the Game Master LLM for narrative interpretation. The engine must never respond with an error message for non-empty free-text input.
+1. **System Commands**: Hard-coded actions that directly mutate engine state. These are not sent to the LLM. Examples: `look`, `inventory`, `quit`.
+2. **Free Actions**: Everything else including navigation attempts. All player input goes to the LLM, which generates narration. The quantifier then detects if movement occurred. The engine must never respond with an error message for non-empty free-text input.
 
 ## Game Master Role
 The LLM operates as a Game Master / Narrator for the text adventure. Its context window is constructed using the **PromptBuilder** (see `llm_processing.md`) from the current game state:
@@ -22,7 +22,7 @@ The LLM operates as a Game Master / Narrator for the text adventure. Its context
 The Game Master responds to three primary events:
 1. **Free Actions**: Responding to non-command text input.
 2. **Dialogue**: Responding to the legacy `talk` command.
-3. **Arrivals**: Responding to the player entering a new room (`Action::WalkTo`). 
+3. **Arrivals**: Responding to the player entering a new room via quantifier-detected movement. 
 
 ### Arrival Logic Flow
 1. **Movement Intent**: The player issues a navigation command.

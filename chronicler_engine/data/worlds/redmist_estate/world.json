@@ -3,29 +3,24 @@
     "name": "Redmist Estate",
     "description": "The world setting derived from character lorebooks.",
     "global_rules": [
-        "Bernard Redmist was the patriarch of the Redmist Family, he was well respected for his kindness and charitable attitude. He recently passed away, leaving his wealth to an unknown child. {{char}} liked how easy he was to protect due to him rarely leaving the estate, though considered him to be quite perverted.",
-        "Gabriella Redmist was the wife of Bernard before his death, she is infamous around the estate for being a rude and arrogant woman. {{char}} despises Gabriella and has no doubt she'll try to weazel her way into the inheritance.",
-        "Gabriella Redmist was the wife of Bernard before his death, she is infamous around the estate for being a rude and arrogant woman. {{char}} hates Gabriella for how she looks down on everyone.",
-        "Gabriella Redmist was the wife of Bernard before his death, she is infamous around the estate for being a rude and arrogant woman.",
-        "Bernard Redmist was the patriarch of the Redmist Family, he was well respected for his kindness and charitable attitude. {{char}} never met him, but always heard rumours of how messy he could be.",
-        "Bernard Redmist is {{char}}'s late husband. He was an elderly man with plenty of wealth who {{char}} naively believed was an easy mark. He was quite a strange man who liked to have {{char}} dress up for intimate encounters. Unfortunately, he seemed to have gotten the last laugh and left his wealth out of {{char}}'s hands.",
-        "The Redmist Family has a long history dating back to the colonisation of the Americas. The Redmists are particularly known being surgeons and doctors. They are one of the more influential families in the city.",
-        "The Redmist Estate is an expansive ground made up of a large mansion, miscellaneous buildings, and a large garden. It is one of the largest colonial estates still standing, second only to the Small Family Estate nearby.",
-        "Bernard Redmist was the patriarch of the Redmist Family, he was well respected for his kindness and charitable attitude. {{char}} considers him to be her mentor. He recently passed away, leaving his wealth to an unknown child.",
-        "Bernard Redmist was the patriarch of the Redmist Family, he was well respected for his kindness and charitable attitude. He recently passed away, leaving his wealth to an unknown child.",
-        "Gabriella Redmist was the wife of Bernard before his death, she is infamous around the estate for being a rude and arrogant woman. {{char}} has had firsthand experience of being mistreated by Gabriella.",
-        "Carla Jess was the bodyguard of Bernard, she's known for being a tough and imposing presence wherever she goes."
+        "Bernard Redmist was the patriarch of the Redmist Family, well respected for his kindness and charitable attitude. He recently passed away, leaving his wealth to an unknown child. {{char}} considered him her mentor.",
+        "Bernard Redmist is {{char}}'s late husband - an elderly, wealthy man she naively believed was an easy mark. He was peculiar, enjoyed having {{char}} dress up for intimate encounters, and ultimately left her out of his will.",
+        "Gabriella Redmist was Bernard's wife before his death, infamous around the estate for being rude and arrogant. {{char}} despises her and has no doubt she'll try to worm her way into the inheritance.",
+        "The Redmist Family has a long history dating back to the colonisation of the Americas, particularly known as surgeons and doctors. They are one of the more influential families in the city.",
+        "The Redmist Estate is an expansive ground with a large mansion, miscellaneous buildings, and a garden - one of the largest colonial estates still standing, second only to the Small Family Estate nearby.",
+        "Carla Jess was Bernard's bodyguard, known for being a tough and imposing presence wherever she goes."
     ],
     "starting_room_id": "front_gates",
     "map_file": "map.json",
     "player_file": "player.json",
+    "default_room_image": "data/images/rooms/default.png",
     "scenarios": [
         {
             "id": "bodyguard_intro",
             "name": "Bodyguard Introduction",
             "description": "Carla introduces herself as your bodyguard at the front gates",
             "starting_room_id": "front_gates",
-            "text": "Standing tall and commanding, Carla confidently approaches {{user}}. With a piercing gaze, she extends her arm, offering a firm handshake. \"I'm Carla. I'll be your bodyguard both inside the Redmist Estate and wherever else you might go. You'll notice me around frequently, so don't try to shake me off.\" Her voice carries authority, leaving little room for argument. She steps back slightly, crossing her arms over her chest as she observes {{user}} closely, scrutinizing their every movement and preparing for any possible threat or sign of danger. \"I need you to understand that your safety is my top priority. My job is to protect you, and it might seem frustrating or annoying, but everything I do is to keep you safe. With that in mind, let's work together to make sure nothing compromises that.\" She adds with a stern yet reassuring smile, maintaining eye contact as she watches {{user}} carefully. \"Firstly, I'll ask to borrow your phone. It won't take long.\""
+            "text": "Standing tall and commanding, Carla approaches {{user}} with a piercing gaze. She extends her arm for a firm handshake. \"I'm Carla. I'll be your bodyguard both inside the Redmist Estate and wherever else you go. You'll notice me around frequently, so don't try to shake me off.\" She steps back, crossing her arms. \"I need you to understand that your safety is my top priority. Everything I do is to keep you safe. Let's work together to make sure nothing compromises that. Firstly, I'll ask to borrow your phone. It won't take long.\""
         }
     ]
 }

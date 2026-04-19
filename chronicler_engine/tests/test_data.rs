@@ -1,6 +1,3 @@
-//! Test data for UI tests
-//! Provides reusable world, player, map, and character data
-
 use chronicler_engine::model::character::{CharacterSheet, NpcCard, PlayerCard};
 use chronicler_engine::model::map::{Direction, MapDef, Overworld, Region, Room};
 use chronicler_engine::model::state::GameState;
@@ -13,6 +10,7 @@ pub fn create_test_world() -> WorldCard {
         name: "Test Realm".to_string(),
         description: "A small testing kingdom".to_string(),
         global_rules: vec![],
+        default_room_image: None,
     }
 }
 
@@ -49,6 +47,7 @@ pub fn create_test_map() -> MapDef {
         items: vec![],
         npcs: vec!["test_npc".to_string()],
         image_path: None,
+        navigation_description: None,
     };
 
     let room2 = Room {
@@ -59,6 +58,7 @@ pub fn create_test_map() -> MapDef {
         items: vec![],
         npcs: vec![],
         image_path: None,
+        navigation_description: None,
     };
 
     let room3 = Room {
@@ -69,6 +69,7 @@ pub fn create_test_map() -> MapDef {
         items: vec![],
         npcs: vec![],
         image_path: None,
+        navigation_description: None,
     };
 
     let region = Region {
@@ -117,7 +118,6 @@ pub fn create_test_game_state() -> Arc<std::sync::Mutex<GameState>> {
     )))
 }
 
-/// Test map with known exits for navigation testing
 pub fn create_navigation_test_map() -> MapDef {
     let mut entrance_exits = HashMap::new();
     entrance_exits.insert(Direction::North, "hall".to_string());
@@ -138,6 +138,7 @@ pub fn create_navigation_test_map() -> MapDef {
         items: vec![],
         npcs: vec![],
         image_path: None,
+        navigation_description: None,
     };
 
     let hall = Room {
@@ -148,6 +149,7 @@ pub fn create_navigation_test_map() -> MapDef {
         items: vec![],
         npcs: vec![],
         image_path: None,
+        navigation_description: None,
     };
 
     let kitchen = Room {
@@ -158,6 +160,7 @@ pub fn create_navigation_test_map() -> MapDef {
         items: vec![],
         npcs: vec!["chef".to_string()],
         image_path: None,
+        navigation_description: None,
     };
 
     let library = Room {
@@ -168,6 +171,7 @@ pub fn create_navigation_test_map() -> MapDef {
         items: vec![],
         npcs: vec![],
         image_path: None,
+        navigation_description: None,
     };
 
     let region = Region {
@@ -195,6 +199,7 @@ pub fn create_simple_test_map() -> MapDef {
         items: vec![],
         npcs: vec![],
         image_path: None,
+        navigation_description: None,
     };
 
     let region = Region {

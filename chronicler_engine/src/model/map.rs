@@ -32,6 +32,10 @@ pub struct Room {
     pub npcs: Vec<String>, // list of NPC IDs
     #[serde(default)]
     pub image_path: Option<String>,
+    /// Free text description of navigation options for the LLM.
+    /// The quantifier reads this to understand where the player can go.
+    #[serde(default)]
+    pub navigation_description: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]

@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::model::character::{NpcCard, PlayerCard};
-use crate::model::map::MapDef;
+use crate::model::map::{MapDef, Room};
 use crate::model::world::WorldCard;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -60,7 +60,6 @@ pub struct GeneratingGuard {
 }
 
 impl GeneratingGuard {
-    /// Create a new guard, setting is_generating=true immediately.
     pub fn new(state: Arc<std::sync::Mutex<GameState>>) -> Self {
         if let Ok(mut guard) = state.lock() {
             guard.generation_state.is_generating = true;
@@ -87,6 +86,7 @@ pub struct GameState {
     pub narration_history: Vec<LogEntry>,
     pub npcs_in_area: Vec<NpcCard>,
     pub generation_state: GenerationState,
+    pub dynamic_rooms: HashMap<String, Room>,
 }
 
 impl GameState {
@@ -110,6 +110,7 @@ impl GameState {
             narration_history: Vec::new(),
             generation_state: GenerationState::default(),
             npcs_in_area: Vec::new(),
+            dynamic_rooms: HashMap::new(),
         }
     }
 
@@ -139,6 +140,7 @@ mod tests {
             name: "W".into(),
             description: "D".into(),
             global_rules: vec![],
+            ..Default::default()
         };
         let map = MapDef {
             overworld: crate::model::map::Overworld {
@@ -237,6 +239,7 @@ mod tests {
                 name: "W".into(),
                 description: "D".into(),
                 global_rules: vec![],
+                ..Default::default()
             }),
             Arc::new(MapDef {
                 overworld: crate::model::map::Overworld {

@@ -32,9 +32,9 @@ mod tests {
         let (_playwright, browser) = launch_chrome().await;
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", port), None)
+        goto_with_connection_check(&page, port)
             .await
-            .unwrap();
+            .expect("Failed to connect to server");
 
         // Wait for story log entries
         let _ = wait_for_element_children(&page, "#story-log .log-entry", 1).await;
@@ -60,9 +60,9 @@ mod tests {
         let (_playwright, browser) = launch_chrome().await;
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", port), None)
+        goto_with_connection_check(&page, port)
             .await
-            .unwrap();
+            .expect("Failed to connect to server");
 
         // Poll until story log has entries
         let entries = wait_for_element_children(&page, "#story-log .log-entry", 1).await;
@@ -84,9 +84,9 @@ mod tests {
         let (_playwright, browser) = launch_chrome().await;
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", port), None)
+        goto_with_connection_check(&page, port)
             .await
-            .unwrap();
+            .expect("Failed to connect to server");
 
         // Wait for status to be stable (ready, not thinking)
         wait_for_status_ready(&page).await;
@@ -108,9 +108,9 @@ mod tests {
         let (_playwright, browser) = launch_chrome().await;
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", port), None)
+        goto_with_connection_check(&page, port)
             .await
-            .unwrap();
+            .expect("Failed to connect to server");
 
         // Poll until element is ready (not loading)
         let _ = wait_for_non_loading_value(&page, ".location").await;

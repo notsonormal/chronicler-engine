@@ -18,10 +18,6 @@ use chronicler_engine::model::state::GameState;
 use chronicler_engine::model::world::WorldCard;
 use chronicler_engine::server::templates::HeaderTemplate;
 
-// =============================================================================
-// Helper Functions
-// =============================================================================
-
 fn create_test_state() -> Arc<Mutex<GameState>> {
     use chronicler_engine::model::map::Room;
 
@@ -29,6 +25,7 @@ fn create_test_state() -> Arc<Mutex<GameState>> {
         name: "Test World".into(),
         description: "A test world".into(),
         global_rules: vec![],
+        default_room_image: None,
     });
 
     let test_room = Room {
@@ -39,6 +36,7 @@ fn create_test_state() -> Arc<Mutex<GameState>> {
         exits: std::collections::HashMap::new(),
         items: vec![],
         npcs: vec![],
+        navigation_description: None,
     };
 
     let map = Arc::new(MapDef {
@@ -84,10 +82,7 @@ fn create_test_state() -> Arc<Mutex<GameState>> {
     Arc::new(Mutex::new(state))
 }
 
-// =============================================================================
 // Template Tests (from template_tests.rs)
-// =============================================================================
-
 #[test]
 fn test_header_template_renders_room_name() {
     let template = HeaderTemplate {
@@ -159,10 +154,7 @@ fn test_header_template_exact_output() {
     assert!(rendered.contains("Chronicler Engine"));
 }
 
-// =============================================================================
 // HTTP Endpoint Tests (from fragment_tests.rs)
-// =============================================================================
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -361,10 +353,6 @@ mod tests {
     }
 }
 
-// =============================================================================
-// JSON Loading Tests
-// =============================================================================
-
 /// Integration test that loads actual world data and verifies room image_path
 /// is correctly deserialized from JSON.
 #[test]
@@ -386,10 +374,6 @@ fn test_load_world_includes_room_image_path() {
         "Room image_path should be loaded from JSON"
     );
 }
-
-// =============================================================================
-// Real World Integration Tests
-// =============================================================================
 
 /// Integration test that loads the real world via JSON files and tests
 /// the full HTTP endpoint path for visual-sidebar fragment.
@@ -500,10 +484,6 @@ fn test_redmist_estate_room_image_path() {
         "Redmist Estate room image_path should be loaded"
     );
 }
-
-// =============================================================================
-// NPC Sidebar Tests - npcs_in_area feature
-// =============================================================================
 
 /// Test that GameState initializes with empty npcs_in_area
 #[test]

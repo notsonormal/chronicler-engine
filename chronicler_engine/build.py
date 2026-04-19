@@ -15,7 +15,7 @@ def kill_port(port: int):
     try:
         # Find process using the port
         result = subprocess.run(
-            f"netstat -ano | findstr :{port}",
+            f"netstat -ano | Select-String ':{port}'",
             shell=True,
             capture_output=True,
             text=True,

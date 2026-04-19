@@ -4,31 +4,31 @@
 //! It's isolated to allow easy exclusion from coverage (requires external API).
 //!
 //! Two model configurations are supported:
-//! - `LLM_MODEL`: Primary model for narrative generation (default: `z-ai/glm-4.5-air:free`)
-//! - `QUANTIFIER_MODEL`: Secondary model for scene quantification (default: `z-ai/glm-4.5-air:free`)
+//! - `LLM_MODEL`: Primary model for narrative generation (default: `openai/gpt-4o-mini`)
+//! - `QUANTIFIER_MODEL`: Secondary model for scene quantification (default: `openai/gpt-4o-mini`)
 
 use serde_json::json;
 
 /// Get the configured LLM model for narrative generation.
 ///
-/// Reads the `LLM_MODEL` environment variable, defaulting to `z-ai/glm-4.5-air:free`.
+/// Reads the `LLM_MODEL` environment variable, defaulting to `openai/gpt-4o-mini`.
 pub fn get_llm_model() -> String {
-    std::env::var("LLM_MODEL").unwrap_or_else(|_| "z-ai/glm-4.5-air:free".to_string())
+    std::env::var("LLM_MODEL").unwrap_or_else(|_| "openai/gpt-4o-mini".to_string())
 }
 
 /// Get the configured LLM model for scene quantification.
 ///
-/// Reads the `QUANTIFIER_MODEL` environment variable, defaulting to `z-ai/glm-4.5-air:free`.
+/// Reads the `QUANTIFIER_MODEL` environment variable, defaulting to `openai/gpt-4o-mini`.
 /// The quantifier uses a separate model configuration so it can run on a
 /// different (typically cheaper/faster) model than the main narrative generator.
 pub fn get_quantifier_model() -> String {
-    std::env::var("QUANTIFIER_MODEL").unwrap_or_else(|_| "z-ai/glm-4.5-air:free".to_string())
+    std::env::var("QUANTIFIER_MODEL").unwrap_or_else(|_| "openai/gpt-4o-mini".to_string())
 }
 
 /// Call OpenRouter API with a specific model and return the response content.
 ///
 /// This is the core implementation that all OpenRouter calls route through.
-/// The `model` parameter specifies which LLM to use (e.g., `z-ai/glm-4.5-air:free`).
+/// The `model` parameter specifies which LLM to use (e.g., `openai/gpt-4o-mini`).
 pub fn call_openrouter_with_model(
     api_key: &str,
     system_prompt: &str,
@@ -58,6 +58,8 @@ pub fn call_openrouter_with_model(
         ],
         "stream": false
     });
+
+    log::debug!("[LLM] Request payload: {:#}", payload);
 
     let res = client
         .post("https://openrouter.ai/api/v1/chat/completions")
@@ -89,14 +91,10 @@ pub fn call_openrouter_with_model(
             })?;
 
             log::debug!("[LLM] Raw response length: {} bytes", raw_response.len());
-            log::debug!(
-                "[LLM] Raw response (first 500 chars): {}",
-                &raw_response[..raw_response.len().min(500)]
-            );
 
-            match serde_json::from_str::<serde_json::Value>(&raw_response) {
+            match serde_json::from_str::<serde_json::Value>(&raw_response.trim_start()) {
                 Ok(json_response) => {
-                    log::debug!("[LLM] Raw JSON response: {json_response:?}");
+                    log::debug!("[LLM] Response JSON: {:#}", json_response);
 
                     // Check for API-level errors in response
                     if let Some(error) = json_response.get("error") {
@@ -174,7 +172,10 @@ pub fn call_openrouter_with_model(
                 }
                 Err(e) => {
                     log::error!("[LLM] JSON parse error: {e}");
-                    log::error!("[LLM] Raw response that failed to parse: {raw_response}");
+                    log::error!(
+                        "[LLM] Raw response that failed to parse: {}",
+                        raw_response.trim_start()
+                    );
                     Err(format!("Failed to parse LLM response: {e}"))
                 }
             }
@@ -224,7 +225,7 @@ mod tests {
         // Note: This test may fail if LLM_MODEL is set in the environment
         let default_model = std::env::var("LLM_MODEL");
         if default_model.is_err() {
-            assert_eq!(get_llm_model(), "z-ai/glm-4.5-air:free");
+            assert_eq!(get_llm_model(), "openai/gpt-4o-mini");
         }
     }
 
@@ -234,7 +235,7 @@ mod tests {
         // Note: This test may fail if QUANTIFIER_MODEL is set in the environment
         let default_model = std::env::var("QUANTIFIER_MODEL");
         if default_model.is_err() {
-            assert_eq!(get_quantifier_model(), "z-ai/glm-4.5-air:free");
+            assert_eq!(get_quantifier_model(), "openai/gpt-4o-mini");
         }
     }
 }

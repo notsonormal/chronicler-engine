@@ -118,7 +118,6 @@ pub struct PromptBuilder<'a> {
 }
 
 impl<'a> PromptBuilder<'a> {
-    /// Create a PromptBuilder from a PromptContext
     pub fn from_context(context: &PromptContext<'a>) -> Self {
         Self {
             world: context.world,
@@ -131,8 +130,6 @@ impl<'a> PromptBuilder<'a> {
         }
     }
 
-    /// Build a combined prompt for simple LLM calls.
-    /// This returns a single prompt string with all layers.
     pub fn build(&self) -> std::result::Result<String, EngineError> {
         let mut prompt = String::new();
 
@@ -179,10 +176,6 @@ impl<'a> PromptBuilder<'a> {
         Ok(prompt)
     }
 
-    /// Build system and user prompts separately for OpenRouter-style API calls.
-    /// Returns (system_prompt, user_prompt) tuple.
-    /// The system prompt contains all context layers except user input.
-    /// The user prompt contains the user message layer.
     pub fn build_split(&self) -> std::result::Result<(String, String), EngineError> {
         let mut system = String::new();
 
@@ -224,8 +217,6 @@ impl<'a> PromptBuilder<'a> {
         Ok((system, user))
     }
 
-    /// Build only the system prompt (all layers except user input).
-    /// Useful when you need to set system context separately.
     pub fn build_system_only(&self) -> String {
         let mut system = String::new();
 
@@ -259,8 +250,6 @@ impl<'a> PromptBuilder<'a> {
         system
     }
 
-    /// Build only the user prompt (user message layer).
-    /// Useful for chat-style APIs that separate system and user messages.
     pub fn build_user_only(&self) -> String {
         self.render_user_layer()
     }
@@ -268,9 +257,24 @@ impl<'a> PromptBuilder<'a> {
     /// Layer 0: System prompt - global game rules and AI role
     fn render_system_layer(&self) -> String {
         let mut output = String::from("<SystemPrompt>\n");
-        output.push_str("You are a text adventure game narrator. ");
-        output.push_str("Describe what happens based on player actions. ");
-        output.push_str("Be descriptive, immersive, and reactive to player choices.\n");
+        output.push_str("You are an interactive fiction author. Write in the style of literary fiction prose.\n");
+        output.push_str("Your role is to narrate the consequences of player actions as if writing a novel chapter.\n");
+        output.push_str("Each response should be a self-contained narrative passage that:\n");
+        output.push_str("- Describes what happens, what is seen, heard, and felt\n");
+        output.push_str("- Advances the story through action and description\n");
+        output.push_str("- Maintains atmosphere and tension\n");
+        output.push_str("\nWriting style:\n");
+        output.push_str("- Third-person limited perspective, focused on the player character\n");
+        output.push_str("- Past tense narrative prose\n");
+        output
+            .push_str("- Literary fiction style — show don't tell, sensory details, atmospheric\n");
+        output.push_str("\nNever:\n");
+        output.push_str("- Ask the player what they want to do\n");
+        output.push_str("- Address the player directly (\"you should\", \"what will you do\")\n");
+        output.push_str("- End with questions or prompts for action\n");
+        output.push_str("- Break the fourth wall or provide meta-commentary\n");
+        output.push_str("- Suggest possible actions or choices\n");
+        output.push_str("\nThe player's next action will be provided separately. Your only job is to narrate what happens now.\n");
         output.push_str("\n--- Game Rules ---\n");
         for rule in &self.world.global_rules {
             output.push_str("- ");
@@ -442,12 +446,18 @@ impl<'a> PromptBuilder<'a> {
     /// Layer 7: PHI - auxiliary instructions
     fn render_phi_layer(&self) -> String {
         let mut output = String::from("<AuxiliaryInstructions>\n");
-        output.push_str("Provide a narrative response that:\n");
-        output.push_str("- Describes the outcome of the player's action\n");
-        output.push_str("- Is immersive and atmospheric\n");
-        output.push_str("- Responds to any NPC interactions\n");
-        output.push_str("- Maintains continuity with the history above\n");
-        output.push_str("\nFormat your response as pure narrative text.\n");
+        output.push_str("Write a narrative passage of 2-4 paragraphs.\n");
+        output.push_str("\nStructure your response as:\n");
+        output.push_str("1. Immediate consequence of the player's action\n");
+        output.push_str("2. Environmental details and atmosphere\n");
+        output.push_str("3. NPC reactions if present (dialogue and action)\n");
+        output.push_str("4. A closing image or moment that leaves the scene open\n");
+        output.push_str(
+            "\nDo NOT conclude with any form of player direction, question, or prompt.\n",
+        );
+        output.push_str(
+            "End on a descriptive note — an image, a sound, a feeling, or an unresolved moment.\n",
+        );
 
         output.push_str("</AuxiliaryInstructions>\n");
         output
@@ -608,6 +618,7 @@ mod tests {
                 "Rule 1: Be descriptive".to_string(),
                 "Rule 2: Stay in character".to_string(),
             ],
+            ..Default::default()
         }
     }
 
@@ -620,6 +631,7 @@ mod tests {
             items: vec![],
             npcs: vec![],
             image_path: None,
+            navigation_description: None,
         }
     }
 
@@ -978,6 +990,6 @@ mod tests {
         let result = builder.build().expect("build should succeed");
 
         assert!(result.contains("<AuxiliaryInstructions>"));
-        assert!(result.contains("narrative response"));
+        assert!(result.contains("narrative passage"));
     }
 }

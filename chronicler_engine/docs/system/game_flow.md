@@ -117,13 +117,14 @@ And after LLM generates response, the story-log shows the LLM description
 And the status shows "Ready"
 ```
 
-### Scenario 3: Move to New Location
+### Scenario 3: Quantifier-Driven Movement
 ```gherkin
 Given the game is loaded at starting room
-When the user enters "go north" and submits
+When the user enters "I walk to the village square" and submits
 Then the status shows "Thinking..."
-And the story-log shows a minimal header with the new room name
 And after LLM generates response:
+  And the quantifier detects movement intent (entering + destination)
+  And the story-log shows a minimal header with the new room name
   And the story-log shows the LLM narration for arrival
   And the visual-sidebar shows the new room's image and NPCs
 And the status shows "Ready"

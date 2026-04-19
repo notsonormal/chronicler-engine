@@ -43,7 +43,35 @@ A unified structure for both `PlayerCard` and `NpcCard` narrative fields:
 ### Image Field Usage
 - `image_path`: Legacy field, full body image
 - `profile_image`: Preferred for character profile display
-- `headshot_image**: Used for visual sidebar NPC portraits (2-column grid)
+- `headshot_image`: Used for visual sidebar NPC portraits (2-column grid)
   - Falls back to `image_path` if not set
 
 This schema allows the LLM Game Master to treat player and NPCs with equal granular detail.
+
+## Room Schema (Current)
+Rooms in map.json have the following structure:
+
+```json
+{
+  "id": "string",
+  "name": "string",
+  "description": "string",
+  "exits": { "north": "room_id", "east": "room_id" },  // Legacy cardinal directions
+  "semantic_exits": [  // NEW: Semantic triggers for natural language
+    {
+      "trigger": "front gate",
+      "destination": "entrance_hall",
+      "keywords": ["enter", "go through", "pass through"]
+    }
+  ],
+  "items": ["item_id_1"],
+  "npcs": ["npc_id_1"],
+  "image_path": "string"
+}
+```
+
+### Semantic Exits
+The `semantic_exits` array enables quantifier-driven movement:
+- `trigger`: The text that activates this exit (e.g., "front gate")
+- `destination`: The room ID to navigate to
+- `keywords`: Additional matching patterns for flexible input (e.g., "go through", "enter")

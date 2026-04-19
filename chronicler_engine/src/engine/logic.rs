@@ -1,6 +1,7 @@
 use crate::error::{EngineError, Result};
 use crate::model::map::Room;
 use crate::model::state::GameState;
+use std::collections::HashMap;
 
 pub fn get_room_by_id<'a>(state: &'a GameState, target_id: &str) -> Option<&'a Room> {
     for region in &state.map.overworld.regions {
@@ -14,8 +15,15 @@ pub fn get_room_by_id<'a>(state: &'a GameState, target_id: &str) -> Option<&'a R
 }
 
 pub fn get_current_room(state: &GameState) -> Result<&Room> {
-    get_room_by_id(state, &state.current_room_id)
-        .ok_or_else(|| EngineError::RoomNotFound(state.current_room_id.clone()))
+    // First check static map
+    if let Some(room) = get_room_by_id(state, &state.current_room_id) {
+        return Ok(room);
+    }
+    // Then check dynamic rooms
+    if let Some(room) = state.dynamic_rooms.get(&state.current_room_id) {
+        return Ok(room);
+    }
+    Err(EngineError::RoomNotFound(state.current_room_id.clone()))
 }
 
 pub fn get_available_exits(state: &GameState) -> Vec<String> {
@@ -56,6 +64,46 @@ pub fn attempt_walk(state: &mut GameState, target: &str) -> Result<String> {
     }
 }
 
+/// Attempt to walk using quantifier-driven movement.
+pub fn attempt_semantic_walk(state: &mut GameState, room_id: &str) -> Result<String> {
+    // Validate room exists (quantifier already resolved the room ID)
+    let room_name = match get_room_by_id(state, room_id) {
+        Some(room) => room.name.clone(),
+        None => {
+            return Err(EngineError::Navigation(
+                "You don't see a way to go there.".to_string(),
+            ));
+        }
+    };
+
+    // Update location
+    state.current_room_id = room_id.to_string();
+    Ok(format!("You go to: {room_name}."))
+}
+
+/// Create a dynamic (pseudo) room for invalid destinations.
+pub fn create_dynamic_room(name: &str, description: &str) -> Room {
+    use std::time::SystemTime;
+    let timestamp = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+
+    // Generate a unique ID - caller will need to track these
+    let room_id = format!("dynamic_{timestamp}");
+
+    Room {
+        id: room_id,
+        name: name.to_string(),
+        description: description.to_string(),
+        exits: HashMap::new(), // No exits - dead end
+        items: vec![],
+        npcs: vec![],
+        image_path: None,
+        navigation_description: None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -85,6 +133,7 @@ mod tests {
             items: vec![],
             npcs: vec![],
             image_path: None,
+            navigation_description: None,
         };
 
         let room2 = Room {
@@ -95,6 +144,7 @@ mod tests {
             items: vec![],
             npcs: vec![],
             image_path: None,
+            navigation_description: None,
         };
 
         let room3 = Room {
@@ -105,6 +155,7 @@ mod tests {
             items: vec![],
             npcs: vec![],
             image_path: None,
+            navigation_description: None,
         };
 
         let region = Region {
@@ -124,6 +175,7 @@ mod tests {
             name: "W".into(),
             description: "D".into(),
             global_rules: vec![],
+            ..Default::default()
         };
         let player = PlayerCard {
             sheet: CharacterSheet {
@@ -221,6 +273,7 @@ mod tests {
             name: "W".into(),
             description: "D".into(),
             global_rules: vec![],
+            ..Default::default()
         });
 
         let room_no_exits = Room {
@@ -231,6 +284,7 @@ mod tests {
             items: vec![],
             npcs: vec![],
             image_path: None,
+            navigation_description: None,
         };
 
         let map = MapDef {
@@ -283,6 +337,7 @@ mod tests {
             name: "W".into(),
             description: "D".into(),
             global_rules: vec![],
+            ..Default::default()
         });
 
         let map = MapDef {
@@ -300,6 +355,7 @@ mod tests {
                         items: vec![],
                         npcs: vec![],
                         image_path: None,
+                        navigation_description: None,
                     }],
                 }],
             },

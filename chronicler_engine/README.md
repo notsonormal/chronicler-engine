@@ -51,7 +51,7 @@ The engine uses a trait-based `LlmBackend` design for flexible LLM integration:
 The engine requires a `.env` file or environment variables to be set for AI functionality:
 
 - `OPENROUTER_API_KEY`: **(Required for real LLM)** Your API key from OpenRouter.
-- `LLM_MODEL`: The OpenRouter model ID to use. Defaults to `z-ai/glm-4.5-air:free` if unset.
+- `LLM_MODEL`: The OpenRouter model ID to use. Defaults to `openai/gpt-4o-mini` if unset.
 - `LLM_BACKEND`: Set to `mock` to use mock LLM backend (no API key needed for testing).
 
 ## Quick Start

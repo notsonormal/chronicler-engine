@@ -3,11 +3,13 @@ use serde::{Deserialize, Serialize};
 use crate::model::scenario::StartingScenario;
 
 /// Represents the overarching rules and scenario for the game world.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct WorldCard {
     pub name: String,
     pub description: String,
     pub global_rules: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_room_image: Option<String>,
 }
 
 /// Extended world manifest with loading metadata.
@@ -27,6 +29,8 @@ pub struct WorldManifest {
     pub scenarios: Vec<StartingScenario>,
     #[serde(default)]
     pub default_scenario_id: Option<String>,
+    #[serde(default)]
+    pub default_room_image: Option<String>,
 }
 
 impl WorldManifest {
@@ -54,6 +58,7 @@ impl From<WorldManifest> for WorldCard {
             name: manifest.name,
             description: manifest.description,
             global_rules: manifest.global_rules,
+            default_room_image: manifest.default_room_image,
         }
     }
 }
@@ -121,6 +126,7 @@ mod tests {
             player_file: "player.json".to_string(),
             scenarios: vec![],
             default_scenario_id: None,
+            default_room_image: None,
         };
 
         let card: WorldCard = manifest.into();

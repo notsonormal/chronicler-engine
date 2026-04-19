@@ -18,9 +18,7 @@ mod tests {
     const TEST_WORLD: &str = "test";
     const CONFIG_PATH: &str = "tests/test_config.json";
 
-    // ========================================================================
-    // UI Structure Tests (from spec_tests.rs, ui_tests.rs)
-    // ========================================================================
+    // UI Structure Tests
 
     #[tokio::test]
     async fn test_page_loads() {
@@ -31,9 +29,9 @@ mod tests {
         let browser = playwright.chromium().launch().await.unwrap();
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", port), None)
+        goto_with_connection_check(&page, port)
             .await
-            .unwrap();
+            .expect("Failed to connect to server");
 
         // Wait for initial content to load
         let _ = wait_for_element_children(&page, "#story-log .log-entry", 1).await;
@@ -71,9 +69,9 @@ mod tests {
         let browser = playwright.chromium().launch().await.unwrap();
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", port), None)
+        goto_with_connection_check(&page, port)
             .await
-            .unwrap();
+            .expect("Failed to connect to server");
 
         let _ = wait_for_element_children(&page, "#story-log .log-entry", 1).await;
 
@@ -102,9 +100,9 @@ mod tests {
         let browser = playwright.chromium().launch().await.unwrap();
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", port), None)
+        goto_with_connection_check(&page, port)
             .await
-            .unwrap();
+            .expect("Failed to connect to server");
 
         let _ = wait_for_element_children(&page, "#story-log .log-entry", 1).await;
 
@@ -120,9 +118,7 @@ mod tests {
         browser.close().await.unwrap();
     }
 
-    // ========================================================================
-    // Action Area Tests (from spec_tests.rs, behavior_tests.rs)
-    // ========================================================================
+    // Action Area Tests
 
     #[tokio::test]
     async fn test_action_area_elements() {
@@ -133,9 +129,9 @@ mod tests {
         let browser = playwright.chromium().launch().await.unwrap();
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", port), None)
+        goto_with_connection_check(&page, port)
             .await
-            .unwrap();
+            .expect("Failed to connect to server");
 
         let _ = wait_for_element_children(&page, "#story-log .log-entry", 1).await;
 
@@ -169,9 +165,9 @@ mod tests {
         let browser = playwright.chromium().launch().await.unwrap();
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", port), None)
+        goto_with_connection_check(&page, port)
             .await
-            .unwrap();
+            .expect("Failed to connect to server");
 
         let _ = wait_for_element_children(&page, "#story-log .log-entry", 1).await;
 
@@ -200,9 +196,9 @@ mod tests {
         let browser = playwright.chromium().launch().await.unwrap();
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", port), None)
+        goto_with_connection_check(&page, port)
             .await
-            .unwrap();
+            .expect("Failed to connect to server");
 
         let _ = wait_for_element_children(&page, "#story-log .log-entry", 1).await;
 
@@ -225,9 +221,7 @@ mod tests {
         browser.close().await.unwrap();
     }
 
-    // ========================================================================
-    // Story Log Tests (from spec_tests.rs, layout_tests.rs)
-    // ========================================================================
+    // Story Log Tests
 
     #[tokio::test]
     async fn test_story_log_populated() {
@@ -238,9 +232,9 @@ mod tests {
         let browser = playwright.chromium().launch().await.unwrap();
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", port), None)
+        goto_with_connection_check(&page, port)
             .await
-            .unwrap();
+            .expect("Failed to connect to server");
 
         let _ = wait_for_element_children(&page, "#story-log .log-entry", 1).await;
 
@@ -268,9 +262,9 @@ mod tests {
         let browser = playwright.chromium().launch().await.unwrap();
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", port), None)
+        goto_with_connection_check(&page, port)
             .await
-            .unwrap();
+            .expect("Failed to connect to server");
 
         let _ = wait_for_element_children(&page, "#story-log .log-entry", 1).await;
 
@@ -293,9 +287,7 @@ mod tests {
         browser.close().await.unwrap();
     }
 
-    // ========================================================================
-    // Layout Tests (from layout_tests.rs) - Critical Ones Only
-    // ========================================================================
+    // Layout Tests
 
     #[tokio::test]
     async fn test_no_horizontal_overflow() {
@@ -306,9 +298,9 @@ mod tests {
         let browser = playwright.chromium().launch().await.unwrap();
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", port), None)
+        goto_with_connection_check(&page, port)
             .await
-            .unwrap();
+            .expect("Failed to connect to server");
 
         let _ = wait_for_element_children(&page, "#story-log .log-entry", 1).await;
 
@@ -338,9 +330,9 @@ mod tests {
         let browser = playwright.chromium().launch().await.unwrap();
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", port), None)
+        goto_with_connection_check(&page, port)
             .await
-            .unwrap();
+            .expect("Failed to connect to server");
 
         let _ = wait_for_element_children(&page, "#story-log .log-entry", 1).await;
 
@@ -378,9 +370,7 @@ mod tests {
         browser.close().await.unwrap();
     }
 
-    // ========================================================================
-    // Visual Sidebar Tests (from spec_tests.rs, ui_tests.rs)
-    // ========================================================================
+    // Visual Sidebar Tests
 
     #[tokio::test]
     async fn test_visual_sidebar_exists() {
@@ -391,9 +381,9 @@ mod tests {
         let browser = playwright.chromium().launch().await.unwrap();
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", port), None)
+        goto_with_connection_check(&page, port)
             .await
-            .unwrap();
+            .expect("Failed to connect to server");
 
         let _ = wait_for_element_children(&page, "#story-log .log-entry", 1).await;
 
@@ -415,9 +405,9 @@ mod tests {
         let browser = playwright.chromium().launch().await.unwrap();
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", port), None)
+        goto_with_connection_check(&page, port)
             .await
-            .unwrap();
+            .expect("Failed to connect to server");
 
         let _ = wait_for_element_children(&page, "#story-log .log-entry", 1).await;
 
@@ -430,9 +420,7 @@ mod tests {
         browser.close().await.unwrap();
     }
 
-    // ========================================================================
-    // Static Shell Test (from spec_tests.rs)
-    // ========================================================================
+    // Static Shell Test
 
     #[tokio::test]
     async fn test_form_stays_static_after_submission() {
@@ -443,9 +431,9 @@ mod tests {
         let browser = playwright.chromium().launch().await.unwrap();
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", port), None)
+        goto_with_connection_check(&page, port)
             .await
-            .unwrap();
+            .expect("Failed to connect to server");
 
         let _ = wait_for_element_children(&page, "#story-log .log-entry", 1).await;
 
@@ -481,9 +469,7 @@ mod tests {
         browser.close().await.unwrap();
     }
 
-    // ========================================================================
     // CSS Tests
-    // ========================================================================
 
     #[tokio::test]
     async fn test_css_file_loads() {
@@ -494,9 +480,9 @@ mod tests {
         let browser = playwright.chromium().launch().await.unwrap();
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", port), None)
+        goto_with_connection_check(&page, port)
             .await
-            .unwrap();
+            .expect("Failed to connect to server");
 
         // Fetch the CSS file via fetch API
         let css_content: String = page
@@ -528,9 +514,9 @@ mod tests {
         let browser = playwright.chromium().launch().await.unwrap();
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", port), None)
+        goto_with_connection_check(&page, port)
             .await
-            .unwrap();
+            .expect("Failed to connect to server");
 
         // Fetch the CSS file
         let css_content: String = page
@@ -562,9 +548,9 @@ mod tests {
         let browser = playwright.chromium().launch().await.unwrap();
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", port), None)
+        goto_with_connection_check(&page, port)
             .await
-            .unwrap();
+            .expect("Failed to connect to server");
 
         // Fetch the CSS file
         let css_content: String = page
@@ -587,9 +573,7 @@ mod tests {
         browser.close().await.unwrap();
     }
 
-    // ========================================================================
-    // Scrollbar & NPC Portrait Layout Tests (new in ui-improvements plan)
-    // ========================================================================
+    // Scrollbar & NPC Portrait Layout Tests
 
     #[tokio::test]
     async fn test_scrollbar_styled() {
@@ -600,9 +584,9 @@ mod tests {
         let browser = playwright.chromium().launch().await.unwrap();
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", port), None)
+        goto_with_connection_check(&page, port)
             .await
-            .unwrap();
+            .expect("Failed to connect to server");
 
         let _ = wait_for_element_children(&page, "#story-log .log-entry", 1).await;
 
@@ -639,9 +623,9 @@ mod tests {
         let browser = playwright.chromium().launch().await.unwrap();
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", port), None)
+        goto_with_connection_check(&page, port)
             .await
-            .unwrap();
+            .expect("Failed to connect to server");
 
         let _ = wait_for_element_children(&page, "#story-log .log-entry", 1).await;
 
@@ -691,9 +675,9 @@ mod tests {
         let browser = playwright.chromium().launch().await.unwrap();
         let page = browser.new_page().await.unwrap();
 
-        page.goto(&format!("http://127.0.0.1:{}", port), None)
+        goto_with_connection_check(&page, port)
             .await
-            .unwrap();
+            .expect("Failed to connect to server");
 
         let _ = wait_for_element_children(&page, "#story-log .log-entry", 1).await;
 

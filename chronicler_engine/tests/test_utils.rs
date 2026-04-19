@@ -19,12 +19,39 @@ pub fn port_in_use(port: u16) -> bool {
     std::net::TcpStream::connect(format!("127.0.0.1:{}", port)).is_ok()
 }
 
+/// Navigate to a URL with explicit error handling for connection refused.
+/// Logs a clear error message when the server isn't reachable, including
+/// the port number and likely cause (port conflict, server crash).
+pub async fn goto_with_connection_check(
+    page: &playwright_rs::Page,
+    port: u16,
+) -> Result<(), String> {
+    let url = format!("http://127.0.0.1:{}", port);
+    let _: Option<_> = page.goto(&url, None).await.map_err(|e| {
+        let err_str = e.to_string();
+        if err_str.contains("ERR_CONNECTION_REFUSED") {
+            format!(
+                "CONNECTION REFUSED: Server not running on port {port}. \
+                 Likely causes: port conflict (another process using port {port}), \
+                 server failed to start, or server crashed. \
+                 Check with: netstat -ano | Select-String {port}",
+            )
+        } else {
+            format!("Navigation failed to {}: {}", url, err_str)
+        }
+    })?;
+    Ok(())
+}
+
 pub fn kill_existing_server() {
-    let _ = Command::new("taskkill")
-        .args(&["/F", "/IM", "chronicler_engine.exe"])
-        .output();
-    // Wait longer for the port to be released
-    std::thread::sleep(std::time::Duration::from_millis(500));
+    // Only kill if we manage the server (to avoid killing other test instances)
+    if SERVER_MANAGED.load(Ordering::SeqCst) {
+        let _ = Command::new("taskkill")
+            .args(&["/F", "/IM", "chronicler_engine.exe"])
+            .output();
+        // Wait for the port to be released (2 seconds for Windows)
+        std::thread::sleep(std::time::Duration::from_millis(2000));
+    }
 }
 
 /// Start the server with optional mock LLM backend
@@ -64,6 +91,7 @@ pub fn wait_for_server(port: u16, max_attempts: usize) -> bool {
 
 /// Wait for LLM to finish generating a response by polling the generating status endpoint.
 /// Returns Ok(()) if LLM became idle within timeout, Err(()) if timeout exceeded.
+/// If timeout is reached, forcefully resets the is_generating flag on the server.
 pub async fn wait_for_llm_idle(port: u16, timeout: Duration) -> Result<(), ()> {
     let start = std::time::Instant::now();
     let client = reqwest::Client::new();
@@ -85,6 +113,17 @@ pub async fn wait_for_llm_idle(port: u16, timeout: Duration) -> Result<(), ()> {
         }
         tokio::time::sleep(Duration::from_millis(200)).await;
     }
+
+    // Timeout reached - try to reset the flag by posting to a reset endpoint
+    // This ensures is_generating doesn't get stuck
+    let _ = client
+        .post(&format!(
+            "http://127.0.0.1:{}/status/reset-generating",
+            port
+        ))
+        .send()
+        .await;
+
     Err(())
 }
 
@@ -297,6 +336,34 @@ pub async fn wait_for_status_ready(page: &playwright_rs::Page) {
         }
         sleep(Duration::from_millis(100)).await;
     }
+}
+
+/// Poll until status display is no longer "Thinking..."
+/// Returns the final status text, or "Thinking..." if timeout
+pub async fn wait_for_status_not_thinking(page: &playwright_rs::Page) -> String {
+    use tokio::time::sleep;
+
+    for _ in 0..30 {
+        let status: String = page
+            .evaluate::<(), String>(
+                "document.querySelector('#status-display')?.innerText || ''",
+                None,
+            )
+            .await
+            .unwrap_or_default();
+
+        if !status.contains("Thinking") {
+            return status;
+        }
+        sleep(Duration::from_millis(500)).await;
+    }
+
+    page.evaluate::<(), String>(
+        "document.querySelector('#status-display')?.innerText || ''",
+        None,
+    )
+    .await
+    .unwrap_or_default()
 }
 
 /// Launch Chrome browser for testing

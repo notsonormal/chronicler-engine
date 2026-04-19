@@ -27,20 +27,6 @@ pub fn parse_command(input: &str) -> Action {
 
     match tokens[0] {
         "l" | "look" if tokens.len() == 1 => Action::Look,
-        "n" | "north" if tokens.len() == 1 => Action::WalkTo("north".to_string()),
-        "s" | "south" if tokens.len() == 1 => Action::WalkTo("south".to_string()),
-        "e" | "east" if tokens.len() == 1 => Action::WalkTo("east".to_string()),
-        "w" | "west" if tokens.len() == 1 => Action::WalkTo("west".to_string()),
-        "u" | "up" if tokens.len() == 1 => Action::WalkTo("up".to_string()),
-        "d" | "down" if tokens.len() == 1 => Action::WalkTo("down".to_string()),
-        "go" | "walk" | "move" if tokens.len() > 1 => {
-            // Check if they typed "go to X" or "walk to X"
-            if tokens[1] == "to" && tokens.len() >= 3 {
-                Action::WalkTo(tokens[2..].join(" "))
-            } else {
-                Action::WalkTo(tokens[1..].join(" "))
-            }
-        }
         "i" | "inv" | "inventory" if tokens.len() == 1 => Action::Inventory,
         "t" | "talk" => {
             if tokens.len() >= 2 {
@@ -65,10 +51,11 @@ mod tests {
 
     #[test]
     fn test_parse_extra_whitespace() {
-        // Extra whitespace handling - whitespace is preserved in free action
+        // Extra whitespace handling - original input is preserved in FreeAction
+        // "north" is now a FreeAction (quantifier-driven movement)
         assert_eq!(
             parse_command("  north  "),
-            Action::WalkTo("north".to_string())
+            Action::FreeAction("  north  ".to_string())
         );
         assert_eq!(
             parse_command("  talk guard  "),
@@ -180,15 +167,35 @@ mod tests {
 
     #[test]
     fn test_parse_mixed_case_commands() {
-        // Mixed case handling
+        // Mixed case handling - explicit commands become FreeAction (quantifier interprets)
+        // FreeAction preserves original case
         assert_eq!(
             parse_command("Go North"),
-            Action::WalkTo("north".to_string())
+            Action::FreeAction("Go North".to_string())
+        );
+        assert_eq!(
+            parse_command("Walk to the kitchen"),
+            Action::FreeAction("Walk to the kitchen".to_string())
         );
         assert_eq!(
             parse_command("Talk TO Carla"),
             Action::Talk("carla".to_string(), None)
         );
         assert_eq!(parse_command("InVeNtOrY"), Action::Inventory);
+    }
+
+    #[test]
+    fn test_parse_north_as_free_action() {
+        // Cardinal directions now become FreeAction (preserving original case)
+        assert_eq!(
+            parse_command("north"),
+            Action::FreeAction("north".to_string())
+        );
+        assert_eq!(parse_command("n"), Action::FreeAction("n".to_string()));
+        assert_eq!(
+            parse_command("south"),
+            Action::FreeAction("south".to_string())
+        );
+        assert_eq!(parse_command("s"), Action::FreeAction("s".to_string()));
     }
 }

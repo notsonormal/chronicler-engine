@@ -14,6 +14,7 @@
                         "exits": {
                             "north": "entrance_hall"
                         },
+                        "navigation_description": "You can go north to enter the entrance hall.",
                         "items": [],
                         "npcs": ["carla"],
                         "image_path": "data/images/Redmist Estate.png"
@@ -28,6 +29,7 @@
                             "east": "financial_office",
                             "north": "master_quarters"
                         },
+                        "navigation_description": "You can go south to the front gates, west to the kitchen, east to the financial office, or north to the master quarters.",
                         "items": [],
                         "npcs": ["gabriella"],
                         "image_path": "data/images/Redmist Estate.png"
@@ -39,6 +41,7 @@
                         "exits": {
                             "east": "entrance_hall"
                         },
+                        "navigation_description": "You can go east to return to the entrance hall.",
                         "items": [],
                         "npcs": ["louise"],
                         "image_path": "data/images/Redmist Estate.png"
@@ -50,6 +53,7 @@
                         "exits": {
                             "west": "entrance_hall"
                         },
+                        "navigation_description": "You can go west to return to the entrance hall.",
                         "items": [],
                         "npcs": ["jezebel"],
                         "image_path": "data/images/Redmist Estate.png"
@@ -61,6 +65,7 @@
                         "exits": {
                             "south": "entrance_hall"
                         },
+                        "navigation_description": "You can go south to return to the entrance hall.",
                         "items": [],
                         "npcs": ["lisette"],
                         "image_path": "data/images/Redmist Estate.png"

@@ -59,13 +59,11 @@ impl LlmBackend for OpenRouterBackend {
     ) -> Result<String, EngineError> {
         log::info!("[LLM] Generating dialogue for NPC: {}", npc.sheet.name);
 
-        // Build user message for the NPC dialogue context
         let user_msg = format!(
             "The player says to {}: \"{}\"",
             npc.sheet.name, context.user_message
         );
 
-        // Create context for this specific NPC
         let npc_context = PromptContext {
             world: context.world,
             room: context.room,
@@ -108,7 +106,6 @@ impl LlmBackend for OpenRouterBackend {
             context.room.name
         );
 
-        // Create arrival-specific user message
         let user_msg = format!(
             "{} enters the {}.",
             context.player.sheet.name, context.room.name
@@ -237,7 +234,50 @@ impl LlmBackend for MockBackend {
     }
 
     fn narrate_action(&self, context: &PromptContext) -> Result<String, EngineError> {
-        Ok(format!("[MockNarration] {}", context.user_message))
+        let msg = context.user_message;
+        let msg_lower = msg.to_lowercase();
+
+        let movement_keywords = [
+            "walk",
+            "go",
+            "enter",
+            "leave",
+            "head to",
+            "travel to",
+            "move to",
+            "go to",
+            "exit",
+            "climb",
+            "descend",
+        ];
+        let has_movement = movement_keywords.iter().any(|k| msg_lower.contains(k));
+
+        // Try to find destination in user's message by looking for room-like words
+        // Common destinations in test world
+        let possible_destinations = [
+            "kitchen", "village", "square", "forest", "gate", "hall", "entrance", "tavern", "shop",
+            "store", "office", "quarters",
+        ];
+        let destination = if has_movement {
+            possible_destinations
+                .iter()
+                .find(|d| msg_lower.contains(*d))
+                .map(|s| s.to_string())
+        } else {
+            None
+        };
+
+        // Return JSON format that quantifier can parse
+        if has_movement && destination.is_some() {
+            Ok(format!(
+                r#"{{"narrative": "[MockNarration] {msg}", "movement": {{"type": "entering", "destination": "{dest}"}}}}"#,
+                dest = destination.unwrap()
+            ))
+        } else {
+            Ok(format!(
+                r#"{{"narrative": "[MockNarration] {msg}", "movement": null}}"#
+            ))
+        }
     }
 
     fn narrate_arrival(&self, context: &PromptContext) -> Result<String, EngineError> {
@@ -295,6 +335,7 @@ mod tests {
             items: vec![],
             npcs: vec![],
             image_path: None,
+            navigation_description: None,
         }
     }
 
@@ -303,6 +344,7 @@ mod tests {
             name: "Test World".to_string(),
             description: "Testing.".to_string(),
             global_rules: vec!["Rule 1".to_string()],
+            ..Default::default()
         }
     }
 
@@ -363,7 +405,10 @@ mod tests {
 
         let result = backend.narrate_action(&context);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "[MockNarration] I look around carefully.");
+        assert_eq!(
+            result.unwrap(),
+            r#"{"narrative": "[MockNarration] I look around carefully.", "movement": null}"#
+        );
     }
 
     #[test]
@@ -453,8 +498,6 @@ mod tests {
         assert!(!system_prompt.is_empty());
         assert!(user_prompt.contains("I look around"));
     }
-
-    // ========== Additional LlmBackend Tests ==========
 
     #[test]
     fn test_mock_generate_dialogue_with_message() {
@@ -599,11 +642,6 @@ mod tests {
         assert!(result.is_ok());
         assert!(result.unwrap().contains("I approach"));
     }
-
-    // ========================================================================
-    // Property-based tests for MockBackend responses
-    // These test response properties rather than exact strings
-    // ========================================================================
 
     #[test]
     fn test_mock_response_length_bounds() {

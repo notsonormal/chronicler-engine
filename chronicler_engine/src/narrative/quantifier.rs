@@ -25,11 +25,49 @@ pub struct QuantifierParseResult {
     pub confidence: QuantifierConfidence,
 }
 
+/// Basic room information for the quantifier prompt.
+pub struct RoomInfo {
+    pub id: String,
+    pub name: String,
+}
+
+/// Type of movement detected by the quantifier.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MovementType {
+    /// Player is entering a new room ("I walk through the gate", "enter the kitchen")
+    Entering,
+    /// Player is already in a room (contextual, rarely used)
+    In,
+    /// Player is leaving the current room ("I leave the house", "go outside")
+    Leaving,
+}
+
+/// Result of detecting movement intent from the quantifier.
+#[derive(Debug, Clone)]
+pub struct MovementParseResult {
+    /// Type of movement detected, if any.
+    pub movement_type: Option<MovementType>,
+    /// Destination room ID or name, if detected.
+    pub destination: Option<String>,
+    /// Confidence level of the movement detection.
+    pub confidence: QuantifierConfidence,
+}
+
+/// Combined result from the quantifier: NPCs in room + movement intent.
+#[derive(Debug, Clone)]
+pub struct QuantifierResult {
+    /// NPCs detected as present in the room.
+    pub npcs: QuantifierParseResult,
+    /// Movement intent detected, if any.
+    pub movement: MovementParseResult,
+}
+
 /// Context needed to build a quantifier prompt.
 pub struct QuantifierPromptContext<'a> {
     pub room: &'a Room,
     pub previous_room_npcs: &'a [NpcCard],
     pub all_known_npcs: &'a [NpcCard],
+    pub all_rooms: &'a [RoomInfo],
     pub player_name: &'a str,
     pub recent_history: &'a [LogEntry],
     pub player_action: &'a str,
@@ -54,19 +92,28 @@ impl<'a> QuantifierPromptBuilder<'a> {
         let mut prompt = String::from(
             "You are a scene quantifier for a text adventure game. \
              Your task is to determine which NPCs (non-player characters) \
-             are present in the current room based on the context provided.\n\n\
+             are present in the room and whether the player is moving to a new location.\n\n\
              Rules:\n\
              - Only include NPCs that would logically be in the room\n\
              - NPCs from the previous room may have followed the player\n\
              - Use the exact NPC IDs provided in the character list\n\
+             - Also detect if the player is moving (entering/in/leaving a room)\n\
+             - Movement is determined by the narrative context, not explicit commands\n\
              - Respond ONLY with a JSON object in this format: \
-             {\"npcs_in_room\": [\"id1\", \"id2\"]}\n\
-             - If no NPCs are present, respond with: {\"npcs_in_room\": []}\n\n",
+             {\"npcs_in_room\": [\"id1\", \"id2\"], \"movement\": {\"type\": \"entering|in|leaving\", \"destination\": \"room_name\"}}\n\
+             - If no NPCs are present: {\"npcs_in_room\": []}\n\
+             - If no movement detected, omit movement or set type to null: {\"npcs_in_room\": [...], \"movement\": {\"type\": null}}\n\n\
+             Available rooms (for movement destination):\n",
         );
 
         prompt.push_str("Known NPC IDs:\n");
         for npc in self.context.all_known_npcs {
             prompt.push_str(&format!("- {} (\"{}\")\n", npc.id, npc.sheet.name));
+        }
+
+        prompt.push_str("\nAvailable rooms:\n");
+        for room in self.context.all_rooms {
+            prompt.push_str(&format!("- {} (\"{}\")\n", room.id, room.name));
         }
 
         prompt
@@ -79,6 +126,11 @@ impl<'a> QuantifierPromptBuilder<'a> {
             "Current room: {} — {}\n\n",
             self.context.room.name, self.context.room.description
         ));
+
+        // Add navigation description if available
+        if let Some(nav_desc) = &self.context.room.navigation_description {
+            prompt.push_str(&format!("Navigation options: {nav_desc}\n\n"));
+        }
 
         if !self.context.previous_room_npcs.is_empty() {
             prompt.push_str("NPCs from previous room (may have followed the player):\n");
@@ -117,15 +169,23 @@ impl<'a> QuantifierPromptBuilder<'a> {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Response parsing
-// ---------------------------------------------------------------------------
-
 /// Serde struct for deserializing the expected JSON response.
 #[derive(Deserialize, Debug)]
 struct QuantifierJsonResponse {
     #[serde(default)]
     npcs_in_room: Vec<String>,
+    #[serde(default)]
+    #[allow(dead_code)]
+    movement: Option<MovementJson>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+#[allow(dead_code)]
+struct MovementJson {
+    /// Maps JSON "type" field to Rust "movement_type" field
+    #[serde(rename = "type")]
+    movement_type: Option<String>,
+    destination: Option<String>,
 }
 
 /// Parse the quantifier LLM response to extract NPC IDs.
@@ -143,8 +203,8 @@ pub fn parse_quantifier_response(
     let trimmed = response.trim();
 
     // Strategy 1: Try JSON parse
-    if let Ok(parsed) = try_parse_json(trimmed) {
-        let valid_ids: Vec<String> = parsed
+    if let Ok((npc_ids, _movement)) = try_parse_json_full(trimmed) {
+        let valid_ids: Vec<String> = npc_ids
             .into_iter()
             .filter(|id| known_npc_ids.contains(id))
             .collect();
@@ -174,17 +234,84 @@ pub fn parse_quantifier_response(
     }
 }
 
+/// Parse the quantifier LLM response to extract both NPCs and movement.
+///
+/// Returns a combined `QuantifierResult` with NPC presence and movement intent.
+pub fn parse_quantifier_response_with_movement(
+    response: &str,
+    known_npc_ids: &[String],
+    _all_rooms: &[RoomInfo],
+) -> QuantifierResult {
+    let trimmed = response.trim();
+
+    // Try JSON parse first
+    if let Ok((npc_ids, movement_json)) = try_parse_json_full(trimmed) {
+        let valid_ids: Vec<String> = npc_ids
+            .into_iter()
+            .filter(|id| known_npc_ids.contains(id))
+            .collect();
+
+        let movement = movement_json.map(|m| MovementParseResult {
+            movement_type: m
+                .movement_type
+                .as_ref()
+                .and_then(|t| match t.to_lowercase().as_str() {
+                    "entering" => Some(MovementType::Entering),
+                    "leaving" => Some(MovementType::Leaving),
+                    _ => None,
+                }),
+            destination: m.destination,
+            confidence: QuantifierConfidence::High,
+        });
+
+        return QuantifierResult {
+            npcs: QuantifierParseResult {
+                npc_ids: valid_ids,
+                confidence: QuantifierConfidence::High,
+            },
+            movement: movement.unwrap_or(MovementParseResult {
+                movement_type: None,
+                destination: None,
+                confidence: QuantifierConfidence::High,
+            }),
+        };
+    }
+
+    // Text fallback for NPCs
+    let text_ids = extract_npc_ids_from_text(trimmed, known_npc_ids);
+    let npcs = if !text_ids.is_empty() {
+        QuantifierParseResult {
+            npc_ids: text_ids,
+            confidence: QuantifierConfidence::Medium,
+        }
+    } else {
+        QuantifierParseResult {
+            npc_ids: Vec::new(),
+            confidence: QuantifierConfidence::Low,
+        }
+    };
+
+    // Movement is only detected via JSON - no text fallback
+    let movement = MovementParseResult {
+        movement_type: None,
+        destination: None,
+        confidence: QuantifierConfidence::Low,
+    };
+
+    QuantifierResult { npcs, movement }
+}
+
 /// Try to parse the response as JSON, handling markdown code fences.
-fn try_parse_json(response: &str) -> Result<Vec<String>, String> {
+fn try_parse_json_full(response: &str) -> Result<(Vec<String>, Option<MovementJson>), String> {
     // Try direct JSON parse first
     if let Ok(parsed) = serde_json::from_str::<QuantifierJsonResponse>(response) {
-        return Ok(parsed.npcs_in_room);
+        return Ok((parsed.npcs_in_room, parsed.movement));
     }
 
     // Try extracting JSON from markdown code fences (```json ... ```)
     if let Some(json_content) = extract_json_from_code_fence(response) {
         if let Ok(parsed) = serde_json::from_str::<QuantifierJsonResponse>(&json_content) {
-            return Ok(parsed.npcs_in_room);
+            return Ok((parsed.npcs_in_room, parsed.movement));
         }
     }
 
@@ -193,7 +320,7 @@ fn try_parse_json(response: &str) -> Result<Vec<String>, String> {
         if let Some(end) = response.rfind('}') {
             let json_str = &response[start..=end];
             if let Ok(parsed) = serde_json::from_str::<QuantifierJsonResponse>(json_str) {
-                return Ok(parsed.npcs_in_room);
+                return Ok((parsed.npcs_in_room, parsed.movement));
             }
         }
     }
@@ -230,9 +357,50 @@ fn extract_npc_ids_from_text(response: &str, known_npc_ids: &[String]) -> Vec<St
     found
 }
 
-// ---------------------------------------------------------------------------
-// QuantifierBackend
-// ---------------------------------------------------------------------------
+/// Extract movement intent from text response using keyword matching.
+/// Used by fragments.rs for direct movement detection from LLM narration.
+pub fn extract_movement_from_text(
+    response: &str,
+    all_rooms: &[RoomInfo],
+) -> Option<MovementParseResult> {
+    let response_lower = response.to_lowercase();
+
+    let entering_keywords = [
+        "enters",
+        "enter",
+        "walk into",
+        "go into",
+        "go to",
+        "head to",
+        "travel to",
+    ];
+    let leaving_keywords = [
+        "leaves", "leave", "exits", "exit", "go out", "walk out", "head out",
+    ];
+
+    let movement_type = if entering_keywords.iter().any(|k| response_lower.contains(k)) {
+        Some(MovementType::Entering)
+    } else if leaving_keywords.iter().any(|k| response_lower.contains(k)) {
+        Some(MovementType::Leaving)
+    } else {
+        None
+    };
+
+    let destination = all_rooms
+        .iter()
+        .find(|r| response_lower.contains(&r.name.to_lowercase()))
+        .map(|r| r.name.clone());
+
+    if movement_type.is_some() || destination.is_some() {
+        Some(MovementParseResult {
+            movement_type,
+            destination,
+            confidence: QuantifierConfidence::Medium,
+        })
+    } else {
+        None
+    }
+}
 
 /// Backend for calling the quantifier LLM.
 ///
@@ -241,20 +409,24 @@ fn extract_npc_ids_from_text(response: &str, known_npc_ids: &[String]) -> Vec<St
 pub struct QuantifierBackend;
 
 impl QuantifierBackend {
-    /// Quantify which NPCs are in the current room using LLM inference.
+    /// Quantify which NPCs are in the current room and detect movement intent.
     ///
-    /// Returns a `QuantifierParseResult` with detected NPC IDs and confidence level.
+    /// Returns a `QuantifierResult` containing both NPC presence and movement detection.
+    /// - `npcs`: Detected NPC IDs with confidence level.
+    /// - `movement`: Detected movement type (entering/leaving/in) and destination.
+    ///
     /// If the LLM call fails entirely, returns the `fallback_npc_ids` with `Low` confidence.
     pub fn quantify_room(
         &self,
         api_key: &str,
         context: &QuantifierPromptContext,
         fallback_npc_ids: &[String],
-    ) -> Result<QuantifierParseResult, EngineError> {
+    ) -> Result<QuantifierResult, EngineError> {
         let builder = QuantifierPromptBuilder::new(QuantifierPromptContext {
             room: context.room,
             previous_room_npcs: context.previous_room_npcs,
             all_known_npcs: context.all_known_npcs,
+            all_rooms: context.all_rooms,
             player_name: context.player_name,
             recent_history: context.recent_history,
             player_action: context.player_action,
@@ -277,34 +449,51 @@ impl QuantifierBackend {
 
         match call_openrouter_with_model(api_key, &system_prompt, &user_prompt, &model) {
             Ok(response) => {
+                log::info!("[Quantifier] Player action: {}", context.player_action);
                 log::info!("[Quantifier] Received response ({} chars)", response.len());
                 log::debug!(
                     "[Quantifier] Response: {}",
                     &response[..response.len().min(200)]
                 );
 
-                let result = parse_quantifier_response(&response, &known_ids);
+                let result = parse_quantifier_response_with_movement(
+                    &response,
+                    &known_ids,
+                    context.all_rooms,
+                );
                 log::info!(
                     "[Quantifier] Detected NPCs: {:?} (confidence: {:?})",
-                    result.npc_ids,
-                    result.confidence
+                    result.npcs.npc_ids,
+                    result.npcs.confidence
                 );
+                if let Some(mt) = &result.movement.movement_type {
+                    log::info!(
+                        "[Quantifier] Detected movement: {:?} destination: {:?}",
+                        mt,
+                        result.movement.destination
+                    );
+                } else {
+                    log::info!("[Quantifier] No movement detected");
+                }
                 Ok(result)
             }
             Err(e) => {
                 log::warn!("[Quantifier] LLM call failed: {e}, using fallback NPC IDs");
-                Ok(QuantifierParseResult {
-                    npc_ids: fallback_npc_ids.to_vec(),
-                    confidence: QuantifierConfidence::Low,
+                Ok(QuantifierResult {
+                    npcs: QuantifierParseResult {
+                        npc_ids: fallback_npc_ids.to_vec(),
+                        confidence: QuantifierConfidence::Low,
+                    },
+                    movement: MovementParseResult {
+                        movement_type: None,
+                        destination: None,
+                        confidence: QuantifierConfidence::Low,
+                    },
                 })
             }
         }
     }
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
@@ -326,6 +515,7 @@ mod tests {
             items: vec![],
             npcs: vec!["gabriella".to_string()],
             image_path: None,
+            navigation_description: None,
         }
     }
 
@@ -377,6 +567,7 @@ mod tests {
             room: &room,
             previous_room_npcs: &previous_npcs,
             all_known_npcs: &all_npcs,
+            all_rooms: &[],
             player_name: "Hero",
             recent_history: &history,
             player_action: "I walk into the entrance hall.",
@@ -410,9 +601,10 @@ mod tests {
             room: &room,
             previous_room_npcs: &previous_npcs,
             all_known_npcs: &all_npcs,
+            all_rooms: &[],
             player_name: "Hero",
             recent_history: &history,
-            player_action: "I walk into the entrance hall.",
+            player_action: "I look around.",
         };
 
         let builder = QuantifierPromptBuilder::new(context);
@@ -427,30 +619,6 @@ mod tests {
     }
 
     #[test]
-    fn test_quantifier_prompt_builder_includes_history() {
-        let room = make_room();
-        let all_npcs: Vec<NpcCard> = vec![];
-        let previous_npcs: Vec<NpcCard> = vec![];
-        let history = make_history();
-
-        let context = QuantifierPromptContext {
-            room: &room,
-            previous_room_npcs: &previous_npcs,
-            all_known_npcs: &all_npcs,
-            player_name: "Hero",
-            recent_history: &history,
-            player_action: "I look around.",
-        };
-
-        let builder = QuantifierPromptBuilder::new(context);
-        let (_, user) = builder.build();
-
-        assert!(user.contains("Recent events"));
-        assert!(user.contains("You enter the front gate"));
-        assert!(user.contains("I'll follow you inside"));
-    }
-
-    #[test]
     fn test_quantifier_prompt_builder_empty_history() {
         let room = make_room();
         let all_npcs: Vec<NpcCard> = vec![];
@@ -461,6 +629,7 @@ mod tests {
             room: &room,
             previous_room_npcs: &previous_npcs,
             all_known_npcs: &all_npcs,
+            all_rooms: &[],
             player_name: "Hero",
             recent_history: &history,
             player_action: "I look around.",
@@ -589,5 +758,150 @@ mod tests {
         // Low: No valid IDs
         let low_result = parse_quantifier_response("Random text.", &["carla".to_string()]);
         assert_eq!(low_result.confidence, QuantifierConfidence::Low);
+    }
+
+    #[test]
+    fn test_parse_quantifier_response_no_movement() {
+        let response = r#"{"npcs_in_room": ["carla"], "movement": {"type": null}}"#;
+
+        let result = parse_quantifier_response_with_movement(response, &["carla".to_string()], &[]);
+
+        assert_eq!(result.npcs.npc_ids, vec!["carla"]);
+        assert_eq!(result.movement.movement_type, None);
+        assert_eq!(result.movement.destination, None);
+    }
+
+    #[test]
+    fn test_parse_movement_entering_with_destination() {
+        // The actual LLM response format we're using
+        let response = r#"{"npcs_in_room": ["carla"], "movement": {"type": "entering", "destination": "entrance_hall"}}"#;
+
+        let result = parse_quantifier_response_with_movement(
+            response,
+            &["carla".to_string()],
+            &[RoomInfo {
+                id: "entrance_hall".to_string(),
+                name: "Entrance Hall".to_string(),
+            }],
+        );
+
+        assert_eq!(result.npcs.npc_ids, vec!["carla"]);
+        assert_eq!(result.movement.movement_type, Some(MovementType::Entering));
+        assert_eq!(
+            result.movement.destination,
+            Some("entrance_hall".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_movement_leaving_with_destination() {
+        let response = r#"{"npcs_in_room": ["carla"], "movement": {"type": "leaving", "destination": "tavern"}}"#;
+
+        let result = parse_quantifier_response_with_movement(
+            response,
+            &["carla".to_string()],
+            &[RoomInfo {
+                id: "tavern".to_string(),
+                name: "Tavern".to_string(),
+            }],
+        );
+
+        assert_eq!(result.movement.movement_type, Some(MovementType::Leaving));
+        assert_eq!(result.movement.destination, Some("tavern".to_string()));
+    }
+
+    #[test]
+    fn test_parse_movement_no_movement_field() {
+        // No movement field at all - should detect no movement
+        let response = r#"{"npcs_in_room": ["carla"]}"#;
+
+        let result = parse_quantifier_response_with_movement(response, &["carla".to_string()], &[]);
+
+        assert_eq!(result.npcs.npc_ids, vec!["carla"]);
+        assert_eq!(result.movement.movement_type, None);
+        assert_eq!(result.movement.destination, None);
+    }
+
+    #[test]
+    fn test_parse_movement_empty_movement_object() {
+        // Empty movement object - should detect no movement
+        let response = r#"{"npcs_in_room": ["carla"], "movement": {}}"#;
+
+        let result = parse_quantifier_response_with_movement(response, &["carla".to_string()], &[]);
+
+        assert_eq!(result.npcs.npc_ids, vec!["carla"]);
+        assert_eq!(result.movement.movement_type, None);
+        assert_eq!(result.movement.destination, None);
+    }
+
+    #[test]
+    fn test_parse_movement_unknown_type_becomes_none() {
+        // Unknown movement type should map to None (not panic)
+        let response = r#"{"npcs_in_room": ["carla"], "movement": {"type": "teleporting", "destination": "castle"}}"#;
+
+        let result = parse_quantifier_response_with_movement(
+            response,
+            &["carla".to_string()],
+            &[RoomInfo {
+                id: "castle".to_string(),
+                name: "Castle".to_string(),
+            }],
+        );
+
+        assert_eq!(result.npcs.npc_ids, vec!["carla"]);
+        // Unknown type maps to None
+        assert_eq!(result.movement.movement_type, None);
+        // But destination should still be captured
+        assert_eq!(result.movement.destination, Some("castle".to_string()));
+    }
+
+    #[test]
+    fn test_parse_movement_case_insensitive_type() {
+        // Type should be case-insensitive
+        let response = r#"{"npcs_in_room": ["carla"], "movement": {"type": "ENTERING", "destination": "hall"}}"#;
+
+        let result = parse_quantifier_response_with_movement(
+            response,
+            &["carla".to_string()],
+            &[RoomInfo {
+                id: "hall".to_string(),
+                name: "Hall".to_string(),
+            }],
+        );
+
+        assert_eq!(result.movement.movement_type, Some(MovementType::Entering));
+    }
+
+    #[test]
+    fn test_quantifier_prompt_includes_navigation() {
+        let room = Room {
+            id: "test_room".to_string(),
+            name: "Test Room".to_string(),
+            description: "A test room.".to_string(),
+            exits: HashMap::new(),
+            items: vec![],
+            npcs: vec![],
+            image_path: None,
+            navigation_description: Some("You can go north to the kitchen.".to_string()),
+        };
+
+        let context = QuantifierPromptContext {
+            room: &room,
+            previous_room_npcs: &[],
+            all_known_npcs: &[],
+            all_rooms: &[RoomInfo {
+                id: "kitchen".to_string(),
+                name: "Kitchen".to_string(),
+            }],
+            player_name: "Player",
+            recent_history: &[],
+            player_action: "I walk to the kitchen",
+        };
+
+        let builder = QuantifierPromptBuilder::new(context);
+        let (_, user_prompt) = builder.build();
+
+        assert!(user_prompt.contains("Navigation options:"));
+        assert!(user_prompt.contains("You can go north to the kitchen"));
     }
 }

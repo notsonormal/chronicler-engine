@@ -99,7 +99,7 @@ The visual sidebar displays NPCs present in the current room in a **horizontal s
 - **Data Flow**: `quantifier result → GameState.npcs_in_area → visual sidebar`
 - **Storage**: `GameState.npcs_in_area: Vec<NpcCard>` stores the current in-area NPCs
 - **Update Triggers**:
-  1. **WalkTo**: When player enters a room, quantifier runs and result stored in `npcs_in_area`
+  1. **Quantifier-Driven Movement**: When player enters a room via natural language, the quantifier detects movement intent and result stored in `npcs_in_area`
   2. **Re-quantification**: After LLM narration mentioning NPC movement (e.g., "follows you", "enters", "leaves"), quantifier re-runs to update `npcs_in_area` automatically
 - **Fallback**: If quantifier is unavailable (no API key) or returns Low confidence, static `room.npcs` from `map.json` is used
 - **Validation**: All NPC IDs from quantifier are validated against `GameState.npcs` - hallucinated NPCs are filtered out

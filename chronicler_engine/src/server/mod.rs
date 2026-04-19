@@ -29,6 +29,10 @@ pub fn create_app_for_testing(state: Arc<std::sync::Mutex<GameState>>) -> Router
             "/status/generating",
             get(fragments::generating_status_handler),
         )
+        .route(
+            "/status/reset-generating",
+            post(fragments::reset_generating_handler),
+        )
         .nest_service("/assets", ServeDir::new("assets"))
         .nest_service("/data", ServeDir::new("data"))
         .fallback_service(ServeDir::new("assets"))
