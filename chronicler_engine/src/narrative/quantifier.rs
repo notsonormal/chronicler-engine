@@ -90,31 +90,44 @@ impl<'a> QuantifierPromptBuilder<'a> {
 
     fn build_system_prompt(&self) -> String {
         let mut prompt = String::from(
-            "You are a scene quantifier for a text adventure game. \
-             Your task is to determine which NPCs (non-player characters) \
-             are present in the room and whether the player is moving to a new location.\n\n\
-             Rules:\n\
-             - Only include NPCs that would logically be in the room\n\
-             - NPCs from the previous room may have followed the player\n\
-             - Use the exact NPC IDs provided in the character list\n\
-             - Also detect if the player is moving (entering/in/leaving a room)\n\
-             - Movement is determined by the narrative context, not explicit commands\n\
-             - Respond ONLY with a JSON object in this format: \
-             {\"npcs_in_room\": [\"id1\", \"id2\"], \"movement\": {\"type\": \"entering|in|leaving\", \"destination\": \"room_name\"}}\n\
-             - If no NPCs are present: {\"npcs_in_room\": []}\n\
-             - If no movement detected, omit movement or set type to null: {\"npcs_in_room\": [...], \"movement\": {\"type\": null}}\n\n\
-             Available rooms (for movement destination):\n",
+            r#"<QuantifierTask>
+You are a scene quantifier for a text adventure game.
+Your task is to determine which NPCs are present in the current room
+and whether the player is moving to a new location.
+
+Respond ONLY with a JSON object in this exact format:
+{"npcs_in_room": ["id1", "id2"], "movement": {"type": "entering|in|leaving", "destination": "room_id"}}
+
+Rules:
+- Only include NPCs that would logically be in the room based on context.
+- NPCs from the previous room may have followed the player.
+- Use the exact NPC IDs provided in the AvailableNpcIds list.
+- Movement is determined by narrative context, not explicit commands.
+- If no NPCs are present, return an empty array: {"npcs_in_room": []}
+- If no movement detected, set type to null: {"movement": {"type": null}}
+</QuantifierTask>
+
+<AvailableNpcIds>
+"#,
         );
 
-        prompt.push_str("Known NPC IDs:\n");
         for npc in self.context.all_known_npcs {
-            prompt.push_str(&format!("- {} (\"{}\")\n", npc.id, npc.sheet.name));
+            prompt.push_str(&format!(
+                "  <Npc id=\"{}\" name=\"{}\"/>\n",
+                npc.id, npc.sheet.name
+            ));
         }
 
-        prompt.push_str("\nAvailable rooms:\n");
+        prompt.push_str("</AvailableNpcIds>\n\n<AvailableRooms>\n");
+
         for room in self.context.all_rooms {
-            prompt.push_str(&format!("- {} (\"{}\")\n", room.id, room.name));
+            prompt.push_str(&format!(
+                "  <Room id=\"{}\" name=\"{}\"/>\n",
+                room.id, room.name
+            ));
         }
+
+        prompt.push_str("</AvailableRooms>\n");
 
         prompt
     }
@@ -122,48 +135,65 @@ impl<'a> QuantifierPromptBuilder<'a> {
     fn build_user_prompt(&self) -> String {
         let mut prompt = String::new();
 
+        prompt.push_str("<CurrentRoom>\n");
+        prompt.push_str(&format!("  <Name>{}</Name>\n", self.context.room.name));
         prompt.push_str(&format!(
-            "Current room: {} — {}\n\n",
-            self.context.room.name, self.context.room.description
+            "  <Description>{}</Description>\n",
+            self.context.room.description
         ));
 
         // Add navigation description if available
         if let Some(nav_desc) = &self.context.room.navigation_description {
-            prompt.push_str(&format!("Navigation options: {nav_desc}\n\n"));
+            prompt.push_str(&format!("  <Navigation>{nav_desc}</Navigation>\n"));
         }
 
+        prompt.push_str("</CurrentRoom>\n\n");
+
         if !self.context.previous_room_npcs.is_empty() {
-            prompt.push_str("NPCs from previous room (may have followed the player):\n");
+            prompt.push_str("<PreviousRoomNpcs>\n");
             for npc in self.context.previous_room_npcs {
                 prompt.push_str(&format!(
-                    "- {} ({}): {}\n",
+                    "  <Npc id=\"{}\" name=\"{}\">{}</Npc>\n",
                     npc.id, npc.sheet.name, npc.sheet.description
                 ));
             }
-            prompt.push('\n');
+            prompt.push_str("</PreviousRoomNpcs>\n\n");
         }
 
         if !self.context.room.npcs.is_empty() {
-            prompt.push_str("NPCs configured for this room: ");
+            prompt.push_str("<RoomConfiguredNpcs>\n");
+            prompt.push_str("  ");
             prompt.push_str(&self.context.room.npcs.join(", "));
-            prompt.push_str("\n\n");
+            prompt.push_str("\n</RoomConfiguredNpcs>\n\n");
         }
 
         if !self.context.recent_history.is_empty() {
-            prompt.push_str("Recent events:\n");
+            prompt.push_str("<RecentHistory>\n");
             for entry in self.context.recent_history {
                 let sender = entry.sender.as_deref().unwrap_or("Narrator");
-                prompt.push_str(&format!("{}: {}\n", sender, entry.text));
+                prompt.push_str(&format!(
+                    "  <Entry sender=\"{}\">{}</Entry>\n",
+                    sender, entry.text
+                ));
             }
-            prompt.push('\n');
+            prompt.push_str("</RecentHistory>\n\n");
         }
 
         prompt.push_str(&format!(
-            "{}: {}\n\n",
+            "<PlayerAction>\n  {}: {}\n</PlayerAction>\n\n",
             self.context.player_name, self.context.player_action
         ));
 
-        prompt.push_str("Which NPCs are in this room? Respond with JSON only.");
+        prompt.push_str(
+            r#"<Query>
+Based on the context above, determine:
+- Which NPCs are present in the current room
+- Whether the player is entering, leaving, or remaining
+
+Respond ONLY with the JSON format specified in <QuantifierTask>.
+</Query>
+"#,
+        );
 
         prompt
     }
@@ -901,7 +931,7 @@ mod tests {
         let builder = QuantifierPromptBuilder::new(context);
         let (_, user_prompt) = builder.build();
 
-        assert!(user_prompt.contains("Navigation options:"));
+        assert!(user_prompt.contains("<Navigation>"));
         assert!(user_prompt.contains("You can go north to the kitchen"));
     }
 }

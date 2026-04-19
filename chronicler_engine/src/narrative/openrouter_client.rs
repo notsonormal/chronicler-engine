@@ -59,7 +59,7 @@ pub fn call_openrouter_with_model(
         "stream": false
     });
 
-    log::debug!("[LLM] Request payload: {:#}", payload);
+    log::debug!("[LLM] Request payload: {payload:#}");
 
     let res = client
         .post("https://openrouter.ai/api/v1/chat/completions")
@@ -92,9 +92,9 @@ pub fn call_openrouter_with_model(
 
             log::debug!("[LLM] Raw response length: {} bytes", raw_response.len());
 
-            match serde_json::from_str::<serde_json::Value>(&raw_response.trim_start()) {
+            match serde_json::from_str::<serde_json::Value>(raw_response.trim_start()) {
                 Ok(json_response) => {
-                    log::debug!("[LLM] Response JSON: {:#}", json_response);
+                    log::debug!("[LLM] Response JSON: {json_response:#}");
 
                     // Check for API-level errors in response
                     if let Some(error) = json_response.get("error") {
