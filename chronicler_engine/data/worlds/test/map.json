@@ -15,8 +15,8 @@
                             "north": "village_square"
                         },
                         "items": [],
-                        "npcs": ["bartender"],
-                        "image_path": "data/images/test_room.png"
+                        "npcs": ["bartender", "shopkeeper"],
+                        "image_path": "data/images/test_room.jpg"
                     },
                     {
                         "id": "village_square",

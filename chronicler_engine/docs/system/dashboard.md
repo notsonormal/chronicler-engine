@@ -21,9 +21,9 @@ Horizontal split into story context and visual context:
     - Character name prominent above message (bold, larger)
     - Subtle timestamp (HH:MM format, small gray)
     - Fade-in animation for new messages
-- **Visual Sidebar (20%)**: 
-  - Location Image (top): Displays the current room's visual from `Room.image_path`
-  - NPC Portraits (bottom): 2-column grid of present NPCs using `CharacterSheet.headshot_image` (with fallback to `image_path`)
+- **Visual Sidebar (20%)**:
+  - Location Image (top): Full-width location image, max-height 200px, object-fit contain (scales to fit without cropping)
+  - NPC Portraits (bottom): Full-width stacked portraits, each 100px height, object-fit contain
   - Click on any image toggles sidebar expand/collapse
 
 ### 3. Action Area (64px height)

@@ -101,19 +101,27 @@
 - Background: #0f0f0f
 - Border: 1px solid #333
 - Display: flex, flex-direction: column
+- Overflow: hidden
 
-### Location Image Container
-- Width: 100%
-- Min-height: 120px
-- Image max-height: 150px
-- Contains: Location image with "Location" label
+### Location Header Bar
+- Width: 100% (full width, above sidebar)
+- Separator: 1px border bottom
+- Contains: Location image or "No Location Image" placeholder
 - No image state: center-aligned "No Location Image" text in #555
 
+### Location Image
+- Container: full width, overflow hidden
+- Image: width 100%, max-height 200px, object-fit contain
+- Auto-scales to fit container without cropping
+
 ### NPC Portraits
-- Layout: CSS Grid, 2 columns
+- Layout: Flex row with wrap (center-aligned grid)
 - Gap: 8px
-- Each portrait: 50% width (1fr)
+- Each portrait: full width of sidebar, fixed height 100px
+- Image: width 100%, height 100px, object-fit contain
 - Shows present NPCs only
+- No scrollbar (wraps to multiple rows if needed)
+- Center-aligned in sidebar
 
 ### Action Area
 - Height: 64px
@@ -137,13 +145,13 @@
 - Background: linear-gradient(180deg, #00aa00 0%, #006600 100%)
 - Border: 1px solid #00ff00
 - Border radius: 4px
-- Color: #e0e0e0
-- Padding: 8px 20px
-- Height: 40px, min-width: 90px
+- Color: #00ff00 (green text)
+- Padding: 8px 16px
+- Height: 40px, min-width: 100px
 - Font: inherit, 14px, bold
 - Box-shadow: 0 0 8px rgba(0, 255, 0, 0.3)
-- Hover: background linear-gradient(180deg, #00cc00 0%, #008800 100%), border-color #00ff00, box-shadow 0 0 12px rgba(0, 255, 0, 0.4)
-- Active: gradient #008800-#006600
+- Hover: background linear-gradient(180deg, #00cc00 0%, #008800 100%), box-shadow 0 0 12px rgba(0, 255, 0, 0.5)
+- Active: background linear-gradient(180deg, #006600 0%, #004400 100%)
 - Disabled: opacity 0.5, cursor not-allowed, box-shadow none
 
 ### Action Hints
@@ -226,12 +234,11 @@ The design tokens above are implemented as CSS custom properties (CSS variables)
 Media queries handle responsive behavior:
 
 | Breakpoint | Width | Adjustments |
-|-----------|-------|-----------|
-| Mobile | < 640px | Stack sidebar below story log, reduce padding |
-| Tablet | 640px - 1024px | Adjust sidebar width to 25% |
-| Desktop | > 1024px | Full layout as specified above |
+|-----------|-------|-------------|
+| Tablet | ≤ 768px | Stack sidebar below story log, sidebar 100% width |
+| Mobile | ≤ 480px | Wrap header elements, stack action area vertically |
 
-- **Mobile-first**: Base styles target smallest screens, `@media (min-width: ...)` adds larger layouts
+- **Mobile-first**: Base styles target smallest screens, `@media (max-width: ...)` adds larger layouts
 - **Flexibility**: CSS variables enable theme changes without modifying component styles
 
 ### Reference Implementation

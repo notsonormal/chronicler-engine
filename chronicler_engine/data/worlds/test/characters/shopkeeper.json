@@ -6,5 +6,5 @@
     "scenario": "Runs the General Store and trades with adventurers",
     "example_dialogue": "Welcome! Take a look at my wares. Best prices in the village!",
     "inventory": [],
-    "profile_image": null
+    "profile_image": "data/images/test_headshot_2.png"
 }
