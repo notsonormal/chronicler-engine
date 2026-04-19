@@ -88,17 +88,17 @@ chronicler_engine/
 ## COMMANDS
 ```bash
 python build.py             # Full build + test (recommended)
-cargo build                # Release build
-cargo test                 # All tests
+cargo build                 # Release build
+cargo test                  # All tests
 cargo test --test flow_mock_tests  # Fast mock tests only
 cargo run -- --world redmist_estate --port 3000
-cargo clippy -- -D warnings    # Strict linting
-cargo fmt                  # Format code
+cargo clippy -- -D warnings # Strict linting
+cargo fmt                   # Format code
 ```
 
 ## NOTES
 - LLM requires `OPENROUTER_API_KEY` env var or .env file
-- Default world: `redmist_estate`
-- WebSocket at `/ws` for real-time updates
+- Default world: `redmist_estate` (use `test` for testing)
 - Game state is Single Source of Truth in `src/model/state.rs`
 - Use `python build.py` for complete validation (runs fmt, clippy, tests, coverage)
+- You should aggressively stop/kill the running application if it is stopping you from building/rerunning the application
