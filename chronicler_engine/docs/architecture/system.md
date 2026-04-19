@@ -23,7 +23,7 @@ Contains the mechanics that drive the simulation. It translates user intent and 
 The interface between the synchronous engine and stochastic LLM generation.
 - **`llm`**: Traits (`LlmBackend`) and implementations (OpenRouter, DeepSeek) for Game Master narration.
 - **`prompt`**: PromptBuilder module for SillyTavern-style layered prompt construction with token budget management.
-- **`quantifier`**: Scene quantification module for dynamic room presence detection via secondary LLM (NEW).
+- **`quantifier`**: Scene quantification module for dynamic room presence detection via secondary LLM.
 
 ### 4. The Server Tier (`crate::server::*`)
 The HTTP layer for the HTMX web dashboard with polling-based real-time updates.
@@ -47,13 +47,13 @@ Static web assets served by the server.
 | `src/model/map.rs` | `crate::model::map` | |
 | `src/model/character.rs` | `crate::model::character` | |
 | `src/model/state.rs` | `crate::model::state` | |
-| `src/model/scenario.rs` | `crate::model::scenario` | Starting scenarios (NEW) |
+| `src/model/scenario.rs` | `crate::model::scenario` | Starting scenarios |
 | `src/engine/parser.rs` | `crate::engine::parser` | |
 | `src/engine/action.rs` | `crate::engine::action` | |
 | `src/engine/logic.rs` | `crate::engine::logic` | |
 | `src/narrative/llm.rs` | `crate::narrative::llm` | LLM backend implementations |
 | `src/narrative/prompt.rs` | `crate::narrative::prompt` | PromptBuilder with layered prompts |
-| `src/narrative/quantifier.rs` | `crate::narrative::quantifier` | Scene quantification for dynamic NPC presence (NEW) |
+| `src/narrative/quantifier.rs` | `crate::narrative::quantifier` | Scene quantification for dynamic NPC presence |
 | `src/narrative/openrouter_client.rs` | `crate::narrative::openrouter_client` | OpenRouter HTTP client with dual-model support (NEW) |
 | `src/server/mod.rs` | `crate::server` | HTTP server + HTMX endpoints |
 | `src/server/fragments.rs` | `crate::server` | HTML fragments |
@@ -70,14 +70,31 @@ The engine presents a web-based HTMX dashboard:
   - Location entries appear inline in story log with room name and timestamp
   - Visual sidebar displays:
     - Room location image (from `Room.image_path`)
-    - NPC portraits in 2-column grid (from `CharacterSheet.headshot_image` with fallback to `image_path`)
+    - NPC portraits in horizontal scrollable row (from `CharacterSheet.headshot_image` with fallback to `image_path`)
 - **Action Area**: Command input + status indicator (Ready/Thinking)
 
 Real-time updates via HTMX polling (5s interval for story-log, 5s for status-display).
 
+### Scrollbar Styling
+
+The story log and visual sidebar use custom-styled scrollbars matching the dark terminal aesthetic:
+
+- **WebKit browsers**: Custom `::-webkit-scrollbar` with semi-transparent thumb (`rgba(255,255,255,0.2)`), 8px width, rounded corners (4px)
+- **Firefox**: `scrollbar-width: thin` with `scrollbar-color` for cross-browser consistency
+- **Track background**: Transparent to blend with dark backgrounds
+- **Hover state**: Thumb lightens to `rgba(255,255,255,0.35)` on hover
+
+This replaces the default browser scrollbar with a sleek, dark-themed design inspired by SillyTavern.
+
 ### NPC Display in Visual Sidebar
 
-The visual sidebar displays NPCs present in the current room. **Dynamic NPC presence** is determined by the **Quantifier** (see `scene_quantification_v2.md` plan) rather than static room configuration:
+The visual sidebar displays NPCs present in the current room in a **horizontal scrollable row** (not a grid) to maximize space efficiency:
+
+- **Layout**: Horizontal flex container with `flex-wrap: nowrap`, `overflow-x: auto` for horizontal scrolling
+- **Portrait sizing**: Fixed 80×80px square images with `object-fit: cover`
+- **Spacing**: 6px gap between portraits (tight, not huge spaces)
+- **Scroll behavior**: When multiple NPCs exceed sidebar width, container scrolls horizontally
+- **Dynamic NPC presence** is determined by the **Quantifier** (see `scene_quantification_v2.md` plan) rather than static room configuration:
 
 - **Data Flow**: `quantifier result → GameState.npcs_in_area → visual sidebar`
 - **Storage**: `GameState.npcs_in_area: Vec<NpcCard>` stores the current in-area NPCs

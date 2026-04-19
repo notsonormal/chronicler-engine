@@ -586,4 +586,138 @@ mod tests {
 
         browser.close().await.unwrap();
     }
+
+    // ========================================================================
+    // Scrollbar & NPC Portrait Layout Tests (new in ui-improvements plan)
+    // ========================================================================
+
+    #[tokio::test]
+    async fn test_scrollbar_styled() {
+        let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
+        let _server = TestServer::new_with_mock(port, TEST_WORLD);
+
+        let playwright = Playwright::launch().await.unwrap();
+        let browser = playwright.chromium().launch().await.unwrap();
+        let page = browser.new_page().await.unwrap();
+
+        page.goto(&format!("http://127.0.0.1:{}", port), None)
+            .await
+            .unwrap();
+
+        let _ = wait_for_element_children(&page, "#story-log .log-entry", 1).await;
+
+        // Verify CSS contains scrollbar styles
+        let css_content: String = page
+            .evaluate::<(), String>(
+                r#"(async () => {
+                    const response = await fetch('/assets/styles.css');
+                    return await response.text();
+                })()"#,
+                None,
+            )
+            .await
+            .unwrap();
+
+        assert!(
+            css_content.contains("::-webkit-scrollbar"),
+            "CSS should contain custom scrollbar styling"
+        );
+        assert!(
+            css_content.contains("scrollbar-width"),
+            "CSS should contain Firefox scrollbar-width"
+        );
+
+        browser.close().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_npc_portraits_horizontal_layout() {
+        let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
+        let _server = TestServer::new_with_mock(port, TEST_WORLD);
+
+        let playwright = Playwright::launch().await.unwrap();
+        let browser = playwright.chromium().launch().await.unwrap();
+        let page = browser.new_page().await.unwrap();
+
+        page.goto(&format!("http://127.0.0.1:{}", port), None)
+            .await
+            .unwrap();
+
+        let _ = wait_for_element_children(&page, "#story-log .log-entry", 1).await;
+
+        // Check flex-wrap is nowrap
+        let flex_wrap: String = page
+            .evaluate::<(), String>(
+                r#"(() => {
+                    const el = document.querySelector('.npc-portraits');
+                    if (!el) return 'no-element';
+                    return window.getComputedStyle(el).flexWrap;
+                })()"#,
+                None,
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            flex_wrap, "nowrap",
+            "NPC portraits should have flex-wrap: nowrap"
+        );
+
+        // Check overflow-x is auto
+        let overflow_x: String = page
+            .evaluate::<(), String>(
+                r#"(() => {
+                    const el = document.querySelector('.npc-portraits');
+                    if (!el) return 'no-element';
+                    return window.getComputedStyle(el).overflowX;
+                })()"#,
+                None,
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            overflow_x, "auto",
+            "NPC portraits should have overflow-x: auto"
+        );
+
+        browser.close().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_npc_portraits_fixed_width() {
+        let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
+        let _server = TestServer::new_with_mock(port, TEST_WORLD);
+
+        let playwright = Playwright::launch().await.unwrap();
+        let browser = playwright.chromium().launch().await.unwrap();
+        let page = browser.new_page().await.unwrap();
+
+        page.goto(&format!("http://127.0.0.1:{}", port), None)
+            .await
+            .unwrap();
+
+        let _ = wait_for_element_children(&page, "#story-log .log-entry", 1).await;
+
+        // Check portrait image has fixed width (not 100%)
+        let width: f64 = page
+            .evaluate::<(), f64>(
+                r#"(() => {
+                    const el = document.querySelector('.image-container.npc-portrait img');
+                    if (!el) return 0;
+                    const rect = el.getBoundingClientRect();
+                    return rect.width;
+                })()"#,
+                None,
+            )
+            .await
+            .unwrap();
+
+        // Fixed width should be around 80px (not 100% which would be much smaller)
+        assert!(
+            width > 50.0 && width < 120.0,
+            "NPC portrait should have fixed width around 80px, got {}",
+            width
+        );
+
+        browser.close().await.unwrap();
+    }
 }

@@ -382,7 +382,7 @@ fn test_load_world_includes_room_image_path() {
 
     assert_eq!(
         start_room.image_path,
-        Some("data/images/test_room.png".to_string()),
+        Some("data/images/test_room.jpg".to_string()),
         "Room image_path should be loaded from JSON"
     );
 }
@@ -470,7 +470,7 @@ async fn test_visual_sidebar_with_real_world_data() {
 
     // Should show the room image, not the placeholder
     assert!(
-        body_str.contains("test_room.png"),
+        body_str.contains("test_room.jpg"),
         "Should contain room image: {}",
         body_str
     );
