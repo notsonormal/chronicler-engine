@@ -36,6 +36,34 @@ The Game Master responds to three primary events:
    - The engine calls `llm_backend.narrate_arrival` with the dynamic `npcs_in_area`.
    - The LLM generates a narrative paragraph describing the entrance and NPC reactions.
 5. **Scene Setup**: The engine prints the standard room dashboard *after* the narration to provide system context.
+6. **Trigger Evaluation**: After movement is confirmed, the engine evaluates NPC triggers (see Continuation Narration below).
+
+## Continuation Narration (Auto-Trigger)
+
+After the player moves to a new room and the first narration is generated, the engine checks for NPC triggers based on character state.
+
+**Flow:**
+1. Player movement is detected via quantifier → `attempt_semantic_walk` updates `GameState.current_room_id`
+2. `evaluate_triggers(state, new_room_id)` is called to find matching triggers
+3. For each matching trigger:
+   a. `build_continuation_prompt` creates the second LLM prompt including:
+      - The first narration text (for continuity)
+      - The trigger's `narration_prompt` text
+      - Current room context (name, description, NPCs present)
+   b. LLM generates continuation narration
+   c. Continuation is appended to the narration log
+   d. `times_met` is incremented; non-repeatable triggers are marked as fired
+4. `is_generating` is reset to `false` only after ALL trigger narrations complete
+
+**Key behaviors:**
+- `is_generating` stays `true` through both the first narration AND all trigger narrations
+- Trigger narrations do NOT cause further movement — quantifier is skipped for them
+- Maximum 3 trigger narrations per user action (prevents runaway chains)
+- If a trigger LLM call fails, the first narration still displays; error is logged
+
+**Trigger condition example:**
+- `TimesMet Eq 0` — fires on first encounter (when `times_met` is 0)
+- `TimesMet Lt 3` — fires on encounters 0, 1, 2 (while `times_met < 3`)
 
 ## LLM Prompts & Guidance
 The Game Master must:

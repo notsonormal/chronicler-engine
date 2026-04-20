@@ -100,6 +100,7 @@ pub fn create_test_npcs() -> Vec<NpcCard> {
             headshot_image: None,
         },
         inventory: vec![],
+        triggers: vec![],
     }]
 }
 

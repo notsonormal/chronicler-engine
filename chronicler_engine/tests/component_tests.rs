@@ -76,6 +76,7 @@ fn create_test_state() -> Arc<Mutex<GameState>> {
             headshot_image: Some("data/images/npc_headshot.png".into()),
         },
         inventory: vec![],
+        triggers: vec![],
     }];
 
     let state = GameState::new(world, map, player, npcs, "room_1".to_string());

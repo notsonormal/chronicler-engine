@@ -37,6 +37,8 @@ pub struct NpcCard {
     pub sheet: CharacterSheet,
     #[serde(default)]
     pub inventory: Vec<String>,
+    #[serde(default)]
+    pub triggers: Vec<crate::model::trigger::Trigger>,
 }
 
 #[cfg(test)]

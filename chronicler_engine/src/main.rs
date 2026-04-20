@@ -30,9 +30,41 @@ struct Args {
     port: u16,
 }
 
+use std::path::PathBuf;
+
+/// Get the data directory path.
+///
+/// Priority:
+/// 1. CHRONLER_DATA environment variable (for custom data location)
+/// 2. {exe_dir}/data/ (for deployed binaries)
+/// 3. ./data/ (for development via cargo run)
+///
+/// This allows flexible deployment: standalone binary can find data alongside itself,
+/// or use a custom path via environment variable.
+fn get_data_dir() -> PathBuf {
+    // Check environment variable first
+    if let Ok(data_dir) = std::env::var("CHRONLER_DATA") {
+        return PathBuf::from(data_dir);
+    }
+
+    // Try executable directory (for deployed binary)
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
+            let data_dir = exe_dir.join("data");
+            if data_dir.exists() {
+                return data_dir;
+            }
+        }
+    }
+
+    // Fall back to current directory (development)
+    PathBuf::from("data")
+}
+
 /// Load world manifest from file
 fn load_world_manifest(world_id: &str) -> chronicler_engine::Result<WorldManifest> {
-    let path = Path::new("data/worlds").join(world_id).join("world.json");
+    let data_dir = get_data_dir();
+    let path = data_dir.join("worlds").join(world_id).join("world.json");
     let json = fs::read_to_string(&path)?;
     let manifest: WorldManifest = serde_json::from_str(&json)?;
     Ok(manifest)
@@ -40,7 +72,8 @@ fn load_world_manifest(world_id: &str) -> chronicler_engine::Result<WorldManifes
 
 /// List all available worlds
 fn list_available_worlds() -> chronicler_engine::Result<()> {
-    let worlds_dir = Path::new("data/worlds");
+    let data_dir = get_data_dir();
+    let worlds_dir = data_dir.join("worlds");
     if !worlds_dir.exists() {
         println!("No worlds found in data/worlds/");
         return Ok(());
@@ -117,8 +150,9 @@ mod tests {
 fn load_world(
     world_id: &str,
 ) -> chronicler_engine::Result<(WorldManifest, MapDef, PlayerCard, Vec<NpcCard>)> {
-    // Load from data/worlds/<world_id>/
-    let world_dir = Path::new("data/worlds").join(world_id);
+    // Load from {data_dir}/worlds/<world_id>/
+    let data_dir = get_data_dir();
+    let world_dir = data_dir.join("worlds").join(world_id);
 
     if !world_dir.exists() {
         return Err(EngineError::WorldNotFound(world_id.to_string()));

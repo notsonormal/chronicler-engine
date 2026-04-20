@@ -13,7 +13,9 @@ use crate::engine::parser::parse_command;
 use crate::error::Result;
 use crate::model::character::NpcCard;
 use crate::model::state::{GameState, LogType};
+use crate::narrative::continuation::build_continuation_prompt;
 use crate::narrative::llm::get_llm_backend;
+use crate::narrative::openrouter_client::{call_openrouter_with_model, get_llm_model};
 use crate::narrative::prompt::PromptContext;
 use crate::narrative::quantifier::{
     QuantifierBackend, QuantifierConfidence, QuantifierPromptContext, QuantifierResult, RoomInfo,
@@ -31,6 +33,87 @@ fn get_static_npcs(state: &GameState, room_npc_ids: &[String]) -> Vec<NpcCard> {
         .iter()
         .filter_map(|id| state.npcs.get(id).cloned())
         .collect()
+}
+
+/// Evaluate triggers and narrate continuations for NPCs in the room.
+fn evaluate_and_narrate_triggers(
+    state: &mut GameState,
+    narration_text: &str,
+    trigger_context: &PromptContext<'_>,
+    max_triggers: usize,
+) {
+    let matching_triggers = crate::engine::trigger_eval::evaluate_triggers(state);
+
+    for (trigger_idx, (npc, trigger)) in matching_triggers.iter().take(max_triggers).enumerate() {
+        let Ok(room) = get_current_room(state) else {
+            continue;
+        };
+
+        let context = PromptContext {
+            world: trigger_context.world,
+            room,
+            all_npcs: trigger_context.all_npcs,
+            npcs_in_area: &state.npcs_in_area,
+            player: trigger_context.player,
+            user_message: trigger_context.user_message,
+            history: trigger_context.history,
+        };
+
+        let Ok((system_prompt, user_prompt)) =
+            build_continuation_prompt(&context, narration_text, &trigger.action.narration_prompt)
+        else {
+            log::error!("Failed to build continuation prompt: {}", "continuation failed");
+            continue;
+        };
+
+        let api_key = std::env::var("OPENROUTER_API_KEY").unwrap_or_default();
+        let model = get_llm_model();
+
+        match call_openrouter_with_model(&api_key, &system_prompt, &user_prompt, &model) {
+            Ok(continuation_text) => {
+                if continuation_text.trim().is_empty() {
+                    continue;
+                }
+                state.add_log(continuation_text, Some(npc.sheet.name.clone()), LogType::Narration);
+                crate::engine::trigger_eval::increment_times_met(state, &npc.id);
+                if !trigger.repeat {
+                    crate::engine::trigger_eval::mark_trigger_fired(state, &npc.id, trigger_idx);
+                }
+            }
+            Err(e) => {
+                log::error!("Trigger narration failed: {e}");
+                state.add_log(
+                    format!("[Trigger narration failed: {e}]"),
+                    None,
+                    LogType::System,
+                );
+            }
+        }
+    }
+}
+
+/// Handle movement triggered by quantifier result.
+/// Creates dynamic rooms for new destinations if needed.
+fn handle_movement(state: &mut GameState, destination: Option<&str>) {
+    let Some(trigger) = destination else {
+        return;
+    };
+
+    match crate::engine::logic::attempt_semantic_walk(state, trigger) {
+        Ok(_) => {
+            let room_name = get_current_room(state)
+                .map(|r| r.name.clone())
+                .unwrap_or_else(|_| "Unknown".to_string());
+            state.add_log(String::new(), Some(room_name), LogType::Narration);
+        }
+        Err(_) => {
+            let dynamic_room =
+                crate::engine::logic::create_dynamic_room(trigger, "A place you have never seen before.");
+            state.dynamic_rooms.insert(dynamic_room.id.clone(), dynamic_room.clone());
+            state.current_room_id = dynamic_room.id.clone();
+            state.add_log(String::new(), Some(dynamic_room.name.clone()), LogType::Narration);
+        }
+    }
 }
 
 /// Determine which NPCs are in the current room using the quantifier LLM.
@@ -582,18 +665,15 @@ fn process_action(state: Arc<std::sync::Mutex<GameState>>, input: String, _playe
             state_guard.generation_state.is_generating = false;
         }
         crate::engine::action::Action::FreeAction(text) => {
-            // Generate LLM response for free action
             let world = Arc::clone(&state_guard.world);
             let map = Arc::clone(&state_guard.map);
             let player = Arc::clone(&state_guard.player);
             let room_id = state_guard.current_room_id.clone();
             let history = state_guard.narration_history.clone();
-            // Get nearby NPCs from current room (static lookup for free actions)
             let room_npc_ids = get_current_room(&state_guard)
                 .map(|r| r.npcs.clone())
                 .unwrap_or_default();
             let nearby_npcs = get_static_npcs(&state_guard, &room_npc_ids);
-            // Get ALL NPCs from game state for prompt context
             let all_npcs: Vec<NpcCard> = state_guard.npcs.values().cloned().collect();
             let text = text.clone();
             drop(state_guard);
@@ -607,97 +687,72 @@ fn process_action(state: Arc<std::sync::Mutex<GameState>>, input: String, _playe
                     .flat_map(|r| r.rooms.iter())
                     .find(|r| r.id == room_id);
 
-                if let Some(room) = room {
-                    let backend = get_llm_backend();
-                    let context = PromptContext {
+                let Some(room) = room else {
+                    if let Ok(mut state) = state_for_thread.lock() {
+                        state.generation_state.is_generating = false;
+                    }
+                    return;
+                };
+
+                let backend = get_llm_backend();
+                let context = PromptContext {
+                    world: &world,
+                    room,
+                    all_npcs: &all_npcs,
+                    npcs_in_area: &nearby_npcs,
+                    player: &player,
+                    user_message: &text,
+                    history: &history,
+                };
+
+                let Ok(narration_text) = backend.narrate_action(&context) else {
+                    if let Ok(mut state) = state_for_thread.lock() {
+                        state.generation_state.error_message =
+                            Some("LLM Error: narration failed".to_string());
+                    }
+                    if let Ok(mut state) = state_for_thread.lock() {
+                        state.generation_state.is_generating = false;
+                    }
+                    return;
+                };
+
+                if let Ok(mut state) = state_for_thread.lock() {
+                    let room_npc_ids = get_current_room(&state)
+                        .map(|r| r.npcs.clone())
+                        .unwrap_or_default();
+                    let previous_room_npcs: Vec<NpcCard> = state.npcs_in_area.clone();
+                    let quantifier_result = determine_npcs_in_room(
+                        &state,
+                        &room_npc_ids,
+                        &previous_room_npcs,
+                        &narration_text,
+                    );
+
+                    handle_movement(&mut state, quantifier_result.movement.destination.as_deref());
+
+                    let current_npcs: Vec<NpcCard> = quantifier_result
+                        .npcs
+                        .npc_ids
+                        .iter()
+                        .filter_map(|id| state.npcs.get(id).cloned())
+                        .collect();
+                    let npcs_for_context = current_npcs.clone();
+                    let trigger_context = PromptContext {
                         world: &world,
                         room,
                         all_npcs: &all_npcs,
-                        npcs_in_area: &nearby_npcs,
+                        npcs_in_area: &npcs_for_context,
                         player: &player,
                         user_message: &text,
                         history: &history,
                     };
-                    let narration = backend.narrate_action(&context);
-                    match narration {
-                        Ok(narration_text) => {
-                            if let Ok(mut state) = state_for_thread.lock() {
-                                // FIRST: Get quantifier result (contains both NPCs AND movement)
-                                let room_npc_ids = get_current_room(&state)
-                                    .map(|r| r.npcs.clone())
-                                    .unwrap_or_default();
-                                let previous_room_npcs: Vec<NpcCard> = state.npcs_in_area.clone();
-                                let quantifier_result = determine_npcs_in_room(
-                                    &state,
-                                    &room_npc_ids,
-                                    &previous_room_npcs,
-                                    &narration_text,
-                                );
+                    evaluate_and_narrate_triggers(&mut state, &narration_text, &trigger_context, 3);
+                    state.add_log(narration_text.clone(), None, LogType::Narration);
+                    state.npcs_in_area = current_npcs;
+                }
 
-                                // Handle movement and add location entry BEFORE narration
-                                if let Some(trigger) =
-                                    quantifier_result.movement.destination.clone()
-                                {
-                                    match crate::engine::logic::attempt_semantic_walk(
-                                        &mut state, &trigger,
-                                    ) {
-                                        Ok(_) => {
-                                            let room_name = get_current_room(&state)
-                                                .map(|r| r.name.clone())
-                                                .unwrap_or_else(|_| "Unknown".to_string());
-                                            state.add_log(
-                                                String::new(),
-                                                Some(room_name),
-                                                LogType::Narration,
-                                            );
-                                        }
-                                        Err(_) => {
-                                            let dynamic_room =
-                                                crate::engine::logic::create_dynamic_room(
-                                                    &trigger,
-                                                    "A place you have never seen before.",
-                                                );
-                                            state.dynamic_rooms.insert(
-                                                dynamic_room.id.clone(),
-                                                dynamic_room.clone(),
-                                            );
-                                            state.current_room_id = dynamic_room.id.clone();
-                                            state.add_log(
-                                                String::new(),
-                                                Some(dynamic_room.name.clone()),
-                                                LogType::Narration,
-                                            );
-                                        }
-                                    }
-                                }
-
-                                // SECOND: Add narration after location (if any)
-                                state.add_log(narration_text.clone(), None, LogType::Narration);
-
-                                // Update NPCs from quantifier result
-                                state.npcs_in_area = quantifier_result
-                                    .npcs
-                                    .npc_ids
-                                    .iter()
-                                    .filter_map(|id| state.npcs.get(id).cloned())
-                                    .collect();
-                            }
-                        }
-                        Err(e) => {
-                            log::error!("LLM narration failed: {e}");
-                            if let Ok(mut state) = state_for_thread.lock() {
-                                // Set error message for UI instead of adding to chat log
-                                state.generation_state.error_message =
-                                    Some(format!("LLM Error: {e}"));
-                            }
-                        }
-                    }
-
-                    // ALWAYS reset is_generating flag, regardless of what happened above
-                    // This prevents the UI from being stuck on "Thinking..." if the lock failed
-                    if let Ok(mut state) = state_for_thread.lock() {
-                        state.generation_state.is_generating = false;
-                    }
+                if let Ok(mut state) = state_for_thread.lock() {
+                    state.generation_state.is_generating = false;
                 }
             });
         }

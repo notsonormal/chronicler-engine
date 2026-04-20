@@ -14,6 +14,42 @@
 mod test_utils;
 use test_utils::*;
 
+use std::sync::Arc;
+use playwright_rs::{Browser, LaunchOptions, Playwright};
+
+/// Shared browser state - initialized once and reused across all tests
+static SHARED_BROWSER: std::sync::RwLock<Option<Arc<Browser>>> = std::sync::RwLock::new(None);
+
+/// Get or init shared browser
+async fn get_shared_browser() -> Arc<Browser> {
+    // Try fast path - already initialized
+    if let Some(browser) = SHARED_BROWSER.read().unwrap().as_ref() {
+        return Arc::clone(browser);
+    }
+    
+    // Slow path - initialize
+    let playwright = Playwright::launch().await.unwrap();
+    let browser = playwright
+        .chromium()
+        .launch_with_options(LaunchOptions {
+            channel: Some("chrome".to_string()),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    let shared = Arc::new(browser);
+    
+    *SHARED_BROWSER.write().unwrap() = Some(Arc::clone(&shared));
+    shared
+}
+
+/// Cleanup shared browser (call after all tests)
+async fn cleanup_shared_browser() {
+    if let Some(browser) = SHARED_BROWSER.write().unwrap().take() {
+        browser.close().await.unwrap();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -29,7 +65,8 @@ mod tests {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
         let _server = TestServer::new_with_mock(port, TEST_WORLD);
 
-        let (_playwright, browser) = launch_chrome().await;
+        // Use shared browser instead of launching new one each time
+        let browser = get_shared_browser().await;
         let page = browser.new_page().await.unwrap();
 
         goto_with_connection_check(&page, port)

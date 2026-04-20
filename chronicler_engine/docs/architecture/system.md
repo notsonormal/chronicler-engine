@@ -12,18 +12,21 @@ Contains pure data structures, serialization schemas, and the "Single Source of 
 - **`character`**: NPC attributes (name, description, personality, scenario, image_path, **profile_image**, **headshot_image**) and Player inventory.
 - **`state`**: The `GameState` aggregation, narration history logs, and TUI state.
 - **`scenario`**: Starting scenario definitions for narrative introductions.
+- **`trigger`**: Trigger definitions, conditions, and character state tracking (`Trigger`, `TriggerCondition`, `TriggerAction`, `NpcEncounterState`, `CharacterState`).
 
 ### 2. The Engine Tier (`crate::engine::*`)
 Contains the mechanics that drive the simulation. It translates user intent and state into outcomes.
 - **`parser`**: Natural language command decomposition.
 - **`action`**: The `Action` enum defining all supported system intents.
 - **`logic`**: Rules for movement, fuzzy-matching, and room resolution.
+- **`trigger_eval`**: Pure function evaluation of NPC triggers based on character state (`evaluate_triggers(state, room_id) -> Vec<(NpcCard, Trigger)>`).
 
 ### 3. The Narrative Tier (`crate::narrative::*`)
 The interface between the synchronous engine and stochastic LLM generation.
 - **`llm`**: Traits (`LlmBackend`) and implementations (OpenRouter, DeepSeek) for Game Master narration.
 - **`prompt`**: PromptBuilder module for SillyTavern-style layered prompt construction with token budget management.
 - **`quantifier`**: Scene quantification module for dynamic room presence detection via secondary LLM.
+- **`continuation`**: Continuation narration for triggered NPC encounters (`build_continuation_prompt(context, first_narration, trigger_text) -> (system_prompt, user_prompt)`).
 
 ### 4. The Server Tier (`crate::server::*`)
 The HTTP layer for the HTMX web dashboard with polling-based real-time updates.
@@ -48,12 +51,15 @@ Static web assets served by the server.
 | `src/model/character.rs` | `crate::model::character` | |
 | `src/model/state.rs` | `crate::model::state` | |
 | `src/model/scenario.rs` | `crate::model::scenario` | Starting scenarios |
+| `src/model/trigger.rs` | `crate::model::trigger` | Trigger definitions, conditions, character state |
 | `src/engine/parser.rs` | `crate::engine::parser` | |
 | `src/engine/action.rs` | `crate::engine::action` | |
 | `src/engine/logic.rs` | `crate::engine::logic` | |
+| `src/engine/trigger_eval.rs` | `crate::engine::trigger_eval` | Trigger evaluation based on character state |
 | `src/narrative/llm.rs` | `crate::narrative::llm` | LLM backend implementations |
 | `src/narrative/prompt.rs` | `crate::narrative::prompt` | PromptBuilder with layered prompts |
 | `src/narrative/quantifier.rs` | `crate::narrative::quantifier` | Scene quantification for dynamic NPC presence |
+| `src/narrative/continuation.rs` | `crate::narrative::continuation` | Continuation narration for triggered encounters |
 | `src/narrative/openrouter_client.rs` | `crate::narrative::openrouter_client` | OpenRouter HTTP client with dual-model support (NEW) |
 | `src/server/mod.rs` | `crate::server` | HTTP server + HTMX endpoints |
 | `src/server/fragments.rs` | `crate::server` | HTML fragments |
@@ -113,6 +119,34 @@ NPC presence can change WITHOUT player movement. After LLM narration completes (
 4. Visual sidebar automatically displays updated NPCs on next poll
 
 This allows NPCs like "Carla" to appear in a room because the LLM mentioned "Carla follows you from the front gate" - without the player having to physically walk there.
+
+### Auto-Trigger System
+
+The engine supports reactive NPC encounters based on character state. When the player moves to a new room, the system evaluates triggers before generating the final narration.
+
+**Flow**: `room entry → trigger evaluation → continuation narration → combined response`
+
+1. **Movement Detection**: Player enters a new room via natural language command
+2. **Trigger Evaluation** (`trigger_eval`): Engine evaluates all NPC triggers for the new room against `CharacterState` (e.g., `times_met == 0`, `has_item == "key"`)
+3. **First Narration**: Initial LLM narration for the room arrival is generated
+4. **Continuation Narration** (`continuation`): If triggers fire, a second LLM prompt is built combining the first narration with trigger-specific text
+5. **Combined Response**: Both narrations are merged into a single response shown to the player
+
+**CharacterState** tracks persistent NPC encounter data:
+- `times_met`: Number of times player has met the NPC
+- `last_room_id`: Last room where NPC was encountered
+- `custom_flags`: Game-specific state flags
+
+**Trigger Conditions**:
+- `times_met_eq`, `times_met_gte`, `times_met_lte`: Compare encounter count
+- `has_item`: Check player inventory for item
+- `room_visited`: Check if player has visited a specific room
+- `custom`: Custom boolean expression
+
+**Trigger Actions**:
+- `narrate`: Generate continuation narration for the encounter
+- `give_item`: Grant item to player
+- `set_flag`: Set custom flag in CharacterState
 
 ### Image Handling
 

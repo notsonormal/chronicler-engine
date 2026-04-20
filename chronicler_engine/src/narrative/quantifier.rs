@@ -562,6 +562,7 @@ mod tests {
                 headshot_image: None,
             },
             inventory: vec![],
+            triggers: vec![],
         }
     }
 

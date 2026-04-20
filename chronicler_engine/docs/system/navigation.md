@@ -32,3 +32,18 @@ Rooms in map.json define semantic exits:
 2. System matches trigger text against current room's semantic exits
 3. Keywords enable flexible matching ("go through the front gate" matches "go through")
 4. If no match: creates dynamic pseudo-room for invalid destinations
+
+### Auto-Trigger Phase
+
+After `attempt_semantic_walk` succeeds, the engine evaluates NPC triggers for the destination room.
+
+**Trigger evaluation:**
+- `evaluate_triggers(state, room_id)` checks each NPC in the room against `state.character_state`
+- Matching triggers fire a continuation narration via a second LLM call
+- Trigger narrations do NOT cause further movement — the quantifier is skipped for them
+- This prevents infinite trigger chains (e.g., trigger causes movement → new trigger fires → ...)
+
+**Quantifier skip for triggers:**
+- Movement is NOT re-detected for trigger narrations
+- The quantifier only runs once per player action (after the initial arrival narration)
+- This ensures trigger responses don't cascade into additional movement

@@ -105,12 +105,40 @@ def main():
     print("[3/5] Building...")
     run("cargo build")
 
-    print("[4/5] Running all tests (parallel with nextest, limited concurrency + retries for port conflicts)...")
+    print("[4/6] Copying data and assets for deployment...")
+    import shutil
+    release_dir = Path("target/release")
+    release_dir.mkdir(exist_ok=True)
+    
+    # Copy data folder (worlds, images, etc.)
+    if Path("data").exists():
+        dest_data = release_dir / "data"
+        if dest_data.exists():
+            shutil.rmtree(dest_data)
+        shutil.copytree("data", dest_data)
+        print(f"  Copied data/ -> {dest_data}")
+    
+    # Copy assets folder (HTML, CSS, etc.)
+    if Path("assets").exists():
+        dest_assets = release_dir / "assets"
+        if dest_assets.exists():
+            shutil.rmtree(dest_assets)
+        shutil.copytree("assets", dest_assets)
+        print(f"  Copied assets/ -> {dest_assets}")
+    
+    # Create logs directory
+    (release_dir / "logs").mkdir(exist_ok=True)
+    print("  Created logs/")
+    
+    print(f"  Release package ready in {release_dir}/")
+    print("  Deployment: copy target/release/ folder to your target machine")
+
+    print("[5/6] Running all tests...")
     # Limit parallelism to 4 threads to avoid exhausting port range (20 ports)
     # Combined with retries for flaky port collisions
     run("cargo nextest run --retries 2 -j 4", show_output=True)
 
-    print("[5/5] Running coverage check (full test suite)...")
+    print("[6/6] Running coverage check (full test suite)...")
     run("cargo llvm-cov test --text", check=False)
     # Note: server/* handlers and main.rs CLI will show 0% - they need different test approaches
 

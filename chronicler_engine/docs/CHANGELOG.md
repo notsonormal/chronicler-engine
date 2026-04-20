@@ -1,5 +1,53 @@
 # Changelog
 
+## 2026-04-20
+
+### Added
+- **Reactive Auto-Trigger Movement** - Character-state-based NPC trigger system
+  - New `model/trigger.rs` module: `Trigger`, `TriggerCondition`, `TriggerAction`, `NpcEncounterState`, `CharacterState`
+  - `TriggerCondition` supports `TimesMet(Eq|Lt|Gte, u32)` comparisons
+  - `CharacterState` tracks per-NPC encounter counts in-memory
+  - `NpcCard.triggers: Vec<Trigger>` field with `#[serde(default)]` for backward compatibility
+  - `GameState.character_state: CharacterState` for persistent in-session NPC encounter tracking
+
+- **Trigger Evaluation Engine** - Pure evaluation functions for NPC triggers
+  - New `engine/trigger_eval.rs`: `evaluate_triggers`, `check_condition`, `increment_times_met`, `mark_trigger_fired`
+  - Returns matching `(NpcCard, Trigger)` tuples for NPCs in current room
+  - Handles missing character state gracefully (defaults to `times_met = 0`)
+  - Non-repeatable triggers tracked and skipped after first fire
+
+- **Continuation Prompt Builder** - Second LLM prompt for trigger narration
+  - New `narrative/continuation.rs`: `build_continuation_prompt`
+  - System prompt instructs LLM to continue scene without repetition
+  - User prompt includes first narration + room context + trigger text
+  - Token budgeting: truncates first narration to fit `MAX_CONTEXT_TOKENS`
+
+- **Recursive Auto-Trigger Flow** - Integration in `fragments.rs` process_action
+  - After first LLM narration + quantifier movement detection
+  - `evaluate_triggers` called on successful room transition
+  - Second LLM call per trigger with continuation prompt (max 3 to prevent runaway)
+  - `is_generating` stays true through ALL LLM calls (no reset between narrations)
+  - Failed second calls: first narration still displays, error logged, state resets
+  - Trigger narrations marked non-movement (quantifier skipped for them)
+  - `times_met` incremented and non-repeatable triggers marked after each fire
+
+- **Trigger Tests** - Comprehensive mock LLM test suite
+  - New `tests/trigger_tests.rs`: 5 integration tests (requires Playwright + mock LLM server)
+  - Tests: first encounter fires, second encounter skipped, multiple triggers, non-repeatable behavior, LLM failure graceful degradation
+
+### Documentation Updated
+- `architecture/system.md` - New Model tier (Trigger, CharacterState), Engine tier (trigger_eval), Narrative tier (continuation)
+- `reference/data_schemas.md` - Trigger, NpcEncounterState, CharacterState schemas; NpcCard updated with triggers field
+- `system/narration_engine.md` - Continuation narration flow, trigger evaluation, `is_generating` behavior
+- `system/navigation.md` - Auto-trigger phase after movement, quantifier skip for triggers
+- `system/game_flow.md` - Phase 3.5: Trigger Evaluation, dual LLM call in Phase 4
+
+### Data Updated
+- `data/worlds/redmist_estate/characters/gabriella.json` - First-encounter trigger example
+- `data/worlds/test/characters/shopkeeper.json` - `TimesMet Eq 0` trigger (non-repeatable)
+- `data/worlds/test/characters/ranger.json` - `TimesMet Lt 3` trigger (repeatable)
+- `data/worlds/test/characters/bartender.json` - No triggers (control case)
+
 ## 2026-04-18 (continued)
 
 ### Added

@@ -75,3 +75,62 @@ The `semantic_exits` array enables quantifier-driven movement:
 - `trigger`: The text that activates this exit (e.g., "front gate")
 - `destination`: The room ID to navigate to
 - `keywords`: Additional matching patterns for flexible input (e.g., "go through", "enter")
+
+## NpcCard Schema (Current)
+```json
+{
+  "id": "string",
+  "name": "string",
+  "description": "string (physical appearance + general intro)",
+  "personality": "string (e.g., 'Arrogant, brave, tech-savvy')",
+  "scenario": "string (background or current motivation)",
+  "example_dialogue": "string (optional example for LLM context)",
+  "inventory": ["item_id_1", "item_id_2"],
+  "profile_image": "string (optional, preferred profile image)",
+  "headshot_image": "string (optional, headshot/portrait for sidebar grid)",
+  "triggers": [Trigger, ...]  // NEW: Array of Trigger objects. Defaults to [] if missing.
+}
+```
+
+## Trigger Schema (NEW)
+Attached to an NPC. Defines a condition and the narration to inject when that condition is met.
+
+```json
+{
+  "condition": { "TimesMet": ["Eq", 0] },
+  "action": { "narration_prompt": "The shopkeeper looks up from behind the counter with a warm smile." },
+  "repeat": false
+}
+```
+
+### Fields
+- `condition`: The condition that must be true for this trigger to fire. Currently supports `TimesMet` with a comparison operator.
+  - `TimesMet`: Array of `[operator, value]`. Operators: `Eq` (equal), `Lt` (less than), `Gte` (greater than or equal)
+- `action.narration_prompt`: The text injected into the continuation LLM prompt when this trigger fires
+- `repeat`: If `false`, fires only once (first time condition is met). If `true`, fires whenever condition is met.
+
+## NpcEncounterState Schema (NEW)
+Tracks character state for a specific NPC. Stored in `GameState.character_state`.
+
+```json
+{
+  "times_met": 0,
+  "trigger_fired": {}
+}
+```
+
+### Fields
+- `times_met`: How many times the player has encountered this NPC
+- `trigger_fired`: Map of trigger description to boolean (whether that trigger has fired)
+
+## CharacterState Schema (NEW)
+Contains all NPC encounter state. Top-level field in `GameState`.
+
+```json
+{
+  "npcs": {}
+}
+```
+
+### Fields
+- `npcs`: Map of NPC ID to `NpcEncounterState`

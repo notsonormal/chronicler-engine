@@ -57,6 +57,7 @@ pub fn kill_existing_server() {
 /// Start the server with optional mock LLM backend
 /// If use_mock is true, sets LLM_BACKEND=mock env var
 pub fn start_server_with_env(port: u16, world: &str, use_mock: bool) -> Child {
+    // Use cargo run - pre-built binary has working directory issues in test context
     let mut cmd = Command::new("cargo");
     cmd.args(&["run", "--", "--world", world, "--port", &port.to_string()]);
 

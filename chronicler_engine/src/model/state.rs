@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::model::character::{NpcCard, PlayerCard};
 use crate::model::map::{MapDef, Room};
+use crate::model::trigger::CharacterState;
 use crate::model::world::WorldCard;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -87,6 +88,7 @@ pub struct GameState {
     pub npcs_in_area: Vec<NpcCard>,
     pub generation_state: GenerationState,
     pub dynamic_rooms: HashMap<String, Room>,
+    pub character_state: crate::model::trigger::CharacterState,
 }
 
 impl GameState {
@@ -111,6 +113,7 @@ impl GameState {
             generation_state: GenerationState::default(),
             npcs_in_area: Vec::new(),
             dynamic_rooms: HashMap::new(),
+            character_state: CharacterState::default(),
         }
     }
 
@@ -173,6 +176,7 @@ mod tests {
                 headshot_image: None,
             },
             inventory: vec![],
+            triggers: vec![],
         };
 
         let state = GameState::new(

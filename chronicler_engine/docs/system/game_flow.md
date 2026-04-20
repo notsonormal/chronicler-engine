@@ -71,6 +71,21 @@ When the engine needs LLM narration, it builds a comprehensive prompt using the 
                                   │
                                   ▼
 ┌─────────────────────────────────────────────────────────────────────┐
+│               PHASE 3.5: TRIGGER EVALUATION                          │
+│         (After movement succeeds, before LLM generation)           │
+│                                                                      │
+│  1. `evaluate_triggers(state, new_room_id)` → returns Vec<(NpcCard, Trigger)>
+│  2. For each matching trigger:                                      │
+│     - Build continuation prompt via `build_continuation_prompt`     │
+│     - Call LLM for continuation narration                          │
+│     - Append to narration log                                       │
+│     - Update character state (`times_met`, `trigger_fired`)        │
+│  3. `is_generating` stays `true` until all trigger narrations done │
+│  4. Max 3 trigger narrations per action (prevents runaway)         │
+└─────────────────────────────────┬───────────────────────────────────┘
+                                  │
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────┐
 │                     PHASE 4: LLM GENERATION                          │
 │                  (If narrative action)                               │
 │                                                                      │
@@ -79,6 +94,11 @@ When the engine needs LLM narration, it builds a comprehensive prompt using the 
 │  3. Receive narration response                                      │
 │  4. Add to narration history as "Narration"                        │
 │  5. Set status back to "Ready"                                      │
+│                                                                      │
+│  **Note:** This phase may now include multiple LLM calls per       │
+│  action — first the arrival narration, then a continuation         │
+│  narration for each triggered NPC. All are combined into a single  │
+│  response delivered via HTMX polling.                              │
 └─────────────────────────────────┬───────────────────────────────────┘
                                   │
                                   ▼

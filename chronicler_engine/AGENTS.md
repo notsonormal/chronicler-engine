@@ -1,6 +1,6 @@
 # Chronicler Engine Knowledge Base
 
-**Generated:** 2026-04-18
+**Generated:** 2026-04-20
 **Language:** Rust (Edition 2024)
 **Type:** Single crate (binary + library)
 
@@ -10,21 +10,22 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
 ## STRUCTURE
 ```
 chronicler_engine/
-├── src/                    # Source code (23 .rs files)
-│   ├── lib.rs             # Library root (6 modules)
+├── src/                    # Source code (27 .rs files)
+│   ├── lib.rs             # Library root (7 modules)
 │   ├── main.rs            # Binary entry (CLI + server)
 │   ├── error.rs           # EngineError enum
-│   ├── engine/            # Game logic (action, logic, parser)
-│   ├── model/             # Data structures (world, map, character, state, scenario)
-│   ├── narrative/         # LLM integration (llm, prompt, openrouter_client)
+│   ├── engine/            # Game logic (action, logic, parser, trigger_eval)
+│   ├── model/             # Data structures (world, map, character, state, scenario, trigger)
+│   ├── narrative/         # LLM integration (llm, prompt, openrouter_client, continuation, quantifier)
 │   ├── server/            # Axum HTTP/WebSocket (mod, templates, template_builders, fragments)
 │   └── ui/                # Dashboard components (mod, dashboard)
-├── tests/                 # Integration tests (6 files)
+├── tests/                 # Integration tests (7 files)
 │   ├── component_tests.rs    # In-process unit tests
 │   ├── e2e_tests.rs          # Browser/Playwright tests
-│   ├── flow_mock_tests.rs    # Mock LLM tests (port 3006)
-│   ├── flow_llm_tests.rs     # Real LLM tests (port 3007, requires OPENROUTER_API_KEY)
-│   ├── test_utils.rs         # Shared test helpers
+│   ├── flow_mock_tests.rs    # Mock LLM tests
+│   ├── flow_llm_tests.rs     # Real LLM tests (requires OPENROUTER_API_KEY)
+│   ├── trigger_tests.rs      # Trigger system integration tests
+│   ├── test_utils.rs         # Shared test helpers (TestServer, port allocation)
 │   └── test_data.rs          # Test fixtures
 ├── docs/                  # Extensive documentation (34+ .md files)
 │   ├── architecture/      # System specs (system.md)
@@ -48,11 +49,12 @@ chronicler_engine/
 | Task | Location | Notes |
 |------|----------|-------|
 | Add game feature | `src/engine/` | Action enum, parser, logic |
-| Modify data model | `src/model/` | World, map, character, state, scenario |
-| LLM changes | `src/narrative/` | llm.rs (trait), prompt.rs (templates), openrouter_client.rs |
+| Modify data model | `src/model/` | World, map, character, state, scenario, trigger |
+| LLM changes | `src/narrative/` | llm.rs (trait), prompt.rs (templates), openrouter_client.rs, continuation.rs |
+| Trigger system | `src/engine/trigger_eval.rs` | Trigger evaluation, condition checking |
 | Web server | `src/server/` | Axum router, WebSocket, HTMX templates |
 | Dashboard UI | `src/ui/dashboard.rs` | HTMX components |
-| Run tests | `tests/` | flow_mock_tests (fast), flow_llm_tests (requires API key) |
+| Run tests | `tests/` | trigger_tests (Playwright), flow_mock_tests, flow_llm_tests |
 | Add world | `data/worlds/<name>/` | world.json, map.json, player.json, characters/ |
 | Write docs | `docs/` | Follow existing structure |
 
@@ -67,11 +69,23 @@ chronicler_engine/
 ## TEST PORTS
 | Test Suite | Port | Notes |
 |------------|------|-------|
-| flow_mock_tests | 3006 | Fast - uses mock LLM |
-| flow_llm_tests | 3007 | Requires OPENROUTER_API_KEY |
-| behavior_tests | 3003 | - |
-| layout_tests | 3002 | - |
-| spec_tests | 3001 | - |
+| Most test suites | Dynamic (3010-3050) | Allocated per-test from `tests/test_config.json` |
+| flow_llm_tests | Real LLM | Requires `OPENROUTER_API_KEY` env var |
+
+**Note:** Test ports are dynamically allocated to avoid port conflicts when tests run in parallel. The `TestServer` utility in `test_utils.rs` allocates ports from the range 3010-3050 via `get_available_port()`. Tests do NOT hardcode port numbers — they call `get_config_port("tests/test_config.json")` at runtime.
+
+## TEST CONFIGURATION
+| File | Purpose |
+|------|---------|
+| `tests/test_utils.rs` | `TestServer`, `get_available_port()`, smart waiting helpers |
+| `tests/test_config.json` | Port range (3010-3050) and per-test backend selection |
+| `tests/test_data.rs` | Test fixtures (NpcCard, Room, GameState builders) |
+| `tests/trigger_tests.rs` | Integration tests for the trigger system (Playwright + mock LLM) |
+
+All integration tests use:
+- `TestServer::with_config()` or `TestServer::from_config()` to start the server
+- `get_config_port()` to get a dynamically allocated port
+- `LLM_BACKEND=mock` for fast test execution (no real LLM API calls)
 
 ## ANTI-PATTERNS (THIS PROJECT)
 - **Never** use `.unwrap()` or `.expect()` in production code

@@ -448,6 +448,7 @@ mod tests {
                 headshot_image: None,
             },
             inventory: vec![],
+            triggers: vec![],
         };
         let (prompt, _user) =
             build_dialogue_prompts(&world, &room, &npc, &Some("Hello".to_string()));
@@ -476,6 +477,7 @@ mod tests {
                 headshot_image: None,
             },
             inventory: vec![],
+            triggers: vec![],
         };
 
         let (system_prompt, user_prompt) = build_dialogue_prompts(&world, &room, &npc, &None);
@@ -516,6 +518,7 @@ mod tests {
                 headshot_image: None,
             },
             inventory: vec![],
+            triggers: vec![],
         };
         let _player = make_test_player();
         let message = "Hello, guard!";
@@ -545,6 +548,7 @@ mod tests {
                 headshot_image: None,
             },
             inventory: vec![],
+            triggers: vec![],
         };
         let _player = make_test_player();
         let _message: Option<String> = None;
@@ -577,6 +581,7 @@ mod tests {
                 headshot_image: None,
             },
             inventory: vec![],
+            triggers: vec![],
         };
         let _player = make_test_player();
 
@@ -713,6 +718,7 @@ mod tests {
                 headshot_image: None,
             },
             inventory: vec![],
+            triggers: vec![],
         };
         let _player = make_test_player();
 
@@ -745,6 +751,7 @@ mod tests {
                 headshot_image: None,
             },
             inventory: vec![],
+            triggers: vec![],
         };
         let _player = make_test_player();
 
