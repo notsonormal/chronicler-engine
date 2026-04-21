@@ -35,6 +35,12 @@ pub enum EngineError {
     #[error("Internal error: {0}")]
     Internal(String),
 
+    #[error("Data loading error in {path}: {source}")]
+    DataLoad {
+        path: String,
+        source: Box<EngineError>,
+    },
+
     #[error("Context overflow: requested {requested} tokens exceeds max {max}")]
     ContextOverflow { requested: usize, max: usize },
 }

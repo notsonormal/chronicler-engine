@@ -32,7 +32,7 @@ mod tests {
     #[tokio::test]
     async fn test_first_encounter_trigger_fires() {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
-        let _server = TestServer::new_with_mock(port, TEST_WORLD);
+        let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
 
         let (_playwright, browser) = launch_chrome().await;
         let page = browser.new_page().await.unwrap();
@@ -64,7 +64,7 @@ mod tests {
             initial_entries, after_look
         );
 
-        browser.close().await.unwrap();
+        let _ = browser.close().await;
     }
 
     /// Test: No trigger fires for NPC without triggers (bartender)
@@ -72,7 +72,7 @@ mod tests {
     #[tokio::test]
     async fn test_no_trigger_for_npc_without_triggers() {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
-        let _server = TestServer::new_with_mock(port, TEST_WORLD);
+        let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
 
         let (_playwright, browser) = launch_chrome().await;
         let page = browser.new_page().await.unwrap();
@@ -101,7 +101,7 @@ mod tests {
             "Should have response entries after talking to bartender"
         );
 
-        browser.close().await.unwrap();
+        let _ = browser.close().await;
     }
 
     /// Test: Second encounter does NOT re-fire (non-repeatable trigger)
@@ -109,7 +109,7 @@ mod tests {
     #[tokio::test]
     async fn test_second_encounter_does_not_refire() {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
-        let _server = TestServer::new_with_mock(port, TEST_WORLD);
+        let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
 
         let (_playwright, browser) = launch_chrome().await;
         let page = browser.new_page().await.unwrap();
@@ -144,7 +144,7 @@ mod tests {
             new_entries
         );
 
-        browser.close().await.unwrap();
+        let _ = browser.close().await;
     }
 
     /// Test: FreeAction without movement works as before (regression)
@@ -152,7 +152,7 @@ mod tests {
     #[tokio::test]
     async fn test_freeaction_without_movement_works() {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
-        let _server = TestServer::new_with_mock(port, TEST_WORLD);
+        let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
 
         let (_playwright, browser) = launch_chrome().await;
         let page = browser.new_page().await.unwrap();
@@ -177,7 +177,7 @@ mod tests {
         let status = get_status(&page).await;
         assert_eq!(status, "Ready", "Status should be ready");
 
-        browser.close().await.unwrap();
+        let _ = browser.close().await;
     }
 
     /// Test: FreeAction with movement but no triggers works as before (regression)
@@ -185,7 +185,7 @@ mod tests {
     #[tokio::test]
     async fn test_freeaction_with_movement_no_triggers() {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
-        let _server = TestServer::new_with_mock(port, TEST_WORLD);
+        let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
 
         let (_playwright, browser) = launch_chrome().await;
         let page = browser.new_page().await.unwrap();
@@ -208,7 +208,7 @@ mod tests {
         let status = get_status(&page).await;
         assert_eq!(status, "Ready", "Movement action should complete");
 
-        browser.close().await.unwrap();
+        let _ = browser.close().await;
     }
 
     // Helper Functions

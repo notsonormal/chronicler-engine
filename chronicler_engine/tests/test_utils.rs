@@ -27,6 +27,12 @@ pub async fn goto_with_connection_check(
     port: u16,
 ) -> Result<(), String> {
     let url = format!("http://127.0.0.1:{}", port);
+
+    // Explicit wait for server before navigation
+    if !wait_for_server(port, 100).await {
+        return Err(format!("Server failed to start on port {}", port));
+    }
+
     let _: Option<_> = page.goto(&url, None).await.map_err(|e| {
         let err_str = e.to_string();
         if err_str.contains("ERR_CONNECTION_REFUSED") {
@@ -72,20 +78,20 @@ pub fn start_server_with_env(port: u16, world: &str, use_mock: bool) -> Child {
     cmd.spawn().expect("Failed to start server")
 }
 
-pub fn wait_for_server(port: u16, max_attempts: usize) -> bool {
+pub async fn wait_for_server(port: u16, max_attempts: usize) -> bool {
     for _ in 0..max_attempts {
         if port_in_use(port) {
             // Port is open - give it more time to be fully ready
-            std::thread::sleep(std::time::Duration::from_millis(300));
+            tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
 
             // Try to connect and verify server responds
             if std::net::TcpStream::connect(format!("127.0.0.1:{}", port)).is_ok() {
                 // Give extra time for server to initialize
-                std::thread::sleep(std::time::Duration::from_millis(200));
+                tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
                 return true;
             }
         }
-        std::thread::sleep(std::time::Duration::from_millis(100));
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
     }
     false
 }
@@ -468,13 +474,13 @@ pub struct TestServer {
 
 impl TestServer {
     /// Create a test server with config (dynamic port + config-based backend)
-    pub fn with_config(port: u16, world: &str, use_mock: bool) -> Self {
-        Self::start(port, world, use_mock)
+    pub async fn with_config(port: u16, world: &str, use_mock: bool) -> Self {
+        Self::start(port, world, use_mock).await
     }
 
     /// Create a test server using config file for port and backend
     /// Returns (TestServer, port_used) - port is dynamically allocated
-    pub fn from_config(
+    pub async fn from_config(
         world: &str,
         config_path: &str,
         test_name: &str,
@@ -482,31 +488,31 @@ impl TestServer {
         let config = TestConfig::from_file(config_path)?;
         let port = get_available_port(config.port_range.min, config.port_range.max)?;
         let use_mock = config.get_backend(test_name) == "mock";
-        let server = Self::start(port, world, use_mock);
+        let server = Self::start(port, world, use_mock).await;
         Ok((server, port))
     }
 
     /// Internal: start the server with given parameters
-    fn start(port: u16, world: &str, use_mock: bool) -> Self {
+    async fn start(port: u16, world: &str, use_mock: bool) -> Self {
         if port_in_use(port) {
             kill_existing_server();
         }
         let child = start_server_with_env(port, world, use_mock);
         // Increased wait time for server to be fully ready
-        let started = wait_for_server(port, 100); // 100 * 100ms = 10s total
+        let started = wait_for_server(port, 100).await; // 100 * 100ms = 10s total
         assert!(started, "Server failed to start on port {}", port);
         SERVER_MANAGED.store(true, Ordering::SeqCst);
         TestServer { child }
     }
 
     /// Create a test server with real LLM backend
-    pub fn new(port: u16, world: &str) -> Self {
-        Self::start(port, world, false)
+    pub async fn new(port: u16, world: &str) -> Self {
+        Self::start(port, world, false).await
     }
 
     /// Create a test server with mock LLM backend
-    pub fn new_with_mock(port: u16, world: &str) -> Self {
-        Self::start(port, world, true)
+    pub async fn new_with_mock(port: u16, world: &str) -> Self {
+        Self::start(port, world, true).await
     }
 }
 

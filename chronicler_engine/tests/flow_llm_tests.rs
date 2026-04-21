@@ -50,7 +50,7 @@ mod tests {
         }
 
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
-        let _server = TestServer::new(port, TEST_WORLD);
+        let _server = TestServer::new(port, TEST_WORLD).await;
 
         let (_playwright, browser) = launch_chrome().await;
         let page = browser.new_page().await.unwrap();
@@ -140,7 +140,7 @@ mod tests {
             new_message
         );
 
-        browser.close().await.unwrap();
+        let _ = browser.close().await;
     }
 
     #[tokio::test]
@@ -153,7 +153,7 @@ mod tests {
         }
 
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
-        let _server = TestServer::new(port, TEST_WORLD);
+        let _server = TestServer::new(port, TEST_WORLD).await;
 
         let (_playwright, browser) = launch_chrome().await;
         let page = browser.new_page().await.unwrap();
@@ -255,7 +255,7 @@ mod tests {
             status_after
         );
 
-        browser.close().await.unwrap();
+        let _ = browser.close().await;
     }
 
     #[tokio::test]
@@ -268,7 +268,7 @@ mod tests {
         }
 
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
-        let _server = TestServer::new(port, TEST_WORLD);
+        let _server = TestServer::new(port, TEST_WORLD).await;
 
         let (_playwright, browser) = launch_chrome().await;
         let page = browser.new_page().await.unwrap();
@@ -339,6 +339,6 @@ mod tests {
             llm_result
         );
 
-        browser.close().await.unwrap();
+        let _ = browser.close().await;
     }
 }

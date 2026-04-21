@@ -12,23 +12,15 @@
 //! Reference: docs/system/game_flow.md
 
 mod test_utils;
+use playwright_rs::{Browser, LaunchOptions, Playwright};
+use std::sync::Arc;
 use test_utils::*;
 
-use std::sync::Arc;
-use playwright_rs::{Browser, LaunchOptions, Playwright};
-
-/// Shared browser state - initialized once and reused across all tests
-static SHARED_BROWSER: std::sync::RwLock<Option<Arc<Browser>>> = std::sync::RwLock::new(None);
-
 /// Get or init shared browser
-async fn get_shared_browser() -> Arc<Browser> {
-    // Try fast path - already initialized
-    if let Some(browser) = SHARED_BROWSER.read().unwrap().as_ref() {
-        return Arc::clone(browser);
-    }
-    
-    // Slow path - initialize
-    let playwright = Playwright::launch().await.unwrap();
+async fn get_shared_browser() -> (playwright_rs::Playwright, Arc<Browser>) {
+    let playwright = Playwright::launch()
+        .await
+        .expect("Failed to launch playwright");
     let browser = playwright
         .chromium()
         .launch_with_options(LaunchOptions {
@@ -36,18 +28,13 @@ async fn get_shared_browser() -> Arc<Browser> {
             ..Default::default()
         })
         .await
-        .unwrap();
-    let shared = Arc::new(browser);
-    
-    *SHARED_BROWSER.write().unwrap() = Some(Arc::clone(&shared));
-    shared
+        .expect("Failed to launch chromium");
+    (playwright, Arc::new(browser))
 }
 
 /// Cleanup shared browser (call after all tests)
 async fn cleanup_shared_browser() {
-    if let Some(browser) = SHARED_BROWSER.write().unwrap().take() {
-        browser.close().await.unwrap();
-    }
+    // No-op for now
 }
 
 #[cfg(test)]
@@ -63,10 +50,10 @@ mod tests {
     #[tokio::test]
     async fn test_initial_load_header_shows_location() {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
-        let _server = TestServer::new_with_mock(port, TEST_WORLD);
+        let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
 
         // Use shared browser instead of launching new one each time
-        let browser = get_shared_browser().await;
+        let (_playwright, browser) = get_shared_browser().await;
         let page = browser.new_page().await.unwrap();
 
         goto_with_connection_check(&page, port)
@@ -86,15 +73,15 @@ mod tests {
             "Story log should display current location"
         );
 
-        browser.close().await.unwrap();
+        let _ = browser.close().await;
     }
 
     #[tokio::test]
     async fn test_initial_load_story_log_has_content() {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
-        let _server = TestServer::new_with_mock(port, TEST_WORLD);
+        let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
 
-        let (_playwright, browser) = launch_chrome().await;
+        let (_playwright, browser) = get_shared_browser().await;
         let page = browser.new_page().await.unwrap();
 
         goto_with_connection_check(&page, port)
@@ -110,15 +97,15 @@ mod tests {
         // Wait for completion
         wait_for_status_ready(&page).await;
 
-        browser.close().await.unwrap();
+        let _ = browser.close().await;
     }
 
     #[tokio::test]
     async fn test_initial_load_status_is_ready() {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
-        let _server = TestServer::new_with_mock(port, TEST_WORLD);
+        let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
 
-        let (_playwright, browser) = launch_chrome().await;
+        let (_playwright, browser) = get_shared_browser().await;
         let page = browser.new_page().await.unwrap();
 
         goto_with_connection_check(&page, port)
@@ -132,7 +119,7 @@ mod tests {
         println!("Initial status: {}", status);
         assert!(status.contains("Ready"), "Status should show 'Ready'");
 
-        browser.close().await.unwrap();
+        let _ = browser.close().await;
     }
 
     // Command Submission Tests - Status updates, no LLM needed
@@ -140,9 +127,9 @@ mod tests {
     #[tokio::test]
     async fn test_look_command_shows_thinking() {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
-        let _server = TestServer::new_with_mock(port, TEST_WORLD);
+        let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
 
-        let (_playwright, browser) = launch_chrome().await;
+        let (_playwright, browser) = get_shared_browser().await;
         let page = browser.new_page().await.unwrap();
 
         goto_with_connection_check(&page, port)
@@ -185,6 +172,6 @@ mod tests {
         // Wait for completion to avoid polluting next test
         wait_for_status_ready(&page).await;
 
-        browser.close().await.unwrap();
+        let _ = browser.close().await;
     }
 }

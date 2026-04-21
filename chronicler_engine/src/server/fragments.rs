@@ -62,7 +62,10 @@ fn evaluate_and_narrate_triggers(
         let Ok((system_prompt, user_prompt)) =
             build_continuation_prompt(&context, narration_text, &trigger.action.narration_prompt)
         else {
-            log::error!("Failed to build continuation prompt: {}", "continuation failed");
+            log::error!(
+                "Failed to build continuation prompt: {}",
+                "continuation failed"
+            );
             continue;
         };
 
@@ -74,7 +77,11 @@ fn evaluate_and_narrate_triggers(
                 if continuation_text.trim().is_empty() {
                     continue;
                 }
-                state.add_log(continuation_text, Some(npc.sheet.name.clone()), LogType::Narration);
+                state.add_log(
+                    continuation_text,
+                    Some(npc.sheet.name.clone()),
+                    LogType::Narration,
+                );
                 crate::engine::trigger_eval::increment_times_met(state, &npc.id);
                 if !trigger.repeat {
                     crate::engine::trigger_eval::mark_trigger_fired(state, &npc.id, trigger_idx);
@@ -107,11 +114,19 @@ fn handle_movement(state: &mut GameState, destination: Option<&str>) {
             state.add_log(String::new(), Some(room_name), LogType::Narration);
         }
         Err(_) => {
-            let dynamic_room =
-                crate::engine::logic::create_dynamic_room(trigger, "A place you have never seen before.");
-            state.dynamic_rooms.insert(dynamic_room.id.clone(), dynamic_room.clone());
+            let dynamic_room = crate::engine::logic::create_dynamic_room(
+                trigger,
+                "A place you have never seen before.",
+            );
+            state
+                .dynamic_rooms
+                .insert(dynamic_room.id.clone(), dynamic_room.clone());
             state.current_room_id = dynamic_room.id.clone();
-            state.add_log(String::new(), Some(dynamic_room.name.clone()), LogType::Narration);
+            state.add_log(
+                String::new(),
+                Some(dynamic_room.name.clone()),
+                LogType::Narration,
+            );
         }
     }
 }
@@ -728,7 +743,10 @@ fn process_action(state: Arc<std::sync::Mutex<GameState>>, input: String, _playe
                         &narration_text,
                     );
 
-                    handle_movement(&mut state, quantifier_result.movement.destination.as_deref());
+                    handle_movement(
+                        &mut state,
+                        quantifier_result.movement.destination.as_deref(),
+                    );
 
                     let current_npcs: Vec<NpcCard> = quantifier_result
                         .npcs

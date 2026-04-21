@@ -65,8 +65,15 @@ fn get_data_dir() -> PathBuf {
 fn load_world_manifest(world_id: &str) -> chronicler_engine::Result<WorldManifest> {
     let data_dir = get_data_dir();
     let path = data_dir.join("worlds").join(world_id).join("world.json");
-    let json = fs::read_to_string(&path)?;
-    let manifest: WorldManifest = serde_json::from_str(&json)?;
+    let json = fs::read_to_string(&path).map_err(|e| EngineError::DataLoad {
+        path: path.display().to_string(),
+        source: Box::new(e.into()),
+    })?;
+    let manifest: WorldManifest =
+        serde_json::from_str(&json).map_err(|e| EngineError::DataLoad {
+            path: path.display().to_string(),
+            source: Box::new(e.into()),
+        })?;
     Ok(manifest)
 }
 
@@ -163,13 +170,26 @@ fn load_world(
 
     // Load map
     let map_path = world_dir.join(&manifest.map_file);
-    let map_json = fs::read_to_string(&map_path)?;
-    let map: MapDef = serde_json::from_str(&map_json)?;
+    let map_json = fs::read_to_string(&map_path).map_err(|e| EngineError::DataLoad {
+        path: map_path.display().to_string(),
+        source: Box::new(e.into()),
+    })?;
+    let map: MapDef = serde_json::from_str(&map_json).map_err(|e| EngineError::DataLoad {
+        path: map_path.display().to_string(),
+        source: Box::new(e.into()),
+    })?;
 
     // Load player
     let player_path = world_dir.join(&manifest.player_file);
-    let player_json = fs::read_to_string(&player_path)?;
-    let player: PlayerCard = serde_json::from_str(&player_json)?;
+    let player_json = fs::read_to_string(&player_path).map_err(|e| EngineError::DataLoad {
+        path: player_path.display().to_string(),
+        source: Box::new(e.into()),
+    })?;
+    let player: PlayerCard =
+        serde_json::from_str(&player_json).map_err(|e| EngineError::DataLoad {
+            path: player_path.display().to_string(),
+            source: Box::new(e.into()),
+        })?;
 
     // Load NPCs from characters directory
     let mut npcs = Vec::new();
@@ -178,7 +198,10 @@ fn load_world(
         for entry in fs::read_dir(&chars_dir)?.flatten() {
             let path = entry.path();
             if path.extension().and_then(|s| s.to_str()) == Some("json") {
-                let char_json = fs::read_to_string(&path)?;
+                let char_json = fs::read_to_string(&path).map_err(|e| EngineError::DataLoad {
+                    path: path.display().to_string(),
+                    source: Box::new(e.into()),
+                })?;
                 match serde_json::from_str::<NpcCard>(&char_json) {
                     Ok(npc) => npcs.push(npc),
                     Err(e) => {

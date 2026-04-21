@@ -23,7 +23,7 @@ mod tests {
     #[tokio::test]
     async fn test_page_loads() {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
-        let _server = TestServer::new_with_mock(port, TEST_WORLD);
+        let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
@@ -57,13 +57,13 @@ mod tests {
             .unwrap();
         assert!(has_action_area, "Action area should exist");
 
-        browser.close().await.unwrap();
+        let _ = browser.close().await;
     }
 
     #[tokio::test]
     async fn test_header_displays_game_title() {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
-        let _server = TestServer::new_with_mock(port, TEST_WORLD);
+        let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
@@ -88,13 +88,13 @@ mod tests {
             "Header should display game title"
         );
 
-        browser.close().await.unwrap();
+        let _ = browser.close().await;
     }
 
     #[tokio::test]
     async fn test_connection_status_indicator() {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
-        let _server = TestServer::new_with_mock(port, TEST_WORLD);
+        let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
@@ -115,7 +115,7 @@ mod tests {
             .unwrap();
         assert!(has_status, "Connection status indicator should exist");
 
-        browser.close().await.unwrap();
+        let _ = browser.close().await;
     }
 
     // Action Area Tests
@@ -123,7 +123,7 @@ mod tests {
     #[tokio::test]
     async fn test_action_area_elements() {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
-        let _server = TestServer::new_with_mock(port, TEST_WORLD);
+        let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
@@ -153,13 +153,13 @@ mod tests {
             .unwrap();
         assert!(has_button, "Submit button should exist");
 
-        browser.close().await.unwrap();
+        let _ = browser.close().await;
     }
 
     #[tokio::test]
     async fn test_input_validation_required() {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
-        let _server = TestServer::new_with_mock(port, TEST_WORLD);
+        let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
@@ -184,13 +184,13 @@ mod tests {
             "Input should have required attribute for validation"
         );
 
-        browser.close().await.unwrap();
+        let _ = browser.close().await;
     }
 
     #[tokio::test]
     async fn test_form_submission() {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
-        let _server = TestServer::new_with_mock(port, TEST_WORLD);
+        let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
@@ -218,7 +218,7 @@ mod tests {
         // Wait for completion to avoid polluting next test
         wait_for_status_ready(&page).await;
 
-        browser.close().await.unwrap();
+        let _ = browser.close().await;
     }
 
     // Story Log Tests
@@ -226,7 +226,7 @@ mod tests {
     #[tokio::test]
     async fn test_story_log_populated() {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
-        let _server = TestServer::new_with_mock(port, TEST_WORLD);
+        let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
@@ -250,13 +250,13 @@ mod tests {
             "Story log should have entries on initial load"
         );
 
-        browser.close().await.unwrap();
+        let _ = browser.close().await;
     }
 
     #[tokio::test]
     async fn test_story_log_scrollable() {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
-        let _server = TestServer::new_with_mock(port, TEST_WORLD);
+        let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
@@ -284,7 +284,7 @@ mod tests {
             "Story log should be scrollable"
         );
 
-        browser.close().await.unwrap();
+        let _ = browser.close().await;
     }
 
     // Layout Tests
@@ -292,7 +292,7 @@ mod tests {
     #[tokio::test]
     async fn test_no_horizontal_overflow() {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
-        let _server = TestServer::new_with_mock(port, TEST_WORLD);
+        let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
@@ -318,13 +318,13 @@ mod tests {
 
         assert!(!has_overflow, "Page should not have horizontal overflow");
 
-        browser.close().await.unwrap();
+        let _ = browser.close().await;
     }
 
     #[tokio::test]
     async fn test_element_positioning() {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
-        let _server = TestServer::new_with_mock(port, TEST_WORLD);
+        let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
@@ -367,7 +367,7 @@ mod tests {
             "Action area should be below story log"
         );
 
-        browser.close().await.unwrap();
+        let _ = browser.close().await;
     }
 
     // Visual Sidebar Tests
@@ -375,7 +375,7 @@ mod tests {
     #[tokio::test]
     async fn test_visual_sidebar_exists() {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
-        let _server = TestServer::new_with_mock(port, TEST_WORLD);
+        let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
@@ -393,13 +393,13 @@ mod tests {
             .unwrap();
         assert!(has_sidebar, "Visual sidebar should exist");
 
-        browser.close().await.unwrap();
+        let _ = browser.close().await;
     }
 
     #[tokio::test]
     async fn test_action_hints_visible() {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
-        let _server = TestServer::new_with_mock(port, TEST_WORLD);
+        let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
@@ -417,7 +417,7 @@ mod tests {
             .unwrap();
         assert!(has_hints, "Action hints should exist");
 
-        browser.close().await.unwrap();
+        let _ = browser.close().await;
     }
 
     // Static Shell Test
@@ -425,7 +425,7 @@ mod tests {
     #[tokio::test]
     async fn test_form_stays_static_after_submission() {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
-        let _server = TestServer::new_with_mock(port, TEST_WORLD);
+        let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
@@ -466,7 +466,7 @@ mod tests {
             "Form should stay in DOM (static shell)"
         );
 
-        browser.close().await.unwrap();
+        let _ = browser.close().await;
     }
 
     // CSS Tests
@@ -474,7 +474,7 @@ mod tests {
     #[tokio::test]
     async fn test_css_file_loads() {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
-        let _server = TestServer::new_with_mock(port, TEST_WORLD);
+        let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
@@ -502,13 +502,13 @@ mod tests {
             "CSS should contain :root for CSS variables"
         );
 
-        browser.close().await.unwrap();
+        let _ = browser.close().await;
     }
 
     #[tokio::test]
     async fn test_css_variables_used() {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
-        let _server = TestServer::new_with_mock(port, TEST_WORLD);
+        let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
@@ -536,13 +536,13 @@ mod tests {
             "CSS should use CSS custom properties (var())"
         );
 
-        browser.close().await.unwrap();
+        let _ = browser.close().await;
     }
 
     #[tokio::test]
     async fn test_responsive_breakpoints() {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
-        let _server = TestServer::new_with_mock(port, TEST_WORLD);
+        let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
@@ -570,7 +570,7 @@ mod tests {
             "CSS should contain @media queries for responsive breakpoints"
         );
 
-        browser.close().await.unwrap();
+        let _ = browser.close().await;
     }
 
     // Scrollbar & NPC Portrait Layout Tests
@@ -578,7 +578,7 @@ mod tests {
     #[tokio::test]
     async fn test_scrollbar_styled() {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
-        let _server = TestServer::new_with_mock(port, TEST_WORLD);
+        let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
@@ -611,13 +611,13 @@ mod tests {
             "CSS should contain Firefox scrollbar-width"
         );
 
-        browser.close().await.unwrap();
+        let _ = browser.close().await;
     }
 
     #[tokio::test]
     async fn test_npc_portraits_horizontal_layout() {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
-        let _server = TestServer::new_with_mock(port, TEST_WORLD);
+        let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();
@@ -663,13 +663,13 @@ mod tests {
             "NPC portraits should have overflow-x: auto"
         );
 
-        browser.close().await.unwrap();
+        let _ = browser.close().await;
     }
 
     #[tokio::test]
     async fn test_npc_portraits_fixed_width() {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
-        let _server = TestServer::new_with_mock(port, TEST_WORLD);
+        let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
 
         let playwright = Playwright::launch().await.unwrap();
         let browser = playwright.chromium().launch().await.unwrap();

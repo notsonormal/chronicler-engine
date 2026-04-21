@@ -8,6 +8,8 @@ import subprocess
 import sys
 import os
 import signal
+from pathlib import Path
+import shutil
 
 
 def kill_port(port: int):
@@ -106,7 +108,6 @@ def main():
     run("cargo build")
 
     print("[4/6] Copying data and assets for deployment...")
-    import shutil
     release_dir = Path("target/release")
     release_dir.mkdir(exist_ok=True)
     
