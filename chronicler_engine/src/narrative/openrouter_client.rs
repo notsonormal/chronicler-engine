@@ -9,26 +9,17 @@
 
 use serde_json::json;
 
-/// Get the configured LLM model for narrative generation.
-///
-/// Reads the `LLM_MODEL` environment variable, defaulting to `openai/gpt-4o-mini`.
+// [DOC: docs/system/llm_processing.md]
 pub fn get_llm_model() -> String {
     std::env::var("LLM_MODEL").unwrap_or_else(|_| "openai/gpt-4o-mini".to_string())
 }
 
-/// Get the configured LLM model for scene quantification.
-///
-/// Reads the `QUANTIFIER_MODEL` environment variable, defaulting to `openai/gpt-4o-mini`.
-/// The quantifier uses a separate model configuration so it can run on a
-/// different (typically cheaper/faster) model than the main narrative generator.
+// [DOC: docs/system/llm_processing.md]
 pub fn get_quantifier_model() -> String {
     std::env::var("QUANTIFIER_MODEL").unwrap_or_else(|_| "openai/gpt-4o-mini".to_string())
 }
 
-/// Call OpenRouter API with a specific model and return the response content.
-///
-/// This is the core implementation that all OpenRouter calls route through.
-/// The `model` parameter specifies which LLM to use (e.g., `openai/gpt-4o-mini`).
+// [DOC: docs/system/llm_processing.md]
 pub fn call_openrouter_with_model(
     api_key: &str,
     system_prompt: &str,

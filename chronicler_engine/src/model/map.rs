@@ -25,15 +25,13 @@ pub struct Room {
     pub id: String,
     pub name: String,
     pub description: String,
-    pub exits: HashMap<Direction, String>, // mapping direction to Room ID
+    pub exits: HashMap<Direction, String>,
     #[serde(default)]
-    pub items: Vec<String>, // list of item IDs
+    pub items: Vec<String>,
     #[serde(default)]
-    pub npcs: Vec<String>, // list of NPC IDs
+    pub npcs: Vec<String>,
     #[serde(default)]
     pub image_path: Option<String>,
-    /// Free text description of navigation options for the LLM.
-    /// The quantifier reads this to understand where the player can go.
     #[serde(default)]
     pub navigation_description: Option<String>,
 }

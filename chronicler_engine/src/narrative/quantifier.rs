@@ -16,8 +16,8 @@ pub enum QuantifierConfidence {
     Low,
 }
 
-/// Result of quantifying which NPCs are in a room.
-#[derive(Debug, Clone)]
+/// [DOC: docs/system/navigation.md]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct QuantifierParseResult {
     /// The NPC IDs detected as present in the room.
     pub npc_ids: Vec<String>,
@@ -42,7 +42,7 @@ pub enum MovementType {
     Leaving,
 }
 
-/// Result of detecting movement intent from the quantifier.
+/// [DOC: docs/system/navigation.md]
 #[derive(Debug, Clone)]
 pub struct MovementParseResult {
     /// Type of movement detected, if any.
@@ -73,8 +73,7 @@ pub struct QuantifierPromptContext<'a> {
     pub player_action: &'a str,
 }
 
-/// Builds compact prompts for the scene quantifier LLM.
-/// Produces a minimal context focused on determining room occupancy.
+/// [DOC: docs/reference/quantifier_prompt.md]
 pub struct QuantifierPromptBuilder<'a> {
     context: QuantifierPromptContext<'a>,
 }
@@ -218,13 +217,7 @@ struct MovementJson {
     destination: Option<String>,
 }
 
-/// Parse the quantifier LLM response to extract NPC IDs.
-///
-/// Strategy:
-/// 1. Try to parse as JSON `{"npcs_in_room": ["id1", "id2"]}`
-/// 2. If JSON fails, fall back to text extraction by matching known NPC IDs
-/// 3. Validate all extracted IDs against the known NPC list
-/// 4. Return results with confidence level
+/// [DOC: docs/reference/quantifier_prompt.md]
 pub fn parse_quantifier_response(
     response: &str,
     known_npc_ids: &[String],
@@ -264,9 +257,7 @@ pub fn parse_quantifier_response(
     }
 }
 
-/// Parse the quantifier LLM response to extract both NPCs and movement.
-///
-/// Returns a combined `QuantifierResult` with NPC presence and movement intent.
+/// [DOC: docs/reference/quantifier_prompt.md]
 pub fn parse_quantifier_response_with_movement(
     response: &str,
     known_npc_ids: &[String],
@@ -387,8 +378,7 @@ fn extract_npc_ids_from_text(response: &str, known_npc_ids: &[String]) -> Vec<St
     found
 }
 
-/// Extract movement intent from text response using keyword matching.
-/// Used by fragments.rs for direct movement detection from LLM narration.
+/// [DOC: docs/reference/quantifier_prompt.md]
 pub fn extract_movement_from_text(
     response: &str,
     all_rooms: &[RoomInfo],

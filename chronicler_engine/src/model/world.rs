@@ -2,7 +2,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::model::scenario::StartingScenario;
 
-/// Represents the overarching rules and scenario for the game world.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct WorldCard {
     pub name: String,
@@ -12,7 +11,6 @@ pub struct WorldCard {
     pub default_room_image: Option<String>,
 }
 
-/// Extended world manifest with loading metadata.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorldManifest {
     pub id: String,

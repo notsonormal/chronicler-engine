@@ -2,9 +2,7 @@ use crate::model::character::NpcCard;
 use crate::model::state::GameState;
 use crate::model::trigger::{ComparisonOperator, Trigger, TriggerCondition};
 
-/// Evaluate all NPC triggers for the current room.
-/// Returns a list of (NPC, matching trigger) tuples.
-/// Only evaluates NPCs currently in `state.npcs_in_area` (quantifier-confirmed present).
+/// [DOC: docs/system/triggers.md]
 pub fn evaluate_triggers(state: &GameState) -> Vec<(NpcCard, Trigger)> {
     let mut results = Vec::new();
 
@@ -22,7 +20,6 @@ pub fn evaluate_triggers(state: &GameState) -> Vec<(NpcCard, Trigger)> {
     results
 }
 
-/// Check if a trigger condition is met for the given NPC.
 pub fn check_condition(
     character_state: &crate::model::trigger::CharacterState,
     npc_id: &str,
@@ -40,12 +37,11 @@ pub fn check_condition(
     }
 }
 
-/// Increment the times_met counter for an NPC.
 pub fn increment_times_met(state: &mut GameState, npc_id: &str) {
+    // [DOC: docs/system/triggers.md]
     state.character_state.increment_times_met(npc_id);
 }
 
-/// Mark a trigger as fired for an NPC.
 pub fn mark_trigger_fired(state: &mut GameState, npc_id: &str, trigger_index: usize) {
     state
         .character_state

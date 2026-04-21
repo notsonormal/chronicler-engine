@@ -1,6 +1,6 @@
 # Chronicler Engine Knowledge Base
 
-**Generated:** 2026-04-20
+**Generated:** 2026-04-21
 **Language:** Rust (Edition 2024)
 **Type:** Single crate (binary + library)
 
@@ -20,29 +20,45 @@ chronicler_engine/
 │   ├── server/            # Axum HTTP/WebSocket (mod, templates, template_builders, fragments)
 │   └── ui/                # Dashboard components (mod, dashboard)
 ├── tests/                 # Integration tests (7 files)
-│   ├── component_tests.rs    # In-process unit tests
-│   ├── e2e_tests.rs          # Browser/Playwright tests
-│   ├── flow_mock_tests.rs    # Mock LLM tests
-│   ├── flow_llm_tests.rs     # Real LLM tests (requires OPENROUTER_API_KEY)
-│   ├── trigger_tests.rs      # Trigger system integration tests
-│   ├── test_utils.rs         # Shared test helpers (TestServer, port allocation)
-│   └── test_data.rs          # Test fixtures
 ├── docs/                  # Extensive documentation (34+ .md files)
 │   ├── architecture/      # System specs (system.md)
-│   ├── system/            # Domain docs (dashboard, navigation, narration, llm, etc.)
+│   ├── system/            # Domain docs (dashboard, navigation, narration, llm, triggers, etc.)
 │   ├── plans/            # Implementation plans (active + archived/)
 │   ├── adr/              # Architecture Decision Records
 │   └── reference/        # Data schemas, API specs, testing strategy
 ├── data/
 │   ├── worlds/           # Game data (JSON configs per world)
-│   │   ├── redmist_estate/  # Default world
-│   │   └── test/             # Test world
 │   └── images/           # Character sprites and assets
 └── scripts/              # Python helpers
-    ├── refine_character_json.py
-    ├── extract_sillytavern_png.py
-    ├── extract_images.py
-    └── coverage_summary.py
+```
+
+## DOCUMENTATION STRATEGY: SEMANTIC MAPPING
+This project follows a **Spec-Driven Implementation** (SDI) strategy.
+
+### The Golden Rule: Spec-First
+**NEVER** implement a new technical system or narrative logic without first creating/updating its specification in `docs/`. The code must reflect the spec, not the other way around.
+
+### Core Principles
+1. **Naming as Documentation**: Symbols (functions, types, variables) must use verbose, domain-aligned names that map 1-to-1 with concepts in the `docs/`.
+2. **Doc Anchors**: Complex logic blocks are marked with `// [DOC: docs/path/to/file.md]`.
+3. **Lean Code**: Remove all "What" comments. If the code isn't clear, rename the symbols.
+4. **The "Why" Exception**: Comments are reserved ONLY for technical constraints (e.g., `// Workaround for Axum timeout issue`).
+
+### Example: Semantic vs. Traditional
+**❌ BAD (Traditional)**
+```rust
+// Loop through NPCs and check if they are in the room
+for npc in all_npcs {
+    if npc.room_id == current_room {
+        // ...
+    }
+}
+```
+
+**✅ GOOD (Semantic Mapping)**
+```rust
+// [DOC: docs/system/navigation.md]
+let residents = find_npcs_in_current_location(all_npcs, current_room);
 ```
 
 ## WHERE TO LOOK
@@ -50,69 +66,26 @@ chronicler_engine/
 |------|----------|-------|
 | Add game feature | `src/engine/` | Action enum, parser, logic |
 | Modify data model | `src/model/` | World, map, character, state, scenario, trigger |
-| LLM changes | `src/narrative/` | llm.rs (trait), prompt.rs (templates), openrouter_client.rs, continuation.rs |
+| LLM changes | `src/narrative/` | llm.rs (trait), prompt.rs (templates) |
 | Trigger system | `src/engine/trigger_eval.rs` | Trigger evaluation, condition checking |
 | Web server | `src/server/` | Axum router, WebSocket, HTMX templates |
 | Dashboard UI | `src/ui/dashboard.rs` | HTMX components |
-| Run tests | `tests/` | trigger_tests (Playwright), flow_mock_tests, flow_llm_tests |
-| Add world | `data/worlds/<name>/` | world.json, map.json, player.json, characters/ |
-| Write docs | `docs/` | Follow existing structure |
 
-## CONVENTIONS (THIS PROJECT)
+## CONVENTIONS
 - **Result over panic**: Use `EngineError` enum, propagate with `?`
-- **Import order**: std → external crates → local modules
-- **Tests**: Inline `#[cfg(test)]` in source + `tests/` directory
-- **Async**: Use `#[tokio::test]` for integration tests
+- **Doc Anchors**: Always link complex blocks to `docs/` via `// [DOC: docs/path/to/file.md]`
 - **LLM backend**: Trait-based (`LlmBackend`), mock via `LLM_BACKEND=mock` env var
-- **Validation**: Run `cargo fmt`, `cargo clippy`, `cargo test` before commit
+- **Validation**: Run `python build.py` before commit (fmt + clippy + tests)
 
-## TEST PORTS
-| Test Suite | Port | Notes |
-|------------|------|-------|
-| Most test suites | Dynamic (3010-3050) | Allocated per-test from `tests/test_config.json` |
-| flow_llm_tests | Real LLM | Requires `OPENROUTER_API_KEY` env var |
-
-**Note:** Test ports are dynamically allocated to avoid port conflicts when tests run in parallel. The `TestServer` utility in `test_utils.rs` allocates ports from the range 3010-3050 via `get_available_port()`. Tests do NOT hardcode port numbers — they call `get_config_port("tests/test_config.json")` at runtime.
-
-## TEST CONFIGURATION
-| File | Purpose |
-|------|---------|
-| `tests/test_utils.rs` | `TestServer`, `get_available_port()`, smart waiting helpers |
-| `tests/test_config.json` | Port range (3010-3050) and per-test backend selection |
-| `tests/test_data.rs` | Test fixtures (NpcCard, Room, GameState builders) |
-| `tests/trigger_tests.rs` | Integration tests for the trigger system (Playwright + mock LLM) |
-
-All integration tests use:
-- `TestServer::with_config()` or `TestServer::from_config()` to start the server
-- `get_config_port()` to get a dynamically allocated port
-- `LLM_BACKEND=mock` for fast test execution (no real LLM API calls)
-
-## ANTI-PATTERNS (THIS PROJECT)
-- **Never** use `.unwrap()` or `.expect()` in production code
-- **Never** commit without running `cargo clippy`
-- **Never** skip architecture update (see `docs/architecture/system.md`)
-
-## UNIQUE STYLES
-- Rust 2024 edition (requires Rust 1.85+)
-- Extensive SDD docs hierarchy (adr/, plans/, system/, reference/)
-- Smart waiting in tests (poll-based, not sleep)
-- World loading from external JSON (not hardcoded)
-- HTMX for UI (no client-side JS framework)
+## ANTI-PATTERNS
+- **Never** use redundant "What" comments (e.g., `// Add to log`).
+- **Never** skip architecture/spec update before implementing engine changes.
+- **Never** use `.unwrap()` or `.expect()` in production code.
 
 ## COMMANDS
 ```bash
 python build.py             # Full build + test (recommended)
 cargo build                 # Release build
 cargo test                  # All tests
-cargo test --test flow_mock_tests  # Fast mock tests only
 cargo run -- --world redmist_estate --port 3000
-cargo clippy -- -D warnings # Strict linting
-cargo fmt                   # Format code
 ```
-
-## NOTES
-- LLM requires `OPENROUTER_API_KEY` env var or .env file
-- Default world: `redmist_estate` (use `test` for testing)
-- Game state is Single Source of Truth in `src/model/state.rs`
-- Use `python build.py` for complete validation (runs fmt, clippy, tests, coverage)
-- You should aggressively stop/kill the running application if it is stopping you from building/rerunning the application

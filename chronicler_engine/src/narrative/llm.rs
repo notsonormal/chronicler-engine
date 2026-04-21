@@ -19,7 +19,7 @@ pub trait LlmBackend: Send + Sync {
     fn name(&self) -> &str;
 }
 
-/// Enum for available LLM backends
+// [DOC: docs/system/llm_processing.md]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LlmBackendType {
     OpenRouter,
@@ -28,8 +28,6 @@ pub enum LlmBackendType {
 }
 
 impl LlmBackendType {
-    /// Get the configured LLM backend from environment
-    /// Default to OpenRouter if not set
     pub fn from_env() -> Self {
         match std::env::var("LLM_BACKEND").as_deref() {
             Ok("deepseek") => LlmBackendType::DeepSeek,
@@ -39,7 +37,6 @@ impl LlmBackendType {
     }
 }
 
-/// Get the configured LLM backend instance
 pub fn get_llm_backend() -> Box<dyn LlmBackend> {
     match LlmBackendType::from_env() {
         LlmBackendType::Mock => Box::new(MockBackend),
@@ -142,6 +139,7 @@ pub fn build_dialogue_prompts(
     npc: &NpcCard,
     user_message: &Option<String>,
 ) -> (String, String) {
+    // [DOC: docs/reference/sillytavern_prompt_system.md]
     let mut system_prompt = format!(
         "You are a character in a text adventure game. Your name is {}.\n\
     Personality: {}\n\
@@ -177,6 +175,7 @@ pub fn build_action_prompts(
     player: &PlayerCard,
     player_input: &str,
 ) -> (String, String) {
+    // [DOC: docs/reference/sillytavern_prompt_system.md]
     let mut system_prompt = String::from(
         "You are the Game Master of a text adventure game. \
 Narrate what happens in response to the player's action. \
@@ -221,21 +220,20 @@ pub struct MockBackend;
 impl LlmBackend for MockBackend {
     fn generate_dialogue(
         &self,
-        _context: &PromptContext,
+        context: &PromptContext,
         _npc: &NpcCard,
     ) -> Result<String, EngineError> {
-        // For mock, use the user_message from context
-        let msg = _context.user_message;
-        if msg.is_empty() {
+        let user_input = context.user_message;
+        if user_input.is_empty() {
             Ok("[MockGenerated] Standard greeting.".to_string())
         } else {
-            Ok(format!("[MockGenerated] Replying to: {msg}"))
+            Ok(format!("[MockGenerated] Replying to: {user_input}"))
         }
     }
 
     fn narrate_action(&self, context: &PromptContext) -> Result<String, EngineError> {
-        let msg = context.user_message;
-        let msg_lower = msg.to_lowercase();
+        let user_input = context.user_message;
+        let user_input_lower = user_input.to_lowercase();
 
         let movement_keywords = [
             "walk",
@@ -245,37 +243,35 @@ impl LlmBackend for MockBackend {
             "head to",
             "travel to",
             "move to",
-            "go to",
             "exit",
             "climb",
             "descend",
         ];
-        let has_movement = movement_keywords.iter().any(|k| msg_lower.contains(k));
+        let has_movement = movement_keywords
+            .iter()
+            .any(|k| user_input_lower.contains(k));
 
-        // Try to find destination in user's message by looking for room-like words
-        // Common destinations in test world
         let possible_destinations = [
             "kitchen", "village", "square", "forest", "gate", "hall", "entrance", "tavern", "shop",
             "store", "office", "quarters",
         ];
-        let destination = if has_movement {
+        let detected_destination = if has_movement {
             possible_destinations
                 .iter()
-                .find(|d| msg_lower.contains(*d))
+                .find(|d| user_input_lower.contains(*d))
                 .map(|s| s.to_string())
         } else {
             None
         };
 
-        // Return JSON format that quantifier can parse
-        if has_movement && destination.is_some() {
+        if has_movement && detected_destination.is_some() {
             Ok(format!(
-                r#"{{"narrative": "[MockNarration] {msg}", "movement": {{"type": "entering", "destination": "{dest}"}}}}"#,
-                dest = destination.unwrap()
+                r#"{{"narrative": "[MockNarration] {user_input}", "movement": {{"type": "entering", "destination": "{dest}"}}}}"#,
+                dest = detected_destination.unwrap()
             ))
         } else {
             Ok(format!(
-                r#"{{"narrative": "[MockNarration] {msg}", "movement": null}}"#
+                r#"{{"narrative": "[MockNarration] {user_input}", "movement": null}}"#
             ))
         }
     }
@@ -292,7 +288,6 @@ impl LlmBackend for MockBackend {
     }
 }
 
-/// DeepSeek backend - placeholder for future implementation
 pub struct DeepSeekBackend;
 
 impl LlmBackend for DeepSeekBackend {
@@ -453,7 +448,6 @@ mod tests {
         let (prompt, _user) =
             build_dialogue_prompts(&world, &room, &npc, &Some("Hello".to_string()));
 
-        // Assertions for prompt integrity
         assert!(prompt.contains("Carla"));
         assert!(prompt.contains("Strict"));
         assert!(prompt.contains("Gate"));
@@ -482,9 +476,8 @@ mod tests {
 
         let (system_prompt, user_prompt) = build_dialogue_prompts(&world, &room, &npc, &None);
 
-        // Verify the prompts are generated (basic sanity check)
         assert!(!system_prompt.is_empty());
-        assert!(!user_prompt.is_empty() || user_prompt.len() < 200); // user might be empty or have placeholder
+        assert!(!user_prompt.is_empty() || user_prompt.len() < 200);
     }
 
     #[test]
@@ -496,7 +489,6 @@ mod tests {
         let (system_prompt, user_prompt) =
             build_action_prompts(&world, &room, &[], &player, "I look around");
 
-        // Verify the prompts are generated
         assert!(!system_prompt.is_empty());
         assert!(user_prompt.contains("I look around"));
     }
@@ -627,7 +619,6 @@ mod tests {
         let _room = make_test_room();
         let _player = make_test_player();
 
-        // Test that history parameter is accepted (doesn't cause error)
         let _history = vec![
             LogEntry {
                 sender: Some("Narrator".to_string()),
@@ -681,7 +672,6 @@ mod tests {
         let result = backend.narrate_action(&make_test_context(unique_input));
 
         assert!(result.is_ok());
-        // Mock response echoes the input
         assert!(result.unwrap().contains(unique_input));
     }
 
@@ -696,7 +686,6 @@ mod tests {
 
         assert!(result.is_ok());
         let response = result.unwrap();
-        // Should mention entering and room name
         assert!(response.contains("enter"));
         assert!(response.contains(&room.name));
     }
@@ -730,7 +719,6 @@ mod tests {
 
         assert!(result.is_ok());
         let response = result.unwrap();
-        // Should echo the player's message
         assert!(response.contains("Hello, guard!"));
     }
 
@@ -758,7 +746,6 @@ mod tests {
         let result = backend.generate_dialogue(&make_test_context_with_npc(&npc, ""), &npc);
 
         assert!(result.is_ok());
-        // Without message, should return greeting
         assert!(result.unwrap().contains("greeting"));
     }
 
@@ -769,7 +756,6 @@ mod tests {
         let _room = make_test_room();
         let _player = make_test_player();
 
-        // Empty history should work fine
         let result = backend.narrate_action(&make_test_context("test"));
         assert!(result.is_ok());
     }
@@ -781,7 +767,6 @@ mod tests {
         let _room = make_test_room();
         let _player = make_test_player();
 
-        // Substantial history (like real game would have)
         let _history: Vec<LogEntry> = (0..50)
             .map(|i| LogEntry {
                 sender: Some(format!("Speaker{}", i % 3)),
@@ -797,6 +782,5 @@ mod tests {
 
         let result = backend.narrate_action(&make_test_context("current action"));
         assert!(result.is_ok());
-        // Should still work with large history (Mock doesn't use it, but API accepts it)
     }
 }

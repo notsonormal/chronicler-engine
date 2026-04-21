@@ -55,7 +55,7 @@ impl GenerationState {
     }
 }
 
-/// RAII guard that sets is_generating=true on creation and false on drop.
+/// [DOC: docs/architecture/system.md]
 pub struct GeneratingGuard {
     state: Arc<std::sync::Mutex<GameState>>,
 }
@@ -196,21 +196,17 @@ mod tests {
     fn test_generation_state_input_robustness() {
         let mut tui = GenerationState::default();
 
-        // Test push
         tui.push_char('A');
         assert_eq!(tui.input, "A");
         assert_eq!(tui.cursor_position, 1);
 
-        // Test pop
         tui.pop_char();
         assert_eq!(tui.input, "");
         assert_eq!(tui.cursor_position, 0);
 
-        // Test underflow protection (Negative Case)
         tui.pop_char();
-        assert_eq!(tui.cursor_position, 0); // Still 0, no panic
+        assert_eq!(tui.cursor_position, 0);
 
-        // Test clear
         tui.push_char('h');
         tui.clear_input();
         assert_eq!(tui.input, "");
@@ -221,17 +217,14 @@ mod tests {
     fn test_generation_state_error_message() {
         let mut tui = GenerationState::default();
 
-        // Initially no error
         assert!(tui.error_message.is_none());
 
-        // Set an error
         tui.error_message = Some("LLM Error: 429 Too Many Requests".to_string());
         assert_eq!(
             tui.error_message,
             Some("LLM Error: 429 Too Many Requests".to_string())
         );
 
-        // Clear the error
         tui.error_message = None;
         assert!(tui.error_message.is_none());
     }

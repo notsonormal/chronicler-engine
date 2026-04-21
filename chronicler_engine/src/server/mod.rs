@@ -1,8 +1,6 @@
 pub mod fragments;
 pub mod templates;
 
-/// Test helper - create the Axum app without running a server.
-/// This allows same-process testing with coverage.
 pub fn create_app_for_testing(state: Arc<std::sync::Mutex<GameState>>) -> Router {
     let app_state = AppState { state };
 

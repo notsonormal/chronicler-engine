@@ -11,7 +11,7 @@ use chronicler_engine::server::ServerConfig;
 
 use clap::Parser;
 
-/// Command-line arguments for the Chronicler Engine
+/// [DOC: docs/architecture/system.md]
 #[derive(Parser, Debug)]
 #[command(name = "chronicler-engine")]
 #[command(version = "0.1.0")]
@@ -32,22 +32,19 @@ struct Args {
 
 use std::path::PathBuf;
 
-/// Get the data directory path.
-///
-/// Priority:
-/// 1. CHRONLER_DATA environment variable (for custom data location)
-/// 2. {exe_dir}/data/ (for deployed binaries)
-/// 3. ./data/ (for development via cargo run)
-///
-/// This allows flexible deployment: standalone binary can find data alongside itself,
-/// or use a custom path via environment variable.
-fn get_data_dir() -> PathBuf {
-    // Check environment variable first
-    if let Ok(data_dir) = std::env::var("CHRONLER_DATA") {
+/// [DOC: docs/architecture/system.md]
+fn resolve_engine_data_path() -> PathBuf {
+    // [DOC: docs/system/startup.md]
+    if let Ok(data_dir) = std::env::var("CHRONICLER_DATA") {
         return PathBuf::from(data_dir);
     }
 
-    // Try executable directory (for deployed binary)
+    // Deprecated: CHRONLER_DATA was a typo, kept for backward compatibility.
+    if let Ok(data_dir) = std::env::var("CHRONLER_DATA") {
+        eprintln!("Warning: CHRONLER_DATA is deprecated. Use CHRONICLER_DATA instead.");
+        return PathBuf::from(data_dir);
+    }
+
     if let Ok(exe_path) = std::env::current_exe() {
         if let Some(exe_dir) = exe_path.parent() {
             let data_dir = exe_dir.join("data");
@@ -57,13 +54,11 @@ fn get_data_dir() -> PathBuf {
         }
     }
 
-    // Fall back to current directory (development)
     PathBuf::from("data")
 }
 
-/// Load world manifest from file
 fn load_world_manifest(world_id: &str) -> chronicler_engine::Result<WorldManifest> {
-    let data_dir = get_data_dir();
+    let data_dir = resolve_engine_data_path();
     let path = data_dir.join("worlds").join(world_id).join("world.json");
     let json = fs::read_to_string(&path).map_err(|e| EngineError::DataLoad {
         path: path.display().to_string(),
@@ -77,9 +72,9 @@ fn load_world_manifest(world_id: &str) -> chronicler_engine::Result<WorldManifes
     Ok(manifest)
 }
 
-/// List all available worlds
+/// [DOC: docs/architecture/system.md]
 fn list_available_worlds() -> chronicler_engine::Result<()> {
-    let data_dir = get_data_dir();
+    let data_dir = resolve_engine_data_path();
     let worlds_dir = data_dir.join("worlds");
     if !worlds_dir.exists() {
         println!("No worlds found in data/worlds/");
@@ -114,14 +109,14 @@ fn list_available_worlds() -> chronicler_engine::Result<()> {
     Ok(())
 }
 
-/// Verify that a world can be loaded (for testing purposes)
+/// [DOC: docs/system/testing.md]
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_load_redmist_estate_world() {
-        let result = load_world("redmist_estate");
+        let result = initialize_world_from_manifest("redmist_estate");
         assert!(
             result.is_ok(),
             "Failed to load redmist_estate: {:?}",
@@ -136,7 +131,7 @@ mod tests {
 
     #[test]
     fn test_load_test_world() {
-        let result = load_world("test");
+        let result = initialize_world_from_manifest("test");
         assert!(result.is_ok(), "Failed to load test world: {:?}", result);
         let (manifest, _map, player, npcs) = result.unwrap();
         assert_eq!(manifest.id, "test");
@@ -153,22 +148,20 @@ mod tests {
     }
 }
 
-/// Load a complete game world from the worlds directory structure
-fn load_world(
+/// [DOC: docs/architecture/system.md]
+fn initialize_world_from_manifest(
     world_id: &str,
 ) -> chronicler_engine::Result<(WorldManifest, MapDef, PlayerCard, Vec<NpcCard>)> {
-    // Load from {data_dir}/worlds/<world_id>/
-    let data_dir = get_data_dir();
+    let data_dir = resolve_engine_data_path();
     let world_dir = data_dir.join("worlds").join(world_id);
 
     if !world_dir.exists() {
         return Err(EngineError::WorldNotFound(world_id.to_string()));
     }
 
-    // Load world manifest
+    // [DOC: docs/system/startup.md]
     let manifest = load_world_manifest(world_id)?;
 
-    // Load map
     let map_path = world_dir.join(&manifest.map_file);
     let map_json = fs::read_to_string(&map_path).map_err(|e| EngineError::DataLoad {
         path: map_path.display().to_string(),
@@ -179,7 +172,6 @@ fn load_world(
         source: Box::new(e.into()),
     })?;
 
-    // Load player
     let player_path = world_dir.join(&manifest.player_file);
     let player_json = fs::read_to_string(&player_path).map_err(|e| EngineError::DataLoad {
         path: player_path.display().to_string(),
@@ -191,7 +183,6 @@ fn load_world(
             source: Box::new(e.into()),
         })?;
 
-    // Load NPCs from characters directory
     let mut npcs = Vec::new();
     let chars_dir = world_dir.join("characters");
     if chars_dir.is_dir() {
@@ -218,21 +209,17 @@ fn load_world(
 fn main() -> chronicler_engine::Result<()> {
     dotenv::dotenv().ok();
 
-    // Initialize logging to both stdout and file
     init_logging();
 
     let args = Args::parse();
 
-    // Handle --list-worlds flag
     if args.list_worlds {
         list_available_worlds()?;
         return Ok(());
     }
 
-    // Load the world
-    let (manifest, map, player, npcs) = load_world(&args.world)?;
+    let (manifest, map, player, npcs) = initialize_world_from_manifest(&args.world)?;
 
-    // Create game state with the starting room from manifest
     let mut state = GameState::new(
         Arc::new(manifest.clone().into()),
         Arc::new(map),
@@ -241,31 +228,26 @@ fn main() -> chronicler_engine::Result<()> {
         manifest.starting_room_id.clone(),
     );
 
-    // Check for starting scenario - use scenario text instead of LLM if available
     let use_scenario = if let Some(scenario) = manifest.default_scenario() {
         !scenario.text.is_empty()
     } else {
         false
     };
 
-    // If scenario exists with text, add it to the log (skip LLM call)
     if use_scenario {
         if let Some(scenario) = manifest.default_scenario() {
-            // Look up room name from map (not raw ID)
-            let room_name = chronicler_engine::engine::logic::get_room_by_id(
+            let room_name = chronicler_engine::engine::logic::find_room_in_world_map(
                 &state,
                 &manifest.starting_room_id,
             )
             .map(|r| r.name.clone())
             .unwrap_or_else(|| manifest.starting_room_id.clone());
 
-            // Add location entry first (sender + empty text = is_location detection)
             state.add_log(
                 String::new(),
                 Some(room_name),
                 chronicler_engine::model::state::LogType::Narration,
             );
-            // Then add scenario text
             let text = scenario.text.replace("{{user}}", &player.sheet.name);
             state.add_log(
                 text,
@@ -275,38 +257,29 @@ fn main() -> chronicler_engine::Result<()> {
         }
     }
 
-    let current_room = chronicler_engine::engine::logic::get_current_room(&state)
-        .map_err(|e| chronicler_engine::EngineError::RoomNotFound(e.to_string()))?;
+    let current_room = chronicler_engine::engine::logic::get_current_room(&state)?;
 
-    // Fetch NPCs from room's NPC IDs via state.npcs HashMap (before mutating state)
     let room_npc_ids = current_room.npcs.clone();
 
-    // For initial arrival, use static NPCs from map.json.
-    // The quantifier is most useful during room transitions (handled in fragments.rs)
-    // where conversation history provides context about NPC following behavior.
     let nearby_npcs: Vec<NpcCard> = room_npc_ids
         .iter()
         .filter_map(|id| state.npcs.get(id).cloned())
         .collect();
 
-    // Get ALL NPCs from game state for prompt context
     let all_npcs: Vec<NpcCard> = state.npcs.values().cloned().collect();
 
-    // Clone data for the background thread
     let world = state.world.clone();
     let map = state.map.clone();
     let player = state.player.clone();
     let room_id = state.current_room_id.clone();
     let history: Vec<chronicler_engine::model::state::LogEntry> = Vec::new();
 
-    // Create shared state for the HTMX server
     let state = Arc::new(std::sync::Mutex::new(state));
 
-    // Trigger LLM narration in background ONLY if no scenario was used
+    // [DOC: docs/system/narration_engine.md]
     if !use_scenario {
         let state_for_thread = state.clone();
         thread::spawn(move || {
-            // RAII guard ensures is_generating is reset even if room is None
             let _guard = GeneratingGuard::new(state_for_thread.clone());
 
             let room = map
@@ -324,7 +297,7 @@ fn main() -> chronicler_engine::Result<()> {
                     all_npcs: &all_npcs,
                     npcs_in_area: &nearby_npcs,
                     player: &player,
-                    user_message: "", // narrate_arrival creates its own message
+                    user_message: "",
                     history: &history,
                 };
                 let narration = backend.narrate_arrival(&context);
@@ -336,22 +309,19 @@ fn main() -> chronicler_engine::Result<()> {
                                 None,
                                 chronicler_engine::model::state::LogType::Narration,
                             );
-                            // Note: Guard will reset is_generating on drop
                         }
                     }
                     Err(e) => {
                         if let Ok(mut state) = state_for_thread.lock() {
                             state.generation_state.error_message = Some(format!("LLM Error: {e}"));
-                            // Note: Guard will reset is_generating on drop
                         }
                     }
                 }
             }
-            // Guard drops here, resetting is_generating = false
         });
     } // end if !use_scenario
 
-    // Run the HTTP server on the specified port
+    // [DOC: docs/architecture/system.md]
     let config = ServerConfig { port: args.port };
     let runtime = tokio::runtime::Runtime::new()?;
     runtime.block_on(chronicler_engine::server::run_server_with_config(
@@ -361,12 +331,11 @@ fn main() -> chronicler_engine::Result<()> {
     Ok(())
 }
 
-/// Initialize logging to both stdout and a daily rotating log file
+/// [DOC: docs/architecture/system.md]
 fn init_logging() {
     use chrono::Local;
     use std::io::Write;
 
-    // Create logs directory if it doesn't exist
     let log_dir = Path::new("logs");
     if !log_dir.exists() {
         if let Err(e) = fs::create_dir_all(log_dir) {
@@ -374,11 +343,9 @@ fn init_logging() {
         }
     }
 
-    // Generate log filename with current date
     let timestamp = Local::now().format("%Y%m%d");
     let log_file_path = log_dir.join(format!("chronicler_{timestamp}.log"));
 
-    // Write initial message to log file
     let init_msg = format!(
         "[{}] [INFO] [chronicler_engine] Logging initialized. Log file: {:?}\n",
         Local::now().format("%Y-%m-%d %H:%M:%S%.3f"),
@@ -392,7 +359,6 @@ fn init_logging() {
         let _ = file.write_all(init_msg.as_bytes());
     }
 
-    // Initialize env_logger to stdout with debug level by default
     env_logger::Builder::from_default_env()
         .filter_level(log::LevelFilter::Debug)
         .init();

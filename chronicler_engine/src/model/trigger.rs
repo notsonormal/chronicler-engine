@@ -38,18 +38,16 @@ pub struct CharacterState {
 }
 
 impl CharacterState {
-    /// Get the times_met counter for an NPC. Returns 0 if not found.
+    // [DOC: docs/system/character_state.md]
     pub fn get_times_met(&self, npc_id: &str) -> u32 {
         self.npcs.get(npc_id).map(|s| s.times_met).unwrap_or(0)
     }
 
-    /// Increment the times_met counter for an NPC. Creates entry if missing.
     pub fn increment_times_met(&mut self, npc_id: &str) {
         let entry = self.npcs.entry(npc_id.to_string()).or_default();
         entry.times_met += 1;
     }
 
-    /// Check if a trigger has already fired for an NPC.
     pub fn is_trigger_fired(&self, npc_id: &str, trigger_index: usize) -> bool {
         self.npcs
             .get(npc_id)
@@ -58,7 +56,6 @@ impl CharacterState {
             .unwrap_or(false)
     }
 
-    /// Mark a trigger as fired for an NPC. Creates entry if missing.
     pub fn mark_trigger_fired(&mut self, npc_id: &str, trigger_index: usize) {
         let entry = self.npcs.entry(npc_id.to_string()).or_default();
         entry.trigger_fired.insert(trigger_index, true);

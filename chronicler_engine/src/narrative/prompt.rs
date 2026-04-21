@@ -1,7 +1,6 @@
-//! Prompt layer definitions for context management.
+//! [DOC: docs/reference/sillytavern_prompt_system.md]
 //!
-//! Inspired by SillyTavern's Prompt Manager, this module defines the layer structure
-//! for building LLM context with explicit token budgeting.
+//! Inspired by SillyTavern's Prompt Manager.
 
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -12,11 +11,8 @@ use crate::model::map::Room;
 use crate::model::state::LogEntry;
 use crate::model::world::WorldCard;
 
-/// Sanitize user input to prevent prompt injection attacks.
-///
-/// Strips or escapes {{Variable}} patterns that could be used to
-/// inject or override system prompts.
 pub fn sanitize_for_prompt(input: &str) -> String {
+    // [DOC: docs/system/llm_processing.md]
     static INJECTION_PATTERN: Lazy<Regex> =
         Lazy::new(|| Regex::new(r"\{\{.+?\}\}").expect("valid regex pattern"));
 
@@ -25,11 +21,7 @@ pub fn sanitize_for_prompt(input: &str) -> String {
         .to_string()
 }
 
-/// Prompt layers ordered by priority (0 = highest priority, immutable).
-///
-/// Each layer represents a distinct category of context that gets included
-/// in the LLM prompt. Lower-numbered layers are processed first and cannot
-/// be overridden by higher-numbered layers.
+/// [DOC: docs/reference/sillytavern_prompt_system.md]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PromptLayer {
     /// Layer 0: System prompt - global game rules and AI role
@@ -50,7 +42,7 @@ pub enum PromptLayer {
     Phi,
 }
 
-/// Token budget constants for context management.
+/// [DOC: docs/system/llm_processing.md]
 pub mod budget {
     /// Maximum tokens allocated for the entire context window.
     pub const MAX_CONTEXT_TOKENS: u32 = 8192;
@@ -65,22 +57,13 @@ pub mod budget {
     pub const MAX_RESPONSE_TOKENS: u32 = 512;
 }
 
-/// Estimates the number of tokens in a string using simple character-based approximation.
-///
-/// This uses a rough estimate of 4 characters per token, which is a common
-/// approximation for English text. More sophisticated tokenizers would give
-/// better accuracy but require additional dependencies.
 pub fn estimate_tokens(text: &str) -> usize {
     // Use div_ceil for cleaner integer division with ceiling
     text.chars().count().div_ceil(4)
 }
 
-/// Truncates a string to fit within a token budget.
-///
-/// This function removes characters from the beginning of the string to fit
-/// within the specified token limit, keeping the most recent text which is
-/// typically more relevant for conversation context.
 pub fn truncate_to_budget(text: &str, max_tokens: usize) -> String {
+    // [DOC: docs/system/llm_processing.md]
     let max_chars = max_tokens * 4; // Reverse the token estimate
 
     if text.chars().count() <= max_chars {

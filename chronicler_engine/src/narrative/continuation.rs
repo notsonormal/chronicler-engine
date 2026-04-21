@@ -1,8 +1,4 @@
-//! Continuation prompt builder for auto-trigger narration.
-//!
-//! This module constructs the second LLM prompt when an NPC trigger fires
-//! after the player enters a room. The continuation prompt instructs the LLM
-//! to continue the scene from the first narration without repeating it.
+//! [DOC: docs/system/triggers.md]
 
 use crate::error::{EngineError, Result};
 use crate::narrative::prompt::{PromptContext, estimate_tokens, truncate_to_budget};
@@ -11,28 +7,7 @@ use crate::narrative::prompt::{PromptContext, estimate_tokens, truncate_to_budge
 /// We reserve some budget for the room context, trigger text, and prompt overhead.
 const MAX_FIRST_NARRATION_TOKENS: usize = 2048;
 
-/// Build a continuation prompt for the second LLM call after a trigger fires.
-///
-/// The system prompt instructs the LLM to:
-/// - Continue the scene from the first narration
-/// - Incorporate the trigger text naturally into the narrative
-/// - NOT repeat or contradict the first narration
-/// - Keep the response concise
-///
-/// The user prompt includes:
-/// - The first narration text (truncated if too long to fit token budget)
-/// - Current room context (name, description, NPCs present)
-/// - The trigger action text
-///
-/// # Arguments
-///
-/// * `context` - The prompt context containing room, NPC, and world information
-/// * `first_narration` - The narration text from the first LLM call
-/// * `trigger_text` - The trigger action text (e.g., "Gabriella steps forward from the shadows.")
-///
-/// # Returns
-///
-/// A tuple of (system_prompt, user_prompt) for the second LLM call.
+/// [DOC: docs/system/triggers.md]
 pub fn build_continuation_prompt(
     context: &PromptContext,
     first_narration: &str,
@@ -74,9 +49,7 @@ Keep your response concise — focus on the trigger event and immediate reaction
     )
 }
 
-/// Truncate the first narration to fit within the token budget.
-///
-/// Uses word-boundary aware truncation to avoid cutting mid-word.
+/// [DOC: docs/system/llm_processing.md]
 fn truncate_first_narration(narration: &str, max_tokens: usize) -> String {
     let truncated = truncate_to_budget(narration, max_tokens);
 

@@ -27,7 +27,6 @@ use crate::server::templates::{
 
 const MAX_LOG_DISPLAY: usize = 50;
 
-/// Get NPCs from static room.npcs list in map.json.
 fn get_static_npcs(state: &GameState, room_npc_ids: &[String]) -> Vec<NpcCard> {
     room_npc_ids
         .iter()
@@ -35,7 +34,6 @@ fn get_static_npcs(state: &GameState, room_npc_ids: &[String]) -> Vec<NpcCard> {
         .collect()
 }
 
-/// Evaluate triggers and narrate continuations for NPCs in the room.
 fn evaluate_and_narrate_triggers(
     state: &mut GameState,
     narration_text: &str,
@@ -99,8 +97,6 @@ fn evaluate_and_narrate_triggers(
     }
 }
 
-/// Handle movement triggered by quantifier result.
-/// Creates dynamic rooms for new destinations if needed.
 fn handle_movement(state: &mut GameState, destination: Option<&str>) {
     let Some(trigger) = destination else {
         return;
@@ -131,9 +127,7 @@ fn handle_movement(state: &mut GameState, destination: Option<&str>) {
     }
 }
 
-/// Determine which NPCs are in the current room using the quantifier LLM.
-/// Falls back to static room.npcs from map.json if the quantifier fails
-/// or returns Low confidence.
+/// [DOC: docs/reference/quantifier_prompt.md]
 fn determine_npcs_in_room(
     state: &GameState,
     room_npc_ids: &[String],
@@ -316,14 +310,11 @@ pub fn render_story_log(state: &AppState) -> Result<String> {
 fn render_visual_sidebar_unlocked(state: &GameState) -> Result<String> {
     let room = get_current_room(state)?;
 
-    // Use room image, or fall back to world default, or None
     let image_path = room
         .image_path
         .clone()
         .or_else(|| state.world.default_room_image.clone());
 
-    // Collect NPC data: (preferred_image, name) pairs
-    // Use npcs_in_area from state if available, otherwise fallback to room.npcs
     let npc_data: Vec<(String, String)> = if !state.npcs_in_area.is_empty() {
         state
             .npcs_in_area
@@ -490,7 +481,6 @@ pub async fn generating_status_handler(State(state): State<AppState>) -> Html<St
     }
 }
 
-/// Reset the is_generating flag - used by tests to avoid stuck state
 pub async fn reset_generating_handler(State(state): State<AppState>) -> Html<String> {
     let result = state
         .state
@@ -539,6 +529,7 @@ pub struct ActionForm {
     command: String,
 }
 
+/// [DOC: docs/system/game_flow.md]
 pub async fn action_handler(
     State(state): State<AppState>,
     Form(form): Form<ActionForm>,
@@ -549,8 +540,8 @@ pub async fn action_handler(
         return Html("<span class=\"status error\">Enter a command</span>".to_string());
     }
 
-    // Get mutable state and add the input to the log
     let (player_name, is_sync) = {
+        // [DOC: docs/system/game_flow.md]
         let mut state_guard = match state.state.lock() {
             Ok(g) => g,
             Err(_) => return Html(String::new()),
@@ -559,8 +550,6 @@ pub async fn action_handler(
         let name = state_guard.player.sheet.name.clone();
         state_guard.add_log(command.clone(), Some(name.clone()), LogType::Input);
 
-        // For synchronous commands (look, inventory, quit), set generating=false immediately
-        // For async commands (free actions), keep generating=true until LLM completes
         let action = parse_command(&command);
         let is_sync = matches!(
             action,
@@ -570,7 +559,6 @@ pub async fn action_handler(
         );
 
         if is_sync {
-            // Add the output immediately for sync commands
             process_sync_action(&mut state_guard, &action);
             state_guard.generation_state.is_generating = false;
         } else {
@@ -603,7 +591,6 @@ pub async fn action_handler(
     }
 }
 
-/// Process synchronous actions (Look, Inventory, Quit) immediately
 fn process_sync_action(state: &mut GameState, action: &crate::engine::action::Action) {
     match action {
         crate::engine::action::Action::Look => {
@@ -625,14 +612,13 @@ fn process_sync_action(state: &mut GameState, action: &crate::engine::action::Ac
         crate::engine::action::Action::Quit => {
             state.add_log("Goodbye!".to_string(), None, LogType::System);
         }
-        _ => {} // Other actions handled by process_action
+        _ => {}
     }
 }
 
 fn process_action(state: Arc<std::sync::Mutex<GameState>>, input: String, _player_name: String) {
     // Note: We don't use GeneratingGuard here because async actions (WalkTo, FreeAction)
     // spawn inner threads that need to manage the is_generating flag themselves.
-    // The outer spawn (line 272-279) now uses a guard to ensure cleanup.
 
     let action = parse_command(&input);
 
@@ -662,7 +648,6 @@ fn process_action(state: Arc<std::sync::Mutex<GameState>>, input: String, _playe
             state_guard.generation_state.is_generating = false;
         }
         crate::engine::action::Action::Talk(name, msg) => {
-            // Simplified - in full implementation, would generate dialogue via LLM
             let msg_str = msg.unwrap_or_default();
             state_guard.add_log(
                 format!("You talk to {name}: {msg_str}"),
