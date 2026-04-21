@@ -161,7 +161,7 @@ cargo llvm-cov test --json --output-path coverage.json
 
 These have low coverage but are acceptable:
 - **Runtime env detection** (`LlmBackendType::from_env()`) - cannot be unit tested
-- **API client code** (`OpenRouterBackend`) - requires API key
+- **API client code** (`OpenRouterBackend`) - LLM requests are slow
 - **`add_log` overflow** - requires >1000 log entries
 
 See `docs/adr/` for detailed rationale behind these patterns.

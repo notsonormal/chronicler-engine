@@ -3,8 +3,10 @@ use std::thread;
 
 use askama::Template;
 use axum::{
+    body::Body,
     extract::{Form, State},
-    response::Html,
+    http::{HeaderMap, StatusCode},
+    response::{Html, Response},
 };
 use serde::Deserialize;
 
@@ -533,18 +535,28 @@ pub struct ActionForm {
 pub async fn action_handler(
     State(state): State<AppState>,
     Form(form): Form<ActionForm>,
-) -> Html<String> {
+) -> Response<Body> {
     let command = form.command.trim().to_string();
     if command.is_empty() {
         // Return error status - browser should have caught this, but just in case
-        return Html("<span class=\"status error\">Enter a command</span>".to_string());
+        return Response::builder()
+            .status(StatusCode::BAD_REQUEST)
+            .body(Body::from(
+                "<span class=\"status error\">Enter a command</span>",
+            ))
+            .unwrap();
     }
 
     let (player_name, is_sync) = {
         // [DOC: docs/system/game_flow.md]
         let mut state_guard = match state.state.lock() {
             Ok(g) => g,
-            Err(_) => return Html(String::new()),
+            Err(_) => {
+                return Response::builder()
+                    .status(StatusCode::INTERNAL_SERVER_ERROR)
+                    .body(Body::new(String::new()))
+                    .unwrap();
+            }
         };
 
         let name = state_guard.player.sheet.name.clone();
@@ -583,11 +595,23 @@ pub async fn action_handler(
         });
     }
 
-    // Return the current status immediately
+    // Return the current status immediately.
+    // For sync actions, include HX-Trigger to also refresh the story log immediately.
     if is_sync {
-        Html("<span class=\"status ready\">Ready</span>".to_string())
+        let mut headers = HeaderMap::new();
+        headers.insert("HX-Trigger", "sync-action-complete".parse().unwrap());
+        Response::builder()
+            .status(StatusCode::OK)
+            .header("HX-Trigger", "sync-action-complete")
+            .body(Body::from("<span class=\"status ready\">Ready</span>"))
+            .unwrap()
     } else {
-        Html("<span class=\"status thinking\">Thinking...</span>".to_string())
+        Response::builder()
+            .status(StatusCode::OK)
+            .body(Body::from(
+                "<span class=\"status thinking\">Thinking...</span>",
+            ))
+            .unwrap()
     }
 }
 

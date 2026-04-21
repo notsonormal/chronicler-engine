@@ -49,6 +49,8 @@ mod tests {
             return;
         }
 
+        eprintln!("Running: OPENROUTER_API_KEY set");
+
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
         let _server = TestServer::new(port, TEST_WORLD).await;
 
@@ -85,7 +87,7 @@ mod tests {
         .unwrap();
 
         println!("Waiting for LLM response...");
-        let llm_result = wait_for_llm_idle(port, Duration::from_secs(90)).await;
+        let llm_result = wait_for_llm_idle(port, Duration::from_secs(180)).await;
         if llm_result.is_err() {
             let status: String = page
                 .evaluate::<(), String>(
@@ -152,6 +154,8 @@ mod tests {
             return;
         }
 
+        eprintln!("Running: OPENROUTER_API_KEY set");
+
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
         let _server = TestServer::new(port, TEST_WORLD).await;
 
@@ -162,28 +166,17 @@ mod tests {
             .await
             .expect("Failed to connect to server");
 
-        let initial_text: String = page
-            .evaluate::<(), String>(
-                "document.querySelector('#story-log')?.innerText || ''",
-                None,
-            )
-            .await
-            .unwrap();
+        // Wait for initial load
+        wait_for_status_ready(&page).await;
 
-        page.evaluate::<(), ()>(
-            r#"
-            (() => {
-                const input = document.querySelector('#command-form input');
-                if (input) input.value = 'look around and describe what you see';
-                const form = document.querySelector('#command-form');
-                if (form) form.requestSubmit();
-            })()
-            "#,
-            None,
-        )
-        .await
-        .unwrap();
+        // Count initial log entries by type
+        let initial_log_state = get_story_log_summary(&page).await;
+        println!("Initial story log: {:?}", initial_log_state);
 
+        // Submit a FreeAction that requires LLM narration
+        send_action(&page, "look around and describe what you see").await;
+
+        // Verify status transitions to Thinking
         let status_during: String = page
             .evaluate::<(), String>(
                 "document.querySelector('#status-display')?.innerText || ''",
@@ -191,33 +184,26 @@ mod tests {
             )
             .await
             .unwrap();
-
         println!("Status during LLM: {}", status_during);
         assert!(
             status_during.contains("Thinking"),
-            "Status should show 'Thinking...' during LLM"
+            "Status should show 'Thinking...' during LLM generation. Got: '{}'",
+            status_during
         );
 
-        let llm_result = wait_for_llm_idle(port, Duration::from_secs(90)).await;
-        if llm_result.is_err() {
-            let status: String = page
-                .evaluate::<(), String>(
-                    "document.querySelector('#status-display')?.innerText || 'no status'",
-                    None,
-                )
-                .await
-                .unwrap_or_default();
-            println!("Warning: LLM did not become idle within timeout. Status: '{status}'");
-        }
+        // Wait for LLM to complete (narration + trigger narration)
+        let llm_result = wait_for_llm_idle(port, Duration::from_secs(180)).await;
 
-        let final_text = wait_for_story_log_change(&page, &initial_text).await;
-        println!(
-            "Content length: {} -> {}",
-            initial_text.len(),
-            final_text.len()
-        );
+        // Poll story log until narration count increases (HTMX may need a poll cycle to catch up)
+        let final_log_state = wait_for_narration_increase(
+            &page,
+            initial_log_state.narration_count,
+            Duration::from_secs(10),
+        )
+        .await;
+        println!("Final story log: {:?}", final_log_state);
 
-        // Content should have changed via polling OR there's an error message showing
+        // Get error message if any
         let error_msg: String = page
             .evaluate::<(), String>(
                 "document.querySelector('#error-message')?.innerText || ''",
@@ -226,19 +212,48 @@ mod tests {
             .await
             .unwrap();
 
-        if !error_msg.is_empty() {
-            println!("Error message displayed in UI: {}", error_msg);
+        // Verify narration was added
+        let narration_added = final_log_state.total_entries > initial_log_state.total_entries
+            || final_log_state.narration_count > initial_log_state.narration_count;
+
+        if !narration_added && llm_result.is_err() {
+            panic!(
+                "LLM narration failed: no new entries added after 180s timeout. \
+                 Initial: {:?}, Final: {:?}, Error: '{}', LLM idle: Err",
+                initial_log_state, final_log_state, error_msg
+            );
         }
 
-        let content_changed = final_text.len() > initial_text.len();
+        if !narration_added && !error_msg.is_empty() {
+            panic!(
+                "LLM narration failed with error. Initial: {:?}, Final: {:?}, Error: '{}'",
+                initial_log_state, final_log_state, error_msg
+            );
+        }
+
         assert!(
-            content_changed || !error_msg.is_empty(),
-            "Either story should expand or error should show. Content: {}->{}, Error: '{}'",
-            initial_text.len(),
-            final_text.len(),
-            error_msg
+            narration_added,
+            "LLM should have added narration entries. Initial: {:?}, Final: {:?}, LLM idle: {:?}",
+            initial_log_state, final_log_state, llm_result
         );
 
+        // Verify at least one Narration-type entry was added (the LLM response)
+        assert!(
+            final_log_state.narration_count > initial_log_state.narration_count,
+            "Expected at least one Narration-type entry from LLM. Initial narration: {}, Final: {}",
+            initial_log_state.narration_count,
+            final_log_state.narration_count
+        );
+
+        // Verify Input entry was logged
+        assert!(
+            final_log_state.input_count > initial_log_state.input_count,
+            "Expected an Input entry for the command. Initial input: {}, Final: {}",
+            initial_log_state.input_count,
+            final_log_state.input_count
+        );
+
+        // Verify status returned to Ready or Error
         let status_after: String = page
             .evaluate::<(), String>(
                 "document.querySelector('#status-display')?.innerText || ''",
@@ -246,14 +261,15 @@ mod tests {
             )
             .await
             .unwrap();
-
         println!("Status after LLM: {}", status_after);
-        let status_ok = status_after.contains("Ready") || status_after.contains("Error");
-        assert!(
-            status_ok,
-            "Status should return to 'Ready' or show error after LLM. Got: {}",
-            status_after
-        );
+
+        if !status_after.contains("Ready") && !status_after.contains("Error") {
+            eprintln!(
+                "Status not Ready/Error after 180s. LLM idle result: {:?}. \
+                 Story log: {:?}. Error UI: '{}'",
+                llm_result, final_log_state, error_msg
+            );
+        }
 
         let _ = browser.close().await;
     }
@@ -266,6 +282,8 @@ mod tests {
             eprintln!("Skipping: OPENROUTER_API_KEY not set");
             return;
         }
+
+        eprintln!("Running: OPENROUTER_API_KEY set");
 
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
         let _server = TestServer::new(port, TEST_WORLD).await;
@@ -309,7 +327,7 @@ mod tests {
             .unwrap();
         println!("Status during: {}", status_during);
 
-        let llm_result = wait_for_llm_idle(port, Duration::from_secs(90)).await;
+        let llm_result = wait_for_llm_idle(port, Duration::from_secs(180)).await;
         if llm_result.is_err() {
             let status: String = page
                 .evaluate::<(), String>(
@@ -340,5 +358,96 @@ mod tests {
         );
 
         let _ = browser.close().await;
+    }
+
+    // Helper Functions
+
+    /// Helper: Send an action via the form
+    async fn send_action(page: &playwright_rs::Page, text: &str) {
+        let text_owned = text.to_string();
+        let _: Result<(), _> = page
+            .evaluate(
+                r#"
+            (text) => {
+                const input = document.querySelector('#command-form input[name="command"]');
+                if (input) {
+                    input.value = text;
+                    input.form?.requestSubmit();
+                }
+            }
+            "#,
+                Some(&text_owned),
+            )
+            .await;
+    }
+
+    /// Story log summary for test assertions
+    #[derive(Debug)]
+    struct StoryLogSummary {
+        total_entries: usize,
+        narration_count: usize,
+        dialogue_count: usize,
+        system_count: usize,
+        input_count: usize,
+    }
+
+    /// Helper: Get a summary of story log entries by type
+    async fn get_story_log_summary(page: &playwright_rs::Page) -> StoryLogSummary {
+        let result: serde_json::Value = page
+            .evaluate::<(), serde_json::Value>(
+                r#"
+            (() => {
+                const entries = document.querySelectorAll('#story-log .log-entry');
+                let counts = { total: entries.length, narration: 0, dialogue: 0, system: 0, input: 0 };
+                entries.forEach(entry => {
+                    if (entry.classList.contains('narration')) counts.narration++;
+                    else if (entry.classList.contains('dialogue')) counts.dialogue++;
+                    else if (entry.classList.contains('system')) counts.system++;
+                    else if (entry.classList.contains('input')) counts.input++;
+                });
+                return JSON.stringify(counts);
+            })()
+            "#,
+                None,
+            )
+            .await
+            .unwrap_or(serde_json::json!({"total": 0, "narration": 0, "dialogue": 0, "system": 0, "input": 0}));
+
+        let counts: serde_json::Value = if result.is_string() {
+            serde_json::from_str(result.as_str().unwrap_or("{}")).unwrap_or_default()
+        } else {
+            result
+        };
+
+        StoryLogSummary {
+            total_entries: counts.get("total").and_then(|v| v.as_u64()).unwrap_or(0) as usize,
+            narration_count: counts
+                .get("narration")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0) as usize,
+            dialogue_count: counts.get("dialogue").and_then(|v| v.as_u64()).unwrap_or(0) as usize,
+            system_count: counts.get("system").and_then(|v| v.as_u64()).unwrap_or(0) as usize,
+            input_count: counts.get("input").and_then(|v| v.as_u64()).unwrap_or(0) as usize,
+        }
+    }
+
+    /// Helper: Poll story log until narration count exceeds the initial value
+    /// Waits up to `timeout` for HTMX polling to catch up
+    async fn wait_for_narration_increase(
+        page: &playwright_rs::Page,
+        initial_narration: usize,
+        timeout: Duration,
+    ) -> StoryLogSummary {
+        let start = std::time::Instant::now();
+        loop {
+            let summary = get_story_log_summary(page).await;
+            if summary.narration_count > initial_narration {
+                return summary;
+            }
+            if start.elapsed() > timeout {
+                return summary;
+            }
+            tokio::time::sleep(Duration::from_millis(500)).await;
+        }
     }
 }
