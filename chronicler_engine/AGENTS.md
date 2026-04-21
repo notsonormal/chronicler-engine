@@ -89,3 +89,12 @@ cargo build                 # Release build
 cargo test                  # All tests
 cargo run -- --world redmist_estate --port 3000
 ```
+
+## Repository Map
+
+A full codemap is available at `src/codemap.md`.
+
+Before working on any task, read `src/codemap.md` to understand:
+- Engine architecture and entry points
+- Module responsibilities and design patterns
+- Data flow between engine components
