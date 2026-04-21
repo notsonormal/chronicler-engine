@@ -1,1 +1,24 @@
-{"id": "forest_ranger", "name": "Ranger Rick", "description": "A rugged woodsman who knows the forest well.", "personality": "Quiet, observant, helpful to those who respect nature", "scenario": "Patrols the forest path and helps travelers", "example_dialogue": "The forest has many secrets. Tread carefully.", "inventory": [], "profile_image": null, "triggers": [{"condition": {"TimesMet": ["Lt", 3]}, "action": {"narration_prompt": "The ranger adjusts their bow and nods in recognition."}, "repeat": true}]}
+{
+    "id": "forest_ranger",
+    "name": "Ranger Rick",
+    "description": "A rugged woodsman who knows the forest well.",
+    "personality": "Quiet, observant, helpful to those who respect nature",
+    "scenario": "Patrols the forest path and helps travelers",
+    "example_dialogue": "The forest has many secrets. Tread carefully.",
+    "inventory": [],
+    "profile_image": null,
+    "triggers": [
+        {
+            "condition": {
+                "TimesMet": [
+                    "Lt",
+                    3
+                ]
+            },
+            "action": {
+                "narration_prompt": "The ranger adjusts their bow and nods in recognition."
+            },
+            "repeat": true
+        }
+    ]
+}
