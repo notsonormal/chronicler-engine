@@ -69,48 +69,46 @@ fn evaluate_and_narrate_triggers(
             continue;
         };
 
-        let api_key = std::env::var("OPENROUTER_API_KEY").unwrap_or_default();
-        let model = get_llm_model();
+        let use_mock = std::env::var("LLM_BACKEND").as_deref() == Ok("mock");
 
-        match call_openrouter_with_model(&api_key, &system_prompt, &user_prompt, &model) {
-            Ok(continuation_text) => {
-                if continuation_text.trim().is_empty() {
+        let continuation_text = if use_mock {
+            format!("[Trigger: {}]", trigger.action.narration_prompt)
+        } else {
+            let api_key = std::env::var("OPENROUTER_API_KEY").unwrap_or_default();
+            let model = get_llm_model();
+            match call_openrouter_with_model(&api_key, &system_prompt, &user_prompt, &model) {
+                Ok(text) => text,
+                Err(e) => {
+                    log::error!("Trigger narration failed: {e}");
+                    state.add_log(
+                        format!("[Trigger narration failed: {e}]"),
+                        None,
+                        LogType::System,
+                    );
                     continue;
                 }
-                state.add_log(
-                    continuation_text,
-                    Some(npc.sheet.name.clone()),
-                    LogType::Narration,
-                );
-                crate::engine::trigger_eval::increment_times_met(state, &npc.id);
-                if !trigger.repeat {
-                    crate::engine::trigger_eval::mark_trigger_fired(state, &npc.id, trigger_idx);
-                }
             }
-            Err(e) => {
-                log::error!("Trigger narration failed: {e}");
-                state.add_log(
-                    format!("[Trigger narration failed: {e}]"),
-                    None,
-                    LogType::System,
-                );
-            }
+        };
+
+        if continuation_text.trim().is_empty() {
+            continue;
+        }
+        state.add_log(continuation_text, None, LogType::Narration);
+        if !trigger.repeat {
+            crate::engine::trigger_eval::mark_trigger_fired(state, &npc.id, trigger_idx);
         }
     }
 }
 
-fn handle_movement(state: &mut GameState, destination: Option<&str>) {
+fn handle_movement(state: &mut GameState, destination: Option<&str>, new_npc_ids: &[String]) {
     let Some(trigger) = destination else {
         return;
     };
 
-    match crate::engine::logic::attempt_semantic_walk(state, trigger) {
-        Ok(_) => {
-            let room_name = get_current_room(state)
-                .map(|r| r.name.clone())
-                .unwrap_or_else(|_| "Unknown".to_string());
-            state.add_log(String::new(), Some(room_name), LogType::Narration);
-        }
+    let previous_room_id = state.current_room_id.clone();
+
+    let success = match crate::engine::logic::attempt_semantic_walk(state, trigger) {
+        Ok(_) => true,
         Err(_) => {
             let dynamic_room = crate::engine::logic::create_dynamic_room(
                 trigger,
@@ -120,12 +118,29 @@ fn handle_movement(state: &mut GameState, destination: Option<&str>) {
                 .dynamic_rooms
                 .insert(dynamic_room.id.clone(), dynamic_room.clone());
             state.current_room_id = dynamic_room.id.clone();
-            state.add_log(
-                String::new(),
-                Some(dynamic_room.name.clone()),
-                LogType::Narration,
-            );
+            true
         }
+    };
+
+    if !success {
+        return;
+    }
+
+    if previous_room_id != state.current_room_id {
+        for npc_id in new_npc_ids {
+            if !state.character_state.is_currently_meeting(npc_id) {
+                state.character_state.increment_times_met(npc_id);
+            }
+            state.character_state.set_currently_meeting(npc_id, true);
+        }
+    }
+
+    if let Ok(current_room) = get_current_room(state) {
+        state.add_log(
+            String::new(),
+            Some(current_room.name.clone()),
+            LogType::Narration,
+        );
     }
 }
 
@@ -729,6 +744,24 @@ fn process_action(state: Arc<std::sync::Mutex<GameState>>, input: String, _playe
                     history: &history,
                 };
 
+                // First quantifier: detect NPCs in player action text and handle movement
+                if let Ok(mut state) = state_for_thread.lock() {
+                    let room_npc_ids = get_current_room(&state)
+                        .map(|r| r.npcs.clone())
+                        .unwrap_or_default();
+                    let previous_room_npcs: Vec<NpcCard> = state.npcs_in_area.clone();
+
+                    let pre_narration_quantifier =
+                        determine_npcs_in_room(&state, &room_npc_ids, &previous_room_npcs, &text);
+
+                    handle_movement(
+                        &mut state,
+                        pre_narration_quantifier.movement.destination.as_deref(),
+                        &pre_narration_quantifier.npcs.npc_ids,
+                    );
+                }
+
+                // Generate main narration
                 let Ok(narration_text) = backend.narrate_action(&context) else {
                     if let Ok(mut state) = state_for_thread.lock() {
                         state.generation_state.error_message =
@@ -740,21 +773,18 @@ fn process_action(state: Arc<std::sync::Mutex<GameState>>, input: String, _playe
                     return;
                 };
 
+                // Second quantifier: detect NPCs that appeared in the narration
                 if let Ok(mut state) = state_for_thread.lock() {
                     let room_npc_ids = get_current_room(&state)
                         .map(|r| r.npcs.clone())
                         .unwrap_or_default();
                     let previous_room_npcs: Vec<NpcCard> = state.npcs_in_area.clone();
+
                     let quantifier_result = determine_npcs_in_room(
                         &state,
                         &room_npc_ids,
                         &previous_room_npcs,
                         &narration_text,
-                    );
-
-                    handle_movement(
-                        &mut state,
-                        quantifier_result.movement.destination.as_deref(),
                     );
 
                     let current_npcs: Vec<NpcCard> = quantifier_result
@@ -773,9 +803,17 @@ fn process_action(state: Arc<std::sync::Mutex<GameState>>, input: String, _playe
                         user_message: &text,
                         history: &history,
                     };
-                    evaluate_and_narrate_triggers(&mut state, &narration_text, &trigger_context, 3);
                     state.add_log(narration_text.clone(), None, LogType::Narration);
                     state.npcs_in_area = current_npcs;
+
+                    // Evaluate triggers BEFORE incrementing times_met
+                    // (so TimesMet Eq 0 can fire on first detection)
+                    evaluate_and_narrate_triggers(&mut state, &narration_text, &trigger_context, 3);
+
+                    // After triggers evaluated, increment times_met for detected NPCs
+                    for npc_id in &quantifier_result.npcs.npc_ids {
+                        crate::engine::trigger_eval::increment_times_met(&mut state, npc_id);
+                    }
                 }
 
                 if let Ok(mut state) = state_for_thread.lock() {

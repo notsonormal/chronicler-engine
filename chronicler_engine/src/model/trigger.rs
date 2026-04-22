@@ -30,6 +30,7 @@ pub struct Trigger {
 pub struct NpcEncounterState {
     pub times_met: u32,
     pub trigger_fired: HashMap<usize, bool>,
+    pub currently_meeting: bool,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
@@ -59,6 +60,18 @@ impl CharacterState {
     pub fn mark_trigger_fired(&mut self, npc_id: &str, trigger_index: usize) {
         let entry = self.npcs.entry(npc_id.to_string()).or_default();
         entry.trigger_fired.insert(trigger_index, true);
+    }
+
+    pub fn is_currently_meeting(&self, npc_id: &str) -> bool {
+        self.npcs
+            .get(npc_id)
+            .map(|s| s.currently_meeting)
+            .unwrap_or(false)
+    }
+
+    pub fn set_currently_meeting(&mut self, npc_id: &str, meeting: bool) {
+        let entry = self.npcs.entry(npc_id.to_string()).or_default();
+        entry.currently_meeting = meeting;
     }
 }
 
@@ -144,6 +157,7 @@ mod tests {
             NpcEncounterState {
                 times_met: 3,
                 trigger_fired: HashMap::new(),
+                currently_meeting: false,
             },
         );
 

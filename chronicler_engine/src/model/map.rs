@@ -6,6 +6,19 @@ pub struct MapDef {
     pub overworld: Overworld,
 }
 
+impl MapDef {
+    pub fn get_room_by_id(&self, room_id: &str) -> Option<&Room> {
+        for region in &self.overworld.regions {
+            for room in &region.rooms {
+                if room.id == room_id {
+                    return Some(room);
+                }
+            }
+        }
+        None
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Overworld {
     pub id: String,

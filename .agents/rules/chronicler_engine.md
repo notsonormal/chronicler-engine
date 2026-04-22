@@ -12,6 +12,7 @@ When you (the AI) are tasked with building, debugging, or extending the `chronic
 2. **Plans update architecture first** - Before any code, update the architecture document
 3. **Plan in `docs/plans/`** - Create implementation plans there
 4. **Validate** - Run tests, format, clippy after implementation
+5. **Test-First Context** - Use tests to understand existing behavior and triage bugs BEFORE deep-diving into code
 
 ## Workflow (from docs/README.md)
 

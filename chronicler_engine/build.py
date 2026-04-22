@@ -98,6 +98,13 @@ def main():
     print("Checking for lingering server processes...")
     kill_by_name("chronicler")
 
+    # Clean up stale port lock files from crashed test runs
+    import tempfile
+    lock_dir = Path(tempfile.gettempdir()) / "chronicler_test_ports"
+    if lock_dir.exists():
+        print(f"Cleaning stale port locks from {lock_dir}...")
+        shutil.rmtree(lock_dir)
+
     print("[1/5] Formatting...")
     run("cargo fmt")
 

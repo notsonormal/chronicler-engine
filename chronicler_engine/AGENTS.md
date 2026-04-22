@@ -44,6 +44,12 @@ This project follows a **Spec-Driven Implementation** (SDI) strategy.
 3. **Lean Code**: Remove all "What" comments. If the code isn't clear, rename the symbols.
 4. **The "Why" Exception**: Comments are reserved ONLY for technical constraints (e.g., `// Workaround for Axum timeout issue`).
 
+### THE TEST-FIRST PHILOSOPHY
+This project relies on a comprehensive suite of integration tests as the ultimate source of truth for behavior.
+- **Tests as Documentation**: If you don't understand how a component works, read its tests in `tests/` before reading the source code.
+- **Test-Driven Debugging**: Before fixing a bug, find or create a failing test case. If tests pass but the bug exists, the test suite is missing a scenario.
+- **No Regression**: Every change must be verified by running `python build.py`.
+
 ### Example: Semantic vs. Traditional
 **❌ BAD (Traditional)**
 ```rust

@@ -103,6 +103,25 @@ impl GameState {
         for npc in npcs {
             npcs_map.insert(npc.id.clone(), npc);
         }
+
+        let mut character_state = CharacterState::default();
+
+        for region in &map.overworld.regions {
+            for room in &region.rooms {
+                if room.id == starting_room {
+                    for npc_id in &room.npcs {
+                        if let Some(npc) = npcs_map.get(npc_id) {
+                            let encounter_state =
+                                character_state.npcs.entry(npc.id.clone()).or_default();
+                            encounter_state.times_met = 1;
+                            encounter_state.currently_meeting = true;
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+
         Self {
             world,
             map,
@@ -113,7 +132,7 @@ impl GameState {
             generation_state: GenerationState::default(),
             npcs_in_area: Vec::new(),
             dynamic_rooms: HashMap::new(),
-            character_state: CharacterState::default(),
+            character_state,
         }
     }
 

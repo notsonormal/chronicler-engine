@@ -18,17 +18,19 @@ This folder contains all documentation for the Chronicler Engine project.
 - `llm_processing.md` - LLM integration
 
 ### `docs/plans/`
-**Implementation plans** - Blueprints for features (active or archived).
-
-- `archived/` - Completed or abandoned plans
-  - `hx_migration.md` - HTMX migration (superseded by architecture/system.md)
-  - `tui_migration.md` - Original TUI spec (superseded)
-  - `scene_quantification.md` - Deferred feature
+**Implementation plans** for new features. See [workflow section](#workflow) for process.
 
 ### `docs/adr/`
 **Architecture Decision Records** - Key architectural decisions with context, rationale, and consequences.
 
-See [ADR-001](adr/adr-001-polling-for-realtime-updates.md) for example format.
+ADRs document the "why" behind major architectural choices:
+
+- [ADR-001: HTMX Web Dashboard](./adr/adr-001-htmx-web-dashboard.md) - Web UI over TUI
+- [ADR-002: SSE for Real-Time Updates](./adr/adr-002-sse-realtime-updates.md) - Transport layer
+- [ADR-003: Askama Template Engine](./adr/adr-003-askama-templates.md) - Template rendering
+- [ADR-004: XML-Structured LLM Prompts](./adr/adr-004-xml-prompt-format.md) - Prompt format
+- [ADR-005: Layered Prompt System](./adr/adr-005-layered-prompts.md) - SillyTavern-style prompts
+- [ADR-006: Quantifier-Driven Game Systems](./adr/adr-006-quantifier-systems.md) - LLM-driven features
 
 ### `docs/reference/`
 **Reference documentation** - Data schemas, API specs, testing strategy.

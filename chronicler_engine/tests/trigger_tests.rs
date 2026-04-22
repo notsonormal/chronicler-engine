@@ -67,8 +67,56 @@ mod tests {
         let _ = browser.close().await;
     }
 
-    /// Test: No trigger fires for NPC without triggers (bartender)
-    /// This is a regression test to ensure NPCs without triggers still work.
+    /// Test: Trigger fires when second quantifier detects NPC via RoomConfiguredNpcs
+    /// This tests the flow where:
+    /// 1. Player moves to a room with configured NPCs (e.g., shop with shopkeeper)
+    /// 2. Second quantifier runs on narration and sees RoomConfiguredNpcs
+    /// 3. Trigger with TimesMet Eq 0 fires
+    #[tokio::test]
+    async fn test_second_quantifier_detects_room_npcs() {
+        let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
+        let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
+
+        let (_playwright, browser) = launch_chrome().await;
+        let page = browser.new_page().await.unwrap();
+
+        goto_with_connection_check(&page, port)
+            .await
+            .expect("Failed to connect to server");
+
+        wait_for_status_ready(&page).await;
+
+        // Get initial entry count
+        let before = count_log_entries(&page).await;
+
+        // Move to a room that has NPCs configured (mock will detect room from keyword)
+        // "enter shop" - shop has shopkeeper in map.json
+        send_action(&page, "enter shop").await;
+        wait_for_status_ready(&page).await;
+
+        // Small delay for async trigger processing
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+
+        let after = wait_for_log_entries(&page, before + 1).await;
+
+        // The mock narration should have triggered room NPC detection
+        // and the trigger should fire (adding another entry)
+        println!("Entries before: {}, after: {}", before, after);
+
+        // At minimum: action response + trigger narration
+        assert!(
+            after > before,
+            "Moving to room with NPCs should trigger events"
+        );
+
+        let _ = browser.close().await;
+    }
+
+    /// Test: NPC without triggers still works (bartender has no triggers)
+    /// NOTE: With the fix evaluating ALL NPCs for triggers, other NPCs' triggers may fire
+    /// even when talking to an NPC without triggers. This test verifies the bartender
+    /// still generates dialogue, but accepts that status may show "Thinking..." briefly
+    /// due to other NPCs' triggers firing.
     #[tokio::test]
     async fn test_no_trigger_for_npc_without_triggers() {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
@@ -88,17 +136,28 @@ mod tests {
 
         // Send action near bartender (no triggers)
         send_action(&page, "talk to bartender").await;
+
+        // Wait for completion (may take time due to other NPCs' triggers firing)
         wait_for_status_ready(&page).await;
 
-        // Should complete without errors
-        let status = get_status(&page).await;
-        assert_eq!(status, "Ready", "Server should be ready after action");
-
-        // Should have more entries (the action response)
+        // Should have more entries (the action response + possibly other triggers)
         let after = wait_for_log_entries(&page, before + 1).await;
         assert!(
             after > before,
             "Should have response entries after talking to bartender"
+        );
+
+        // Verify bartender dialogue appeared
+        let story_log = page
+            .evaluate::<(), String>(
+                "document.querySelector('#story-log')?.innerText || ''",
+                None,
+            )
+            .await
+            .unwrap_or_default();
+        assert!(
+            story_log.contains("Bartender") || story_log.contains("bartender"),
+            "Bartender dialogue should appear"
         );
 
         let _ = browser.close().await;
@@ -106,6 +165,9 @@ mod tests {
 
     /// Test: Second encounter does NOT re-fire (non-repeatable trigger)
     /// After a trigger fires once, subsequent encounters should not fire again.
+    /// NOTE: With the fix that evaluates ALL NPCs for triggers (not just npcs_in_area),
+    /// we may see more entries on subsequent encounters due to other NPCs' triggers.
+    /// The key check is that the SAME NPC's trigger doesn't fire twice.
     #[tokio::test]
     async fn test_second_encounter_does_not_refire() {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
@@ -129,7 +191,7 @@ mod tests {
         // Give server a moment to process the trigger state
         tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
-        // Second encounter - trigger should NOT fire (times_met is now 1)
+        // Second encounter - shopkeeper trigger should NOT fire (times_met is now 1)
         send_action(&page, "talk to shopkeeper").await;
         wait_for_status_ready(&page).await;
         // Small delay for story log polling
@@ -137,13 +199,26 @@ mod tests {
         let after_second = count_log_entries(&page).await;
         println!("After second talk: {} entries", after_second);
 
-        // The difference should be minimal (trigger didn't fire a second time)
-        // At most 2 new entries: the "talk to" system message + potential poll refresh
-        let new_entries = after_second - after_first;
+        // With the fix evaluating ALL NPCs, we may see more than 2 new entries
+        // due to other NPCs' triggers firing. But the shopkeeper's trigger
+        // should NOT have fired again (since times_met is now 1 and trigger is non-repeatable).
+        // We verify this by checking the content doesn't contain a duplicate shopkeeper narration.
+        let shopkeeper_trigger_text =
+            "The shopkeeper looks up from behind the counter with a warm smile.";
+        let story_log = page
+            .evaluate::<(), String>(
+                "document.querySelector('#story-log')?.innerText || ''",
+                None,
+            )
+            .await
+            .unwrap_or_default();
+
+        // Count occurrences of the shopkeeper's trigger text
+        let trigger_count = story_log.matches(shopkeeper_trigger_text).count();
         assert!(
-            new_entries <= 2,
-            "Second encounter should not fire trigger (expected <=2 new entry, got {})",
-            new_entries
+            trigger_count <= 1,
+            "Shopkeeper trigger should appear at most once (found {} times)",
+            trigger_count
         );
 
         let _ = browser.close().await;
@@ -183,7 +258,9 @@ mod tests {
     }
 
     /// Test: FreeAction with movement but no triggers works as before (regression)
-    /// Movement actions should work even when no NPC triggers are involved.
+    /// NOTE: With the fix that evaluates ALL NPCs for triggers (not just npcs_in_area),
+    /// movement actions now trigger continuation narration for NPCs with active triggers.
+    /// This means "go north" may be async and take longer to complete.
     #[tokio::test]
     async fn test_freeaction_with_movement_no_triggers() {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
@@ -202,13 +279,21 @@ mod tests {
         let initial_location = wait_for_non_loading_value(&page, ".location-header").await;
         println!("Initial location: {}", initial_location);
 
-        // Try a movement command (may not actually move, but should process)
+        // Try a movement command
+        // With the fix, ALL NPCs get evaluated for triggers, so even "go north"
+        // may trigger continuation narration for NPCs with TimesMet Eq 0 triggers.
+        // This makes it an async action that takes time.
         send_action(&page, "go north").await;
+
+        // Wait for the action to complete (may take a while due to trigger narration)
         wait_for_status_ready(&page).await;
 
-        // Should complete without errors
+        // Status should eventually become Ready
         let status = get_status(&page).await;
-        assert_eq!(status, "Ready", "Movement action should complete");
+        assert_eq!(
+            status, "Ready",
+            "Movement action should complete eventually"
+        );
 
         let _ = browser.close().await;
     }

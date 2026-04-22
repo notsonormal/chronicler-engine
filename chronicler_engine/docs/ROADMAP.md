@@ -43,7 +43,8 @@ Adding the "Gaming" elements to the Roleplay.
 The focus on making NPCs feel "alive" over long sessions.
 
 - [ ] **Spec 12: Long-Term Memory**: Integration of Vector DBs or Summary buffers so NPCs remember past conversations accurately.
-- [ ] **Spec 13: Procedural Content**: Auto-generating room descriptions or minor NPCs on the fly using the LLM.
+
+
 
 ---
 

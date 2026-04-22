@@ -427,39 +427,99 @@ impl TestConfig {
     }
 }
 
-/// Find an available port in the given range
-/// Retries on race condition (multiple tests grabbing same port) because tests run in separate processes
+/// Find an available port in the given range using file-based locking.
+/// Creates a lock file in the system temp directory to prevent race conditions
+/// between parallel test processes.
 pub fn get_available_port(min: u16, max: u16) -> Result<u16, String> {
-    let mut attempts = 10;
+    let lock_dir = std::env::temp_dir().join("chronicler_test_ports");
+    let _ = std::fs::create_dir_all(&lock_dir);
+
+    let mut attempts = 20;
     let mut delay_ms = 50;
 
     while attempts > 0 {
         for port in min..=max {
+            let lock_path = lock_dir.join(format!("port_{}.lock", port));
+
+            // Try to create lock file exclusively (atomic on most filesystems)
+            if std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&lock_path)
+                .is_err()
+            {
+                // Lock exists, port reserved by another test
+                continue;
+            }
+
+            // We have the lock file — verify port is actually free
             match TcpListener::bind(format!("127.0.0.1:{}", port)) {
                 Ok(listener) => {
-                    // Drop the listener to release the port, then re-bind immediately
                     drop(listener);
+                    // Write PID to lock file for debugging stale locks
+                    let _ = std::fs::write(&lock_path, format!("{}", std::process::id()));
                     return Ok(port);
                 }
-                Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
-                    // Port in use, try next port
+                Err(_) => {
+                    // Port not actually available, release lock
+                    let _ = std::fs::remove_file(&lock_path);
                     continue;
                 }
-                Err(_) => continue,
             }
         }
 
-        // All ports in range were in use - wait and retry
+        // All ports in range were locked — clean stale locks and retry
+        if let Ok(entries) = std::fs::read_dir(&lock_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if let Ok(content) = std::fs::read_to_string(&path) {
+                    if let Ok(pid) = content.trim().parse::<u32>() {
+                        // Check if the process is still alive
+                        if !is_process_alive(pid) {
+                            let _ = std::fs::remove_file(&path);
+                        }
+                    }
+                }
+            }
+        }
+
         if attempts > 1 {
             attempts -= 1;
             std::thread::sleep(std::time::Duration::from_millis(delay_ms));
-            delay_ms = (delay_ms * 2).min(500); // Exponential backoff, max 500ms
+            delay_ms = (delay_ms * 2).min(500);
         }
     }
     Err(format!(
         "No available ports in range {}-{} after {} attempts",
-        min, max, 10
+        min, max, 20
     ))
+}
+
+/// Release a previously reserved port lock file
+pub fn release_port_lock(port: u16) {
+    let lock_dir = std::env::temp_dir().join("chronicler_test_ports");
+    let lock_path = lock_dir.join(format!("port_{}.lock", port));
+    let _ = std::fs::remove_file(&lock_path);
+}
+
+/// Check if a process with the given PID is still running
+fn is_process_alive(pid: u32) -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        let output = std::process::Command::new("tasklist")
+            .args(["/FI", &format!("PID eq {}", pid), "/NH"])
+            .output();
+        if let Ok(output) = output {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            stdout.contains(&pid.to_string())
+        } else {
+            false
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        unsafe { libc::kill(pid as i32, 0) == 0 }
+    }
 }
 
 /// Get a dynamic port from config file (convenience function)
@@ -470,6 +530,7 @@ pub fn get_config_port(config_path: &str) -> Result<u16, String> {
 
 pub struct TestServer {
     child: Child,
+    port: u16,
 }
 
 impl TestServer {
@@ -502,7 +563,7 @@ impl TestServer {
         let started = wait_for_server(port, 100).await; // 100 * 100ms = 10s total
         assert!(started, "Server failed to start on port {}", port);
         SERVER_MANAGED.store(true, Ordering::SeqCst);
-        TestServer { child }
+        TestServer { child, port }
     }
 
     /// Create a test server with real LLM backend
@@ -523,6 +584,7 @@ impl Drop for TestServer {
         let _ = self.child.kill();
         let _ = self.child.wait();
         SERVER_MANAGED.store(false, Ordering::SeqCst);
+        release_port_lock(self.port);
         std::thread::sleep(std::time::Duration::from_millis(500));
     }
 }

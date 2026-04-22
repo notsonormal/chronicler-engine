@@ -334,7 +334,6 @@ fn main() -> chronicler_engine::Result<()> {
 /// [DOC: docs/architecture/system.md]
 fn init_logging() {
     use chrono::Local;
-    use std::io::Write;
 
     let log_dir = Path::new("logs");
     if !log_dir.exists() {
@@ -346,22 +345,21 @@ fn init_logging() {
     let timestamp = Local::now().format("%Y%m%d");
     let log_file_path = log_dir.join(format!("chronicler_{timestamp}.log"));
 
-    let init_msg = format!(
-        "[{}] [INFO] [chronicler_engine] Logging initialized. Log file: {:?}\n",
-        Local::now().format("%Y-%m-%d %H:%M:%S%.3f"),
-        log_file_path
-    );
-    if let Ok(mut file) = fs::OpenOptions::new()
+    // Open file for writing all logs
+    let log_file = fs::OpenOptions::new()
         .create(true)
         .append(true)
         .open(&log_file_path)
-    {
-        let _ = file.write_all(init_msg.as_bytes());
-    }
+        .expect("Failed to open log file");
 
+    // Configure env_logger to write to the file
     env_logger::Builder::from_default_env()
         .filter_level(log::LevelFilter::Debug)
+        .target(env_logger::Target::Pipe(Box::new(log_file)))
         .init();
+
+    // Also print to console so user sees output when running cargo run
+    println!("Logging to file: {log_file_path:?}");
 
     log::info!("Logging initialized. Log file: {log_file_path:?}");
 }

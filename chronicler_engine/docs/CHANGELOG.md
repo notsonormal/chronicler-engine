@@ -1,5 +1,43 @@
 # Changelog
 
+## 2026-04-22
+
+### Fixed
+- **Trigger evaluation timing bug** - Triggers not firing because `times_met` was incremented BEFORE trigger evaluation
+  - `TimesMet Eq 0` triggers would never fire because the counter was already 1
+  - Fixed: Evaluate triggers BEFORE incrementing `times_met` in `fragments.rs`
+  - Now triggers see `times_met = 0` when evaluating, allowing `TimesMet Eq 0` conditions to fire
+
+- ** Gabriella not detected** - Second quantifier now runs after main narration to detect NPCs in generated text
+  - Added two-stage quantifier: first before action (movement), second after narration (NPC detection)
+  - This catches NPCs like Gabriella who appear dynamically in the narration
+
+- **Multiple NPCs checked** - Triggers now evaluate ALL NPCs, not just `npcs_in_area`
+  - Changed `evaluate_triggers` to iterate `state.npcs.values()` instead of `state.npcs_in_area`
+  - This catches NPCs who appear in narration but weren't in the initial room config
+
+- **Trigger order** - Main narration now appears BEFORE trigger continuation
+  - Fixed reordering in `fragments.rs`: add_log → then trigger evaluation
+
+- **NPC name prefix** - Trigger narration no longer includes NPC name prefix
+  - Changed sender from `Some(npc.sheet.name.clone())` to `None`
+
+### Added
+- **Unit tests for new trigger behavior**:
+  - `test_currently_meeting_tracks_encounters` - Tests the currently_meeting flag
+  - `test_increment_times_met_always_increments` - Tests increment behavior
+  - `test_character_state_initializes_with_starting_room_npcs` - Tests starting room NPCs
+  - `test_evaluate_triggers_fires_for_npc_not_in_area` - Tests ALL NPCs get evaluated
+
+- **Integration test for second quantifier flow**:
+  - `test_second_quantifier_detects_room_npcs` - Tests movement to room with configured NPCs triggers detection
+
+- **Mock backend support for trigger continuation** - `LLM_BACKEND=mock` now works for trigger narration
+
+### Changed
+- **times_met semantics** - Counter increments on room entry, not on trigger fire
+- **TimesMet conditions** work correctly now that evaluation happens before increment
+
 ## 2026-04-20
 
 ### Added
