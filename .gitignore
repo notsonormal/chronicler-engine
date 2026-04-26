@@ -217,3 +217,4 @@ logs/
 /tmp
 /chronicler_engine/.sisyphus
 /.sisyphus
+/node_modules

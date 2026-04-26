@@ -8,3 +8,4 @@
     - [ ] Check how the trigger system works. I know if seems to always require the room to the correct set, which isn't what I want since that it just a specific trigger.
     - [ ] Times met should always be set, even outside of the trigger. Although it's going to have to be based on when some meets up for the first time, or leaves and comes back (e.g. not just Carla following you around)
 - [ ] Going to need to consider multiple system prompts, or rewrite the existing ones with "Do not speak for the user" type stuff.
+- [ ] The quantifier movement might not be right. It's tracking when the PLAYER is moving in and out of a room. It needs to track when the NPC is entering or leaving. Or has left I suppose. Tracking when the PLAYER is entering/leaving a room isn't that important, I actually want to know what room he is currently in right now. Although I guess if the NPC was in the room previously and isn't in the room, we can infer that they left?
