@@ -7,8 +7,7 @@ use crate::engine::logic::{attempt_semantic_walk, create_dynamic_room, get_curre
 use crate::engine::trigger_eval::{evaluate_triggers, mark_trigger_fired};
 use crate::model::character::NpcCard;
 use crate::model::state::{GameState, LogType};
-use crate::narrative::continuation::build_continuation_prompt;
-use crate::narrative::prompt::PromptContext;
+use crate::narrative::prompt::{PhiMode, PromptBuilder, PromptContext};
 use crate::narrative::quantifier::NpcEvent;
 
 /// [DOC: docs/architecture/system.md]
@@ -95,43 +94,46 @@ pub fn evaluate_and_narrate_triggers(
             continue;
         };
 
-        let context = PromptContext {
+        let continuation_user_msg = format!(
+            "Previous narration:\n{narration_text}\n\nTrigger event: {}",
+            trigger.action.narration_prompt
+        );
+
+        let trigger_ctx = PromptContext {
             world: trigger_context.world,
             room,
             all_npcs: trigger_context.all_npcs,
             npcs_in_area: &state.npcs_in_area,
             player: trigger_context.player,
-            user_message: trigger_context.user_message,
-            history: trigger_context.history,
+            user_message: &continuation_user_msg,
+            history: &state.narration_history,
         };
 
-        let Ok((system_prompt, user_prompt)) =
-            build_continuation_prompt(&context, narration_text, &trigger.action.narration_prompt)
-        else {
+        let mut pb = PromptBuilder::from_context(&trigger_ctx);
+        pb.phi_mode = PhiMode::Continuation;
+
+        let Ok((system_prompt, user_prompt)) = pb.build_split() else {
             log::error!(
                 "Failed to build continuation prompt: {}",
-                "continuation failed"
+                "build_split failed"
             );
             continue;
         };
 
         let backend = crate::narrative::llm::get_llm_backend();
-        let continuation_text = match backend.narrate_continuation(
-            &system_prompt,
-            &user_prompt,
-            &trigger.action.narration_prompt,
-        ) {
-            Ok(text) => text,
-            Err(e) => {
-                log::error!("Trigger narration failed: {e}");
-                state.add_log(
-                    format!("[Trigger narration failed: {e}]"),
-                    None,
-                    LogType::System,
-                );
-                continue;
-            }
-        };
+        let continuation_text =
+            match backend.narrate_action_from_prompt(&system_prompt, &user_prompt) {
+                Ok(text) => text,
+                Err(e) => {
+                    log::error!("Trigger narration failed: {e}");
+                    state.add_log(
+                        format!("[Trigger narration failed: {e}]"),
+                        None,
+                        LogType::System,
+                    );
+                    continue;
+                }
+            };
 
         if continuation_text.trim().is_empty() {
             continue;

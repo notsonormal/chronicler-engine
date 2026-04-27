@@ -618,23 +618,6 @@ fn process_action(state: Arc<std::sync::Mutex<GameState>>, input: String, _playe
                     history: &history,
                 };
 
-                // First quantifier: detect NPCs in player action text and handle movement
-                if let Ok(mut state) = state_for_thread.lock() {
-                    let room_npc_ids = get_current_room(&state)
-                        .map(|r| r.npcs.clone())
-                        .unwrap_or_default();
-                    let previous_room_npcs: Vec<NpcCard> = state.npcs_in_area.clone();
-
-                    let pre_narration_quantifier =
-                        determine_npcs_in_room(&state, &room_npc_ids, &previous_room_npcs, &text);
-
-                    handle_movement(
-                        &mut state,
-                        pre_narration_quantifier.movement.destination.as_deref(),
-                        &pre_narration_quantifier.npcs.npc_ids,
-                    );
-                }
-
                 // Generate main narration
                 let Ok(narration_text) = backend.narrate_action(&context) else {
                     if let Ok(mut state) = state_for_thread.lock() {
@@ -647,7 +630,7 @@ fn process_action(state: Arc<std::sync::Mutex<GameState>>, input: String, _playe
                     return;
                 };
 
-                // Second quantifier: detect NPCs that appeared in the narration
+                // Quantifier: detect NPCs that appeared in the narration and handle movement
                 if let Ok(mut state) = state_for_thread.lock() {
                     let room_npc_ids = get_current_room(&state)
                         .map(|r| r.npcs.clone())
@@ -661,6 +644,14 @@ fn process_action(state: Arc<std::sync::Mutex<GameState>>, input: String, _playe
                         &room_npc_ids,
                         &previous_room_npcs,
                         &narration_text,
+                    );
+
+                    // Handle movement AFTER narration is generated
+                    // This adds the location header at the right time
+                    handle_movement(
+                        &mut state,
+                        quantifier_result.movement.destination.as_deref(),
+                        &quantifier_result.npcs.npc_ids,
                     );
 
                     let current_npcs: Vec<NpcCard> = quantifier_result

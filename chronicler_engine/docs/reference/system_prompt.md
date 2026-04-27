@@ -98,6 +98,44 @@ End on a descriptive note — an image, a sound, a feeling, or an unresolved mom
 </AuxiliaryInstructions>
 ```
 
+## PHI Layer Modes
+
+The PHI layer (Layer 7) has two modes controlled by `PhiMode`:
+
+### Narration Mode (default)
+Used for main player narration - focuses on "outcome of player's action":
+
+```xml
+<AuxiliaryInstructions>
+Narrate the outcome of the player's action in immersive prose.
+
+Let the scene unfold naturally — some moments call for a single sharp image, others for extended description or dialogue. Match the pacing to what's happening.
+
+Do NOT conclude with any form of player direction, question, or prompt.
+End on a descriptive note — an image, a sound, a feeling, or an unresolved moment.
+</AuxiliaryInstructions>
+```
+
+### Continuation Mode (PhiMode::Continuation)
+Used for trigger continuation - emphasizes continuity and avoiding repetition:
+
+```xml
+<AuxiliaryInstructions>
+Continue the scene naturally. Incorporate the trigger event into the narrative.
+
+Do NOT repeat or contradict what was already described. Build naturally on the existing scene.
+
+Keep the flow natural — let reactions unfold, don't rush to conclusions.
+</AuxiliaryInstructions>
+```
+
+### Implementation
+The `PhiMode` is set on `PromptBuilder` before calling `build_split()`:
+- Default (Narration) for main narration
+- `PhiMode::Continuation` for trigger continuation via `evaluate_and_narrate_triggers`
+
+See: `src/narrative/prompt.rs:PhiMode`
+
 ## Sources
 
 - System prompt: `src/narrative/prompt.rs:258-341`

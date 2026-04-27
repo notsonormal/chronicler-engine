@@ -4,116 +4,60 @@
 
 This document defines the core game loop - the play-by-play experience from starting the game to receiving LLM responses. This is the fundamental user experience that must work reliably.
 
-## The LLM Context Pipeline
-
-When the engine needs LLM narration, it builds a comprehensive prompt using the **SillyTavern-style 8-layer system** (see `reference/sillytavern_prompt_system.md`):
-
-```text
-┌─────────────────────────────────────────────────────────────────────┐
-│                     PHASE 4: LLM GENERATION                          │
-│                  (If narrative action)                               │
-│                                                                      │
-│  1. Build 8-layer prompt (SillyTavern-style):                        │
-│     - Layer 0: System prompt (game rules, narrator persona)         │
-│     - Layer 1: Game state (room, inventory, NPCs)                   │
-│     - Layer 2: NPC cards (in-room NPCs only)                         │
-│     - Layer 3: Player persona                                        │
-│     - Layer 4: World info (keyword-triggered lore)                  │
-│     - Layer 5: Full narration history (up to 1000 entries)         │
-│     - Layer 6: User input (current action)                          │
-│     - Layer 7: Post-History Instructions                            │
-│  2. Token budget check (8192 max, truncate if overflow)             │
-│  3. Send to LLM (OpenRouter/DeepSeek)                               │
-│  4. Receive narration response                                      │
-│  5. Add to narration history as "Narration"                        │
-│  6. Set status back to "Ready"                                      │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
 ## The Game Flow
 
-```text
-┌─────────────────────────────────────────────────────────────────────┐
-│                        START GAME                                    │
-│                  (Server starts, loads world)                       │
-└─────────────────────────────────┬───────────────────────────────────┘
-                                  │
-                                  ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                     PHASE 1: INITIALIZE                              │
-│  1. Load world data (rooms, NPCs, items)                            │
-│  2. Set player in starting room                                     │
-│  3. Render initial UI fragments                                     │
-│     - Header: location name                                         │
-│     - Story Log: initial narration (room description)               │
-│     - Visual Sidebar: location image + NPCs                         │
-│  4. Establish HTMX polling (every 5s)                              │
-└─────────────────────────────────┬───────────────────────────────────┘
-                                  │
-                                  ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                     PHASE 2: AWAIT INPUT                              │
-│                   (Status: "Ready")                                  │
-│                                                                      │
-│  User types command → submits form                                  │
-└─────────────────────────────────┬───────────────────────────────────┘
-                                  │
-                                  ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                     PHASE 3: PROCESS ACTION                          │
-│  1. Parse command (look, move north, talk to npc, etc.)            │
-│  2. Execute game logic                                              │
-│     - Update player position if moving                              │
-│     - Add command to narration history as "Input"                  │
-│  3. Set status to "Thinking..."                                     │
-│  4. If LLM needed: spawn async thread for generation               │
-└─────────────────────────────────┬───────────────────────────────────┘
-                                  │
-                                  ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│               PHASE 3.5: TRIGGER EVALUATION                          │
-│         (After movement succeeds, before LLM generation)           │
-│                                                                      │
-│  1. `evaluate_triggers(state, new_room_id)` → returns Vec<(NpcCard, Trigger)>
-│  2. For each matching trigger:                                      │
-│     - Build continuation prompt via `build_continuation_prompt`     │
-│     - Call LLM for continuation narration                          │
-│     - Append to narration log                                       │
-│     - Update character state (`times_met`, `trigger_fired`)        │
-│  3. `is_generating` stays `true` until all trigger narrations done │
-│  4. Max 3 trigger narrations per action (prevents runaway)         │
-└─────────────────────────────────┬───────────────────────────────────┘
-                                  │
-                                  ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                     PHASE 4: LLM GENERATION                          │
-│                  (If narrative action)                               │
-│                                                                      │
-│  1. Build context: current room, NPCs present, player, action     │
-│  2. Send to LLM (OpenRouter)                                        │
-│  3. Receive narration response                                      │
-│  4. Add to narration history as "Narration"                        │
-│  5. Set status back to "Ready"                                      │
-│                                                                      │
-│  **Note:** This phase may now include multiple LLM calls per       │
-│  action — first the arrival narration, then a continuation         │
-│  narration for each triggered NPC. All are combined into a single  │
-│  response delivered via HTMX polling.                              │
-└─────────────────────────────────┬───────────────────────────────────┘
-                                  │
-                                  ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                     PHASE 5: POLLING UPDATE                          │
-│                                                                      │
-│  1. Client polls /fragment/story-log every 5 seconds              │
-│  2. Server returns updated log entries (innerHTML)                 │
-│  3. HTMX swaps content without page reload                          │
-└─────────────────────────────────┬───────────────────────────────────┘
-                                  │
-                                  ▼
-                           ┌───────────────┐
-                           │  BACK TO 2    │
-                           └───────────────┘
+```mermaid
+flowchart TD
+    Start(["**START GAME**<br>*(Server starts, loads world)*"])
+    
+    Phase1["**PHASE 1: INITIALIZE**<br>1. Load world data<br>2. Set player in starting room<br>3. Render initial UI (Header, Story Log, Sidebar)<br>4. Establish HTMX polling (every 5s)"]
+    
+    Phase2["**PHASE 2: AWAIT INPUT**<br>*(Status: 'Ready')*<br>User types command → submits form"]
+    
+    Phase3["**PHASE 3: PROCESS ACTION**<br>1. Parse command & execute game logic<br>2. Log command as 'Input'<br>3. Set status to 'Thinking...'<br>4. Spawn async thread for LLM"]
+    
+    Phase4["**PHASE 4: MAIN LLM NARRATION**<br>*(If narrative action)*<br>1. Build prompt via PromptBuilder (PhiMode::Action)<br>2. Send to LLM (see Context Pipeline below)<br>3. Add to history as 'Narration'"]
+    
+    Phase45["**PHASE 4.5: QUANTIFIER & MOVEMENT**<br>1. Post-narration Quantifier analyzes<br>2. Process movement intent<br>3. If moved: trigger `narrate_arrival` LLM call<br>4. Determine NPC Enter/Leave events"]
+    
+    Phase5["**PHASE 5: TRIGGER EVALUATION**<br>1. `evaluate_triggers(state)`<br>2. For each match: Build prompt (PhiMode::Continuation)<br>3. Call LLM & mark triggers as fired<br>4. Set status back to 'Ready'"]
+    
+    Phase6["**PHASE 6: POLLING UPDATE**<br>1. Client polls /fragment/story-log (5s)<br>2. Server returns updated HTML<br>3. HTMX swaps content"]
+
+    Start --> Phase1
+    Phase1 --> Phase2
+    Phase2 --> Phase3
+    Phase3 --> Phase4
+    Phase4 --> Phase45
+    Phase45 --> Phase5
+    Phase5 --> Phase6
+    Phase6 -.->|BACK TO 2| Phase2
+```
+
+## The LLM Context Pipeline
+
+When the engine needs LLM narration (during Phase 4), it builds a comprehensive prompt using the **SillyTavern-style 8-layer system** (see `reference/sillytavern_prompt_system.md`):
+
+```mermaid
+flowchart TD
+    Start(["**PHASE 4: LLM GENERATION**<br>*(If narrative action)*"])
+    
+    Step1["**1. Build 8-layer prompt (SillyTavern-style)**"]
+    Sub1["Layer 0: System prompt (game rules, narrator persona)<br>Layer 1: Game state (room, inventory, NPCs)<br>Layer 2: NPC cards (in-room NPCs only)<br>Layer 3: Player persona<br>Layer 4: World info (keyword-triggered lore)<br>Layer 5: Full narration history (up to 1000 entries)<br>Layer 6: User input (current action)<br>Layer 7: Post-History Instructions"]
+    
+    Step2["**2. Token budget check**<br>*(8192 max, truncate if overflow)*"]
+    Step3["**3. Send to LLM**<br>*(OpenRouter/DeepSeek)*"]
+    Step4["**4. Receive narration response**"]
+    Step5["**5. Add to narration history**<br>*(as 'Narration')*"]
+    Step6(["**6. Set status back to 'Ready'**"])
+
+    Start --> Step1
+    Step1 --> Sub1
+    Sub1 --> Step2
+    Step2 --> Step3
+    Step3 --> Step4
+    Step4 --> Step5
+    Step5 --> Step6
 ```
 
 ## Test Scenarios
@@ -142,11 +86,10 @@ And the status shows "Ready"
 Given the game is loaded at starting room
 When the user enters "I walk to the village square" and submits
 Then the status shows "Thinking..."
-And after LLM generates response:
-  And the quantifier detects movement intent (entering + destination)
-  And the story-log shows a minimal header with the new room name
-  And the story-log shows the LLM narration for arrival
-  And the visual-sidebar shows the new room's image and NPCs
+And after LLM generates response, the quantifier detects movement intent
+And the story-log shows a minimal header with the new room name
+And the story-log shows the LLM narration for arrival
+And the visual-sidebar shows the new room's image and NPCs
 And the status shows "Ready"
 ```
 
@@ -155,8 +98,7 @@ And the status shows "Ready"
 Given the game is loaded
 When the user enters "examine the mysterious orb" and submits
 Then the status shows "Thinking..."
-And after LLM generates response:
-  And the story-log shows the LLM's description of the orb
+And after LLM generates response, the story-log shows the LLM's description of the orb
 And the status shows "Ready"
 ```
 

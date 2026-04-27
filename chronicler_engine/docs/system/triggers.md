@@ -10,13 +10,7 @@ When a player enters a room or performs an action, the engine evaluates a set of
 ### 1. Player Action
 Player performs an action (movement, dialogue, etc.)
 
-### 2. First Quantifier (Pre-Narration)
-The quantifier analyzes the player's action text to:
-- Detect NPCs mentioned in the action
-- Determine if the player is moving to a new room
-- Handle movement transitions
-
-### 3. Generate Main Narration
+### 2. Generate Main Narration
 LLM generates the main narrative response
 
 ### 4. Second Quantifier (Post-Narration)
@@ -42,7 +36,7 @@ Each trigger is checked against the current `CharacterState`:
 - If non-repeatable: Trigger is marked as "fired" and won't re-fire
 
 ### 9. Narration
-Trigger actions generate "Continuation Narration" which is appended to the main game log
+Trigger actions now use the unified 8-layer prompt with `Phi:Continuation` mode.
 
 ## Timing: Evaluate BEFORE Increment
 
@@ -105,6 +99,6 @@ pub struct NpcEncounterState {
 
 1. **All NPCs Evaluated**: Triggers are checked for ALL loaded NPCs, not just those in the current room. This ensures NPCs like Gabriella (who appears dynamically in narration) still have their triggers evaluated.
 
-2. **Quantifier Runs Twice**: Once before narration (for movement), once after (for NPC detection in generated text).
+2. **Quantifier Runs Once (Post-Narration)**: Single quantifier call AFTER narration generation detects both NPCs and movement intent from the generated text. This replaces the previous two-stage approach.
 
 3. **Times Met vs Trigger Fire**: `times_met` is incremented based on movement/room entry, NOT when triggers fire. This prevents the bug where trigger fires would increment the counter for the next evaluation.

@@ -15,11 +15,7 @@
 3. **Quantified NPCs in Sidebar** - Dynamic NPC presence (not static map config)
 4. **Reactive Movement/Triggers** - Auto-trigger continuation narrations on room entry
 
----
-
-## Context (Original Problem)
-
-Single model handled both narration and scene understanding, which was expensive and slow.
+*Original Problem*: A single model handled both narration and scene understanding, which was expensive and slow.
 
 ---
 
@@ -63,13 +59,13 @@ NPCs in the visual sidebar use quantifier's dynamic detection (not static map.js
 // GameState persists quantifier result
 pub npcs_in_area: Vec<NpcCard>  // Dynamic from quantifier
 
-// Re-quantification after EVERY LLM generation
-// (not just on keyword match like "follows", "enters")
+// Re-quantification after EVERY main narration
+// Note: This is now a SINGLE PASS post-narration that extracts both movement and NPCs
 ```
 
 - **Storage**: Quantifier result persisted in `GameState`
 - **Fallback**: Static `room.npcs` when quantifier unavailable
-- **Re-quantification**: After every narration completes
+- **Quantification**: Runs once post-narration to grab both movement and NPC presence
 
 ### Feature 3: Reactive Auto-Trigger Movement
 
@@ -80,7 +76,7 @@ Player enters room with Gabriella (first encounter)
 LLM narration: "You enter the hall."
 Quantifier detects: movement to Entrance Hall
 TRIGGER: Gabriella.times_met == 0
-SECOND LLM call: continuation narration
+SECOND LLM call: continuation narration (unified 8-layer PromptBuilder)
 COMBINED response delivered to player
 ```
 
@@ -130,7 +126,7 @@ COMBINED response delivered to player
 These features evolved incrementally:
 - Quantifier movement: detect navigation from narration
 - Quantified NPCs: sidebar shows dynamic NPC presence
-- Reactive triggers: auto-fire scene continuations
+- Reactive triggers: auto-fire scene continuations (unified 8-layer PromptBuilder with PhiMode::Continuation)
 - Dual-LLM: separate quantifier model for scene analysis
 
 The dual-LLM architecture (scene_quantification_v2) was the latest enhancement, allowing separate cheap/fast model for scene understanding.

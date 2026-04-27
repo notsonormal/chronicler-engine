@@ -3,6 +3,9 @@
 ## 2026-04-27
 
 ### Added
+- **Trigger continuation unified** - Trigger narrations now use full 8-layer sillytavern prompt via `PromptBuilder` with `PhiMode::Continuation`
+- **Removed continuation.rs** - Functionality migrated to unified prompt system
+- **Added PhiMode** - New enum controlling PHI layer (Layer 7) behavior: Narration vs Continuation
 - **Quantifier Backend Trait** - Refactored quantifier to use trait for enable testing
   - New `QuantifierBackendTrait` interface with `quantify_room()` method
   - `RealQuantifierBackend` - Production LLM-based implementation
@@ -19,6 +22,10 @@
 - **fragments.rs** - Now uses trait-based quantifier and action_processing module
   - Selects mock/real backend based on `LLM_BACKEND` env var
   - Delegates to extracted action_processing functions
+- **Quantifier timing** - Movement detection now runs AFTER narration generation (from narration text), not before
+  - Old: Quantifier ran BEFORE narration to detect movement intent from player action text
+  - New: Narration generated first, then quantifier detects movement from generated text
+  - This ensures the location header is added at the right time
 
 ### Fixed
 - **Coverage target** - Now maintains ~87% line coverage (excludes async/server code)

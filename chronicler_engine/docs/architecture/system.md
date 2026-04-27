@@ -25,12 +25,11 @@ Contains the mechanics that drive the simulation. It translates user intent and 
 ### 3. The Narrative Tier (`crate::narrative::*`)
 The interface between the synchronous engine and stochastic LLM generation.
 - **`llm`**: Traits (`LlmBackend`) and implementations (OpenRouter, DeepSeek) for Game Master narration.
-- **`prompt`**: PromptBuilder module for SillyTavern-style layered prompt construction with token budget management.
+- **`prompt`**: PromptBuilder module for SillyTavern-style layered prompt construction with token budget management, including `PhiMode` for controlling PHI layer behavior (Narration vs Continuation).
 - **`quantifier`**: Scene quantification module for dynamic room presence detection via secondary LLM. Returns NPC presence, player movement intent, and NPC enter/leave events.
   - **`QuantifierBackendTrait`**: Interface for NPC detection backends
   - **`RealQuantifierBackend`**: Production implementation using LLM
   - **`MockQuantifierBackend`**: Test implementation returning configurable NPCs with High confidence
-- **`continuation`**: Continuation narration for triggered NPC encounters (`build_continuation_prompt(context, first_narration, trigger_text) -> (system_prompt, user_prompt)`).
 
 ### 4. The Server Tier (`crate::server::*`)
 The HTTP layer for the HTMX web dashboard with polling-based real-time updates.
@@ -62,9 +61,8 @@ Static web assets served by the server.
 | `src/engine/trigger_eval.rs` | `crate::engine::trigger_eval` | Trigger evaluation based on character state |
 | `src/engine/action_processing.rs` | `crate::engine::action_processing` | Server handler pure functions (NEW) |
 | `src/narrative/llm.rs` | `crate::narrative::llm` | LLM backend implementations |
-| `src/narrative/prompt.rs` | `crate::narrative::prompt` | PromptBuilder with layered prompts |
+| `src/narrative/prompt.rs` | `crate::narrative::prompt` | PromptBuilder with layered prompts, PhiMode enum |
 | `src/narrative/quantifier.rs` | `crate::narrative::quantifier` | Scene quantification for dynamic NPC presence, includes QuantifierBackendTrait, RealQuantifierBackend, MockQuantifierBackend |
-| `src/narrative/continuation.rs` | `crate::narrative::continuation` | Continuation narration for triggered encounters |
 | `src/narrative/openrouter_client.rs` | `crate::narrative::openrouter_client` | OpenRouter HTTP client with dual-model support (NEW) |
 | `src/server/mod.rs` | `crate::server` | HTTP server + HTMX endpoints |
 | `src/server/fragments.rs` | `crate::server` | HTML fragments |
@@ -133,13 +131,14 @@ This allows NPCs like "Carla" to appear in a room because the LLM mentioned "Car
 
 The engine supports reactive NPC encounters based on character state. When the player moves to a new room, the system evaluates triggers before generating the final narration.
 
-**Flow**: `room entry → trigger evaluation → continuation narration → combined response`
+**Flow**: `first narration → quantifier & movement → trigger evaluation → continuation narration → combined response`
 
-1. **Movement Detection**: Player enters a new room via natural language command
-2. **Trigger Evaluation** (`trigger_eval`): Engine evaluates all NPC triggers for the new room against `CharacterState` (e.g., `times_met == 0`, `has_item == "key"`)
-3. **First Narration**: Initial LLM narration for the room arrival is generated
-4. **Continuation Narration** (`continuation`): If triggers fire, a second LLM prompt is built combining the first narration with trigger-specific text
-5. **Combined Response**: Both narrations are merged into a single response shown to the player
+1. **First Narration**: Initial LLM narration for the user's action is generated.
+2. **Movement & NPC Detection**: A single post-narration Quantifier pass detects movement intent and any NPCs mentioned in the narration.
+3. **Movement Execution**: If movement is detected, the engine updates `GameState.current_room_id`.
+4. **Trigger Evaluation** (`trigger_eval`): Engine evaluates all NPC triggers against `CharacterState` (e.g., `times_met == 0`, `has_item == "key"`).
+5. **Continuation Narration** (`prompt`): If triggers fire, `PromptBuilder` builds a second LLM prompt with `PhiMode::Continuation` combining the first narration with trigger-specific text.
+6. **Combined Response**: Both narrations are logged and delivered in the same polling cycle.
 
 **CharacterState** tracks persistent NPC encounter data:
 - `times_met`: Number of times player has met the NPC

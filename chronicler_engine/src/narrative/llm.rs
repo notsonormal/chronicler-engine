@@ -21,6 +21,12 @@ pub trait LlmBackend: Send + Sync {
         trigger_prompt: &str,
     ) -> Result<String, EngineError>;
 
+    fn narrate_action_from_prompt(
+        &self,
+        system_prompt: &str,
+        user_prompt: &str,
+    ) -> Result<String, EngineError>;
+
     fn name(&self) -> &str;
 }
 
@@ -149,6 +155,21 @@ impl LlmBackend for OpenRouterBackend {
         call_openrouter(&api_key, system_prompt, user_prompt).map_err(EngineError::Narrative)
     }
 
+    fn narrate_action_from_prompt(
+        &self,
+        system_prompt: &str,
+        user_prompt: &str,
+    ) -> Result<String, EngineError> {
+        log::info!("[LLM] Generating action from prompt");
+
+        let api_key = std::env::var("OPENROUTER_API_KEY").map_err(|_| {
+            log::error!("OPENROUTER_API_KEY not set - cannot generate action from prompt");
+            EngineError::Config("OPENROUTER_API_KEY not set".into())
+        })?;
+
+        call_openrouter(&api_key, system_prompt, user_prompt).map_err(EngineError::Narrative)
+    }
+
     fn name(&self) -> &str {
         "OpenRouter"
     }
@@ -190,6 +211,17 @@ impl LlmBackend for MockBackend {
         Ok(format!("[Trigger: {trigger_prompt}]"))
     }
 
+    fn narrate_action_from_prompt(
+        &self,
+        _system_prompt: &str,
+        user_prompt: &str,
+    ) -> Result<String, EngineError> {
+        Ok(format!(
+            "[Continuation: {}]",
+            user_prompt.lines().next().unwrap_or("...")
+        ))
+    }
+
     fn name(&self) -> &str {
         "Mock"
     }
@@ -221,6 +253,17 @@ impl LlmBackend for DeepSeekBackend {
         _trigger_prompt: &str,
     ) -> Result<String, EngineError> {
         Ok("[DeepSeek] Continuation not yet implemented. Use OpenRouter for now.".to_string())
+    }
+
+    fn narrate_action_from_prompt(
+        &self,
+        _system_prompt: &str,
+        _user_prompt: &str,
+    ) -> Result<String, EngineError> {
+        Ok(
+            "[DeepSeek] Action from prompt not yet implemented. Use OpenRouter for now."
+                .to_string(),
+        )
     }
 
     fn name(&self) -> &str {
