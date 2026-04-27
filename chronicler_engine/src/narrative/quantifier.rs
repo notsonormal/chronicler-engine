@@ -6,13 +6,14 @@ use crate::narrative::openrouter_client::{call_openrouter_with_model, get_quanti
 use serde::Deserialize;
 
 /// Confidence level of the quantifier's NPC presence detection.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum QuantifierConfidence {
     /// JSON parsed successfully and all NPC IDs are valid.
     High,
     /// Text fallback was used; some valid NPC IDs were found.
     Medium,
     /// No valid NPC IDs could be extracted; fallback data should be used.
+    #[default]
     Low,
 }
 
@@ -54,12 +55,41 @@ pub struct MovementParseResult {
 }
 
 /// Combined result from the quantifier: NPCs in room + movement intent.
+///
+/// NPC events are computed separately in `fragments.rs` by comparing previous vs current NPC presence.
 #[derive(Debug, Clone)]
 pub struct QuantifierResult {
     /// NPCs detected as present in the room.
     pub npcs: QuantifierParseResult,
     /// Movement intent detected, if any.
     pub movement: MovementParseResult,
+}
+
+/// NPC movement event type.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NpcEventType {
+    /// NPC entered the area (was not present, now present).
+    Entered,
+    /// NPC left the area (was present, now not present).
+    Left,
+}
+
+/// A single NPC movement event.
+#[derive(Debug, Clone)]
+pub struct NpcEvent {
+    /// NPC ID that moved.
+    pub npc_id: String,
+    /// Type of movement event.
+    pub event_type: NpcEventType,
+}
+
+/// List of NPC movement events with confidence level.
+#[derive(Debug, Clone, Default)]
+pub struct NpcEventList {
+    /// Detected movement events.
+    pub events: Vec<NpcEvent>,
+    /// Confidence in the event detection.
+    pub confidence: QuantifierConfidence,
 }
 
 /// Context needed to build a quantifier prompt.
@@ -141,7 +171,7 @@ Rules:
             self.context.room.description
         ));
 
-        // Add navigation description if available
+        // Include navigation hint to improve movement detection
         if let Some(nav_desc) = &self.context.room.navigation_description {
             prompt.push_str(&format!("  <Navigation>{nav_desc}</Navigation>\n"));
         }
@@ -255,6 +285,45 @@ pub fn parse_quantifier_response(
         npc_ids: Vec::new(),
         confidence: QuantifierConfidence::Low,
     }
+}
+
+/// Compute NPC enter/leave events by comparing previous vs current NPC presence.
+///
+/// - NPCs in current but not in previous → `Entered`
+/// - NPCs in previous but not in current → `Left`
+pub fn compute_npc_events(previous_npc_ids: &[String], current_npc_ids: &[String]) -> NpcEventList {
+    let previous_set: std::collections::HashSet<_> = previous_npc_ids.iter().collect();
+    let current_set: std::collections::HashSet<_> = current_npc_ids.iter().collect();
+
+    let mut events = Vec::new();
+
+    for npc_id in current_npc_ids {
+        if !previous_set.contains(npc_id) {
+            events.push(NpcEvent {
+                npc_id: npc_id.clone(),
+                event_type: NpcEventType::Entered,
+            });
+        }
+    }
+
+    for npc_id in previous_npc_ids {
+        if !current_set.contains(npc_id) {
+            events.push(NpcEvent {
+                npc_id: npc_id.clone(),
+                event_type: NpcEventType::Left,
+            });
+        }
+    }
+
+    // If we detected any events, use Medium confidence (since we can't be 100% sure)
+    // If no events, use Low (nothing happened)
+    let confidence = if !events.is_empty() {
+        QuantifierConfidence::Medium
+    } else {
+        QuantifierConfidence::Low
+    };
+
+    NpcEventList { events, confidence }
 }
 
 /// [DOC: docs/reference/quantifier_prompt.md]
@@ -438,10 +507,14 @@ impl QuantifierBackend {
     /// If the LLM call fails entirely, returns the `fallback_npc_ids` with `Low` confidence.
     pub fn quantify_room(
         &self,
-        api_key: &str,
         context: &QuantifierPromptContext,
         fallback_npc_ids: &[String],
     ) -> Result<QuantifierResult, EngineError> {
+        let api_key = std::env::var("OPENROUTER_API_KEY").map_err(|_| {
+            log::debug!("[Quantifier] OPENROUTER_API_KEY not set");
+            crate::error::EngineError::Config("OPENROUTER_API_KEY not set".into())
+        })?;
+
         let builder = QuantifierPromptBuilder::new(QuantifierPromptContext {
             room: context.room,
             previous_room_npcs: context.previous_room_npcs,
@@ -467,7 +540,7 @@ impl QuantifierBackend {
             .map(|npc| npc.id.clone())
             .collect();
 
-        match call_openrouter_with_model(api_key, &system_prompt, &user_prompt, &model) {
+        match call_openrouter_with_model(&api_key, &system_prompt, &user_prompt, &model) {
             Ok(response) => {
                 log::info!("[Quantifier] Player action: {}", context.player_action);
                 log::info!("[Quantifier] Received response ({} chars)", response.len());
@@ -512,6 +585,88 @@ impl QuantifierBackend {
                 })
             }
         }
+    }
+}
+
+/// Trait for quantifier backends (enables mocking in tests).
+pub trait QuantifierBackendTrait: Send + Sync {
+    fn quantify_room(
+        &self,
+        context: &QuantifierPromptContext,
+        fallback_npc_ids: &[String],
+    ) -> Result<QuantifierResult, EngineError>;
+}
+
+/// Real quantifier backend that calls OpenRouter API.
+pub struct RealQuantifierBackend;
+
+impl QuantifierBackendTrait for RealQuantifierBackend {
+    fn quantify_room(
+        &self,
+        context: &QuantifierPromptContext,
+        fallback_npc_ids: &[String],
+    ) -> Result<QuantifierResult, EngineError> {
+        QuantifierBackend.quantify_room(context, fallback_npc_ids)
+    }
+}
+
+/// Mock quantifier backend for testing.
+/// Returns NPC IDs specified during construction with High confidence,
+/// or auto-detects NPC names from player action text.
+#[derive(Default)]
+pub struct MockQuantifierBackend {
+    /// NPC IDs to return (overrides auto-detection).
+    pub npcs_to_return: Vec<String>,
+    /// Movement to return (optional).
+    pub movement_to_return: Option<MovementParseResult>,
+}
+
+impl QuantifierBackendTrait for MockQuantifierBackend {
+    fn quantify_room(
+        &self,
+        context: &QuantifierPromptContext,
+        _fallback_npc_ids: &[String],
+    ) -> Result<QuantifierResult, EngineError> {
+        // Auto-detect NPCs from player action text if none specified
+        let npc_ids = if !self.npcs_to_return.is_empty() {
+            self.npcs_to_return.clone()
+        } else {
+            // Word-boundary matching - look for known NPC names as whole words in player action
+            let action_lower = context.player_action.to_lowercase();
+            let word_boundary_chars: std::collections::HashSet<char> = [
+                ' ', '.', ',', '!', '?', '\n', '\t', '\r', '\'', '"', ':', ';',
+            ]
+            .into_iter()
+            .collect();
+
+            context
+                .all_known_npcs
+                .iter()
+                .filter_map(|npc| {
+                    let npc_name = npc.sheet.name.to_lowercase();
+                    if action_boundary_contains(&action_lower, &npc_name, &word_boundary_chars) {
+                        Some(npc.id.clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        };
+
+        Ok(QuantifierResult {
+            npcs: QuantifierParseResult {
+                npc_ids,
+                confidence: QuantifierConfidence::High,
+            },
+            movement: self
+                .movement_to_return
+                .clone()
+                .unwrap_or(MovementParseResult {
+                    movement_type: None,
+                    destination: None,
+                    confidence: QuantifierConfidence::High,
+                }),
+        })
     }
 }
 
@@ -924,5 +1079,255 @@ mod tests {
 
         assert!(user_prompt.contains("<Navigation>"));
         assert!(user_prompt.contains("You can go north to the kitchen"));
+    }
+
+    // ---- NPC Event Computation Tests ----
+
+    #[test]
+    fn test_compute_npc_events_empty_previous() {
+        // First encounter - Carla enters
+        let previous: Vec<String> = vec![];
+        let current = vec!["carla".to_string()];
+
+        let result = compute_npc_events(&previous, &current);
+
+        assert_eq!(result.events.len(), 1);
+        assert_eq!(result.events[0].npc_id, "carla");
+        assert_eq!(result.events[0].event_type, NpcEventType::Entered);
+        assert_eq!(result.confidence, QuantifierConfidence::Medium);
+    }
+
+    #[test]
+    fn test_compute_npc_events_no_changes() {
+        // Carla was there and still is there - no events
+        let previous = vec!["carla".to_string()];
+        let current = vec!["carla".to_string()];
+
+        let result = compute_npc_events(&previous, &current);
+
+        assert!(result.events.is_empty());
+        assert_eq!(result.confidence, QuantifierConfidence::Low);
+    }
+
+    #[test]
+    fn test_compute_npc_events_npc_left() {
+        // Carla was there, now she's gone
+        let previous = vec!["carla".to_string()];
+        let current: Vec<String> = vec![];
+
+        let result = compute_npc_events(&previous, &current);
+
+        assert_eq!(result.events.len(), 1);
+        assert_eq!(result.events[0].npc_id, "carla");
+        assert_eq!(result.events[0].event_type, NpcEventType::Left);
+        assert_eq!(result.confidence, QuantifierConfidence::Medium);
+    }
+
+    #[test]
+    fn test_compute_npc_events_mixed() {
+        // Carla stays, Gabriella enters, Derek leaves
+        let previous = vec!["carla".to_string(), "derek".to_string()];
+        let current = vec!["carla".to_string(), "gabriella".to_string()];
+
+        let result = compute_npc_events(&previous, &current);
+
+        assert_eq!(result.events.len(), 2);
+
+        // Should have Entered for Gabriella
+        let entered = result
+            .events
+            .iter()
+            .find(|e| e.npc_id == "gabriella")
+            .expect("Gabriella should be in events");
+        assert_eq!(entered.event_type, NpcEventType::Entered);
+
+        // Should have Left for Derek
+        let left = result
+            .events
+            .iter()
+            .find(|e| e.npc_id == "derek")
+            .expect("Derek should be in events");
+        assert_eq!(left.event_type, NpcEventType::Left);
+
+        // Carla should NOT be in events (she stayed)
+        assert!(!result.events.iter().any(|e| e.npc_id == "carla"));
+    }
+
+    #[test]
+    fn test_compute_npc_events_multiple_entered() {
+        // Carla and Gabriella both enter at once
+        let previous: Vec<String> = vec![];
+        let current = vec!["carla".to_string(), "gabriella".to_string()];
+
+        let result = compute_npc_events(&previous, &current);
+
+        assert_eq!(result.events.len(), 2);
+        assert!(
+            result
+                .events
+                .iter()
+                .all(|e| e.event_type == NpcEventType::Entered)
+        );
+        assert!(result.events.iter().any(|e| e.npc_id == "carla"));
+        assert!(result.events.iter().any(|e| e.npc_id == "gabriella"));
+    }
+
+    #[test]
+    fn test_parse_quantifier_response_with_movement_only() {
+        // Verify NPCs and movement are parsed correctly (npc_events computed separately in fragments.rs)
+        let response = r#"{"npcs_in_room": ["carla"], "movement": {"type": null}}"#;
+
+        let result = parse_quantifier_response_with_movement(response, &["carla".to_string()], &[]);
+
+        assert_eq!(result.npcs.npc_ids, vec!["carla"]);
+        assert_eq!(result.movement.movement_type, None);
+    }
+}
+
+/// Check if a substring appears at word boundaries in the text.
+fn action_boundary_contains(
+    text: &str,
+    substring: &str,
+    boundary_chars: &std::collections::HashSet<char>,
+) -> bool {
+    if let Some(start) = text.find(substring) {
+        let end = start + substring.len();
+        let char_at_start_is_boundary = start == 0
+            || text[..start]
+                .chars()
+                .last()
+                .is_some_and(|c| boundary_chars.contains(&c));
+        let char_at_end_is_boundary = end >= text.len()
+            || text[end..]
+                .chars()
+                .next()
+                .is_some_and(|c| boundary_chars.contains(&c));
+        char_at_start_is_boundary && char_at_end_is_boundary
+    } else {
+        false
+    }
+}
+
+#[cfg(test)]
+mod action_boundary_tests {
+    use super::*;
+
+    fn make_boundary_chars() -> std::collections::HashSet<char> {
+        [
+            ' ', '.', ',', '!', '?', '\n', '\t', '\r', '\'', '"', ':', ';',
+        ]
+        .into_iter()
+        .collect()
+    }
+
+    #[test]
+    fn test_action_boundary_exact_match_at_start() {
+        let boundary_chars = make_boundary_chars();
+        let result = action_boundary_contains("hello world", "hello", &boundary_chars);
+        assert!(result, "Should match at start of text");
+    }
+
+    #[test]
+    fn test_action_boundary_exact_match_at_end() {
+        let boundary_chars = make_boundary_chars();
+        let result = action_boundary_contains("hello world", "world", &boundary_chars);
+        assert!(result, "Should match at end of text");
+    }
+
+    #[test]
+    fn test_action_boundary_match_in_middle() {
+        let boundary_chars = make_boundary_chars();
+        let result = action_boundary_contains("hello world here", "world", &boundary_chars);
+        assert!(result, "Should match in middle with spaces on both sides");
+    }
+
+    #[test]
+    fn test_action_boundary_no_match_prefix() {
+        let boundary_chars = make_boundary_chars();
+        let result = action_boundary_contains("announcement", "ann", &boundary_chars);
+        assert!(
+            !result,
+            "Should not match when substring is prefix of longer word"
+        );
+    }
+
+    #[test]
+    fn test_action_boundary_no_match_suffix() {
+        let boundary_chars = make_boundary_chars();
+        let result = action_boundary_contains("maryann", "ann", &boundary_chars);
+        assert!(
+            !result,
+            "Should not match when substring is suffix of longer word"
+        );
+    }
+
+    #[test]
+    fn test_action_boundary_no_match_mid_word() {
+        let boundary_chars = make_boundary_chars();
+        let result = action_boundary_contains("canny", "ann", &boundary_chars);
+        assert!(
+            !result,
+            "Should not match when substring appears but surrounded by non-boundary chars"
+        );
+    }
+
+    #[test]
+    fn test_action_boundary_match_with_comma() {
+        let boundary_chars = make_boundary_chars();
+        let result = action_boundary_contains("hello,world", "world", &boundary_chars);
+        assert!(result, "Should match with comma as boundary");
+    }
+
+    #[test]
+    fn test_action_boundary_match_with_period() {
+        let boundary_chars = make_boundary_chars();
+        let result = action_boundary_contains("hello.world", "world", &boundary_chars);
+        assert!(result, "Should match with period as boundary");
+    }
+
+    #[test]
+    fn test_action_boundary_match_with_exclamation() {
+        let boundary_chars = make_boundary_chars();
+        let result = action_boundary_contains("hello!world", "world", &boundary_chars);
+        assert!(result, "Should match with exclamation as boundary");
+    }
+
+    #[test]
+    fn test_action_boundary_match_with_question_mark() {
+        let boundary_chars = make_boundary_chars();
+        let result = action_boundary_contains("hello?world", "world", &boundary_chars);
+        assert!(result, "Should match with question mark as boundary");
+    }
+
+    #[test]
+    fn test_action_boundary_empty_text() {
+        let boundary_chars = make_boundary_chars();
+        let result = action_boundary_contains("", "hello", &boundary_chars);
+        assert!(!result, "Should not match empty text");
+    }
+
+    #[test]
+    fn test_action_boundary_empty_substring() {
+        let boundary_chars = make_boundary_chars();
+        // Empty substring finds at position 0, but char after position 0 is not a boundary
+        let result = action_boundary_contains("hello world", "", &boundary_chars);
+        assert!(
+            !result,
+            "Empty substring should not match when followed by non-boundary char"
+        );
+    }
+
+    #[test]
+    fn test_action_boundary_both_empty() {
+        let boundary_chars = make_boundary_chars();
+        let result = action_boundary_contains("", "", &boundary_chars);
+        assert!(result, "Empty text and substring should match");
+    }
+
+    #[test]
+    fn test_action_boundary_no_match_not_found() {
+        let boundary_chars = make_boundary_chars();
+        let result = action_boundary_contains("hello world", "xyz", &boundary_chars);
+        assert!(!result, "Should not match when substring not found");
     }
 }

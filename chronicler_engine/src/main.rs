@@ -228,14 +228,8 @@ fn main() -> chronicler_engine::Result<()> {
         manifest.starting_room_id.clone(),
     );
 
-    let use_scenario = if let Some(scenario) = manifest.default_scenario() {
-        !scenario.text.is_empty()
-    } else {
-        false
-    };
-
-    if use_scenario {
-        if let Some(scenario) = manifest.default_scenario() {
+    if let Some(scenario) = manifest.default_scenario() {
+        if !scenario.text.is_empty() {
             let room_name = chronicler_engine::engine::logic::find_room_in_world_map(
                 &state,
                 &manifest.starting_room_id,
@@ -277,7 +271,10 @@ fn main() -> chronicler_engine::Result<()> {
     let state = Arc::new(std::sync::Mutex::new(state));
 
     // [DOC: docs/system/narration_engine.md]
-    if !use_scenario {
+    let has_scenario = manifest
+        .default_scenario()
+        .is_some_and(|s| !s.text.is_empty());
+    if !has_scenario {
         let state_for_thread = state.clone();
         thread::spawn(move || {
             let _guard = GeneratingGuard::new(state_for_thread.clone());
@@ -319,7 +316,7 @@ fn main() -> chronicler_engine::Result<()> {
                 }
             }
         });
-    } // end if !use_scenario
+    } // end if !has_scenario
 
     // [DOC: docs/architecture/system.md]
     let config = ServerConfig { port: args.port };

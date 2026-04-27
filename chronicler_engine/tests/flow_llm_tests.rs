@@ -386,8 +386,6 @@ mod tests {
     struct StoryLogSummary {
         total_entries: usize,
         narration_count: usize,
-        dialogue_count: usize,
-        system_count: usize,
         input_count: usize,
     }
 
@@ -425,8 +423,6 @@ mod tests {
                 .get("narration")
                 .and_then(|v| v.as_u64())
                 .unwrap_or(0) as usize,
-            dialogue_count: counts.get("dialogue").and_then(|v| v.as_u64()).unwrap_or(0) as usize,
-            system_count: counts.get("system").and_then(|v| v.as_u64()).unwrap_or(0) as usize,
             input_count: counts.get("input").and_then(|v| v.as_u64()).unwrap_or(0) as usize,
         }
     }

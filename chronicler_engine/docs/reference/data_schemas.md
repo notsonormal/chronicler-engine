@@ -134,3 +134,41 @@ Contains all NPC encounter state. Top-level field in `GameState`.
 
 ### Fields
 - `npcs`: Map of NPC ID to `NpcEncounterState`
+
+## NpcEventType Schema (NEW)
+Enum representing NPC movement event types.
+
+```json
+"Entered" | "Left"
+```
+
+### Variants
+- `Entered`: NPC transitioned from not being in the area to being in the area
+- `Left`: NPC transitioned from being in the area to not being in the area
+
+## NpcEvent Schema (NEW)
+A single NPC movement event.
+
+```json
+{
+  "npc_id": "carla",
+  "event_type": "Entered"
+}
+```
+
+## NpcEventList Schema (NEW)
+Collection of NPC movement events with confidence level. Returned by `compute_npc_events()`.
+
+```json
+{
+  "events": [
+    { "npc_id": "carla", "event_type": "Entered" },
+    { "npc_id": "derek", "event_type": "Left" }
+  ],
+  "confidence": "Medium"
+}
+```
+
+### Fields
+- `events`: Array of `NpcEvent` objects
+- `confidence`: Confidence level (`High`, `Medium`, `Low`). Medium when events detected, Low when no events.

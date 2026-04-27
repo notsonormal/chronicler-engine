@@ -20,12 +20,16 @@ Contains the mechanics that drive the simulation. It translates user intent and 
 - **`action`**: The `Action` enum defining all supported system intents.
 - **`logic`**: Rules for movement, fuzzy-matching, and room resolution.
 - **`trigger_eval`**: Pure function evaluation of NPC triggers based on character state (`evaluate_triggers(state, room_id) -> Vec<(NpcCard, Trigger)>`).
+- **`action_processing`**: Extracted pure functions for server handlers (get_static_npcs, handle_movement, apply_npc_events, evaluate_and_narrate_triggers). Enables unit testing of server-side logic.
 
 ### 3. The Narrative Tier (`crate::narrative::*`)
 The interface between the synchronous engine and stochastic LLM generation.
 - **`llm`**: Traits (`LlmBackend`) and implementations (OpenRouter, DeepSeek) for Game Master narration.
 - **`prompt`**: PromptBuilder module for SillyTavern-style layered prompt construction with token budget management.
-- **`quantifier`**: Scene quantification module for dynamic room presence detection via secondary LLM.
+- **`quantifier`**: Scene quantification module for dynamic room presence detection via secondary LLM. Returns NPC presence, player movement intent, and NPC enter/leave events.
+  - **`QuantifierBackendTrait`**: Interface for NPC detection backends
+  - **`RealQuantifierBackend`**: Production implementation using LLM
+  - **`MockQuantifierBackend`**: Test implementation returning configurable NPCs with High confidence
 - **`continuation`**: Continuation narration for triggered NPC encounters (`build_continuation_prompt(context, first_narration, trigger_text) -> (system_prompt, user_prompt)`).
 
 ### 4. The Server Tier (`crate::server::*`)
@@ -56,9 +60,10 @@ Static web assets served by the server.
 | `src/engine/action.rs` | `crate::engine::action` | |
 | `src/engine/logic.rs` | `crate::engine::logic` | |
 | `src/engine/trigger_eval.rs` | `crate::engine::trigger_eval` | Trigger evaluation based on character state |
+| `src/engine/action_processing.rs` | `crate::engine::action_processing` | Server handler pure functions (NEW) |
 | `src/narrative/llm.rs` | `crate::narrative::llm` | LLM backend implementations |
 | `src/narrative/prompt.rs` | `crate::narrative::prompt` | PromptBuilder with layered prompts |
-| `src/narrative/quantifier.rs` | `crate::narrative::quantifier` | Scene quantification for dynamic NPC presence |
+| `src/narrative/quantifier.rs` | `crate::narrative::quantifier` | Scene quantification for dynamic NPC presence, includes QuantifierBackendTrait, RealQuantifierBackend, MockQuantifierBackend |
 | `src/narrative/continuation.rs` | `crate::narrative::continuation` | Continuation narration for triggered encounters |
 | `src/narrative/openrouter_client.rs` | `crate::narrative::openrouter_client` | OpenRouter HTTP client with dual-model support (NEW) |
 | `src/server/mod.rs` | `crate::server` | HTTP server + HTMX endpoints |
@@ -104,9 +109,13 @@ The visual sidebar displays NPCs present in the current room in a **horizontal s
 
 - **Data Flow**: `quantifier result → GameState.npcs_in_area → visual sidebar`
 - **Storage**: `GameState.npcs_in_area: Vec<NpcCard>` stores the current in-area NPCs
+- **NPC Event Layer**: The quantifier also returns `NpcEventList` with `Entered` and `Left` events derived from comparing previous vs current NPC presence. These events drive:
+  - `character_state.currently_meeting` (true on Entered, false on Left)
+  - `times_met` increments only on `Entered` events (new encounters), not on simple presence
 - **Update Triggers**:
   1. **Quantifier-Driven Movement**: When player enters a room via natural language, the quantifier detects movement intent and result stored in `npcs_in_area`
   2. **Re-quantification**: After LLM narration mentioning NPC movement (e.g., "follows you", "enters", "leaves"), quantifier re-runs to update `npcs_in_area` automatically
+  3. **Event Detection**: NPC events (Entered/Left) are computed by comparing previous `npcs_in_area` with the new quantifier result
 - **Fallback**: If quantifier is unavailable (no API key) or returns Low confidence, static `room.npcs` from `map.json` is used
 - **Validation**: All NPC IDs from quantifier are validated against `GameState.npcs` - hallucinated NPCs are filtered out
 

@@ -87,6 +87,17 @@ Or without movement:
 }
 ```
 
+## NPC Events (Computed Client-Side)
+
+NPC enter/leave events are **not** returned by the LLM. Instead, they are computed by the engine by comparing the previous quantifier result with the current one:
+
+1. LLM returns `npcs_in_room` (list of NPC IDs present)
+2. Engine compares `previous_npcs` vs `current_npcs`
+3. `Entered` → NPC in current but not in previous
+4. `Left` → NPC in previous but not in current
+
+This delta-based approach avoids requiring the LLM to reason about transitions, making it more reliable than asking for explicit enter/leave events.
+
 ## Sources
 
 - System prompt: `src/narrative/quantifier.rs:91-133`

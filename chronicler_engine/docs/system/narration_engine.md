@@ -28,10 +28,13 @@ The Game Master responds to three primary events:
 1. **Movement Intent**: The player issues a navigation command.
 2. **State Transition**: The engine validates the move and updates `state.current_room_id`.
 3. **Scene Quantification** (NEW):
-   - The engine calls `QuantifierBackend::quantify_room()` with a secondary LLM.
+   - The engine calls `QuantifierBackendTrait::quantify_room()` with a backend implementation:
+     - **`RealQuantifierBackend`**: Production implementation using secondary LLM
+     - **`MockQuantifierBackend`**: Test implementation for unit testing (returns High confidence with configurable NPCs)
    - The quantifier uses a separate model (`QUANTIFIER_MODEL` env var, defaults to free model).
    - It dynamically determines which NPCs are present based on: previous room NPCs, recent conversation history, and the player's action.
    - Falls back to static `room.npcs` from map.json if LLM fails or returns Low confidence.
+   - Set `LLM_BACKEND=mock` env var to use MockQuantifierBackend for testing.
 4. **Arrival Narration**:
    - The engine calls `llm_backend.narrate_arrival` with the dynamic `npcs_in_area`.
    - The LLM generates a narrative paragraph describing the entrance and NPC reactions.
@@ -52,8 +55,19 @@ After the player moves to a new room and the first narration is generated, the e
       - Current room context (name, description, NPCs present)
    b. LLM generates continuation narration
    c. Continuation is appended to the narration log
-   d. `times_met` is incremented; non-repeatable triggers are marked as fired
+   d. Non-repeatable triggers are marked as fired
 4. `is_generating` is reset to `false` only after ALL trigger narrations complete
+
+**NPC Event Layer:**
+After the second quantifier runs (post-narration), the engine computes NPC enter/leave events by comparing previous vs current `npcs_in_area`:
+- NPCs in current but not in previous → `Entered` event
+- NPCs in previous but not in current → `Left` event
+
+These events drive character state updates:
+- `Entered` → `set_currently_meeting(true)` + `increment_times_met()`
+- `Left` → `set_currently_meeting(false)`
+
+This means `times_met` only increments on **new encounters** (when an NPC enters the area), not simply when NPCs are present. If Carla follows you through 3 rooms, `times_met` increments once on first entry.
 
 **Key behaviors:**
 - `is_generating` stays `true` through both the first narration AND all trigger narrations

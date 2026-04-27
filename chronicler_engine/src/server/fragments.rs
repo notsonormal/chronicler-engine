@@ -10,139 +10,28 @@ use axum::{
 };
 use serde::Deserialize;
 
+use crate::engine::action_processing::apply_npc_events;
 use crate::engine::logic::{get_available_exits, get_current_room};
 use crate::engine::parser::parse_command;
 use crate::error::Result;
 use crate::model::character::NpcCard;
 use crate::model::state::{GameState, LogType};
-use crate::narrative::continuation::build_continuation_prompt;
 use crate::narrative::llm::get_llm_backend;
-use crate::narrative::openrouter_client::{call_openrouter_with_model, get_llm_model};
 use crate::narrative::prompt::PromptContext;
 use crate::narrative::quantifier::{
-    QuantifierBackend, QuantifierConfidence, QuantifierPromptContext, QuantifierResult, RoomInfo,
+    MockQuantifierBackend, QuantifierBackendTrait, QuantifierConfidence, QuantifierPromptContext,
+    QuantifierResult, RealQuantifierBackend, RoomInfo, compute_npc_events,
 };
 use crate::server::AppState;
 use crate::server::templates::{
     ActionAreaTemplate, HeaderTemplate, StoryLogTemplate, VisualSidebarTemplate,
 };
 
+use crate::engine::action_processing::{
+    evaluate_and_narrate_triggers, get_static_npcs, handle_movement,
+};
+
 const MAX_LOG_DISPLAY: usize = 50;
-
-fn get_static_npcs(state: &GameState, room_npc_ids: &[String]) -> Vec<NpcCard> {
-    room_npc_ids
-        .iter()
-        .filter_map(|id| state.npcs.get(id).cloned())
-        .collect()
-}
-
-fn evaluate_and_narrate_triggers(
-    state: &mut GameState,
-    narration_text: &str,
-    trigger_context: &PromptContext<'_>,
-    max_triggers: usize,
-) {
-    let matching_triggers = crate::engine::trigger_eval::evaluate_triggers(state);
-
-    for (trigger_idx, (npc, trigger)) in matching_triggers.iter().take(max_triggers).enumerate() {
-        let Ok(room) = get_current_room(state) else {
-            continue;
-        };
-
-        let context = PromptContext {
-            world: trigger_context.world,
-            room,
-            all_npcs: trigger_context.all_npcs,
-            npcs_in_area: &state.npcs_in_area,
-            player: trigger_context.player,
-            user_message: trigger_context.user_message,
-            history: trigger_context.history,
-        };
-
-        let Ok((system_prompt, user_prompt)) =
-            build_continuation_prompt(&context, narration_text, &trigger.action.narration_prompt)
-        else {
-            log::error!(
-                "Failed to build continuation prompt: {}",
-                "continuation failed"
-            );
-            continue;
-        };
-
-        let use_mock = std::env::var("LLM_BACKEND").as_deref() == Ok("mock");
-
-        let continuation_text = if use_mock {
-            format!("[Trigger: {}]", trigger.action.narration_prompt)
-        } else {
-            let api_key = std::env::var("OPENROUTER_API_KEY").unwrap_or_default();
-            let model = get_llm_model();
-            match call_openrouter_with_model(&api_key, &system_prompt, &user_prompt, &model) {
-                Ok(text) => text,
-                Err(e) => {
-                    log::error!("Trigger narration failed: {e}");
-                    state.add_log(
-                        format!("[Trigger narration failed: {e}]"),
-                        None,
-                        LogType::System,
-                    );
-                    continue;
-                }
-            }
-        };
-
-        if continuation_text.trim().is_empty() {
-            continue;
-        }
-        state.add_log(continuation_text, None, LogType::Narration);
-        if !trigger.repeat {
-            crate::engine::trigger_eval::mark_trigger_fired(state, &npc.id, trigger_idx);
-        }
-    }
-}
-
-fn handle_movement(state: &mut GameState, destination: Option<&str>, new_npc_ids: &[String]) {
-    let Some(trigger) = destination else {
-        return;
-    };
-
-    let previous_room_id = state.current_room_id.clone();
-
-    let success = match crate::engine::logic::attempt_semantic_walk(state, trigger) {
-        Ok(_) => true,
-        Err(_) => {
-            let dynamic_room = crate::engine::logic::create_dynamic_room(
-                trigger,
-                "A place you have never seen before.",
-            );
-            state
-                .dynamic_rooms
-                .insert(dynamic_room.id.clone(), dynamic_room.clone());
-            state.current_room_id = dynamic_room.id.clone();
-            true
-        }
-    };
-
-    if !success {
-        return;
-    }
-
-    if previous_room_id != state.current_room_id {
-        for npc_id in new_npc_ids {
-            if !state.character_state.is_currently_meeting(npc_id) {
-                state.character_state.increment_times_met(npc_id);
-            }
-            state.character_state.set_currently_meeting(npc_id, true);
-        }
-    }
-
-    if let Ok(current_room) = get_current_room(state) {
-        state.add_log(
-            String::new(),
-            Some(current_room.name.clone()),
-            LogType::Narration,
-        );
-    }
-}
 
 /// [DOC: docs/reference/quantifier_prompt.md]
 fn determine_npcs_in_room(
@@ -151,27 +40,6 @@ fn determine_npcs_in_room(
     previous_room_npcs: &[NpcCard],
     player_action: &str,
 ) -> QuantifierResult {
-    let api_key = match std::env::var("OPENROUTER_API_KEY") {
-        Ok(key) => key,
-        Err(_) => {
-            log::debug!("[Quantifier] No API key, using static NPCs");
-            return QuantifierResult {
-                npcs: crate::narrative::quantifier::QuantifierParseResult {
-                    npc_ids: get_static_npcs(state, room_npc_ids)
-                        .iter()
-                        .map(|n| n.id.clone())
-                        .collect(),
-                    confidence: QuantifierConfidence::Low,
-                },
-                movement: crate::narrative::quantifier::MovementParseResult {
-                    movement_type: None,
-                    destination: None,
-                    confidence: QuantifierConfidence::Low,
-                },
-            };
-        }
-    };
-
     let all_npcs: Vec<NpcCard> = state.npcs.values().cloned().collect();
 
     let room = match get_current_room(state) {
@@ -204,7 +72,6 @@ fn determine_npcs_in_room(
         .cloned()
         .collect();
 
-    // Build list of all rooms for the quantifier
     let all_rooms: Vec<RoomInfo> = state
         .map
         .overworld
@@ -228,8 +95,15 @@ fn determine_npcs_in_room(
         player_action,
     };
 
-    let backend = QuantifierBackend;
-    match backend.quantify_room(&api_key, &context, room_npc_ids) {
+    // Use mock backend when LLM_BACKEND=mock, otherwise use real backend
+    let use_mock = std::env::var("LLM_BACKEND").as_deref() == Ok("mock");
+    let backend: Box<dyn QuantifierBackendTrait> = if use_mock {
+        Box::new(MockQuantifierBackend::default())
+    } else {
+        Box::new(RealQuantifierBackend)
+    };
+
+    match backend.quantify_room(&context, room_npc_ids) {
         Ok(result) => match result.npcs.confidence {
             QuantifierConfidence::High | QuantifierConfidence::Medium => {
                 log::info!("[Quantifier] Using dynamic NPCs: {:?}", result.npcs.npc_ids);
@@ -553,7 +427,7 @@ pub async fn action_handler(
 ) -> Response<Body> {
     let command = form.command.trim().to_string();
     if command.is_empty() {
-        // Return error status - browser should have caught this, but just in case
+        // Browser should catch invalid actions, but return error just in case
         return Response::builder()
             .status(StatusCode::BAD_REQUEST)
             .body(Body::from(
@@ -779,6 +653,8 @@ fn process_action(state: Arc<std::sync::Mutex<GameState>>, input: String, _playe
                         .map(|r| r.npcs.clone())
                         .unwrap_or_default();
                     let previous_room_npcs: Vec<NpcCard> = state.npcs_in_area.clone();
+                    let previous_npc_ids: Vec<String> =
+                        previous_room_npcs.iter().map(|n| n.id.clone()).collect();
 
                     let quantifier_result = determine_npcs_in_room(
                         &state,
@@ -793,6 +669,8 @@ fn process_action(state: Arc<std::sync::Mutex<GameState>>, input: String, _playe
                         .iter()
                         .filter_map(|id| state.npcs.get(id).cloned())
                         .collect();
+                    let current_npc_ids: Vec<String> =
+                        current_npcs.iter().map(|n| n.id.clone()).collect();
                     let npcs_for_context = current_npcs.clone();
                     let trigger_context = PromptContext {
                         world: &world,
@@ -810,10 +688,9 @@ fn process_action(state: Arc<std::sync::Mutex<GameState>>, input: String, _playe
                     // (so TimesMet Eq 0 can fire on first detection)
                     evaluate_and_narrate_triggers(&mut state, &narration_text, &trigger_context, 3);
 
-                    // After triggers evaluated, increment times_met for detected NPCs
-                    for npc_id in &quantifier_result.npcs.npc_ids {
-                        crate::engine::trigger_eval::increment_times_met(&mut state, npc_id);
-                    }
+                    // Apply NPC events using the reusable function
+                    let events = compute_npc_events(&previous_npc_ids, &current_npc_ids);
+                    apply_npc_events(&mut state, &events.events);
                 }
 
                 if let Ok(mut state) = state_for_thread.lock() {

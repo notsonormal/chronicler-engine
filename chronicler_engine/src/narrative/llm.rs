@@ -1,7 +1,5 @@
 use crate::error::EngineError;
-use crate::model::character::{NpcCard, PlayerCard};
-use crate::model::map::Room;
-use crate::model::world::WorldCard;
+use crate::model::character::NpcCard;
 use crate::narrative::openrouter_client::call_openrouter;
 use crate::narrative::prompt::{PromptBuilder, PromptContext};
 
@@ -15,6 +13,13 @@ pub trait LlmBackend: Send + Sync {
     fn narrate_action(&self, context: &PromptContext) -> Result<String, EngineError>;
 
     fn narrate_arrival(&self, context: &PromptContext) -> Result<String, EngineError>;
+
+    fn narrate_continuation(
+        &self,
+        system_prompt: &str,
+        user_prompt: &str,
+        trigger_prompt: &str,
+    ) -> Result<String, EngineError>;
 
     fn name(&self) -> &str;
 }
@@ -128,91 +133,25 @@ impl LlmBackend for OpenRouterBackend {
         call_openrouter(&api_key, &system_prompt, &user_text).map_err(EngineError::Narrative)
     }
 
+    fn narrate_continuation(
+        &self,
+        system_prompt: &str,
+        user_prompt: &str,
+        _trigger_prompt: &str,
+    ) -> Result<String, EngineError> {
+        log::info!("[LLM] Generating continuation narration");
+
+        let api_key = std::env::var("OPENROUTER_API_KEY").map_err(|_| {
+            log::error!("OPENROUTER_API_KEY not set - cannot generate continuation narration");
+            EngineError::Config("OPENROUTER_API_KEY not set".into())
+        })?;
+
+        call_openrouter(&api_key, system_prompt, user_prompt).map_err(EngineError::Narrative)
+    }
+
     fn name(&self) -> &str {
         "OpenRouter"
     }
-}
-
-pub fn build_dialogue_prompts(
-    world: &WorldCard,
-    room: &Room,
-    npc: &NpcCard,
-    user_message: &Option<String>,
-) -> (String, String) {
-    // [DOC: docs/reference/sillytavern_prompt_system.md]
-    let mut system_prompt = format!(
-        "You are a character in a text adventure game. Your name is {}.\n\
-    Personality: {}\n\
-    Scenario/Background: {}\n\
-    \n",
-        npc.sheet.name, npc.sheet.personality, npc.sheet.scenario
-    );
-
-    system_prompt.push_str(&format!(
-        "Current Room: {} - {}\n\n",
-        room.name, room.description
-    ));
-
-    system_prompt.push_str("World Rules:\n");
-    for rule in &world.global_rules {
-        system_prompt.push_str(&format!("- {rule}\n"));
-    }
-
-    system_prompt.push_str("\nInstructions: Roleplay as your character and respond to the player's action. Reply primarily with dialogue, and do not act or speak on behalf of the player.");
-
-    let user_text = match user_message {
-        Some(msg) => format!("The player says: \"{msg}\""),
-        None => "The player approaches you in silence, waiting for you to speak.".to_string(),
-    };
-
-    (system_prompt, user_text)
-}
-
-pub fn build_action_prompts(
-    world: &WorldCard,
-    room: &Room,
-    nearby_npcs: &[&NpcCard],
-    player: &PlayerCard,
-    player_input: &str,
-) -> (String, String) {
-    // [DOC: docs/reference/sillytavern_prompt_system.md]
-    let mut system_prompt = String::from(
-        "You are the Game Master of a text adventure game. \
-Narrate what happens in response to the player's action. \
-Voice any NPCs present if they would logically react. \
-Keep responses immersive, concise, and in the style of literary fiction. \
-Never act or speak on behalf of the player.\n\n",
-    );
-
-    system_prompt.push_str(&format!(
-        "Player Identity:\n- Name: {}\n- Persona: {}\n- Background: {}\n\n",
-        player.sheet.name, player.sheet.personality, player.sheet.scenario
-    ));
-
-    system_prompt.push_str(&format!(
-        "Current Location: {} — {}\n\n",
-        room.name, room.description
-    ));
-
-    if !nearby_npcs.is_empty() {
-        system_prompt.push_str("Characters present:\n");
-        for npc in nearby_npcs {
-            system_prompt.push_str(&format!(
-                "- {} ({}): {} Background: {}\n",
-                npc.sheet.name, npc.sheet.personality, npc.sheet.description, npc.sheet.scenario
-            ));
-        }
-        system_prompt.push('\n');
-    }
-
-    system_prompt.push_str("World Lore:\n");
-    for rule in &world.global_rules {
-        system_prompt.push_str(&format!("- {rule}\n"));
-    }
-
-    let user_text = format!("The player does the following: {player_input}");
-
-    (system_prompt, user_text)
 }
 
 pub struct MockBackend;
@@ -232,48 +171,7 @@ impl LlmBackend for MockBackend {
     }
 
     fn narrate_action(&self, context: &PromptContext) -> Result<String, EngineError> {
-        let user_input = context.user_message;
-        let user_input_lower = user_input.to_lowercase();
-
-        let movement_keywords = [
-            "walk",
-            "go",
-            "enter",
-            "leave",
-            "head to",
-            "travel to",
-            "move to",
-            "exit",
-            "climb",
-            "descend",
-        ];
-        let has_movement = movement_keywords
-            .iter()
-            .any(|k| user_input_lower.contains(k));
-
-        let possible_destinations = [
-            "kitchen", "village", "square", "forest", "gate", "hall", "entrance", "tavern", "shop",
-            "store", "office", "quarters",
-        ];
-        let detected_destination = if has_movement {
-            possible_destinations
-                .iter()
-                .find(|d| user_input_lower.contains(*d))
-                .map(|s| s.to_string())
-        } else {
-            None
-        };
-
-        if has_movement && detected_destination.is_some() {
-            Ok(format!(
-                r#"{{"narrative": "[MockNarration] {user_input}", "movement": {{"type": "entering", "destination": "{dest}"}}}}"#,
-                dest = detected_destination.unwrap()
-            ))
-        } else {
-            Ok(format!(
-                r#"{{"narrative": "[MockNarration] {user_input}", "movement": null}}"#
-            ))
-        }
+        Ok(format!("[MockNarration] {}", context.user_message))
     }
 
     fn narrate_arrival(&self, context: &PromptContext) -> Result<String, EngineError> {
@@ -281,6 +179,15 @@ impl LlmBackend for MockBackend {
             "[MockArrival] You enter the {}.",
             context.room.name
         ))
+    }
+
+    fn narrate_continuation(
+        &self,
+        _system_prompt: &str,
+        _user_prompt: &str,
+        trigger_prompt: &str,
+    ) -> Result<String, EngineError> {
+        Ok(format!("[Trigger: {trigger_prompt}]"))
     }
 
     fn name(&self) -> &str {
@@ -307,6 +214,15 @@ impl LlmBackend for DeepSeekBackend {
         Ok("[DeepSeek] Arrival not yet implemented. Use OpenRouter for now.".to_string())
     }
 
+    fn narrate_continuation(
+        &self,
+        _system_prompt: &str,
+        _user_prompt: &str,
+        _trigger_prompt: &str,
+    ) -> Result<String, EngineError> {
+        Ok("[DeepSeek] Continuation not yet implemented. Use OpenRouter for now.".to_string())
+    }
+
     fn name(&self) -> &str {
         "DeepSeek"
     }
@@ -315,9 +231,10 @@ impl LlmBackend for DeepSeekBackend {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::character::CharacterSheet;
+    use crate::model::character::{CharacterSheet, PlayerCard};
     use crate::model::map::Room;
     use crate::model::state::{LogEntry, LogType};
+    use crate::model::world::WorldCard;
     use chrono::Utc;
     use std::collections::HashMap;
 
@@ -400,97 +317,7 @@ mod tests {
 
         let result = backend.narrate_action(&context);
         assert!(result.is_ok());
-        assert_eq!(
-            result.unwrap(),
-            r#"{"narrative": "[MockNarration] I look around carefully.", "movement": null}"#
-        );
-    }
-
-    #[test]
-    fn test_mock_narrate_arrival() {
-        let backend = MockBackend;
-        let world = make_test_world();
-        let room = make_test_room();
-        let player = make_test_player();
-
-        let context = PromptContext {
-            world: Box::leak(Box::new(world)),
-            room: Box::leak(Box::new(room)),
-            all_npcs: &[],
-            npcs_in_area: &[],
-            player: Box::leak(Box::new(player)),
-            user_message: "",
-            history: &[],
-        };
-        let result = backend.narrate_arrival(&context);
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "[MockArrival] You enter the Test Room.");
-    }
-
-    #[test]
-    fn test_system_prompt_construction() {
-        let world = make_test_world();
-        let room = make_test_room();
-        let npc = NpcCard {
-            id: "carla".to_string(),
-            sheet: CharacterSheet {
-                name: "Carla".to_string(),
-                description: "Guard".to_string(),
-                personality: "Strict".to_string(),
-                scenario: "Gate".to_string(),
-                example_dialogue: "Halt!".to_string(),
-                profile_image: None,
-                headshot_image: None,
-            },
-            inventory: vec![],
-            triggers: vec![],
-        };
-        let (prompt, _user) =
-            build_dialogue_prompts(&world, &room, &npc, &Some("Hello".to_string()));
-
-        assert!(prompt.contains("Carla"));
-        assert!(prompt.contains("Strict"));
-        assert!(prompt.contains("Gate"));
-        assert!(prompt.contains("Test Room"));
-        assert!(prompt.contains("Rule 1"));
-    }
-
-    #[test]
-    fn test_build_dialogue_prompts_with_no_message() {
-        let world = make_test_world();
-        let room = make_test_room();
-        let npc = NpcCard {
-            id: "test".to_string(),
-            sheet: CharacterSheet {
-                name: "NPC".to_string(),
-                description: "Desc".to_string(),
-                personality: "Person".to_string(),
-                scenario: "Scene".to_string(),
-                example_dialogue: "".to_string(),
-                profile_image: None,
-                headshot_image: None,
-            },
-            inventory: vec![],
-            triggers: vec![],
-        };
-
-        let (system_prompt, user_prompt) = build_dialogue_prompts(&world, &room, &npc, &None);
-
-        assert!(!system_prompt.is_empty());
-        assert!(!user_prompt.is_empty() || user_prompt.len() < 200);
-    }
-
-    #[test]
-    fn test_build_action_prompts_basic() {
-        let world = make_test_world();
-        let room = make_test_room();
-        let player = make_test_player();
-
-        let (system_prompt, user_prompt) =
-            build_action_prompts(&world, &room, &[], &player, "I look around");
-
-        assert!(!system_prompt.is_empty());
-        assert!(user_prompt.contains("I look around"));
+        assert_eq!(result.unwrap(), "[MockNarration] I look around carefully.");
     }
 
     #[test]

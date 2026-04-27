@@ -32,11 +32,6 @@ async fn get_shared_browser() -> (playwright_rs::Playwright, Arc<Browser>) {
     (playwright, Arc::new(browser))
 }
 
-/// Cleanup shared browser (call after all tests)
-async fn cleanup_shared_browser() {
-    // No-op for now
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
