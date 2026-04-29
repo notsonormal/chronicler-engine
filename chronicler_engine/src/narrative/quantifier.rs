@@ -714,12 +714,14 @@ mod tests {
     fn make_history() -> Vec<LogEntry> {
         vec![
             LogEntry {
+                id: 1,
                 sender: Some("Narrator".to_string()),
                 text: "You enter the front gate.".to_string(),
                 log_type: LogType::Narration,
                 timestamp: Utc::now(),
             },
             LogEntry {
+                id: 2,
                 sender: Some("Carla".to_string()),
                 text: "I'll follow you inside.".to_string(),
                 log_type: LogType::Dialogue,

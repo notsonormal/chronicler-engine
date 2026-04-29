@@ -8,7 +8,10 @@
 use std::sync::{Arc, Mutex};
 
 use askama::Template;
-use axum::{body::Body, http::Request};
+use axum::{
+    body::Body,
+    http::{Request, StatusCode},
+};
 use tower::util::ServiceExt;
 
 use chronicler_engine::create_app_for_testing;
@@ -352,6 +355,107 @@ mod tests {
         let body_str = String::from_utf8_lossy(&body);
         assert!(body_str.contains("Ready"));
     }
+
+    #[tokio::test]
+    async fn test_character_headshots_fragment() {
+        let state = create_test_state();
+        let app = create_app_for_testing(state);
+
+        let req = Request::builder()
+            .uri("/fragment/character-headshots")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(req).await.unwrap();
+
+        assert!(response.status().is_success());
+        let body = axum::body::to_bytes(response.into_body(), 1024)
+            .await
+            .unwrap();
+        let body_str = String::from_utf8_lossy(&body);
+        // Should contain headshot div or be empty (no NPCs with images)
+        // The test state has npc_1 with a profile_image
+        assert!(body_str.contains("headshot") || body_str.contains("Test NPC"));
+    }
+
+    #[tokio::test]
+    async fn test_generating_status_handler_idle() {
+        let state = create_test_state();
+        let app = create_app_for_testing(state);
+
+        let req = Request::builder()
+            .uri("/status/generating")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(req).await.unwrap();
+
+        assert!(response.status().is_success());
+        let body = axum::body::to_bytes(response.into_body(), 1024)
+            .await
+            .unwrap();
+        let body_str = String::from_utf8_lossy(&body);
+        // Should return "idle" when not generating
+        assert!(body_str.contains("idle"));
+    }
+
+    #[tokio::test]
+    async fn test_reset_generating_handler() {
+        let state = create_test_state();
+        let app = create_app_for_testing(state);
+
+        // reset-generating is POST, not GET
+        let req = Request::builder()
+            .uri("/status/reset-generating")
+            .method(http::Method::POST)
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(req).await.unwrap();
+
+        assert!(response.status().is_success());
+        let body = axum::body::to_bytes(response.into_body(), 1024)
+            .await
+            .unwrap();
+        let body_str = String::from_utf8_lossy(&body);
+        // Should return "reset" on success
+        assert!(body_str.contains("reset"));
+    }
+
+    #[tokio::test]
+    async fn test_edit_history_handler_not_found() {
+        let state = create_test_state();
+        let app = create_app_for_testing(state);
+
+        // Try to edit a non-existent log entry (ID 9999) - correct path is /history/:id
+        let req = Request::builder()
+            .uri("/history/9999")
+            .method(http::Method::POST)
+            .header(
+                http::header::CONTENT_TYPE,
+                "application/x-www-form-urlencoded",
+            )
+            .body(Body::from("text=Edited text"))
+            .unwrap();
+        let response = app.oneshot(req).await.unwrap();
+
+        // Should return NOT_FOUND for non-existent entry
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_retry_handler_no_input() {
+        let state = create_test_state();
+        let app = create_app_for_testing(state);
+
+        // retry is POST, not GET
+        let req = Request::builder()
+            .uri("/retry")
+            .method(http::Method::POST)
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(req).await.unwrap();
+
+        // With no input history, should return BAD_REQUEST
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
 }
 
 /// Integration test that loads actual world data and verifies room image_path
@@ -376,12 +480,6 @@ fn test_load_world_includes_room_image_path() {
     );
 }
 
-/// Integration test that loads the real world via JSON files and tests
-/// the full HTTP endpoint path for visual-sidebar fragment.
-/// This test reveals if the bug is in:
-/// - The state creation (GameState::new)
-/// - The fragment handler (render_visual_sidebar)
-/// - Or elsewhere in the data pipeline
 #[tokio::test]
 async fn test_visual_sidebar_with_real_world_data() {
     // Load real world data directly from JSON files

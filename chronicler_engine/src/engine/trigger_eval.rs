@@ -127,6 +127,7 @@ mod tests {
             npcs,
             current_room_id: "room_1".into(),
             narration_history: vec![],
+            next_log_id: 1,
             npcs_in_area,
             generation_state: Default::default(),
             dynamic_rooms: HashMap::new(),

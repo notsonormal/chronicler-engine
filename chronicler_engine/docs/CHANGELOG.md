@@ -1,6 +1,37 @@
 # Changelog
 
-## 2026-04-27
+## 2026-04-29
+
+### Added
+- **Retry Handler Implementation** - The `/retry` endpoint now actually regenerates AI responses
+  - Added `replace_last_ai_response(new_text)` method to `GameState`
+  - Added `get_history_context_for_retry()` - Returns history excluding AI response being retried
+  - Retry now calls LLM with original user input and truncated history
+  - Critical: History truncation prevents LLM from repeating old response
+
+### Fixed
+- **Retry endpoint** - Was returning stub "Retrying..." without actual LLM call
+- **History context** - Retry now properly excludes the AI response being retried from LLM context
+
+## 2026-04-28
+
+### Added
+- **History Edit & Retry** - Users can now edit past conversation entries and regenerate the last AI response
+  - Added `id: u64` to `LogEntry` for unique identification
+  - Added `next_log_id: u64` to `GameState` for auto-increment
+  - `edit_log(id, new_text)` method to modify entry text
+  - `get_last_input_text()` to retrieve last user input for retry
+  - `POST /history/:id` endpoint for editing entries
+  - `POST /retry` endpoint to regenerate last response
+  - UI Edit button (pencil icon) appears on log entry hover
+  - Inline text editing (no modal)
+  - Retry button on last AI message (Narration/Dialogue)
+
+### Changed
+- **StoryLogTemplate** - Now includes `data-id` and `data-raw-text` attributes on each entry
+- **LogEntryView** - Added `raw_text` field to preserve original markdown
+- **Edit behavior** - Uses `data-raw-text` attribute to get original text (not HTML)
+- **Polling pause** - HTMX polling pauses during edit mode to prevent DOM replacement
 
 ### Added
 - **Trigger continuation unified** - Trigger narrations now use full 8-layer sillytavern prompt via `PromptBuilder` with `PhiMode::Continuation`

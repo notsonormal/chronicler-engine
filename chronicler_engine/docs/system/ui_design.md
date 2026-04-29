@@ -24,6 +24,12 @@
 | `--color-button-gradient-start` | #2a2a2a | Button gradient top |
 | `--color-button-gradient-end` | #1a1a1a | Button gradient bottom |
 | `--color-button-border` | #555 | Button border |
+| `--color-log-input` | #2a2a2a | User input bubble background |
+| `--color-log-narration` | #1a3a3a | Narration bubble background |
+| `--color-log-dialogue` | #3a2a1a | Dialogue bubble background |
+| `--color-log-system` | #3a3a1a | System message bubble background |
+| `--color-error-gradient-start` | #ff4444 | Error notification gradient top |
+| `--color-error-gradient-end` | #cc0000 | Error notification gradient bottom |
 
 ### Typography
 
@@ -50,7 +56,7 @@
 | `--header-height` | 48px | Header height |
 | `--action-area-height` | 64px | Action area height |
 | `--input-height` | 40px | Input and button height |
-| `--button-min-width` | 90px | Button minimum width |
+| `--button-min-width` | 100px | Button minimum width |
 | `--input-min-width` | 200px | Input minimum width |
 
 ### Animation
@@ -115,13 +121,12 @@
 - Auto-scales to fit container without cropping
 
 ### NPC Portraits
-- Layout: Flex row with wrap (center-aligned grid)
-- Gap: 8px
-- Each portrait: full width of sidebar, fixed height 100px
-- Image: width 100%, height 100px, object-fit contain
+- Layout: Flex row, nowrap, horizontal scroll (overflow-x: auto)
+- Gap: 6px
+- Each portrait: fixed 80×80px square
+- Image: width 80px, height 80px, object-fit: cover
 - Shows present NPCs only
-- No scrollbar (wraps to multiple rows if needed)
-- Center-aligned in sidebar
+- Scrollable when multiple NPCs exceed sidebar width
 
 ### Action Area
 - Height: 64px
@@ -200,6 +205,47 @@
 
 #### Input
 - Color: #888888
+
+### Edit & Retry Controls
+
+#### Edit Button (✏️)
+- Always visible (opacity: 1)
+- Background: transparent, no border
+- Color: muted (#888), cyan on hover (#00ffff)
+- Font size: 18px
+- Padding: 4px 8px
+- Margin-left: 8px
+- Transition: opacity 0.2s, color 0.2s
+
+#### Retry Button (↻)
+- Same styling as edit button
+- Only appears on the last AI message (narration or dialogue)
+- Not shown on location entries or user input
+
+#### Inline Edit Textarea
+- Width: 100%, box-sizing: border-box
+- Background: #0a0a0a
+- Border: 1px solid #333
+- Border-radius: 4px
+- Color: #e0e0e0
+- Padding: 4px
+- Font: inherit, 14px
+- Resize: none
+- Line-height: 1.4
+- Height: matches original text height (measured before replacement)
+
+#### Save/Cancel Buttons
+- Background: transparent, no border
+- Font size: 14px
+- Padding: 2px 6px
+- Margin-left: 4px
+- Save: green on hover (#00ff00)
+- Cancel: red on hover (#ff4444)
+
+#### Polling Behavior
+- During edit mode, story-log polling is paused via `hx-trigger: none`
+- `htmx.process()` called to force HTMX to re-read the trigger attribute
+- Polling resumes on save or cancel
 
 ## JavaScript Features
 

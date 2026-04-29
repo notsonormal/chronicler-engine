@@ -9,7 +9,9 @@
 </head>
 <body>
     <div class="error-notification" id="error-notification"></div>
-    <div class="header" id="header" hx-get="/fragment/header" hx-trigger="load"></div>
+    <div class="header-bar">
+        <div class="header" id="header" hx-get="/fragment/header" hx-trigger="load"></div>
+    </div>
     <div class="main-container">
         <div class="story-log" id="story-log" hx-get="/fragment/story-log" hx-trigger="load, every 2s" hx-swap="innerHTML"></div>
         <div class="visual-sidebar" hx-get="/fragment/visual-sidebar" hx-trigger="load, every 5s"></div>
@@ -92,6 +94,105 @@
                     errorNotification.classList.remove('visible');
                 }, 5000);
             }
+        }
+        
+        // Edit functions - inline editing with polling pause
+        let currentEditId = null;
+        let originalText = null;
+        let originalTrigger = null;
+        
+        function pausePolling() {
+            const storyLog = document.getElementById('story-log');
+            if (storyLog) {
+                originalTrigger = storyLog.getAttribute('hx-trigger');
+                storyLog.setAttribute('hx-trigger', 'none');
+                // Force HTMX to re-read the trigger attribute
+                htmx.process(storyLog);
+            }
+        }
+        
+        function resumePolling() {
+            const storyLog = document.getElementById('story-log');
+            if (storyLog && originalTrigger) {
+                storyLog.setAttribute('hx-trigger', originalTrigger);
+                htmx.process(storyLog);
+                originalTrigger = null;
+            }
+        }
+        
+        function showEditForm(id) {
+            currentEditId = id;
+            const entry = document.querySelector(`[data-id="${id}"]`);
+            if (entry) {
+                const textSpan = entry.querySelector('.text');
+                
+                // Measure original height BEFORE replacing content
+                const originalHeight = textSpan.scrollHeight;
+                
+                // Get raw text from data attribute (before markdown conversion)
+                const rawText = entry.getAttribute('data-raw-text') || '';
+                originalText = textSpan.innerHTML;
+                
+                // Replace text with textarea containing raw text (escape to prevent XSS)
+                const escapedText = rawText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                textSpan.innerHTML = `<textarea id="edit-textarea" class="edit-textarea">${escapedText}</textarea>`;
+                
+                // Set textarea height to match original
+                const textarea = textSpan.querySelector('textarea');
+                textarea.style.height = originalHeight + 'px';
+                
+                // Replace edit button with save/cancel
+                const editBtn = entry.querySelector('.edit-btn');
+                editBtn.outerHTML = `<button class="save-btn" onclick="submitEdit()">✓</button><button class="cancel-btn" onclick="cancelEdit()">✗</button>`;
+                
+                // Pause HTMX polling while editing
+                pausePolling();
+            }
+        }
+        
+        function cancelEdit() {
+            if (currentEditId === null) return;
+            const entry = document.querySelector(`[data-id="${currentEditId}"]`);
+            if (entry) {
+                const textSpan = entry.querySelector('.text');
+                textSpan.innerHTML = originalText;
+                // Restore edit button
+                const saveBtn = entry.querySelector('.save-btn');
+                const cancelBtn = entry.querySelector('.cancel-btn');
+                saveBtn.outerHTML = `<button class="edit-btn" onclick="showEditForm(${currentEditId})" title="Edit">&#9998;</button>`;
+                cancelBtn.remove();
+            }
+            currentEditId = null;
+            originalText = null;
+            resumePolling();
+        }
+        
+        function submitEdit() {
+            if (currentEditId === null) return;
+            const newText = document.getElementById('edit-textarea').value;
+            const formData = new URLSearchParams();
+            formData.append('text', newText);
+            fetch(`/history/${currentEditId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: formData
+            }).then(() => {
+                // Resume polling before refresh
+                resumePolling();
+                // Refresh story log
+                htmx.trigger('#story-log', 'htmx:refresh');
+            });
+            currentEditId = null;
+            originalText = null;
+        }
+        
+        function submitRetry() {
+            fetch('/retry', { method: 'POST' })
+                .then(response => response.text())
+                .then(() => {
+                    // Refresh story log
+                    htmx.trigger('#story-log', 'htmx:refresh');
+                });
         }
         
         // Create a MutationObserver to watch for status changes

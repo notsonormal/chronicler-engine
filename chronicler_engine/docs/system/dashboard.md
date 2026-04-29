@@ -23,8 +23,7 @@ Horizontal split into story context and visual context:
     - Fade-in animation for new messages
 - **Visual Sidebar (20%)**:
   - Location Image (top): Full-width location image, max-height 200px, object-fit contain (scales to fit without cropping)
-  - NPC Portraits (bottom): Full-width stacked portraits, each 100px height, object-fit contain
-  - Click on any image toggles sidebar expand/collapse
+  - NPC Portraits (bottom): Horizontal scrollable row, 80×80px square images, object-fit cover
 
 ### 3. Action Area (64px height)
 Interactive zone for player input.
@@ -38,8 +37,10 @@ Interactive zone for player input.
 
 ## Real-Time Updates
 The dashboard uses HTMX polling for live updates:
-- Story-log polls `/fragment/story-log` every 5 seconds for new content
+- Story-log polls `/fragment/story-log` every 2 seconds for new content
+- Visual sidebar polls `/fragment/visual-sidebar` every 5 seconds
 - Status-display polls `/status/generating` every 5 seconds to update button state
+- Action hints poll `/hints` every 5 seconds
 - New narration appears automatically with fade-in effect
 - Button changes state during LLM processing
 - No manual refresh required
@@ -55,12 +56,43 @@ The dashboard uses HTMX polling for live updates:
 ### LogEntry
 ```rust
 pub struct LogEntry {
+    pub id: u64,                           // Unique auto-incrementing ID
     pub sender: Option<String>,
-    pub text: String,
+    pub text: String,                       // Raw text (markdown source)
     pub log_type: LogType,
-    pub timestamp: chrono::DateTime<chrono::Utc>,  // Added for timestamps
+    pub timestamp: chrono::DateTime<chrono::Utc>,
 }
 ```
+
+### LogEntryView (Rendered)
+```rust
+pub struct LogEntryView {
+    pub id: u64,
+    pub text: SafeHtml,                     // Rendered HTML (markdown converted)
+    pub raw_text: String,                   // Original markdown (for editing)
+    pub log_type: String,
+    pub is_location: bool,
+}
+```
+
+HTML template renders with `data-raw-text` attribute for inline editing:
+
+```html
+<div class="log-entry" data-id="{{ entry.id }}" data-raw-text="{{ entry.raw_text }}">
+    <span class="text">{{ entry.text }}</span>
+    <button class="edit-btn">✏️</button>
+    {% if last_ai_message %}
+    <button class="retry-btn">🔄</button>
+    {% endif %}
+</div>
+```
+
+## Edit Flow (SillyTavern Pattern)
+
+1. Click edit button → textarea replaces text span, polling pauses
+2. Edit text in textarea (uses `data-raw-text`, not HTML textContent)
+3. Click save → textarea value sent to server, stored as raw text
+4. Click cancel → restore original text, resume polling
 
 ## Button Logic (JavaScript)
 1. Monitor status element changes via MutationObserver or HTMX events
@@ -82,4 +114,9 @@ pub struct LogEntry {
 - `.log-entry .timestamp` - Small gray timestamp above message
 - `.log-entry .sender` - Bold name above message content
 - `.log-entry .text` - Message content
+- `.log-entry .edit-btn` - Edit pencil icon, always visible (opacity: 1)
+- `.log-entry .retry-btn` - Retry refresh icon, last AI message only
+- `.edit-textarea` - Inline edit textarea, full width, no resize
+- `.save-btn` - Save/confirm button (green on hover)
+- `.cancel-btn` - Cancel button (red on hover)
 - `@keyframes fadeIn` - Opacity 0 to 1 for new messages

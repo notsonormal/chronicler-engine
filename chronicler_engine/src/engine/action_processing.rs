@@ -222,6 +222,7 @@ mod tests {
             npcs,
             current_room_id: "test_room".to_string(),
             narration_history: vec![],
+            next_log_id: 1,
             npcs_in_area: vec![],
             dynamic_rooms: std::collections::HashMap::new(),
             character_state: Default::default(),
@@ -327,5 +328,30 @@ mod tests {
         // Should create a dynamic room
         assert_ne!(state.current_room_id, original_room);
         assert!(state.dynamic_rooms.contains_key(&state.current_room_id));
+    }
+
+    #[test]
+    fn test_handle_movement_success_adds_room_log() {
+        let mut state = make_test_state();
+
+        // Move to existing room (test_room exists in the map)
+        handle_movement(&mut state, Some("test_room"), &["carla".to_string()]);
+
+        // Should have added a narration entry with room name
+        assert!(!state.narration_history.is_empty());
+        let last_entry = state.narration_history.last().unwrap();
+        assert_eq!(last_entry.log_type, LogType::Narration);
+        assert_eq!(last_entry.sender, Some("Test Room".to_string()));
+    }
+
+    #[test]
+    fn test_handle_movement_sets_currently_meeting() {
+        let mut state = make_test_state();
+
+        // Move to a different room (creates dynamic room)
+        handle_movement(&mut state, Some("new_room"), &["carla".to_string()]);
+
+        // Should set currently_meeting for NPCs in new room
+        assert!(state.character_state.is_currently_meeting("carla"));
     }
 }

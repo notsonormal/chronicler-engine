@@ -94,9 +94,7 @@ mod tests {
         send_action(&page, "enter shop").await;
         wait_for_status_ready(&page).await;
 
-        // Small delay for async trigger processing
-        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-
+        // Poll for more log entries (replaces arbitrary sleep)
         let after = wait_for_log_entries(&page, before + 1).await;
 
         // The mock narration should have triggered room NPC detection
@@ -188,15 +186,14 @@ mod tests {
         let after_first = wait_for_log_entries(&page, 1).await;
         println!("After first talk: {} entries", after_first);
 
-        // Give server a moment to process the trigger state
-        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+        // Poll for trigger state processing (replaces arbitrary sleep)
+        let _ = wait_for_log_entries(&page, after_first).await;
 
         // Second encounter - shopkeeper trigger should NOT fire (times_met is now 1)
         send_action(&page, "talk to shopkeeper").await;
         wait_for_status_ready(&page).await;
-        // Small delay for story log polling
-        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-        let after_second = count_log_entries(&page).await;
+        // Poll for story log update (replaces arbitrary sleep)
+        let after_second = wait_for_log_entries(&page, after_first).await;
         println!("After second talk: {} entries", after_second);
 
         // With the fix evaluating ALL NPCs, we may see more than 2 new entries

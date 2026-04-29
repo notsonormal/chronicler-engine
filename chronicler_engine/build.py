@@ -163,6 +163,7 @@ def main():
         print(result.stdout)
     if result.returncode != 0:
         print(f"Coverage check exited with code {result.returncode}")
+        print("Run 'python scripts/parse_coverage.py' for detailed coverage analysis")
 
     print("=== Build Complete ===")
     return 0

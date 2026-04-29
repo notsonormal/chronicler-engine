@@ -731,12 +731,14 @@ mod tests {
     fn create_test_history() -> Vec<LogEntry> {
         vec![
             LogEntry {
+                id: 1,
                 sender: Some("Narrator".to_string()),
                 text: "Welcome to the game!".to_string(),
                 log_type: crate::model::state::LogType::Narration,
                 timestamp: chrono::Utc::now(),
             },
             LogEntry {
+                id: 2,
                 sender: Some("Player".to_string()),
                 text: "I look around.".to_string(),
                 log_type: crate::model::state::LogType::Input,

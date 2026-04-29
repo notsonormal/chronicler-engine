@@ -698,3 +698,157 @@ fn html_escape(s: &str) -> String {
         .replace('>', "&gt;")
         .replace('"', "&quot;")
 }
+
+// ============ History Edit & Retry Handlers ============
+
+#[derive(serde::Deserialize)]
+pub struct EditHistoryForm {
+    text: String,
+}
+
+/// Edit a history entry by ID
+pub async fn edit_history_handler(
+    State(state): State<AppState>,
+    axum::extract::Path(id): axum::extract::Path<u64>,
+    Form(form): Form<EditHistoryForm>,
+) -> (StatusCode, String) {
+    let result = state
+        .state
+        .lock()
+        .map(|mut guard| guard.edit_log(id, form.text));
+
+    match result {
+        Ok(Ok(())) => (
+            StatusCode::OK,
+            "<span class=\"status ready\">Edited</span>".to_string(),
+        ),
+        Ok(Err(e)) => (StatusCode::NOT_FOUND, render_error(&e.to_string())),
+        Err(_) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            render_error("Failed to lock state"),
+        ),
+    }
+}
+
+/// Retry the last AI response
+pub async fn retry_handler(State(state): State<AppState>) -> (StatusCode, String) {
+    // Get last input text and validate we have something to retry
+    let (input_text, _player_name) = match state.state.lock() {
+        Ok(guard) => match guard.get_last_input_text() {
+            Some((sender, text)) => (text, sender),
+            None => {
+                return (StatusCode::BAD_REQUEST, render_error("No input to retry"));
+            }
+        },
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                render_error("Failed to lock state"),
+            );
+        }
+    };
+
+    // Clone data needed for the background thread BEFORE spawning
+    // History is truncated at last AI response to prevent LLM from repeating old response
+    let (world, map, player, all_npcs, room_npc_ids, history_for_retry) = {
+        let guard = match state.state.lock() {
+            Ok(g) => g,
+            Err(_) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    render_error("Failed to lock state"),
+                );
+            }
+        };
+
+        let room_npc_ids = match get_current_room(&guard) {
+            Ok(room) => room.npcs.clone(),
+            Err(_) => vec![],
+        };
+
+        (
+            Arc::clone(&guard.world),
+            Arc::clone(&guard.map),
+            Arc::clone(&guard.player),
+            guard.npcs.values().cloned().collect::<Vec<_>>(),
+            room_npc_ids,
+            guard.get_history_context_for_retry(), // Excludes the AI response being retried
+        )
+    };
+
+    let state_clone = state.state.clone();
+
+    // Spawn background thread to call LLM and replace the response
+    std::thread::spawn(move || {
+        // Small delay to let any inner threads start their guards first
+        std::thread::sleep(std::time::Duration::from_millis(50));
+
+        // Get the room from the map
+        let room = map
+            .overworld
+            .regions
+            .iter()
+            .flat_map(|r| r.rooms.iter())
+            .find(|r| r.npcs.iter().any(|npc_id| room_npc_ids.contains(npc_id)))
+            .or_else(|| {
+                map.overworld
+                    .regions
+                    .iter()
+                    .flat_map(|r| r.rooms.iter())
+                    .find(|r| r.id == "room_1")
+            });
+
+        let Some(room) = room else {
+            if let Ok(mut state) = state_clone.lock() {
+                state.generation_state.error_message =
+                    Some("Retry failed: room not found".to_string());
+                state.generation_state.is_generating = false;
+            }
+            return;
+        };
+
+        // Get nearby NPCs
+        let nearby_npcs: Vec<NpcCard> = all_npcs
+            .iter()
+            .filter(|npc| room_npc_ids.contains(&npc.id))
+            .cloned()
+            .collect();
+
+        // Call LLM to generate new narration
+        let backend = get_llm_backend();
+        let context = PromptContext {
+            world: &world,
+            room,
+            all_npcs: &all_npcs,
+            npcs_in_area: &nearby_npcs,
+            player: &player,
+            user_message: &input_text,
+            history: &history_for_retry, // History excludes the AI response being retried
+        };
+
+        let new_narration = match backend.narrate_action(&context) {
+            Ok(text) => text,
+            Err(e) => {
+                if let Ok(mut state) = state_clone.lock() {
+                    state.generation_state.error_message = Some(format!("LLM Error: {e}"));
+                    state.generation_state.is_generating = false;
+                }
+                return;
+            }
+        };
+
+        // Replace the last AI response with the new narration
+        if let Ok(mut state) = state_clone.lock() {
+            if let Err(e) = state.replace_last_ai_response(new_narration) {
+                state.generation_state.error_message = Some(format!("Retry failed: {e}"));
+            }
+            state.generation_state.is_generating = false;
+        }
+    });
+
+    // Return immediately while LLM generates in background
+    (
+        StatusCode::OK,
+        "<span class=\"status ready\">Retrying...</span>".to_string(),
+    )
+}

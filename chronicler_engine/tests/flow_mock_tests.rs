@@ -16,7 +16,6 @@ use playwright_rs::{Browser, LaunchOptions, Playwright};
 use std::sync::Arc;
 use test_utils::*;
 
-/// Get or init shared browser
 async fn get_shared_browser() -> (playwright_rs::Playwright, Arc<Browser>) {
     let playwright = Playwright::launch()
         .await
@@ -43,7 +42,7 @@ mod tests {
     // Initial Load Tests - No LLM needed
 
     #[tokio::test]
-    async fn test_initial_load_header_shows_location() {
+    async fn test_initial_load_story_log_displays_location() {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
         let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
 

@@ -96,9 +96,6 @@ pub async fn wait_for_server(port: u16, max_attempts: usize) -> bool {
     false
 }
 
-/// Wait for LLM to finish generating a response by polling the generating status endpoint.
-/// Returns Ok(()) if LLM became idle within timeout, Err(()) if timeout exceeded.
-/// If timeout is reached, forcefully resets the is_generating flag on the server.
 pub async fn wait_for_llm_idle(port: u16, timeout: Duration) -> Result<(), ()> {
     let start = std::time::Instant::now();
     let client = reqwest::Client::new();
@@ -134,8 +131,6 @@ pub async fn wait_for_llm_idle(port: u16, timeout: Duration) -> Result<(), ()> {
     Err(())
 }
 
-/// Poll until story log has at least the expected number of entries
-/// Returns the actual count after polling, or the expected count if timeout
 pub async fn wait_for_story_log_entries(page: &playwright_rs::Page, min_count: u32) -> u32 {
     use tokio::time::sleep;
 
@@ -161,8 +156,6 @@ pub async fn wait_for_story_log_entries(page: &playwright_rs::Page, min_count: u
     .unwrap_or(0)
 }
 
-/// Poll until location text changes from the initial value
-/// Returns the new location text, or empty string if timeout
 pub async fn wait_for_location_change(page: &playwright_rs::Page, initial: &str) -> String {
     use tokio::time::sleep;
 
@@ -180,8 +173,6 @@ pub async fn wait_for_location_change(page: &playwright_rs::Page, initial: &str)
     String::new()
 }
 
-/// Poll until story log content changes from initial content
-/// Returns the new content, or empty string if timeout
 pub async fn wait_for_story_log_change(page: &playwright_rs::Page, initial: &str) -> String {
     use tokio::time::sleep;
 
@@ -202,8 +193,6 @@ pub async fn wait_for_story_log_change(page: &playwright_rs::Page, initial: &str
     String::new()
 }
 
-/// Poll until story log has more messages than initial count
-/// Returns the new message count, or initial_count if timeout
 pub async fn wait_for_more_messages(page: &playwright_rs::Page, initial_count: usize) -> usize {
     use tokio::time::sleep;
 
@@ -224,8 +213,6 @@ pub async fn wait_for_more_messages(page: &playwright_rs::Page, initial_count: u
     initial_count
 }
 
-/// Poll until element has a non-empty value (not "Loading...")
-/// Returns the element's inner text, or empty string if timeout
 pub async fn wait_for_non_loading_value(page: &playwright_rs::Page, selector: &str) -> String {
     use tokio::time::sleep;
 
@@ -246,8 +233,6 @@ pub async fn wait_for_non_loading_value(page: &playwright_rs::Page, selector: &s
     String::new()
 }
 
-/// Poll until element has a specific class
-/// Returns true if class found, false if timeout
 pub async fn wait_for_element_class(
     page: &playwright_rs::Page,
     selector: &str,
@@ -273,8 +258,6 @@ pub async fn wait_for_element_class(
     false
 }
 
-/// Poll until element exists and has at least min_count children
-/// Returns the count of children, or 0 if timeout
 pub async fn wait_for_element_children(
     page: &playwright_rs::Page,
     selector: &str,
@@ -299,8 +282,6 @@ pub async fn wait_for_element_children(
     0
 }
 
-/// Poll until element has text content (not empty)
-/// Returns the text content, or empty string if timeout
 pub async fn wait_for_element_text(page: &playwright_rs::Page, selector: &str) -> String {
     use tokio::time::sleep;
 
@@ -321,8 +302,6 @@ pub async fn wait_for_element_text(page: &playwright_rs::Page, selector: &str) -
     String::new()
 }
 
-/// Poll until status display shows "Ready" (not "Thinking")
-/// This indicates synchronous action processing is complete
 pub async fn wait_for_status_ready(page: &playwright_rs::Page) {
     use tokio::time::sleep;
 
@@ -345,8 +324,6 @@ pub async fn wait_for_status_ready(page: &playwright_rs::Page) {
     }
 }
 
-/// Poll until status display is no longer "Thinking..."
-/// Returns the final status text, or "Thinking..." if timeout
 pub async fn wait_for_status_not_thinking(page: &playwright_rs::Page) -> String {
     use tokio::time::sleep;
 
@@ -373,7 +350,6 @@ pub async fn wait_for_status_not_thinking(page: &playwright_rs::Page) -> String 
     .unwrap_or_default()
 }
 
-/// Launch Chrome browser for testing
 pub async fn launch_chrome() -> (playwright_rs::Playwright, playwright_rs::Browser) {
     use playwright_rs::LaunchOptions;
 
@@ -389,7 +365,6 @@ pub async fn launch_chrome() -> (playwright_rs::Playwright, playwright_rs::Brows
     (playwright, browser)
 }
 
-/// Test configuration loaded from JSON file
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TestConfig {
     pub port_range: PortRange,
@@ -411,7 +386,6 @@ pub struct TestSpecificConfig {
 }
 
 impl TestConfig {
-    /// Load test configuration from JSON file
     pub fn from_file(path: &str) -> Result<Self, String> {
         let content =
             fs::read_to_string(path).map_err(|e| format!("Failed to read config file: {}", e))?;
@@ -427,9 +401,6 @@ impl TestConfig {
     }
 }
 
-/// Find an available port in the given range using file-based locking.
-/// Creates a lock file in the system temp directory to prevent race conditions
-/// between parallel test processes.
 pub fn get_available_port(min: u16, max: u16) -> Result<u16, String> {
     let lock_dir = std::env::temp_dir().join("chronicler_test_ports");
     let _ = std::fs::create_dir_all(&lock_dir);
@@ -495,14 +466,12 @@ pub fn get_available_port(min: u16, max: u16) -> Result<u16, String> {
     ))
 }
 
-/// Release a previously reserved port lock file
 pub fn release_port_lock(port: u16) {
     let lock_dir = std::env::temp_dir().join("chronicler_test_ports");
     let lock_path = lock_dir.join(format!("port_{}.lock", port));
     let _ = std::fs::remove_file(&lock_path);
 }
 
-/// Check if a process with the given PID is still running
 fn is_process_alive(pid: u32) -> bool {
     #[cfg(target_os = "windows")]
     {
@@ -522,7 +491,6 @@ fn is_process_alive(pid: u32) -> bool {
     }
 }
 
-/// Get a dynamic port from config file (convenience function)
 pub fn get_config_port(config_path: &str) -> Result<u16, String> {
     let config = TestConfig::from_file(config_path)?;
     get_available_port(config.port_range.min, config.port_range.max)
@@ -534,13 +502,10 @@ pub struct TestServer {
 }
 
 impl TestServer {
-    /// Create a test server with config (dynamic port + config-based backend)
     pub async fn with_config(port: u16, world: &str, use_mock: bool) -> Self {
         Self::start(port, world, use_mock).await
     }
 
-    /// Create a test server using config file for port and backend
-    /// Returns (TestServer, port_used) - port is dynamically allocated
     pub async fn from_config(
         world: &str,
         config_path: &str,
@@ -553,7 +518,6 @@ impl TestServer {
         Ok((server, port))
     }
 
-    /// Internal: start the server with given parameters
     async fn start(port: u16, world: &str, use_mock: bool) -> Self {
         if port_in_use(port) {
             kill_existing_server();
@@ -566,12 +530,10 @@ impl TestServer {
         TestServer { child, port }
     }
 
-    /// Create a test server with real LLM backend
     pub async fn new(port: u16, world: &str) -> Self {
         Self::start(port, world, false).await
     }
 
-    /// Create a test server with mock LLM backend
     pub async fn new_with_mock(port: u16, world: &str) -> Self {
         Self::start(port, world, true).await
     }

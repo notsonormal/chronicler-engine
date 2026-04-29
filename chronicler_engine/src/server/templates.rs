@@ -49,9 +49,11 @@ pub struct HeaderTemplate {
 
 #[derive(Debug, Clone)]
 pub struct LogEntryView {
+    pub id: u64,
     pub timestamp: String,
     pub sender: String,
     pub text: SafeHtml,
+    pub raw_text: String,
     pub log_type: String,
     pub is_location: bool,
 }
@@ -61,9 +63,11 @@ impl From<&LogEntry> for LogEntryView {
         let parsed_text = markdown_to_html(&entry.text);
         let is_location = entry.sender.is_some() && entry.text.is_empty();
         Self {
+            id: entry.id,
             timestamp: entry.timestamp.format("%H:%M").to_string(),
             sender: entry.sender.clone().unwrap_or_default(),
             text: SafeHtml(parsed_text),
+            raw_text: entry.text.clone(),
             log_type: match entry.log_type {
                 LogType::Narration => "narration".to_string(),
                 LogType::Dialogue => "dialogue".to_string(),
@@ -77,7 +81,7 @@ impl From<&LogEntry> for LogEntryView {
 
 #[derive(Template)]
 #[template(
-    source = r#"<div class="story-log" id="story-log">{% for entry in entries %}<div class="log-entry {{ entry.log_type }}">{% if entry.is_location %}<span class="location-header">{{ entry.sender }}</span><span class="location-timestamp">- {{ entry.timestamp }}</span>{% else %}<span class="timestamp">{{ entry.timestamp }}</span>{% if entry.sender != "" %}<span class="sender">{{ entry.sender }}:</span> {% endif %}{% endif %}<span class="text">{{ entry.text }}</span></div>{% endfor %}</div>"#,
+    source = r#"<div class="story-log" id="story-log">{% for entry in entries %}<div class="log-entry {{ entry.log_type }}" data-id="{{ entry.id }}" data-raw-text="{{ entry.raw_text | escape }}">{% if entry.is_location %}<span class="location-header">{{ entry.sender }}</span><span class="location-timestamp">- {{ entry.timestamp }}</span>{% else %}<span class="timestamp">{{ entry.timestamp }}</span>{% if entry.sender != "" %}<span class="sender">{{ entry.sender }}:</span> {% endif %}{% endif %}<span class="text">{{ entry.text }}</span>{% if !entry.is_location %}<button class="edit-btn" onclick="showEditForm({{ entry.id }})" title="Edit">&#9998;</button>{% if loop.last %}{% if entry.log_type == "narration" || entry.log_type == "dialogue" %}<button class="retry-btn" onclick="submitRetry()" title="Retry">&#8635;</button>{% endif %}{% endif %}{% endif %}</div>{% endfor %}</div>"#,
     ext = "html"
 )]
 pub struct StoryLogTemplate {
@@ -234,6 +238,7 @@ mod tests {
         use chrono::Utc;
 
         let entries = vec![LogEntry {
+            id: 1,
             sender: Some("Game Master".to_string()),
             text: "Welcome to the adventure!".to_string(),
             log_type: LogType::Narration,
@@ -251,6 +256,7 @@ mod tests {
         use chrono::Utc;
 
         let entries = vec![LogEntry {
+            id: 1,
             sender: None,
             text: "<script>alert('xss')</script>".to_string(),
             log_type: LogType::Narration,

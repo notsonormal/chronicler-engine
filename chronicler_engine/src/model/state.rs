@@ -19,6 +19,7 @@ pub enum LogType {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct LogEntry {
+    pub id: u64,
     pub sender: Option<String>,
     pub text: String,
     pub log_type: LogType,
@@ -85,6 +86,7 @@ pub struct GameState {
     pub npcs: HashMap<String, NpcCard>,
     pub current_room_id: String,
     pub narration_history: Vec<LogEntry>,
+    pub next_log_id: u64,
     pub npcs_in_area: Vec<NpcCard>,
     pub generation_state: GenerationState,
     pub dynamic_rooms: HashMap<String, Room>,
@@ -129,6 +131,7 @@ impl GameState {
             npcs: npcs_map,
             current_room_id: starting_room,
             narration_history: Vec::new(),
+            next_log_id: 1,
             generation_state: GenerationState::default(),
             npcs_in_area: Vec::new(),
             dynamic_rooms: HashMap::new(),
@@ -140,12 +143,97 @@ impl GameState {
         if self.narration_history.len() >= MAX_LOG_ENTRIES {
             self.narration_history.remove(0);
         }
+        let id = self.next_log_id;
+        self.next_log_id += 1;
         self.narration_history.push(LogEntry {
+            id,
             sender,
             text,
             log_type,
             timestamp: Utc::now(),
         });
+    }
+
+    /// Edit a log entry by its ID
+    pub fn edit_log(&mut self, id: u64, new_text: String) -> crate::error::Result<()> {
+        let entry = self
+            .narration_history
+            .iter_mut()
+            .find(|e| e.id == id)
+            .ok_or_else(|| {
+                crate::error::EngineError::Internal(format!("Log entry not found: {id}"))
+            })?;
+        entry.text = new_text;
+        Ok(())
+    }
+
+    /// Get a log entry by its ID
+    pub fn get_log(&self, id: u64) -> Option<&LogEntry> {
+        self.narration_history.iter().find(|e| e.id == id)
+    }
+
+    /// Get the index of the last AI response (Narration or Dialogue)
+    pub fn get_last_ai_response_index(&self) -> Option<usize> {
+        self.narration_history
+            .iter()
+            .rposition(|e| e.log_type == LogType::Narration || e.log_type == LogType::Dialogue)
+    }
+
+    /// Get the index of the last user input
+    pub fn get_last_input_index(&self) -> Option<usize> {
+        self.narration_history
+            .iter()
+            .rposition(|e| e.log_type == LogType::Input)
+    }
+
+    /// Get last input text for retry
+    pub fn get_last_input_text(&self) -> Option<(String, String)> {
+        let input_idx = self.get_last_input_index()?;
+        let input_entry = self.narration_history.get(input_idx)?;
+        let sender = input_entry.sender.clone().unwrap_or_default();
+        Some((sender, input_entry.text.clone()))
+    }
+
+    /// Get the full history context for LLM prompt
+    pub fn get_history_context(&self) -> &[LogEntry] {
+        &self.narration_history
+    }
+
+    /// Get history context for retry, excluding the AI response being retried.
+    /// This prevents the LLM from repeating/paraphrasing the old response.
+    pub fn get_history_context_for_retry(&self) -> Vec<LogEntry> {
+        let last_ai_idx = self.get_last_ai_response_index();
+        if let Some(idx) = last_ai_idx {
+            // Exclude the AI response being retried (and any entries after it)
+            self.narration_history[..idx].to_vec()
+        } else {
+            self.narration_history.clone()
+        }
+    }
+
+    /// Replace the AI response that follows the last user input.
+    /// Returns error if there's no input or no AI response after it.
+    pub fn replace_last_ai_response(&mut self, new_text: String) -> crate::error::Result<()> {
+        let input_idx = self
+            .get_last_input_index()
+            .ok_or_else(|| crate::error::EngineError::Internal("No input to retry".into()))?;
+        let ai_idx = self
+            .get_last_ai_response_index()
+            .ok_or_else(|| crate::error::EngineError::Internal("No AI response to retry".into()))?;
+
+        // Validate: AI response must come AFTER the input
+        if ai_idx <= input_idx {
+            return Err(crate::error::EngineError::Internal(
+                "AI response must be after input".into(),
+            ));
+        }
+
+        let entry = self
+            .narration_history
+            .get_mut(ai_idx)
+            .ok_or_else(|| crate::error::EngineError::Internal("AI response not found".into()))?;
+        entry.text = new_text;
+        Ok(())
     }
 }
 
@@ -286,5 +374,219 @@ mod tests {
         assert_eq!(state.narration_history.len(), 2);
         assert_eq!(state.narration_history[0].text, "Message 1");
         assert_eq!(state.narration_history[1].text, "Message 2");
+    }
+
+    #[test]
+    fn test_edit_log() {
+        let mut state = GameState::new(
+            Arc::new(WorldCard {
+                name: "W".into(),
+                description: "D".into(),
+                global_rules: vec![],
+                ..Default::default()
+            }),
+            Arc::new(MapDef {
+                overworld: crate::model::map::Overworld {
+                    id: "o".into(),
+                    name: "ow".into(),
+                    regions: vec![],
+                },
+            }),
+            Arc::new(PlayerCard {
+                sheet: CharacterSheet {
+                    name: "P".into(),
+                    description: "D".into(),
+                    personality: "P".into(),
+                    scenario: "S".into(),
+                    example_dialogue: "E".into(),
+                    profile_image: None,
+                    headshot_image: None,
+                },
+                inventory: vec![],
+            }),
+            vec![],
+            "room1".to_string(),
+        );
+
+        state.add_log("Original text".into(), None, LogType::Narration);
+        let id = state.narration_history[0].id;
+
+        // Verify edit works
+        state.edit_log(id, "Edited text".into()).unwrap();
+        assert_eq!(state.narration_history[0].text, "Edited text");
+
+        // Verify edit fails for invalid ID
+        assert!(state.edit_log(9999, "Not found".into()).is_err());
+    }
+
+    #[test]
+    fn test_get_last_input_index() {
+        let mut state = GameState::new(
+            Arc::new(WorldCard {
+                name: "W".into(),
+                description: "D".into(),
+                global_rules: vec![],
+                ..Default::default()
+            }),
+            Arc::new(MapDef {
+                overworld: crate::model::map::Overworld {
+                    id: "o".into(),
+                    name: "ow".into(),
+                    regions: vec![],
+                },
+            }),
+            Arc::new(PlayerCard {
+                sheet: CharacterSheet {
+                    name: "P".into(),
+                    description: "D".into(),
+                    personality: "P".into(),
+                    scenario: "S".into(),
+                    example_dialogue: "E".into(),
+                    profile_image: None,
+                    headshot_image: None,
+                },
+                inventory: vec![],
+            }),
+            vec![],
+            "room1".to_string(),
+        );
+
+        // Empty history returns None
+        assert!(state.get_last_input_index().is_none());
+
+        // Add narration, then input
+        state.add_log("Narration".into(), None, LogType::Narration);
+        state.add_log("User input".into(), Some("Player".into()), LogType::Input);
+
+        let idx = state.get_last_input_index();
+        assert!(idx.is_some());
+        assert_eq!(state.narration_history[idx.unwrap()].text, "User input");
+    }
+
+    #[test]
+    fn test_replace_last_ai_response() {
+        let mut state = GameState::new(
+            Arc::new(WorldCard {
+                name: "W".into(),
+                description: "D".into(),
+                global_rules: vec![],
+                ..Default::default()
+            }),
+            Arc::new(MapDef {
+                overworld: crate::model::map::Overworld {
+                    id: "o".into(),
+                    name: "ow".into(),
+                    regions: vec![],
+                },
+            }),
+            Arc::new(PlayerCard {
+                sheet: CharacterSheet {
+                    name: "P".into(),
+                    description: "D".into(),
+                    personality: "P".into(),
+                    scenario: "S".into(),
+                    example_dialogue: "E".into(),
+                    profile_image: None,
+                    headshot_image: None,
+                },
+                inventory: vec![],
+            }),
+            vec![],
+            "room1".to_string(),
+        );
+
+        // Add input then AI response
+        state.add_log("User input".into(), Some("Player".into()), LogType::Input);
+        state.add_log("Old AI response".into(), None, LogType::Narration);
+
+        // Replace the AI response
+        state
+            .replace_last_ai_response("New AI response".into())
+            .unwrap();
+
+        // Verify the AI response was replaced
+        let ai_idx = state.get_last_ai_response_index().unwrap();
+        assert_eq!(state.narration_history[ai_idx].text, "New AI response");
+    }
+
+    #[test]
+    fn test_replace_last_ai_response_no_input() {
+        let mut state = GameState::new(
+            Arc::new(WorldCard {
+                name: "W".into(),
+                description: "D".into(),
+                global_rules: vec![],
+                ..Default::default()
+            }),
+            Arc::new(MapDef {
+                overworld: crate::model::map::Overworld {
+                    id: "o".into(),
+                    name: "ow".into(),
+                    regions: vec![],
+                },
+            }),
+            Arc::new(PlayerCard {
+                sheet: CharacterSheet {
+                    name: "P".into(),
+                    description: "D".into(),
+                    personality: "P".into(),
+                    scenario: "S".into(),
+                    example_dialogue: "E".into(),
+                    profile_image: None,
+                    headshot_image: None,
+                },
+                inventory: vec![],
+            }),
+            vec![],
+            "room1".to_string(),
+        );
+
+        // No input - should fail
+        assert!(
+            state
+                .replace_last_ai_response("New response".into())
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn test_replace_last_ai_response_no_ai() {
+        let mut state = GameState::new(
+            Arc::new(WorldCard {
+                name: "W".into(),
+                description: "D".into(),
+                global_rules: vec![],
+                ..Default::default()
+            }),
+            Arc::new(MapDef {
+                overworld: crate::model::map::Overworld {
+                    id: "o".into(),
+                    name: "ow".into(),
+                    regions: vec![],
+                },
+            }),
+            Arc::new(PlayerCard {
+                sheet: CharacterSheet {
+                    name: "P".into(),
+                    description: "D".into(),
+                    personality: "P".into(),
+                    scenario: "S".into(),
+                    example_dialogue: "E".into(),
+                    profile_image: None,
+                    headshot_image: None,
+                },
+                inventory: vec![],
+            }),
+            vec![],
+            "room1".to_string(),
+        );
+
+        // Add only input, no AI response - should fail
+        state.add_log("User input".into(), Some("Player".into()), LogType::Input);
+        assert!(
+            state
+                .replace_last_ai_response("New response".into())
+                .is_err()
+        );
     }
 }

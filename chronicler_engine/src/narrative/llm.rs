@@ -491,12 +491,14 @@ mod tests {
 
         let _history = vec![
             LogEntry {
+                id: 1,
                 sender: Some("Narrator".to_string()),
                 text: "You see a mysterious figure.".to_string(),
                 log_type: LogType::Narration,
                 timestamp: Utc::now(),
             },
             LogEntry {
+                id: 2,
                 sender: Some("Player".to_string()),
                 text: "Hello?".to_string(),
                 log_type: LogType::Input,
@@ -639,6 +641,7 @@ mod tests {
 
         let _history: Vec<LogEntry> = (0..50)
             .map(|i| LogEntry {
+                id: i as u64,
                 sender: Some(format!("Speaker{}", i % 3)),
                 text: format!("This is narration entry number {} in the game history.", i),
                 log_type: if i % 2 == 0 {
@@ -652,5 +655,49 @@ mod tests {
 
         let result = backend.narrate_action(&make_test_context("current action"));
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_deepseek_backend_name() {
+        let backend = DeepSeekBackend;
+        assert_eq!(backend.name(), "DeepSeek");
+    }
+
+    #[test]
+    fn test_llm_backend_type_from_env_mock() {
+        // Set env var to mock
+        // SAFETY: This test modifies env vars but is isolated to this test.
+        // We restore the original value after the test.
+        unsafe {
+            std::env::set_var("LLM_BACKEND", "mock");
+        }
+        let backend_type = LlmBackendType::from_env();
+        assert_eq!(backend_type, LlmBackendType::Mock);
+        unsafe {
+            std::env::remove_var("LLM_BACKEND");
+        }
+    }
+
+    #[test]
+    fn test_llm_backend_type_from_env_deepseek() {
+        // Set env var to deepseek
+        unsafe {
+            std::env::set_var("LLM_BACKEND", "deepseek");
+        }
+        let backend_type = LlmBackendType::from_env();
+        assert_eq!(backend_type, LlmBackendType::DeepSeek);
+        unsafe {
+            std::env::remove_var("LLM_BACKEND");
+        }
+    }
+
+    #[test]
+    fn test_llm_backend_type_default() {
+        // Ensure env var is not set
+        unsafe {
+            std::env::remove_var("LLM_BACKEND");
+        }
+        let backend_type = LlmBackendType::from_env();
+        assert_eq!(backend_type, LlmBackendType::OpenRouter);
     }
 }

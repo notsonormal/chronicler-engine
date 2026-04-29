@@ -704,4 +704,415 @@ mod tests {
 
         browser.close().await.unwrap();
     }
+
+    // ============ Edit/Retry UI Tests ============
+
+    #[tokio::test]
+    async fn test_edit_button_exists_on_entries() {
+        let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
+        let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
+
+        let playwright = Playwright::launch().await.unwrap();
+        let browser = playwright.chromium().launch().await.unwrap();
+        let page = browser.new_page().await.unwrap();
+
+        goto_with_connection_check(&page, port)
+            .await
+            .expect("Failed to connect to server");
+
+        let _ = wait_for_element_children(&page, "#story-log .log-entry", 1).await;
+
+        // Edit buttons should exist on non-location entries
+        let edit_buttons: i32 = page
+            .evaluate::<(), i32>(
+                "document.querySelectorAll('.log-entry:not(.location) .edit-btn').length",
+                None,
+            )
+            .await
+            .unwrap();
+
+        // There should be at least one edit button (entry with text, not location header)
+        assert!(
+            edit_buttons > 0,
+            "Edit buttons should exist on story entries"
+        );
+
+        browser.close().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_edit_mode_activates_on_click() {
+        let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
+        let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
+
+        let playwright = Playwright::launch().await.unwrap();
+        let browser = playwright.chromium().launch().await.unwrap();
+        let page = browser.new_page().await.unwrap();
+
+        goto_with_connection_check(&page, port)
+            .await
+            .expect("Failed to connect to server");
+
+        let _ = wait_for_element_children(&page, "#story-log .log-entry", 1).await;
+
+        // Find first edit button and click it
+        let clicked = page
+            .evaluate::<(), bool>(
+                r#"(() => {
+                    const btn = document.querySelector('.edit-btn');
+                    if (btn) {
+                        btn.click();
+                        return true;
+                    }
+                    return false;
+                })()"#,
+                None,
+            )
+            .await
+            .unwrap();
+
+        assert!(clicked, "Should find and click an edit button");
+
+        // Wait a moment for DOM update
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+        // Textarea should now exist
+        let textarea_exists: bool = page
+            .evaluate::<(), bool>("document.querySelector('#edit-textarea') !== null", None)
+            .await
+            .unwrap();
+
+        assert!(
+            textarea_exists,
+            "Textarea should appear after clicking edit"
+        );
+
+        // Save/cancel buttons should exist
+        let save_exists: bool = page
+            .evaluate::<(), bool>("document.querySelector('.save-btn') !== null", None)
+            .await
+            .unwrap();
+        assert!(save_exists, "Save button should appear during edit");
+
+        let cancel_exists: bool = page
+            .evaluate::<(), bool>("document.querySelector('.cancel-btn') !== null", None)
+            .await
+            .unwrap();
+        assert!(cancel_exists, "Cancel button should appear during edit");
+
+        browser.close().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_edit_cancel_restores_original() {
+        let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
+        let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
+
+        let playwright = Playwright::launch().await.unwrap();
+        let browser = playwright.chromium().launch().await.unwrap();
+        let page = browser.new_page().await.unwrap();
+
+        goto_with_connection_check(&page, port)
+            .await
+            .expect("Failed to connect to server");
+
+        let _ = wait_for_element_children(&page, "#story-log .log-entry", 1).await;
+
+        // Get text from first non-location entry with actual text content
+        let original_text: String = page
+            .evaluate::<(), String>(
+                r#"(() => {
+                    const entries = document.querySelectorAll('.log-entry');
+                    for (const entry of entries) {
+                        if (entry.classList.contains('location')) continue;
+                        const text = entry.querySelector('.text');
+                        if (text && text.textContent.trim()) {
+                            return text.textContent;
+                        }
+                    }
+                    return '';
+                })()"#,
+                None,
+            )
+            .await
+            .unwrap();
+
+        assert!(
+            original_text.len() > 0,
+            "Original text should not be empty, got: '{}'",
+            original_text
+        );
+
+        // Click edit
+        page.evaluate::<(), bool>(
+            r#"(() => {
+                const btn = document.querySelector('.edit-btn');
+                if (btn) { btn.click(); return true; }
+                return false;
+            })()"#,
+            None,
+        )
+        .await
+        .unwrap();
+
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+        // Click cancel
+        page.evaluate::<(), bool>(
+            r#"(() => {
+                const btn = document.querySelector('.cancel-btn');
+                if (btn) { btn.click(); return true; }
+                return false;
+            })()"#,
+            None,
+        )
+        .await
+        .unwrap();
+
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+        // Original text should be restored
+        let restored_text: String = page
+            .evaluate::<(), String>(
+                r#"(() => {
+                    const entries = document.querySelectorAll('.log-entry');
+                    for (const entry of entries) {
+                        if (entry.classList.contains('location')) continue;
+                        const text = entry.querySelector('.text');
+                        if (text && text.textContent.trim()) {
+                            return text.textContent;
+                        }
+                    }
+                    return '';
+                })()"#,
+                None,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            original_text, restored_text,
+            "Text should be restored after cancel"
+        );
+
+        browser.close().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_polling_pauses_during_edit() {
+        let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
+        let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
+
+        let playwright = Playwright::launch().await.unwrap();
+        let browser = playwright.chromium().launch().await.unwrap();
+        let page = browser.new_page().await.unwrap();
+
+        goto_with_connection_check(&page, port)
+            .await
+            .expect("Failed to connect to server");
+
+        let _ = wait_for_element_children(&page, "#story-log .log-entry", 1).await;
+
+        // Before edit - hx-trigger should include "every"
+        let trigger_before: String = page
+            .evaluate::<(), String>(
+                "document.querySelector('#story-log')?.getAttribute('hx-trigger') || ''",
+                None,
+            )
+            .await
+            .unwrap();
+
+        assert!(
+            trigger_before.contains("every"),
+            "Should have polling trigger before edit"
+        );
+
+        // Click edit
+        page.evaluate::<(), bool>(
+            r#"(() => {
+                const btn = document.querySelector('.edit-btn');
+                if (btn) { btn.click(); return true; }
+                return false;
+            })()"#,
+            None,
+        )
+        .await
+        .unwrap();
+
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+        // During edit - hx-trigger should be "none"
+        let trigger_during: String = page
+            .evaluate::<(), String>(
+                "document.querySelector('#story-log')?.getAttribute('hx-trigger') || ''",
+                None,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            trigger_during, "none",
+            "hx-trigger should be 'none' during edit"
+        );
+
+        // Click cancel
+        page.evaluate::<(), bool>(
+            r#"(() => {
+                const btn = document.querySelector('.cancel-btn');
+                if (btn) { btn.click(); return true; }
+                return false;
+            })()"#,
+            None,
+        )
+        .await
+        .unwrap();
+
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+        // After cancel - hx-trigger should include "every" again
+        let trigger_after: String = page
+            .evaluate::<(), String>(
+                "document.querySelector('#story-log')?.getAttribute('hx-trigger') || ''",
+                None,
+            )
+            .await
+            .unwrap();
+
+        assert!(
+            trigger_after.contains("every"),
+            "Should have polling trigger after cancel"
+        );
+
+        browser.close().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_retry_button_on_last_ai_message() {
+        let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
+        let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
+
+        let playwright = Playwright::launch().await.unwrap();
+        let browser = playwright.chromium().launch().await.unwrap();
+        let page = browser.new_page().await.unwrap();
+
+        goto_with_connection_check(&page, port)
+            .await
+            .expect("Failed to connect to server");
+
+        let _ = wait_for_element_children(&page, "#story-log .log-entry", 1).await;
+
+        // Count retry buttons - should be exactly 1
+        let retry_count: i32 = page
+            .evaluate::<(), i32>("document.querySelectorAll('.retry-btn').length", None)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            retry_count, 1,
+            "Should have exactly one retry button on last AI message"
+        );
+
+        // Earlier entries should NOT have retry buttons
+        let earlier_entries_have_retry: i32 = page
+            .evaluate::<(), i32>(
+                r#"(() => {
+                    const entries = document.querySelectorAll('.log-entry');
+                    if (entries.length <= 1) return 0;
+                    let count = 0;
+                    for (let i = 0; i < entries.length - 1; i++) {
+                        if (entries[i].querySelector('.retry-btn')) count++;
+                    }
+                    return count;
+                })()"#,
+                None,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            earlier_entries_have_retry, 0,
+            "Earlier entries should not have retry buttons"
+        );
+
+        browser.close().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_edit_textarea_matches_original_height() {
+        let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
+        let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
+
+        let playwright = Playwright::launch().await.unwrap();
+        let browser = playwright.chromium().launch().await.unwrap();
+        let page = browser.new_page().await.unwrap();
+
+        goto_with_connection_check(&page, port)
+            .await
+            .expect("Failed to connect to server");
+
+        let _ = wait_for_element_children(&page, "#story-log .log-entry", 1).await;
+
+        // Get the original text element height before edit
+        let original_height: f64 = page
+            .evaluate::<(), f64>(
+                r#"(() => {
+                    const text = document.querySelector('.log-entry:not(.location) .text');
+                    if (!text) return -1;
+                    const rect = text.getBoundingClientRect();
+                    return rect.height;
+                })()"#,
+                None,
+            )
+            .await
+            .unwrap();
+
+        assert!(
+            original_height > 0.0,
+            "Original text should have a valid height"
+        );
+
+        // Click edit
+        page.evaluate::<(), bool>(
+            r#"(() => {
+                const btn = document.querySelector('.edit-btn');
+                if (btn) { btn.click(); return true; }
+                return false;
+            })()"#,
+            None,
+        )
+        .await
+        .unwrap();
+
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+        // Get textarea height after edit
+        let textarea_height: f64 = page
+            .evaluate::<(), f64>(
+                r#"(() => {
+                    const textarea = document.querySelector('.edit-textarea');
+                    if (!textarea) return -1;
+                    // Force reflow to ensure styles are applied
+                    void textarea.offsetHeight;
+                    const rect = textarea.getBoundingClientRect();
+                    return rect.height;
+                })()"#,
+                None,
+            )
+            .await
+            .unwrap();
+
+        assert!(textarea_height > 0.0, "Textarea should have a valid height");
+
+        // The textarea height should match the original text height
+        // Allow tolerance for rendering differences, borders, and padding (15px)
+        let diff = (textarea_height - original_height).abs();
+        assert!(
+            diff < 15.0,
+            "Textarea height ({}) should match original text height ({})",
+            textarea_height,
+            original_height
+        );
+
+        browser.close().await.unwrap();
+    }
 }

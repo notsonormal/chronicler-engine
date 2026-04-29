@@ -31,6 +31,9 @@ pub fn create_app_for_testing(state: Arc<std::sync::Mutex<GameState>>) -> Router
             "/status/reset-generating",
             post(fragments::reset_generating_handler),
         )
+        // History edit & retry endpoints
+        .route("/history/:id", post(fragments::edit_history_handler))
+        .route("/retry", post(fragments::retry_handler))
         .nest_service("/assets", ServeDir::new("assets"))
         .nest_service("/data", ServeDir::new("data"))
         .fallback_service(ServeDir::new("assets"))
@@ -97,6 +100,9 @@ pub async fn run_server_with_config(
             "/status/generating",
             get(fragments::generating_status_handler),
         )
+        // History edit & retry endpoints
+        .route("/history/:id", post(fragments::edit_history_handler))
+        .route("/retry", post(fragments::retry_handler))
         .nest_service("/assets", ServeDir::new("assets"))
         .nest_service("/data", ServeDir::new("data"))
         .fallback_service(ServeDir::new("assets"))

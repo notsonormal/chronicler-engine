@@ -98,14 +98,21 @@ body {
 }
 
 /* Header */
-.header {
+.header-bar {
+    display: flex;
+    align-items: center;
+    height: var(--header-height);
     background: var(--color-bg-header);
-    border: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.header {
+    flex: 1;
+    background: var(--color-bg-header);
     padding: var(--spacing-sm) var(--spacing-md);
     display: flex;
     align-items: center;
     height: var(--header-height);
-    flex-shrink: 0;
 }
 
 .game-title {
@@ -483,6 +490,75 @@ body {
 
 .error-notification.visible {
     transform: translateY(0);
+}
+
+/* Log Entry Edit Button */
+.log-entry .edit-btn {
+    opacity: 1;
+    background: transparent;
+    border: none;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    font-size: 18px;
+    padding: 4px 8px;
+    margin-left: var(--spacing-sm);
+    transition: opacity var(--transition-fast), color var(--transition-fast);
+}
+
+.log-entry .edit-btn:hover {
+    color: var(--color-accent-cyan);
+}
+
+/* Inline Edit Textarea */
+.edit-textarea {
+    width: 100%;
+    box-sizing: border-box;
+    background: var(--color-bg-primary);
+    border: 1px solid var(--color-border);
+    color: var(--color-text-primary);
+    border-radius: 4px;
+    padding: var(--spacing-xs);
+    font-family: inherit;
+    font-size: var(--font-size-base);
+    resize: none;
+    display: block;
+    line-height: 1.4;
+    margin: 0;
+}
+
+/* Save/Cancel Buttons */
+.save-btn, .cancel-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 2px 6px;
+    margin-left: var(--spacing-xs);
+    transition: opacity var(--transition-fast);
+}
+
+.save-btn:hover {
+    color: var(--color-accent-green);
+}
+
+.cancel-btn:hover {
+    color: var(--color-accent-red);
+}
+
+/* Retry Button (inline on messages) */
+.retry-btn {
+    background: transparent;
+    border: none;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    font-size: 18px;
+    padding: 4px 8px;
+    margin-left: var(--spacing-xs);
+    transition: opacity var(--transition-fast);
+}
+
+.retry-btn:hover {
+    color: var(--color-accent-cyan);
 }
 
 /* Responsive Breakpoints */

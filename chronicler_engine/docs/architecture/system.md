@@ -82,7 +82,7 @@ The engine presents a web-based HTMX dashboard:
     - NPC portraits in horizontal scrollable row (from `CharacterSheet.headshot_image` with fallback to `image_path`)
 - **Action Area**: Command input + status indicator (Ready/Thinking)
 
-Real-time updates via HTMX polling (5s interval for story-log, 5s for status-display).
+Real-time updates via HTMX polling (2s interval for story-log, 5s for status-display and visual-sidebar).
 
 ### Scrollbar Styling
 
@@ -169,3 +169,55 @@ Click handlers on images trigger visual sidebar toggle.
 
 ## Error Strategy
 A unified error type (`crate::error::EngineError`) is shared across all tiers to provide consistent error propagation from data loading through LLM failures to the final UI report.
+
+## History Management
+
+The engine supports editing and regenerating conversation history via the History API.
+
+### LogEntry Structure
+
+Each history entry has a unique auto-incrementing ID:
+
+```rust
+pub struct LogEntry {
+    pub id: u64,                    // Auto-incrementing unique ID
+    pub sender: Option<String>,       // Who spoke (None for narrator)
+    pub text: String,               // The message content
+    pub log_type: LogType,          // Category: Narration, Dialogue, System, Input
+    pub timestamp: DateTime<Utc>,     // When recorded
+}
+```
+
+### History Editing
+
+Entries can be edited in place via `PUT /api/history/{id}`:
+
+- Both user inputs (`LogType::Input`) and AI responses (`LogType::Narration`, `LogType::Dialogue`) are editable
+- Editing replaces `text` field; other fields unchanged
+- Subsequent history entries are unaffected
+- In-memory only (not persisted to disk)
+
+### Retry Feature
+
+The retry endpoint (`POST /api/retry`) regenerates the last AI response:
+
+- Finds the last `LogType::Input` entry
+- Regenerates its corresponding AI response via LLM
+- Replaces the existing response with new narration
+- Only works on the last exchange, not arbitrary history points
+- **Critical**: History passed to LLM excludes the AI response being retried to prevent the LLM from repeating/paraphrasing the old response
+
+### Server Endpoints
+
+| Method | Path | Description |
+|--------|-----|-------------|
+| `POST` | `/history/:id` | Edit entry text |
+| `POST` | `/retry` | Regenerate last AI response |
+
+### UI Integration
+
+The story log displays edit controls always visible:
+
+- Pencil icon (✏️) always shown on every entry
+- Click opens inline edit mode with save/cancel
+- Retry button (↻) appears near the last AI response (narration/dialogue only)
