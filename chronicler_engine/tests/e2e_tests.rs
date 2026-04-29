@@ -773,8 +773,8 @@ mod tests {
 
         assert!(clicked, "Should find and click an edit button");
 
-        // Wait a moment for DOM update
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        // Wait for DOM to update with textarea
+        let _ = wait_for_element_exists(&page, "#edit-textarea", 10).await;
 
         // Textarea should now exist
         let textarea_exists: bool = page
@@ -855,7 +855,8 @@ mod tests {
         .await
         .unwrap();
 
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        // Wait for edit mode to be ready before clicking cancel
+        let _ = wait_for_element_exists(&page, ".cancel-btn", 10).await;
 
         // Click cancel
         page.evaluate::<(), bool>(
@@ -869,7 +870,8 @@ mod tests {
         .await
         .unwrap();
 
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        // Wait for cancel to complete (textarea should disappear)
+        let _ = wait_for_element_not_exists(&page, "#edit-textarea", 10).await;
 
         // Original text should be restored
         let restored_text: String = page
@@ -939,7 +941,8 @@ mod tests {
         .await
         .unwrap();
 
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        // Wait for edit mode - hx-trigger should change to "none"
+        let _ = wait_for_element_exists(&page, "#edit-textarea", 10).await;
 
         // During edit - hx-trigger should be "none"
         let trigger_during: String = page
@@ -967,7 +970,8 @@ mod tests {
         .await
         .unwrap();
 
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        // Wait for cancel to complete (textarea should disappear)
+        let _ = wait_for_element_not_exists(&page, "#edit-textarea", 10).await;
 
         // After cancel - hx-trigger should include "every" again
         let trigger_after: String = page
@@ -1083,7 +1087,8 @@ mod tests {
         .await
         .unwrap();
 
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        // Wait for edit mode to be ready
+        let _ = wait_for_element_exists(&page, ".edit-textarea", 10).await;
 
         // Get textarea height after edit
         let textarea_height: f64 = page

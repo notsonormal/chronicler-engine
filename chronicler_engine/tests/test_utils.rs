@@ -302,6 +302,124 @@ pub async fn wait_for_element_text(page: &playwright_rs::Page, selector: &str) -
     String::new()
 }
 
+// ============ Shared Helper Functions ============
+// These functions are duplicated across multiple test files.
+// Centralized here to ensure consistency and reduce duplication.
+
+/// Launch Chromium browser for UI tests
+pub async fn launch_chrome() -> (playwright_rs::Playwright, playwright_rs::Browser) {
+    use playwright_rs::LaunchOptions;
+
+    let playwright = Playwright::launch().await.unwrap();
+    let browser = playwright
+        .chromium()
+        .launch_with_options(LaunchOptions {
+            channel: Some("chrome".to_string()),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    (playwright, browser)
+}
+
+/// Send an action via the command form
+pub async fn send_action(page: &playwright_rs::Page, text: &str) {
+    let text_owned = text.to_string();
+    let _: Result<(), _> = page
+        .evaluate(
+            r#"
+            (text) => {
+                const input = document.querySelector('#command-form input[name="command"]');
+                if (input) {
+                    input.value = text;
+                    input.form?.requestSubmit();
+                }
+            }
+            "#,
+            Some(&text_owned),
+        )
+        .await;
+}
+
+/// Get current status text from the status display element
+pub async fn get_status(page: &playwright_rs::Page) -> String {
+    page.evaluate::<(), String>(
+        "document.querySelector('#status-display')?.innerText || ''",
+        None,
+    )
+    .await
+    .unwrap_or_default()
+}
+
+/// Count log entries in story log (instant snapshot)
+pub async fn count_log_entries(page: &playwright_rs::Page) -> usize {
+    page.query_selector_all("#story-log .log-entry")
+        .await
+        .unwrap_or_default()
+        .len()
+}
+
+/// Wait until story log has at least `min_count` entries
+/// Polls every 200ms for up to 5 seconds
+pub async fn wait_for_log_entries(page: &playwright_rs::Page, min_count: usize) -> usize {
+    for _ in 0..25 {
+        let count = count_log_entries(page).await;
+        if count >= min_count {
+            return count;
+        }
+        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+    }
+    count_log_entries(page).await
+}
+
+/// Wait for an element to exist in the DOM
+/// Polls every 50ms for up to `max_attempts` times
+pub async fn wait_for_element_exists(
+    page: &playwright_rs::Page,
+    selector: &str,
+    max_attempts: u32,
+) -> bool {
+    for _ in 0..max_attempts {
+        let exists: bool = page
+            .evaluate::<(), bool>(
+                &format!("document.querySelector('{}') !== null", selector),
+                None,
+            )
+            .await
+            .unwrap_or(false);
+
+        if exists {
+            return true;
+        }
+        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+    }
+    false
+}
+
+/// Wait for an element to NOT exist in the DOM
+/// Polls every 50ms for up to `max_attempts` times
+pub async fn wait_for_element_not_exists(
+    page: &playwright_rs::Page,
+    selector: &str,
+    max_attempts: u32,
+) -> bool {
+    for _ in 0..max_attempts {
+        let exists: bool = page
+            .evaluate::<(), bool>(
+                &format!("document.querySelector('{}') !== null", selector),
+                None,
+            )
+            .await
+            .unwrap_or(false);
+
+        if !exists {
+            return true;
+        }
+        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+    }
+    false
+}
+
 pub async fn wait_for_status_ready(page: &playwright_rs::Page) {
     use tokio::time::sleep;
 
@@ -348,21 +466,6 @@ pub async fn wait_for_status_not_thinking(page: &playwright_rs::Page) -> String 
     )
     .await
     .unwrap_or_default()
-}
-
-pub async fn launch_chrome() -> (playwright_rs::Playwright, playwright_rs::Browser) {
-    use playwright_rs::LaunchOptions;
-
-    let playwright = Playwright::launch().await.unwrap();
-    let browser = playwright
-        .chromium()
-        .launch_with_options(LaunchOptions {
-            channel: Some("chrome".to_string()),
-            ..Default::default()
-        })
-        .await
-        .unwrap();
-    (playwright, browser)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

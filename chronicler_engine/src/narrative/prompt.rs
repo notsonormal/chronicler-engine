@@ -1,6 +1,4 @@
 //! [DOC: docs/reference/sillytavern_prompt_system.md]
-//!
-//! Inspired by SillyTavern's Prompt Manager.
 
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -133,35 +131,27 @@ impl<'a> PromptBuilder<'a> {
     pub fn build(&self) -> std::result::Result<String, EngineError> {
         let mut prompt = String::new();
 
-        // Layer 0: System prompt (game rules, role)
         prompt.push_str(&self.render_system_layer());
         prompt.push_str("\n\n");
 
-        // Layer 1: Game state (room name, description, player inventory)
         prompt.push_str(&self.render_game_state_layer());
         prompt.push_str("\n\n");
 
-        // Layer 2: NPC cards (only in-room NPCs)
         prompt.push_str(&self.render_npc_cards_layer());
         prompt.push_str("\n\n");
 
-        // Layer 3: Player persona (from player card)
         prompt.push_str(&self.render_player_layer());
         prompt.push_str("\n\n");
 
-        // Layer 4: World info (global rules as lorebook)
         prompt.push_str(&self.render_world_info_layer());
         prompt.push_str("\n\n");
 
-        // Layer 5: Full history (with truncation if needed)
         prompt.push_str(&self.render_history_layer());
         prompt.push_str("\n\n");
 
-        // Layer 6: User message (current input)
         prompt.push_str(&self.render_user_layer());
         prompt.push_str("\n\n");
 
-        // Layer 7: PHI (auxiliary instructions)
         prompt.push_str(&self.render_phi_layer());
 
         // Verify token budget
@@ -179,30 +169,18 @@ impl<'a> PromptBuilder<'a> {
     pub fn build_split(&self) -> std::result::Result<(String, String), EngineError> {
         let mut system = String::new();
 
-        // Layer 0: System prompt (game rules, role)
         system.push_str(&self.render_system_layer());
         system.push_str("\n\n");
-
-        // Layer 1: Game state (room name, description, player inventory)
         system.push_str(&self.render_game_state_layer());
         system.push_str("\n\n");
-
-        // Layer 2: NPC cards (only in-room NPCs)
         system.push_str(&self.render_npc_cards_layer());
         system.push_str("\n\n");
-
-        // Layer 3: Player persona (from player card)
         system.push_str(&self.render_player_layer());
         system.push_str("\n\n");
-
-        // Layer 4: World info (global rules as lorebook)
         system.push_str(&self.render_world_info_layer());
         system.push_str("\n\n");
-
-        // Layer 5: Full history (with truncation if needed)
         system.push_str(&self.render_history_layer());
 
-        // User message goes in user_prompt
         let user = self.render_user_layer();
 
         // Verify token budget
@@ -235,16 +213,10 @@ impl<'a> PromptBuilder<'a> {
         // Layer 3: Player persona (from player card)
         system.push_str(&self.render_player_layer());
         system.push_str("\n\n");
-
-        // Layer 4: World info (global rules as lorebook)
         system.push_str(&self.render_world_info_layer());
         system.push_str("\n\n");
-
-        // Layer 5: Full history (with truncation if needed)
         system.push_str(&self.render_history_layer());
         system.push_str("\n\n");
-
-        // Layer 7: PHI (auxiliary instructions)
         system.push_str(&self.render_phi_layer());
 
         system
@@ -376,7 +348,6 @@ The player's next action will be provided separately. Your only job is to narrat
         if self.all_npcs.is_empty() {
             output.push_str("No characters in this world.\n");
         } else {
-            // Build a set of NPC IDs in the current area for presence checking
             let in_area_ids: std::collections::HashSet<_> =
                 self.npcs_in_area.iter().map(|n| n.id.as_str()).collect();
 
@@ -396,8 +367,6 @@ The player's next action will be provided separately. Your only job is to narrat
             }
         }
         output.push_str("</Npcs>\n\n");
-
-        // Section 2: NPCs in current room (for interaction)
         output.push_str("<NpcsInRoom>\n");
         if self.npcs_in_area.is_empty() {
             output.push_str("No NPCs are present in this location.\n");
@@ -525,6 +494,30 @@ Keep the flow natural — let reactions unfold, don't rush to conclusions.
     }
 }
 
+/// Build a PromptContext from individual components.
+///
+/// Convenience function for assembling the context needed for narrative generation.
+/// This centralizes context construction logic in one place.
+pub fn make_prompt_context<'a>(
+    world: &'a WorldCard,
+    room: &'a Room,
+    all_npcs: &'a [NpcCard],
+    npcs_in_area: &'a [NpcCard],
+    player: &'a PlayerCard,
+    user_message: &'a str,
+    history: &'a [LogEntry],
+) -> PromptContext<'a> {
+    PromptContext {
+        world,
+        room,
+        all_npcs,
+        npcs_in_area,
+        player,
+        user_message,
+        history,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -547,8 +540,6 @@ mod tests {
         assert_eq!(budget::MAX_HISTORY_TOKENS, 4096);
         assert_eq!(budget::MAX_SYSTEM_TOKENS, 1024);
     }
-
-    // ========== Sanitization Tests ==========
 
     #[test]
     fn test_sanitize_injection_system() {
@@ -594,8 +585,6 @@ mod tests {
         assert_eq!(result, "test {{}} end");
     }
 
-    // ========== Token Estimation Tests ==========
-
     #[test]
     fn test_estimate_tokens_empty() {
         assert_eq!(estimate_tokens(""), 0);
@@ -626,8 +615,6 @@ mod tests {
         // 51 chars / 4 = 12.75 -> 13
         assert_eq!(tokens, 13);
     }
-
-    // ========== Truncation Tests ==========
 
     #[test]
     fn test_truncate_to_budget_no_truncate_needed() {
@@ -668,8 +655,6 @@ mod tests {
         // Empty result with 0 max chars
         assert_eq!(result, "");
     }
-
-    // ========== PromptBuilder Layer Tests ==========
 
     fn create_test_world() -> WorldCard {
         WorldCard {

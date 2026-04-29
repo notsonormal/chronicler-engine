@@ -1,11 +1,4 @@
-//! OpenRouter HTTP client
-//!
-//! This module handles the actual HTTP communication with OpenRouter API.
-//! It's isolated to allow easy exclusion from coverage (requires external API).
-//!
-//! Two model configurations are supported:
-//! - `LLM_MODEL`: Primary model for narrative generation (default: `openai/gpt-4o-mini`)
-//! - `QUANTIFIER_MODEL`: Secondary model for scene quantification (default: `openai/gpt-4o-mini`)
+//! [DOC: docs/system/llm_processing.md]
 
 use serde_json::json;
 
@@ -87,7 +80,6 @@ pub fn call_openrouter_with_model(
                 Ok(json_response) => {
                     log::debug!("[LLM] Response JSON: {json_response:#}");
 
-                    // Check for API-level errors in response
                     if let Some(error) = json_response.get("error") {
                         let error_msg = error
                             .get("message")
@@ -97,8 +89,6 @@ pub fn call_openrouter_with_model(
                         return Err(format!("LLM API error: {error_msg}"));
                     }
 
-                    // Extract content with robust fallback chain
-                    // Some models return empty string "", some return null - need to handle both
                     let content_source: &str;
                     let content: Option<String> = {
                         // 1. Try content field (only if non-null AND non-empty)

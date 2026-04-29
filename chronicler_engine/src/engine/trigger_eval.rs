@@ -1,6 +1,6 @@
 use crate::model::character::NpcCard;
 use crate::model::state::GameState;
-use crate::model::trigger::{ComparisonOperator, Trigger, TriggerCondition};
+use crate::model::trigger::{CharacterState, ComparisonOperator, Trigger, TriggerCondition};
 
 /// [DOC: docs/system/triggers.md]
 pub fn evaluate_triggers(state: &GameState) -> Vec<(NpcCard, Trigger)> {
@@ -9,7 +9,7 @@ pub fn evaluate_triggers(state: &GameState) -> Vec<(NpcCard, Trigger)> {
     for npc in state.npcs.values() {
         for (index, trigger) in npc.triggers.iter().enumerate() {
             if check_condition(&state.character_state, &npc.id, &trigger.condition) {
-                if !trigger.repeat && state.character_state.is_trigger_fired(&npc.id, index) {
+                if !trigger.repeat && is_trigger_fired(&state.character_state, &npc.id, index) {
                     continue;
                 }
                 results.push((npc.clone(), trigger.clone()));
@@ -27,7 +27,7 @@ pub fn check_condition(
 ) -> bool {
     match condition {
         TriggerCondition::TimesMet(op, threshold) => {
-            let times_met = character_state.get_times_met(npc_id);
+            let times_met = get_times_met(character_state, npc_id);
             match op {
                 ComparisonOperator::Eq => times_met == *threshold,
                 ComparisonOperator::Lt => times_met < *threshold,
@@ -37,15 +37,52 @@ pub fn check_condition(
     }
 }
 
-pub fn increment_times_met(state: &mut GameState, npc_id: &str) {
-    // [DOC: docs/system/triggers.md]
-    state.character_state.increment_times_met(npc_id);
+pub fn is_currently_meeting(character_state: &CharacterState, npc_id: &str) -> bool {
+    character_state
+        .npcs
+        .get(npc_id)
+        .map(|s| s.currently_meeting)
+        .unwrap_or(false)
 }
 
-pub fn mark_trigger_fired(state: &mut GameState, npc_id: &str, trigger_index: usize) {
-    state
-        .character_state
-        .mark_trigger_fired(npc_id, trigger_index);
+pub fn increment_times_met(character_state: &mut CharacterState, npc_id: &str) {
+    let entry = character_state.npcs.entry(npc_id.to_string()).or_default();
+    entry.times_met += 1;
+}
+
+pub fn mark_trigger_fired(
+    character_state: &mut CharacterState,
+    npc_id: &str,
+    trigger_index: usize,
+) {
+    let entry = character_state.npcs.entry(npc_id.to_string()).or_default();
+    entry.trigger_fired.insert(trigger_index, true);
+}
+
+pub fn set_currently_meeting(character_state: &mut CharacterState, npc_id: &str, meeting: bool) {
+    let entry = character_state.npcs.entry(npc_id.to_string()).or_default();
+    entry.currently_meeting = meeting;
+}
+
+pub fn get_times_met(character_state: &CharacterState, npc_id: &str) -> u32 {
+    character_state
+        .npcs
+        .get(npc_id)
+        .map(|s| s.times_met)
+        .unwrap_or(0)
+}
+
+pub fn is_trigger_fired(
+    character_state: &CharacterState,
+    npc_id: &str,
+    trigger_index: usize,
+) -> bool {
+    character_state
+        .npcs
+        .get(npc_id)
+        .and_then(|s| s.trigger_fired.get(&trigger_index))
+        .copied()
+        .unwrap_or(false)
 }
 
 #[cfg(test)]
@@ -157,7 +194,7 @@ mod tests {
         let trigger = make_trigger(TriggerCondition::TimesMet(ComparisonOperator::Eq, 0), false);
         let npc = make_npc("gabriella", vec![trigger]);
         let mut character_state = CharacterState::default();
-        character_state.increment_times_met("gabriella");
+        increment_times_met(&mut character_state, "gabriella");
         let state = make_state(vec![npc.clone()], &[npc.clone()], character_state);
         let results = evaluate_triggers(&state);
         assert!(results.is_empty());
@@ -168,7 +205,7 @@ mod tests {
         let trigger = make_trigger(TriggerCondition::TimesMet(ComparisonOperator::Eq, 0), false);
         let npc = make_npc("gabriella", vec![trigger.clone()]);
         let mut character_state = CharacterState::default();
-        character_state.mark_trigger_fired("gabriella", 0);
+        mark_trigger_fired(&mut character_state, "gabriella", 0);
         let state = make_state(vec![npc.clone()], &[npc.clone()], character_state);
         let results = evaluate_triggers(&state);
         assert!(results.is_empty());
@@ -204,7 +241,7 @@ mod tests {
         let trigger = make_trigger(TriggerCondition::TimesMet(ComparisonOperator::Lt, 3), true);
         let npc = make_npc("ranger", vec![trigger]);
         let mut character_state = CharacterState::default();
-        character_state.increment_times_met("ranger");
+        increment_times_met(&mut character_state, "ranger");
         let state = make_state(vec![npc.clone()], &[npc.clone()], character_state);
         let results = evaluate_triggers(&state);
         assert_eq!(results.len(), 1);
@@ -215,15 +252,15 @@ mod tests {
         let mut character_state = CharacterState::default();
 
         // Initially not meeting
-        assert!(!character_state.is_currently_meeting("carla"));
+        assert!(!is_currently_meeting(&character_state, "carla"));
 
         // Start meeting
-        character_state.set_currently_meeting("carla", true);
-        assert!(character_state.is_currently_meeting("carla"));
+        set_currently_meeting(&mut character_state, "carla", true);
+        assert!(is_currently_meeting(&character_state, "carla"));
 
         // End meeting (player leaves room)
-        character_state.set_currently_meeting("carla", false);
-        assert!(!character_state.is_currently_meeting("carla"));
+        set_currently_meeting(&mut character_state, "carla", false);
+        assert!(!is_currently_meeting(&character_state, "carla"));
     }
 
     #[test]
@@ -232,12 +269,12 @@ mod tests {
         let mut character_state = CharacterState::default();
 
         // Always increments when called
-        character_state.increment_times_met("gabriella");
-        assert_eq!(character_state.get_times_met("gabriella"), 1);
+        increment_times_met(&mut character_state, "gabriella");
+        assert_eq!(get_times_met(&character_state, "gabriella"), 1);
 
         // Can be called multiple times
-        character_state.increment_times_met("gabriella");
-        assert_eq!(character_state.get_times_met("gabriella"), 2);
+        increment_times_met(&mut character_state, "gabriella");
+        assert_eq!(get_times_met(&character_state, "gabriella"), 2);
     }
 
     #[test]
@@ -313,8 +350,8 @@ mod tests {
         );
 
         // Carla in starting room should have times_met=1
-        assert_eq!(state.character_state.get_times_met("carla"), 1);
-        assert!(state.character_state.is_currently_meeting("carla"));
+        assert_eq!(get_times_met(&state.character_state, "carla"), 1);
+        assert!(is_currently_meeting(&state.character_state, "carla"));
     }
 
     #[test]
@@ -324,8 +361,8 @@ mod tests {
         let mut state = make_state(vec![npc.clone()], &[npc.clone()], CharacterState::default());
         let results = evaluate_triggers(&state);
         assert_eq!(results.len(), 1);
-        increment_times_met(&mut state, "gabriella");
-        mark_trigger_fired(&mut state, "gabriella", 0);
+        increment_times_met(&mut state.character_state, "gabriella");
+        mark_trigger_fired(&mut state.character_state, "gabriella", 0);
         let results = evaluate_triggers(&state);
         assert!(results.is_empty());
     }

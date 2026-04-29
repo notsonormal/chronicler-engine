@@ -418,9 +418,7 @@ fn try_parse_json_full(response: &str) -> Result<(Vec<String>, Option<MovementJs
     Err("Failed to parse JSON".to_string())
 }
 
-/// Extract JSON content from markdown code fences.
 fn extract_json_from_code_fence(response: &str) -> Option<String> {
-    // Handle ```json ... ``` blocks
     let start_marker = "```json";
     let end_marker = "```";
 
@@ -438,7 +436,6 @@ fn extract_npc_ids_from_text(response: &str, known_npc_ids: &[String]) -> Vec<St
     let mut found = Vec::new();
 
     for id in known_npc_ids {
-        // Check if the NPC ID appears in the response
         if response_lower.contains(&id.to_lowercase()) {
             found.push(id.clone());
         }
@@ -588,6 +585,127 @@ impl QuantifierBackend {
     }
 }
 
+/// Determine which NPCs are in the current room and detect player movement intent.
+///
+/// Calls the quantifier backend to analyze the current scene, with fallback to
+/// static room NPCs on low confidence or error.
+pub fn determine_npcs_in_room(
+    state: &crate::model::state::GameState,
+    room_npc_ids: &[String],
+    previous_room_npcs: &[crate::model::character::NpcCard],
+    player_action: &str,
+    backend: &dyn QuantifierBackendTrait,
+) -> QuantifierResult {
+    let all_npcs: Vec<crate::model::character::NpcCard> = state.npcs.values().cloned().collect();
+
+    let room = match crate::engine::logic::get_current_room(state) {
+        Ok(r) => r,
+        Err(_) => {
+            log::warn!("[Quantifier] Cannot get current room, using static NPCs");
+            return QuantifierResult {
+                npcs: QuantifierParseResult {
+                    npc_ids: room_npc_ids
+                        .iter()
+                        .filter_map(|id| state.npcs.get(id).cloned())
+                        .map(|n| n.id)
+                        .collect(),
+                    confidence: QuantifierConfidence::Low,
+                },
+                movement: MovementParseResult {
+                    movement_type: None,
+                    destination: None,
+                    confidence: QuantifierConfidence::Low,
+                },
+            };
+        }
+    };
+
+    let recent_history: Vec<_> = state
+        .narration_history
+        .iter()
+        .rev()
+        .take(4)
+        .rev()
+        .cloned()
+        .collect();
+
+    let all_rooms: Vec<RoomInfo> = state
+        .map
+        .overworld
+        .regions
+        .iter()
+        .flat_map(|region| {
+            region.rooms.iter().map(|room| RoomInfo {
+                id: room.id.clone(),
+                name: room.name.clone(),
+            })
+        })
+        .collect();
+
+    let context = QuantifierPromptContext {
+        room,
+        previous_room_npcs,
+        all_known_npcs: &all_npcs,
+        all_rooms: &all_rooms,
+        player_name: &state.player.sheet.name,
+        recent_history: &recent_history,
+        player_action,
+    };
+
+    match backend.quantify_room(&context, room_npc_ids) {
+        Ok(result) => match result.npcs.confidence {
+            QuantifierConfidence::High | QuantifierConfidence::Medium => {
+                log::info!("[Quantifier] Using dynamic NPCs: {:?}", result.npcs.npc_ids);
+                let npc_cards: Vec<crate::model::character::NpcCard> = result
+                    .npcs
+                    .npc_ids
+                    .iter()
+                    .filter_map(|id| state.npcs.get(id).cloned())
+                    .collect();
+                QuantifierResult {
+                    npcs: QuantifierParseResult {
+                        npc_ids: npc_cards.iter().map(|n| n.id.clone()).collect(),
+                        confidence: result.npcs.confidence,
+                    },
+                    movement: result.movement,
+                }
+            }
+            QuantifierConfidence::Low => {
+                log::info!("[Quantifier] Low confidence, using static NPCs");
+                QuantifierResult {
+                    npcs: QuantifierParseResult {
+                        npc_ids: room_npc_ids
+                            .iter()
+                            .filter_map(|id| state.npcs.get(id).cloned())
+                            .map(|n| n.id)
+                            .collect(),
+                        confidence: QuantifierConfidence::Low,
+                    },
+                    movement: result.movement,
+                }
+            }
+        },
+        Err(e) => {
+            log::warn!("[Quantifier] Failed: {e}, using static NPCs");
+            QuantifierResult {
+                npcs: QuantifierParseResult {
+                    npc_ids: room_npc_ids
+                        .iter()
+                        .filter_map(|id| state.npcs.get(id).cloned())
+                        .map(|n| n.id)
+                        .collect(),
+                    confidence: QuantifierConfidence::Low,
+                },
+                movement: MovementParseResult {
+                    movement_type: None,
+                    destination: None,
+                    confidence: QuantifierConfidence::Low,
+                },
+            }
+        }
+    }
+}
+
 /// Trait for quantifier backends (enables mocking in tests).
 pub trait QuantifierBackendTrait: Send + Sync {
     fn quantify_room(
@@ -679,8 +797,6 @@ mod tests {
     use chrono::Utc;
     use std::collections::HashMap;
 
-    // ---- Helper factories ----
-
     fn make_room() -> Room {
         Room {
             id: "entrance_hall".to_string(),
@@ -729,8 +845,6 @@ mod tests {
             },
         ]
     }
-
-    // ---- QuantifierPromptBuilder tests ----
 
     #[test]
     fn test_quantifier_prompt_builder_basic() {
@@ -820,8 +934,6 @@ mod tests {
         assert!(user.contains("Hero"));
         assert!(user.contains("I look around"));
     }
-
-    // ---- Response parsing tests ----
 
     #[test]
     fn test_parse_json_response() {
@@ -1082,8 +1194,6 @@ mod tests {
         assert!(user_prompt.contains("<Navigation>"));
         assert!(user_prompt.contains("You can go north to the kitchen"));
     }
-
-    // ---- NPC Event Computation Tests ----
 
     #[test]
     fn test_compute_npc_events_empty_previous() {

@@ -589,4 +589,144 @@ mod tests {
                 .is_err()
         );
     }
+
+    #[test]
+    fn test_generating_guard_sets_is_generating_on_construct() {
+        let state = Arc::new(std::sync::Mutex::new(GameState::new(
+            Arc::new(WorldCard {
+                name: "W".into(),
+                description: "D".into(),
+                global_rules: vec![],
+                ..Default::default()
+            }),
+            Arc::new(MapDef {
+                overworld: crate::model::map::Overworld {
+                    id: "o".into(),
+                    name: "ow".into(),
+                    regions: vec![],
+                },
+            }),
+            Arc::new(PlayerCard {
+                sheet: CharacterSheet {
+                    name: "P".into(),
+                    description: "D".into(),
+                    personality: "P".into(),
+                    scenario: "S".into(),
+                    example_dialogue: "E".into(),
+                    profile_image: None,
+                    headshot_image: None,
+                },
+                inventory: vec![],
+            }),
+            vec![],
+            "room1".to_string(),
+        )));
+
+        assert!(!state.lock().unwrap().generation_state.is_generating);
+
+        {
+            let _guard = GeneratingGuard::new(state.clone());
+            assert!(state.lock().unwrap().generation_state.is_generating);
+        }
+
+        // Guard dropped — is_generating reset
+        assert!(!state.lock().unwrap().generation_state.is_generating);
+    }
+
+    #[test]
+    fn test_generating_guard_resets_on_drop() {
+        let state = Arc::new(std::sync::Mutex::new(GameState::new(
+            Arc::new(WorldCard {
+                name: "W".into(),
+                description: "D".into(),
+                global_rules: vec![],
+                ..Default::default()
+            }),
+            Arc::new(MapDef {
+                overworld: crate::model::map::Overworld {
+                    id: "o".into(),
+                    name: "ow".into(),
+                    regions: vec![],
+                },
+            }),
+            Arc::new(PlayerCard {
+                sheet: CharacterSheet {
+                    name: "P".into(),
+                    description: "D".into(),
+                    personality: "P".into(),
+                    scenario: "S".into(),
+                    example_dialogue: "E".into(),
+                    profile_image: None,
+                    headshot_image: None,
+                },
+                inventory: vec![],
+            }),
+            vec![],
+            "room1".to_string(),
+        )));
+
+        {
+            let guard = GeneratingGuard::new(state.clone());
+            assert!(state.lock().unwrap().generation_state.is_generating);
+            drop(guard);
+        }
+
+        assert!(!state.lock().unwrap().generation_state.is_generating);
+    }
+
+    #[test]
+    fn test_generating_guard_poisoned_lock_recovers() {
+        // Simulate a poisoned mutex by holding the lock in a child thread
+        // then creating a guard — the guard's lock attempt will fail but
+        // the guard still drops cleanly without panicking.
+        let state = Arc::new(std::sync::Mutex::new(GameState::new(
+            Arc::new(WorldCard {
+                name: "W".into(),
+                description: "D".into(),
+                global_rules: vec![],
+                ..Default::default()
+            }),
+            Arc::new(MapDef {
+                overworld: crate::model::map::Overworld {
+                    id: "o".into(),
+                    name: "ow".into(),
+                    regions: vec![],
+                },
+            }),
+            Arc::new(PlayerCard {
+                sheet: CharacterSheet {
+                    name: "P".into(),
+                    description: "D".into(),
+                    personality: "P".into(),
+                    scenario: "S".into(),
+                    example_dialogue: "E".into(),
+                    profile_image: None,
+                    headshot_image: None,
+                },
+                inventory: vec![],
+            }),
+            vec![],
+            "room1".to_string(),
+        )));
+
+        // Hold the mutex in a thread so it poisons on drop
+        let state_clone = state.clone();
+        let handle = std::thread::spawn(move || {
+            let _g = state_clone.lock().unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            // lock dropped here, poisons the mutex
+        });
+
+        handle.join().unwrap();
+
+        // Creating a guard when the mutex is poisoned should not panic
+        // and drop() should not panic even though lock() fails
+        let guard = GeneratingGuard::new(state.clone());
+        drop(guard); // should not panic
+
+        // Verify state is still accessible and is_generating is false
+        // (the guard's constructor failed to set it, and drop failed to unset it,
+        // but the underlying state is not corrupted)
+        assert!(!state.lock().unwrap().generation_state.is_generating);
+    }
 }

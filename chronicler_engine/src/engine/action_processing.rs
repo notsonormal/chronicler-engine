@@ -1,10 +1,11 @@
-//! Action processing logic extracted from fragments.rs
-//!
-//! This module contains pure functions for game action processing,
-//! moved to a separate module for better testability and code coverage.
+//! [DOC: docs/architecture/system.md]
 
 use crate::engine::logic::{attempt_semantic_walk, create_dynamic_room, get_current_room};
-use crate::engine::trigger_eval::{evaluate_triggers, mark_trigger_fired};
+#[allow(unused_imports)]
+use crate::engine::trigger_eval::{
+    evaluate_triggers, get_times_met, increment_times_met, is_currently_meeting,
+    mark_trigger_fired, set_currently_meeting,
+};
 use crate::model::character::NpcCard;
 use crate::model::state::{GameState, LogType};
 use crate::narrative::prompt::{PhiMode, PromptBuilder, PromptContext};
@@ -44,11 +45,7 @@ pub fn handle_movement(state: &mut GameState, destination: Option<&str>, new_npc
 
     if previous_room_id != state.current_room_id {
         for npc_id in new_npc_ids {
-            // Set currently_meeting = true for NPCs in the new room.
-            // NOTE: times_met is NOT incremented here - it's handled by the NPC event layer
-            // in fragments.rs (compute_npc_events -> "Entered" events), which prevents
-            // double-increment when an NPC enters a room.
-            state.character_state.set_currently_meeting(npc_id, true);
+            set_currently_meeting(&mut state.character_state, npc_id, true);
         }
     }
 
@@ -66,15 +63,11 @@ pub fn apply_npc_events(state: &mut GameState, events: &[NpcEvent]) {
     for event in events {
         match event.event_type {
             crate::narrative::quantifier::NpcEventType::Entered => {
-                state
-                    .character_state
-                    .set_currently_meeting(&event.npc_id, true);
-                state.character_state.increment_times_met(&event.npc_id);
+                set_currently_meeting(&mut state.character_state, &event.npc_id, true);
+                increment_times_met(&mut state.character_state, &event.npc_id);
             }
             crate::narrative::quantifier::NpcEventType::Left => {
-                state
-                    .character_state
-                    .set_currently_meeting(&event.npc_id, false);
+                set_currently_meeting(&mut state.character_state, &event.npc_id, false);
             }
         }
     }
@@ -140,7 +133,7 @@ pub fn evaluate_and_narrate_triggers(
         }
         state.add_log(continuation_text, None, LogType::Narration);
         if !trigger.repeat {
-            mark_trigger_fired(state, &npc.id, trigger_idx);
+            mark_trigger_fired(&mut state.character_state, &npc.id, trigger_idx);
         }
     }
 }
@@ -257,13 +250,13 @@ mod tests {
 
         apply_npc_events(&mut state, &events);
 
-        assert!(state.character_state.is_currently_meeting("carla"));
+        assert!(is_currently_meeting(&state.character_state, "carla"));
     }
 
     #[test]
     fn test_apply_npc_events_left() {
         let mut state = make_test_state();
-        state.character_state.set_currently_meeting("carla", true);
+        set_currently_meeting(&mut state.character_state, "carla", true);
 
         let events = vec![NpcEvent {
             npc_id: "carla".to_string(),
@@ -272,13 +265,13 @@ mod tests {
 
         apply_npc_events(&mut state, &events);
 
-        assert!(!state.character_state.is_currently_meeting("carla"));
+        assert!(!is_currently_meeting(&state.character_state, "carla"));
     }
 
     #[test]
     fn test_apply_npc_events_increments_times_met() {
         let mut state = make_test_state();
-        let initial_times = state.character_state.get_times_met("carla");
+        let initial_times = get_times_met(&state.character_state, "carla");
 
         let events = vec![NpcEvent {
             npc_id: "carla".to_string(),
@@ -288,7 +281,7 @@ mod tests {
         apply_npc_events(&mut state, &events);
 
         assert_eq!(
-            state.character_state.get_times_met("carla"),
+            get_times_met(&state.character_state, "carla"),
             initial_times + 1
         );
     }
@@ -309,12 +302,15 @@ mod tests {
         let mut state = make_test_state();
         // Already in test_room, moving to same room
         state.current_room_id = "test_room".to_string();
-        let initial_times = state.character_state.get_times_met("carla");
+        let initial_times = get_times_met(&state.character_state, "carla");
 
         handle_movement(&mut state, Some("test_room"), &["carla".to_string()]);
 
         // times_met should not increment when room doesn't change
-        assert_eq!(state.character_state.get_times_met("carla"), initial_times);
+        assert_eq!(
+            get_times_met(&state.character_state, "carla"),
+            initial_times
+        );
     }
 
     #[test]
@@ -334,10 +330,8 @@ mod tests {
     fn test_handle_movement_success_adds_room_log() {
         let mut state = make_test_state();
 
-        // Move to existing room (test_room exists in the map)
         handle_movement(&mut state, Some("test_room"), &["carla".to_string()]);
 
-        // Should have added a narration entry with room name
         assert!(!state.narration_history.is_empty());
         let last_entry = state.narration_history.last().unwrap();
         assert_eq!(last_entry.log_type, LogType::Narration);
@@ -348,10 +342,9 @@ mod tests {
     fn test_handle_movement_sets_currently_meeting() {
         let mut state = make_test_state();
 
-        // Move to a different room (creates dynamic room)
         handle_movement(&mut state, Some("new_room"), &["carla".to_string()]);
 
         // Should set currently_meeting for NPCs in new room
-        assert!(state.character_state.is_currently_meeting("carla"));
+        assert!(is_currently_meeting(&state.character_state, "carla"));
     }
 }

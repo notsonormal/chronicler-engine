@@ -1,7 +1,4 @@
-//! Askama template definitions for HTML fragments.
-//!
-//! These templates provide compile-time validation for HTML fragments used in HTMX partial updates.
-//! Variables are automatically HTML-escaped by Askama unless marked as safe.
+//! [DOC: docs/architecture/system.md]
 
 use std::fmt;
 

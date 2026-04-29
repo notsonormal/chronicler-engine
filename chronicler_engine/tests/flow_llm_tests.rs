@@ -15,7 +15,6 @@ use test_utils::*;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use playwright_rs::Playwright;
     use tokio::time::Duration;
 
     const TEST_WORLD: &str = "test";
@@ -23,21 +22,6 @@ mod tests {
 
     fn has_llm_api_key() -> bool {
         std::env::var("OPENROUTER_API_KEY").is_ok()
-    }
-
-    async fn launch_chrome() -> (playwright_rs::Playwright, playwright_rs::Browser) {
-        use playwright_rs::LaunchOptions;
-
-        let playwright = Playwright::launch().await.unwrap();
-        let browser = playwright
-            .chromium()
-            .launch_with_options(LaunchOptions {
-                channel: Some("chrome".to_string()),
-                ..Default::default()
-            })
-            .await
-            .unwrap();
-        (playwright, browser)
     }
 
     #[tokio::test]
@@ -358,27 +342,6 @@ mod tests {
         );
 
         let _ = browser.close().await;
-    }
-
-    // Helper Functions
-
-    /// Helper: Send an action via the form
-    async fn send_action(page: &playwright_rs::Page, text: &str) {
-        let text_owned = text.to_string();
-        let _: Result<(), _> = page
-            .evaluate(
-                r#"
-            (text) => {
-                const input = document.querySelector('#command-form input[name="command"]');
-                if (input) {
-                    input.value = text;
-                    input.form?.requestSubmit();
-                }
-            }
-            "#,
-                Some(&text_owned),
-            )
-            .await;
     }
 
     /// Story log summary for test assertions

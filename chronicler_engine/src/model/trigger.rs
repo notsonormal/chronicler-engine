@@ -38,43 +38,6 @@ pub struct CharacterState {
     pub npcs: HashMap<String, NpcEncounterState>,
 }
 
-impl CharacterState {
-    // [DOC: docs/system/character_state.md]
-    pub fn get_times_met(&self, npc_id: &str) -> u32 {
-        self.npcs.get(npc_id).map(|s| s.times_met).unwrap_or(0)
-    }
-
-    pub fn increment_times_met(&mut self, npc_id: &str) {
-        let entry = self.npcs.entry(npc_id.to_string()).or_default();
-        entry.times_met += 1;
-    }
-
-    pub fn is_trigger_fired(&self, npc_id: &str, trigger_index: usize) -> bool {
-        self.npcs
-            .get(npc_id)
-            .and_then(|s| s.trigger_fired.get(&trigger_index))
-            .copied()
-            .unwrap_or(false)
-    }
-
-    pub fn mark_trigger_fired(&mut self, npc_id: &str, trigger_index: usize) {
-        let entry = self.npcs.entry(npc_id.to_string()).or_default();
-        entry.trigger_fired.insert(trigger_index, true);
-    }
-
-    pub fn is_currently_meeting(&self, npc_id: &str) -> bool {
-        self.npcs
-            .get(npc_id)
-            .map(|s| s.currently_meeting)
-            .unwrap_or(false)
-    }
-
-    pub fn set_currently_meeting(&mut self, npc_id: &str, meeting: bool) {
-        let entry = self.npcs.entry(npc_id.to_string()).or_default();
-        entry.currently_meeting = meeting;
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

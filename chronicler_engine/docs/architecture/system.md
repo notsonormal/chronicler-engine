@@ -57,12 +57,13 @@ Static web assets served by the server.
 | `src/model/trigger.rs` | `crate::model::trigger` | Trigger definitions, conditions, character state |
 | `src/engine/parser.rs` | `crate::engine::parser` | |
 | `src/engine/action.rs` | `crate::engine::action` | |
-| `src/engine/logic.rs` | `crate::engine::logic` | |
+| `src/engine/logic.rs` | `crate::engine::logic` | `get_current_room`, `find_room_in_map`, `find_room_in_world_map` |
 | `src/engine/trigger_eval.rs` | `crate::engine::trigger_eval` | Trigger evaluation based on character state |
 | `src/engine/action_processing.rs` | `crate::engine::action_processing` | Server handler pure functions (NEW) |
+| `src/engine/game_service.rs` | `crate::engine::game_service` | `GameService` trait and `DefaultGameService` — game orchestration extracted from fragments.rs |
 | `src/narrative/llm.rs` | `crate::narrative::llm` | LLM backend implementations |
-| `src/narrative/prompt.rs` | `crate::narrative::prompt` | PromptBuilder with layered prompts, PhiMode enum |
-| `src/narrative/quantifier.rs` | `crate::narrative::quantifier` | Scene quantification for dynamic NPC presence, includes QuantifierBackendTrait, RealQuantifierBackend, MockQuantifierBackend |
+| `src/narrative/prompt.rs` | `crate::narrative::prompt` | PromptBuilder with layered prompts, PhiMode enum, `make_prompt_context` helper |
+| `src/narrative/quantifier.rs` | `crate::narrative::quantifier` | Scene quantification for dynamic NPC presence. `QuantifierBackendTrait`, `RealQuantifierBackend`, `MockQuantifierBackend`, `determine_npcs_in_room` |
 | `src/narrative/openrouter_client.rs` | `crate::narrative::openrouter_client` | OpenRouter HTTP client with dual-model support (NEW) |
 | `src/server/mod.rs` | `crate::server` | HTTP server + HTMX endpoints |
 | `src/server/fragments.rs` | `crate::server` | HTML fragments |

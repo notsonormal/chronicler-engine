@@ -342,7 +342,6 @@ fn init_logging() {
     let timestamp = Local::now().format("%Y%m%d");
     let log_file_path = log_dir.join(format!("chronicler_{timestamp}.log"));
 
-    // Open file for writing all logs
     let log_file = fs::OpenOptions::new()
         .create(true)
         .append(true)

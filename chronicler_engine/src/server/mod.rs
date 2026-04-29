@@ -2,7 +2,10 @@ pub mod fragments;
 pub mod templates;
 
 pub fn create_app_for_testing(state: Arc<std::sync::Mutex<GameState>>) -> Router {
-    let app_state = AppState { state };
+    let app_state = AppState {
+        state,
+        game_service: Arc::new(DefaultGameService::new()) as Arc<dyn GameService>,
+    };
 
     Router::new()
         .route("/", get(index_handler))
@@ -48,6 +51,7 @@ use axum::{
 use std::sync::Arc;
 use tower_http::services::ServeDir;
 
+use crate::engine::game_service::{DefaultGameService, GameService};
 use crate::error::{EngineError, Result};
 use crate::model::state::GameState;
 
@@ -65,6 +69,7 @@ impl Default for ServerConfig {
 #[derive(Clone)]
 pub struct AppState {
     pub state: Arc<std::sync::Mutex<GameState>>,
+    pub game_service: Arc<dyn GameService>,
 }
 
 pub async fn run_server(state: Arc<std::sync::Mutex<GameState>>) -> Result<()> {
@@ -75,7 +80,10 @@ pub async fn run_server_with_config(
     state: Arc<std::sync::Mutex<GameState>>,
     config: ServerConfig,
 ) -> Result<()> {
-    let app_state = AppState { state };
+    let app_state = AppState {
+        state,
+        game_service: Arc::new(DefaultGameService::new()) as Arc<dyn GameService>,
+    };
 
     let app = Router::new()
         .route("/", get(index_handler))
