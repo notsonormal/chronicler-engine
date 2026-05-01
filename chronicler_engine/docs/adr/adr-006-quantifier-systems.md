@@ -7,13 +7,14 @@
 ## Context
 
 > [!NOTE]
-> This ADR covers three related features plus the dual-LLM architecture that enables them.
+> This ADR covers four related features plus the dual-LLM architecture that enables them.
 
-**Four components** work together:
+**Five components** work together:
 1. **Dual-LLM Architecture** - Separate quantifier vs storyteller models
 2. **Quantifier-Driven Movement** - LLM detects movement from natural language
 3. **Quantified NPCs in Sidebar** - Dynamic NPC presence (not static map config)
 4. **Reactive Movement/Triggers** - Auto-trigger continuation narrations on room entry
+5. **NPC Event Layer** - Track NPC enter/leave events for times_met semantics
 
 *Original Problem*: A single model handled both narration and scene understanding, which was expensive and slow.
 
@@ -84,6 +85,50 @@ COMBINED response delivered to player
 - **Character state**: `times_met` counter per NPC (in-memory)
 - **Continuation prompt**: Includes first narration for continuity
 
+### Feature 4: NPC Event Layer
+
+The quantifier tracks player movement, but not NPC movement. We need to track when NPCs enter or leave the player's area to:
+
+- Better manage `times_met` semantics
+- Support "NPC was here before, now they're gone" inference
+- Enable future features like NPC schedules
+
+#### NPC Event Types
+
+```rust
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NpcEventType {
+    Entered,
+    Left,
+}
+
+#[derive(Debug, Clone)]
+pub struct NpcEvent {
+    pub npc_id: String,
+    pub event_type: NpcEventType,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct NpcEventList {
+    pub events: Vec<NpcEvent>,
+    pub confidence: QuantifierConfidence,
+}
+```
+
+#### Event Detection
+
+Comparing previous vs current NPC presence in area:
+
+- NPCs in new but not in previous → `Entered`
+- NPCs in previous but not in new → `Left`
+
+#### Semantics Changes
+
+- `times_met` increments ONLY on `Entered` (first encounter or rejoined after leaving)
+- Not simply when NPC is present in area across multiple turns
+- `currently_meeting = true` when `Entered` fires
+- `currently_meeting = false` when `Left` fires
+
 ---
 
 ## Consequences
@@ -93,12 +138,15 @@ COMBINED response delivered to player
 - **Dynamic NPCs**: Sidebar reflects narrative reality, not config
 - **Immersion**: Auto-triggers create seamless scene transitions
 - **Graceful fallbacks**: Static data when LLM unavailable
+- **Event-driven tracking**: Clear semantics for NPC presence changes
+- **Refined times_met**: Only increments on meaningful encounters
 
 ### Negative
 - **LLM dependency**: All features require LLM calls
 - **Token cost**: Additional quantifier calls add latency and cost
 - **No persistence**: Character state in-memory only
 - **Pseudo-rooms**: Dynamic rooms don't persist
+- **State comparison needed**: Requires maintaining previous NPC state
 
 ### Trade-offs
 - Chose quantifier over explicit commands for natural feel
@@ -118,6 +166,7 @@ COMBINED response delivered to player
 - **2025-04-13**: Quantifier movement implemented
 - **2026-04-17**: Quantified NPCs sidebar
 - **2026-04-18**: Reactive auto-trigger movement
+- **2026-05-01**: NPC Event Layer (see npc-event-layer.md plan)
 
 ---
 
@@ -128,8 +177,9 @@ These features evolved incrementally:
 - Quantified NPCs: sidebar shows dynamic NPC presence
 - Reactive triggers: auto-fire scene continuations (unified 8-layer PromptBuilder with PhiMode::Continuation)
 - Dual-LLM: separate quantifier model for scene analysis
+- NPC Event Layer: track NPC enter/leave events
 
-The dual-LLM architecture (scene_quantification_v2) was the latest enhancement, allowing separate cheap/fast model for scene understanding.
+The dual-LLM architecture (scene_quantification_v2) was the latest enhancement, allowing separate cheap/fast model for scene analysis.
 
 ---
 

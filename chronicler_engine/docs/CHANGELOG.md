@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- Settings system with tabbed UI for LLM configuration (backend, model, quantifier model, API key)
+- `data/settings.json` for persistent configuration
+- **Test Backend Override** - Atomic override mechanism for reliable mock LLM testing
+  - `with_test_backend(LlmBackendType::Mock)` RAII guard for test isolation
+  - `get_llm_backend()` checks override before loading settings from disk
+  - Eliminates need for temporary `settings.json` files in unit tests
+- **Coverage Improvement** - `game_service.rs` coverage increased from 58% to 79% (llvm-cov)
+  - Extracted `execute_freeaction_impl` to `action_processing.rs` for testability
+  - Added 6 new integration tests covering FreeAction success, retry, and movement paths
+
 ## 2026-04-29
 
 ### Added

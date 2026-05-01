@@ -1,0 +1,6 @@
+{
+            "llm_backend": "Mock",
+            "llm_model": "openai/gpt-4o-mini",
+            "quantifier_model": "openai/gpt-4o-mini",
+            "openrouter_api_key": null
+        }

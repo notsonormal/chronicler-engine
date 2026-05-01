@@ -10,10 +10,17 @@ The engine utilizes Large Language Models (LLMs) via the OpenRouter API or DeepS
 - **Communication**: Results are streamed back to the main UI loop via `std::sync::mpsc` channels.
 
 ### 2. Model Configuration
-The engine supports flexible model selection via environment variables.
-- **Variable**: `LLM_MODEL` (OpenRouter) or `DEEPSEEK_MODEL` (DeepSeek)
-- **Backend Selection**: `LLM_BACKEND` env var: `openrouter` (default), `deepseek`, or `mock`
-- **Authentication**: Requires API key in `.env` (`OPENROUTER_API_KEY` or `DEEPSEEK_API_KEY`)
+The engine supports flexible model selection via settings file (`data/settings.json`).
+- **LLM Backend**: `openrouter` (default), `deepseek`, or `mock` - configurable via UI
+- **LLM Model**: OpenRouter model ID for dialogue/narration (default: `openai/gpt-4o-mini`)
+- **Quantifier Model**: OpenRouter model ID for scene quantification (default: `openai/gpt-4o-mini`)
+- **Authentication**: `openrouter_api_key` in settings, with `OPENROUTER_API_KEY` env var fallback
+
+### 3. Backend Selection
+Backend is selected via `AppSettings.llm_backend`:
+- `openrouter` → Uses OpenRouter API with configured model
+- `deepseek` → Uses DeepSeek API with configured model
+- `mock` → Uses MockBackend for testing (no API key needed)
 
 ### 3. Prompt Construction (SillyTavern-Style Layered Prompts)
 The engine uses a layered prompt system inspired by SillyTavern's Prompt Manager. The prompt is built from 8 layers:

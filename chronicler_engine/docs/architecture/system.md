@@ -20,16 +20,33 @@ Contains the mechanics that drive the simulation. It translates user intent and 
 - **`action`**: The `Action` enum defining all supported system intents.
 - **`logic`**: Rules for movement, fuzzy-matching, and room resolution.
 - **`trigger_eval`**: Pure function evaluation of NPC triggers based on character state (`evaluate_triggers(state, room_id) -> Vec<(NpcCard, Trigger)>`).
-- **`action_processing`**: Extracted pure functions for server handlers (get_static_npcs, handle_movement, apply_npc_events, evaluate_and_narrate_triggers). Enables unit testing of server-side logic.
+- **`action_processing`**: Extracted pure functions for server handlers (`get_static_npcs`, `handle_movement`, `apply_npc_events`, `evaluate_and_narrate_triggers`, `execute_freeaction_impl`). Enables unit testing of server-side logic.
 
 ### 3. The Narrative Tier (`crate::narrative::*`)
 The interface between the synchronous engine and stochastic LLM generation.
-- **`llm`**: Traits (`LlmBackend`) and implementations (OpenRouter, DeepSeek) for Game Master narration.
+- **`llm`**: Traits (`LlmBackend`) and implementations (OpenRouter, DeepSeek, Mock) for Game Master narration.
+  - **`get_llm_backend()`**: Production entry point that loads backend from `data/settings.json`
+  - **`with_test_backend()`**: RAII guard for overriding backend in tests (atomically sets Mock/DeepSeek/OpenRouter without file I/O)
 - **`prompt`**: PromptBuilder module for SillyTavern-style layered prompt construction with token budget management, including `PhiMode` for controlling PHI layer behavior (Narration vs Continuation).
 - **`quantifier`**: Scene quantification module for dynamic room presence detection via secondary LLM. Returns NPC presence, player movement intent, and NPC enter/leave events.
   - **`QuantifierBackendTrait`**: Interface for NPC detection backends
   - **`RealQuantifierBackend`**: Production implementation using LLM
   - **`MockQuantifierBackend`**: Test implementation returning configurable NPCs with High confidence
+  - **`NpcEventList`**: NPC movement events from quantification (Entered, Left)
+
+#### NPC Event Layer
+
+Quantifier results include NPC movement events:
+
+| Event | Trigger |
+|-------|---------|
+| `Entered` | NPC transitions from NOT in area → in area |
+| `Left` | NPC transitions from in area → NOT in area |
+
+When `Entered` fires: `currently_meeting = true`  
+When `Left` fires: `currently_meeting = false`  
+
+**times_met semantics**: Only increments on `Entered` (first encounter or NPC rejoins after leaving). Not on continuous presence across turns.
 
 ### 4. The Server Tier (`crate::server::*`)
 The HTTP layer for the HTMX web dashboard with polling-based real-time updates.
@@ -41,9 +58,46 @@ The HTTP layer for the HTMX web dashboard with polling-based real-time updates.
   - Templates declare required data shapes at compile time.
   - Missing fields = compiler error (not runtime failure).
 
-### 5. The Presentation Tier (`assets/`)
+### 6. The Settings Tier (`crate::settings` + `crate::model::settings`)
+Persistent JSON-based settings system for LLM configuration. Replaces environment variables as the primary configuration source.
+
+| Component | Purpose |
+|-----------|---------|
+| `data/settings.json` | Persistent settings file |
+| `AppSettings` struct | Configuration data model |
+| `AppState.settings` | Runtime access via `Arc<RwLock<AppSettings>>` |
+
+#### Settings Flow
+
+```
+settings.json → load_settings() → AppSettings (defaults if missing)
+                                              ↓
+                                    AppState.settings
+                                              ↓
+                    ┌─────────────────────────┴─────────────────────────┐
+                    ↓                                                   ↓
+        get_llm_backend()                                      get_llm_model()
+        (uses settings.backend)                               (uses settings.llm_model)
+```
+
+#### Configuration Options
+
+| Setting | Type | Default |
+|---------|------|---------| 
+| `llm_backend` | mock/deepseek/openrouter | openrouter |
+| `llm_model` | string | openai/gpt-4o-mini |
+| `quantifier_model` | string | openai/gpt-4o-mini |
+| `openrouter_api_key` | Option<String> | None (falls back to env var) |
+
+#### Backward Compatibility
+
+- `LLM_MODEL` / `QUANTIFIER_MODEL` env vars override settings file values
+- `OPENROUTER_API_KEY` env var used if settings.api_key is None
+- `LLM_BACKEND` env var is **not** consulted (settings file is sole source of truth)
+
+### 7. The Presentation Tier (`assets/`)
 Static web assets served by the server.
-- **`index.html`**: HTMX frontend with CSS styling matching terminal aesthetic.
+- **`index.html`**: HTMX frontend with tabbed interface (Game/Settings tabs)
 
 ## File Mapping
 
@@ -55,6 +109,8 @@ Static web assets served by the server.
 | `src/model/state.rs` | `crate::model::state` | |
 | `src/model/scenario.rs` | `crate::model::scenario` | Starting scenarios |
 | `src/model/trigger.rs` | `crate::model::trigger` | Trigger definitions, conditions, character state |
+| `src/model/settings.rs` | `crate::model::settings` | AppSettings struct for persistence |
+| `src/settings.rs` | `crate::settings` | Settings load/save persistence module |
 | `src/engine/parser.rs` | `crate::engine::parser` | |
 | `src/engine/action.rs` | `crate::engine::action` | |
 | `src/engine/logic.rs` | `crate::engine::logic` | `get_current_room`, `find_room_in_map`, `find_room_in_world_map` |
@@ -67,12 +123,29 @@ Static web assets served by the server.
 | `src/narrative/openrouter_client.rs` | `crate::narrative::openrouter_client` | OpenRouter HTTP client with dual-model support (NEW) |
 | `src/server/mod.rs` | `crate::server` | HTTP server + HTMX endpoints |
 | `src/server/fragments.rs` | `crate::server` | HTML fragments |
-| `src/server/templates.rs` | `crate::server` | Askama templates (NEW) |
+| `src/server/settings_fragment.rs` | `crate::server` | Settings panel fragment (NEW) |
+| `src/server/templates.rs` | `crate::server` | Askama templates |
 | `assets/index.html` | Presentation | HTMX frontend |
 
 ## UI Specification
 
-The engine presents a web-based HTMX dashboard:
+The engine presents a web-based HTMX dashboard with a tabbed interface:
+
+### Tab Bar
+
+Silly Tavern-style horizontal tab bar at the top:
+```
+┌─────────────────────────────────────────┐
+│ [Game] [Settings]                       │
+└─────────────────────────────────────────┘
+```
+
+- **Game Tab**: Default active tab containing the main game interface
+- **Settings Tab**: Configuration panel for LLM settings and preferences
+
+### Game Tab Content
+
+The game tab contains the standard interface:
 
 - **Header**: Game title only
 - **Main Body**: Story log (80%) + visual sidebar (20%) (see `docs/system/dashboard.md`)
@@ -212,6 +285,8 @@ The retry endpoint (`POST /api/retry`) regenerates the last AI response:
 
 | Method | Path | Description |
 |--------|-----|-------------|
+| `GET` | `/fragment/settings` | Settings panel HTML |
+| `POST` | `/settings` | Save settings from form |
 | `POST` | `/history/:id` | Edit entry text |
 | `POST` | `/retry` | Regenerate last AI response |
 

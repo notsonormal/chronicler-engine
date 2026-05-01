@@ -1,6 +1,4 @@
-//! Test Utilities for Chronicler Engine UI Tests
-//!
-//! Shared utilities for managing test server lifecycle and smart waiting
+//! [DOC: docs/reference/testing.md]
 
 #![allow(dead_code)]
 
@@ -61,15 +59,25 @@ pub fn kill_existing_server() {
 }
 
 /// Start the server with optional mock LLM backend
-/// If use_mock is true, sets LLM_BACKEND=mock env var
+/// If use_mock is true, creates data/settings.json with mock backend
 pub fn start_server_with_env(port: u16, world: &str, use_mock: bool) -> Child {
     // Use cargo run - pre-built binary has working directory issues in test context
     let mut cmd = Command::new("cargo");
     cmd.args(&["run", "--", "--world", world, "--port", &port.to_string()]);
 
-    // Set env var for mock LLM if requested
+    // Create settings file with mock backend if requested
     if use_mock {
-        cmd.env("LLM_BACKEND", "mock");
+        let settings_path = std::path::PathBuf::from("data/settings.json");
+        if let Some(parent) = settings_path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let mock_settings = r#"{
+            "llm_backend": "Mock",
+            "llm_model": "openai/gpt-4o-mini",
+            "quantifier_model": "openai/gpt-4o-mini",
+            "openrouter_api_key": null
+        }"#;
+        let _ = std::fs::write(&settings_path, mock_settings);
     }
 
     cmd.current_dir(".")

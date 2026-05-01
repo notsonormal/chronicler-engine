@@ -4,18 +4,15 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 
 use crate::engine::action::Action;
-use crate::engine::action_processing::{
-    apply_npc_events, evaluate_and_narrate_triggers, get_static_npcs, handle_movement,
-};
+use crate::engine::action_processing::{execute_freeaction_impl, get_static_npcs};
 use crate::engine::logic::{find_room_in_map, get_current_room};
 use crate::engine::parser::parse_command;
 use crate::model::character::NpcCard;
 use crate::model::state::{GameState, LogType};
 use crate::narrative::llm::get_llm_backend;
-use crate::narrative::prompt::{PromptContext, make_prompt_context};
+use crate::narrative::prompt::make_prompt_context;
 use crate::narrative::quantifier::{
-    MockQuantifierBackend, QuantifierBackendTrait, RealQuantifierBackend, compute_npc_events,
-    determine_npcs_in_room,
+    MockQuantifierBackend, QuantifierBackendTrait, RealQuantifierBackend, determine_npcs_in_room,
 };
 
 /// Trait for game service that handles game orchestration logic.
@@ -102,7 +99,6 @@ impl GameService for DefaultGameService {
                     .unwrap_or_default();
                 let nearby_npcs = get_static_npcs(&state_guard, &room_npc_ids);
                 let all_npcs: Vec<NpcCard> = state_guard.npcs.values().cloned().collect();
-                let text = text.clone();
                 drop(state_guard);
 
                 let state_for_thread = state.clone();
@@ -115,8 +111,8 @@ impl GameService for DefaultGameService {
                         .find(|r| r.id == room_id);
 
                     let Some(room) = room else {
-                        if let Ok(mut state) = state_for_thread.lock() {
-                            state.generation_state.is_generating = false;
+                        if let Ok(mut s) = state_for_thread.lock() {
+                            s.generation_state.is_generating = false;
                         }
                         return;
                     };
@@ -133,81 +129,75 @@ impl GameService for DefaultGameService {
                     );
 
                     let Ok(narration_text) = backend.narrate_action(&context) else {
-                        if let Ok(mut state) = state_for_thread.lock() {
-                            state.generation_state.error_message =
+                        if let Ok(mut s) = state_for_thread.lock() {
+                            s.generation_state.error_message =
                                 Some("LLM Error: narration failed".to_string());
-                        }
-                        if let Ok(mut state) = state_for_thread.lock() {
-                            state.generation_state.is_generating = false;
+                            s.generation_state.is_generating = false;
                         }
                         return;
                     };
 
-                    if let Ok(mut state) = state_for_thread.lock() {
-                        let room_npc_ids = get_current_room(&state)
-                            .map(|r| r.npcs.clone())
-                            .unwrap_or_default();
-                        let previous_room_npcs: Vec<NpcCard> = state.npcs_in_area.clone();
-                        let previous_npc_ids: Vec<String> =
-                            previous_room_npcs.iter().map(|n| n.id.clone()).collect();
+                    // Determine NPCs via quantifier
+                    let use_mock = std::env::var("LLM_BACKEND").as_deref() == Ok("mock");
+                    let quantifier_backend: Box<dyn QuantifierBackendTrait> = if use_mock {
+                        Box::new(MockQuantifierBackend::default())
+                    } else {
+                        Box::new(RealQuantifierBackend)
+                    };
 
-                        let use_mock = std::env::var("LLM_BACKEND").as_deref() == Ok("mock");
-                        let backend: Box<dyn QuantifierBackendTrait> = if use_mock {
-                            Box::new(MockQuantifierBackend::default())
-                        } else {
-                            Box::new(RealQuantifierBackend)
+                    let quantifier_result = {
+                        let state = match state_for_thread.lock() {
+                            Ok(s) => s,
+                            Err(_) => {
+                                if let Ok(mut s) = state_for_thread.lock() {
+                                    s.generation_state.is_generating = false;
+                                }
+                                return;
+                            }
                         };
-                        let quantifier_result = determine_npcs_in_room(
+                        let previous_room_npcs: Vec<NpcCard> = state.npcs_in_area.clone();
+                        determine_npcs_in_room(
                             &state,
-                            &room_npc_ids,
+                            &room.npcs,
                             &previous_room_npcs,
                             &narration_text,
-                            backend.as_ref(),
-                        );
+                            quantifier_backend.as_ref(),
+                        )
+                    };
 
-                        handle_movement(
-                            &mut state,
-                            quantifier_result.movement.destination.as_deref(),
-                            &quantifier_result.npcs.npc_ids,
-                        );
-
-                        let current_npcs: Vec<NpcCard> = quantifier_result
-                            .npcs
-                            .npc_ids
-                            .iter()
-                            .filter_map(|id| state.npcs.get(id).cloned())
-                            .collect();
-                        let current_npc_ids: Vec<String> =
-                            current_npcs.iter().map(|n| n.id.clone()).collect();
-                        let npcs_for_context = current_npcs.clone();
-                        let trigger_context = PromptContext {
-                            world: &world,
-                            room,
-                            all_npcs: &all_npcs,
-                            npcs_in_area: &npcs_for_context,
-                            player: &player,
-                            user_message: &text,
-                            history: &history,
+                    // Call synchronous impl — handles all state mutations
+                    let result = {
+                        let mut state = match state_for_thread.lock() {
+                            Ok(s) => s,
+                            Err(_) => {
+                                if let Ok(mut s) = state_for_thread.lock() {
+                                    s.generation_state.is_generating = false;
+                                }
+                                return;
+                            }
                         };
-                        state.add_log(narration_text.clone(), None, LogType::Narration);
-                        state.npcs_in_area = current_npcs;
-
-                        // Evaluate triggers BEFORE incrementing times_met
-                        // (so TimesMet Eq 0 can fire on first detection)
-                        evaluate_and_narrate_triggers(
+                        execute_freeaction_impl(
                             &mut state,
                             &narration_text,
-                            &trigger_context,
-                            3,
-                        );
+                            &text,
+                            &quantifier_result,
+                            &world,
+                            &map,
+                            &player,
+                            &all_npcs,
+                            &room.npcs,
+                            &history,
+                        )
+                    };
 
-                        // Apply NPC events using the reusable function
-                        let events = compute_npc_events(&previous_npc_ids, &current_npc_ids);
-                        apply_npc_events(&mut state, &events.events);
+                    if let Err(e) = result {
+                        if let Ok(mut s) = state_for_thread.lock() {
+                            s.generation_state.error_message = Some(format!("Error: {e}"));
+                        }
                     }
 
-                    if let Ok(mut state) = state_for_thread.lock() {
-                        state.generation_state.is_generating = false;
+                    if let Ok(mut s) = state_for_thread.lock() {
+                        s.generation_state.is_generating = false;
                     }
                 });
             }

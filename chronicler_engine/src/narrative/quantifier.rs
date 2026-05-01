@@ -54,9 +54,7 @@ pub struct MovementParseResult {
     pub confidence: QuantifierConfidence,
 }
 
-/// Combined result from the quantifier: NPCs in room + movement intent.
-///
-/// NPC events are computed separately in `fragments.rs` by comparing previous vs current NPC presence.
+/// [DOC: docs/system/llm_processing.md]
 #[derive(Debug, Clone)]
 pub struct QuantifierResult {
     /// NPCs detected as present in the room.
@@ -287,10 +285,7 @@ pub fn parse_quantifier_response(
     }
 }
 
-/// Compute NPC enter/leave events by comparing previous vs current NPC presence.
-///
-/// - NPCs in current but not in previous → `Entered`
-/// - NPCs in previous but not in current → `Left`
+/// [DOC: docs/system/llm_processing.md]
 pub fn compute_npc_events(previous_npc_ids: &[String], current_npc_ids: &[String]) -> NpcEventList {
     let previous_set: std::collections::HashSet<_> = previous_npc_ids.iter().collect();
     let current_set: std::collections::HashSet<_> = current_npc_ids.iter().collect();
@@ -488,20 +483,11 @@ pub fn extract_movement_from_text(
     }
 }
 
-/// Backend for calling the quantifier LLM.
-///
-/// Uses a separate model (configured via `QUANTIFIER_MODEL` env var)
-/// from the main narrative generator.
+/// [DOC: docs/system/llm_processing.md]
 pub struct QuantifierBackend;
 
 impl QuantifierBackend {
-    /// Quantify which NPCs are in the current room and detect movement intent.
-    ///
-    /// Returns a `QuantifierResult` containing both NPC presence and movement detection.
-    /// - `npcs`: Detected NPC IDs with confidence level.
-    /// - `movement`: Detected movement type (entering/leaving/in) and destination.
-    ///
-    /// If the LLM call fails entirely, returns the `fallback_npc_ids` with `Low` confidence.
+    /// [DOC: docs/system/llm_processing.md]
     pub fn quantify_room(
         &self,
         context: &QuantifierPromptContext,
@@ -523,7 +509,8 @@ impl QuantifierBackend {
         });
 
         let (system_prompt, user_prompt) = builder.build();
-        let model = get_quantifier_model();
+        let settings = crate::settings::load_settings().unwrap_or_default();
+        let model = get_quantifier_model(&settings);
 
         log::info!(
             "[Quantifier] Calling model: {} for room: {}",
@@ -585,10 +572,26 @@ impl QuantifierBackend {
     }
 }
 
-/// Determine which NPCs are in the current room and detect player movement intent.
-///
-/// Calls the quantifier backend to analyze the current scene, with fallback to
-/// static room NPCs on low confidence or error.
+/// Build a fallback QuantifierResult using static room NPCs.
+fn static_npc_result(
+    state: &crate::model::state::GameState,
+    room_npc_ids: &[String],
+    movement: MovementParseResult,
+) -> QuantifierResult {
+    QuantifierResult {
+        npcs: QuantifierParseResult {
+            npc_ids: room_npc_ids
+                .iter()
+                .filter_map(|id| state.npcs.get(id).cloned())
+                .map(|n| n.id)
+                .collect(),
+            confidence: QuantifierConfidence::Low,
+        },
+        movement,
+    }
+}
+
+/// [DOC: docs/system/llm_processing.md]
 pub fn determine_npcs_in_room(
     state: &crate::model::state::GameState,
     room_npc_ids: &[String],
@@ -602,21 +605,15 @@ pub fn determine_npcs_in_room(
         Ok(r) => r,
         Err(_) => {
             log::warn!("[Quantifier] Cannot get current room, using static NPCs");
-            return QuantifierResult {
-                npcs: QuantifierParseResult {
-                    npc_ids: room_npc_ids
-                        .iter()
-                        .filter_map(|id| state.npcs.get(id).cloned())
-                        .map(|n| n.id)
-                        .collect(),
-                    confidence: QuantifierConfidence::Low,
-                },
-                movement: MovementParseResult {
+            return static_npc_result(
+                state,
+                room_npc_ids,
+                MovementParseResult {
                     movement_type: None,
                     destination: None,
                     confidence: QuantifierConfidence::Low,
                 },
-            };
+            );
         }
     };
 
@@ -672,36 +669,20 @@ pub fn determine_npcs_in_room(
             }
             QuantifierConfidence::Low => {
                 log::info!("[Quantifier] Low confidence, using static NPCs");
-                QuantifierResult {
-                    npcs: QuantifierParseResult {
-                        npc_ids: room_npc_ids
-                            .iter()
-                            .filter_map(|id| state.npcs.get(id).cloned())
-                            .map(|n| n.id)
-                            .collect(),
-                        confidence: QuantifierConfidence::Low,
-                    },
-                    movement: result.movement,
-                }
+                static_npc_result(state, room_npc_ids, result.movement)
             }
         },
         Err(e) => {
             log::warn!("[Quantifier] Failed: {e}, using static NPCs");
-            QuantifierResult {
-                npcs: QuantifierParseResult {
-                    npc_ids: room_npc_ids
-                        .iter()
-                        .filter_map(|id| state.npcs.get(id).cloned())
-                        .map(|n| n.id)
-                        .collect(),
-                    confidence: QuantifierConfidence::Low,
-                },
-                movement: MovementParseResult {
+            static_npc_result(
+                state,
+                room_npc_ids,
+                MovementParseResult {
                     movement_type: None,
                     destination: None,
                     confidence: QuantifierConfidence::Low,
                 },
-            }
+            )
         }
     }
 }
@@ -844,6 +825,14 @@ mod tests {
                 timestamp: Utc::now(),
             },
         ]
+    }
+
+    fn make_boundary_chars() -> std::collections::HashSet<char> {
+        [
+            ' ', '.', ',', '!', '?', '\n', '\t', '\r', '\'', '"', ':', ';',
+        ]
+        .into_iter()
+        .collect()
     }
 
     #[test]
@@ -1293,6 +1282,438 @@ mod tests {
 
         assert_eq!(result.npcs.npc_ids, vec!["carla"]);
         assert_eq!(result.movement.movement_type, None);
+    }
+
+    #[test]
+    fn test_extract_movement_from_text_entering() {
+        let rooms = vec![RoomInfo {
+            id: "kitchen".to_string(),
+            name: "Kitchen".to_string(),
+        }];
+        let result = extract_movement_from_text("I enter the kitchen", &rooms);
+        assert!(result.is_some());
+        let result = result.unwrap();
+        assert_eq!(result.movement_type, Some(MovementType::Entering));
+    }
+
+    #[test]
+    fn test_extract_movement_from_text_leaving() {
+        let rooms = vec![RoomInfo {
+            id: "hall".to_string(),
+            name: "Hall".to_string(),
+        }];
+        let result = extract_movement_from_text("I leave the hall", &rooms);
+        assert!(result.is_some());
+        let result = result.unwrap();
+        assert_eq!(result.movement_type, Some(MovementType::Leaving));
+    }
+
+    #[test]
+    fn test_extract_movement_from_text_walk_into() {
+        let rooms = vec![RoomInfo {
+            id: "garden".to_string(),
+            name: "Garden".to_string(),
+        }];
+        let result = extract_movement_from_text("I walk into the garden", &rooms);
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_extract_movement_from_text_head_to() {
+        let rooms = vec![RoomInfo {
+            id: "tower".to_string(),
+            name: "Tower".to_string(),
+        }];
+        let result = extract_movement_from_text("I head to the tower", &rooms);
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_extract_movement_destination_not_found() {
+        let rooms = vec![RoomInfo {
+            id: "kitchen".to_string(),
+            name: "Kitchen".to_string(),
+        }];
+        // Room name doesn't appear in text
+        let result = extract_movement_from_text("I go somewhere else", &rooms);
+        // Should not have destination
+        assert!(result.map(|r| r.destination.is_none()).unwrap_or(true));
+    }
+
+    #[test]
+    fn test_extract_movement_from_text_empty() {
+        let rooms = vec![];
+        let result = extract_movement_from_text("", &rooms);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_extract_movement_case_insensitive() {
+        let rooms = vec![RoomInfo {
+            id: "FOREST".to_string(),
+            name: "Forest".to_string(),
+        }];
+        let result = extract_movement_from_text("I ENTER the FOREST", &rooms);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().movement_type, Some(MovementType::Entering));
+    }
+
+    #[test]
+    fn test_extract_movement_go_out() {
+        let rooms = vec![RoomInfo {
+            id: "outside".to_string(),
+            name: "Outside".to_string(),
+        }];
+        let result = extract_movement_from_text("I go out", &rooms);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().movement_type, Some(MovementType::Leaving));
+    }
+
+    #[test]
+    fn test_extract_movement_walk_out() {
+        let rooms = vec![RoomInfo {
+            id: "garden".to_string(),
+            name: "Garden".to_string(),
+        }];
+        let result = extract_movement_from_text("I walk out to the garden", &rooms);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().movement_type, Some(MovementType::Leaving));
+    }
+
+    #[test]
+    fn test_extract_movement_head_out() {
+        let rooms = vec![RoomInfo {
+            id: "courtyard".to_string(),
+            name: "Courtyard".to_string(),
+        }];
+        let result = extract_movement_from_text("I head out to the courtyard", &rooms);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().movement_type, Some(MovementType::Leaving));
+    }
+
+    #[test]
+    fn test_extract_movement_exits() {
+        let rooms = vec![RoomInfo {
+            id: "hallway".to_string(),
+            name: "Hallway".to_string(),
+        }];
+        let result = extract_movement_from_text("I exit to the hallway", &rooms);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().movement_type, Some(MovementType::Leaving));
+    }
+
+    #[test]
+    fn test_extract_movement_travel_to() {
+        let rooms = vec![RoomInfo {
+            id: "village".to_string(),
+            name: "Village".to_string(),
+        }];
+        let result = extract_movement_from_text("I travel to the village", &rooms);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().movement_type, Some(MovementType::Entering));
+    }
+
+    #[test]
+    fn test_extract_movement_go_into() {
+        let rooms = vec![RoomInfo {
+            id: "cave".to_string(),
+            name: "Cave".to_string(),
+        }];
+        let result = extract_movement_from_text("I go into the cave", &rooms);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().movement_type, Some(MovementType::Entering));
+    }
+
+    #[test]
+    fn test_extract_movement_destination_found() {
+        let rooms = vec![RoomInfo {
+            id: "kitchen".to_string(),
+            name: "Kitchen".to_string(),
+        }];
+        let result = extract_movement_from_text("I walk to the kitchen", &rooms);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().destination, Some("Kitchen".to_string()));
+    }
+
+    #[test]
+    fn test_quantifier_prompt_builder_empty_npcs() {
+        let room = make_room();
+        let all_npcs: Vec<NpcCard> = vec![];
+        let previous_npcs: Vec<NpcCard> = vec![];
+        let history: Vec<LogEntry> = vec![];
+
+        let context = QuantifierPromptContext {
+            room: &room,
+            previous_room_npcs: &previous_npcs,
+            all_known_npcs: &all_npcs,
+            all_rooms: &[],
+            player_name: "Hero",
+            recent_history: &history,
+            player_action: "I look around.",
+        };
+
+        let builder = QuantifierPromptBuilder::new(context);
+        let (system, user) = builder.build();
+
+        // Should handle empty NPCs gracefully
+        assert!(system.contains("AvailableNpcIds"));
+        assert!(user.contains("Hero"));
+    }
+
+    #[test]
+    fn test_quantifier_prompt_builder_with_room_npcs() {
+        let mut room = make_room();
+        room.npcs = vec!["gabriella".to_string(), "carla".to_string()];
+
+        let gabriella = make_npc("gabriella", "Gabriella");
+        let all_npcs = vec![gabriella];
+        let previous_npcs: Vec<NpcCard> = vec![];
+        let history: Vec<LogEntry> = vec![];
+
+        let context = QuantifierPromptContext {
+            room: &room,
+            previous_room_npcs: &previous_npcs,
+            all_known_npcs: &all_npcs,
+            all_rooms: &[],
+            player_name: "Hero",
+            recent_history: &history,
+            player_action: "I enter the room.",
+        };
+
+        let builder = QuantifierPromptBuilder::new(context);
+        let (_, user) = builder.build();
+
+        // Should include room configured NPCs
+        assert!(user.contains("RoomConfiguredNpcs"));
+        assert!(user.contains("gabriella"));
+        assert!(user.contains("carla"));
+    }
+
+    #[test]
+    fn test_parse_movement_text_fallback_no_movement() {
+        // When JSON parsing fails, movement should be Low confidence (no text fallback)
+        // But NPC extraction should still work via text matching
+        let response = "carla is standing in the room.";
+        let result = parse_quantifier_response_with_movement(response, &["carla".to_string()], &[]);
+
+        assert_eq!(result.npcs.npc_ids, vec!["carla"]);
+        assert_eq!(result.npcs.confidence, QuantifierConfidence::Medium);
+        // Movement is only from JSON, so it should be None/Low
+        assert_eq!(result.movement.movement_type, None);
+        assert_eq!(result.movement.confidence, QuantifierConfidence::Low);
+    }
+
+    #[test]
+    fn test_parse_movement_json_invalid_npcs_filtered() {
+        // Unknown NPCs in JSON should be filtered out
+        let response = r#"{"npcs_in_room": ["carla", "unknown_npc", "gabriella"], "movement": {"type": "entering"}}"#;
+
+        let result = parse_quantifier_response_with_movement(
+            response,
+            &["carla".to_string(), "gabriella".to_string()],
+            &[],
+        );
+
+        assert_eq!(result.npcs.npc_ids, vec!["carla", "gabriella"]);
+        assert_eq!(result.npcs.confidence, QuantifierConfidence::High);
+    }
+
+    #[test]
+    fn test_mock_quantifier_backend_auto_detect() {
+        let carla = make_npc("carla", "Carla");
+        let gabriella = make_npc("gabriella", "Gabriella");
+        let all_npcs = vec![carla, gabriella];
+
+        let backend = MockQuantifierBackend::default();
+
+        let room = make_room();
+        let context = QuantifierPromptContext {
+            room: &room,
+            previous_room_npcs: &[],
+            all_known_npcs: &all_npcs,
+            all_rooms: &[],
+            player_name: "Hero",
+            recent_history: &[],
+            player_action: "I talk to Carla about the quest.",
+        };
+
+        let result = backend.quantify_room(&context, &[]).unwrap();
+
+        // Should auto-detect "Carla" from player action
+        assert!(result.npcs.npc_ids.contains(&"carla".to_string()));
+        assert_eq!(result.npcs.confidence, QuantifierConfidence::High);
+    }
+
+    #[test]
+    fn test_mock_quantifier_backend_explicit_npcs() {
+        let all_npcs = vec![make_npc("carla", "Carla")];
+
+        let backend = MockQuantifierBackend {
+            npcs_to_return: vec!["carla".to_string()],
+            movement_to_return: Some(MovementParseResult {
+                movement_type: Some(MovementType::Entering),
+                destination: Some("entrance".to_string()),
+                confidence: QuantifierConfidence::High,
+            }),
+        };
+
+        let room = make_room();
+        let context = QuantifierPromptContext {
+            room: &room,
+            previous_room_npcs: &[],
+            all_known_npcs: &all_npcs,
+            all_rooms: &[],
+            player_name: "Hero",
+            recent_history: &[],
+            player_action: "I walk in.",
+        };
+
+        let result = backend.quantify_room(&context, &[]).unwrap();
+
+        assert_eq!(result.npcs.npc_ids, vec!["carla".to_string()]);
+        assert_eq!(result.movement.movement_type, Some(MovementType::Entering));
+        assert_eq!(result.movement.destination, Some("entrance".to_string()));
+    }
+
+    #[test]
+    fn test_mock_quantifier_no_match_when_different_action() {
+        let carla = make_npc("carla", "Carla");
+        let all_npcs = vec![carla];
+
+        let backend = MockQuantifierBackend::default();
+
+        let room = make_room();
+        let context = QuantifierPromptContext {
+            room: &room,
+            previous_room_npcs: &[],
+            all_known_npcs: &all_npcs,
+            all_rooms: &[],
+            player_name: "Hero",
+            recent_history: &[],
+            player_action: "I look at the wall.", // No NPC name mentioned
+        };
+
+        let result = backend.quantify_room(&context, &[]).unwrap();
+
+        // Should not auto-detect any NPCs
+        assert!(result.npcs.npc_ids.is_empty());
+    }
+
+    #[test]
+    fn test_action_boundary_substring_at_start_no_boundary_after() {
+        // "carla" in "carlax" should NOT match (no boundary after)
+        let boundary_chars = make_boundary_chars();
+        let result = action_boundary_contains("carlax", "carla", &boundary_chars);
+        assert!(
+            !result,
+            "Should not match when followed by non-boundary char"
+        );
+    }
+
+    #[test]
+    fn test_action_boundary_substring_at_end_no_boundary_before() {
+        // "carla" in "xcarla" should NOT match (no boundary before)
+        let boundary_chars = make_boundary_chars();
+        let result = action_boundary_contains("xcarla", "carla", &boundary_chars);
+        assert!(
+            !result,
+            "Should not match when preceded by non-boundary char"
+        );
+    }
+
+    #[test]
+    fn test_quantifier_prompt_builder_all_rooms() {
+        let room = make_room();
+        let all_npcs = vec![make_npc("carla", "Carla")];
+        let all_rooms = vec![
+            RoomInfo {
+                id: "entrance".to_string(),
+                name: "Entrance".to_string(),
+            },
+            RoomInfo {
+                id: "library".to_string(),
+                name: "Library".to_string(),
+            },
+        ];
+
+        let context = QuantifierPromptContext {
+            room: &room,
+            previous_room_npcs: &[],
+            all_known_npcs: &all_npcs,
+            all_rooms: &all_rooms,
+            player_name: "Hero",
+            recent_history: &[],
+            player_action: "I look around.",
+        };
+
+        let builder = QuantifierPromptBuilder::new(context);
+        let (system, _) = builder.build();
+
+        // System prompt should include all rooms
+        assert!(system.contains("AvailableRooms"));
+        assert!(system.contains("Entrance"));
+        assert!(system.contains("Library"));
+    }
+
+    #[test]
+    fn test_parse_response_json_with_movement_null_type() {
+        // JSON with movement.type = null should result in None movement type
+        let response =
+            r#"{"npcs_in_room": ["carla"], "movement": {"type": null, "destination": "hall"}}"#;
+
+        let result = parse_quantifier_response_with_movement(response, &["carla".to_string()], &[]);
+
+        assert_eq!(result.npcs.npc_ids, vec!["carla"]);
+        assert_eq!(result.movement.movement_type, None);
+        // Destination should still be captured even with null type
+        assert_eq!(result.movement.destination, Some("hall".to_string()));
+    }
+
+    #[test]
+    fn test_compute_npc_events_both_empty() {
+        let previous: Vec<String> = vec![];
+        let current: Vec<String> = vec![];
+
+        let result = compute_npc_events(&previous, &current);
+
+        assert!(result.events.is_empty());
+        assert_eq!(result.confidence, QuantifierConfidence::Low);
+    }
+
+    #[test]
+    fn test_compute_npc_events_all_left() {
+        // All previous NPCs left
+        let previous = vec!["carla".to_string(), "gabriella".to_string()];
+        let current: Vec<String> = vec![];
+
+        let result = compute_npc_events(&previous, &current);
+
+        assert_eq!(result.events.len(), 2);
+        assert!(
+            result
+                .events
+                .iter()
+                .all(|e| e.event_type == NpcEventType::Left)
+        );
+        assert_eq!(result.confidence, QuantifierConfidence::Medium);
+    }
+
+    #[test]
+    fn test_compute_npc_events_all_entered() {
+        // All new NPCs entered
+        let previous: Vec<String> = vec![];
+        let current = vec!["carla".to_string(), "gabriella".to_string()];
+
+        let result = compute_npc_events(&previous, &current);
+
+        assert_eq!(result.events.len(), 2);
+        assert!(
+            result
+                .events
+                .iter()
+                .all(|e| e.event_type == NpcEventType::Entered)
+        );
+        assert_eq!(result.confidence, QuantifierConfidence::Medium);
     }
 }
 

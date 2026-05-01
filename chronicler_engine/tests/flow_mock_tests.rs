@@ -1,15 +1,4 @@
-//! Game Flow Tests - Mock LLM Version
-//!
-//! End-to-end tests verifying the core game loop with mocked LLM responses.
-//! These tests verify the UI/UX flow without requiring real LLM API calls.
-//!
-//! Tests here focus on:
-//! - Initial page load (header, story-log, status)
-//! - Command submission (form works, status updates)
-//! - Polling mechanism (updates appear without page reload)
-//! - Message ordering (new messages at bottom)
-//!
-//! Reference: docs/system/game_flow.md
+//! [DOC: docs/reference/testing.md]
 
 mod test_utils;
 use playwright_rs::{Browser, LaunchOptions, Playwright};

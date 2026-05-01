@@ -1,9 +1,4 @@
-//! Component Tests
-//!
-//! Merged tests from template_tests.rs (Askama template rendering)
-//! and fragment_tests.rs (HTTP endpoint tests).
-//!
-//! Run with: cargo test --test component_tests
+//! [DOC: docs/reference/testing.md]
 
 use std::sync::{Arc, Mutex};
 
@@ -455,6 +450,229 @@ mod tests {
 
         // With no input history, should return BAD_REQUEST
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    mod settings_tests {
+        use super::*;
+
+        #[tokio::test]
+        async fn test_settings_panel_returns_html() {
+            let state = create_test_state();
+            let app = create_app_for_testing(state);
+
+            let req = Request::builder()
+                .uri("/fragment/settings")
+                .body(Body::empty())
+                .unwrap();
+            let response = app.oneshot(req).await.unwrap();
+
+            assert!(response.status().is_success());
+            let body = axum::body::to_bytes(response.into_body(), 2048)
+                .await
+                .unwrap();
+            let body_str = String::from_utf8_lossy(&body);
+            assert!(
+                body_str.contains("LLM Settings"),
+                "Expected 'LLM Settings' in response: {}",
+                body_str
+            );
+        }
+
+        #[tokio::test]
+        async fn test_settings_panel_has_backend_select() {
+            let state = create_test_state();
+            let app = create_app_for_testing(state);
+
+            let req = Request::builder()
+                .uri("/fragment/settings")
+                .body(Body::empty())
+                .unwrap();
+            let response = app.oneshot(req).await.unwrap();
+
+            assert!(response.status().is_success());
+            let body = axum::body::to_bytes(response.into_body(), 2048)
+                .await
+                .unwrap();
+            let body_str = String::from_utf8_lossy(&body);
+            assert!(
+                body_str.contains("llm_backend"),
+                "Expected llm_backend select element: {}",
+                body_str
+            );
+        }
+
+        #[tokio::test]
+        async fn test_settings_panel_has_model_inputs() {
+            let state = create_test_state();
+            let app = create_app_for_testing(state);
+
+            let req = Request::builder()
+                .uri("/fragment/settings")
+                .body(Body::empty())
+                .unwrap();
+            let response = app.oneshot(req).await.unwrap();
+
+            assert!(response.status().is_success());
+            let body = axum::body::to_bytes(response.into_body(), 2048)
+                .await
+                .unwrap();
+            let body_str = String::from_utf8_lossy(&body);
+            assert!(
+                body_str.contains("llm_model"),
+                "Expected llm_model input: {}",
+                body_str
+            );
+            assert!(
+                body_str.contains("quantifier_model"),
+                "Expected quantifier_model input: {}",
+                body_str
+            );
+        }
+
+        #[tokio::test]
+        async fn test_save_settings_openrouter() {
+            let state = create_test_state();
+            let app = create_app_for_testing(state);
+
+            let req = Request::builder()
+                .uri("/settings")
+                .method(http::Method::POST)
+                .header(
+                    http::header::CONTENT_TYPE,
+                    "application/x-www-form-urlencoded",
+                )
+                .body(Body::from("llm_backend=openrouter&llm_model=gpt-4o-mini&quantifier_model=gpt-4o-mini&api_key="))
+                .unwrap();
+            let response = app.oneshot(req).await.unwrap();
+
+            assert!(response.status().is_success());
+            let body = axum::body::to_bytes(response.into_body(), 1024)
+                .await
+                .unwrap();
+            let body_str = String::from_utf8_lossy(&body);
+            assert!(
+                body_str.contains("saved"),
+                "Expected success response: {}",
+                body_str
+            );
+        }
+
+        #[tokio::test]
+        async fn test_save_settings_deepseek() {
+            let state = create_test_state();
+            let app = create_app_for_testing(state);
+
+            let req = Request::builder()
+                .uri("/settings")
+                .method(http::Method::POST)
+                .header(
+                    http::header::CONTENT_TYPE,
+                    "application/x-www-form-urlencoded",
+                )
+                .body(Body::from("llm_backend=deepseek&llm_model=deepseek-chat&quantifier_model=deepseek-chat&api_key="))
+                .unwrap();
+            let response = app.oneshot(req).await.unwrap();
+
+            assert!(response.status().is_success());
+            let body = axum::body::to_bytes(response.into_body(), 1024)
+                .await
+                .unwrap();
+            let body_str = String::from_utf8_lossy(&body);
+            assert!(
+                body_str.contains("saved"),
+                "Expected success response: {}",
+                body_str
+            );
+        }
+
+        #[tokio::test]
+        async fn test_save_settings_mock() {
+            let state = create_test_state();
+            let app = create_app_for_testing(state);
+
+            let req = Request::builder()
+                .uri("/settings")
+                .method(http::Method::POST)
+                .header(
+                    http::header::CONTENT_TYPE,
+                    "application/x-www-form-urlencoded",
+                )
+                .body(Body::from(
+                    "llm_backend=mock&llm_model=gpt-4o-mini&quantifier_model=gpt-4o-mini&api_key=",
+                ))
+                .unwrap();
+            let response = app.oneshot(req).await.unwrap();
+
+            assert!(response.status().is_success());
+            let body = axum::body::to_bytes(response.into_body(), 1024)
+                .await
+                .unwrap();
+            let body_str = String::from_utf8_lossy(&body);
+            assert!(
+                body_str.contains("saved"),
+                "Expected success response: {}",
+                body_str
+            );
+        }
+
+        #[tokio::test]
+        async fn test_save_settings_with_models() {
+            let state = create_test_state();
+            let app = create_app_for_testing(state);
+
+            let req = Request::builder()
+                .uri("/settings")
+                .method(http::Method::POST)
+                .header(
+                    http::header::CONTENT_TYPE,
+                    "application/x-www-form-urlencoded",
+                )
+                .body(Body::from("llm_backend=mock&llm_model=gpt-4o-mini&quantifier_model=gpt-4o-mini&api_key=test-key-123"))
+                .unwrap();
+            let response = app.oneshot(req).await.unwrap();
+
+            assert!(response.status().is_success());
+            let body = axum::body::to_bytes(response.into_body(), 1024)
+                .await
+                .unwrap();
+            let body_str = String::from_utf8_lossy(&body);
+            assert!(
+                body_str.contains("saved"),
+                "Expected success response: {}",
+                body_str
+            );
+        }
+
+        #[tokio::test]
+        async fn test_save_settings_empty_api_key() {
+            let state = create_test_state();
+            let app = create_app_for_testing(state);
+
+            // Empty api_key should result in success (api key cleared)
+            let req = Request::builder()
+                .uri("/settings")
+                .method(http::Method::POST)
+                .header(
+                    http::header::CONTENT_TYPE,
+                    "application/x-www-form-urlencoded",
+                )
+                .body(Body::from(
+                    "llm_backend=mock&llm_model=gpt-4o-mini&quantifier_model=gpt-4o-mini&api_key=",
+                ))
+                .unwrap();
+            let response = app.oneshot(req).await.unwrap();
+
+            assert!(response.status().is_success());
+            let body = axum::body::to_bytes(response.into_body(), 1024)
+                .await
+                .unwrap();
+            let body_str = String::from_utf8_lossy(&body);
+            assert!(
+                body_str.contains("saved"),
+                "Expected success response with empty api_key: {}",
+                body_str
+            );
+        }
     }
 }
 

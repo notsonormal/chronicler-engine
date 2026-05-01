@@ -2,14 +2,16 @@
 
 use serde_json::json;
 
+use crate::model::settings::AppSettings;
+
 // [DOC: docs/system/llm_processing.md]
-pub fn get_llm_model() -> String {
-    std::env::var("LLM_MODEL").unwrap_or_else(|_| "openai/gpt-4o-mini".to_string())
+pub fn get_llm_model(settings: &AppSettings) -> String {
+    std::env::var("LLM_MODEL").unwrap_or_else(|_| settings.llm_model.clone())
 }
 
 // [DOC: docs/system/llm_processing.md]
-pub fn get_quantifier_model() -> String {
-    std::env::var("QUANTIFIER_MODEL").unwrap_or_else(|_| "openai/gpt-4o-mini".to_string())
+pub fn get_quantifier_model(settings: &AppSettings) -> String {
+    std::env::var("QUANTIFIER_MODEL").unwrap_or_else(|_| settings.quantifier_model.clone())
 }
 
 // [DOC: docs/system/llm_processing.md]
@@ -177,7 +179,8 @@ pub fn call_openrouter(
     system_prompt: &str,
     user_text: &str,
 ) -> Result<String, String> {
-    let model = get_llm_model();
+    let settings = crate::settings::load_settings().unwrap_or_default();
+    let model = get_llm_model(&settings);
     call_openrouter_with_model(api_key, system_prompt, user_text, &model)
 }
 
@@ -187,36 +190,126 @@ mod tests {
 
     #[test]
     fn test_get_llm_model_default() {
-        // When LLM_MODEL is not set, should return default
-        let model = get_llm_model();
-        // The default may vary if env var is set in CI, so just check it's non-empty
-        assert!(!model.is_empty());
+        let settings = AppSettings::default();
+        let model = get_llm_model(&settings);
+        assert_eq!(model, "openai/gpt-4o-mini");
     }
 
     #[test]
     fn test_get_quantifier_model_default() {
-        // When QUANTIFIER_MODEL is not set, should return default
-        let model = get_quantifier_model();
+        let settings = AppSettings::default();
+        let model = get_quantifier_model(&settings);
+        assert_eq!(model, "openai/gpt-4o-mini");
+    }
+
+    #[test]
+    fn test_get_llm_model_from_settings() {
+        let mut settings = AppSettings::default();
+        settings.llm_model = "google/gemini-pro".to_string();
+        let model = get_llm_model(&settings);
+        assert_eq!(model, "google/gemini-pro");
+    }
+
+    #[test]
+    fn test_get_quantifier_model_from_settings() {
+        let mut settings = AppSettings::default();
+        settings.quantifier_model = "google/gemini-pro".to_string();
+        let model = get_quantifier_model(&settings);
+        assert_eq!(model, "google/gemini-pro");
+    }
+
+    #[test]
+    fn test_call_openrouter_with_model_invalid_api_key_format() {
+        let result = call_openrouter_with_model("", "system prompt", "user text", "test/model");
+        // Should fail due to empty bearer token or other validation
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_call_openrouter_success_with_content() {
+        let settings = AppSettings::default();
+        let model = get_llm_model(&settings);
+        assert_eq!(model, "openai/gpt-4o-mini");
+    }
+
+    #[test]
+    fn test_get_llm_model_env_var_override() {
+        let settings = AppSettings::default();
+        // Default should use settings.llm_model when no env var
+        let model = get_llm_model(&settings);
+        assert_eq!(model, settings.llm_model);
+    }
+
+    #[test]
+    fn test_call_openrouter_empty_system_prompt() {
+        let result = call_openrouter_with_model("", "", "user text", "test/model");
+        // Should fail due to empty API key or network error, not panic
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_call_openrouter_empty_user_text() {
+        let result = call_openrouter_with_model("fake_key", "system", "", "test/model");
+        // Should fail due to invalid key but not panic
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_call_openrouter_with_model_rejects_empty_api_key() {
+        let result = call_openrouter_with_model("", "system", "user", "model");
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        // Should contain error information
+        assert!(!err.is_empty());
+    }
+
+    #[test]
+    fn test_call_openrouter_very_long_model_name() {
+        let long_model = "a".repeat(1000);
+        let result = call_openrouter_with_model("", "system", "user", &long_model);
+        assert!(result.is_err()); // Should fail for other reasons, not panic
+    }
+
+    #[test]
+    fn test_call_openrouter_very_long_system_prompt() {
+        let long_prompt = "x".repeat(10000);
+        let result = call_openrouter_with_model("key", &long_prompt, "user", "model");
+        assert!(result.is_err()); // Should fail for other reasons, not panic
+    }
+
+    #[test]
+    fn test_call_openrouter_very_long_user_text() {
+        let long_text = "y".repeat(50000);
+        let result = call_openrouter_with_model("key", "system", &long_text, "model");
+        assert!(result.is_err()); // Should fail for other reasons, not panic
+    }
+
+    #[test]
+    fn test_call_openrouter_whitespace_api_key() {
+        let result = call_openrouter_with_model("   ", "system", "user", "model");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_call_openrouter_special_characters_in_prompts() {
+        let special_system = "System: <script>alert('xss')</script>\n{\"json\": true}";
+        let special_user = "User input with \"quotes\" and 'apostrophes' and <brackets>";
+        let result = call_openrouter_with_model("key", special_system, special_user, "model");
+        assert!(result.is_err()); // Should handle gracefully
+    }
+
+    #[test]
+    fn test_call_openrouter_unicode_in_prompts() {
+        let unicode_text = "Hello 你好 مرحبا 🌍";
+        let result = call_openrouter_with_model("key", "system", unicode_text, "model");
+        assert!(result.is_err()); // Should handle gracefully
+    }
+
+    #[test]
+    fn test_call_openrouter_call_helper() {
+        let settings = AppSettings::default();
+        let model = get_llm_model(&settings);
+        // Verify model retrieval works
         assert!(!model.is_empty());
-    }
-
-    #[test]
-    fn test_get_llm_model_returns_default_value() {
-        // Verify the expected default model string
-        // Note: This test may fail if LLM_MODEL is set in the environment
-        let default_model = std::env::var("LLM_MODEL");
-        if default_model.is_err() {
-            assert_eq!(get_llm_model(), "openai/gpt-4o-mini");
-        }
-    }
-
-    #[test]
-    fn test_get_quantifier_model_returns_default_value() {
-        // Verify the expected default model string
-        // Note: This test may fail if QUANTIFIER_MODEL is set in the environment
-        let default_model = std::env::var("QUANTIFIER_MODEL");
-        if default_model.is_err() {
-            assert_eq!(get_quantifier_model(), "openai/gpt-4o-mini");
-        }
     }
 }

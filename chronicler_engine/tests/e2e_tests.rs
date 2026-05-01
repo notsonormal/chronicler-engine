@@ -1,11 +1,4 @@
-//! End-to-End Tests - Browser-Based
-//!
-//! Merged from: spec_tests.rs, behavior_tests.rs, ui_tests.rs, layout_tests.rs
-//! Duplicates removed, pointless tests removed.
-//!
-//! Runtime: ~60 seconds
-//!
-//! Run with: cargo test --test e2e_tests
+//! [DOC: docs/reference/testing.md]
 
 mod test_utils;
 use test_utils::*;

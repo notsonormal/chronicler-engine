@@ -3,10 +3,16 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum EngineError {
     #[error("I/O error: {0}")]
-    Io(#[from] std::io::Error),
+    Io(String),
 
     #[error("Serialization error: {0}")]
     Serde(#[from] serde_json::Error),
+
+    #[error("Parse error: {0}")]
+    Parse(String),
+
+    #[error("Serialize error: {0}")]
+    Serialize(String),
 
     #[error("Navigation error: {0}")]
     Navigation(String),
@@ -43,6 +49,12 @@ pub enum EngineError {
 
     #[error("Context overflow: requested {requested} tokens exceeds max {max}")]
     ContextOverflow { requested: usize, max: usize },
+}
+
+impl From<std::io::Error> for EngineError {
+    fn from(e: std::io::Error) -> Self {
+        EngineError::Io(e.to_string())
+    }
 }
 
 pub type Result<T> = std::result::Result<T, EngineError>;

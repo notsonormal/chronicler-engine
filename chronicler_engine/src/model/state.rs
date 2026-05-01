@@ -200,7 +200,8 @@ impl GameState {
     }
 
     /// Get history context for retry, excluding the AI response being retried.
-    /// This prevents the LLM from repeating/paraphrasing the old response.
+    /// [DOC: docs/architecture/system.md]
+    /// NOTE: Excludes the AI response being retried to prevent the LLM from repeating it.
     pub fn get_history_context_for_retry(&self) -> Vec<LogEntry> {
         let last_ai_idx = self.get_last_ai_response_index();
         if let Some(idx) = last_ai_idx {
@@ -300,7 +301,7 @@ mod tests {
     }
 
     #[test]
-    fn test_generation_state_input_robustness() {
+    fn test_generation_state_input_edge_cases() {
         let mut tui = GenerationState::default();
 
         tui.push_char('A');

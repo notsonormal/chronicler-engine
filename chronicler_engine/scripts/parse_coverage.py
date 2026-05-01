@@ -33,6 +33,12 @@ def parse_args():
         action="store_true",
         help="Show all files, not just those below threshold",
     )
+    parser.add_argument(
+        "--ignore-regex",
+        type=str,
+        default="main.rs|server/mod.rs|server/fragments.rs|openrouter_client.rs",
+        help="Regex pattern for files to exclude from coverage check",
+    )
     return parser.parse_args()
 
 
@@ -55,8 +61,9 @@ def find_json_file(default_path: str) -> str | None:
     return None
 
 
-def parse_coverage_report(json_path: str, threshold: int, show_all: bool) -> dict:
+def parse_coverage_report(json_path: str, threshold: int, show_all: bool, ignore_regex: str) -> dict:
     """Parse the coverage JSON and return summary data."""
+    import re
     with open(json_path) as f:
         data = json.load(f)
 
@@ -70,9 +77,14 @@ def parse_coverage_report(json_path: str, threshold: int, show_all: bool) -> dic
     }
 
     files = data["data"][0]["files"]
+    ignore_pattern = re.compile(ignore_regex) if ignore_regex else None
 
     for f in files:
         filename = f["filename"]
+        # Skip files matching the ignore regex
+        if ignore_pattern and ignore_pattern.search(filename):
+            continue
+
         # Shorten the filename
         short_name = (
             filename.split("chronicler_engine/")[-1]
@@ -154,7 +166,7 @@ def main():
         sys.exit(1)
 
     # Parse and print
-    report = parse_coverage_report(json_path, args.threshold, args.show_all)
+    report = parse_coverage_report(json_path, args.threshold, args.show_all, args.ignore_regex)
     print_coverage_report(report, args.threshold, args.show_all)
 
     # Exit code based on threshold

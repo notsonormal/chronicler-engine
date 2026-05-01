@@ -1,6 +1,4 @@
-//! Logic Module Unit Tests
-//!
-//! Tests for navigation and room functions in logic.rs
+//! [DOC: docs/reference/testing.md]
 
 mod test_data;
 

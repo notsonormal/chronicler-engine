@@ -1,13 +1,4 @@
-//! Game Flow Tests - Real LLM Version
-//!
-//! End-to-end tests verifying the game loop with real LLM API calls.
-//!
-//! Tests here focus on LLM-specific functionality:
-//! - LLM generates actual narrative responses
-//! - Different action types produce different LLM outputs
-//! - Full end-to-end flow with real AI responses
-//!
-//! Reference: docs/system/game_flow.md
+//! [DOC: docs/reference/testing.md]
 
 mod test_utils;
 use test_utils::*;

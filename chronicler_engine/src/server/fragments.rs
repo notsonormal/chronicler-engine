@@ -5,7 +5,7 @@ use axum::{
     http::{HeaderMap, StatusCode},
     response::{Html, Response},
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::engine::logic::{get_available_exits, get_current_room};
 use crate::engine::parser::parse_command;
@@ -278,7 +278,7 @@ fn render_action_hints(state: &AppState) -> Result<String> {
     Ok(available_actions)
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct ActionForm {
     command: String,
 }
@@ -398,7 +398,193 @@ fn html_escape(s: &str) -> String {
         .replace('"', "&quot;")
 }
 
-#[derive(serde::Deserialize)]
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_html_escape_basic() {
+        assert_eq!(html_escape("<test>"), "&lt;test&gt;");
+    }
+
+    #[test]
+    fn test_html_escape_ampersand() {
+        assert_eq!(html_escape("foo & bar"), "foo &amp; bar");
+    }
+
+    #[test]
+    fn test_html_escape_quotes() {
+        assert_eq!(html_escape("\"quoted\""), "&quot;quoted&quot;");
+    }
+
+    #[test]
+    fn test_html_escape_all() {
+        assert_eq!(
+            html_escape("<foo & \"bar\">"),
+            "&lt;foo &amp; &quot;bar&quot;&gt;"
+        );
+    }
+
+    #[test]
+    fn test_html_escape_empty() {
+        assert_eq!(html_escape(""), "");
+    }
+
+    #[test]
+    fn test_render_error_basic() {
+        let result = render_error("Test error message");
+        assert!(result.contains("error-message"));
+        assert!(result.contains("Test error message"));
+    }
+
+    #[test]
+    fn test_render_error_html_escaped() {
+        let result = render_error("<script>alert('xss')</script>");
+        assert!(!result.contains("<script>"));
+        assert!(result.contains("&lt;script&gt;"));
+    }
+
+    #[test]
+    fn test_action_form_deserialization() {
+        let form: ActionForm = serde_json::from_str(r#"{"command": "look"}"#).unwrap();
+        assert_eq!(form.command, "look");
+    }
+
+    #[test]
+    fn test_action_form_empty_command() {
+        let form: ActionForm = serde_json::from_str(r#"{"command": ""}"#).unwrap();
+        assert!(form.command.is_empty());
+    }
+
+    #[test]
+    fn test_edit_history_form_deserialization() {
+        let form: EditHistoryForm = serde_json::from_str(r#"{"text": "Modified text"}"#).unwrap();
+        assert_eq!(form.text, "Modified text");
+    }
+
+    #[test]
+    fn test_render_error_empty_message() {
+        let result = render_error("");
+        assert!(result.contains("error-message"));
+        assert!(result.contains("Error:"));
+    }
+
+    #[test]
+    fn test_html_escape_newline() {
+        // [DOC: docs/reference/testing.md]
+        // Newlines should be preserved (not converted to &lt;br&gt;)
+        assert_eq!(html_escape("line1\nline2"), "line1\nline2");
+    }
+
+    #[test]
+    fn test_html_escape_backtick() {
+        // [DOC: docs/reference/testing.md]
+        // Backticks should be preserved
+        assert_eq!(html_escape("`code`"), "`code`");
+    }
+
+    #[test]
+    fn test_html_escape_unicode_characters() {
+        // [DOC: docs/reference/testing.md]
+        // Unicode should be preserved
+        assert_eq!(html_escape("日本語"), "日本語");
+    }
+
+    #[test]
+    fn test_html_escape_multiple_special_chars() {
+        assert_eq!(
+            html_escape("<div class=\"test\">Hello & \"World\"</div>"),
+            "&lt;div class=&quot;test&quot;&gt;Hello &amp; &quot;World&quot;&lt;/div&gt;"
+        );
+    }
+
+    #[test]
+    fn test_html_escape_repeated_escaping() {
+        // [DOC: docs/reference/testing.md]
+        // html_escape is NOT idempotent - running it twice double-encodes
+        let escaped = html_escape("<&>");
+        assert_eq!(escaped, "&lt;&amp;&gt;");
+        assert_eq!(html_escape(&escaped), "&amp;lt;&amp;amp;&amp;gt;");
+    }
+
+    #[test]
+    fn test_action_form_with_whitespace_command() {
+        let form: ActionForm = serde_json::from_str(r#"{"command": "  look  "}"#).unwrap();
+        assert_eq!(form.command, "  look  ");
+    }
+
+    #[test]
+    fn test_action_form_with_special_characters() {
+        let form: ActionForm =
+            serde_json::from_str(r#"{"command": "go north & talk to guard"}"#).unwrap();
+        assert_eq!(form.command, "go north & talk to guard");
+    }
+
+    #[test]
+    fn test_edit_history_form_empty_text() {
+        let form: EditHistoryForm = serde_json::from_str(r#"{"text": ""}"#).unwrap();
+        assert!(form.text.is_empty());
+    }
+
+    #[test]
+    fn test_edit_history_form_with_newlines() {
+        let form: EditHistoryForm =
+            serde_json::from_str(r#"{"text": "Line1\nLine2\nLine3"}"#).unwrap();
+        assert!(form.text.contains('\n'));
+    }
+
+    #[test]
+    fn test_action_form_deserialize_unicode() {
+        let form: ActionForm = serde_json::from_str(r#"{"command": "こんにちは"}"#).unwrap();
+        assert_eq!(form.command, "こんにちは");
+    }
+
+    #[test]
+    fn test_render_error_long_message() {
+        let long_msg = "x".repeat(10000).to_string();
+        let result = render_error(&long_msg);
+        assert!(result.len() > 10000);
+        assert!(result.contains(&long_msg[..100]));
+    }
+
+    #[test]
+    fn test_html_escape_only_ampersand() {
+        assert_eq!(html_escape("&"), "&amp;");
+    }
+
+    #[test]
+    fn test_html_escape_only_lt() {
+        assert_eq!(html_escape("<"), "&lt;");
+    }
+
+    #[test]
+    fn test_html_escape_only_gt() {
+        assert_eq!(html_escape(">"), "&gt;");
+    }
+
+    #[test]
+    fn test_action_form_roundtrip() {
+        let original = ActionForm {
+            command: "test command".to_string(),
+        };
+        let json = serde_json::to_string(&original).unwrap();
+        let parsed: ActionForm = serde_json::from_str(&json).unwrap();
+        assert_eq!(original.command, parsed.command);
+    }
+
+    #[test]
+    fn test_edit_history_form_roundtrip() {
+        let original = EditHistoryForm {
+            text: "new text".to_string(),
+        };
+        let json = serde_json::to_string(&original).unwrap();
+        let parsed: EditHistoryForm = serde_json::from_str(&json).unwrap();
+        assert_eq!(original.text, parsed.text);
+    }
+
+}
+
+#[derive(serde::Deserialize, serde::Serialize)]
 pub struct EditHistoryForm {
     text: String,
 }

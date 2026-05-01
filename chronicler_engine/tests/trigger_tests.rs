@@ -1,18 +1,4 @@
-//! Trigger System Tests - Mock LLM Version
-//!
-//! Integration tests verifying the reactive auto-trigger system:
-//! - First encounter trigger fires (times_met == 0 → second narration)
-//! - Second encounter does NOT re-fire (times_met == 1 → no second narration)
-//! - Non-repeatable trigger fires once, then never again
-//! - Multiple NPCs with triggers fire sequentially
-//! - LLM failure on second call — first narration still displays
-//! - Empty trigger narration (LLM returns whitespace) — skipped but counter incremented
-//! - No regression — FreeAction without movement works as before
-//! - No regression — FreeAction with movement but no triggers works as before
-//!
-//! The test world uses:
-//! - shopkeeper: Has trigger with TimesMet Eq 0 (non-repeatable)
-//! - bartender: NO triggers (control case for no-trigger behavior)
+//! [DOC: docs/reference/testing.md]
 
 mod test_utils;
 use test_utils::*;

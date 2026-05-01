@@ -1,5 +1,8 @@
+use serde::{Deserialize, Serialize};
+
 use crate::error::EngineError;
 use crate::model::character::NpcCard;
+use crate::model::settings::AppSettings;
 use crate::narrative::openrouter_client::call_openrouter;
 use crate::narrative::prompt::{PromptBuilder, PromptContext};
 
@@ -31,7 +34,7 @@ pub trait LlmBackend: Send + Sync {
 }
 
 // [DOC: docs/system/llm_processing.md]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LlmBackendType {
     OpenRouter,
     DeepSeek,
@@ -48,8 +51,61 @@ impl LlmBackendType {
     }
 }
 
+use std::sync::atomic::{AtomicU8, Ordering};
+
+static TEST_BACKEND_OVERRIDE: AtomicU8 = AtomicU8::new(0); // 0=none, 1=mock, 2=deepseek, 3=openrouter
+
+/// Set a test backend override. Tests should use `with_test_backend` for RAII cleanup.
+pub fn set_test_backend(backend: LlmBackendType) {
+    let val = match backend {
+        LlmBackendType::Mock => 1,
+        LlmBackendType::DeepSeek => 2,
+        LlmBackendType::OpenRouter => 3,
+    };
+    TEST_BACKEND_OVERRIDE.store(val, Ordering::SeqCst);
+}
+
+/// Clear the test backend override.
+pub fn clear_test_backend() {
+    TEST_BACKEND_OVERRIDE.store(0, Ordering::SeqCst);
+}
+
+/// RAII guard that automatically clears the test backend override on drop.
+pub struct TestBackendGuard;
+
+impl Drop for TestBackendGuard {
+    fn drop(&mut self) {
+        clear_test_backend();
+    }
+}
+
+/// Set a test backend override and return an RAII guard that clears it on drop.
+pub fn with_test_backend(backend: LlmBackendType) -> TestBackendGuard {
+    set_test_backend(backend);
+    TestBackendGuard
+}
+
 pub fn get_llm_backend() -> Box<dyn LlmBackend> {
-    match LlmBackendType::from_env() {
+    let override_val = TEST_BACKEND_OVERRIDE.load(Ordering::SeqCst);
+    if override_val != 0 {
+        let backend_type = match override_val {
+            1 => LlmBackendType::Mock,
+            2 => LlmBackendType::DeepSeek,
+            _ => LlmBackendType::OpenRouter,
+        };
+        return get_llm_backend_with_settings(&AppSettings {
+            llm_backend: backend_type,
+            ..AppSettings::default()
+        });
+    }
+
+    // Load settings and use the backend from settings
+    let settings = crate::settings::load_settings().unwrap_or_else(|_| AppSettings::default());
+    get_llm_backend_with_settings(&settings)
+}
+
+pub fn get_llm_backend_with_settings(settings: &AppSettings) -> Box<dyn LlmBackend> {
+    match settings.llm_backend {
         LlmBackendType::Mock => Box::new(MockBackend),
         LlmBackendType::DeepSeek => Box::new(DeepSeekBackend),
         LlmBackendType::OpenRouter => Box::new(OpenRouterBackend),
@@ -664,40 +720,646 @@ mod tests {
     }
 
     #[test]
-    fn test_llm_backend_type_from_env_mock() {
-        // Set env var to mock
-        // SAFETY: This test modifies env vars but is isolated to this test.
-        // We restore the original value after the test.
-        unsafe {
-            std::env::set_var("LLM_BACKEND", "mock");
-        }
-        let backend_type = LlmBackendType::from_env();
-        assert_eq!(backend_type, LlmBackendType::Mock);
-        unsafe {
-            std::env::remove_var("LLM_BACKEND");
-        }
+    fn test_get_llm_backend_with_settings_all_types() {
+        let mut settings = AppSettings::default();
+
+        settings.llm_backend = LlmBackendType::OpenRouter;
+        assert_eq!(get_llm_backend_with_settings(&settings).name(), "OpenRouter");
+
+        settings.llm_backend = LlmBackendType::Mock;
+        assert_eq!(get_llm_backend_with_settings(&settings).name(), "Mock");
+
+        settings.llm_backend = LlmBackendType::DeepSeek;
+        assert_eq!(get_llm_backend_with_settings(&settings).name(), "DeepSeek");
     }
 
     #[test]
-    fn test_llm_backend_type_from_env_deepseek() {
-        // Set env var to deepseek
-        unsafe {
-            std::env::set_var("LLM_BACKEND", "deepseek");
-        }
-        let backend_type = LlmBackendType::from_env();
-        assert_eq!(backend_type, LlmBackendType::DeepSeek);
-        unsafe {
-            std::env::remove_var("LLM_BACKEND");
-        }
+    fn test_llm_backend_type_from_env_default() {
+        assert_eq!(LlmBackendType::from_env(), LlmBackendType::OpenRouter);
     }
 
     #[test]
-    fn test_llm_backend_type_default() {
-        // Ensure env var is not set
-        unsafe {
-            std::env::remove_var("LLM_BACKEND");
-        }
-        let backend_type = LlmBackendType::from_env();
-        assert_eq!(backend_type, LlmBackendType::OpenRouter);
+    fn test_mock_narrate_continuation() {
+        let backend = MockBackend;
+        let result = backend.narrate_continuation("system", "user", "trigger_info");
+        assert!(result.is_ok());
+        assert!(result.unwrap().contains("trigger_info"));
+    }
+
+    #[test]
+    fn test_mock_narrate_action_from_prompt() {
+        let backend = MockBackend;
+        let result = backend.narrate_action_from_prompt("system prompt", "user action");
+        assert!(result.is_ok());
+        let response = result.unwrap();
+        assert!(response.contains("action") || response.contains("Continuation"));
+    }
+
+    #[test]
+    fn test_deepseek_narrate_continuation() {
+        let backend = DeepSeekBackend;
+        let result = backend.narrate_continuation("system", "user", "trigger");
+        assert!(result.is_ok());
+        assert!(result.unwrap().contains("DeepSeek"));
+    }
+
+    #[test]
+    fn test_deepseek_narrate_action_from_prompt() {
+        let backend = DeepSeekBackend;
+        let result = backend.narrate_action_from_prompt("system", "user");
+        assert!(result.is_ok());
+        assert!(result.unwrap().contains("DeepSeek"));
+    }
+
+    #[test]
+    fn test_deepseek_error_message_descriptive() {
+        let backend = DeepSeekBackend;
+        let result = backend.narrate_action(&make_test_context("test"));
+        assert!(result.unwrap().contains("DeepSeek"));
+    }
+
+    #[test]
+    fn test_mock_narrate_continuation_empty_trigger() {
+        let backend = MockBackend;
+        let result = backend.narrate_continuation("system", "user", "");
+        assert!(result.is_ok());
+        assert!(result.unwrap().contains("[Trigger: ]"));
+    }
+
+    #[test]
+    fn test_mock_narrate_continuation_special_chars() {
+        let backend = MockBackend;
+        let result = backend.narrate_continuation("sys", "user", "trigger with <special> & chars");
+        assert!(result.is_ok());
+        assert!(result.unwrap().contains("trigger with"));
+    }
+
+    #[test]
+    fn test_mock_narrate_action_from_prompt_multiline() {
+        let backend = MockBackend;
+        let result = backend.narrate_action_from_prompt(
+            "system prompt\nwith multiple lines",
+            "user prompt\nalso multiline",
+        );
+        assert!(result.is_ok());
+        assert!(result.unwrap().contains("user prompt"));
+    }
+
+    #[test]
+    fn test_mock_narrate_action_from_prompt_empty() {
+        let backend = MockBackend;
+        let result = backend.narrate_action_from_prompt("", "");
+        assert!(result.is_ok());
+        assert!(result.unwrap().contains("..."));
+    }
+
+    #[test]
+    fn test_mock_generate_dialogue_very_long_message() {
+        let backend = MockBackend;
+        let long_message = "This is a very long user message that goes on and on and on to test how the mock backend handles lengthy inputs without any issues whatsoever because it should just echo back whatever it receives.";
+        let npc = NpcCard {
+            id: "npc1".to_string(),
+            sheet: CharacterSheet {
+                name: "LongNameNPC".to_string(),
+                description: "A very long description that describes this NPC in great detail"
+                    .to_string(),
+                personality: "Some personality traits that are described here".to_string(),
+                scenario: "A scenario description that is also quite lengthy".to_string(),
+                example_dialogue: "Example dialogue text".to_string(),
+                profile_image: None,
+                headshot_image: None,
+            },
+            inventory: vec![],
+            triggers: vec![],
+        };
+        let result =
+            backend.generate_dialogue(&make_test_context_with_npc(&npc, long_message), &npc);
+        assert!(result.is_ok());
+        assert!(result.unwrap().contains(long_message));
+    }
+
+    #[test]
+    fn test_mock_narrate_action_special_characters() {
+        let backend = MockBackend;
+        let special_msg = "Player says: \"Hello <world> & goodbye!\"";
+        let result = backend.narrate_action(&make_test_context(special_msg));
+        assert!(result.is_ok());
+        assert!(result.unwrap().contains(special_msg));
+    }
+
+    #[test]
+    fn test_mock_narrate_arrival_different_rooms() {
+        let backend = MockBackend;
+
+        let mut room1 = make_test_room();
+        room1.name = "Tavern".to_string();
+        let world = make_test_world();
+        let player = make_test_player();
+        let context1 = PromptContext {
+            world: Box::leak(Box::new(world.clone())),
+            room: Box::leak(Box::new(room1.clone())),
+            all_npcs: Box::leak(Box::new(vec![])),
+            npcs_in_area: &[],
+            player: Box::leak(Box::new(player.clone())),
+            user_message: Box::leak(Box::new("".to_string())),
+            history: &[],
+        };
+        let result1 = backend.narrate_arrival(&context1);
+        assert!(result1.is_ok());
+        assert!(result1.unwrap().contains("Tavern"));
+
+        let mut room2 = make_test_room();
+        room2.name = "Dungeon".to_string();
+        let context2 = PromptContext {
+            world: Box::leak(Box::new(world)),
+            room: Box::leak(Box::new(room2)),
+            all_npcs: Box::leak(Box::new(vec![])),
+            npcs_in_area: &[],
+            player: Box::leak(Box::new(player)),
+            user_message: Box::leak(Box::new("".to_string())),
+            history: &[],
+        };
+        let result2 = backend.narrate_arrival(&context2);
+        assert!(result2.is_ok());
+        assert!(result2.unwrap().contains("Dungeon"));
+    }
+
+    #[test]
+    fn test_deepseek_all_methods_return_not_implemented() {
+        let backend = DeepSeekBackend;
+        let npc = NpcCard {
+            id: "npc1".to_string(),
+            sheet: CharacterSheet {
+                name: "Test".to_string(),
+                description: "Test".to_string(),
+                personality: "Test".to_string(),
+                scenario: "Test".to_string(),
+                example_dialogue: "".to_string(),
+                profile_image: None,
+                headshot_image: None,
+            },
+            inventory: vec![],
+            triggers: vec![],
+        };
+
+        let dialogue_result =
+            backend.generate_dialogue(&make_test_context_with_npc(&npc, "test"), &npc);
+        assert!(dialogue_result.unwrap().contains("not yet implemented"));
+
+        let action_result = backend.narrate_action(&make_test_context("test"));
+        assert!(action_result.unwrap().contains("not yet implemented"));
+
+        let arrival_result = backend.narrate_arrival(&make_test_context("test"));
+        assert!(arrival_result.unwrap().contains("not yet implemented"));
+
+        let continuation_result = backend.narrate_continuation("sys", "user", "trigger");
+        assert!(continuation_result.unwrap().contains("not yet implemented"));
+
+        let prompt_result = backend.narrate_action_from_prompt("sys", "user");
+        assert!(prompt_result.unwrap().contains("not yet implemented"));
+    }
+
+    #[test]
+    fn test_context_with_different_player_names() {
+        let backend = MockBackend;
+
+        let player1 = make_test_player();
+        let mut room1 = make_test_room();
+        room1.name = "Tavern".to_string();
+        let world = make_test_world();
+
+        let context1 = PromptContext {
+            world: Box::leak(Box::new(world.clone())),
+            room: Box::leak(Box::new(room1.clone())),
+            all_npcs: Box::leak(Box::new(vec![])),
+            npcs_in_area: &[],
+            player: Box::leak(Box::new(player1)),
+            user_message: Box::leak(Box::new("test".to_string())),
+            history: &[],
+        };
+        let result1 = backend.narrate_arrival(&context1);
+        assert!(result1.is_ok());
+        // Mock arrival includes room name
+        assert!(result1.unwrap().contains("Tavern"));
+
+        let mut room2 = make_test_room();
+        room2.name = "Dungeon".to_string();
+        let player2 = make_test_player();
+        let context2 = PromptContext {
+            world: Box::leak(Box::new(world)),
+            room: Box::leak(Box::new(room2)),
+            all_npcs: Box::leak(Box::new(vec![])),
+            npcs_in_area: &[],
+            player: Box::leak(Box::new(player2)),
+            user_message: Box::leak(Box::new("test".to_string())),
+            history: &[],
+        };
+        let result2 = backend.narrate_arrival(&context2);
+        assert!(result2.is_ok());
+        assert!(result2.unwrap().contains("Dungeon"));
+    }
+
+    #[test]
+    fn test_mock_dialogue_with_unicode() {
+        let backend = MockBackend;
+        let npc = NpcCard {
+            id: "npc1".to_string(),
+            sheet: CharacterSheet {
+                name: "日本語NPC".to_string(),
+                description: "A Japanese NPC".to_string(),
+                personality: "Friendly".to_string(),
+                scenario: "Test".to_string(),
+                example_dialogue: "".to_string(),
+                profile_image: None,
+                headshot_image: None,
+            },
+            inventory: vec![],
+            triggers: vec![],
+        };
+        let result =
+            backend.generate_dialogue(&make_test_context_with_npc(&npc, "こんにちは"), &npc);
+        assert!(result.is_ok());
+        assert!(result.unwrap().contains("こんにちは"));
+    }
+
+    #[test]
+    fn test_mock_narrate_action_unicode() {
+        let backend = MockBackend;
+        let result = backend.narrate_action(&make_test_context("アクション"));
+        assert!(result.is_ok());
+        assert!(result.unwrap().contains("アクション"));
+    }
+
+    #[test]
+    fn test_mock_narrate_continuation_unicode_trigger() {
+        let backend = MockBackend;
+        let result = backend.narrate_continuation("system", "user", "トリガー");
+        assert!(result.is_ok());
+        assert!(result.unwrap().contains("トリガー"));
+    }
+
+    #[test]
+    fn test_context_with_empty_world_description() {
+        let backend = MockBackend;
+        let world = WorldCard {
+            name: "Empty World".to_string(),
+            description: "".to_string(),
+            global_rules: vec![],
+            ..Default::default()
+        };
+        let room = make_test_room();
+        let player = make_test_player();
+
+        let context = PromptContext {
+            world: Box::leak(Box::new(world)),
+            room: Box::leak(Box::new(room)),
+            all_npcs: Box::leak(Box::new(vec![])),
+            npcs_in_area: &[],
+            player: Box::leak(Box::new(player)),
+            user_message: Box::leak(Box::new("test".to_string())),
+            history: &[],
+        };
+
+        let result = backend.narrate_action(&context);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_context_with_many_global_rules() {
+        let backend = MockBackend;
+        let world = WorldCard {
+            name: "Rules World".to_string(),
+            description: "A world with many rules".to_string(),
+            global_rules: vec![
+                "Rule 1".to_string(),
+                "Rule 2".to_string(),
+                "Rule 3".to_string(),
+                "Rule 4".to_string(),
+                "Rule 5".to_string(),
+            ],
+            ..Default::default()
+        };
+        let room = make_test_room();
+        let player = make_test_player();
+
+        let context = PromptContext {
+            world: Box::leak(Box::new(world)),
+            room: Box::leak(Box::new(room)),
+            all_npcs: Box::leak(Box::new(vec![])),
+            npcs_in_area: &[],
+            player: Box::leak(Box::new(player)),
+            user_message: Box::leak(Box::new("test".to_string())),
+            history: &[],
+        };
+
+        let result = backend.narrate_action(&context);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_mock_narrate_action_from_prompt_very_long_input() {
+        let backend = MockBackend;
+        let long_system = "You are a game master. ".repeat(50);
+        let long_user = "The player performs an action. ".repeat(50);
+        let result = backend.narrate_action_from_prompt(&long_system, &long_user);
+        assert!(result.is_ok());
+        // Should still contain first line
+        assert!(result.unwrap().contains("The player performs"));
+    }
+
+    #[test]
+    fn test_npc_with_no_triggers() {
+        let backend = MockBackend;
+        let npc = NpcCard {
+            id: "npc1".to_string(),
+            sheet: CharacterSheet {
+                name: "Plain NPC".to_string(),
+                description: "A plain NPC with no triggers".to_string(),
+                personality: "Neutral".to_string(),
+                scenario: "Standing around".to_string(),
+                example_dialogue: "".to_string(),
+                profile_image: None,
+                headshot_image: None,
+            },
+            inventory: vec![],
+            triggers: vec![],
+        };
+        let result = backend.generate_dialogue(&make_test_context_with_npc(&npc, "Hello"), &npc);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_npc_with_multiple_triggers() {
+        use crate::model::trigger::{ComparisonOperator, Trigger, TriggerAction, TriggerCondition};
+        let backend = MockBackend;
+        let npc = NpcCard {
+            id: "npc1".to_string(),
+            sheet: CharacterSheet {
+                name: "Trigger NPC".to_string(),
+                description: "An NPC with multiple triggers".to_string(),
+                personality: "Variable".to_string(),
+                scenario: "Complex".to_string(),
+                example_dialogue: "".to_string(),
+                profile_image: None,
+                headshot_image: None,
+            },
+            inventory: vec![],
+            triggers: vec![
+                Trigger {
+                    condition: TriggerCondition::TimesMet(ComparisonOperator::Eq, 1),
+                    action: TriggerAction {
+                        narration_prompt: "trigger1".to_string(),
+                    },
+                    repeat: false,
+                },
+                Trigger {
+                    condition: TriggerCondition::TimesMet(ComparisonOperator::Gte, 2),
+                    action: TriggerAction {
+                        narration_prompt: "trigger2".to_string(),
+                    },
+                    repeat: true,
+                },
+            ],
+        };
+        let result = backend.generate_dialogue(&make_test_context_with_npc(&npc, "Test"), &npc);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_player_with_empty_inventory() {
+        let backend = MockBackend;
+        let player = PlayerCard {
+            sheet: CharacterSheet {
+                name: "Hero".to_string(),
+                description: "A hero with no items".to_string(),
+                personality: "Brave".to_string(),
+                scenario: "Quest".to_string(),
+                example_dialogue: "".to_string(),
+                profile_image: None,
+                headshot_image: None,
+            },
+            inventory: vec![],
+        };
+        let world = make_test_world();
+        let room = make_test_room();
+
+        let context = PromptContext {
+            world: Box::leak(Box::new(world)),
+            room: Box::leak(Box::new(room)),
+            all_npcs: Box::leak(Box::new(vec![])),
+            npcs_in_area: &[],
+            player: Box::leak(Box::new(player)),
+            user_message: Box::leak(Box::new("test".to_string())),
+            history: &[],
+        };
+
+        let result = backend.narrate_action(&context);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_player_with_items_in_inventory() {
+        let backend = MockBackend;
+        let player = PlayerCard {
+            sheet: CharacterSheet {
+                name: "Equipped Hero".to_string(),
+                description: "A hero with items".to_string(),
+                personality: "Prepared".to_string(),
+                scenario: "Quest".to_string(),
+                example_dialogue: "".to_string(),
+                profile_image: None,
+                headshot_image: None,
+            },
+            inventory: vec![
+                "Sword".to_string(),
+                "Shield".to_string(),
+                "Potion".to_string(),
+            ],
+        };
+        let world = make_test_world();
+        let room = make_test_room();
+
+        let context = PromptContext {
+            world: Box::leak(Box::new(world)),
+            room: Box::leak(Box::new(room)),
+            all_npcs: Box::leak(Box::new(vec![])),
+            npcs_in_area: &[],
+            player: Box::leak(Box::new(player)),
+            user_message: Box::leak(Box::new("test".to_string())),
+            history: &[],
+        };
+
+        let result = backend.narrate_action(&context);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_room_with_items() {
+        let backend = MockBackend;
+        let room = Room {
+            id: "room_with_items".to_string(),
+            name: "Storage Room".to_string(),
+            description: "A room full of items".to_string(),
+            exits: HashMap::new(),
+            items: vec![
+                "Chest".to_string(),
+                "Barrel".to_string(),
+                "Table".to_string(),
+            ],
+            npcs: vec![],
+            image_path: None,
+            navigation_description: None,
+        };
+        let world = make_test_world();
+        let player = make_test_player();
+
+        let context = PromptContext {
+            world: Box::leak(Box::new(world)),
+            room: Box::leak(Box::new(room)),
+            all_npcs: Box::leak(Box::new(vec![])),
+            npcs_in_area: &[],
+            player: Box::leak(Box::new(player)),
+            user_message: Box::leak(Box::new("look".to_string())),
+            history: &[],
+        };
+
+        let result = backend.narrate_action(&context);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_room_with_exits() {
+        use crate::model::map::Direction;
+        let backend = MockBackend;
+        let mut exits = HashMap::new();
+        exits.insert(Direction::North, "hallway".to_string());
+        exits.insert(Direction::East, "kitchen".to_string());
+        exits.insert(Direction::South, "garden".to_string());
+
+        let room = Room {
+            id: "room_with_exits".to_string(),
+            name: "Central Room".to_string(),
+            description: "A central room with many exits".to_string(),
+            exits,
+            items: vec![],
+            npcs: vec![],
+            image_path: None,
+            navigation_description: None,
+        };
+        let world = make_test_world();
+        let player = make_test_player();
+
+        let context = PromptContext {
+            world: Box::leak(Box::new(world)),
+            room: Box::leak(Box::new(room)),
+            all_npcs: Box::leak(Box::new(vec![])),
+            npcs_in_area: &[],
+            player: Box::leak(Box::new(player)),
+            user_message: Box::leak(Box::new("exits".to_string())),
+            history: &[],
+        };
+
+        let result = backend.narrate_action(&context);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_world_with_default_room_image() {
+        let backend = MockBackend;
+        let world = WorldCard {
+            name: "World with Image".to_string(),
+            description: "A world with default room image".to_string(),
+            global_rules: vec!["Rule".to_string()],
+            default_room_image: Some("default_room.png".to_string()),
+        };
+        let room = make_test_room();
+        let player = make_test_player();
+
+        let context = PromptContext {
+            world: Box::leak(Box::new(world)),
+            room: Box::leak(Box::new(room)),
+            all_npcs: Box::leak(Box::new(vec![])),
+            npcs_in_area: &[],
+            player: Box::leak(Box::new(player)),
+            user_message: Box::leak(Box::new("test".to_string())),
+            history: &[],
+        };
+
+        let result = backend.narrate_action(&context);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_npc_with_inventory() {
+        let backend = MockBackend;
+        let npc = NpcCard {
+            id: "npc_with_items".to_string(),
+            sheet: CharacterSheet {
+                name: "Merchant".to_string(),
+                description: "A merchant with items".to_string(),
+                personality: "Greedy".to_string(),
+                scenario: "Trading".to_string(),
+                example_dialogue: "".to_string(),
+                profile_image: None,
+                headshot_image: None,
+            },
+            inventory: vec!["Gold".to_string(), "Gem".to_string(), "Map".to_string()],
+            triggers: vec![],
+        };
+        let result =
+            backend.generate_dialogue(&make_test_context_with_npc(&npc, "What do you sell?"), &npc);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_context_with_npcs_in_area() {
+        let backend = MockBackend;
+        let npc1 = NpcCard {
+            id: "npc1".to_string(),
+            sheet: CharacterSheet {
+                name: "Guard1".to_string(),
+                description: "First guard".to_string(),
+                personality: "Alert".to_string(),
+                scenario: "Watching".to_string(),
+                example_dialogue: "".to_string(),
+                profile_image: None,
+                headshot_image: None,
+            },
+            inventory: vec![],
+            triggers: vec![],
+        };
+        let npc2 = NpcCard {
+            id: "npc2".to_string(),
+            sheet: CharacterSheet {
+                name: "Guard2".to_string(),
+                description: "Second guard".to_string(),
+                personality: "Alert".to_string(),
+                scenario: "Watching".to_string(),
+                example_dialogue: "".to_string(),
+                profile_image: None,
+                headshot_image: None,
+            },
+            inventory: vec![],
+            triggers: vec![],
+        };
+
+        let world = make_test_world();
+        let room = make_test_room();
+        let player = make_test_player();
+        let all_npcs = vec![npc1.clone(), npc2.clone()];
+        let npcs_in_area = vec![npc1.clone()];
+
+        let context = PromptContext {
+            world: Box::leak(Box::new(world)),
+            room: Box::leak(Box::new(room)),
+            all_npcs: Box::leak(Box::new(all_npcs)),
+            npcs_in_area: Box::leak(Box::new(npcs_in_area)),
+            player: Box::leak(Box::new(player)),
+            user_message: Box::leak(Box::new("look".to_string())),
+            history: &[],
+        };
+
+        let result = backend.narrate_action(&context);
+        assert!(result.is_ok());
     }
 }

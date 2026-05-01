@@ -23,9 +23,24 @@ The engine will provide multiple implementations of this trait:
 - `DeepSeekBackend`: Placeholder for future implementation.
 
 ### Backend Selection
-The LLM backend can be selected in two ways:
+The LLM backend can be selected in three ways:
 
-1. **Config File** (`tests/test_config.json`): Priority method
+1. **Test Override** (Recommended for unit tests): Atomic override with RAII guard
+   ```rust
+   use chronicler_engine::narrative::llm::{with_test_backend, LlmBackendType};
+
+   #[test]
+   fn test_with_mock_llm() {
+       let _guard = with_test_backend(LlmBackendType::Mock);
+       // Test code here uses MockBackend regardless of settings file
+   } // override automatically cleared on drop
+   ```
+   - Thread-safe (atomic operations)
+   - No file I/O required
+   - Auto-cleanup via RAII guard prevents cross-test pollution
+   - Works in both unit tests and integration tests
+
+2. **Config File** (`tests/test_config.json`): For integration tests
    ```json
    {
      "port_range": {"min": 3010, "max": 3030},
@@ -35,11 +50,11 @@ The LLM backend can be selected in two ways:
      }
    }
    ```
-2. **Environment Variable**: Fallback for backward compatibility
+3. **Environment Variable**: Fallback for backward compatibility
    - `LLM_BACKEND=mock` - Uses MockBackend for fast, no-network tests
    - `LLM_BACKEND=real` (or unset) - Uses OpenRouterBackend for real LLM responses
 
-The `get_llm_backend()` function in `src/narrative/llm.rs` reads the environment variable for backward compatibility.
+The `get_llm_backend()` function checks the test override first, then falls back to settings file or environment variable.
 
 ## UI Tests
 
@@ -74,16 +89,17 @@ cargo test -- --test-threads=1
 |----------|---------|---------------|---------|
 | `flow_mock_tests.rs` | Core game loop, polling | Browser + Mock LLM | Fast |
 | `flow_llm_tests.rs` | LLM narrative | Browser + Real LLM | Slow |
-| `component_tests.rs` | Templates, endpoints | In-process | Very Fast |
+| `component_tests.rs` | Templates, endpoints, settings | In-process | Very Fast |
 | `e2e_tests.rs` | UI structure, layouts | Browser | Medium |
 
 ### Test Coverage
 
-**component_tests.rs** (12 tests):
+**component_tests.rs** (33 tests):
 - XSS security (template escaping)
 - Template rendering
-- HTTP endpoint responses
+- HTTP endpoint responses (game fragments)
 - Validation (empty command rejection)
+- Settings UI integration (8 tests)
 
 **e2e_tests.rs** (13 tests):
 - Page loads, UI structure
@@ -132,6 +148,58 @@ if llm_result.is_err() {
 }
 sleep(Duration::from_millis(1000)).await; // Brief wait for poll to catch update
 ```
+
+### Settings Integration Tests
+
+Settings UI tests use in-process HTTP testing via `tower::ServiceExt::oneshot`. No browser needed.
+
+#### Test Infrastructure
+
+The `create_app_for_testing()` helper in `src/server/mod.rs` creates a test router with:
+- All game fragment routes (`/fragment/header`, `/fragment/story-log`, etc.)
+- Settings routes (`/fragment/settings`, `/settings`)
+- In-memory `AppState` with default settings
+
+#### Patterns
+
+```rust
+#[tokio::test]
+async fn test_settings_panel_returns_html() {
+    let state = create_test_state();
+    let app = create_app_for_testing(state);
+
+    let req = Request::builder()
+        .uri("/fragment/settings")
+        .body(Body::empty())
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+
+    assert!(response.status().is_success());
+    let body = axum::body::to_bytes(response.into_body(), 1024).await.unwrap();
+    let body_str = String::from_utf8_lossy(&body);
+    assert!(body_str.contains("LLM Settings"));
+}
+
+#[tokio::test]
+async fn test_save_settings_updates_memory() {
+    let state = create_test_state();
+    let app = create_app_for_testing(state);
+
+    let req = Request::builder()
+        .uri("/settings")
+        .method(http::Method::POST)
+        .header(http::header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .body(Body::from("llm_backend=mock&llm_model=gpt-4o-mini&quantifier_model=gpt-4o-mini&api_key="))
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+
+    assert!(response.status().is_success());
+}
+```
+
+#### Routes Tested
+- GET `/fragment/settings` - Settings panel HTML fragment
+- POST `/settings` - Save settings form submission (backend, model names, API key)
 
 ## Code Coverage
 

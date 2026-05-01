@@ -497,7 +497,6 @@ Keep the flow natural — let reactions unfold, don't rush to conclusions.
 /// Build a PromptContext from individual components.
 ///
 /// Convenience function for assembling the context needed for narrative generation.
-/// This centralizes context construction logic in one place.
 pub fn make_prompt_context<'a>(
     world: &'a WorldCard,
     room: &'a Room,
