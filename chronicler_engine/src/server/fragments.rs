@@ -36,18 +36,12 @@ fn render_header_unlocked(state: &GameState) -> Result<String> {
 }
 
 pub fn render_header(state: &AppState) -> Result<String> {
-    let state_guard = state
-        .state
-        .lock()
-        .map_err(|_| crate::error::EngineError::Config("Lock poisoned".into()))?;
+    let state_guard = state.lock_state()?;
     render_header_unlocked(&state_guard)
 }
 
 pub fn render_story_log(state: &AppState) -> Result<String> {
-    let state_guard = state
-        .state
-        .lock()
-        .map_err(|_| crate::error::EngineError::Config("Lock poisoned".into()))?;
+    let state_guard = state.lock_state()?;
 
     let entries: Vec<_> = state_guard
         .narration_history
@@ -101,30 +95,25 @@ fn render_visual_sidebar_unlocked(state: &GameState) -> Result<String> {
 }
 
 pub fn render_visual_sidebar(state: &AppState) -> Result<String> {
-    let state_guard = state
-        .state
-        .lock()
-        .map_err(|_| crate::error::EngineError::Config("Lock poisoned".into()))?;
+    let state_guard = state.lock_state()?;
     render_visual_sidebar_unlocked(&state_guard)
 }
 
+/// [DOC: docs/system/game_flow.md]
 pub fn render_action_area(state: &AppState) -> Result<String> {
-    let state_guard = state
-        .state
-        .lock()
-        .map_err(|_| crate::error::EngineError::Config("Lock poisoned".into()))?;
+    let state_guard = state.lock_state()?;
 
-    let is_generating = state_guard.generation_state.is_generating;
-    let error_message = state_guard.generation_state.error_message.clone();
+    let status = state_guard.generation_state.status.clone();
     let exits = get_available_exits(&state_guard);
     drop(state_guard);
 
-    let template = ActionAreaTemplate::new_with_error(is_generating, &exits, error_message);
+    let template = ActionAreaTemplate::new(&status, &exits);
     template
         .render()
         .map_err(|e| crate::error::EngineError::Template(e.to_string()))
 }
 
+/// [DOC: docs/system/game_flow.md]
 pub async fn header_fragment(State(state): State<AppState>) -> Html<String> {
     match render_header(&state) {
         Ok(html) => Html(html),
@@ -135,6 +124,7 @@ pub async fn header_fragment(State(state): State<AppState>) -> Html<String> {
     }
 }
 
+/// [DOC: docs/system/game_flow.md]
 pub async fn story_log_fragment(State(state): State<AppState>) -> Html<String> {
     match render_story_log(&state) {
         Ok(html) => Html(html),
@@ -145,6 +135,7 @@ pub async fn story_log_fragment(State(state): State<AppState>) -> Html<String> {
     }
 }
 
+/// [DOC: docs/system/game_flow.md]
 pub async fn visual_sidebar_fragment(State(state): State<AppState>) -> Html<String> {
     match render_visual_sidebar(&state) {
         Ok(html) => Html(html),
@@ -155,6 +146,7 @@ pub async fn visual_sidebar_fragment(State(state): State<AppState>) -> Html<Stri
     }
 }
 
+/// [DOC: docs/system/game_flow.md]
 pub async fn action_area_fragment(State(state): State<AppState>) -> Html<String> {
     match render_action_area(&state) {
         Ok(html) => Html(html),
@@ -169,10 +161,7 @@ fn render_character_headshots(state: &AppState) -> Result<String> {
     use crate::server::templates::CharacterHeadshotsTemplate;
     use askama::Template;
 
-    let state_guard = state
-        .state
-        .lock()
-        .map_err(|_| crate::error::EngineError::Config("Lock poisoned".into()))?;
+    let state_guard = state.lock_state()?;
 
     let npc_data: Vec<(String, String)> = state_guard
         .npcs
@@ -190,6 +179,7 @@ fn render_character_headshots(state: &AppState) -> Result<String> {
         .map_err(|e| crate::error::EngineError::Template(e.to_string()))
 }
 
+/// [DOC: docs/system/game_flow.md]
 pub async fn character_headshots_fragment(State(state): State<AppState>) -> Html<String> {
     match render_character_headshots(&state) {
         Ok(html) => Html(html),
@@ -200,6 +190,7 @@ pub async fn character_headshots_fragment(State(state): State<AppState>) -> Html
     }
 }
 
+/// [DOC: docs/system/game_flow.md]
 pub async fn hints_handler(State(state): State<AppState>) -> Html<String> {
     match render_action_hints(&state) {
         Ok(hints) => Html(hints),
@@ -214,34 +205,30 @@ pub async fn status_ready_handler(State(_state): State<AppState>) -> Html<String
     Html("<span class=\"status ready\">Ready</span>".to_string())
 }
 
+/// [DOC: docs/system/game_flow.md]
 pub async fn generating_status_handler(State(state): State<AppState>) -> Html<String> {
-    let (is_generating, error_message) = state
+    let status = state
         .state
         .lock()
-        .map(|guard| {
-            (
-                guard.generation_state.is_generating,
-                guard.generation_state.error_message.clone(),
-            )
-        })
-        .unwrap_or((false, None));
+        .map(|guard| guard.generation_state.status.clone())
+        .unwrap_or_default();
 
-    if let Some(err) = error_message {
+    if let Some(err) = status.error_message() {
         Html(format!("<span class=\"status error\">Error: {err}</span>"))
-    } else if is_generating {
+    } else if status.is_generating() {
         Html("generating".to_string())
     } else {
         Html("idle".to_string())
     }
 }
 
+/// [DOC: docs/system/game_flow.md]
 pub async fn reset_generating_handler(State(state): State<AppState>) -> Html<String> {
     let result = state
         .state
         .lock()
         .map(|mut guard| {
-            guard.generation_state.is_generating = false;
-            guard.generation_state.error_message = None;
+            guard.generation_state.status = crate::model::state::GenerationStatus::Idle;
             true
         })
         .unwrap_or(false);
@@ -254,10 +241,7 @@ pub async fn reset_generating_handler(State(state): State<AppState>) -> Html<Str
 }
 
 fn render_action_hints(state: &AppState) -> Result<String> {
-    let state_guard = state
-        .state
-        .lock()
-        .map_err(|_| crate::error::EngineError::Config("Lock poisoned".into()))?;
+    let state_guard = state.lock_state()?;
 
     let exits = get_available_exits(&state_guard);
     let available_actions = if exits.is_empty() {
@@ -326,11 +310,10 @@ pub async fn action_handler(
 
         if is_sync {
             process_sync_action(&mut state_guard, &action);
-            state_guard.generation_state.is_generating = false;
+            state_guard.generation_state.status = crate::model::state::GenerationStatus::Idle;
         } else {
-            state_guard.generation_state.is_generating = true;
+            state_guard.generation_state.status = crate::model::state::GenerationStatus::Generating;
         }
-        state_guard.generation_state.error_message = None;
 
         (name, is_sync)
     };
@@ -588,7 +571,7 @@ pub struct EditHistoryForm {
     text: String,
 }
 
-/// Edit a history entry by ID
+/// [DOC: docs/system/game_flow.md]
 pub async fn edit_history_handler(
     State(state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<u64>,
@@ -612,7 +595,7 @@ pub async fn edit_history_handler(
     }
 }
 
-/// Retry the last AI response
+/// [DOC: docs/system/game_flow.md]
 pub async fn retry_handler(State(state): State<AppState>) -> (StatusCode, String) {
     let has_input = state
         .state

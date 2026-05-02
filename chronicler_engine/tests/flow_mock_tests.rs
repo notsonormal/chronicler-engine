@@ -49,7 +49,7 @@ mod tests {
         // Location is now in story log as location-header, not in header
         let location = wait_for_non_loading_value(&page, ".location-header").await;
 
-        println!("Initial location: {}", location);
+        println!("Initial location: {location}");
 
         assert!(
             !location.is_empty(),
@@ -74,7 +74,7 @@ mod tests {
         // Poll until story log has entries
         let entries = wait_for_element_children(&page, "#story-log .log-entry", 1).await;
 
-        println!("Initial story-log entries: {}", entries);
+        println!("Initial story-log entries: {entries}");
         assert!(entries > 0, "Story log should have entries on initial load");
 
         // Wait for completion
@@ -99,7 +99,7 @@ mod tests {
         wait_for_status_ready(&page).await;
         let status = wait_for_element_text(&page, "#status-display").await;
 
-        println!("Initial status: {}", status);
+        println!("Initial status: {status}");
         assert!(status.contains("Ready"), "Status should show 'Ready'");
 
         let _ = browser.close().await;
@@ -146,7 +146,7 @@ mod tests {
             .await
             .unwrap();
 
-        println!("Status after look: {}", status);
+        println!("Status after look: {status}");
 
         // Status should show "Thinking..." or "Ready" (timing dependent)
         let has_status = status.contains("Thinking") || status.contains("Ready");

@@ -24,9 +24,7 @@ fn markdown_to_html(text: &str) -> String {
     // [DOC: docs/architecture/system.md]
     let escaped = text.replace('&', "&amp;").replace('<', "&lt;");
 
-    let mut options = Options::empty();
-    options.insert(Options::ENABLE_SMART_PUNCTUATION);
-    let parser = Parser::new_ext(&escaped, options);
+    let parser = Parser::new_ext(&escaped, Options::ENABLE_SMART_PUNCTUATION);
     let mut html_output = String::new();
     html::push_html(&mut html_output, parser);
 
@@ -156,26 +154,20 @@ pub struct ActionAreaTemplate {
 }
 
 impl ActionAreaTemplate {
-    pub fn new(is_generating: bool, exits: &[String]) -> Self {
-        Self::new_with_error(is_generating, exits, None)
-    }
-
-    pub fn new_with_error(
-        is_generating: bool,
-        exits: &[String],
-        error_message: Option<String>,
-    ) -> Self {
-        let is_disabled = is_generating;
-        let error_msg = error_message.clone().unwrap_or_default();
-        let status_class = if is_generating {
+    pub fn new(status: &crate::model::state::GenerationStatus, exits: &[String]) -> Self {
+        let is_disabled = status.is_generating();
+        let error_msg = status.error_message().unwrap_or_default().to_string();
+        let status_class = if is_disabled {
             "status thinking".to_string()
-        } else if error_message.is_some() {
+        } else if status.error_message().is_some() {
             "status error".to_string()
         } else {
             "status ready".to_string()
         };
-        let status_text = if is_generating {
+        let status_text = if is_disabled {
             "Thinking...".to_string()
+        } else if !error_msg.is_empty() {
+            error_msg.clone()
         } else {
             "Ready".to_string()
         };
@@ -328,7 +320,10 @@ mod tests {
 
     #[test]
     fn test_action_area_ready() {
-        let template = ActionAreaTemplate::new(false, &["north".to_string(), "east".to_string()]);
+        let template = ActionAreaTemplate::new(
+            &crate::model::state::GenerationStatus::Idle,
+            &["north".to_string(), "east".to_string()],
+        );
         let rendered = template.render().unwrap();
         assert!(rendered.contains("id=cmd-area"));
         assert!(rendered.contains("Ready"));
@@ -340,7 +335,8 @@ mod tests {
 
     #[test]
     fn test_action_area_thinking() {
-        let template = ActionAreaTemplate::new(true, &[]);
+        let template =
+            ActionAreaTemplate::new(&crate::model::state::GenerationStatus::Generating, &[]);
         let rendered = template.render().unwrap();
         assert!(rendered.contains("Thinking..."));
         assert!(rendered.contains("disabled"));
@@ -348,7 +344,7 @@ mod tests {
 
     #[test]
     fn test_action_area_no_exits() {
-        let template = ActionAreaTemplate::new(false, &[]);
+        let template = ActionAreaTemplate::new(&crate::model::state::GenerationStatus::Idle, &[]);
         let rendered = template.render().unwrap();
         assert!(rendered.contains("Look"));
         assert!(rendered.contains("Inventory"));

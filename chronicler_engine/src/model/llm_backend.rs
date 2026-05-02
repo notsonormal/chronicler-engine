@@ -7,12 +7,20 @@ pub enum LlmBackendType {
     Mock,
 }
 
-impl LlmBackendType {
-    pub fn from_env() -> Self {
-        match std::env::var("LLM_BACKEND").as_deref() {
-            Ok("deepseek") => LlmBackendType::DeepSeek,
-            Ok("mock") => LlmBackendType::Mock,
+impl From<&str> for LlmBackendType {
+    fn from(s: &str) -> Self {
+        match s {
+            "deepseek" => LlmBackendType::DeepSeek,
+            "mock" => LlmBackendType::Mock,
             _ => LlmBackendType::OpenRouter,
         }
+    }
+}
+
+impl LlmBackendType {
+    pub fn from_env() -> Self {
+        std::env::var("LLM_BACKEND")
+            .as_deref()
+            .map_or(LlmBackendType::OpenRouter, Self::from)
     }
 }

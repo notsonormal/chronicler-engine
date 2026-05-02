@@ -1,12 +1,4 @@
 //! [DOC: docs/architecture/guardrails.md]
-//! Custom architecture guardrails using syn AST analysis.
-//!
-//! These tests enforce coding standards that clippy and arch-lint cannot catch:
-//! - Import ordering (std -> external -> crate)
-//! - "What" comment detection
-//! - Doc anchor requirements on complex functions
-//! - mod.rs purity
-//! - Single-letter variable naming
 
 use syn::spanned::Spanned;
 use syn::visit::Visit;
@@ -529,9 +521,8 @@ impl<'ast> Visit<'ast> for DocAnchorVisitor<'_> {
             self.file_path,
             start,
             format!(
-                "Public function `{}` is complex (>5 stmts or has control flow) but lacks a doc anchor. \
-                 Add `/// [DOC: docs/path/to/file.md]` or `// [DOC: ...]` inside the function body.",
-                fn_name
+                "Public function `{fn_name}` is complex (>5 stmts or has control flow) but lacks a doc anchor. \
+                 Add `/// [DOC: docs/path/to/file.md]` or `// [DOC: ...]` inside the function body."
             ),
         ));
     }
@@ -681,10 +672,9 @@ fn check_mod_purity(path: &str, _content: &str, ast: &File) -> Vec<Violation> {
             path,
             line,
             format!(
-                "mod.rs purity violation: `{}` definition found in mod.rs. \
+                "mod.rs purity violation: `{kind}` definition found in mod.rs. \
                  mod.rs should only contain `pub mod`, `use`, `pub use`, and module docs (`//!`). \
-                 Move {kind} definitions to a separate file.",
-                kind
+                 Move {kind} definitions to a separate file."
             ),
         ));
     }
@@ -802,7 +792,7 @@ fn print_warnings(violations: &[Violation], rule_name: &str) {
         for v in violations {
             eprintln!("  {}:{} - {}", v.file, v.line, v.message);
         }
-        eprintln!("=== End {} warnings ===\n", rule_name);
+        eprintln!("=== End {rule_name} warnings ===\n");
     }
 }
 

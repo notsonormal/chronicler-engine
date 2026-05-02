@@ -118,9 +118,14 @@ def run(cmd, cwd=None, check=True, show_output=True, env=None):
 def main():
     parser = argparse.ArgumentParser(description="Chronicler Engine build script")
     parser.add_argument(
-        "--verbose",
+        "--coverage",
         action="store_true",
-        help="Show full per-test output and coverage table",
+        help="Run tests with coverage instrumentation (slower, useful for CI)",
+    )
+    parser.add_argument(
+        "--release",
+        action="store_true",
+        help="Build and package in release mode",
     )
     args = parser.parse_args()
 
@@ -147,7 +152,7 @@ def main():
     run("cargo fmt")
 
     print("[2/8] Running clippy...")
-    run("cargo clippy -- -D warnings")
+    run("cargo clippy --all-targets --all-features -- -D warnings")
 
     print("[3/8] Running architecture guardrail tests...")
     run("cargo test --test architecture")
@@ -155,67 +160,50 @@ def main():
     print("[4/8] Running custom guardrails tests...")
     run("cargo test --test guardrails")
 
-    print("[5/8] Building...")
-    run("cargo build")
+    build_profile = "release" if args.release else "debug"
+    build_flag = "--release" if args.release else ""
+    target_dir = Path(f"target/{build_profile}")
+
+    print(f"[5/8] Building ({build_profile})...")
+    run(f"cargo build {build_flag}".strip())
 
     print("[6/8] Copying data and assets for deployment...")
-    release_dir = Path("target/release")
-    release_dir.mkdir(exist_ok=True)
+    target_dir.mkdir(exist_ok=True)
 
     # Copy data folder (worlds, images, etc.)
     if Path("data").exists():
-        dest_data = release_dir / "data"
+        dest_data = target_dir / "data"
         if dest_data.exists():
             shutil.rmtree(dest_data)
         shutil.copytree("data", dest_data)
         print(f"  Copied data/ -> {dest_data}")
 
-
     # Copy assets folder (HTML, CSS, etc.)
     if Path("assets").exists():
-        dest_assets = release_dir / "assets"
+        dest_assets = target_dir / "assets"
         if dest_assets.exists():
             shutil.rmtree(dest_assets)
         shutil.copytree("assets", dest_assets)
         print(f"  Copied assets/ -> {dest_assets}")
 
     # Create logs directory
-    (release_dir / "logs").mkdir(exist_ok=True)
+    (target_dir / "logs").mkdir(exist_ok=True)
     print("  Created logs/")
 
-    print(f"  Release package ready in {release_dir}/")
-    print("  Deployment: copy target/release/ folder to your target machine")
+    print(f"  Package ready in {target_dir}/")
+    print(f"  Deployment: copy {target_dir}/ folder to your target machine")
 
-    print("[7/8] Running all tests with coverage...")
-    # Suppress per-test PASS lines unless --verbose is set
-    test_env = {}
-    if not args.verbose:
-        test_env["NEXTEST_STATUS_LEVEL"] = "fail"
+    test_env = {"NEXTEST_STATUS_LEVEL": "fail"}
 
-    # Run tests via nextest with coverage collection (single pass)
-    # Do NOT exclude anything - run all tests including main.rs
-    run(
-        "cargo llvm-cov nextest --no-report --retries 2 -j 4",
-        check=False,
-        env=test_env,
-    )
-
-    print("[8/8] Generating coverage report...")
-    if args.verbose:
-        # Full table for verbose mode
-        result = subprocess.run(
-            'cargo llvm-cov report --summary-only --ignore-filename-regex "main.rs|server/mod.rs|server/fragments.rs|openrouter_client.rs"',
-            shell=True,
-            cwd=os.getcwd(),
-            capture_output=True,
-            text=True,
+    if args.coverage:
+        print("[7/8] Running all tests with coverage...")
+        run(
+            "cargo llvm-cov nextest --no-report --retries 2 -j 4",
+            check=False,
+            env=test_env,
         )
-        if result.stdout:
-            print(result.stdout)
-        if result.returncode != 0:
-            print(f"Coverage check exited with code {result.returncode}")
-    else:
-        # Concise summary via JSON + parse_coverage.py
+
+        print("[8/8] Generating coverage report...")
         json_path = Path("target/llvm-cov/coverage.json")
         json_path.parent.mkdir(parents=True, exist_ok=True)
         run(
@@ -229,6 +217,14 @@ def main():
             )
         else:
             print("Warning: Could not generate coverage JSON.")
+    else:
+        print("[7/8] Running all tests...")
+        run(
+            "cargo nextest run --retries 2 -j 4",
+            check=False,
+            env=test_env,
+        )
+        print("[8/8] Skipping coverage report (use --coverage to enable)")
 
     print("=== Build Complete ===")
     return 0

@@ -65,31 +65,27 @@ pub fn with_test_backend(backend: LlmBackendType) -> TestBackendGuard {
 }
 
 pub fn get_llm_backend() -> Box<dyn LlmBackend> {
-    let override_val = TEST_BACKEND_OVERRIDE.load(Ordering::SeqCst);
-    if override_val != 0 {
-        let backend_type = match override_val {
-            1 => LlmBackendType::Mock,
-            2 => LlmBackendType::DeepSeek,
-            _ => LlmBackendType::OpenRouter,
-        };
-        return get_llm_backend_with_settings(&AppSettings {
-            llm_backend: backend_type,
-            ..AppSettings::default()
-        });
-    }
+    let backend_type = match TEST_BACKEND_OVERRIDE.load(Ordering::SeqCst) {
+        1 => LlmBackendType::Mock,
+        2 => LlmBackendType::DeepSeek,
+        3 => LlmBackendType::OpenRouter,
+        // No override: check environment, then fall back to settings file
+        _ => {
+            let env = LlmBackendType::from_env();
+            if env != LlmBackendType::OpenRouter {
+                env
+            } else {
+                crate::settings::load_settings()
+                    .map(|s| s.llm_backend)
+                    .unwrap_or(LlmBackendType::OpenRouter)
+            }
+        }
+    };
 
-    // Check environment variable before loading settings file
-    let env_backend = LlmBackendType::from_env();
-    if env_backend != LlmBackendType::OpenRouter {
-        return get_llm_backend_with_settings(&AppSettings {
-            llm_backend: env_backend,
-            ..AppSettings::default()
-        });
-    }
-
-    // Load settings and use the backend from settings
-    let settings = crate::settings::load_settings().unwrap_or_else(|_| AppSettings::default());
-    get_llm_backend_with_settings(&settings)
+    get_llm_backend_with_settings(&AppSettings {
+        llm_backend: backend_type,
+        ..AppSettings::default()
+    })
 }
 
 pub fn get_llm_backend_with_settings(settings: &AppSettings) -> Box<dyn LlmBackend> {
@@ -533,7 +529,7 @@ mod tests {
         let _room = make_test_room();
         let _player = make_test_player();
 
-        let _history = vec![
+        let _history = [
             LogEntry {
                 id: 1,
                 sender: Some("Narrator".to_string()),
@@ -687,7 +683,7 @@ mod tests {
             .map(|i| LogEntry {
                 id: i as u64,
                 sender: Some(format!("Speaker{}", i % 3)),
-                text: format!("This is narration entry number {} in the game history.", i),
+                text: format!("This is narration entry number {i} in the game history."),
                 log_type: if i % 2 == 0 {
                     LogType::Narration
                 } else {
@@ -709,19 +705,29 @@ mod tests {
 
     #[test]
     fn test_get_llm_backend_with_settings_all_types() {
-        let mut settings = AppSettings::default();
-
-        settings.llm_backend = LlmBackendType::OpenRouter;
+        let openrouter_settings = AppSettings {
+            llm_backend: LlmBackendType::OpenRouter,
+            ..Default::default()
+        };
         assert_eq!(
-            get_llm_backend_with_settings(&settings).name(),
+            get_llm_backend_with_settings(&openrouter_settings).name(),
             "OpenRouter"
         );
 
-        settings.llm_backend = LlmBackendType::Mock;
-        assert_eq!(get_llm_backend_with_settings(&settings).name(), "Mock");
+        let mock_settings = AppSettings {
+            llm_backend: LlmBackendType::Mock,
+            ..Default::default()
+        };
+        assert_eq!(get_llm_backend_with_settings(&mock_settings).name(), "Mock");
 
-        settings.llm_backend = LlmBackendType::DeepSeek;
-        assert_eq!(get_llm_backend_with_settings(&settings).name(), "DeepSeek");
+        let deepseek_settings = AppSettings {
+            llm_backend: LlmBackendType::DeepSeek,
+            ..Default::default()
+        };
+        assert_eq!(
+            get_llm_backend_with_settings(&deepseek_settings).name(),
+            "DeepSeek"
+        );
     }
 
     #[test]

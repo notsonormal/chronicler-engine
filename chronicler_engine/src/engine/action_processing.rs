@@ -6,11 +6,25 @@ use crate::engine::trigger_eval::{
 };
 use crate::error::EngineError;
 use crate::model::character::NpcCard;
-use crate::model::map::MapDef;
+
 use crate::model::state::{GameState, LogType};
 use crate::model::world::WorldCard;
 use crate::narrative::prompt::{PhiMode, PromptBuilder, PromptContext};
 use crate::narrative::quantifier::{NpcEvent, QuantifierResult, compute_npc_events};
+
+/// Shared context for executing a free action — bundles all data needed for narration,
+/// trigger evaluation, and NPC state updates.
+///
+/// [DOC: docs/architecture/system.md]
+pub struct FreeActionContext<'a> {
+    pub narration_text: &'a str,
+    pub user_input: &'a str,
+    pub quantifier_result: &'a QuantifierResult,
+    pub world: &'a WorldCard,
+    pub player: &'a crate::model::character::PlayerCard,
+    pub all_npcs: &'a [NpcCard],
+    pub history: &'a [crate::model::state::LogEntry],
+}
 
 /// [DOC: docs/architecture/system.md]
 pub fn get_static_npcs(state: &GameState, room_npc_ids: &[String]) -> Vec<NpcCard> {
@@ -145,31 +159,21 @@ pub fn evaluate_and_narrate_triggers(
 }
 
 /// [DOC: docs/architecture/system.md]
-#[allow(clippy::too_many_arguments)]
 pub fn execute_freeaction_impl(
     state: &mut GameState,
-    narration_text: &str,
-    text: &str,
-    quantifier_result: &QuantifierResult,
-    world: &WorldCard,
-    _map: &MapDef,
-    player: &crate::model::character::PlayerCard,
-    all_npcs: &[NpcCard],
-    _room_npc_ids: &[String],
-    history: &[crate::model::state::LogEntry],
+    ctx: &FreeActionContext<'_>,
 ) -> Result<(), EngineError> {
     let previous_room_npcs: Vec<NpcCard> = state.npcs_in_area.clone();
     let previous_npc_ids: Vec<String> = previous_room_npcs.iter().map(|n| n.id.clone()).collect();
 
-    // Handle movement if quantifier detected it
     handle_movement(
         state,
-        quantifier_result.movement.destination.as_deref(),
-        &quantifier_result.npcs.npc_ids,
+        ctx.quantifier_result.movement.destination.as_deref(),
+        &ctx.quantifier_result.npcs.npc_ids,
     );
 
-    // Build current NPCs from quantifier result
-    let current_npcs: Vec<NpcCard> = quantifier_result
+    let current_npcs: Vec<NpcCard> = ctx
+        .quantifier_result
         .npcs
         .npc_ids
         .iter()
@@ -177,31 +181,26 @@ pub fn execute_freeaction_impl(
         .collect();
     let current_npc_ids: Vec<String> = current_npcs.iter().map(|n| n.id.clone()).collect();
 
-    // Get room data — clone to avoid holding &state borrow across mutating calls
     let room_data = get_current_room(state)
         .map_err(|_| EngineError::RoomNotFound("current room not found".to_string()))?
         .clone();
 
     // Now state is no longer borrowed — we can safely mutate it
-    state.add_log(narration_text.to_string(), None, LogType::Narration);
+    state.add_log(ctx.narration_text.to_string(), None, LogType::Narration);
     state.npcs_in_area = current_npcs.clone();
 
-    // Build trigger context with owned room data
     let trigger_context = PromptContext {
-        world,
+        world: ctx.world,
         room: &room_data,
-        all_npcs,
+        all_npcs: ctx.all_npcs,
         npcs_in_area: &current_npcs,
-        player,
-        user_message: text,
-        history,
+        player: ctx.player,
+        user_message: ctx.user_input,
+        history: ctx.history,
     };
 
-    // Evaluate triggers BEFORE incrementing times_met
-    // (so TimesMet Eq 0 can fire on first detection)
-    evaluate_and_narrate_triggers(state, narration_text, &trigger_context, 3);
+    evaluate_and_narrate_triggers(state, ctx.narration_text, &trigger_context, 3);
 
-    // Apply NPC events using the reusable function
     let events = compute_npc_events(&previous_npc_ids, &current_npc_ids);
     apply_npc_events(state, &events.events);
 
@@ -357,22 +356,22 @@ mod execute_freeaction_impl_tests {
     fn test_execute_freeaction_impl_no_movement() {
         let mut state = make_test_state();
         let world = make_test_world();
-        let map = make_test_map();
+        let _map = make_test_map();
         let player = make_test_player();
         let all_npcs = make_test_npcs();
         let history = vec![];
 
         let result = execute_freeaction_impl(
             &mut state,
-            "You examine the room.",
-            "examine the room",
-            &make_quantifier_result_no_movement(),
-            &world,
-            &map,
-            &player,
-            &all_npcs,
-            &["carla".to_string()],
-            &history,
+            &FreeActionContext {
+                narration_text: "You examine the room.",
+                user_input: "examine the room",
+                quantifier_result: &make_quantifier_result_no_movement(),
+                world: &world,
+                player: &player,
+                all_npcs: &all_npcs,
+                history: &history,
+            },
         );
 
         assert!(result.is_ok());
@@ -388,7 +387,7 @@ mod execute_freeaction_impl_tests {
     fn test_execute_freeaction_impl_with_movement() {
         let mut state = make_test_state();
         let world = make_test_world();
-        let map = make_test_map();
+        let _map = make_test_map();
         let player = make_test_player();
         let all_npcs = make_test_npcs();
         let history = vec![];
@@ -396,15 +395,15 @@ mod execute_freeaction_impl_tests {
         // quantifier result with movement to a new room
         let result = execute_freeaction_impl(
             &mut state,
-            "You walk to the tavern.",
-            "walk to the tavern",
-            &make_quantifier_result_with_movement("nonexistent_room"),
-            &world,
-            &map,
-            &player,
-            &all_npcs,
-            &["carla".to_string()],
-            &history,
+            &FreeActionContext {
+                narration_text: "You walk to the tavern.",
+                user_input: "walk to the tavern",
+                quantifier_result: &make_quantifier_result_with_movement("nonexistent_room"),
+                world: &world,
+                player: &player,
+                all_npcs: &all_npcs,
+                history: &history,
+            },
         );
 
         assert!(result.is_ok());
@@ -419,7 +418,7 @@ mod execute_freeaction_impl_tests {
     fn test_execute_freeaction_impl_updates_npcs_in_area() {
         let mut state = make_test_state();
         let world = make_test_world();
-        let map = make_test_map();
+        let _map = make_test_map();
         let player = make_test_player();
         let all_npcs = make_test_npcs();
 
@@ -428,15 +427,15 @@ mod execute_freeaction_impl_tests {
 
         let result = execute_freeaction_impl(
             &mut state,
-            "You look around.",
-            "look around",
-            &make_quantifier_result_no_movement(),
-            &world,
-            &map,
-            &player,
-            &all_npcs,
-            &["carla".to_string()],
-            &vec![],
+            &FreeActionContext {
+                narration_text: "You look around.",
+                user_input: "look around",
+                quantifier_result: &make_quantifier_result_no_movement(),
+                world: &world,
+                player: &player,
+                all_npcs: &all_npcs,
+                history: &[],
+            },
         );
 
         assert!(result.is_ok());
@@ -499,15 +498,15 @@ mod execute_freeaction_impl_tests {
         // will use whatever backend is configured (mock in test env)
         let result = execute_freeaction_impl(
             &mut state,
-            "You enter the room.",
-            "enter",
-            &make_quantifier_result_no_movement(),
-            &world,
-            &map,
-            &player,
-            &[], // all_npcs - empty won't match triggers
-            &["carla".to_string()],
-            &vec![],
+            &FreeActionContext {
+                narration_text: "You enter the room.",
+                user_input: "enter",
+                quantifier_result: &make_quantifier_result_no_movement(),
+                world: &world,
+                player: &player,
+                all_npcs: &[], // empty won't match triggers
+                history: &[],
+            },
         );
 
         // Result should be ok (even if trigger LLM call fails, fn handles gracefully)
@@ -520,21 +519,21 @@ mod execute_freeaction_impl_tests {
         // NPC already in area (simulating re-encounter after leaving)
         state.npcs_in_area = vec![]; // Empty - NPC is not currently in area
         let world = make_test_world();
-        let map = make_test_map();
+        let _map = make_test_map();
         let player = make_test_player();
         let all_npcs = make_test_npcs();
 
         let result = execute_freeaction_impl(
             &mut state,
-            "You see Carla.",
-            "look around",
-            &make_quantifier_result_no_movement(),
-            &world,
-            &map,
-            &player,
-            &all_npcs,
-            &["carla".to_string()],
-            &vec![],
+            &FreeActionContext {
+                narration_text: "You see Carla.",
+                user_input: "look around",
+                quantifier_result: &make_quantifier_result_no_movement(),
+                world: &world,
+                player: &player,
+                all_npcs: &all_npcs,
+                history: &[],
+            },
         );
 
         assert!(result.is_ok());

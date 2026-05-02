@@ -48,7 +48,7 @@ This project follows a **Spec-Driven Implementation** (SDI) strategy.
 This project relies on a comprehensive suite of integration tests as the ultimate source of truth for behavior.
 - **Tests as Documentation**: If you don't understand how a component works, read its tests in `tests/` before reading the source code.
 - **Test-Driven Debugging**: Before fixing a bug, find or create a failing test case. If tests pass but the bug exists, the test suite is missing a scenario.
-- **No Regression**: Every change must be verified by running `python build.py`.
+- **No Regression**: Every change must be verified by running `python build.py` (fast path: debug build + tests).
 
 ### Example: Semantic vs. Traditional
 **❌ BAD (Traditional)**
@@ -81,7 +81,7 @@ let residents = find_npcs_in_current_location(all_npcs, current_room);
 - **Result over panic**: Use `EngineError` enum, propagate with `?`
 - **Doc Anchors**: Always link complex blocks to `docs/` via `// [DOC: docs/path/to/file.md]`
 - **LLM backend**: Trait-based (`LlmBackend`), mock via `LLM_BACKEND=mock` env var
-- **Validation**: Run `python build.py` before commit (fmt + clippy + tests)
+- **Validation**: Run `python build.py` before commit (fmt + clippy + tests + guardrails)
 
 ## ANTI-PATTERNS
 - **Never** use redundant "What" comments (e.g., `// Add to log`).
@@ -124,8 +124,8 @@ To encode new review feedback as a permanent guardrail:
 
 ## COMMANDS
 ```bash
-python build.py             # Full build + test (recommended)
-cargo build                 # Release build
+python build.py             # Fast validation (fmt + clippy + guardrails + debug build + tests)
+python build.py --release   # Release build + tests + package
 cargo test                  # All tests
 cargo run -- --world redmist_estate --port 3000
 ```

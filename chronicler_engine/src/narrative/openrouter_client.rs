@@ -14,7 +14,28 @@ pub fn get_quantifier_model(settings: &AppSettings) -> String {
     std::env::var("QUANTIFIER_MODEL").unwrap_or_else(|_| settings.quantifier_model.clone())
 }
 
-// [DOC: docs/system/llm_processing.md]
+fn extract_content_from_response(json: &serde_json::Value) -> Option<(String, &'static str)> {
+    let message = json.get("choices")?.get(0)?.get("message")?;
+
+    // 1. Try content field
+    if let Some(c) = message.get("content").and_then(|c| c.as_str()) {
+        return Some((c.to_string(), "content"));
+    }
+
+    // 2. Try reasoning field
+    if let Some(r) = message.get("reasoning").and_then(|r| r.as_str()) {
+        return Some((r.to_string(), "reasoning"));
+    }
+
+    // 3. Try reasoning_content field (OpenRouter extended field)
+    if let Some(rc) = message.get("reasoning_content").and_then(|rc| rc.as_str()) {
+        return Some((rc.to_string(), "reasoning_content"));
+    }
+
+    None
+}
+
+/// [DOC: docs/system/llm_processing.md]
 pub fn call_openrouter_with_model(
     api_key: &str,
     system_prompt: &str,
@@ -91,52 +112,9 @@ pub fn call_openrouter_with_model(
                         return Err(format!("LLM API error: {error_msg}"));
                     }
 
-                    let content_source: &str;
-                    let content: Option<String> = {
-                        // 1. Try content field (only if non-null AND non-empty)
-                        let c = json_response["choices"]
-                            .get(0)
-                            .and_then(|c| c.get("message"))
-                            .and_then(|m| m.get("content"))
-                            .and_then(|c| c.as_str());
-
-                        if let Some(c) = c {
-                            content_source = "content";
-                            Some(c.to_string())
-                        } else {
-                            // 2. Try reasoning field (only if non-null AND non-empty)
-                            let r = json_response["choices"]
-                                .get(0)
-                                .and_then(|c| c.get("message"))
-                                .and_then(|m| m.get("reasoning"))
-                                .and_then(|r| r.as_str());
-
-                            if let Some(r) = r {
-                                content_source = "reasoning";
-                                Some(r.to_string())
-                            } else {
-                                // 3. Try reasoning_content field (OpenRouter extended field)
-                                let rc = json_response["choices"]
-                                    .get(0)
-                                    .and_then(|c| c.get("message"))
-                                    .and_then(|m| m.get("reasoning_content"))
-                                    .and_then(|rc| rc.as_str());
-
-                                if let Some(rc) = rc {
-                                    content_source = "reasoning_content";
-                                    Some(rc.to_string())
-                                } else {
-                                    content_source = "none";
-                                    None
-                                }
-                            }
-                        }
-                    };
-
-                    if let Some(content) = content {
+                    if let Some((content, source)) = extract_content_from_response(&json_response) {
                         log::info!(
-                            "[LLM] Extracted content via: {} ({} chars)",
-                            content_source,
+                            "[LLM] Extracted content via: {source} ({} chars)",
                             content.len()
                         );
                         return Ok(content);
@@ -201,16 +179,20 @@ mod tests {
 
     #[test]
     fn test_get_llm_model_from_settings() {
-        let mut settings = AppSettings::default();
-        settings.llm_model = "google/gemini-pro".to_string();
+        let settings = AppSettings {
+            llm_model: "google/gemini-pro".to_string(),
+            ..Default::default()
+        };
         let model = get_llm_model(&settings);
         assert_eq!(model, "google/gemini-pro");
     }
 
     #[test]
     fn test_get_quantifier_model_from_settings() {
-        let mut settings = AppSettings::default();
-        settings.quantifier_model = "google/gemini-pro".to_string();
+        let settings = AppSettings {
+            quantifier_model: "google/gemini-pro".to_string(),
+            ..Default::default()
+        };
         let model = get_quantifier_model(&settings);
         assert_eq!(model, "google/gemini-pro");
     }

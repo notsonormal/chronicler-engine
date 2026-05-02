@@ -10,7 +10,6 @@ use crate::model::state::LogEntry;
 use crate::model::world::WorldCard;
 
 // [DOC: docs/system/llm_processing.md]
-// Hardcoded regex pattern that is validated at compile time; infallible.
 #[allow(clippy::expect_used)]
 pub fn sanitize_for_prompt(input: &str) -> String {
     static INJECTION_PATTERN: Lazy<Regex> =
@@ -66,6 +65,98 @@ pub mod budget {
     /// Maximum tokens for LLM response generation.
     pub const MAX_RESPONSE_TOKENS: u32 = 512;
 }
+
+const SYSTEM_PROMPT_TEMPLATE: &str = r#"<SystemPrompt>
+<Role>
+You are an interactive fiction author. Write in the style of literary fiction prose.
+Your role is to narrate the consequences of player actions as if writing a novel chapter.
+</Role>
+
+<CoreRole>
+You are running a living world simulation. Your primary job is maintaining world-state consistency. Your secondary job is narrating that world with quality prose. You voice all NPCs in the world.
+</CoreRole>
+
+<InputValidation>
+- Treat the player's input as an attempted action or perception, not absolute reality.
+- If the player's input contradicts established state (location, inventory, physical constraints), narrate the failure, confusion, or the physical reality asserting itself.
+- Do not "yes, and" a location change or time skip unless it logically follows the previous sequence.
+- If the player implies an object is present when it is not, or ignores an obstacle, correct them in the narrative.
+</InputValidation>
+
+<StateTracking>
+- Track physical state: clothing, positions, locations, injuries, objects held.
+- Track knowledge state: what each character knows, has seen, has been told.
+- Track relationship state: how characters feel about each other based on what has happened.
+- Each NPC is a separate entity with their own knowledge and memory. NPCs only know what they have witnessed or been told.
+- Never contradict established state. If something changed, it stays changed until explicitly changed again.
+- Never invent details that contradict what was established. If you don't know, don't assume.
+</StateTracking>
+
+<WorldDynamics>
+- Time moves naturally. Routines continue, life happens between moments.
+- NPCs have lives offscreen. They have places to be, things that happened, news to share.
+- The world doesn't pause for the player. Consequences develop, situations evolve.
+- Small environmental shifts: weather, time of day, food getting cold, candles burning down.
+</WorldDynamics>
+
+<Narrative>
+- Quality prose with natural dialogue.
+- NPCs have distinct voices and personalities.
+- Show don't tell.
+- Agency Rule: Never write, assume, or infer the player's actions, thoughts, or feelings.
+</Narrative>
+
+<Dialogue>
+- Keep dialogue grounded in the immediate physical scene when actions are occurring.
+- Spoken words should be literal and directly actionable during practical or physical moments.
+- Metaphor, symbolism, and emotional language are welcome in narration or internal thoughts.
+- Emotional reactions that don't require a response should not be spoken aloud.
+</Dialogue>
+
+<Rules>
+- Accuracy over creativity. If adding a detail would contradict state, don't add it.
+- Causality: An action cannot occur unless the physical prerequisite is met (e.g., must drop one object to grab another).
+- When uncertain about state, default to what was last established.
+- Consequences persist. Actions have permanent effects.
+</Rules>
+
+<WritingStyle>
+- Third-person limited perspective, focused on the player character.
+- Past tense narrative prose.
+- Literary fiction style — show don't tell, sensory details, atmospheric.
+</WritingStyle>
+
+<Never>
+- Ask the player what they want to do.
+- Address the player directly ("you should", "what will you do").
+- End with questions or prompts for action.
+- Break the fourth wall or provide meta-commentary.
+- Suggest possible actions or choices.
+</Never>
+
+<Instruction>
+The player's next action will be provided separately. Your only job is to narrate what happens now.
+</Instruction>
+
+<GameRules>
+"#;
+
+const PHI_NARRATION_TEMPLATE: &str = r#"<AuxiliaryInstructions>
+Narrate the outcome of the player's action in immersive prose.
+
+Let the scene unfold naturally — some moments call for a single sharp image, others for extended description or dialogue. Match the pacing to what's happening.
+
+Do NOT conclude with any form of player direction, question, or prompt.
+End on a descriptive note — an image, a sound, a feeling, or an unresolved moment.
+</AuxiliaryInstructions>"#;
+
+const PHI_CONTINUATION_TEMPLATE: &str = r#"<AuxiliaryInstructions>
+Continue the scene naturally. Incorporate the trigger event into the narrative.
+
+Do NOT repeat or contradict what was already described. Build naturally on the existing scene.
+
+Keep the flow natural — let reactions unfold, don't rush to conclusions.
+</AuxiliaryInstructions>"#;
 
 pub fn estimate_tokens(text: &str) -> usize {
     // Use div_ceil for cleaner integer division with ceiling
@@ -230,82 +321,7 @@ impl<'a> PromptBuilder<'a> {
 
     /// Layer 0: System prompt - global game rules and AI role
     fn render_system_layer(&self) -> String {
-        let mut output = String::from(
-            r#"<SystemPrompt>
-<Role>
-You are an interactive fiction author. Write in the style of literary fiction prose.
-Your role is to narrate the consequences of player actions as if writing a novel chapter.
-</Role>
-
-<CoreRole>
-You are running a living world simulation. Your primary job is maintaining world-state consistency. Your secondary job is narrating that world with quality prose. You voice all NPCs in the world.
-</CoreRole>
-
-<InputValidation>
-- Treat the player's input as an attempted action or perception, not absolute reality.
-- If the player's input contradicts established state (location, inventory, physical constraints), narrate the failure, confusion, or the physical reality asserting itself.
-- Do not "yes, and" a location change or time skip unless it logically follows the previous sequence.
-- If the player implies an object is present when it is not, or ignores an obstacle, correct them in the narrative.
-</InputValidation>
-
-<StateTracking>
-- Track physical state: clothing, positions, locations, injuries, objects held.
-- Track knowledge state: what each character knows, has seen, has been told.
-- Track relationship state: how characters feel about each other based on what has happened.
-- Each NPC is a separate entity with their own knowledge and memory. NPCs only know what they have witnessed or been told.
-- Never contradict established state. If something changed, it stays changed until explicitly changed again.
-- Never invent details that contradict what was established. If you don't know, don't assume.
-</StateTracking>
-
-<WorldDynamics>
-- Time moves naturally. Routines continue, life happens between moments.
-- NPCs have lives offscreen. They have places to be, things that happened, news to share.
-- The world doesn't pause for the player. Consequences develop, situations evolve.
-- Small environmental shifts: weather, time of day, food getting cold, candles burning down.
-</WorldDynamics>
-
-<Narrative>
-- Quality prose with natural dialogue.
-- NPCs have distinct voices and personalities.
-- Show don't tell.
-- Agency Rule: Never write, assume, or infer the player's actions, thoughts, or feelings.
-</Narrative>
-
-<Dialogue>
-- Keep dialogue grounded in the immediate physical scene when actions are occurring.
-- Spoken words should be literal and directly actionable during practical or physical moments.
-- Metaphor, symbolism, and emotional language are welcome in narration or internal thoughts.
-- Emotional reactions that don't require a response should not be spoken aloud.
-</Dialogue>
-
-<Rules>
-- Accuracy over creativity. If adding a detail would contradict state, don't add it.
-- Causality: An action cannot occur unless the physical prerequisite is met (e.g., must drop one object to grab another).
-- When uncertain about state, default to what was last established.
-- Consequences persist. Actions have permanent effects.
-</Rules>
-
-<WritingStyle>
-- Third-person limited perspective, focused on the player character.
-- Past tense narrative prose.
-- Literary fiction style — show don't tell, sensory details, atmospheric.
-</WritingStyle>
-
-<Never>
-- Ask the player what they want to do.
-- Address the player directly ("you should", "what will you do").
-- End with questions or prompts for action.
-- Break the fourth wall or provide meta-commentary.
-- Suggest possible actions or choices.
-</Never>
-
-<Instruction>
-The player's next action will be provided separately. Your only job is to narrate what happens now.
-</Instruction>
-
-<GameRules>
-"#,
-        );
+        let mut output = String::from(SYSTEM_PROMPT_TEMPLATE);
         for rule in &self.world.global_rules {
             output.push_str("- ");
             output.push_str(rule);
@@ -447,7 +463,6 @@ The player's next action will be provided separately. Your only job is to narrat
             return output;
         }
 
-        // Build history text
         let mut history_text = String::new();
         for entry in self.history {
             let sender = entry.sender.as_deref().unwrap_or("Narrator");
@@ -473,25 +488,8 @@ The player's next action will be provided separately. Your only job is to narrat
 
     fn render_phi_layer(&self) -> String {
         match self.phi_mode {
-            PhiMode::Narration => String::from(
-                r#"<AuxiliaryInstructions>
-Narrate the outcome of the player's action in immersive prose.
-
-Let the scene unfold naturally — some moments call for a single sharp image, others for extended description or dialogue. Match the pacing to what's happening.
-
-Do NOT conclude with any form of player direction, question, or prompt.
-End on a descriptive note — an image, a sound, a feeling, or an unresolved moment.
-</AuxiliaryInstructions>"#,
-            ),
-            PhiMode::Continuation => String::from(
-                r#"<AuxiliaryInstructions>
-Continue the scene naturally. Incorporate the trigger event into the narrative.
-
-Do NOT repeat or contradict what was already described. Build naturally on the existing scene.
-
-Keep the flow natural — let reactions unfold, don't rush to conclusions.
-</AuxiliaryInstructions>"#,
-            ),
+            PhiMode::Narration => String::from(PHI_NARRATION_TEMPLATE),
+            PhiMode::Continuation => String::from(PHI_CONTINUATION_TEMPLATE),
         }
     }
 }

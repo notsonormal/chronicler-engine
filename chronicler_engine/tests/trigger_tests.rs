@@ -32,7 +32,7 @@ mod tests {
 
         // Count initial log entries
         let initial_entries = wait_for_element_children(&page, "#story-log .log-entry", 1).await;
-        println!("Initial entries: {}", initial_entries);
+        println!("Initial entries: {initial_entries}");
 
         // Send a "look" command to trigger narration
         send_action(&page, "look").await;
@@ -41,14 +41,11 @@ mod tests {
         // After look, there should be at least initial_entries + 1 (the look narration)
         let after_look = wait_for_log_entries(&page, initial_entries as usize + 1).await;
         assert!(
-            after_look >= initial_entries as usize + 1,
+            after_look > initial_entries as usize,
             "Look command should add at least one narration entry"
         );
 
-        println!(
-            "Trigger test: {} -> {} entries",
-            initial_entries, after_look
-        );
+        println!("Trigger test: {initial_entries} -> {after_look} entries");
 
         let _ = browser.close().await;
     }
@@ -85,7 +82,7 @@ mod tests {
 
         // The mock narration should have triggered room NPC detection
         // and the trigger should fire (adding another entry)
-        println!("Entries before: {}, after: {}", before, after);
+        println!("Entries before: {before}, after: {after}");
 
         // At minimum: action response + trigger narration
         assert!(
@@ -170,7 +167,7 @@ mod tests {
         send_action(&page, "talk to shopkeeper").await;
         wait_for_status_ready(&page).await;
         let after_first = wait_for_log_entries(&page, 1).await;
-        println!("After first talk: {} entries", after_first);
+        println!("After first talk: {after_first} entries");
 
         // Poll for trigger state processing (replaces arbitrary sleep)
         let _ = wait_for_log_entries(&page, after_first).await;
@@ -180,7 +177,7 @@ mod tests {
         wait_for_status_ready(&page).await;
         // Poll for story log update (replaces arbitrary sleep)
         let after_second = wait_for_log_entries(&page, after_first).await;
-        println!("After second talk: {} entries", after_second);
+        println!("After second talk: {after_second} entries");
 
         // With the fix evaluating ALL NPCs, we may see more than 2 new entries
         // due to other NPCs' triggers firing. But the shopkeeper's trigger
@@ -200,8 +197,7 @@ mod tests {
         let trigger_count = story_log.matches(shopkeeper_trigger_text).count();
         assert!(
             trigger_count <= 1,
-            "Shopkeeper trigger should appear at most once (found {} times)",
-            trigger_count
+            "Shopkeeper trigger should appear at most once (found {trigger_count} times)"
         );
 
         let _ = browser.close().await;
@@ -260,7 +256,7 @@ mod tests {
 
         // Get initial location
         let initial_location = wait_for_non_loading_value(&page, ".location-header").await;
-        println!("Initial location: {}", initial_location);
+        println!("Initial location: {initial_location}");
 
         // Try a movement command
         // With the fix, ALL NPCs get evaluated for triggers, so even "go north"

@@ -104,8 +104,10 @@ mod tests {
 
     #[test]
     fn test_npc_encounter_state_update() {
-        let mut state = NpcEncounterState::default();
-        state.times_met = 5;
+        let mut state = NpcEncounterState {
+            times_met: 5,
+            ..Default::default()
+        };
         state.trigger_fired.insert(0, true);
         state.trigger_fired.insert(1, false);
 

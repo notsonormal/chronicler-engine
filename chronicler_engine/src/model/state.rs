@@ -29,13 +29,33 @@ pub struct LogEntry {
 
 const MAX_LOG_ENTRIES: usize = 1000;
 
+#[derive(Debug, Default, Clone, PartialEq)]
+pub enum GenerationStatus {
+    #[default]
+    Idle,
+    Generating,
+    Error(String),
+}
+
+impl GenerationStatus {
+    pub fn is_generating(&self) -> bool {
+        matches!(self, Self::Generating)
+    }
+
+    pub fn error_message(&self) -> Option<&str> {
+        match self {
+            Self::Error(msg) => Some(msg),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct GenerationState {
     pub input: String,
     pub cursor_position: usize,
     pub scroll_offset: u16,
-    pub is_generating: bool,
-    pub error_message: Option<String>,
+    pub status: GenerationStatus,
 }
 
 impl GenerationState {
@@ -65,7 +85,7 @@ pub struct GeneratingGuard {
 impl GeneratingGuard {
     pub fn new(state: Arc<std::sync::Mutex<GameState>>) -> Self {
         if let Ok(mut guard) = state.lock() {
-            guard.generation_state.is_generating = true;
+            guard.generation_state.status = GenerationStatus::Generating;
         }
         Self { state }
     }
@@ -74,7 +94,7 @@ impl GeneratingGuard {
 impl Drop for GeneratingGuard {
     fn drop(&mut self) {
         if let Ok(mut guard) = self.state.lock() {
-            guard.generation_state.is_generating = false;
+            guard.generation_state.status = GenerationStatus::Idle;
         }
     }
 }
@@ -155,7 +175,7 @@ impl GameState {
         });
     }
 
-    /// Edit a log entry by its ID
+    /// [DOC: docs/architecture/system.md]
     pub fn edit_log(&mut self, id: u64, new_text: String) -> crate::error::Result<()> {
         let entry = self
             .narration_history
@@ -216,7 +236,6 @@ impl GameState {
             .get_last_ai_response_index()
             .ok_or_else(|| crate::error::EngineError::Internal("No AI response to retry".into()))?;
 
-        // Validate: AI response must come AFTER the input
         if ai_idx <= input_idx {
             return Err(crate::error::EngineError::Internal(
                 "AI response must be after input".into(),
@@ -316,19 +335,23 @@ mod tests {
     }
 
     #[test]
-    fn test_generation_state_error_message() {
+    fn test_generation_state_status() {
         let mut tui = GenerationState::default();
 
-        assert!(tui.error_message.is_none());
+        assert_eq!(tui.status, GenerationStatus::Idle);
+        assert!(!tui.status.is_generating());
+        assert!(tui.status.error_message().is_none());
 
-        tui.error_message = Some("LLM Error: 429 Too Many Requests".to_string());
+        tui.status = GenerationStatus::Error("LLM Error: 429 Too Many Requests".to_string());
         assert_eq!(
-            tui.error_message,
-            Some("LLM Error: 429 Too Many Requests".to_string())
+            tui.status,
+            GenerationStatus::Error("LLM Error: 429 Too Many Requests".to_string())
         );
+        assert!(tui.status.error_message().is_some());
 
-        tui.error_message = None;
-        assert!(tui.error_message.is_none());
+        tui.status = GenerationStatus::Generating;
+        assert!(tui.status.is_generating());
+        assert!(tui.status.error_message().is_none());
     }
 
     #[test]
@@ -617,15 +640,36 @@ mod tests {
             "room1".to_string(),
         )));
 
-        assert!(!state.lock().unwrap().generation_state.is_generating);
+        assert!(
+            !state
+                .lock()
+                .unwrap()
+                .generation_state
+                .status
+                .is_generating()
+        );
 
         {
             let _guard = GeneratingGuard::new(state.clone());
-            assert!(state.lock().unwrap().generation_state.is_generating);
+            assert!(
+                state
+                    .lock()
+                    .unwrap()
+                    .generation_state
+                    .status
+                    .is_generating()
+            );
         }
 
-        // Guard dropped — is_generating reset
-        assert!(!state.lock().unwrap().generation_state.is_generating);
+        // Guard dropped — status reset to Idle
+        assert!(
+            !state
+                .lock()
+                .unwrap()
+                .generation_state
+                .status
+                .is_generating()
+        );
     }
 
     #[test]
@@ -662,11 +706,25 @@ mod tests {
 
         {
             let guard = GeneratingGuard::new(state.clone());
-            assert!(state.lock().unwrap().generation_state.is_generating);
+            assert!(
+                state
+                    .lock()
+                    .unwrap()
+                    .generation_state
+                    .status
+                    .is_generating()
+            );
             drop(guard);
         }
 
-        assert!(!state.lock().unwrap().generation_state.is_generating);
+        assert!(
+            !state
+                .lock()
+                .unwrap()
+                .generation_state
+                .status
+                .is_generating()
+        );
     }
 
     #[test]
@@ -719,9 +777,16 @@ mod tests {
         let guard = GeneratingGuard::new(state.clone());
         drop(guard); // should not panic
 
-        // Verify state is still accessible and is_generating is false
+        // Verify state is still accessible and status is Idle
         // (the guard's constructor failed to set it, and drop failed to unset it,
         // but the underlying state is not corrupted)
-        assert!(!state.lock().unwrap().generation_state.is_generating);
+        assert!(
+            !state
+                .lock()
+                .unwrap()
+                .generation_state
+                .status
+                .is_generating()
+        );
     }
 }

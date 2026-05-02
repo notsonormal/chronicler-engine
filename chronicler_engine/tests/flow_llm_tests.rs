@@ -45,7 +45,7 @@ mod tests {
             .unwrap();
 
         let initial_count = initial_messages.len();
-        println!("Initial messages: {}", initial_count);
+        println!("Initial messages: {initial_count}");
 
         page.evaluate::<(), ()>(
             r#"
@@ -85,13 +85,11 @@ mod tests {
         }
 
         let final_count = wait_for_more_messages(&page, initial_count).await;
-        println!("Final messages: {}", final_count);
+        println!("Final messages: {final_count}");
 
         assert!(
             final_count > initial_count,
-            "Should have more messages after LLM processes command. Initial: {}, Final: {}",
-            initial_count,
-            final_count
+            "Should have more messages after LLM processes command. Initial: {initial_count}, Final: {final_count}"
         );
 
         let final_messages: Vec<String> = page
@@ -103,18 +101,16 @@ mod tests {
             .unwrap();
 
         let new_message = final_messages.last().unwrap();
-        println!("New message: {}", new_message);
+        println!("New message: {new_message}");
 
         assert!(
             !new_message.contains("[MockNarration]") && !new_message.contains("[MockGenerated]"),
-            "LLM should generate real response, not mock. Got: {}",
-            new_message
+            "LLM should generate real response, not mock. Got: {new_message}"
         );
 
         assert!(
             new_message.len() > 20,
-            "LLM response should be substantial. Got: {}",
-            new_message
+            "LLM response should be substantial. Got: {new_message}"
         );
 
         let _ = browser.close().await;
@@ -146,7 +142,7 @@ mod tests {
 
         // Count initial log entries by type
         let initial_log_state = get_story_log_summary(&page).await;
-        println!("Initial story log: {:?}", initial_log_state);
+        println!("Initial story log: {initial_log_state:?}");
 
         // Submit a FreeAction that requires LLM narration
         send_action(&page, "look around and describe what you see").await;
@@ -159,11 +155,10 @@ mod tests {
             )
             .await
             .unwrap();
-        println!("Status during LLM: {}", status_during);
+        println!("Status during LLM: {status_during}");
         assert!(
             status_during.contains("Thinking"),
-            "Status should show 'Thinking...' during LLM generation. Got: '{}'",
-            status_during
+            "Status should show 'Thinking...' during LLM generation. Got: '{status_during}'"
         );
 
         // Wait for LLM to complete (narration + trigger narration)
@@ -176,7 +171,7 @@ mod tests {
             Duration::from_secs(10),
         )
         .await;
-        println!("Final story log: {:?}", final_log_state);
+        println!("Final story log: {final_log_state:?}");
 
         // Get error message if any
         let error_msg: String = page
@@ -194,22 +189,19 @@ mod tests {
         if !narration_added && llm_result.is_err() {
             panic!(
                 "LLM narration failed: no new entries added after 180s timeout. \
-                 Initial: {:?}, Final: {:?}, Error: '{}', LLM idle: Err",
-                initial_log_state, final_log_state, error_msg
+                 Initial: {initial_log_state:?}, Final: {final_log_state:?}, Error: '{error_msg}', LLM idle: Err"
             );
         }
 
         if !narration_added && !error_msg.is_empty() {
             panic!(
-                "LLM narration failed with error. Initial: {:?}, Final: {:?}, Error: '{}'",
-                initial_log_state, final_log_state, error_msg
+                "LLM narration failed with error. Initial: {initial_log_state:?}, Final: {final_log_state:?}, Error: '{error_msg}'"
             );
         }
 
         assert!(
             narration_added,
-            "LLM should have added narration entries. Initial: {:?}, Final: {:?}, LLM idle: {:?}",
-            initial_log_state, final_log_state, llm_result
+            "LLM should have added narration entries. Initial: {initial_log_state:?}, Final: {final_log_state:?}, LLM idle: {llm_result:?}"
         );
 
         // Verify at least one Narration-type entry was added (the LLM response)
@@ -236,13 +228,12 @@ mod tests {
             )
             .await
             .unwrap();
-        println!("Status after LLM: {}", status_after);
+        println!("Status after LLM: {status_after}");
 
         if !status_after.contains("Ready") && !status_after.contains("Error") {
             eprintln!(
-                "Status not Ready/Error after 180s. LLM idle result: {:?}. \
-                 Story log: {:?}. Error UI: '{}'",
-                llm_result, final_log_state, error_msg
+                "Status not Ready/Error after 180s. LLM idle result: {llm_result:?}. \
+                 Story log: {final_log_state:?}. Error UI: '{error_msg}'"
             );
         }
 
@@ -277,7 +268,7 @@ mod tests {
             )
             .await
             .unwrap();
-        println!("Initial status: {}", initial_status);
+        println!("Initial status: {initial_status}");
 
         page.evaluate::<(), ()>(
             r#"
@@ -300,7 +291,7 @@ mod tests {
             )
             .await
             .unwrap();
-        println!("Status during: {}", status_during);
+        println!("Status during: {status_during}");
 
         let llm_result = wait_for_llm_idle(port, Duration::from_secs(180)).await;
         if llm_result.is_err() {
@@ -318,18 +309,13 @@ mod tests {
 
         let status_after = wait_for_status_not_thinking(&page).await;
 
-        println!(
-            "Status after (LLM result: {:?}): {}",
-            llm_result, status_after
-        );
+        println!("Status after (LLM result: {llm_result:?}): {status_after}");
 
         assert!(
             !status_after.contains("Thinking")
                 || status_after.contains("Ready")
                 || status_after.contains("Error"),
-            "Status should not be stuck on 'Thinking...'. Got: {} (LLM result: {:?})",
-            status_after,
-            llm_result
+            "Status should not be stuck on 'Thinking...'. Got: {status_after} (LLM result: {llm_result:?})"
         );
 
         let _ = browser.close().await;

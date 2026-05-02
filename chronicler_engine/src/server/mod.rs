@@ -2,13 +2,7 @@ pub mod fragments;
 pub mod settings_fragment;
 pub mod templates;
 
-pub fn create_app_for_testing(state: Arc<std::sync::Mutex<GameState>>) -> Router {
-    let app_state = AppState {
-        state,
-        game_service: Arc::new(DefaultGameService::new()) as Arc<dyn GameService>,
-        settings: Arc::new(RwLock::new(AppSettings::default())),
-    };
-
+fn build_router(app_state: AppState) -> Router {
     Router::new()
         .route("/", get(index_handler))
         .route("/fragment/header", get(fragments::header_fragment))
@@ -54,6 +48,15 @@ pub fn create_app_for_testing(state: Arc<std::sync::Mutex<GameState>>) -> Router
         .with_state(app_state)
 }
 
+pub fn create_app_for_testing(state: Arc<std::sync::Mutex<GameState>>) -> Router {
+    let app_state = AppState {
+        state,
+        game_service: Arc::new(DefaultGameService::new()) as Arc<dyn GameService>,
+        settings: Arc::new(RwLock::new(AppSettings::default())),
+    };
+    build_router(app_state)
+}
+
 use axum::{
     Router,
     response::Html,
@@ -95,56 +98,26 @@ impl AppState {
             settings: Arc::new(RwLock::new(settings)),
         }
     }
+
+    pub fn lock_state(&self) -> crate::error::Result<std::sync::MutexGuard<GameState>> {
+        self.state
+            .lock()
+            .map_err(|_| crate::error::EngineError::Config("Lock poisoned".into()))
+    }
 }
 
 pub async fn run_server(state: Arc<std::sync::Mutex<GameState>>) -> Result<()> {
     run_server_with_config(state, ServerConfig::default()).await
 }
 
+/// [DOC: docs/architecture/system.md]
 pub async fn run_server_with_config(
     state: Arc<std::sync::Mutex<GameState>>,
     config: ServerConfig,
 ) -> Result<()> {
     let app_state = AppState::new(state.clone()).await;
 
-    let app = Router::new()
-        .route("/", get(index_handler))
-        .route("/fragment/header", get(fragments::header_fragment))
-        .route("/fragment/story-log", get(fragments::story_log_fragment))
-        .route(
-            "/fragment/visual-sidebar",
-            get(fragments::visual_sidebar_fragment),
-        )
-        .route(
-            "/fragment/action-area",
-            get(fragments::action_area_fragment),
-        )
-        .route(
-            "/fragment/character-headshots",
-            get(fragments::character_headshots_fragment),
-        )
-        .route("/action", post(fragments::action_handler))
-        .route("/hints", get(fragments::hints_handler))
-        .route("/status/ready", get(fragments::status_ready_handler))
-        .route(
-            "/status/generating",
-            get(fragments::generating_status_handler),
-        )
-        // History edit & retry endpoints
-        .route("/history/:id", post(fragments::edit_history_handler))
-        .route("/retry", post(fragments::retry_handler))
-        .route(
-            "/fragment/settings",
-            get(crate::server::settings_fragment::settings_panel),
-        )
-        .route(
-            "/settings",
-            post(crate::server::settings_fragment::save_settings_handler),
-        )
-        .nest_service("/assets", ServeDir::new("assets"))
-        .nest_service("/data", ServeDir::new("data"))
-        .fallback_service(ServeDir::new("assets"))
-        .with_state(app_state);
+    let app = build_router(app_state);
 
     let addr = format!("127.0.0.1:{}", config.port);
     let listener = bind_with_retry(&addr).await.map_err(|e| {
@@ -242,7 +215,7 @@ mod tests {
     #[test]
     fn test_server_config_debug() {
         let config = ServerConfig { port: 3000 };
-        let debug_str = format!("{:?}", config);
+        let debug_str = format!("{config:?}");
         assert!(debug_str.contains("3000"));
     }
 

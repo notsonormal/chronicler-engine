@@ -8,15 +8,6 @@ use crate::model::settings::AppSettings;
 use crate::server::AppState;
 
 /// [DOC: docs/architecture/system.md]
-pub fn parse_backend(s: &str) -> LlmBackendType {
-    match s {
-        "deepseek" => LlmBackendType::DeepSeek,
-        "mock" => LlmBackendType::Mock,
-        _ => LlmBackendType::OpenRouter,
-    }
-}
-
-/// [DOC: docs/architecture/system.md]
 pub fn parse_api_key(s: &str) -> Option<String> {
     if s.is_empty() {
         None
@@ -81,6 +72,7 @@ impl SettingsTemplate {
     }
 }
 
+/// [DOC: docs/architecture/system.md]
 pub async fn settings_panel(State(app_state): State<AppState>) -> Html<String> {
     let settings = match app_state.settings.read() {
         Ok(g) => g,
@@ -105,15 +97,12 @@ pub struct SettingsForm {
     pub api_key: String,
 }
 
+/// [DOC: docs/architecture/system.md]
 pub async fn save_settings_handler(
     State(app_state): State<AppState>,
     Form(form): Form<SettingsForm>,
 ) -> Html<String> {
-    let backend = match form.llm_backend.as_str() {
-        "deepseek" => LlmBackendType::DeepSeek,
-        "mock" => LlmBackendType::Mock,
-        _ => LlmBackendType::OpenRouter,
-    };
+    let backend = LlmBackendType::from(form.llm_backend.as_str());
 
     let api_key = if form.api_key.is_empty() {
         None
@@ -155,24 +144,30 @@ mod tests {
 
         #[test]
         fn test_deepseek_returns_deepseek() {
-            assert_eq!(parse_backend("deepseek"), LlmBackendType::DeepSeek);
+            assert_eq!(LlmBackendType::from("deepseek"), LlmBackendType::DeepSeek);
         }
 
         #[test]
         fn test_mock_returns_mock() {
-            assert_eq!(parse_backend("mock"), LlmBackendType::Mock);
+            assert_eq!(LlmBackendType::from("mock"), LlmBackendType::Mock);
         }
 
         #[test]
         fn test_openrouter_returns_openrouter() {
-            assert_eq!(parse_backend("openrouter"), LlmBackendType::OpenRouter);
+            assert_eq!(
+                LlmBackendType::from("openrouter"),
+                LlmBackendType::OpenRouter
+            );
         }
 
         #[test]
         fn test_unknown_returns_openrouter_default() {
-            assert_eq!(parse_backend("unknown_backend"), LlmBackendType::OpenRouter);
-            assert_eq!(parse_backend(""), LlmBackendType::OpenRouter);
-            assert_eq!(parse_backend("ollama"), LlmBackendType::OpenRouter);
+            assert_eq!(
+                LlmBackendType::from("unknown_backend"),
+                LlmBackendType::OpenRouter
+            );
+            assert_eq!(LlmBackendType::from(""), LlmBackendType::OpenRouter);
+            assert_eq!(LlmBackendType::from("ollama"), LlmBackendType::OpenRouter);
         }
     }
 

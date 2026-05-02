@@ -691,8 +691,7 @@ mod tests {
         // Fixed width should be around 80px (not 100% which would be much smaller)
         assert!(
             width > 50.0 && width < 120.0,
-            "NPC portrait should have fixed width around 80px, got {}",
-            width
+            "NPC portrait should have fixed width around 80px, got {width}"
         );
 
         browser.close().await.unwrap();
@@ -831,9 +830,8 @@ mod tests {
             .unwrap();
 
         assert!(
-            original_text.len() > 0,
-            "Original text should not be empty, got: '{}'",
-            original_text
+            !original_text.is_empty(),
+            "Original text should not be empty, got: '{original_text}'"
         );
 
         // Click edit
@@ -1106,9 +1104,7 @@ mod tests {
         let diff = (textarea_height - original_height).abs();
         assert!(
             diff < 15.0,
-            "Textarea height ({}) should match original text height ({})",
-            textarea_height,
-            original_height
+            "Textarea height ({textarea_height}) should match original text height ({original_height})"
         );
 
         browser.close().await.unwrap();

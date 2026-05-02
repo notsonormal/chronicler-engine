@@ -90,23 +90,19 @@ fn test_header_template_renders_room_name() {
     let rendered = template.render().unwrap();
     assert!(
         rendered.contains("Chronicler Engine"),
-        "Expected rendered output to contain 'Chronicler Engine': {}",
-        rendered
+        "Expected rendered output to contain 'Chronicler Engine': {rendered}"
     );
     assert!(
         rendered.contains(r#"class="header""#),
-        "Expected header class: {}",
-        rendered
+        "Expected header class: {rendered}"
     );
     assert!(
         rendered.contains(r#"class="game-title""#),
-        "Expected game-title class: {}",
-        rendered
+        "Expected game-title class: {rendered}"
     );
     assert!(
         rendered.contains("connection-status"),
-        "Expected connection-status in: {}",
-        rendered
+        "Expected connection-status in: {rendered}"
     );
 }
 
@@ -119,8 +115,7 @@ fn test_header_template_escapes_html() {
     let rendered = template.render().unwrap();
     assert!(
         rendered.contains("Chronicler Engine"),
-        "Should contain Chronicler Engine: {}",
-        rendered
+        "Should contain Chronicler Engine: {rendered}"
     );
 }
 
@@ -132,13 +127,11 @@ fn test_header_template_connection_status() {
     let rendered = template.render().unwrap();
     assert!(
         rendered.contains(r#"id="connection-status""#),
-        "Expected connection-status id: {}",
-        rendered
+        "Expected connection-status id: {rendered}"
     );
     assert!(
         rendered.contains("Connected"),
-        "Expected Connected text: {}",
-        rendered
+        "Expected Connected text: {rendered}"
     );
 }
 
@@ -148,7 +141,7 @@ fn test_header_template_exact_output() {
         room_name: "Grand Hall".to_string(),
     };
     let rendered = template.render().unwrap();
-    eprintln!("Rendered output: {:?}", rendered);
+    eprintln!("Rendered output: {rendered:?}");
     assert!(rendered.contains("class=\"header\""));
     assert!(rendered.contains("Chronicler Engine"));
 }
@@ -236,13 +229,11 @@ mod tests {
         // Should contain the image, not "No Location Image"
         assert!(
             body_str.contains("data/images/test_room.png"),
-            "Expected room image in sidebar: {}",
-            body_str
+            "Expected room image in sidebar: {body_str}"
         );
         assert!(
             !body_str.contains("No Location Image"),
-            "Should not show placeholder when image exists: {}",
-            body_str
+            "Should not show placeholder when image exists: {body_str}"
         );
     }
 
@@ -506,8 +497,7 @@ mod tests {
             let body_str = String::from_utf8_lossy(&body);
             assert!(
                 body_str.contains("LLM Settings"),
-                "Expected 'LLM Settings' in response: {}",
-                body_str
+                "Expected 'LLM Settings' in response: {body_str}"
             );
         }
 
@@ -529,23 +519,19 @@ mod tests {
             let body_str = String::from_utf8_lossy(&body);
             assert!(
                 body_str.contains("llm_backend"),
-                "Expected llm_backend select element: {}",
-                body_str
+                "Expected llm_backend select element: {body_str}"
             );
             assert!(
                 body_str.contains("OpenRouter"),
-                "Expected OpenRouter option: {}",
-                body_str
+                "Expected OpenRouter option: {body_str}"
             );
             assert!(
                 body_str.contains("DeepSeek"),
-                "Expected DeepSeek option: {}",
-                body_str
+                "Expected DeepSeek option: {body_str}"
             );
             assert!(
                 !body_str.contains("Mock (Testing)"),
-                "Mock option should not appear in UI dropdown: {}",
-                body_str
+                "Mock option should not appear in UI dropdown: {body_str}"
             );
         }
 
@@ -567,13 +553,11 @@ mod tests {
             let body_str = String::from_utf8_lossy(&body);
             assert!(
                 body_str.contains("llm_model"),
-                "Expected llm_model input: {}",
-                body_str
+                "Expected llm_model input: {body_str}"
             );
             assert!(
                 body_str.contains("quantifier_model"),
-                "Expected quantifier_model input: {}",
-                body_str
+                "Expected quantifier_model input: {body_str}"
             );
         }
 
@@ -601,8 +585,7 @@ mod tests {
             let body_str = String::from_utf8_lossy(&body);
             assert!(
                 body_str.contains("saved"),
-                "Expected success response: {}",
-                body_str
+                "Expected success response: {body_str}"
             );
         }
 
@@ -630,8 +613,7 @@ mod tests {
             let body_str = String::from_utf8_lossy(&body);
             assert!(
                 body_str.contains("saved"),
-                "Expected success response: {}",
-                body_str
+                "Expected success response: {body_str}"
             );
         }
 
@@ -661,8 +643,7 @@ mod tests {
             let body_str = String::from_utf8_lossy(&body);
             assert!(
                 body_str.contains("saved"),
-                "Expected success response: {}",
-                body_str
+                "Expected success response: {body_str}"
             );
         }
 
@@ -690,8 +671,7 @@ mod tests {
             let body_str = String::from_utf8_lossy(&body);
             assert!(
                 body_str.contains("saved"),
-                "Expected success response: {}",
-                body_str
+                "Expected success response: {body_str}"
             );
         }
 
@@ -722,8 +702,7 @@ mod tests {
             let body_str = String::from_utf8_lossy(&body);
             assert!(
                 body_str.contains("saved"),
-                "Expected success response with empty api_key: {}",
-                body_str
+                "Expected success response with empty api_key: {body_str}"
             );
         }
     }
@@ -825,13 +804,11 @@ async fn test_visual_sidebar_with_real_world_data() {
     // Should show the room image, not the placeholder
     assert!(
         body_str.contains("test_room.jpg"),
-        "Should contain room image: {}",
-        body_str
+        "Should contain room image: {body_str}"
     );
     assert!(
         !body_str.contains("No Location Image"),
-        "Should not show placeholder: {}",
-        body_str
+        "Should not show placeholder: {body_str}"
     );
 }
 

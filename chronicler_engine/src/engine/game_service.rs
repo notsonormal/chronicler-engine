@@ -35,10 +35,28 @@ impl Default for DefaultGameService {
     }
 }
 
+fn with_state_lock<T>(
+    state: &Arc<Mutex<GameState>>,
+    f: impl FnOnce(&mut GameState) -> T,
+) -> Option<T> {
+    state.lock().ok().map(|mut guard| f(&mut guard))
+}
+
+fn reset_generating(state: &Arc<Mutex<GameState>>) {
+    if let Ok(mut s) = state.lock() {
+        s.generation_state.status = crate::model::state::GenerationStatus::Idle;
+    }
+}
+
+fn set_error_and_reset(state: &Arc<Mutex<GameState>>, message: String) {
+    if let Ok(mut s) = state.lock() {
+        s.generation_state.status = crate::model::state::GenerationStatus::Error(message);
+    }
+}
+
 impl GameService for DefaultGameService {
     fn execute_action(&self, state: Arc<Mutex<GameState>>, input: String, _player_name: String) {
-        // Note: We don't use GeneratingGuard here because async actions (WalkTo, FreeAction)
-        // spawn inner threads that need to manage the is_generating flag themselves.
+        // NOTE: async actions manage is_generating themselves.
 
         let action = parse_command(&input);
 
@@ -50,7 +68,7 @@ impl GameService for DefaultGameService {
         match action {
             Action::Quit => {
                 state_guard.add_log("Goodbye!".to_string(), None, LogType::System);
-                state_guard.generation_state.is_generating = false;
+                state_guard.generation_state.status = crate::model::state::GenerationStatus::Idle;
             }
             Action::Look => {
                 let room_name;
@@ -65,7 +83,7 @@ impl GameService for DefaultGameService {
                         state_guard.add_log(desc, Some(name), LogType::Narration);
                     }
                 }
-                state_guard.generation_state.is_generating = false;
+                state_guard.generation_state.status = crate::model::state::GenerationStatus::Idle;
             }
             Action::Talk(name, msg) => {
                 let msg_str = msg.unwrap_or_default();
@@ -74,7 +92,7 @@ impl GameService for DefaultGameService {
                     None,
                     LogType::System,
                 );
-                state_guard.generation_state.is_generating = false;
+                state_guard.generation_state.status = crate::model::state::GenerationStatus::Idle;
             }
             Action::Inventory => {
                 state_guard.add_log(
@@ -82,7 +100,7 @@ impl GameService for DefaultGameService {
                     None,
                     LogType::System,
                 );
-                state_guard.generation_state.is_generating = false;
+                state_guard.generation_state.status = crate::model::state::GenerationStatus::Idle;
             }
             Action::FreeAction(text) => {
                 let world = Arc::clone(&state_guard.world);
@@ -107,9 +125,7 @@ impl GameService for DefaultGameService {
                         .find(|r| r.id == room_id);
 
                     let Some(room) = room else {
-                        if let Ok(mut s) = state_for_thread.lock() {
-                            s.generation_state.is_generating = false;
-                        }
+                        reset_generating(&state_for_thread);
                         return;
                     };
 
@@ -125,15 +141,13 @@ impl GameService for DefaultGameService {
                     );
 
                     let Ok(narration_text) = backend.narrate_action(&context) else {
-                        if let Ok(mut s) = state_for_thread.lock() {
-                            s.generation_state.error_message =
-                                Some("LLM Error: narration failed".to_string());
-                            s.generation_state.is_generating = false;
-                        }
+                        set_error_and_reset(
+                            &state_for_thread,
+                            "LLM Error: narration failed".to_string(),
+                        );
                         return;
                     };
 
-                    // Determine NPCs via quantifier
                     let use_mock = std::env::var("LLM_BACKEND").as_deref() == Ok("mock");
                     let quantifier_backend: Box<dyn QuantifierBackendTrait> = if use_mock {
                         Box::new(MockQuantifierBackend::default())
@@ -141,60 +155,45 @@ impl GameService for DefaultGameService {
                         Box::new(RealQuantifierBackend)
                     };
 
-                    let quantifier_result = {
-                        let state = match state_for_thread.lock() {
-                            Ok(s) => s,
-                            Err(_) => {
-                                if let Ok(mut s) = state_for_thread.lock() {
-                                    s.generation_state.is_generating = false;
-                                }
-                                return;
-                            }
-                        };
+                    let quantifier_result = with_state_lock(&state_for_thread, |state| {
                         let previous_room_npcs: Vec<NpcCard> = state.npcs_in_area.clone();
                         determine_npcs_in_room(
-                            &state,
+                            state,
                             &room.npcs,
                             &previous_room_npcs,
                             &narration_text,
                             quantifier_backend.as_ref(),
                         )
+                    });
+
+                    let Some(quantifier_result) = quantifier_result else {
+                        reset_generating(&state_for_thread);
+                        return;
                     };
 
-                    // Call synchronous impl — handles all state mutations
-                    let result = {
-                        let mut state = match state_for_thread.lock() {
-                            Ok(s) => s,
-                            Err(_) => {
-                                if let Ok(mut s) = state_for_thread.lock() {
-                                    s.generation_state.is_generating = false;
-                                }
-                                return;
-                            }
-                        };
+                    let result = with_state_lock(&state_for_thread, |state| {
                         execute_freeaction_impl(
-                            &mut state,
-                            &narration_text,
-                            &text,
-                            &quantifier_result,
-                            &world,
-                            &map,
-                            &player,
-                            &all_npcs,
-                            &room.npcs,
-                            &history,
+                            state,
+                            &crate::engine::action_processing::FreeActionContext {
+                                narration_text: &narration_text,
+                                user_input: &text,
+                                quantifier_result: &quantifier_result,
+                                world: &world,
+                                player: &player,
+                                all_npcs: &all_npcs,
+                                history: &history,
+                            },
                         )
-                    };
+                    });
 
-                    if let Err(e) = result {
+                    if let Some(Err(e)) = result {
                         if let Ok(mut s) = state_for_thread.lock() {
-                            s.generation_state.error_message = Some(format!("Error: {e}"));
+                            s.generation_state.status =
+                                crate::model::state::GenerationStatus::Error(format!("Error: {e}"));
                         }
                     }
 
-                    if let Ok(mut s) = state_for_thread.lock() {
-                        s.generation_state.is_generating = false;
-                    }
+                    reset_generating(&state_for_thread);
                 });
             }
         }
@@ -242,19 +241,12 @@ impl GameService for DefaultGameService {
 
         let state_clone = state.clone();
 
-        // Spawn background thread to call LLM and replace the response
         thread::spawn(move || {
             // Small delay to let any inner threads start their guards first
             std::thread::sleep(std::time::Duration::from_millis(50));
 
-            let room = find_room_in_map(&map, &current_room_id);
-
-            let Some(room) = room else {
-                if let Ok(mut state) = state_clone.lock() {
-                    state.generation_state.error_message =
-                        Some("Retry failed: room not found".to_string());
-                    state.generation_state.is_generating = false;
-                }
+            let Some(room) = find_room_in_map(&map, &current_room_id) else {
+                set_error_and_reset(&state_clone, "Retry failed: room not found".to_string());
                 return;
             };
 
@@ -272,26 +264,25 @@ impl GameService for DefaultGameService {
                 &nearby_npcs,
                 &player,
                 &input_text,
-                &history_for_retry, // History excludes the AI response being retried
+                &history_for_retry,
             );
 
-            let new_narration = match backend.narrate_action(&context) {
-                Ok(text) => text,
-                Err(e) => {
-                    if let Ok(mut state) = state_clone.lock() {
-                        state.generation_state.error_message = Some(format!("LLM Error: {e}"));
-                        state.generation_state.is_generating = false;
-                    }
-                    return;
-                }
+            let Ok(new_narration) = backend.narrate_action(&context) else {
+                set_error_and_reset(
+                    &state_clone,
+                    "LLM Error: retry narration failed".to_string(),
+                );
+                return;
             };
 
             // Replace the last AI response with the new narration
             if let Ok(mut state) = state_clone.lock() {
                 if let Err(e) = state.replace_last_ai_response(new_narration) {
-                    state.generation_state.error_message = Some(format!("Retry failed: {e}"));
+                    state.generation_state.status =
+                        crate::model::state::GenerationStatus::Error(format!("Retry failed: {e}"));
+                } else {
+                    state.generation_state.status = crate::model::state::GenerationStatus::Idle;
                 }
-                state.generation_state.is_generating = false;
             }
         });
     }

@@ -14,7 +14,7 @@ use std::time::Duration;
 static SERVER_MANAGED: AtomicBool = AtomicBool::new(false);
 
 pub fn port_in_use(port: u16) -> bool {
-    std::net::TcpStream::connect(format!("127.0.0.1:{}", port)).is_ok()
+    std::net::TcpStream::connect(format!("127.0.0.1:{port}")).is_ok()
 }
 
 /// Navigate to a URL with explicit error handling for connection refused.
@@ -24,11 +24,11 @@ pub async fn goto_with_connection_check(
     page: &playwright_rs::Page,
     port: u16,
 ) -> Result<(), String> {
-    let url = format!("http://127.0.0.1:{}", port);
+    let url = format!("http://127.0.0.1:{port}");
 
     // Explicit wait for server before navigation
     if !wait_for_server(port, 100).await {
-        return Err(format!("Server failed to start on port {}", port));
+        return Err(format!("Server failed to start on port {port}"));
     }
 
     let _: Option<_> = page.goto(&url, None).await.map_err(|e| {
@@ -41,7 +41,7 @@ pub async fn goto_with_connection_check(
                  Check with: netstat -ano | Select-String {port}",
             )
         } else {
-            format!("Navigation failed to {}: {}", url, err_str)
+            format!("Navigation failed to {url}: {err_str}")
         }
     })?;
     Ok(())
@@ -51,7 +51,7 @@ pub fn kill_existing_server() {
     // Only kill if we manage the server (to avoid killing other test instances)
     if SERVER_MANAGED.load(Ordering::SeqCst) {
         let _ = Command::new("taskkill")
-            .args(&["/F", "/IM", "chronicler_engine.exe"])
+            .args(["/F", "/IM", "chronicler_engine.exe"])
             .output();
         // Wait for the port to be released (2 seconds for Windows)
         std::thread::sleep(std::time::Duration::from_millis(2000));
@@ -64,7 +64,7 @@ pub fn kill_existing_server() {
 pub fn start_server_with_env(port: u16, world: &str, use_mock: bool) -> Child {
     // Use cargo run - pre-built binary has working directory issues in test context
     let mut cmd = Command::new("cargo");
-    cmd.args(&["run", "--", "--world", world, "--port", &port.to_string()]);
+    cmd.args(["run", "--", "--world", world, "--port", &port.to_string()]);
 
     // Use environment variable to override backend instead of mutating settings file
     if use_mock {
@@ -84,7 +84,7 @@ pub async fn wait_for_server(port: u16, max_attempts: usize) -> bool {
             tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
 
             // Try to connect and verify server responds
-            if std::net::TcpStream::connect(format!("127.0.0.1:{}", port)).is_ok() {
+            if std::net::TcpStream::connect(format!("127.0.0.1:{port}")).is_ok() {
                 // Give extra time for server to initialize
                 tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
                 return true;
@@ -100,19 +100,16 @@ pub async fn wait_for_llm_idle(port: u16, timeout: Duration) -> Result<(), ()> {
     let client = reqwest::Client::new();
 
     while start.elapsed() < timeout {
-        match client
-            .get(&format!("http://127.0.0.1:{}/status/generating", port))
+        if let Ok(resp) = client
+            .get(format!("http://127.0.0.1:{port}/status/generating"))
             .send()
             .await
         {
-            Ok(resp) => {
-                if let Ok(text) = resp.text().await {
-                    if text == "idle" {
-                        return Ok(());
-                    }
+            if let Ok(text) = resp.text().await {
+                if text == "idle" {
+                    return Ok(());
                 }
             }
-            Err(_) => {}
         }
         tokio::time::sleep(Duration::from_millis(200)).await;
     }
@@ -120,10 +117,7 @@ pub async fn wait_for_llm_idle(port: u16, timeout: Duration) -> Result<(), ()> {
     // Timeout reached - try to reset the flag by posting to a reset endpoint
     // This ensures is_generating doesn't get stuck
     let _ = client
-        .post(&format!(
-            "http://127.0.0.1:{}/status/reset-generating",
-            port
-        ))
+        .post(format!("http://127.0.0.1:{port}/status/reset-generating"))
         .send()
         .await;
 
@@ -218,7 +212,7 @@ pub async fn wait_for_non_loading_value(page: &playwright_rs::Page, selector: &s
     for _ in 0..20 {
         let value: String = page
             .evaluate::<(), String>(
-                &format!("document.querySelector('{}')?.innerText || ''", selector),
+                &format!("document.querySelector('{selector}')?.innerText || ''"),
                 None,
             )
             .await
@@ -267,7 +261,7 @@ pub async fn wait_for_element_children(
     for _ in 0..20 {
         let count: u32 = page
             .evaluate::<(), u32>(
-                &format!("document.querySelectorAll('{}').length", selector),
+                &format!("document.querySelectorAll('{selector}').length"),
                 None,
             )
             .await
@@ -287,7 +281,7 @@ pub async fn wait_for_element_text(page: &playwright_rs::Page, selector: &str) -
     for _ in 0..20 {
         let text: String = page
             .evaluate::<(), String>(
-                &format!("document.querySelector('{}')?.innerText || ''", selector),
+                &format!("document.querySelector('{selector}')?.innerText || ''"),
                 None,
             )
             .await
@@ -381,7 +375,7 @@ pub async fn wait_for_element_exists(
     for _ in 0..max_attempts {
         let exists: bool = page
             .evaluate::<(), bool>(
-                &format!("document.querySelector('{}') !== null", selector),
+                &format!("document.querySelector('{selector}') !== null"),
                 None,
             )
             .await
@@ -405,7 +399,7 @@ pub async fn wait_for_element_not_exists(
     for _ in 0..max_attempts {
         let exists: bool = page
             .evaluate::<(), bool>(
-                &format!("document.querySelector('{}') !== null", selector),
+                &format!("document.querySelector('{selector}') !== null"),
                 None,
             )
             .await
@@ -435,7 +429,7 @@ pub async fn wait_for_status_ready(page: &playwright_rs::Page) {
             return;
         }
         if i == 49 {
-            println!("WAIT_FOR_STATUS_READY TIMEOUT - status: '{}'", status);
+            println!("WAIT_FOR_STATUS_READY TIMEOUT - status: '{status}'");
         }
         sleep(Duration::from_millis(100)).await;
     }
@@ -490,8 +484,8 @@ pub struct TestSpecificConfig {
 impl TestConfig {
     pub fn from_file(path: &str) -> Result<Self, String> {
         let content =
-            fs::read_to_string(path).map_err(|e| format!("Failed to read config file: {}", e))?;
-        serde_json::from_str(&content).map_err(|e| format!("Failed to parse config: {}", e))
+            fs::read_to_string(path).map_err(|e| format!("Failed to read config file: {e}"))?;
+        serde_json::from_str(&content).map_err(|e| format!("Failed to parse config: {e}"))
     }
 
     /// Get the backend for a specific test file
@@ -512,7 +506,7 @@ pub fn get_available_port(min: u16, max: u16) -> Result<u16, String> {
 
     while attempts > 0 {
         for port in min..=max {
-            let lock_path = lock_dir.join(format!("port_{}.lock", port));
+            let lock_path = lock_dir.join(format!("port_{port}.lock"));
 
             // Try to create lock file exclusively (atomic on most filesystems)
             if std::fs::OpenOptions::new()
@@ -526,7 +520,7 @@ pub fn get_available_port(min: u16, max: u16) -> Result<u16, String> {
             }
 
             // We have the lock file — verify port is actually free
-            match TcpListener::bind(format!("127.0.0.1:{}", port)) {
+            match TcpListener::bind(format!("127.0.0.1:{port}")) {
                 Ok(listener) => {
                     drop(listener);
                     // Write PID to lock file for debugging stale locks
@@ -570,7 +564,7 @@ pub fn get_available_port(min: u16, max: u16) -> Result<u16, String> {
 
 pub fn release_port_lock(port: u16) {
     let lock_dir = std::env::temp_dir().join("chronicler_test_ports");
-    let lock_path = lock_dir.join(format!("port_{}.lock", port));
+    let lock_path = lock_dir.join(format!("port_{port}.lock"));
     let _ = std::fs::remove_file(&lock_path);
 }
 
@@ -578,7 +572,7 @@ fn is_process_alive(pid: u32) -> bool {
     #[cfg(target_os = "windows")]
     {
         let output = std::process::Command::new("tasklist")
-            .args(["/FI", &format!("PID eq {}", pid), "/NH"])
+            .args(["/FI", &format!("PID eq {pid}"), "/NH"])
             .output();
         if let Ok(output) = output {
             let stdout = String::from_utf8_lossy(&output.stdout);
@@ -627,7 +621,7 @@ impl TestServer {
         let child = start_server_with_env(port, world, use_mock);
         // Increased wait time for server to be fully ready
         let started = wait_for_server(port, 100).await; // 100 * 100ms = 10s total
-        assert!(started, "Server failed to start on port {}", port);
+        assert!(started, "Server failed to start on port {port}");
         SERVER_MANAGED.store(true, Ordering::SeqCst);
         TestServer { child, port }
     }

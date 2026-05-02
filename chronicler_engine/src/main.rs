@@ -7,7 +7,12 @@
     clippy::print_stderr
 )]
 
-use std::{fs, path::Path, sync::Arc, thread};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    sync::Arc,
+    thread,
+};
 
 use chronicler_engine::error::EngineError;
 use chronicler_engine::model::character::{NpcCard, PlayerCard};
@@ -38,8 +43,6 @@ struct Args {
     #[arg(long, default_value = "3000")]
     port: u16,
 }
-
-use std::path::PathBuf;
 
 /// [DOC: docs/architecture/system.md]
 fn resolve_engine_data_path() -> PathBuf {
@@ -126,11 +129,7 @@ mod tests {
     #[test]
     fn test_load_redmist_estate_world() {
         let result = initialize_world_from_manifest("redmist_estate");
-        assert!(
-            result.is_ok(),
-            "Failed to load redmist_estate: {:?}",
-            result
-        );
+        assert!(result.is_ok(), "Failed to load redmist_estate: {result:?}");
         let (manifest, _map, _player, npcs) = result.unwrap();
         assert_eq!(manifest.id, "redmist_estate");
         assert_eq!(manifest.name, "Redmist Estate");
@@ -141,7 +140,7 @@ mod tests {
     #[test]
     fn test_load_test_world() {
         let result = initialize_world_from_manifest("test");
-        assert!(result.is_ok(), "Failed to load test world: {:?}", result);
+        assert!(result.is_ok(), "Failed to load test world: {result:?}");
         let (manifest, _map, player, npcs) = result.unwrap();
         assert_eq!(manifest.id, "test");
         assert_eq!(manifest.name, "Test Realm");
@@ -274,8 +273,7 @@ mod main_tests {
         let result = load_world_manifest("test");
         assert!(
             result.is_ok(),
-            "Should load test world manifest: {:?}",
-            result
+            "Should load test world manifest: {result:?}"
         );
         let manifest = result.unwrap();
         assert_eq!(manifest.id, "test");
@@ -464,7 +462,10 @@ fn main() -> chronicler_engine::Result<()> {
                     }
                     Err(e) => {
                         if let Ok(mut state) = state_for_thread.lock() {
-                            state.generation_state.error_message = Some(format!("LLM Error: {e}"));
+                            state.generation_state.status =
+                                chronicler_engine::model::state::GenerationStatus::Error(format!(
+                                    "LLM Error: {e}"
+                                ));
                         }
                     }
                 }

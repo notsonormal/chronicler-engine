@@ -18,7 +18,7 @@ mod tests {
         let timeout = std::time::Duration::from_millis(timeout_ms);
         while start.elapsed() < timeout {
             if let Ok(guard) = state.lock() {
-                if !guard.generation_state.is_generating {
+                if !guard.generation_state.status.is_generating() {
                     return true;
                 }
             }
@@ -182,7 +182,7 @@ mod tests {
             .any(|e| e.log_type == LogType::System && e.text.contains("Goodbye"));
         assert!(has_goodbye, "Quit should add Goodbye log");
         assert!(
-            !guard.generation_state.is_generating,
+            !guard.generation_state.status.is_generating(),
             "Quit should reset is_generating"
         );
     }
@@ -214,7 +214,7 @@ mod tests {
         {
             let mut guard = state.lock().unwrap();
             guard.narration_history.clear();
-            guard.generation_state.is_generating = false;
+            guard.generation_state.status = chronicler_engine::model::state::GenerationStatus::Idle;
         }
 
         // FreeAction should return immediately and spawn a thread
@@ -228,7 +228,9 @@ mod tests {
         // State should be accessible immediately after execute_action returns
         // (the thread runs in background)
         let guard = state.lock().unwrap();
-        assert!(guard.narration_history.is_empty() || !guard.generation_state.is_generating);
+        assert!(
+            guard.narration_history.is_empty() || !guard.generation_state.status.is_generating()
+        );
     }
 
     /// Test that FreeAction handles room-not-found gracefully.
@@ -243,7 +245,8 @@ mod tests {
         {
             let mut guard = state.lock().unwrap();
             guard.narration_history.clear();
-            guard.generation_state.is_generating = true;
+            guard.generation_state.status =
+                chronicler_engine::model::state::GenerationStatus::Generating;
             guard.current_room_id = "non_existent_room".to_string();
         }
 
@@ -271,7 +274,8 @@ mod tests {
         {
             let mut guard = state.lock().unwrap();
             guard.narration_history.clear();
-            guard.generation_state.is_generating = true;
+            guard.generation_state.status =
+                chronicler_engine::model::state::GenerationStatus::Generating;
         }
 
         service.execute_action(
@@ -283,7 +287,7 @@ mod tests {
         // State should remain accessible after execute_action returns
         let guard = state.lock().unwrap();
         assert!(
-            guard.generation_state.is_generating || !guard.narration_history.is_empty(),
+            guard.generation_state.status.is_generating() || !guard.narration_history.is_empty(),
             "State should be accessible and either generating or have history"
         );
     }
@@ -298,8 +302,9 @@ mod tests {
         {
             let mut guard = state.lock().unwrap();
             guard.narration_history.clear();
-            guard.generation_state.is_generating = true;
-            guard.generation_state.error_message = None;
+            guard.generation_state.status =
+                chronicler_engine::model::state::GenerationStatus::Generating;
+            guard.generation_state.status = chronicler_engine::model::state::GenerationStatus::Idle;
         }
 
         service.execute_action(
@@ -314,7 +319,8 @@ mod tests {
         let guard = state.lock().unwrap();
         // With default backend (no API key), narration fails and error is set
         assert!(
-            guard.generation_state.error_message.is_some() || !guard.generation_state.is_generating,
+            guard.generation_state.status.error_message().is_some()
+                || !guard.generation_state.status.is_generating(),
             "Should have error or be idle after failed narration"
         );
     }
@@ -333,7 +339,8 @@ mod tests {
         {
             let mut guard = state.lock().unwrap();
             guard.narration_history.clear();
-            guard.generation_state.is_generating = true; // set by caller (server)
+            guard.generation_state.status =
+                chronicler_engine::model::state::GenerationStatus::Generating; // set by caller (server)
         }
 
         service.execute_action(
@@ -347,7 +354,7 @@ mod tests {
 
         let guard = state.lock().unwrap();
         assert!(
-            !guard.generation_state.is_generating,
+            !guard.generation_state.status.is_generating(),
             "is_generating should be reset after FreeAction completes"
         );
 
@@ -375,7 +382,8 @@ mod tests {
             guard.narration_history.clear();
             guard.add_log("look around".to_string(), None, LogType::Input);
             guard.add_log("Initial narration".to_string(), None, LogType::Narration);
-            guard.generation_state.is_generating = true; // set by caller (server)
+            guard.generation_state.status =
+                chronicler_engine::model::state::GenerationStatus::Generating; // set by caller (server)
         }
 
         service.retry_last_response(state.clone());
@@ -385,7 +393,7 @@ mod tests {
 
         let guard = state.lock().unwrap();
         assert!(
-            !guard.generation_state.is_generating,
+            !guard.generation_state.status.is_generating(),
             "is_generating should be reset after retry completes"
         );
 
@@ -418,7 +426,7 @@ mod tests {
 
         let guard = state.lock().unwrap();
         assert!(
-            !guard.generation_state.is_generating,
+            !guard.generation_state.status.is_generating(),
             "Look should reset is_generating even when room not found"
         );
     }
@@ -463,7 +471,8 @@ mod tests {
         {
             let mut guard = state.lock().unwrap();
             guard.narration_history.clear();
-            guard.generation_state.is_generating = true; // set by caller (server)
+            guard.generation_state.status =
+                chronicler_engine::model::state::GenerationStatus::Generating; // set by caller (server)
         }
 
         // Action that implies movement
@@ -481,7 +490,7 @@ mod tests {
 
         let guard = state.lock().unwrap();
         assert!(
-            !guard.generation_state.is_generating,
+            !guard.generation_state.status.is_generating(),
             "is_generating should be reset after FreeAction with movement"
         );
 
@@ -511,7 +520,6 @@ mod tests {
         service.execute_action(state.clone(), "look".to_string(), "Player".to_string());
 
         // If we get here, the function handled poisoned mutex gracefully
-        assert!(true);
     }
 }
 
