@@ -151,7 +151,7 @@ pub async fn run_server_with_config(
         EngineError::Config(format!("Failed to bind to port {}: {}", config.port, e))
     })?;
 
-    println!("HTMX Dashboard running at http://127.0.0.1:{}", config.port);
+    log::info!("HTMX Dashboard running at http://127.0.0.1:{}", config.port);
     axum::serve(listener, app)
         .await
         .map_err(|e| EngineError::Config(e.to_string()))
@@ -162,9 +162,9 @@ async fn bind_with_retry(addr: &str) -> std::io::Result<tokio::net::TcpListener>
         match tokio::net::TcpListener::bind(addr).await {
             Ok(listener) => return Ok(listener),
             Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
-                eprintln!("Port in use, attempting to free it...");
+                log::error!("Port in use, attempting to free it...");
                 if let Some(pid) = find_process_on_port(addr) {
-                    eprintln!("Found process on port, attempting to kill PID {pid}...");
+                    log::error!("Found process on port, attempting to kill PID {pid}...");
                     let _ = kill_process(pid);
                     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
                     continue;
@@ -173,7 +173,7 @@ async fn bind_with_retry(addr: &str) -> std::io::Result<tokio::net::TcpListener>
                 tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
             }
             Err(e) => {
-                eprintln!("Bind error: {e:?}");
+                log::error!("Bind error: {e:?}");
                 return Err(e);
             }
         }

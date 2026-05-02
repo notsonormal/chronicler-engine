@@ -168,26 +168,22 @@ impl GameState {
         Ok(())
     }
 
-    /// Get a log entry by its ID
     pub fn get_log(&self, id: u64) -> Option<&LogEntry> {
         self.narration_history.iter().find(|e| e.id == id)
     }
 
-    /// Get the index of the last AI response (Narration or Dialogue)
     pub fn get_last_ai_response_index(&self) -> Option<usize> {
         self.narration_history
             .iter()
             .rposition(|e| e.log_type == LogType::Narration || e.log_type == LogType::Dialogue)
     }
 
-    /// Get the index of the last user input
     pub fn get_last_input_index(&self) -> Option<usize> {
         self.narration_history
             .iter()
             .rposition(|e| e.log_type == LogType::Input)
     }
 
-    /// Get last input text for retry
     pub fn get_last_input_text(&self) -> Option<(String, String)> {
         let input_idx = self.get_last_input_index()?;
         let input_entry = self.narration_history.get(input_idx)?;
@@ -195,12 +191,10 @@ impl GameState {
         Some((sender, input_entry.text.clone()))
     }
 
-    /// Get the full history context for LLM prompt
     pub fn get_history_context(&self) -> &[LogEntry] {
         &self.narration_history
     }
 
-    /// Get history context for retry, excluding the AI response being retried.
     /// [DOC: docs/architecture/system.md]
     /// NOTE: Excludes the AI response being retried to prevent the LLM from repeating it.
     pub fn get_history_context_for_retry(&self) -> Vec<LogEntry> {
@@ -213,8 +207,7 @@ impl GameState {
         }
     }
 
-    /// Replace the AI response that follows the last user input.
-    /// Returns error if there's no input or no AI response after it.
+    /// [DOC: docs/architecture/system.md]
     pub fn replace_last_ai_response(&mut self, new_text: String) -> crate::error::Result<()> {
         let input_idx = self
             .get_last_input_index()

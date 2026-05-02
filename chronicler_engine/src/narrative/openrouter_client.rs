@@ -170,10 +170,7 @@ pub fn call_openrouter_with_model(
     }
 }
 
-/// Call OpenRouter API using the primary narrative model.
-///
-/// Convenience wrapper that reads `LLM_MODEL` from the environment
-/// and delegates to [`call_openrouter_with_model`].
+/// [DOC: docs/system/llm_processing.md]
 pub fn call_openrouter(
     api_key: &str,
     system_prompt: &str,

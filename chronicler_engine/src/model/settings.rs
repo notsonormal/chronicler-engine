@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::narrative::llm::LlmBackendType;
+use crate::model::llm_backend::LlmBackendType;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {

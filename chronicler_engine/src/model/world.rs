@@ -34,7 +34,6 @@ pub struct WorldManifest {
 }
 
 impl WorldManifest {
-    /// Returns the first scenario in the scenarios list, if any.
     pub fn default_scenario(&self) -> Option<&StartingScenario> {
         self.scenarios.first()
     }

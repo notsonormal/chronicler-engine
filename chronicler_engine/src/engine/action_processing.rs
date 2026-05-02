@@ -144,25 +144,7 @@ pub fn evaluate_and_narrate_triggers(
     }
 }
 
-/// Processes the result of a FreeAction LLM call.
-///
-/// The LLM call and quantifier pass happen in the caller (game_service.rs thread).
-///
-/// # Arguments
-/// * `state` - Game state to mutate
-/// * `narration_text` - LLM-generated narration text
-/// * `text` - Original user input text
-/// * `quantifier_result` - Pre-computed quantifier result (from determine_npcs_in_room)
-/// * `world` - World card reference
-/// * `map` - Map definition reference
-/// * `player` - Player card reference
-/// * `all_npcs` - All NPCs in the game
-/// * `room_npc_ids` - NPC IDs from current room's static config
-/// * `history` - Narration history for trigger context
-///
-/// # Returns
-/// * `Ok(())` on success
-/// * `Err(EngineError::RoomNotFound)` if current room not found
+/// [DOC: docs/architecture/system.md]
 #[allow(clippy::too_many_arguments)]
 pub fn execute_freeaction_impl(
     state: &mut GameState,
@@ -573,7 +555,6 @@ mod tests {
     use crate::engine::trigger_eval::{get_times_met, is_currently_meeting};
     use std::sync::Arc;
 
-    /// Create a minimal GameState for testing.
     fn make_test_state() -> GameState {
         let world = Arc::new(crate::model::world::WorldCard {
             name: "Test World".to_string(),

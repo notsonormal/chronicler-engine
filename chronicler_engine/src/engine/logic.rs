@@ -1,9 +1,9 @@
+use std::collections::HashMap;
+
 use crate::error::{EngineError, Result};
 use crate::model::map::{MapDef, Room};
 use crate::model::state::GameState;
-use std::collections::HashMap;
 
-/// Find a room by ID in a MapDef's overworld.
 /// Does not check dynamic_rooms — use get_current_room for full lookup.
 pub fn find_room_in_map<'a>(map: &'a MapDef, target_id: &str) -> Option<&'a Room> {
     for region in &map.overworld.regions {

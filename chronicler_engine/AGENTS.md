@@ -88,6 +88,40 @@ let residents = find_npcs_in_current_location(all_npcs, current_room);
 - **Never** skip architecture/spec update before implementing engine changes.
 - **Never** use `.unwrap()` or `.expect()` in production code.
 
+## GUARDRAILS (PROGRAMMATIC ENFORCEMENT)
+
+Conventions above are **not advisory** — they are enforced automatically.
+If AI-generated code violates these rules, the build will fail.
+
+### Layer 1: Clippy (Compile-Time)
+`src/lib.rs` declares `#![deny(clippy::unwrap_used, clippy::expect_used, clippy::dbg_macro, clippy::todo, clippy::unimplemented, clippy::print_stdout, clippy::print_stderr)]`.
+Test code is exempt via `#![cfg_attr(test, allow(...))]`.
+Binary code (`main.rs`) is exempt for CLI bootstrap only.
+
+### Layer 2: arch-lint (Test-Time)
+`tests/architecture.rs` runs `arch_lint::check!()` against `arch-lint.toml`.
+
+**Configured rules:**
+- `no-unwrap-expect` (AL001) — forbids `.unwrap()` / `.expect()` in production code
+- `no-sync-io` (AL002) — forbids blocking I/O in async contexts
+- `no-error-swallowing` (AL003) — forbids silently swallowed errors
+- `no-silent-result-drop` (AL013) — forbids discarding `Result` without handling
+- `require-thiserror` (AL005) — requires `thiserror::Error` derive on error types
+- Layer enforcement via `[[deny-scope-dep]]` — `model/` must not import `server/`, `narrative/`, or `engine/`
+
+**Suppressing a violation:**
+```rust
+// For infallible operations only (e.g., hardcoded regex, static HTTP response)
+#[allow(clippy::expect_used)]
+#[arch_lint::allow(no_unwrap_expect, reason = "Hardcoded pattern, validated at compile time")]
+```
+
+### Adding New Rules
+To encode new review feedback as a permanent guardrail:
+1. **Clippy-level** (mechanical): Add the lint to `#![deny(...)]` in `src/lib.rs`
+2. **Architecture-level** (structural): Add a declarative rule to `arch-lint.toml` (scopes, dependency bans, crate preferences)
+3. **Custom rule** (advanced): Write a Rust rule using `arch_lint_core::Rule` and register it in `tests/architecture.rs`
+
 ## COMMANDS
 ```bash
 python build.py             # Full build + test (recommended)

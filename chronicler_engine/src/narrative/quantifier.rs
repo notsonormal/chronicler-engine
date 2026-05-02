@@ -1,9 +1,10 @@
+use serde::Deserialize;
+
 use crate::error::EngineError;
 use crate::model::character::NpcCard;
 use crate::model::map::Room;
 use crate::model::state::LogEntry;
 use crate::narrative::openrouter_client::{call_openrouter_with_model, get_quantifier_model};
-use serde::Deserialize;
 
 /// Confidence level of the quantifier's NPC presence detection.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -20,7 +21,6 @@ pub enum QuantifierConfidence {
 /// [DOC: docs/system/navigation.md]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct QuantifierParseResult {
-    /// The NPC IDs detected as present in the room.
     pub npc_ids: Vec<String>,
     /// How confident the quantifier is in this result.
     pub confidence: QuantifierConfidence,
@@ -72,7 +72,6 @@ pub enum NpcEventType {
     Left,
 }
 
-/// A single NPC movement event.
 #[derive(Debug, Clone)]
 pub struct NpcEvent {
     /// NPC ID that moved.
@@ -237,7 +236,6 @@ struct QuantifierJsonResponse {
 
 #[derive(Deserialize, Debug, Clone)]
 struct MovementJson {
-    /// Maps JSON "type" field to Rust "movement_type" field
     #[serde(rename = "type")]
     movement_type: Option<String>,
     destination: Option<String>,
@@ -423,7 +421,6 @@ fn extract_json_from_code_fence(response: &str) -> Option<String> {
     Some(remaining[..end_idx].trim().to_string())
 }
 
-/// Extract NPC IDs from natural language text by matching against known IDs.
 fn extract_npc_ids_from_text(response: &str, known_npc_ids: &[String]) -> Vec<String> {
     let response_lower = response.to_lowercase();
     let mut found = Vec::new();
@@ -570,7 +567,6 @@ impl QuantifierBackend {
     }
 }
 
-/// Build a fallback QuantifierResult using static room NPCs.
 fn static_npc_result(
     state: &crate::model::state::GameState,
     room_npc_ids: &[String],
@@ -685,7 +681,6 @@ pub fn determine_npcs_in_room(
     }
 }
 
-/// Trait for quantifier backends (enables mocking in tests).
 pub trait QuantifierBackendTrait: Send + Sync {
     fn quantify_room(
         &self,
@@ -707,9 +702,7 @@ impl QuantifierBackendTrait for RealQuantifierBackend {
     }
 }
 
-/// Mock quantifier backend for testing.
-/// Returns NPC IDs specified during construction with High confidence,
-/// or auto-detects NPC names from player action text.
+/// [DOC: docs/reference/quantifier_prompt.md]
 #[derive(Default)]
 pub struct MockQuantifierBackend {
     /// NPC IDs to return (overrides auto-detection).
@@ -1715,7 +1708,6 @@ mod tests {
     }
 }
 
-/// Check if a substring appears at word boundaries in the text.
 fn action_boundary_contains(
     text: &str,
     substring: &str,

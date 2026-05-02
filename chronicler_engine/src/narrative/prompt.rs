@@ -9,8 +9,10 @@ use crate::model::map::Room;
 use crate::model::state::LogEntry;
 use crate::model::world::WorldCard;
 
+// [DOC: docs/system/llm_processing.md]
+// Hardcoded regex pattern that is validated at compile time; infallible.
+#[allow(clippy::expect_used)]
 pub fn sanitize_for_prompt(input: &str) -> String {
-    // [DOC: docs/system/llm_processing.md]
     static INJECTION_PATTERN: Lazy<Regex> =
         Lazy::new(|| Regex::new(r"\{\{.+?\}\}").expect("valid regex pattern"));
 
@@ -494,9 +496,7 @@ Keep the flow natural — let reactions unfold, don't rush to conclusions.
     }
 }
 
-/// Build a PromptContext from individual components.
-///
-/// Convenience function for assembling the context needed for narrative generation.
+/// [DOC: docs/reference/sillytavern_prompt_system.md]
 pub fn make_prompt_context<'a>(
     world: &'a WorldCard,
     room: &'a Room,

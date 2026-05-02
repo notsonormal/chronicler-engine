@@ -15,16 +15,12 @@ use crate::narrative::quantifier::{
     MockQuantifierBackend, QuantifierBackendTrait, RealQuantifierBackend, determine_npcs_in_room,
 };
 
-/// Trait for game service that handles game orchestration logic.
 pub trait GameService: Send + Sync {
-    /// Execute a player action, spawning threads for async processing.
     fn execute_action(&self, state: Arc<Mutex<GameState>>, input: String, player_name: String);
 
-    /// Retry the last AI response with a new LLM call.
     fn retry_last_response(&self, state: Arc<Mutex<GameState>>);
 }
 
-/// Default implementation of the GameService trait.
 pub struct DefaultGameService;
 
 impl DefaultGameService {

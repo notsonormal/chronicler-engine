@@ -1,5 +1,3 @@
-use serde::{Deserialize, Serialize};
-
 use crate::error::EngineError;
 use crate::model::character::NpcCard;
 use crate::model::settings::AppSettings;
@@ -34,28 +32,12 @@ pub trait LlmBackend: Send + Sync {
 }
 
 // [DOC: docs/system/llm_processing.md]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum LlmBackendType {
-    OpenRouter,
-    DeepSeek,
-    Mock,
-}
-
-impl LlmBackendType {
-    pub fn from_env() -> Self {
-        match std::env::var("LLM_BACKEND").as_deref() {
-            Ok("deepseek") => LlmBackendType::DeepSeek,
-            Ok("mock") => LlmBackendType::Mock,
-            _ => LlmBackendType::OpenRouter, // default
-        }
-    }
-}
+pub use crate::model::llm_backend::LlmBackendType;
 
 use std::sync::atomic::{AtomicU8, Ordering};
 
 static TEST_BACKEND_OVERRIDE: AtomicU8 = AtomicU8::new(0); // 0=none, 1=mock, 2=deepseek, 3=openrouter
 
-/// Set a test backend override. Tests should use `with_test_backend` for RAII cleanup.
 pub fn set_test_backend(backend: LlmBackendType) {
     let val = match backend {
         LlmBackendType::Mock => 1,
@@ -65,12 +47,10 @@ pub fn set_test_backend(backend: LlmBackendType) {
     TEST_BACKEND_OVERRIDE.store(val, Ordering::SeqCst);
 }
 
-/// Clear the test backend override.
 pub fn clear_test_backend() {
     TEST_BACKEND_OVERRIDE.store(0, Ordering::SeqCst);
 }
 
-/// RAII guard that automatically clears the test backend override on drop.
 pub struct TestBackendGuard;
 
 impl Drop for TestBackendGuard {
@@ -79,7 +59,6 @@ impl Drop for TestBackendGuard {
     }
 }
 
-/// Set a test backend override and return an RAII guard that clears it on drop.
 pub fn with_test_backend(backend: LlmBackendType) -> TestBackendGuard {
     set_test_backend(backend);
     TestBackendGuard

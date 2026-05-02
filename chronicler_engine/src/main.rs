@@ -1,3 +1,12 @@
+// Binary entry point is allowed to use stdout/stderr for CLI output
+// and expect for fatal bootstrap errors.
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::print_stdout,
+    clippy::print_stderr
+)]
+
 use std::{fs, path::Path, sync::Arc, thread};
 
 use chronicler_engine::error::EngineError;
@@ -487,17 +496,25 @@ fn init_logging() {
     let timestamp = Local::now().format("%Y%m%d");
     let log_file_path = log_dir.join(format!("chronicler_{timestamp}.log"));
 
-    let log_file = fs::OpenOptions::new()
+    match fs::OpenOptions::new()
         .create(true)
         .append(true)
         .open(&log_file_path)
-        .expect("Failed to open log file");
-
-    // Configure env_logger to write to the file
-    env_logger::Builder::from_default_env()
-        .filter_level(log::LevelFilter::Debug)
-        .target(env_logger::Target::Pipe(Box::new(log_file)))
-        .init();
+    {
+        Ok(log_file) => {
+            // Configure env_logger to write to the file
+            env_logger::Builder::from_default_env()
+                .filter_level(log::LevelFilter::Debug)
+                .target(env_logger::Target::Pipe(Box::new(log_file)))
+                .init();
+        }
+        Err(e) => {
+            eprintln!("Warning: Could not open log file {log_file_path:?}: {e}");
+            env_logger::Builder::from_default_env()
+                .filter_level(log::LevelFilter::Debug)
+                .init();
+        }
+    }
 
     // Also print to console so user sees output when running cargo run
     println!("Logging to file: {log_file_path:?}");

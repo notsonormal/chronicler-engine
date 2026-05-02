@@ -3,8 +3,8 @@
 use askama::Template;
 use axum::{Form, extract::State, response::Html};
 
+use crate::model::llm_backend::LlmBackendType;
 use crate::model::settings::AppSettings;
-use crate::narrative::llm::LlmBackendType;
 use crate::server::AppState;
 
 /// [DOC: docs/architecture/system.md]
@@ -82,9 +82,19 @@ impl SettingsTemplate {
 }
 
 pub async fn settings_panel(State(app_state): State<AppState>) -> Html<String> {
-    let settings = app_state.settings.read().unwrap();
+    let settings = match app_state.settings.read() {
+        Ok(g) => g,
+        Err(_) => {
+            return Html(
+                "<span class='error'>Internal error: settings lock poisoned</span>".to_string(),
+            );
+        }
+    };
     let template = SettingsTemplate::from_settings(&settings);
-    Html(template.render().unwrap())
+    match template.render() {
+        Ok(html) => Html(html),
+        Err(e) => Html(format!("<span class='error'>Template error: {e}</span>")),
+    }
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -122,7 +132,14 @@ pub async fn save_settings_handler(
         return Html(format!("<span class='error'>Save failed: {e}</span>"));
     }
 
-    let mut settings = app_state.settings.write().unwrap();
+    let mut settings = match app_state.settings.write() {
+        Ok(g) => g,
+        Err(_) => {
+            return Html(
+                "<span class='error'>Internal error: settings lock poisoned</span>".to_string(),
+            );
+        }
+    };
     *settings = new_settings;
 
     Html("Settings saved!".to_string())

@@ -1,0 +1,23 @@
+# Clippy configuration for Chronicler Engine
+# These settings complement the crate-level lint attributes in src/lib.rs
+
+# Cognitive complexity threshold
+# Keep functions readable and AI-generated code from becoming overly complex
+cognitive-complexity-threshold = 25
+
+# Line length alignment with rustfmt.toml
+# Note: this only affects certain lints that reference line length
+
+# Avoid excessive arguments
+# Forces AI to use builder patterns or structs instead of long parameter lists
+too-many-arguments-threshold = 7
+
+# Avoid deeply nested types
+# Prevents AI from generating complex nested Result/Option chains
+type-complexity-threshold = 250
+
+# Catch large enum variants
+# Forces AI to Box large variants instead of bloating the enum size
+enum-variant-size-threshold = 200
+
+

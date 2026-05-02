@@ -2,7 +2,7 @@ use askama::Template;
 use axum::{
     body::Body,
     extract::{Form, State},
-    http::{HeaderMap, StatusCode},
+    http::StatusCode,
     response::{Html, Response},
 };
 use serde::{Deserialize, Serialize};
@@ -284,6 +284,8 @@ pub struct ActionForm {
 }
 
 /// [DOC: docs/system/game_flow.md]
+// Static response bodies are infallible by construction (valid status + static string).
+#[allow(clippy::expect_used)]
 pub async fn action_handler(
     State(state): State<AppState>,
     Form(form): Form<ActionForm>,
@@ -296,7 +298,7 @@ pub async fn action_handler(
             .body(Body::from(
                 "<span class=\"status error\">Enter a command</span>",
             ))
-            .unwrap();
+            .expect("static response body is valid");
     }
 
     let (player_name, is_sync) = {
@@ -307,7 +309,7 @@ pub async fn action_handler(
                 return Response::builder()
                     .status(StatusCode::INTERNAL_SERVER_ERROR)
                     .body(Body::new(String::new()))
-                    .unwrap();
+                    .expect("static response body is valid");
             }
         };
 
@@ -349,20 +351,18 @@ pub async fn action_handler(
     }
 
     if is_sync {
-        let mut headers = HeaderMap::new();
-        headers.insert("HX-Trigger", "sync-action-complete".parse().unwrap());
         Response::builder()
             .status(StatusCode::OK)
             .header("HX-Trigger", "sync-action-complete")
             .body(Body::from("<span class=\"status ready\">Ready</span>"))
-            .unwrap()
+            .expect("static response body is valid")
     } else {
         Response::builder()
             .status(StatusCode::OK)
             .body(Body::from(
                 "<span class=\"status thinking\">Thinking...</span>",
             ))
-            .unwrap()
+            .expect("static response body is valid")
     }
 }
 

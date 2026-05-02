@@ -1,3 +1,28 @@
+// [DOC: docs/architecture/guardrails.md]
+// AI Guardrails: These lint attributes enforce the project's coding standards
+// at compile time. Any violation will fail the build.
+#![deny(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::dbg_macro,
+    clippy::todo,
+    clippy::unimplemented,
+    clippy::print_stdout,
+    clippy::print_stderr,
+    clippy::panic
+)]
+// Tests are allowed to panic on assertion failures — that's their purpose.
+#![cfg_attr(
+    test,
+    allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::print_stdout,
+        clippy::print_stderr
+    )
+)]
+
 pub mod engine;
 pub mod error;
 pub mod model;

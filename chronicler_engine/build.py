@@ -143,16 +143,22 @@ def main():
         print(f"Cleaning stale port locks from {lock_dir}...")
         shutil.rmtree(lock_dir)
 
-    print("[1/6] Formatting...")
+    print("[1/8] Formatting...")
     run("cargo fmt")
 
-    print("[2/6] Running clippy...")
+    print("[2/8] Running clippy...")
     run("cargo clippy -- -D warnings")
 
-    print("[3/6] Building...")
+    print("[3/8] Running architecture guardrail tests...")
+    run("cargo test --test architecture")
+
+    print("[4/8] Running custom guardrails tests...")
+    run("cargo test --test guardrails")
+
+    print("[5/8] Building...")
     run("cargo build")
 
-    print("[4/6] Copying data and assets for deployment...")
+    print("[6/8] Copying data and assets for deployment...")
     release_dir = Path("target/release")
     release_dir.mkdir(exist_ok=True)
 
@@ -180,7 +186,7 @@ def main():
     print(f"  Release package ready in {release_dir}/")
     print("  Deployment: copy target/release/ folder to your target machine")
 
-    print("[5/6] Running all tests with coverage...")
+    print("[7/8] Running all tests with coverage...")
     # Suppress per-test PASS lines unless --verbose is set
     test_env = {}
     if not args.verbose:
@@ -194,7 +200,7 @@ def main():
         env=test_env,
     )
 
-    print("[6/6] Generating coverage report...")
+    print("[8/8] Generating coverage report...")
     if args.verbose:
         # Full table for verbose mode
         result = subprocess.run(
