@@ -724,7 +724,10 @@ mod tests {
         let mut settings = AppSettings::default();
 
         settings.llm_backend = LlmBackendType::OpenRouter;
-        assert_eq!(get_llm_backend_with_settings(&settings).name(), "OpenRouter");
+        assert_eq!(
+            get_llm_backend_with_settings(&settings).name(),
+            "OpenRouter"
+        );
 
         settings.llm_backend = LlmBackendType::Mock;
         assert_eq!(get_llm_backend_with_settings(&settings).name(), "Mock");

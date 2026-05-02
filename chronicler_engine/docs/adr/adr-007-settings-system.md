@@ -26,7 +26,7 @@ The Chronicler Engine now loads configuration from `data/settings.json` into an 
 
 | Setting | Type | Options | Default |
 |---------|------|---------|---------|
-| `llm_backend` | enum | `mock`, `deepseek`, `openrouter` | `openrouter` |
+| `llm_backend` | enum | `deepseek`, `openrouter` (`mock` is test-only, not shown in UI dropdown) | `openrouter` |
 | `llm_model` | string | Any OpenRouter model ID | `openai/gpt-4o-mini` |
 | `quantifier_model` | string | Any OpenRouter model ID | `openai/gpt-4o-mini` |
 | `openrouter_api_key` | string | Masked in UI, stored plain | `None` (falls back to env var) |

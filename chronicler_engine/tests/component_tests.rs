@@ -499,6 +499,21 @@ mod tests {
                 "Expected llm_backend select element: {}",
                 body_str
             );
+            assert!(
+                body_str.contains("OpenRouter"),
+                "Expected OpenRouter option: {}",
+                body_str
+            );
+            assert!(
+                body_str.contains("DeepSeek"),
+                "Expected DeepSeek option: {}",
+                body_str
+            );
+            assert!(
+                !body_str.contains("Mock (Testing)"),
+                "Mock option should not appear in UI dropdown: {}",
+                body_str
+            );
         }
 
         #[tokio::test]

@@ -11,7 +11,7 @@ The engine utilizes Large Language Models (LLMs) via the OpenRouter API or DeepS
 
 ### 2. Model Configuration
 The engine supports flexible model selection via settings file (`data/settings.json`).
-- **LLM Backend**: `openrouter` (default), `deepseek`, or `mock` - configurable via UI
+- **LLM Backend**: `openrouter` (default) or `deepseek` - configurable via UI. `mock` is available for testing but hidden from the settings dropdown.
 - **LLM Model**: OpenRouter model ID for dialogue/narration (default: `openai/gpt-4o-mini`)
 - **Quantifier Model**: OpenRouter model ID for scene quantification (default: `openai/gpt-4o-mini`)
 - **Authentication**: `openrouter_api_key` in settings, with `OPENROUTER_API_KEY` env var fallback

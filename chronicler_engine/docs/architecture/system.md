@@ -84,7 +84,7 @@ settings.json → load_settings() → AppSettings (defaults if missing)
 
 | Setting | Type | Default |
 |---------|------|---------| 
-| `llm_backend` | mock/deepseek/openrouter | openrouter |
+| `llm_backend` | deepseek/openrouter (mock is test-only, not shown in UI) | openrouter |
 | `llm_model` | string | openai/gpt-4o-mini |
 | `quantifier_model` | string | openai/gpt-4o-mini |
 | `openrouter_api_key` | Option<String> | None (falls back to env var) |

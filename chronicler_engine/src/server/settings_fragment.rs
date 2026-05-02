@@ -36,7 +36,6 @@ pub fn parse_api_key(s: &str) -> Option<String> {
             <select name="llm_backend" id="llm_backend">
                 <option value="openrouter" {% if backend_openrouter %}selected{% endif %}>OpenRouter</option>
                 <option value="deepseek" {% if backend_deepseek %}selected{% endif %}>DeepSeek</option>
-                <option value="mock" {% if backend_mock %}selected{% endif %}>Mock (Testing)</option>
             </select>
         </div>
         <div class="form-group">
@@ -61,7 +60,6 @@ pub fn parse_api_key(s: &str) -> Option<String> {
 pub struct SettingsTemplate {
     pub backend_openrouter: bool,
     pub backend_deepseek: bool,
-    pub backend_mock: bool,
     pub llm_model: String,
     pub quantifier_model: String,
     pub api_key_placeholder: String,
@@ -72,7 +70,6 @@ impl SettingsTemplate {
         Self {
             backend_openrouter: settings.llm_backend == LlmBackendType::OpenRouter,
             backend_deepseek: settings.llm_backend == LlmBackendType::DeepSeek,
-            backend_mock: settings.llm_backend == LlmBackendType::Mock,
             llm_model: settings.llm_model.clone(),
             quantifier_model: settings.quantifier_model.clone(),
             api_key_placeholder: if settings.openrouter_api_key.is_some() {
@@ -196,7 +193,6 @@ mod tests {
 
             assert!(template.backend_openrouter);
             assert!(!template.backend_deepseek);
-            assert!(!template.backend_mock);
         }
 
         #[test]
@@ -206,17 +202,6 @@ mod tests {
 
             assert!(!template.backend_openrouter);
             assert!(template.backend_deepseek);
-            assert!(!template.backend_mock);
-        }
-
-        #[test]
-        fn test_mock_backend_sets_mock_flag() {
-            let settings = make_settings(LlmBackendType::Mock, None);
-            let template = SettingsTemplate::from_settings(&settings);
-
-            assert!(!template.backend_openrouter);
-            assert!(!template.backend_deepseek);
-            assert!(template.backend_mock);
         }
 
         #[test]

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+- **Default backend fixed** - `data/settings.json` now defaults to `OpenRouter` instead of `Mock`
+- **Mock backend hidden from UI** - Removed "Mock (Testing)" from the Settings backend dropdown. `Mock` remains available for tests via `with_test_backend()` but is no longer selectable by end users
+
 ### Added
 - Settings system with tabbed UI for LLM configuration (backend, model, quantifier model, API key)
 - `data/settings.json` for persistent configuration

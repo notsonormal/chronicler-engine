@@ -581,7 +581,6 @@ mod tests {
         let parsed: EditHistoryForm = serde_json::from_str(&json).unwrap();
         assert_eq!(original.text, parsed.text);
     }
-
 }
 
 #[derive(serde::Deserialize, serde::Serialize)]
