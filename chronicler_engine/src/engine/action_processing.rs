@@ -132,6 +132,11 @@ pub fn evaluate_and_narrate_triggers(
         if continuation_text.trim().is_empty() {
             continue;
         }
+        state.add_log(
+            String::new(),
+            Some(trigger.action.name.clone()),
+            LogType::Event,
+        );
         state.add_log(continuation_text, None, LogType::Narration);
         if !trigger.repeat {
             mark_trigger_fired(&mut state.character_state, &npc.id, trigger_idx);
@@ -141,7 +146,6 @@ pub fn evaluate_and_narrate_triggers(
 
 /// Processes the result of a FreeAction LLM call.
 ///
-/// This is the synchronous, testable core of FreeAction processing.
 /// The LLM call and quantifier pass happen in the caller (game_service.rs thread).
 ///
 /// # Arguments
@@ -480,6 +484,7 @@ mod execute_freeaction_impl_tests {
                     0,
                 ),
                 action: crate::model::trigger::TriggerAction {
+                    name: "Carla Greeting".to_string(),
                     narration_prompt: "Carla greets you warmly!".to_string(),
                 },
                 repeat: false,
@@ -771,5 +776,87 @@ mod tests {
 
         // Should set currently_meeting for NPCs in new room
         assert!(is_currently_meeting(&state.character_state, "carla"));
+    }
+
+    #[test]
+    fn test_evaluate_and_narrate_triggers_adds_event_header() {
+        let _guard =
+            crate::narrative::llm::with_test_backend(crate::narrative::llm::LlmBackendType::Mock);
+
+        let mut state = make_test_state();
+        let trigger = crate::model::trigger::Trigger {
+            condition: crate::model::trigger::TriggerCondition::TimesMet(
+                crate::model::trigger::ComparisonOperator::Eq,
+                0,
+            ),
+            action: crate::model::trigger::TriggerAction {
+                name: "Carla Introduction".to_string(),
+                narration_prompt: "Carla greets you warmly!".to_string(),
+            },
+            repeat: false,
+        };
+
+        // Replace the NPC with one that has a named trigger
+        let npc_with_trigger = NpcCard {
+            id: "carla".to_string(),
+            sheet: crate::model::character::CharacterSheet {
+                name: "Carla".to_string(),
+                description: "A test NPC".to_string(),
+                personality: "Friendly".to_string(),
+                scenario: "Test scenario".to_string(),
+                example_dialogue: "Hello!".to_string(),
+                profile_image: None,
+                headshot_image: None,
+            },
+            inventory: vec![],
+            triggers: vec![trigger],
+        };
+        state
+            .npcs
+            .insert("carla".to_string(), npc_with_trigger.clone());
+
+        let room = crate::model::map::Room {
+            id: "test_room".to_string(),
+            name: "Test Room".to_string(),
+            description: "A test room".to_string(),
+            exits: std::collections::HashMap::new(),
+            items: vec![],
+            npcs: vec!["carla".to_string()],
+            image_path: None,
+            navigation_description: None,
+        };
+
+        let world = state.world.clone();
+        let player = state.player.clone();
+        let history = state.narration_history.clone();
+
+        let trigger_context = crate::narrative::prompt::PromptContext {
+            world: &world,
+            room: &room,
+            all_npcs: &[],
+            npcs_in_area: &[],
+            player: &player,
+            user_message: "test",
+            history: &history,
+        };
+
+        evaluate_and_narrate_triggers(&mut state, "You enter the room.", &trigger_context, 3);
+
+        // Should have at least 2 entries: event header + narration
+        assert!(
+            state.narration_history.len() >= 2,
+            "Expected event header + narration, got {:?}",
+            state.narration_history
+        );
+
+        // First trigger-related entry should be the event header
+        let event_entry = &state.narration_history[0];
+        assert_eq!(event_entry.log_type, LogType::Event);
+        assert_eq!(event_entry.sender, Some("Carla Introduction".to_string()));
+        assert_eq!(event_entry.text, "");
+
+        // Second entry should be the narration
+        let narration_entry = &state.narration_history[1];
+        assert_eq!(narration_entry.log_type, LogType::Narration);
     }
 }

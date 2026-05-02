@@ -16,6 +16,12 @@
 - **Coverage Improvement** - `game_service.rs` coverage increased from 58% to 79% (llvm-cov)
   - Extracted `execute_freeaction_impl` to `action_processing.rs` for testability
   - Added 6 new integration tests covering FreeAction success, retry, and movement paths
+- **Event Header Entries** - Named triggers now render visual event banners in the story log
+  - `TriggerAction` requires a `name` field (e.g., "Gabriella Introduction")
+  - New `LogType::Event` variant for event header entries
+  - Event headers appear before trigger narration, styled in blue/cyan (`#38bdf8`)
+  - Event entries have no edit/retry buttons (same as location headers)
+  - Updated all world data (`gabriella.json`, `shopkeeper.json`, `ranger.json`) with trigger names
 
 ## 2026-04-29
 

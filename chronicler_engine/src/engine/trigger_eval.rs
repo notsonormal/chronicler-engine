@@ -117,6 +117,7 @@ mod tests {
         Trigger {
             condition,
             action: TriggerAction {
+                name: "Test Event".to_string(),
                 narration_prompt: "Test trigger".to_string(),
             },
             repeat,

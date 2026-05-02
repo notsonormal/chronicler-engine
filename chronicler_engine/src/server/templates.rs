@@ -53,12 +53,14 @@ pub struct LogEntryView {
     pub raw_text: String,
     pub log_type: String,
     pub is_location: bool,
+    pub is_event: bool,
 }
 
 impl From<&LogEntry> for LogEntryView {
     fn from(entry: &LogEntry) -> Self {
         let parsed_text = markdown_to_html(&entry.text);
-        let is_location = entry.sender.is_some() && entry.text.is_empty();
+        let is_event = entry.log_type == LogType::Event;
+        let is_location = entry.sender.is_some() && entry.text.is_empty() && !is_event;
         Self {
             id: entry.id,
             timestamp: entry.timestamp.format("%H:%M").to_string(),
@@ -70,15 +72,17 @@ impl From<&LogEntry> for LogEntryView {
                 LogType::Dialogue => "dialogue".to_string(),
                 LogType::System => "system".to_string(),
                 LogType::Input => "input".to_string(),
+                LogType::Event => "event".to_string(),
             },
             is_location,
+            is_event,
         }
     }
 }
 
 #[derive(Template)]
 #[template(
-    source = r#"<div class="story-log" id="story-log">{% for entry in entries %}<div class="log-entry {{ entry.log_type }}" data-id="{{ entry.id }}" data-raw-text="{{ entry.raw_text | escape }}">{% if entry.is_location %}<span class="location-header">{{ entry.sender }}</span><span class="location-timestamp">- {{ entry.timestamp }}</span>{% else %}<span class="timestamp">{{ entry.timestamp }}</span>{% if entry.sender != "" %}<span class="sender">{{ entry.sender }}:</span> {% endif %}{% endif %}<span class="text">{{ entry.text }}</span>{% if !entry.is_location %}<button class="edit-btn" onclick="showEditForm({{ entry.id }})" title="Edit">&#9998;</button>{% if loop.last %}{% if entry.log_type == "narration" || entry.log_type == "dialogue" %}<button class="retry-btn" onclick="submitRetry()" title="Retry">&#8635;</button>{% endif %}{% endif %}{% endif %}</div>{% endfor %}</div>"#,
+    source = r#"<div class="story-log" id="story-log">{% for entry in entries %}<div class="log-entry {{ entry.log_type }}" data-id="{{ entry.id }}" data-raw-text="{{ entry.raw_text | escape }}">{% if entry.is_location %}<span class="location-header">{{ entry.sender }}</span><span class="location-timestamp">- {{ entry.timestamp }}</span>{% elif entry.is_event %}<span class="event-header">{{ entry.sender }}</span><span class="event-timestamp">- {{ entry.timestamp }}</span>{% else %}<span class="timestamp">{{ entry.timestamp }}</span>{% if entry.sender != "" %}<span class="sender">{{ entry.sender }}:</span> {% endif %}{% endif %}<span class="text">{{ entry.text }}</span>{% if !entry.is_location && !entry.is_event %}<button class="edit-btn" onclick="showEditForm({{ entry.id }})" title="Edit">&#9998;</button>{% if loop.last %}{% if entry.log_type == "narration" || entry.log_type == "dialogue" %}<button class="retry-btn" onclick="submitRetry()" title="Retry">&#8635;</button>{% endif %}{% endif %}{% endif %}</div>{% endfor %}</div>"#,
     ext = "html"
 )]
 pub struct StoryLogTemplate {
@@ -262,6 +266,27 @@ mod tests {
         let template = StoryLogTemplate::new(&entries);
         let rendered = template.render().unwrap();
         assert!(!rendered.contains("<script>"));
+    }
+
+    #[test]
+    fn test_story_log_template_renders_event_entry() {
+        use chrono::Utc;
+
+        let entries = vec![LogEntry {
+            id: 1,
+            sender: Some("Gabriella Introduction".to_string()),
+            text: "".to_string(),
+            log_type: LogType::Event,
+            timestamp: Utc::now(),
+        }];
+        let template = StoryLogTemplate::new(&entries);
+        let rendered = template.render().unwrap();
+        assert!(rendered.contains("event-header"));
+        assert!(rendered.contains("Gabriella Introduction"));
+        assert!(rendered.contains("event-timestamp"));
+        // Event entries should not have edit/retry buttons
+        assert!(!rendered.contains("edit-btn"));
+        assert!(!rendered.contains("retry-btn"));
     }
 
     #[test]

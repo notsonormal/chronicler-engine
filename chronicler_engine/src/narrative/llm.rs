@@ -99,6 +99,15 @@ pub fn get_llm_backend() -> Box<dyn LlmBackend> {
         });
     }
 
+    // Check environment variable before loading settings file
+    let env_backend = LlmBackendType::from_env();
+    if env_backend != LlmBackendType::OpenRouter {
+        return get_llm_backend_with_settings(&AppSettings {
+            llm_backend: env_backend,
+            ..AppSettings::default()
+        });
+    }
+
     // Load settings and use the backend from settings
     let settings = crate::settings::load_settings().unwrap_or_else(|_| AppSettings::default());
     get_llm_backend_with_settings(&settings)
@@ -1111,6 +1120,7 @@ mod tests {
                 Trigger {
                     condition: TriggerCondition::TimesMet(ComparisonOperator::Eq, 1),
                     action: TriggerAction {
+                        name: "Trigger One".to_string(),
                         narration_prompt: "trigger1".to_string(),
                     },
                     repeat: false,
@@ -1118,6 +1128,7 @@ mod tests {
                 Trigger {
                     condition: TriggerCondition::TimesMet(ComparisonOperator::Gte, 2),
                     action: TriggerAction {
+                        name: "Trigger Two".to_string(),
                         narration_prompt: "trigger2".to_string(),
                     },
                     repeat: true,

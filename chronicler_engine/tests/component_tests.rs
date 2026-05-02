@@ -454,6 +454,39 @@ mod tests {
 
     mod settings_tests {
         use super::*;
+        use std::sync::{Mutex, MutexGuard};
+
+        static SETTINGS_TEST_LOCK: Mutex<()> = Mutex::new(());
+
+        /// RAII guard that redirects settings to a temp file and cleans up on drop.
+        /// Uses a process-wide lock to prevent parallel tests from interfering
+        /// with each other's environment variables.
+        struct TempSettingsGuard {
+            _lock: MutexGuard<'static, ()>,
+            temp_path: std::path::PathBuf,
+        }
+
+        impl TempSettingsGuard {
+            fn new() -> Self {
+                let lock = SETTINGS_TEST_LOCK.lock().unwrap();
+                let temp_path = std::env::temp_dir().join(format!(
+                    "chronicler_test_settings_{}.json",
+                    std::process::id()
+                ));
+                unsafe { std::env::set_var("CHRONICLER_SETTINGS_PATH", &temp_path) };
+                Self {
+                    _lock: lock,
+                    temp_path,
+                }
+            }
+        }
+
+        impl Drop for TempSettingsGuard {
+            fn drop(&mut self) {
+                unsafe { std::env::remove_var("CHRONICLER_SETTINGS_PATH") };
+                let _ = std::fs::remove_file(&self.temp_path);
+            }
+        }
 
         #[tokio::test]
         async fn test_settings_panel_returns_html() {
@@ -546,18 +579,19 @@ mod tests {
 
         #[tokio::test]
         async fn test_save_settings_openrouter() {
+            let _guard = TempSettingsGuard::new();
             let state = create_test_state();
             let app = create_app_for_testing(state);
 
             let req = Request::builder()
-                .uri("/settings")
-                .method(http::Method::POST)
-                .header(
-                    http::header::CONTENT_TYPE,
-                    "application/x-www-form-urlencoded",
-                )
-                .body(Body::from("llm_backend=openrouter&llm_model=gpt-4o-mini&quantifier_model=gpt-4o-mini&api_key="))
-                .unwrap();
+                    .uri("/settings")
+                    .method(http::Method::POST)
+                    .header(
+                        http::header::CONTENT_TYPE,
+                        "application/x-www-form-urlencoded",
+                    )
+                    .body(Body::from("llm_backend=openrouter&llm_model=gpt-4o-mini&quantifier_model=gpt-4o-mini&api_key="))
+                    .unwrap();
             let response = app.oneshot(req).await.unwrap();
 
             assert!(response.status().is_success());
@@ -574,18 +608,19 @@ mod tests {
 
         #[tokio::test]
         async fn test_save_settings_deepseek() {
+            let _guard = TempSettingsGuard::new();
             let state = create_test_state();
             let app = create_app_for_testing(state);
 
             let req = Request::builder()
-                .uri("/settings")
-                .method(http::Method::POST)
-                .header(
-                    http::header::CONTENT_TYPE,
-                    "application/x-www-form-urlencoded",
-                )
-                .body(Body::from("llm_backend=deepseek&llm_model=deepseek-chat&quantifier_model=deepseek-chat&api_key="))
-                .unwrap();
+                    .uri("/settings")
+                    .method(http::Method::POST)
+                    .header(
+                        http::header::CONTENT_TYPE,
+                        "application/x-www-form-urlencoded",
+                    )
+                    .body(Body::from("llm_backend=deepseek&llm_model=deepseek-chat&quantifier_model=deepseek-chat&api_key="))
+                    .unwrap();
             let response = app.oneshot(req).await.unwrap();
 
             assert!(response.status().is_success());
@@ -602,6 +637,7 @@ mod tests {
 
         #[tokio::test]
         async fn test_save_settings_mock() {
+            let _guard = TempSettingsGuard::new();
             let state = create_test_state();
             let app = create_app_for_testing(state);
 
@@ -632,18 +668,19 @@ mod tests {
 
         #[tokio::test]
         async fn test_save_settings_with_models() {
+            let _guard = TempSettingsGuard::new();
             let state = create_test_state();
             let app = create_app_for_testing(state);
 
             let req = Request::builder()
-                .uri("/settings")
-                .method(http::Method::POST)
-                .header(
-                    http::header::CONTENT_TYPE,
-                    "application/x-www-form-urlencoded",
-                )
-                .body(Body::from("llm_backend=mock&llm_model=gpt-4o-mini&quantifier_model=gpt-4o-mini&api_key=test-key-123"))
-                .unwrap();
+                    .uri("/settings")
+                    .method(http::Method::POST)
+                    .header(
+                        http::header::CONTENT_TYPE,
+                        "application/x-www-form-urlencoded",
+                    )
+                    .body(Body::from("llm_backend=mock&llm_model=gpt-4o-mini&quantifier_model=gpt-4o-mini&api_key=test-key-123"))
+                    .unwrap();
             let response = app.oneshot(req).await.unwrap();
 
             assert!(response.status().is_success());
@@ -660,6 +697,7 @@ mod tests {
 
         #[tokio::test]
         async fn test_save_settings_empty_api_key() {
+            let _guard = TempSettingsGuard::new();
             let state = create_test_state();
             let app = create_app_for_testing(state);
 
@@ -798,7 +836,6 @@ async fn test_visual_sidebar_with_real_world_data() {
 }
 
 /// Test that redmist_estate world loads with image_path correctly.
-/// This confirms whether the issue is specific to redmist_estate or the general pipeline.
 #[test]
 fn test_redmist_estate_room_image_path() {
     let map_json = std::fs::read_to_string("data/worlds/redmist_estate/map.json").unwrap();

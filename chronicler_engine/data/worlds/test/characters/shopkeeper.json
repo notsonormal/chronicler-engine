@@ -16,6 +16,7 @@
                 ]
             },
             "action": {
+                "name": "Shopkeeper Greeting",
                 "narration_prompt": "The shopkeeper looks up from behind the counter with a warm smile."
             },
             "repeat": false

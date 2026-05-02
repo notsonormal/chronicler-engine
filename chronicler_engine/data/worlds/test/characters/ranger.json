@@ -16,6 +16,7 @@
                 ]
             },
             "action": {
+                "name": "Ranger Recognition",
                 "narration_prompt": "The ranger adjusts their bow and nods in recognition."
             },
             "repeat": true

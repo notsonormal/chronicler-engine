@@ -8,7 +8,7 @@
     "triggers": [
         {
             "condition": {"TimesMet": ["Eq", 0]},
-            "action": {"narration_prompt": "Gabriella emerges from the shadows, her eyes fixing on you with immediate recognition. A calculated smile plays on her lips as she takes your measure."},
+            "action": {"name": "Gabriella Introduction", "narration_prompt": "Gabriella emerges from the shadows, her eyes fixing on you with immediate recognition. A calculated smile plays on her lips as she takes your measure."},
             "repeat": false
         }
     ],

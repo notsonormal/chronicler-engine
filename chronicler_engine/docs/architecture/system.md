@@ -257,7 +257,7 @@ pub struct LogEntry {
     pub id: u64,                    // Auto-incrementing unique ID
     pub sender: Option<String>,       // Who spoke (None for narrator)
     pub text: String,               // The message content
-    pub log_type: LogType,          // Category: Narration, Dialogue, System, Input
+    pub log_type: LogType,          // Category: Narration, Dialogue, System, Input, Event
     pub timestamp: DateTime<Utc>,     // When recorded
 }
 ```
@@ -267,6 +267,7 @@ pub struct LogEntry {
 Entries can be edited in place via `PUT /api/history/{id}`:
 
 - Both user inputs (`LogType::Input`) and AI responses (`LogType::Narration`, `LogType::Dialogue`) are editable
+- Event headers (`LogType::Event`) and location headers are not editable
 - Editing replaces `text` field; other fields unchanged
 - Subsequent history entries are unaffected
 - In-memory only (not persisted to disk)

@@ -80,6 +80,17 @@ The key variable is `currently_meeting`:
 | :--- | :--- |
 | `Narrate` | Appends a custom LLM prompt to the arrival/action narration. |
 
+### Action Fields
+```json
+{
+    "name": "Event Name",
+    "narration_prompt": "LLM prompt text"
+}
+```
+
+- `name` (required): Display name for the event. When the trigger fires, an event header with this name appears in the story log before the narration.
+- `narration_prompt` (required): The prompt sent to the LLM to generate continuation narration.
+
 ## Character State Tracking
 The `CharacterState` struct tracks encounter state:
 
@@ -95,6 +106,24 @@ pub struct NpcEncounterState {
 - `currently_meeting`: Set to true on room entry, false on room exit
 - `trigger_fired`: Indices of non-repeatable triggers that have fired
 
+## Event Headers
+
+When a trigger fires, if its action has a `name`, the engine inserts an **event header** entry into the story log before the LLM-generated narration. Event headers are visually distinct from location headers (room names) and use a blue/cyan color (`#38bdf8`).
+
+Example story log output:
+```
+─── Entrance Hall ─── 10:42
+You step into the grand hall.
+
+─── Gabriella Introduction ─── 10:43
+Gabriella emerges from the shadows...
+```
+
+Event headers:
+- Use `LogType::Event` internally
+- Have no edit or retry buttons
+- Are rendered with `.event-header` and `.event-timestamp` CSS classes
+
 ## Key Design Decisions
 
 1. **All NPCs Evaluated**: Triggers are checked for ALL loaded NPCs, not just those in the current room. This ensures NPCs like Gabriella (who appears dynamically in narration) still have their triggers evaluated.
@@ -102,3 +131,5 @@ pub struct NpcEncounterState {
 2. **Quantifier Runs Once (Post-Narration)**: Single quantifier call AFTER narration generation detects both NPCs and movement intent from the generated text. This replaces the previous two-stage approach.
 
 3. **Times Met vs Trigger Fire**: `times_met` is incremented based on movement/room entry, NOT when triggers fire. This prevents the bug where trigger fires would increment the counter for the next evaluation.
+
+4. **Named Triggers**: Every trigger action requires a `name`. This name is used for the event header and helps players recognize important story moments at a glance.

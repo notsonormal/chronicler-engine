@@ -203,7 +203,7 @@ pub struct CharacterState {
 ```rust
 pub struct Trigger {
     pub condition: TriggerCondition,  // TimesMet(Eq, 0)
-    pub action: TriggerAction,        // narration_prompt
+    pub action: TriggerAction,        // name + narration_prompt
     pub repeat: bool,               // fire once or repeatable
 }
 ```

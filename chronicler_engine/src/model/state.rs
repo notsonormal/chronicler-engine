@@ -15,6 +15,7 @@ pub enum LogType {
     Dialogue,
     System,
     Input,
+    Event,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

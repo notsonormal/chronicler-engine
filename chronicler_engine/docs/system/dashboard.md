@@ -72,6 +72,7 @@ pub struct LogEntryView {
     pub raw_text: String,                   // Original markdown (for editing)
     pub log_type: String,
     pub is_location: bool,
+    pub is_event: bool,
 }
 ```
 
@@ -107,10 +108,13 @@ HTML template renders with `data-raw-text` attribute for inline editing:
 ## CSS Classes
 - `.location-header` - Room name in location entry, inline, green bold (#4ade80)
 - `.location-timestamp` - Timestamp for location entry, inline after room name
+- `.event-header` - Event name in trigger event entry, inline, blue/cyan bold (#38bdf8)
+- `.event-timestamp` - Timestamp for event entry, inline after event name
 - `.log-entry.narration` - AI narration, left-aligned, cyan-tinted bubble
 - `.log-entry.dialogue` - Character dialogue, left-aligned, orange-tinted
 - `.log-entry.system` - System messages, centered, yellow
 - `.log-entry.input` - User input, right-aligned, darker gray bubble
+- `.log-entry.event` - Trigger event header, inline header with no edit/retry buttons
 - `.log-entry .timestamp` - Small gray timestamp above message
 - `.log-entry .sender` - Bold name above message content
 - `.log-entry .text` - Message content

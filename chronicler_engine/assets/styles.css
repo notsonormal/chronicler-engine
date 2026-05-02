@@ -16,6 +16,7 @@
     --color-accent-green: #00ff00;
     --color-accent-green-bright: #4ade80;
     --color-accent-cyan: #00ffff;
+    --color-accent-blue-cyan: #38bdf8;
     --color-accent-orange: #ffb347;
     --color-accent-yellow: #ffff00;
     --color-accent-red: #ff4444;
@@ -191,6 +192,13 @@ body {
     border-bottom-left-radius: 4px;
 }
 
+/* Event - Left Aligned, Dark Cyan (same bubble as narration) */
+.log-entry.event {
+    margin-right: auto;
+    background: var(--color-log-narration);
+    border-bottom-left-radius: 4px;
+}
+
 /* Dialogue - Left Aligned, Orange Tinted */
 .log-entry.dialogue {
     margin-right: auto;
@@ -277,6 +285,23 @@ body {
 
 /* Location Timestamp - Inline After Location */
 .location-timestamp {
+    display: inline;
+    font-size: 1em;
+    font-weight: 600;
+    color: var(--color-text-muted);
+}
+
+/* Event Header - Inline with Timestamp */
+.event-header {
+    display: inline;
+    font-size: 1.1em;
+    font-weight: bold;
+    color: var(--color-accent-blue-cyan);
+    margin-right: var(--spacing-xs);
+}
+
+/* Event Timestamp - Inline After Event Header */
+.event-timestamp {
     display: inline;
     font-size: 1em;
     font-weight: 600;

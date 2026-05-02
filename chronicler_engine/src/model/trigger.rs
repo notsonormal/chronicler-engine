@@ -16,6 +16,7 @@ pub enum TriggerCondition {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct TriggerAction {
+    pub name: String,
     pub narration_prompt: String,
 }
 
@@ -66,8 +67,9 @@ mod tests {
 
     #[test]
     fn test_trigger_action_serde() {
-        let json = r#"{"narration_prompt": "You meet an old friend."}"#;
+        let json = r#"{"name": "Old Friend", "narration_prompt": "You meet an old friend."}"#;
         let action: TriggerAction = serde_json::from_str(json).unwrap();
+        assert_eq!(action.name, "Old Friend");
         assert_eq!(action.narration_prompt, "You meet an old friend.");
     }
 
@@ -75,7 +77,7 @@ mod tests {
     fn test_trigger_serde() {
         let json = r#"{
             "condition": {"TimesMet": ["Gte", 2]},
-            "action": {"narration_prompt": "The guard recognizes you."},
+            "action": {"name": "Guard Recognition", "narration_prompt": "The guard recognizes you."},
             "repeat": false
         }"#;
         let trigger: Trigger = serde_json::from_str(json).unwrap();
