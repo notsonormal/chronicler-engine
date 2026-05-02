@@ -160,7 +160,7 @@ SillyTavern character cards (Jailbreak format):
 
 ### Chronicler Adaptation
 - Uses same structure in `NpcCard` and `PlayerCard`
-- Stored as JSON in `data/worlds/<world>/characters/`
+- Stored as JSON in `data/characters/<world>/`
 
 ## Implementation in Chronicler Engine
 

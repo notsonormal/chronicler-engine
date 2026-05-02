@@ -13,7 +13,7 @@ When a world is loaded via the `--world` flag, the engine performs these steps:
 1.  **Manifest Loading**: Reads `world.json` to identify the map, player, and starting room files.
 2.  **Map Deserialization**: Loads the `MapDef` (Regions, Rooms, Exits).
 3.  **Player Bootstrapping**: Loads the `PlayerCard` (Sheet and Inventory).
-4.  **NPC Discovery**: Scans the `characters/` directory within the world folder, deserializing every `.json` file into an `NpcCard`.
+4.  **NPC Discovery**: Scans the `data/characters/<characters_dir>/` directory (where `characters_dir` comes from `world.json`, defaulting to the world id), deserializing every `.json` file into an `NpcCard`.
 5.  **State Synthesis**: Combines these components into a unified `GameState`, initializing the current location and visibility filters.
 
 ## 3. Server Startup

@@ -22,6 +22,12 @@
   - Event headers appear before trigger narration, styled in blue/cyan (`#38bdf8`)
   - Event entries have no edit/retry buttons (same as location headers)
   - Updated all world data (`gabriella.json`, `shopkeeper.json`, `ranger.json`) with trigger names
+- **Decoupled Characters and Players from Worlds** - Characters and player personas are now stored outside world directories, enabling sharing across worlds
+  - Characters moved from `data/worlds/<world>/characters/` to `data/characters/<group>/`
+  - Players moved from `data/worlds/<world>/player.json` to `data/personas/<name>.json`
+  - `WorldManifest` now has a `characters_dir` field to specify which character group to load
+  - `player_file` in `WorldManifest` now resolves relative to `data/personas/`
+  - Map files remain in `data/worlds/<world>/map.json`
 
 ## 2026-04-29
 

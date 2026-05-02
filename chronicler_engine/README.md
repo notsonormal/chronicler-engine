@@ -19,10 +19,14 @@ data/
 ├── worlds/              # Game data (per world)
 │   ├── redmist_estate/  # Default world
 │   │   ├── world.json
-│   │   ├── map.json
-│   │   ├── player.json
-│   │   └── characters/
+│   │   └── map.json
 │   └── test/            # Test world
+├── characters/          # NPC definitions (shared across worlds)
+│   ├── redmist_estate/
+│   └── test/
+├── personas/            # Player definitions (shared across worlds)
+│   ├── julian.json
+│   └── test_player.json
 └── images/              # Character sprites and assets
 ```
 

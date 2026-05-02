@@ -81,12 +81,12 @@
 ### Character Images
 - **Location**: `data/images/` directory stores character sprites
 - **Files**: Full images (e.g., `louise.png`) and cropped headshots (e.g., `louise_headshot.png`)
-- **Usage**: Loaded via `data/worlds/<world>/characters/` JSON configs that reference image paths
+- **Usage**: Loaded via `data/characters/<world>/` JSON configs that reference image paths
 
 ## Data Structure
 
 ### World Configuration
 - **world.json**: High-level rules, universe facts, LLM prompt templates
 - **map.json**: `Overworld -> Region -> Room` topology and navigation
-- **player.json**: Player state and inventory
-- **characters/**: NPC definitions with image references
+- **personas/**: Player state and inventory (shared across worlds)
+- **characters/**: NPC definitions with image references (shared across worlds)

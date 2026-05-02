@@ -215,7 +215,7 @@ mod tests {
     #[test]
     fn test_evaluate_triggers_fires_for_npc_not_in_area() {
         // Test that triggers fire for NPCs even when they're NOT in npcs_in_area.
-        /// [DOC: docs/architecture/system.md]
+        // [DOC: docs/architecture/system.md]
         // NOTE: Triggers must check all NPCs in state.npcs, not just npcs_in_area.
         let trigger = make_trigger(TriggerCondition::TimesMet(ComparisonOperator::Eq, 0), false);
         let npc = make_npc("gabriella", vec![trigger]);

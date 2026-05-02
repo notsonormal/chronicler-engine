@@ -4,6 +4,7 @@
 Uses cargo-nextest for parallel test execution.
 """
 
+import argparse
 import subprocess
 import sys
 import os
@@ -63,22 +64,51 @@ def kill_by_name(name: str):
         print(f"Note: Could not search for processes: {e}")
 
 
-def run(cmd, cwd=None, check=True, show_output=True):
-    """Run a command and handle output."""
+def run(cmd, cwd=None, check=True, show_output=True, env=None):
+    """Run a command and handle output.
+
+    Captures both stdout and stderr to avoid PowerShell ErrorRecord wrapping,
+    then prints them to stdout so the user still sees everything.
+    """
     print(f"$ {cmd}")
-    # Use live output for nextest (real-time progress), capture for others
+    merged_env = os.environ.copy()
+    if env:
+        merged_env.update(env)
+
     if show_output:
-        result = subprocess.run(cmd, shell=True, cwd=cwd or os.getcwd())
-        if check and result.returncode != 0:
-            print(f"FAILED with code {result.returncode}")
-            sys.exit(result.returncode)
-        return result.returncode
+        # Stream output in real-time to avoid looking "stuck" on long commands
+        process = subprocess.Popen(
+            cmd,
+            shell=True,
+            cwd=cwd or os.getcwd(),
+            env=merged_env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        for line in process.stdout:
+            # Filter out noisy cargo-llvm-cov info messages
+            if line.strip().startswith("info: cargo-llvm-cov"):
+                continue
+            print(line, end="")
+        process.wait()
+        if check and process.returncode != 0:
+            print(f"FAILED with code {process.returncode}")
+            sys.exit(process.returncode)
+        return process.returncode
     else:
-        result = subprocess.run(cmd, shell=True, cwd=cwd or os.getcwd(), capture_output=True, text=True)
+        result = subprocess.run(
+            cmd,
+            shell=True,
+            cwd=cwd or os.getcwd(),
+            env=merged_env,
+            capture_output=True,
+            text=True,
+        )
         if result.stdout:
             print(result.stdout)
-        if result.stderr and "warning" not in result.stderr.lower():
-            print(result.stderr, file=sys.stderr)
+        if result.stderr:
+            print(result.stderr)
         if check and result.returncode != 0:
             print(f"FAILED with code {result.returncode}")
             sys.exit(result.returncode)
@@ -86,6 +116,14 @@ def run(cmd, cwd=None, check=True, show_output=True):
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Chronicler Engine build script")
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Show full per-test output and coverage table",
+    )
+    args = parser.parse_args()
+
     print("=== Chronicler Engine Build ===")
     os.chdir(os.path.dirname(os.path.abspath(__file__)) or os.getcwd())
 
@@ -105,19 +143,19 @@ def main():
         print(f"Cleaning stale port locks from {lock_dir}...")
         shutil.rmtree(lock_dir)
 
-    print("[1/5] Formatting...")
+    print("[1/6] Formatting...")
     run("cargo fmt")
 
-    print("[2/5] Running clippy...")
+    print("[2/6] Running clippy...")
     run("cargo clippy -- -D warnings")
 
-    print("[3/5] Building...")
+    print("[3/6] Building...")
     run("cargo build")
 
     print("[4/6] Copying data and assets for deployment...")
     release_dir = Path("target/release")
     release_dir.mkdir(exist_ok=True)
-    
+
     # Copy data folder (worlds, images, etc.)
     if Path("data").exists():
         dest_data = release_dir / "data"
@@ -125,7 +163,8 @@ def main():
             shutil.rmtree(dest_data)
         shutil.copytree("data", dest_data)
         print(f"  Copied data/ -> {dest_data}")
-    
+
+
     # Copy assets folder (HTML, CSS, etc.)
     if Path("assets").exists():
         dest_assets = release_dir / "assets"
@@ -133,37 +172,57 @@ def main():
             shutil.rmtree(dest_assets)
         shutil.copytree("assets", dest_assets)
         print(f"  Copied assets/ -> {dest_assets}")
-    
+
     # Create logs directory
     (release_dir / "logs").mkdir(exist_ok=True)
     print("  Created logs/")
-    
+
     print(f"  Release package ready in {release_dir}/")
     print("  Deployment: copy target/release/ folder to your target machine")
 
     print("[5/6] Running all tests with coverage...")
+    # Suppress per-test PASS lines unless --verbose is set
+    test_env = {}
+    if not args.verbose:
+        test_env["NEXTEST_STATUS_LEVEL"] = "fail"
+
     # Run tests via nextest with coverage collection (single pass)
     # Do NOT exclude anything - run all tests including main.rs
-    run("cargo llvm-cov nextest --no-report --retries 2 -j 4", check=False)
+    run(
+        "cargo llvm-cov nextest --no-report --retries 2 -j 4",
+        check=False,
+        env=test_env,
+    )
 
     print("[6/6] Generating coverage report...")
-    # Exclude from coverage math:
-    # - main.rs: CLI entry point, hard to unit test
-    # - server/mod.rs: async server runtime, only runs when server starts
-    # - server/fragments.rs: async handlers, hard to unit test
-    # - narrative/openrouter_client.rs: HTTP client, requires external API
-    result = subprocess.run(
-        "cargo llvm-cov report --summary-only --ignore-filename-regex 'main.rs|server/mod.rs|server/fragments.rs|openrouter_client.rs'",
-        shell=True,
-        cwd=os.getcwd(),
-        capture_output=True,
-        text=True,
-    )
-    if result.stdout:
-        print(result.stdout)
-    if result.returncode != 0:
-        print(f"Coverage check exited with code {result.returncode}")
-        print("Run 'python scripts/parse_coverage.py' for detailed coverage analysis")
+    if args.verbose:
+        # Full table for verbose mode
+        result = subprocess.run(
+            'cargo llvm-cov report --summary-only --ignore-filename-regex "main.rs|server/mod.rs|server/fragments.rs|openrouter_client.rs"',
+            shell=True,
+            cwd=os.getcwd(),
+            capture_output=True,
+            text=True,
+        )
+        if result.stdout:
+            print(result.stdout)
+        if result.returncode != 0:
+            print(f"Coverage check exited with code {result.returncode}")
+    else:
+        # Concise summary via JSON + parse_coverage.py
+        json_path = Path("target/llvm-cov/coverage.json")
+        json_path.parent.mkdir(parents=True, exist_ok=True)
+        run(
+            f'cargo llvm-cov report --json --output-path "{json_path}"',
+            check=False,
+        )
+        if json_path.exists():
+            run(
+                f'python scripts/parse_coverage.py --json "{json_path}"',
+                check=False,
+            )
+        else:
+            print("Warning: Could not generate coverage JSON.")
 
     print("=== Build Complete ===")
     return 0

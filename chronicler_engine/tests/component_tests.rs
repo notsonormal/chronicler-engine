@@ -762,12 +762,12 @@ async fn test_visual_sidebar_with_real_world_data() {
         serde_json::from_str(&world_json).unwrap();
     let world: chronicler_engine::model::world::WorldCard = manifest.clone().into();
 
-    let player_json = std::fs::read_to_string("data/worlds/test/player.json").unwrap();
+    let player_json = std::fs::read_to_string("data/personas/test_player.json").unwrap();
     let player: chronicler_engine::model::character::PlayerCard =
         serde_json::from_str(&player_json).unwrap();
 
     // Load NPCs from characters directory
-    let chars_dir = std::path::Path::new("data/worlds/test/characters");
+    let chars_dir = std::path::Path::new("data/characters/test");
     let mut npcs = Vec::new();
     if chars_dir.is_dir() {
         for entry in std::fs::read_dir(chars_dir).unwrap().flatten() {

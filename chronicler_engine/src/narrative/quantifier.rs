@@ -232,12 +232,10 @@ struct QuantifierJsonResponse {
     #[serde(default)]
     npcs_in_room: Vec<String>,
     #[serde(default)]
-    #[allow(dead_code)]
     movement: Option<MovementJson>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
-#[allow(dead_code)]
 struct MovementJson {
     /// Maps JSON "type" field to Rust "movement_type" field
     #[serde(rename = "type")]

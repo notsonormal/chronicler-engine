@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use chronicler_engine::model::character::{CharacterSheet, NpcCard, PlayerCard};
 use chronicler_engine::model::map::{Direction, MapDef, Overworld, Region, Room};
 use chronicler_engine::model::state::GameState;

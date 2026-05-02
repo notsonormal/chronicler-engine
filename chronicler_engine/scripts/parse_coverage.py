@@ -36,7 +36,7 @@ def parse_args():
     parser.add_argument(
         "--ignore-regex",
         type=str,
-        default="main.rs|server/mod.rs|server/fragments.rs|openrouter_client.rs",
+        default=r"main\.rs|server[/\\]mod\.rs|server[/\\]fragments\.rs|openrouter_client\.rs",
         help="Regex pattern for files to exclude from coverage check",
     )
     return parser.parse_args()
@@ -86,11 +86,11 @@ def parse_coverage_report(json_path: str, threshold: int, show_all: bool, ignore
             continue
 
         # Shorten the filename
-        short_name = (
-            filename.split("chronicler_engine/")[-1]
-            if "chronicler_engine/" in filename
-            else filename
-        )
+        short_name = filename
+        for sep in ["chronicler_engine/", "chronicler_engine\\"]:
+            if sep in short_name:
+                short_name = short_name.split(sep)[-1]
+                break
 
         # Get line coverage from summary
         summary = f.get("summary", {})

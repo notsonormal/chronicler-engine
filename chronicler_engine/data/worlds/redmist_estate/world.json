@@ -12,7 +12,8 @@
     ],
     "starting_room_id": "front_gates",
     "map_file": "map.json",
-    "player_file": "player.json",
+    "player_file": "julian.json",
+    "characters_dir": "redmist_estate",
     "default_room_image": "data/images/rooms/default.png",
     "scenarios": [
         {

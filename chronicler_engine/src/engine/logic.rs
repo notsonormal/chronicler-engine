@@ -260,7 +260,7 @@ mod tests {
         room.exits
             .insert(Direction::South, "non_existent_id".to_string());
 
-        /// [DOC: docs/architecture/system.md]
+        // [DOC: docs/architecture/system.md]
         // NOTE: Map is behind Arc, so we clone the reference for the guard.
         let res = find_room_in_world_map(&state, "non_existent_id");
         assert!(res.is_none());

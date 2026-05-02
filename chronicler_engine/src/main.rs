@@ -282,7 +282,7 @@ mod main_tests {
 
     #[test]
     fn test_list_worlds_nonexistent_directory() {
-        let data_dir = resolve_engine_data_path();
+        let _data_dir = resolve_engine_data_path();
         let result = list_available_worlds();
         assert!(result.is_ok() || result.is_err());
     }
@@ -312,7 +312,7 @@ fn initialize_world_from_manifest(
         source: Box::new(e.into()),
     })?;
 
-    let player_path = world_dir.join(&manifest.player_file);
+    let player_path = data_dir.join("personas").join(&manifest.player_file);
     let player_json = fs::read_to_string(&player_path).map_err(|e| EngineError::DataLoad {
         path: player_path.display().to_string(),
         source: Box::new(e.into()),
@@ -324,7 +324,12 @@ fn initialize_world_from_manifest(
         })?;
 
     let mut npcs = Vec::new();
-    let chars_dir = world_dir.join("characters");
+    let characters_group = if manifest.characters_dir.is_empty() {
+        world_id
+    } else {
+        &manifest.characters_dir
+    };
+    let chars_dir = data_dir.join("characters").join(characters_group);
     if chars_dir.is_dir() {
         for entry in fs::read_dir(&chars_dir)?.flatten() {
             let path = entry.path();

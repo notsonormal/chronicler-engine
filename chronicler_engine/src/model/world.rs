@@ -24,6 +24,8 @@ pub struct WorldManifest {
     #[serde(default = "default_player_file")]
     pub player_file: String,
     #[serde(default)]
+    pub characters_dir: String,
+    #[serde(default)]
     pub scenarios: Vec<StartingScenario>,
     #[serde(default)]
     pub default_scenario_id: Option<String>,
@@ -122,6 +124,7 @@ mod tests {
             starting_room_id: "start".to_string(),
             map_file: "map.json".to_string(),
             player_file: "player.json".to_string(),
+            characters_dir: String::new(),
             scenarios: vec![],
             default_scenario_id: None,
             default_room_image: None,

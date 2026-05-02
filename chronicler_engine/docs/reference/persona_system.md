@@ -20,7 +20,7 @@ To avoid code duplication, `PlayerCard` and `NpcCard` should leverage a shared d
 
 ### 3. Persona Management
 The engine will look for persona files in `data/personas/`.
-- **Default Loading**: On startup, the engine strictly loads `data/personas/julian.json`.
+- **Default Loading**: On startup, the engine loads the persona file specified by `player_file` in the world's `world.json` manifest (resolved relative to `data/personas/`).
 - **Portability**: Personas are standalone. The "Julian Redmist" persona should be generalized enough to work in other settings, with the `WorldCard` providing setting-specific context.
 
 ## LLM Integration Changes
