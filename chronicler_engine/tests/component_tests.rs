@@ -574,7 +574,7 @@ mod tests {
                         http::header::CONTENT_TYPE,
                         "application/x-www-form-urlencoded",
                     )
-                    .body(Body::from("llm_backend=openrouter&llm_model=gpt-4o-mini&quantifier_model=gpt-4o-mini&api_key="))
+                    .body(Body::from("llm_backend=openrouter&quantifier_backend=openrouter&llm_model=gpt-4o-mini&quantifier_model=gpt-4o-mini&ollama_base_url=http%3A%2F%2Flocalhost%3A11434&api_key="))
                     .unwrap();
             let response = app.oneshot(req).await.unwrap();
 
@@ -602,7 +602,7 @@ mod tests {
                         http::header::CONTENT_TYPE,
                         "application/x-www-form-urlencoded",
                     )
-                    .body(Body::from("llm_backend=deepseek&llm_model=deepseek-chat&quantifier_model=deepseek-chat&api_key="))
+                    .body(Body::from("llm_backend=deepseek&quantifier_backend=deepseek&llm_model=deepseek-chat&quantifier_model=deepseek-chat&ollama_base_url=http%3A%2F%2Flocalhost%3A11434&api_key="))
                     .unwrap();
             let response = app.oneshot(req).await.unwrap();
 
@@ -631,7 +631,7 @@ mod tests {
                     "application/x-www-form-urlencoded",
                 )
                 .body(Body::from(
-                    "llm_backend=mock&llm_model=gpt-4o-mini&quantifier_model=gpt-4o-mini&api_key=",
+                    "llm_backend=mock&quantifier_backend=mock&llm_model=gpt-4o-mini&quantifier_model=gpt-4o-mini&ollama_base_url=http%3A%2F%2Flocalhost%3A11434&api_key=",
                 ))
                 .unwrap();
             let response = app.oneshot(req).await.unwrap();
@@ -660,7 +660,7 @@ mod tests {
                         http::header::CONTENT_TYPE,
                         "application/x-www-form-urlencoded",
                     )
-                    .body(Body::from("llm_backend=mock&llm_model=gpt-4o-mini&quantifier_model=gpt-4o-mini&api_key=test-key-123"))
+                    .body(Body::from("llm_backend=mock&quantifier_backend=mock&llm_model=gpt-4o-mini&quantifier_model=gpt-4o-mini&ollama_base_url=http%3A%2F%2Flocalhost%3A11434&api_key=test-key-123"))
                     .unwrap();
             let response = app.oneshot(req).await.unwrap();
 
@@ -690,7 +690,7 @@ mod tests {
                     "application/x-www-form-urlencoded",
                 )
                 .body(Body::from(
-                    "llm_backend=mock&llm_model=gpt-4o-mini&quantifier_model=gpt-4o-mini&api_key=",
+                    "llm_backend=mock&quantifier_backend=mock&llm_model=gpt-4o-mini&quantifier_model=gpt-4o-mini&ollama_base_url=http%3A%2F%2Flocalhost%3A11434&api_key=",
                 ))
                 .unwrap();
             let response = app.oneshot(req).await.unwrap();

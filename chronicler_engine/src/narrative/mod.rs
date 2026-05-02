@@ -1,4 +1,4 @@
 pub mod llm;
-pub mod openrouter_client;
+pub mod llm_client;
 pub mod prompt;
 pub mod quantifier;

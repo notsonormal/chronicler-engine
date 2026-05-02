@@ -1,7 +1,7 @@
 use crate::error::EngineError;
 use crate::model::character::NpcCard;
 use crate::model::settings::AppSettings;
-use crate::narrative::openrouter_client::call_openrouter;
+use crate::narrative::llm_client::{call_ollama, call_openrouter, get_llm_model};
 use crate::narrative::prompt::{PromptBuilder, PromptContext};
 
 pub trait LlmBackend: Send + Sync {
@@ -43,6 +43,7 @@ pub fn set_test_backend(backend: LlmBackendType) {
         LlmBackendType::Mock => 1,
         LlmBackendType::DeepSeek => 2,
         LlmBackendType::OpenRouter => 3,
+        LlmBackendType::Ollama => 4,
     };
     TEST_BACKEND_OVERRIDE.store(val, Ordering::SeqCst);
 }
@@ -69,6 +70,7 @@ pub fn get_llm_backend() -> Box<dyn LlmBackend> {
         1 => LlmBackendType::Mock,
         2 => LlmBackendType::DeepSeek,
         3 => LlmBackendType::OpenRouter,
+        4 => LlmBackendType::Ollama,
         // No override: check environment, then fall back to settings file
         _ => {
             let env = LlmBackendType::from_env();
@@ -93,6 +95,7 @@ pub fn get_llm_backend_with_settings(settings: &AppSettings) -> Box<dyn LlmBacke
         LlmBackendType::Mock => Box::new(MockBackend),
         LlmBackendType::DeepSeek => Box::new(DeepSeekBackend),
         LlmBackendType::OpenRouter => Box::new(OpenRouterBackend),
+        LlmBackendType::Ollama => Box::new(OllamaBackend),
     }
 }
 
@@ -308,6 +311,117 @@ impl LlmBackend for DeepSeekBackend {
 
     fn name(&self) -> &str {
         "DeepSeek"
+    }
+}
+
+fn get_ollama_config() -> (String, String) {
+    let settings = crate::settings::load_settings().unwrap_or_default();
+    let base_url =
+        std::env::var("OLLAMA_BASE_URL").unwrap_or_else(|_| settings.ollama_base_url.clone());
+    let model = get_llm_model(&settings);
+    (base_url, model)
+}
+
+pub struct OllamaBackend;
+
+impl LlmBackend for OllamaBackend {
+    fn generate_dialogue(
+        &self,
+        context: &PromptContext,
+        npc: &NpcCard,
+    ) -> Result<String, EngineError> {
+        log::info!("[LLM] Generating dialogue for NPC: {}", npc.sheet.name);
+
+        let user_msg = format!(
+            "The player says to {}: \"{}\"",
+            npc.sheet.name, context.user_message
+        );
+
+        let npc_context = PromptContext {
+            world: context.world,
+            room: context.room,
+            all_npcs: &[npc.clone()],
+            npcs_in_area: &[npc.clone()],
+            player: context.player,
+            user_message: &user_msg,
+            history: context.history,
+        };
+
+        let builder = PromptBuilder::from_context(&npc_context);
+        let (system_prompt, user_text) = builder.build_split()?;
+        let (base_url, model) = get_ollama_config();
+
+        call_ollama(&base_url, &model, &system_prompt, &user_text).map_err(EngineError::Narrative)
+    }
+
+    fn narrate_action(&self, context: &PromptContext) -> Result<String, EngineError> {
+        log::info!(
+            "[LLM] Generating action narration for: {}",
+            context.user_message
+        );
+
+        let builder = PromptBuilder::from_context(context);
+        let (system_prompt, user_text) = builder.build_split()?;
+        let (base_url, model) = get_ollama_config();
+
+        call_ollama(&base_url, &model, &system_prompt, &user_text).map_err(EngineError::Narrative)
+    }
+
+    fn narrate_arrival(&self, context: &PromptContext) -> Result<String, EngineError> {
+        log::info!(
+            "[LLM] Generating arrival narration for room: {}",
+            context.room.name
+        );
+
+        let user_msg = format!(
+            "{} enters the {}.",
+            context.player.sheet.name, context.room.name
+        );
+
+        let arrival_context = PromptContext {
+            world: context.world,
+            room: context.room,
+            all_npcs: context.all_npcs,
+            npcs_in_area: context.npcs_in_area,
+            player: context.player,
+            user_message: &user_msg,
+            history: context.history,
+        };
+
+        let builder = PromptBuilder::from_context(&arrival_context);
+        let (system_prompt, user_text) = builder.build_split()?;
+        let (base_url, model) = get_ollama_config();
+
+        call_ollama(&base_url, &model, &system_prompt, &user_text).map_err(EngineError::Narrative)
+    }
+
+    fn narrate_continuation(
+        &self,
+        system_prompt: &str,
+        user_prompt: &str,
+        _trigger_prompt: &str,
+    ) -> Result<String, EngineError> {
+        log::info!("[LLM] Generating continuation narration");
+
+        let (base_url, model) = get_ollama_config();
+
+        call_ollama(&base_url, &model, system_prompt, user_prompt).map_err(EngineError::Narrative)
+    }
+
+    fn narrate_action_from_prompt(
+        &self,
+        system_prompt: &str,
+        user_prompt: &str,
+    ) -> Result<String, EngineError> {
+        log::info!("[LLM] Generating action from prompt");
+
+        let (base_url, model) = get_ollama_config();
+
+        call_ollama(&base_url, &model, system_prompt, user_prompt).map_err(EngineError::Narrative)
+    }
+
+    fn name(&self) -> &str {
+        "Ollama"
     }
 }
 
@@ -728,6 +842,21 @@ mod tests {
             get_llm_backend_with_settings(&deepseek_settings).name(),
             "DeepSeek"
         );
+
+        let ollama_settings = AppSettings {
+            llm_backend: LlmBackendType::Ollama,
+            ..Default::default()
+        };
+        assert_eq!(
+            get_llm_backend_with_settings(&ollama_settings).name(),
+            "Ollama"
+        );
+    }
+
+    #[test]
+    fn test_ollama_backend_name() {
+        let backend = OllamaBackend;
+        assert_eq!(backend.name(), "Ollama");
     }
 
     #[test]

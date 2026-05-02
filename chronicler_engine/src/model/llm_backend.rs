@@ -1,10 +1,12 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LlmBackendType {
+    #[default]
     OpenRouter,
     DeepSeek,
     Mock,
+    Ollama,
 }
 
 impl From<&str> for LlmBackendType {
@@ -12,6 +14,7 @@ impl From<&str> for LlmBackendType {
         match s {
             "deepseek" => LlmBackendType::DeepSeek,
             "mock" => LlmBackendType::Mock,
+            "ollama" => LlmBackendType::Ollama,
             _ => LlmBackendType::OpenRouter,
         }
     }

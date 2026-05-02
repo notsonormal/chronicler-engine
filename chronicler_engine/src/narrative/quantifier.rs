@@ -2,9 +2,10 @@ use serde::Deserialize;
 
 use crate::error::EngineError;
 use crate::model::character::NpcCard;
+use crate::model::llm_backend::LlmBackendType;
 use crate::model::map::Room;
 use crate::model::state::LogEntry;
-use crate::narrative::openrouter_client::{call_openrouter_with_model, get_quantifier_model};
+use crate::narrative::llm_client::{call_ollama, call_openrouter_with_model, get_quantifier_model};
 
 /// Confidence level of the quantifier's NPC presence detection.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -478,6 +479,81 @@ pub fn extract_movement_from_text(
     }
 }
 
+fn quantify_room_with_llm_call(
+    context: &QuantifierPromptContext,
+    fallback_npc_ids: &[String],
+    llm_call: impl FnOnce(&str, &str, &str) -> Result<String, String>,
+) -> Result<QuantifierResult, EngineError> {
+    let builder = QuantifierPromptBuilder::new(QuantifierPromptContext {
+        room: context.room,
+        previous_room_npcs: context.previous_room_npcs,
+        all_known_npcs: context.all_known_npcs,
+        all_rooms: context.all_rooms,
+        player_name: context.player_name,
+        recent_history: context.recent_history,
+        player_action: context.player_action,
+    });
+
+    let (system_prompt, user_prompt) = builder.build();
+    let settings = crate::settings::load_settings().unwrap_or_default();
+    let model = get_quantifier_model(&settings);
+
+    log::info!(
+        "[Quantifier] Calling model: {} for room: {}",
+        model,
+        context.room.name
+    );
+
+    let known_ids: Vec<String> = context
+        .all_known_npcs
+        .iter()
+        .map(|npc| npc.id.clone())
+        .collect();
+
+    match llm_call(&system_prompt, &user_prompt, &model) {
+        Ok(response) => {
+            log::info!("[Quantifier] Player action: {}", context.player_action);
+            log::info!("[Quantifier] Received response ({} chars)", response.len());
+            log::debug!(
+                "[Quantifier] Response: {}",
+                &response[..response.len().min(200)]
+            );
+
+            let result =
+                parse_quantifier_response_with_movement(&response, &known_ids, context.all_rooms);
+            log::info!(
+                "[Quantifier] Detected NPCs: {:?} (confidence: {:?})",
+                result.npcs.npc_ids,
+                result.npcs.confidence
+            );
+            if let Some(mt) = &result.movement.movement_type {
+                log::info!(
+                    "[Quantifier] Detected movement: {:?} destination: {:?}",
+                    mt,
+                    result.movement.destination
+                );
+            } else {
+                log::info!("[Quantifier] No movement detected");
+            }
+            Ok(result)
+        }
+        Err(e) => {
+            log::warn!("[Quantifier] LLM call failed: {e}, using fallback NPC IDs");
+            Ok(QuantifierResult {
+                npcs: QuantifierParseResult {
+                    npc_ids: fallback_npc_ids.to_vec(),
+                    confidence: QuantifierConfidence::Low,
+                },
+                movement: MovementParseResult {
+                    movement_type: None,
+                    destination: None,
+                    confidence: QuantifierConfidence::Low,
+                },
+            })
+        }
+    }
+}
+
 /// [DOC: docs/system/llm_processing.md]
 pub struct QuantifierBackend;
 
@@ -493,77 +569,28 @@ impl QuantifierBackend {
             crate::error::EngineError::Config("OPENROUTER_API_KEY not set".into())
         })?;
 
-        let builder = QuantifierPromptBuilder::new(QuantifierPromptContext {
-            room: context.room,
-            previous_room_npcs: context.previous_room_npcs,
-            all_known_npcs: context.all_known_npcs,
-            all_rooms: context.all_rooms,
-            player_name: context.player_name,
-            recent_history: context.recent_history,
-            player_action: context.player_action,
-        });
+        quantify_room_with_llm_call(context, fallback_npc_ids, |system, user, model| {
+            call_openrouter_with_model(&api_key, system, user, model)
+        })
+    }
+}
 
-        let (system_prompt, user_prompt) = builder.build();
+/// Quantifier backend that calls Ollama API.
+pub struct OllamaQuantifierBackend;
+
+impl QuantifierBackendTrait for OllamaQuantifierBackend {
+    fn quantify_room(
+        &self,
+        context: &QuantifierPromptContext,
+        fallback_npc_ids: &[String],
+    ) -> Result<QuantifierResult, EngineError> {
         let settings = crate::settings::load_settings().unwrap_or_default();
-        let model = get_quantifier_model(&settings);
+        let base_url =
+            std::env::var("OLLAMA_BASE_URL").unwrap_or_else(|_| settings.ollama_base_url.clone());
 
-        log::info!(
-            "[Quantifier] Calling model: {} for room: {}",
-            model,
-            context.room.name
-        );
-
-        let known_ids: Vec<String> = context
-            .all_known_npcs
-            .iter()
-            .map(|npc| npc.id.clone())
-            .collect();
-
-        match call_openrouter_with_model(&api_key, &system_prompt, &user_prompt, &model) {
-            Ok(response) => {
-                log::info!("[Quantifier] Player action: {}", context.player_action);
-                log::info!("[Quantifier] Received response ({} chars)", response.len());
-                log::debug!(
-                    "[Quantifier] Response: {}",
-                    &response[..response.len().min(200)]
-                );
-
-                let result = parse_quantifier_response_with_movement(
-                    &response,
-                    &known_ids,
-                    context.all_rooms,
-                );
-                log::info!(
-                    "[Quantifier] Detected NPCs: {:?} (confidence: {:?})",
-                    result.npcs.npc_ids,
-                    result.npcs.confidence
-                );
-                if let Some(mt) = &result.movement.movement_type {
-                    log::info!(
-                        "[Quantifier] Detected movement: {:?} destination: {:?}",
-                        mt,
-                        result.movement.destination
-                    );
-                } else {
-                    log::info!("[Quantifier] No movement detected");
-                }
-                Ok(result)
-            }
-            Err(e) => {
-                log::warn!("[Quantifier] LLM call failed: {e}, using fallback NPC IDs");
-                Ok(QuantifierResult {
-                    npcs: QuantifierParseResult {
-                        npc_ids: fallback_npc_ids.to_vec(),
-                        confidence: QuantifierConfidence::Low,
-                    },
-                    movement: MovementParseResult {
-                        movement_type: None,
-                        destination: None,
-                        confidence: QuantifierConfidence::Low,
-                    },
-                })
-            }
-        }
+        quantify_room_with_llm_call(context, fallback_npc_ids, |system, user, model| {
+            call_ollama(&base_url, model, system, user)
+        })
     }
 }
 
@@ -757,6 +784,16 @@ impl QuantifierBackendTrait for MockQuantifierBackend {
                     confidence: QuantifierConfidence::High,
                 }),
         })
+    }
+}
+
+/// Factory function that returns the appropriate quantifier backend based on settings.
+pub fn get_quantifier_backend() -> Box<dyn QuantifierBackendTrait> {
+    let settings = crate::settings::load_settings().unwrap_or_default();
+    match settings.quantifier_backend {
+        LlmBackendType::Mock => Box::new(MockQuantifierBackend::default()),
+        LlmBackendType::Ollama => Box::new(OllamaQuantifierBackend),
+        LlmBackendType::OpenRouter | LlmBackendType::DeepSeek => Box::new(RealQuantifierBackend),
     }
 }
 

@@ -1,6 +1,8 @@
 {
-            "llm_backend": "OpenRouter",
-            "llm_model": "openai/gpt-4o-mini",
-            "quantifier_model": "openai/gpt-4o-mini",
-            "openrouter_api_key": null
-        }
+  "llm_backend": "OpenRouter",
+  "llm_model": "openai/gpt-4o-mini",
+  "quantifier_model": "openai/gpt-4o-mini",
+  "openrouter_api_key": null,
+  "quantifier_backend": "OpenRouter",
+  "ollama_base_url": "http://localhost:11434"
+}

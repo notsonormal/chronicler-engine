@@ -23,10 +23,19 @@ pub fn parse_api_key(s: &str) -> Option<String> {
     <h2>LLM Settings</h2>
     <form hx-post="/settings" hx-target="#settings-status">
         <div class="form-group">
-            <label for="llm_backend">Backend</label>
+            <label for="llm_backend">Narrative Backend</label>
             <select name="llm_backend" id="llm_backend">
                 <option value="openrouter" {% if backend_openrouter %}selected{% endif %}>OpenRouter</option>
                 <option value="deepseek" {% if backend_deepseek %}selected{% endif %}>DeepSeek</option>
+                <option value="ollama" {% if backend_ollama %}selected{% endif %}>Ollama</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="quantifier_backend">Quantifier Backend</label>
+            <select name="quantifier_backend" id="quantifier_backend">
+                <option value="openrouter" {% if quantifier_backend_openrouter %}selected{% endif %}>OpenRouter</option>
+                <option value="deepseek" {% if quantifier_backend_deepseek %}selected{% endif %}>DeepSeek</option>
+                <option value="ollama" {% if quantifier_backend_ollama %}selected{% endif %}>Ollama</option>
             </select>
         </div>
         <div class="form-group">
@@ -36,6 +45,10 @@ pub fn parse_api_key(s: &str) -> Option<String> {
         <div class="form-group">
             <label for="quantifier_model">Quantifier Model</label>
             <input type="text" id="quantifier_model" name="quantifier_model" value="{{ quantifier_model }}" placeholder="openai/gpt-4o-mini" />
+        </div>
+        <div class="form-group">
+            <label for="ollama_base_url">Ollama Base URL</label>
+            <input type="text" id="ollama_base_url" name="ollama_base_url" value="{{ ollama_base_url }}" placeholder="http://localhost:11434" />
         </div>
         <div class="form-group">
             <label for="api_key">OpenRouter API Key</label>
@@ -51,8 +64,13 @@ pub fn parse_api_key(s: &str) -> Option<String> {
 pub struct SettingsTemplate {
     pub backend_openrouter: bool,
     pub backend_deepseek: bool,
+    pub backend_ollama: bool,
+    pub quantifier_backend_openrouter: bool,
+    pub quantifier_backend_deepseek: bool,
+    pub quantifier_backend_ollama: bool,
     pub llm_model: String,
     pub quantifier_model: String,
+    pub ollama_base_url: String,
     pub api_key_placeholder: String,
 }
 
@@ -61,8 +79,14 @@ impl SettingsTemplate {
         Self {
             backend_openrouter: settings.llm_backend == LlmBackendType::OpenRouter,
             backend_deepseek: settings.llm_backend == LlmBackendType::DeepSeek,
+            backend_ollama: settings.llm_backend == LlmBackendType::Ollama,
+            quantifier_backend_openrouter: settings.quantifier_backend
+                == LlmBackendType::OpenRouter,
+            quantifier_backend_deepseek: settings.quantifier_backend == LlmBackendType::DeepSeek,
+            quantifier_backend_ollama: settings.quantifier_backend == LlmBackendType::Ollama,
             llm_model: settings.llm_model.clone(),
             quantifier_model: settings.quantifier_model.clone(),
+            ollama_base_url: settings.ollama_base_url.clone(),
             api_key_placeholder: if settings.openrouter_api_key.is_some() {
                 "(current key set)".to_string()
             } else {
@@ -92,8 +116,10 @@ pub async fn settings_panel(State(app_state): State<AppState>) -> Html<String> {
 #[derive(Debug, serde::Deserialize)]
 pub struct SettingsForm {
     pub llm_backend: String,
+    pub quantifier_backend: String,
     pub llm_model: String,
     pub quantifier_model: String,
+    pub ollama_base_url: String,
     pub api_key: String,
 }
 
@@ -103,6 +129,7 @@ pub async fn save_settings_handler(
     Form(form): Form<SettingsForm>,
 ) -> Html<String> {
     let backend = LlmBackendType::from(form.llm_backend.as_str());
+    let quantifier_backend = LlmBackendType::from(form.quantifier_backend.as_str());
 
     let api_key = if form.api_key.is_empty() {
         None
@@ -110,11 +137,19 @@ pub async fn save_settings_handler(
         Some(form.api_key)
     };
 
+    let ollama_base_url = if form.ollama_base_url.is_empty() {
+        "http://localhost:11434".to_string()
+    } else {
+        form.ollama_base_url
+    };
+
     let new_settings = AppSettings {
         llm_backend: backend,
         llm_model: form.llm_model,
         quantifier_model: form.quantifier_model,
         openrouter_api_key: api_key,
+        quantifier_backend,
+        ollama_base_url,
     };
 
     if let Err(e) = new_settings.save() {
@@ -167,7 +202,11 @@ mod tests {
                 LlmBackendType::OpenRouter
             );
             assert_eq!(LlmBackendType::from(""), LlmBackendType::OpenRouter);
-            assert_eq!(LlmBackendType::from("ollama"), LlmBackendType::OpenRouter);
+        }
+
+        #[test]
+        fn test_ollama_returns_ollama() {
+            assert_eq!(LlmBackendType::from("ollama"), LlmBackendType::Ollama);
         }
     }
 
@@ -189,36 +228,70 @@ mod tests {
     mod settings_template_from_settings {
         use super::*;
 
-        fn make_settings(backend: LlmBackendType, api_key: Option<String>) -> AppSettings {
+        fn make_settings(
+            backend: LlmBackendType,
+            quantifier_backend: LlmBackendType,
+            api_key: Option<String>,
+        ) -> AppSettings {
             AppSettings {
                 llm_backend: backend,
                 llm_model: "test-model".to_string(),
                 quantifier_model: "test-quantifier".to_string(),
                 openrouter_api_key: api_key,
+                quantifier_backend,
+                ollama_base_url: "http://localhost:11434".to_string(),
             }
         }
 
         #[test]
         fn test_openrouter_backend_sets_openrouter_flag() {
-            let settings = make_settings(LlmBackendType::OpenRouter, None);
+            let settings =
+                make_settings(LlmBackendType::OpenRouter, LlmBackendType::OpenRouter, None);
             let template = SettingsTemplate::from_settings(&settings);
 
             assert!(template.backend_openrouter);
             assert!(!template.backend_deepseek);
+            assert!(!template.backend_ollama);
         }
 
         #[test]
         fn test_deepseek_backend_sets_deepseek_flag() {
-            let settings = make_settings(LlmBackendType::DeepSeek, None);
+            let settings =
+                make_settings(LlmBackendType::DeepSeek, LlmBackendType::OpenRouter, None);
             let template = SettingsTemplate::from_settings(&settings);
 
             assert!(!template.backend_openrouter);
             assert!(template.backend_deepseek);
+            assert!(!template.backend_ollama);
+        }
+
+        #[test]
+        fn test_ollama_backend_sets_ollama_flag() {
+            let settings = make_settings(LlmBackendType::Ollama, LlmBackendType::OpenRouter, None);
+            let template = SettingsTemplate::from_settings(&settings);
+
+            assert!(!template.backend_openrouter);
+            assert!(!template.backend_deepseek);
+            assert!(template.backend_ollama);
+        }
+
+        #[test]
+        fn test_quantifier_backend_flags() {
+            let settings = make_settings(LlmBackendType::OpenRouter, LlmBackendType::Ollama, None);
+            let template = SettingsTemplate::from_settings(&settings);
+
+            assert!(!template.quantifier_backend_openrouter);
+            assert!(!template.quantifier_backend_deepseek);
+            assert!(template.quantifier_backend_ollama);
         }
 
         #[test]
         fn test_api_key_set_shows_current_key_placeholder() {
-            let settings = make_settings(LlmBackendType::OpenRouter, Some("sk-abc123".to_string()));
+            let settings = make_settings(
+                LlmBackendType::OpenRouter,
+                LlmBackendType::OpenRouter,
+                Some("sk-abc123".to_string()),
+            );
             let template = SettingsTemplate::from_settings(&settings);
 
             assert_eq!(template.api_key_placeholder, "(current key set)");
@@ -226,7 +299,8 @@ mod tests {
 
         #[test]
         fn test_api_key_none_shows_env_var_placeholder() {
-            let settings = make_settings(LlmBackendType::OpenRouter, None);
+            let settings =
+                make_settings(LlmBackendType::OpenRouter, LlmBackendType::OpenRouter, None);
             let template = SettingsTemplate::from_settings(&settings);
 
             assert_eq!(template.api_key_placeholder, "(not set - use env var)");
@@ -239,12 +313,30 @@ mod tests {
                 llm_model: "custom-model".to_string(),
                 quantifier_model: "custom-quantifier".to_string(),
                 openrouter_api_key: None,
+                quantifier_backend: LlmBackendType::OpenRouter,
+                ollama_base_url: "http://localhost:11434".to_string(),
             };
 
             let template = SettingsTemplate::from_settings(&settings);
 
             assert_eq!(template.llm_model, "custom-model");
             assert_eq!(template.quantifier_model, "custom-quantifier");
+        }
+
+        #[test]
+        fn test_ollama_base_url_is_copied() {
+            let settings = AppSettings {
+                llm_backend: LlmBackendType::OpenRouter,
+                llm_model: "test-model".to_string(),
+                quantifier_model: "test-quantifier".to_string(),
+                openrouter_api_key: None,
+                quantifier_backend: LlmBackendType::OpenRouter,
+                ollama_base_url: "http://ollama:11434".to_string(),
+            };
+
+            let template = SettingsTemplate::from_settings(&settings);
+
+            assert_eq!(template.ollama_base_url, "http://ollama:11434");
         }
     }
 }

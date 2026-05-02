@@ -12,7 +12,7 @@ use crate::model::state::{GameState, LogType};
 use crate::narrative::llm::get_llm_backend;
 use crate::narrative::prompt::make_prompt_context;
 use crate::narrative::quantifier::{
-    MockQuantifierBackend, QuantifierBackendTrait, RealQuantifierBackend, determine_npcs_in_room,
+    QuantifierBackendTrait, determine_npcs_in_room, get_quantifier_backend,
 };
 
 pub trait GameService: Send + Sync {
@@ -148,12 +148,8 @@ impl GameService for DefaultGameService {
                         return;
                     };
 
-                    let use_mock = std::env::var("LLM_BACKEND").as_deref() == Ok("mock");
-                    let quantifier_backend: Box<dyn QuantifierBackendTrait> = if use_mock {
-                        Box::new(MockQuantifierBackend::default())
-                    } else {
-                        Box::new(RealQuantifierBackend)
-                    };
+                    let quantifier_backend: Box<dyn QuantifierBackendTrait> =
+                        get_quantifier_backend();
 
                     let quantifier_result = with_state_lock(&state_for_thread, |state| {
                         let previous_room_npcs: Vec<NpcCard> = state.npcs_in_area.clone();
