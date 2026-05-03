@@ -1,5 +1,7 @@
 # Reference: Quantifier Prompt
 
+> **Context**: The quantifier prompt is a **separate secondary prompt** used for post-narration scene analysis. It is **not** part of the 8-layer narrative prompt system. For the main narrative prompt architecture, see [`system/prompt_system.md`](../system/prompt_system.md).
+
 The quantifier prompt is rendered by `QuantifierPromptBuilder` in `src/narrative/quantifier.rs`. It uses a separate LLM model (`QUANTIFIER_MODEL` env var) to determine which NPCs are present in the current room and whether the player is moving.
 
 ## System Prompt
@@ -8,7 +10,7 @@ The quantifier prompt is rendered by `QuantifierPromptBuilder` in `src/narrative
 <QuantifierTask>
 You are a scene quantifier for a text adventure game.
 Your task is to determine which NPCs are present in the current room
-and whether the player is moving to a new location.
+and whether the player actually moved to a new location.
 
 Respond ONLY with a JSON object in this exact format:
 {"npcs_in_room": ["id1", "id2"], "movement": {"type": "entering|in|leaving", "destination": "room_id"}}
@@ -17,9 +19,16 @@ Rules:
 - Only include NPCs that would logically be in the room based on context.
 - NPCs from the previous room may have followed the player.
 - Use the exact NPC IDs provided in the AvailableNpcIds list.
-- Movement is determined by narrative context, not explicit commands.
+- Movement is determined ONLY by what happens in <LatestNarration>, not by earlier history.
+- If the player is blocked, stopped, prevented, or fails to move in <LatestNarration>, they have NOT moved.
+- An NPC interposing, blocking a path, or saying "you can't go" means the player remains.
 - If no NPCs are present, return an empty array: {"npcs_in_room": []}
 - If no movement detected, set type to null: {"movement": {"type": null}}
+
+Examples:
+- Narration: "You walk through the door into the kitchen." → {"movement": {"type": "entering", "destination": "kitchen"}}
+- Narration: "The guard blocks your path. 'Halt!' he shouts." → {"movement": {"type": null}}
+- Narration: "She swiftly interposes herself between you and the gate." → {"movement": {"type": null}}
 </QuantifierTask>
 
 <AvailableNpcIds>
@@ -52,14 +61,16 @@ Rules:
   <Entry sender="CharacterName">Recent dialogue or narration.</Entry>
 </RecentHistory>
 
-<PlayerAction>
-  PlayerName: player's action text
-</PlayerAction>
+<LatestNarration>
+  PlayerName: the most recent scene narration
+</LatestNarration>
 
 <Query>
 Based on the context above, determine:
 - Which NPCs are present in the current room
-- Whether the player is entering, leaving, or remaining
+- Whether the player actually entered, left, or remained in place
+
+IMPORTANT: Base your decision ONLY on what happens in <LatestNarration>, not on what the player attempted in <RecentHistory>.
 
 Respond ONLY with the JSON format specified in <QuantifierTask>.
 </Query>
@@ -98,8 +109,12 @@ NPC enter/leave events are **not** returned by the LLM. Instead, they are comput
 
 This delta-based approach avoids requiring the LLM to reason about transitions, making it more reliable than asking for explicit enter/leave events.
 
+## Retry Behavior
+
+If the quantifier returns a **Low confidence** result (e.g., unparseable response), the engine automatically retries the LLM call once. This gives the model a second chance to produce valid JSON. Medium and High confidence results are accepted on the first attempt.
+
 ## Sources
 
-- System prompt: `src/narrative/quantifier.rs:91-133`
-- User prompt: `src/narrative/quantifier.rs:135-199`
+- System prompt: `src/narrative/quantifier.rs:119-167`
+- User prompt: `src/narrative/quantifier.rs:170-236`
 - Response parsing: `src/narrative/quantifier.rs` (see `parse_quantifier_response` functions)

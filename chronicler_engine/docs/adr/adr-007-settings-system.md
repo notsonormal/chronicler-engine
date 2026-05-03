@@ -1,6 +1,9 @@
 # ADR-007: Settings System Architecture
 
 **Date:** 2026-05-01
+**Updated:** 2026-05-02
+
+> **Note:** This ADR describes the original flat settings system. It has been superseded by the **Connection Profiles** system (see implementation in `src/model/settings.rs`), which adds a `Connection` abstraction for reusable provider+model profiles. The core principles (JSON persistence, runtime mutability, HTMX UI) remain unchanged.
 
 ---
 
@@ -22,26 +25,33 @@ The team needed a solution that enabled runtime configuration without server res
 
 The Chronicler Engine now loads configuration from `data/settings.json` into an `AppSettings` struct, exposes it via `AppState` (wrapped in `Arc<RwLock<AppSettings>>`), and provides a dedicated Settings tab for runtime configuration.
 
-### Configuration Scope
+### Configuration Scope (v2 — Connection-Based)
 
-| Setting | Type | Options | Default |
-|---------|------|---------|---------|
-| `llm_backend` | enum | `deepseek`, `openrouter` (`mock` is test-only, not shown in UI dropdown) | `openrouter` |
-| `llm_model` | string | Any OpenRouter model ID | `openai/gpt-4o-mini` |
-| `quantifier_model` | string | Any OpenRouter model ID | `openai/gpt-4o-mini` |
-| `openrouter_api_key` | string | Masked in UI, stored plain | `None` (falls back to env var) |
+| Setting | Type | Description |
+|---------|------|-------------|
+| `connections` | `Vec<Connection>` | Named profiles containing provider, model, API key, and base URL |
+| `narration_connection_id` | string | ID of the connection used for narrative generation |
+| `quantifier_connection_id` | string | ID of the connection used for scene quantification |
+
+Each `Connection` has:
+- `id`: Unique identifier (e.g. `"conn-1"`)
+- `name`: Display name (e.g. `"GPT-4o Mini"`)
+- `provider`: `LlmBackendType` (`OpenRouter`, `DeepSeek`, `Ollama`, `Mock`)
+- `model`: Model string (e.g. `"openai/gpt-4o-mini"`)
+- `api_key`: Optional per-connection API key
+- `base_url`: Optional per-connection base URL
 
 ### Data Flow
 
 ```
-settings.json → AppSettings (loaded at startup)
+settings.json → AppSettings (loaded at startup, defaults if missing)
                     ↓
               AppState.settings (Arc<RwLock<AppSettings>>)
                     ↓
      ┌───────────────┴───────────────┐
      ↓                               ↓
-get_llm_backend()           get_llm_model()
-(uses settings.backend)    (uses settings.llm_model)
+get_llm_backend()           get_quantifier_backend()
+(uses narration connection) (uses quantifier connection)
 ```
 
 The settings file serves as the single source of truth for backend selection. On first launch, the system auto-creates `settings.json` with default values if missing.
@@ -61,13 +71,12 @@ Following Silly Tavern conventions, the dashboard provides a tabbed interface:
 ```
 
 - **Game Tab**: Current layout (story log, visual sidebar, action area)
-- **Settings Tab**: Settings form with backend dropdown, model inputs, masked API key field, and Save button
+- **Settings Tab**: Connection management (add/list connections) and active-connection selection for Narration and Quantifier
 
-### Backward Compatibility
+### Environment Fallback
 
-- **Model names**: Environment variables `LLM_MODEL` and `QUANTIFIER_MODEL` are checked first; if set, they override settings file values (allows CI/testing to override without modifying JSON)
-- **API key**: If `openrouter_api_key` in settings is `None`, the system falls back to `OPENROUTER_API_KEY` env var
-- **Backend selection**: The `LLM_BACKEND` environment variable is **no longer consulted** after this change; the settings file is the sole source of truth for backend type
+- **API key fallback**: If a connection's `api_key` is `None`, the system falls back to the provider-specific environment variable (`OPENROUTER_API_KEY` for OpenRouter/DeepSeek)
+- **Backend selection**: The `LLM_BACKEND` environment variable is **no longer consulted**; the settings file is the sole source of truth. Integration tests should write a mock settings file and set `CHRONICLER_SETTINGS_PATH`.
 
 ---
 
@@ -76,8 +85,9 @@ Following Silly Tavern conventions, the dashboard provides a tabbed interface:
 ### Positive
 - **Runtime configuration**: Settings changes take effect without server restart, enabling rapid iteration
 - **User-friendly UI**: Non-technical users can modify LLM settings through the browser
-- **Test simplification**: Mock backend tests no longer require `LLM_BACKEND=mock` env var manipulation
+- **Test simplification**: Mock backend tests use a temporary mock settings file via `CHRONICLER_SETTINGS_PATH`
 - **Centralized configuration**: All LLM settings in one JSON file simplifies deployment management
+- **Connection reuse**: Multiple named profiles enable switching between providers without retyping credentials
 
 ### Negative
 - **Persistence complexity**: Requires file I/O for settings load/save operations, introducing potential failure modes
@@ -87,7 +97,7 @@ Following Silly Tavern conventions, the dashboard provides a tabbed interface:
 ### Trade-offs
 - Chose JSON over YAML/TOML for native `serde` support and human readability
 - Chose tabbed UI over modal/slide-out for persistent visibility
-- Env var fallback preserved for model names (CI convenience) but removed for backend type (settings file authority)
+- Env var fallback preserved for API keys (deployment convenience) but removed for backend type (settings file authority)
 
 ---
 

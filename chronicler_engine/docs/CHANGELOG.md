@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Added
+- **Room-Aware Triggers** - Triggers can now be scoped to specific rooms via `room_id`
+  - Added optional `room_id` field to `Trigger` schema
+  - Global triggers (no `room_id`) fire anywhere (backward compatible)
+  - Room-scoped triggers only fire when `state.current_room_id` matches
+  - Gabriella's introduction trigger now scoped to `entrance_hall`
+  - Prevents NPC introduction events from firing in the wrong location
+
 ### Changed
 - **Default backend fixed** - `data/settings.json` now defaults to `OpenRouter` instead of `Mock`
 - **Mock backend hidden from UI** - Removed "Mock (Testing)" from the Settings backend dropdown. `Mock` remains available for tests via `with_test_backend()` but is no longer selectable by end users
@@ -249,8 +257,8 @@
 
 - **NPC Prompt Structure** - All characters now included in LLM prompts
   - New fields in PromptBuilder: `all_npcs` and `npcs_in_area`
-  - Two output sections: `<Npcs>` (all characters with presence) and `<NpcsInRoom>` (room-specific)
-  - Presence status shows "(IN ROOM)" or "(elsewhere)"
+  - Two output sections: `<KnownNpcs>` (condensed roster of all characters) and `<NpcsInRoom>` (room-specific full cards)
+  - Presence status shows "(in room)" or "(elsewhere)"
 
 ### Changed
 - **OpenRouter Client** - Enhanced content extraction

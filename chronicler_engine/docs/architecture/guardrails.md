@@ -130,7 +130,20 @@ No `struct`, `enum`, `fn`, `impl`, or `const` definitions.
 **Exemptions**:
 - `src/server/mod.rs` — legacy structural decision; centralizes Axum router, `AppState`, and server entry points.
 
-### 3.5 Single-Letter Variables (`guardrails_single_letter_vars`)
+### 3.5 Long Comment Run Detection (`guardrails_long_comment_runs`)
+
+**Standard**: No runs of 5 or more consecutive `//` or `///` comment lines. Long explanations belong in external documentation linked via doc anchors.
+
+Exemptions:
+- Visual dividers (`////` or more slashes)
+- Doc anchors (`// [DOC: ...]`)
+- Empty comment lines
+- Comments inside `#[cfg(test)]` modules
+
+**Severity**: warn  
+**Goal**: zero warnings, then promote to error.
+
+### 3.6 Single-Letter Variables (`guardrails_single_letter_vars`)
 
 **Standard**: No single-letter bindings (`a`, `b`, `i`, `x`, etc.) outside tiny scopes (≤3 statements).
 

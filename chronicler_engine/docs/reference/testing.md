@@ -50,11 +50,9 @@ The LLM backend can be selected in three ways:
      }
    }
    ```
-3. **Environment Variable**: Fallback for backward compatibility
-   - `LLM_BACKEND=mock` - Uses MockBackend for fast, no-network tests
-   - `LLM_BACKEND=real` (or unset) - Uses OpenRouterBackend for real LLM responses
+3. **Mock Settings File**: Integration tests write a temporary settings file with Mock connections and set `CHRONICLER_SETTINGS_PATH` to point to it. This is the preferred approach for subprocess-based tests.
 
-The `get_llm_backend()` function checks the test override first, then falls back to settings file or environment variable.
+The `get_llm_backend()` function checks the test override first, then falls back to the narration connection from `settings.json`.
 
 ## UI Tests
 
@@ -189,7 +187,7 @@ async fn test_save_settings_updates_memory() {
         .uri("/settings")
         .method(http::Method::POST)
         .header(http::header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .body(Body::from("llm_backend=mock&llm_model=gpt-4o-mini&quantifier_model=gpt-4o-mini&api_key="))
+        .body(Body::from("narration_connection_id=openrouter-gpt-4o-mini&quantifier_connection_id=openrouter-gpt-4o-mini"))
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
 
@@ -199,7 +197,8 @@ async fn test_save_settings_updates_memory() {
 
 #### Routes Tested
 - GET `/fragment/settings` - Settings panel HTML fragment
-- POST `/settings` - Save settings form submission (backend, model names, API key)
+- POST `/settings` - Save active connection selections (narration_connection_id, quantifier_connection_id)
+- POST `/connections/add` - Add a new connection profile
 
 ## Code Coverage
 

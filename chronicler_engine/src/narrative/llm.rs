@@ -1,7 +1,7 @@
 use crate::error::EngineError;
 use crate::model::character::NpcCard;
-use crate::model::settings::AppSettings;
-use crate::narrative::llm_client::{call_ollama, call_openrouter, get_llm_model};
+use crate::model::settings::{AppSettings, Connection};
+use crate::narrative::llm_client::{call_ollama, call_openrouter_with_model};
 use crate::narrative::prompt::{PromptBuilder, PromptContext};
 
 pub trait LlmBackend: Send + Sync {
@@ -36,7 +36,7 @@ pub use crate::model::llm_backend::LlmBackendType;
 
 use std::sync::atomic::{AtomicU8, Ordering};
 
-static TEST_BACKEND_OVERRIDE: AtomicU8 = AtomicU8::new(0); // 0=none, 1=mock, 2=deepseek, 3=openrouter
+static TEST_BACKEND_OVERRIDE: AtomicU8 = AtomicU8::new(0); // 0=none, 1=mock, 2=deepseek, 3=openrouter, 4=ollama
 
 pub fn set_test_backend(backend: LlmBackendType) {
     let val = match backend {
@@ -65,42 +65,71 @@ pub fn with_test_backend(backend: LlmBackendType) -> TestBackendGuard {
     TestBackendGuard
 }
 
-pub fn get_llm_backend() -> Box<dyn LlmBackend> {
-    let backend_type = match TEST_BACKEND_OVERRIDE.load(Ordering::SeqCst) {
-        1 => LlmBackendType::Mock,
-        2 => LlmBackendType::DeepSeek,
-        3 => LlmBackendType::OpenRouter,
-        4 => LlmBackendType::Ollama,
-        // No override: check environment, then fall back to settings file
-        _ => {
-            let env = LlmBackendType::from_env();
-            if env != LlmBackendType::OpenRouter {
-                env
-            } else {
-                crate::settings::load_settings()
-                    .map(|s| s.llm_backend)
-                    .unwrap_or(LlmBackendType::OpenRouter)
-            }
-        }
-    };
-
-    get_llm_backend_with_settings(&AppSettings {
-        llm_backend: backend_type,
-        ..AppSettings::default()
-    })
-}
-
-pub fn get_llm_backend_with_settings(settings: &AppSettings) -> Box<dyn LlmBackend> {
-    match settings.llm_backend {
+/// Create an LLM backend for a specific connection.
+/// [DOC: docs/system/llm_processing.md]
+pub fn get_llm_backend_for(connection: &Connection) -> Box<dyn LlmBackend> {
+    match connection.provider {
         LlmBackendType::Mock => Box::new(MockBackend),
-        LlmBackendType::DeepSeek => Box::new(DeepSeekBackend),
-        LlmBackendType::OpenRouter => Box::new(OpenRouterBackend),
-        LlmBackendType::Ollama => Box::new(OllamaBackend),
+        LlmBackendType::DeepSeek => Box::new(DeepSeekBackend::from_connection(connection)),
+        LlmBackendType::OpenRouter => Box::new(OpenRouterBackend::from_connection(connection)),
+        LlmBackendType::Ollama => Box::new(OllamaBackend::from_connection(connection)),
     }
 }
 
-#[derive(Clone, Copy)]
-pub struct OpenRouterBackend;
+/// Get the LLM backend for the current narration connection.
+/// Respects test overrides for backward compatibility with tests.
+/// [DOC: docs/system/llm_processing.md]
+pub fn get_llm_backend() -> Box<dyn LlmBackend> {
+    let override_type = TEST_BACKEND_OVERRIDE.load(Ordering::SeqCst);
+    if override_type != 0 {
+        let provider = match override_type {
+            1 => LlmBackendType::Mock,
+            2 => LlmBackendType::DeepSeek,
+            3 => LlmBackendType::OpenRouter,
+            4 => LlmBackendType::Ollama,
+            _ => LlmBackendType::OpenRouter,
+        };
+        let conn = Connection::new("test-override", "Test Override", provider);
+        return get_llm_backend_for(&conn);
+    }
+
+    let settings = crate::settings::load_settings().unwrap_or_default();
+    let connection = settings
+        .get_narration_connection()
+        .cloned()
+        .unwrap_or_else(|| Connection::new("default", "Default", LlmBackendType::Mock));
+    get_llm_backend_for(&connection)
+}
+
+/// Backward-compatible helper used by some tests.
+pub fn get_llm_backend_with_settings(settings: &AppSettings) -> Box<dyn LlmBackend> {
+    let connection = settings
+        .get_narration_connection()
+        .cloned()
+        .unwrap_or_else(|| Connection::new("default", "Default", LlmBackendType::Mock));
+    get_llm_backend_for(&connection)
+}
+
+#[derive(Clone, Default)]
+pub struct OpenRouterBackend {
+    api_key: String,
+    model: String,
+}
+
+impl OpenRouterBackend {
+    fn from_connection(connection: &Connection) -> Self {
+        let api_key = connection.resolve_api_key().unwrap_or_default();
+        Self {
+            api_key,
+            model: connection.model.clone(),
+        }
+    }
+
+    fn call(&self, system_prompt: &str, user_text: &str) -> Result<String, EngineError> {
+        call_openrouter_with_model(&self.api_key, system_prompt, user_text, &self.model)
+            .map_err(EngineError::Narrative)
+    }
+}
 
 impl LlmBackend for OpenRouterBackend {
     fn generate_dialogue(
@@ -127,12 +156,8 @@ impl LlmBackend for OpenRouterBackend {
 
         let builder = PromptBuilder::from_context(&npc_context);
         let (system_prompt, user_text) = builder.build_split()?;
-        let api_key = std::env::var("OPENROUTER_API_KEY").map_err(|_| {
-            log::error!("OPENROUTER_API_KEY not set - cannot generate dialogue");
-            EngineError::Config("OPENROUTER_API_KEY not set".into())
-        })?;
 
-        call_openrouter(&api_key, &system_prompt, &user_text).map_err(EngineError::Narrative)
+        self.call(&system_prompt, &user_text)
     }
 
     fn narrate_action(&self, context: &PromptContext) -> Result<String, EngineError> {
@@ -143,12 +168,8 @@ impl LlmBackend for OpenRouterBackend {
 
         let builder = PromptBuilder::from_context(context);
         let (system_prompt, user_text) = builder.build_split()?;
-        let api_key = std::env::var("OPENROUTER_API_KEY").map_err(|_| {
-            log::error!("OPENROUTER_API_KEY not set - cannot generate action narration");
-            EngineError::Config("OPENROUTER_API_KEY not set".into())
-        })?;
 
-        call_openrouter(&api_key, &system_prompt, &user_text).map_err(EngineError::Narrative)
+        self.call(&system_prompt, &user_text)
     }
 
     fn narrate_arrival(&self, context: &PromptContext) -> Result<String, EngineError> {
@@ -174,12 +195,8 @@ impl LlmBackend for OpenRouterBackend {
 
         let builder = PromptBuilder::from_context(&arrival_context);
         let (system_prompt, user_text) = builder.build_split()?;
-        let api_key = std::env::var("OPENROUTER_API_KEY").map_err(|_| {
-            log::error!("OPENROUTER_API_KEY not set - cannot generate arrival narration");
-            EngineError::Config("OPENROUTER_API_KEY not set".into())
-        })?;
 
-        call_openrouter(&api_key, &system_prompt, &user_text).map_err(EngineError::Narrative)
+        self.call(&system_prompt, &user_text)
     }
 
     fn narrate_continuation(
@@ -190,12 +207,7 @@ impl LlmBackend for OpenRouterBackend {
     ) -> Result<String, EngineError> {
         log::info!("[LLM] Generating continuation narration");
 
-        let api_key = std::env::var("OPENROUTER_API_KEY").map_err(|_| {
-            log::error!("OPENROUTER_API_KEY not set - cannot generate continuation narration");
-            EngineError::Config("OPENROUTER_API_KEY not set".into())
-        })?;
-
-        call_openrouter(&api_key, system_prompt, user_prompt).map_err(EngineError::Narrative)
+        self.call(system_prompt, user_prompt)
     }
 
     fn narrate_action_from_prompt(
@@ -205,12 +217,7 @@ impl LlmBackend for OpenRouterBackend {
     ) -> Result<String, EngineError> {
         log::info!("[LLM] Generating action from prompt");
 
-        let api_key = std::env::var("OPENROUTER_API_KEY").map_err(|_| {
-            log::error!("OPENROUTER_API_KEY not set - cannot generate action from prompt");
-            EngineError::Config("OPENROUTER_API_KEY not set".into())
-        })?;
-
-        call_openrouter(&api_key, system_prompt, user_prompt).map_err(EngineError::Narrative)
+        self.call(system_prompt, user_prompt)
     }
 
     fn name(&self) -> &str {
@@ -218,6 +225,7 @@ impl LlmBackend for OpenRouterBackend {
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct MockBackend;
 
 impl LlmBackend for MockBackend {
@@ -270,7 +278,22 @@ impl LlmBackend for MockBackend {
     }
 }
 
-pub struct DeepSeekBackend;
+#[derive(Clone, Default)]
+#[allow(dead_code)]
+pub struct DeepSeekBackend {
+    api_key: String,
+    model: String,
+}
+
+impl DeepSeekBackend {
+    fn from_connection(connection: &Connection) -> Self {
+        let api_key = connection.resolve_api_key().unwrap_or_default();
+        Self {
+            api_key,
+            model: connection.model.clone(),
+        }
+    }
+}
 
 impl LlmBackend for DeepSeekBackend {
     fn generate_dialogue(
@@ -314,15 +337,20 @@ impl LlmBackend for DeepSeekBackend {
     }
 }
 
-fn get_ollama_config() -> (String, String) {
-    let settings = crate::settings::load_settings().unwrap_or_default();
-    let base_url =
-        std::env::var("OLLAMA_BASE_URL").unwrap_or_else(|_| settings.ollama_base_url.clone());
-    let model = get_llm_model(&settings);
-    (base_url, model)
+#[derive(Clone, Default)]
+pub struct OllamaBackend {
+    base_url: String,
+    model: String,
 }
 
-pub struct OllamaBackend;
+impl OllamaBackend {
+    fn from_connection(connection: &Connection) -> Self {
+        Self {
+            base_url: connection.resolve_base_url(),
+            model: connection.model.clone(),
+        }
+    }
+}
 
 impl LlmBackend for OllamaBackend {
     fn generate_dialogue(
@@ -349,9 +377,9 @@ impl LlmBackend for OllamaBackend {
 
         let builder = PromptBuilder::from_context(&npc_context);
         let (system_prompt, user_text) = builder.build_split()?;
-        let (base_url, model) = get_ollama_config();
 
-        call_ollama(&base_url, &model, &system_prompt, &user_text).map_err(EngineError::Narrative)
+        call_ollama(&self.base_url, &self.model, &system_prompt, &user_text)
+            .map_err(EngineError::Narrative)
     }
 
     fn narrate_action(&self, context: &PromptContext) -> Result<String, EngineError> {
@@ -362,9 +390,9 @@ impl LlmBackend for OllamaBackend {
 
         let builder = PromptBuilder::from_context(context);
         let (system_prompt, user_text) = builder.build_split()?;
-        let (base_url, model) = get_ollama_config();
 
-        call_ollama(&base_url, &model, &system_prompt, &user_text).map_err(EngineError::Narrative)
+        call_ollama(&self.base_url, &self.model, &system_prompt, &user_text)
+            .map_err(EngineError::Narrative)
     }
 
     fn narrate_arrival(&self, context: &PromptContext) -> Result<String, EngineError> {
@@ -390,9 +418,9 @@ impl LlmBackend for OllamaBackend {
 
         let builder = PromptBuilder::from_context(&arrival_context);
         let (system_prompt, user_text) = builder.build_split()?;
-        let (base_url, model) = get_ollama_config();
 
-        call_ollama(&base_url, &model, &system_prompt, &user_text).map_err(EngineError::Narrative)
+        call_ollama(&self.base_url, &self.model, &system_prompt, &user_text)
+            .map_err(EngineError::Narrative)
     }
 
     fn narrate_continuation(
@@ -403,9 +431,8 @@ impl LlmBackend for OllamaBackend {
     ) -> Result<String, EngineError> {
         log::info!("[LLM] Generating continuation narration");
 
-        let (base_url, model) = get_ollama_config();
-
-        call_ollama(&base_url, &model, system_prompt, user_prompt).map_err(EngineError::Narrative)
+        call_ollama(&self.base_url, &self.model, system_prompt, user_prompt)
+            .map_err(EngineError::Narrative)
     }
 
     fn narrate_action_from_prompt(
@@ -415,9 +442,8 @@ impl LlmBackend for OllamaBackend {
     ) -> Result<String, EngineError> {
         log::info!("[LLM] Generating action from prompt");
 
-        let (base_url, model) = get_ollama_config();
-
-        call_ollama(&base_url, &model, system_prompt, user_prompt).map_err(EngineError::Narrative)
+        call_ollama(&self.base_url, &self.model, system_prompt, user_prompt)
+            .map_err(EngineError::Narrative)
     }
 
     fn name(&self) -> &str {
@@ -465,6 +491,7 @@ mod tests {
                 personality: "Brave".to_string(),
                 scenario: "Generic Quest".to_string(),
                 example_dialogue: "".to_string(),
+                summary: None,
                 profile_image: None,
                 headshot_image: None,
             },
@@ -530,6 +557,7 @@ mod tests {
                 personality: "Suspicious".to_string(),
                 scenario: "Watching the gate".to_string(),
                 example_dialogue: "".to_string(),
+                summary: None,
                 profile_image: None,
                 headshot_image: None,
             },
@@ -560,6 +588,7 @@ mod tests {
                 personality: "Suspicious".to_string(),
                 scenario: "Watching the gate".to_string(),
                 example_dialogue: "".to_string(),
+                summary: None,
                 profile_image: None,
                 headshot_image: None,
             },
@@ -582,7 +611,7 @@ mod tests {
 
     #[test]
     fn test_deepseek_generate_dialogue() {
-        let backend = DeepSeekBackend;
+        let backend = DeepSeekBackend::default();
         let _world = make_test_world();
         let _room = make_test_room();
         let npc = NpcCard {
@@ -593,6 +622,7 @@ mod tests {
                 personality: "Test".to_string(),
                 scenario: "Test".to_string(),
                 example_dialogue: "".to_string(),
+                summary: None,
                 profile_image: None,
                 headshot_image: None,
             },
@@ -608,7 +638,7 @@ mod tests {
 
     #[test]
     fn test_deepseek_narrate_action() {
-        let backend = DeepSeekBackend;
+        let backend = DeepSeekBackend::default();
         let _world = make_test_world();
         let _room = make_test_room();
         let _player = make_test_player();
@@ -620,7 +650,7 @@ mod tests {
 
     #[test]
     fn test_deepseek_narrate_arrival() {
-        let backend = DeepSeekBackend;
+        let backend = DeepSeekBackend::default();
         let _world = make_test_world();
         let _room = make_test_room();
         let _player = make_test_player();
@@ -632,7 +662,7 @@ mod tests {
 
     #[test]
     fn test_deepseek_name() {
-        let backend = DeepSeekBackend;
+        let backend = DeepSeekBackend::default();
         assert_eq!(backend.name(), "DeepSeek");
     }
 
@@ -729,6 +759,7 @@ mod tests {
                 personality: "Alert".to_string(),
                 scenario: "Watching".to_string(),
                 example_dialogue: "Halt!".to_string(),
+                summary: None,
                 profile_image: None,
                 headshot_image: None,
             },
@@ -761,6 +792,7 @@ mod tests {
                 personality: "Alert".to_string(),
                 scenario: "Watching".to_string(),
                 example_dialogue: "Halt!".to_string(),
+                summary: None,
                 profile_image: None,
                 headshot_image: None,
             },
@@ -813,40 +845,37 @@ mod tests {
 
     #[test]
     fn test_deepseek_backend_name() {
-        let backend = DeepSeekBackend;
+        let backend = DeepSeekBackend::default();
         assert_eq!(backend.name(), "DeepSeek");
+    }
+
+    fn make_settings_with_provider(provider: LlmBackendType) -> AppSettings {
+        let conn = Connection::new("test-conn", "Test", provider);
+        AppSettings {
+            connections: vec![conn],
+            narration_connection_id: "test-conn".into(),
+            quantifier_connection_id: "test-conn".into(),
+        }
     }
 
     #[test]
     fn test_get_llm_backend_with_settings_all_types() {
-        let openrouter_settings = AppSettings {
-            llm_backend: LlmBackendType::OpenRouter,
-            ..Default::default()
-        };
+        let openrouter_settings = make_settings_with_provider(LlmBackendType::OpenRouter);
         assert_eq!(
             get_llm_backend_with_settings(&openrouter_settings).name(),
             "OpenRouter"
         );
 
-        let mock_settings = AppSettings {
-            llm_backend: LlmBackendType::Mock,
-            ..Default::default()
-        };
+        let mock_settings = make_settings_with_provider(LlmBackendType::Mock);
         assert_eq!(get_llm_backend_with_settings(&mock_settings).name(), "Mock");
 
-        let deepseek_settings = AppSettings {
-            llm_backend: LlmBackendType::DeepSeek,
-            ..Default::default()
-        };
+        let deepseek_settings = make_settings_with_provider(LlmBackendType::DeepSeek);
         assert_eq!(
             get_llm_backend_with_settings(&deepseek_settings).name(),
             "DeepSeek"
         );
 
-        let ollama_settings = AppSettings {
-            llm_backend: LlmBackendType::Ollama,
-            ..Default::default()
-        };
+        let ollama_settings = make_settings_with_provider(LlmBackendType::Ollama);
         assert_eq!(
             get_llm_backend_with_settings(&ollama_settings).name(),
             "Ollama"
@@ -855,7 +884,7 @@ mod tests {
 
     #[test]
     fn test_ollama_backend_name() {
-        let backend = OllamaBackend;
+        let backend = OllamaBackend::default();
         assert_eq!(backend.name(), "Ollama");
     }
 
@@ -883,7 +912,7 @@ mod tests {
 
     #[test]
     fn test_deepseek_narrate_continuation() {
-        let backend = DeepSeekBackend;
+        let backend = DeepSeekBackend::default();
         let result = backend.narrate_continuation("system", "user", "trigger");
         assert!(result.is_ok());
         assert!(result.unwrap().contains("DeepSeek"));
@@ -891,7 +920,7 @@ mod tests {
 
     #[test]
     fn test_deepseek_narrate_action_from_prompt() {
-        let backend = DeepSeekBackend;
+        let backend = DeepSeekBackend::default();
         let result = backend.narrate_action_from_prompt("system", "user");
         assert!(result.is_ok());
         assert!(result.unwrap().contains("DeepSeek"));
@@ -899,7 +928,7 @@ mod tests {
 
     #[test]
     fn test_deepseek_error_message_descriptive() {
-        let backend = DeepSeekBackend;
+        let backend = DeepSeekBackend::default();
         let result = backend.narrate_action(&make_test_context("test"));
         assert!(result.unwrap().contains("DeepSeek"));
     }
@@ -952,6 +981,7 @@ mod tests {
                 personality: "Some personality traits that are described here".to_string(),
                 scenario: "A scenario description that is also quite lengthy".to_string(),
                 example_dialogue: "Example dialogue text".to_string(),
+                summary: None,
                 profile_image: None,
                 headshot_image: None,
             },
@@ -1012,7 +1042,7 @@ mod tests {
 
     #[test]
     fn test_deepseek_all_methods_return_not_implemented() {
-        let backend = DeepSeekBackend;
+        let backend = DeepSeekBackend::default();
         let npc = NpcCard {
             id: "npc1".to_string(),
             sheet: CharacterSheet {
@@ -1021,6 +1051,7 @@ mod tests {
                 personality: "Test".to_string(),
                 scenario: "Test".to_string(),
                 example_dialogue: "".to_string(),
+                summary: None,
                 profile_image: None,
                 headshot_image: None,
             },
@@ -1096,6 +1127,7 @@ mod tests {
                 personality: "Friendly".to_string(),
                 scenario: "Test".to_string(),
                 example_dialogue: "".to_string(),
+                summary: None,
                 profile_image: None,
                 headshot_image: None,
             },
@@ -1204,6 +1236,7 @@ mod tests {
                 personality: "Neutral".to_string(),
                 scenario: "Standing around".to_string(),
                 example_dialogue: "".to_string(),
+                summary: None,
                 profile_image: None,
                 headshot_image: None,
             },
@@ -1226,6 +1259,7 @@ mod tests {
                 personality: "Variable".to_string(),
                 scenario: "Complex".to_string(),
                 example_dialogue: "".to_string(),
+                summary: None,
                 profile_image: None,
                 headshot_image: None,
             },
@@ -1238,6 +1272,7 @@ mod tests {
                         narration_prompt: "trigger1".to_string(),
                     },
                     repeat: false,
+                    room_id: None,
                 },
                 Trigger {
                     condition: TriggerCondition::TimesMet(ComparisonOperator::Gte, 2),
@@ -1246,6 +1281,7 @@ mod tests {
                         narration_prompt: "trigger2".to_string(),
                     },
                     repeat: true,
+                    room_id: None,
                 },
             ],
         };
@@ -1263,6 +1299,7 @@ mod tests {
                 personality: "Brave".to_string(),
                 scenario: "Quest".to_string(),
                 example_dialogue: "".to_string(),
+                summary: None,
                 profile_image: None,
                 headshot_image: None,
             },
@@ -1295,6 +1332,7 @@ mod tests {
                 personality: "Prepared".to_string(),
                 scenario: "Quest".to_string(),
                 example_dialogue: "".to_string(),
+                summary: None,
                 profile_image: None,
                 headshot_image: None,
             },
@@ -1428,6 +1466,7 @@ mod tests {
                 personality: "Greedy".to_string(),
                 scenario: "Trading".to_string(),
                 example_dialogue: "".to_string(),
+                summary: None,
                 profile_image: None,
                 headshot_image: None,
             },
@@ -1450,6 +1489,7 @@ mod tests {
                 personality: "Alert".to_string(),
                 scenario: "Watching".to_string(),
                 example_dialogue: "".to_string(),
+                summary: None,
                 profile_image: None,
                 headshot_image: None,
             },
@@ -1464,6 +1504,7 @@ mod tests {
                 personality: "Alert".to_string(),
                 scenario: "Watching".to_string(),
                 example_dialogue: "".to_string(),
+                summary: None,
                 profile_image: None,
                 headshot_image: None,
             },

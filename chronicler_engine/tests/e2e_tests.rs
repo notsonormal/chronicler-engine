@@ -465,7 +465,7 @@ mod tests {
     // CSS Tests
 
     #[tokio::test]
-    async fn test_css_file_loads() {
+    async fn test_css_valid() {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
         let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
 
@@ -477,7 +477,6 @@ mod tests {
             .await
             .expect("Failed to connect to server");
 
-        // Fetch the CSS file via fetch API
         let css_content: String = page
             .evaluate::<(), String>(
                 r#"(async () => {
@@ -489,75 +488,14 @@ mod tests {
             .await
             .unwrap();
 
-        // Check :root exists in CSS (CSS custom properties declaration)
         assert!(
             css_content.contains(":root"),
             "CSS should contain :root for CSS variables"
         );
-
-        let _ = browser.close().await;
-    }
-
-    #[tokio::test]
-    async fn test_css_variables_used() {
-        let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
-        let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
-
-        let playwright = Playwright::launch().await.unwrap();
-        let browser = playwright.chromium().launch().await.unwrap();
-        let page = browser.new_page().await.unwrap();
-
-        goto_with_connection_check(&page, port)
-            .await
-            .expect("Failed to connect to server");
-
-        // Fetch the CSS file
-        let css_content: String = page
-            .evaluate::<(), String>(
-                r#"(async () => {
-                    const response = await fetch('/assets/styles.css');
-                    return await response.text();
-                })()"#,
-                None,
-            )
-            .await
-            .unwrap();
-
-        // Check CSS variables (var(-- ) are used
         assert!(
             css_content.contains("var(--"),
             "CSS should use CSS custom properties (var())"
         );
-
-        let _ = browser.close().await;
-    }
-
-    #[tokio::test]
-    async fn test_responsive_breakpoints() {
-        let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
-        let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
-
-        let playwright = Playwright::launch().await.unwrap();
-        let browser = playwright.chromium().launch().await.unwrap();
-        let page = browser.new_page().await.unwrap();
-
-        goto_with_connection_check(&page, port)
-            .await
-            .expect("Failed to connect to server");
-
-        // Fetch the CSS file
-        let css_content: String = page
-            .evaluate::<(), String>(
-                r#"(async () => {
-                    const response = await fetch('/assets/styles.css');
-                    return await response.text();
-                })()"#,
-                None,
-            )
-            .await
-            .unwrap();
-
-        // Check @media queries exist for responsive design
         assert!(
             css_content.contains("@media"),
             "CSS should contain @media queries for responsive breakpoints"
@@ -1079,13 +1017,13 @@ mod tests {
         .unwrap();
 
         // Wait for edit mode to be ready
-        let _ = wait_for_element_exists(&page, ".edit-textarea", 10).await;
+        let _ = wait_for_element_exists(&page, "#edit-textarea", 10).await;
 
         // Get textarea height after edit
         let textarea_height: f64 = page
             .evaluate::<(), f64>(
                 r#"(() => {
-                    const textarea = document.querySelector('.edit-textarea');
+                    const textarea = document.querySelector('#edit-textarea');
                     if (!textarea) return -1;
                     // Force reflow to ensure styles are applied
                     void textarea.offsetHeight;

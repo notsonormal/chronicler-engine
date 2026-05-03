@@ -9,6 +9,8 @@ pub struct CharacterSheet {
     #[serde(default)]
     pub example_dialogue: String,
     #[serde(default)]
+    pub summary: Option<String>,
+    #[serde(default)]
     pub profile_image: Option<String>,
     #[serde(default)]
     pub headshot_image: Option<String>,
@@ -140,6 +142,7 @@ mod tests {
             personality: "Personality".into(),
             scenario: "Scenario".into(),
             example_dialogue: "Dialogue".into(),
+            summary: None,
             profile_image: Some("profile.png".into()),
             headshot_image: Some("headshot.png".into()),
         };
@@ -154,6 +157,7 @@ mod tests {
             personality: "Personality".into(),
             scenario: "Scenario".into(),
             example_dialogue: "Dialogue".into(),
+            summary: None,
             profile_image: Some("profile.png".into()),
             headshot_image: None,
         };
@@ -168,6 +172,7 @@ mod tests {
             personality: "Personality".into(),
             scenario: "Scenario".into(),
             example_dialogue: "Dialogue".into(),
+            summary: None,
             profile_image: None,
             headshot_image: None,
         };

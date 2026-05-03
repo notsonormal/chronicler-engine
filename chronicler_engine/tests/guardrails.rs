@@ -464,6 +464,83 @@ fn check_what_comments(path: &str, content: &str, _in_test_module: &[bool]) -> V
     violations
 }
 
+// ── Long Comment Run Detection ──
+
+fn is_countable_comment(line: &str) -> bool {
+    if !line.starts_with("//") {
+        return false;
+    }
+    // Exclude visual dividers (4+ slashes)
+    if line.starts_with("////") {
+        return false;
+    }
+    // Exclude doc anchors
+    if line.starts_with("// [DOC:") {
+        return false;
+    }
+    // Exclude empty comments
+    let after_slashes = if line.starts_with("///") || line.starts_with("//!") {
+        &line[3..]
+    } else {
+        &line[2..]
+    };
+    !after_slashes.trim().is_empty()
+}
+
+fn check_long_comment_runs(path: &str, content: &str) -> Vec<Violation> {
+    let mut violations = Vec::new();
+    let mut inside_cfg_test = false;
+    let mut brace_depth = 0;
+
+    let mut run_start: Option<usize> = None;
+    let mut run_count = 0;
+
+    for (line_num, line) in content.lines().enumerate() {
+        let trimmed = line.trim();
+
+        // Track cfg(test) module depth roughly
+        if trimmed.starts_with("#[cfg(test)]") {
+            inside_cfg_test = true;
+        }
+        for c in trimmed.chars() {
+            if c == '{' {
+                brace_depth += 1;
+            } else if c == '}' {
+                brace_depth -= 1;
+                if brace_depth == 0 && inside_cfg_test {
+                    inside_cfg_test = false;
+                }
+            }
+        }
+
+        if inside_cfg_test {
+            run_start = None;
+            run_count = 0;
+            continue;
+        }
+
+        if is_countable_comment(line.trim_start()) {
+            if run_start.is_none() {
+                run_start = Some(line_num + 1);
+            }
+            run_count += 1;
+            if run_count == 5 {
+                violations.push(Violation::warn(
+                    path,
+                    run_start.unwrap(),
+                    "Long comment run: 5+ consecutive comment lines starting here. \
+                     Consider replacing with semantic naming or a doc anchor // [DOC: docs/...]",
+                ));
+            }
+        } else {
+            run_start = None;
+            run_count = 0;
+        }
+    }
+
+    violations
+}
+
 // ── Doc Anchor Requirement ──
 
 struct DocAnchorVisitor<'a> {
@@ -697,20 +774,18 @@ fn guardrails_import_ordering() {
 
 #[test]
 fn guardrails_what_comments() {
-    let mut warnings = Vec::new();
+    let mut errors = Vec::new();
     for file in discover_src_files() {
         let content = std::fs::read_to_string(&file).unwrap();
         let rel = relative_path(&file);
-        warnings.extend(check_what_comments(rel, &content, &[]));
+        errors.extend(check_what_comments(rel, &content, &[]));
     }
-    print_warnings(&warnings, "'What' comment");
-    // Currently warn-only due to existing violations.
-    // Flip to assert_empty when baseline is clean.
+    assert_violations(&errors, "'What' comment");
 }
 
 #[test]
 fn guardrails_doc_anchors() {
-    let mut warnings = Vec::new();
+    let mut errors = Vec::new();
     for file in discover_src_files() {
         let content = std::fs::read_to_string(&file).unwrap();
         let rel = relative_path(&file);
@@ -718,32 +793,39 @@ fn guardrails_doc_anchors() {
         let mut visitor = DocAnchorVisitor {
             file_path: rel,
             content: &content,
-            violations: &mut warnings,
+            violations: &mut errors,
         };
         visitor.visit_file(&ast);
     }
-    print_warnings(&warnings, "doc anchor");
-    // Currently warn-only due to existing violations.
-    // Flip to assert_empty when baseline is clean.
+    assert_violations(&errors, "doc anchor");
 }
 
 #[test]
 fn guardrails_single_letter_vars() {
-    let mut warnings = Vec::new();
+    let mut errors = Vec::new();
     for file in discover_src_files() {
         let content = std::fs::read_to_string(&file).unwrap();
         let rel = relative_path(&file);
         let ast = syn::parse_file(&content).unwrap();
         let mut visitor = SingleLetterVisitor {
             file_path: rel,
-            violations: &mut warnings,
+            violations: &mut errors,
             fn_stmt_count: 0,
         };
         visitor.visit_file(&ast);
     }
-    print_warnings(&warnings, "single-letter variable");
-    // Currently warn-only due to existing violations.
-    // Flip to assert_empty when baseline is clean.
+    assert_violations(&errors, "single-letter variable");
+}
+
+#[test]
+fn guardrails_long_comment_runs() {
+    let mut errors = Vec::new();
+    for file in discover_src_files() {
+        let content = std::fs::read_to_string(&file).unwrap();
+        let rel = relative_path(&file);
+        errors.extend(check_long_comment_runs(rel, &content));
+    }
+    assert_violations(&errors, "long comment run");
 }
 
 #[test]
@@ -779,20 +861,6 @@ fn assert_violations(violations: &[Violation], rule_name: &str) {
             violations.len(),
             rule_name
         );
-    }
-}
-
-fn print_warnings(violations: &[Violation], rule_name: &str) {
-    if !violations.is_empty() {
-        eprintln!(
-            "\n=== {} warnings: {} violation(s) ===",
-            rule_name,
-            violations.len()
-        );
-        for v in violations {
-            eprintln!("  {}:{} - {}", v.file, v.line, v.message);
-        }
-        eprintln!("=== End {rule_name} warnings ===\n");
     }
 }
 

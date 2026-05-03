@@ -1,18 +1,20 @@
 //! [DOC: docs/system/llm_processing.md]
 
+use std::sync::atomic::{AtomicU64, Ordering};
+
 use serde_json::json;
 
-use crate::model::settings::AppSettings;
+static REQUEST_COUNTER: AtomicU64 = AtomicU64::new(1);
 
-// [DOC: docs/system/llm_processing.md]
-pub fn get_llm_model(settings: &AppSettings) -> String {
-    std::env::var("LLM_MODEL").unwrap_or_else(|_| settings.llm_model.clone())
+fn next_request_id() -> u64 {
+    REQUEST_COUNTER.fetch_add(1, Ordering::SeqCst)
 }
 
+const DEFAULT_MAX_TOKENS: u32 = 1024;
+
 // [DOC: docs/system/llm_processing.md]
-pub fn get_quantifier_model(settings: &AppSettings) -> String {
-    std::env::var("QUANTIFIER_MODEL").unwrap_or_else(|_| settings.quantifier_model.clone())
-}
+// Model selection is now connection-driven; these helpers are retained
+// for backward compatibility during transition but delegate to Connection.
 
 fn extract_content_from_response(json: &serde_json::Value) -> Option<(String, &'static str)> {
     let message = json.get("choices")?.get(0)?.get("message")?;
@@ -36,32 +38,34 @@ fn extract_content_from_response(json: &serde_json::Value) -> Option<(String, &'
 }
 
 /// Parse a raw HTTP response body from an LLM chat completions endpoint.
-fn parse_chat_response(raw_response: &str) -> Result<String, String> {
+fn parse_chat_response(raw_response: &str, req_id: u64) -> Result<String, String> {
     match serde_json::from_str::<serde_json::Value>(raw_response.trim_start()) {
         Ok(json_response) => {
-            log::debug!("[LLM] Response JSON: {json_response:#}");
+            log::debug!("[LLM][req:{req_id}] Response JSON: {json_response:#}");
 
             if let Some(error) = json_response.get("error") {
                 let error_msg = error
                     .get("message")
                     .and_then(|m| m.as_str())
                     .unwrap_or("Unknown API error");
-                log::error!("[LLM] API error: {error_msg}");
+                log::error!("[LLM][req:{req_id}] API error: {error_msg}");
                 return Err(format!("LLM API error: {error_msg}"));
             }
 
             if let Some((content, source)) = extract_content_from_response(&json_response) {
                 log::info!(
-                    "[LLM] Extracted content via: {source} ({} chars)",
+                    "[LLM][req:{req_id}] Extracted content via: {source} ({} chars)",
                     content.len()
                 );
                 return Ok(content);
             }
 
             // If we got here, the response structure was unexpected
-            log::error!("[LLM] Parse error: Could not find content in response structure");
             log::error!(
-                "[LLM] Response had keys: {:?}",
+                "[LLM][req:{req_id}] Parse error: Could not find content in response structure"
+            );
+            log::error!(
+                "[LLM][req:{req_id}] Response had keys: {:?}",
                 json_response
                     .as_object()
                     .map(|m| m.keys().cloned().collect::<Vec<_>>())
@@ -70,9 +74,9 @@ fn parse_chat_response(raw_response: &str) -> Result<String, String> {
             Err("The world seems to hold its breath (parse error).".to_string())
         }
         Err(e) => {
-            log::error!("[LLM] JSON parse error: {e}");
+            log::error!("[LLM][req:{req_id}] JSON parse error: {e}");
             log::error!(
-                "[LLM] Raw response that failed to parse: {}",
+                "[LLM][req:{req_id}] Raw response that failed to parse: {}",
                 raw_response.trim_start()
             );
             Err(format!("Failed to parse LLM response: {e}"))
@@ -89,15 +93,26 @@ pub fn call_chat_completions(
     system_prompt: &str,
     user_text: &str,
     title: Option<&str>,
+    max_tokens: u32,
 ) -> Result<String, String> {
+    let req_id = next_request_id();
+    let start_time = std::time::Instant::now();
+
     let client = reqwest::blocking::Client::builder()
-        .timeout(std::time::Duration::from_secs(60))
+        .timeout(std::time::Duration::from_secs(180))
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
 
-    log::info!("[LLM] Using model: {model}");
-    log::debug!("[LLM] System prompt length: {} chars", system_prompt.len());
-    log::debug!("[LLM] User text length: {} chars", user_text.len());
+    log::info!("[LLM][req:{req_id}] Using model: {model}");
+    log::debug!(
+        "[LLM][req:{req_id}] System prompt length: {} chars",
+        system_prompt.len()
+    );
+    log::debug!(
+        "[LLM][req:{req_id}] User text length: {} chars",
+        user_text.len()
+    );
+    log::debug!("[LLM][req:{req_id}] Max tokens: {max_tokens}");
 
     let payload = json!({
         "model": model,
@@ -111,10 +126,11 @@ pub fn call_chat_completions(
                 "content": user_text
             }
         ],
-        "stream": false
+        "stream": false,
+        "max_tokens": max_tokens
     });
 
-    log::debug!("[LLM] Request payload: {payload:#}");
+    log::debug!("[LLM][req:{req_id}] Request payload: {payload:#}");
 
     let url = format!("{base_url}/chat/completions");
     let mut request = client
@@ -127,37 +143,88 @@ pub fn call_chat_completions(
         request = request.header("Authorization", format!("Bearer {key}"));
     }
     if let Some(t) = title {
-        request = request.header("HTTP-X-Title", t);
+        request = request.header("X-Title", t);
     }
 
+    log::info!("[LLM][req:{req_id}] Sending request to {url}");
     let res = request.send();
+    let header_time = start_time.elapsed();
 
     match res {
         Ok(response) => {
             let status = response.status();
-            log::info!("[LLM] Response status: {status}");
+            log::info!(
+                "[LLM][req:{req_id}] Response status: {status} (headers after {:.2}s)",
+                header_time.as_secs_f64()
+            );
 
             // Log response headers for debugging
-            log::debug!("[LLM] Response headers: {:?}", response.headers());
+            log::debug!(
+                "[LLM][req:{req_id}] Response headers: {:?}",
+                response.headers()
+            );
 
             if !status.is_success() {
-                log::error!("[LLM] Non-success HTTP status: {status}");
-                return Err(format!("Error communicating with LLM API: {status}"));
+                // Include the response body so the error message is actionable
+                let error_body = response.text().unwrap_or_default();
+                log::error!(
+                    "[LLM][req:{req_id}] Non-success HTTP status: {status}. Body: {error_body}"
+                );
+                let snippet = if error_body.len() > 500 {
+                    format!("{}...", &error_body[..500])
+                } else {
+                    error_body.clone()
+                };
+                return Err(format!(
+                    "Error communicating with LLM API: {status}. Body: {snippet}"
+                ));
             }
 
             // Try to parse JSON response - get raw text first to log on failure
             let raw_response = response.text().map_err(|e| {
-                log::error!("[LLM] Failed to read response body: {e}");
-                log::error!("[LLM] This usually means: 1) Network issue, 2) Invalid encoding, 3) Server closed connection");
+                let elapsed = start_time.elapsed();
+                log::error!(
+                    "[LLM][req:{req_id}] Failed to read response body after {:.2}s: {e}",
+                    elapsed.as_secs_f64()
+                );
+                log::error!(
+                    "[LLM][req:{req_id}] This usually means: 1) Overall timeout (body still streaming), 2) Truncated gzip stream, 3) Server closed connection"
+                );
                 format!("Failed to read response body: {e}")
             })?;
 
-            log::debug!("[LLM] Raw response length: {} bytes", raw_response.len());
+            let body_time = start_time.elapsed();
+            log::debug!(
+                "[LLM][req:{req_id}] Raw response length: {} bytes (body after {:.2}s)",
+                raw_response.len(),
+                body_time.as_secs_f64()
+            );
 
-            parse_chat_response(&raw_response)
+            let result = parse_chat_response(&raw_response, req_id);
+            let total_time = start_time.elapsed();
+            match &result {
+                Ok(content) => {
+                    log::info!(
+                        "[LLM][req:{req_id}] Success: {} chars in {:.2}s total",
+                        content.len(),
+                        total_time.as_secs_f64()
+                    );
+                }
+                Err(e) => {
+                    log::error!(
+                        "[LLM][req:{req_id}] Failed after {:.2}s: {e}",
+                        total_time.as_secs_f64()
+                    );
+                }
+            }
+            result
         }
         Err(e) => {
-            log::error!("[LLM] Request failed: {e}");
+            let elapsed = start_time.elapsed();
+            log::error!(
+                "[LLM][req:{req_id}] Request failed after {:.2}s: {e}",
+                elapsed.as_secs_f64()
+            );
             Err(format!("Request failed: {e}"))
         }
     }
@@ -177,18 +244,8 @@ pub fn call_openrouter_with_model(
         system_prompt,
         user_text,
         Some("Chronicler Engine"),
+        DEFAULT_MAX_TOKENS,
     )
-}
-
-/// [DOC: docs/system/llm_processing.md]
-pub fn call_openrouter(
-    api_key: &str,
-    system_prompt: &str,
-    user_text: &str,
-) -> Result<String, String> {
-    let settings = crate::settings::load_settings().unwrap_or_default();
-    let model = get_llm_model(&settings);
-    call_openrouter_with_model(api_key, system_prompt, user_text, &model)
 }
 
 /// [DOC: docs/system/llm_processing.md]
@@ -198,77 +255,20 @@ pub fn call_ollama(
     system_prompt: &str,
     user_text: &str,
 ) -> Result<String, String> {
-    call_chat_completions(base_url, None, model, system_prompt, user_text, None)
+    call_chat_completions(
+        base_url,
+        None,
+        model,
+        system_prompt,
+        user_text,
+        None,
+        DEFAULT_MAX_TOKENS,
+    )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Mutex;
-
-    static ENV_LOCK: Mutex<()> = Mutex::new(());
-
-    #[test]
-    fn test_get_llm_model_default() {
-        let _lock = ENV_LOCK.lock().unwrap();
-        unsafe { std::env::remove_var("LLM_MODEL") };
-        let settings = AppSettings::default();
-        let model = get_llm_model(&settings);
-        assert_eq!(model, "openai/gpt-4o-mini");
-    }
-
-    #[test]
-    fn test_get_quantifier_model_default() {
-        let _lock = ENV_LOCK.lock().unwrap();
-        unsafe { std::env::remove_var("QUANTIFIER_MODEL") };
-        let settings = AppSettings::default();
-        let model = get_quantifier_model(&settings);
-        assert_eq!(model, "openai/gpt-4o-mini");
-    }
-
-    #[test]
-    fn test_get_llm_model_from_settings() {
-        let _lock = ENV_LOCK.lock().unwrap();
-        unsafe { std::env::remove_var("LLM_MODEL") };
-        let settings = AppSettings {
-            llm_model: "google/gemini-pro".to_string(),
-            ..Default::default()
-        };
-        let model = get_llm_model(&settings);
-        assert_eq!(model, "google/gemini-pro");
-    }
-
-    #[test]
-    fn test_get_quantifier_model_from_settings() {
-        let _lock = ENV_LOCK.lock().unwrap();
-        unsafe { std::env::remove_var("QUANTIFIER_MODEL") };
-        let settings = AppSettings {
-            quantifier_model: "google/gemini-pro".to_string(),
-            ..Default::default()
-        };
-        let model = get_quantifier_model(&settings);
-        assert_eq!(model, "google/gemini-pro");
-    }
-
-    #[test]
-    fn test_get_llm_model_env_override() {
-        let _lock = ENV_LOCK.lock().unwrap();
-        unsafe { std::env::set_var("LLM_MODEL", "env-model") };
-        let settings = AppSettings::default();
-        let model = get_llm_model(&settings);
-        assert_eq!(model, "env-model");
-        unsafe { std::env::remove_var("LLM_MODEL") };
-    }
-
-    #[test]
-    fn test_get_quantifier_model_env_override() {
-        let _lock = ENV_LOCK.lock().unwrap();
-        unsafe { std::env::set_var("QUANTIFIER_MODEL", "env-quant-model") };
-        let settings = AppSettings::default();
-        let model = get_quantifier_model(&settings);
-        assert_eq!(model, "env-quant-model");
-        unsafe { std::env::remove_var("QUANTIFIER_MODEL") };
-    }
 
     // --- extract_content_from_response tests ---
 
@@ -339,21 +339,21 @@ mod tests {
     #[test]
     fn test_parse_chat_response_success_content() {
         let raw = r#"{"choices":[{"message":{"content":"hello"}}]}"#;
-        let result = parse_chat_response(raw);
+        let result = parse_chat_response(raw, 1);
         assert_eq!(result, Ok("hello".to_string()));
     }
 
     #[test]
     fn test_parse_chat_response_success_reasoning() {
         let raw = r#"{"choices":[{"message":{"reasoning":"think"}}]}"#;
-        let result = parse_chat_response(raw);
+        let result = parse_chat_response(raw, 1);
         assert_eq!(result, Ok("think".to_string()));
     }
 
     #[test]
     fn test_parse_chat_response_api_error() {
         let raw = r#"{"error":{"message":"rate limited"}}"#;
-        let result = parse_chat_response(raw);
+        let result = parse_chat_response(raw, 1);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("rate limited"));
     }
@@ -361,7 +361,7 @@ mod tests {
     #[test]
     fn test_parse_chat_response_api_error_no_message() {
         let raw = r#"{"error":{}}"#;
-        let result = parse_chat_response(raw);
+        let result = parse_chat_response(raw, 1);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Unknown API error"));
     }
@@ -369,7 +369,7 @@ mod tests {
     #[test]
     fn test_parse_chat_response_missing_content() {
         let raw = r#"{"choices":[{"message":{"role":"assistant"}}]}"#;
-        let result = parse_chat_response(raw);
+        let result = parse_chat_response(raw, 1);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("parse error"));
     }
@@ -377,7 +377,7 @@ mod tests {
     #[test]
     fn test_parse_chat_response_malformed_json() {
         let raw = "not json";
-        let result = parse_chat_response(raw);
+        let result = parse_chat_response(raw, 1);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Failed to parse LLM response"));
     }
@@ -385,7 +385,7 @@ mod tests {
     #[test]
     fn test_parse_chat_response_empty_json() {
         let raw = "{}";
-        let result = parse_chat_response(raw);
+        let result = parse_chat_response(raw, 1);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("parse error"));
     }

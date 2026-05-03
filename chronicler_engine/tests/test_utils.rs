@@ -10,6 +10,7 @@ use std::net::TcpListener;
 use std::process::{Child, Command};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
+use tokio::time::sleep;
 
 static SERVER_MANAGED: AtomicBool = AtomicBool::new(false);
 
@@ -58,23 +59,65 @@ pub fn kill_existing_server() {
     }
 }
 
-/// Start the server with optional mock LLM backend
-/// If use_mock is true, sets LLM_BACKEND=Mock environment variable
-/// instead of mutating settings.json on disk
-pub fn start_server_with_env(port: u16, world: &str, use_mock: bool) -> Child {
-    // Use cargo run - pre-built binary has working directory issues in test context
+/// Start the server with optional mock LLM backend.
+/// When use_mock is true, writes a temporary settings file with Mock
+/// connections and points the server to it via CHRONICLER_SETTINGS_PATH.
+/// Returns the spawned child process and an optional temp directory path
+/// that should be cleaned up when the server shuts down.
+pub fn start_server_with_env(
+    port: u16,
+    world: &str,
+    use_mock: bool,
+) -> (Child, Option<std::path::PathBuf>) {
     let mut cmd = Command::new("cargo");
     cmd.args(["run", "--", "--world", world, "--port", &port.to_string()]);
 
-    // Use environment variable to override backend instead of mutating settings file
-    if use_mock {
-        cmd.env("LLM_BACKEND", "mock");
-    }
+    let tmp_dir = if use_mock {
+        let tmp = std::env::temp_dir().join(format!(
+            "chronicler_test_settings_{}_{}",
+            std::process::id(),
+            port
+        ));
+        let _ = std::fs::create_dir_all(&tmp);
+        let settings_path = tmp.join("settings.json");
+        let mock_settings = serde_json::json!({
+            "connections": [
+                {
+                    "id": "openrouter-gpt-4o-mini",
+                    "name": "openrouter-gpt-4o-mini",
+                    "provider": "Mock",
+                    "model": "mock-model",
+                    "api_key": null,
+                    "base_url": null
+                },
+                {
+                    "id": "openrouter-euryale",
+                    "name": "openrouter-euryale",
+                    "provider": "Mock",
+                    "model": "mock-model",
+                    "api_key": null,
+                    "base_url": null
+                }
+            ],
+            "narration_connection_id": "openrouter-gpt-4o-mini",
+            "quantifier_connection_id": "openrouter-gpt-4o-mini"
+        });
+        std::fs::write(
+            &settings_path,
+            serde_json::to_string_pretty(&mock_settings).unwrap(),
+        )
+        .expect("Failed to write mock settings");
+        cmd.env("CHRONICLER_SETTINGS_PATH", &settings_path);
+        Some(tmp)
+    } else {
+        None
+    };
 
     cmd.current_dir(".")
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
-    cmd.spawn().expect("Failed to start server")
+    let child = cmd.spawn().expect("Failed to start server");
+    (child, tmp_dir)
 }
 
 pub async fn wait_for_server(port: u16, max_attempts: usize) -> bool {
@@ -124,34 +167,7 @@ pub async fn wait_for_llm_idle(port: u16, timeout: Duration) -> Result<(), ()> {
     Err(())
 }
 
-pub async fn wait_for_story_log_entries(page: &playwright_rs::Page, min_count: u32) -> u32 {
-    use tokio::time::sleep;
-
-    for _ in 0..20 {
-        let count: u32 = page
-            .evaluate::<(), u32>(
-                "document.querySelectorAll('#story-log .log-entry').length",
-                None,
-            )
-            .await
-            .unwrap_or(0);
-
-        if count >= min_count {
-            return count;
-        }
-        sleep(Duration::from_millis(500)).await;
-    }
-    page.evaluate::<(), u32>(
-        "document.querySelectorAll('#story-log .log-entry').length",
-        None,
-    )
-    .await
-    .unwrap_or(0)
-}
-
 pub async fn wait_for_location_change(page: &playwright_rs::Page, initial: &str) -> String {
-    use tokio::time::sleep;
-
     for _ in 0..20 {
         let location: String = page
             .evaluate::<(), String>("document.querySelector('.location')?.innerText || ''", None)
@@ -167,8 +183,6 @@ pub async fn wait_for_location_change(page: &playwright_rs::Page, initial: &str)
 }
 
 pub async fn wait_for_story_log_change(page: &playwright_rs::Page, initial: &str) -> String {
-    use tokio::time::sleep;
-
     for _ in 0..20 {
         let content: String = page
             .evaluate::<(), String>(
@@ -187,8 +201,6 @@ pub async fn wait_for_story_log_change(page: &playwright_rs::Page, initial: &str
 }
 
 pub async fn wait_for_more_messages(page: &playwright_rs::Page, initial_count: usize) -> usize {
-    use tokio::time::sleep;
-
     for _ in 0..20 {
         let messages: Vec<String> = page
             .evaluate::<(), Vec<String>>(
@@ -207,8 +219,6 @@ pub async fn wait_for_more_messages(page: &playwright_rs::Page, initial_count: u
 }
 
 pub async fn wait_for_non_loading_value(page: &playwright_rs::Page, selector: &str) -> String {
-    use tokio::time::sleep;
-
     for _ in 0..20 {
         let value: String = page
             .evaluate::<(), String>(
@@ -232,8 +242,6 @@ pub async fn wait_for_element_class(
     class_name: &str,
     max_attempts: u32,
 ) -> bool {
-    use tokio::time::sleep;
-
     for _ in 0..max_attempts {
         let has_class: bool = page
             .evaluate::<(), bool>(
@@ -256,8 +264,6 @@ pub async fn wait_for_element_children(
     selector: &str,
     min_count: u32,
 ) -> u32 {
-    use tokio::time::sleep;
-
     for _ in 0..20 {
         let count: u32 = page
             .evaluate::<(), u32>(
@@ -276,8 +282,6 @@ pub async fn wait_for_element_children(
 }
 
 pub async fn wait_for_element_text(page: &playwright_rs::Page, selector: &str) -> String {
-    use tokio::time::sleep;
-
     for _ in 0..20 {
         let text: String = page
             .evaluate::<(), String>(
@@ -414,8 +418,6 @@ pub async fn wait_for_element_not_exists(
 }
 
 pub async fn wait_for_status_ready(page: &playwright_rs::Page) {
-    use tokio::time::sleep;
-
     for i in 0..50 {
         let status: String = page
             .evaluate::<(), String>(
@@ -436,8 +438,6 @@ pub async fn wait_for_status_ready(page: &playwright_rs::Page) {
 }
 
 pub async fn wait_for_status_not_thinking(page: &playwright_rs::Page) -> String {
-    use tokio::time::sleep;
-
     for _ in 0..30 {
         let status: String = page
             .evaluate::<(), String>(
@@ -595,6 +595,7 @@ pub fn get_config_port(config_path: &str) -> Result<u16, String> {
 pub struct TestServer {
     child: Child,
     port: u16,
+    temp_dir: Option<std::path::PathBuf>,
 }
 
 impl TestServer {
@@ -618,12 +619,16 @@ impl TestServer {
         if port_in_use(port) {
             kill_existing_server();
         }
-        let child = start_server_with_env(port, world, use_mock);
+        let (child, temp_dir) = start_server_with_env(port, world, use_mock);
         // Increased wait time for server to be fully ready
         let started = wait_for_server(port, 100).await; // 100 * 100ms = 10s total
         assert!(started, "Server failed to start on port {port}");
         SERVER_MANAGED.store(true, Ordering::SeqCst);
-        TestServer { child, port }
+        TestServer {
+            child,
+            port,
+            temp_dir,
+        }
     }
 
     pub async fn new(port: u16, world: &str) -> Self {
@@ -643,6 +648,9 @@ impl Drop for TestServer {
         let _ = self.child.wait();
         SERVER_MANAGED.store(false, Ordering::SeqCst);
         release_port_lock(self.port);
+        if let Some(tmp) = &self.temp_dir {
+            let _ = std::fs::remove_dir_all(tmp);
+        }
         std::thread::sleep(std::time::Duration::from_millis(500));
     }
 }

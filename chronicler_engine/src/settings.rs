@@ -12,6 +12,7 @@ pub fn get_settings_path() -> PathBuf {
     PathBuf::from("data").join(SETTINGS_FILENAME)
 }
 
+/// [DOC: docs/architecture/system.md]
 pub fn load_settings() -> Result<AppSettings> {
     let path = get_settings_path();
     if !path.exists() {
@@ -19,9 +20,11 @@ pub fn load_settings() -> Result<AppSettings> {
         defaults.save()?;
         return Ok(defaults);
     }
+
     let content = std::fs::read_to_string(&path)
         .map_err(|e| EngineError::Io(format!("Failed to read settings: {e}")))?;
-    serde_json::from_str(&content)
+
+    serde_json::from_str::<AppSettings>(&content)
         .map_err(|e| EngineError::Parse(format!("Failed to parse settings: {e}")))
 }
 
@@ -39,6 +42,8 @@ impl AppSettings {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::llm_backend::LlmBackendType;
+    use crate::model::settings::Connection;
     use std::io::Write;
     use std::sync::Mutex;
 
@@ -111,7 +116,8 @@ mod tests {
             assert!(!path.exists());
 
             let settings = load_settings().expect("should create defaults");
-            assert_eq!(settings, AppSettings::default());
+            assert_eq!(settings.connections.len(), 3);
+            assert_eq!(settings.narration_connection_id, "openrouter-gpt-4o-mini");
 
             // Verify file was created
             assert!(path.exists());
@@ -124,15 +130,16 @@ mod tests {
     #[test]
     fn test_load_settings_valid_file() {
         with_isolated_settings(|_path| {
-            // Create a valid settings file
             let custom = AppSettings {
-                llm_model: "test/model".to_string(),
-                ..Default::default()
+                connections: vec![Connection::new("test", "Test", LlmBackendType::OpenRouter)],
+                narration_connection_id: "test".into(),
+                quantifier_connection_id: "test".into(),
             };
             custom.save().expect("should save");
 
             let loaded = load_settings().expect("should load");
-            assert_eq!(loaded.llm_model, "test/model");
+            assert_eq!(loaded.narration_connection_id, "test");
+            assert_eq!(loaded.connections.len(), 1);
         });
     }
 
@@ -158,15 +165,22 @@ mod tests {
     fn test_save_settings_roundtrip() {
         with_isolated_settings(|_path| {
             let settings = AppSettings {
-                llm_model: "roundtrip/model".to_string(),
-                quantifier_model: "quant/model".to_string(),
-                ..Default::default()
+                connections: vec![Connection {
+                    id: "conn-1".into(),
+                    name: "Conn 1".into(),
+                    provider: LlmBackendType::OpenRouter,
+                    model: "model-a".into(),
+                    api_key: Some("key-a".into()),
+                    base_url: None,
+                }],
+                narration_connection_id: "conn-1".into(),
+                quantifier_connection_id: "conn-1".into(),
             };
             settings.save().expect("should save");
 
             let loaded = load_settings().expect("should load");
-            assert_eq!(loaded.llm_model, "roundtrip/model");
-            assert_eq!(loaded.quantifier_model, "quant/model");
+            assert_eq!(loaded.narration_connection_id, "conn-1");
+            assert_eq!(loaded.connections[0].model, "model-a");
         });
     }
 
@@ -183,5 +197,44 @@ mod tests {
             let err = result.unwrap_err().to_string();
             assert!(err.contains("Failed to write settings"));
         });
+    }
+
+    #[test]
+    fn test_connection_resolve_api_key() {
+        let conn = Connection {
+            id: "test".into(),
+            name: "Test".into(),
+            provider: LlmBackendType::OpenRouter,
+            model: "model".into(),
+            api_key: Some("direct-key".into()),
+            base_url: None,
+        };
+        assert_eq!(conn.resolve_api_key(), Some("direct-key".into()));
+
+        let conn_no_key = Connection {
+            api_key: None,
+            ..conn
+        };
+        // Without env var, should be None
+        assert_eq!(conn_no_key.resolve_api_key(), None);
+    }
+
+    #[test]
+    fn test_connection_resolve_base_url() {
+        let conn = Connection {
+            id: "test".into(),
+            name: "Test".into(),
+            provider: LlmBackendType::Ollama,
+            model: "model".into(),
+            api_key: None,
+            base_url: Some("http://custom:11434".into()),
+        };
+        assert_eq!(conn.resolve_base_url(), "http://custom:11434");
+
+        let conn_default = Connection {
+            base_url: None,
+            ..conn
+        };
+        assert_eq!(conn_default.resolve_base_url(), "http://localhost:11434/v1");
     }
 }

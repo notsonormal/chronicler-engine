@@ -56,6 +56,7 @@ fn create_test_state() -> Arc<Mutex<GameState>> {
             personality: "Brave".into(),
             scenario: "Test scenario".into(),
             example_dialogue: "Hello!".into(),
+            summary: None,
             profile_image: None,
             headshot_image: None,
         },
@@ -70,6 +71,7 @@ fn create_test_state() -> Arc<Mutex<GameState>> {
             personality: "Friendly".into(),
             scenario: "Test scenario".into(),
             example_dialogue: "Hello there!".into(),
+            summary: None,
             profile_image: Some("data/images/npc.png".into()),
             headshot_image: Some("data/images/npc_headshot.png".into()),
         },
@@ -106,9 +108,11 @@ fn test_header_template_renders_room_name() {
     );
 }
 
-/// CRITICAL XSS Security Test - verifies HTML escaping
+/// Header template currently does not render room_name, so XSS via room_name
+/// is not a concern for this specific template. This test verifies the template
+/// renders correctly regardless of the room_name value.
 #[test]
-fn test_header_template_escapes_html() {
+fn test_header_template_ignores_room_name() {
     let template = HeaderTemplate {
         room_name: "<script>alert('xss')</script>".to_string(),
     };
@@ -116,6 +120,10 @@ fn test_header_template_escapes_html() {
     assert!(
         rendered.contains("Chronicler Engine"),
         "Should contain Chronicler Engine: {rendered}"
+    );
+    assert!(
+        !rendered.contains("<script>"),
+        "Template should not contain raw script tag: {rendered}"
     );
 }
 
@@ -445,9 +453,11 @@ mod tests {
 
     mod settings_tests {
         use super::*;
+        use std::sync::atomic::{AtomicU64, Ordering};
         use std::sync::{Mutex, MutexGuard};
 
         static SETTINGS_TEST_LOCK: Mutex<()> = Mutex::new(());
+        static SETTINGS_TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
 
         /// RAII guard that redirects settings to a temp file and cleans up on drop.
         /// Uses a process-wide lock to prevent parallel tests from interfering
@@ -459,10 +469,12 @@ mod tests {
 
         impl TempSettingsGuard {
             fn new() -> Self {
-                let lock = SETTINGS_TEST_LOCK.lock().unwrap();
+                let lock = SETTINGS_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+                let counter = SETTINGS_TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
                 let temp_path = std::env::temp_dir().join(format!(
-                    "chronicler_test_settings_{}.json",
-                    std::process::id()
+                    "chronicler_test_settings_{}_{}.json",
+                    std::process::id(),
+                    counter
                 ));
                 unsafe { std::env::set_var("CHRONICLER_SETTINGS_PATH", &temp_path) };
                 Self {
@@ -491,18 +503,18 @@ mod tests {
             let response = app.oneshot(req).await.unwrap();
 
             assert!(response.status().is_success());
-            let body = axum::body::to_bytes(response.into_body(), 2048)
+            let body = axum::body::to_bytes(response.into_body(), 16384)
                 .await
                 .unwrap();
             let body_str = String::from_utf8_lossy(&body);
             assert!(
-                body_str.contains("LLM Settings"),
-                "Expected 'LLM Settings' in response: {body_str}"
+                body_str.contains("Connections"),
+                "Expected 'Connections' in response: {body_str}"
             );
         }
 
         #[tokio::test]
-        async fn test_settings_panel_has_backend_select() {
+        async fn test_settings_panel_has_provider_select() {
             let state = create_test_state();
             let app = create_app_for_testing(state);
 
@@ -513,13 +525,13 @@ mod tests {
             let response = app.oneshot(req).await.unwrap();
 
             assert!(response.status().is_success());
-            let body = axum::body::to_bytes(response.into_body(), 2048)
+            let body = axum::body::to_bytes(response.into_body(), 16384)
                 .await
                 .unwrap();
             let body_str = String::from_utf8_lossy(&body);
             assert!(
-                body_str.contains("llm_backend"),
-                "Expected llm_backend select element: {body_str}"
+                body_str.contains("conn_provider"),
+                "Expected conn_provider select element: {body_str}"
             );
             assert!(
                 body_str.contains("OpenRouter"),
@@ -529,14 +541,10 @@ mod tests {
                 body_str.contains("DeepSeek"),
                 "Expected DeepSeek option: {body_str}"
             );
-            assert!(
-                !body_str.contains("Mock (Testing)"),
-                "Mock option should not appear in UI dropdown: {body_str}"
-            );
         }
 
         #[tokio::test]
-        async fn test_settings_panel_has_model_inputs() {
+        async fn test_settings_panel_has_model_input() {
             let state = create_test_state();
             let app = create_app_for_testing(state);
 
@@ -547,92 +555,376 @@ mod tests {
             let response = app.oneshot(req).await.unwrap();
 
             assert!(response.status().is_success());
+            let body = axum::body::to_bytes(response.into_body(), 16384)
+                .await
+                .unwrap();
+            let body_str = String::from_utf8_lossy(&body);
+            assert!(
+                body_str.contains("conn_model"),
+                "Expected conn_model input: {body_str}"
+            );
+        }
+
+        #[tokio::test]
+        async fn test_save_settings_switch_narrator() {
+            let _guard = TempSettingsGuard::new();
+            let state = create_test_state();
+            let app = create_app_for_testing(state);
+
+            let req = Request::builder()
+                .uri("/settings")
+                .method(http::Method::POST)
+                .header(
+                    http::header::CONTENT_TYPE,
+                    "application/x-www-form-urlencoded",
+                )
+                .body(Body::from(
+                    "narration_connection_id=openrouter-euryale&quantifier_connection_id=openrouter-gpt-4o-mini",
+                ))
+                .unwrap();
+            let response = app.oneshot(req).await.unwrap();
+
+            assert!(response.status().is_success());
+            let body = axum::body::to_bytes(response.into_body(), 1024)
+                .await
+                .unwrap();
+            let body_str = String::from_utf8_lossy(&body);
+            assert!(
+                body_str.contains("saved"),
+                "Expected success response: {body_str}"
+            );
+        }
+
+        #[tokio::test]
+        async fn test_save_settings_switch_quantifier() {
+            let _guard = TempSettingsGuard::new();
+            let state = create_test_state();
+            let app = create_app_for_testing(state);
+
+            let req = Request::builder()
+                .uri("/settings")
+                .method(http::Method::POST)
+                .header(
+                    http::header::CONTENT_TYPE,
+                    "application/x-www-form-urlencoded",
+                )
+                .body(Body::from(
+                    "narration_connection_id=openrouter-gpt-4o-mini&quantifier_connection_id=ollama-gemma-4-26B",
+                ))
+                .unwrap();
+            let response = app.oneshot(req).await.unwrap();
+
+            assert!(response.status().is_success());
+            let body = axum::body::to_bytes(response.into_body(), 1024)
+                .await
+                .unwrap();
+            let body_str = String::from_utf8_lossy(&body);
+            assert!(
+                body_str.contains("saved"),
+                "Expected success response: {body_str}"
+            );
+        }
+
+        #[tokio::test]
+        async fn test_save_settings_switch_both() {
+            let _guard = TempSettingsGuard::new();
+            let state = create_test_state();
+            let app = create_app_for_testing(state);
+
+            let req = Request::builder()
+                .uri("/settings")
+                .method(http::Method::POST)
+                .header(
+                    http::header::CONTENT_TYPE,
+                    "application/x-www-form-urlencoded",
+                )
+                .body(Body::from(
+                    "narration_connection_id=openrouter-euryale&quantifier_connection_id=ollama-gemma-4-26B",
+                ))
+                .unwrap();
+            let response = app.oneshot(req).await.unwrap();
+
+            assert!(response.status().is_success());
+            let body = axum::body::to_bytes(response.into_body(), 1024)
+                .await
+                .unwrap();
+            let body_str = String::from_utf8_lossy(&body);
+            assert!(
+                body_str.contains("saved"),
+                "Expected success response: {body_str}"
+            );
+        }
+
+        #[tokio::test]
+        async fn test_add_connection_openrouter() {
+            let _guard = TempSettingsGuard::new();
+            let state = create_test_state();
+            let app = create_app_for_testing(state);
+
+            let req = Request::builder()
+                .uri("/connections/add")
+                .method(http::Method::POST)
+                .header(
+                    http::header::CONTENT_TYPE,
+                    "application/x-www-form-urlencoded",
+                )
+                .body(Body::from(
+                    "conn_name=My+OpenRouter&conn_provider=openrouter&conn_model=openai/gpt-4o&conn_api_key=sk-test&conn_base_url=",
+                ))
+                .unwrap();
+            let response = app.oneshot(req).await.unwrap();
+
+            assert!(response.status().is_success());
+            let body = axum::body::to_bytes(response.into_body(), 16384)
+                .await
+                .unwrap();
+            let body_str = String::from_utf8_lossy(&body);
+            assert!(
+                body_str.contains("My OpenRouter"),
+                "Expected new connection name in response: {body_str}"
+            );
+        }
+
+        #[tokio::test]
+        async fn test_add_connection_deepseek() {
+            let _guard = TempSettingsGuard::new();
+            let state = create_test_state();
+            let app = create_app_for_testing(state);
+
+            let req = Request::builder()
+                .uri("/connections/add")
+                .method(http::Method::POST)
+                .header(
+                    http::header::CONTENT_TYPE,
+                    "application/x-www-form-urlencoded",
+                )
+                .body(Body::from(
+                    "conn_name=My+DeepSeek&conn_provider=deepseek&conn_model=deepseek-chat&conn_api_key=&conn_base_url=",
+                ))
+                .unwrap();
+            let response = app.oneshot(req).await.unwrap();
+
+            assert!(response.status().is_success());
+            let body = axum::body::to_bytes(response.into_body(), 16384)
+                .await
+                .unwrap();
+            let body_str = String::from_utf8_lossy(&body);
+            assert!(
+                body_str.contains("My DeepSeek"),
+                "Expected new connection name in response: {body_str}"
+            );
+        }
+
+        #[tokio::test]
+        async fn test_set_narrator() {
+            let _guard = TempSettingsGuard::new();
+            let state = create_test_state();
+            let app = create_app_for_testing(state);
+
+            let req = Request::builder()
+                .uri("/connections/openrouter-euryale/set-narrator")
+                .method(http::Method::POST)
+                .body(Body::empty())
+                .unwrap();
+            let response = app.oneshot(req).await.unwrap();
+
+            assert!(response.status().is_success());
+            let body = axum::body::to_bytes(response.into_body(), 16384)
+                .await
+                .unwrap();
+            let body_str = String::from_utf8_lossy(&body);
+            assert!(
+                body_str.contains("Narrator"),
+                "Expected Narrator badge on euryale: {body_str}"
+            );
+        }
+
+        #[tokio::test]
+        async fn test_set_quantifier() {
+            let _guard = TempSettingsGuard::new();
+            let state = create_test_state();
+            let app = create_app_for_testing(state);
+
+            let req = Request::builder()
+                .uri("/connections/ollama-gemma-4-26B/set-quantifier")
+                .method(http::Method::POST)
+                .body(Body::empty())
+                .unwrap();
+            let response = app.oneshot(req).await.unwrap();
+
+            assert!(response.status().is_success());
+            let body = axum::body::to_bytes(response.into_body(), 16384)
+                .await
+                .unwrap();
+            let body_str = String::from_utf8_lossy(&body);
+            assert!(
+                body_str.contains("Quantifier"),
+                "Expected Quantifier badge on gemma: {body_str}"
+            );
+        }
+
+        #[tokio::test]
+        async fn test_set_narrator_not_found() {
+            let _guard = TempSettingsGuard::new();
+            let state = create_test_state();
+            let app = create_app_for_testing(state);
+
+            let req = Request::builder()
+                .uri("/connections/nonexistent/set-narrator")
+                .method(http::Method::POST)
+                .body(Body::empty())
+                .unwrap();
+            let response = app.oneshot(req).await.unwrap();
+
+            assert!(response.status().is_success());
+            let body = axum::body::to_bytes(response.into_body(), 1024)
+                .await
+                .unwrap();
+            let body_str = String::from_utf8_lossy(&body);
+            assert!(
+                body_str.contains("Connection not found"),
+                "Expected error for nonexistent connection: {body_str}"
+            );
+        }
+
+        #[tokio::test]
+        async fn test_delete_connection() {
+            let _guard = TempSettingsGuard::new();
+            let state = create_test_state();
+            let app = create_app_for_testing(state);
+
+            let req = Request::builder()
+                .uri("/connections/ollama-gemma-4-26B/delete")
+                .method(http::Method::POST)
+                .body(Body::empty())
+                .unwrap();
+            let response = app.oneshot(req).await.unwrap();
+
+            assert!(response.status().is_success());
+            let body = axum::body::to_bytes(response.into_body(), 1024)
+                .await
+                .unwrap();
+            let body_str = String::from_utf8_lossy(&body);
+            assert!(
+                body_str.is_empty(),
+                "Expected empty response (HTMX swap delete): '{body_str}'"
+            );
+        }
+
+        #[tokio::test]
+        async fn test_delete_connection_not_found() {
+            let _guard = TempSettingsGuard::new();
+            let state = create_test_state();
+            let app = create_app_for_testing(state);
+
+            let req = Request::builder()
+                .uri("/connections/nonexistent/delete")
+                .method(http::Method::POST)
+                .body(Body::empty())
+                .unwrap();
+            let response = app.oneshot(req).await.unwrap();
+
+            assert!(response.status().is_success());
+            let body = axum::body::to_bytes(response.into_body(), 1024)
+                .await
+                .unwrap();
+            let body_str = String::from_utf8_lossy(&body);
+            assert!(
+                body_str.contains("Connection not found"),
+                "Expected error for nonexistent connection: {body_str}"
+            );
+        }
+
+        #[tokio::test]
+        async fn test_edit_connection() {
+            let _guard = TempSettingsGuard::new();
+            let state = create_test_state();
+            let app = create_app_for_testing(state);
+
+            let req = Request::builder()
+                .uri("/connections/openrouter-gpt-4o-mini/edit")
+                .method(http::Method::POST)
+                .header(
+                    http::header::CONTENT_TYPE,
+                    "application/x-www-form-urlencoded",
+                )
+                .body(Body::from(
+                    "conn_name=Updated+Name&conn_provider=openrouter&conn_model=gpt-4o&conn_api_key=new-key&conn_base_url=",
+                ))
+                .unwrap();
+            let response = app.oneshot(req).await.unwrap();
+
+            assert!(response.status().is_success());
+            let body = axum::body::to_bytes(response.into_body(), 16384)
+                .await
+                .unwrap();
+            let body_str = String::from_utf8_lossy(&body);
+            assert!(
+                body_str.contains("Updated Name"),
+                "Expected updated connection name: {body_str}"
+            );
+        }
+
+        #[tokio::test]
+        async fn test_edit_connection_not_found() {
+            let _guard = TempSettingsGuard::new();
+            let state = create_test_state();
+            let app = create_app_for_testing(state);
+
+            let req = Request::builder()
+                .uri("/connections/nonexistent/edit")
+                .method(http::Method::POST)
+                .header(
+                    http::header::CONTENT_TYPE,
+                    "application/x-www-form-urlencoded",
+                )
+                .body(Body::from(
+                    "conn_name=Updated+Name&conn_provider=openrouter&conn_model=gpt-4o&conn_api_key=&conn_base_url=",
+                ))
+                .unwrap();
+            let response = app.oneshot(req).await.unwrap();
+
+            assert!(response.status().is_success());
+            let body = axum::body::to_bytes(response.into_body(), 1024)
+                .await
+                .unwrap();
+            let body_str = String::from_utf8_lossy(&body);
+            assert!(
+                body_str.contains("Connection not found"),
+                "Expected error for nonexistent connection: {body_str}"
+            );
+        }
+
+        #[tokio::test]
+        async fn test_connection_card_fragment() {
+            let state = create_test_state();
+            let app = create_app_for_testing(state);
+
+            let req = Request::builder()
+                .uri("/fragment/connections/openrouter-gpt-4o-mini")
+                .body(Body::empty())
+                .unwrap();
+            let response = app.oneshot(req).await.unwrap();
+
+            assert!(response.status().is_success());
             let body = axum::body::to_bytes(response.into_body(), 2048)
                 .await
                 .unwrap();
             let body_str = String::from_utf8_lossy(&body);
             assert!(
-                body_str.contains("llm_model"),
-                "Expected llm_model input: {body_str}"
-            );
-            assert!(
-                body_str.contains("quantifier_model"),
-                "Expected quantifier_model input: {body_str}"
+                body_str.contains("openrouter-gpt-4o-mini"),
+                "Expected connection card: {body_str}"
             );
         }
 
         #[tokio::test]
-        async fn test_save_settings_openrouter() {
-            let _guard = TempSettingsGuard::new();
+        async fn test_connection_card_fragment_not_found() {
             let state = create_test_state();
             let app = create_app_for_testing(state);
 
             let req = Request::builder()
-                    .uri("/settings")
-                    .method(http::Method::POST)
-                    .header(
-                        http::header::CONTENT_TYPE,
-                        "application/x-www-form-urlencoded",
-                    )
-                    .body(Body::from("llm_backend=openrouter&quantifier_backend=openrouter&llm_model=gpt-4o-mini&quantifier_model=gpt-4o-mini&ollama_base_url=http%3A%2F%2Flocalhost%3A11434&api_key="))
-                    .unwrap();
-            let response = app.oneshot(req).await.unwrap();
-
-            assert!(response.status().is_success());
-            let body = axum::body::to_bytes(response.into_body(), 1024)
-                .await
-                .unwrap();
-            let body_str = String::from_utf8_lossy(&body);
-            assert!(
-                body_str.contains("saved"),
-                "Expected success response: {body_str}"
-            );
-        }
-
-        #[tokio::test]
-        async fn test_save_settings_deepseek() {
-            let _guard = TempSettingsGuard::new();
-            let state = create_test_state();
-            let app = create_app_for_testing(state);
-
-            let req = Request::builder()
-                    .uri("/settings")
-                    .method(http::Method::POST)
-                    .header(
-                        http::header::CONTENT_TYPE,
-                        "application/x-www-form-urlencoded",
-                    )
-                    .body(Body::from("llm_backend=deepseek&quantifier_backend=deepseek&llm_model=deepseek-chat&quantifier_model=deepseek-chat&ollama_base_url=http%3A%2F%2Flocalhost%3A11434&api_key="))
-                    .unwrap();
-            let response = app.oneshot(req).await.unwrap();
-
-            assert!(response.status().is_success());
-            let body = axum::body::to_bytes(response.into_body(), 1024)
-                .await
-                .unwrap();
-            let body_str = String::from_utf8_lossy(&body);
-            assert!(
-                body_str.contains("saved"),
-                "Expected success response: {body_str}"
-            );
-        }
-
-        #[tokio::test]
-        async fn test_save_settings_mock() {
-            let _guard = TempSettingsGuard::new();
-            let state = create_test_state();
-            let app = create_app_for_testing(state);
-
-            let req = Request::builder()
-                .uri("/settings")
-                .method(http::Method::POST)
-                .header(
-                    http::header::CONTENT_TYPE,
-                    "application/x-www-form-urlencoded",
-                )
-                .body(Body::from(
-                    "llm_backend=mock&quantifier_backend=mock&llm_model=gpt-4o-mini&quantifier_model=gpt-4o-mini&ollama_base_url=http%3A%2F%2Flocalhost%3A11434&api_key=",
-                ))
+                .uri("/fragment/connections/nonexistent")
+                .body(Body::empty())
                 .unwrap();
             let response = app.oneshot(req).await.unwrap();
 
@@ -642,56 +934,45 @@ mod tests {
                 .unwrap();
             let body_str = String::from_utf8_lossy(&body);
             assert!(
-                body_str.contains("saved"),
-                "Expected success response: {body_str}"
+                body_str.contains("Connection not found"),
+                "Expected error for nonexistent connection: {body_str}"
             );
         }
 
         #[tokio::test]
-        async fn test_save_settings_with_models() {
-            let _guard = TempSettingsGuard::new();
+        async fn test_edit_connection_form() {
             let state = create_test_state();
             let app = create_app_for_testing(state);
 
             let req = Request::builder()
-                    .uri("/settings")
-                    .method(http::Method::POST)
-                    .header(
-                        http::header::CONTENT_TYPE,
-                        "application/x-www-form-urlencoded",
-                    )
-                    .body(Body::from("llm_backend=mock&quantifier_backend=mock&llm_model=gpt-4o-mini&quantifier_model=gpt-4o-mini&ollama_base_url=http%3A%2F%2Flocalhost%3A11434&api_key=test-key-123"))
-                    .unwrap();
+                .uri("/fragment/connections/openrouter-gpt-4o-mini/edit")
+                .body(Body::empty())
+                .unwrap();
             let response = app.oneshot(req).await.unwrap();
 
             assert!(response.status().is_success());
-            let body = axum::body::to_bytes(response.into_body(), 1024)
+            let body = axum::body::to_bytes(response.into_body(), 2048)
                 .await
                 .unwrap();
             let body_str = String::from_utf8_lossy(&body);
             assert!(
-                body_str.contains("saved"),
-                "Expected success response: {body_str}"
+                body_str.contains("Edit openrouter-gpt-4o-mini"),
+                "Expected edit form: {body_str}"
+            );
+            assert!(
+                body_str.contains("conn_name"),
+                "Expected conn_name field: {body_str}"
             );
         }
 
         #[tokio::test]
-        async fn test_save_settings_empty_api_key() {
-            let _guard = TempSettingsGuard::new();
+        async fn test_edit_connection_form_not_found() {
             let state = create_test_state();
             let app = create_app_for_testing(state);
 
-            // Empty api_key should result in success (api key cleared)
             let req = Request::builder()
-                .uri("/settings")
-                .method(http::Method::POST)
-                .header(
-                    http::header::CONTENT_TYPE,
-                    "application/x-www-form-urlencoded",
-                )
-                .body(Body::from(
-                    "llm_backend=mock&quantifier_backend=mock&llm_model=gpt-4o-mini&quantifier_model=gpt-4o-mini&ollama_base_url=http%3A%2F%2Flocalhost%3A11434&api_key=",
-                ))
+                .uri("/fragment/connections/nonexistent/edit")
+                .body(Body::empty())
                 .unwrap();
             let response = app.oneshot(req).await.unwrap();
 
@@ -701,8 +982,8 @@ mod tests {
                 .unwrap();
             let body_str = String::from_utf8_lossy(&body);
             assert!(
-                body_str.contains("saved"),
-                "Expected success response with empty api_key: {body_str}"
+                body_str.contains("Connection not found"),
+                "Expected error for nonexistent connection: {body_str}"
             );
         }
     }

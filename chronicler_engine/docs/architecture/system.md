@@ -19,13 +19,14 @@ Contains the mechanics that drive the simulation. It translates user intent and 
 - **`parser`**: Natural language command decomposition.
 - **`action`**: The `Action` enum defining all supported system intents.
 - **`logic`**: Rules for movement, fuzzy-matching, and room resolution.
-- **`trigger_eval`**: Pure function evaluation of NPC triggers based on character state (`evaluate_triggers(state, room_id) -> Vec<(NpcCard, Trigger)>`).
+- **`trigger_eval`**: Pure function evaluation of NPC triggers based on character state and room location (`evaluate_triggers(state, current_room_id) -> Vec<(NpcCard, Trigger)>`). Triggers with `room_id` only fire in that room.
 - **`action_processing`**: Extracted pure functions for server handlers (`get_static_npcs`, `handle_movement`, `apply_npc_events`, `evaluate_and_narrate_triggers`, `execute_freeaction_impl`). Enables unit testing of server-side logic.
 
 ### 3. The Narrative Tier (`crate::narrative::*`)
 The interface between the synchronous engine and stochastic LLM generation.
 - **`llm`**: Traits (`LlmBackend`) and implementations (OpenRouter, DeepSeek, Mock) for Game Master narration.
-  - **`get_llm_backend()`**: Production entry point that loads backend from `data/settings.json`
+  - **`get_llm_backend()`**: Production entry point that loads the narration connection from `data/settings.json`
+  - **`get_llm_backend_for(connection)`**: Create a backend for a specific `Connection` profile
   - **`with_test_backend()`**: RAII guard for overriding backend in tests (atomically sets Mock/DeepSeek/OpenRouter without file I/O)
 - **`prompt`**: PromptBuilder module for SillyTavern-style layered prompt construction with token budget management, including `PhiMode` for controlling PHI layer behavior (Narration vs Continuation).
 - **`quantifier`**: Scene quantification module for dynamic room presence detection via secondary LLM. Returns NPC presence, player movement intent, and NPC enter/leave events.
@@ -59,12 +60,13 @@ The HTTP layer for the HTMX web dashboard with polling-based real-time updates.
   - Missing fields = compiler error (not runtime failure).
 
 ### 6. The Settings Tier (`crate::settings` + `crate::model::settings`)
-Persistent JSON-based settings system for LLM configuration. Replaces environment variables as the primary configuration source.
+Persistent JSON-based settings system for LLM configuration with reusable connection profiles.
 
 | Component | Purpose |
 |-----------|---------|
 | `data/settings.json` | Persistent settings file |
-| `AppSettings` struct | Configuration data model |
+| `AppSettings` struct | Configuration data model (connections + active selections) |
+| `Connection` struct | Named provider+model profile |
 | `AppState.settings` | Runtime access via `Arc<RwLock<AppSettings>>` |
 
 #### Settings Flow
@@ -76,23 +78,23 @@ settings.json → load_settings() → AppSettings (defaults if missing)
                                               ↓
                     ┌─────────────────────────┴─────────────────────────┐
                     ↓                                                   ↓
-        get_llm_backend()                                      get_llm_model()
-        (uses settings.backend)                               (uses settings.llm_model)
+        get_llm_backend()                                      get_quantifier_backend()
+        (uses narration connection)                         (uses quantifier connection)
 ```
 
 #### Configuration Options
 
 | Setting | Type | Default |
-|---------|------|---------| 
-| `llm_backend` | deepseek/openrouter (mock is test-only, not shown in UI) | openrouter |
-| `llm_model` | string | openai/gpt-4o-mini |
-| `quantifier_model` | string | openai/gpt-4o-mini |
-| `openrouter_api_key` | Option<String> | None (falls back to env var) |
+|---------|------|---------|
+| `connections` | `Vec<Connection>` | Three default connections (OpenRouter GPT-4o Mini, OpenRouter Euryale, Ollama Gemma) |
+| `narration_connection_id` | string | `"openrouter-gpt-4o-mini"` |
+| `quantifier_connection_id` | string | `"openrouter-gpt-4o-mini"` |
 
-#### Backward Compatibility
+Each `Connection` contains: `id`, `name`, `provider`, `model`, `api_key` (optional), `base_url` (optional).
 
-- `LLM_MODEL` / `QUANTIFIER_MODEL` env vars override settings file values
-- `OPENROUTER_API_KEY` env var used if settings.api_key is None
+#### Environment Fallback
+
+- `OPENROUTER_API_KEY` env var used as fallback when connection `api_key` is None
 - `LLM_BACKEND` env var is **not** consulted (settings file is sole source of truth)
 
 ### 7. The Presentation Tier (`assets/`)

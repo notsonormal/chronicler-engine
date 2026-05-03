@@ -538,12 +538,164 @@ body {
     display: flex;
 }
 
+/* Settings Tab Scrolling */
+#settings-tab {
+    overflow-y: auto;
+}
+
 /* Settings Panel */
 .settings-panel {
     padding: var(--spacing-md);
     display: flex;
     flex-direction: column;
     gap: var(--spacing-md);
+    max-width: 800px;
+}
+
+/* Settings Buttons */
+.settings-panel button {
+    background: linear-gradient(180deg, #2a4a5a 0%, #1a3a4a 100%);
+    border: 1px solid var(--color-accent-cyan);
+    border-radius: 4px;
+    color: var(--color-accent-cyan);
+    padding: 6px 14px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: var(--font-size-base);
+    transition: background var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.settings-panel button:hover {
+    background: linear-gradient(180deg, #3a5a6a 0%, #2a4a5a 100%);
+    box-shadow: 0 0 10px rgba(0, 255, 255, 0.25);
+}
+
+.settings-panel button:active {
+    background: linear-gradient(180deg, #1a3a4a 0%, #0a2a3a 100%);
+}
+
+.settings-panel button.danger {
+    background: linear-gradient(180deg, #5a2a2a 0%, #4a1a1a 100%);
+    border-color: var(--color-accent-red);
+    color: var(--color-accent-red);
+}
+
+.settings-panel button.danger:hover {
+    background: linear-gradient(180deg, #6a3a3a 0%, #5a2a2a 100%);
+    box-shadow: 0 0 10px rgba(255, 68, 68, 0.25);
+}
+
+.settings-panel button.primary {
+    background: linear-gradient(180deg, #2a5a2a 0%, #1a4a1a 100%);
+    border-color: var(--color-accent-green);
+    color: var(--color-accent-green);
+}
+
+.settings-panel button.primary:hover {
+    background: linear-gradient(180deg, #3a6a3a 0%, #2a5a2a 100%);
+    box-shadow: 0 0 10px rgba(0, 255, 0, 0.25);
+}
+
+/* Connection Cards */
+.connection-card {
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: var(--spacing-md);
+    margin-bottom: var(--spacing-md);
+}
+
+.connection-card .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-sm);
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+}
+
+.connection-card .card-title {
+    font-weight: bold;
+    font-size: 1.05em;
+    color: var(--color-text-primary);
+}
+
+.connection-card .card-badges {
+    display: flex;
+    gap: var(--spacing-xs);
+}
+
+.connection-card .badge {
+    font-size: var(--font-size-xs);
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: rgba(0, 255, 0, 0.12);
+    color: var(--color-accent-green);
+    border: 1px solid rgba(0, 255, 0, 0.25);
+}
+
+.connection-card .badge.quantifier {
+    background: rgba(255, 179, 71, 0.12);
+    color: var(--color-accent-orange);
+    border-color: rgba(255, 179, 71, 0.25);
+}
+
+.connection-card .card-details {
+    font-size: var(--font-size-small);
+    color: var(--color-text-muted);
+    margin-bottom: var(--spacing-sm);
+    line-height: 1.5;
+}
+
+.connection-card .card-actions {
+    display: flex;
+    gap: var(--spacing-sm);
+    flex-wrap: wrap;
+}
+
+/* Connection Edit Form (inline) */
+.connection-edit-form {
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-accent-cyan);
+    border-radius: 8px;
+    padding: var(--spacing-md);
+    margin-bottom: var(--spacing-md);
+}
+
+.connection-edit-form .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+    margin-bottom: var(--spacing-sm);
+}
+
+.connection-edit-form label {
+    font-size: var(--font-size-small);
+    color: var(--color-text-muted);
+}
+
+.connection-edit-form input,
+.connection-edit-form select {
+    background: var(--color-bg-primary);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    color: var(--color-text-primary);
+    padding: var(--spacing-sm);
+    font-family: inherit;
+    font-size: var(--font-size-base);
+}
+
+.connection-edit-form input:focus,
+.connection-edit-form select:focus {
+    outline: none;
+    border-color: var(--color-accent-cyan);
+    box-shadow: 0 0 8px rgba(0, 255, 255, 0.2);
+}
+
+.connection-edit-form .form-actions {
+    display: flex;
+    gap: var(--spacing-sm);
+    margin-top: var(--spacing-sm);
 }
 
 .settings-panel .form-group {

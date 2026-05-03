@@ -37,7 +37,7 @@ Based on SillyTavern's Prompt Manager:
 
 ### Implementation Features
 
-1. **Token budget**: MAX_CONTEXT_TOKENS = 8192, hard truncation
+1. **Token budget**: MAX_CONTEXT_TOKENS = 32000, hard truncation
 2. **Prompt injection sanitization**: Filter `{{variable}}` patterns, instruction overrides
 3. **World Info triggers**: Keyword matching from history (not RAG)
 4. **Full history**: All conversation retained and sent (no summarization)

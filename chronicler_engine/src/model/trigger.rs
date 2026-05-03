@@ -25,6 +25,8 @@ pub struct Trigger {
     pub condition: TriggerCondition,
     pub action: TriggerAction,
     pub repeat: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub room_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
@@ -74,7 +76,7 @@ mod tests {
     }
 
     #[test]
-    fn test_trigger_serde() {
+    fn test_trigger_serde_without_room_id() {
         let json = r#"{
             "condition": {"TimesMet": ["Gte", 2]},
             "action": {"name": "Guard Recognition", "narration_prompt": "The guard recognizes you."},
@@ -87,6 +89,23 @@ mod tests {
         );
         assert_eq!(trigger.action.narration_prompt, "The guard recognizes you.");
         assert!(!trigger.repeat);
+        assert_eq!(trigger.room_id, None);
+    }
+
+    #[test]
+    fn test_trigger_serde_with_room_id() {
+        let json = r#"{
+            "condition": {"TimesMet": ["Eq", 0]},
+            "action": {"name": "Introduction", "narration_prompt": "They appear."},
+            "repeat": false,
+            "room_id": "entrance_hall"
+        }"#;
+        let trigger: Trigger = serde_json::from_str(json).unwrap();
+        assert_eq!(
+            trigger.condition,
+            TriggerCondition::TimesMet(ComparisonOperator::Eq, 0)
+        );
+        assert_eq!(trigger.room_id, Some("entrance_hall".to_string()));
     }
 
     #[test]

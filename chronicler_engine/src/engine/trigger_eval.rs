@@ -4,10 +4,18 @@ use crate::model::trigger::{CharacterState, ComparisonOperator, Trigger, Trigger
 
 /// [DOC: docs/system/triggers.md]
 pub fn evaluate_triggers(state: &GameState) -> Vec<(NpcCard, Trigger)> {
+    let current_room_id = &state.current_room_id;
+
     let mut results = Vec::new();
 
     for npc in state.npcs.values() {
         for (index, trigger) in npc.triggers.iter().enumerate() {
+            if let Some(room_id) = &trigger.room_id {
+                if room_id != current_room_id {
+                    continue;
+                }
+            }
+
             if check_condition(&state.character_state, &npc.id, &trigger.condition) {
                 if !trigger.repeat && is_trigger_fired(&state.character_state, &npc.id, index) {
                     continue;
@@ -20,6 +28,7 @@ pub fn evaluate_triggers(state: &GameState) -> Vec<(NpcCard, Trigger)> {
     results
 }
 
+/// [DOC: docs/system/triggers.md]
 pub fn check_condition(
     character_state: &crate::model::trigger::CharacterState,
     npc_id: &str,
@@ -105,6 +114,7 @@ mod tests {
                 personality: "Neutral".to_string(),
                 scenario: "Testing".to_string(),
                 example_dialogue: String::new(),
+                summary: None,
                 profile_image: None,
                 headshot_image: None,
             },
@@ -121,6 +131,19 @@ mod tests {
                 narration_prompt: "Test trigger".to_string(),
             },
             repeat,
+            room_id: None,
+        }
+    }
+
+    fn make_trigger_with_room(condition: TriggerCondition, repeat: bool, room_id: &str) -> Trigger {
+        Trigger {
+            condition,
+            action: TriggerAction {
+                name: "Test Event".to_string(),
+                narration_prompt: "Test trigger".to_string(),
+            },
+            repeat,
+            room_id: Some(room_id.to_string()),
         }
     }
 
@@ -149,6 +172,7 @@ mod tests {
                 personality: "Brave".to_string(),
                 scenario: "Testing".to_string(),
                 example_dialogue: String::new(),
+                summary: None,
                 profile_image: None,
                 headshot_image: None,
             },
@@ -214,9 +238,7 @@ mod tests {
 
     #[test]
     fn test_evaluate_triggers_fires_for_npc_not_in_area() {
-        // Test that triggers fire for NPCs even when they're NOT in npcs_in_area.
         // [DOC: docs/architecture/system.md]
-        // NOTE: Triggers must check all NPCs in state.npcs, not just npcs_in_area.
         let trigger = make_trigger(TriggerCondition::TimesMet(ComparisonOperator::Eq, 0), false);
         let npc = make_npc("gabriella", vec![trigger]);
         // npcs_in_area is empty, but Gabriella IS in state.npcs
@@ -232,10 +254,69 @@ mod tests {
             "npcs_in_area should be empty"
         );
 
-        // Trigger should still fire because we check ALL npcs, not just npcs_in_area
         let results = evaluate_triggers(&state);
-        assert_eq!(results.len(), 1, "Trigger should fire for NPC not in area");
+        assert_eq!(
+            results.len(),
+            1,
+            "Global trigger should fire for NPC not in area"
+        );
         assert_eq!(results[0].0.id, "gabriella");
+    }
+
+    #[test]
+    fn test_room_scoped_trigger_fires_in_correct_room() {
+        let trigger = make_trigger_with_room(
+            TriggerCondition::TimesMet(ComparisonOperator::Eq, 0),
+            false,
+            "room_1",
+        );
+        let npc = make_npc("gabriella", vec![trigger]);
+        let state = make_state(vec![], &[npc.clone()], CharacterState::default());
+
+        // State is in room_1 by default
+        assert_eq!(state.current_room_id, "room_1");
+
+        let results = evaluate_triggers(&state);
+        assert_eq!(
+            results.len(),
+            1,
+            "Room-scoped trigger should fire in correct room"
+        );
+        assert_eq!(results[0].0.id, "gabriella");
+    }
+
+    #[test]
+    fn test_room_scoped_trigger_skipped_in_wrong_room() {
+        let trigger = make_trigger_with_room(
+            TriggerCondition::TimesMet(ComparisonOperator::Eq, 0),
+            false,
+            "entrance_hall",
+        );
+        let npc = make_npc("gabriella", vec![trigger]);
+        let state = make_state(vec![], &[npc.clone()], CharacterState::default());
+
+        // State is in room_1, but trigger is scoped to entrance_hall
+        assert_eq!(state.current_room_id, "room_1");
+
+        let results = evaluate_triggers(&state);
+        assert!(
+            results.is_empty(),
+            "Room-scoped trigger should NOT fire in wrong room"
+        );
+    }
+
+    #[test]
+    fn test_global_trigger_fires_in_any_room() {
+        let trigger = make_trigger(TriggerCondition::TimesMet(ComparisonOperator::Eq, 0), false);
+        let npc = make_npc("gabriella", vec![trigger]);
+        let state = make_state(vec![], &[npc.clone()], CharacterState::default());
+
+        let results = evaluate_triggers(&state);
+        assert_eq!(
+            results.len(),
+            1,
+            "Global trigger should fire regardless of room"
+        );
     }
 
     #[test]
@@ -324,6 +405,7 @@ mod tests {
                 personality: "Protective".into(),
                 scenario: "Guarding".into(),
                 example_dialogue: "Stay safe.".into(),
+                summary: None,
                 profile_image: None,
                 headshot_image: None,
             },
@@ -342,6 +424,7 @@ mod tests {
                     personality: "Brave".into(),
                     scenario: "Test".into(),
                     example_dialogue: "".into(),
+                    summary: None,
                     profile_image: None,
                     headshot_image: None,
                 },

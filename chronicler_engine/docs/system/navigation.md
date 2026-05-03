@@ -6,12 +6,15 @@ The engine's movement system uses quantifier-driven detection. Player types natu
 ## Current Approach: Quantifier-Driven Movement
 
 1. **All Input is FreeAction**: The parser passes all user input to the LLM as FreeAction.
-2. **Quantifier Detection**: After LLM generates narration, the quantifier analyzes the response for movement intent (entering, in, leaving).
-3. **Semantic Exits**: Rooms define semantic exits with triggers and keywords for natural language matching.
+2. **Narrator Response**: The LLM generates a narrative response describing what happens.
+3. **Quantifier Detection**: The quantifier analyzes the *narrative outcome* (not just player intent) to determine if the player actually moved. If the narration says the player was blocked or prevented from moving, no movement is detected.
+4. **Retry on Low Confidence**: If the quantifier produces an unparseable or uncertain response, it retries once before falling back to static NPCs.
+5. **Semantic Exits**: Rooms define semantic exits with triggers and keywords for natural language matching.
 
 ### Example Flows
-- "I walk through the front gate" -> quantifier detects "entering" + "front gate" trigger
-- "I head to the kitchen" -> quantifier detects "entering" + "kitchen" trigger (via keywords)
+- "I walk through the front gate" → narrator confirms movement → quantifier detects "entering" + "front gate" trigger
+- "I head to the kitchen" → narrator confirms movement → quantifier detects "entering" + "kitchen" trigger (via keywords)
+- "I try to enter but Carla blocks me" → narrator describes blocking → quantifier detects **no movement**
 
 ## Semantic Exit Format
 Rooms in map.json define semantic exits:
@@ -28,10 +31,11 @@ Rooms in map.json define semantic exits:
 ```
 
 ## Resolution Algorithm
-1. Quantifier extracts movement intent from LLM response
-2. System matches trigger text against current room's semantic exits
-3. Keywords enable flexible matching ("go through the front gate" matches "go through")
-4. If no match: creates dynamic pseudo-room for invalid destinations
+1. Quantifier extracts movement from the *narrative outcome* in `<LatestNarration>`
+2. If the narration describes the player being blocked, stopped, or prevented from moving → **no movement**
+3. System matches trigger text against current room's semantic exits
+4. Keywords enable flexible matching ("go through the front gate" matches "go through")
+5. If no match: creates dynamic pseudo-room for invalid destinations
 
 ### Auto-Trigger Phase
 

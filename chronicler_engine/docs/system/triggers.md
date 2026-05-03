@@ -24,7 +24,11 @@ For each NPC detected in the narration:
 - This tracks encounter cycles: entering → exiting → re-entering
 
 ### 6. Trigger Evaluation
-`crate::engine::trigger_eval::evaluate_triggers` scans **ALL NPCs** in `state.npcs` (not just npcs_in_area).
+`crate::engine::trigger_eval::evaluate_triggers` scans **ALL NPCs** in `state.npcs`, but filters by room:
+- Triggers with `room_id: null` (or missing) are **global** — they fire anywhere
+- Triggers with `room_id: "some_room_id"` only fire when the player is in that room
+
+This ensures NPC introduction triggers (like Gabriella in the Entrance Hall) don't fire in the wrong location.
 
 ### 7. Condition Check
 Each trigger is checked against the current `CharacterState`:
@@ -74,6 +78,21 @@ The key variable is `currently_meeting`:
 | :--- | :--- |
 | `TimesMet` | Evaluates the `times_met` counter using `Eq`, `Lt`, or `Gte`. |
 | `HasItem` | (Planned) Checks player inventory for a specific item ID. |
+
+## Trigger Room Scoping
+
+By default, triggers are **global** — they fire regardless of where the player is. To restrict a trigger to a specific room, add `room_id`:
+
+```json
+{
+  "condition": {"TimesMet": ["Eq", 0]},
+  "action": {"name": "Gabriella Introduction", "narration_prompt": "Gabriella emerges from the shadows..."},
+  "repeat": false,
+  "room_id": "entrance_hall"
+}
+```
+
+This trigger only fires when `state.current_room_id == "entrance_hall"`.
 
 ## Trigger Actions
 | Action | Description |
@@ -126,7 +145,7 @@ Event headers:
 
 ## Key Design Decisions
 
-1. **All NPCs Evaluated**: Triggers are checked for ALL loaded NPCs, not just those in the current room. This ensures NPCs like Gabriella (who appears dynamically in narration) still have their triggers evaluated.
+1. **Room-Aware Evaluation**: Triggers are checked for ALL loaded NPCs, but filtered by `room_id`. Global triggers (no `room_id`) fire anywhere. Room-scoped triggers only fire in their designated room. This prevents introduction triggers from firing in the wrong location while still supporting dynamic appearances.
 
 2. **Quantifier Runs Once (Post-Narration)**: Single quantifier call AFTER narration generation detects both NPCs and movement intent from the generated text. This replaces the previous two-stage approach.
 

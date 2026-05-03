@@ -7,6 +7,7 @@ use crate::engine::action::Action;
 use crate::engine::action_processing::{execute_freeaction_impl, get_static_npcs};
 use crate::engine::logic::{find_room_in_map, get_current_room};
 use crate::engine::parser::parse_command;
+use crate::error::EngineError;
 use crate::model::character::NpcCard;
 use crate::model::state::{GameState, LogType};
 use crate::narrative::llm::get_llm_backend;
@@ -113,6 +114,7 @@ impl GameService for DefaultGameService {
                     .unwrap_or_default();
                 let nearby_npcs = get_static_npcs(&state_guard, &room_npc_ids);
                 let all_npcs: Vec<NpcCard> = state_guard.npcs.values().cloned().collect();
+
                 drop(state_guard);
 
                 let state_for_thread = state.clone();
@@ -140,12 +142,26 @@ impl GameService for DefaultGameService {
                         &history,
                     );
 
-                    let Ok(narration_text) = backend.narrate_action(&context) else {
-                        set_error_and_reset(
-                            &state_for_thread,
-                            "LLM Error: narration failed".to_string(),
-                        );
-                        return;
+                    let narration_text = match backend.narrate_action(&context) {
+                        Ok(t) => t,
+                        Err(e) => {
+                            let user_msg = match &e {
+                                EngineError::Narrative(msg) if msg.contains("timed out") => {
+                                    "LLM Error: request timed out".to_string()
+                                }
+                                EngineError::Narrative(msg)
+                                    if msg.contains("Failed to read response body") =>
+                                {
+                                    "LLM Error: response incomplete".to_string()
+                                }
+                                EngineError::Narrative(msg) if msg.contains("parse") => {
+                                    "LLM Error: unexpected response format".to_string()
+                                }
+                                _ => format!("LLM Error: {e}"),
+                            };
+                            set_error_and_reset(&state_for_thread, user_msg);
+                            return;
+                        }
                     };
 
                     let quantifier_backend: Box<dyn QuantifierBackendTrait> =
@@ -263,12 +279,26 @@ impl GameService for DefaultGameService {
                 &history_for_retry,
             );
 
-            let Ok(new_narration) = backend.narrate_action(&context) else {
-                set_error_and_reset(
-                    &state_clone,
-                    "LLM Error: retry narration failed".to_string(),
-                );
-                return;
+            let new_narration = match backend.narrate_action(&context) {
+                Ok(t) => t,
+                Err(e) => {
+                    let user_msg = match &e {
+                        EngineError::Narrative(msg) if msg.contains("timed out") => {
+                            "LLM Error: request timed out".to_string()
+                        }
+                        EngineError::Narrative(msg)
+                            if msg.contains("Failed to read response body") =>
+                        {
+                            "LLM Error: response incomplete".to_string()
+                        }
+                        EngineError::Narrative(msg) if msg.contains("parse") => {
+                            "LLM Error: unexpected response format".to_string()
+                        }
+                        _ => format!("LLM Error: {e}"),
+                    };
+                    set_error_and_reset(&state_clone, user_msg);
+                    return;
+                }
             };
 
             // Replace the last AI response with the new narration

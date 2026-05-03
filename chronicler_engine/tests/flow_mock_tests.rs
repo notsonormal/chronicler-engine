@@ -1,24 +1,7 @@
 //! [DOC: docs/reference/testing.md]
 
 mod test_utils;
-use playwright_rs::{Browser, LaunchOptions, Playwright};
-use std::sync::Arc;
 use test_utils::*;
-
-async fn get_shared_browser() -> (playwright_rs::Playwright, Arc<Browser>) {
-    let playwright = Playwright::launch()
-        .await
-        .expect("Failed to launch playwright");
-    let browser = playwright
-        .chromium()
-        .launch_with_options(LaunchOptions {
-            channel: Some("chrome".to_string()),
-            ..Default::default()
-        })
-        .await
-        .expect("Failed to launch chromium");
-    (playwright, Arc::new(browser))
-}
 
 #[cfg(test)]
 mod tests {
@@ -35,8 +18,7 @@ mod tests {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
         let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
 
-        // Use shared browser instead of launching new one each time
-        let (_playwright, browser) = get_shared_browser().await;
+        let (_playwright, browser) = launch_chrome().await;
         let page = browser.new_page().await.unwrap();
 
         goto_with_connection_check(&page, port)
@@ -64,7 +46,7 @@ mod tests {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
         let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
 
-        let (_playwright, browser) = get_shared_browser().await;
+        let (_playwright, browser) = launch_chrome().await;
         let page = browser.new_page().await.unwrap();
 
         goto_with_connection_check(&page, port)
@@ -88,7 +70,7 @@ mod tests {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
         let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
 
-        let (_playwright, browser) = get_shared_browser().await;
+        let (_playwright, browser) = launch_chrome().await;
         let page = browser.new_page().await.unwrap();
 
         goto_with_connection_check(&page, port)
@@ -112,7 +94,7 @@ mod tests {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
         let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
 
-        let (_playwright, browser) = get_shared_browser().await;
+        let (_playwright, browser) = launch_chrome().await;
         let page = browser.new_page().await.unwrap();
 
         goto_with_connection_check(&page, port)
@@ -137,7 +119,8 @@ mod tests {
         .await
         .unwrap();
 
-        // Immediately check status (synchronous response)
+        // Look is processed synchronously — wait for Ready then verify
+        wait_for_status_ready(&page).await;
         let status: String = page
             .evaluate::<(), String>(
                 "document.querySelector('#status-display')?.innerText || ''",
@@ -145,15 +128,14 @@ mod tests {
             )
             .await
             .unwrap();
+        assert!(
+            status.contains("Ready"),
+            "Status should be Ready after look command: {status}"
+        );
 
-        println!("Status after look: {status}");
-
-        // Status should show "Thinking..." or "Ready" (timing dependent)
-        let has_status = status.contains("Thinking") || status.contains("Ready");
-        assert!(has_status, "Status should show 'Thinking...' or 'Ready'");
-
-        // Wait for completion to avoid polluting next test
-        wait_for_status_ready(&page).await;
+        // A new narration entry should have been added
+        let entries = wait_for_log_entries(&page, 1).await;
+        assert!(entries >= 1, "Look command should add narration entries");
 
         let _ = browser.close().await;
     }

@@ -59,12 +59,6 @@ mod tests {
     #[test]
     fn test_get_available_exits_multiple() {
         // Move to hall which has 3 exits
-        {
-            let state = create_navigation_test_state();
-            let mut guard = state.lock().unwrap();
-            guard.current_room_id = "hall".to_string();
-        }
-
         let state = create_navigation_test_state();
         {
             let mut guard = state.lock().unwrap();

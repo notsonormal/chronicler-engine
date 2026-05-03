@@ -36,7 +36,7 @@ flowchart TD
 
 ## The LLM Context Pipeline
 
-When the engine needs LLM narration (during Phase 4), it builds a comprehensive prompt using the **SillyTavern-style 8-layer system** (see `reference/sillytavern_prompt_system.md`):
+When the engine needs LLM narration (during Phase 4), it builds a comprehensive prompt using the **8-layer system** (see [`prompt_system.md`](prompt_system.md)):
 
 ```mermaid
 flowchart TD

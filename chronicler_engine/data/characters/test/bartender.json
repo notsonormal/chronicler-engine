@@ -7,5 +7,6 @@
     "example_dialogue": "Welcome, traveler! What can I get you?",
     "inventory": [],
     "profile_image": "data/images/test_headshot_1.png",
-    "triggers": []
+    "triggers": [],
+    "summary": "A friendly tavern keeper with a bushy beard and kind eyes. Helpful, cheerful, and always ready for a chat. Runs the Test Tavern and knows everyone in the village."
 }

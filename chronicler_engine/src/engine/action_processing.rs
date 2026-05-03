@@ -264,6 +264,7 @@ mod execute_freeaction_impl_tests {
                 personality: "Brave".to_string(),
                 scenario: "Test".to_string(),
                 example_dialogue: "Hello!".to_string(),
+                summary: None,
                 profile_image: None,
                 headshot_image: None,
             },
@@ -280,6 +281,7 @@ mod execute_freeaction_impl_tests {
                 personality: "Friendly".to_string(),
                 scenario: "Test scenario".to_string(),
                 example_dialogue: "Hello!".to_string(),
+                summary: None,
                 profile_image: None,
                 headshot_image: None,
             },
@@ -300,6 +302,7 @@ mod execute_freeaction_impl_tests {
                 personality: "Friendly".to_string(),
                 scenario: "Test scenario".to_string(),
                 example_dialogue: "Hello!".to_string(),
+                summary: None,
                 profile_image: None,
                 headshot_image: None,
             },
@@ -455,6 +458,7 @@ mod execute_freeaction_impl_tests {
                 personality: "Friendly".to_string(),
                 scenario: "Test scenario".to_string(),
                 example_dialogue: "Hello!".to_string(),
+                summary: None,
                 profile_image: None,
                 headshot_image: None,
             },
@@ -469,6 +473,7 @@ mod execute_freeaction_impl_tests {
                     narration_prompt: "Carla greets you warmly!".to_string(),
                 },
                 repeat: false,
+                room_id: None,
             }],
         };
 
@@ -595,6 +600,7 @@ mod tests {
                 personality: "Friendly".to_string(),
                 scenario: "Test scenario".to_string(),
                 example_dialogue: "Hello!".to_string(),
+                summary: None,
                 profile_image: None,
                 headshot_image: None,
             },
@@ -612,6 +618,7 @@ mod tests {
                 personality: "Brave".to_string(),
                 scenario: "Test scenario".to_string(),
                 example_dialogue: "Hello!".to_string(),
+                summary: None,
                 profile_image: None,
                 headshot_image: None,
             },
@@ -774,6 +781,7 @@ mod tests {
                 narration_prompt: "Carla greets you warmly!".to_string(),
             },
             repeat: false,
+            room_id: None,
         };
 
         // Replace the NPC with one that has a named trigger
@@ -785,6 +793,7 @@ mod tests {
                 personality: "Friendly".to_string(),
                 scenario: "Test scenario".to_string(),
                 example_dialogue: "Hello!".to_string(),
+                summary: None,
                 profile_image: None,
                 headshot_image: None,
             },

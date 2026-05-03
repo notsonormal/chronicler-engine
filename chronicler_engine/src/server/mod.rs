@@ -42,6 +42,34 @@ fn build_router(app_state: AppState) -> Router {
             "/settings",
             post(crate::server::settings_fragment::save_settings_handler),
         )
+        .route(
+            "/connections/add",
+            post(crate::server::settings_fragment::add_connection_handler),
+        )
+        .route(
+            "/fragment/connections/:id",
+            get(crate::server::settings_fragment::connection_card_fragment),
+        )
+        .route(
+            "/fragment/connections/:id/edit",
+            get(crate::server::settings_fragment::edit_connection_form),
+        )
+        .route(
+            "/connections/:id/edit",
+            post(crate::server::settings_fragment::edit_connection_handler),
+        )
+        .route(
+            "/connections/:id/delete",
+            post(crate::server::settings_fragment::delete_connection_handler),
+        )
+        .route(
+            "/connections/:id/set-narrator",
+            post(crate::server::settings_fragment::set_narrator_handler),
+        )
+        .route(
+            "/connections/:id/set-quantifier",
+            post(crate::server::settings_fragment::set_quantifier_handler),
+        )
         .nest_service("/assets", ServeDir::new("assets"))
         .nest_service("/data", ServeDir::new("data"))
         .fallback_service(ServeDir::new("assets"))
@@ -251,7 +279,10 @@ mod tests {
     #[test]
     fn test_app_settings_default() {
         let settings = AppSettings::default();
-        assert!(settings.llm_model.contains("gpt-4o-mini") || settings.llm_model.is_empty());
+        let narrator = settings
+            .get_narration_connection()
+            .expect("narrator exists");
+        assert!(narrator.model.contains("gpt-4o-mini") || narrator.model.is_empty());
     }
 }
 

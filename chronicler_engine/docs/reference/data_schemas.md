@@ -108,6 +108,7 @@ Attached to an NPC. Defines a condition and the narration to inject when that co
   - `TimesMet`: Array of `[operator, value]`. Operators: `Eq` (equal), `Lt` (less than), `Gte` (greater than or equal)
 - `action.narration_prompt`: The text injected into the continuation LLM prompt when this trigger fires
 - `repeat`: If `false`, fires only once (first time condition is met). If `true`, fires whenever condition is met.
+- `room_id` (optional): If set, this trigger only fires when the player is in this room. If omitted or `null`, the trigger is global.
 
 ## NpcEncounterState Schema (NEW)
 Tracks character state for a specific NPC. Stored in `GameState.character_state`.

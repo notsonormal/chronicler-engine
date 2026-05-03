@@ -4,8 +4,9 @@ use crate::error::EngineError;
 use crate::model::character::NpcCard;
 use crate::model::llm_backend::LlmBackendType;
 use crate::model::map::Room;
+use crate::model::settings::Connection;
 use crate::model::state::LogEntry;
-use crate::narrative::llm_client::{call_ollama, call_openrouter_with_model, get_quantifier_model};
+use crate::narrative::llm_client::{call_ollama, call_openrouter_with_model};
 
 /// Confidence level of the quantifier's NPC presence detection.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -120,7 +121,7 @@ impl<'a> QuantifierPromptBuilder<'a> {
             r#"<QuantifierTask>
 You are a scene quantifier for a text adventure game.
 Your task is to determine which NPCs are present in the current room
-and whether the player is moving to a new location.
+and whether the player actually moved to a new location.
 
 Respond ONLY with a JSON object in this exact format:
 {"npcs_in_room": ["id1", "id2"], "movement": {"type": "entering|in|leaving", "destination": "room_id"}}
@@ -129,9 +130,16 @@ Rules:
 - Only include NPCs that would logically be in the room based on context.
 - NPCs from the previous room may have followed the player.
 - Use the exact NPC IDs provided in the AvailableNpcIds list.
-- Movement is determined by narrative context, not explicit commands.
+- Movement is determined ONLY by what happens in <LatestNarration>, not by earlier history.
+- If the player is blocked, stopped, prevented, or fails to move in <LatestNarration>, they have NOT moved.
+- An NPC interposing, blocking a path, or saying "you can't go" means the player remains.
 - If no NPCs are present, return an empty array: {"npcs_in_room": []}
 - If no movement detected, set type to null: {"movement": {"type": null}}
+
+Examples:
+- Narration: "You walk through the door into the kitchen." → {"movement": {"type": "entering", "destination": "kitchen"}}
+- Narration: "The guard blocks your path. 'Halt!' he shouts." → {"movement": {"type": null}}
+- Narration: "She swiftly interposes herself between you and the gate." → {"movement": {"type": null}}
 </QuantifierTask>
 
 <AvailableNpcIds>
@@ -207,7 +215,7 @@ Rules:
         }
 
         prompt.push_str(&format!(
-            "<PlayerAction>\n  {}: {}\n</PlayerAction>\n\n",
+            "<LatestNarration>\n  {}: {}\n</LatestNarration>\n\n",
             self.context.player_name, self.context.player_action
         ));
 
@@ -215,7 +223,9 @@ Rules:
             r#"<Query>
 Based on the context above, determine:
 - Which NPCs are present in the current room
-- Whether the player is entering, leaving, or remaining
+- Whether the player actually entered, left, or remained in place
+
+IMPORTANT: Base your decision ONLY on what happens in <LatestNarration>, not on what the player attempted in <RecentHistory>.
 
 Respond ONLY with the JSON format specified in <QuantifierTask>.
 </Query>
@@ -482,7 +492,8 @@ pub fn extract_movement_from_text(
 fn quantify_room_with_llm_call(
     context: &QuantifierPromptContext,
     fallback_npc_ids: &[String],
-    llm_call: impl FnOnce(&str, &str, &str) -> Result<String, String>,
+    model: &str,
+    mut llm_call: impl FnMut(&str, &str, &str) -> Result<String, String>,
 ) -> Result<QuantifierResult, EngineError> {
     let builder = QuantifierPromptBuilder::new(QuantifierPromptContext {
         room: context.room,
@@ -495,12 +506,9 @@ fn quantify_room_with_llm_call(
     });
 
     let (system_prompt, user_prompt) = builder.build();
-    let settings = crate::settings::load_settings().unwrap_or_default();
-    let model = get_quantifier_model(&settings);
 
     log::info!(
-        "[Quantifier] Calling model: {} for room: {}",
-        model,
+        "[Quantifier] Calling model: {model} for room: {}",
         context.room.name
     );
 
@@ -510,73 +518,123 @@ fn quantify_room_with_llm_call(
         .map(|npc| npc.id.clone())
         .collect();
 
-    match llm_call(&system_prompt, &user_prompt, &model) {
-        Ok(response) => {
-            log::info!("[Quantifier] Player action: {}", context.player_action);
-            log::info!("[Quantifier] Received response ({} chars)", response.len());
-            log::debug!(
-                "[Quantifier] Response: {}",
-                &response[..response.len().min(200)]
-            );
+    let max_attempts = 2;
+    let mut last_error = None;
 
-            let result =
-                parse_quantifier_response_with_movement(&response, &known_ids, context.all_rooms);
-            log::info!(
-                "[Quantifier] Detected NPCs: {:?} (confidence: {:?})",
-                result.npcs.npc_ids,
-                result.npcs.confidence
-            );
-            if let Some(mt) = &result.movement.movement_type {
+    for attempt in 1..=max_attempts {
+        match llm_call(&system_prompt, &user_prompt, model) {
+            Ok(response) => {
+                log::info!("[Quantifier] Player action: {}", context.player_action);
                 log::info!(
-                    "[Quantifier] Detected movement: {:?} destination: {:?}",
-                    mt,
-                    result.movement.destination
+                    "[Quantifier] Received response ({} chars) [attempt {}/{}]",
+                    response.len(),
+                    attempt,
+                    max_attempts
                 );
-            } else {
-                log::info!("[Quantifier] No movement detected");
+                log::debug!(
+                    "[Quantifier] Response: {}",
+                    &response[..response.len().min(200)]
+                );
+
+                let result = parse_quantifier_response_with_movement(
+                    &response,
+                    &known_ids,
+                    context.all_rooms,
+                );
+                log::info!(
+                    "[Quantifier] Detected NPCs: {:?} (confidence: {:?})",
+                    result.npcs.npc_ids,
+                    result.npcs.confidence
+                );
+                if let Some(mt) = &result.movement.movement_type {
+                    log::info!(
+                        "[Quantifier] Detected movement: {:?} destination: {:?}",
+                        mt,
+                        result.movement.destination
+                    );
+                } else {
+                    log::info!("[Quantifier] No movement detected");
+                }
+
+                // Retry on Low confidence (unless this was the last attempt)
+                if result.npcs.confidence == QuantifierConfidence::Low && attempt < max_attempts {
+                    log::warn!("[Quantifier] Low confidence on attempt {attempt}, retrying...");
+                    continue;
+                }
+
+                return Ok(result);
             }
-            Ok(result)
+            Err(e) => {
+                log::warn!("[Quantifier] LLM call failed on attempt {attempt}: {e}");
+                last_error = Some(e);
+                if attempt < max_attempts {
+                    continue;
+                }
+            }
         }
-        Err(e) => {
-            log::warn!("[Quantifier] LLM call failed: {e}, using fallback NPC IDs");
-            Ok(QuantifierResult {
-                npcs: QuantifierParseResult {
-                    npc_ids: fallback_npc_ids.to_vec(),
-                    confidence: QuantifierConfidence::Low,
-                },
-                movement: MovementParseResult {
-                    movement_type: None,
-                    destination: None,
-                    confidence: QuantifierConfidence::Low,
-                },
-            })
+    }
+
+    log::warn!(
+        "[Quantifier] All attempts failed, using fallback NPC IDs. Last error: {}",
+        last_error.as_deref().unwrap_or("unknown")
+    );
+    Ok(QuantifierResult {
+        npcs: QuantifierParseResult {
+            npc_ids: fallback_npc_ids.to_vec(),
+            confidence: QuantifierConfidence::Low,
+        },
+        movement: MovementParseResult {
+            movement_type: None,
+            destination: None,
+            confidence: QuantifierConfidence::Low,
+        },
+    })
+}
+
+/// OpenRouter-based quantifier backend.
+/// [DOC: docs/system/llm_processing.md]
+pub struct QuantifierBackend {
+    api_key: String,
+    model: String,
+}
+
+impl QuantifierBackend {
+    fn from_connection(connection: &Connection) -> Self {
+        Self {
+            api_key: connection.resolve_api_key().unwrap_or_default(),
+            model: connection.model.clone(),
         }
     }
 }
 
-/// [DOC: docs/system/llm_processing.md]
-pub struct QuantifierBackend;
-
-impl QuantifierBackend {
-    /// [DOC: docs/system/llm_processing.md]
-    pub fn quantify_room(
+impl QuantifierBackendTrait for QuantifierBackend {
+    fn quantify_room(
         &self,
         context: &QuantifierPromptContext,
         fallback_npc_ids: &[String],
     ) -> Result<QuantifierResult, EngineError> {
-        let api_key = std::env::var("OPENROUTER_API_KEY").map_err(|_| {
-            log::debug!("[Quantifier] OPENROUTER_API_KEY not set");
-            crate::error::EngineError::Config("OPENROUTER_API_KEY not set".into())
-        })?;
-
-        quantify_room_with_llm_call(context, fallback_npc_ids, |system, user, model| {
-            call_openrouter_with_model(&api_key, system, user, model)
+        let api_key = self.api_key.clone();
+        let model = self.model.clone();
+        quantify_room_with_llm_call(context, fallback_npc_ids, &model, |system, user, m| {
+            call_openrouter_with_model(&api_key, system, user, m)
         })
     }
 }
 
 /// Quantifier backend that calls Ollama API.
-pub struct OllamaQuantifierBackend;
+pub struct OllamaQuantifierBackend {
+    base_url: String,
+    model: String,
+}
+
+impl OllamaQuantifierBackend {
+    fn from_connection(connection: &Connection) -> Self {
+        Self {
+            base_url: connection.resolve_base_url(),
+            model: connection.model.clone(),
+        }
+    }
+}
 
 impl QuantifierBackendTrait for OllamaQuantifierBackend {
     fn quantify_room(
@@ -584,12 +642,10 @@ impl QuantifierBackendTrait for OllamaQuantifierBackend {
         context: &QuantifierPromptContext,
         fallback_npc_ids: &[String],
     ) -> Result<QuantifierResult, EngineError> {
-        let settings = crate::settings::load_settings().unwrap_or_default();
-        let base_url =
-            std::env::var("OLLAMA_BASE_URL").unwrap_or_else(|_| settings.ollama_base_url.clone());
-
-        quantify_room_with_llm_call(context, fallback_npc_ids, |system, user, model| {
-            call_ollama(&base_url, model, system, user)
+        let base_url = self.base_url.clone();
+        let model = self.model.clone();
+        quantify_room_with_llm_call(context, fallback_npc_ids, &model, |system, user, m| {
+            call_ollama(&base_url, m, system, user)
         })
     }
 }
@@ -717,7 +773,9 @@ pub trait QuantifierBackendTrait: Send + Sync {
 }
 
 /// Real quantifier backend that calls OpenRouter API.
-pub struct RealQuantifierBackend;
+pub struct RealQuantifierBackend {
+    inner: QuantifierBackend,
+}
 
 impl QuantifierBackendTrait for RealQuantifierBackend {
     fn quantify_room(
@@ -725,7 +783,7 @@ impl QuantifierBackendTrait for RealQuantifierBackend {
         context: &QuantifierPromptContext,
         fallback_npc_ids: &[String],
     ) -> Result<QuantifierResult, EngineError> {
-        QuantifierBackend.quantify_room(context, fallback_npc_ids)
+        self.inner.quantify_room(context, fallback_npc_ids)
     }
 }
 
@@ -787,14 +845,25 @@ impl QuantifierBackendTrait for MockQuantifierBackend {
     }
 }
 
-/// Factory function that returns the appropriate quantifier backend based on settings.
+/// Create a quantifier backend for a specific connection.
+pub fn get_quantifier_backend_for(connection: &Connection) -> Box<dyn QuantifierBackendTrait> {
+    match connection.provider {
+        LlmBackendType::Mock => Box::new(MockQuantifierBackend::default()),
+        LlmBackendType::Ollama => Box::new(OllamaQuantifierBackend::from_connection(connection)),
+        LlmBackendType::OpenRouter | LlmBackendType::DeepSeek => Box::new(RealQuantifierBackend {
+            inner: QuantifierBackend::from_connection(connection),
+        }),
+    }
+}
+
+/// Get the quantifier backend for the current quantifier connection.
 pub fn get_quantifier_backend() -> Box<dyn QuantifierBackendTrait> {
     let settings = crate::settings::load_settings().unwrap_or_default();
-    match settings.quantifier_backend {
-        LlmBackendType::Mock => Box::new(MockQuantifierBackend::default()),
-        LlmBackendType::Ollama => Box::new(OllamaQuantifierBackend),
-        LlmBackendType::OpenRouter | LlmBackendType::DeepSeek => Box::new(RealQuantifierBackend),
-    }
+    let connection = settings
+        .get_quantifier_connection()
+        .cloned()
+        .unwrap_or_else(|| Connection::new("default", "Default", LlmBackendType::Mock));
+    get_quantifier_backend_for(&connection)
 }
 
 #[cfg(test)]
@@ -828,6 +897,7 @@ mod tests {
                 personality: "Mysterious".to_string(),
                 scenario: "Investigating".to_string(),
                 example_dialogue: String::new(),
+                summary: None,
                 profile_image: None,
                 headshot_image: None,
             },
@@ -1742,6 +1812,144 @@ mod tests {
                 .all(|e| e.event_type == NpcEventType::Entered)
         );
         assert_eq!(result.confidence, QuantifierConfidence::Medium);
+    }
+
+    #[test]
+    fn test_quantifier_prompt_uses_latest_narration_tag() {
+        let room = make_room();
+        let all_npcs: Vec<NpcCard> = vec![];
+        let previous_npcs: Vec<NpcCard> = vec![];
+        let history: Vec<LogEntry> = vec![];
+
+        let context = QuantifierPromptContext {
+            room: &room,
+            previous_room_npcs: &previous_npcs,
+            all_known_npcs: &all_npcs,
+            all_rooms: &[],
+            player_name: "Hero",
+            recent_history: &history,
+            player_action: "I look around.",
+        };
+
+        let builder = QuantifierPromptBuilder::new(context);
+        let (_system, user) = builder.build();
+
+        // Should use <LatestNarration> instead of <PlayerAction>
+        assert!(
+            user.contains("<LatestNarration>"),
+            "User prompt should contain <LatestNarration> tag"
+        );
+        assert!(
+            !user.contains("<PlayerAction>"),
+            "User prompt should not contain old <PlayerAction> tag"
+        );
+    }
+
+    #[test]
+    fn test_quantifier_prompt_references_latest_narration_in_query() {
+        let room = make_room();
+        let all_npcs: Vec<NpcCard> = vec![];
+        let previous_npcs: Vec<NpcCard> = vec![];
+        let history: Vec<LogEntry> = vec![];
+
+        let context = QuantifierPromptContext {
+            room: &room,
+            previous_room_npcs: &previous_npcs,
+            all_known_npcs: &all_npcs,
+            all_rooms: &[],
+            player_name: "Hero",
+            recent_history: &history,
+            player_action: "I look around.",
+        };
+
+        let builder = QuantifierPromptBuilder::new(context);
+        let (_system, user) = builder.build();
+
+        // Query should tell LLM to focus on <LatestNarration>
+        assert!(
+            user.contains("<LatestNarration>"),
+            "Query should reference <LatestNarration>"
+        );
+    }
+
+    #[test]
+    fn test_quantifier_retry_on_low_confidence() {
+        let room = make_room();
+        let carla = make_npc("carla", "Carla");
+        let all_npcs = vec![carla];
+        let previous_npcs: Vec<NpcCard> = vec![];
+        let history: Vec<LogEntry> = vec![];
+
+        let context = QuantifierPromptContext {
+            room: &room,
+            previous_room_npcs: &previous_npcs,
+            all_known_npcs: &all_npcs,
+            all_rooms: &[],
+            player_name: "Hero",
+            recent_history: &history,
+            player_action: "I look around.",
+        };
+
+        let mut call_count = 0;
+        let mock_llm = |_: &str, _: &str, _: &str| -> Result<String, String> {
+            call_count += 1;
+            if call_count == 1 {
+                // First call: completely invalid response → Low confidence
+                Ok("I am not sure what to say here.".to_string())
+            } else {
+                // Second call: valid JSON → High confidence
+                Ok(r#"{"npcs_in_room": ["carla"], "movement": {"type": null}}"#.to_string())
+            }
+        };
+
+        let result =
+            quantify_room_with_llm_call(&context, &["carla".to_string()], "mock", mock_llm);
+
+        assert!(result.is_ok());
+        let result = result.unwrap();
+
+        // Should have retried (2 calls)
+        assert_eq!(call_count, 2, "Expected retry on low confidence");
+
+        // Should get the high-confidence result from the second call
+        assert_eq!(result.npcs.npc_ids, vec!["carla".to_string()]);
+        assert_eq!(result.npcs.confidence, QuantifierConfidence::High);
+        assert_eq!(result.movement.movement_type, None);
+    }
+
+    #[test]
+    fn test_quantifier_no_retry_when_high_confidence() {
+        let room = make_room();
+        let carla = make_npc("carla", "Carla");
+        let all_npcs = vec![carla];
+        let previous_npcs: Vec<NpcCard> = vec![];
+        let history: Vec<LogEntry> = vec![];
+
+        let context = QuantifierPromptContext {
+            room: &room,
+            previous_room_npcs: &previous_npcs,
+            all_known_npcs: &all_npcs,
+            all_rooms: &[],
+            player_name: "Hero",
+            recent_history: &history,
+            player_action: "I look around.",
+        };
+
+        let mut call_count = 0;
+        let mock_llm = |_: &str, _: &str, _: &str| -> Result<String, String> {
+            call_count += 1;
+            Ok(r#"{"npcs_in_room": ["carla"], "movement": {"type": null}}"#.to_string())
+        };
+
+        let result =
+            quantify_room_with_llm_call(&context, &["carla".to_string()], "mock", mock_llm);
+
+        assert!(result.is_ok());
+        let result = result.unwrap();
+
+        // Should NOT retry when first response is high confidence
+        assert_eq!(call_count, 1, "Should not retry on high confidence");
+        assert_eq!(result.npcs.confidence, QuantifierConfidence::High);
     }
 }
 

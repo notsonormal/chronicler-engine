@@ -1,5 +1,7 @@
 # Reference: Normal System Prompt
 
+> **Context**: This document contains the actual prompt text for **Layer 0 (System Prompt)** and **Layer 7 (PHI)** of the Chronicler Engine's 8-layer narrative prompt system. For the overall architecture, see [`system/prompt_system.md`](../system/prompt_system.md).
+
 The normal system prompt (Layer 0) is rendered by `PromptBuilder::render_system_layer()` in `src/narrative/prompt.rs`. It uses full XML tagging for consistency with other prompt layers.
 
 ## System Prompt Structure

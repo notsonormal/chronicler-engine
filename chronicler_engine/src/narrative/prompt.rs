@@ -1,4 +1,4 @@
-//! [DOC: docs/reference/sillytavern_prompt_system.md]
+//! [DOC: docs/system/prompt_system.md]
 
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -20,7 +20,7 @@ pub fn sanitize_for_prompt(input: &str) -> String {
         .to_string()
 }
 
-/// [DOC: docs/reference/sillytavern_prompt_system.md]
+/// [DOC: docs/system/prompt_system.md]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PromptLayer {
     /// Layer 0: System prompt - global game rules and AI role
@@ -54,16 +54,16 @@ pub enum PhiMode {
 /// [DOC: docs/system/llm_processing.md]
 pub mod budget {
     /// Maximum tokens allocated for the entire context window.
-    pub const MAX_CONTEXT_TOKENS: u32 = 8192;
+    pub const MAX_CONTEXT_TOKENS: u32 = 32000;
 
     /// Maximum tokens for history (conversation log).
-    pub const MAX_HISTORY_TOKENS: u32 = 4096;
+    pub const MAX_HISTORY_TOKENS: u32 = 16000;
 
     /// Maximum tokens for system prompt.
     pub const MAX_SYSTEM_TOKENS: u32 = 1024;
 
     /// Maximum tokens for LLM response generation.
-    pub const MAX_RESPONSE_TOKENS: u32 = 512;
+    pub const MAX_RESPONSE_TOKENS: u32 = 1024;
 }
 
 const SYSTEM_PROMPT_TEMPLATE: &str = r#"<SystemPrompt>
@@ -357,12 +357,12 @@ impl<'a> PromptBuilder<'a> {
         output
     }
 
-    /// Layer 2: NPC cards - all NPCs with presence status + in-room NPCs
+    /// Layer 2: NPC cards - known NPCs roster + in-room NPCs with full detail
     fn render_npc_cards_layer(&self) -> String {
         let mut output = String::new();
 
-        // Section 1: All NPCs with presence status
-        output.push_str("<Npcs>\n");
+        // Section 1: All known NPCs with condensed cards
+        output.push_str("<KnownNpcs>\n");
         if self.all_npcs.is_empty() {
             output.push_str("No characters in this world.\n");
         } else {
@@ -371,20 +371,38 @@ impl<'a> PromptBuilder<'a> {
 
             for npc in self.all_npcs {
                 let presence = if in_area_ids.contains(npc.id.as_str()) {
-                    "(IN ROOM)"
+                    "(in room)"
                 } else {
                     "(elsewhere)"
                 };
                 output.push_str(&format!("- {} {}\n", npc.sheet.name, presence));
-                output.push_str(&format!("  Description: {}\n", npc.sheet.description));
-                output.push_str(&format!("  Personality: {}\n", npc.sheet.personality));
-                if !npc.sheet.scenario.is_empty() {
-                    output.push_str(&format!("  Context: {}\n", npc.sheet.scenario));
+
+                // Use explicit summary if available, otherwise first 3 lines of description
+                let summary_text = npc
+                    .sheet
+                    .summary
+                    .as_deref()
+                    .filter(|s| !s.is_empty())
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| {
+                        npc.sheet
+                            .description
+                            .lines()
+                            .take(3)
+                            .collect::<Vec<_>>()
+                            .join("\n")
+                    });
+
+                // Indent each line of the summary
+                for line in summary_text.lines() {
+                    output.push_str(&format!("  {line}\n"));
                 }
                 output.push('\n');
             }
         }
-        output.push_str("</Npcs>\n\n");
+        output.push_str("</KnownNpcs>\n\n");
+
+        // Section 2: Present NPCs with full character cards
         output.push_str("<NpcsInRoom>\n");
         if self.npcs_in_area.is_empty() {
             output.push_str("No NPCs are present in this location.\n");
@@ -494,7 +512,7 @@ impl<'a> PromptBuilder<'a> {
     }
 }
 
-/// [DOC: docs/reference/sillytavern_prompt_system.md]
+/// [DOC: docs/system/prompt_system.md]
 pub fn make_prompt_context<'a>(
     world: &'a WorldCard,
     room: &'a Room,
@@ -533,8 +551,8 @@ mod tests {
 
     #[test]
     fn test_token_budgets() {
-        assert_eq!(budget::MAX_CONTEXT_TOKENS, 8192);
-        assert_eq!(budget::MAX_HISTORY_TOKENS, 4096);
+        assert_eq!(budget::MAX_CONTEXT_TOKENS, 32000);
+        assert_eq!(budget::MAX_HISTORY_TOKENS, 16000);
         assert_eq!(budget::MAX_SYSTEM_TOKENS, 1024);
     }
 
@@ -686,6 +704,7 @@ mod tests {
                 personality: "Curious and bold".to_string(),
                 scenario: "Exploring the world".to_string(),
                 example_dialogue: String::new(),
+                summary: None,
                 profile_image: None,
                 headshot_image: None,
             },
@@ -702,6 +721,7 @@ mod tests {
                 personality: "Serious and vigilant".to_string(),
                 scenario: "Standing watch".to_string(),
                 example_dialogue: String::new(),
+                summary: None,
                 profile_image: None,
                 headshot_image: None,
             },
@@ -753,7 +773,7 @@ mod tests {
         // Check all layer headers are present
         assert!(result.contains("<SystemPrompt>"));
         assert!(result.contains("<GameState>"));
-        assert!(result.contains("<Npcs>"));
+        assert!(result.contains("<KnownNpcs>"));
         assert!(result.contains("<NpcsInRoom>"));
         assert!(result.contains("<PlayerCharacter>"));
         assert!(result.contains("<WorldLore>"));
@@ -861,7 +881,7 @@ mod tests {
 
         let result = builder.build().expect("build should succeed");
 
-        assert!(result.contains("<Npcs>"));
+        assert!(result.contains("<KnownNpcs>"));
         assert!(result.contains("Guard"));
         assert!(result.contains("A stern guard"));
     }
@@ -885,7 +905,7 @@ mod tests {
 
         let result = builder.build().expect("build should succeed");
 
-        assert!(result.contains("<Npcs>"));
+        assert!(result.contains("<KnownNpcs>"));
         assert!(result.contains("No NPCs are present"));
     }
 

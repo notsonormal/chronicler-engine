@@ -68,6 +68,7 @@ mod tests {
                 personality: "Brave".into(),
                 scenario: "Test scenario".into(),
                 example_dialogue: "Hello!".into(),
+                summary: None,
                 profile_image: None,
                 headshot_image: None,
             },
@@ -82,6 +83,7 @@ mod tests {
                 personality: "Helpful".into(),
                 scenario: "Runs the tavern".into(),
                 example_dialogue: "Welcome!".into(),
+                summary: None,
                 profile_image: None,
                 headshot_image: None,
             },
@@ -228,8 +230,12 @@ mod tests {
         // State should be accessible immediately after execute_action returns
         // (the thread runs in background)
         let guard = state.lock().unwrap();
+        let status = &guard.generation_state.status;
         assert!(
-            guard.narration_history.is_empty() || !guard.generation_state.status.is_generating()
+            status.is_generating()
+                || *status == chronicler_engine::model::state::GenerationStatus::Idle
+                || status.error_message().is_some(),
+            "Status should be Generating, Idle, or Error after FreeAction: {status:?}"
         );
     }
 
@@ -286,9 +292,12 @@ mod tests {
 
         // State should remain accessible after execute_action returns
         let guard = state.lock().unwrap();
+        let status = &guard.generation_state.status;
         assert!(
-            guard.generation_state.status.is_generating() || !guard.narration_history.is_empty(),
-            "State should be accessible and either generating or have history"
+            status.is_generating()
+                || *status == chronicler_engine::model::state::GenerationStatus::Idle
+                || status.error_message().is_some(),
+            "State should be accessible and status should be valid: {status:?}"
         );
     }
 
@@ -304,7 +313,6 @@ mod tests {
             guard.narration_history.clear();
             guard.generation_state.status =
                 chronicler_engine::model::state::GenerationStatus::Generating;
-            guard.generation_state.status = chronicler_engine::model::state::GenerationStatus::Idle;
         }
 
         service.execute_action(

@@ -4,7 +4,7 @@ use askama::Template;
 use axum::{Form, extract::State, response::Html};
 
 use crate::model::llm_backend::LlmBackendType;
-use crate::model::settings::AppSettings;
+use crate::model::settings::{AppSettings, Connection};
 use crate::server::AppState;
 
 /// [DOC: docs/architecture/system.md]
@@ -16,82 +16,105 @@ pub fn parse_api_key(s: &str) -> Option<String> {
     }
 }
 
+fn provider_option_html(value: &str, label: &str, selected: bool) -> String {
+    let sel = if selected { " selected" } else { "" };
+    format!(r#"<option value="{value}"{sel}>{label}</option>"#)
+}
+
+fn provider_options_html(selected: &str) -> String {
+    [
+        ("openrouter", "OpenRouter"),
+        ("deepseek", "DeepSeek"),
+        ("ollama", "Ollama"),
+    ]
+    .iter()
+    .map(|(v, l)| provider_option_html(v, l, *v == selected))
+    .collect::<Vec<_>>()
+    .join("\n")
+}
+
+fn html_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+}
+
 #[derive(Template)]
 #[template(
     source = r##"
 <div class="settings-panel">
-    <h2>LLM Settings</h2>
-    <form hx-post="/settings" hx-target="#settings-status">
+    <h2>Connections</h2>
+    {% for conn in connections %}
+    <div class="connection-card">
+        <div class="card-header">
+            <span class="card-title">{{ conn.name }}</span>
+            <div class="card-badges">
+                {% if conn.id == narration_connection_id %}<span class="badge">Narrator</span>{% endif %}
+                {% if conn.id == quantifier_connection_id %}<span class="badge quantifier">Quantifier</span>{% endif %}
+            </div>
+        </div>
+        <div class="card-details">
+            {{ conn.provider|fmt("{:?}") }} — {{ conn.model }}
+        </div>
+        <div class="card-actions">
+            <button hx-get="/fragment/connections/{{ conn.id }}/edit" hx-target="closest .connection-card" hx-swap="outerHTML">Edit</button>
+            <button hx-post="/connections/{{ conn.id }}/delete" hx-confirm="Delete this connection?" hx-target="closest .connection-card" hx-swap="outerHTML swap:0.3s" class="danger">Delete</button>
+            {% if conn.id != narration_connection_id %}
+            <button hx-post="/connections/{{ conn.id }}/set-narrator" hx-target=".settings-panel" hx-swap="innerHTML" class="primary">Set as Narrator</button>
+            {% endif %}
+            {% if conn.id != quantifier_connection_id %}
+            <button hx-post="/connections/{{ conn.id }}/set-quantifier" hx-target=".settings-panel" hx-swap="innerHTML" class="primary">Set as Quantifier</button>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+
+    <h3>Add Connection</h3>
+    <form hx-post="/connections/add" hx-target=".settings-panel" hx-swap="innerHTML">
         <div class="form-group">
-            <label for="llm_backend">Narrative Backend</label>
-            <select name="llm_backend" id="llm_backend">
-                <option value="openrouter" {% if backend_openrouter %}selected{% endif %}>OpenRouter</option>
-                <option value="deepseek" {% if backend_deepseek %}selected{% endif %}>DeepSeek</option>
-                <option value="ollama" {% if backend_ollama %}selected{% endif %}>Ollama</option>
+            <label for="conn_name">Name</label>
+            <input type="text" id="conn_name" name="conn_name" placeholder="My OpenRouter" />
+        </div>
+        <div class="form-group">
+            <label for="conn_provider">Provider</label>
+            <select name="conn_provider" id="conn_provider">
+                {{ provider_options|safe }}
             </select>
         </div>
         <div class="form-group">
-            <label for="quantifier_backend">Quantifier Backend</label>
-            <select name="quantifier_backend" id="quantifier_backend">
-                <option value="openrouter" {% if quantifier_backend_openrouter %}selected{% endif %}>OpenRouter</option>
-                <option value="deepseek" {% if quantifier_backend_deepseek %}selected{% endif %}>DeepSeek</option>
-                <option value="ollama" {% if quantifier_backend_ollama %}selected{% endif %}>Ollama</option>
-            </select>
+            <label for="conn_model">Model</label>
+            <input type="text" id="conn_model" name="conn_model" placeholder="openai/gpt-4o-mini" />
         </div>
         <div class="form-group">
-            <label for="llm_model">LLM Model</label>
-            <input type="text" id="llm_model" name="llm_model" value="{{ llm_model }}" placeholder="openai/gpt-4o-mini" />
+            <label for="conn_api_key">API Key</label>
+            <input type="password" id="conn_api_key" name="conn_api_key" placeholder="(optional)" />
         </div>
         <div class="form-group">
-            <label for="quantifier_model">Quantifier Model</label>
-            <input type="text" id="quantifier_model" name="quantifier_model" value="{{ quantifier_model }}" placeholder="openai/gpt-4o-mini" />
+            <label for="conn_base_url">Base URL</label>
+            <input type="text" id="conn_base_url" name="conn_base_url" placeholder="(optional)" />
         </div>
-        <div class="form-group">
-            <label for="ollama_base_url">Ollama Base URL</label>
-            <input type="text" id="ollama_base_url" name="ollama_base_url" value="{{ ollama_base_url }}" placeholder="http://localhost:11434" />
-        </div>
-        <div class="form-group">
-            <label for="api_key">OpenRouter API Key</label>
-            <input type="password" id="api_key" name="api_key" value="" placeholder="{{ api_key_placeholder }}" />
-        </div>
-        <button type="submit">Save Settings</button>
-        <span id="settings-status"></span>
+        <button type="submit" class="primary">Add Connection</button>
     </form>
+    <span id="settings-status"></span>
 </div>
 "##,
     ext = "html"
 )]
 pub struct SettingsTemplate {
-    pub backend_openrouter: bool,
-    pub backend_deepseek: bool,
-    pub backend_ollama: bool,
-    pub quantifier_backend_openrouter: bool,
-    pub quantifier_backend_deepseek: bool,
-    pub quantifier_backend_ollama: bool,
-    pub llm_model: String,
-    pub quantifier_model: String,
-    pub ollama_base_url: String,
-    pub api_key_placeholder: String,
+    pub connections: Vec<Connection>,
+    pub narration_connection_id: String,
+    pub quantifier_connection_id: String,
+    pub provider_options: String,
 }
 
 impl SettingsTemplate {
     fn from_settings(settings: &AppSettings) -> Self {
         Self {
-            backend_openrouter: settings.llm_backend == LlmBackendType::OpenRouter,
-            backend_deepseek: settings.llm_backend == LlmBackendType::DeepSeek,
-            backend_ollama: settings.llm_backend == LlmBackendType::Ollama,
-            quantifier_backend_openrouter: settings.quantifier_backend
-                == LlmBackendType::OpenRouter,
-            quantifier_backend_deepseek: settings.quantifier_backend == LlmBackendType::DeepSeek,
-            quantifier_backend_ollama: settings.quantifier_backend == LlmBackendType::Ollama,
-            llm_model: settings.llm_model.clone(),
-            quantifier_model: settings.quantifier_model.clone(),
-            ollama_base_url: settings.ollama_base_url.clone(),
-            api_key_placeholder: if settings.openrouter_api_key.is_some() {
-                "(current key set)".to_string()
-            } else {
-                "(not set - use env var)".to_string()
-            },
+            connections: settings.connections.clone(),
+            narration_connection_id: settings.narration_connection_id.clone(),
+            quantifier_connection_id: settings.quantifier_connection_id.clone(),
+            provider_options: provider_options_html("openrouter"),
         }
     }
 }
@@ -115,12 +138,26 @@ pub async fn settings_panel(State(app_state): State<AppState>) -> Html<String> {
 
 #[derive(Debug, serde::Deserialize)]
 pub struct SettingsForm {
-    pub llm_backend: String,
-    pub quantifier_backend: String,
-    pub llm_model: String,
-    pub quantifier_model: String,
-    pub ollama_base_url: String,
-    pub api_key: String,
+    pub narration_connection_id: String,
+    pub quantifier_connection_id: String,
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct AddConnectionForm {
+    pub conn_name: String,
+    pub conn_provider: String,
+    pub conn_model: String,
+    pub conn_api_key: String,
+    pub conn_base_url: String,
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct EditConnectionForm {
+    pub conn_name: String,
+    pub conn_provider: String,
+    pub conn_model: String,
+    pub conn_api_key: String,
+    pub conn_base_url: String,
 }
 
 /// [DOC: docs/architecture/system.md]
@@ -128,34 +165,6 @@ pub async fn save_settings_handler(
     State(app_state): State<AppState>,
     Form(form): Form<SettingsForm>,
 ) -> Html<String> {
-    let backend = LlmBackendType::from(form.llm_backend.as_str());
-    let quantifier_backend = LlmBackendType::from(form.quantifier_backend.as_str());
-
-    let api_key = if form.api_key.is_empty() {
-        None
-    } else {
-        Some(form.api_key)
-    };
-
-    let ollama_base_url = if form.ollama_base_url.is_empty() {
-        "http://localhost:11434".to_string()
-    } else {
-        form.ollama_base_url
-    };
-
-    let new_settings = AppSettings {
-        llm_backend: backend,
-        llm_model: form.llm_model,
-        quantifier_model: form.quantifier_model,
-        openrouter_api_key: api_key,
-        quantifier_backend,
-        ollama_base_url,
-    };
-
-    if let Err(e) = new_settings.save() {
-        return Html(format!("<span class='error'>Save failed: {e}</span>"));
-    }
-
     let mut settings = match app_state.settings.write() {
         Ok(g) => g,
         Err(_) => {
@@ -164,9 +173,374 @@ pub async fn save_settings_handler(
             );
         }
     };
-    *settings = new_settings;
+
+    settings.narration_connection_id = form.narration_connection_id;
+    settings.quantifier_connection_id = form.quantifier_connection_id;
+
+    if let Err(e) = settings.save() {
+        return Html(format!("<span class='error'>Save failed: {e}</span>"));
+    }
 
     Html("Settings saved!".to_string())
+}
+
+/// [DOC: docs/architecture/system.md]
+pub async fn add_connection_handler(
+    State(app_state): State<AppState>,
+    Form(form): Form<AddConnectionForm>,
+) -> Html<String> {
+    let mut settings = match app_state.settings.write() {
+        Ok(g) => g,
+        Err(_) => {
+            return Html(
+                "<span class='error'>Internal error: settings lock poisoned</span>".to_string(),
+            );
+        }
+    };
+
+    let id = format!(
+        "conn-{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis()
+    );
+
+    let api_key = parse_api_key(&form.conn_api_key);
+    let base_url = if form.conn_base_url.is_empty() {
+        None
+    } else {
+        Some(form.conn_base_url)
+    };
+
+    let connection = Connection {
+        id,
+        name: form.conn_name,
+        provider: LlmBackendType::from(form.conn_provider.as_str()),
+        model: form.conn_model,
+        api_key,
+        base_url,
+    };
+
+    settings.connections.push(connection);
+
+    if let Err(e) = settings.save() {
+        return Html(format!("<span class='error'>Save failed: {e}</span>"));
+    }
+
+    // Return full settings panel so the new connection appears
+    let template = SettingsTemplate::from_settings(&settings);
+    match template.render() {
+        Ok(html) => Html(html),
+        Err(e) => Html(format!("<span class='error'>Template error: {e}</span>")),
+    }
+}
+
+pub async fn connection_card_fragment(
+    State(app_state): State<AppState>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Html<String> {
+    let settings = match app_state.settings.read() {
+        Ok(g) => g,
+        Err(_) => return Html("<span class='error'>Lock poisoned</span>".to_string()),
+    };
+
+    let conn = match settings.find_connection(&id) {
+        Some(c) => c.clone(),
+        None => return Html("<span class='error'>Connection not found</span>".to_string()),
+    };
+
+    Html(connection_card_html(
+        &conn,
+        settings.narration_connection_id == id,
+        settings.quantifier_connection_id == id,
+    ))
+}
+
+pub async fn edit_connection_form(
+    State(app_state): State<AppState>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Html<String> {
+    let settings = match app_state.settings.read() {
+        Ok(g) => g,
+        Err(_) => return Html("<span class='error'>Lock poisoned</span>".to_string()),
+    };
+
+    let conn = match settings.find_connection(&id) {
+        Some(c) => c.clone(),
+        None => return Html("<span class='error'>Connection not found</span>".to_string()),
+    };
+
+    Html(connection_edit_form_html(&conn))
+}
+
+/// [DOC: docs/architecture/system.md]
+pub async fn edit_connection_handler(
+    State(app_state): State<AppState>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+    Form(form): Form<EditConnectionForm>,
+) -> Html<String> {
+    let mut settings = match app_state.settings.write() {
+        Ok(g) => g,
+        Err(_) => {
+            return Html(
+                "<span class='error'>Internal error: settings lock poisoned</span>".to_string(),
+            );
+        }
+    };
+
+    let conn = match settings.find_connection_mut(&id) {
+        Some(c) => c,
+        None => return Html("<span class='error'>Connection not found</span>".to_string()),
+    };
+
+    conn.name = form.conn_name;
+    conn.provider = LlmBackendType::from(form.conn_provider.as_str());
+    conn.model = form.conn_model;
+    conn.api_key = parse_api_key(&form.conn_api_key);
+    conn.base_url = if form.conn_base_url.is_empty() {
+        None
+    } else {
+        Some(form.conn_base_url)
+    };
+
+    let is_narrator = settings.narration_connection_id == id;
+    let is_quantifier = settings.quantifier_connection_id == id;
+
+    if let Err(e) = settings.save() {
+        return Html(format!("<span class='error'>Save failed: {e}</span>"));
+    }
+
+    // Return updated card
+    match settings.find_connection(&id) {
+        Some(updated_conn) => Html(connection_card_html(
+            updated_conn,
+            is_narrator,
+            is_quantifier,
+        )),
+        None => Html("<span class='error'>Connection not found after update</span>".to_string()),
+    }
+}
+
+/// [DOC: docs/architecture/system.md]
+pub async fn delete_connection_handler(
+    State(app_state): State<AppState>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Html<String> {
+    let mut settings = match app_state.settings.write() {
+        Ok(g) => g,
+        Err(_) => {
+            return Html(
+                "<span class='error'>Internal error: settings lock poisoned</span>".to_string(),
+            );
+        }
+    };
+
+    let idx = settings.connections.iter().position(|c| c.id == id);
+    let idx = match idx {
+        Some(i) => i,
+        None => return Html("<span class='error'>Connection not found</span>".to_string()),
+    };
+
+    if settings.connections.len() <= 1 {
+        return Html("<span class='error'>Cannot delete the last connection</span>".to_string());
+    }
+
+    settings.connections.remove(idx);
+
+    // Reassign active connections if the deleted one was active
+    if settings.narration_connection_id == id {
+        settings.narration_connection_id = settings.connections[0].id.clone();
+    }
+    if settings.quantifier_connection_id == id {
+        settings.quantifier_connection_id = settings.connections[0].id.clone();
+    }
+
+    if let Err(e) = settings.save() {
+        return Html(format!("<span class='error'>Save failed: {e}</span>"));
+    }
+
+    // Return empty string — HTMX will remove the card
+    Html(String::new())
+}
+
+/// [DOC: docs/architecture/system.md]
+pub async fn set_narrator_handler(
+    State(app_state): State<AppState>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Html<String> {
+    let mut settings = match app_state.settings.write() {
+        Ok(g) => g,
+        Err(_) => {
+            return Html(
+                "<span class='error'>Internal error: settings lock poisoned</span>".to_string(),
+            );
+        }
+    };
+
+    if settings.find_connection(&id).is_none() {
+        return Html("<span class='error'>Connection not found</span>".to_string());
+    }
+
+    settings.narration_connection_id = id;
+
+    if let Err(e) = settings.save() {
+        return Html(format!("<span class='error'>Save failed: {e}</span>"));
+    }
+
+    let template = SettingsTemplate::from_settings(&settings);
+    match template.render() {
+        Ok(html) => Html(html),
+        Err(e) => Html(format!("<span class='error'>Template error: {e}</span>")),
+    }
+}
+
+/// [DOC: docs/architecture/system.md]
+pub async fn set_quantifier_handler(
+    State(app_state): State<AppState>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Html<String> {
+    let mut settings = match app_state.settings.write() {
+        Ok(g) => g,
+        Err(_) => {
+            return Html(
+                "<span class='error'>Internal error: settings lock poisoned</span>".to_string(),
+            );
+        }
+    };
+
+    if settings.find_connection(&id).is_none() {
+        return Html("<span class='error'>Connection not found</span>".to_string());
+    }
+
+    settings.quantifier_connection_id = id;
+
+    if let Err(e) = settings.save() {
+        return Html(format!("<span class='error'>Save failed: {e}</span>"));
+    }
+
+    let template = SettingsTemplate::from_settings(&settings);
+    match template.render() {
+        Ok(html) => Html(html),
+        Err(e) => Html(format!("<span class='error'>Template error: {e}</span>")),
+    }
+}
+
+// === HTML fragment helpers ===
+
+fn connection_card_html(conn: &Connection, is_narrator: bool, is_quantifier: bool) -> String {
+    let badges = if is_narrator {
+        r#"<span class="badge">Narrator</span>"#.to_string()
+    } else {
+        String::new()
+    } + if is_quantifier {
+        r#" <span class="badge quantifier">Quantifier</span>"#
+    } else {
+        ""
+    };
+
+    let mut actions = String::new();
+    actions.push_str(&format!(
+        r#"<button hx-get="/fragment/connections/{}/edit" hx-target="closest .connection-card" hx-swap="outerHTML">Edit</button>"#,
+        html_escape(&conn.id)
+    ));
+    actions.push_str(&format!(
+        r#"<button hx-post="/connections/{}/delete" hx-confirm="Delete this connection?" hx-target="closest .connection-card" hx-swap="outerHTML swap:0.3s" class="danger">Delete</button>"#,
+        html_escape(&conn.id)
+    ));
+    if !is_narrator {
+        actions.push_str(&format!(
+            r#"<button hx-post="/connections/{}/set-narrator" hx-target=".settings-panel" hx-swap="innerHTML" class="primary">Set as Narrator</button>"#,
+            html_escape(&conn.id)
+        ));
+    }
+    if !is_quantifier {
+        actions.push_str(&format!(
+            r#"<button hx-post="/connections/{}/set-quantifier" hx-target=".settings-panel" hx-swap="innerHTML" class="primary">Set as Quantifier</button>"#,
+            html_escape(&conn.id)
+        ));
+    }
+
+    format!(
+        r#"<div class="connection-card">
+    <div class="card-header">
+        <span class="card-title">{}</span>
+        <div class="card-badges">{}</div>
+    </div>
+    <div class="card-details">{:?} — {}</div>
+    <div class="card-actions">{}</div>
+</div>"#,
+        html_escape(&conn.name),
+        badges,
+        conn.provider,
+        html_escape(&conn.model),
+        actions
+    )
+}
+
+fn connection_edit_form_html(conn: &Connection) -> String {
+    let provider = match conn.provider {
+        LlmBackendType::OpenRouter => "openrouter",
+        LlmBackendType::DeepSeek => "deepseek",
+        LlmBackendType::Ollama => "ollama",
+        LlmBackendType::Mock => "mock",
+    };
+    let api_key_value = conn.api_key.as_deref().unwrap_or("");
+    let base_url_value = conn.base_url.as_deref().unwrap_or("");
+
+    format!(
+        r#"<div class="connection-edit-form">
+    <div class="card-header">
+        <span class="card-title">Edit {}</span>
+    </div>
+    <form hx-post="/connections/{}/edit" hx-target="closest .connection-edit-form" hx-swap="outerHTML">
+        <div class="form-group">
+            <label for="edit-name-{}">Name</label>
+            <input type="text" id="edit-name-{}" name="conn_name" value="{}" />
+        </div>
+        <div class="form-group">
+            <label for="edit-provider-{}">Provider</label>
+            <select name="conn_provider" id="edit-provider-{}">
+                {}
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="edit-model-{}">Model</label>
+            <input type="text" id="edit-model-{}" name="conn_model" value="{}" />
+        </div>
+        <div class="form-group">
+            <label for="edit-api-key-{}">API Key</label>
+            <input type="password" id="edit-api-key-{}" name="conn_api_key" value="{}" placeholder="(optional)" />
+        </div>
+        <div class="form-group">
+            <label for="edit-base-url-{}">Base URL</label>
+            <input type="text" id="edit-base-url-{}" name="conn_base_url" value="{}" placeholder="(optional)" />
+        </div>
+        <div class="form-actions">
+            <button type="submit" class="primary">Save</button>
+            <button type="button" hx-get="/fragment/connections/{}" hx-target="closest .connection-edit-form" hx-swap="outerHTML">Cancel</button>
+        </div>
+    </form>
+</div>"#,
+        html_escape(&conn.name),
+        html_escape(&conn.id),
+        conn.id,
+        conn.id,
+        html_escape(&conn.name),
+        conn.id,
+        conn.id,
+        provider_options_html(provider),
+        conn.id,
+        conn.id,
+        html_escape(&conn.model),
+        conn.id,
+        conn.id,
+        html_escape(api_key_value),
+        conn.id,
+        conn.id,
+        html_escape(base_url_value),
+        conn.id,
+    )
 }
 
 #[cfg(test)]
@@ -228,115 +602,57 @@ mod tests {
     mod settings_template_from_settings {
         use super::*;
 
-        fn make_settings(
-            backend: LlmBackendType,
-            quantifier_backend: LlmBackendType,
-            api_key: Option<String>,
-        ) -> AppSettings {
+        fn make_settings() -> AppSettings {
             AppSettings {
-                llm_backend: backend,
-                llm_model: "test-model".to_string(),
-                quantifier_model: "test-quantifier".to_string(),
-                openrouter_api_key: api_key,
-                quantifier_backend,
-                ollama_base_url: "http://localhost:11434".to_string(),
+                connections: vec![
+                    Connection {
+                        id: "conn-1".into(),
+                        name: "Test Narrator".into(),
+                        provider: LlmBackendType::OpenRouter,
+                        model: "openai/gpt-4o-mini".into(),
+                        api_key: Some("sk-test".into()),
+                        base_url: None,
+                    },
+                    Connection {
+                        id: "conn-2".into(),
+                        name: "Test Quantifier".into(),
+                        provider: LlmBackendType::Ollama,
+                        model: "llama3".into(),
+                        api_key: None,
+                        base_url: Some("http://localhost:11434".into()),
+                    },
+                ],
+                narration_connection_id: "conn-1".into(),
+                quantifier_connection_id: "conn-2".into(),
             }
         }
 
         #[test]
-        fn test_openrouter_backend_sets_openrouter_flag() {
-            let settings =
-                make_settings(LlmBackendType::OpenRouter, LlmBackendType::OpenRouter, None);
+        fn test_template_renders_connections() {
+            let settings = make_settings();
             let template = SettingsTemplate::from_settings(&settings);
 
-            assert!(template.backend_openrouter);
-            assert!(!template.backend_deepseek);
-            assert!(!template.backend_ollama);
+            assert_eq!(template.connections.len(), 2);
+            assert!(template.render().unwrap().contains("conn-1"));
+            assert!(template.render().unwrap().contains("conn-2"));
         }
 
         #[test]
-        fn test_deepseek_backend_sets_deepseek_flag() {
-            let settings =
-                make_settings(LlmBackendType::DeepSeek, LlmBackendType::OpenRouter, None);
+        fn test_narrator_badge_renders() {
+            let settings = make_settings();
             let template = SettingsTemplate::from_settings(&settings);
+            let html = template.render().unwrap();
 
-            assert!(!template.backend_openrouter);
-            assert!(template.backend_deepseek);
-            assert!(!template.backend_ollama);
+            assert!(html.contains(r#"<span class="badge">Narrator</span>"#));
         }
 
         #[test]
-        fn test_ollama_backend_sets_ollama_flag() {
-            let settings = make_settings(LlmBackendType::Ollama, LlmBackendType::OpenRouter, None);
+        fn test_quantifier_badge_renders() {
+            let settings = make_settings();
             let template = SettingsTemplate::from_settings(&settings);
+            let html = template.render().unwrap();
 
-            assert!(!template.backend_openrouter);
-            assert!(!template.backend_deepseek);
-            assert!(template.backend_ollama);
-        }
-
-        #[test]
-        fn test_quantifier_backend_flags() {
-            let settings = make_settings(LlmBackendType::OpenRouter, LlmBackendType::Ollama, None);
-            let template = SettingsTemplate::from_settings(&settings);
-
-            assert!(!template.quantifier_backend_openrouter);
-            assert!(!template.quantifier_backend_deepseek);
-            assert!(template.quantifier_backend_ollama);
-        }
-
-        #[test]
-        fn test_api_key_set_shows_current_key_placeholder() {
-            let settings = make_settings(
-                LlmBackendType::OpenRouter,
-                LlmBackendType::OpenRouter,
-                Some("sk-abc123".to_string()),
-            );
-            let template = SettingsTemplate::from_settings(&settings);
-
-            assert_eq!(template.api_key_placeholder, "(current key set)");
-        }
-
-        #[test]
-        fn test_api_key_none_shows_env_var_placeholder() {
-            let settings =
-                make_settings(LlmBackendType::OpenRouter, LlmBackendType::OpenRouter, None);
-            let template = SettingsTemplate::from_settings(&settings);
-
-            assert_eq!(template.api_key_placeholder, "(not set - use env var)");
-        }
-
-        #[test]
-        fn test_models_are_copied() {
-            let settings = AppSettings {
-                llm_backend: LlmBackendType::OpenRouter,
-                llm_model: "custom-model".to_string(),
-                quantifier_model: "custom-quantifier".to_string(),
-                openrouter_api_key: None,
-                quantifier_backend: LlmBackendType::OpenRouter,
-                ollama_base_url: "http://localhost:11434".to_string(),
-            };
-
-            let template = SettingsTemplate::from_settings(&settings);
-
-            assert_eq!(template.llm_model, "custom-model");
-            assert_eq!(template.quantifier_model, "custom-quantifier");
-        }
-
-        #[test]
-        fn test_ollama_base_url_is_copied() {
-            let settings = AppSettings {
-                llm_backend: LlmBackendType::OpenRouter,
-                llm_model: "test-model".to_string(),
-                quantifier_model: "test-quantifier".to_string(),
-                openrouter_api_key: None,
-                quantifier_backend: LlmBackendType::OpenRouter,
-                ollama_base_url: "http://ollama:11434".to_string(),
-            };
-
-            let template = SettingsTemplate::from_settings(&settings);
-
-            assert_eq!(template.ollama_base_url, "http://ollama:11434");
+            assert!(html.contains(r#"<span class="badge quantifier">Quantifier</span>"#));
         }
     }
 }
