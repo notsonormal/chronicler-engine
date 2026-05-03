@@ -28,7 +28,7 @@ mod tests {
         // Wait for story log entries
         let _ = wait_for_element_children(&page, "#story-log .log-entry", 1).await;
 
-        // Location is now in story log as location-header, not in header
+        // The location is rendered inside the story log as a location-header entry
         let location = wait_for_non_loading_value(&page, ".location-header").await;
 
         println!("Initial location: {location}");

@@ -129,26 +129,39 @@
             }
         }
         
+        function autoResizeTextarea(textarea) {
+            textarea.style.height = 'auto';
+            textarea.style.height = textarea.scrollHeight + 'px';
+        }
+        
         function showEditForm(id) {
             currentEditId = id;
             const entry = document.querySelector(`[data-id="${id}"]`);
             if (entry) {
                 const textSpan = entry.querySelector('.text');
                 
-                // Measure original height BEFORE replacing content
-                const originalHeight = textSpan.scrollHeight;
+                // Measure original rendered height BEFORE replacing content
+                const originalHeight = textSpan.getBoundingClientRect().height;
                 
                 // Get raw text from data attribute (before markdown conversion)
                 const rawText = entry.getAttribute('data-raw-text') || '';
                 originalText = textSpan.innerHTML;
                 
-                // Replace text with textarea containing raw text (escape to prevent XSS)
-                const escapedText = rawText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                textSpan.innerHTML = `<textarea id="edit-textarea" class="edit-textarea">${escapedText}</textarea>`;
+                // Replace text with textarea containing raw text
+                textSpan.innerHTML = '';
+                const textarea = document.createElement('textarea');
+                textarea.id = 'edit-textarea';
+                textarea.className = 'edit-textarea';
+                textarea.textContent = rawText;
+                textSpan.appendChild(textarea);
+                // .edit-textarea has 4px padding top+bottom + 1px border top+bottom = 10px extra
+                const textareaExtra = 10;
+                textarea.style.height = (originalHeight + textareaExtra) + 'px';
                 
-                // Set textarea height to match original
-                const textarea = textSpan.querySelector('textarea');
-                textarea.style.height = originalHeight + 'px';
+                // Auto-resize on input so the textarea grows if the user types more
+                textarea.addEventListener('input', function() {
+                    autoResizeTextarea(this);
+                });
                 
                 // Replace edit button with save/cancel
                 const editBtn = entry.querySelector('.edit-btn');

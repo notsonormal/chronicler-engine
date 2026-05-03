@@ -274,7 +274,9 @@ impl<'a> PromptBuilder<'a> {
         system.push_str("\n\n");
         system.push_str(&self.render_history_layer());
 
-        let user = self.render_user_layer();
+        let mut user = self.render_user_layer();
+        user.push_str("\n\n");
+        user.push_str(&self.render_phi_layer());
 
         // Verify token budget
         let total_tokens = estimate_tokens(&system) + estimate_tokens(&user);
@@ -1070,5 +1072,88 @@ mod tests {
 
         assert!(result.contains("<AuxiliaryInstructions>"));
         assert!(result.contains("Narrate the outcome"));
+    }
+
+    #[test]
+    fn test_build_split_includes_phi_in_user_half() {
+        let world = create_test_world();
+        let room = create_test_room();
+        let player = create_test_player();
+
+        let builder = PromptBuilder {
+            world: &world,
+            room: &room,
+            all_npcs: &[],
+            npcs_in_area: &[],
+            player: &player,
+            user_message: "test",
+            history: &[],
+            phi_mode: PhiMode::Narration,
+        };
+
+        let (system, user) = builder.build_split().expect("build_split should succeed");
+
+        // PHI should NOT be in system
+        assert!(
+            !system.contains("<AuxiliaryInstructions>"),
+            "PHI layer should not appear in system prompt"
+        );
+        // PHI should be in user
+        assert!(
+            user.contains("<AuxiliaryInstructions>"),
+            "PHI layer should appear in user prompt"
+        );
+        assert!(user.contains("Narrate the outcome"));
+        // PlayerInput should still precede PHI
+        let player_input_pos = user.find("<PlayerInput>").expect("PlayerInput in user");
+        let phi_pos = user.find("<AuxiliaryInstructions>").expect("PHI in user");
+        assert!(
+            player_input_pos < phi_pos,
+            "PlayerInput should precede PHI in user prompt"
+        );
+    }
+
+    #[test]
+    fn test_build_split_phi_narration_mode() {
+        let world = create_test_world();
+        let room = create_test_room();
+        let player = create_test_player();
+
+        let builder = PromptBuilder {
+            world: &world,
+            room: &room,
+            all_npcs: &[],
+            npcs_in_area: &[],
+            player: &player,
+            user_message: "test",
+            history: &[],
+            phi_mode: PhiMode::Narration,
+        };
+
+        let (_system, user) = builder.build_split().expect("build_split should succeed");
+        assert!(user.contains("Narrate the outcome"));
+        assert!(!user.contains("Continue the scene"));
+    }
+
+    #[test]
+    fn test_build_split_phi_continuation_mode() {
+        let world = create_test_world();
+        let room = create_test_room();
+        let player = create_test_player();
+
+        let builder = PromptBuilder {
+            world: &world,
+            room: &room,
+            all_npcs: &[],
+            npcs_in_area: &[],
+            player: &player,
+            user_message: "test",
+            history: &[],
+            phi_mode: PhiMode::Continuation,
+        };
+
+        let (_system, user) = builder.build_split().expect("build_split should succeed");
+        assert!(user.contains("Continue the scene"));
+        assert!(!user.contains("Narrate the outcome"));
     }
 }

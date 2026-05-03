@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+### Fixed
+- **Edit textarea sizing** - Textarea now preserves original text height using `getBoundingClientRect()` + padding/border compensation, with auto-resize on input
+- **PHI layer missing from split prompts** - `build_split()` now includes Layer 7 (PHI) in the user message, preserving the same ordering as `build()` where behavioral instructions sit closest to generation
+- **Settings UI** - Restored accidentally corrupted `data/settings.json` model entry
+
+### Added
+- **Single User Message mode** - Per-connection toggle for models that ignore system prompts
+  - New `single_user_message` field on `Connection` struct
+  - Checkbox in Add/Edit connection forms
+  - When enabled, merges system + user into one user message with `[SYSTEM]\n` prefix
+  - Empty system messages are omitted from the API payload
+  - Added `merge_single_user_message()` helper and coverage tests
+- **OpenRouter header** - Added `HTTP-Referer` header alongside existing `X-Title`
+
+### Changed
+- **Prompt system docs** - Updated `prompt_system.md` to document PHI placement in user half of split prompts
+- **UI docs** - Updated `ui_design.md` and `dashboard.md` to reflect tab bar, settings panel, connection cards, and edit form
+
 ### Added
 - **Room-Aware Triggers** - Triggers can now be scoped to specific rooms via `room_id`
   - Added optional `room_id` field to `Trigger` schema

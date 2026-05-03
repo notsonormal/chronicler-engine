@@ -172,6 +172,7 @@ mod tests {
                     model: "model-a".into(),
                     api_key: Some("key-a".into()),
                     base_url: None,
+                    single_user_message: false,
                 }],
                 narration_connection_id: "conn-1".into(),
                 quantifier_connection_id: "conn-1".into(),
@@ -208,6 +209,7 @@ mod tests {
             model: "model".into(),
             api_key: Some("direct-key".into()),
             base_url: None,
+            single_user_message: false,
         };
         assert_eq!(conn.resolve_api_key(), Some("direct-key".into()));
 
@@ -228,6 +230,7 @@ mod tests {
             model: "model".into(),
             api_key: None,
             base_url: Some("http://custom:11434".into()),
+            single_user_message: false,
         };
         assert_eq!(conn.resolve_base_url(), "http://custom:11434");
 

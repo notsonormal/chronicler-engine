@@ -69,11 +69,29 @@
 
 ## Components
 
-### Header
+### Header Bar
 - Height: 48px
 - Background: #1a1a1a
-- Border: 1px solid #333
-- Contains: Game title, location, connection status
+- Border-bottom: 1px solid #333
+- Contains: Game title (left), connection status (right)
+- Location is displayed in the story log, not the header
+
+### Tab Bar
+- Display: flex, below header
+- Background: #111
+- Border-bottom: 1px solid #333
+- Padding: 0 16px
+- Tabs: Game | Settings
+- Active tab: green text (#00ff00), green bottom border
+- Inactive tab: muted text (#888), transparent border
+- Hover: muted text brightens to primary
+
+### Tab Content
+- Default: hidden (`display: none`)
+- Active: flex column (`display: flex`)
+- Flex: 1, overflow hidden
+- Game tab contains main container + action area
+- Settings tab contains connections panel (scrollable)
 
 ### Game Title
 - Color: #888
@@ -231,8 +249,9 @@
 - Padding: 4px
 - Font: inherit, 14px
 - Resize: none
-- Line-height: 1.4
-- Height: matches original text height (measured before replacement)
+- Line-height: 1.5 (matches `.log-entry .text`)
+- Height: matches original text height + 10px padding/border compensation
+- Auto-resizes on input to grow with content
 
 #### Save/Cancel Buttons
 - Background: transparent, no border
@@ -264,6 +283,41 @@
 - Z-index above all content
 
 ---
+
+### Settings Panel
+- Padding: 16px
+- Max-width: 800px
+- Display: flex column, gap 16px
+- Overflow-y: auto (settings tab scrolling)
+
+### Connection Cards
+- Background: #111
+- Border: 1px solid #333
+- Border-radius: 8px
+- Padding: 16px
+- Margin-bottom: 16px
+- Header: flex, space-between, wrap
+  - Title: bold, 1.05em
+  - Badges: flex row, gap 4px
+    - Narrator badge: green background rgba(0,255,0,0.12), green text, green border
+    - Quantifier badge: orange background rgba(255,179,71,0.12), orange text, orange border
+- Details: small text, muted color, line-height 1.5
+- Actions: flex row, gap 8px, wrap
+
+### Connection Edit Form
+- Background: #111
+- Border: 1px solid #00ffff (cyan accent)
+- Border-radius: 8px
+- Padding: 16px
+- Form groups: flex column, gap 4px
+- Labels: small text, muted color
+- Inputs/selects: same styling as command input (dark background, #333 border, primary text)
+- Focus: cyan border, cyan box-shadow
+
+### Settings Buttons
+- Primary (save/add): cyan gradient (#2a4a5a → #1a3a4a), cyan border, cyan text
+- Danger (delete): red gradient (#5a2a2a → #4a1a1a), red border, red text
+- Set as Narrator/Quantifier: green gradient (#2a5a2a → #1a4a1a), green border, green text
 
 ## Implementation
 

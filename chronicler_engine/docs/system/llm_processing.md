@@ -23,7 +23,20 @@ Backend is selected per-connection via `Connection.provider`:
 - `ollama` → Uses local Ollama instance with the connection's base URL and model
 - `mock` → Uses MockBackend for testing (no API key needed)
 
-### 3. Prompt Construction (SillyTavern-Style Layered Prompts)
+### 4. Single User Message Mode
+Some models (particularly certain local/quantized models) ignore or poorly handle the `system` role. The `Connection` struct provides a `single_user_message` toggle for this case:
+- **When `false` (default)**: System prompt is sent as the `system` message, user text as the `user` message (standard behavior)
+- **When `true`**: System and user prompts are merged into a single `user` message with a `[SYSTEM]` prefix:
+  ```
+  [SYSTEM]
+  <system prompt content>
+
+  <user prompt content>
+  ```
+- The system message is omitted from the API payload when merging
+- This is a per-connection setting, so different backends can use different strategies
+
+### 5. Prompt Construction (SillyTavern-Style Layered Prompts)
 The engine uses a layered prompt system inspired by SillyTavern's Prompt Manager. The prompt is built from 8 layers:
 
 | Layer | Name | Content |
@@ -37,13 +50,13 @@ The engine uses a layered prompt system inspired by SillyTavern's Prompt Manager
 | 6 | User Input | Current player message |
 | 7 | PHI | Post-History Instructions (behavioral guidance) |
 
-### 4. Token Budget Management
+### 6. Token Budget Management
 - **MAX_CONTEXT_TOKENS**: 32000
 - **MAX_RESPONSE_TOKENS**: 1024
 - **MAX_HISTORY_TOKENS**: 16000
 - Hard truncation with `truncate_to_budget()` - no summarization
 
-### 5. Prompt Injection Sanitization
+### 7. Prompt Injection Sanitization
 User input is sanitized to prevent prompt injection:
 - `{{variable}}` patterns are escaped
 - Known injection patterns are stripped

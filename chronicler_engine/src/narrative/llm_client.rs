@@ -114,18 +114,21 @@ pub fn call_chat_completions(
     );
     log::debug!("[LLM][req:{req_id}] Max tokens: {max_tokens}");
 
+    let mut messages = vec![];
+    if !system_prompt.is_empty() {
+        messages.push(json!({
+            "role": "system",
+            "content": system_prompt
+        }));
+    }
+    messages.push(json!({
+        "role": "user",
+        "content": user_text
+    }));
+
     let payload = json!({
         "model": model,
-        "messages": [
-            {
-                "role": "system",
-                "content": system_prompt
-            },
-            {
-                "role": "user",
-                "content": user_text
-            }
-        ],
+        "messages": messages,
         "stream": false,
         "max_tokens": max_tokens
     });
@@ -144,6 +147,7 @@ pub fn call_chat_completions(
     }
     if let Some(t) = title {
         request = request.header("X-Title", t);
+        request = request.header("HTTP-Referer", "https://github.com/chronicler-engine");
     }
 
     log::info!("[LLM][req:{req_id}] Sending request to {url}");
@@ -464,6 +468,13 @@ mod tests {
     fn test_call_ollama_invalid_url() {
         // call_ollama with a fake URL should fail gracefully without panic
         let result = call_ollama("http://localhost:59999", "model", "system", "user");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_call_ollama_empty_system_prompt() {
+        // call_ollama with empty system prompt should not panic
+        let result = call_ollama("http://localhost:59999", "model", "", "user message");
         assert!(result.is_err());
     }
 }

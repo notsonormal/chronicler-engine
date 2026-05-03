@@ -90,7 +90,7 @@ settings.json → load_settings() → AppSettings (defaults if missing)
 | `narration_connection_id` | string | `"openrouter-gpt-4o-mini"` |
 | `quantifier_connection_id` | string | `"openrouter-gpt-4o-mini"` |
 
-Each `Connection` contains: `id`, `name`, `provider`, `model`, `api_key` (optional), `base_url` (optional).
+Each `Connection` contains: `id`, `name`, `provider`, `model`, `api_key` (optional), `base_url` (optional), `single_user_message` (optional, default `false`).
 
 #### Environment Fallback
 

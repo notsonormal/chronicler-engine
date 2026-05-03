@@ -218,3 +218,5 @@ logs/
 /chronicler_engine/.sisyphus
 /.sisyphus
 /node_modules
+
+.devrag/

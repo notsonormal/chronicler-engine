@@ -40,6 +40,7 @@ Each `Connection` has:
 - `model`: Model string (e.g. `"openai/gpt-4o-mini"`)
 - `api_key`: Optional per-connection API key
 - `base_url`: Optional per-connection base URL
+- `single_user_message`: When `true`, merges system and user prompts into a single user message (for models that ignore the system role)
 
 ### Data Flow
 

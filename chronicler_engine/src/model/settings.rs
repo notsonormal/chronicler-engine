@@ -18,6 +18,8 @@ pub struct Connection {
     pub api_key: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub base_url: Option<String>,
+    #[serde(default)]
+    pub single_user_message: bool,
 }
 
 impl Connection {
@@ -29,6 +31,7 @@ impl Connection {
             model: "openai/gpt-4o-mini".into(),
             api_key: None,
             base_url: None,
+            single_user_message: false,
         }
     }
 
@@ -82,6 +85,7 @@ impl Default for AppSettings {
             model: "openai/gpt-4o-mini".into(),
             api_key: None,
             base_url: None,
+            single_user_message: false,
         };
         let euryale = Connection {
             id: "openrouter-euryale".into(),
@@ -90,6 +94,7 @@ impl Default for AppSettings {
             model: "sao10k/l3.3-euryale-70b".into(),
             api_key: None,
             base_url: None,
+            single_user_message: false,
         };
         let gemma = Connection {
             id: "ollama-gemma-4-26B".into(),
@@ -98,6 +103,7 @@ impl Default for AppSettings {
             model: "hf.co/mradermacher/gemma-4-26B-A4B-it-abliterated-i1-GGUF:latest".into(),
             api_key: None,
             base_url: Some("http://localhost:11434/v1".into()),
+            single_user_message: false,
         };
         Self {
             connections: vec![gpt4o, euryale, gemma],

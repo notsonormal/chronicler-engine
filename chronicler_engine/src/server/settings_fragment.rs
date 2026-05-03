@@ -94,6 +94,12 @@ fn html_escape(s: &str) -> String {
             <label for="conn_base_url">Base URL</label>
             <input type="text" id="conn_base_url" name="conn_base_url" placeholder="(optional)" />
         </div>
+        <div class="form-group">
+            <label>
+                <input type="checkbox" name="single_user_message" value="true" />
+                Single User Message (merge system + user for models that ignore system prompts)
+            </label>
+        </div>
         <button type="submit" class="primary">Add Connection</button>
     </form>
     <span id="settings-status"></span>
@@ -149,6 +155,8 @@ pub struct AddConnectionForm {
     pub conn_model: String,
     pub conn_api_key: String,
     pub conn_base_url: String,
+    #[serde(default)]
+    pub single_user_message: bool,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -158,6 +166,8 @@ pub struct EditConnectionForm {
     pub conn_model: String,
     pub conn_api_key: String,
     pub conn_base_url: String,
+    #[serde(default)]
+    pub single_user_message: bool,
 }
 
 /// [DOC: docs/architecture/system.md]
@@ -220,6 +230,7 @@ pub async fn add_connection_handler(
         model: form.conn_model,
         api_key,
         base_url,
+        single_user_message: form.single_user_message,
     };
 
     settings.connections.push(connection);
@@ -303,6 +314,7 @@ pub async fn edit_connection_handler(
     } else {
         Some(form.conn_base_url)
     };
+    conn.single_user_message = form.single_user_message;
 
     let is_narrator = settings.narration_connection_id == id;
     let is_quantifier = settings.quantifier_connection_id == id;
@@ -516,6 +528,12 @@ fn connection_edit_form_html(conn: &Connection) -> String {
             <label for="edit-base-url-{}">Base URL</label>
             <input type="text" id="edit-base-url-{}" name="conn_base_url" value="{}" placeholder="(optional)" />
         </div>
+        <div class="form-group">
+            <label>
+                <input type="checkbox" name="single_user_message" value="true" {} />
+                Single User Message (merge system + user for models that ignore system prompts)
+            </label>
+        </div>
         <div class="form-actions">
             <button type="submit" class="primary">Save</button>
             <button type="button" hx-get="/fragment/connections/{}" hx-target="closest .connection-edit-form" hx-swap="outerHTML">Cancel</button>
@@ -539,6 +557,11 @@ fn connection_edit_form_html(conn: &Connection) -> String {
         conn.id,
         conn.id,
         html_escape(base_url_value),
+        if conn.single_user_message {
+            "checked"
+        } else {
+            ""
+        },
         conn.id,
     )
 }
@@ -612,6 +635,7 @@ mod tests {
                         model: "openai/gpt-4o-mini".into(),
                         api_key: Some("sk-test".into()),
                         base_url: None,
+                        single_user_message: false,
                     },
                     Connection {
                         id: "conn-2".into(),
@@ -620,6 +644,7 @@ mod tests {
                         model: "llama3".into(),
                         api_key: None,
                         base_url: Some("http://localhost:11434".into()),
+                        single_user_message: false,
                     },
                 ],
                 narration_connection_id: "conn-1".into(),

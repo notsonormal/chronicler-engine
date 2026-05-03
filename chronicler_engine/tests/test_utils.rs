@@ -319,6 +319,32 @@ pub async fn launch_chrome() -> (playwright_rs::Playwright, playwright_rs::Brows
     (playwright, browser)
 }
 
+/// Run an E2E test with a fully set up browser page.
+///
+/// Handles: port allocation, mock server startup, browser launch, navigation,
+/// and waiting for initial content. Cleans up the browser on completion.
+pub async fn with_test_page<F, Fut>(config_path: &str, world: &str, test_fn: F)
+where
+    F: FnOnce(playwright_rs::Page, u16) -> Fut,
+    Fut: std::future::Future<Output = ()>,
+{
+    let port = get_config_port(config_path).expect("Failed to get config port");
+    let _server = TestServer::new_with_mock(port, world).await;
+
+    let (_playwright, browser) = launch_chrome().await;
+    let page = browser.new_page().await.unwrap();
+
+    goto_with_connection_check(&page, port)
+        .await
+        .expect("Failed to connect to server");
+
+    let _ = wait_for_element_children(&page, "#story-log .log-entry", 1).await;
+
+    test_fn(page, port).await;
+
+    let _ = browser.close().await;
+}
+
 /// Send an action via the command form
 pub async fn send_action(page: &playwright_rs::Page, text: &str) {
     let text_owned = text.to_string();

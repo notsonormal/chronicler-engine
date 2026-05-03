@@ -907,7 +907,7 @@ mod tests {
             let response = app.oneshot(req).await.unwrap();
 
             assert!(response.status().is_success());
-            let body = axum::body::to_bytes(response.into_body(), 2048)
+            let body = axum::body::to_bytes(response.into_body(), 4096)
                 .await
                 .unwrap();
             let body_str = String::from_utf8_lossy(&body);
@@ -951,7 +951,7 @@ mod tests {
             let response = app.oneshot(req).await.unwrap();
 
             assert!(response.status().is_success());
-            let body = axum::body::to_bytes(response.into_body(), 2048)
+            let body = axum::body::to_bytes(response.into_body(), 8192)
                 .await
                 .unwrap();
             let body_str = String::from_utf8_lossy(&body);
@@ -986,7 +986,173 @@ mod tests {
                 "Expected error for nonexistent connection: {body_str}"
             );
         }
+
+        #[tokio::test]
+        async fn test_settings_panel_has_single_user_message_checkbox() {
+            let state = create_test_state();
+            let app = create_app_for_testing(state);
+
+            let req = Request::builder()
+                .uri("/fragment/settings")
+                .body(Body::empty())
+                .unwrap();
+            let response = app.oneshot(req).await.unwrap();
+
+            assert!(response.status().is_success());
+            let body = axum::body::to_bytes(response.into_body(), 16384)
+                .await
+                .unwrap();
+            let body_str = String::from_utf8_lossy(&body);
+            assert!(
+                body_str.contains("single_user_message"),
+                "Expected single_user_message checkbox in settings panel: {body_str}"
+            );
+            assert!(
+                body_str.contains("Single User Message"),
+                "Expected 'Single User Message' label in settings panel: {body_str}"
+            );
+        }
+
+        #[tokio::test]
+        async fn test_add_connection_with_single_user_message() {
+            let _guard = TempSettingsGuard::new();
+            let state = create_test_state();
+            let app = create_app_for_testing(state);
+
+            let req = Request::builder()
+                .uri("/connections/add")
+                .method(http::Method::POST)
+                .header(
+                    http::header::CONTENT_TYPE,
+                    "application/x-www-form-urlencoded",
+                )
+                .body(Body::from(
+                    "conn_name=My+Mock&conn_provider=mock&conn_model=mock-model&conn_api_key=&conn_base_url=&single_user_message=true",
+                ))
+                .unwrap();
+            let response = app.oneshot(req).await.unwrap();
+
+            assert!(response.status().is_success());
+            let body = axum::body::to_bytes(response.into_body(), 16384)
+                .await
+                .unwrap();
+            let body_str = String::from_utf8_lossy(&body);
+            assert!(
+                body_str.contains("My Mock"),
+                "Expected new connection name in response: {body_str}"
+            );
+        }
+
+        #[tokio::test]
+        async fn test_edit_connection_preserves_single_user_message() {
+            let _guard = TempSettingsGuard::new();
+            let state = create_test_state();
+            let app = create_app_for_testing(state);
+
+            let req = Request::builder()
+                .uri("/connections/openrouter-gpt-4o-mini/edit")
+                .method(http::Method::POST)
+                .header(
+                    http::header::CONTENT_TYPE,
+                    "application/x-www-form-urlencoded",
+                )
+                .body(Body::from(
+                    "conn_name=Updated+Name&conn_provider=openrouter&conn_model=gpt-4o&conn_api_key=new-key&conn_base_url=&single_user_message=true",
+                ))
+                .unwrap();
+            let response = app.oneshot(req).await.unwrap();
+
+            assert!(response.status().is_success());
+            let body = axum::body::to_bytes(response.into_body(), 16384)
+                .await
+                .unwrap();
+            let body_str = String::from_utf8_lossy(&body);
+            assert!(
+                body_str.contains("Updated Name"),
+                "Expected updated connection name: {body_str}"
+            );
+        }
+
+        #[tokio::test]
+        async fn test_edit_connection_form_has_single_user_message_checkbox() {
+            let state = create_test_state();
+            let app = create_app_for_testing(state);
+
+            let req = Request::builder()
+                .uri("/fragment/connections/openrouter-gpt-4o-mini/edit")
+                .body(Body::empty())
+                .unwrap();
+            let response = app.oneshot(req).await.unwrap();
+
+            assert!(response.status().is_success());
+            let body = axum::body::to_bytes(response.into_body(), 8192)
+                .await
+                .unwrap();
+            let body_str = String::from_utf8_lossy(&body);
+            assert!(
+                body_str.contains("single_user_message"),
+                "Expected single_user_message checkbox in edit form: {body_str}"
+            );
+        }
     }
+}
+
+#[tokio::test]
+async fn test_css_valid() {
+    let state = create_test_state();
+    let app = create_app_for_testing(state);
+
+    let req = Request::builder()
+        .uri("/assets/styles.css")
+        .body(Body::empty())
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+
+    assert!(response.status().is_success());
+    let body = axum::body::to_bytes(response.into_body(), 65536)
+        .await
+        .unwrap();
+    let css_content = String::from_utf8_lossy(&body);
+
+    assert!(
+        css_content.contains(":root"),
+        "CSS should contain :root for CSS variables"
+    );
+    assert!(
+        css_content.contains("var(--"),
+        "CSS should use CSS custom properties (var())"
+    );
+    assert!(
+        css_content.contains("@media"),
+        "CSS should contain @media queries for responsive breakpoints"
+    );
+}
+
+#[tokio::test]
+async fn test_scrollbar_styled() {
+    let state = create_test_state();
+    let app = create_app_for_testing(state);
+
+    let req = Request::builder()
+        .uri("/assets/styles.css")
+        .body(Body::empty())
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+
+    assert!(response.status().is_success());
+    let body = axum::body::to_bytes(response.into_body(), 65536)
+        .await
+        .unwrap();
+    let css_content = String::from_utf8_lossy(&body);
+
+    assert!(
+        css_content.contains("::-webkit-scrollbar"),
+        "CSS should contain custom scrollbar styling"
+    );
+    assert!(
+        css_content.contains("scrollbar-width"),
+        "CSS should contain Firefox scrollbar-width"
+    );
 }
 
 /// Integration test that loads actual world data and verifies room image_path

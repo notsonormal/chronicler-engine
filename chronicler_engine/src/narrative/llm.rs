@@ -110,10 +110,17 @@ pub fn get_llm_backend_with_settings(settings: &AppSettings) -> Box<dyn LlmBacke
     get_llm_backend_for(&connection)
 }
 
+/// Merge system and user prompts into a single user message.
+/// Used for models that ignore the system role.
+pub fn merge_single_user_message(system_prompt: &str, user_text: &str) -> String {
+    format!("[SYSTEM]\n{system_prompt}\n\n{user_text}")
+}
+
 #[derive(Clone, Default)]
 pub struct OpenRouterBackend {
     api_key: String,
     model: String,
+    single_user_message: bool,
 }
 
 impl OpenRouterBackend {
@@ -122,11 +129,17 @@ impl OpenRouterBackend {
         Self {
             api_key,
             model: connection.model.clone(),
+            single_user_message: connection.single_user_message,
         }
     }
 
     fn call(&self, system_prompt: &str, user_text: &str) -> Result<String, EngineError> {
-        call_openrouter_with_model(&self.api_key, system_prompt, user_text, &self.model)
+        let (system, user) = if self.single_user_message {
+            ("", merge_single_user_message(system_prompt, user_text))
+        } else {
+            (system_prompt, user_text.to_string())
+        };
+        call_openrouter_with_model(&self.api_key, system, &user, &self.model)
             .map_err(EngineError::Narrative)
     }
 }
@@ -341,6 +354,7 @@ impl LlmBackend for DeepSeekBackend {
 pub struct OllamaBackend {
     base_url: String,
     model: String,
+    single_user_message: bool,
 }
 
 impl OllamaBackend {
@@ -348,7 +362,17 @@ impl OllamaBackend {
         Self {
             base_url: connection.resolve_base_url(),
             model: connection.model.clone(),
+            single_user_message: connection.single_user_message,
         }
+    }
+
+    fn call(&self, system_prompt: &str, user_text: &str) -> Result<String, EngineError> {
+        let (system, user) = if self.single_user_message {
+            ("", merge_single_user_message(system_prompt, user_text))
+        } else {
+            (system_prompt, user_text.to_string())
+        };
+        call_ollama(&self.base_url, &self.model, system, &user).map_err(EngineError::Narrative)
     }
 }
 
@@ -377,9 +401,7 @@ impl LlmBackend for OllamaBackend {
 
         let builder = PromptBuilder::from_context(&npc_context);
         let (system_prompt, user_text) = builder.build_split()?;
-
-        call_ollama(&self.base_url, &self.model, &system_prompt, &user_text)
-            .map_err(EngineError::Narrative)
+        self.call(&system_prompt, &user_text)
     }
 
     fn narrate_action(&self, context: &PromptContext) -> Result<String, EngineError> {
@@ -390,9 +412,7 @@ impl LlmBackend for OllamaBackend {
 
         let builder = PromptBuilder::from_context(context);
         let (system_prompt, user_text) = builder.build_split()?;
-
-        call_ollama(&self.base_url, &self.model, &system_prompt, &user_text)
-            .map_err(EngineError::Narrative)
+        self.call(&system_prompt, &user_text)
     }
 
     fn narrate_arrival(&self, context: &PromptContext) -> Result<String, EngineError> {
@@ -418,9 +438,7 @@ impl LlmBackend for OllamaBackend {
 
         let builder = PromptBuilder::from_context(&arrival_context);
         let (system_prompt, user_text) = builder.build_split()?;
-
-        call_ollama(&self.base_url, &self.model, &system_prompt, &user_text)
-            .map_err(EngineError::Narrative)
+        self.call(&system_prompt, &user_text)
     }
 
     fn narrate_continuation(
@@ -430,9 +448,7 @@ impl LlmBackend for OllamaBackend {
         _trigger_prompt: &str,
     ) -> Result<String, EngineError> {
         log::info!("[LLM] Generating continuation narration");
-
-        call_ollama(&self.base_url, &self.model, system_prompt, user_prompt)
-            .map_err(EngineError::Narrative)
+        self.call(system_prompt, user_prompt)
     }
 
     fn narrate_action_from_prompt(
@@ -441,9 +457,7 @@ impl LlmBackend for OllamaBackend {
         user_prompt: &str,
     ) -> Result<String, EngineError> {
         log::info!("[LLM] Generating action from prompt");
-
-        call_ollama(&self.base_url, &self.model, system_prompt, user_prompt)
-            .map_err(EngineError::Narrative)
+        self.call(system_prompt, user_prompt)
     }
 
     fn name(&self) -> &str {
@@ -1530,5 +1544,44 @@ mod tests {
 
         let result = backend.narrate_action(&context);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_merge_single_user_message_format() {
+        let merged = merge_single_user_message("system content", "user content");
+        assert!(merged.starts_with("[SYSTEM]\n"));
+        assert!(merged.contains("system content"));
+        assert!(merged.contains("user content"));
+        // System content should come before user content
+        let system_pos = merged.find("system content").unwrap();
+        let user_pos = merged.find("user content").unwrap();
+        assert!(system_pos < user_pos);
+    }
+
+    #[test]
+    fn test_merge_single_user_message_preserves_multiline() {
+        let system = "Line 1\nLine 2";
+        let user = "User Line 1\nUser Line 2";
+        let merged = merge_single_user_message(system, user);
+        assert!(merged.contains("Line 1\nLine 2"));
+        assert!(merged.contains("User Line 1\nUser Line 2"));
+    }
+
+    #[test]
+    fn test_merge_single_user_message_empty_system() {
+        let merged = merge_single_user_message("", "user content");
+        assert_eq!(merged, "[SYSTEM]\n\n\nuser content");
+    }
+
+    #[test]
+    fn test_merge_single_user_message_empty_user() {
+        let merged = merge_single_user_message("system content", "");
+        assert_eq!(merged, "[SYSTEM]\nsystem content\n\n");
+    }
+
+    #[test]
+    fn test_merge_single_user_message_both_empty() {
+        let merged = merge_single_user_message("", "");
+        assert_eq!(merged, "[SYSTEM]\n\n\n");
     }
 }

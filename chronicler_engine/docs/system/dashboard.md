@@ -5,35 +5,59 @@ The Chronicler Engine presents a web-based HTMX dashboard for player interaction
 
 ## The Dashboard Layout
 
-### 1. Header (48px height)
+### 1. Header Bar (48px height)
 Displays system-level context.
-- **Content**: Game title only (location displayed in story log)
+- **Content**: Game title (left), connection status (right)
+- **Note**: Location is displayed in the story log, not the header
 
-### 2. Main Body (Flex: 1)
+### 2. Tab Bar
+Navigation between Game and Settings views.
+- **Tabs**: Game | Settings
+- **Active tab**: Green text with green bottom border
+- **Inactive tab**: Muted gray text
+
+### 3. Game Tab (Default)
+
+#### Main Body (Flex: 1)
 Horizontal split into story context and visual context:
 
 - **Story Log (80%)**: Scrollable history of narration with chat-bubble styling
   - **Styles**:
     - **Location headers**: Inline "Room Name - HH:MM", green color (#4ade80), bold
+    - **Event headers**: Inline "Event Name - HH:MM", blue/cyan color (#38bdf8), bold
     - User input (right-aligned, darker gray background #2a2a2a)
     - AI/Narration (left-aligned, dark cyan background #1a3a3a)
+    - AI/Dialogue (left-aligned, orange-tinted background #3a2a1a, italic text)
     - System messages (center-aligned, yellow #ffff00)
     - Character name prominent above message (bold, larger)
     - Subtle timestamp (HH:MM format, small gray)
     - Fade-in animation for new messages
+    - Edit button (✎) on all non-location, non-event entries
+    - Retry button (↻) on last AI message only
 - **Visual Sidebar (20%)**:
-  - Location Image (top): Full-width location image, max-height 200px, object-fit contain (scales to fit without cropping)
+  - Location Image (top): Full-width location image, max-height 200px, object-fit contain
   - NPC Portraits (bottom): Horizontal scrollable row, 80×80px square images, object-fit cover
 
-### 3. Action Area (64px height)
+#### Action Area (64px height)
 Interactive zone for player input.
-- **Content**: Text input field + send button + status indicator
+- **Content**: Text input field + send button + action hints + status indicator
 - **Button States**:
   - Ready: Green button with "Send" text and play icon (▶)
   - Thinking: Green button with "Stop" text and square icon (■), disabled input
 - **Status States**:
   - "Ready" - Green (#00ff00), awaiting input
   - "Thinking..." - Yellow (#ffff00) with pulse animation, LLM generating response
+
+### 4. Settings Tab
+Configuration panel for LLM connections.
+- **Connections List**: Cards showing each configured connection
+  - Name, provider, model
+  - Badges: "Narrator" or "Quantifier" (if assigned)
+  - Actions: Edit, Delete, Set as Narrator, Set as Quantifier
+- **Add Connection Form**:
+  - Name, Provider (OpenRouter/DeepSeek/Ollama), Model
+  - API Key (optional), Base URL (optional)
+  - Single User Message checkbox (for models that ignore system prompts)
 
 ## Real-Time Updates
 The dashboard uses HTMX polling for live updates:
@@ -91,9 +115,11 @@ HTML template renders with `data-raw-text` attribute for inline editing:
 ## Edit Flow (SillyTavern Pattern)
 
 1. Click edit button → textarea replaces text span, polling pauses
-2. Edit text in textarea (uses `data-raw-text`, not HTML textContent)
-3. Click save → textarea value sent to server, stored as raw text
-4. Click cancel → restore original text, resume polling
+2. Textarea height matches original rendered height (+ padding/border compensation)
+3. Textarea auto-resizes on input if content grows taller
+4. Edit text in textarea (uses `data-raw-text`, not HTML textContent)
+5. Click save → textarea value sent to server, stored as raw text
+6. Click cancel → restore original text, resume polling
 
 ## Button Logic (JavaScript)
 1. Monitor status element changes via MutationObserver or HTMX events

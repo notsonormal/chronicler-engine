@@ -81,10 +81,11 @@ The Chronicler Engine implements an 8-layer prompt structure mapped from SillyTa
 - **Content**: The player's current message/action
 
 ### Layer 7: Post-History Instructions (PHI)
-- **Role**: System (injected as user)
+- **Role**: User (appended to user message in split mode)
 - **Position**: After history, before response
 - **Content**: Final behavioral instructions
 - **Modes**: See [`reference/system_prompt.md`](../reference/system_prompt.md) for `PhiMode::Narration` and `PhiMode::Continuation`
+- **Split behavior**: In `build_split()`, PHI is appended to the **user message** (not the system prompt) so it sits closest to the generation point, matching the ordering in `build()` where `PlayerInput` precedes `AuxiliaryInstructions`
 - **Example**:
   ```
   Describe the outcome of the player's action. If NPCs react, include their dialogue.
