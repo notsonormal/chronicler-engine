@@ -46,6 +46,14 @@ fn with_state_lock<T>(
 fn reset_generating(state: &Arc<Mutex<GameState>>) {
     if let Ok(mut s) = state.lock() {
         s.generation_state.status = crate::model::state::GenerationStatus::Idle;
+        s.generation_state.phase = crate::model::state::GenerationPhase::default();
+    }
+}
+
+fn set_phase(state: &Arc<Mutex<GameState>>, phase: crate::model::state::GenerationPhase) {
+    if let Ok(mut s) = state.lock() {
+        s.generation_state.status = crate::model::state::GenerationStatus::Generating;
+        s.generation_state.phase = phase;
     }
 }
 
@@ -142,6 +150,11 @@ impl GameService for DefaultGameService {
                         &history,
                     );
 
+                    set_phase(
+                        &state_for_thread,
+                        crate::model::state::GenerationPhase::Narrating,
+                    );
+
                     let narration_text = match backend.narrate_action(&context) {
                         Ok(t) => t,
                         Err(e) => {
@@ -166,6 +179,11 @@ impl GameService for DefaultGameService {
 
                     let quantifier_backend: Box<dyn QuantifierBackendTrait> =
                         get_quantifier_backend();
+
+                    set_phase(
+                        &state_for_thread,
+                        crate::model::state::GenerationPhase::Quantifying,
+                    );
 
                     let quantifier_result = with_state_lock(&state_for_thread, |state| {
                         let previous_room_npcs: Vec<NpcCard> = state.npcs_in_area.clone();
@@ -301,7 +319,6 @@ impl GameService for DefaultGameService {
                 }
             };
 
-            // Replace the last AI response with the new narration
             if let Ok(mut state) = state_clone.lock() {
                 if let Err(e) = state.replace_last_ai_response(new_narration) {
                     state.generation_state.status =

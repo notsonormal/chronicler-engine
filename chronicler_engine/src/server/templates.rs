@@ -7,7 +7,7 @@ use pulldown_cmark::{Options, Parser, html};
 
 use crate::model::state::{LogEntry, LogType};
 
-// [DOC: docs/architecture/system.md]
+/// [DOC: docs/architecture/system.md]
 #[allow(private_interfaces)]
 #[derive(Debug, Clone)]
 pub struct SafeHtml(String);
@@ -154,7 +154,11 @@ pub struct ActionAreaTemplate {
 }
 
 impl ActionAreaTemplate {
-    pub fn new(status: &crate::model::state::GenerationStatus, exits: &[String]) -> Self {
+    pub fn new(
+        status: &crate::model::state::GenerationStatus,
+        phase: &crate::model::state::GenerationPhase,
+        exits: &[String],
+    ) -> Self {
         let is_disabled = status.is_generating();
         let error_msg = status.error_message().unwrap_or_default().to_string();
         let status_class = if is_disabled {
@@ -165,7 +169,7 @@ impl ActionAreaTemplate {
             "status ready".to_string()
         };
         let status_text = if is_disabled {
-            "Thinking...".to_string()
+            phase.display_text().to_string()
         } else if !error_msg.is_empty() {
             error_msg.clone()
         } else {
@@ -322,6 +326,7 @@ mod tests {
     fn test_action_area_ready() {
         let template = ActionAreaTemplate::new(
             &crate::model::state::GenerationStatus::Idle,
+            &crate::model::state::GenerationPhase::default(),
             &["north".to_string(), "east".to_string()],
         );
         let rendered = template.render().unwrap();
@@ -335,16 +340,47 @@ mod tests {
 
     #[test]
     fn test_action_area_thinking() {
-        let template =
-            ActionAreaTemplate::new(&crate::model::state::GenerationStatus::Generating, &[]);
+        let template = ActionAreaTemplate::new(
+            &crate::model::state::GenerationStatus::Generating,
+            &crate::model::state::GenerationPhase::Narrating,
+            &[],
+        );
         let rendered = template.render().unwrap();
-        assert!(rendered.contains("Thinking..."));
+        assert!(rendered.contains("Generating narration..."));
+        assert!(rendered.contains("disabled"));
+    }
+
+    #[test]
+    fn test_action_area_quantifying() {
+        let template = ActionAreaTemplate::new(
+            &crate::model::state::GenerationStatus::Generating,
+            &crate::model::state::GenerationPhase::Quantifying,
+            &[],
+        );
+        let rendered = template.render().unwrap();
+        assert!(rendered.contains("Quantifying scene..."));
+        assert!(rendered.contains("disabled"));
+    }
+
+    #[test]
+    fn test_action_area_generating_event() {
+        let template = ActionAreaTemplate::new(
+            &crate::model::state::GenerationStatus::Generating,
+            &crate::model::state::GenerationPhase::GeneratingEvent,
+            &[],
+        );
+        let rendered = template.render().unwrap();
+        assert!(rendered.contains("Generating event..."));
         assert!(rendered.contains("disabled"));
     }
 
     #[test]
     fn test_action_area_no_exits() {
-        let template = ActionAreaTemplate::new(&crate::model::state::GenerationStatus::Idle, &[]);
+        let template = ActionAreaTemplate::new(
+            &crate::model::state::GenerationStatus::Idle,
+            &crate::model::state::GenerationPhase::default(),
+            &[],
+        );
         let rendered = template.render().unwrap();
         assert!(rendered.contains("Look"));
         assert!(rendered.contains("Inventory"));

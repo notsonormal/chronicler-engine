@@ -104,10 +104,11 @@ pub fn render_action_area(state: &AppState) -> Result<String> {
     let state_guard = state.lock_state()?;
 
     let status = state_guard.generation_state.status.clone();
+    let phase = state_guard.generation_state.phase.clone();
     let exits = get_available_exits(&state_guard);
     drop(state_guard);
 
-    let template = ActionAreaTemplate::new(&status, &exits);
+    let template = ActionAreaTemplate::new(&status, &phase, &exits);
     template
         .render()
         .map_err(|e| crate::error::EngineError::Template(e.to_string()))
@@ -207,16 +208,21 @@ pub async fn status_ready_handler(State(_state): State<AppState>) -> Html<String
 
 /// [DOC: docs/system/game_flow.md]
 pub async fn generating_status_handler(State(state): State<AppState>) -> Html<String> {
-    let status = state
+    let (status, phase) = state
         .state
         .lock()
-        .map(|guard| guard.generation_state.status.clone())
+        .map(|guard| {
+            (
+                guard.generation_state.status.clone(),
+                guard.generation_state.phase.clone(),
+            )
+        })
         .unwrap_or_default();
 
     if let Some(err) = status.error_message() {
         Html(format!("<span class=\"status error\">Error: {err}</span>"))
     } else if status.is_generating() {
-        Html("generating".to_string())
+        Html(phase.as_endpoint_str().to_string())
     } else {
         Html("idle".to_string())
     }
@@ -313,6 +319,7 @@ pub async fn action_handler(
             state_guard.generation_state.status = crate::model::state::GenerationStatus::Idle;
         } else {
             state_guard.generation_state.status = crate::model::state::GenerationStatus::Generating;
+            state_guard.generation_state.phase = crate::model::state::GenerationPhase::Narrating;
         }
 
         (name, is_sync)

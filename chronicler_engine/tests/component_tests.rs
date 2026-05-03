@@ -392,6 +392,58 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_generating_status_handler_narrating() {
+        let state = create_test_state();
+        {
+            let mut guard = state.lock().unwrap();
+            guard.generation_state.status =
+                chronicler_engine::model::state::GenerationStatus::Generating;
+            guard.generation_state.phase =
+                chronicler_engine::model::state::GenerationPhase::Narrating;
+        }
+        let app = create_app_for_testing(state);
+
+        let req = Request::builder()
+            .uri("/status/generating")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(req).await.unwrap();
+
+        assert!(response.status().is_success());
+        let body = axum::body::to_bytes(response.into_body(), 1024)
+            .await
+            .unwrap();
+        let body_str = String::from_utf8_lossy(&body);
+        assert!(body_str.contains("narrating"));
+    }
+
+    #[tokio::test]
+    async fn test_generating_status_handler_quantifying() {
+        let state = create_test_state();
+        {
+            let mut guard = state.lock().unwrap();
+            guard.generation_state.status =
+                chronicler_engine::model::state::GenerationStatus::Generating;
+            guard.generation_state.phase =
+                chronicler_engine::model::state::GenerationPhase::Quantifying;
+        }
+        let app = create_app_for_testing(state);
+
+        let req = Request::builder()
+            .uri("/status/generating")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(req).await.unwrap();
+
+        assert!(response.status().is_success());
+        let body = axum::body::to_bytes(response.into_body(), 1024)
+            .await
+            .unwrap();
+        let body_str = String::from_utf8_lossy(&body);
+        assert!(body_str.contains("quantifying"));
+    }
+
+    #[tokio::test]
     async fn test_reset_generating_handler() {
         let state = create_test_state();
         let app = create_app_for_testing(state);

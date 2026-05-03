@@ -44,15 +44,12 @@ Each `Connection` has:
 
 ### Data Flow
 
-```
-settings.json → AppSettings (loaded at startup, defaults if missing)
-                    ↓
-              AppState.settings (Arc<RwLock<AppSettings>>)
-                    ↓
-     ┌───────────────┴───────────────┐
-     ↓                               ↓
-get_llm_backend()           get_quantifier_backend()
-(uses narration connection) (uses quantifier connection)
+```mermaid
+flowchart TD
+    A["settings.json"] --> B["AppSettings<br/>(loaded at startup, defaults if missing)"]
+    B --> C["AppState.settings<br/>(Arc<RwLock<AppSettings>>)"]
+    C --> D["get_llm_backend()<br/>(uses narration connection)"]
+    C --> E["get_quantifier_backend()<br/>(uses quantifier connection)"]
 ```
 
 The settings file serves as the single source of truth for backend selection. On first launch, the system auto-creates `settings.json` with default values if missing.
@@ -61,14 +58,16 @@ The settings file serves as the single source of truth for backend selection. On
 
 Following Silly Tavern conventions, the dashboard provides a tabbed interface:
 
-```
-┌─────────────────────────────────────────┐
-│ [Game Tab] [Settings Tab]               │
-├─────────────────────────────────────────┤
-│                                          │
-│         (Tab content here)               │
-│                                          │
-└─────────────────────────────────────────┘
+```html
+<div class="dashboard">
+  <div class="tab-bar">
+    <button class="tab active">Game Tab</button>
+    <button class="tab">Settings Tab</button>
+  </div>
+  <div class="tab-content">
+    <!-- Tab content here -->
+  </div>
+</div>
 ```
 
 - **Game Tab**: Current layout (story log, visual sidebar, action area)

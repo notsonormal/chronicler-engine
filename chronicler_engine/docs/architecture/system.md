@@ -71,15 +71,13 @@ Persistent JSON-based settings system for LLM configuration with reusable connec
 
 #### Settings Flow
 
-```
-settings.json → load_settings() → AppSettings (defaults if missing)
-                                              ↓
-                                    AppState.settings
-                                              ↓
-                    ┌─────────────────────────┴─────────────────────────┐
-                    ↓                                                   ↓
-        get_llm_backend()                                      get_quantifier_backend()
-        (uses narration connection)                         (uses quantifier connection)
+```mermaid
+flowchart TD
+    A["settings.json"] --> B["load_settings()"]
+    B --> C["AppSettings<br/>(defaults if missing)"]
+    C --> D["AppState.settings"]
+    D --> E["get_llm_backend()<br/>(uses narration connection)"]
+    D --> F["get_quantifier_backend()<br/>(uses quantifier connection)"]
 ```
 
 #### Configuration Options
@@ -122,10 +120,10 @@ Static web assets served by the server.
 | `src/narrative/llm.rs` | `crate::narrative::llm` | LLM backend implementations |
 | `src/narrative/prompt.rs` | `crate::narrative::prompt` | PromptBuilder with layered prompts, PhiMode enum, `make_prompt_context` helper |
 | `src/narrative/quantifier.rs` | `crate::narrative::quantifier` | Scene quantification for dynamic NPC presence. `QuantifierBackendTrait`, `RealQuantifierBackend`, `MockQuantifierBackend`, `determine_npcs_in_room` |
-| `src/narrative/openrouter_client.rs` | `crate::narrative::openrouter_client` | OpenRouter HTTP client with dual-model support (NEW) |
-| `src/server/mod.rs` | `crate::server` | HTTP server + HTMX endpoints |
-| `src/server/fragments.rs` | `crate::server` | HTML fragments |
-| `src/server/settings_fragment.rs` | `crate::server` | Settings panel fragment (NEW) |
+| `src/narrative/llm_client.rs` | `crate::narrative::llm_client` | HTTP client helpers for OpenRouter and Ollama |
+| `src/server/mod.rs` | `crate::server` | Axum router, `AppState`, `run_server`, `create_app_for_testing` |
+| `src/server/fragments.rs` | `crate::server` | HTMX endpoint handlers and HTML fragment generators |
+| `src/server/settings_fragment.rs` | `crate::server` | Settings panel fragment handlers |
 | `src/server/templates.rs` | `crate::server` | Askama templates |
 | `assets/index.html` | Presentation | HTMX frontend |
 
@@ -136,10 +134,12 @@ The engine presents a web-based HTMX dashboard with a tabbed interface:
 ### Tab Bar
 
 Silly Tavern-style horizontal tab bar at the top:
-```
-┌─────────────────────────────────────────┐
-│ [Game] [Settings]                       │
-└─────────────────────────────────────────┘
+
+```html
+<div class="tab-bar">
+  <button class="tab active">Game</button>
+  <button class="tab">Settings</button>
+</div>
 ```
 
 - **Game Tab**: Default active tab containing the main game interface
@@ -212,25 +212,25 @@ The engine supports reactive NPC encounters based on character state. When the p
 1. **First Narration**: Initial LLM narration for the user's action is generated.
 2. **Movement & NPC Detection**: A single post-narration Quantifier pass detects movement intent and any NPCs mentioned in the narration.
 3. **Movement Execution**: If movement is detected, the engine updates `GameState.current_room_id`.
-4. **Trigger Evaluation** (`trigger_eval`): Engine evaluates all NPC triggers against `CharacterState` (e.g., `times_met == 0`, `has_item == "key"`).
+4. **Trigger Evaluation** (`trigger_eval`): Engine evaluates all NPC triggers against `CharacterState` (e.g., `times_met == 0`).
 5. **Continuation Narration** (`prompt`): If triggers fire, `PromptBuilder` builds a second LLM prompt with `PhiMode::Continuation` combining the first narration with trigger-specific text.
 6. **Combined Response**: Both narrations are logged and delivered in the same polling cycle.
 
-**CharacterState** tracks persistent NPC encounter data:
+**`NpcEncounterState`** tracks persistent NPC encounter data:
 - `times_met`: Number of times player has met the NPC
-- `last_room_id`: Last room where NPC was encountered
-- `custom_flags`: Game-specific state flags
+- `trigger_fired`: Indices of non-repeatable triggers that have already fired
+- `currently_meeting`: Whether the player is currently in the same room/session as the NPC
 
 **Trigger Conditions**:
-- `times_met_eq`, `times_met_gte`, `times_met_lte`: Compare encounter count
-- `has_item`: Check player inventory for item
-- `room_visited`: Check if player has visited a specific room
-- `custom`: Custom boolean expression
+- `TimesMet(ComparisonOperator, u32)`: Compare encounter count. `ComparisonOperator` is one of:
+  - `Eq` — equal to
+  - `Lt` — less than
+  - `Gte` — greater than or equal to
 
 **Trigger Actions**:
-- `narrate`: Generate continuation narration for the encounter
-- `give_item`: Grant item to player
-- `set_flag`: Set custom flag in CharacterState
+- `TriggerAction` contains:
+  - `name`: Display name for the event (used for event headers)
+  - `narration_prompt`: Prompt sent to the LLM to generate continuation narration
 
 ### Image Handling
 

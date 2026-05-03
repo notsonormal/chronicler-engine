@@ -79,6 +79,7 @@ use crate::model::state::GameState;
 ```
 
 **Severity**: error  
+**Scope**: `src/` and `tests/`  
 **Exemptions**: None
 
 ### 3.2 "What" Comment Detection (`guardrails_what_comments`)

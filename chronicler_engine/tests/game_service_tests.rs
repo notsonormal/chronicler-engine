@@ -2,11 +2,12 @@
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+    use std::sync::{Arc, Mutex};
+
     use chronicler_engine::engine::game_service::{DefaultGameService, GameService};
     use chronicler_engine::model::state::LogType;
     use chronicler_engine::model::{character::*, map::*, world::*};
-    use std::collections::HashMap;
-    use std::sync::{Arc, Mutex};
 
     /// Poll for the FreeAction/retry thread to complete by checking is_generating.
     /// Returns true if generation completed within timeout, false on timeout.
@@ -528,6 +529,70 @@ mod tests {
         service.execute_action(state.clone(), "look".to_string(), "Player".to_string());
 
         // If we get here, the function handled poisoned mutex gracefully
+    }
+
+    #[test]
+    fn test_freeaction_phase_starts_narrating() {
+        let state = create_test_state();
+        let service = DefaultGameService::new();
+
+        {
+            let mut guard = state.lock().unwrap();
+            guard.narration_history.clear();
+            guard.generation_state.status = chronicler_engine::model::state::GenerationStatus::Idle;
+        }
+
+        service.execute_action(
+            state.clone(),
+            "examine the room".to_string(),
+            "Player".to_string(),
+        );
+
+        let guard = state.lock().unwrap();
+        assert!(
+            guard.generation_state.phase
+                == chronicler_engine::model::state::GenerationPhase::Narrating
+                || !guard.generation_state.status.is_generating(),
+            "Phase should be Narrating or status should be idle/completed: {:?}",
+            guard.generation_state.phase
+        );
+    }
+
+    #[test]
+    fn test_freeaction_phase_transitions_mock() {
+        let _guard = chronicler_engine::narrative::llm::with_test_backend(
+            chronicler_engine::narrative::llm::LlmBackendType::Mock,
+        );
+
+        let state = create_test_state();
+        let service = DefaultGameService::new();
+
+        {
+            let mut guard = state.lock().unwrap();
+            guard.narration_history.clear();
+            guard.generation_state.status =
+                chronicler_engine::model::state::GenerationStatus::Generating;
+        }
+
+        service.execute_action(
+            state.clone(),
+            "examine the room carefully".to_string(),
+            "Player".to_string(),
+        );
+
+        let completed = wait_for_generation_complete(&state, 1000);
+        assert!(completed, "FreeAction should complete within timeout");
+
+        let guard = state.lock().unwrap();
+        assert!(
+            !guard.generation_state.status.is_generating(),
+            "Status should be reset after FreeAction completes"
+        );
+        assert_eq!(
+            guard.generation_state.phase,
+            chronicler_engine::model::state::GenerationPhase::default(),
+            "Phase should be reset to default after completion"
+        );
     }
 }
 

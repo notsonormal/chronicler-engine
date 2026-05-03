@@ -50,12 +50,39 @@ impl GenerationStatus {
     }
 }
 
+#[derive(Debug, Default, Clone, PartialEq)]
+pub enum GenerationPhase {
+    #[default]
+    Narrating,
+    Quantifying,
+    GeneratingEvent,
+}
+
+impl GenerationPhase {
+    pub fn display_text(&self) -> &'static str {
+        match self {
+            Self::Narrating => "Generating narration...",
+            Self::Quantifying => "Quantifying scene...",
+            Self::GeneratingEvent => "Generating event...",
+        }
+    }
+
+    pub fn as_endpoint_str(&self) -> &'static str {
+        match self {
+            Self::Narrating => "narrating",
+            Self::Quantifying => "quantifying",
+            Self::GeneratingEvent => "generating-event",
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct GenerationState {
     pub input: String,
     pub cursor_position: usize,
     pub scroll_offset: u16,
     pub status: GenerationStatus,
+    pub phase: GenerationPhase,
 }
 
 impl GenerationState {

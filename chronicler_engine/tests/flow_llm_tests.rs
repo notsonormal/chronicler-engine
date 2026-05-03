@@ -157,8 +157,8 @@ mod tests {
             .unwrap();
         println!("Status during LLM: {status_during}");
         assert!(
-            status_during.contains("Thinking"),
-            "Status should show 'Thinking...' during LLM generation. Got: '{status_during}'"
+            !status_during.contains("Ready"),
+            "Status should show a generating phase during LLM processing. Got: '{status_during}'"
         );
 
         // Wait for LLM to complete (narration + trigger narration)
@@ -307,7 +307,7 @@ mod tests {
 
         let _final_messages = wait_for_more_messages(&page, 0).await;
 
-        let status_after = wait_for_status_not_thinking(&page).await;
+        let status_after = wait_for_status_ready_or_error(&page).await;
 
         println!("Status after (LLM result: {llm_result:?}): {status_after}");
 

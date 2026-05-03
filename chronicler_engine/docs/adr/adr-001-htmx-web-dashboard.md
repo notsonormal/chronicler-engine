@@ -32,21 +32,20 @@ The Chronicler Engine now uses:
 
 ### Architecture Components
 
-```
-Client Browser (HTMX + SSE)
-        ↓ HTTP POST /action
-Axum HTTP Server
-        ↓
-   ┌────┴────┐
-   │         │
-Game State │   LLM Backend
-(Mutex)    │   (OpenRouter)
-   │         │
-   └────┬────┘
-        ↓
-   Broadcast Channel
-        ↓
-   SSE → Client
+```mermaid
+flowchart TD
+    Client["Client Browser<br/>(HTMX + SSE)"]
+    Server["Axum HTTP Server"]
+    GameState["Game State<br/>(Mutex)"]
+    LLM["LLM Backend<br/>(OpenRouter)"]
+    Broadcast["Broadcast Channel"]
+
+    Client -->|"HTTP POST /action"| Server
+    Server --> GameState
+    Server --> LLM
+    GameState --> Broadcast
+    LLM --> Broadcast
+    Broadcast -->|"SSE"| Client
 ```
 
 ### UI Layout

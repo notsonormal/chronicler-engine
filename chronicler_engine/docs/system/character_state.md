@@ -6,15 +6,14 @@ The `CharacterState` system tracks the player's relationship and history with ev
 Unlike the volatile `GameState` (which resets frequently), `CharacterState` represents the permanent records of the simulation's actors.
 
 ## Tracked Data
-- **`times_met`**: An integer incremented every time the player initiates a dialogue or encounter with an NPC.
-- **`last_room_id`**: The ID of the room where the player last saw this NPC.
-- **`fired_triggers`**: A set of indices representing non-repeatable triggers that have already executed for this NPC.
+- **`times_met`**: An integer incremented every time the player encounters an NPC after having left their presence.
+- **`trigger_fired`**: A map of trigger indices to booleans representing non-repeatable triggers that have already executed for this NPC.
+- **`currently_meeting`**: Whether the player is currently in the same room/session as the NPC. Set to `true` on entry, `false` on exit.
 
 ## Rationale: Why Track Persistence?
-The Auto-Trigger system relies on these metrics to prevent repetitive narration. 
+The Auto-Trigger system relies on these metrics to prevent repetitive narration.
 - **Example**: A "First Encounter" trigger only fires if `times_met == 0`.
-- **Example**: A "Returning Home" trigger only fires if `last_room_id` was the village and the current room is the estate.
 
 ## Implementation
 - **Storage**: `crate::model::trigger::CharacterState`
-- **Mutators**: `crate::engine::trigger_eval::increment_times_met` and `mark_trigger_fired`.
+- **Mutators**: `crate::engine::trigger_eval::increment_times_met`, `mark_trigger_fired`, and `set_currently_meeting`.

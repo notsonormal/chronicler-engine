@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+### Added
+- **Granular Status Phases** - The UI now shows distinct status messages during each stage of LLM processing
+  - New `GenerationPhase` enum with three variants: `Narrating`, `Quantifying`, `GeneratingEvent`
+  - Added `phase` field to `GenerationState` alongside existing `status`
+  - `GenerationStatus` (Idle/Generating/Error) remains unchanged for backward compatibility
+  - `is_generating()` remains the single source of truth for disabling UI elements
+  - Phase is a secondary display concern only — all phases use unified `.thinking` CSS class
+  - `/status/generating` endpoint returns phase names (`narrating`, `quantifying`, `generating-event`)
+  - Frontend maps endpoint values to human-readable text via `onStatusPoll()`
+  - Optimistic "Thinking..." still shown immediately on form submit before first poll
+  - Pipeline phases:
+    - `Narrating` — During main LLM narration (Phase 4)
+    - `Quantifying` — During post-narration quantifier analysis (Phase 4.5)
+    - `GeneratingEvent` — During trigger continuation narration (Phase 5), only when a trigger actually fires
+
+### Changed
+- **Trigger evaluation simplified** — Only the first matching trigger is processed per action
+  - Removed `max_triggers` parameter from `evaluate_and_narrate_triggers`
+  - Replaced loop with single `if let Some(...)` for first match only
+  - `GeneratingEvent` phase only set when a trigger is found and about to call LLM
+  - Removed redundant `get_current_room()` call in trigger evaluation (uses `trigger_context.room` directly)
+
 ### Fixed
 - **Edit textarea sizing** - Textarea now preserves original text height using `getBoundingClientRect()` + padding/border compensation, with auto-resize on input
 - **PHI layer missing from split prompts** - `build_split()` now includes Layer 7 (PHI) in the user message, preserving the same ordering as `build()` where behavioral instructions sit closest to generation
@@ -19,6 +41,8 @@
 ### Changed
 - **Prompt system docs** - Updated `prompt_system.md` to document PHI placement in user half of split prompts
 - **UI docs** - Updated `ui_design.md` and `dashboard.md` to reflect tab bar, settings panel, connection cards, and edit form
+- **Test docs** - Updated `testing.md` with accurate test counts and new test files
+- **Game flow docs** - Updated `game_flow.md` with granular status phase documentation
 
 ### Added
 - **Room-Aware Triggers** - Triggers can now be scoped to specific rooms via `room_id`
@@ -115,7 +139,7 @@
 
 ### Fixed
 - **Coverage target** - Now maintains ~87% line coverage (excludes async/server code)
-  - Excluded `fragments.rs`, `mod.rs`, `openrouter_client.rs` from coverage
+  - Excluded `fragments.rs`, `mod.rs` from coverage
   - Added unit tests for action_processing functions
 
 ## 2026-04-26

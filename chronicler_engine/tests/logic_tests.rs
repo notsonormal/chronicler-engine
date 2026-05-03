@@ -4,10 +4,12 @@ mod test_data;
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::sync::{Arc, Mutex};
+
     use chronicler_engine::engine::logic::*;
     use chronicler_engine::model::state::GameState;
-    use std::sync::{Arc, Mutex};
+
+    use super::*;
 
     fn create_navigation_test_state() -> Arc<Mutex<GameState>> {
         let world = Arc::new(test_data::create_test_world());

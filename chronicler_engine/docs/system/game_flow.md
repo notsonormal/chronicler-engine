@@ -14,13 +14,13 @@ flowchart TD
     
     Phase2["**PHASE 2: AWAIT INPUT**<br>*(Status: 'Ready')*<br>User types command → submits form"]
     
-    Phase3["**PHASE 3: PROCESS ACTION**<br>1. Parse command & execute game logic<br>2. Log command as 'Input'<br>3. Set status to 'Thinking...'<br>4. Spawn async thread for LLM"]
+    Phase3["**PHASE 3: PROCESS ACTION**<br>1. Parse command & execute game logic<br>2. Log command as 'Input'<br>3. Set status to 'Generating' + phase 'Narrating'<br>4. Spawn async thread for LLM"]
     
-    Phase4["**PHASE 4: MAIN LLM NARRATION**<br>*(If narrative action)*<br>1. Build prompt via PromptBuilder (PhiMode::Action)<br>2. Send to LLM (see Context Pipeline below)<br>3. Add to history as 'Narration'"]
+    Phase4["**PHASE 4: MAIN LLM NARRATION**<br>*(Phase: Narrating)*<br>1. Build prompt via PromptBuilder (PhiMode::Action)<br>2. Send to LLM (see Context Pipeline below)<br>3. Add to history as 'Narration'"]
     
-    Phase45["**PHASE 4.5: QUANTIFIER & MOVEMENT**<br>1. Post-narration Quantifier analyzes<br>2. Process movement intent<br>3. If moved: trigger `narrate_arrival` LLM call<br>4. Determine NPC Enter/Leave events"]
+    Phase45["**PHASE 4.5: QUANTIFIER & MOVEMENT**<br>*(Phase: Quantifying)*<br>1. Post-narration Quantifier analyzes<br>2. Process movement intent<br>3. If moved: trigger `narrate_arrival` LLM call<br>4. Determine NPC Enter/Leave events"]
     
-    Phase5["**PHASE 5: TRIGGER EVALUATION**<br>1. `evaluate_triggers(state)`<br>2. For each match: Build prompt (PhiMode::Continuation)<br>3. Call LLM & mark triggers as fired<br>4. Set status back to 'Ready'"]
+    Phase5["**PHASE 5: TRIGGER EVALUATION**<br>*(Phase: GeneratingEvent — only if trigger fires)*<br>1. `evaluate_triggers(state)` — first match only<br>2. Build prompt (PhiMode::Continuation)<br>3. Call LLM & mark trigger as fired<br>4. Set status back to 'Ready'"]
     
     Phase6["**PHASE 6: POLLING UPDATE**<br>1. Client polls /fragment/story-log (5s)<br>2. Server returns updated HTML<br>3. HTMX swaps content"]
 
@@ -76,7 +76,7 @@ And the status shows "Ready"
 ```gherkin
 Given the game is loaded
 When the user enters "look" and submits
-Then the status shows "Thinking..."
+Then the status shows "Generating narration..."
 And after LLM generates response, the story-log shows the LLM description
 And the status shows "Ready"
 ```
@@ -85,8 +85,9 @@ And the status shows "Ready"
 ```gherkin
 Given the game is loaded at starting room
 When the user enters "I walk to the village square" and submits
-Then the status shows "Thinking..."
+Then the status shows "Generating narration..."
 And after LLM generates response, the quantifier detects movement intent
+Then the status shows "Quantifying scene..."
 And the story-log shows a minimal header with the new room name
 And the story-log shows the LLM narration for arrival
 And the visual-sidebar shows the new room's image and NPCs
@@ -97,7 +98,7 @@ And the status shows "Ready"
 ```gherkin
 Given the game is loaded
 When the user enters "examine the mysterious orb" and submits
-Then the status shows "Thinking..."
+Then the status shows "Generating narration..."
 And after LLM generates response, the story-log shows the LLM's description of the orb
 And the status shows "Ready"
 ```
@@ -112,9 +113,27 @@ And the status shows "Ready"
 - Show helpful error in story-log
 - Status returns to "Ready"
 
+### Granular Status Phases
+
+During LLM processing, the UI displays granular status phases instead of a single "Thinking..." message:
+
+| Phase | Display Text | Endpoint Value | When Active |
+|-------|-------------|----------------|-------------|
+| `Narrating` | "Generating narration..." | `narrating` | During main LLM narration (Phase 4) |
+| `Quantifying` | "Quantifying scene..." | `quantifying` | During post-narration quantifier analysis (Phase 4.5) |
+| `GeneratingEvent` | "Generating event..." | `generating-event` | During trigger continuation narration (Phase 5) |
+
+**Design Principles:**
+- `GenerationStatus` (Idle/Generating/Error) remains unchanged for backward compatibility
+- `is_generating()` is the single source of truth for disabling UI elements
+- Phase is a secondary display concern only — all phases use the same `.thinking` CSS class
+- The frontend maps endpoint values (`narrating`, `quantifying`, `generating-event`) to human-readable text
+- An optimistic "Thinking..." is shown immediately on form submit before the first poll response
+
 ### Polling-based Updates
 - HTMX automatically polls every 5 seconds for story-log updates
 - Status-display polls `/status/generating` for button state
+- `/status/generating` returns phase endpoint values (`idle`, `narrating`, `quantifying`, `generating-event`)
 - No manual reconnection needed
 
 ## Reference Implementation

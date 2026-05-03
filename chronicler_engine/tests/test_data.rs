@@ -1,11 +1,12 @@
 #![allow(dead_code)]
 
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use chronicler_engine::model::character::{CharacterSheet, NpcCard, PlayerCard};
 use chronicler_engine::model::map::{Direction, MapDef, Overworld, Region, Room};
 use chronicler_engine::model::state::GameState;
 use chronicler_engine::model::world::WorldCard;
-use std::collections::HashMap;
-use std::sync::Arc;
 
 pub fn create_test_world() -> WorldCard {
     WorldCard {

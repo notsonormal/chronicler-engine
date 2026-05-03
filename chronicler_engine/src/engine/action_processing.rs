@@ -12,9 +12,6 @@ use crate::model::world::WorldCard;
 use crate::narrative::prompt::{PhiMode, PromptBuilder, PromptContext};
 use crate::narrative::quantifier::{NpcEvent, QuantifierResult, compute_npc_events};
 
-/// Shared context for executing a free action — bundles all data needed for narration,
-/// trigger evaluation, and NPC state updates.
-///
 /// [DOC: docs/architecture/system.md]
 pub struct FreeActionContext<'a> {
     pub narration_text: &'a str,
@@ -93,68 +90,66 @@ pub fn evaluate_and_narrate_triggers(
     state: &mut GameState,
     narration_text: &str,
     trigger_context: &PromptContext<'_>,
-    max_triggers: usize,
 ) {
     let matching_triggers = evaluate_triggers(state);
 
-    for (trigger_idx, (npc, trigger)) in matching_triggers.iter().take(max_triggers).enumerate() {
-        let Ok(room) = get_current_room(state) else {
-            continue;
-        };
+    let Some((trigger_idx, (npc, trigger))) = matching_triggers.iter().enumerate().next() else {
+        return;
+    };
 
-        let continuation_user_msg = format!(
-            "Previous narration:\n{narration_text}\n\nTrigger event: {}",
-            trigger.action.narration_prompt
+    state.generation_state.phase = crate::model::state::GenerationPhase::GeneratingEvent;
+
+    let continuation_user_msg = format!(
+        "Previous narration:\n{narration_text}\n\nTrigger event: {}",
+        trigger.action.narration_prompt
+    );
+
+    let trigger_ctx = PromptContext {
+        world: trigger_context.world,
+        room: trigger_context.room,
+        all_npcs: trigger_context.all_npcs,
+        npcs_in_area: &state.npcs_in_area,
+        player: trigger_context.player,
+        user_message: &continuation_user_msg,
+        history: &state.narration_history,
+    };
+
+    let mut pb = PromptBuilder::from_context(&trigger_ctx);
+    pb.phi_mode = PhiMode::Continuation;
+
+    let Ok((system_prompt, user_prompt)) = pb.build_split() else {
+        log::error!(
+            "Failed to build continuation prompt: {}",
+            "build_split failed"
         );
+        return;
+    };
 
-        let trigger_ctx = PromptContext {
-            world: trigger_context.world,
-            room,
-            all_npcs: trigger_context.all_npcs,
-            npcs_in_area: &state.npcs_in_area,
-            player: trigger_context.player,
-            user_message: &continuation_user_msg,
-            history: &state.narration_history,
-        };
-
-        let mut pb = PromptBuilder::from_context(&trigger_ctx);
-        pb.phi_mode = PhiMode::Continuation;
-
-        let Ok((system_prompt, user_prompt)) = pb.build_split() else {
-            log::error!(
-                "Failed to build continuation prompt: {}",
-                "build_split failed"
+    let backend = crate::narrative::llm::get_llm_backend();
+    let continuation_text = match backend.narrate_action_from_prompt(&system_prompt, &user_prompt) {
+        Ok(text) => text,
+        Err(e) => {
+            log::error!("Trigger narration failed: {e}");
+            state.add_log(
+                format!("[Trigger narration failed: {e}]"),
+                None,
+                LogType::System,
             );
-            continue;
-        };
-
-        let backend = crate::narrative::llm::get_llm_backend();
-        let continuation_text =
-            match backend.narrate_action_from_prompt(&system_prompt, &user_prompt) {
-                Ok(text) => text,
-                Err(e) => {
-                    log::error!("Trigger narration failed: {e}");
-                    state.add_log(
-                        format!("[Trigger narration failed: {e}]"),
-                        None,
-                        LogType::System,
-                    );
-                    continue;
-                }
-            };
-
-        if continuation_text.trim().is_empty() {
-            continue;
+            return;
         }
-        state.add_log(
-            String::new(),
-            Some(trigger.action.name.clone()),
-            LogType::Event,
-        );
-        state.add_log(continuation_text, None, LogType::Narration);
-        if !trigger.repeat {
-            mark_trigger_fired(&mut state.character_state, &npc.id, trigger_idx);
-        }
+    };
+
+    if continuation_text.trim().is_empty() {
+        return;
+    }
+    state.add_log(
+        String::new(),
+        Some(trigger.action.name.clone()),
+        LogType::Event,
+    );
+    state.add_log(continuation_text, None, LogType::Narration);
+    if !trigger.repeat {
+        mark_trigger_fired(&mut state.character_state, &npc.id, trigger_idx);
     }
 }
 
@@ -199,17 +194,13 @@ pub fn execute_freeaction_impl(
         history: ctx.history,
     };
 
-    evaluate_and_narrate_triggers(state, ctx.narration_text, &trigger_context, 3);
+    evaluate_and_narrate_triggers(state, ctx.narration_text, &trigger_context);
 
     let events = compute_npc_events(&previous_npc_ids, &current_npc_ids);
     apply_npc_events(state, &events.events);
 
     Ok(())
 }
-
-// =============================================================================
-// TESTS for execute_freeaction_impl
-// =============================================================================
 
 #[cfg(test)]
 mod execute_freeaction_impl_tests {
@@ -829,7 +820,7 @@ mod tests {
             history: &history,
         };
 
-        evaluate_and_narrate_triggers(&mut state, "You enter the room.", &trigger_context, 3);
+        evaluate_and_narrate_triggers(&mut state, "You enter the room.", &trigger_context);
 
         // Should have at least 2 entries: event header + narration
         assert!(

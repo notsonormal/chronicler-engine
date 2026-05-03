@@ -2,14 +2,15 @@
 
 #![allow(dead_code)]
 
-use playwright_rs::Playwright;
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::net::TcpListener;
 use std::process::{Child, Command};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
+
+use playwright_rs::Playwright;
+use serde::{Deserialize, Serialize};
 use tokio::time::sleep;
 
 static SERVER_MANAGED: AtomicBool = AtomicBool::new(false);
@@ -18,9 +19,6 @@ pub fn port_in_use(port: u16) -> bool {
     std::net::TcpStream::connect(format!("127.0.0.1:{port}")).is_ok()
 }
 
-/// Navigate to a URL with explicit error handling for connection refused.
-/// Logs a clear error message when the server isn't reachable, including
-/// the port number and likely cause (port conflict, server crash).
 pub async fn goto_with_connection_check(
     page: &playwright_rs::Page,
     port: u16,
@@ -463,7 +461,7 @@ pub async fn wait_for_status_ready(page: &playwright_rs::Page) {
     }
 }
 
-pub async fn wait_for_status_not_thinking(page: &playwright_rs::Page) -> String {
+pub async fn wait_for_status_ready_or_error(page: &playwright_rs::Page) -> String {
     for _ in 0..30 {
         let status: String = page
             .evaluate::<(), String>(
@@ -473,7 +471,7 @@ pub async fn wait_for_status_not_thinking(page: &playwright_rs::Page) -> String 
             .await
             .unwrap_or_default();
 
-        if !status.contains("Thinking") {
+        if status.contains("Ready") || status.contains("Error") {
             return status;
         }
         sleep(Duration::from_millis(500)).await;

@@ -76,14 +76,19 @@
         }
         
         // Called after HTMX polls /status/generating
-        // The endpoint returns "generating" or "idle" (plain text)
+        // The endpoint returns phase names or "idle" (plain text)
         function onStatusPoll(el) {
             const text = el.textContent.trim();
             if (text === 'idle') {
                 el.innerHTML = '<span class="status ready">Ready</span>';
                 setButtonState(false);
-            } else if (text === 'generating') {
-                el.innerHTML = '<span class="status thinking">Thinking...</span>';
+            } else if (text === 'narrating' || text === 'quantifying' || text === 'generating-event') {
+                const phaseMap = {
+                    'narrating': 'Generating narration...',
+                    'quantifying': 'Quantifying scene...',
+                    'generating-event': 'Generating event...'
+                };
+                el.innerHTML = '<span class="status thinking">' + phaseMap[text] + '</span>';
                 setButtonState(true);
             }
             // If text is empty or unexpected, do nothing
@@ -221,14 +226,15 @@
         const statusObserver = new MutationObserver(function(mutations) {
             mutations.forEach(function(mutation) {
                 if (mutation.type === 'childList' || mutation.type === 'characterData') {
-                    const statusText = statusDisplay.textContent;
-                    // Re-enable button on ANY state that isn't thinking (Ready, Error, etc.)
-                    if (statusText.includes('Thinking')) {
+                    // Check if the inner status span has the 'thinking' class
+                    const isThinking = statusDisplay.querySelector('.status.thinking') !== null;
+                    if (isThinking) {
                         setButtonState(true);
                     } else {
                         setButtonState(false);
                     }
                     // Show error notification for error states
+                    const statusText = statusDisplay.textContent;
                     if (statusText.includes('Error')) {
                         showError(statusText);
                     }

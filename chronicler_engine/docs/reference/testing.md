@@ -11,9 +11,13 @@ Establish a formal policy and architectural design pattern for ensuring the Chro
 ## The `LlmBackend` Interface
 To satisfy the LLM Abstraction policy, `llm.rs` must implement an interface:
 ```rust
-pub trait LlmBackend {
-    fn generate_dialogue(&self, world: &WorldCard, room: &Room, npc: &NpcCard, user_message: &Option<String>) -> String;
-    fn narrate_action(&self, world: &WorldCard, room: &Room, nearby_npcs: &[&NpcCard], player: &PlayerCard, player_input: &str) -> String;
+pub trait LlmBackend: Send + Sync {
+    fn generate_dialogue(&self, context: &PromptContext, npc: &NpcCard) -> Result<String, EngineError>;
+    fn narrate_action(&self, context: &PromptContext) -> Result<String, EngineError>;
+    fn narrate_arrival(&self, context: &PromptContext) -> Result<String, EngineError>;
+    fn narrate_continuation(&self, system_prompt: &str, user_prompt: &str, trigger_prompt: &str) -> Result<String, EngineError>;
+    fn narrate_action_from_prompt(&self, system_prompt: &str, user_prompt: &str) -> Result<String, EngineError>;
+    fn name(&self) -> &str;
 }
 ```
 
@@ -89,35 +93,43 @@ cargo test -- --test-threads=1
 | `flow_llm_tests.rs` | LLM narrative | Browser + Real LLM | Slow |
 | `component_tests.rs` | Templates, endpoints, settings | In-process | Very Fast |
 | `e2e_tests.rs` | UI structure, layouts | Browser | Medium |
+| `trigger_tests.rs` | Trigger evaluation and firing | Browser + Mock LLM | Fast |
+| `game_service_tests.rs` | Game service logic | In-process | Very Fast |
+| `architecture.rs` | Architecture guardrails | In-process | Very Fast |
 
 ### Test Coverage
 
-**component_tests.rs** (33 tests):
+**component_tests.rs** (52 tests):
 - XSS security (template escaping)
 - Template rendering
 - HTTP endpoint responses (game fragments)
+- Status endpoint phase responses (`narrating`, `quantifying`)
 - Validation (empty command rejection)
-- Settings UI integration (8 tests)
+- Settings UI integration (16+ tests)
 
-**e2e_tests.rs** (13 tests):
+**e2e_tests.rs** (21 tests):
 - Page loads, UI structure
 - Action area elements
 - Story log functionality
 - Layout positioning
 - Visual sidebar
+- Edit mode and retry functionality
 
-**flow_mock_tests.rs** (5 tests):
+**flow_mock_tests.rs** (4 tests):
 - Initial load (header, story-log, status)
 - Connection status indicator
 - Command submission
 - Polling mechanism
-- Message ordering
 
-**flow_llm_tests.rs** (4 tests):
+**flow_llm_tests.rs** (3 tests):
 - LLM narration via polling
-- LLM error handling
 - LLM arrival narration
 - LLM free action narration
+
+**trigger_tests.rs** (6 tests):
+- Trigger evaluation and firing
+- Non-repeatable trigger behavior
+- Multiple trigger handling
 
 ### Known Limitations
 

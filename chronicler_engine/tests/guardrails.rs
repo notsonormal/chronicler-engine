@@ -52,6 +52,16 @@ fn discover_src_files() -> Vec<String> {
         .collect()
 }
 
+fn discover_test_files() -> Vec<String> {
+    walkdir::WalkDir::new("tests")
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().is_file())
+        .filter(|e| e.path().extension().map(|ext| ext == "rs").unwrap_or(false))
+        .map(|e| e.path().to_string_lossy().to_string())
+        .collect()
+}
+
 fn relative_path(full: &str) -> &str {
     full.strip_prefix("src/").unwrap_or(full)
 }
@@ -770,6 +780,17 @@ fn guardrails_import_ordering() {
         errors.extend(check_import_ordering(rel, &content));
     }
     assert_violations(&errors, "import ordering");
+}
+
+#[test]
+fn guardrails_import_ordering_tests() {
+    let mut errors = Vec::new();
+    for file in discover_test_files() {
+        let content = std::fs::read_to_string(&file).unwrap();
+        let rel = file.strip_prefix("tests/").unwrap_or(&file);
+        errors.extend(check_import_ordering(rel, &content));
+    }
+    assert_violations(&errors, "import ordering (tests)");
 }
 
 #[test]
