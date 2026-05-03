@@ -149,18 +149,7 @@ pub struct SettingsForm {
 }
 
 #[derive(Debug, serde::Deserialize)]
-pub struct AddConnectionForm {
-    pub conn_name: String,
-    pub conn_provider: String,
-    pub conn_model: String,
-    pub conn_api_key: String,
-    pub conn_base_url: String,
-    #[serde(default)]
-    pub single_user_message: bool,
-}
-
-#[derive(Debug, serde::Deserialize)]
-pub struct EditConnectionForm {
+pub struct ConnectionForm {
     pub conn_name: String,
     pub conn_provider: String,
     pub conn_model: String,
@@ -197,7 +186,7 @@ pub async fn save_settings_handler(
 /// [DOC: docs/architecture/system.md]
 pub async fn add_connection_handler(
     State(app_state): State<AppState>,
-    Form(form): Form<AddConnectionForm>,
+    Form(form): Form<ConnectionForm>,
 ) -> Html<String> {
     let mut settings = match app_state.settings.write() {
         Ok(g) => g,
@@ -231,6 +220,8 @@ pub async fn add_connection_handler(
         api_key,
         base_url,
         single_user_message: form.single_user_message,
+        max_tokens: None,
+        max_context_tokens: None,
     };
 
     settings.connections.push(connection);
@@ -289,7 +280,7 @@ pub async fn edit_connection_form(
 pub async fn edit_connection_handler(
     State(app_state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<String>,
-    Form(form): Form<EditConnectionForm>,
+    Form(form): Form<ConnectionForm>,
 ) -> Html<String> {
     let mut settings = match app_state.settings.write() {
         Ok(g) => g,
@@ -636,6 +627,8 @@ mod tests {
                         api_key: Some("sk-test".into()),
                         base_url: None,
                         single_user_message: false,
+                        max_tokens: None,
+                        max_context_tokens: None,
                     },
                     Connection {
                         id: "conn-2".into(),
@@ -645,6 +638,8 @@ mod tests {
                         api_key: None,
                         base_url: Some("http://localhost:11434".into()),
                         single_user_message: false,
+                        max_tokens: None,
+                        max_context_tokens: None,
                     },
                 ],
                 narration_connection_id: "conn-1".into(),

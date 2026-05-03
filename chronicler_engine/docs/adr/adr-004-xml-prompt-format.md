@@ -1,6 +1,6 @@
 # ADR-004: XML-Structured LLM Prompts
 
-**Date:** 2025-04-13 (initial), 2026-04-14 (Silly Tavern v2)
+**Date:** 2025-04-13 (initial), 2026-04-14 (Silly Tavern v2), 2026-05-03 (plain-text instructions v3)
 
 ---
 
@@ -76,10 +76,26 @@ The quantifier prompt (for NPC detection, movement) was also updated to XML:
 
 ---
 
+## v3 Update: Plain-Text Instructions + XML-Wrapped Data (2026-05-03)
+
+**Problem discovered**: Self-referential XML tags wrapping instructions (`<SystemPrompt>`, `<Role>`, `<AuxiliaryInstructions>`, `<QuantifierTask>`) caused reasoning models (e.g., Gemma 4) to enter meta-analysis mode. The model would analyze the prompt structure instead of executing the instructions, consuming all tokens in `reasoning` fields and leaving `content` empty.
+
+**New decision**: Separate instructions from data:
+- **Instructions stay plain text** — No XML tags wrapping the system prompt or PHI layer. Imperative voice only ("You are...", "Your job is...", "Never...").
+- **Data keeps XML wrapping** — `<GameState>`, `<KnownNpcs>`, `<ConversationHistory>`, `<CurrentRoom>`, etc. remain XML because they are external context, not instructions.
+
+**Consequences of v3**:
+- **Positive**: Reasoning models (Gemma 4, etc.) now execute instructions correctly without meta-analysis loops
+- **Positive**: Token overhead reduced for instruction layers
+- **Negative**: Slightly less visual structure in the system prompt section
+- **Trade-off**: Lost the self-documenting XML structure for instructions, but gained reasoning-model compatibility
+
+---
+
 ## Related ADRs
 
-- [ADR-005: Layered Prompt System](./adr-005-layered-prompts.md) - Uses XML structure
-- [ADR-006: Quantifier-Driven Game Systems](./adr-006-quantifier-systems.md) - Quantifier with XML
+- [ADR-005: Layered Prompt System](./adr-005-layered-prompts.md) - Uses XML structure for data layers
+- [ADR-006: Quantifier-Driven Game Systems](./adr-006-quantifier-systems.md) - Quantifier with XML data wrapping
 
 ---
 
@@ -87,9 +103,10 @@ The quantifier prompt (for NPC detection, movement) was also updated to XML:
 
 - **2025-04-13**: Initial XML refactor (prompt-xml-refactor plan)
 - **Later**: v2 - Silly Tavern integration + quantifier XML (prompt-xml-refactor-v2 plan)
+- **2026-05-03**: v3 - Plain-text instructions for reasoning-model compatibility (hercules-she-hulk-doctor-fate plan)
 
 ---
 
 ## Historical Note
 
-Initial prompt format used `=== SECTION ===` delimiters. This was later enhanced with Silly Tavern behavioral rules in v2.
+Initial prompt format used `=== SECTION ===` delimiters. This was later enhanced with Silly Tavern behavioral rules in v2, then refined to plain-text instructions in v3 to address reasoning-model compatibility.

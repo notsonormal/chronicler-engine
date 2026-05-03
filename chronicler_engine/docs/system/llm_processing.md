@@ -1,7 +1,7 @@
 # Specification: LLM Processing & Integration
 
 ## Objective
-The engine utilizes Large Language Models (LLMs) via the OpenRouter API or DeepSeek to handle Game Master narration and NPC dialogue.
+The engine utilizes Large Language Models (LLMs) via the OpenRouter API, DeepSeek, or local Ollama to handle Game Master narration and NPC dialogue.
 
 ## Technical Architecture
 
@@ -36,25 +36,35 @@ Some models (particularly certain local/quantized models) ignore or poorly handl
 - The system message is omitted from the API payload when merging
 - This is a per-connection setting, so different backends can use different strategies
 
-### 5. Prompt Construction (SillyTavern-Style Layered Prompts)
-The engine uses a layered prompt system inspired by SillyTavern's Prompt Manager. The prompt is built from 8 layers:
+### 5. Prompt Construction (Layered Prompts)
+The engine uses a layered prompt system inspired by SillyTavern's Prompt Manager, refined with a **plain-text instructions + XML-wrapped data** pattern for reasoning-model compatibility:
 
-| Layer | Name | Content |
-|-------|------|---------|
-| 0 | System | Game rules, role instructions, narrative style |
-| 1 | Game State | Current room, inventory, present NPCs |
-| 2 | NPC Cards | `<KnownNpcs>` roster (all NPCs, condensed) + `<NpcsInRoom>` full cards (present NPCs only) |
-| 3 | Player | Player persona and description |
-| 4 | World Info | World lore triggered by keywords |
-| 5 | History | Full narration_history (up to 1000 entries) |
-| 6 | User Input | Current player message |
-| 7 | PHI | Post-History Instructions (behavioral guidance) |
+| Layer | Name | Content | Role |
+|-------|------|---------|------|
+| 0 | System | Plain-text game rules, role instructions, narrative style | System |
+| 1 | Game State | `<GameState>` — Current room, inventory, present NPCs | User (data) |
+| 2 | NPC Cards | `<KnownNpcs>` roster (all NPCs, condensed) + `<NpcsInRoom>` full cards (present NPCs only) | User (data) |
+| 3 | Player | `<PlayerCharacter>` — Player persona and description | User (data) |
+| 4 | World Info | `<WorldLore>` — World lore triggered by keywords | User (data) |
+| 5 | History | `<ConversationHistory>` — Full narration_history | User (data) |
+| 6 | User Input | `<PlayerInput>` — Current player message | User (data) |
+| 7 | PHI | Plain-text post-history behavioral guidance | User (instruction) |
+
+**`build_split()` separation**:
+- **System half**: Plain-text instructions only (Layer 0)
+- **User half**: XML-wrapped data (Layers 1–6) + plain-text PHI (Layer 7)
+
+This separation prevents reasoning models (e.g., Gemma 4) from entering meta-analysis mode.
 
 ### 6. Token Budget Management
-- **MAX_CONTEXT_TOKENS**: 32000
-- **MAX_RESPONSE_TOKENS**: 1024
+- **MAX_CONTEXT_TOKENS**: 32768 (fallback default; configurable per connection via `max_context_tokens`)
+- **MAX_RESPONSE_TOKENS**: 2048 (fallback default)
 - **MAX_HISTORY_TOKENS**: 16000
-- Hard truncation with `truncate_to_budget()` - no summarization
+- **SAFETY_MARGIN_TOKENS**: 256 (reserved for token estimation error)
+- **MIN_INPUT_BUDGET_TOKENS**: 512 (minimum space reserved for input)
+- **Strategy**: Context-aware fitting via `fit_messages_to_context()` — dynamically caps `max_tokens`, trims oldest history entries first to fit within the connection's configured context window
+- **No summarization** — maintains accuracy over compression
+- **Estimation**: Character-based token estimation (simple and fast)
 
 ### 7. Prompt Injection Sanitization
 User input is sanitized to prevent prompt injection:
@@ -64,9 +74,11 @@ User input is sanitized to prevent prompt injection:
 
 ### Module Location
 - **Crate path**: `crate::narrative::llm` (LLM backends)
-- **Crate path**: `crate::narrative::prompt` (PromptBuilder)
+- **Crate path**: `crate::narrative::prompt` (PromptBuilder, context fitting)
+- **Crate path**: `crate::narrative::llm_client` (HTTP client helpers)
 
 ## Implementation Standards
 - Use the `LlmBackend` trait for all implementations
 - Maintain a `MockBackend` for test environments
 - Use `PromptBuilder` for all LLM calls
+- Configure `max_context_tokens` per connection to match the model's actual context window

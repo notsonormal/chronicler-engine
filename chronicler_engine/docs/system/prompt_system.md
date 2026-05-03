@@ -6,6 +6,14 @@ The Chronicler Engine uses a layered prompt construction system inspired by Sill
 
 For background on SillyTavern's original system, see [`reference/sillytavern_prompt_system.md`](../reference/sillytavern_prompt_system.md).
 
+## Prompt Architecture: Plain-Text Instructions + XML Data
+
+The engine follows a **Marinara-Engine-inspired pattern** designed for compatibility with reasoning models:
+
+- **Instructions are plain text** — No XML tags wrapping the system prompt or PHI layer. Imperative voice only ("You are...", "Your job is...", "Never...").
+- **Data is XML-wrapped** — External context (`<GameState>`, `<KnownNpcs>`, `<ConversationHistory>`, etc.) uses XML tags because it is *data*, not instructions.
+- **Why?** Self-referential XML (`<SystemPrompt>`, `<Role>`, `<AuxiliaryInstructions>`) can trigger reasoning models (e.g., Gemma 4) to enter meta-analysis mode, consuming all tokens in `reasoning` fields and producing empty `content`. Plain-text instructions avoid this trap.
+
 ## Source
 
 - **SillyTavern Docs**: https://docs.sillytavern.app/usage/prompts/prompt-manager/
@@ -33,71 +41,92 @@ The Chronicler Engine implements an 8-layer prompt structure mapped from SillyTa
 - **Position**: Absolute (top)
 - **Content**: Global game rules, narrator persona, narrative style guidelines
 - **Renders**: `PromptBuilder::render_system_layer()`
+- **Format**: Plain text (no XML wrapper)
 - **Example**:
   ```
-  You are a text adventure game master. Narrate outcomes in a literary fiction style.
-  Never speak on behalf of the player. Keep descriptions immersive and concise.
+  You are an interactive fiction author. Write in the style of literary fiction prose.
+  Your role is to narrate the consequences of player actions as if writing a novel chapter.
   ```
 - **See also**: [`reference/system_prompt.md`](../reference/system_prompt.md) for the full prompt text
 
 ### Layer 1: Game State
-- **Role**: System
+- **Role**: User (data)
 - **Content**: Current room name, description, player inventory, NPCs in the current room
+- **Format**: XML-wrapped (`<GameState>... </GameState>`)
 - **Example**:
-  ```
-  ## Current Location
-  Name: Grand Foyer
-  Description: A cavernous entrance hall with marble floors.
-  Inventory: Rusty Key, Candle
+  ```xml
+  <GameState>
+  Current Location: Grand Foyer
 
-  NPCs Present: Butler, Maid
+  A cavernous entrance hall with marble floors.
+
+  --- Inventory ---
+  - Rusty Key
+  - Candle
+  </GameState>
   ```
 
 ### Layer 2: NPC Cards (Character Description)
-- **Role**: System
+- **Role**: User (data)
 - **Content**: Two sections:
   - `<KnownNpcs>`: Condensed roster of **all** NPCs the player has met (name, location, 3-line summary)
   - `<NpcsInRoom>`: Full character sheets for NPCs **currently present** (name, description, personality, scenario, goals)
 - **Why two-tier**: The LLM needs awareness of off-screen characters to reference them or write introduction scenes, but full cards for every NPC would bloat the prompt. Condensed cards (~40-60 words) preserve identity and motivation without the bulk.
 
 ### Layer 3: Player Persona
-- **Role**: System
+- **Role**: User (data)
 - **Content**: Player's character sheet
+- **Format**: XML-wrapped (`<PlayerCharacter>... </PlayerCharacter>`)
 - **Includes**: name, description, personality, scenario
 
 ### Layer 4: World Info (Lorebook)
-- **Role**: System
+- **Role**: User (data)
 - **Trigger**: Keyword matching in conversation
 - **Content**: World lore, setting facts, background information
+- **Format**: XML-wrapped (`<WorldLore>... </WorldLore>`)
 - **Implementation**: Simple keyword matching from `world.json` `global_rules`
 
 ### Layer 5: Chat History
-- **Role**: User/Assistant alternating
+- **Role**: User (data)
 - **Content**: Full conversation history (up to token limit)
-- **Note**: No summarization — all conversation retained and sent
+- **Format**: XML-wrapped (`<ConversationHistory>... </ConversationHistory>`)
+- **Note**: No summarization — all conversation retained and sent. Oldest entries are trimmed first if the context window is exceeded.
 
 ### Layer 6: User Input
-- **Role**: User
+- **Role**: User (data)
 - **Content**: The player's current message/action
+- **Format**: XML-wrapped (`<PlayerInput>... </PlayerInput>`)
 
 ### Layer 7: Post-History Instructions (PHI)
-- **Role**: User (appended to user message in split mode)
+- **Role**: User (instruction appended to user message)
 - **Position**: After history, before response
 - **Content**: Final behavioral instructions
+- **Format**: Plain text (no XML wrapper)
 - **Modes**: See [`reference/system_prompt.md`](../reference/system_prompt.md) for `PhiMode::Narration` and `PhiMode::Continuation`
-- **Split behavior**: In `build_split()`, PHI is appended to the **user message** (not the system prompt) so it sits closest to the generation point, matching the ordering in `build()` where `PlayerInput` precedes `AuxiliaryInstructions`
+- **Split behavior**: In `build_split()`, PHI is appended to the **user message** (not the system prompt) so it sits closest to the generation point, matching the ordering in `build()` where `PlayerInput` precedes the PHI instructions.
 - **Example**:
   ```
-  Describe the outcome of the player's action. If NPCs react, include their dialogue.
-  Keep responses under 2 paragraphs.
+  Narrate the outcome of the player's action in immersive prose.
+  Do NOT conclude with any form of player direction, question, or prompt.
   ```
+
+## `build_split()` Separation
+
+`build_split()` separates instructions from data to maximize compatibility with OpenAI-compatible APIs:
+
+- **System half**: Plain-text instructions only (Layer 0)
+- **User half**: XML-wrapped data (Layers 1–6) + plain-text PHI (Layer 7)
+
+This separation ensures that reasoning models receive clear imperative instructions in the system role, while all external context stays in the user role.
 
 ## Token Budget Management
 
-- **MAX_CONTEXT_TOKENS**: 32000
-- **MAX_RESPONSE_TOKENS**: 1024
+- **MAX_CONTEXT_TOKENS**: 32768 (fallback default; configurable per connection via `max_context_tokens`)
+- **MAX_RESPONSE_TOKENS**: 2048 (fallback default)
 - **MAX_HISTORY_TOKENS**: 16000
-- **Strategy**: Hard truncation — removes oldest history entries to fit budget
+- **SAFETY_MARGIN_TOKENS**: 256 (reserved for token estimation error)
+- **MIN_INPUT_BUDGET_TOKENS**: 512 (minimum space reserved for input)
+- **Strategy**: Context-aware fitting — `fit_messages_to_context()` caps `max_tokens` dynamically and trims oldest history entries first to fit within the connection's configured context window.
 - **No summarization** — maintains accuracy over compression
 - **Estimation**: Character-based token estimation (simple and fast)
 
@@ -138,22 +167,22 @@ The engine also uses a **quantifier prompt** — a separate secondary LLM call t
 - See [`reference/quantifier_prompt.md`](../reference/quantifier_prompt.md) for the full prompt text
 - Rendered by: `QuantifierPromptBuilder` in `src/narrative/quantifier.rs`
 - Uses a separate model connection from the main narration LLM
+- The quantifier also follows the plain-text instructions + XML-wrapped data pattern
 
 ## Implementation
 
 ### Key Files
-- `src/narrative/prompt.rs` — `PromptBuilder` with 8-layer construction
-- `src/narrative/llm.rs` — LLM calls using `PromptBuilder`
+- `src/narrative/prompt.rs` — `PromptBuilder` with 8-layer construction, context fitting, and budget management
+- `src/narrative/llm.rs` — LLM backend implementations that configure `PromptBuilder` with connection-specific context windows
 - `src/model/state.rs` — `GameState` provides context data
 - `src/model/character.rs` — `NpcCard`, `PlayerCard` structures
 
 ### Code Example
 ```rust
-let prompt = PromptBuilder::new()
-    .with_game_state(&state)
-    .with_history(&state.narration_history)
-    .with_user_input(input)
-    .build()?;
+let (system, user, max_tokens) = PromptBuilder::from_context(&ctx)
+    .with_max_context_tokens(8192)
+    .with_max_tokens(2048)
+    .build_split()?;
 ```
 
 ## Differences from SillyTavern
@@ -165,6 +194,8 @@ let prompt = PromptBuilder::new()
 | History | Full chat | narration_history |
 | Memory | Vector RAG | Keyword triggers only |
 | UI | Web GUI | None (server) |
+| Prompt style | XML-wrapped instructions | Plain-text instructions + XML data |
+| Context fitting | Manual | Automatic per connection |
 
 ## References
 

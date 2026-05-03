@@ -20,12 +20,14 @@ pub trait LlmBackend: Send + Sync {
         system_prompt: &str,
         user_prompt: &str,
         trigger_prompt: &str,
+        max_tokens: Option<u32>,
     ) -> Result<String, EngineError>;
 
     fn narrate_action_from_prompt(
         &self,
         system_prompt: &str,
         user_prompt: &str,
+        max_tokens: Option<u32>,
     ) -> Result<String, EngineError>;
 
     fn name(&self) -> &str;
@@ -121,6 +123,8 @@ pub struct OpenRouterBackend {
     api_key: String,
     model: String,
     single_user_message: bool,
+    max_tokens: Option<u32>,
+    max_context_tokens: u32,
 }
 
 impl OpenRouterBackend {
@@ -130,17 +134,37 @@ impl OpenRouterBackend {
             api_key,
             model: connection.model.clone(),
             single_user_message: connection.single_user_message,
+            max_tokens: connection.max_tokens,
+            max_context_tokens: connection.resolve_max_context_tokens(),
         }
     }
 
-    fn call(&self, system_prompt: &str, user_text: &str) -> Result<String, EngineError> {
+    fn call(
+        &self,
+        system_prompt: &str,
+        user_text: &str,
+        max_tokens: Option<u32>,
+    ) -> Result<String, EngineError> {
         let (system, user) = if self.single_user_message {
             ("", merge_single_user_message(system_prompt, user_text))
         } else {
             (system_prompt, user_text.to_string())
         };
-        call_openrouter_with_model(&self.api_key, system, &user, &self.model)
+        let max_tokens = max_tokens.or(self.max_tokens);
+        call_openrouter_with_model(&self.api_key, system, &user, &self.model, max_tokens)
             .map_err(EngineError::Narrative)
+    }
+
+    /// Build a prompt from context using this backend's token limits, then call the LLM.
+    fn narrate_from_context(&self, context: &PromptContext) -> Result<String, EngineError> {
+        let builder = PromptBuilder::from_context(context)
+            .with_max_context_tokens(self.max_context_tokens)
+            .with_max_tokens(
+                self.max_tokens
+                    .unwrap_or(crate::narrative::prompt::budget::MAX_RESPONSE_TOKENS),
+            );
+        let (system_prompt, user_text, max_tokens) = builder.build_split()?;
+        self.call(&system_prompt, &user_text, Some(max_tokens))
     }
 }
 
@@ -167,10 +191,7 @@ impl LlmBackend for OpenRouterBackend {
             history: context.history,
         };
 
-        let builder = PromptBuilder::from_context(&npc_context);
-        let (system_prompt, user_text) = builder.build_split()?;
-
-        self.call(&system_prompt, &user_text)
+        self.narrate_from_context(&npc_context)
     }
 
     fn narrate_action(&self, context: &PromptContext) -> Result<String, EngineError> {
@@ -179,10 +200,7 @@ impl LlmBackend for OpenRouterBackend {
             context.user_message
         );
 
-        let builder = PromptBuilder::from_context(context);
-        let (system_prompt, user_text) = builder.build_split()?;
-
-        self.call(&system_prompt, &user_text)
+        self.narrate_from_context(context)
     }
 
     fn narrate_arrival(&self, context: &PromptContext) -> Result<String, EngineError> {
@@ -206,10 +224,7 @@ impl LlmBackend for OpenRouterBackend {
             history: context.history,
         };
 
-        let builder = PromptBuilder::from_context(&arrival_context);
-        let (system_prompt, user_text) = builder.build_split()?;
-
-        self.call(&system_prompt, &user_text)
+        self.narrate_from_context(&arrival_context)
     }
 
     fn narrate_continuation(
@@ -217,20 +232,22 @@ impl LlmBackend for OpenRouterBackend {
         system_prompt: &str,
         user_prompt: &str,
         _trigger_prompt: &str,
+        max_tokens: Option<u32>,
     ) -> Result<String, EngineError> {
         log::info!("[LLM] Generating continuation narration");
 
-        self.call(system_prompt, user_prompt)
+        self.call(system_prompt, user_prompt, max_tokens)
     }
 
     fn narrate_action_from_prompt(
         &self,
         system_prompt: &str,
         user_prompt: &str,
+        max_tokens: Option<u32>,
     ) -> Result<String, EngineError> {
         log::info!("[LLM] Generating action from prompt");
 
-        self.call(system_prompt, user_prompt)
+        self.call(system_prompt, user_prompt, max_tokens)
     }
 
     fn name(&self) -> &str {
@@ -271,6 +288,7 @@ impl LlmBackend for MockBackend {
         _system_prompt: &str,
         _user_prompt: &str,
         trigger_prompt: &str,
+        _max_tokens: Option<u32>,
     ) -> Result<String, EngineError> {
         Ok(format!("[Trigger: {trigger_prompt}]"))
     }
@@ -279,6 +297,7 @@ impl LlmBackend for MockBackend {
         &self,
         _system_prompt: &str,
         user_prompt: &str,
+        _max_tokens: Option<u32>,
     ) -> Result<String, EngineError> {
         Ok(format!(
             "[Continuation: {}]",
@@ -296,6 +315,7 @@ impl LlmBackend for MockBackend {
 pub struct DeepSeekBackend {
     api_key: String,
     model: String,
+    max_context_tokens: u32,
 }
 
 impl DeepSeekBackend {
@@ -304,6 +324,7 @@ impl DeepSeekBackend {
         Self {
             api_key,
             model: connection.model.clone(),
+            max_context_tokens: connection.resolve_max_context_tokens(),
         }
     }
 }
@@ -330,6 +351,7 @@ impl LlmBackend for DeepSeekBackend {
         _system_prompt: &str,
         _user_prompt: &str,
         _trigger_prompt: &str,
+        _max_tokens: Option<u32>,
     ) -> Result<String, EngineError> {
         Ok("[DeepSeek] Continuation not yet implemented. Use OpenRouter for now.".to_string())
     }
@@ -338,6 +360,7 @@ impl LlmBackend for DeepSeekBackend {
         &self,
         _system_prompt: &str,
         _user_prompt: &str,
+        _max_tokens: Option<u32>,
     ) -> Result<String, EngineError> {
         Ok(
             "[DeepSeek] Action from prompt not yet implemented. Use OpenRouter for now."
@@ -355,6 +378,8 @@ pub struct OllamaBackend {
     base_url: String,
     model: String,
     single_user_message: bool,
+    max_tokens: Option<u32>,
+    max_context_tokens: u32,
 }
 
 impl OllamaBackend {
@@ -363,16 +388,37 @@ impl OllamaBackend {
             base_url: connection.resolve_base_url(),
             model: connection.model.clone(),
             single_user_message: connection.single_user_message,
+            max_tokens: connection.max_tokens,
+            max_context_tokens: connection.resolve_max_context_tokens(),
         }
     }
 
-    fn call(&self, system_prompt: &str, user_text: &str) -> Result<String, EngineError> {
+    fn call(
+        &self,
+        system_prompt: &str,
+        user_text: &str,
+        max_tokens: Option<u32>,
+    ) -> Result<String, EngineError> {
         let (system, user) = if self.single_user_message {
             ("", merge_single_user_message(system_prompt, user_text))
         } else {
             (system_prompt, user_text.to_string())
         };
-        call_ollama(&self.base_url, &self.model, system, &user).map_err(EngineError::Narrative)
+        let max_tokens = max_tokens.or(self.max_tokens);
+        call_ollama(&self.base_url, &self.model, system, &user, max_tokens)
+            .map_err(EngineError::Narrative)
+    }
+
+    /// Build a prompt from context using this backend's token limits, then call the LLM.
+    fn narrate_from_context(&self, context: &PromptContext) -> Result<String, EngineError> {
+        let builder = PromptBuilder::from_context(context)
+            .with_max_context_tokens(self.max_context_tokens)
+            .with_max_tokens(
+                self.max_tokens
+                    .unwrap_or(crate::narrative::prompt::budget::MAX_RESPONSE_TOKENS),
+            );
+        let (system_prompt, user_text, max_tokens) = builder.build_split()?;
+        self.call(&system_prompt, &user_text, Some(max_tokens))
     }
 }
 
@@ -399,9 +445,7 @@ impl LlmBackend for OllamaBackend {
             history: context.history,
         };
 
-        let builder = PromptBuilder::from_context(&npc_context);
-        let (system_prompt, user_text) = builder.build_split()?;
-        self.call(&system_prompt, &user_text)
+        self.narrate_from_context(&npc_context)
     }
 
     fn narrate_action(&self, context: &PromptContext) -> Result<String, EngineError> {
@@ -410,9 +454,7 @@ impl LlmBackend for OllamaBackend {
             context.user_message
         );
 
-        let builder = PromptBuilder::from_context(context);
-        let (system_prompt, user_text) = builder.build_split()?;
-        self.call(&system_prompt, &user_text)
+        self.narrate_from_context(context)
     }
 
     fn narrate_arrival(&self, context: &PromptContext) -> Result<String, EngineError> {
@@ -436,9 +478,7 @@ impl LlmBackend for OllamaBackend {
             history: context.history,
         };
 
-        let builder = PromptBuilder::from_context(&arrival_context);
-        let (system_prompt, user_text) = builder.build_split()?;
-        self.call(&system_prompt, &user_text)
+        self.narrate_from_context(&arrival_context)
     }
 
     fn narrate_continuation(
@@ -446,18 +486,20 @@ impl LlmBackend for OllamaBackend {
         system_prompt: &str,
         user_prompt: &str,
         _trigger_prompt: &str,
+        max_tokens: Option<u32>,
     ) -> Result<String, EngineError> {
         log::info!("[LLM] Generating continuation narration");
-        self.call(system_prompt, user_prompt)
+        self.call(system_prompt, user_prompt, max_tokens)
     }
 
     fn narrate_action_from_prompt(
         &self,
         system_prompt: &str,
         user_prompt: &str,
+        max_tokens: Option<u32>,
     ) -> Result<String, EngineError> {
         log::info!("[LLM] Generating action from prompt");
-        self.call(system_prompt, user_prompt)
+        self.call(system_prompt, user_prompt, max_tokens)
     }
 
     fn name(&self) -> &str {
@@ -910,7 +952,7 @@ mod tests {
     #[test]
     fn test_mock_narrate_continuation() {
         let backend = MockBackend;
-        let result = backend.narrate_continuation("system", "user", "trigger_info");
+        let result = backend.narrate_continuation("system", "user", "trigger_info", None);
         assert!(result.is_ok());
         assert!(result.unwrap().contains("trigger_info"));
     }
@@ -918,7 +960,7 @@ mod tests {
     #[test]
     fn test_mock_narrate_action_from_prompt() {
         let backend = MockBackend;
-        let result = backend.narrate_action_from_prompt("system prompt", "user action");
+        let result = backend.narrate_action_from_prompt("system prompt", "user action", None);
         assert!(result.is_ok());
         let response = result.unwrap();
         assert!(response.contains("action") || response.contains("Continuation"));
@@ -927,7 +969,7 @@ mod tests {
     #[test]
     fn test_deepseek_narrate_continuation() {
         let backend = DeepSeekBackend::default();
-        let result = backend.narrate_continuation("system", "user", "trigger");
+        let result = backend.narrate_continuation("system", "user", "trigger", None);
         assert!(result.is_ok());
         assert!(result.unwrap().contains("DeepSeek"));
     }
@@ -935,7 +977,7 @@ mod tests {
     #[test]
     fn test_deepseek_narrate_action_from_prompt() {
         let backend = DeepSeekBackend::default();
-        let result = backend.narrate_action_from_prompt("system", "user");
+        let result = backend.narrate_action_from_prompt("system", "user", None);
         assert!(result.is_ok());
         assert!(result.unwrap().contains("DeepSeek"));
     }
@@ -950,7 +992,7 @@ mod tests {
     #[test]
     fn test_mock_narrate_continuation_empty_trigger() {
         let backend = MockBackend;
-        let result = backend.narrate_continuation("system", "user", "");
+        let result = backend.narrate_continuation("system", "user", "", None);
         assert!(result.is_ok());
         assert!(result.unwrap().contains("[Trigger: ]"));
     }
@@ -958,7 +1000,8 @@ mod tests {
     #[test]
     fn test_mock_narrate_continuation_special_chars() {
         let backend = MockBackend;
-        let result = backend.narrate_continuation("sys", "user", "trigger with <special> & chars");
+        let result =
+            backend.narrate_continuation("sys", "user", "trigger with <special> & chars", None);
         assert!(result.is_ok());
         assert!(result.unwrap().contains("trigger with"));
     }
@@ -969,6 +1012,7 @@ mod tests {
         let result = backend.narrate_action_from_prompt(
             "system prompt\nwith multiple lines",
             "user prompt\nalso multiline",
+            None,
         );
         assert!(result.is_ok());
         assert!(result.unwrap().contains("user prompt"));
@@ -977,7 +1021,7 @@ mod tests {
     #[test]
     fn test_mock_narrate_action_from_prompt_empty() {
         let backend = MockBackend;
-        let result = backend.narrate_action_from_prompt("", "");
+        let result = backend.narrate_action_from_prompt("", "", None);
         assert!(result.is_ok());
         assert!(result.unwrap().contains("..."));
     }
@@ -1083,10 +1127,10 @@ mod tests {
         let arrival_result = backend.narrate_arrival(&make_test_context("test"));
         assert!(arrival_result.unwrap().contains("not yet implemented"));
 
-        let continuation_result = backend.narrate_continuation("sys", "user", "trigger");
+        let continuation_result = backend.narrate_continuation("sys", "user", "trigger", None);
         assert!(continuation_result.unwrap().contains("not yet implemented"));
 
-        let prompt_result = backend.narrate_action_from_prompt("sys", "user");
+        let prompt_result = backend.narrate_action_from_prompt("sys", "user", None);
         assert!(prompt_result.unwrap().contains("not yet implemented"));
     }
 
@@ -1165,7 +1209,7 @@ mod tests {
     #[test]
     fn test_mock_narrate_continuation_unicode_trigger() {
         let backend = MockBackend;
-        let result = backend.narrate_continuation("system", "user", "トリガー");
+        let result = backend.narrate_continuation("system", "user", "トリガー", None);
         assert!(result.is_ok());
         assert!(result.unwrap().contains("トリガー"));
     }
@@ -1233,7 +1277,7 @@ mod tests {
         let backend = MockBackend;
         let long_system = "You are a game master. ".repeat(50);
         let long_user = "The player performs an action. ".repeat(50);
-        let result = backend.narrate_action_from_prompt(&long_system, &long_user);
+        let result = backend.narrate_action_from_prompt(&long_system, &long_user, None);
         assert!(result.is_ok());
         // Should still contain first line
         assert!(result.unwrap().contains("The player performs"));

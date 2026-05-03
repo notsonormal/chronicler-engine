@@ -28,7 +28,7 @@ The interface between the synchronous engine and stochastic LLM generation.
   - **`get_llm_backend()`**: Production entry point that loads the narration connection from `data/settings.json`
   - **`get_llm_backend_for(connection)`**: Create a backend for a specific `Connection` profile
   - **`with_test_backend()`**: RAII guard for overriding backend in tests (atomically sets Mock/DeepSeek/OpenRouter without file I/O)
-- **`prompt`**: PromptBuilder module for SillyTavern-style layered prompt construction with token budget management, including `PhiMode` for controlling PHI layer behavior (Narration vs Continuation).
+- **`prompt`**: PromptBuilder module for layered prompt construction with token budget management, including `PhiMode` for controlling PHI layer behavior (Narration vs Continuation). Uses plain-text instructions + XML-wrapped data for reasoning-model compatibility. Includes `fit_messages_to_context()` for dynamic context-window fitting.
 - **`quantifier`**: Scene quantification module for dynamic room presence detection via secondary LLM. Returns NPC presence, player movement intent, and NPC enter/leave events.
   - **`QuantifierBackendTrait`**: Interface for NPC detection backends
   - **`RealQuantifierBackend`**: Production implementation using LLM
@@ -88,7 +88,17 @@ flowchart TD
 | `narration_connection_id` | string | `"openrouter-gpt-4o-mini"` |
 | `quantifier_connection_id` | string | `"openrouter-gpt-4o-mini"` |
 
-Each `Connection` contains: `id`, `name`, `provider`, `model`, `api_key` (optional), `base_url` (optional), `single_user_message` (optional, default `false`).
+#### Connection Context Windows
+
+Each connection can specify a `max_context_tokens` value. When unset, defaults are resolved by provider:
+
+| Provider | Default `max_context_tokens` |
+|----------|------------------------------|
+| `ollama` | 8192 |
+| `openrouter` / `deepseek` | 32768 |
+| `mock` | 4096 |
+
+Each `Connection` contains: `id`, `name`, `provider`, `model`, `api_key` (optional), `base_url` (optional), `single_user_message` (optional, default `false`), `max_tokens` (optional), `max_context_tokens` (optional).
 
 #### Environment Fallback
 

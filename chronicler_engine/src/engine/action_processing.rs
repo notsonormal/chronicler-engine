@@ -114,10 +114,19 @@ pub fn evaluate_and_narrate_triggers(
         history: &state.narration_history,
     };
 
+    let settings = crate::settings::load_settings().unwrap_or_default();
+    let narration_conn = settings.get_narration_connection();
+    let max_context = narration_conn
+        .map(|c| c.resolve_max_context_tokens())
+        .unwrap_or(crate::narrative::prompt::budget::MAX_CONTEXT_TOKENS);
+    let max_tokens = narration_conn.and_then(|c| c.max_tokens);
+
     let mut pb = PromptBuilder::from_context(&trigger_ctx);
     pb.phi_mode = PhiMode::Continuation;
+    pb.max_context_tokens = Some(max_context);
+    pb.requested_max_tokens = max_tokens;
 
-    let Ok((system_prompt, user_prompt)) = pb.build_split() else {
+    let Ok((system_prompt, user_prompt, fitted_max_tokens)) = pb.build_split() else {
         log::error!(
             "Failed to build continuation prompt: {}",
             "build_split failed"
@@ -126,7 +135,11 @@ pub fn evaluate_and_narrate_triggers(
     };
 
     let backend = crate::narrative::llm::get_llm_backend();
-    let continuation_text = match backend.narrate_action_from_prompt(&system_prompt, &user_prompt) {
+    let continuation_text = match backend.narrate_action_from_prompt(
+        &system_prompt,
+        &user_prompt,
+        Some(fitted_max_tokens),
+    ) {
         Ok(text) => text,
         Err(e) => {
             log::error!("Trigger narration failed: {e}");

@@ -3,6 +3,26 @@
 ## Unreleased
 
 ### Added
+- **Marinara-Style Prompt Architecture** - Refactored prompt construction to plain-text instructions + XML-wrapped data only
+  - System prompt (Layer 0) is now plain text — removed `<SystemPrompt>`, `<Role>`, `<CoreRole>`, etc.
+  - PHI layer (Layer 7) is now plain text — removed `<AuxiliaryInstructions>` wrapper
+  - Quantifier prompt instructions are now plain text — removed `<QuantifierTask>` and `<Query>` wrappers
+  - XML tags remain only for external data: `<GameState>`, `<KnownNpcs>`, `<ConversationHistory>`, `<CurrentRoom>`, etc.
+  - Fixes Gemma 4 reasoning-loop bug where self-referential XML triggered meta-analysis instead of execution
+- **Per-Connection Context Windows** - Added `max_context_tokens` to `Connection` settings
+  - Defaults: 8192 for Ollama, 32768 for OpenRouter/DeepSeek, 4096 for Mock
+  - Optional field — existing `settings.json` loads without modification
+- **Context-Aware Token Fitting** - `fit_messages_to_context()` dynamically caps `max_tokens` and trims oldest history first
+  - New constants: `SAFETY_MARGIN_TOKENS` (256), `MIN_INPUT_BUDGET_TOKENS` (512)
+  - `build_split()` now returns fitted `(system, user, max_tokens)` using the active connection's context window
+
+### Changed
+- **Token budget defaults** - `DEFAULT_MAX_TOKENS` increased from 1024 to 2048
+- **`build_split()` separation** - System half now contains plain-text instructions only; user half contains all XML-wrapped data + PHI
+- **`build()` return type** - Now returns `(prompt, max_tokens)` to include the context-fitted token limit
+- **LLM backend trait** - `narrate_continuation` and `narrate_action_from_prompt` now accept optional `max_tokens` to pass fitted limits through
+
+### Added
 - **Granular Status Phases** - The UI now shows distinct status messages during each stage of LLM processing
   - New `GenerationPhase` enum with three variants: `Narrating`, `Quantifying`, `GeneratingEvent`
   - Added `phase` field to `GenerationState` alongside existing `status`

@@ -2,12 +2,19 @@
 
 > **Context**: The quantifier prompt is a **separate secondary prompt** used for post-narration scene analysis. It is **not** part of the 8-layer narrative prompt system. For the main narrative prompt architecture, see [`system/prompt_system.md`](../system/prompt_system.md).
 
-The quantifier prompt is rendered by `QuantifierPromptBuilder` in `src/narrative/quantifier.rs`. It uses a separate LLM model (`QUANTIFIER_MODEL` env var) to determine which NPCs are present in the current room and whether the player is moving.
+The quantifier prompt is rendered by `QuantifierPromptBuilder` in `src/narrative/quantifier.rs`. It uses a separate LLM model connection to determine which NPCs are present in the current room and whether the player is moving.
+
+## Prompt Architecture
+
+The quantifier follows the same **plain-text instructions + XML-wrapped data** pattern as the main narrative prompt:
+- **Instructions are plain text** — No XML tags wrapping the task description or rules.
+- **Data is XML-wrapped** — `<AvailableNpcIds>`, `<AvailableRooms>`, `<CurrentRoom>`, etc. are external context, not instructions.
+
+This design avoids triggering meta-analysis mode in reasoning models (e.g., Gemma 4).
 
 ## System Prompt
 
-```xml
-<QuantifierTask>
+```
 You are a scene quantifier for a text adventure game.
 Your task is to determine which NPCs are present in the current room
 and whether the player actually moved to a new location.
@@ -29,7 +36,6 @@ Examples:
 - Narration: "You walk through the door into the kitchen." → {"movement": {"type": "entering", "destination": "kitchen"}}
 - Narration: "The guard blocks your path. 'Halt!' he shouts." → {"movement": {"type": null}}
 - Narration: "She swiftly interposes herself between you and the gate." → {"movement": {"type": null}}
-</QuantifierTask>
 
 <AvailableNpcIds>
   <Npc id="npc_id" name="NPC Name"/>
@@ -65,15 +71,13 @@ Examples:
   PlayerName: the most recent scene narration
 </LatestNarration>
 
-<Query>
 Based on the context above, determine:
 - Which NPCs are present in the current room
 - Whether the player actually entered, left, or remained in place
 
 IMPORTANT: Base your decision ONLY on what happens in <LatestNarration>, not on what the player attempted in <RecentHistory>.
 
-Respond ONLY with the JSON format specified in <QuantifierTask>.
-</Query>
+Respond ONLY with the JSON format specified in the system instructions.
 ```
 
 ## Expected Response Format
@@ -115,6 +119,6 @@ If the quantifier returns a **Low confidence** result (e.g., unparseable respons
 
 ## Sources
 
-- System prompt: `src/narrative/quantifier.rs:119-167`
-- User prompt: `src/narrative/quantifier.rs:170-236`
+- System prompt: `src/narrative/quantifier.rs:build_system_prompt()`
+- User prompt: `src/narrative/quantifier.rs:build_user_prompt()`
 - Response parsing: `src/narrative/quantifier.rs` (see `parse_quantifier_response` functions)

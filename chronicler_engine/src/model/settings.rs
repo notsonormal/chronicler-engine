@@ -20,6 +20,10 @@ pub struct Connection {
     pub base_url: Option<String>,
     #[serde(default)]
     pub single_user_message: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_tokens: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_context_tokens: Option<u32>,
 }
 
 impl Connection {
@@ -32,6 +36,8 @@ impl Connection {
             api_key: None,
             base_url: None,
             single_user_message: false,
+            max_tokens: None,
+            max_context_tokens: None,
         }
     }
 
@@ -65,6 +71,17 @@ impl Connection {
             LlmBackendType::Mock => String::new(),
         }
     }
+
+    /// Resolve the context window size for this connection.
+    /// Returns 8192 for Ollama (local models typically have smaller contexts),
+    /// 32768 for API models (OpenRouter, DeepSeek) when unset.
+    pub fn resolve_max_context_tokens(&self) -> u32 {
+        self.max_context_tokens.unwrap_or(match self.provider {
+            LlmBackendType::Ollama => 8192,
+            LlmBackendType::OpenRouter | LlmBackendType::DeepSeek => 32768,
+            LlmBackendType::Mock => 4096,
+        })
+    }
 }
 
 /// Application settings with connection profiles.
@@ -86,6 +103,8 @@ impl Default for AppSettings {
             api_key: None,
             base_url: None,
             single_user_message: false,
+            max_tokens: None,
+            max_context_tokens: None,
         };
         let euryale = Connection {
             id: "openrouter-euryale".into(),
@@ -95,6 +114,8 @@ impl Default for AppSettings {
             api_key: None,
             base_url: None,
             single_user_message: false,
+            max_tokens: None,
+            max_context_tokens: None,
         };
         let gemma = Connection {
             id: "ollama-gemma-4-26B".into(),
@@ -104,6 +125,8 @@ impl Default for AppSettings {
             api_key: None,
             base_url: Some("http://localhost:11434/v1".into()),
             single_user_message: false,
+            max_tokens: None,
+            max_context_tokens: None,
         };
         Self {
             connections: vec![gpt4o, euryale, gemma],

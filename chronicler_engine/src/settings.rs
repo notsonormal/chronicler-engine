@@ -173,6 +173,8 @@ mod tests {
                     api_key: Some("key-a".into()),
                     base_url: None,
                     single_user_message: false,
+                    max_tokens: None,
+                    max_context_tokens: None,
                 }],
                 narration_connection_id: "conn-1".into(),
                 quantifier_connection_id: "conn-1".into(),
@@ -210,6 +212,8 @@ mod tests {
             api_key: Some("direct-key".into()),
             base_url: None,
             single_user_message: false,
+            max_tokens: None,
+            max_context_tokens: None,
         };
         assert_eq!(conn.resolve_api_key(), Some("direct-key".into()));
 
@@ -231,6 +235,8 @@ mod tests {
             api_key: None,
             base_url: Some("http://custom:11434".into()),
             single_user_message: false,
+            max_tokens: None,
+            max_context_tokens: None,
         };
         assert_eq!(conn.resolve_base_url(), "http://custom:11434");
 
@@ -239,5 +245,35 @@ mod tests {
             ..conn
         };
         assert_eq!(conn_default.resolve_base_url(), "http://localhost:11434/v1");
+    }
+
+    #[test]
+    fn test_connection_resolve_max_context_tokens_defaults() {
+        assert_eq!(
+            Connection::new("t", "T", LlmBackendType::Ollama).resolve_max_context_tokens(),
+            8192
+        );
+        assert_eq!(
+            Connection::new("t", "T", LlmBackendType::OpenRouter).resolve_max_context_tokens(),
+            32768
+        );
+        assert_eq!(
+            Connection::new("t", "T", LlmBackendType::DeepSeek).resolve_max_context_tokens(),
+            32768
+        );
+        assert_eq!(
+            Connection::new("t", "T", LlmBackendType::Mock).resolve_max_context_tokens(),
+            4096
+        );
+    }
+
+    #[test]
+    fn test_connection_resolve_max_context_tokens_override() {
+        let mut conn = Connection::new("t", "T", LlmBackendType::Ollama);
+        conn.max_context_tokens = Some(16384);
+        assert_eq!(conn.resolve_max_context_tokens(), 16384);
+
+        conn.max_context_tokens = Some(2048);
+        assert_eq!(conn.resolve_max_context_tokens(), 2048);
     }
 }

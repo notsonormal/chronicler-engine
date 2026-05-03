@@ -4,22 +4,33 @@
       "id": "openrouter-gpt-4o-mini",
       "name": "openrouter-gpt-4o-mini",
       "provider": "OpenRouter",
-      "model": "openai/gpt-4o-mini"
+      "model": "openai/gpt-4o-mini",
+      "single_user_message": false
     },
     {
       "id": "openrouter-euryale",
       "name": "openrouter-euryale",
       "provider": "OpenRouter",
-      "model": "sao10k/l3.3-euryale-70b"
+      "model": "sao10k/l3.3-euryale-70b",
+      "single_user_message": false
     },
     {
       "id": "ollama-gemma-4-26B",
       "name": "ollama-gemma-4-26B",
       "provider": "Ollama",
       "model": "hf.co/mradermacher/gemma-4-26B-A4B-it-abliterated-i1-GGUF:latest",
-      "base_url": "http://localhost:11434/v1"
+      "base_url": "http://localhost:11434/v1",
+      "single_user_message": false
+    },
+    {
+      "id": "ollama-gemma-4-e2b",
+      "name": "ollama-gemma-4-e2b",
+      "provider": "Ollama",
+      "model": "huihui_ai/gemma-4-abliterated:e2b-v2",
+      "base_url": "http://localhost:11434/v1",
+      "single_user_message": false
     }
   ],
-  "narration_connection_id": "openrouter-euryale",
-  "quantifier_connection_id": "openrouter-gpt-4o-mini"
+  "narration_connection_id": "ollama-gemma-4-26B",
+  "quantifier_connection_id": "ollama-gemma-4-e2b"
 }

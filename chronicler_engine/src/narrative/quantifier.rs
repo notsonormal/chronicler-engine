@@ -118,8 +118,7 @@ impl<'a> QuantifierPromptBuilder<'a> {
 
     fn build_system_prompt(&self) -> String {
         let mut prompt = String::from(
-            r#"<QuantifierTask>
-You are a scene quantifier for a text adventure game.
+            r#"You are a scene quantifier for a text adventure game.
 Your task is to determine which NPCs are present in the current room
 and whether the player actually moved to a new location.
 
@@ -140,7 +139,6 @@ Examples:
 - Narration: "You walk through the door into the kitchen." → {"movement": {"type": "entering", "destination": "kitchen"}}
 - Narration: "The guard blocks your path. 'Halt!' he shouts." → {"movement": {"type": null}}
 - Narration: "She swiftly interposes herself between you and the gate." → {"movement": {"type": null}}
-</QuantifierTask>
 
 <AvailableNpcIds>
 "#,
@@ -220,15 +218,13 @@ Examples:
         ));
 
         prompt.push_str(
-            r#"<Query>
-Based on the context above, determine:
+            r#"Based on the context above, determine:
 - Which NPCs are present in the current room
 - Whether the player actually entered, left, or remained in place
 
 IMPORTANT: Base your decision ONLY on what happens in <LatestNarration>, not on what the player attempted in <RecentHistory>.
 
-Respond ONLY with the JSON format specified in <QuantifierTask>.
-</Query>
+Respond ONLY with the JSON format specified in the system instructions.
 "#,
         );
 
@@ -596,6 +592,9 @@ fn quantify_room_with_llm_call(
 pub struct QuantifierBackend {
     api_key: String,
     model: String,
+    max_tokens: Option<u32>,
+    #[allow(dead_code)]
+    max_context_tokens: u32,
 }
 
 impl QuantifierBackend {
@@ -603,6 +602,8 @@ impl QuantifierBackend {
         Self {
             api_key: connection.resolve_api_key().unwrap_or_default(),
             model: connection.model.clone(),
+            max_tokens: connection.max_tokens,
+            max_context_tokens: connection.resolve_max_context_tokens(),
         }
     }
 }
@@ -615,8 +616,9 @@ impl QuantifierBackendTrait for QuantifierBackend {
     ) -> Result<QuantifierResult, EngineError> {
         let api_key = self.api_key.clone();
         let model = self.model.clone();
+        let max_tokens = self.max_tokens;
         quantify_room_with_llm_call(context, fallback_npc_ids, &model, |system, user, m| {
-            call_openrouter_with_model(&api_key, system, user, m)
+            call_openrouter_with_model(&api_key, system, user, m, max_tokens)
         })
     }
 }
@@ -625,6 +627,9 @@ impl QuantifierBackendTrait for QuantifierBackend {
 pub struct OllamaQuantifierBackend {
     base_url: String,
     model: String,
+    max_tokens: Option<u32>,
+    #[allow(dead_code)]
+    max_context_tokens: u32,
 }
 
 impl OllamaQuantifierBackend {
@@ -632,6 +637,8 @@ impl OllamaQuantifierBackend {
         Self {
             base_url: connection.resolve_base_url(),
             model: connection.model.clone(),
+            max_tokens: connection.max_tokens,
+            max_context_tokens: connection.resolve_max_context_tokens(),
         }
     }
 }
@@ -644,8 +651,9 @@ impl QuantifierBackendTrait for OllamaQuantifierBackend {
     ) -> Result<QuantifierResult, EngineError> {
         let base_url = self.base_url.clone();
         let model = self.model.clone();
+        let max_tokens = self.max_tokens;
         quantify_room_with_llm_call(context, fallback_npc_ids, &model, |system, user, m| {
-            call_ollama(&base_url, m, system, user)
+            call_ollama(&base_url, m, system, user, max_tokens)
         })
     }
 }
@@ -965,6 +973,11 @@ mod tests {
         assert!(user.contains("Entrance Hall"));
         assert!(user.contains("Carla"));
         assert!(user.contains("Hero"));
+
+        // Plain-text format: old XML wrappers must not be present
+        assert!(!system.contains("<QuantifierTask>"));
+        assert!(!system.contains("<AuxiliaryInstructions>"));
+        assert!(!user.contains("<Query>"));
     }
 
     #[test]

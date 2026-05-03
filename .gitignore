@@ -219,4 +219,7 @@ logs/
 /.sisyphus
 /node_modules
 
+# Vector databases
+vectors.db
+
 .devrag/

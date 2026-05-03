@@ -10,7 +10,7 @@ fn next_request_id() -> u64 {
     REQUEST_COUNTER.fetch_add(1, Ordering::SeqCst)
 }
 
-const DEFAULT_MAX_TOKENS: u32 = 1024;
+const DEFAULT_MAX_TOKENS: u32 = 2048;
 
 // [DOC: docs/system/llm_processing.md]
 // Model selection is now connection-driven; these helpers are retained
@@ -93,8 +93,9 @@ pub fn call_chat_completions(
     system_prompt: &str,
     user_text: &str,
     title: Option<&str>,
-    max_tokens: u32,
+    max_tokens: Option<u32>,
 ) -> Result<String, String> {
+    let max_tokens = max_tokens.unwrap_or(DEFAULT_MAX_TOKENS);
     let req_id = next_request_id();
     let start_time = std::time::Instant::now();
 
@@ -240,6 +241,7 @@ pub fn call_openrouter_with_model(
     system_prompt: &str,
     user_text: &str,
     model: &str,
+    max_tokens: Option<u32>,
 ) -> Result<String, String> {
     call_chat_completions(
         "https://openrouter.ai/api/v1",
@@ -248,7 +250,7 @@ pub fn call_openrouter_with_model(
         system_prompt,
         user_text,
         Some("Chronicler Engine"),
-        DEFAULT_MAX_TOKENS,
+        max_tokens,
     )
 }
 
@@ -258,6 +260,7 @@ pub fn call_ollama(
     model: &str,
     system_prompt: &str,
     user_text: &str,
+    max_tokens: Option<u32>,
 ) -> Result<String, String> {
     call_chat_completions(
         base_url,
@@ -266,7 +269,7 @@ pub fn call_ollama(
         system_prompt,
         user_text,
         None,
-        DEFAULT_MAX_TOKENS,
+        max_tokens,
     )
 }
 
@@ -398,25 +401,26 @@ mod tests {
 
     #[test]
     fn test_call_openrouter_with_model_invalid_api_key_format() {
-        let result = call_openrouter_with_model("", "system prompt", "user text", "test/model");
+        let result =
+            call_openrouter_with_model("", "system prompt", "user text", "test/model", None);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_call_openrouter_empty_system_prompt() {
-        let result = call_openrouter_with_model("", "", "user text", "test/model");
+        let result = call_openrouter_with_model("", "", "user text", "test/model", None);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_call_openrouter_empty_user_text() {
-        let result = call_openrouter_with_model("fake_key", "system", "", "test/model");
+        let result = call_openrouter_with_model("fake_key", "system", "", "test/model", None);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_call_openrouter_with_model_rejects_empty_api_key() {
-        let result = call_openrouter_with_model("", "system", "user", "model");
+        let result = call_openrouter_with_model("", "system", "user", "model", None);
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(!err.is_empty());
@@ -425,27 +429,27 @@ mod tests {
     #[test]
     fn test_call_openrouter_very_long_model_name() {
         let long_model = "a".repeat(1000);
-        let result = call_openrouter_with_model("", "system", "user", &long_model);
+        let result = call_openrouter_with_model("", "system", "user", &long_model, None);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_call_openrouter_very_long_system_prompt() {
         let long_prompt = "x".repeat(10000);
-        let result = call_openrouter_with_model("key", &long_prompt, "user", "model");
+        let result = call_openrouter_with_model("key", &long_prompt, "user", "model", None);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_call_openrouter_very_long_user_text() {
         let long_text = "y".repeat(50000);
-        let result = call_openrouter_with_model("key", "system", &long_text, "model");
+        let result = call_openrouter_with_model("key", "system", &long_text, "model", None);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_call_openrouter_whitespace_api_key() {
-        let result = call_openrouter_with_model("   ", "system", "user", "model");
+        let result = call_openrouter_with_model("   ", "system", "user", "model", None);
         assert!(result.is_err());
     }
 
@@ -453,28 +457,28 @@ mod tests {
     fn test_call_openrouter_special_characters_in_prompts() {
         let special_system = "System: <script>alert('xss')</script>\n{\"json\": true}";
         let special_user = "User input with \"quotes\" and 'apostrophes' and <brackets>";
-        let result = call_openrouter_with_model("key", special_system, special_user, "model");
+        let result = call_openrouter_with_model("key", special_system, special_user, "model", None);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_call_openrouter_unicode_in_prompts() {
         let unicode_text = "Hello 你好 مرحبا 🌍";
-        let result = call_openrouter_with_model("key", "system", unicode_text, "model");
+        let result = call_openrouter_with_model("key", "system", unicode_text, "model", None);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_call_ollama_invalid_url() {
         // call_ollama with a fake URL should fail gracefully without panic
-        let result = call_ollama("http://localhost:59999", "model", "system", "user");
+        let result = call_ollama("http://localhost:59999", "model", "system", "user", None);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_call_ollama_empty_system_prompt() {
         // call_ollama with empty system prompt should not panic
-        let result = call_ollama("http://localhost:59999", "model", "", "user message");
+        let result = call_ollama("http://localhost:59999", "model", "", "user message", None);
         assert!(result.is_err());
     }
 }

@@ -37,10 +37,11 @@ Based on SillyTavern's Prompt Manager:
 
 ### Implementation Features
 
-1. **Token budget**: MAX_CONTEXT_TOKENS = 32000, hard truncation
-2. **Prompt injection sanitization**: Filter `{{variable}}` patterns, instruction overrides
-3. **World Info triggers**: Keyword matching from history (not RAG)
-4. **Full history**: All conversation retained and sent (no summarization)
+1. **Token budget**: MAX_CONTEXT_TOKENS = 32768 (fallback), context-aware fitting via `fit_messages_to_context()` — dynamically caps `max_tokens` and trims oldest history first
+2. **Per-connection context windows**: `max_context_tokens` configurable per connection (8192 for Ollama, 32768 for API models)
+3. **Prompt injection sanitization**: Filter `{{variable}}` patterns, instruction overrides
+4. **World Info triggers**: Keyword matching from history (not RAG)
+5. **Full history**: All conversation retained and sent (no summarization)
 
 ### Prompt Classes
 
