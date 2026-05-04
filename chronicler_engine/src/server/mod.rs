@@ -1,3 +1,4 @@
+pub mod debug;
 pub mod fragments;
 pub mod settings_fragment;
 pub mod templates;
@@ -70,6 +71,8 @@ fn build_router(app_state: AppState) -> Router {
             "/connections/:id/set-quantifier",
             post(crate::server::settings_fragment::set_quantifier_handler),
         )
+        // NOTE: dev-only diagnostic endpoint
+        .route("/debug/state", get(debug::debug_state_handler))
         .nest_service("/assets", ServeDir::new("assets"))
         .nest_service("/data", ServeDir::new("data"))
         .fallback_service(ServeDir::new("assets"))

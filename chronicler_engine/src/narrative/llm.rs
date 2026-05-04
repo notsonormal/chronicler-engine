@@ -222,13 +222,36 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 #[derive(Default)]
 pub struct MockBackend {
+    /// If true, all narration methods return `Err(EngineError::Narrative("Mock failure"))`.
     pub should_fail: AtomicBool,
+    /// If true, `narrate_action` returns `Ok("")` — simulates an empty LLM response.
+    pub should_return_empty: AtomicBool,
+    /// If true, `narrate_action_from_prompt` (trigger narration) returns `Err`.
+    pub trigger_narration_should_fail: AtomicBool,
 }
 
 impl MockBackend {
+    /// Backend that fails all narration calls.
     pub fn failing() -> Self {
         Self {
             should_fail: AtomicBool::new(true),
+            ..Default::default()
+        }
+    }
+
+    /// Backend whose `narrate_action` returns an empty string — simulates `LlmEmptyResponse`.
+    pub fn with_empty_response() -> Self {
+        Self {
+            should_return_empty: AtomicBool::new(true),
+            ..Default::default()
+        }
+    }
+
+    /// Backend whose trigger narration (`narrate_action_from_prompt`) fails.
+    pub fn with_failing_trigger_narration() -> Self {
+        Self {
+            trigger_narration_should_fail: AtomicBool::new(true),
+            ..Default::default()
         }
     }
 }
@@ -239,6 +262,9 @@ impl LlmBackend for MockBackend {
         context: &PromptContext,
         _npc: &NpcCard,
     ) -> Result<String, EngineError> {
+        if self.should_fail.load(Ordering::SeqCst) {
+            return Err(EngineError::Narrative("Mock failure".to_string()));
+        }
         let user_input = context.user_message;
         if user_input.is_empty() {
             Ok("[MockGenerated] Standard greeting.".to_string())
@@ -251,10 +277,16 @@ impl LlmBackend for MockBackend {
         if self.should_fail.load(Ordering::SeqCst) {
             return Err(EngineError::Narrative("Mock failure".to_string()));
         }
+        if self.should_return_empty.load(Ordering::SeqCst) {
+            return Ok(String::new());
+        }
         Ok(format!("[MockNarration] {}", context.user_message))
     }
 
     fn narrate_arrival(&self, context: &PromptContext) -> Result<String, EngineError> {
+        if self.should_fail.load(Ordering::SeqCst) {
+            return Err(EngineError::Narrative("Mock failure".to_string()));
+        }
         Ok(format!(
             "[MockArrival] You enter the {}.",
             context.room.name
@@ -268,6 +300,9 @@ impl LlmBackend for MockBackend {
         trigger_prompt: &str,
         _max_tokens: Option<u32>,
     ) -> Result<String, EngineError> {
+        if self.should_fail.load(Ordering::SeqCst) {
+            return Err(EngineError::Narrative("Mock failure".to_string()));
+        }
         Ok(format!("[Trigger: {trigger_prompt}]"))
     }
 
@@ -277,6 +312,13 @@ impl LlmBackend for MockBackend {
         user_prompt: &str,
         _max_tokens: Option<u32>,
     ) -> Result<String, EngineError> {
+        if self.should_fail.load(Ordering::SeqCst)
+            || self.trigger_narration_should_fail.load(Ordering::SeqCst)
+        {
+            return Err(EngineError::Narrative(
+                "Mock trigger narration failure".to_string(),
+            ));
+        }
         Ok(format!(
             "[Continuation: {}]",
             user_prompt.lines().next().unwrap_or("...")
@@ -313,15 +355,24 @@ impl LlmBackend for DeepSeekBackend {
         _context: &PromptContext,
         _npc: &NpcCard,
     ) -> Result<String, EngineError> {
-        Ok("[DeepSeek] Dialogue not yet implemented. Use OpenRouter for now.".to_string())
+        Err(EngineError::Config(
+            "DeepSeek backend is not yet implemented. Configure an OpenRouter or Ollama connection."
+                .into(),
+        ))
     }
 
     fn narrate_action(&self, _context: &PromptContext) -> Result<String, EngineError> {
-        Ok("[DeepSeek] Narration not yet implemented. Use OpenRouter for now.".to_string())
+        Err(EngineError::Config(
+            "DeepSeek backend is not yet implemented. Configure an OpenRouter or Ollama connection."
+                .into(),
+        ))
     }
 
     fn narrate_arrival(&self, _context: &PromptContext) -> Result<String, EngineError> {
-        Ok("[DeepSeek] Arrival not yet implemented. Use OpenRouter for now.".to_string())
+        Err(EngineError::Config(
+            "DeepSeek backend is not yet implemented. Configure an OpenRouter or Ollama connection."
+                .into(),
+        ))
     }
 
     fn narrate_continuation(
@@ -331,7 +382,10 @@ impl LlmBackend for DeepSeekBackend {
         _trigger_prompt: &str,
         _max_tokens: Option<u32>,
     ) -> Result<String, EngineError> {
-        Ok("[DeepSeek] Continuation not yet implemented. Use OpenRouter for now.".to_string())
+        Err(EngineError::Config(
+            "DeepSeek backend is not yet implemented. Configure an OpenRouter or Ollama connection."
+                .into(),
+        ))
     }
 
     fn narrate_action_from_prompt(
@@ -340,10 +394,10 @@ impl LlmBackend for DeepSeekBackend {
         _user_prompt: &str,
         _max_tokens: Option<u32>,
     ) -> Result<String, EngineError> {
-        Ok(
-            "[DeepSeek] Action from prompt not yet implemented. Use OpenRouter for now."
-                .to_string(),
-        )
+        Err(EngineError::Config(
+            "DeepSeek backend is not yet implemented. Configure an OpenRouter or Ollama connection."
+                .into(),
+        ))
     }
 
     fn name(&self) -> &str {
@@ -652,8 +706,6 @@ mod tests {
     #[test]
     fn test_deepseek_generate_dialogue() {
         let backend = DeepSeekBackend::default();
-        let _world = make_test_world();
-        let _room = make_test_room();
         let npc = NpcCard {
             id: "npc1".to_string(),
             sheet: CharacterSheet {
@@ -669,35 +721,49 @@ mod tests {
             inventory: vec![],
             triggers: vec![],
         };
-        let _player = make_test_player();
-
         let result = backend.generate_dialogue(&make_test_context_with_npc(&npc, ""), &npc);
-        assert!(result.is_ok());
-        assert!(result.unwrap().contains("DeepSeek"));
+        assert!(
+            result.is_err(),
+            "DeepSeek generate_dialogue should return Err (not yet implemented)"
+        );
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("not yet implemented")
+        );
     }
 
     #[test]
     fn test_deepseek_narrate_action() {
         let backend = DeepSeekBackend::default();
-        let _world = make_test_world();
-        let _room = make_test_room();
-        let _player = make_test_player();
-
         let result = backend.narrate_action(&make_test_context("test"));
-        assert!(result.is_ok());
-        assert!(result.unwrap().contains("DeepSeek"));
+        assert!(
+            result.is_err(),
+            "DeepSeek narrate_action should return Err (not yet implemented)"
+        );
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("not yet implemented")
+        );
     }
 
     #[test]
     fn test_deepseek_narrate_arrival() {
         let backend = DeepSeekBackend::default();
-        let _world = make_test_world();
-        let _room = make_test_room();
-        let _player = make_test_player();
-
         let result = backend.narrate_arrival(&make_test_context(""));
-        assert!(result.is_ok());
-        assert!(result.unwrap().contains("DeepSeek"));
+        assert!(
+            result.is_err(),
+            "DeepSeek narrate_arrival should return Err (not yet implemented)"
+        );
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("not yet implemented")
+        );
     }
 
     #[test]
@@ -961,23 +1027,87 @@ mod tests {
     fn test_deepseek_narrate_continuation() {
         let backend = DeepSeekBackend::default();
         let result = backend.narrate_continuation("system", "user", "trigger", None);
-        assert!(result.is_ok());
-        assert!(result.unwrap().contains("DeepSeek"));
+        assert!(
+            result.is_err(),
+            "DeepSeek narrate_continuation should return Err (not yet implemented)"
+        );
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("not yet implemented")
+        );
     }
 
     #[test]
     fn test_deepseek_narrate_action_from_prompt() {
         let backend = DeepSeekBackend::default();
         let result = backend.narrate_action_from_prompt("system", "user", None);
-        assert!(result.is_ok());
-        assert!(result.unwrap().contains("DeepSeek"));
+        assert!(
+            result.is_err(),
+            "DeepSeek narrate_action_from_prompt should return Err (not yet implemented)"
+        );
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("not yet implemented")
+        );
+    }
+
+    #[test]
+    fn test_mock_with_empty_response() {
+        let backend = MockBackend::with_empty_response();
+        let result = backend.narrate_action(&make_test_context("I look around."));
+        assert!(
+            result.is_ok(),
+            "with_empty_response should return Ok, not Err: {:?}",
+            result.err()
+        );
+        assert_eq!(
+            result.unwrap(),
+            "",
+            "with_empty_response should return an empty string"
+        );
+    }
+
+    #[test]
+    fn test_mock_with_failing_trigger_narration() {
+        let backend = MockBackend::with_failing_trigger_narration();
+        // narrate_action should still succeed
+        let narrate_result = backend.narrate_action(&make_test_context("look"));
+        assert!(
+            narrate_result.is_ok(),
+            "narrate_action should succeed even with trigger_narration_should_fail set"
+        );
+        // narrate_action_from_prompt (used for trigger narration) should fail
+        let trigger_result = backend.narrate_action_from_prompt("sys", "user", None);
+        assert!(
+            trigger_result.is_err(),
+            "narrate_action_from_prompt should fail when trigger_narration_should_fail is set"
+        );
+        assert!(
+            trigger_result
+                .unwrap_err()
+                .to_string()
+                .contains("trigger narration failure"),
+            "Error message should identify this as a trigger narration failure"
+        );
     }
 
     #[test]
     fn test_deepseek_error_message_descriptive() {
         let backend = DeepSeekBackend::default();
         let result = backend.narrate_action(&make_test_context("test"));
-        assert!(result.unwrap().contains("DeepSeek"));
+        assert!(
+            result.is_err(),
+            "DeepSeek should return Err, not a placeholder string"
+        );
+        let msg = result.unwrap_err().to_string();
+        assert!(
+            msg.contains("not yet implemented"),
+            "Error message should explain the backend is unimplemented, got: {msg}"
+        );
     }
 
     #[test]
@@ -1110,19 +1240,19 @@ mod tests {
 
         let dialogue_result =
             backend.generate_dialogue(&make_test_context_with_npc(&npc, "test"), &npc);
-        assert!(dialogue_result.unwrap().contains("not yet implemented"));
+        assert!(dialogue_result.is_err());
 
         let action_result = backend.narrate_action(&make_test_context("test"));
-        assert!(action_result.unwrap().contains("not yet implemented"));
+        assert!(action_result.is_err());
 
         let arrival_result = backend.narrate_arrival(&make_test_context("test"));
-        assert!(arrival_result.unwrap().contains("not yet implemented"));
+        assert!(arrival_result.is_err());
 
         let continuation_result = backend.narrate_continuation("sys", "user", "trigger", None);
-        assert!(continuation_result.unwrap().contains("not yet implemented"));
+        assert!(continuation_result.is_err());
 
         let prompt_result = backend.narrate_action_from_prompt("sys", "user", None);
-        assert!(prompt_result.unwrap().contains("not yet implemented"));
+        assert!(prompt_result.is_err());
     }
 
     #[test]

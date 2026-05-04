@@ -29,19 +29,25 @@ The engine will provide multiple implementations of this trait:
 ### Backend Selection
 The LLM backend can be selected in three ways:
 
-1. **Test Override** (Recommended for unit tests): Atomic override with RAII guard
+1. **Dependency Injection** (Recommended for unit tests): Pass mock backends directly to `DefaultGameService`
    ```rust
-   use chronicler_engine::narrative::llm::{with_test_backend, LlmBackendType};
+   use chronicler_engine::engine::game_service::DefaultGameService;
+   use chronicler_engine::narrative::llm::MockBackend;
+   use chronicler_engine::narrative::quantifier::MockQuantifierBackend;
+   use std::sync::Arc;
 
    #[test]
    fn test_with_mock_llm() {
-       let _guard = with_test_backend(LlmBackendType::Mock);
-       // Test code here uses MockBackend regardless of settings file
-   } // override automatically cleared on drop
+       let service = DefaultGameService::with_backends(
+           Arc::new(MockBackend),
+           Arc::new(MockQuantifierBackend::default()),
+       );
+       // Test code here uses injected mocks directly — no globals, no file I/O
+   }
    ```
-   - Thread-safe (atomic operations)
+   - Thread-safe (`Arc<dyn Trait>`)
    - No file I/O required
-   - Auto-cleanup via RAII guard prevents cross-test pollution
+   - No global state — tests are fully isolated
    - Works in both unit tests and integration tests
 
 2. **Config File** (`tests/test_config.json`): For integration tests
@@ -100,13 +106,15 @@ cargo test -- --test-threads=1
 
 | Test File | Purpose | Execution Model | Runtime |
 |----------|---------|---------------|---------|
+| `architecture.rs` | Architecture guardrails (arch-lint, no-unwrap, layer enforcement) | In-process | Very Fast |
+| `component_tests.rs` | Templates, endpoints, settings, validation | In-process | Very Fast |
+| `e2e_tests.rs` | UI structure, layouts, interactions | Browser | Medium |
 | `flow_mock_tests.rs` | Core game loop, polling | Browser + Mock LLM | Fast |
 | `flow_llm_tests.rs` | LLM narrative | Browser + Real LLM | Slow |
-| `component_tests.rs` | Templates, endpoints, settings | In-process | Very Fast |
-| `e2e_tests.rs` | UI structure, layouts | Browser | Medium |
+| `game_service_tests.rs` | Game service logic, DI, retry | In-process | Very Fast |
+| `guardrails.rs` | Custom guardrails (what-comments, import order, single-letter vars) | In-process | Very Fast |
+| `logic_tests.rs` | Movement, room resolution, fuzzy matching | In-process | Very Fast |
 | `trigger_tests.rs` | Trigger evaluation and firing | Browser + Mock LLM | Fast |
-| `game_service_tests.rs` | Game service logic | In-process | Very Fast |
-| `architecture.rs` | Architecture guardrails | In-process | Very Fast |
 
 ### Test Coverage
 
@@ -118,7 +126,7 @@ cargo test -- --test-threads=1
 - Validation (empty command rejection)
 - Settings UI integration (16+ tests)
 
-**e2e_tests.rs** (21 tests):
+**e2e_tests.rs** (22 tests):
 - Page loads, UI structure
 - Action area elements
 - Story log functionality
@@ -136,6 +144,18 @@ cargo test -- --test-threads=1
 - LLM narration via polling
 - LLM arrival narration
 - LLM free action narration
+
+**guardrails.rs** (7 tests):
+- Import ordering (std → external → local)
+- Module purity (no side effects in `model/`)
+- "What" comment detection
+- Doc anchor verification
+- Single-letter variable detection
+
+**logic_tests.rs** (11 tests):
+- Room resolution and fuzzy matching
+- Movement validation
+- Exit availability
 
 **trigger_tests.rs** (6 tests):
 - Trigger evaluation and firing

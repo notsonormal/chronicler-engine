@@ -27,7 +27,7 @@ The interface between the synchronous engine and stochastic LLM generation.
 - **`llm`**: Traits (`LlmBackend`) and implementations (OpenRouter, DeepSeek, Mock) for Game Master narration.
   - **`get_llm_backend()`**: Production entry point that loads the narration connection from `data/settings.json`
   - **`get_llm_backend_for(connection)`**: Create a backend for a specific `Connection` profile
-  - **`with_test_backend()`**: RAII guard for overriding backend in tests (atomically sets Mock/DeepSeek/OpenRouter without file I/O)
+  - **`DefaultGameService::with_backends(llm, quantifier)`**: Constructor for dependency-injecting mock backends in tests. No globals, no file I/O, fully isolated.
 - **`prompt`**: PromptBuilder module for layered prompt construction with token budget management. Uses plain-text instructions + XML-wrapped data for reasoning-model compatibility. Includes `fit_messages_to_context()` for dynamic context-window fitting.
 - **`quantifier`**: Scene quantification module for dynamic room presence detection via secondary LLM. Returns NPC presence, player movement intent, and NPC enter/leave events.
   - **`QuantifierBackendTrait`**: Interface for NPC detection backends

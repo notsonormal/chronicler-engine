@@ -106,15 +106,16 @@
 
 ### Changed
 - **Default backend fixed** - `data/settings.json` now defaults to `OpenRouter` instead of `Mock`
-- **Mock backend hidden from UI** - Removed "Mock (Testing)" from the Settings backend dropdown. `Mock` remains available for tests via `with_test_backend()` but is no longer selectable by end users
+- **Mock backend hidden from UI** - Removed "Mock (Testing)" from the Settings backend dropdown. `Mock` remains available for tests via `DefaultGameService::with_backends()` but is no longer selectable by end users
 
 ### Added
 - Settings system with tabbed UI for LLM configuration (backend, model, quantifier model, API key)
 - `data/settings.json` for persistent configuration
-- **Test Backend Override** - Atomic override mechanism for reliable mock LLM testing
-  - `with_test_backend(LlmBackendType::Mock)` RAII guard for test isolation
-  - `get_llm_backend()` checks override before loading settings from disk
-  - Eliminates need for temporary `settings.json` files in unit tests
+- **Dependency-Injected Backends** - `DefaultGameService` now owns its backends via `Arc<dyn Trait>`, eliminating global state and test flakiness
+  - `DefaultGameService::with_backends(llm, quantifier)` constructor for test injection
+  - Removed all global test-override atomics (`TEST_BACKEND_OVERRIDE`, `TEST_QUANTIFIER_OVERRIDE`, RAII guards)
+  - `FreeActionContext` carries `&dyn LlmBackend` to thread backends through `evaluate_and_narrate_triggers`
+  - All 17 `game_service_tests` converted to DI; timeouts reduced to 200ms (no disk I/O races)
 - **Coverage Improvement** - `game_service.rs` coverage increased from 58% to 79% (llvm-cov)
   - Extracted `execute_freeaction_impl` to `action_processing.rs` for testability
   - Added 6 new integration tests covering FreeAction success, retry, and movement paths

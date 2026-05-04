@@ -1,0 +1,46 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Character Card",
+  "description": "Configuration for a character (Player or NPC) in Chronicler Engine.",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "name": { "type": "string" },
+    "description": { "type": "string" },
+    "personality": { "type": "string" },
+    "scenario": { "type": "string" },
+    "example_dialogue": { "type": "string" },
+    "summary": { "type": ["string", "null"] },
+    "profile_image": { "type": ["string", "null"] },
+    "headshot_image": { "type": ["string", "null"] },
+    "inventory": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "triggers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "condition": {
+            "type": "object"
+          },
+          "action": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "narration_prompt": { "type": "string" }
+            },
+            "required": ["name", "narration_prompt"]
+          },
+          "repeat": { "type": "boolean" },
+          "room_id": { "type": ["string", "null"] }
+        },
+        "required": ["condition", "action"]
+      }
+    }
+  },
+  "required": ["name", "description", "personality", "scenario"]
+}

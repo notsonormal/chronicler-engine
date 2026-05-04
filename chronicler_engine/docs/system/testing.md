@@ -1,6 +1,6 @@
-# Testing Strategy (Consolidated)
+# Testing Strategy
 
-> **Note**: This document reflects the consolidated test structure (4 files). See `docs/reference/testing.md` for historical context.
+> **Note**: See `docs/reference/testing.md` for command reference and coverage thresholds.
 
 ## Overview
 
@@ -11,14 +11,19 @@ The Chronicler Engine uses a dual-layer testing strategy:
 
 ## Test Organization
 
-After consolidation, tests are organized by execution model:
+Tests are organized by execution model:
 
 | File | Purpose | Execution Model | Runtime |
 |------|---------|---------------|---------|
+| `architecture.rs` | Architecture guardrails (clippy, import order, doc anchors) | In-process | Very Fast |
+| `component_tests.rs` | Templates, endpoints, settings, validation | In-process | Very Fast |
+| `e2e_tests.rs` | UI structure, layouts, interactions | Browser | Medium |
 | `flow_mock_tests.rs` | Game loop, polling, real-time updates | Browser + Mock LLM | Fast |
 | `flow_llm_tests.rs` | LLM narrative generation | Browser + Real LLM | Slow |
-| `component_tests.rs` | Templates, endpoints, validation | In-process | Very Fast |
-| `e2e_tests.rs` | UI structure, layouts, interactions | Browser | Medium |
+| `game_service_tests.rs` | Game service logic, action handling, retry | In-process | Very Fast |
+| `guardrails.rs` | Custom guardrails (what-comments, long comment runs, single-letter vars) | In-process | Very Fast |
+| `logic_tests.rs` | Movement, room resolution, fuzzy matching | In-process | Very Fast |
+| `trigger_tests.rs` | Trigger evaluation and firing | Browser + Mock LLM | Fast |
 
 ## Test Files Explained
 
@@ -100,12 +105,17 @@ Critical tests that must not be removed:
 
 ## Runtime Expectations
 
-| Suite | Before | After |
-|-------|--------|-------|
-| All tests | ~15 min | ~3 min |
-| component_tests | N/A | ~5 sec |
-| e2e_tests | ~6 min | ~1 min |
-| flow_mock_tests | ~3 min | ~1 min |
+| Suite | Runtime |
+|-------|---------|
+| Full suite (`python build.py`) | ~70 sec (LLM tests excluded) |
+| component_tests | ~5 sec |
+| e2e_tests | ~60 sec |
+| flow_mock_tests | ~30 sec |
+| game_service_tests | ~5 sec |
+| guardrails | ~2 sec |
+| logic_tests | ~2 sec |
+| trigger_tests | ~30 sec |
+| flow_llm_tests | ~30–120 sec (requires API key) |
 
 ## Smart Waiting Patterns
 

@@ -29,7 +29,7 @@ pub struct LogEntry {
 
 const MAX_LOG_ENTRIES: usize = 1000;
 
-#[derive(Debug, Default, Clone, PartialEq)]
+#[derive(Debug, Default, Clone, PartialEq, Serialize)]
 pub enum GenerationStatus {
     #[default]
     Idle,
@@ -50,7 +50,7 @@ impl GenerationStatus {
     }
 }
 
-#[derive(Debug, Default, Clone, PartialEq)]
+#[derive(Debug, Default, Clone, PartialEq, Serialize)]
 pub enum GenerationPhase {
     #[default]
     Narrating,
@@ -281,61 +281,12 @@ impl GameState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::character::{CharacterSheet, NpcCard, PlayerCard};
-    use crate::model::map::MapDef;
-    use crate::model::world::WorldCard;
+    use crate::test_support::*;
 
     #[test]
     fn test_game_state_initialization() {
-        let world = WorldCard {
-            name: "W".into(),
-            description: "D".into(),
-            global_rules: vec![],
-            ..Default::default()
-        };
-        let map = MapDef {
-            overworld: crate::model::map::Overworld {
-                id: "ow".into(),
-                name: "ow".into(),
-                regions: vec![],
-            },
-        };
-        let player = PlayerCard {
-            sheet: CharacterSheet {
-                name: "P".into(),
-                description: "P".into(),
-                personality: "P".into(),
-                scenario: "S".into(),
-                example_dialogue: "E".into(),
-                summary: None,
-                profile_image: None,
-                headshot_image: None,
-            },
-            inventory: vec![],
-        };
-        let npc = NpcCard {
-            id: "npc_1".into(),
-            sheet: CharacterSheet {
-                name: "N".into(),
-                description: "D".into(),
-                personality: "P".into(),
-                scenario: "S".into(),
-                example_dialogue: "E".into(),
-                summary: None,
-                profile_image: None,
-                headshot_image: None,
-            },
-            inventory: vec![],
-            triggers: vec![],
-        };
-
-        let state = GameState::new(
-            Arc::new(world),
-            Arc::new(map),
-            Arc::new(player),
-            vec![npc],
-            "room_1".to_string(),
-        );
+        let npc = TestNpc::named("npc_1", "N");
+        let state = TestGameState::with_npc("room_1", npc);
 
         assert_eq!(state.current_room_id, "room_1");
         assert_eq!(state.npcs.len(), 1);
@@ -385,36 +336,7 @@ mod tests {
 
     #[test]
     fn test_log_ordering() {
-        let mut state = GameState::new(
-            Arc::new(WorldCard {
-                name: "W".into(),
-                description: "D".into(),
-                global_rules: vec![],
-                ..Default::default()
-            }),
-            Arc::new(MapDef {
-                overworld: crate::model::map::Overworld {
-                    id: "o".into(),
-                    name: "o".into(),
-                    regions: vec![],
-                },
-            }),
-            Arc::new(PlayerCard {
-                sheet: CharacterSheet {
-                    name: "P".into(),
-                    description: "D".into(),
-                    personality: "P".into(),
-                    scenario: "S".into(),
-                    example_dialogue: "E".into(),
-                    summary: None,
-                    profile_image: None,
-                    headshot_image: None,
-                },
-                inventory: vec![],
-            }),
-            vec![],
-            "room1".to_string(),
-        );
+        let mut state = TestGameState::in_room("room1");
 
         state.add_log("Message 1".into(), None, LogType::Narration);
         state.add_log("Message 2".into(), None, LogType::Narration);
@@ -426,36 +348,7 @@ mod tests {
 
     #[test]
     fn test_edit_log() {
-        let mut state = GameState::new(
-            Arc::new(WorldCard {
-                name: "W".into(),
-                description: "D".into(),
-                global_rules: vec![],
-                ..Default::default()
-            }),
-            Arc::new(MapDef {
-                overworld: crate::model::map::Overworld {
-                    id: "o".into(),
-                    name: "ow".into(),
-                    regions: vec![],
-                },
-            }),
-            Arc::new(PlayerCard {
-                sheet: CharacterSheet {
-                    name: "P".into(),
-                    description: "D".into(),
-                    personality: "P".into(),
-                    scenario: "S".into(),
-                    example_dialogue: "E".into(),
-                    summary: None,
-                    profile_image: None,
-                    headshot_image: None,
-                },
-                inventory: vec![],
-            }),
-            vec![],
-            "room1".to_string(),
-        );
+        let mut state = TestGameState::in_room("room1");
 
         state.add_log("Original text".into(), None, LogType::Narration);
         let id = state.narration_history[0].id;
@@ -470,36 +363,7 @@ mod tests {
 
     #[test]
     fn test_get_last_input_index() {
-        let mut state = GameState::new(
-            Arc::new(WorldCard {
-                name: "W".into(),
-                description: "D".into(),
-                global_rules: vec![],
-                ..Default::default()
-            }),
-            Arc::new(MapDef {
-                overworld: crate::model::map::Overworld {
-                    id: "o".into(),
-                    name: "ow".into(),
-                    regions: vec![],
-                },
-            }),
-            Arc::new(PlayerCard {
-                sheet: CharacterSheet {
-                    name: "P".into(),
-                    description: "D".into(),
-                    personality: "P".into(),
-                    scenario: "S".into(),
-                    example_dialogue: "E".into(),
-                    summary: None,
-                    profile_image: None,
-                    headshot_image: None,
-                },
-                inventory: vec![],
-            }),
-            vec![],
-            "room1".to_string(),
-        );
+        let mut state = TestGameState::in_room("room1");
 
         // Empty history returns None
         assert!(state.get_last_input_index().is_none());
@@ -515,36 +379,7 @@ mod tests {
 
     #[test]
     fn test_replace_last_ai_response() {
-        let mut state = GameState::new(
-            Arc::new(WorldCard {
-                name: "W".into(),
-                description: "D".into(),
-                global_rules: vec![],
-                ..Default::default()
-            }),
-            Arc::new(MapDef {
-                overworld: crate::model::map::Overworld {
-                    id: "o".into(),
-                    name: "ow".into(),
-                    regions: vec![],
-                },
-            }),
-            Arc::new(PlayerCard {
-                sheet: CharacterSheet {
-                    name: "P".into(),
-                    description: "D".into(),
-                    personality: "P".into(),
-                    scenario: "S".into(),
-                    example_dialogue: "E".into(),
-                    summary: None,
-                    profile_image: None,
-                    headshot_image: None,
-                },
-                inventory: vec![],
-            }),
-            vec![],
-            "room1".to_string(),
-        );
+        let mut state = TestGameState::in_room("room1");
 
         // Add input then AI response
         state.add_log("User input".into(), Some("Player".into()), LogType::Input);
@@ -562,36 +397,7 @@ mod tests {
 
     #[test]
     fn test_replace_last_ai_response_no_input() {
-        let mut state = GameState::new(
-            Arc::new(WorldCard {
-                name: "W".into(),
-                description: "D".into(),
-                global_rules: vec![],
-                ..Default::default()
-            }),
-            Arc::new(MapDef {
-                overworld: crate::model::map::Overworld {
-                    id: "o".into(),
-                    name: "ow".into(),
-                    regions: vec![],
-                },
-            }),
-            Arc::new(PlayerCard {
-                sheet: CharacterSheet {
-                    name: "P".into(),
-                    description: "D".into(),
-                    personality: "P".into(),
-                    scenario: "S".into(),
-                    example_dialogue: "E".into(),
-                    summary: None,
-                    profile_image: None,
-                    headshot_image: None,
-                },
-                inventory: vec![],
-            }),
-            vec![],
-            "room1".to_string(),
-        );
+        let mut state = TestGameState::in_room("room1");
 
         // No input - should fail
         assert!(
@@ -603,36 +409,7 @@ mod tests {
 
     #[test]
     fn test_replace_last_ai_response_no_ai() {
-        let mut state = GameState::new(
-            Arc::new(WorldCard {
-                name: "W".into(),
-                description: "D".into(),
-                global_rules: vec![],
-                ..Default::default()
-            }),
-            Arc::new(MapDef {
-                overworld: crate::model::map::Overworld {
-                    id: "o".into(),
-                    name: "ow".into(),
-                    regions: vec![],
-                },
-            }),
-            Arc::new(PlayerCard {
-                sheet: CharacterSheet {
-                    name: "P".into(),
-                    description: "D".into(),
-                    personality: "P".into(),
-                    scenario: "S".into(),
-                    example_dialogue: "E".into(),
-                    summary: None,
-                    profile_image: None,
-                    headshot_image: None,
-                },
-                inventory: vec![],
-            }),
-            vec![],
-            "room1".to_string(),
-        );
+        let mut state = TestGameState::in_room("room1");
 
         // Add only input, no AI response - should fail
         state.add_log("User input".into(), Some("Player".into()), LogType::Input);
@@ -645,36 +422,7 @@ mod tests {
 
     #[test]
     fn test_generating_guard_sets_is_generating_on_construct() {
-        let state = Arc::new(std::sync::Mutex::new(GameState::new(
-            Arc::new(WorldCard {
-                name: "W".into(),
-                description: "D".into(),
-                global_rules: vec![],
-                ..Default::default()
-            }),
-            Arc::new(MapDef {
-                overworld: crate::model::map::Overworld {
-                    id: "o".into(),
-                    name: "ow".into(),
-                    regions: vec![],
-                },
-            }),
-            Arc::new(PlayerCard {
-                sheet: CharacterSheet {
-                    name: "P".into(),
-                    description: "D".into(),
-                    personality: "P".into(),
-                    scenario: "S".into(),
-                    example_dialogue: "E".into(),
-                    summary: None,
-                    profile_image: None,
-                    headshot_image: None,
-                },
-                inventory: vec![],
-            }),
-            vec![],
-            "room1".to_string(),
-        )));
+        let state = Arc::new(std::sync::Mutex::new(TestGameState::in_room("room1")));
 
         assert!(
             !state
@@ -710,36 +458,7 @@ mod tests {
 
     #[test]
     fn test_generating_guard_resets_on_drop() {
-        let state = Arc::new(std::sync::Mutex::new(GameState::new(
-            Arc::new(WorldCard {
-                name: "W".into(),
-                description: "D".into(),
-                global_rules: vec![],
-                ..Default::default()
-            }),
-            Arc::new(MapDef {
-                overworld: crate::model::map::Overworld {
-                    id: "o".into(),
-                    name: "ow".into(),
-                    regions: vec![],
-                },
-            }),
-            Arc::new(PlayerCard {
-                sheet: CharacterSheet {
-                    name: "P".into(),
-                    description: "D".into(),
-                    personality: "P".into(),
-                    scenario: "S".into(),
-                    example_dialogue: "E".into(),
-                    summary: None,
-                    profile_image: None,
-                    headshot_image: None,
-                },
-                inventory: vec![],
-            }),
-            vec![],
-            "room1".to_string(),
-        )));
+        let state = Arc::new(std::sync::Mutex::new(TestGameState::in_room("room1")));
 
         {
             let guard = GeneratingGuard::new(state.clone());
@@ -769,36 +488,7 @@ mod tests {
         // Simulate a poisoned mutex by holding the lock in a child thread
         // then creating a guard — the guard's lock attempt will fail but
         // the guard still drops cleanly without panicking.
-        let state = Arc::new(std::sync::Mutex::new(GameState::new(
-            Arc::new(WorldCard {
-                name: "W".into(),
-                description: "D".into(),
-                global_rules: vec![],
-                ..Default::default()
-            }),
-            Arc::new(MapDef {
-                overworld: crate::model::map::Overworld {
-                    id: "o".into(),
-                    name: "ow".into(),
-                    regions: vec![],
-                },
-            }),
-            Arc::new(PlayerCard {
-                sheet: CharacterSheet {
-                    name: "P".into(),
-                    description: "D".into(),
-                    personality: "P".into(),
-                    scenario: "S".into(),
-                    example_dialogue: "E".into(),
-                    summary: None,
-                    profile_image: None,
-                    headshot_image: None,
-                },
-                inventory: vec![],
-            }),
-            vec![],
-            "room1".to_string(),
-        )));
+        let state = Arc::new(std::sync::Mutex::new(TestGameState::in_room("room1")));
 
         // Hold the mutex in a thread so it poisons on drop
         let state_clone = state.clone();

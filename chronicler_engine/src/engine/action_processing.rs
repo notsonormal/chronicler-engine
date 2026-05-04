@@ -130,12 +130,15 @@ pub fn evaluate_and_narrate_triggers(
     pb.requested_max_tokens = max_tokens;
     pb.response_length = Some(&settings.response_length);
 
-    let Ok((system_prompt, user_prompt, fitted_max_tokens)) = pb.build_split() else {
-        log::error!(
-            "Failed to build continuation prompt: {}",
-            "build_split failed"
-        );
-        return;
+    let (system_prompt, user_prompt, fitted_max_tokens) = match pb.build_split() {
+        Ok(parts) => parts,
+        Err(e) => {
+            log::error!(
+                "Failed to build trigger continuation prompt for '{}': {e}",
+                trigger.action.name
+            );
+            return;
+        }
     };
 
     let continuation_text = match llm_backend.narrate_action_from_prompt(
@@ -197,6 +200,9 @@ pub fn execute_freeaction_impl(
         .clone();
 
     // Now state is no longer borrowed — we can safely mutate it
+    // [DOC: docs/system/triggers.md §Mutation Order Invariant]
+    // Order is load-bearing: narration logged first (step 1), then triggers evaluated
+    // which read history for context (step 2), then NPC events applied (step 3).
     state.add_log(ctx.narration_text.to_string(), None, LogType::Narration);
     state.npcs_in_area = current_npcs.clone();
 

@@ -35,3 +35,6 @@ pub use error::{EngineError, Result};
 pub use model::settings::AppSettings;
 pub use server::AppState;
 pub use server::create_app_for_testing;
+
+#[cfg(test)]
+pub mod test_support;

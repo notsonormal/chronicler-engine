@@ -1,0 +1,59 @@
+use std::collections::HashMap;
+
+use axum::{Json, extract::State, http::StatusCode};
+use serde::Serialize;
+
+use crate::model::state::{GenerationPhase, GenerationStatus, LogEntry};
+use crate::model::trigger::NpcEncounterState;
+use crate::server::AppState;
+
+#[derive(Serialize)]
+pub struct DebugStateResponse {
+    pub current_room_id: String,
+    pub npcs_in_area: Vec<String>,
+    pub generation_status: GenerationStatus,
+    pub generation_phase: GenerationPhase,
+    pub character_state: HashMap<String, NpcEncounterState>,
+    pub narration_history_tail: Vec<LogEntry>,
+}
+
+/// NOTE: dev-only diagnostic endpoint
+/// [DOC: docs/system/game_flow.md]
+pub async fn debug_state_handler(
+    State(state): State<AppState>,
+) -> Result<Json<DebugStateResponse>, StatusCode> {
+    let guard = match state.state.lock() {
+        Ok(g) => g,
+        Err(_) => {
+            log::error!("State lock poisoned during /debug/state request");
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+
+    // Only take the last 5 entries to keep the response scannable
+    let history_tail: Vec<LogEntry> = guard
+        .narration_history
+        .iter()
+        .rev()
+        .take(5)
+        .rev()
+        .cloned()
+        .collect();
+
+    let npcs_in_area: Vec<String> = guard
+        .npcs_in_area
+        .iter()
+        .map(|npc| npc.id.clone())
+        .collect();
+
+    let response = DebugStateResponse {
+        current_room_id: guard.current_room_id.clone(),
+        npcs_in_area,
+        generation_status: guard.generation_state.status.clone(),
+        generation_phase: guard.generation_state.phase.clone(),
+        character_state: guard.character_state.npcs.clone(),
+        narration_history_tail: history_tail,
+    };
+
+    Ok(Json(response))
+}

@@ -1,0 +1,62 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "World Manifest",
+  "description": "Configuration for a Chronicler Engine world.",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique identifier for the world"
+    },
+    "name": {
+      "type": "string",
+      "description": "Display name of the world"
+    },
+    "description": {
+      "type": "string",
+      "description": "Lore or description of the world"
+    },
+    "global_rules": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Global prompt rules applied to all LLM requests"
+    },
+    "starting_room_id": {
+      "type": "string",
+      "default": "start"
+    },
+    "map_file": {
+      "type": "string",
+      "default": "map.json"
+    },
+    "player_file": {
+      "type": "string",
+      "default": "player.json"
+    },
+    "characters_dir": {
+      "type": "string",
+      "default": ""
+    },
+    "default_room_image": {
+      "type": ["string", "null"]
+    },
+    "scenarios": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "starting_room_id": { "type": "string" },
+          "text": { "type": "string" }
+        },
+        "required": ["id", "name", "description", "starting_room_id", "text"]
+      }
+    },
+    "default_scenario_id": {
+      "type": ["string", "null"]
+    }
+  },
+  "required": ["id", "name", "description", "global_rules"]
+}

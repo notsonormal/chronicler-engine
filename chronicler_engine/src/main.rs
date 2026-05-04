@@ -358,6 +358,65 @@ fn initialize_world_from_manifest(
     Ok((manifest, map, player, npcs))
 }
 
+fn validate_loaded_data(
+    manifest: &WorldManifest,
+    map: &MapDef,
+    _player: &PlayerCard,
+    npcs: &[NpcCard],
+) -> Result<(), String> {
+    let mut errors = Vec::new();
+
+    let mut valid_room_ids = std::collections::HashSet::new();
+    for region in &map.overworld.regions {
+        for room in &region.rooms {
+            valid_room_ids.insert(room.id.clone());
+        }
+    }
+
+    // 1. Validate starting room exists
+    if !valid_room_ids.contains(&manifest.starting_room_id) {
+        errors.push(format!(
+            "starting_room_id '{}' not found in map",
+            manifest.starting_room_id
+        ));
+    }
+
+    // 2. Validate all NPCs referenced in the map actually exist
+    let loaded_npc_ids: std::collections::HashSet<_> = npcs.iter().map(|n| n.id.clone()).collect();
+    for region in &map.overworld.regions {
+        for room in &region.rooms {
+            for npc_id in &room.npcs {
+                if !loaded_npc_ids.contains(npc_id) {
+                    errors.push(format!(
+                        "Map room '{}' references missing NPC '{}'",
+                        room.id, npc_id
+                    ));
+                }
+            }
+        }
+    }
+
+    // 3. Validate trigger room_ids exist in the map
+    for npc in npcs {
+        for (i, trigger) in npc.triggers.iter().enumerate() {
+            if let Some(room_id) = &trigger.room_id {
+                if !valid_room_ids.contains(room_id) {
+                    errors.push(format!(
+                        "NPC '{}' Trigger[{}] references non-existent room_id: '{}'",
+                        npc.id, i, room_id
+                    ));
+                }
+            }
+        }
+    }
+
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors.join("\n"))
+    }
+}
+
 fn main() -> chronicler_engine::Result<()> {
     dotenv::dotenv().ok();
 
@@ -371,6 +430,12 @@ fn main() -> chronicler_engine::Result<()> {
     }
 
     let (manifest, map, player, npcs) = initialize_world_from_manifest(&args.world)?;
+
+    if let Err(e) = validate_loaded_data(&manifest, &map, &player, &npcs) {
+        log::error!("Data validation failed for world '{}':\n{}", args.world, e);
+        eprintln!("Data validation failed for world '{}':\n{}", args.world, e);
+        std::process::exit(1);
+    }
 
     let mut state = GameState::new(
         Arc::new(manifest.clone().into()),

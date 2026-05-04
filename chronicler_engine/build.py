@@ -149,6 +149,11 @@ def main():
         dest="llm_only",
         help="Run only the slow LLM tests (skips formatting, clippy, guardrails, and other tests)",
     )
+    parser.add_argument(
+        "--validate-data",
+        action="store_true",
+        help="Validate JSON data files against schemas",
+    )
     args = parser.parse_args()
 
     print("=== Chronicler Engine Build ===")
@@ -216,6 +221,11 @@ def main():
     print(f"  Deployment: copy {target_dir}/ folder to your target machine")
 
     test_env = {"NEXTEST_STATUS_LEVEL": "fail"}
+
+    if args.validate_data:
+        print("[0/8] Validating JSON data...")
+        run("python scripts/validate_data.py")
+        print("Data validation successful.")
 
     if args.llm_only:
         print("[1/3] Building...")

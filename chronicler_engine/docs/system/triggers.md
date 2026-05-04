@@ -152,3 +152,25 @@ Event headers:
 3. **Times Met vs Trigger Fire**: `times_met` is incremented based on movement/room entry, NOT when triggers fire. This prevents the bug where trigger fires would increment the counter for the next evaluation.
 
 4. **Named Triggers**: Every trigger action requires a `name`. This name is used for the event header and helps players recognize important story moments at a glance.
+
+---
+
+## Mutation Order Invariant
+
+`execute_freeaction_impl` in `src/engine/action_processing.rs` mutates state in a strict, load-bearing order:
+
+| Step | Operation | Why it must come here |
+| :--- | :--- | :--- |
+| 1 | `handle_movement()` — may update `current_room_id` | Room must be current before NPCs are resolved |
+| 2 | Resolve current NPCs from quantifier result | Uses updated `current_room_id` from step 1 |
+| 3 | `state.add_log(narration_text)` | Narration must be in history before triggers read it |
+| 4 | `evaluate_and_narrate_triggers()` | Reads `state.narration_history` (step 3) to build the trigger continuation prompt |
+| 5 | `apply_npc_events()` — mutates `character_state` | `times_met` increments AFTER trigger evaluation (see Timing section above) |
+
+**What breaks if you change the order:**
+
+- Swapping steps 3 and 4: triggers generate continuation without seeing the current narration as context — the LLM has no story thread to continue from.
+- Swapping steps 4 and 5: `times_met` increments before trigger evaluation — `TimesMet Eq 0` would never fire on first encounter.
+- Moving step 1 after step 3: the narration gets logged against the old room, then the room changes — state is inconsistent.
+
+This invariant is enforced by code structure, not by runtime checks. If you refactor `execute_freeaction_impl`, preserve this order explicitly.

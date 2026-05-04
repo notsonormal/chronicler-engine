@@ -1,0 +1,58 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Map Definition",
+  "description": "Configuration for a Chronicler Engine map.",
+  "type": "object",
+  "properties": {
+    "overworld": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "regions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "rooms": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string" },
+                    "name": { "type": "string" },
+                    "description": { "type": "string" },
+                    "exits": {
+                      "type": "object",
+                      "additionalProperties": { "type": "string" }
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": { "type": "string" }
+                    },
+                    "npcs": {
+                      "type": "array",
+                      "items": { "type": "string" }
+                    },
+                    "image_path": {
+                      "type": ["string", "null"]
+                    },
+                    "navigation_description": {
+                      "type": ["string", "null"]
+                    }
+                  },
+                  "required": ["id", "name", "description"]
+                }
+              }
+            },
+            "required": ["id", "name", "rooms"]
+          }
+        }
+      },
+      "required": ["id", "name", "regions"]
+    }
+  },
+  "required": ["overworld"]
+}
