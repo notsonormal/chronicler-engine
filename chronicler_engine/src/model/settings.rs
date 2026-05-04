@@ -91,6 +91,12 @@ pub struct AppSettings {
     pub connections: Vec<Connection>,
     pub narration_connection_id: String,
     pub quantifier_connection_id: String,
+    #[serde(default = "default_response_length")]
+    pub response_length: String,
+}
+
+fn default_response_length() -> String {
+    "flexible, based on the current scene. During a conversation, keep it concise (under 150 words) to allow back-and-forth. For scene transitions, travel, or plot developments, build content (above 150 words), but allow the player to react.".to_string()
 }
 
 impl Default for AppSettings {
@@ -132,6 +138,7 @@ impl Default for AppSettings {
             connections: vec![gpt4o, euryale, gemma],
             narration_connection_id: "openrouter-gpt-4o-mini".into(),
             quantifier_connection_id: "openrouter-gpt-4o-mini".into(),
+            response_length: default_response_length(),
         }
     }
 }

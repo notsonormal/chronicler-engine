@@ -33,7 +33,7 @@ Based on SillyTavern's Prompt Manager:
 | Layer 4 | World info (keyword-triggered) | ~500 |
 | Layer 5 | Full narration history | ~3000 |
 | Layer 6 | User message | ~200 |
-| Layer 7 | PHI (Post-History Instructions) | ~300 |
+| Layer 7 | PHI (Post-History Instructions) — universal behavioral constraints | ~300 |
 
 ### Implementation Features
 

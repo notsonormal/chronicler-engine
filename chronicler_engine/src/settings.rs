@@ -134,6 +134,7 @@ mod tests {
                 connections: vec![Connection::new("test", "Test", LlmBackendType::OpenRouter)],
                 narration_connection_id: "test".into(),
                 quantifier_connection_id: "test".into(),
+                response_length: "flexible".into(),
             };
             custom.save().expect("should save");
 
@@ -178,6 +179,7 @@ mod tests {
                 }],
                 narration_connection_id: "conn-1".into(),
                 quantifier_connection_id: "conn-1".into(),
+                response_length: "flexible".into(),
             };
             settings.save().expect("should save");
 

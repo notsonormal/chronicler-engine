@@ -83,6 +83,11 @@ let residents = find_npcs_in_current_location(all_npcs, current_room);
 - **LLM backend**: Trait-based (`LlmBackend`), mock via `LLM_BACKEND=mock` env var
 - **Validation**: Run `python build.py` before commit (fmt + clippy + tests + guardrails)
 
+## LLM TEST POLICY
+- `python build.py` runs the fast suite only. LLM tests are `#[ignore]`d by default.
+- When modifying ANY file in `src/narrative/` or changing LLM prompt/parsing behavior,
+  you MUST also run `python build.py --llm-only` to verify real LLM integration.
+
 ## ANTI-PATTERNS
 - **Never** use redundant "What" comments (e.g., `// Add to log`).
 - **Never** skip architecture/spec update before implementing engine changes.

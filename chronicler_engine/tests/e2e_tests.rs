@@ -225,6 +225,60 @@ mod tests {
         let _ = browser.close().await;
     }
 
+    /// Regression test for text overflowing log-entry bubbles.
+    /// Indented markdown renders as <pre><code> which defaults to
+    /// white-space: pre (no wrapping). Without CSS handling, long
+    /// lines spill out of the chat bubble.
+    #[tokio::test]
+    async fn test_log_entry_text_wraps_within_bubble() {
+        let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
+        let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
+
+        let (_playwright, browser) = launch_chrome().await;
+        let page = browser.new_page().await.unwrap();
+
+        goto_with_connection_check(&page, port)
+            .await
+            .expect("Failed to connect to server");
+
+        let _ = wait_for_element_children(&page, "#story-log .log-entry", 1).await;
+
+        // Inject a narration entry with indented text (renders as <pre><code>)
+        // and a very long unbroken word to stress the wrapping.
+        let overflows: bool = page
+            .evaluate::<(), bool>(
+                r#"() => {
+                    const storyLog = document.querySelector('#story-log');
+                    if (!storyLog) return false;
+
+                    const entry = document.createElement('div');
+                    entry.className = 'log-entry narration';
+                    entry.innerHTML = '<span class="timestamp">10:43</span>' +
+                        '<span class="text"><pre><code>The air at the gates was thick with scent. ' +
+                        'The heavy,-ironic scent of history pressed against stone walls. ' +
+                        'AVeryLongUnbrokenWordThatWouldNormallyOverflowTheContainerBoundsIfWrappingIsBroken ' +
+                        'He ignored the distance in her eyes and the shadows that clung to the threshold.</code></pre></span>';
+                    storyLog.appendChild(entry);
+
+                    // Force layout recalculation
+                    void entry.offsetHeight;
+
+                    // Check if the entry itself has horizontal overflow
+                    return entry.scrollWidth > entry.clientWidth;
+                }"#,
+                None,
+            )
+            .await
+            .unwrap();
+
+        assert!(
+            !overflows,
+            "Log entry with <pre><code> content should not overflow horizontally"
+        );
+
+        let _ = browser.close().await;
+    }
+
     #[tokio::test]
     async fn test_element_positioning() {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");

@@ -40,7 +40,7 @@ Each trigger is checked against the current `CharacterState`:
 - If non-repeatable: Trigger is marked as "fired" and won't re-fire
 
 ### 9. Narration
-Trigger actions now use the unified 8-layer prompt with `Phi:Continuation` mode.
+Trigger actions now use the unified 8-layer prompt with continuation context in the user message.
 
 ## Timing: Evaluate BEFORE Increment
 

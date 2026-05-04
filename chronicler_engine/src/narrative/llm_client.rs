@@ -2,6 +2,8 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use once_cell::sync::Lazy;
+use regex::Regex;
 use serde_json::json;
 
 static REQUEST_COUNTER: AtomicU64 = AtomicU64::new(1);
@@ -37,6 +39,46 @@ fn extract_content_from_response(json: &serde_json::Value) -> Option<(String, &'
     None
 }
 
+/// Appends the Gemma 4 thinking-channel closure marker to bypass infinite thought loops.
+// [DOC: docs/system/llm_processing.md §8]
+fn apply_gemma4_thinking_suffix(user_text: &str, model: &str) -> String {
+    let m = model.to_lowercase();
+    if m.contains("gemma-4") || m.contains("gemma4") {
+        format!("{user_text}\n<|turn>model\n<|channel>thought\n<channel|>")
+    } else {
+        user_text.to_string()
+    }
+}
+
+/// Strip leaked thinking/reasoning artifacts from LLM output.
+/// Applies to all models as a defensive safety net.
+#[allow(clippy::expect_used)]
+fn sanitize_llm_output(text: &str) -> String {
+    static RE_LEADING_CHANNEL: Lazy<Regex> =
+        Lazy::new(|| Regex::new(r"^\s*<channel\|>").expect("valid regex"));
+    static RE_THOUGHT_BLOCK: Lazy<Regex> =
+        Lazy::new(|| Regex::new(r"(?s)<thought>.*?</thought>").expect("valid regex"));
+    static RE_CHANNEL_THOUGHT: Lazy<Regex> =
+        Lazy::new(|| Regex::new(r"(?s)<\|channel>thought.*?<channel\|>").expect("valid regex"));
+    static RE_TURN_MARKERS: Lazy<Regex> =
+        Lazy::new(|| Regex::new(r"<\|turn>model|<turn\|>|<\|turn>").expect("valid regex"));
+
+    let result = RE_LEADING_CHANNEL.replace(text, "");
+    let result = RE_THOUGHT_BLOCK.replace_all(&result, "");
+    let result = RE_CHANNEL_THOUGHT.replace_all(&result, "");
+    let result = RE_TURN_MARKERS.replace_all(&result, "");
+
+    // Normalize paragraph indentation.
+    // [DOC: docs/system/llm_processing.md §9]
+    result
+        .lines()
+        .map(|line| line.trim_start())
+        .collect::<Vec<_>>()
+        .join("\n")
+        .trim()
+        .to_string()
+}
+
 /// Parse a raw HTTP response body from an LLM chat completions endpoint.
 fn parse_chat_response(raw_response: &str, req_id: u64) -> Result<String, String> {
     match serde_json::from_str::<serde_json::Value>(raw_response.trim_start()) {
@@ -53,11 +95,12 @@ fn parse_chat_response(raw_response: &str, req_id: u64) -> Result<String, String
             }
 
             if let Some((content, source)) = extract_content_from_response(&json_response) {
+                let sanitized = sanitize_llm_output(&content);
                 log::info!(
                     "[LLM][req:{req_id}] Extracted content via: {source} ({} chars)",
-                    content.len()
+                    sanitized.len()
                 );
-                return Ok(content);
+                return Ok(sanitized);
             }
 
             // If we got here, the response structure was unexpected
@@ -262,12 +305,13 @@ pub fn call_ollama(
     user_text: &str,
     max_tokens: Option<u32>,
 ) -> Result<String, String> {
+    let user_text = apply_gemma4_thinking_suffix(user_text, model);
     call_chat_completions(
         base_url,
         None,
         model,
         system_prompt,
-        user_text,
+        &user_text,
         None,
         max_tokens,
     )
@@ -480,5 +524,104 @@ mod tests {
         // call_ollama with empty system prompt should not panic
         let result = call_ollama("http://localhost:59999", "model", "", "user message", None);
         assert!(result.is_err());
+    }
+
+    // --- sanitize_llm_output tests ---
+
+    #[test]
+    fn test_sanitize_leading_channel_close() {
+        let input = "<channel|>The heavy iron gates...";
+        let result = sanitize_llm_output(input);
+        assert_eq!(result, "The heavy iron gates...");
+    }
+
+    #[test]
+    fn test_sanitize_thought_block() {
+        let input = "<thought>The user wants to continue...</thought>The gates creaked.";
+        let result = sanitize_llm_output(input);
+        assert_eq!(result, "The gates creaked.");
+    }
+
+    #[test]
+    fn test_sanitize_channel_thought_block() {
+        let input = "<|channel>thought\nSome reasoning here\n<channel|>Narrative text.";
+        let result = sanitize_llm_output(input);
+        assert_eq!(result, "Narrative text.");
+    }
+
+    #[test]
+    fn test_sanitize_orphan_turn_markers() {
+        let input = "<|turn>modelStart of text<turn|>more text<|turn>end.";
+        let result = sanitize_llm_output(input);
+        assert_eq!(result, "Start of textmore textend.");
+    }
+
+    #[test]
+    fn test_sanitize_combined_artifacts() {
+        let input = "<channel|><thought>reasoning</thought><|turn>modelThe real content.";
+        let result = sanitize_llm_output(input);
+        assert_eq!(result, "The real content.");
+    }
+
+    #[test]
+    fn test_sanitize_clean_text_unchanged() {
+        let input = "The heavy iron gates offered no resistance.";
+        let result = sanitize_llm_output(input);
+        assert_eq!(result, input);
+    }
+
+    #[test]
+    fn test_sanitize_empty_string() {
+        assert_eq!(sanitize_llm_output(""), "");
+    }
+
+    #[test]
+    fn test_sanitize_whitespace_only() {
+        assert_eq!(sanitize_llm_output("   "), "");
+    }
+
+    #[test]
+    fn test_sanitize_multiple_thought_blocks() {
+        let input = "<thought>first</thought>A<thought>second</thought>B";
+        let result = sanitize_llm_output(input);
+        assert_eq!(result, "AB");
+    }
+
+    #[test]
+    fn test_sanitize_paragraph_indentation() {
+        // Models often emit indented paragraphs that pulldown-cmark
+        // treats as code blocks (<pre><code>), causing bubble overflow.
+        let input = "  First paragraph.\n\n        Second paragraph.\n\n        Third paragraph.";
+        let result = sanitize_llm_output(input);
+        assert_eq!(
+            result,
+            "First paragraph.\n\nSecond paragraph.\n\nThird paragraph."
+        );
+    }
+
+    // --- apply_gemma4_thinking_suffix tests ---
+
+    #[test]
+    fn test_gemma4_suffix_applied_for_gemma4_name() {
+        let input = "User prompt";
+        let result = apply_gemma4_thinking_suffix(input, "gemma4:latest");
+        assert!(result.contains("<|turn>model"));
+        assert!(result.contains("<|channel>thought"));
+        assert!(result.contains("<channel|>"));
+        assert!(!result.contains("\n<turn|>\n")); // old malformed format
+    }
+
+    #[test]
+    fn test_gemma4_suffix_applied_for_gemma_dash() {
+        let input = "User prompt";
+        let result = apply_gemma4_thinking_suffix(input, "mradermacher/gemma-4-26b");
+        assert!(result.contains("<|turn>model"));
+    }
+
+    #[test]
+    fn test_gemma4_suffix_not_applied_for_other_models() {
+        let input = "User prompt";
+        let result = apply_gemma4_thinking_suffix(input, "llama3:8b");
+        assert_eq!(result, input);
     }
 }

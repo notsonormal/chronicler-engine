@@ -20,6 +20,9 @@ pub enum EngineError {
     #[error("LLM error: {0}")]
     Llm(String),
 
+    #[error("LLM returned an empty response")]
+    LlmEmptyResponse,
+
     #[error("Narrative generation error: {0}")]
     Narrative(String),
 

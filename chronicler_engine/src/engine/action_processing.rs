@@ -9,7 +9,7 @@ use crate::model::character::NpcCard;
 
 use crate::model::state::{GameState, LogType};
 use crate::model::world::WorldCard;
-use crate::narrative::prompt::{PhiMode, PromptBuilder, PromptContext};
+use crate::narrative::prompt::{PromptBuilder, PromptContext};
 use crate::narrative::quantifier::{NpcEvent, QuantifierResult, compute_npc_events};
 
 /// [DOC: docs/architecture/system.md]
@@ -21,6 +21,7 @@ pub struct FreeActionContext<'a> {
     pub player: &'a crate::model::character::PlayerCard,
     pub all_npcs: &'a [NpcCard],
     pub history: &'a [crate::model::state::LogEntry],
+    pub llm_backend: &'a dyn crate::narrative::llm::LlmBackend,
 }
 
 /// [DOC: docs/architecture/system.md]
@@ -90,6 +91,7 @@ pub fn evaluate_and_narrate_triggers(
     state: &mut GameState,
     narration_text: &str,
     trigger_context: &PromptContext<'_>,
+    llm_backend: &dyn crate::narrative::llm::LlmBackend,
 ) {
     let matching_triggers = evaluate_triggers(state);
 
@@ -100,7 +102,9 @@ pub fn evaluate_and_narrate_triggers(
     state.generation_state.phase = crate::model::state::GenerationPhase::GeneratingEvent;
 
     let continuation_user_msg = format!(
-        "Previous narration:\n{narration_text}\n\nTrigger event: {}",
+        "Previous narration:\n{narration_text}\n\nTrigger event: {}\n\n\
+         Continue the scene naturally, incorporating the trigger event into the narrative. \
+         Do NOT repeat or contradict what was already described. Build naturally on the existing scene.",
         trigger.action.narration_prompt
     );
 
@@ -122,9 +126,9 @@ pub fn evaluate_and_narrate_triggers(
     let max_tokens = narration_conn.and_then(|c| c.max_tokens);
 
     let mut pb = PromptBuilder::from_context(&trigger_ctx);
-    pb.phi_mode = PhiMode::Continuation;
     pb.max_context_tokens = Some(max_context);
     pb.requested_max_tokens = max_tokens;
+    pb.response_length = Some(&settings.response_length);
 
     let Ok((system_prompt, user_prompt, fitted_max_tokens)) = pb.build_split() else {
         log::error!(
@@ -134,8 +138,7 @@ pub fn evaluate_and_narrate_triggers(
         return;
     };
 
-    let backend = crate::narrative::llm::get_llm_backend();
-    let continuation_text = match backend.narrate_action_from_prompt(
+    let continuation_text = match llm_backend.narrate_action_from_prompt(
         &system_prompt,
         &user_prompt,
         Some(fitted_max_tokens),
@@ -207,7 +210,7 @@ pub fn execute_freeaction_impl(
         history: ctx.history,
     };
 
-    evaluate_and_narrate_triggers(state, ctx.narration_text, &trigger_context);
+    evaluate_and_narrate_triggers(state, ctx.narration_text, &trigger_context, ctx.llm_backend);
 
     let events = compute_npc_events(&previous_npc_ids, &current_npc_ids);
     apply_npc_events(state, &events.events);
@@ -378,6 +381,7 @@ mod execute_freeaction_impl_tests {
                 player: &player,
                 all_npcs: &all_npcs,
                 history: &history,
+                llm_backend: &crate::narrative::llm::MockBackend::default(),
             },
         );
 
@@ -410,6 +414,7 @@ mod execute_freeaction_impl_tests {
                 player: &player,
                 all_npcs: &all_npcs,
                 history: &history,
+                llm_backend: &crate::narrative::llm::MockBackend::default(),
             },
         );
 
@@ -442,6 +447,7 @@ mod execute_freeaction_impl_tests {
                 player: &player,
                 all_npcs: &all_npcs,
                 history: &[],
+                llm_backend: &crate::narrative::llm::MockBackend::default(),
             },
         );
 
@@ -515,6 +521,7 @@ mod execute_freeaction_impl_tests {
                 player: &player,
                 all_npcs: &[], // empty won't match triggers
                 history: &[],
+                llm_backend: &crate::narrative::llm::MockBackend::default(),
             },
         );
 
@@ -542,6 +549,7 @@ mod execute_freeaction_impl_tests {
                 player: &player,
                 all_npcs: &all_npcs,
                 history: &[],
+                llm_backend: &crate::narrative::llm::MockBackend::default(),
             },
         );
 
@@ -771,8 +779,7 @@ mod tests {
 
     #[test]
     fn test_evaluate_and_narrate_triggers_adds_event_header() {
-        let _guard =
-            crate::narrative::llm::with_test_backend(crate::narrative::llm::LlmBackendType::Mock);
+        let llm_backend = crate::narrative::llm::MockBackend::default();
 
         let mut state = make_test_state();
         let trigger = crate::model::trigger::Trigger {
@@ -833,7 +840,12 @@ mod tests {
             history: &history,
         };
 
-        evaluate_and_narrate_triggers(&mut state, "You enter the room.", &trigger_context);
+        evaluate_and_narrate_triggers(
+            &mut state,
+            "You enter the room.",
+            &trigger_context,
+            &llm_backend,
+        );
 
         // Should have at least 2 entries: event header + narration
         assert!(

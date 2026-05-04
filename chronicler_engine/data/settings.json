@@ -18,9 +18,10 @@
       "id": "ollama-gemma-4-26B",
       "name": "ollama-gemma-4-26B",
       "provider": "Ollama",
-      "model": "hf.co/mradermacher/gemma-4-26B-A4B-it-abliterated-i1-GGUF:latest",
+      "model": "mradermacher/gemma-4-26b-a4b-it-abliterated:iq2xs",
       "base_url": "http://localhost:11434/v1",
-      "single_user_message": false
+      "single_user_message": false,
+      "max_tokens": 8192
     },
     {
       "id": "ollama-gemma-4-e2b",
@@ -28,9 +29,11 @@
       "provider": "Ollama",
       "model": "huihui_ai/gemma-4-abliterated:e2b-v2",
       "base_url": "http://localhost:11434/v1",
-      "single_user_message": false
+      "single_user_message": false,
+      "max_tokens": 2048
     }
   ],
-  "narration_connection_id": "ollama-gemma-4-26B",
-  "quantifier_connection_id": "ollama-gemma-4-e2b"
+  "narration_connection_id": "openrouter-euryale",
+  "quantifier_connection_id": "ollama-gemma-4-e2b",
+  "response_length": "flexible, based on the current scene. During a conversation, keep it concise (under 150 words) to allow back-and-forth. For scene transitions, travel, or plot developments, build content (above 150 words), but allow the player to react."
 }

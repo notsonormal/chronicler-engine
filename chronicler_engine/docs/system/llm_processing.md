@@ -54,7 +54,7 @@ The engine uses a layered prompt system inspired by SillyTavern's Prompt Manager
 - **System half**: Plain-text instructions only (Layer 0)
 - **User half**: XML-wrapped data (Layers 1–6) + plain-text PHI (Layer 7)
 
-This separation prevents reasoning models (e.g., Gemma 4) from entering meta-analysis mode.
+This separation reduces the chance of reasoning models (e.g., Gemma 4) entering meta-analysis mode. However, the Gemma 4 26B model (particularly abliterated quants) can still get stuck in an infinite `<|channel>thought` loop even with plain-text instructions. An additional prompt-level fix is applied for Gemma 4 models (see §8).
 
 ### 6. Token Budget Management
 - **MAX_CONTEXT_TOKENS**: 32768 (fallback default; configurable per connection via `max_context_tokens`)
@@ -71,6 +71,27 @@ User input is sanitized to prevent prompt injection:
 - `{{variable}}` patterns are escaped
 - Known injection patterns are stripped
 - Legitimate text passes through unchanged
+
+### 8. Gemma 4 Thinking-Channel Suffix
+
+Gemma 4 models on Ollama use a `{{ .Prompt }}` passthrough template — Ollama does not apply a native chat template. The 26B variant (especially abliterated quants) can enter an infinite reasoning loop, burning all `max_tokens` in `<|channel>thought` and returning empty `content`.
+
+**Fix**: `llm_client.rs::apply_gemma4_thinking_suffix()` detects models with `"gemma-4"` or `"gemma4"` in their name and appends the closure marker to the user message **only for Ollama backends**:
+
+```
+<|turn>model
+<|channel>thought
+<channel|>
+```
+
+This matches SillyTavern's `last_output_sequence` preset for Gemma 4. It pre-fills an empty thought block so the model skips reasoning and generates narrative content immediately.
+
+- **Scope**: Ollama backends only; Gemma 4 models detected by name
+- **OpenRouter / chat-template backends**: Suffix is NOT applied — the backend's native chat template handles turn structure
+- **Non-Gemma models**: Completely unaffected
+- **Validation**: Reduced completion tokens from 2048 (all reasoning) to ~211 (actual content) on `mradermacher/gemma-4-26b-a4b-it-abliterated:iq2xs`
+- **Safety net**: `sanitize_llm_output()` strips any leaked `<channel|>`, `<thought>`, or `<|channel>thought` artifacts from all responses regardless of model
+- **Ref**: [SillyTavern Reddit discussion](https://old.reddit.com/r/SillyTavernAI/comments/1sbjwke/)
 
 ### Module Location
 - **Crate path**: `crate::narrative::llm` (LLM backends)

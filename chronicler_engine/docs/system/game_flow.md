@@ -16,11 +16,11 @@ flowchart TD
     
     Phase3["**PHASE 3: PROCESS ACTION**<br>1. Parse command & execute game logic<br>2. Log command as 'Input'<br>3. Set status to 'Generating' + phase 'Narrating'<br>4. Spawn async thread for LLM"]
     
-    Phase4["**PHASE 4: MAIN LLM NARRATION**<br>*(Phase: Narrating)*<br>1. Build prompt via PromptBuilder (PhiMode::Action)<br>2. Send to LLM (see Context Pipeline below)<br>3. Add to history as 'Narration'"]
+    Phase4["**PHASE 4: MAIN LLM NARRATION**<br>*(Phase: Narrating)*<br>1. Build prompt via PromptBuilder<br>2. Send to LLM (see Context Pipeline below)<br>3. Add to history as 'Narration'"]
     
     Phase45["**PHASE 4.5: QUANTIFIER & MOVEMENT**<br>*(Phase: Quantifying)*<br>1. Post-narration Quantifier analyzes<br>2. Process movement intent<br>3. If moved: trigger `narrate_arrival` LLM call<br>4. Determine NPC Enter/Leave events"]
     
-    Phase5["**PHASE 5: TRIGGER EVALUATION**<br>*(Phase: GeneratingEvent — only if trigger fires)*<br>1. `evaluate_triggers(state)` — first match only<br>2. Build prompt (PhiMode::Continuation)<br>3. Call LLM & mark trigger as fired<br>4. Set status back to 'Ready'"]
+    Phase5["**PHASE 5: TRIGGER EVALUATION**<br>*(Phase: GeneratingEvent — only if trigger fires)*<br>1. `evaluate_triggers(state)` — first match only<br>2. Build prompt with continuation context<br>3. Call LLM & mark trigger as fired<br>4. Set status back to 'Ready'"]
     
     Phase6["**PHASE 6: POLLING UPDATE**<br>1. Client polls /fragment/story-log (5s)<br>2. Server returns updated HTML<br>3. HTMX swaps content"]
 

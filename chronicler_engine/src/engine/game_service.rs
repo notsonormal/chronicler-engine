@@ -10,11 +10,8 @@ use crate::engine::parser::parse_command;
 use crate::error::EngineError;
 use crate::model::character::NpcCard;
 use crate::model::state::{GameState, LogType};
-use crate::narrative::llm::get_llm_backend;
 use crate::narrative::prompt::make_prompt_context;
-use crate::narrative::quantifier::{
-    QuantifierBackendTrait, determine_npcs_in_room, get_quantifier_backend,
-};
+use crate::narrative::quantifier::{QuantifierBackendTrait, determine_npcs_in_room};
 
 pub trait GameService: Send + Sync {
     fn execute_action(&self, state: Arc<Mutex<GameState>>, input: String, player_name: String);
@@ -22,11 +19,27 @@ pub trait GameService: Send + Sync {
     fn retry_last_response(&self, state: Arc<Mutex<GameState>>);
 }
 
-pub struct DefaultGameService;
+pub struct DefaultGameService {
+    llm_backend: Arc<dyn crate::narrative::llm::LlmBackend>,
+    quantifier_backend: Arc<dyn QuantifierBackendTrait>,
+}
 
 impl DefaultGameService {
     pub fn new() -> Self {
-        DefaultGameService
+        Self {
+            llm_backend: Arc::from(crate::narrative::llm::get_llm_backend()),
+            quantifier_backend: Arc::from(crate::narrative::quantifier::get_quantifier_backend()),
+        }
+    }
+
+    pub fn with_backends(
+        llm_backend: Arc<dyn crate::narrative::llm::LlmBackend>,
+        quantifier_backend: Arc<dyn QuantifierBackendTrait>,
+    ) -> Self {
+        Self {
+            llm_backend,
+            quantifier_backend,
+        }
     }
 }
 
@@ -126,6 +139,8 @@ impl GameService for DefaultGameService {
                 drop(state_guard);
 
                 let state_for_thread = state.clone();
+                let backend = Arc::clone(&self.llm_backend);
+                let quantifier_backend = Arc::clone(&self.quantifier_backend);
                 thread::spawn(move || {
                     let room = map
                         .overworld
@@ -138,8 +153,6 @@ impl GameService for DefaultGameService {
                         reset_generating(&state_for_thread);
                         return;
                     };
-
-                    let backend = get_llm_backend();
                     let context = make_prompt_context(
                         &world,
                         room,
@@ -170,6 +183,9 @@ impl GameService for DefaultGameService {
                                 EngineError::Narrative(msg) if msg.contains("parse") => {
                                     "LLM Error: unexpected response format".to_string()
                                 }
+                                EngineError::LlmEmptyResponse => {
+                                    "LLM Error: empty response".to_string()
+                                }
                                 _ => format!("LLM Error: {e}"),
                             };
                             set_error_and_reset(&state_for_thread, user_msg);
@@ -177,8 +193,7 @@ impl GameService for DefaultGameService {
                         }
                     };
 
-                    let quantifier_backend: Box<dyn QuantifierBackendTrait> =
-                        get_quantifier_backend();
+                    let quantifier_backend: Arc<dyn QuantifierBackendTrait> = quantifier_backend;
 
                     set_phase(
                         &state_for_thread,
@@ -212,6 +227,7 @@ impl GameService for DefaultGameService {
                                 player: &player,
                                 all_npcs: &all_npcs,
                                 history: &history,
+                                llm_backend: backend.as_ref(),
                             },
                         )
                     });
@@ -270,6 +286,7 @@ impl GameService for DefaultGameService {
         };
 
         let state_clone = state.clone();
+        let backend = Arc::clone(&self.llm_backend);
 
         thread::spawn(move || {
             // Small delay to let any inner threads start their guards first
@@ -285,8 +302,6 @@ impl GameService for DefaultGameService {
                 .filter(|npc| room_npc_ids.contains(&npc.id))
                 .cloned()
                 .collect();
-
-            let backend = get_llm_backend();
             let context = make_prompt_context(
                 &world,
                 room,
@@ -312,6 +327,7 @@ impl GameService for DefaultGameService {
                         EngineError::Narrative(msg) if msg.contains("parse") => {
                             "LLM Error: unexpected response format".to_string()
                         }
+                        EngineError::LlmEmptyResponse => "LLM Error: empty response".to_string(),
                         _ => format!("LLM Error: {e}"),
                     };
                     set_error_and_reset(&state_clone, user_msg);

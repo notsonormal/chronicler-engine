@@ -8,6 +8,8 @@ mod tests {
     use chronicler_engine::engine::game_service::{DefaultGameService, GameService};
     use chronicler_engine::model::state::LogType;
     use chronicler_engine::model::{character::*, map::*, world::*};
+    use chronicler_engine::narrative::llm::MockBackend;
+    use chronicler_engine::narrative::quantifier::MockQuantifierBackend;
 
     /// Poll for the FreeAction/retry thread to complete by checking is_generating.
     /// Returns true if generation completed within timeout, false on timeout.
@@ -265,7 +267,7 @@ mod tests {
         );
 
         // Verify is_generating was reset (room not found path)
-        let completed = wait_for_generation_complete(&state, 500);
+        let completed = wait_for_generation_complete(&state, 1000);
         assert!(
             completed,
             "is_generating should be reset when room not found"
@@ -307,7 +309,10 @@ mod tests {
     #[test]
     fn test_execute_freeaction_narration_failure() {
         let state = create_test_state();
-        let service = DefaultGameService::new();
+        let service = DefaultGameService::with_backends(
+            Arc::new(MockBackend::failing()),
+            Arc::new(MockQuantifierBackend::default()),
+        );
 
         {
             let mut guard = state.lock().unwrap();
@@ -322,7 +327,7 @@ mod tests {
             "Player".to_string(),
         );
 
-        let completed = wait_for_generation_complete(&state, 500);
+        let completed = wait_for_generation_complete(&state, 200);
         assert!(completed, "FreeAction should complete within timeout");
 
         let guard = state.lock().unwrap();
@@ -338,12 +343,11 @@ mod tests {
     /// Verifies that narration is added and is_generating is properly reset.
     #[test]
     fn test_execute_freeaction_with_mock_backend() {
-        let _guard = chronicler_engine::narrative::llm::with_test_backend(
-            chronicler_engine::narrative::llm::LlmBackendType::Mock,
-        );
-
         let state = create_test_state();
-        let service = DefaultGameService::new();
+        let service = DefaultGameService::with_backends(
+            Arc::new(MockBackend::default()),
+            Arc::new(MockQuantifierBackend::default()),
+        );
 
         {
             let mut guard = state.lock().unwrap();
@@ -358,7 +362,7 @@ mod tests {
             "Player".to_string(),
         );
 
-        let completed = wait_for_generation_complete(&state, 1000);
+        let completed = wait_for_generation_complete(&state, 200);
         assert!(completed, "FreeAction should complete within timeout");
 
         let guard = state.lock().unwrap();
@@ -378,12 +382,11 @@ mod tests {
     /// Verifies that the retry path works end-to-end.
     #[test]
     fn test_retry_with_mock_backend() {
-        let _guard = chronicler_engine::narrative::llm::with_test_backend(
-            chronicler_engine::narrative::llm::LlmBackendType::Mock,
-        );
-
         let state = create_test_state();
-        let service = DefaultGameService::new();
+        let service = DefaultGameService::with_backends(
+            Arc::new(MockBackend::default()),
+            Arc::new(MockQuantifierBackend::default()),
+        );
 
         // Set up history with a player input and AI response
         {
@@ -470,12 +473,11 @@ mod tests {
     /// Verifies that the quantifier runs and NPC detection works.
     #[test]
     fn test_execute_freeaction_with_movement_mock() {
-        let _guard = chronicler_engine::narrative::llm::with_test_backend(
-            chronicler_engine::narrative::llm::LlmBackendType::Mock,
-        );
-
         let state = create_test_state();
-        let service = DefaultGameService::new();
+        let service = DefaultGameService::with_backends(
+            Arc::new(MockBackend::default()),
+            Arc::new(MockQuantifierBackend::default()),
+        );
 
         {
             let mut guard = state.lock().unwrap();
@@ -560,12 +562,11 @@ mod tests {
 
     #[test]
     fn test_freeaction_phase_transitions_mock() {
-        let _guard = chronicler_engine::narrative::llm::with_test_backend(
-            chronicler_engine::narrative::llm::LlmBackendType::Mock,
-        );
-
         let state = create_test_state();
-        let service = DefaultGameService::new();
+        let service = DefaultGameService::with_backends(
+            Arc::new(MockBackend::default()),
+            Arc::new(MockQuantifierBackend::default()),
+        );
 
         {
             let mut guard = state.lock().unwrap();
@@ -580,7 +581,7 @@ mod tests {
             "Player".to_string(),
         );
 
-        let completed = wait_for_generation_complete(&state, 1000);
+        let completed = wait_for_generation_complete(&state, 200);
         assert!(completed, "FreeAction should complete within timeout");
 
         let guard = state.lock().unwrap();

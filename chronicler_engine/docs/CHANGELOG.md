@@ -3,6 +3,38 @@
 ## Unreleased
 
 ### Added
+- **Marinara-Style Prompt Rules** - Overhauled `SYSTEM_PROMPT_TEMPLATE` with battle-tested patterns from Marinara Engine
+  - Free will framing: "you have your own free will, intellect, and emotional intelligence"
+  - Anti-repetition rule with concrete example ("Gooner?" → "What type of question is that?")
+  - Anti-GPTism ban on generic structures and clichés ("jaws working", "physical punches")
+  - Knowledge boundary rules: latecomers ignorant, private conversations stay private, rumors travel slowly
+  - Character complexity requirement: opinions, contradictions, boundaries, hypocrisies, judgments
+  - Proactive narrative momentum: introduce challenges, resist comfort, no plot armor
+  - Internal thought barrier: thoughts via narration are never audible to others
+  - Positive framing: "describe what DOES happen, rather than what doesn't"
+  - Scattered prohibitions (removed dedicated "Never do" bulleted list)
+- **Response Length Setting** - Configurable `response_length` in `AppSettings` / `settings.json`
+  - Injected into system prompt via `PromptBuilder::with_response_length()`
+  - Default: flexible scene-adaptive guidance (concise for dialogue, longer for transitions)
+
+### Fixed
+- **Duplicate `global_rules` removal** - `global_rules` no longer appear in both system prompt and `<WorldLore>` user layer
+  - Now injected **only** in `render_system_layer()` (Layer 0)
+  - Saves tokens and reduces redundancy
+
+### Added
+- **Gemma 4 Thinking-Channel Suffix** - Fixed infinite reasoning loop on Gemma 4 26B models
+  - `apply_gemma4_thinking_suffix()` in `llm_client.rs` detects Gemma 4 models by name
+  - Appends `<|turn>model\n<|channel>thought\n<channel|>` to Ollama user messages
+  - Tells the model the thinking slot is already filled, bypassing the loop
+  - Validated on `mradermacher/gemma-4-26b-a4b-it-abliterated:iq2xs`: 2048 tokens all-reasoning → ~211 tokens of narrative content
+  - Non-Gemma models are completely unaffected
+
+### Fixed
+- **Gemma 4 suffix corruption** — Fixed malformed thinking suffix that was causing `<channel|>` prefixes and `<thought>` blocks in output
+  - Removed erroneous leading `<turn|>` line from suffix (now matches SillyTavern preset exactly)
+  - Scoped suffix to Ollama backend only; OpenRouter's native chat template was fighting the injected raw tokens
+  - Added `sanitize_llm_output()` to strip leaked thinking artifacts from all responses
 - **Marinara-Style Prompt Architecture** - Refactored prompt construction to plain-text instructions + XML-wrapped data only
   - System prompt (Layer 0) is now plain text — removed `<SystemPrompt>`, `<Role>`, `<CoreRole>`, etc.
   - PHI layer (Layer 7) is now plain text — removed `<AuxiliaryInstructions>` wrapper
@@ -133,9 +165,9 @@
 - **Polling pause** - HTMX polling pauses during edit mode to prevent DOM replacement
 
 ### Added
-- **Trigger continuation unified** - Trigger narrations now use full 8-layer sillytavern prompt via `PromptBuilder` with `PhiMode::Continuation`
+- **Trigger continuation unified** - Trigger narrations now use full 8-layer sillytavern prompt via `PromptBuilder` with continuation context in user message
 - **Removed continuation.rs** - Functionality migrated to unified prompt system
-- **Added PhiMode** - New enum controlling PHI layer (Layer 7) behavior: Narration vs Continuation
+- **Added PhiMode** - ~~New enum controlling PHI layer (Layer 7) behavior: Narration vs Continuation~~ (removed in later refactor — PHI is now universal)
 - **Quantifier Backend Trait** - Refactored quantifier to use trait for enable testing
   - New `QuantifierBackendTrait` interface with `quantify_room()` method
   - `RealQuantifierBackend` - Production LLM-based implementation

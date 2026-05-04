@@ -44,8 +44,7 @@ The Chronicler Engine implements an 8-layer prompt structure mapped from SillyTa
 - **Format**: Plain text (no XML wrapper)
 - **Example**:
   ```
-  You are an interactive fiction author. Write in the style of literary fiction prose.
-  Your role is to narrate the consequences of player actions as if writing a novel chapter.
+  You are an interactive fiction author with your own free will, intellect, and emotional intelligence...
   ```
 - **See also**: [`reference/system_prompt.md`](../reference/system_prompt.md) for the full prompt text
 
@@ -84,7 +83,7 @@ The Chronicler Engine implements an 8-layer prompt structure mapped from SillyTa
 - **Trigger**: Keyword matching in conversation
 - **Content**: World lore, setting facts, background information
 - **Format**: XML-wrapped (`<WorldLore>... </WorldLore>`)
-- **Implementation**: Simple keyword matching from `world.json` `global_rules`
+- **Implementation**: Renders `world.name` and `world.description` only. `global_rules` were previously duplicated here but have been moved exclusively to Layer 0 (System Prompt) to reduce token waste.
 
 ### Layer 5: Chat History
 - **Role**: User (data)
@@ -102,7 +101,7 @@ The Chronicler Engine implements an 8-layer prompt structure mapped from SillyTa
 - **Position**: After history, before response
 - **Content**: Final behavioral instructions
 - **Format**: Plain text (no XML wrapper)
-- **Modes**: See [`reference/system_prompt.md`](../reference/system_prompt.md) for `PhiMode::Narration` and `PhiMode::Continuation`
+- **Content**: Universal behavioral instructions (immersive prose, don't ask questions, end descriptively)
 - **Split behavior**: In `build_split()`, PHI is appended to the **user message** (not the system prompt) so it sits closest to the generation point, matching the ordering in `build()` where `PlayerInput` precedes the PHI instructions.
 - **Example**:
   ```
@@ -130,6 +129,21 @@ This separation ensures that reasoning models receive clear imperative instructi
 - **No summarization** — maintains accuracy over compression
 - **Estimation**: Character-based token estimation (simple and fast)
 
+## Response Length Control
+
+The `PromptBuilder` supports an optional `response_length` field (set via `.with_response_length()`) that appends scene-adaptive length guidance to the system prompt:
+
+```
+Response Length:
+flexible, based on the current scene. During a conversation, keep it concise
+(under 150 words) to allow back-and-forth. For scene transitions, travel, or
+plot developments, build content (above 150 words), but allow the player to react.
+```
+
+- **Source**: `AppSettings.response_length` (persisted in `settings.json`)
+- **Default**: Flexible scene-adaptive guidance
+- **Injection point**: Appended after `Global Rules` in `render_system_layer()`
+
 ## Context Templates
 
 The engine uses a variable system similar to SillyTavern's Handlebars-style templates:
@@ -139,7 +153,7 @@ The engine uses a variable system similar to SillyTavern's Handlebars-style temp
 ## World Info / Knowledge Base
 
 - **Trigger**: Keywords appear in player input or history
-- **Content**: World `global_rules` used as lore
+- **Content**: World name and description. World `global_rules` appear in Layer 0 (System Prompt), not here.
 - **Method**: Simple string matching (no RAG or vector DB)
 
 ## Character Card Format
@@ -182,6 +196,7 @@ The engine also uses a **quantifier prompt** — a separate secondary LLM call t
 let (system, user, max_tokens) = PromptBuilder::from_context(&ctx)
     .with_max_context_tokens(8192)
     .with_max_tokens(2048)
+    .with_response_length(&settings.response_length)
     .build_split()?;
 ```
 

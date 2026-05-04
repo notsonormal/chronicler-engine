@@ -28,7 +28,7 @@ The interface between the synchronous engine and stochastic LLM generation.
   - **`get_llm_backend()`**: Production entry point that loads the narration connection from `data/settings.json`
   - **`get_llm_backend_for(connection)`**: Create a backend for a specific `Connection` profile
   - **`with_test_backend()`**: RAII guard for overriding backend in tests (atomically sets Mock/DeepSeek/OpenRouter without file I/O)
-- **`prompt`**: PromptBuilder module for layered prompt construction with token budget management, including `PhiMode` for controlling PHI layer behavior (Narration vs Continuation). Uses plain-text instructions + XML-wrapped data for reasoning-model compatibility. Includes `fit_messages_to_context()` for dynamic context-window fitting.
+- **`prompt`**: PromptBuilder module for layered prompt construction with token budget management. Uses plain-text instructions + XML-wrapped data for reasoning-model compatibility. Includes `fit_messages_to_context()` for dynamic context-window fitting.
 - **`quantifier`**: Scene quantification module for dynamic room presence detection via secondary LLM. Returns NPC presence, player movement intent, and NPC enter/leave events.
   - **`QuantifierBackendTrait`**: Interface for NPC detection backends
   - **`RealQuantifierBackend`**: Production implementation using LLM
@@ -128,7 +128,7 @@ Static web assets served by the server.
 | `src/engine/action_processing.rs` | `crate::engine::action_processing` | Server handler pure functions (NEW) |
 | `src/engine/game_service.rs` | `crate::engine::game_service` | `GameService` trait and `DefaultGameService` — game orchestration extracted from fragments.rs |
 | `src/narrative/llm.rs` | `crate::narrative::llm` | LLM backend implementations |
-| `src/narrative/prompt.rs` | `crate::narrative::prompt` | PromptBuilder with layered prompts, PhiMode enum, `make_prompt_context` helper |
+| `src/narrative/prompt.rs` | `crate::narrative::prompt` | PromptBuilder with layered prompts, `make_prompt_context` helper |
 | `src/narrative/quantifier.rs` | `crate::narrative::quantifier` | Scene quantification for dynamic NPC presence. `QuantifierBackendTrait`, `RealQuantifierBackend`, `MockQuantifierBackend`, `determine_npcs_in_room` |
 | `src/narrative/llm_client.rs` | `crate::narrative::llm_client` | HTTP client helpers for OpenRouter and Ollama |
 | `src/server/mod.rs` | `crate::server` | Axum router, `AppState`, `run_server`, `create_app_for_testing` |
@@ -223,7 +223,7 @@ The engine supports reactive NPC encounters based on character state. When the p
 2. **Movement & NPC Detection**: A single post-narration Quantifier pass detects movement intent and any NPCs mentioned in the narration.
 3. **Movement Execution**: If movement is detected, the engine updates `GameState.current_room_id`.
 4. **Trigger Evaluation** (`trigger_eval`): Engine evaluates all NPC triggers against `CharacterState` (e.g., `times_met == 0`).
-5. **Continuation Narration** (`prompt`): If triggers fire, `PromptBuilder` builds a second LLM prompt with `PhiMode::Continuation` combining the first narration with trigger-specific text.
+5. **Continuation Narration** (`prompt`): If triggers fire, `PromptBuilder` builds a second LLM prompt combining the first narration with trigger-specific text in the user message.
 6. **Combined Response**: Both narrations are logged and delivered in the same polling cycle.
 
 **`NpcEncounterState`** tracks persistent NPC encounter data:

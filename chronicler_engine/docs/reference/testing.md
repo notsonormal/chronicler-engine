@@ -68,14 +68,25 @@ UI tests use **playwright-rs** (Rust bindings for Microsoft Playwright) for brow
 # Install Playwright browsers first (requires Node.js)
 npx playwright install chromium
 
-# Run all tests
+# Default: fast suite (LLM tests excluded)
 cargo test
+cargo nextest run
+python build.py
 
-# Run specific test suites
+# Include slow LLM tests in full suite
+cargo test -- --ignored
+cargo nextest run --run-ignored all
+python build.py --include-llm
+
+# Run ONLY the LLM tests (focused validation)
+cargo test --test flow_llm_tests -- --ignored
+cargo nextest run --run-ignored all --test flow_llm_tests
+python build.py --llm-only
+
+# Run specific non-LLM test suites
 cargo test --test component_tests   # In-process tests (fast)
 cargo test --test e2e_tests         # Browser tests
 cargo test --test flow_mock_tests   # Fast tests with mock LLM
-cargo test --test flow_llm_tests     # Tests requiring real LLM
 
 # Run with single thread (recommended for tests sharing ports)
 cargo test -- --test-threads=1

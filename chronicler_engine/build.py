@@ -12,6 +12,12 @@ import signal
 from pathlib import Path
 import shutil
 
+# Force UTF-8 for stdout/stderr on Windows to handle cargo's Unicode output
+if sys.platform == "win32":
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+
 
 def kill_port(port: int):
     """Kill any process using the specified port."""
@@ -85,6 +91,8 @@ def run(cmd, cwd=None, check=True, show_output=True, env=None):
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         )
         for line in process.stdout:
             # Filter out noisy cargo-llvm-cov info messages
@@ -104,6 +112,8 @@ def run(cmd, cwd=None, check=True, show_output=True, env=None):
             env=merged_env,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         )
         if result.stdout:
             print(result.stdout)
@@ -126,6 +136,18 @@ def main():
         "--release",
         action="store_true",
         help="Build and package in release mode",
+    )
+    parser.add_argument(
+        "--include-llm",
+        action="store_true",
+        dest="include_llm",
+        help="Include slow LLM tests in the test suite",
+    )
+    parser.add_argument(
+        "--llm-only",
+        action="store_true",
+        dest="llm_only",
+        help="Run only the slow LLM tests (skips formatting, clippy, guardrails, and other tests)",
     )
     args = parser.parse_args()
 
@@ -195,6 +217,26 @@ def main():
 
     test_env = {"NEXTEST_STATUS_LEVEL": "fail"}
 
+    if args.llm_only:
+        print("[1/3] Building...")
+        run(f"cargo build {build_flag}".strip())
+
+        print("[2/3] Running LLM tests only...")
+        print("=" * 60)
+        print("NOTE: LLM tests contact the real OpenRouter API.")
+        print("      Each test takes 1-3 minutes. Total: ~3-9 minutes.")
+        print("      Do not interrupt. Set your tool timeout to >= 600s.")
+        print("=" * 60)
+        run(
+            "cargo nextest run --retries 2 -j 4 --run-ignored all --test flow_llm_tests",
+            check=False,
+            env=test_env,
+        )
+
+        print("[3/3] Done")
+        print("=== Build Complete ===")
+        return 0
+
     if args.coverage:
         print("[7/8] Running all tests with coverage...")
         run(
@@ -219,11 +261,20 @@ def main():
             print("Warning: Could not generate coverage JSON.")
     else:
         print("[7/8] Running all tests...")
-        run(
-            "cargo nextest run --retries 2 -j 4",
-            check=False,
-            env=test_env,
-        )
+        nextest_cmd = "cargo nextest run --retries 2 -j 4"
+        if args.include_llm:
+            nextest_cmd += " --run-ignored all"
+            print("=" * 60)
+            print("NOTE: Including LLM tests. These contact the real OpenRouter API.")
+            print("      Each LLM test takes 1-3 minutes. Total suite: ~3-9 minutes longer.")
+            print("      Do not interrupt. Set your tool timeout to >= 600s.")
+            print("=" * 60)
+        run(nextest_cmd, check=False, env=test_env)
+        if not args.include_llm:
+            print(
+                "    NOTE: 3 LLM tests were skipped. "
+                "Run 'python build.py --llm-only' to execute them."
+            )
         print("[8/8] Skipping coverage report (use --coverage to enable)")
 
     print("=== Build Complete ===")

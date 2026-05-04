@@ -12,7 +12,7 @@ The engine recognizes two categories of player input:
 ## Game Master Role
 The LLM operates as a Game Master / Narrator for the text adventure. Its context window is constructed using the **PromptBuilder** (see `llm_processing.md`) from the current game state:
 
-- **World Lore**: The `WorldCard.global_rules` provide persistent setting and lore context.
+- **World Lore**: The `WorldCard.global_rules` provide persistent setting and lore context, injected into the **system prompt** (Layer 0) alongside the base rules. They no longer appear in the `<WorldLore>` user data layer.
 - **Room Context**: The current `Room.name` and `Room.description` ground the scene.
 - **Present NPCs**: All `NpcCard`s located in the current room, including their `personality`, `scenario`, and `description`.
 - **Player Identity**: The `PlayerCard.name` and `PlayerCard.description` for reference.
@@ -47,7 +47,7 @@ After the player moves to a new room and the first narration is generated, the e
 1. Player movement is detected via quantifier → `attempt_semantic_walk` updates `GameState.current_room_id`
 2. `evaluate_triggers(state, new_room_id)` is called to find matching triggers
 3. For each matching trigger:
-   a. Uses unified `PromptBuilder` with `PhiMode::Continuation`:
+   a. Uses unified `PromptBuilder` with continuation context in user message:
       - Full 8-layer SillyTavern prompt structure
       - Trigger text as Layer 6 (User Input)
       - History included for continuity

@@ -50,8 +50,9 @@ Runtime: ~60 seconds
 ## Running Tests
 
 ```bash
-# All tests (~3 min target)
+# Default: fast suite (~3 min, LLM tests excluded)
 cargo test
+python build.py
 
 # Fast suite only (in-process)
 cargo test --test component_tests
@@ -60,8 +61,15 @@ cargo test --test component_tests
 cargo test --test e2e_tests
 cargo test --test flow_mock_tests
 
-# Real LLM tests (requires OPENROUTER_API_KEY)
-cargo test --test flow_llm_tests
+# Include slow LLM tests in full suite
+cargo test -- --ignored
+cargo nextest run --run-ignored all
+python build.py --include-llm
+
+# Run ONLY the LLM tests (focused validation)
+cargo test --test flow_llm_tests -- --ignored
+cargo nextest run --run-ignored all --test flow_llm_tests
+python build.py --llm-only
 ```
 
 ## Test Requirements

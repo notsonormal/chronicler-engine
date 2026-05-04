@@ -15,6 +15,7 @@ mod tests {
         std::env::var("OPENROUTER_API_KEY").is_ok()
     }
 
+    #[ignore = "slow: requires OPENROUTER_API_KEY"]
     #[tokio::test]
     async fn test_llm_generates_narration_for_free_action() {
         dotenv::dotenv().ok();
@@ -116,6 +117,7 @@ mod tests {
         let _ = browser.close().await;
     }
 
+    #[ignore = "slow: requires OPENROUTER_API_KEY"]
     #[tokio::test]
     async fn test_llm_narration_appears_via_polling() {
         dotenv::dotenv().ok();
@@ -240,6 +242,7 @@ mod tests {
         let _ = browser.close().await;
     }
 
+    #[ignore = "slow: requires OPENROUTER_API_KEY"]
     #[tokio::test]
     async fn test_llm_handles_arrival_narration() {
         dotenv::dotenv().ok();

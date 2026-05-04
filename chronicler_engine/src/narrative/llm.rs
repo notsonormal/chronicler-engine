@@ -36,42 +36,11 @@ pub trait LlmBackend: Send + Sync {
 // [DOC: docs/system/llm_processing.md]
 pub use crate::model::llm_backend::LlmBackendType;
 
-use std::sync::atomic::{AtomicU8, Ordering};
-
-static TEST_BACKEND_OVERRIDE: AtomicU8 = AtomicU8::new(0); // 0=none, 1=mock, 2=deepseek, 3=openrouter, 4=ollama
-
-pub fn set_test_backend(backend: LlmBackendType) {
-    let val = match backend {
-        LlmBackendType::Mock => 1,
-        LlmBackendType::DeepSeek => 2,
-        LlmBackendType::OpenRouter => 3,
-        LlmBackendType::Ollama => 4,
-    };
-    TEST_BACKEND_OVERRIDE.store(val, Ordering::SeqCst);
-}
-
-pub fn clear_test_backend() {
-    TEST_BACKEND_OVERRIDE.store(0, Ordering::SeqCst);
-}
-
-pub struct TestBackendGuard;
-
-impl Drop for TestBackendGuard {
-    fn drop(&mut self) {
-        clear_test_backend();
-    }
-}
-
-pub fn with_test_backend(backend: LlmBackendType) -> TestBackendGuard {
-    set_test_backend(backend);
-    TestBackendGuard
-}
-
 /// Create an LLM backend for a specific connection.
 /// [DOC: docs/system/llm_processing.md]
 pub fn get_llm_backend_for(connection: &Connection) -> Box<dyn LlmBackend> {
     match connection.provider {
-        LlmBackendType::Mock => Box::new(MockBackend),
+        LlmBackendType::Mock => Box::new(MockBackend::default()),
         LlmBackendType::DeepSeek => Box::new(DeepSeekBackend::from_connection(connection)),
         LlmBackendType::OpenRouter => Box::new(OpenRouterBackend::from_connection(connection)),
         LlmBackendType::Ollama => Box::new(OllamaBackend::from_connection(connection)),
@@ -82,19 +51,6 @@ pub fn get_llm_backend_for(connection: &Connection) -> Box<dyn LlmBackend> {
 /// Respects test overrides for backward compatibility with tests.
 /// [DOC: docs/system/llm_processing.md]
 pub fn get_llm_backend() -> Box<dyn LlmBackend> {
-    let override_type = TEST_BACKEND_OVERRIDE.load(Ordering::SeqCst);
-    if override_type != 0 {
-        let provider = match override_type {
-            1 => LlmBackendType::Mock,
-            2 => LlmBackendType::DeepSeek,
-            3 => LlmBackendType::OpenRouter,
-            4 => LlmBackendType::Ollama,
-            _ => LlmBackendType::OpenRouter,
-        };
-        let conn = Connection::new("test-override", "Test Override", provider);
-        return get_llm_backend_for(&conn);
-    }
-
     let settings = crate::settings::load_settings().unwrap_or_default();
     let connection = settings
         .get_narration_connection()
@@ -151,18 +107,25 @@ impl OpenRouterBackend {
             (system_prompt, user_text.to_string())
         };
         let max_tokens = max_tokens.or(self.max_tokens);
-        call_openrouter_with_model(&self.api_key, system, &user, &self.model, max_tokens)
-            .map_err(EngineError::Narrative)
+        let result =
+            call_openrouter_with_model(&self.api_key, system, &user, &self.model, max_tokens)
+                .map_err(EngineError::Narrative)?;
+        if result.trim().is_empty() {
+            return Err(EngineError::LlmEmptyResponse);
+        }
+        Ok(result)
     }
 
     /// Build a prompt from context using this backend's token limits, then call the LLM.
     fn narrate_from_context(&self, context: &PromptContext) -> Result<String, EngineError> {
+        let settings = crate::settings::load_settings().unwrap_or_default();
         let builder = PromptBuilder::from_context(context)
             .with_max_context_tokens(self.max_context_tokens)
             .with_max_tokens(
                 self.max_tokens
                     .unwrap_or(crate::narrative::prompt::budget::MAX_RESPONSE_TOKENS),
-            );
+            )
+            .with_response_length(&settings.response_length);
         let (system_prompt, user_text, max_tokens) = builder.build_split()?;
         self.call(&system_prompt, &user_text, Some(max_tokens))
     }
@@ -255,8 +218,20 @@ impl LlmBackend for OpenRouterBackend {
     }
 }
 
-#[derive(Clone, Copy)]
-pub struct MockBackend;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+#[derive(Default)]
+pub struct MockBackend {
+    pub should_fail: AtomicBool,
+}
+
+impl MockBackend {
+    pub fn failing() -> Self {
+        Self {
+            should_fail: AtomicBool::new(true),
+        }
+    }
+}
 
 impl LlmBackend for MockBackend {
     fn generate_dialogue(
@@ -273,6 +248,9 @@ impl LlmBackend for MockBackend {
     }
 
     fn narrate_action(&self, context: &PromptContext) -> Result<String, EngineError> {
+        if self.should_fail.load(Ordering::SeqCst) {
+            return Err(EngineError::Narrative("Mock failure".to_string()));
+        }
         Ok(format!("[MockNarration] {}", context.user_message))
     }
 
@@ -405,18 +383,24 @@ impl OllamaBackend {
             (system_prompt, user_text.to_string())
         };
         let max_tokens = max_tokens.or(self.max_tokens);
-        call_ollama(&self.base_url, &self.model, system, &user, max_tokens)
-            .map_err(EngineError::Narrative)
+        let result = call_ollama(&self.base_url, &self.model, system, &user, max_tokens)
+            .map_err(EngineError::Narrative)?;
+        if result.trim().is_empty() {
+            return Err(EngineError::LlmEmptyResponse);
+        }
+        Ok(result)
     }
 
     /// Build a prompt from context using this backend's token limits, then call the LLM.
     fn narrate_from_context(&self, context: &PromptContext) -> Result<String, EngineError> {
+        let settings = crate::settings::load_settings().unwrap_or_default();
         let builder = PromptBuilder::from_context(context)
             .with_max_context_tokens(self.max_context_tokens)
             .with_max_tokens(
                 self.max_tokens
                     .unwrap_or(crate::narrative::prompt::budget::MAX_RESPONSE_TOKENS),
-            );
+            )
+            .with_response_length(&settings.response_length);
         let (system_prompt, user_text, max_tokens) = builder.build_split()?;
         self.call(&system_prompt, &user_text, Some(max_tokens))
     }
@@ -592,7 +576,7 @@ mod tests {
 
     #[test]
     fn test_mock_narrate_action() {
-        let backend = MockBackend;
+        let backend = MockBackend::default();
         let context = make_test_context("I look around carefully.");
 
         let result = backend.narrate_action(&context);
@@ -602,7 +586,7 @@ mod tests {
 
     #[test]
     fn test_mock_generate_dialogue_with_message() {
-        let backend = MockBackend;
+        let backend = MockBackend::default();
         let _world = make_test_world();
         let _room = make_test_room();
         let npc = NpcCard {
@@ -633,7 +617,7 @@ mod tests {
 
     #[test]
     fn test_mock_generate_dialogue_no_message() {
-        let backend = MockBackend;
+        let backend = MockBackend::default();
         let _world = make_test_world();
         let _room = make_test_room();
         let npc = NpcCard {
@@ -661,7 +645,7 @@ mod tests {
 
     #[test]
     fn test_mock_backend_name() {
-        let backend = MockBackend;
+        let backend = MockBackend::default();
         assert_eq!(backend.name(), "Mock");
     }
 
@@ -724,7 +708,7 @@ mod tests {
 
     #[test]
     fn test_mock_with_history() {
-        let backend = MockBackend;
+        let backend = MockBackend::default();
         let _world = make_test_world();
         let _room = make_test_room();
         let _player = make_test_player();
@@ -753,7 +737,7 @@ mod tests {
 
     #[test]
     fn test_mock_response_length_bounds() {
-        let backend = MockBackend;
+        let backend = MockBackend::default();
         let _world = make_test_world();
         let _room = make_test_room();
         let _player = make_test_player();
@@ -775,7 +759,7 @@ mod tests {
 
     #[test]
     fn test_mock_response_contains_input() {
-        let backend = MockBackend;
+        let backend = MockBackend::default();
         let _world = make_test_world();
         let _room = make_test_room();
         let _player = make_test_player();
@@ -789,7 +773,7 @@ mod tests {
 
     #[test]
     fn test_mock_narrate_arrival_includes_room_name() {
-        let backend = MockBackend;
+        let backend = MockBackend::default();
         let _world = make_test_world();
         let room = make_test_room();
         let _player = make_test_player();
@@ -804,7 +788,7 @@ mod tests {
 
     #[test]
     fn test_mock_dialogue_with_message() {
-        let backend = MockBackend;
+        let backend = MockBackend::default();
         let _world = make_test_world();
         let _room = make_test_room();
         let npc = NpcCard {
@@ -837,7 +821,7 @@ mod tests {
 
     #[test]
     fn test_mock_dialogue_without_message() {
-        let backend = MockBackend;
+        let backend = MockBackend::default();
         let _world = make_test_world();
         let _room = make_test_room();
         let npc = NpcCard {
@@ -865,7 +849,7 @@ mod tests {
 
     #[test]
     fn test_mock_with_empty_history() {
-        let backend = MockBackend;
+        let backend = MockBackend::default();
         let _world = make_test_world();
         let _room = make_test_room();
         let _player = make_test_player();
@@ -876,7 +860,7 @@ mod tests {
 
     #[test]
     fn test_mock_with_substantial_history() {
-        let backend = MockBackend;
+        let backend = MockBackend::default();
         let _world = make_test_world();
         let _room = make_test_room();
         let _player = make_test_player();
@@ -911,6 +895,7 @@ mod tests {
             connections: vec![conn],
             narration_connection_id: "test-conn".into(),
             quantifier_connection_id: "test-conn".into(),
+            response_length: "flexible".into(),
         }
     }
 
@@ -950,8 +935,14 @@ mod tests {
     }
 
     #[test]
+    fn test_llm_empty_response_error_variant() {
+        let err = EngineError::LlmEmptyResponse;
+        assert_eq!(err.to_string(), "LLM returned an empty response");
+    }
+
+    #[test]
     fn test_mock_narrate_continuation() {
-        let backend = MockBackend;
+        let backend = MockBackend::default();
         let result = backend.narrate_continuation("system", "user", "trigger_info", None);
         assert!(result.is_ok());
         assert!(result.unwrap().contains("trigger_info"));
@@ -959,7 +950,7 @@ mod tests {
 
     #[test]
     fn test_mock_narrate_action_from_prompt() {
-        let backend = MockBackend;
+        let backend = MockBackend::default();
         let result = backend.narrate_action_from_prompt("system prompt", "user action", None);
         assert!(result.is_ok());
         let response = result.unwrap();
@@ -991,7 +982,7 @@ mod tests {
 
     #[test]
     fn test_mock_narrate_continuation_empty_trigger() {
-        let backend = MockBackend;
+        let backend = MockBackend::default();
         let result = backend.narrate_continuation("system", "user", "", None);
         assert!(result.is_ok());
         assert!(result.unwrap().contains("[Trigger: ]"));
@@ -999,7 +990,7 @@ mod tests {
 
     #[test]
     fn test_mock_narrate_continuation_special_chars() {
-        let backend = MockBackend;
+        let backend = MockBackend::default();
         let result =
             backend.narrate_continuation("sys", "user", "trigger with <special> & chars", None);
         assert!(result.is_ok());
@@ -1008,7 +999,7 @@ mod tests {
 
     #[test]
     fn test_mock_narrate_action_from_prompt_multiline() {
-        let backend = MockBackend;
+        let backend = MockBackend::default();
         let result = backend.narrate_action_from_prompt(
             "system prompt\nwith multiple lines",
             "user prompt\nalso multiline",
@@ -1020,7 +1011,7 @@ mod tests {
 
     #[test]
     fn test_mock_narrate_action_from_prompt_empty() {
-        let backend = MockBackend;
+        let backend = MockBackend::default();
         let result = backend.narrate_action_from_prompt("", "", None);
         assert!(result.is_ok());
         assert!(result.unwrap().contains("..."));
@@ -1028,7 +1019,7 @@ mod tests {
 
     #[test]
     fn test_mock_generate_dialogue_very_long_message() {
-        let backend = MockBackend;
+        let backend = MockBackend::default();
         let long_message = "This is a very long user message that goes on and on and on to test how the mock backend handles lengthy inputs without any issues whatsoever because it should just echo back whatever it receives.";
         let npc = NpcCard {
             id: "npc1".to_string(),
@@ -1054,7 +1045,7 @@ mod tests {
 
     #[test]
     fn test_mock_narrate_action_special_characters() {
-        let backend = MockBackend;
+        let backend = MockBackend::default();
         let special_msg = "Player says: \"Hello <world> & goodbye!\"";
         let result = backend.narrate_action(&make_test_context(special_msg));
         assert!(result.is_ok());
@@ -1063,7 +1054,7 @@ mod tests {
 
     #[test]
     fn test_mock_narrate_arrival_different_rooms() {
-        let backend = MockBackend;
+        let backend = MockBackend::default();
 
         let mut room1 = make_test_room();
         room1.name = "Tavern".to_string();
@@ -1136,7 +1127,7 @@ mod tests {
 
     #[test]
     fn test_context_with_different_player_names() {
-        let backend = MockBackend;
+        let backend = MockBackend::default();
 
         let player1 = make_test_player();
         let mut room1 = make_test_room();
@@ -1176,7 +1167,7 @@ mod tests {
 
     #[test]
     fn test_mock_dialogue_with_unicode() {
-        let backend = MockBackend;
+        let backend = MockBackend::default();
         let npc = NpcCard {
             id: "npc1".to_string(),
             sheet: CharacterSheet {
@@ -1200,7 +1191,7 @@ mod tests {
 
     #[test]
     fn test_mock_narrate_action_unicode() {
-        let backend = MockBackend;
+        let backend = MockBackend::default();
         let result = backend.narrate_action(&make_test_context("アクション"));
         assert!(result.is_ok());
         assert!(result.unwrap().contains("アクション"));
@@ -1208,7 +1199,7 @@ mod tests {
 
     #[test]
     fn test_mock_narrate_continuation_unicode_trigger() {
-        let backend = MockBackend;
+        let backend = MockBackend::default();
         let result = backend.narrate_continuation("system", "user", "トリガー", None);
         assert!(result.is_ok());
         assert!(result.unwrap().contains("トリガー"));
@@ -1216,7 +1207,7 @@ mod tests {
 
     #[test]
     fn test_context_with_empty_world_description() {
-        let backend = MockBackend;
+        let backend = MockBackend::default();
         let world = WorldCard {
             name: "Empty World".to_string(),
             description: "".to_string(),
@@ -1242,7 +1233,7 @@ mod tests {
 
     #[test]
     fn test_context_with_many_global_rules() {
-        let backend = MockBackend;
+        let backend = MockBackend::default();
         let world = WorldCard {
             name: "Rules World".to_string(),
             description: "A world with many rules".to_string(),
@@ -1274,7 +1265,7 @@ mod tests {
 
     #[test]
     fn test_mock_narrate_action_from_prompt_very_long_input() {
-        let backend = MockBackend;
+        let backend = MockBackend::default();
         let long_system = "You are a game master. ".repeat(50);
         let long_user = "The player performs an action. ".repeat(50);
         let result = backend.narrate_action_from_prompt(&long_system, &long_user, None);
@@ -1285,7 +1276,7 @@ mod tests {
 
     #[test]
     fn test_npc_with_no_triggers() {
-        let backend = MockBackend;
+        let backend = MockBackend::default();
         let npc = NpcCard {
             id: "npc1".to_string(),
             sheet: CharacterSheet {
@@ -1308,7 +1299,7 @@ mod tests {
     #[test]
     fn test_npc_with_multiple_triggers() {
         use crate::model::trigger::{ComparisonOperator, Trigger, TriggerAction, TriggerCondition};
-        let backend = MockBackend;
+        let backend = MockBackend::default();
         let npc = NpcCard {
             id: "npc1".to_string(),
             sheet: CharacterSheet {
@@ -1349,7 +1340,7 @@ mod tests {
 
     #[test]
     fn test_player_with_empty_inventory() {
-        let backend = MockBackend;
+        let backend = MockBackend::default();
         let player = PlayerCard {
             sheet: CharacterSheet {
                 name: "Hero".to_string(),
@@ -1382,7 +1373,7 @@ mod tests {
 
     #[test]
     fn test_player_with_items_in_inventory() {
-        let backend = MockBackend;
+        let backend = MockBackend::default();
         let player = PlayerCard {
             sheet: CharacterSheet {
                 name: "Equipped Hero".to_string(),
@@ -1419,7 +1410,7 @@ mod tests {
 
     #[test]
     fn test_room_with_items() {
-        let backend = MockBackend;
+        let backend = MockBackend::default();
         let room = Room {
             id: "room_with_items".to_string(),
             name: "Storage Room".to_string(),
@@ -1454,7 +1445,7 @@ mod tests {
     #[test]
     fn test_room_with_exits() {
         use crate::model::map::Direction;
-        let backend = MockBackend;
+        let backend = MockBackend::default();
         let mut exits = HashMap::new();
         exits.insert(Direction::North, "hallway".to_string());
         exits.insert(Direction::East, "kitchen".to_string());
@@ -1489,7 +1480,7 @@ mod tests {
 
     #[test]
     fn test_world_with_default_room_image() {
-        let backend = MockBackend;
+        let backend = MockBackend::default();
         let world = WorldCard {
             name: "World with Image".to_string(),
             description: "A world with default room image".to_string(),
@@ -1515,7 +1506,7 @@ mod tests {
 
     #[test]
     fn test_npc_with_inventory() {
-        let backend = MockBackend;
+        let backend = MockBackend::default();
         let npc = NpcCard {
             id: "npc_with_items".to_string(),
             sheet: CharacterSheet {
@@ -1538,7 +1529,7 @@ mod tests {
 
     #[test]
     fn test_context_with_npcs_in_area() {
-        let backend = MockBackend;
+        let backend = MockBackend::default();
         let npc1 = NpcCard {
             id: "npc1".to_string(),
             sheet: CharacterSheet {

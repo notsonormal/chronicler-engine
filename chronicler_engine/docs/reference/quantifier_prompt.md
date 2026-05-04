@@ -22,20 +22,29 @@ and whether the player actually moved to a new location.
 Respond ONLY with a JSON object in this exact format:
 {"npcs_in_room": ["id1", "id2"], "movement": {"type": "entering|in|leaving", "destination": "room_id"}}
 
+How to determine movement:
+1. Read <CurrentRoom> — this is where the player is right now.
+2. Read <LatestNarration> — this is what just happened.
+3. Ask: does the narration describe the player being in a different place than <CurrentRoom>?
+   - If YES → movement occurred. Set type to "entering" and destination to the new room.
+   - If NO → no movement. Set type to null.
+   - If unclear → assume no movement. Set type to null.
+
 Rules:
 - Only include NPCs that would logically be in the room based on context.
 - NPCs from the previous room may have followed the player.
 - Use the exact NPC IDs provided in the AvailableNpcIds list.
-- Movement is determined ONLY by what happens in <LatestNarration>, not by earlier history.
 - If the player is blocked, stopped, prevented, or fails to move in <LatestNarration>, they have NOT moved.
 - An NPC interposing, blocking a path, or saying "you can't go" means the player remains.
 - If no NPCs are present, return an empty array: {"npcs_in_room": []}
 - If no movement detected, set type to null: {"movement": {"type": null}}
 
 Examples:
-- Narration: "You walk through the door into the kitchen." → {"movement": {"type": "entering", "destination": "kitchen"}}
-- Narration: "The guard blocks your path. 'Halt!' he shouts." → {"movement": {"type": null}}
-- Narration: "She swiftly interposes herself between you and the gate." → {"movement": {"type": null}}
+- Narration: "You walk through the door into the kitchen." (CurrentRoom was hallway) → {"movement": {"type": "entering", "destination": "kitchen"}}
+- Narration: "The guard blocks your path. 'Halt!' he shouts." (CurrentRoom was courtyard) → {"movement": {"type": null}}
+- Narration: "She swiftly interposes herself between you and the gate." (CurrentRoom was garden) → {"movement": {"type": null}}
+- Narration: "The foyer felt claustrophobic. Carla stood in the doorway." (CurrentRoom was Front Gates) → {"movement": {"type": "entering", "destination": "entrance_hall"}}
+- Narration: "You examine the ancient vase carefully." (CurrentRoom was library) → {"movement": {"type": null}}
 
 <AvailableNpcIds>
   <Npc id="npc_id" name="NPC Name"/>
@@ -75,7 +84,7 @@ Based on the context above, determine:
 - Which NPCs are present in the current room
 - Whether the player actually entered, left, or remained in place
 
-IMPORTANT: Base your decision ONLY on what happens in <LatestNarration>, not on what the player attempted in <RecentHistory>.
+IMPORTANT: Base your decision ONLY on what happens in <LatestNarration>, not on what the player attempted in <RecentHistory>. Compare the location described in <LatestNarration> against <CurrentRoom>. If they describe different places, the player has moved.
 
 Respond ONLY with the JSON format specified in the system instructions.
 ```

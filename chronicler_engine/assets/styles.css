@@ -176,6 +176,7 @@ body {
     padding: 10px 14px;
     border-radius: 12px;
     max-width: 85%;
+    overflow-x: hidden;
 }
 
 /* User Input - Right Aligned, Darker Gray */
@@ -236,6 +237,17 @@ body {
 .log-entry .text {
     font-size: var(--font-size-base);
     line-height: 1.5;
+    overflow-wrap: anywhere;
+    word-wrap: break-word;
+}
+
+/* Preformatted / code blocks from markdown need wrapping too */
+.log-entry .text pre {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    max-width: 100%;
+    overflow-x: auto;
 }
 
 /* Quoted Text */

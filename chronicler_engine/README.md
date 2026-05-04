@@ -61,7 +61,7 @@ The engine requires a `.env` file or environment variables to be set for AI func
 ## Quick Start
 
 ```bash
-# Full build and test (recommended)
+# Full build and test (recommended) — fast suite, LLM tests excluded
 python build.py
 
 # Or manual commands
@@ -70,5 +70,6 @@ cargo run -- --world redmist_estate --port 3000
 
 # Run tests
 cargo test --test flow_mock_tests    # Fast - no API key needed
-cargo test --test flow_llm_tests     # Requires OPENROUTER_API_KEY
+python build.py --llm-only           # LLM integration tests only
+python build.py --include-llm        # Full suite including LLM tests
 ```
