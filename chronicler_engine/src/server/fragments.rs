@@ -343,6 +343,9 @@ pub async fn action_handler(
                 .expect("static response body is valid");
         }
 
+        // [DOC: docs/architecture/invariants.md#INV-004]
+        // FreeAction runs off the async thread so the HTTP handler returns immediately.
+        // CancellationToken resets status to Idle if the server shuts down mid-flight.
         tokio::task::spawn_blocking(move || {
             if token.is_cancelled() {
                 if let Ok(mut guard) = state_clone.lock() {

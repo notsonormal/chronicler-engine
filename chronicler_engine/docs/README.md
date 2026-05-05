@@ -104,7 +104,8 @@ This folder contains all documentation for the Chronicler Engine project.
 When adding a new feature:
 
 1. **Create a plan** in `docs/plans/` (or update existing)
-2. **Update architecture** - Modify `architecture/system.md` to reflect changes
+2. **Update architecture** - Modify `docs/architecture/system.md` to reflect changes
+3. **Update all the other docs as needed* - Read  `docs/*`
 3. **Implement** - Write the code
 4. **Validate** - Run the full build and test suite:
    ```bash

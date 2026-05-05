@@ -926,6 +926,50 @@ fn guardrails_no_std_thread() {
     assert_violations(&errors, "no-std-thread");
 }
 
+// ── Spawn site documentation ──
+
+fn check_spawn_site_docs(path: &str, content: &str) -> Vec<Violation> {
+    let mut violations = Vec::new();
+    let lines: Vec<&str> = content.lines().collect();
+
+    for (line_num, line) in lines.iter().enumerate() {
+        let trimmed = line.trim();
+        if !trimmed.contains("spawn_blocking") && !trimmed.contains("tokio::spawn") {
+            continue;
+        }
+
+        // Look back up to 5 lines for a doc anchor
+        let start = line_num.saturating_sub(5);
+        let has_doc = lines[start..line_num]
+            .iter()
+            .any(|l| l.trim().starts_with("// [DOC:"));
+
+        if !has_doc {
+            violations.push(Violation::warn(
+                path,
+                line_num + 1,
+                format!(
+                    "Spawn site `{trimmed}` lacks a doc anchor. \
+                     Add `// [DOC: docs/architecture/invariants.md#INV-004]` \
+                     or similar within 5 lines above the spawn."
+                ),
+            ));
+        }
+    }
+    violations
+}
+
+#[test]
+fn guardrails_spawn_site_docs() {
+    let mut errors = Vec::new();
+    for file in discover_src_files() {
+        let content = std::fs::read_to_string(&file).unwrap();
+        let rel = relative_path(&file);
+        errors.extend(check_spawn_site_docs(rel, &content));
+    }
+    assert_violations(&errors, "spawn-site-docs");
+}
+
 // ── Helpers ──
 
 fn assert_violations(violations: &[Violation], rule_name: &str) {

@@ -1,15 +1,11 @@
 // Bootstrap module is allowed to use stdout/stderr for CLI output.
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
-use std::{
-    fs,
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::{fs, path::Path, sync::Arc};
 
 use chrono::Local;
 
-use crate::cli::Args;
+use crate::cli::{Args, list_available_worlds, resolve_engine_data_path};
 use crate::error::EngineError;
 use crate::model::character::{NpcCard, PlayerCard};
 use crate::model::map::MapDef;
@@ -18,31 +14,6 @@ use crate::model::world::WorldManifest;
 use crate::narrative::llm::get_llm_backend;
 use crate::narrative::prompt::PromptContext;
 use crate::server::ServerConfig;
-
-/// [DOC: docs/architecture/system.md]
-pub fn resolve_engine_data_path() -> PathBuf {
-    // [DOC: docs/system/startup.md]
-    if let Ok(data_dir) = std::env::var("CHRONICLER_DATA") {
-        return PathBuf::from(data_dir);
-    }
-
-    // Deprecated: CHRONLER_DATA was a typo, kept for backward compatibility.
-    if let Ok(data_dir) = std::env::var("CHRONLER_DATA") {
-        eprintln!("Warning: CHRONLER_DATA is deprecated. Use CHRONICLER_DATA instead.");
-        return PathBuf::from(data_dir);
-    }
-
-    if let Ok(exe_path) = std::env::current_exe() {
-        if let Some(exe_dir) = exe_path.parent() {
-            let data_dir = exe_dir.join("data");
-            if data_dir.exists() {
-                return data_dir;
-            }
-        }
-    }
-
-    PathBuf::from("data")
-}
 
 pub fn load_world_manifest(world_id: &str) -> crate::error::Result<WorldManifest> {
     let data_dir = resolve_engine_data_path();
@@ -60,47 +31,6 @@ pub fn load_world_manifest(world_id: &str) -> crate::error::Result<WorldManifest
             source: Box::new(e.into()),
         })?;
     Ok(manifest)
-}
-
-/// [DOC: docs/architecture/system.md]
-pub fn list_available_worlds() -> crate::error::Result<()> {
-    let data_dir = resolve_engine_data_path();
-    let worlds_dir = data_dir.join("worlds");
-    if !worlds_dir.exists() {
-        println!("No worlds found in data/worlds/");
-        return Ok(());
-    }
-
-    let mut worlds = Vec::new();
-    for entry in fs::read_dir(&worlds_dir)
-        .map_err(|e| EngineError::Io(format!("read_dir {}: {e}", worlds_dir.display())))?
-    {
-        let entry = entry.map_err(|e| {
-            EngineError::Io(format!("read_dir_entry {}: {e}", worlds_dir.display()))
-        })?;
-        let path = entry.path();
-        if path.is_dir() {
-            let world_file = path.join("world.json");
-            if world_file.exists() {
-                if let Ok(json) = fs::read_to_string(&world_file) {
-                    if let Ok(manifest) = serde_json::from_str::<WorldManifest>(&json) {
-                        worlds.push((manifest.id.clone(), manifest.name.clone()));
-                    }
-                }
-            }
-        }
-    }
-
-    if worlds.is_empty() {
-        println!("No worlds found in data/worlds/");
-    } else {
-        println!("Available worlds:");
-        for (id, name) in &worlds {
-            println!("  {id} - {name}");
-        }
-    }
-
-    Ok(())
 }
 
 /// [DOC: docs/architecture/system.md]
@@ -307,6 +237,8 @@ pub fn run(args: Args) -> crate::error::Result<()> {
         .default_scenario()
         .is_some_and(|s| !s.text.is_empty());
     if !has_scenario {
+        // [DOC: docs/architecture/invariants.md#INV-004]
+        // Arrival narration runs off the async thread so the server starts immediately.
         let state_for_task = state.clone();
         let _handle = runtime.spawn_blocking(move || {
             let _guard = GeneratingGuard::new(state_for_task.clone());
@@ -420,29 +352,6 @@ mod tests {
     }
 
     #[test]
-    fn test_list_worlds_uses_worlds_subdirectory() {
-        // list_available_works should look in data/worlds/ subdirectory
-        let result = list_available_worlds();
-        assert!(result.is_ok()); // Should handle gracefully
-    }
-
-    #[test]
-    fn test_list_worlds_graceful_when_empty() {
-        // Test that empty worlds directory is handled gracefully
-        // The function should not panic
-        let result = list_available_worlds();
-        assert!(result.is_ok() || result.is_err()); // Should return cleanly
-    }
-
-    #[test]
-    fn test_resolve_data_path_from_exe_fallback() {
-        let data_dir = resolve_engine_data_path();
-        // Should return a path (may or may not exist)
-        assert!(data_dir.is_relative() || data_dir.is_absolute());
-        let _ = data_dir.to_string_lossy(); // Should not panic
-    }
-
-    #[test]
     fn test_load_world_manifest_json_parse_error() {
         let result = load_world_manifest("test"); // Valid world
         assert!(result.is_ok()); // Should succeed for valid world
@@ -501,14 +410,6 @@ mod tests {
     }
 
     #[test]
-    fn test_resolve_data_path_returns_pathbuf() {
-        // Verify return type is PathBuf
-        let path = resolve_engine_data_path();
-        use std::path::PathBuf;
-        let _type_check: PathBuf = path;
-    }
-
-    #[test]
     fn test_load_world_manifest_returns_result() {
         // Verify load_world_manifest returns engine Result type
         let result: crate::error::Result<WorldManifest> = load_world_manifest("test");
@@ -519,12 +420,6 @@ mod tests {
 #[cfg(test)]
 mod bootstrap_tests {
     use super::*;
-
-    #[test]
-    fn test_resolve_engine_data_path_default() {
-        let path = resolve_engine_data_path();
-        assert!(path.is_relative() || path.is_absolute());
-    }
 
     #[test]
     fn test_load_world_manifest_error_nonexistent() {
@@ -555,12 +450,5 @@ mod bootstrap_tests {
         assert!(!manifest.id.is_empty());
         assert!(!manifest.name.is_empty());
         assert!(!manifest.starting_room_id.is_empty());
-    }
-
-    #[test]
-    fn test_list_worlds_nonexistent_directory() {
-        let _data_dir = resolve_engine_data_path();
-        let result = list_available_worlds();
-        assert!(result.is_ok() || result.is_err());
     }
 }
