@@ -935,6 +935,51 @@ fn guardrails_spawn_site_docs() {
     assert_violations(&errors, "spawn-site-docs");
 }
 
+// ── File Length ──
+
+fn check_file_length(path: &str, content: &str) -> Vec<Violation> {
+    let mut violations = Vec::new();
+    let non_blank_count = content
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .count();
+
+    if non_blank_count > 2000 {
+        violations.push(Violation::error(
+            path,
+            1,
+            format!(
+                "File is too long: {non_blank_count} non-blank lines (max 2000). \
+                 Consider splitting into smaller modules."
+            ),
+        ));
+    }
+
+    violations
+}
+
+#[test]
+fn guardrails_file_length_src() {
+    let mut errors = Vec::new();
+    for file in discover_rs_files("src") {
+        let content = std::fs::read_to_string(&file).unwrap();
+        let rel = relative_path(&file);
+        errors.extend(check_file_length(rel, &content));
+    }
+    assert_violations(&errors, "file length (src)");
+}
+
+#[test]
+fn guardrails_file_length_tests() {
+    let mut errors = Vec::new();
+    for file in discover_rs_files("tests") {
+        let content = std::fs::read_to_string(&file).unwrap();
+        let rel = file.strip_prefix("tests/").unwrap_or(&file);
+        errors.extend(check_file_length(rel, &content));
+    }
+    assert_violations(&errors, "file length (tests)");
+}
+
 // ── Helpers ──
 
 fn assert_violations(violations: &[Violation], rule_name: &str) {

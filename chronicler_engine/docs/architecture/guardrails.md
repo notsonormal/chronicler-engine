@@ -151,6 +151,16 @@ Exemptions:
 **Severity**: warn  
 **Current status**: zero violations.
 
+### 3.7 File Length (`guardrails_file_length_src`, `guardrails_file_length_tests`)
+
+**Standard**: No `.rs` file may exceed 2,000 non-blank lines.
+
+Non-blank means any line that contains at least one non-whitespace character.
+
+**Severity**: error  
+**Scope**: `src/` and `tests/`  
+**Exemptions**: None
+
 ---
 
 ## Running Guardrails
