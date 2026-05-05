@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-05 20:13 UTC*
+*Index last generated: 2026-05-05 22:27 UTC*
 
 ### Root files
 
@@ -27,14 +27,6 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Architecture Guardrails](./architecture/guardrails.md)
 - [Chronicler Engine Runtime Invariants](./architecture/invariants.md)
 - [Specification: Core Architecture (Modular)](./architecture/system.md)
-
-### `docs/diagnostics/`
-
-- [Error Catalog](./diagnostics/error_catalog.md)
-- [Phase 1 Audit: Error Emissions, Concurrency Boundaries, and Untested APIs](./diagnostics/phase1_audit.md)
-- [Phase 1 Audit: Concurrency Boundaries](./diagnostics/phase1_concurrency_map.md)
-- [Phase 1 Audit: String-Based Error Emissions](./diagnostics/phase1_error_catalog.md)
-- [Phase 1 Audit: main.rs Responsibilities & Untested APIs](./diagnostics/phase1_mainrs_map.md)
 
 ### `docs/plans/`
 

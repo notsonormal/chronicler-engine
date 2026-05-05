@@ -5,13 +5,36 @@ Uses cargo-nextest for parallel test execution.
 """
 
 import argparse
+import io
+import os
 import re
+import shutil
+import signal
 import subprocess
 import sys
-import os
-import signal
+import tempfile
 from pathlib import Path
-import shutil
+
+# Force UTF-8 for stdout/stderr on Windows to handle cargo's Unicode output
+if sys.platform == "win32":
+    sys.stdout = io.TextIOWrapper(
+        sys.stdout.buffer, encoding="utf-8", errors="replace"
+    )
+    sys.stderr = io.TextIOWrapper(
+        sys.stderr.buffer, encoding="utf-8", errors="replace"
+    )
+
+
+class StepCounter:
+    """Simple step counter for build progress output."""
+
+    def __init__(self, total: int):
+        self.current = 0
+        self.total = total
+
+    def next(self, label: str):
+        self.current += 1
+        print(f"[{self.current}/{self.total}] {label}")
 
 
 def check_rust_version():
@@ -66,17 +89,10 @@ def get_coverage_cmd(strict=False):
     print("WARNING: cargo-nextest not found. Falling back to cargo test for coverage.")
     return "cargo llvm-cov --no-report"
 
-# Force UTF-8 for stdout/stderr on Windows to handle cargo's Unicode output
-if sys.platform == "win32":
-    import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
-
 
 def kill_port(port: int):
     """Kill any process using the specified port."""
     try:
-        # Find process using the port
         result = subprocess.run(
             f"netstat -ano | Select-String ':{port}'",
             shell=True,
@@ -117,7 +133,11 @@ def kill_by_name(name: str):
                     if pid.isdigit():
                         print(f"Killing process {parts[0]} (PID {pid})...")
                         try:
-                            subprocess.run(f"taskkill /F /PID {pid}", shell=True, capture_output=True)
+                            subprocess.run(
+                                f"taskkill /F /PID {pid}",
+                                shell=True,
+                                capture_output=True,
+                            )
                         except Exception as e:
                             print(f"Failed to kill PID {pid}: {e}")
     except Exception as e:
@@ -181,7 +201,8 @@ def run(cmd, cwd=None, check=True, show_output=True, env=None):
 
 def is_target_locked(target_dir: Path) -> bool:
     """Check if cargo holds a lock on the target directory via .cargo-lock."""
-    # Cargo creates .cargo-lock inside the profile subdirectory and holds an OS lock on it.
+    # Cargo creates .cargo-lock inside the profile subdirectory
+    # and holds an OS lock on it.
     for profile in ["debug", "release"]:
         lock_file = target_dir / profile / ".cargo-lock"
         if not lock_file.exists():
@@ -191,10 +212,12 @@ def is_target_locked(target_dir: Path) -> bool:
             try:
                 if sys.platform == "win32":
                     import msvcrt
+
                     msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
                     msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
                 else:
                     import fcntl
+
                     fcntl.flock(fd, fcntl.LOCK_NB | fcntl.LOCK_EX)
                 os.close(fd)
                 return False  # We got the lock, so cargo doesn't hold it
@@ -204,18 +227,6 @@ def is_target_locked(target_dir: Path) -> bool:
         except OSError:
             continue
     return False  # No lock file found, assume not locked
-
-
-class StepCounter:
-    """Simple step counter for build progress output."""
-
-    def __init__(self, total: int):
-        self.current = 0
-        self.total = total
-
-    def next(self, label: str):
-        self.current += 1
-        print(f"[{self.current}/{self.total}] {label}")
 
 
 def main():
@@ -240,7 +251,10 @@ def main():
         "--llm-only",
         action="store_true",
         dest="llm_only",
-        help="Run only the slow LLM tests (skips formatting, clippy, guardrails, and other tests)",
+        help=(
+            "Run only the slow LLM tests "
+            "(skips formatting, clippy, guardrails, and other tests)"
+        ),
     )
     parser.add_argument(
         "--validate-data",
@@ -286,7 +300,6 @@ def main():
         kill_by_name("chronicler")
 
         # Clean up stale port lock files from crashed test runs
-        import tempfile
         lock_dir = Path(tempfile.gettempdir()) / "chronicler_test_ports"
         if lock_dir.exists():
             print(f"Cleaning stale port locks from {lock_dir}...")
@@ -319,19 +332,31 @@ def main():
         cargo_env["CARGO_TARGET_DIR"] = str(cargo_target_dir.resolve())
         print(f"Using custom target directory: {cargo_target_dir}")
         if is_target_locked(cargo_target_dir):
-            print(f"WARNING: Target directory {cargo_target_dir} appears to be locked by another cargo process.")
+            print(
+                f"WARNING: Target directory {cargo_target_dir} appears to be "
+                "locked by another cargo process."
+            )
             print("         Another agent may be building in this directory.")
     else:
         # Default target directory
         if is_target_locked(cargo_target_dir):
-            print("WARNING: Default target directory (target/) appears to be locked by another cargo process.")
-            print("         Use --target-dir to build in a unique folder and avoid conflicts:")
+            print(
+                "WARNING: Default target directory (target/) appears to be "
+                "locked by another cargo process."
+            )
+            print(
+                "         Use --target-dir to build in a unique folder "
+                "and avoid conflicts:"
+            )
             print("         python build.py --target-dir target/<unique-name>")
 
     if args.llm_only:
         steps = StepCounter(3)
         steps.next("Building...")
-        run(f"cargo build {'--release' if args.release else ''}".strip(), env=cargo_env)
+        run(
+            f"cargo build {'--release' if args.release else ''}".strip(),
+            env=cargo_env,
+        )
 
         steps.next("Running LLM tests only...")
         print("=" * 60)
@@ -379,7 +404,10 @@ def main():
     run("cargo test --test guardrails", env=cargo_env)
 
     steps.next(f"Building ({build_profile})...")
-    run(f"cargo build {'--release' if args.release else ''}".strip(), env=cargo_env)
+    run(
+        f"cargo build {'--release' if args.release else ''}".strip(),
+        env=cargo_env,
+    )
 
     steps.next("Copying data and assets for deployment...")
     target_dir.mkdir(parents=True, exist_ok=True)
@@ -437,7 +465,6 @@ def main():
             print("=" * 60)
             print("NOTE: Including LLM tests. These contact the real OpenRouter API.")
             print("      Each LLM test takes 1-3 minutes. Total suite: ~3-9 minutes longer.")
-            print("      Do not interrupt. Set your tool timeout to >= 600s.")
             print("=" * 60)
         run(test_cmd, check=False, env=cargo_env)
         if not args.include_llm:

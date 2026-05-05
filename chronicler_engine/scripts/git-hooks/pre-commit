@@ -5,11 +5,11 @@
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-python "$PROJECT_ROOT/scripts/generate_docs_index.py"
+python "$PROJECT_ROOT/chronicler_engine/scripts/generate_docs_index.py"
 
 # If the index was updated, the working tree is now dirty.
 # Abort the commit so the user can stage the updated README.md.
-if ! git diff --quiet -- "$PROJECT_ROOT/docs/README.md"; then
+if ! git diff --quiet -- "$PROJECT_ROOT/chronicler_engine/docs/README.md"; then
     echo ""
     echo "docs/README.md was updated by the auto-index generator."
     echo "Please stage the changes and commit again:"
