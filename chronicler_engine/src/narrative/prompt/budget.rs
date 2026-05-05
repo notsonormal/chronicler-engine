@@ -1,4 +1,3 @@
-/// Token budget constants and utilities for prompt construction.
 /// [DOC: docs/system/llm_processing.md]
 /// Maximum tokens allocated for the entire context window (fallback default).
 pub const MAX_CONTEXT_TOKENS: u32 = 32768;

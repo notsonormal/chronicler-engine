@@ -42,18 +42,8 @@ impl Violation {
 
 // ── File Discovery ──
 
-fn discover_src_files() -> Vec<String> {
-    walkdir::WalkDir::new("src")
-        .into_iter()
-        .filter_map(|e| e.ok())
-        .filter(|e| e.file_type().is_file())
-        .filter(|e| e.path().extension().map(|ext| ext == "rs").unwrap_or(false))
-        .map(|e| e.path().to_string_lossy().to_string())
-        .collect()
-}
-
-fn discover_test_files() -> Vec<String> {
-    walkdir::WalkDir::new("tests")
+fn discover_rs_files(root: &str) -> Vec<String> {
+    walkdir::WalkDir::new(root)
         .into_iter()
         .filter_map(|e| e.ok())
         .filter(|e| e.file_type().is_file())
@@ -222,7 +212,6 @@ static WHAT_COMMENT_VERBS: &[&str] = &[
     "resume",
     "pause",
     "suspend",
-    "resume",
     "schedule",
     "dispatch",
     "route",
@@ -324,9 +313,6 @@ static ALLOWED_COMMENT_PREFIXES: &[&str] = &[
     "on",
     "at",
     "by",
-    "for",
-    "from",
-    "with",
     "without",
     "not",
     "no",
@@ -430,31 +416,44 @@ fn is_what_comment(line: &str) -> bool {
     false
 }
 
-fn check_what_comments(path: &str, content: &str, _in_test_module: &[bool]) -> Vec<Violation> {
-    let mut violations = Vec::new();
-    let mut inside_cfg_test = false;
-    let mut brace_depth = 0;
+struct CfgTestTracker {
+    inside_cfg_test: bool,
+    brace_depth: i32,
+}
 
-    for (line_num, line) in content.lines().enumerate() {
-        let trimmed = line.trim();
-
-        // Track cfg(test) module depth roughly
-        if trimmed.starts_with("#[cfg(test)]") {
-            inside_cfg_test = true;
+impl CfgTestTracker {
+    fn new() -> Self {
+        Self {
+            inside_cfg_test: false,
+            brace_depth: 0,
         }
-        for c in trimmed.chars() {
-            if c == '{' {
-                brace_depth += 1;
-            } else if c == '}' {
-                brace_depth -= 1;
-                if brace_depth == 0 && inside_cfg_test {
-                    inside_cfg_test = false;
-                }
+    }
+
+    /// Process a line and return `true` if we are inside a `#[cfg(test)]` block.
+    fn process_line(&mut self, line: &str) -> bool {
+        let trimmed = line.trim();
+        if trimmed.starts_with("#[cfg(test)]") {
+            self.inside_cfg_test = true;
+            self.brace_depth = 0;
+            return true;
+        }
+        if self.inside_cfg_test {
+            self.brace_depth += line.matches('{').count() as i32;
+            self.brace_depth -= line.matches('}').count() as i32;
+            if self.brace_depth <= 0 && trimmed.starts_with('}') {
+                self.inside_cfg_test = false;
             }
         }
+        self.inside_cfg_test
+    }
+}
 
-        // Skip comments inside test modules
-        if inside_cfg_test {
+fn check_what_comments(path: &str, content: &str, _in_test_module: &[bool]) -> Vec<Violation> {
+    let mut violations = Vec::new();
+    let mut tracker = CfgTestTracker::new();
+
+    for (line_num, line) in content.lines().enumerate() {
+        if tracker.process_line(line) {
             continue;
         }
 
@@ -499,31 +498,13 @@ fn is_countable_comment(line: &str) -> bool {
 
 fn check_long_comment_runs(path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
-    let mut inside_cfg_test = false;
-    let mut brace_depth = 0;
+    let mut tracker = CfgTestTracker::new();
 
     let mut run_start: Option<usize> = None;
     let mut run_count = 0;
 
     for (line_num, line) in content.lines().enumerate() {
-        let trimmed = line.trim();
-
-        // Track cfg(test) module depth roughly
-        if trimmed.starts_with("#[cfg(test)]") {
-            inside_cfg_test = true;
-        }
-        for c in trimmed.chars() {
-            if c == '{' {
-                brace_depth += 1;
-            } else if c == '}' {
-                brace_depth -= 1;
-                if brace_depth == 0 && inside_cfg_test {
-                    inside_cfg_test = false;
-                }
-            }
-        }
-
-        if inside_cfg_test {
+        if tracker.process_line(line) {
             run_start = None;
             run_count = 0;
             continue;
@@ -774,7 +755,7 @@ fn check_mod_purity(path: &str, _content: &str, ast: &File) -> Vec<Violation> {
 #[test]
 fn guardrails_import_ordering() {
     let mut errors = Vec::new();
-    for file in discover_src_files() {
+    for file in discover_rs_files("src") {
         let content = std::fs::read_to_string(&file).unwrap();
         let rel = relative_path(&file);
         errors.extend(check_import_ordering(rel, &content));
@@ -785,7 +766,7 @@ fn guardrails_import_ordering() {
 #[test]
 fn guardrails_import_ordering_tests() {
     let mut errors = Vec::new();
-    for file in discover_test_files() {
+    for file in discover_rs_files("tests") {
         let content = std::fs::read_to_string(&file).unwrap();
         let rel = file.strip_prefix("tests/").unwrap_or(&file);
         errors.extend(check_import_ordering(rel, &content));
@@ -796,7 +777,7 @@ fn guardrails_import_ordering_tests() {
 #[test]
 fn guardrails_what_comments() {
     let mut errors = Vec::new();
-    for file in discover_src_files() {
+    for file in discover_rs_files("src") {
         let content = std::fs::read_to_string(&file).unwrap();
         let rel = relative_path(&file);
         errors.extend(check_what_comments(rel, &content, &[]));
@@ -807,7 +788,7 @@ fn guardrails_what_comments() {
 #[test]
 fn guardrails_doc_anchors() {
     let mut errors = Vec::new();
-    for file in discover_src_files() {
+    for file in discover_rs_files("src") {
         let content = std::fs::read_to_string(&file).unwrap();
         let rel = relative_path(&file);
         let ast = syn::parse_file(&content).unwrap();
@@ -824,7 +805,7 @@ fn guardrails_doc_anchors() {
 #[test]
 fn guardrails_single_letter_vars() {
     let mut errors = Vec::new();
-    for file in discover_src_files() {
+    for file in discover_rs_files("src") {
         let content = std::fs::read_to_string(&file).unwrap();
         let rel = relative_path(&file);
         let ast = syn::parse_file(&content).unwrap();
@@ -841,7 +822,7 @@ fn guardrails_single_letter_vars() {
 #[test]
 fn guardrails_long_comment_runs() {
     let mut errors = Vec::new();
-    for file in discover_src_files() {
+    for file in discover_rs_files("src") {
         let content = std::fs::read_to_string(&file).unwrap();
         let rel = relative_path(&file);
         errors.extend(check_long_comment_runs(rel, &content));
@@ -852,7 +833,7 @@ fn guardrails_long_comment_runs() {
 #[test]
 fn guardrails_mod_purity() {
     let mut errors = Vec::new();
-    for file in discover_src_files() {
+    for file in discover_rs_files("src") {
         if !file.ends_with("mod.rs") {
             continue;
         }
@@ -874,27 +855,11 @@ fn check_no_std_thread(path: &str, content: &str) -> Vec<Violation> {
         return violations;
     }
 
-    let lines: Vec<&str> = content.lines().collect();
-    let mut in_test_cfg = false;
-    let mut brace_depth = 0i32;
+    let mut tracker = CfgTestTracker::new();
 
-    for (line_num, line) in lines.iter().enumerate() {
-        let trimmed = line.trim();
-
-        // Detect entry into a #[cfg(test)] block
-        if trimmed.starts_with("#[cfg(test)]") {
-            in_test_cfg = true;
-            brace_depth = 0;
+    for (line_num, line) in content.lines().enumerate() {
+        if tracker.process_line(line) {
             continue;
-        }
-
-        if in_test_cfg {
-            brace_depth += line.matches('{').count() as i32;
-            brace_depth -= line.matches('}').count() as i32;
-            if brace_depth <= 0 && trimmed.starts_with('}') {
-                in_test_cfg = false;
-            }
-            continue; // Skip lines inside test blocks
         }
 
         if line.contains("std::thread::spawn") || line.contains("std::thread::sleep") {
@@ -918,7 +883,7 @@ fn check_no_std_thread(path: &str, content: &str) -> Vec<Violation> {
 #[test]
 fn guardrails_no_std_thread() {
     let mut errors = Vec::new();
-    for file in discover_src_files() {
+    for file in discover_rs_files("src") {
         let content = std::fs::read_to_string(&file).unwrap();
         let rel = relative_path(&file);
         errors.extend(check_no_std_thread(rel, &content));
@@ -962,7 +927,7 @@ fn check_spawn_site_docs(path: &str, content: &str) -> Vec<Violation> {
 #[test]
 fn guardrails_spawn_site_docs() {
     let mut errors = Vec::new();
-    for file in discover_src_files() {
+    for file in discover_rs_files("src") {
         let content = std::fs::read_to_string(&file).unwrap();
         let rel = relative_path(&file);
         errors.extend(check_spawn_site_docs(rel, &content));

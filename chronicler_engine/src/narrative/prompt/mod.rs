@@ -1,4 +1,3 @@
-//! Prompt construction and token budget management.
 //! [DOC: docs/system/prompt_system.md]
 
 pub mod budget;

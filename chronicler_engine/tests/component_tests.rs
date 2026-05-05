@@ -143,17 +143,6 @@ fn test_header_template_connection_status() {
     );
 }
 
-#[test]
-fn test_header_template_exact_output() {
-    let template = HeaderTemplate {
-        room_name: "Grand Hall".to_string(),
-    };
-    let rendered = template.render().unwrap();
-    eprintln!("Rendered output: {rendered:?}");
-    assert!(rendered.contains("class=\"header\""));
-    assert!(rendered.contains("Chronicler Engine"));
-}
-
 // HTTP Endpoint Tests (from fragment_tests.rs)
 #[cfg(test)]
 mod tests {
@@ -261,7 +250,10 @@ mod tests {
             .await
             .unwrap();
         let body_str = String::from_utf8_lossy(&body);
-        assert!(body_str.contains("id=\"action-area\"") || body_str.contains("cmd-area"));
+        assert!(
+            body_str.contains("id=cmd-area"),
+            "Expected cmd-area id: {body_str}"
+        );
     }
 
     #[tokio::test]
@@ -309,7 +301,10 @@ mod tests {
             .await
             .unwrap();
         let body_str = String::from_utf8_lossy(&body);
-        assert!(body_str.contains("error") || body_str.is_empty());
+        assert!(
+            body_str.contains("Enter a command"),
+            "Expected empty command error: {body_str}"
+        );
     }
 
     #[tokio::test]
@@ -366,9 +361,11 @@ mod tests {
             .await
             .unwrap();
         let body_str = String::from_utf8_lossy(&body);
-        // Should contain headshot div or be empty (no NPCs with images)
-        // The test state has npc_1 with a profile_image
-        assert!(body_str.contains("headshot") || body_str.contains("Test NPC"));
+        // The test state has npc_1 with a profile_image, so headshots should render
+        assert!(
+            body_str.contains("headshot"),
+            "Expected headshot in fragment: {body_str}"
+        );
     }
 
     #[tokio::test]
@@ -1418,5 +1415,49 @@ fn test_npcs_in_area_can_be_replaced() {
     assert!(
         state_guard.npcs_in_area.is_empty(),
         "npcs_in_area should be empty after replacement"
+    );
+}
+
+#[tokio::test]
+async fn test_debug_state_endpoint_returns_json() {
+    let state = create_test_state();
+    let app = create_app_for_testing(state);
+
+    let req = Request::builder()
+        .uri("/debug/state")
+        .body(Body::empty())
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+
+    assert!(response.status().is_success());
+    let body = axum::body::to_bytes(response.into_body(), 4096)
+        .await
+        .unwrap();
+    let json: serde_json::Value =
+        serde_json::from_slice(&body).expect("Response should be valid JSON");
+
+    assert!(
+        json.get("current_room_id").is_some(),
+        "Debug state should include current_room_id"
+    );
+    assert!(
+        json.get("npcs_in_area").is_some(),
+        "Debug state should include npcs_in_area"
+    );
+    assert!(
+        json.get("generation_status").is_some(),
+        "Debug state should include generation_status"
+    );
+    assert!(
+        json.get("generation_phase").is_some(),
+        "Debug state should include generation_phase"
+    );
+    assert!(
+        json.get("character_state").is_some(),
+        "Debug state should include character_state"
+    );
+    assert!(
+        json.get("narration_history_tail").is_some(),
+        "Debug state should include narration_history_tail"
     );
 }

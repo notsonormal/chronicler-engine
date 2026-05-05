@@ -8,7 +8,6 @@ use crate::narrative::quantifier::types::{
     QuantifierResult,
 };
 
-/// OpenRouter-based quantifier backend.
 /// [DOC: docs/system/llm_processing.md]
 pub struct QuantifierBackend {
     api_key: String,
@@ -44,7 +43,6 @@ impl QuantifierBackendTrait for QuantifierBackend {
     }
 }
 
-/// Quantifier backend that calls Ollama API.
 pub struct OllamaQuantifierBackend {
     base_url: String,
     model: String,
@@ -86,7 +84,6 @@ pub trait QuantifierBackendTrait: Send + Sync {
     ) -> Result<QuantifierResult, EngineError>;
 }
 
-/// Real quantifier backend that calls OpenRouter API.
 pub struct RealQuantifierBackend {
     inner: QuantifierBackend,
 }
@@ -159,7 +156,6 @@ impl QuantifierBackendTrait for MockQuantifierBackend {
     }
 }
 
-/// Create a quantifier backend for a specific connection.
 pub fn get_quantifier_backend_for(connection: &Connection) -> Box<dyn QuantifierBackendTrait> {
     match connection.provider {
         LlmBackendType::Mock => Box::new(MockQuantifierBackend::default()),
@@ -171,7 +167,6 @@ pub fn get_quantifier_backend_for(connection: &Connection) -> Box<dyn Quantifier
 }
 
 /// [DOC: docs/system/quantifier.md]
-/// Get the quantifier backend for the current quantifier connection.
 pub fn get_quantifier_backend() -> Box<dyn QuantifierBackendTrait> {
     let settings = crate::settings::load_settings().unwrap_or_default();
     let connection = settings

@@ -127,7 +127,6 @@ fn parse_chat_response(raw_response: &str, req_id: u64) -> Result<String, String
     }
 }
 
-/// Generic OpenAI-compatible chat completions call.
 /// [DOC: docs/system/llm_processing.md]
 pub fn call_chat_completions(
     base_url: &str,

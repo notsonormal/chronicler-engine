@@ -35,7 +35,6 @@ pub trait LlmBackend: Send + Sync {
 // [DOC: docs/system/llm_processing.md]
 pub use crate::model::llm_backend::LlmBackendType;
 
-/// Create an LLM backend for a specific connection.
 /// [DOC: docs/system/llm_processing.md]
 pub fn get_llm_backend_for(connection: &Connection) -> Box<dyn LlmBackend> {
     match connection.provider {

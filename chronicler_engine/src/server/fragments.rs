@@ -63,28 +63,24 @@ fn render_visual_sidebar_unlocked(state: &GameState) -> Result<String> {
         .clone()
         .or_else(|| state.world.default_room_image.clone());
 
+    let resolve_headshot = |npc_id: &str| {
+        let npc = state.npcs.get(npc_id)?;
+        let image_path = npc.sheet.preferred_image()?.to_string();
+        let name = npc.sheet.name.clone();
+        Some((image_path, name))
+    };
+
     let npc_data: Vec<(String, String)> = if !state.npcs_in_area.is_empty() {
         state
             .npcs_in_area
             .iter()
-            .filter_map(|npc| {
-                // Defensive: only include NPCs that exist in state.npcs
-                let npc = state.npcs.get(&npc.id)?;
-                let image_path = npc.sheet.preferred_image()?.to_string();
-                let name = npc.sheet.name.clone();
-                Some((image_path, name))
-            })
+            .filter_map(|npc| resolve_headshot(&npc.id))
             .collect()
     } else {
         // Fallback to static room.npcs
         room.npcs
             .iter()
-            .filter_map(|npc_id| {
-                let npc = state.npcs.get(npc_id)?;
-                let image_path = npc.sheet.preferred_image()?.to_string();
-                let name = npc.sheet.name.clone();
-                Some((image_path, name))
-            })
+            .filter_map(|npc_id| resolve_headshot(npc_id))
             .collect()
     };
 
@@ -114,48 +110,37 @@ pub fn render_action_area(state: &AppState) -> Result<String> {
         .map_err(|e| crate::error::EngineError::Template(e.to_string()))
 }
 
-/// [DOC: docs/system/game_flow.md]
-pub async fn header_fragment(State(state): State<AppState>) -> Html<String> {
-    match render_header(&state) {
+fn render_fragment<F>(state: &AppState, render: F, name: &str) -> Html<String>
+where
+    F: FnOnce(&AppState) -> Result<String>,
+{
+    match render(state) {
         Ok(html) => Html(html),
         Err(e) => {
-            log::error!("header_fragment failed: {e}");
+            log::error!("{name} failed: {e}");
             Html(render_error(&e.to_string()))
         }
     }
+}
+
+/// [DOC: docs/system/game_flow.md]
+pub async fn header_fragment(State(state): State<AppState>) -> Html<String> {
+    render_fragment(&state, render_header, "header_fragment")
 }
 
 /// [DOC: docs/system/game_flow.md]
 pub async fn story_log_fragment(State(state): State<AppState>) -> Html<String> {
-    match render_story_log(&state) {
-        Ok(html) => Html(html),
-        Err(e) => {
-            log::error!("story_log_fragment failed: {e}");
-            Html(render_error(&e.to_string()))
-        }
-    }
+    render_fragment(&state, render_story_log, "story_log_fragment")
 }
 
 /// [DOC: docs/system/game_flow.md]
 pub async fn visual_sidebar_fragment(State(state): State<AppState>) -> Html<String> {
-    match render_visual_sidebar(&state) {
-        Ok(html) => Html(html),
-        Err(e) => {
-            log::error!("visual_sidebar_fragment failed: {e}");
-            Html(render_error(&e.to_string()))
-        }
-    }
+    render_fragment(&state, render_visual_sidebar, "visual_sidebar_fragment")
 }
 
 /// [DOC: docs/system/game_flow.md]
 pub async fn action_area_fragment(State(state): State<AppState>) -> Html<String> {
-    match render_action_area(&state) {
-        Ok(html) => Html(html),
-        Err(e) => {
-            log::error!("action_area_fragment failed: {e}");
-            Html(render_error(&e.to_string()))
-        }
-    }
+    render_fragment(&state, render_action_area, "action_area_fragment")
 }
 
 fn render_character_headshots(state: &AppState) -> Result<String> {
@@ -182,24 +167,16 @@ fn render_character_headshots(state: &AppState) -> Result<String> {
 
 /// [DOC: docs/system/game_flow.md]
 pub async fn character_headshots_fragment(State(state): State<AppState>) -> Html<String> {
-    match render_character_headshots(&state) {
-        Ok(html) => Html(html),
-        Err(e) => {
-            log::error!("character_headshots_fragment failed: {e}");
-            Html(render_error(&e.to_string()))
-        }
-    }
+    render_fragment(
+        &state,
+        render_character_headshots,
+        "character_headshots_fragment",
+    )
 }
 
 /// [DOC: docs/system/game_flow.md]
 pub async fn hints_handler(State(state): State<AppState>) -> Html<String> {
-    match render_action_hints(&state) {
-        Ok(hints) => Html(hints),
-        Err(e) => {
-            log::error!("hints_handler failed: {e}");
-            Html(render_error(&e.to_string()))
-        }
-    }
+    render_fragment(&state, render_action_hints, "hints_handler")
 }
 
 pub async fn status_ready_handler(State(_state): State<AppState>) -> Html<String> {

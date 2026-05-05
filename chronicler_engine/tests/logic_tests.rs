@@ -148,4 +148,64 @@ mod tests {
             assert_eq!(guard.current_room_id, "hall");
         }
     }
+
+    #[test]
+    fn test_process_directional_movement_invalid_direction() {
+        let state = create_navigation_test_state();
+        {
+            let mut guard = state.lock().unwrap();
+            let result = process_directional_movement(&mut guard, "upwards");
+            assert!(result.is_err(), "Invalid direction should return error");
+            assert_eq!(
+                guard.current_room_id, "entrance",
+                "Room should not change on invalid direction"
+            );
+        }
+    }
+
+    #[test]
+    fn test_process_directional_movement_whitespace() {
+        let state = create_navigation_test_state();
+        {
+            let mut guard = state.lock().unwrap();
+            let result = process_directional_movement(&mut guard, "   ");
+            assert!(result.is_err(), "Whitespace direction should return error");
+            assert_eq!(
+                guard.current_room_id, "entrance",
+                "Room should not change on whitespace direction"
+            );
+        }
+    }
+
+    #[test]
+    fn test_attempt_semantic_walk_empty() {
+        let state = create_navigation_test_state();
+        {
+            let mut guard = state.lock().unwrap();
+            let result = attempt_semantic_walk(&mut guard, "");
+            assert!(result.is_err(), "Empty room id should return error");
+        }
+    }
+
+    #[test]
+    fn test_get_current_room_not_found() {
+        let state = create_navigation_test_state();
+        {
+            let mut guard = state.lock().unwrap();
+            guard.current_room_id = "nonexistent_room".to_string();
+            let result = get_current_room(&guard);
+            assert!(result.is_err(), "Invalid room id should return error");
+        }
+    }
+
+    #[test]
+    fn test_get_available_exits_invalid_room() {
+        let state = create_navigation_test_state();
+        {
+            let mut guard = state.lock().unwrap();
+            guard.current_room_id = "nonexistent_room".to_string();
+            let exits = get_available_exits(&guard);
+            assert!(exits.is_empty(), "Invalid room should return empty exits");
+        }
+    }
 }

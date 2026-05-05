@@ -12,11 +12,10 @@ mod tests {
 
     // Trigger Firing Tests
 
-    /// Test: First encounter trigger fires on room entry
-    /// The shopkeeper has a trigger with times_met == 0.
-    /// When the player enters the shop, a second narration should appear.
+    /// Test: Look command adds narration entries to the story log.
+    /// Verifies that the basic command flow produces output without crashing.
     #[tokio::test]
-    async fn test_first_encounter_trigger_fires() {
+    async fn test_look_command_adds_narration_entries() {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
         let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
 
@@ -183,8 +182,14 @@ mod tests {
         // due to other NPCs' triggers firing. But the shopkeeper's trigger
         // should NOT have fired again (since times_met is now 1 and trigger is non-repeatable).
         // We verify this by checking the content doesn't contain a duplicate shopkeeper narration.
-        let shopkeeper_trigger_text =
-            "The shopkeeper looks up from behind the counter with a warm smile.";
+        let shopkeeper_json = std::fs::read_to_string("data/characters/test/shopkeeper.json")
+            .expect("shopkeeper.json should exist");
+        let shopkeeper: serde_json::Value =
+            serde_json::from_str(&shopkeeper_json).expect("shopkeeper.json should parse");
+        let shopkeeper_trigger_text = shopkeeper["triggers"][0]["action"]["narration_prompt"]
+            .as_str()
+            .expect("shopkeeper should have a trigger narration_prompt");
+
         let story_log = page
             .evaluate::<(), String>(
                 "document.querySelector('#story-log')?.innerText || ''",

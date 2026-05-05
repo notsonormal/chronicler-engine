@@ -109,38 +109,44 @@ pub struct GeneratingGuard {
     state: Arc<std::sync::Mutex<GameState>>,
 }
 
+fn with_lock_or_recover(
+    state: &Arc<std::sync::Mutex<GameState>>,
+    f: impl FnOnce(&mut GameState),
+    err_msg: &str,
+) {
+    match state.lock() {
+        Ok(mut guard) => f(&mut guard),
+        Err(poisoned) => {
+            log::error!("{err_msg}");
+            let mut guard = poisoned.into_inner();
+            f(&mut guard);
+            state.clear_poison();
+        }
+    }
+}
+
 impl GeneratingGuard {
     pub fn new(state: Arc<std::sync::Mutex<GameState>>) -> Self {
-        match state.lock() {
-            Ok(mut guard) => {
+        with_lock_or_recover(
+            &state,
+            |guard| {
                 guard.generation_state.status = GenerationStatus::Generating;
-            }
-            Err(poisoned) => {
-                log::error!("GeneratingGuard::new encountered poisoned mutex, recovering guard");
-                let mut guard = poisoned.into_inner();
-                guard.generation_state.status = GenerationStatus::Generating;
-                state.clear_poison();
-            }
-        }
+            },
+            "GeneratingGuard::new encountered poisoned mutex, recovering guard",
+        );
         Self { state }
     }
 }
 
 impl Drop for GeneratingGuard {
     fn drop(&mut self) {
-        match self.state.lock() {
-            Ok(mut guard) => {
+        with_lock_or_recover(
+            &self.state,
+            |guard| {
                 guard.generation_state.status = GenerationStatus::Idle;
-            }
-            Err(poisoned) => {
-                log::error!(
-                    "GeneratingGuard::drop encountered poisoned mutex, recovering guard and resetting status"
-                );
-                let mut guard = poisoned.into_inner();
-                guard.generation_state.status = GenerationStatus::Idle;
-                self.state.clear_poison();
-            }
-        }
+            },
+            "GeneratingGuard::drop encountered poisoned mutex, recovering guard and resetting status",
+        );
     }
 }
 

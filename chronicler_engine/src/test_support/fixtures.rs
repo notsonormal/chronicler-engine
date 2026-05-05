@@ -1,5 +1,3 @@
-//! Shared test fixtures for tests.
-
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -151,6 +149,20 @@ impl TestMap {
         }
     }
 
+    /// A `Room` with the given ID and display name, no exits, and no NPCs.
+    pub fn room_named(id: &str, name: &str) -> Room {
+        Room {
+            id: id.to_string(),
+            name: name.to_string(),
+            description: format!("A plain test room ({id})."),
+            exits: HashMap::new(),
+            items: vec![],
+            npcs: vec![],
+            image_path: None,
+            navigation_description: None,
+        }
+    }
+
     /// A `Room` with a specific NPC listed in its NPC IDs.
     pub fn room_with_npc(room_id: &str, npc_id: &str) -> Room {
         Room {
@@ -262,5 +274,58 @@ impl TestGameState {
             npcs,
             room_id.to_string(),
         )
+    }
+
+    /// A `GameState` in the given room with one NPC loaded, but with
+    /// `character_state` set to default (no starting-room encounter tracking).
+    pub fn with_npc_raw(room_id: &str, npc: NpcCard) -> GameState {
+        let npc_id = npc.id.clone();
+        let mut npcs_map = HashMap::new();
+        npcs_map.insert(npc_id.clone(), npc);
+        GameState {
+            world: Arc::new(TestWorld::minimal()),
+            map: Arc::new(TestMap::single_room_with_npc(room_id, &npc_id)),
+            player: Arc::new(TestPlayer::standard()),
+            npcs: npcs_map,
+            current_room_id: room_id.to_string(),
+            narration_history: Vec::new(),
+            next_log_id: 1,
+            npcs_in_area: Vec::new(),
+            dynamic_rooms: HashMap::new(),
+            character_state: Default::default(),
+            generation_state: Default::default(),
+        }
+    }
+
+    /// Like `with_npc_raw` but with a custom room display name.
+    pub fn with_npc_in_named_room_raw(room_id: &str, room_name: &str, npc: NpcCard) -> GameState {
+        let npc_id = npc.id.clone();
+        let mut room = TestMap::room_named(room_id, room_name);
+        room.npcs.push(npc_id.clone());
+        let mut npcs_map = HashMap::new();
+        npcs_map.insert(npc_id, npc);
+        GameState {
+            world: Arc::new(TestWorld::minimal()),
+            map: Arc::new(MapDef {
+                overworld: Overworld {
+                    id: "test_overworld".to_string(),
+                    name: "Test Overworld".to_string(),
+                    regions: vec![Region {
+                        id: "test_region".to_string(),
+                        name: "Test Region".to_string(),
+                        rooms: vec![room],
+                    }],
+                },
+            }),
+            player: Arc::new(TestPlayer::standard()),
+            npcs: npcs_map,
+            current_room_id: room_id.to_string(),
+            narration_history: Vec::new(),
+            next_log_id: 1,
+            npcs_in_area: Vec::new(),
+            dynamic_rooms: HashMap::new(),
+            character_state: Default::default(),
+            generation_state: Default::default(),
+        }
     }
 }

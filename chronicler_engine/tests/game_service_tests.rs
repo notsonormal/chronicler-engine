@@ -236,11 +236,10 @@ mod tests {
         // (the thread runs in background)
         let guard = state.lock().unwrap();
         let status = &guard.generation_state.status;
+        // DefaultGameService has no API key, so FreeAction fails and sets Error status
         assert!(
-            status.is_generating()
-                || *status == chronicler_engine::model::state::GenerationStatus::Idle
-                || status.error_message().is_some(),
-            "Status should be Generating, Idle, or Error after FreeAction: {status:?}"
+            status.error_message().is_some(),
+            "Status should be Error after failed FreeAction: {status:?}"
         );
     }
 
@@ -298,11 +297,10 @@ mod tests {
         // State should remain accessible after execute_action returns
         let guard = state.lock().unwrap();
         let status = &guard.generation_state.status;
+        // DefaultGameService has no API key, so FreeAction fails and sets Error status
         assert!(
-            status.is_generating()
-                || *status == chronicler_engine::model::state::GenerationStatus::Idle
-                || status.error_message().is_some(),
-            "State should be accessible and status should be valid: {status:?}"
+            status.error_message().is_some(),
+            "Status should be Error after failed FreeAction: {status:?}"
         );
     }
 
@@ -333,11 +331,11 @@ mod tests {
         assert!(completed, "FreeAction should complete within timeout");
 
         let guard = state.lock().unwrap();
-        // With default backend (no API key), narration fails and error is set
+        // MockBackend::failing() always returns an error
         assert!(
-            guard.generation_state.status.error_message().is_some()
-                || !guard.generation_state.status.is_generating(),
-            "Should have error or be idle after failed narration"
+            guard.generation_state.status.error_message().is_some(),
+            "Should have error after failed narration: {:?}",
+            guard.generation_state.status
         );
     }
 
@@ -533,6 +531,11 @@ mod tests {
         service.execute_action(state.clone(), "look".to_string(), "Player".to_string());
 
         // If we get here, the function handled poisoned mutex gracefully
+        let guard = state.lock().unwrap_or_else(|e| e.into_inner());
+        assert!(
+            guard.narration_history.is_empty(),
+            "Poisoned mutex should cause early return with no history changes"
+        );
     }
 
     #[test]
@@ -553,12 +556,14 @@ mod tests {
         );
 
         let guard = state.lock().unwrap();
-        assert!(
-            guard.generation_state.phase
-                == chronicler_engine::model::state::GenerationPhase::Narrating
-                || !guard.generation_state.status.is_generating(),
-            "Phase should be Narrating or status should be idle/completed: {:?}",
-            guard.generation_state.phase
+        // DefaultGameService has no API key, so FreeAction fails.
+        // set_phase(Narrating) runs before the backend call, and set_error_and_reset
+        // only updates status (not phase), so phase should still be Narrating.
+        assert_eq!(
+            guard.generation_state.phase,
+            chronicler_engine::model::state::GenerationPhase::Narrating,
+            "Phase should be Narrating after starting FreeAction: {:?}",
+            guard.generation_state.status
         );
     }
 
@@ -646,6 +651,84 @@ mod tests {
         assert!(
             !guard.generation_state.status.is_generating(),
             "Status should be Idle after cancellation cleanup"
+        );
+    }
+
+    #[test]
+    fn test_execute_action_empty_command() {
+        let state = create_test_state();
+        let service = DefaultGameService::new();
+
+        {
+            let mut guard = state.lock().unwrap();
+            guard.narration_history.clear();
+        }
+
+        // Empty command parses as FreeAction("") and should not panic
+        service.execute_action(state.clone(), "".to_string(), "Player".to_string());
+
+        let guard = state.lock().unwrap();
+        // DefaultGameService has no API key, so it fails and sets Error status
+        assert!(
+            guard.generation_state.status.error_message().is_some(),
+            "Empty command should result in error status: {:?}",
+            guard.generation_state.status
+        );
+    }
+
+    #[test]
+    fn test_execute_action_unknown_command() {
+        let state = create_test_state();
+        let service = DefaultGameService::new();
+
+        {
+            let mut guard = state.lock().unwrap();
+            guard.narration_history.clear();
+        }
+
+        // Unknown command parses as FreeAction and should not panic
+        service.execute_action(state.clone(), "xyz123".to_string(), "Player".to_string());
+
+        let guard = state.lock().unwrap();
+        // DefaultGameService has no API key, so it fails and sets Error status
+        assert!(
+            guard.generation_state.status.error_message().is_some(),
+            "Unknown command should result in error status: {:?}",
+            guard.generation_state.status
+        );
+    }
+
+    #[test]
+    fn test_retry_last_response_not_ai_generated() {
+        let state = create_test_state();
+        let service = DefaultGameService::new();
+
+        // Set up history with only an Input entry (no AI Narration after it)
+        {
+            let mut guard = state.lock().unwrap();
+            guard.narration_history.clear();
+            guard.add_log(
+                "look around".to_string(),
+                Some("Player".to_string()),
+                LogType::Input,
+            );
+            guard.add_log("System message".to_string(), None, LogType::System);
+        }
+
+        // Retry should find the last input and attempt to process it
+        // With DefaultGameService (no API key), it will fail
+        service.retry_last_response(state.clone());
+
+        // Wait for the retry to complete
+        let completed = wait_for_generation_complete(&state, 1000);
+        assert!(completed, "Retry should complete within timeout");
+
+        let guard = state.lock().unwrap();
+        assert!(
+            guard.generation_state.status.error_message().is_some()
+                || !guard.generation_state.status.is_generating(),
+            "Retry with no AI response should complete: {:?}",
+            guard.generation_state.status
         );
     }
 }

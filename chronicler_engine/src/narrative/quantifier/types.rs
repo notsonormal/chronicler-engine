@@ -2,7 +2,6 @@ use crate::model::character::NpcCard;
 use crate::model::map::Room;
 use crate::model::state::LogEntry;
 
-/// Confidence level of the quantifier's NPC presence detection.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum QuantifierConfidence {
     /// JSON parsed successfully and all NPC IDs are valid.
@@ -22,13 +21,11 @@ pub struct QuantifierParseResult {
     pub confidence: QuantifierConfidence,
 }
 
-/// Basic room information for the quantifier prompt.
 pub struct RoomInfo {
     pub id: String,
     pub name: String,
 }
 
-/// Type of movement detected by the quantifier.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MovementType {
     /// Player is entering a new room ("I walk through the gate", "enter the kitchen")
@@ -59,7 +56,6 @@ pub struct QuantifierResult {
     pub movement: MovementParseResult,
 }
 
-/// NPC movement event type.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NpcEventType {
     /// NPC entered the area (was not present, now present).
@@ -76,7 +72,6 @@ pub struct NpcEvent {
     pub event_type: NpcEventType,
 }
 
-/// List of NPC movement events with confidence level.
 #[derive(Debug, Clone, Default)]
 pub struct NpcEventList {
     /// Detected movement events.
@@ -85,7 +80,6 @@ pub struct NpcEventList {
     pub confidence: QuantifierConfidence,
 }
 
-/// Context needed to build a quantifier prompt.
 pub struct QuantifierPromptContext<'a> {
     pub room: &'a Room,
     pub previous_room_npcs: &'a [NpcCard],

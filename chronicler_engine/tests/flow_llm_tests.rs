@@ -315,10 +315,12 @@ mod tests {
         println!("Status after (LLM result: {llm_result:?}): {status_after}");
 
         assert!(
-            !status_after.contains("Thinking")
-                || status_after.contains("Ready")
-                || status_after.contains("Error"),
-            "Status should not be stuck on 'Thinking...'. Got: {status_after} (LLM result: {llm_result:?})"
+            !status_after.is_empty(),
+            "Status should not be empty after LLM processing"
+        );
+        assert!(
+            status_after.contains("Ready") || status_after.contains("Error"),
+            "Status should be Ready or Error after LLM completes. Got: {status_after} (LLM result: {llm_result:?})"
         );
 
         let _ = browser.close().await;

@@ -27,7 +27,6 @@ pub struct Args {
     pub port: u16,
 }
 
-/// Parse command-line arguments.
 pub fn parse_args() -> Args {
     Args::parse()
 }

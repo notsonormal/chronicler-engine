@@ -7,8 +7,6 @@ use crate::narrative::prompt::budget;
 use crate::narrative::prompt::budget::estimate_tokens;
 use crate::narrative::prompt::types::PromptContext;
 
-/// Fit system and user messages into a context window, trimming history if needed.
-///
 /// Reserves a safety margin and minimum input budget, caps `max_tokens` to what
 /// actually fits, and drops oldest history entries first if the user text is too long.
 ///

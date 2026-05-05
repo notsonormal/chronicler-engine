@@ -175,8 +175,47 @@ def run(cmd, cwd=None, check=True, show_output=True, env=None):
             print(result.stderr)
         if check and result.returncode != 0:
             print(f"FAILED with code {result.returncode}")
-            sys.exit(result.returncode)
+            sys.exit(process.returncode)
         return result.returncode
+
+
+def is_target_locked(target_dir: Path) -> bool:
+    """Check if cargo holds a lock on the target directory via .cargo-lock."""
+    # Cargo creates .cargo-lock inside the profile subdirectory and holds an OS lock on it.
+    for profile in ["debug", "release"]:
+        lock_file = target_dir / profile / ".cargo-lock"
+        if not lock_file.exists():
+            continue
+        try:
+            fd = os.open(str(lock_file), os.O_RDWR)
+            try:
+                if sys.platform == "win32":
+                    import msvcrt
+                    msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+                    msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+                else:
+                    import fcntl
+                    fcntl.flock(fd, fcntl.LOCK_NB | fcntl.LOCK_EX)
+                os.close(fd)
+                return False  # We got the lock, so cargo doesn't hold it
+            except (OSError, BlockingIOError, IOError):
+                os.close(fd)
+                return True  # Lock is held by another process (cargo)
+        except OSError:
+            continue
+    return False  # No lock file found, assume not locked
+
+
+class StepCounter:
+    """Simple step counter for build progress output."""
+
+    def __init__(self, total: int):
+        self.current = 0
+        self.total = total
+
+    def next(self, label: str):
+        self.current += 1
+        print(f"[{self.current}/{self.total}] {label}")
 
 
 def main():
@@ -213,10 +252,55 @@ def main():
         action="store_true",
         help="Enable strict mode: warnings are errors, debug assertions enabled",
     )
+    parser.add_argument(
+        "--target-dir",
+        dest="target_dir",
+        default=None,
+        help="Custom cargo target directory for isolated builds (e.g., target/agent2)",
+    )
+    parser.add_argument(
+        "--no-fmt",
+        action="store_true",
+        dest="no_fmt",
+        help="Skip cargo fmt (useful for secondary agents to avoid source-file races)",
+    )
+    parser.add_argument(
+        "--cleanup",
+        action="store_true",
+        dest="cleanup",
+        help="Kill lingering chronicler processes and clean build artifacts",
+    )
     args = parser.parse_args()
 
     print("=== Chronicler Engine Build ===")
     os.chdir(os.path.dirname(os.path.abspath(__file__)) or os.getcwd())
+
+    # Resolve target directories
+    cargo_target_dir = Path(args.target_dir) if args.target_dir else Path("target")
+    build_profile = "release" if args.release else "debug"
+    target_dir = cargo_target_dir / build_profile
+
+    if args.cleanup:
+        print("=== Cleanup Mode ===")
+        print("Killing lingering chronicler processes...")
+        kill_by_name("chronicler")
+
+        # Clean up stale port lock files from crashed test runs
+        import tempfile
+        lock_dir = Path(tempfile.gettempdir()) / "chronicler_test_ports"
+        if lock_dir.exists():
+            print(f"Cleaning stale port locks from {lock_dir}...")
+            shutil.rmtree(lock_dir)
+
+        # Clean build artifacts for the resolved target directory
+        if cargo_target_dir.exists():
+            print(f"Removing build directory: {cargo_target_dir}")
+            shutil.rmtree(cargo_target_dir)
+        else:
+            print(f"Build directory does not exist: {cargo_target_dir}")
+
+        print("=== Cleanup Complete ===")
+        return 0
 
     check_rust_version()
 
@@ -224,43 +308,81 @@ def main():
         os.environ["RUSTFLAGS"] = "-D warnings"
         print("Strict mode enabled: warnings treated as errors.")
 
-    # Kill any process on ports used by tests
-    print("Checking for processes on test ports...")
-    for port in [3000, 3001, 3002]:
-        kill_port(port)
+    # Always kill manual runs on the default port first — this may release
+    # the target directory lock if a manual `cargo run` was holding it.
+    print("Checking for processes on port 3000...")
+    kill_port(3000)
 
-    # Also kill any lingering server processes by name
-    print("Checking for lingering server processes...")
-    kill_by_name("chronicler")
+    # Base environment for cargo commands
+    cargo_env = {"NEXTEST_STATUS_LEVEL": "fail"}
+    if args.target_dir:
+        cargo_env["CARGO_TARGET_DIR"] = str(cargo_target_dir.resolve())
+        print(f"Using custom target directory: {cargo_target_dir}")
+        if is_target_locked(cargo_target_dir):
+            print(f"WARNING: Target directory {cargo_target_dir} appears to be locked by another cargo process.")
+            print("         Another agent may be building in this directory.")
+    else:
+        # Default target directory
+        if is_target_locked(cargo_target_dir):
+            print("WARNING: Default target directory (target/) appears to be locked by another cargo process.")
+            print("         Use --target-dir to build in a unique folder and avoid conflicts:")
+            print("         python build.py --target-dir target/<unique-name>")
 
-    # Clean up stale port lock files from crashed test runs
-    import tempfile
-    lock_dir = Path(tempfile.gettempdir()) / "chronicler_test_ports"
-    if lock_dir.exists():
-        print(f"Cleaning stale port locks from {lock_dir}...")
-        shutil.rmtree(lock_dir)
+    if args.llm_only:
+        steps = StepCounter(3)
+        steps.next("Building...")
+        run(f"cargo build {'--release' if args.release else ''}".strip(), env=cargo_env)
 
-    print("[1/8] Formatting...")
-    run("cargo fmt")
+        steps.next("Running LLM tests only...")
+        print("=" * 60)
+        print("NOTE: LLM tests contact the real OpenRouter API.")
+        print("      Each test takes 1-3 minutes. Total: ~3-9 minutes.")
+        print("      Do not interrupt. Set your tool timeout to >= 600s.")
+        print("=" * 60)
+        llm_cmd = get_test_cmd(include_llm=True, strict=args.strict)
+        if "nextest" in llm_cmd:
+            llm_cmd += " --test flow_llm_tests"
+        else:
+            llm_cmd += " flow_llm_tests -- --ignored"
+        run(llm_cmd, check=False, env=cargo_env)
 
-    print("[2/8] Running clippy...")
-    run("cargo clippy --all-targets --all-features -- -D warnings")
+        steps.next("Done")
+        print("=== Build Complete ===")
+        return 0
 
-    print("[3/8] Running architecture guardrail tests...")
-    run("cargo test --test architecture")
+    # Compute total steps for the main build path
+    total_steps = 7  # clippy, arch, guardrails, build, copy assets, tests, report/skip
+    if not args.no_fmt:
+        total_steps += 1
+    if args.validate_data:
+        total_steps += 1
+    steps = StepCounter(total_steps)
 
-    print("[4/8] Running custom guardrails tests...")
-    run("cargo test --test guardrails")
+    if args.validate_data:
+        steps.next("Validating JSON data...")
+        run("python scripts/validate_data.py")
+        print("Data validation successful.")
 
-    build_profile = "release" if args.release else "debug"
-    build_flag = "--release" if args.release else ""
-    target_dir = Path(f"target/{build_profile}")
+    if not args.no_fmt:
+        steps.next("Formatting...")
+        run("cargo fmt", env=cargo_env)
+    else:
+        print("Skipping formatting (--no-fmt set).")
 
-    print(f"[5/8] Building ({build_profile})...")
-    run(f"cargo build {build_flag}".strip())
+    steps.next("Running clippy...")
+    run("cargo clippy --all-targets --all-features -- -D warnings", env=cargo_env)
 
-    print("[6/8] Copying data and assets for deployment...")
-    target_dir.mkdir(exist_ok=True)
+    steps.next("Running architecture guardrail tests...")
+    run("cargo test --test architecture", env=cargo_env)
+
+    steps.next("Running custom guardrails tests...")
+    run("cargo test --test guardrails", env=cargo_env)
+
+    steps.next(f"Building ({build_profile})...")
+    run(f"cargo build {'--release' if args.release else ''}".strip(), env=cargo_env)
+
+    steps.next("Copying data and assets for deployment...")
+    target_dir.mkdir(parents=True, exist_ok=True)
 
     # Copy data folder (worlds, images, etc.)
     if Path("data").exists():
@@ -285,48 +407,21 @@ def main():
     print(f"  Package ready in {target_dir}/")
     print(f"  Deployment: copy {target_dir}/ folder to your target machine")
 
-    test_env = {"NEXTEST_STATUS_LEVEL": "fail"}
-
-    if args.validate_data:
-        print("[0/8] Validating JSON data...")
-        run("python scripts/validate_data.py")
-        print("Data validation successful.")
-
-    if args.llm_only:
-        print("[1/3] Building...")
-        run(f"cargo build {build_flag}".strip())
-
-        print("[2/3] Running LLM tests only...")
-        print("=" * 60)
-        print("NOTE: LLM tests contact the real OpenRouter API.")
-        print("      Each test takes 1-3 minutes. Total: ~3-9 minutes.")
-        print("      Do not interrupt. Set your tool timeout to >= 600s.")
-        print("=" * 60)
-        llm_cmd = get_test_cmd(include_llm=True, strict=args.strict)
-        if "nextest" in llm_cmd:
-            llm_cmd += " --test flow_llm_tests"
-        else:
-            llm_cmd += " flow_llm_tests -- --ignored"
-        run(llm_cmd, check=False, env=test_env)
-
-        print("[3/3] Done")
-        print("=== Build Complete ===")
-        return 0
-
     if args.coverage:
-        print("[7/8] Running all tests with coverage...")
+        steps.next("Running all tests with coverage...")
         run(
             get_coverage_cmd(strict=args.strict),
             check=False,
-            env=test_env,
+            env=cargo_env,
         )
 
-        print("[8/8] Generating coverage report...")
-        json_path = Path("target/llvm-cov/coverage.json")
+        steps.next("Generating coverage report...")
+        json_path = cargo_target_dir / "llvm-cov" / "coverage.json"
         json_path.parent.mkdir(parents=True, exist_ok=True)
         run(
             f'cargo llvm-cov report --json --output-path "{json_path}"',
             check=False,
+            env=cargo_env,
         )
         if json_path.exists():
             run(
@@ -336,7 +431,7 @@ def main():
         else:
             print("Warning: Could not generate coverage JSON.")
     else:
-        print("[7/8] Running all tests...")
+        steps.next("Running all tests...")
         test_cmd = get_test_cmd(include_llm=args.include_llm, strict=args.strict)
         if args.include_llm:
             print("=" * 60)
@@ -344,13 +439,13 @@ def main():
             print("      Each LLM test takes 1-3 minutes. Total suite: ~3-9 minutes longer.")
             print("      Do not interrupt. Set your tool timeout to >= 600s.")
             print("=" * 60)
-        run(test_cmd, check=False, env=test_env)
+        run(test_cmd, check=False, env=cargo_env)
         if not args.include_llm:
             print(
                 "    NOTE: 3 LLM tests were skipped. "
                 "Run 'python build.py --llm-only' to execute them."
             )
-        print("[8/8] Skipping coverage report (use --coverage to enable)")
+        steps.next("Skipping coverage report (use --coverage to enable)")
 
     print("=== Build Complete ===")
     return 0

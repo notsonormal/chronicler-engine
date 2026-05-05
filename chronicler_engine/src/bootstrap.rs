@@ -15,22 +15,24 @@ use crate::narrative::llm::get_llm_backend;
 use crate::narrative::prompt::PromptContext;
 use crate::server::ServerConfig;
 
-pub fn load_world_manifest(world_id: &str) -> crate::error::Result<WorldManifest> {
-    let data_dir = resolve_engine_data_path();
-    let path = data_dir.join("worlds").join(world_id).join("world.json");
-    let json = fs::read_to_string(&path).map_err(|e| EngineError::DataLoad {
+fn read_json_file<T: serde::de::DeserializeOwned>(path: &Path) -> crate::error::Result<T> {
+    let json = fs::read_to_string(path).map_err(|e| EngineError::DataLoad {
         path: path.display().to_string(),
         source: Box::new(EngineError::Io(format!(
             "read_to_string {}: {e}",
             path.display()
         ))),
     })?;
-    let manifest: WorldManifest =
-        serde_json::from_str(&json).map_err(|e| EngineError::DataLoad {
-            path: path.display().to_string(),
-            source: Box::new(e.into()),
-        })?;
-    Ok(manifest)
+    serde_json::from_str(&json).map_err(|e| EngineError::DataLoad {
+        path: path.display().to_string(),
+        source: Box::new(e.into()),
+    })
+}
+
+pub fn load_world_manifest(world_id: &str) -> crate::error::Result<WorldManifest> {
+    let data_dir = resolve_engine_data_path();
+    let path = data_dir.join("worlds").join(world_id).join("world.json");
+    read_json_file(&path)
 }
 
 /// [DOC: docs/architecture/system.md]
@@ -48,31 +50,10 @@ pub fn initialize_world_from_manifest(
     let manifest = load_world_manifest(world_id)?;
 
     let map_path = world_dir.join(&manifest.map_file);
-    let map_json = fs::read_to_string(&map_path).map_err(|e| EngineError::DataLoad {
-        path: map_path.display().to_string(),
-        source: Box::new(EngineError::Io(format!(
-            "read_to_string {}: {e}",
-            map_path.display()
-        ))),
-    })?;
-    let map: MapDef = serde_json::from_str(&map_json).map_err(|e| EngineError::DataLoad {
-        path: map_path.display().to_string(),
-        source: Box::new(e.into()),
-    })?;
+    let map: MapDef = read_json_file(&map_path)?;
 
     let player_path = data_dir.join("personas").join(&manifest.player_file);
-    let player_json = fs::read_to_string(&player_path).map_err(|e| EngineError::DataLoad {
-        path: player_path.display().to_string(),
-        source: Box::new(EngineError::Io(format!(
-            "read_to_string {}: {e}",
-            player_path.display()
-        ))),
-    })?;
-    let player: PlayerCard =
-        serde_json::from_str(&player_json).map_err(|e| EngineError::DataLoad {
-            path: player_path.display().to_string(),
-            source: Box::new(e.into()),
-        })?;
+    let player: PlayerCard = read_json_file(&player_path)?;
 
     let mut npcs = Vec::new();
     let characters_group = if manifest.characters_dir.is_empty() {
@@ -88,14 +69,7 @@ pub fn initialize_world_from_manifest(
         {
             let path = entry.path();
             if path.extension().and_then(|s| s.to_str()) == Some("json") {
-                let char_json = fs::read_to_string(&path).map_err(|e| EngineError::DataLoad {
-                    path: path.display().to_string(),
-                    source: Box::new(EngineError::Io(format!(
-                        "read_to_string {}: {e}",
-                        path.display()
-                    ))),
-                })?;
-                match serde_json::from_str::<NpcCard>(&char_json) {
+                match read_json_file::<NpcCard>(&path) {
                     Ok(npc) => npcs.push(npc),
                     Err(e) => {
                         eprintln!("Warning: Failed to parse NPC file {path:?}: {e}");

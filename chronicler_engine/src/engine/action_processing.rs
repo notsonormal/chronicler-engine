@@ -227,118 +227,12 @@ pub fn execute_freeaction_impl(
 #[cfg(test)]
 mod execute_freeaction_impl_tests {
     use super::*;
-    use crate::model::character::{CharacterSheet, PlayerCard};
-    use crate::model::map::{MapDef, Overworld, Region, Room};
     use crate::model::state::LogType;
-    use crate::model::world::WorldCard;
     use crate::narrative::quantifier::{
         MovementParseResult, MovementType, QuantifierConfidence, QuantifierParseResult,
     };
+    use crate::test_support::{TestGameState, TestNpc, TestPlayer, TestWorld};
     use std::sync::Arc;
-
-    fn make_test_world() -> Arc<WorldCard> {
-        Arc::new(WorldCard {
-            name: "Test World".to_string(),
-            description: "A test world".to_string(),
-            global_rules: vec![],
-            default_room_image: None,
-        })
-    }
-
-    fn make_test_map() -> Arc<MapDef> {
-        let room = Room {
-            id: "room1".to_string(),
-            name: "Test Room".to_string(),
-            description: "A test room".to_string(),
-            exits: std::collections::HashMap::new(),
-            items: vec![],
-            npcs: vec!["carla".to_string()],
-            image_path: None,
-            navigation_description: None,
-        };
-        let region = Region {
-            id: "region1".to_string(),
-            name: "Test Region".to_string(),
-            rooms: vec![room],
-        };
-        let overworld = Overworld {
-            id: "overworld1".to_string(),
-            name: "Test Overworld".to_string(),
-            regions: vec![region],
-        };
-        Arc::new(MapDef { overworld })
-    }
-
-    fn make_test_player() -> Arc<PlayerCard> {
-        Arc::new(PlayerCard {
-            sheet: CharacterSheet {
-                name: "Player".to_string(),
-                description: "A test player".to_string(),
-                personality: "Brave".to_string(),
-                scenario: "Test".to_string(),
-                example_dialogue: "Hello!".to_string(),
-                summary: None,
-                profile_image: None,
-                headshot_image: None,
-            },
-            inventory: vec![],
-        })
-    }
-
-    fn make_test_npcs() -> Vec<NpcCard> {
-        vec![NpcCard {
-            id: "carla".to_string(),
-            sheet: CharacterSheet {
-                name: "Carla".to_string(),
-                description: "A friendly NPC".to_string(),
-                personality: "Friendly".to_string(),
-                scenario: "Test scenario".to_string(),
-                example_dialogue: "Hello!".to_string(),
-                summary: None,
-                profile_image: None,
-                headshot_image: None,
-            },
-            inventory: vec![],
-            triggers: vec![],
-        }]
-    }
-
-    fn make_test_state() -> GameState {
-        let world = make_test_world();
-        let map = make_test_map();
-        let player = make_test_player();
-        let npc = NpcCard {
-            id: "carla".to_string(),
-            sheet: CharacterSheet {
-                name: "Carla".to_string(),
-                description: "A friendly NPC".to_string(),
-                personality: "Friendly".to_string(),
-                scenario: "Test scenario".to_string(),
-                example_dialogue: "Hello!".to_string(),
-                summary: None,
-                profile_image: None,
-                headshot_image: None,
-            },
-            inventory: vec![],
-            triggers: vec![],
-        };
-        let mut npcs = std::collections::HashMap::new();
-        npcs.insert("carla".to_string(), npc);
-
-        GameState {
-            world,
-            map,
-            player,
-            npcs,
-            current_room_id: "room1".to_string(),
-            narration_history: vec![],
-            next_log_id: 1,
-            npcs_in_area: vec![],
-            dynamic_rooms: std::collections::HashMap::new(),
-            character_state: Default::default(),
-            generation_state: Default::default(),
-        }
-    }
 
     fn make_quantifier_result_no_movement() -> QuantifierResult {
         QuantifierResult {
@@ -370,11 +264,10 @@ mod execute_freeaction_impl_tests {
 
     #[test]
     fn test_execute_freeaction_impl_no_movement() {
-        let mut state = make_test_state();
-        let world = make_test_world();
-        let _map = make_test_map();
-        let player = make_test_player();
-        let all_npcs = make_test_npcs();
+        let mut state = TestGameState::with_npc_raw("room1", TestNpc::named("carla", "Carla"));
+        let world = Arc::new(TestWorld::minimal());
+        let player = Arc::new(TestPlayer::standard());
+        let all_npcs = vec![TestNpc::named("carla", "Carla")];
         let history = vec![];
 
         let result = execute_freeaction_impl(
@@ -402,11 +295,10 @@ mod execute_freeaction_impl_tests {
 
     #[test]
     fn test_execute_freeaction_impl_with_movement() {
-        let mut state = make_test_state();
-        let world = make_test_world();
-        let _map = make_test_map();
-        let player = make_test_player();
-        let all_npcs = make_test_npcs();
+        let mut state = TestGameState::with_npc_raw("room1", TestNpc::named("carla", "Carla"));
+        let world = Arc::new(TestWorld::minimal());
+        let player = Arc::new(TestPlayer::standard());
+        let all_npcs = vec![TestNpc::named("carla", "Carla")];
         let history = vec![];
 
         // quantifier result with movement to a new room
@@ -434,11 +326,10 @@ mod execute_freeaction_impl_tests {
 
     #[test]
     fn test_execute_freeaction_impl_updates_npcs_in_area() {
-        let mut state = make_test_state();
-        let world = make_test_world();
-        let _map = make_test_map();
-        let player = make_test_player();
-        let all_npcs = make_test_npcs();
+        let mut state = TestGameState::with_npc_raw("room1", TestNpc::named("carla", "Carla"));
+        let world = Arc::new(TestWorld::minimal());
+        let player = Arc::new(TestPlayer::standard());
+        let all_npcs = vec![TestNpc::named("carla", "Carla")];
 
         // Start with empty npcs_in_area
         assert!(state.npcs_in_area.is_empty());
@@ -465,54 +356,16 @@ mod execute_freeaction_impl_tests {
 
     #[test]
     fn test_execute_freeaction_impl_triggers_evaluated() {
-        // Create NPC with a trigger
-        let npc = NpcCard {
-            id: "carla".to_string(),
-            sheet: CharacterSheet {
-                name: "Carla".to_string(),
-                description: "A friendly NPC".to_string(),
-                personality: "Friendly".to_string(),
-                scenario: "Test scenario".to_string(),
-                example_dialogue: "Hello!".to_string(),
-                summary: None,
-                profile_image: None,
-                headshot_image: None,
-            },
-            inventory: vec![],
-            triggers: vec![crate::model::trigger::Trigger {
-                condition: crate::model::trigger::TriggerCondition::TimesMet(
-                    crate::model::trigger::ComparisonOperator::Eq,
-                    0,
-                ),
-                action: crate::model::trigger::TriggerAction {
-                    name: "Carla Greeting".to_string(),
-                    narration_prompt: "Carla greets you warmly!".to_string(),
-                },
-                repeat: false,
-                room_id: None,
-            }],
-        };
+        let npc = TestNpc::with_times_met_trigger(
+            "carla",
+            "Carla",
+            crate::model::trigger::ComparisonOperator::Eq,
+            0,
+        );
 
-        let world = make_test_world();
-        let map = make_test_map();
-        let player = make_test_player();
-
-        let mut npcs = std::collections::HashMap::new();
-        npcs.insert("carla".to_string(), npc);
-
-        let mut state = GameState {
-            world: world.clone(),
-            map: map.clone(),
-            player: player.clone(),
-            npcs,
-            current_room_id: "room1".to_string(),
-            narration_history: vec![],
-            next_log_id: 1,
-            npcs_in_area: vec![],
-            dynamic_rooms: std::collections::HashMap::new(),
-            character_state: Default::default(),
-            generation_state: Default::default(),
-        };
+        let mut state = TestGameState::with_npc_raw("room1", npc.clone());
+        let world = Arc::new(TestWorld::minimal());
+        let player = Arc::new(TestPlayer::standard());
 
         // NPC has TimesMet Eq 0 trigger - should fire because times_met starts at 0
         // Note: evaluate_and_narrate_triggers calls LLM internally, so this test
@@ -537,13 +390,12 @@ mod execute_freeaction_impl_tests {
 
     #[test]
     fn test_execute_freeaction_impl_npc_events_entered() {
-        let mut state = make_test_state();
+        let mut state = TestGameState::with_npc_raw("room1", TestNpc::named("carla", "Carla"));
         // NPC already in area (simulating re-encounter after leaving)
         state.npcs_in_area = vec![]; // Empty - NPC is not currently in area
-        let world = make_test_world();
-        let _map = make_test_map();
-        let player = make_test_player();
-        let all_npcs = make_test_npcs();
+        let world = Arc::new(TestWorld::minimal());
+        let player = Arc::new(TestPlayer::standard());
+        let all_npcs = vec![TestNpc::named("carla", "Carla")];
 
         let result = execute_freeaction_impl(
             &mut state,
@@ -575,87 +427,14 @@ mod execute_freeaction_impl_tests {
 mod tests {
     use super::*;
     use crate::engine::trigger_eval::{get_times_met, is_currently_meeting};
-    use std::sync::Arc;
+    use crate::test_support::{TestGameState, TestMap, TestNpc};
 
     fn make_test_state() -> GameState {
-        let world = Arc::new(crate::model::world::WorldCard {
-            name: "Test World".to_string(),
-            description: "A test world".to_string(),
-            global_rules: vec![],
-            default_room_image: None,
-        });
-
-        let room = crate::model::map::Room {
-            id: "test_room".to_string(),
-            name: "Test Room".to_string(),
-            description: "A test room".to_string(),
-            exits: std::collections::HashMap::new(),
-            items: vec![],
-            npcs: vec!["carla".to_string()],
-            image_path: None,
-            navigation_description: None,
-        };
-
-        let region = crate::model::map::Region {
-            id: "test".to_string(),
-            name: "Test".to_string(),
-            rooms: vec![room],
-        };
-
-        let overworld = crate::model::map::Overworld {
-            id: "test".to_string(),
-            name: "Test".to_string(),
-            regions: vec![region],
-        };
-
-        let map = Arc::new(crate::model::map::MapDef { overworld });
-
-        let npc = NpcCard {
-            id: "carla".to_string(),
-            sheet: crate::model::character::CharacterSheet {
-                name: "Carla".to_string(),
-                description: "A test NPC".to_string(),
-                personality: "Friendly".to_string(),
-                scenario: "Test scenario".to_string(),
-                example_dialogue: "Hello!".to_string(),
-                summary: None,
-                profile_image: None,
-                headshot_image: None,
-            },
-            inventory: vec![],
-            triggers: vec![],
-        };
-
-        let mut npcs = std::collections::HashMap::new();
-        npcs.insert("carla".to_string(), npc);
-
-        let player = Arc::new(crate::model::character::PlayerCard {
-            sheet: crate::model::character::CharacterSheet {
-                name: "Player".to_string(),
-                description: "The player".to_string(),
-                personality: "Brave".to_string(),
-                scenario: "Test scenario".to_string(),
-                example_dialogue: "Hello!".to_string(),
-                summary: None,
-                profile_image: None,
-                headshot_image: None,
-            },
-            inventory: vec![],
-        });
-
-        GameState {
-            world,
-            map,
-            player,
-            npcs,
-            current_room_id: "test_room".to_string(),
-            narration_history: vec![],
-            next_log_id: 1,
-            npcs_in_area: vec![],
-            dynamic_rooms: std::collections::HashMap::new(),
-            character_state: Default::default(),
-            generation_state: Default::default(),
-        }
+        TestGameState::with_npc_in_named_room_raw(
+            "test_room",
+            "Test Room",
+            TestNpc::named("carla", "Carla"),
+        )
     }
 
     #[test]
@@ -788,49 +567,18 @@ mod tests {
         let llm_backend = crate::narrative::llm::MockBackend::default();
 
         let mut state = make_test_state();
-        let trigger = crate::model::trigger::Trigger {
-            condition: crate::model::trigger::TriggerCondition::TimesMet(
-                crate::model::trigger::ComparisonOperator::Eq,
-                0,
-            ),
-            action: crate::model::trigger::TriggerAction {
-                name: "Carla Introduction".to_string(),
-                narration_prompt: "Carla greets you warmly!".to_string(),
-            },
-            repeat: false,
-            room_id: None,
-        };
-
-        // Replace the NPC with one that has a named trigger
-        let npc_with_trigger = NpcCard {
-            id: "carla".to_string(),
-            sheet: crate::model::character::CharacterSheet {
-                name: "Carla".to_string(),
-                description: "A test NPC".to_string(),
-                personality: "Friendly".to_string(),
-                scenario: "Test scenario".to_string(),
-                example_dialogue: "Hello!".to_string(),
-                summary: None,
-                profile_image: None,
-                headshot_image: None,
-            },
-            inventory: vec![],
-            triggers: vec![trigger],
-        };
+        let npc_with_trigger = TestNpc::with_times_met_trigger(
+            "carla",
+            "Carla",
+            crate::model::trigger::ComparisonOperator::Eq,
+            0,
+        );
         state
             .npcs
             .insert("carla".to_string(), npc_with_trigger.clone());
 
-        let room = crate::model::map::Room {
-            id: "test_room".to_string(),
-            name: "Test Room".to_string(),
-            description: "A test room".to_string(),
-            exits: std::collections::HashMap::new(),
-            items: vec![],
-            npcs: vec!["carla".to_string()],
-            image_path: None,
-            navigation_description: None,
-        };
+        let mut room = TestMap::room_named("test_room", "Test Room");
+        room.npcs.push("carla".to_string());
 
         let world = state.world.clone();
         let player = state.player.clone();

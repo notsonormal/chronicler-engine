@@ -157,3 +157,30 @@ python build.py --release   # Release build + tests + package
 cargo test                  # All tests
 cargo run -- --world redmist_estate --port 3000
 ```
+
+## CONCURRENT BUILDS
+Multiple KimiCode agents building simultaneously can conflict because:
+- `cargo fmt` rewrites source files in-place
+- `target/` is shared, causing cargo lock contention
+
+Use the concurrent-safe flags for secondary agents:
+```bash
+# Primary agent — normal build
+python build.py
+
+# Secondary agent — isolated target, skip fmt
+python build.py --target-dir target/agent2 --no-fmt
+
+# Secondary agent — coverage review (used by /test-police skill)
+python build.py --coverage --target-dir target/test_police --no-fmt
+```
+
+`build.py` checks if the target directory is locked by another cargo process and prints a warning if so.
+
+To clean up lingering processes and build artifacts:
+```bash
+python build.py --cleanup
+python build.py --cleanup --target-dir target/test_police
+```
+
+Tests are already concurrency-safe: they allocate ports dynamically from the range 3010-3050 using file-based locking (`get_available_port` in `tests/test_utils.rs`).

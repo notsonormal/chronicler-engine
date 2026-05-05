@@ -75,6 +75,22 @@ fn set_error_and_reset(state: &Arc<Mutex<GameState>>, message: String) {
     }
 }
 
+fn map_llm_error(e: &EngineError) -> String {
+    match e {
+        EngineError::Narrative(msg) if msg.contains("timed out") => {
+            "LLM Error: request timed out".to_string()
+        }
+        EngineError::Narrative(msg) if msg.contains("Failed to read response body") => {
+            "LLM Error: response incomplete".to_string()
+        }
+        EngineError::Narrative(msg) if msg.contains("parse") => {
+            "LLM Error: unexpected response format".to_string()
+        }
+        EngineError::LlmEmptyResponse => "LLM Error: empty response".to_string(),
+        _ => format!("LLM Error: {e}"),
+    }
+}
+
 impl GameService for DefaultGameService {
     fn execute_action(&self, state: Arc<Mutex<GameState>>, input: String, _player_name: String) {
         // NOTE: async actions manage is_generating themselves.
@@ -170,24 +186,7 @@ impl GameService for DefaultGameService {
                 let narration_text = match backend.narrate_action(&context) {
                     Ok(t) => t,
                     Err(e) => {
-                        let user_msg = match &e {
-                            EngineError::Narrative(msg) if msg.contains("timed out") => {
-                                "LLM Error: request timed out".to_string()
-                            }
-                            EngineError::Narrative(msg)
-                                if msg.contains("Failed to read response body") =>
-                            {
-                                "LLM Error: response incomplete".to_string()
-                            }
-                            EngineError::Narrative(msg) if msg.contains("parse") => {
-                                "LLM Error: unexpected response format".to_string()
-                            }
-                            EngineError::LlmEmptyResponse => {
-                                "LLM Error: empty response".to_string()
-                            }
-                            _ => format!("LLM Error: {e}"),
-                        };
-                        set_error_and_reset(&state_for_thread, user_msg);
+                        set_error_and_reset(&state_for_thread, map_llm_error(&e));
                         return;
                     }
                 };
@@ -309,20 +308,7 @@ impl GameService for DefaultGameService {
         let new_narration = match backend.narrate_action(&context) {
             Ok(t) => t,
             Err(e) => {
-                let user_msg = match &e {
-                    EngineError::Narrative(msg) if msg.contains("timed out") => {
-                        "LLM Error: request timed out".to_string()
-                    }
-                    EngineError::Narrative(msg) if msg.contains("Failed to read response body") => {
-                        "LLM Error: response incomplete".to_string()
-                    }
-                    EngineError::Narrative(msg) if msg.contains("parse") => {
-                        "LLM Error: unexpected response format".to_string()
-                    }
-                    EngineError::LlmEmptyResponse => "LLM Error: empty response".to_string(),
-                    _ => format!("LLM Error: {e}"),
-                };
-                set_error_and_reset(&state_clone, user_msg);
+                set_error_and_reset(&state_clone, map_llm_error(&e));
                 return;
             }
         };

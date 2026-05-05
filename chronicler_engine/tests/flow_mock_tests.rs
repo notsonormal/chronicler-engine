@@ -90,7 +90,7 @@ mod tests {
     // Command Submission Tests - Status updates, no LLM needed
 
     #[tokio::test]
-    async fn test_look_command_shows_thinking() {
+    async fn test_look_command_completes_to_ready() {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
         let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
 

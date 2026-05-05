@@ -23,8 +23,6 @@ pub enum PromptLayer {
     /// Layer 7: Phi layer - auxiliary context, reminders, formatting hints
     Phi,
 }
-/// Shared context for LLM narration calls.
-/// Contains all the data needed to build prompts for generate_dialogue, narrate_action, and narrate_arrival.
 #[derive(Debug, Clone)]
 pub struct PromptContext<'a> {
     pub world: &'a WorldCard,

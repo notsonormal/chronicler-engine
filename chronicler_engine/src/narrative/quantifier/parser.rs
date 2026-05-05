@@ -5,7 +5,6 @@ use crate::narrative::quantifier::types::{
     QuantifierParseResult, QuantifierResult, RoomInfo,
 };
 
-/// Serde struct for deserializing the expected JSON response.
 #[derive(Deserialize, Debug)]
 struct QuantifierJsonResponse {
     #[serde(default)]
@@ -162,7 +161,6 @@ pub fn parse_quantifier_response_with_movement(
     QuantifierResult { npcs, movement }
 }
 
-/// Try to parse the response as JSON, handling markdown code fences.
 pub(crate) fn try_parse_json_full(
     response: &str,
 ) -> Result<(Vec<String>, Option<MovementJson>), String> {

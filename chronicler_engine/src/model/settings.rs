@@ -6,7 +6,6 @@ fn default_ollama_base_url() -> String {
     "http://localhost:11434/v1".into()
 }
 
-/// A named LLM connection profile.
 /// [DOC: docs/architecture/system.md]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Connection {
@@ -84,7 +83,6 @@ impl Connection {
     }
 }
 
-/// Application settings with connection profiles.
 /// [DOC: docs/architecture/system.md]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AppSettings {

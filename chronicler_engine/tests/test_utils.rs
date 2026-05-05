@@ -67,8 +67,25 @@ pub fn start_server_with_env(
     world: &str,
     use_mock: bool,
 ) -> (Child, Option<std::path::PathBuf>) {
-    let mut cmd = Command::new("cargo");
-    cmd.args(["run", "--", "--world", world, "--port", &port.to_string()]);
+    // Prefer pre-built binary to avoid per-test compilation overhead.
+    // Fall back to cargo run for fresh clones or after cargo clean.
+    // Respect CARGO_TARGET_DIR for concurrent builds with custom target directories.
+    let target_dir = std::env::var("CARGO_TARGET_DIR").unwrap_or_else(|_| "target".to_string());
+    let binary_path = if cfg!(windows) {
+        format!("{target_dir}/debug/chronicler_engine.exe")
+    } else {
+        format!("{target_dir}/debug/chronicler_engine")
+    };
+
+    let mut cmd = if std::path::Path::new(&binary_path).exists() {
+        let mut c = Command::new(&binary_path);
+        c.args(["--world", world, "--port", &port.to_string()]);
+        c
+    } else {
+        let mut c = Command::new("cargo");
+        c.args(["run", "--", "--world", world, "--port", &port.to_string()]);
+        c
+    };
 
     let tmp_dir = if use_mock {
         let tmp = std::env::temp_dir().join(format!(
@@ -166,7 +183,7 @@ pub async fn wait_for_llm_idle(port: u16, timeout: Duration) -> Result<(), ()> {
 }
 
 pub async fn wait_for_location_change(page: &playwright_rs::Page, initial: &str) -> String {
-    for _ in 0..20 {
+    for _ in 0..50 {
         let location: String = page
             .evaluate::<(), String>("document.querySelector('.location')?.innerText || ''", None)
             .await
@@ -175,13 +192,13 @@ pub async fn wait_for_location_change(page: &playwright_rs::Page, initial: &str)
         if location != initial {
             return location;
         }
-        sleep(Duration::from_millis(500)).await;
+        sleep(Duration::from_millis(200)).await;
     }
     String::new()
 }
 
 pub async fn wait_for_story_log_change(page: &playwright_rs::Page, initial: &str) -> String {
-    for _ in 0..20 {
+    for _ in 0..50 {
         let content: String = page
             .evaluate::<(), String>(
                 "document.querySelector('#story-log')?.innerText || ''",
@@ -193,13 +210,13 @@ pub async fn wait_for_story_log_change(page: &playwright_rs::Page, initial: &str
         if content != initial {
             return content;
         }
-        sleep(Duration::from_millis(500)).await;
+        sleep(Duration::from_millis(200)).await;
     }
     String::new()
 }
 
 pub async fn wait_for_more_messages(page: &playwright_rs::Page, initial_count: usize) -> usize {
-    for _ in 0..20 {
+    for _ in 0..50 {
         let messages: Vec<String> = page
             .evaluate::<(), Vec<String>>(
                 "Array.from(document.querySelectorAll('#story-log .log-entry .text')).map(el => el.innerText)",
@@ -211,13 +228,13 @@ pub async fn wait_for_more_messages(page: &playwright_rs::Page, initial_count: u
         if messages.len() > initial_count {
             return messages.len();
         }
-        sleep(Duration::from_millis(500)).await;
+        sleep(Duration::from_millis(200)).await;
     }
     initial_count
 }
 
 pub async fn wait_for_non_loading_value(page: &playwright_rs::Page, selector: &str) -> String {
-    for _ in 0..20 {
+    for _ in 0..50 {
         let value: String = page
             .evaluate::<(), String>(
                 &format!("document.querySelector('{selector}')?.innerText || ''"),
@@ -229,7 +246,7 @@ pub async fn wait_for_non_loading_value(page: &playwright_rs::Page, selector: &s
         if !value.is_empty() {
             return value;
         }
-        sleep(Duration::from_millis(500)).await;
+        sleep(Duration::from_millis(200)).await;
     }
     String::new()
 }
@@ -262,7 +279,7 @@ pub async fn wait_for_element_children(
     selector: &str,
     min_count: u32,
 ) -> u32 {
-    for _ in 0..20 {
+    for _ in 0..50 {
         let count: u32 = page
             .evaluate::<(), u32>(
                 &format!("document.querySelectorAll('{selector}').length"),
@@ -274,13 +291,13 @@ pub async fn wait_for_element_children(
         if count >= min_count {
             return count;
         }
-        sleep(Duration::from_millis(500)).await;
+        sleep(Duration::from_millis(200)).await;
     }
     0
 }
 
 pub async fn wait_for_element_text(page: &playwright_rs::Page, selector: &str) -> String {
-    for _ in 0..20 {
+    for _ in 0..50 {
         let text: String = page
             .evaluate::<(), String>(
                 &format!("document.querySelector('{selector}')?.innerText || ''"),
@@ -292,7 +309,7 @@ pub async fn wait_for_element_text(page: &playwright_rs::Page, selector: &str) -
         if !text.is_empty() {
             return text;
         }
-        sleep(Duration::from_millis(500)).await;
+        sleep(Duration::from_millis(200)).await;
     }
     String::new()
 }

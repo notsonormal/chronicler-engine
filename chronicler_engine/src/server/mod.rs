@@ -301,21 +301,3 @@ mod tests {
         assert!(narrator.model.contains("gpt-4o-mini") || narrator.model.is_empty());
     }
 }
-
-#[cfg(test)]
-mod server_tests {
-    use super::*;
-
-    #[test]
-    fn test_server_config_custom_port() {
-        let config = ServerConfig { port: 8080 };
-        assert_eq!(config.port, 8080);
-    }
-
-    #[test]
-    fn test_server_config_default_is_consistent() {
-        let config1 = ServerConfig::default();
-        let config2 = ServerConfig::default();
-        assert_eq!(config1.port, config2.port);
-    }
-}

@@ -1,5 +1,3 @@
-//! Quantifier module: determines NPC presence and player movement from LLM responses.
-
 pub mod backends;
 pub mod core;
 pub mod parser;
