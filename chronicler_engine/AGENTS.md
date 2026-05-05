@@ -20,11 +20,12 @@ chronicler_engine/
 │   ├── server/            # Axum HTTP/WebSocket (mod, templates, template_builders, fragments)
 │   └── ui/                # Dashboard components (mod, dashboard)
 ├── tests/                 # Integration tests (7 files)
-├── docs/                  # Extensive documentation (34+ .md files)
+├── docs/                  # Extensive documentation (52+ .md files, auto-indexed)
 │   ├── architecture/      # System specs (system.md)
 │   ├── system/            # Domain docs (dashboard, navigation, narration, llm, triggers, etc.)
 │   ├── plans/            # Implementation plans (active + archived/)
 │   ├── adr/              # Architecture Decision Records
+│   ├── diagnostics/      # Audit reports, error catalogs
 │   └── reference/        # Data schemas, API specs, testing strategy
 ├── data/
 │   ├── worlds/           # Game data (JSON configs per world)
@@ -126,6 +127,28 @@ To encode new review feedback as a permanent guardrail:
 1. **Clippy-level** (mechanical): Add the lint to `#![deny(...)]` in `src/lib.rs`
 2. **Architecture-level** (structural): Add a declarative rule to `arch-lint.toml` (scopes, dependency bans, crate preferences)
 3. **Custom rule** (advanced): Write a Rust rule using `arch_lint_core::Rule` and register it in `tests/architecture.rs`
+
+## DOCUMENTATION INDEX
+`docs/README.md` is **auto-generated**. Do not edit the file list inside the `<!-- AUTO-INDEX -->` block manually.
+
+To regenerate the index after adding, removing, or renaming docs:
+```bash
+python scripts/generate_docs_index.py
+```
+
+To install the git pre-commit hook (regenerates index before every commit):
+```bash
+python scripts/install_git_hooks.py
+```
+
+### Kimi Code CLI Hook (Optional)
+Add to `~/.kimi/config.toml` to refresh the index at session start:
+```toml
+[[hooks]]
+event = "SessionStart"
+command = "python /absolute/path/to/chronicler_engine/scripts/kimi_hook_wrapper.py"
+timeout = 10
+```
 
 ## COMMANDS
 ```bash

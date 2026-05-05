@@ -5,7 +5,6 @@ use std::{
     fs,
     path::{Path, PathBuf},
     sync::Arc,
-    thread,
 };
 
 use chrono::Local;
@@ -298,14 +297,19 @@ pub fn run(args: Args) -> crate::error::Result<()> {
 
     let state = Arc::new(std::sync::Mutex::new(state));
 
+    // [DOC: docs/architecture/system.md]
+    let config = ServerConfig { port: args.port };
+    let runtime = tokio::runtime::Runtime::new()
+        .map_err(|e| EngineError::Io(format!("runtime_new {}: {e}", "tokio_runtime")))?;
+
     // [DOC: docs/system/narration_engine.md]
     let has_scenario = manifest
         .default_scenario()
         .is_some_and(|s| !s.text.is_empty());
     if !has_scenario {
-        let state_for_thread = state.clone();
-        thread::spawn(move || {
-            let _guard = GeneratingGuard::new(state_for_thread.clone());
+        let state_for_task = state.clone();
+        let _handle = runtime.spawn_blocking(move || {
+            let _guard = GeneratingGuard::new(state_for_task.clone());
 
             let room = map
                 .overworld
@@ -328,12 +332,12 @@ pub fn run(args: Args) -> crate::error::Result<()> {
                 let narration = backend.narrate_arrival(&context);
                 match narration {
                     Ok(text) => {
-                        if let Ok(mut state) = state_for_thread.lock() {
+                        if let Ok(mut state) = state_for_task.lock() {
                             state.add_log(text, None, crate::model::state::LogType::Narration);
                         }
                     }
                     Err(e) => {
-                        if let Ok(mut state) = state_for_thread.lock() {
+                        if let Ok(mut state) = state_for_task.lock() {
                             state.generation_state.status =
                                 crate::model::state::GenerationStatus::Error(format!(
                                     "LLM Error: {e}"
@@ -345,10 +349,6 @@ pub fn run(args: Args) -> crate::error::Result<()> {
         });
     } // end if !has_scenario
 
-    // [DOC: docs/architecture/system.md]
-    let config = ServerConfig { port: args.port };
-    let runtime = tokio::runtime::Runtime::new()
-        .map_err(|e| EngineError::Io(format!("runtime_new {}: {e}", "tokio_runtime")))?;
     runtime.block_on(crate::server::run_server_with_config(state, config))?;
 
     Ok(())

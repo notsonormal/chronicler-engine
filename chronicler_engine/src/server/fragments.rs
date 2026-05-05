@@ -325,17 +325,14 @@ pub async fn action_handler(
         (name, is_sync)
     };
 
-    // For async actions, spawn a thread to process them
+    // For async actions, spawn a blocking task to process them
     if !is_sync {
         let state_clone = state.state.clone();
         let cmd = command;
         let pname = player_name;
         let game_service = state.game_service.clone();
 
-        std::thread::spawn(move || {
-            // Small delay to let inner threads start their guards first
-            std::thread::sleep(std::time::Duration::from_millis(50));
-
+        tokio::task::spawn_blocking(move || {
             game_service.execute_action(state_clone, cmd, pname);
         });
     }
@@ -616,8 +613,7 @@ pub async fn retry_handler(State(state): State<AppState>) -> (StatusCode, String
     let state_clone = state.state.clone();
     let game_service = state.game_service.clone();
 
-    std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_millis(50));
+    tokio::task::spawn_blocking(move || {
         game_service.retry_last_response(state_clone);
     });
 

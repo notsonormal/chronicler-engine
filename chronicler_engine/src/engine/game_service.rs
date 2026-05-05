@@ -1,7 +1,6 @@
 //! [DOC: docs/architecture/system.md]
 
 use std::sync::{Arc, Mutex};
-use std::thread;
 
 use crate::engine::action::Action;
 use crate::engine::action_processing::{execute_freeaction_impl, get_static_npcs};
@@ -141,106 +140,105 @@ impl GameService for DefaultGameService {
                 let state_for_thread = state.clone();
                 let backend = Arc::clone(&self.llm_backend);
                 let quantifier_backend = Arc::clone(&self.quantifier_backend);
-                thread::spawn(move || {
-                    let room = map
-                        .overworld
-                        .regions
-                        .iter()
-                        .flat_map(|r| r.rooms.iter())
-                        .find(|r| r.id == room_id);
 
-                    let Some(room) = room else {
-                        reset_generating(&state_for_thread);
-                        return;
-                    };
-                    let context = make_prompt_context(
-                        &world,
-                        room,
-                        &all_npcs,
-                        &nearby_npcs,
-                        &player,
-                        &text,
-                        &history,
-                    );
+                let room = map
+                    .overworld
+                    .regions
+                    .iter()
+                    .flat_map(|r| r.rooms.iter())
+                    .find(|r| r.id == room_id);
 
-                    set_phase(
-                        &state_for_thread,
-                        crate::model::state::GenerationPhase::Narrating,
-                    );
-
-                    let narration_text = match backend.narrate_action(&context) {
-                        Ok(t) => t,
-                        Err(e) => {
-                            let user_msg = match &e {
-                                EngineError::Narrative(msg) if msg.contains("timed out") => {
-                                    "LLM Error: request timed out".to_string()
-                                }
-                                EngineError::Narrative(msg)
-                                    if msg.contains("Failed to read response body") =>
-                                {
-                                    "LLM Error: response incomplete".to_string()
-                                }
-                                EngineError::Narrative(msg) if msg.contains("parse") => {
-                                    "LLM Error: unexpected response format".to_string()
-                                }
-                                EngineError::LlmEmptyResponse => {
-                                    "LLM Error: empty response".to_string()
-                                }
-                                _ => format!("LLM Error: {e}"),
-                            };
-                            set_error_and_reset(&state_for_thread, user_msg);
-                            return;
-                        }
-                    };
-
-                    let quantifier_backend: Arc<dyn QuantifierBackendTrait> = quantifier_backend;
-
-                    set_phase(
-                        &state_for_thread,
-                        crate::model::state::GenerationPhase::Quantifying,
-                    );
-
-                    let quantifier_result = with_state_lock(&state_for_thread, |state| {
-                        let previous_room_npcs: Vec<NpcCard> = state.npcs_in_area.clone();
-                        determine_npcs_in_room(
-                            state,
-                            &room.npcs,
-                            &previous_room_npcs,
-                            &narration_text,
-                            quantifier_backend.as_ref(),
-                        )
-                    });
-
-                    let Some(quantifier_result) = quantifier_result else {
-                        reset_generating(&state_for_thread);
-                        return;
-                    };
-
-                    let result = with_state_lock(&state_for_thread, |state| {
-                        execute_freeaction_impl(
-                            state,
-                            &crate::engine::action_processing::FreeActionContext {
-                                narration_text: &narration_text,
-                                user_input: &text,
-                                quantifier_result: &quantifier_result,
-                                world: &world,
-                                player: &player,
-                                all_npcs: &all_npcs,
-                                history: &history,
-                                llm_backend: backend.as_ref(),
-                            },
-                        )
-                    });
-
-                    if let Some(Err(e)) = result {
-                        if let Ok(mut s) = state_for_thread.lock() {
-                            s.generation_state.status =
-                                crate::model::state::GenerationStatus::Error(format!("Error: {e}"));
-                        }
-                    }
-
+                let Some(room) = room else {
                     reset_generating(&state_for_thread);
+                    return;
+                };
+                let context = make_prompt_context(
+                    &world,
+                    room,
+                    &all_npcs,
+                    &nearby_npcs,
+                    &player,
+                    &text,
+                    &history,
+                );
+
+                set_phase(
+                    &state_for_thread,
+                    crate::model::state::GenerationPhase::Narrating,
+                );
+
+                let narration_text = match backend.narrate_action(&context) {
+                    Ok(t) => t,
+                    Err(e) => {
+                        let user_msg = match &e {
+                            EngineError::Narrative(msg) if msg.contains("timed out") => {
+                                "LLM Error: request timed out".to_string()
+                            }
+                            EngineError::Narrative(msg)
+                                if msg.contains("Failed to read response body") =>
+                            {
+                                "LLM Error: response incomplete".to_string()
+                            }
+                            EngineError::Narrative(msg) if msg.contains("parse") => {
+                                "LLM Error: unexpected response format".to_string()
+                            }
+                            EngineError::LlmEmptyResponse => {
+                                "LLM Error: empty response".to_string()
+                            }
+                            _ => format!("LLM Error: {e}"),
+                        };
+                        set_error_and_reset(&state_for_thread, user_msg);
+                        return;
+                    }
+                };
+
+                let quantifier_backend: Arc<dyn QuantifierBackendTrait> = quantifier_backend;
+
+                set_phase(
+                    &state_for_thread,
+                    crate::model::state::GenerationPhase::Quantifying,
+                );
+
+                let quantifier_result = with_state_lock(&state_for_thread, |state| {
+                    let previous_room_npcs: Vec<NpcCard> = state.npcs_in_area.clone();
+                    determine_npcs_in_room(
+                        state,
+                        &room.npcs,
+                        &previous_room_npcs,
+                        &narration_text,
+                        quantifier_backend.as_ref(),
+                    )
                 });
+
+                let Some(quantifier_result) = quantifier_result else {
+                    reset_generating(&state_for_thread);
+                    return;
+                };
+
+                let result = with_state_lock(&state_for_thread, |state| {
+                    execute_freeaction_impl(
+                        state,
+                        &crate::engine::action_processing::FreeActionContext {
+                            narration_text: &narration_text,
+                            user_input: &text,
+                            quantifier_result: &quantifier_result,
+                            world: &world,
+                            player: &player,
+                            all_npcs: &all_npcs,
+                            history: &history,
+                            llm_backend: backend.as_ref(),
+                        },
+                    )
+                });
+
+                if let Some(Err(e)) = result {
+                    if let Ok(mut s) = state_for_thread.lock() {
+                        s.generation_state.status =
+                            crate::model::state::GenerationStatus::Error(format!("Error: {e}"));
+                    }
+                }
+
+                reset_generating(&state_for_thread);
             }
         }
     }
@@ -288,61 +286,54 @@ impl GameService for DefaultGameService {
         let state_clone = state.clone();
         let backend = Arc::clone(&self.llm_backend);
 
-        thread::spawn(move || {
-            // Small delay to let any inner threads start their guards first
-            std::thread::sleep(std::time::Duration::from_millis(50));
+        let Some(room) = find_room_in_map(&map, &current_room_id) else {
+            set_error_and_reset(&state_clone, "Retry failed: room not found".to_string());
+            return;
+        };
 
-            let Some(room) = find_room_in_map(&map, &current_room_id) else {
-                set_error_and_reset(&state_clone, "Retry failed: room not found".to_string());
+        let nearby_npcs: Vec<NpcCard> = all_npcs
+            .iter()
+            .filter(|npc| room_npc_ids.contains(&npc.id))
+            .cloned()
+            .collect();
+        let context = make_prompt_context(
+            &world,
+            room,
+            &all_npcs,
+            &nearby_npcs,
+            &player,
+            &input_text,
+            &history_for_retry,
+        );
+
+        let new_narration = match backend.narrate_action(&context) {
+            Ok(t) => t,
+            Err(e) => {
+                let user_msg = match &e {
+                    EngineError::Narrative(msg) if msg.contains("timed out") => {
+                        "LLM Error: request timed out".to_string()
+                    }
+                    EngineError::Narrative(msg) if msg.contains("Failed to read response body") => {
+                        "LLM Error: response incomplete".to_string()
+                    }
+                    EngineError::Narrative(msg) if msg.contains("parse") => {
+                        "LLM Error: unexpected response format".to_string()
+                    }
+                    EngineError::LlmEmptyResponse => "LLM Error: empty response".to_string(),
+                    _ => format!("LLM Error: {e}"),
+                };
+                set_error_and_reset(&state_clone, user_msg);
                 return;
-            };
-
-            let nearby_npcs: Vec<NpcCard> = all_npcs
-                .iter()
-                .filter(|npc| room_npc_ids.contains(&npc.id))
-                .cloned()
-                .collect();
-            let context = make_prompt_context(
-                &world,
-                room,
-                &all_npcs,
-                &nearby_npcs,
-                &player,
-                &input_text,
-                &history_for_retry,
-            );
-
-            let new_narration = match backend.narrate_action(&context) {
-                Ok(t) => t,
-                Err(e) => {
-                    let user_msg = match &e {
-                        EngineError::Narrative(msg) if msg.contains("timed out") => {
-                            "LLM Error: request timed out".to_string()
-                        }
-                        EngineError::Narrative(msg)
-                            if msg.contains("Failed to read response body") =>
-                        {
-                            "LLM Error: response incomplete".to_string()
-                        }
-                        EngineError::Narrative(msg) if msg.contains("parse") => {
-                            "LLM Error: unexpected response format".to_string()
-                        }
-                        EngineError::LlmEmptyResponse => "LLM Error: empty response".to_string(),
-                        _ => format!("LLM Error: {e}"),
-                    };
-                    set_error_and_reset(&state_clone, user_msg);
-                    return;
-                }
-            };
-
-            if let Ok(mut state) = state_clone.lock() {
-                if let Err(e) = state.replace_last_ai_response(new_narration) {
-                    state.generation_state.status =
-                        crate::model::state::GenerationStatus::Error(format!("Retry failed: {e}"));
-                } else {
-                    state.generation_state.status = crate::model::state::GenerationStatus::Idle;
-                }
             }
-        });
+        };
+
+        if let Ok(mut state) = state_clone.lock() {
+            if let Err(e) = state.replace_last_ai_response(new_narration) {
+                state.generation_state.status =
+                    crate::model::state::GenerationStatus::Error(format!("Retry failed: {e}"));
+            } else {
+                state.generation_state.status = crate::model::state::GenerationStatus::Idle;
+            }
+        }
     }
 }
