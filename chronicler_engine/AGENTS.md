@@ -10,7 +10,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
 ## STRUCTURE
 ```
 chronicler_engine/
-├── src/                    # Source code (27 .rs files)
+├── src/                    # Source code (53+ .rs files)
 │   ├── lib.rs             # Library root (7 modules)
 │   ├── main.rs            # Binary entry (CLI + server)
 │   ├── error.rs           # EngineError enum

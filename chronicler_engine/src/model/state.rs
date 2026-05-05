@@ -111,8 +111,16 @@ pub struct GeneratingGuard {
 
 impl GeneratingGuard {
     pub fn new(state: Arc<std::sync::Mutex<GameState>>) -> Self {
-        if let Ok(mut guard) = state.lock() {
-            guard.generation_state.status = GenerationStatus::Generating;
+        match state.lock() {
+            Ok(mut guard) => {
+                guard.generation_state.status = GenerationStatus::Generating;
+            }
+            Err(poisoned) => {
+                log::error!("GeneratingGuard::new encountered poisoned mutex, recovering guard");
+                let mut guard = poisoned.into_inner();
+                guard.generation_state.status = GenerationStatus::Generating;
+                state.clear_poison();
+            }
         }
         Self { state }
     }
@@ -120,8 +128,18 @@ impl GeneratingGuard {
 
 impl Drop for GeneratingGuard {
     fn drop(&mut self) {
-        if let Ok(mut guard) = self.state.lock() {
-            guard.generation_state.status = GenerationStatus::Idle;
+        match self.state.lock() {
+            Ok(mut guard) => {
+                guard.generation_state.status = GenerationStatus::Idle;
+            }
+            Err(poisoned) => {
+                log::error!(
+                    "GeneratingGuard::drop encountered poisoned mutex, recovering guard and resetting status"
+                );
+                let mut guard = poisoned.into_inner();
+                guard.generation_state.status = GenerationStatus::Idle;
+                self.state.clear_poison();
+            }
         }
     }
 }

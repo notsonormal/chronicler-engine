@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-05 19:24 UTC*
+*Index last generated: 2026-05-05 20:13 UTC*
 
 ### Root files
 
@@ -53,7 +53,11 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Implementation Plan: Isolate Slow LLM Tests](./plans/archived/lockjaw-aquaman-sam-alexander-2026-05-03.md)
 - [Plan: Unify PHI Layer — Remove PhiMode::Continuation](./plans/archived/luke-cage-pantha-morbius-2026-05-03.md)
 - [Plan: Unify PHI Layer — Remove PhiMode::Continuation](./plans/archived/luke-cage-pantha-morbius-20260503.md)
+- [Plan: Auto-Generated Index for `chronicler_engine/docs`](./plans/archived/obsidian-doctor-mid-nite-kid-flash-2026-05-05.md)
+- [Async Concurrency & Codebase Hygiene](./plans/archived/polaris-steel-sentry-2026-05-05.md)
 - [Spec: Align chronicler_engine Prompts with Marinara Engine Battle-Tested Patterns](./plans/archived/prompt-alignment-with-marinara-2026-05-04.md)
+- [Plan: Phase 4 — Replace std::thread::spawn with Tokio](./plans/archived/rocket-silver-surfer-orphan-2026-05-05.md)
+- [Issue Tracker Implementation Plan](./plans/archived/spider-man-impulse-aquaman-2026-05-05.md)
 
 ### `docs/reference/`
 

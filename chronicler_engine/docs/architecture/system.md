@@ -24,12 +24,12 @@ Contains the mechanics that drive the simulation. It translates user intent and 
 
 ### 3. The Narrative Tier (`crate::narrative::*`)
 The interface between the synchronous engine and stochastic LLM generation.
-- **`llm`**: Traits (`LlmBackend`) and implementations (OpenRouter, DeepSeek, Mock) for Game Master narration.
+- **`llm`**: Directory module with traits (`LlmBackend`) and per-provider implementations (OpenRouter, DeepSeek, Ollama, Mock) for Game Master narration.
   - **`get_llm_backend()`**: Production entry point that loads the narration connection from `data/settings.json`
   - **`get_llm_backend_for(connection)`**: Create a backend for a specific `Connection` profile
   - **`DefaultGameService::with_backends(llm, quantifier)`**: Constructor for dependency-injecting mock backends in tests. No globals, no file I/O, fully isolated.
-- **`prompt`**: PromptBuilder module for layered prompt construction with token budget management. Uses plain-text instructions + XML-wrapped data for reasoning-model compatibility. Includes `fit_messages_to_context()` for dynamic context-window fitting.
-- **`quantifier`**: Scene quantification module for dynamic room presence detection via secondary LLM. Returns NPC presence, player movement intent, and NPC enter/leave events.
+- **`prompt`**: Directory module for layered prompt construction with token budget management. Uses plain-text instructions + XML-wrapped data for reasoning-model compatibility. Includes `fit_messages_to_context()` for dynamic context-window fitting.
+- **`quantifier`**: Directory module for scene quantification and dynamic room presence detection via secondary LLM. Returns NPC presence, player movement intent, and NPC enter/leave events.
   - **`QuantifierBackendTrait`**: Interface for NPC detection backends
   - **`RealQuantifierBackend`**: Production implementation using LLM
   - **`MockQuantifierBackend`**: Test implementation returning configurable NPCs with High confidence
@@ -127,9 +127,20 @@ Static web assets served by the server.
 | `src/engine/trigger_eval.rs` | `crate::engine::trigger_eval` | Trigger evaluation based on character state |
 | `src/engine/action_processing.rs` | `crate::engine::action_processing` | Server handler pure functions (NEW) |
 | `src/engine/game_service.rs` | `crate::engine::game_service` | `GameService` trait and `DefaultGameService` — game orchestration extracted from fragments.rs |
-| `src/narrative/llm.rs` | `crate::narrative::llm` | LLM backend implementations |
-| `src/narrative/prompt.rs` | `crate::narrative::prompt` | PromptBuilder with layered prompts, `make_prompt_context` helper |
-| `src/narrative/quantifier.rs` | `crate::narrative::quantifier` | Scene quantification for dynamic NPC presence. `QuantifierBackendTrait`, `RealQuantifierBackend`, `MockQuantifierBackend`, `determine_npcs_in_room` |
+| `src/bootstrap.rs` | `crate::bootstrap` | World loading, server initialization |
+| `src/cli.rs` | `crate::cli` | CLI argument parsing (clap) |
+| `src/narrative/llm/mod.rs` | `crate::narrative::llm` | LLM backend module root |
+| `src/narrative/llm/backend.rs` | `crate::narrative::llm` | `LlmBackend` trait |
+| `src/narrative/llm/openrouter.rs` | `crate::narrative::llm` | OpenRouter backend |
+| `src/narrative/llm/deepseek.rs` | `crate::narrative::llm` | DeepSeek backend |
+| `src/narrative/llm/ollama.rs` | `crate::narrative::llm` | Ollama backend |
+| `src/narrative/llm/mock.rs` | `crate::narrative::llm` | Mock backend for tests |
+| `src/narrative/prompt/mod.rs` | `crate::narrative::prompt` | Prompt module root |
+| `src/narrative/prompt/builder.rs` | `crate::narrative::prompt` | `PromptBuilder` with 8-layer construction |
+| `src/narrative/prompt/budget.rs` | `crate::narrative::prompt` | Token budget and context fitting |
+| `src/narrative/quantifier/mod.rs` | `crate::narrative::quantifier` | Quantifier module root |
+| `src/narrative/quantifier/core.rs` | `crate::narrative::quantifier` | Core quantifier logic |
+| `src/narrative/quantifier/backends.rs` | `crate::narrative::quantifier` | Quantifier backend implementations |
 | `src/narrative/llm_client.rs` | `crate::narrative::llm_client` | HTTP client helpers for OpenRouter and Ollama |
 | `src/server/mod.rs` | `crate::server` | Axum router, `AppState`, `run_server`, `create_app_for_testing` |
 | `src/server/fragments.rs` | `crate::server` | HTMX endpoint handlers and HTML fragment generators |

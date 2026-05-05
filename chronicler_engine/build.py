@@ -5,12 +5,66 @@ Uses cargo-nextest for parallel test execution.
 """
 
 import argparse
+import re
 import subprocess
 import sys
 import os
 import signal
 from pathlib import Path
 import shutil
+
+
+def check_rust_version():
+    """Ensure rustc >= 1.85."""
+    result = subprocess.run(
+        ["rustc", "--version"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        print("ERROR: Could not determine Rust version.")
+        sys.exit(1)
+    match = re.search(r"rustc (\d+)\.(\d+)", result.stdout)
+    if not match:
+        print("ERROR: Could not parse Rust version.")
+        sys.exit(1)
+    major, minor = int(match.group(1)), int(match.group(2))
+    if major < 1 or (major == 1 and minor < 85):
+        print(f"ERROR: Rust {major}.{minor} found, but >= 1.85 is required.")
+        sys.exit(1)
+    print(f"Rust version: {major}.{minor} (OK)")
+
+
+def has_nextest():
+    """Check if cargo-nextest is installed."""
+    result = subprocess.run(
+        ["cargo", "nextest", "--version"],
+        capture_output=True,
+        text=True,
+    )
+    return result.returncode == 0
+
+
+def get_test_cmd(include_llm=False, strict=False):
+    """Return the test command, using nextest if available."""
+    if has_nextest():
+        cmd = "cargo nextest run --retries 2 -j 4"
+        if include_llm:
+            cmd += " --run-ignored all"
+        return cmd
+    print("WARNING: cargo-nextest not found. Falling back to cargo test (slower).")
+    cmd = "cargo test"
+    if include_llm:
+        cmd += " -- --ignored"
+    return cmd
+
+
+def get_coverage_cmd(strict=False):
+    """Return the coverage test command, using nextest if available."""
+    if has_nextest():
+        return "cargo llvm-cov nextest --no-report --retries 2 -j 4"
+    print("WARNING: cargo-nextest not found. Falling back to cargo test for coverage.")
+    return "cargo llvm-cov --no-report"
 
 # Force UTF-8 for stdout/stderr on Windows to handle cargo's Unicode output
 if sys.platform == "win32":
@@ -154,10 +208,21 @@ def main():
         action="store_true",
         help="Validate JSON data files against schemas",
     )
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="Enable strict mode: warnings are errors, debug assertions enabled",
+    )
     args = parser.parse_args()
 
     print("=== Chronicler Engine Build ===")
     os.chdir(os.path.dirname(os.path.abspath(__file__)) or os.getcwd())
+
+    check_rust_version()
+
+    if args.strict:
+        os.environ["RUSTFLAGS"] = "-D warnings"
+        print("Strict mode enabled: warnings treated as errors.")
 
     # Kill any process on ports used by tests
     print("Checking for processes on test ports...")
@@ -237,11 +302,12 @@ def main():
         print("      Each test takes 1-3 minutes. Total: ~3-9 minutes.")
         print("      Do not interrupt. Set your tool timeout to >= 600s.")
         print("=" * 60)
-        run(
-            "cargo nextest run --retries 2 -j 4 --run-ignored all --test flow_llm_tests",
-            check=False,
-            env=test_env,
-        )
+        llm_cmd = get_test_cmd(include_llm=True, strict=args.strict)
+        if "nextest" in llm_cmd:
+            llm_cmd += " --test flow_llm_tests"
+        else:
+            llm_cmd += " flow_llm_tests -- --ignored"
+        run(llm_cmd, check=False, env=test_env)
 
         print("[3/3] Done")
         print("=== Build Complete ===")
@@ -250,7 +316,7 @@ def main():
     if args.coverage:
         print("[7/8] Running all tests with coverage...")
         run(
-            "cargo llvm-cov nextest --no-report --retries 2 -j 4",
+            get_coverage_cmd(strict=args.strict),
             check=False,
             env=test_env,
         )
@@ -271,15 +337,14 @@ def main():
             print("Warning: Could not generate coverage JSON.")
     else:
         print("[7/8] Running all tests...")
-        nextest_cmd = "cargo nextest run --retries 2 -j 4"
+        test_cmd = get_test_cmd(include_llm=args.include_llm, strict=args.strict)
         if args.include_llm:
-            nextest_cmd += " --run-ignored all"
             print("=" * 60)
             print("NOTE: Including LLM tests. These contact the real OpenRouter API.")
             print("      Each LLM test takes 1-3 minutes. Total suite: ~3-9 minutes longer.")
             print("      Do not interrupt. Set your tool timeout to >= 600s.")
             print("=" * 60)
-        run(nextest_cmd, check=False, env=test_env)
+        run(test_cmd, check=False, env=test_env)
         if not args.include_llm:
             print(
                 "    NOTE: 3 LLM tests were skipped. "

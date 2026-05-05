@@ -179,15 +179,15 @@ Uses the same structure as SillyTavern character cards (Jailbreak format):
 The engine also uses a **quantifier prompt** — a separate secondary LLM call that runs *after* narration to analyze the scene. It determines which NPCs are present and whether the player moved. This is **not** part of the 8-layer narrative prompt stack.
 
 - See [`reference/quantifier_prompt.md`](../reference/quantifier_prompt.md) for the full prompt text
-- Rendered by: `QuantifierPromptBuilder` in `src/narrative/quantifier.rs`
+- Rendered by: `QuantifierPromptBuilder` in `src/narrative/quantifier/prompt.rs`
 - Uses a separate model connection from the main narration LLM
 - The quantifier also follows the plain-text instructions + XML-wrapped data pattern
 
 ## Implementation
 
 ### Key Files
-- `src/narrative/prompt.rs` — `PromptBuilder` with 8-layer construction, context fitting, and budget management
-- `src/narrative/llm.rs` — LLM backend implementations that configure `PromptBuilder` with connection-specific context windows
+- `src/narrative/prompt/builder.rs` — `PromptBuilder` with 8-layer construction, context fitting, and budget management
+- `src/narrative/llm/mod.rs` — LLM backend module that configures `PromptBuilder` with connection-specific context windows
 - `src/model/state.rs` — `GameState` provides context data
 - `src/model/character.rs` — `NpcCard`, `PlayerCard` structures
 

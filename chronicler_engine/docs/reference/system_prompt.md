@@ -2,7 +2,7 @@
 
 > **Context**: This document contains the actual prompt text for **Layer 0 (System Prompt)** and **Layer 7 (PHI)** of the Chronicler Engine's 8-layer narrative prompt system. For the overall architecture, see [`system/prompt_system.md`](../system/prompt_system.md).
 
-The normal system prompt (Layer 0) is rendered by `PromptBuilder::render_system_layer()` in `src/narrative/prompt.rs`. It uses **plain-text instructions** — no XML tags wrapping the instructions themselves. XML is reserved for external data sections (`<GameState>`, `<KnownNpcs>`, etc.) only.
+The normal system prompt (Layer 0) is rendered by `PromptBuilder::render_system_layer()` in `src/narrative/prompt/builder.rs`. It uses **plain-text instructions** — no XML tags wrapping the instructions themselves. XML is reserved for external data sections (`<GameState>`, `<KnownNpcs>`, etc.) only.
 
 > **Why plain text?** Reasoning models (e.g., Gemma 4) can enter meta-analysis mode when instructions are wrapped in self-referential XML (`<SystemPrompt>`, `<Role>`), treating the prompt as data to analyze rather than instructions to execute. Plain imperative text avoids this trap.
 
@@ -106,9 +106,9 @@ End on a descriptive note — an image, a sound, a feeling, or an unresolved mom
 
 These constraints apply equally to main narrations and trigger continuation narrations. The distinction between "narrate an action" and "continue the scene" comes from the user message (Layer 6) and chat history (Layer 5), not from the PHI.
 
-See: `src/narrative/prompt.rs:PHI_NARRATION_TEMPLATE`
+See: `src/narrative/prompt/templates.rs:PHI_NARRATION_TEMPLATE`
 
 ## Sources
 
-- System prompt: `src/narrative/prompt.rs:SYSTEM_PROMPT_TEMPLATE`
-- PHI layer: `src/narrative/prompt.rs:PHI_NARRATION_TEMPLATE`
+- System prompt: `src/narrative/prompt/templates.rs:SYSTEM_PROMPT_TEMPLATE`
+- PHI layer: `src/narrative/prompt/templates.rs:PHI_NARRATION_TEMPLATE`

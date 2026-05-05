@@ -16,5 +16,12 @@ When a world is loaded via the `--world` flag, the engine performs these steps:
 4.  **NPC Discovery**: Scans the `data/characters/<characters_dir>/` directory (where `characters_dir` comes from `world.json`, defaulting to the world id), deserializing every `.json` file into an `NpcCard`.
 5.  **State Synthesis**: Combines these components into a unified `GameState`, initializing the current location and visibility filters.
 
-## 3. Server Startup
+## 3. Binary Bootstrap (`main.rs` → `bootstrap.rs` + `cli.rs`)
+The binary entry point (`src/main.rs`) delegates to two focused modules:
+- **`cli.rs`**: Parses command-line arguments via `clap` (`Args` struct with `--world`, `--port`, `--list-worlds`).
+- **`bootstrap.rs`**: Orchestrates the full startup sequence — resolves the data directory, loads the selected world, initializes game state, constructs the `GameService`, and starts the Axum HTTP server.
+
+This split keeps `main.rs` minimal and makes the bootstrap logic independently testable.
+
+## 4. Server Startup
 The HTTP server (Axum) is initialized after the game state is synthesized. It binds to the specified `--port` and mounts the `assets/` and `data/` directories for static resource serving.

@@ -6,10 +6,12 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     use chronicler_engine::engine::game_service::{DefaultGameService, GameService};
+    use chronicler_engine::model::state::GenerationStatus;
     use chronicler_engine::model::state::LogType;
     use chronicler_engine::model::{character::*, map::*, world::*};
     use chronicler_engine::narrative::llm::MockBackend;
     use chronicler_engine::narrative::quantifier::MockQuantifierBackend;
+    use tokio_util::sync::CancellationToken;
 
     /// Poll for the FreeAction/retry thread to complete by checking is_generating.
     /// Returns true if generation completed within timeout, false on timeout.
@@ -593,6 +595,57 @@ mod tests {
             guard.generation_state.phase,
             chronicler_engine::model::state::GenerationPhase::default(),
             "Phase should be reset to default after completion"
+        );
+    }
+
+    /// Test that cancellation token resets state to Idle after a task completes.
+    /// Simulates the fragments.rs handler pattern: spawn_blocking with token checks.
+    #[tokio::test]
+    async fn test_cancellation_resets_state_to_idle() {
+        let state = create_test_state();
+        let service = DefaultGameService::with_backends(
+            Arc::new(MockBackend::with_delay(50)),
+            Arc::new(MockQuantifierBackend::default()),
+        );
+        let token = CancellationToken::new();
+
+        {
+            let mut guard = state.lock().unwrap();
+            guard.narration_history.clear();
+            guard.generation_state.status = GenerationStatus::Generating;
+        }
+
+        let state_clone = state.clone();
+        let token_clone = token.clone();
+        let handle = tokio::task::spawn_blocking(move || {
+            if token_clone.is_cancelled() {
+                if let Ok(mut guard) = state_clone.lock() {
+                    guard.generation_state.status = GenerationStatus::Idle;
+                }
+                return;
+            }
+            service.execute_action(
+                state_clone.clone(),
+                "look around".to_string(),
+                "Player".to_string(),
+            );
+            if token_clone.is_cancelled() {
+                if let Ok(mut guard) = state_clone.lock() {
+                    guard.generation_state.status = GenerationStatus::Idle;
+                }
+            }
+        });
+
+        // Cancel while the mock backend is sleeping inside execute_action
+        token.cancel();
+
+        // Wait for the blocking task to finish
+        handle.await.unwrap();
+
+        let guard = state.lock().unwrap();
+        assert!(
+            !guard.generation_state.status.is_generating(),
+            "Status should be Idle after cancellation cleanup"
         );
     }
 }

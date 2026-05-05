@@ -14,7 +14,7 @@ flowchart TD
     
     Phase2["**PHASE 2: AWAIT INPUT**<br>*(Status: 'Ready')*<br>User types command → submits form"]
     
-    Phase3["**PHASE 3: PROCESS ACTION**<br>1. Parse command & execute game logic<br>2. Log command as 'Input'<br>3. Set status to 'Generating' + phase 'Narrating'<br>4. Spawn async thread for LLM"]
+    Phase3["**PHASE 3: PROCESS ACTION**<br>1. Parse command & execute game logic<br>2. Log command as 'Input'<br>3. Set status to 'Generating' + phase 'Narrating'<br>4. Offload to `tokio::task::spawn_blocking` for LLM work"]
     
     Phase4["**PHASE 4: MAIN LLM NARRATION**<br>*(Phase: Narrating)*<br>1. Build prompt via PromptBuilder<br>2. Send to LLM (see Context Pipeline below)<br>3. Add to history as 'Narration'"]
     
@@ -140,6 +140,6 @@ During LLM processing, the UI displays granular status phases instead of a singl
 
 - **Server**: `src/server/fragments.rs` - `action_handler`, `process_action`
 - **HTMX Polling**: `assets/index.html` - `hx-trigger="load, every 5s"`
-- **LLM**: `src/narrative/llm.rs` - `narrate_action`, `narrate_arrival`
-- **Prompt Builder**: `src/narrative/prompt.rs` - 8-layer prompt construction
+- **LLM**: `src/narrative/llm/mod.rs` - `narrate_action`, `narrate_arrival`
+- **Prompt Builder**: `src/narrative/prompt/builder.rs` - 8-layer prompt construction
 - **LLM Tests**: `tests/flow_llm_tests.rs` - Real LLM integration tests

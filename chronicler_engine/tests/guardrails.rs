@@ -864,6 +864,68 @@ fn guardrails_mod_purity() {
     assert_violations(&errors, "mod.rs purity");
 }
 
+// ── No std::thread in production code ──
+
+fn check_no_std_thread(path: &str, content: &str) -> Vec<Violation> {
+    let mut violations = Vec::new();
+
+    // Mock backends are allowed to use thread::sleep for test delays.
+    if path.contains("mock.rs") {
+        return violations;
+    }
+
+    let lines: Vec<&str> = content.lines().collect();
+    let mut in_test_cfg = false;
+    let mut brace_depth = 0i32;
+
+    for (line_num, line) in lines.iter().enumerate() {
+        let trimmed = line.trim();
+
+        // Detect entry into a #[cfg(test)] block
+        if trimmed.starts_with("#[cfg(test)]") {
+            in_test_cfg = true;
+            brace_depth = 0;
+            continue;
+        }
+
+        if in_test_cfg {
+            brace_depth += line.matches('{').count() as i32;
+            brace_depth -= line.matches('}').count() as i32;
+            if brace_depth <= 0 && trimmed.starts_with('}') {
+                in_test_cfg = false;
+            }
+            continue; // Skip lines inside test blocks
+        }
+
+        if line.contains("std::thread::spawn") || line.contains("std::thread::sleep") {
+            violations.push(Violation::error(
+                path,
+                line_num + 1,
+                format!(
+                    "Found {} in production code. Use tokio::task::spawn_blocking instead.",
+                    if line.contains("spawn") {
+                        "std::thread::spawn"
+                    } else {
+                        "std::thread::sleep"
+                    }
+                ),
+            ));
+        }
+    }
+    violations
+}
+
+#[test]
+fn guardrails_no_std_thread() {
+    let mut errors = Vec::new();
+    for file in discover_src_files() {
+        let content = std::fs::read_to_string(&file).unwrap();
+        let rel = relative_path(&file);
+        errors.extend(check_no_std_thread(rel, &content));
+    }
+    assert_violations(&errors, "no-std-thread");
+}
+
 // ── Helpers ──
 
 fn assert_violations(violations: &[Violation], rule_name: &str) {

@@ -5,9 +5,9 @@ The engine utilizes Large Language Models (LLMs) via the OpenRouter API, DeepSee
 
 ## Technical Architecture
 
-### 1. The Worker Thread Pattern
-- **Threading**: The engine uses `std::thread::spawn` to run LLM requests on background threads. This prevents the TUI from freezing during network I/O.
-- **Communication**: Results are streamed back to the main UI loop via `std::sync::mpsc` channels.
+### 1. The Blocking Task Pattern
+- **Concurrency**: The engine keeps the `GameService` trait fully synchronous. HTTP handlers in `src/server/fragments.rs` offload LLM work to the async runtime via `tokio::task::spawn_blocking`. This prevents the Axum event loop from stalling during network I/O while avoiding the `#[async_trait]` + `dyn Trait` incompatibility in Rust 2024 edition.
+- **Cancellation**: Each spawned task checks a `CancellationToken` before and after execution to handle graceful shutdown.
 
 ### 2. Model Configuration
 The engine supports flexible model selection via connection profiles in `data/settings.json`.
@@ -94,9 +94,9 @@ This matches SillyTavern's `last_output_sequence` preset for Gemma 4. It pre-fil
 - **Ref**: [SillyTavern Reddit discussion](https://old.reddit.com/r/SillyTavernAI/comments/1sbjwke/)
 
 ### Module Location
-- **Crate path**: `crate::narrative::llm` (LLM backends)
-- **Crate path**: `crate::narrative::prompt` (PromptBuilder, context fitting)
-- **Crate path**: `crate::narrative::llm_client` (HTTP client helpers)
+- **Crate path**: `crate::narrative::llm` — directory module (`mod.rs`, `backend.rs`, `openrouter.rs`, `deepseek.rs`, `ollama.rs`, `mock.rs`)
+- **Crate path**: `crate::narrative::prompt` — directory module (`mod.rs`, `builder.rs`, `budget.rs`, `context.rs`, `sanitize.rs`, `templates.rs`, `types.rs`, `tests.rs`)
+- **Crate path**: `crate::narrative::llm_client` — HTTP client helpers (`src/narrative/llm_client.rs`)
 
 ## Implementation Standards
 - Use the `LlmBackend` trait for all implementations

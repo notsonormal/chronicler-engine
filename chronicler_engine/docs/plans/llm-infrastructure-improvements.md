@@ -74,7 +74,7 @@ This plan captures the remaining deeper infrastructure improvements.
 **Files:**
 - `chronicler_engine/src/model/settings.rs` — add capability flags to `Connection`
 - `chronicler_engine/src/narrative/llm_client.rs` — adapt payload construction
-- `chronicler_engine/src/narrative/llm.rs` — wire through backends
+- `chronicler_engine/src/narrative/llm/mod.rs` — wire through backends
 - `chronicler_engine/data/settings.json` — update connection schemas
 
 **Acceptance Criteria:**
@@ -101,9 +101,9 @@ This plan captures the remaining deeper infrastructure improvements.
 - [ ] Reserve extra budget for reasoning models (e.g., 50% overhead for thinking) — *deferred to future work*
 
 **Files:**
-- `chronicler_engine/src/narrative/prompt.rs` — `fit_messages_to_context()` + token estimation
+- `chronicler_engine/src/narrative/prompt/budget.rs` — `fit_messages_to_context()` + token estimation
 - `chronicler_engine/src/model/settings.rs` — `max_context_tokens` on `Connection`
-- `chronicler_engine/src/narrative/llm.rs` — backends wire connection context window into `PromptBuilder`
+- `chronicler_engine/src/narrative/llm/mod.rs` — backends wire connection context window into `PromptBuilder`
 
 **Acceptance Criteria:**
 - [x] A 5000-char system prompt + 1024 requested max_tokens doesn't exceed model context window
@@ -132,7 +132,7 @@ This plan captures the remaining deeper infrastructure improvements.
 **Files:**
 - `chronicler_engine/src/model/settings.rs`
 - `chronicler_engine/src/narrative/llm_client.rs`
-- `chronicler_engine/src/narrative/prompt.rs`
+- `chronicler_engine/src/narrative/prompt/builder.rs`
 
 **Acceptance Criteria:**
 - Connection with `enable_thinking: false` produces faster, direct responses

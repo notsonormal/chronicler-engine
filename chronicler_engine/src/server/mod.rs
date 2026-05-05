@@ -84,6 +84,7 @@ pub fn create_app_for_testing(state: Arc<std::sync::Mutex<GameState>>) -> Router
         state,
         game_service: Arc::new(DefaultGameService::new()) as Arc<dyn GameService>,
         settings: Arc::new(RwLock::new(AppSettings::default())),
+        cancel_token: CancellationToken::new(),
     };
     build_router(app_state)
 }
@@ -95,6 +96,7 @@ use axum::{
 };
 use std::sync::Arc;
 use std::sync::RwLock;
+use tokio_util::sync::CancellationToken;
 use tower_http::services::ServeDir;
 
 use crate::engine::game_service::{DefaultGameService, GameService};
@@ -118,6 +120,7 @@ pub struct AppState {
     pub state: Arc<std::sync::Mutex<GameState>>,
     pub game_service: Arc<dyn GameService>,
     pub settings: Arc<RwLock<AppSettings>>,
+    pub cancel_token: CancellationToken,
 }
 
 impl AppState {
@@ -127,6 +130,7 @@ impl AppState {
             state,
             game_service: Arc::new(DefaultGameService::new()) as Arc<dyn GameService>,
             settings: Arc::new(RwLock::new(settings)),
+            cancel_token: CancellationToken::new(),
         }
     }
 
@@ -147,6 +151,7 @@ pub async fn run_server_with_config(
     config: ServerConfig,
 ) -> Result<()> {
     let app_state = AppState::new(state.clone()).await;
+    let cancel_token = app_state.cancel_token.clone();
 
     let app = build_router(app_state);
 
@@ -156,7 +161,15 @@ pub async fn run_server_with_config(
     })?;
 
     log::info!("HTMX Dashboard running at http://127.0.0.1:{}", config.port);
+
+    let shutdown_signal = async move {
+        let _ = tokio::signal::ctrl_c().await;
+        log::info!("Shutdown signal received, cancelling in-flight tasks...");
+        cancel_token.cancel();
+    };
+
     axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal)
         .await
         .map_err(|e| EngineError::Config(e.to_string()))
 }

@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use crate::error::EngineError;
 use crate::model::character::NpcCard;
@@ -13,6 +13,8 @@ pub struct MockBackend {
     pub should_return_empty: AtomicBool,
     /// If true, `narrate_action_from_prompt` (trigger narration) returns `Err`.
     pub trigger_narration_should_fail: AtomicBool,
+    /// Milliseconds to sleep in `narrate_action` to simulate a slow LLM.
+    pub delay_ms: AtomicU64,
 }
 
 impl MockBackend {
@@ -39,6 +41,14 @@ impl MockBackend {
             ..Default::default()
         }
     }
+
+    /// Backend with a configurable delay in `narrate_action`.
+    pub fn with_delay(ms: u64) -> Self {
+        Self {
+            delay_ms: AtomicU64::new(ms),
+            ..Default::default()
+        }
+    }
 }
 
 impl LlmBackend for MockBackend {
@@ -62,6 +72,10 @@ impl LlmBackend for MockBackend {
         &self,
         context: &crate::narrative::prompt::PromptContext,
     ) -> Result<String, EngineError> {
+        let delay = self.delay_ms.load(Ordering::SeqCst);
+        if delay > 0 {
+            std::thread::sleep(std::time::Duration::from_millis(delay));
+        }
         if self.should_fail.load(Ordering::SeqCst) {
             return Err(EngineError::Narrative("Mock failure".to_string()));
         }

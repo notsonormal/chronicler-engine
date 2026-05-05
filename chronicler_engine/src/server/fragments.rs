@@ -331,9 +331,31 @@ pub async fn action_handler(
         let cmd = command;
         let pname = player_name;
         let game_service = state.game_service.clone();
+        let token = state.cancel_token.clone();
+
+        if token.is_cancelled() {
+            if let Ok(mut guard) = state_clone.lock() {
+                guard.generation_state.status = crate::model::state::GenerationStatus::Idle;
+            }
+            return Response::builder()
+                .status(StatusCode::SERVICE_UNAVAILABLE)
+                .body(Body::from(render_error("Server is shutting down")))
+                .expect("static response body is valid");
+        }
 
         tokio::task::spawn_blocking(move || {
-            game_service.execute_action(state_clone, cmd, pname);
+            if token.is_cancelled() {
+                if let Ok(mut guard) = state_clone.lock() {
+                    guard.generation_state.status = crate::model::state::GenerationStatus::Idle;
+                }
+                return;
+            }
+            game_service.execute_action(state_clone.clone(), cmd, pname);
+            if token.is_cancelled() {
+                if let Ok(mut guard) = state_clone.lock() {
+                    guard.generation_state.status = crate::model::state::GenerationStatus::Idle;
+                }
+            }
         });
     }
 
@@ -612,9 +634,30 @@ pub async fn retry_handler(State(state): State<AppState>) -> (StatusCode, String
 
     let state_clone = state.state.clone();
     let game_service = state.game_service.clone();
+    let token = state.cancel_token.clone();
 
+    if token.is_cancelled() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            render_error("Server is shutting down"),
+        );
+    }
+
+    // [DOC: docs/architecture/invariants.md#INV-004]
+    // Retry runs off the async thread so the HTTP handler returns immediately.
     tokio::task::spawn_blocking(move || {
-        game_service.retry_last_response(state_clone);
+        if token.is_cancelled() {
+            if let Ok(mut guard) = state_clone.lock() {
+                guard.generation_state.status = crate::model::state::GenerationStatus::Idle;
+            }
+            return;
+        }
+        game_service.retry_last_response(state_clone.clone());
+        if token.is_cancelled() {
+            if let Ok(mut guard) = state_clone.lock() {
+                guard.generation_state.status = crate::model::state::GenerationStatus::Idle;
+            }
+        }
     });
 
     (
