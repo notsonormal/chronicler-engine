@@ -4,43 +4,85 @@ This folder contains all documentation for the Chronicler Engine project.
 
 ## Folder Structure
 
-### `docs/architecture/`
-**System definition** - The single source of truth for the current system structure.
+<!-- AUTO-INDEX START -->
+*Index last generated: 2026-05-05 19:24 UTC*
 
-- `system.md` - Core architecture, module tiers, file mapping, UI specification, and change log
+### Root files
 
-### `docs/system/`
-**Domain documentation** - Describes specific subsystems and features.
-
-- `dashboard.md` - HTMX web dashboard specification
-- `navigation.md` - Semantic navigation system
-- `narration_engine.md` - Game Master narration system
-- `llm_processing.md` - LLM integration
-
-### `docs/plans/`
-**Implementation plans** for new features. See [workflow section](#workflow) for process.
+- [Changelog](./CHANGELOG.md)
+- [Chronicler Engine: Project Roadmap](./ROADMAP.md)
 
 ### `docs/adr/`
-**Architecture Decision Records** - Key architectural decisions with context, rationale, and consequences.
 
-ADRs document the "why" behind major architectural choices:
+- [ADR-001: HTMX Web Dashboard Architecture](./adr/adr-001-htmx-web-dashboard.md)
+- [ADR-002: Server-Sent Events for Real-Time Updates](./adr/adr-002-sse-realtime-updates.md)
+- [ADR-003: Askama Template Engine for HTML Rendering](./adr/adr-003-askama-templates.md)
+- [ADR-004: XML-Structured LLM Prompts](./adr/adr-004-xml-prompt-format.md)
+- [ADR-005: SillyTavern-Style Layered Prompt System](./adr/adr-005-layered-prompts.md)
+- [ADR-006: Quantifier-Driven Game Systems](./adr/adr-006-quantifier-systems.md)
+- [ADR-007: Settings System Architecture](./adr/adr-007-settings-system.md)
 
-- [ADR-001: HTMX Web Dashboard](./adr/adr-001-htmx-web-dashboard.md) - Web UI over TUI
-- [ADR-002: SSE for Real-Time Updates](./adr/adr-002-sse-realtime-updates.md) - Transport layer
-- [ADR-003: Askama Template Engine](./adr/adr-003-askama-templates.md) - Template rendering
-- [ADR-004: XML-Structured LLM Prompts](./adr/adr-004-xml-prompt-format.md) - Prompt format
-- [ADR-005: Layered Prompt System](./adr/adr-005-layered-prompts.md) - SillyTavern-style prompts
-- [ADR-006: Quantifier-Driven Game Systems](./adr/adr-006-quantifier-systems.md) - LLM-driven features
+### `docs/architecture/`
+
+- [Architecture Guardrails](./architecture/guardrails.md)
+- [Chronicler Engine Runtime Invariants](./architecture/invariants.md)
+- [Specification: Core Architecture (Modular)](./architecture/system.md)
+
+### `docs/diagnostics/`
+
+- [Error Catalog](./diagnostics/error_catalog.md)
+- [Phase 1 Audit: Error Emissions, Concurrency Boundaries, and Untested APIs](./diagnostics/phase1_audit.md)
+- [Phase 1 Audit: Concurrency Boundaries](./diagnostics/phase1_concurrency_map.md)
+- [Phase 1 Audit: String-Based Error Emissions](./diagnostics/phase1_error_catalog.md)
+- [Phase 1 Audit: main.rs Responsibilities & Untested APIs](./diagnostics/phase1_mainrs_map.md)
+
+### `docs/plans/`
+
+- [LLM Infrastructure Improvements](./plans/llm-infrastructure-improvements.md)
+- [Structured Error Taxonomy](./plans/structured-error-taxonomy.md)
+
+### `docs/plans/archived/`
+
+- [Plan: Raise `game_service.rs` Coverage to 80%+ via Refactoring](./plans/archived/coverage-game-service-archived.md)
+- [Plan: Improve Quantifier Prompt for Movement Certainty](./plans/archived/donna-troy-hercules-warpath-2026-05-03.md)
+- [Plan: Dependency-Inject LLM/Quantifier Backends into DefaultGameService](./plans/archived/drax-psylocke-gamora-2026-05-04.md)
+- [Spec: Event Header Entries](./plans/archived/event-header-entries-archived.md)
+- [Plan: Granular Status Phases for LLM Pipeline](./plans/archived/granular-status-phases-archived.md)
+- [Implementation Plan: Marinara-Style Prompt Architecture](./plans/archived/hercules-she-hulk-doctor-fate-20260503.md)
+- [Implementation Plan: Fix Gemma 4 Thinking Suffix Corruption](./plans/archived/iceman-thor-booster-gold-2026-05-04.md)
+- [Implementation Plan: Isolate Slow LLM Tests](./plans/archived/lockjaw-aquaman-sam-alexander-2026-05-03.md)
+- [Plan: Unify PHI Layer — Remove PhiMode::Continuation](./plans/archived/luke-cage-pantha-morbius-2026-05-03.md)
+- [Plan: Unify PHI Layer — Remove PhiMode::Continuation](./plans/archived/luke-cage-pantha-morbius-20260503.md)
+- [Spec: Align chronicler_engine Prompts with Marinara Engine Battle-Tested Patterns](./plans/archived/prompt-alignment-with-marinara-2026-05-04.md)
 
 ### `docs/reference/`
-**Reference documentation** - Data schemas, API specs, testing strategy.
 
-- `data_schemas.md` - Map topology and character normalization
-- `persona_system.md` - Player persona system
-- `testing.md` - Testing strategy and LLM abstraction
+- [Specification: Redmist Estate Map and Data Parsing](./reference/data_schemas.md)
+- [Marinara-Engine Reference](./reference/marinara_engine.md)
+- [Marinara Engine — Default System Prompt](./reference/marinara_engine_system_prompt.md)
+- [Specification: Player Persona System](./reference/persona_system.md)
+- [Reference: Quantifier Prompt](./reference/quantifier_prompt.md)
+- [SillyTavern Chat Window Reference](./reference/sillytavern_chat_window.md)
+- [SillyTavern Prompt System Reference](./reference/sillytavern_prompt_system.md)
+- [Reference: Normal System Prompt](./reference/system_prompt.md)
+- [Specification: Testing Strategy and Architecture](./reference/testing.md)
 
-### `docs/ROADMAP.md`
-**Project roadmap** - Long-term vision and planned phases.
+### `docs/system/`
+
+- [System: Character State & Persistence](./system/character_state.md)
+- [Specification: Dashboard UI](./system/dashboard.md)
+- [System: Dynamic Pseudo-Rooms](./system/dynamic_rooms.md)
+- [Specification: Game Flow](./system/game_flow.md)
+- [Specification: LLM Processing & Integration](./system/llm_processing.md)
+- [Specification: Game Master Narration System](./system/narration_engine.md)
+- [Specification: Semantic Navigation](./system/navigation.md)
+- [Chronicler Engine Prompt System](./system/prompt_system.md)
+- [Engine Startup & Initialization](./system/startup.md)
+- [Testing Strategy](./system/testing.md)
+- [System: Auto-Trigger & Reactive Encounters](./system/triggers.md)
+- [Specification: UI Design](./system/ui_design.md)
+
+<!-- AUTO-INDEX END -->
 
 ---
 

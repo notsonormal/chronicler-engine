@@ -1,0 +1,21 @@
+#!/bin/sh
+# Git pre-commit hook: regenerate docs index if stale.
+# Install with: python scripts/install_git_hooks.py
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+python "$PROJECT_ROOT/scripts/generate_docs_index.py"
+
+# If the index was updated, the working tree is now dirty.
+# Abort the commit so the user can stage the updated README.md.
+if ! git diff --quiet -- "$PROJECT_ROOT/docs/README.md"; then
+    echo ""
+    echo "docs/README.md was updated by the auto-index generator."
+    echo "Please stage the changes and commit again:"
+    echo "  git add chronicler_engine/docs/README.md"
+    echo "  git commit"
+    exit 1
+fi
+
+exit 0
