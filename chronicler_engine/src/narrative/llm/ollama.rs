@@ -146,14 +146,3 @@ impl LlmBackend for OllamaBackend {
         "Ollama"
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_ollama_backend_name() {
-        let backend = OllamaBackend::default();
-        assert_eq!(backend.name(), "Ollama");
-    }
-}

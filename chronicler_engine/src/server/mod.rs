@@ -3,6 +3,15 @@ pub mod fragments;
 pub mod settings_fragment;
 pub mod templates;
 
+#[cfg(test)]
+mod fragments_tests;
+#[cfg(test)]
+mod mod_tests;
+#[cfg(test)]
+mod settings_fragment_tests;
+#[cfg(test)]
+mod templates_tests;
+
 fn build_router(app_state: AppState) -> Router {
     Router::new()
         .route("/", get(index_handler))
@@ -223,81 +232,4 @@ fn kill_process(pid: u32) -> std::io::Result<std::process::Output> {
 
 async fn index_handler() -> Html<String> {
     Html(include_str!("../../assets/index.html").to_string())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_server_config_default() {
-        let config = ServerConfig::default();
-        assert_eq!(config.port, 3_000);
-    }
-
-    #[test]
-    fn test_server_config_custom_port() {
-        let config = ServerConfig { port: 80_80 };
-        assert_eq!(config.port, 80_80);
-    }
-
-    #[test]
-    fn test_server_config_default_is_consistent() {
-        // Ensure default is consistent across calls
-        let config1 = ServerConfig::default();
-        let config2 = ServerConfig::default();
-        assert_eq!(config1.port, config2.port);
-    }
-
-    #[test]
-    fn test_server_config_clone() {
-        let config = ServerConfig { port: 5000 };
-        let cloned = config.clone();
-        assert_eq!(config.port, cloned.port);
-    }
-
-    #[test]
-    fn test_server_config_debug() {
-        let config = ServerConfig { port: 3000 };
-        let debug_str = format!("{config:?}");
-        assert!(debug_str.contains("3000"));
-    }
-
-    #[test]
-    fn test_server_config_min_port() {
-        let config = ServerConfig { port: 1 };
-        assert_eq!(config.port, 1);
-    }
-
-    #[test]
-    fn test_server_config_max_port() {
-        let config = ServerConfig { port: 65535 };
-        assert_eq!(config.port, 65535);
-    }
-
-    #[test]
-    fn test_app_state_struct_fields() {
-        // Verify AppState struct has expected fields
-        let game_service: Arc<dyn GameService> = Arc::new(DefaultGameService::new());
-        let settings = Arc::new(RwLock::new(AppSettings::default()));
-
-        // Verify we can construct AppState-like struct with required fields
-        let _app_state = (game_service, settings);
-    }
-
-    #[test]
-    fn test_game_service_trait_bounds() {
-        // Verify GameService trait is Send + Sync
-        fn assert_send_sync<T: Send + Sync>() {}
-        assert_send_sync::<DefaultGameService>();
-    }
-
-    #[test]
-    fn test_app_settings_default() {
-        let settings = AppSettings::default();
-        let narrator = settings
-            .get_narration_connection()
-            .expect("narrator exists");
-        assert!(narrator.model.contains("gpt-4o-mini") || narrator.model.is_empty());
-    }
 }

@@ -13,4 +13,12 @@ pub use types::PromptBuilder;
 pub use types::{PromptContext, PromptLayer};
 
 #[cfg(test)]
-mod tests;
+mod budget_tests;
+#[cfg(test)]
+mod builder_tests;
+#[cfg(test)]
+mod context_tests;
+#[cfg(test)]
+mod sanitize_tests;
+#[cfg(test)]
+mod types_tests;

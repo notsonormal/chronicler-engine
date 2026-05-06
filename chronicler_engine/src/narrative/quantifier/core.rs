@@ -108,7 +108,7 @@ pub(crate) fn quantify_room_with_llm_call(
         },
     })
 }
-fn static_npc_result(
+pub(crate) fn static_npc_result(
     state: &crate::model::state::GameState,
     room_npc_ids: &[String],
     movement: MovementParseResult,

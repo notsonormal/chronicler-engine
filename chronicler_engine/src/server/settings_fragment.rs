@@ -21,7 +21,7 @@ fn provider_option_html(value: &str, label: &str, selected: bool) -> String {
     format!(r#"<option value="{value}"{sel}>{label}</option>"#)
 }
 
-fn provider_options_html(selected: &str) -> String {
+pub(crate) fn provider_options_html(selected: &str) -> String {
     [
         ("openrouter", "OpenRouter"),
         ("deepseek", "DeepSeek"),
@@ -55,7 +55,7 @@ fn html_escape(s: &str) -> String {
             </div>
         </div>
         <div class="card-details">
-            {{ conn.provider|fmt("{:?}") }} — {{ conn.model }}
+            {{ conn.provider|fmt("{:?}") }} â€” {{ conn.model }}
         </div>
         <div class="card-actions">
             <button hx-get="/fragment/connections/{{ conn.id }}/edit" hx-target="closest .connection-card" hx-swap="outerHTML">Edit</button>
@@ -115,7 +115,7 @@ pub struct SettingsTemplate {
 }
 
 impl SettingsTemplate {
-    fn from_settings(settings: &AppSettings) -> Self {
+    pub(crate) fn from_settings(settings: &AppSettings) -> Self {
         Self {
             connections: settings.connections.clone(),
             narration_connection_id: settings.narration_connection_id.clone(),
@@ -363,7 +363,7 @@ pub async fn delete_connection_handler(
         return Html(format!("<span class='error'>Save failed: {e}</span>"));
     }
 
-    // Return empty string — HTMX will remove the card
+    // Return empty string â€” HTMX will remove the card
     Html(String::new())
 }
 
@@ -470,7 +470,7 @@ fn connection_card_html(conn: &Connection, is_narrator: bool, is_quantifier: boo
         <span class="card-title">{}</span>
         <div class="card-badges">{}</div>
     </div>
-    <div class="card-details">{:?} — {}</div>
+    <div class="card-details">{:?} â€” {}</div>
     <div class="card-actions">{}</div>
 </div>"#,
         html_escape(&conn.name),
@@ -555,125 +555,4 @@ fn connection_edit_form_html(conn: &Connection) -> String {
         },
         conn.id,
     )
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::model::settings::AppSettings;
-
-    mod parse_backend {
-        use super::*;
-
-        #[test]
-        fn test_deepseek_returns_deepseek() {
-            assert_eq!(LlmBackendType::from("deepseek"), LlmBackendType::DeepSeek);
-        }
-
-        #[test]
-        fn test_mock_returns_mock() {
-            assert_eq!(LlmBackendType::from("mock"), LlmBackendType::Mock);
-        }
-
-        #[test]
-        fn test_openrouter_returns_openrouter() {
-            assert_eq!(
-                LlmBackendType::from("openrouter"),
-                LlmBackendType::OpenRouter
-            );
-        }
-
-        #[test]
-        fn test_unknown_returns_openrouter_default() {
-            assert_eq!(
-                LlmBackendType::from("unknown_backend"),
-                LlmBackendType::OpenRouter
-            );
-            assert_eq!(LlmBackendType::from(""), LlmBackendType::OpenRouter);
-        }
-
-        #[test]
-        fn test_ollama_returns_ollama() {
-            assert_eq!(LlmBackendType::from("ollama"), LlmBackendType::Ollama);
-        }
-    }
-
-    mod parse_api_key {
-        use super::*;
-
-        #[test]
-        fn test_empty_returns_none() {
-            assert_eq!(parse_api_key(""), None);
-        }
-
-        #[test]
-        fn test_non_empty_returns_some() {
-            assert_eq!(parse_api_key("sk-test123"), Some("sk-test123".to_string()));
-            assert_eq!(parse_api_key("   "), Some("   ".to_string()));
-        }
-    }
-
-    mod settings_template_from_settings {
-        use super::*;
-
-        fn make_settings() -> AppSettings {
-            AppSettings {
-                connections: vec![
-                    Connection {
-                        id: "conn-1".into(),
-                        name: "Test Narrator".into(),
-                        provider: LlmBackendType::OpenRouter,
-                        model: "openai/gpt-4o-mini".into(),
-                        api_key: Some("sk-test".into()),
-                        base_url: None,
-                        single_user_message: false,
-                        max_tokens: None,
-                        max_context_tokens: None,
-                    },
-                    Connection {
-                        id: "conn-2".into(),
-                        name: "Test Quantifier".into(),
-                        provider: LlmBackendType::Ollama,
-                        model: "llama3".into(),
-                        api_key: None,
-                        base_url: Some("http://localhost:11434".into()),
-                        single_user_message: false,
-                        max_tokens: None,
-                        max_context_tokens: None,
-                    },
-                ],
-                narration_connection_id: "conn-1".into(),
-                quantifier_connection_id: "conn-2".into(),
-                response_length: "flexible".into(),
-            }
-        }
-
-        #[test]
-        fn test_template_renders_connections() {
-            let settings = make_settings();
-            let template = SettingsTemplate::from_settings(&settings);
-
-            assert_eq!(template.connections.len(), 2);
-            assert!(template.render().unwrap().contains("conn-1"));
-            assert!(template.render().unwrap().contains("conn-2"));
-        }
-
-        #[test]
-        fn test_narrator_badge_renders() {
-            let settings = make_settings();
-            let template = SettingsTemplate::from_settings(&settings);
-            let html = template.render().unwrap();
-
-            assert!(html.contains(r#"<span class="badge">Narrator</span>"#));
-        }
-
-        #[test]
-        fn test_quantifier_badge_renders() {
-            let settings = make_settings();
-            let template = SettingsTemplate::from_settings(&settings);
-            let html = template.render().unwrap();
-
-            assert!(html.contains(r#"<span class="badge quantifier">Quantifier</span>"#));
-        }
-    }
 }

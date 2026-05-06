@@ -40,3 +40,12 @@ pub use server::create_app_for_testing;
 
 #[cfg(test)]
 pub mod test_support;
+
+#[cfg(test)]
+mod bootstrap_tests;
+#[cfg(test)]
+mod cli_tests;
+#[cfg(test)]
+mod error_tests;
+#[cfg(test)]
+mod settings_tests;

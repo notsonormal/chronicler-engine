@@ -3,6 +3,14 @@
 ## Unreleased
 
 ### Added
+- **File Length Guard Rails** - Enforced 2,000 non-blank line limit on all `.rs` files
+  - New `tests/guardrails.rs` rules: `guardrails_file_length_src`, `guardrails_file_length_tests`
+  - `docs/architecture/guardrails.md` updated with file length policy
+- **Test File Extraction** - All inline `#[cfg(test)]` blocks moved to separate `*_tests.rs` files
+  - 31 new sibling test files across `src/` (e.g., `logic.rs` → `logic_tests.rs`)
+  - Parent `mod.rs` files updated with `#[cfg(test)] mod xxx_tests;` declarations
+  - Eliminates file-length violations and improves build parallelism
+  - New `scripts/check_test_structure.py` guardrail bans inline test blocks
 - **Marinara-Style Prompt Rules** - Overhauled `SYSTEM_PROMPT_TEMPLATE` with battle-tested patterns from Marinara Engine
   - Free will framing: "you have your own free will, intellect, and emotional intelligence"
   - Anti-repetition rule with concrete example ("Gooner?" → "What type of question is that?")

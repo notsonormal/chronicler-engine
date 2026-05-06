@@ -4,9 +4,58 @@
 Establish a formal policy and architectural design pattern for ensuring the Chronicler Engine remains heavily tested locally without incurring financial costs or massive latency from interacting with external LLM APIs (like OpenRouter).
 
 ## Policy Rules
-1. **Isolated Unit Tests**: All modules (`parser`, `map`, `state`) must continue to maintain fully isolated, embedded unit tests `#[test]` that evaluate standard library behaviors with zero networking overhead.
+1. **Isolated Unit Tests**: All modules (`parser`, `map`, `state`) maintain fully isolated unit tests `#[test]` that evaluate standard library behaviors with zero networking overhead. Unit tests live in separate `*_tests.rs` sibling files (not inline `#[cfg(test)]` blocks) to keep source files under the 2,000-line guardrail.
 2. **Integration Capabilities**: As the engine develops, an overarching `tests/` directory will be required. These integration tests will evaluate the state graph moving from end-to-end.
 3. **LLM Abstraction (The Trait Pattern)**: No component outside of the executable `main.rs` loop should ever be hardcoded to contact OpenRouter.
+
+## Test File Organization
+
+### Unit Tests (Sibling Files)
+
+Unit tests are co-located with source code in separate `*_tests.rs` files:
+
+```
+src/
+├── engine/
+│   ├── logic.rs
+│   ├── logic_tests.rs          ← unit tests for logic.rs
+│   ├── parser.rs
+│   └── parser_tests.rs         ← unit tests for parser.rs
+├── model/
+│   ├── state.rs
+│   └── state_tests.rs          ← unit tests for state.rs
+└── narrative/
+    ├── llm_client.rs
+    └── llm_client_tests.rs     ← unit tests for llm_client.rs
+```
+
+Parent `mod.rs` declares the test module:
+
+```rust
+#[cfg(test)]
+mod logic_tests;
+```
+
+Benefits:
+- Source files stay under the 2,000-line file-length limit
+- Tests compile in parallel with `cargo nextest`
+- Clear 1:1 mapping between source and test file
+
+### Integration Tests (`tests/` Directory)
+
+Cross-module and browser-based tests live in the top-level `tests/` directory:
+
+| Test File | Purpose | Execution Model | Runtime |
+|----------|---------|---------------|---------|
+| `architecture.rs` | Architecture guardrails (arch-lint, no-unwrap, layer enforcement) | In-process | Very Fast |
+| `component_tests.rs` | Templates, endpoints, settings, validation | In-process | Very Fast |
+| `e2e_tests.rs` | UI structure, layouts, interactions | Browser | Medium |
+| `flow_mock_tests.rs` | Core game loop, polling | Browser + Mock LLM | Fast |
+| `flow_llm_tests.rs` | LLM narrative | Browser + Real LLM | Slow |
+| `game_service_tests.rs` | Game service logic, DI, retry | In-process | Very Fast |
+| `guardrails.rs` | Custom guardrails (what-comments, import order, single-letter vars, file length) | In-process | Very Fast |
+| `logic_tests.rs` | Movement, room resolution, fuzzy matching | In-process | Very Fast |
+| `trigger_tests.rs` | Trigger evaluation and firing | Browser + Mock LLM | Fast |
 
 ## The `LlmBackend` Interface
 To satisfy the LLM Abstraction policy, `llm.rs` must implement an interface:
@@ -102,19 +151,7 @@ cargo test -- --test-threads=1
 - Node.js 18+ (for Playwright browser installation)
 - Chromium browser installed via `npx playwright install chromium`
 
-### Test Files (Consolidated)
 
-| Test File | Purpose | Execution Model | Runtime |
-|----------|---------|---------------|---------|
-| `architecture.rs` | Architecture guardrails (arch-lint, no-unwrap, layer enforcement) | In-process | Very Fast |
-| `component_tests.rs` | Templates, endpoints, settings, validation | In-process | Very Fast |
-| `e2e_tests.rs` | UI structure, layouts, interactions | Browser | Medium |
-| `flow_mock_tests.rs` | Core game loop, polling | Browser + Mock LLM | Fast |
-| `flow_llm_tests.rs` | LLM narrative | Browser + Real LLM | Slow |
-| `game_service_tests.rs` | Game service logic, DI, retry | In-process | Very Fast |
-| `guardrails.rs` | Custom guardrails (what-comments, import order, single-letter vars) | In-process | Very Fast |
-| `logic_tests.rs` | Movement, room resolution, fuzzy matching | In-process | Very Fast |
-| `trigger_tests.rs` | Trigger evaluation and firing | Browser + Mock LLM | Fast |
 
 ### Test Coverage
 
@@ -145,12 +182,15 @@ cargo test -- --test-threads=1
 - LLM arrival narration
 - LLM free action narration
 
-**guardrails.rs** (7 tests):
+**guardrails.rs** (11 tests):
 - Import ordering (std → external → local)
 - Module purity (no side effects in `model/`)
 - "What" comment detection
 - Doc anchor verification
 - Single-letter variable detection
+- File length enforcement (src/ and tests/)
+- No `std::thread` in production code
+- Spawn site documentation
 
 **logic_tests.rs** (11 tests):
 - Room resolution and fuzzy matching

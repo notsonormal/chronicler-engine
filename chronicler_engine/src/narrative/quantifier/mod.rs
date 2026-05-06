@@ -20,6 +20,13 @@ pub use types::{
 };
 
 #[cfg(test)]
-mod action_boundary_tests;
+pub(crate) mod test_support;
+
 #[cfg(test)]
-mod tests;
+mod backends_tests;
+#[cfg(test)]
+mod core_tests;
+#[cfg(test)]
+mod parser_tests;
+#[cfg(test)]
+mod prompt_tests;

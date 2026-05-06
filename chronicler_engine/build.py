@@ -376,7 +376,7 @@ def main():
         return 0
 
     # Compute total steps for the main build path
-    total_steps = 7  # clippy, arch, guardrails, build, copy assets, tests, report/skip
+    total_steps = 8  # clippy, arch, guardrails, test-structure, build, copy assets, tests, report/skip
     if not args.no_fmt:
         total_steps += 1
     if args.validate_data:
@@ -402,6 +402,9 @@ def main():
 
     steps.next("Running custom guardrails tests...")
     run("cargo test --test guardrails", env=cargo_env)
+
+    steps.next("Running test structure guardrail...")
+    run("python scripts/check_test_structure.py", env=cargo_env)
 
     steps.next(f"Building ({build_profile})...")
     run(
