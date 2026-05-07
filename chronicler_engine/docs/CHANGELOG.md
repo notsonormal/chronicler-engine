@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Fixed
+- **Sequential trigger display** - Main narration and trigger text now appear sequentially instead of simultaneously
+  - Split `evaluate_and_narrate_triggers` into three phases: evaluate (lock) → LLM (unlock) → commit (lock)
+  - Frontend can now poll and display the main narration while the trigger continuation is still generating
+  - `execute_freeaction_impl` returns `Option<TriggerContinuationRequest>` for orchestration in `game_service.rs`
+  - New `commit_trigger_narration()` function adds event header + narration logs and marks triggers fired
+
 ### Added
 - **Spell & Grammar Check Integration** - Pre-flight text checking for player input via harper-core
   - New `narrative/text_check/` module: `HarperBackend`, `CheckResult`, `CheckIssue`, `IssueKind`
@@ -407,7 +414,7 @@
   - `tests/ui_tests.rs` - check `.location-header`
 
 ### Added  
-- **build.py** - New build script in `scripts/build.py`
+- **build.py** - New build script in `build.py`
   - Runs: cargo build, cargo clippy, cargo test, cargo llvm-cov
 
 ## 2026-04-14

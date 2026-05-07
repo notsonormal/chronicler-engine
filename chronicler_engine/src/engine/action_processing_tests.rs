@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
 use crate::engine::action_processing::{
-    FreeActionContext, apply_npc_events, execute_freeaction_impl,
+    FreeActionContext, TriggerContinuationRequest, apply_npc_events, commit_trigger_narration,
+    execute_freeaction_impl,
 };
 use crate::engine::trigger_eval::{get_times_met, is_currently_meeting, set_currently_meeting};
 use crate::model::state::LogType;
@@ -131,7 +132,7 @@ fn test_execute_freeaction_impl_updates_npcs_in_area() {
 }
 
 #[test]
-fn test_execute_freeaction_impl_triggers_evaluated() {
+fn test_execute_freeaction_impl_returns_trigger_request_when_trigger_matches() {
     let npc = TestNpc::with_times_met_trigger(
         "carla",
         "Carla",
@@ -143,9 +144,6 @@ fn test_execute_freeaction_impl_triggers_evaluated() {
     let world = Arc::new(TestWorld::minimal());
     let player = Arc::new(TestPlayer::standard());
 
-    // NPC has TimesMet Eq 0 trigger - should fire because times_met starts at 0
-    // Note: evaluate_and_narrate_triggers calls LLM internally, so this test
-    // will use whatever backend is configured (mock in test env)
     let result = execute_freeaction_impl(
         &mut state,
         &FreeActionContext {
@@ -154,14 +152,53 @@ fn test_execute_freeaction_impl_triggers_evaluated() {
             quantifier_result: &make_quantifier_result_no_movement(),
             world: &world,
             player: &player,
-            all_npcs: &[], // empty won't match triggers
+            all_npcs: &[],
             history: &[],
             llm_backend: &crate::narrative::llm::MockBackend::default(),
         },
     );
 
-    // Result should be ok (even if trigger LLM call fails, fn handles gracefully)
-    assert!(result.is_ok());
+    assert!(result.is_ok(), "execute_freeaction_impl should succeed");
+    let trigger_request = result.unwrap();
+    assert!(
+        trigger_request.is_some(),
+        "Should return TriggerContinuationRequest when trigger matches"
+    );
+    let request = trigger_request.unwrap();
+    assert_eq!(request.trigger_name, "Carla Introduction");
+    assert_eq!(request.npc_id, "carla");
+    assert!(!request.trigger_repeat);
+    // Prompts should be non-empty after successful build
+    assert!(!request.system_prompt.is_empty());
+    assert!(!request.user_prompt.is_empty());
+}
+
+#[test]
+fn test_execute_freeaction_impl_returns_none_when_no_trigger_matches() {
+    // bartender has no triggers
+    let mut state = TestGameState::with_npc_raw("room1", TestNpc::named("bartender", "Bartender"));
+    let world = Arc::new(TestWorld::minimal());
+    let player = Arc::new(TestPlayer::standard());
+
+    let result = execute_freeaction_impl(
+        &mut state,
+        &FreeActionContext {
+            narration_text: "You look around.",
+            user_input: "look around",
+            quantifier_result: &make_quantifier_result_no_movement(),
+            world: &world,
+            player: &player,
+            all_npcs: &[],
+            history: &[],
+            llm_backend: &crate::narrative::llm::MockBackend::default(),
+        },
+    );
+
+    assert!(result.is_ok(), "execute_freeaction_impl should succeed");
+    assert!(
+        result.unwrap().is_none(),
+        "Should return None when no trigger matches"
+    );
 }
 
 #[test]
@@ -393,4 +430,97 @@ fn test_evaluate_and_narrate_triggers_adds_event_header() {
     // Second entry should be the narration
     let narration_entry = &state.narration_history[1];
     assert_eq!(narration_entry.log_type, LogType::Narration);
+}
+
+#[test]
+fn test_commit_trigger_narration_adds_event_header_and_narration() {
+    let mut state = make_test_state();
+
+    let request = TriggerContinuationRequest {
+        npc_id: "carla".to_string(),
+        trigger_idx: 0,
+        trigger_name: "Carla Introduction".to_string(),
+        trigger_repeat: false,
+        system_prompt: "sys".to_string(),
+        user_prompt: "user".to_string(),
+        max_tokens: None,
+    };
+
+    commit_trigger_narration(&mut state, &request, "Gabriella emerges from the shadows.");
+
+    assert_eq!(state.narration_history.len(), 2);
+
+    let event_entry = &state.narration_history[0];
+    assert_eq!(event_entry.log_type, LogType::Event);
+    assert_eq!(event_entry.sender, Some("Carla Introduction".to_string()));
+    assert_eq!(event_entry.text, "");
+
+    let narration_entry = &state.narration_history[1];
+    assert_eq!(narration_entry.log_type, LogType::Narration);
+    assert_eq!(narration_entry.text, "Gabriella emerges from the shadows.");
+}
+
+#[test]
+fn test_commit_trigger_narration_marks_non_repeat_trigger_fired() {
+    let mut state = make_test_state();
+
+    let request = TriggerContinuationRequest {
+        npc_id: "carla".to_string(),
+        trigger_idx: 0,
+        trigger_name: "Carla Introduction".to_string(),
+        trigger_repeat: false,
+        system_prompt: "sys".to_string(),
+        user_prompt: "user".to_string(),
+        max_tokens: None,
+    };
+
+    commit_trigger_narration(&mut state, &request, "Some text.");
+
+    assert!(
+        crate::engine::trigger_eval::is_trigger_fired(&state.character_state, "carla", 0),
+        "Non-repeating trigger should be marked as fired"
+    );
+}
+
+#[test]
+fn test_commit_trigger_narration_does_not_mark_repeat_trigger_fired() {
+    let mut state = make_test_state();
+
+    let request = TriggerContinuationRequest {
+        npc_id: "carla".to_string(),
+        trigger_idx: 0,
+        trigger_name: "Carla Greeting".to_string(),
+        trigger_repeat: true,
+        system_prompt: "sys".to_string(),
+        user_prompt: "user".to_string(),
+        max_tokens: None,
+    };
+
+    commit_trigger_narration(&mut state, &request, "Some text.");
+
+    assert!(
+        !crate::engine::trigger_eval::is_trigger_fired(&state.character_state, "carla", 0),
+        "Repeating trigger should NOT be marked as fired"
+    );
+}
+
+#[test]
+fn test_commit_trigger_narration_empty_text_is_noop() {
+    let mut state = make_test_state();
+
+    let request = TriggerContinuationRequest {
+        npc_id: "carla".to_string(),
+        trigger_idx: 0,
+        trigger_name: "Carla Introduction".to_string(),
+        trigger_repeat: false,
+        system_prompt: "sys".to_string(),
+        user_prompt: "user".to_string(),
+        max_tokens: None,
+    };
+
+    commit_trigger_narration(&mut state, &request, "");
+    assert!(state.narration_history.is_empty());
+
+    commit_trigger_narration(&mut state, &request, "   ");
+    assert!(state.narration_history.is_empty());
 }

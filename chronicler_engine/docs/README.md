@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-07 21:43 UTC*
+*Index last generated: 2026-05-09 12:34 UTC*
 
 ### Root files
 
@@ -31,12 +31,14 @@ This folder contains all documentation for the Chronicler Engine project.
 ### `docs/plans/`
 
 - [LLM Infrastructure Improvements](./plans/llm-infrastructure-improvements.md)
+- [AI Steering & Guided Generation](./plans/steering-and-guided-generation.md)
 - [Structured Error Taxonomy](./plans/structured-error-taxonomy.md)
 
 ### `docs/plans/archived/`
 
 - [Plan: Spell & Grammar Check Integration](./plans/archived/ant-man-black-lightning-bobbi-morse.md)
 - [Plan: Raise `game_service.rs` Coverage to 80%+ via Refactoring](./plans/archived/coverage-game-service-archived.md)
+- [Fix: Show LLM Text Immediately, Delay Trigger Text Until Generated](./plans/archived/crimson-avenger-robin-iceman.md)
 - [Plan: Improve Quantifier Prompt for Movement Certainty](./plans/archived/donna-troy-hercules-warpath-2026-05-03.md)
 - [Plan: Dependency-Inject LLM/Quantifier Backends into DefaultGameService](./plans/archived/drax-psylocke-gamora-2026-05-04.md)
 - [Spec: Event Header Entries](./plans/archived/event-header-entries-archived.md)

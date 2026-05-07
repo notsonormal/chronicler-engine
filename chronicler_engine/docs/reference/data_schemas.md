@@ -36,6 +36,7 @@ A unified structure for both `PlayerCard` and `NpcCard` narrative fields:
   "inventory": ["item_id_1", "item_id_2"],
   "image_path": "string (optional, legacy field - full body image)",
   "profile_image": "string (optional, preferred profile image)",
+  "summary": "string (optional, brief character summary)",
   "headshot_image": "string (optional, headshot/portrait for sidebar grid)"
 }
 ```
@@ -66,6 +67,7 @@ Rooms in map.json have the following structure:
   ],
   "items": ["item_id_1"],
   "npcs": ["npc_id_1"],
+  "navigation_description": "string (optional, custom movement narration)",
   "image_path": "string"
 }
 ```
@@ -122,7 +124,7 @@ Tracks character state for a specific NPC. Stored in `GameState.character_state`
 
 ### Fields
 - `times_met`: How many times the player has encountered this NPC
-- `trigger_fired`: Map of trigger description to boolean (whether that trigger has fired)
+- `trigger_fired`: Map of trigger index (usize) to boolean (whether that trigger has fired)
 
 ## CharacterState Schema (NEW)
 Contains all NPC encounter state. Top-level field in `GameState`.
@@ -173,3 +175,21 @@ Collection of NPC movement events with confidence level. Returned by `compute_np
 ### Fields
 - `events`: Array of `NpcEvent` objects
 - `confidence`: Confidence level (`High`, `Medium`, `Low`). Medium when events detected, Low when no events.
+
+## WorldCard Schema (NEW)
+Top-level world definition loaded from `data/worlds/*/world.json`.
+
+```json
+{
+  "name": "string",
+  "description": "string",
+  "global_rules": ["rule 1", "rule 2"],
+  "default_room_image": "string (optional, fallback image for rooms without one)"
+}
+```
+
+### Fields
+- `name`: Display name of the world
+- `description`: Lore and setting description for the Game Master
+- `global_rules`: Array of global behavioral rules injected into the system prompt
+- `default_room_image`: Optional fallback image path used when a room does not specify its own `image_path`

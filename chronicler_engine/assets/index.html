@@ -269,6 +269,10 @@
                     saveActionArea();
                     actionArea.innerHTML = html;
                 }
+            })
+            .catch(err => {
+                console.error('Text check failed:', err);
+                restoreActionArea();
             });
         }
         

@@ -20,7 +20,7 @@ flowchart TD
     
     Phase45["**PHASE 4.5: QUANTIFIER & MOVEMENT**<br>*(Phase: Quantifying)*<br>1. Post-narration Quantifier analyzes<br>2. Process movement intent<br>3. If moved: trigger `narrate_arrival` LLM call<br>4. Determine NPC Enter/Leave events"]
     
-    Phase5["**PHASE 5: TRIGGER EVALUATION**<br>*(Phase: GeneratingEvent — only if trigger fires)*<br>1. `evaluate_triggers(state)` — first match only<br>2. Build prompt with continuation context<br>3. Call LLM & mark trigger as fired<br>4. Set status back to 'Ready'"]
+    Phase5["**PHASE 5: TRIGGER EVALUATION**<br>*(Phase: GeneratingEvent — only if trigger fires)*<br>1. `evaluate_triggers(state)` — first match only (inside lock)<br>2. Build prompt with continuation context<br>3. Release lock → call LLM (frontend can poll main narration)<br>4. Re-acquire lock → add event header + trigger narration<br>5. Mark trigger as fired → set status back to 'Ready']]
     
     Phase6["**PHASE 6: POLLING UPDATE**<br>1. Client polls /fragment/story-log (5s)<br>2. Server returns updated HTML<br>3. HTMX swaps content"]
 

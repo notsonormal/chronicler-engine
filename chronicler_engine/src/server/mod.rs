@@ -96,10 +96,17 @@ fn build_router(app_state: AppState) -> Router {
 }
 
 pub fn create_app_for_testing(state: Arc<std::sync::Mutex<GameState>>) -> Router {
+    create_app_for_testing_with_settings(state, AppSettings::default())
+}
+
+pub fn create_app_for_testing_with_settings(
+    state: Arc<std::sync::Mutex<GameState>>,
+    settings: AppSettings,
+) -> Router {
     let app_state = AppState {
         state,
         game_service: Arc::new(DefaultGameService::new()) as Arc<dyn GameService>,
-        settings: Arc::new(RwLock::new(AppSettings::default())),
+        settings: Arc::new(RwLock::new(settings)),
         cancel_token: CancellationToken::new(),
     };
     build_router(app_state)
@@ -154,6 +161,12 @@ impl AppState {
         self.state
             .lock()
             .map_err(|_| crate::error::EngineError::Config("Lock poisoned".into()))
+    }
+
+    /// Read a snapshot of the current settings.
+    /// Returns default settings if the lock is poisoned.
+    pub fn settings(&self) -> AppSettings {
+        self.settings.read().map(|g| g.clone()).unwrap_or_default()
     }
 }
 

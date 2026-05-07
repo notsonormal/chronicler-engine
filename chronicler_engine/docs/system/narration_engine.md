@@ -70,7 +70,7 @@ This means `times_met` only increments on **new encounters** (when an NPC enters
 **Key behaviors:**
 - `is_generating` stays `true` through both the first narration AND all trigger narrations
 - Trigger narrations do NOT cause further movement — quantifier is skipped for them
-- Maximum 3 trigger narrations per user action (prevents runaway chains)
+- Only the first matching trigger is narrated per user action (prevents runaway chains)
 - If a trigger LLM call fails, the first narration still displays; error is logged
 
 **Trigger condition example:**

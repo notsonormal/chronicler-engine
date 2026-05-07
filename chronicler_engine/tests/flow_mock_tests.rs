@@ -139,4 +139,75 @@ mod tests {
 
         let _ = browser.close().await;
     }
+
+    #[tokio::test]
+    async fn test_double_submit_protection() {
+        let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
+        let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
+
+        let (_playwright, browser) = launch_chrome().await;
+        let page = browser.new_page().await.unwrap();
+
+        goto_with_connection_check(&page, port)
+            .await
+            .expect("Failed to connect to server");
+
+        wait_for_status_ready(&page).await;
+
+        // Submit two commands in rapid succession with distinct text
+        page.evaluate::<(), ()>(
+            r#"
+            (() => {
+                const input = document.querySelector('#command-form input[name="command"]');
+                const form = document.querySelector('#command-form');
+                if (input && form) {
+                    input.value = 'alpha-beta-unique-1';
+                    form.requestSubmit();
+                    input.value = 'gamma-delta-unique-2';
+                    form.requestSubmit();
+                }
+            })()
+            "#,
+            None,
+        )
+        .await
+        .unwrap();
+
+        wait_for_status_ready(&page).await;
+
+        // Count Input entries specifically
+        let input_entries: Vec<String> = page
+            .evaluate::<(), Vec<String>>(
+                r#"
+                Array.from(document.querySelectorAll('#story-log .log-entry.input'))
+                    .map(el => el.innerText)
+                "#,
+                None,
+            )
+            .await
+            .unwrap_or_default();
+
+        println!("Input entries: {input_entries:?}");
+
+        // Both submissions should have created Input entries (the server accepts both)
+        // but the frontend button should be disabled during generation,
+        // preventing the second from being sent.
+        let has_first = input_entries
+            .iter()
+            .any(|t| t.contains("alpha-beta-unique-1"));
+        let has_second = input_entries
+            .iter()
+            .any(|t| t.contains("gamma-delta-unique-2"));
+
+        assert!(has_first, "First command should be processed");
+
+        // If the frontend disabled the submit button during generation,
+        // the second requestSubmit should have been a no-op.
+        assert!(
+            !has_second,
+            "Second command should be blocked by disabled submit button"
+        );
+
+        let _ = browser.close().await;
+    }
 }

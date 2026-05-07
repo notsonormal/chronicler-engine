@@ -15,9 +15,13 @@ These invariants are machine-checkable statements about the engine's runtime beh
 1. Parse quantifier result for world-state changes (movement, item transfers).
 2. Update `npcs_in_area` based on quantifier output.
 3. Append narration to `narration_history`.
-4. Evaluate triggers against the mutated state.
+4. Evaluate triggers against the mutated state (inside lock).
+5. Apply NPC events (`times_met` increments, `currently_meeting` updates).
+6. Release lock → trigger LLM call (frontend can poll main narration).
+7. Re-acquire lock → commit trigger narration logs and mark trigger fired.
 
 Reordering steps 1 and 3 would cause triggers to fire against stale state.
+Moving the trigger LLM call inside the lock would block frontend polling, causing both narrations to appear simultaneously.
 
 ## Concurrency
 

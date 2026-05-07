@@ -1,6 +1,7 @@
 use crate::bootstrap::{
-    inject_scenario_logs, initialize_world_from_manifest, load_world_manifest, validate_loaded_data,
+    initialize_world_from_manifest, inject_scenario_logs, load_world_manifest, validate_loaded_data,
 };
+use crate::cli::resolve_engine_data_path;
 use crate::model::character::{CharacterSheet, NpcCard, PlayerCard};
 use crate::model::map::{MapDef, Overworld, Region, Room};
 use crate::model::scenario::StartingScenario;
@@ -10,7 +11,7 @@ use crate::test_support::{TestGameState, TestPlayer};
 
 #[test]
 fn test_load_redmist_estate_world() {
-    let result = initialize_world_from_manifest("redmist_estate");
+    let result = initialize_world_from_manifest("redmist_estate", &resolve_engine_data_path());
     assert!(result.is_ok(), "Failed to load redmist_estate: {result:?}");
     let (manifest, _map, _player, npcs) = result.unwrap();
     assert_eq!(manifest.id, "redmist_estate");
@@ -21,7 +22,7 @@ fn test_load_redmist_estate_world() {
 
 #[test]
 fn test_load_test_world() {
-    let result = initialize_world_from_manifest("test");
+    let result = initialize_world_from_manifest("test", &resolve_engine_data_path());
     assert!(result.is_ok(), "Failed to load test world: {result:?}");
     let (manifest, _map, player, npcs) = result.unwrap();
     assert_eq!(manifest.id, "test");
@@ -33,14 +34,14 @@ fn test_load_test_world() {
 
 #[test]
 fn test_load_world_manifest_json_parse_error() {
-    let result = load_world_manifest("test"); // Valid world
+    let result = load_world_manifest("test", &resolve_engine_data_path()); // Valid world
     assert!(result.is_ok()); // Should succeed for valid world
 }
 
 #[test]
 fn test_load_world_manifest_path_construction() {
     // Test that manifest path is constructed from data_dir
-    let result = load_world_manifest("test");
+    let result = load_world_manifest("test", &resolve_engine_data_path());
     match result {
         Ok(manifest) => {
             // Valid world loads successfully
@@ -56,21 +57,22 @@ fn test_load_world_manifest_path_construction() {
 #[test]
 fn test_initialize_world_checks_world_directory() {
     // Test that initialize_world_from_manifest checks directory existence
-    let result = initialize_world_from_manifest("nonexistent_directory_xyz123");
+    let result =
+        initialize_world_from_manifest("nonexistent_directory_xyz123", &resolve_engine_data_path());
     assert!(result.is_err()); // Should fail for missing directory
 }
 
 #[test]
 fn test_initialize_world_requires_world_json() {
     // A directory without world.manifest should fail
-    let result = initialize_world_from_manifest("nonexistent_xyz789");
+    let result = initialize_world_from_manifest("nonexistent_xyz789", &resolve_engine_data_path());
     assert!(result.is_err()); // Should fail gracefully
 }
 
 #[test]
 fn test_initialize_world_validates_manifest_fields() {
     // Test world should have all required fields
-    let result = initialize_world_from_manifest("test");
+    let result = initialize_world_from_manifest("test", &resolve_engine_data_path());
     if let Ok((manifest, _map, _player, _npcs)) = result {
         assert!(!manifest.id.is_empty());
         assert!(!manifest.name.is_empty());
@@ -82,7 +84,7 @@ fn test_initialize_world_validates_manifest_fields() {
 #[test]
 fn test_initialize_world_loads_character_files() {
     // Verify NPC files are loaded from characters/ subdirectory
-    let result = initialize_world_from_manifest("test");
+    let result = initialize_world_from_manifest("test", &resolve_engine_data_path());
     if let Ok((_manifest, _map, _player, npcs)) = result {
         // NPCs are loaded (if character files exist)
         let _ = npcs.len(); // Should not panic
@@ -92,25 +94,27 @@ fn test_initialize_world_loads_character_files() {
 #[test]
 fn test_load_world_manifest_returns_result() {
     // Verify load_world_manifest returns engine Result type
-    let result: crate::error::Result<WorldManifest> = load_world_manifest("test");
+    let result: crate::error::Result<WorldManifest> =
+        load_world_manifest("test", &resolve_engine_data_path());
     let _ = result; // Just verify it compiles
 }
 
 #[test]
 fn test_load_world_manifest_error_nonexistent() {
-    let result = load_world_manifest("nonexistent_world_xyz");
+    let result = load_world_manifest("nonexistent_world_xyz", &resolve_engine_data_path());
     assert!(result.is_err(), "Should fail for non-existent world");
 }
 
 #[test]
 fn test_initialize_world_error_not_found() {
-    let result = initialize_world_from_manifest("nonexistent_world_xyz");
+    let result =
+        initialize_world_from_manifest("nonexistent_world_xyz", &resolve_engine_data_path());
     assert!(result.is_err());
 }
 
 #[test]
 fn test_load_world_manifest_valid() {
-    let result = load_world_manifest("test");
+    let result = load_world_manifest("test", &resolve_engine_data_path());
     assert!(
         result.is_ok(),
         "Should load test world manifest: {result:?}"
@@ -121,7 +125,7 @@ fn test_load_world_manifest_valid() {
 
 #[test]
 fn test_world_manifest_contains_required_fields() {
-    let manifest = load_world_manifest("test").unwrap();
+    let manifest = load_world_manifest("test", &resolve_engine_data_path()).unwrap();
     assert!(!manifest.id.is_empty());
     assert!(!manifest.name.is_empty());
     assert!(!manifest.starting_room_id.is_empty());
@@ -432,18 +436,13 @@ fn test_validate_loaded_data_invalid_trigger_room() {
 
 #[test]
 fn test_load_world_manifest_invalid_json() {
-    let temp_dir = std::env::temp_dir().join(format!("chronicler_bootstrap_json_{}", std::process::id()));
+    let temp_dir =
+        std::env::temp_dir().join(format!("chronicler_bootstrap_json_{}", std::process::id()));
     let world_dir = temp_dir.join("worlds").join("bad_json");
     std::fs::create_dir_all(&world_dir).unwrap();
     std::fs::write(world_dir.join("world.json"), "not valid json").unwrap();
 
-    unsafe {
-        std::env::set_var("CHRONICLER_DATA", &temp_dir);
-    }
-    let result = load_world_manifest("bad_json");
-    unsafe {
-        std::env::remove_var("CHRONICLER_DATA");
-    }
+    let result = load_world_manifest("bad_json", &temp_dir);
     let _ = std::fs::remove_dir_all(&temp_dir);
 
     assert!(result.is_err(), "Should fail for invalid JSON");
@@ -451,7 +450,8 @@ fn test_load_world_manifest_invalid_json() {
 
 #[test]
 fn test_initialize_world_with_characters_dir() {
-    let temp_dir = std::env::temp_dir().join(format!("chronicler_bootstrap_chars_{}", std::process::id()));
+    let temp_dir =
+        std::env::temp_dir().join(format!("chronicler_bootstrap_chars_{}", std::process::id()));
 
     // World manifest with custom characters_dir
     let world_dir = temp_dir.join("worlds").join("char_world");
@@ -549,13 +549,7 @@ fn test_initialize_world_with_characters_dir() {
     )
     .unwrap();
 
-    unsafe {
-        std::env::set_var("CHRONICLER_DATA", &temp_dir);
-    }
-    let result = initialize_world_from_manifest("char_world");
-    unsafe {
-        std::env::remove_var("CHRONICLER_DATA");
-    }
+    let result = initialize_world_from_manifest("char_world", &temp_dir);
     let _ = std::fs::remove_dir_all(&temp_dir);
 
     assert!(result.is_ok(), "Failed to initialize world: {result:?}");
@@ -638,12 +632,15 @@ fn test_inject_scenario_logs_adds_narration() {
     inject_scenario_logs(&mut state, &manifest, &player);
 
     assert_eq!(state.narration_history.len(), 2);
-    assert_eq!(state.narration_history[0].sender, Some("Room start".to_string()));
     assert_eq!(
-        state.narration_history[1].text,
-        "Welcome, Alice."
+        state.narration_history[0].sender,
+        Some("Room start".to_string())
     );
-    assert_eq!(state.narration_history[1].log_type, crate::model::state::LogType::Narration);
+    assert_eq!(state.narration_history[1].text, "Welcome, Alice.");
+    assert_eq!(
+        state.narration_history[1].log_type,
+        crate::model::state::LogType::Narration
+    );
 }
 
 #[test]

@@ -29,8 +29,7 @@ fn read_json_file<T: serde::de::DeserializeOwned>(path: &Path) -> crate::error::
     })
 }
 
-pub fn load_world_manifest(world_id: &str) -> crate::error::Result<WorldManifest> {
-    let data_dir = resolve_engine_data_path();
+pub fn load_world_manifest(world_id: &str, data_dir: &Path) -> crate::error::Result<WorldManifest> {
     let path = data_dir.join("worlds").join(world_id).join("world.json");
     read_json_file(&path)
 }
@@ -38,8 +37,8 @@ pub fn load_world_manifest(world_id: &str) -> crate::error::Result<WorldManifest
 /// [DOC: docs/architecture/system.md]
 pub fn initialize_world_from_manifest(
     world_id: &str,
+    data_dir: &Path,
 ) -> crate::error::Result<(WorldManifest, MapDef, PlayerCard, Vec<NpcCard>)> {
-    let data_dir = resolve_engine_data_path();
     let world_dir = data_dir.join("worlds").join(world_id);
 
     if !world_dir.exists() {
@@ -47,7 +46,7 @@ pub fn initialize_world_from_manifest(
     }
 
     // [DOC: docs/system/startup.md]
-    let manifest = load_world_manifest(world_id)?;
+    let manifest = load_world_manifest(world_id, data_dir)?;
 
     let map_path = world_dir.join(&manifest.map_file);
     let map: MapDef = read_json_file(&map_path)?;
@@ -143,12 +142,7 @@ pub fn validate_loaded_data(
 }
 
 /// [DOC: docs/architecture/system.md]
-/// Inject default scenario narration logs into the game state.
-pub fn inject_scenario_logs(
-    state: &mut GameState,
-    manifest: &WorldManifest,
-    player: &PlayerCard,
-) {
+pub fn inject_scenario_logs(state: &mut GameState, manifest: &WorldManifest, player: &PlayerCard) {
     let Some(scenario) = manifest.default_scenario() else {
         return;
     };
@@ -156,10 +150,9 @@ pub fn inject_scenario_logs(
         return;
     }
 
-    let room_name =
-        crate::engine::logic::find_room_in_world_map(state, &manifest.starting_room_id)
-            .map(|r| r.name.clone())
-            .unwrap_or_else(|| manifest.starting_room_id.clone());
+    let room_name = crate::engine::logic::find_room_in_world_map(state, &manifest.starting_room_id)
+        .map(|r| r.name.clone())
+        .unwrap_or_else(|| manifest.starting_room_id.clone());
 
     state.add_log(
         String::new(),
@@ -177,7 +170,8 @@ pub fn run(args: Args) -> crate::error::Result<()> {
         return Ok(());
     }
 
-    let (manifest, map, player, npcs) = initialize_world_from_manifest(&args.world)?;
+    let data_dir = resolve_engine_data_path();
+    let (manifest, map, player, npcs) = initialize_world_from_manifest(&args.world, &data_dir)?;
 
     if let Err(e) = validate_loaded_data(&manifest, &map, &player, &npcs) {
         log::error!("Data validation failed for world '{}':\n{}", args.world, e);

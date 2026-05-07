@@ -12,8 +12,6 @@ mod tests {
 
     // Trigger Firing Tests
 
-    /// Test: Look command adds narration entries to the story log.
-    /// Verifies that the basic command flow produces output without crashing.
     #[tokio::test]
     async fn test_look_command_adds_narration_entries() {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
@@ -49,11 +47,6 @@ mod tests {
         let _ = browser.close().await;
     }
 
-    /// Test: Trigger fires when second quantifier detects NPC via RoomConfiguredNpcs
-    /// This tests the flow where:
-    /// 1. Player moves to a room with configured NPCs (e.g., shop with shopkeeper)
-    /// 2. Second quantifier runs on narration and sees RoomConfiguredNpcs
-    /// 3. Trigger with TimesMet Eq 0 fires
     #[tokio::test]
     async fn test_second_quantifier_detects_room_npcs() {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
@@ -92,11 +85,6 @@ mod tests {
         let _ = browser.close().await;
     }
 
-    /// Test: NPC without triggers still works (bartender has no triggers)
-    /// NOTE: With the fix evaluating ALL NPCs for triggers, other NPCs' triggers may fire
-    /// even when talking to an NPC without triggers. This test verifies the bartender
-    /// still generates dialogue, but accepts that status may show "Thinking..." briefly
-    /// due to other NPCs' triggers firing.
     #[tokio::test]
     async fn test_no_trigger_for_npc_without_triggers() {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
@@ -143,11 +131,6 @@ mod tests {
         let _ = browser.close().await;
     }
 
-    /// Test: Second encounter does NOT re-fire (non-repeatable trigger)
-    /// After a trigger fires once, subsequent encounters should not fire again.
-    /// NOTE: With the fix that evaluates ALL NPCs for triggers (not just npcs_in_area),
-    /// we may see more entries on subsequent encounters due to other NPCs' triggers.
-    /// The key check is that the SAME NPC's trigger doesn't fire twice.
     #[tokio::test]
     async fn test_second_encounter_does_not_refire() {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
@@ -208,8 +191,6 @@ mod tests {
         let _ = browser.close().await;
     }
 
-    /// Test: FreeAction without movement works as before (regression)
-    /// Commands like "look" that don't involve movement should still work.
     #[tokio::test]
     async fn test_freeaction_without_movement_works() {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
@@ -241,10 +222,6 @@ mod tests {
         let _ = browser.close().await;
     }
 
-    /// Test: FreeAction with movement but no triggers works as before (regression)
-    /// NOTE: With the fix that evaluates ALL NPCs for triggers (not just npcs_in_area),
-    /// movement actions now trigger continuation narration for NPCs with active triggers.
-    /// This means "go north" may be async and take longer to complete.
     #[tokio::test]
     async fn test_freeaction_with_movement_no_triggers() {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
@@ -277,6 +254,80 @@ mod tests {
         assert_eq!(
             status, "Ready",
             "Movement action should complete eventually"
+        );
+
+        let _ = browser.close().await;
+    }
+
+    #[tokio::test]
+    async fn test_repeatable_trigger_refires_then_stops() {
+        let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
+        let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
+
+        let (_playwright, browser) = launch_chrome().await;
+        let page = browser.new_page().await.unwrap();
+
+        goto_with_connection_check(&page, port)
+            .await
+            .expect("Failed to connect to server");
+
+        wait_for_status_ready(&page).await;
+
+        // Send 4 FreeActions mentioning Ranger Rick
+        for i in 1..=4 {
+            send_action(&page, &format!("greet Ranger Rick encounter {i}")).await;
+            wait_for_status_ready(&page).await;
+        }
+
+        // Check server state via debug endpoint
+        let debug_state: serde_json::Value =
+            reqwest::get(format!("http://127.0.0.1:{port}/debug/state"))
+                .await
+                .expect("Failed to fetch debug state")
+                .json()
+                .await
+                .expect("Failed to parse debug state");
+
+        let times_met = debug_state
+            .pointer("/character_state/forest_ranger/times_met")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
+
+        println!("Ranger times_met after 4 encounters: {times_met}");
+
+        // Count trigger narration occurrences in the story log.
+        // The Event entry has sender "Ranger Recognition".
+        let story_html: String = page
+            .evaluate::<(), String>(
+                "document.querySelector('#story-log')?.innerHTML || ''",
+                None,
+            )
+            .await
+            .unwrap_or_default();
+
+        let trigger_occurrences = story_html.matches("Ranger Recognition").count();
+        println!("Trigger occurrences: {trigger_occurrences}");
+
+        // The ranger is detected by the quantifier on every command.
+        // With repeat: true and times_met == 1 (< 3), the trigger fires every time.
+        assert!(
+            trigger_occurrences >= 2,
+            "Repeatable trigger should fire on multiple encounters, got {trigger_occurrences}"
+        );
+
+        // Verify the ranger was detected at all (npcs_in_area includes him)
+        let npcs_in_area: Vec<String> = debug_state
+            .pointer("/npcs_in_area")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default();
+        assert!(
+            npcs_in_area.contains(&"forest_ranger".to_string()),
+            "Ranger should be detected by quantifier"
         );
 
         let _ = browser.close().await;

@@ -164,13 +164,16 @@ Event headers:
 | 1 | `handle_movement()` — may update `current_room_id` | Room must be current before NPCs are resolved |
 | 2 | Resolve current NPCs from quantifier result | Uses updated `current_room_id` from step 1 |
 | 3 | `state.add_log(narration_text)` | Narration must be in history before triggers read it |
-| 4 | `evaluate_and_narrate_triggers()` | Reads `state.narration_history` (step 3) to build the trigger continuation prompt |
+| 4a | `evaluate_triggers()` + build prompt | Reads `state.narration_history` (step 3) to build the trigger continuation prompt |
+| 4b | Trigger LLM call | Runs **outside** the state lock so the frontend can poll the main narration |
+| 4c | `commit_trigger_narration()` | Re-acquires lock to add trigger logs and mark trigger fired |
 | 5 | `apply_npc_events()` — mutates `character_state` | `times_met` increments AFTER trigger evaluation (see Timing section above) |
 
 **What breaks if you change the order:**
 
-- Swapping steps 3 and 4: triggers generate continuation without seeing the current narration as context — the LLM has no story thread to continue from.
-- Swapping steps 4 and 5: `times_met` increments before trigger evaluation — `TimesMet Eq 0` would never fire on first encounter.
+- Swapping steps 3 and 4a: triggers generate continuation without seeing the current narration as context — the LLM has no story thread to continue from.
+- Swapping steps 4a and 5: `times_met` increments before trigger evaluation — `TimesMet Eq 0` would never fire on first encounter.
 - Moving step 1 after step 3: the narration gets logged against the old room, then the room changes — state is inconsistent.
+- Moving step 4b inside the lock: frontend cannot poll the main narration until the trigger LLM completes — both texts appear simultaneously.
 
 This invariant is enforced by code structure, not by runtime checks. If you refactor `execute_freeaction_impl`, preserve this order explicitly.

@@ -20,7 +20,7 @@ Contains the mechanics that drive the simulation. It translates user intent and 
 - **`action`**: The `Action` enum defining all supported system intents.
 - **`logic`**: Rules for movement, fuzzy-matching, and room resolution.
 - **`trigger_eval`**: Pure function evaluation of NPC triggers based on character state and room location (`evaluate_triggers(state, current_room_id) -> Vec<(NpcCard, Trigger)>`). Triggers with `room_id` only fire in that room.
-- **`action_processing`**: Extracted pure functions for server handlers (`get_static_npcs`, `handle_movement`, `apply_npc_events`, `evaluate_and_narrate_triggers`, `execute_freeaction_impl`). Enables unit testing of server-side logic.
+- **`action_processing`**: Extracted pure functions for server handlers (`get_static_npcs`, `handle_movement`, `apply_npc_events`, `evaluate_and_narrate_triggers`, `commit_trigger_narration`, `execute_freeaction_impl`). Enables unit testing of server-side logic.
 
 ### 3. The Narrative Tier (`crate::narrative::*`)
 The interface between the synchronous engine and stochastic LLM generation.
@@ -63,7 +63,7 @@ The HTTP layer for the HTMX web dashboard with polling-based real-time updates.
   - Templates declare required data shapes at compile time.
   - Missing fields = compiler error (not runtime failure).
 
-### 6. The Settings Tier (`crate::settings` + `crate::model::settings`)
+### 5. The Settings Tier (`crate::settings` + `crate::model::settings`)
 Persistent JSON-based settings system for LLM configuration with reusable connection profiles.
 
 | Component | Purpose |
@@ -149,7 +149,10 @@ Static web assets served by the server.
 | `src/narrative/text_check/harper_backend.rs` | `crate::narrative::text_check` | `HarperBackend` — harper-core wrapper |
 | `src/narrative/text_check/types.rs` | `crate::narrative::text_check` | `CheckResult`, `CheckIssue`, `IssueKind` |
 | `src/narrative/llm_client.rs` | `crate::narrative::llm_client` | HTTP client helpers for OpenRouter and Ollama |
+| `src/model/llm_backend.rs` | `crate::model::llm_backend` | `LlmBackendType` enum for backend selection |
 | `src/server/mod.rs` | `crate::server` | Axum router, `AppState`, `run_server`, `create_app_for_testing` |
+| `src/server/debug.rs` | `crate::server::debug` | Dev diagnostic endpoint (`/debug/state`) |
+| `src/test_support/mod.rs` | `crate::test_support` | Shared test utilities |
 | `src/server/fragments.rs` | `crate::server` | HTMX endpoint handlers and HTML fragment generators |
 | `src/server/settings_fragment.rs` | `crate::server` | Settings panel fragment handlers |
 | `src/server/templates.rs` | `crate::server` | Askama templates |
@@ -235,14 +238,17 @@ This allows NPCs like "Carla" to appear in a room because the LLM mentioned "Car
 
 The engine supports reactive NPC encounters based on character state. When the player moves to a new room, the system evaluates triggers before generating the final narration.
 
-**Flow**: `first narration → quantifier & movement → trigger evaluation → continuation narration → combined response`
+**Flow**: `first narration → quantifier & movement → trigger evaluation → (unlock) → continuation narration → (lock) → trigger commit`
 
-1. **First Narration**: Initial LLM narration for the user's action is generated.
+1. **First Narration**: Initial LLM narration for the user's action is generated **without holding the state lock**.
 2. **Movement & NPC Detection**: A single post-narration Quantifier pass detects movement intent and any NPCs mentioned in the narration.
 3. **Movement Execution**: If movement is detected, the engine updates `GameState.current_room_id`.
-4. **Trigger Evaluation** (`trigger_eval`): Engine evaluates all NPC triggers against `CharacterState` (e.g., `times_met == 0`).
-5. **Continuation Narration** (`prompt`): If triggers fire, `PromptBuilder` builds a second LLM prompt combining the first narration with trigger-specific text in the user message.
-6. **Combined Response**: Both narrations are logged and delivered in the same polling cycle.
+4. **Trigger Evaluation** (`trigger_eval`): Engine evaluates all NPC triggers against `CharacterState` (e.g., `times_met == 0`). This happens inside a state lock.
+5. **Trigger Prompt Building**: If triggers fire, `PromptBuilder` builds a second LLM prompt combining the first narration with trigger-specific text. The state lock is released before the LLM call.
+6. **Continuation Narration** (`prompt`): The second LLM call runs **outside the state lock**, allowing the frontend to poll and display the main narration immediately.
+7. **Trigger Commit**: After the LLM returns, the state lock is re-acquired and the trigger event header + continuation narration are committed to the log.
+
+This three-phase lock/unlock pattern ensures the frontend sees the main narration as soon as it is generated, while the trigger text streams in when ready.
 
 **`NpcEncounterState`** tracks persistent NPC encounter data:
 - `times_met`: Number of times player has met the NPC

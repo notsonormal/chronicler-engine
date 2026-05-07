@@ -3,7 +3,9 @@
 use std::sync::{Arc, Mutex};
 
 use crate::engine::action::Action;
-use crate::engine::action_processing::{execute_freeaction_impl, get_static_npcs};
+use crate::engine::action_processing::{
+    commit_trigger_narration, execute_freeaction_impl, get_static_npcs,
+};
 use crate::engine::logic::{find_room_in_map, get_current_room};
 use crate::engine::parser::parse_command;
 use crate::error::EngineError;
@@ -214,7 +216,7 @@ impl GameService for DefaultGameService {
                     return;
                 };
 
-                let result = with_state_lock(&state_for_thread, |state| {
+                let trigger_request = with_state_lock(&state_for_thread, |state| {
                     execute_freeaction_impl(
                         state,
                         &crate::engine::action_processing::FreeActionContext {
@@ -230,11 +232,49 @@ impl GameService for DefaultGameService {
                     )
                 });
 
-                if let Some(Err(e)) = result {
-                    if let Ok(mut s) = state_for_thread.lock() {
-                        s.generation_state.status =
-                            crate::model::state::GenerationStatus::Error(format!("Error: {e}"));
+                match trigger_request {
+                    Some(Ok(Some(request))) => {
+                        set_phase(
+                            &state_for_thread,
+                            crate::model::state::GenerationPhase::GeneratingEvent,
+                        );
+
+                        let continuation_text = match backend.narrate_action_from_prompt(
+                            &request.system_prompt,
+                            &request.user_prompt,
+                            request.max_tokens,
+                        ) {
+                            Ok(t) => t,
+                            Err(e) => {
+                                log::error!("Trigger narration failed: {e}");
+                                if let Ok(mut s) = state_for_thread.lock() {
+                                    s.add_log(
+                                        format!("[Trigger narration failed: {e}]"),
+                                        None,
+                                        crate::model::state::LogType::System,
+                                    );
+                                    s.generation_state.status =
+                                        crate::model::state::GenerationStatus::Error(format!(
+                                            "Error: {e}"
+                                        ));
+                                }
+                                String::new()
+                            }
+                        };
+
+                        if !continuation_text.is_empty() {
+                            with_state_lock(&state_for_thread, |state| {
+                                commit_trigger_narration(state, &request, &continuation_text);
+                            });
+                        }
                     }
+                    Some(Err(e)) => {
+                        if let Ok(mut s) = state_for_thread.lock() {
+                            s.generation_state.status =
+                                crate::model::state::GenerationStatus::Error(format!("Error: {e}"));
+                        }
+                    }
+                    _ => {}
                 }
 
                 reset_generating(&state_for_thread);

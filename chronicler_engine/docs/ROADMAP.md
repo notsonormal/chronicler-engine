@@ -36,7 +36,7 @@ Adding the "Gaming" elements to the Roleplay.
 
 - [ ] **Spec 09: Item Interactions**: Picking up, dropping, examining, and using items through the GM.
 - [ ] **Spec 10: Character Stats & Combat**: Health, strength, and a narrative-driven combat system.
-- [ ] **Spec 11: Physical Interactions (Quantification)**: Implementation of the "Scene Quantifier" LLM to extract facts like pushing, grabbing, and movement before narration.
+- [x] **Spec 11: Physical Interactions (Quantification)**: Implementation of the "Scene Quantifier" LLM to extract facts like pushing, grabbing, and movement before narration.
 - [ ] **Spec 12: Time & Schedules**: NPCs moving between rooms based on a world clock.
 
 ### Phase 4: Intelligence & Memory
