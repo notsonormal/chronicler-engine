@@ -318,7 +318,6 @@ mod tests {
         assert!(body_str.contains("status"));
     }
 
-    /// CRITICAL Validation Test - verifies empty command handling
     #[tokio::test]
     async fn test_action_handler_empty_command() {
         let state = create_test_state();
@@ -1459,32 +1458,24 @@ async fn test_debug_state_endpoint_returns_json() {
 
 mod text_check_tests {
     use super::*;
-    use crate::TempSettingsGuard;
+    use chronicler_engine::create_app_for_testing_with_settings;
     use chronicler_engine::model::settings::{AppSettings, TextCheckMode, TextCheckSettings};
-    use std::io::Write;
 
-    fn write_text_check_settings(mode: TextCheckMode) {
-        let settings = AppSettings {
+    fn text_check_settings(mode: TextCheckMode) -> AppSettings {
+        AppSettings {
             text_check: TextCheckSettings {
                 mode,
                 enable_auto_check: true,
                 ignored_words: vec![],
             },
             ..Default::default()
-        };
-        let path = std::env::var("CHRONICLER_SETTINGS_PATH").unwrap();
-        let mut file = std::fs::File::create(&path).unwrap();
-        file.write_all(serde_json::to_string(&settings).unwrap().as_bytes())
-            .unwrap();
+        }
     }
 
     #[tokio::test]
     async fn test_action_check_disabled_forwards_to_action() {
-        let _guard = TempSettingsGuard::new();
-        write_text_check_settings(TextCheckMode::Disabled);
-
         let state = create_test_state();
-        let app = create_app_for_testing(state);
+        let app = create_app_for_testing_with_settings(state, text_check_settings(TextCheckMode::Disabled));
 
         let req = Request::builder()
             .uri("/action/check")
@@ -1527,8 +1518,6 @@ mod text_check_tests {
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     }
 
-    /// CRITICAL: /action/confirm must return full action area HTML for outerHTML swap.
-    /// Returning only a status span breaks the DOM when hx-swap="outerHTML" targets #action-area.
     #[tokio::test]
     async fn test_action_confirm_returns_full_action_area() {
         let state = create_test_state();
@@ -1566,11 +1555,8 @@ mod text_check_tests {
 
     #[tokio::test]
     async fn test_check_text_disabled() {
-        let _guard = TempSettingsGuard::new();
-        write_text_check_settings(TextCheckMode::Disabled);
-
         let state = create_test_state();
-        let app = create_app_for_testing(state);
+        let app = create_app_for_testing_with_settings(state, text_check_settings(TextCheckMode::Disabled));
 
         let req = Request::builder()
             .uri("/check-text")
@@ -1615,11 +1601,8 @@ mod text_check_tests {
 
     #[tokio::test]
     async fn test_check_text_finds_issues() {
-        let _guard = TempSettingsGuard::new();
-        write_text_check_settings(TextCheckMode::Spell);
-
         let state = create_test_state();
-        let app = create_app_for_testing(state);
+        let app = create_app_for_testing_with_settings(state, text_check_settings(TextCheckMode::Spell));
 
         let req = Request::builder()
             .uri("/check-text")
@@ -1649,11 +1632,8 @@ mod text_check_tests {
 
     #[tokio::test]
     async fn test_check_text_no_issues() {
-        let _guard = TempSettingsGuard::new();
-        write_text_check_settings(TextCheckMode::SpellGrammar);
-
         let state = create_test_state();
-        let app = create_app_for_testing(state);
+        let app = create_app_for_testing_with_settings(state, text_check_settings(TextCheckMode::SpellGrammar));
 
         let req = Request::builder()
             .uri("/check-text")

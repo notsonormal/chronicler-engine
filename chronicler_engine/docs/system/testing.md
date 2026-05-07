@@ -23,6 +23,7 @@ Tests are organized by execution model:
 | `game_service_tests.rs` | Game service logic, action handling, retry | In-process | Very Fast |
 | `guardrails.rs` | Custom guardrails (what-comments, long comment runs, single-letter vars) | In-process | Very Fast |
 | `logic_tests.rs` | Movement, room resolution, fuzzy matching | In-process | Very Fast |
+| `test_data.rs` | Shared test fixtures (world, map, game state builders) | In-process | Very Fast |
 | `trigger_tests.rs` | Trigger evaluation and firing | Browser + Mock LLM | Fast |
 
 ## Test Files Explained

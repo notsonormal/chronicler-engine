@@ -1,7 +1,6 @@
 use crate::narrative::llm_client::{
-    apply_gemma4_thinking_suffix, call_chat_completions, call_ollama,
-    call_openrouter_with_model, extract_content_from_response, parse_chat_response,
-    sanitize_llm_output,
+    apply_gemma4_thinking_suffix, call_chat_completions, call_ollama, call_openrouter_with_model,
+    extract_content_from_response, parse_chat_response, sanitize_llm_output,
 };
 
 // --- extract_content_from_response tests ---

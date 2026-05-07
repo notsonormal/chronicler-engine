@@ -9,13 +9,11 @@ use crate::model::settings::TextCheckMode;
 
 use super::types::{CheckIssue, CheckResult, IssueKind};
 
-/// Backend that uses harper-core for spell and grammar checking.
 pub struct HarperBackend {
     dictionary: Arc<MergedDictionary>,
 }
 
 impl HarperBackend {
-    /// Create a new backend with the curated dictionary and optional ignored words.
     pub fn new(ignored_words: &[String]) -> Self {
         let mut merged = MergedDictionary::new();
         merged.add_dictionary(FstDictionary::curated());
@@ -33,7 +31,6 @@ impl HarperBackend {
         }
     }
 
-    /// Check the given text and return a result with issues and corrected text.
     pub fn check(
         &self,
         text: &str,
@@ -114,12 +111,11 @@ fn lint_kind_to_issue_kind(kind: harper_core::linting::LintKind) -> IssueKind {
     }
 }
 
-/// Convert a char-index span to a byte-index span for a UTF-8 string.
 fn char_span_to_byte_span(text: &str, char_span: std::ops::Range<usize>) -> std::ops::Range<usize> {
     let mut byte_start = None;
     let mut byte_end = None;
 
-    for (byte_idx, (char_idx, _)) in text.char_indices().enumerate() {
+    for (char_idx, (byte_idx, _)) in text.char_indices().enumerate() {
         if char_idx == char_span.start {
             byte_start = Some(byte_idx);
         }
@@ -134,8 +130,6 @@ fn char_span_to_byte_span(text: &str, char_span: std::ops::Range<usize>) -> std:
     start..end
 }
 
-/// Apply all `ReplaceWith` suggestions to the text, working from end to start
-/// so that earlier spans do not shift.
 fn apply_suggestions(text: &str, lints: &[harper_core::linting::Lint]) -> String {
     let mut chars: Vec<char> = text.chars().collect();
     let mut sorted_lints: Vec<_> = lints.iter().collect();

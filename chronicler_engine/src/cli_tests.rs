@@ -122,7 +122,8 @@ fn test_list_worlds_nonexistent_worlds_dir() {
 
 #[test]
 fn test_scan_worlds_with_valid_world() {
-    let temp_dir = std::env::temp_dir().join(format!("chronicler_scan_test_{}", std::process::id()));
+    let temp_dir =
+        std::env::temp_dir().join(format!("chronicler_scan_test_{}", std::process::id()));
     let world_dir = temp_dir.join("worlds").join("my_world");
     std::fs::create_dir_all(&world_dir).unwrap();
 
@@ -153,7 +154,8 @@ fn test_scan_worlds_with_valid_world() {
 
 #[test]
 fn test_scan_worlds_empty_worlds_dir() {
-    let temp_dir = std::env::temp_dir().join(format!("chronicler_scan_empty_{}", std::process::id()));
+    let temp_dir =
+        std::env::temp_dir().join(format!("chronicler_scan_empty_{}", std::process::id()));
     std::fs::create_dir_all(temp_dir.join("worlds")).unwrap();
 
     let result = scan_worlds(&temp_dir);
@@ -165,7 +167,8 @@ fn test_scan_worlds_empty_worlds_dir() {
 
 #[test]
 fn test_scan_worlds_missing_worlds_dir() {
-    let temp_dir = std::env::temp_dir().join(format!("chronicler_scan_missing_{}", std::process::id()));
+    let temp_dir =
+        std::env::temp_dir().join(format!("chronicler_scan_missing_{}", std::process::id()));
     std::fs::create_dir_all(&temp_dir).unwrap();
 
     let result = scan_worlds(&temp_dir);
@@ -177,7 +180,8 @@ fn test_scan_worlds_missing_worlds_dir() {
 
 #[test]
 fn test_scan_worlds_skips_invalid_json() {
-    let temp_dir = std::env::temp_dir().join(format!("chronicler_scan_badjson_{}", std::process::id()));
+    let temp_dir =
+        std::env::temp_dir().join(format!("chronicler_scan_badjson_{}", std::process::id()));
     let world_dir = temp_dir.join("worlds").join("bad_world");
     std::fs::create_dir_all(&world_dir).unwrap();
     std::fs::write(world_dir.join("world.json"), "not json").unwrap();
@@ -191,7 +195,8 @@ fn test_scan_worlds_skips_invalid_json() {
 
 #[test]
 fn test_scan_worlds_skips_non_dir_entries() {
-    let temp_dir = std::env::temp_dir().join(format!("chronicler_scan_nondir_{}", std::process::id()));
+    let temp_dir =
+        std::env::temp_dir().join(format!("chronicler_scan_nondir_{}", std::process::id()));
     let worlds_dir = temp_dir.join("worlds");
     std::fs::create_dir_all(&worlds_dir).unwrap();
     std::fs::write(worlds_dir.join("not_a_dir.txt"), "hello").unwrap();

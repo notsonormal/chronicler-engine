@@ -112,7 +112,7 @@ fn html_escape(s: &str) -> String {
         <div class="card-details">
             Check player input for spelling and grammar issues before sending to the LLM.
         </div>
-        <form hx-post="/settings/text-check" hx-target="closest .connection-card" hx-swap="outerHTML">
+        <form hx-post="/settings/text-check" hx-target="#settings-status" hx-swap="innerHTML">
             <div class="form-group">
                 <label for="check_mode">Check Mode</label>
                 <select name="check_mode" id="check_mode">
@@ -256,11 +256,7 @@ pub async fn save_text_check_handler(
         return Html(format!("<span class='error'>Save failed: {e}</span>"));
     }
 
-    let template = SettingsTemplate::from_settings(&settings);
-    match template.render() {
-        Ok(html) => Html(html),
-        Err(e) => Html(format!("<span class='error'>Template error: {e}</span>")),
-    }
+    Html("Text check settings saved!".to_string())
 }
 
 /// [DOC: docs/architecture/system.md]

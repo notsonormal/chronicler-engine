@@ -253,7 +253,6 @@ pub struct ActionForm {
     pub command: String,
 }
 
-/// Core action processing logic shared between `/action` and `/action/check`.
 /// [DOC: docs/system/game_flow.md]
 #[allow(clippy::expect_used)]
 async fn process_action(state: &AppState, command: String) -> Response<Body> {
@@ -411,7 +410,7 @@ pub async fn action_check_handler(
             .expect("static response body is valid");
     }
 
-    let settings = crate::settings::load_settings().unwrap_or_default();
+    let settings = state.settings();
 
     if settings.text_check.mode == TextCheckMode::Disabled || !settings.text_check.enable_auto_check
     {
@@ -486,7 +485,7 @@ pub async fn check_text_handler(
             .expect("static response body is valid");
     }
 
-    let settings = crate::settings::load_settings().unwrap_or_default();
+    let settings = _state.settings();
 
     if settings.text_check.mode == TextCheckMode::Disabled {
         return Response::builder()

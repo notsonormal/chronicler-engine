@@ -10,11 +10,11 @@ mod tests {
     use chronicler_engine::model::state::LogType;
     use chronicler_engine::model::{character::*, map::*, world::*};
     use chronicler_engine::narrative::llm::MockBackend;
-    use chronicler_engine::narrative::quantifier::MockQuantifierBackend;
+    use chronicler_engine::narrative::quantifier::{
+        MockQuantifierBackend, MovementParseResult, MovementType, QuantifierConfidence,
+    };
     use tokio_util::sync::CancellationToken;
 
-    /// Poll for the FreeAction/retry thread to complete by checking is_generating.
-    /// Returns true if generation completed within timeout, false on timeout.
     fn wait_for_generation_complete(
         state: &Arc<Mutex<chronicler_engine::model::state::GameState>>,
         timeout_ms: u64,
@@ -32,7 +32,10 @@ mod tests {
         false
     }
 
-    pub fn create_test_state() -> Arc<Mutex<chronicler_engine::model::state::GameState>> {
+    fn create_test_state_inner(
+        room_npcs: Vec<String>,
+        npcs: Vec<NpcCard>,
+    ) -> Arc<Mutex<chronicler_engine::model::state::GameState>> {
         let world = Arc::new(WorldCard {
             name: "Test World".into(),
             description: "A test world".into(),
@@ -40,14 +43,13 @@ mod tests {
             default_room_image: None,
         });
 
-        let room1_exits = HashMap::new();
         let room1 = Room {
             id: "room1".into(),
             name: "Test Tavern".into(),
             description: "A cozy tavern with wooden beams and warm fire.".into(),
-            exits: room1_exits,
+            exits: HashMap::new(),
             items: vec![],
-            npcs: vec!["test_npc".to_string()],
+            npcs: room_npcs,
             image_path: None,
             navigation_description: None,
         };
@@ -58,13 +60,13 @@ mod tests {
             rooms: vec![room1],
         };
 
-        let overworld = Overworld {
-            id: "test_overworld".into(),
-            name: "Test World".into(),
-            regions: vec![region],
-        };
-
-        let map = Arc::new(MapDef { overworld });
+        let map = Arc::new(MapDef {
+            overworld: Overworld {
+                id: "test_overworld".into(),
+                name: "Test World".into(),
+                regions: vec![region],
+            },
+        });
 
         let player = Arc::new(PlayerCard {
             sheet: CharacterSheet {
@@ -80,22 +82,6 @@ mod tests {
             inventory: vec![],
         });
 
-        let npcs = vec![NpcCard {
-            id: "test_npc".into(),
-            sheet: CharacterSheet {
-                name: "Innkeeper".into(),
-                description: "A friendly innkeeper".into(),
-                personality: "Helpful".into(),
-                scenario: "Runs the tavern".into(),
-                example_dialogue: "Welcome!".into(),
-                summary: None,
-                profile_image: None,
-                headshot_image: None,
-            },
-            inventory: vec![],
-            triggers: vec![],
-        }];
-
         Arc::new(Mutex::new(chronicler_engine::model::state::GameState::new(
             world,
             map,
@@ -103,6 +89,59 @@ mod tests {
             npcs,
             "room1".to_string(),
         )))
+    }
+
+    pub fn create_test_state() -> Arc<Mutex<chronicler_engine::model::state::GameState>> {
+        create_test_state_inner(
+            vec!["test_npc".to_string()],
+            vec![NpcCard {
+                id: "test_npc".into(),
+                sheet: CharacterSheet {
+                    name: "Innkeeper".into(),
+                    description: "A friendly innkeeper".into(),
+                    personality: "Helpful".into(),
+                    scenario: "Runs the tavern".into(),
+                    example_dialogue: "Welcome!".into(),
+                    summary: None,
+                    profile_image: None,
+                    headshot_image: None,
+                },
+                inventory: vec![],
+                triggers: vec![],
+            }],
+        )
+    }
+
+    pub fn create_test_state_with_trigger_npc() -> Arc<Mutex<chronicler_engine::model::state::GameState>> {
+        create_test_state_inner(
+            vec!["shopkeeper".to_string()],
+            vec![NpcCard {
+                id: "shopkeeper".into(),
+                sheet: CharacterSheet {
+                    name: "Shopkeeper Sarah".into(),
+                    description: "A shrewd shopkeeper".into(),
+                    personality: "Business-minded".into(),
+                    scenario: "Runs the shop".into(),
+                    example_dialogue: "Welcome!".into(),
+                    summary: None,
+                    profile_image: None,
+                    headshot_image: None,
+                },
+                inventory: vec![],
+                triggers: vec![chronicler_engine::model::trigger::Trigger {
+                    condition: chronicler_engine::model::trigger::TriggerCondition::TimesMet(
+                        chronicler_engine::model::trigger::ComparisonOperator::Eq,
+                        0,
+                    ),
+                    action: chronicler_engine::model::trigger::TriggerAction {
+                        name: "Greeting".into(),
+                        narration_prompt: "The shopkeeper looks up with a smile.".into(),
+                    },
+                    repeat: false,
+                    room_id: None,
+                }],
+            }],
+        )
     }
 
     #[test]
@@ -243,9 +282,6 @@ mod tests {
         );
     }
 
-    /// Test that FreeAction handles room-not-found gracefully.
-    /// When current_room_id points to a non-existent room, the thread
-    /// should reset is_generating and exit without panicking.
     #[test]
     fn test_execute_freeaction_room_not_found() {
         let state = create_test_state();
@@ -275,7 +311,6 @@ mod tests {
         );
     }
 
-    /// Test that FreeAction returns without blocking and state remains accessible.
     #[test]
     fn test_execute_freeaction_state_accessible() {
         let state = create_test_state();
@@ -304,8 +339,6 @@ mod tests {
         );
     }
 
-    /// Test that FreeAction with LLM backend narration failure
-    /// sets error_message and resets is_generating.
     #[test]
     fn test_execute_freeaction_narration_failure() {
         let state = create_test_state();
@@ -339,8 +372,6 @@ mod tests {
         );
     }
 
-    /// Test successful FreeAction flow with mock LLM backend.
-    /// Verifies that narration is added and is_generating is properly reset.
     #[test]
     fn test_execute_freeaction_with_mock_backend() {
         let state = create_test_state();
@@ -378,8 +409,6 @@ mod tests {
         assert!(has_narration, "Mock LLM should add narration to history");
     }
 
-    /// Test retry_last_response with mock backend and existing history.
-    /// Verifies that the retry path works end-to-end.
     #[test]
     fn test_retry_with_mock_backend() {
         let state = create_test_state();
@@ -421,8 +450,6 @@ mod tests {
         );
     }
 
-    /// Test Look action when get_current_room fails.
-    /// Verifies no panic and is_generating is reset.
     #[test]
     fn test_execute_look_room_not_found() {
         let state = create_test_state();
@@ -443,7 +470,6 @@ mod tests {
         );
     }
 
-    /// Test Talk action without quoted message (msg = None).
     #[test]
     fn test_execute_talk_no_message() {
         let state = create_test_state();
@@ -469,8 +495,6 @@ mod tests {
         assert!(has_talk, "Talk without message should add system log");
     }
 
-    /// Test FreeAction with movement using mock backend.
-    /// Verifies that the quantifier runs and NPC detection works.
     #[test]
     fn test_execute_freeaction_with_movement_mock() {
         let state = create_test_state();
@@ -515,7 +539,6 @@ mod tests {
         );
     }
 
-    /// Test that execute_action handles poisoned initial mutex gracefully.
     #[test]
     fn test_execute_action_poisoned_mutex() {
         let state = create_test_state();
@@ -603,8 +626,6 @@ mod tests {
         );
     }
 
-    /// Test that cancellation token resets state to Idle after a task completes.
-    /// Simulates the fragments.rs handler pattern: spawn_blocking with token checks.
     #[tokio::test]
     async fn test_cancellation_resets_state_to_idle() {
         let state = create_test_state();
@@ -729,6 +750,231 @@ mod tests {
                 || !guard.generation_state.status.is_generating(),
             "Retry with no AI response should complete: {:?}",
             guard.generation_state.status
+        );
+    }
+
+    // === Error Resilience Tests ===
+
+    #[test]
+    fn test_empty_llm_response_handled_gracefully() {
+        let state = create_test_state();
+        let service = DefaultGameService::with_backends(
+            Arc::new(MockBackend::with_empty_response()),
+            Arc::new(MockQuantifierBackend::default()),
+        );
+
+        {
+            let mut guard = state.lock().unwrap();
+            guard.narration_history.clear();
+            guard.generation_state.status = GenerationStatus::Generating;
+        }
+
+        service.execute_action(
+            state.clone(),
+            "examine the room".to_string(),
+            "Player".to_string(),
+        );
+
+        let guard = state.lock().unwrap();
+        assert!(
+            !guard.generation_state.status.is_generating(),
+            "Status should be Idle after empty LLM response: {:?}",
+            guard.generation_state.status
+        );
+
+        // Empty narration is still logged
+        let has_narration = guard
+            .narration_history
+            .iter()
+            .any(|e| e.log_type == LogType::Narration);
+        assert!(
+            has_narration,
+            "Empty narration should still be added to history"
+        );
+    }
+
+    #[test]
+    fn test_failing_trigger_narration_does_not_crash() {
+        let state = create_test_state_with_trigger_npc();
+        let service = DefaultGameService::with_backends(
+            Arc::new(MockBackend::with_failing_trigger_narration()),
+            Arc::new(MockQuantifierBackend {
+                npcs_to_return: vec!["shopkeeper".to_string()],
+                ..Default::default()
+            }),
+        );
+
+        {
+            let mut guard = state.lock().unwrap();
+            guard.narration_history.clear();
+            guard.generation_state.status = GenerationStatus::Generating;
+            // Reset times_met so the trigger is eligible to fire
+            if let Some(encounter) = guard.character_state.npcs.get_mut("shopkeeper") {
+                encounter.times_met = 0;
+            }
+        }
+
+        // Use a FreeAction so the backend is invoked ("talk to" parses as Talk, not FreeAction)
+        service.execute_action(
+            state.clone(),
+            "examine the shopkeeper".to_string(),
+            "Player".to_string(),
+        );
+
+        let guard = state.lock().unwrap();
+        assert!(
+            !guard.generation_state.status.is_generating(),
+            "Status should be reset after trigger narration failure"
+        );
+
+        // Main narration should still be present
+        let has_narration = guard
+            .narration_history
+            .iter()
+            .any(|e| e.log_type == LogType::Narration);
+        assert!(
+            has_narration,
+            "Main narration should exist even when trigger narration failed"
+        );
+
+        // Trigger narration failure should be logged as a system message
+        let has_trigger_error = guard
+            .narration_history
+            .iter()
+            .any(|e| e.log_type == LogType::System && e.text.contains("Trigger narration failed"));
+        assert!(
+            has_trigger_error,
+            "Trigger narration failure should be logged"
+        );
+    }
+
+    // === Status Transition & Quantifier Tests ===
+
+    #[test]
+    fn test_delayed_llm_completes_without_deadlock() {
+        let state = create_test_state();
+        let service = DefaultGameService::with_backends(
+            Arc::new(MockBackend::with_delay(200)),
+            Arc::new(MockQuantifierBackend::default()),
+        );
+
+        {
+            let mut guard = state.lock().unwrap();
+            guard.narration_history.clear();
+            guard.generation_state.status = GenerationStatus::Generating;
+        }
+
+        service.execute_action(
+            state.clone(),
+            "look around".to_string(),
+            "Player".to_string(),
+        );
+
+        // execute_action is synchronous — by now the delay has elapsed
+        let guard = state.lock().unwrap();
+        assert!(
+            !guard.generation_state.status.is_generating(),
+            "Status should be Idle after delayed action completes"
+        );
+        assert_eq!(
+            guard.generation_state.phase,
+            chronicler_engine::model::state::GenerationPhase::default(),
+            "Phase should be reset after completion"
+        );
+    }
+
+    #[test]
+    fn test_quantifier_detects_movement() {
+        let state = create_test_state();
+        let service = DefaultGameService::with_backends(
+            Arc::new(MockBackend::default()),
+            Arc::new(MockQuantifierBackend {
+                movement_to_return: Some(MovementParseResult {
+                    movement_type: Some(MovementType::Entering),
+                    destination: Some("village_square".to_string()),
+                    confidence: QuantifierConfidence::High,
+                }),
+                ..Default::default()
+            }),
+        );
+
+        {
+            let mut guard = state.lock().unwrap();
+            guard.narration_history.clear();
+            guard.generation_state.status = GenerationStatus::Generating;
+        }
+
+        service.execute_action(
+            state.clone(),
+            "walk to the village square".to_string(),
+            "Player".to_string(),
+        );
+
+        let completed = wait_for_generation_complete(&state, 500);
+        assert!(completed, "Movement action should complete within timeout");
+
+        let guard = state.lock().unwrap();
+        assert!(
+            !guard.generation_state.status.is_generating(),
+            "Status should be reset after movement action"
+        );
+
+        // Player should have moved (either to existing room or dynamic room)
+        assert_ne!(
+            guard.current_room_id, "room1",
+            "Player should have moved from starting room"
+        );
+    }
+
+    #[test]
+    fn test_quantifier_detects_npc_presence_and_fires_trigger() {
+        let state = create_test_state_with_trigger_npc();
+        let service = DefaultGameService::with_backends(
+            Arc::new(MockBackend::default()),
+            Arc::new(MockQuantifierBackend {
+                npcs_to_return: vec!["shopkeeper".to_string()],
+                ..Default::default()
+            }),
+        );
+
+        {
+            let mut guard = state.lock().unwrap();
+            guard.narration_history.clear();
+            guard.generation_state.status = GenerationStatus::Generating;
+            // Reset times_met so the trigger is eligible to fire
+            if let Some(encounter) = guard.character_state.npcs.get_mut("shopkeeper") {
+                encounter.times_met = 0;
+            }
+        }
+
+        service.execute_action(
+            state.clone(),
+            "enter the shop".to_string(),
+            "Player".to_string(),
+        );
+
+        let guard = state.lock().unwrap();
+        assert!(
+            !guard.generation_state.status.is_generating(),
+            "Status should be reset after trigger action"
+        );
+
+        // Trigger should have fired, adding an Event entry
+        let has_event = guard
+            .narration_history
+            .iter()
+            .any(|e| e.log_type == LogType::Event);
+        assert!(has_event, "Trigger should add an Event entry");
+
+        // And a continuation narration
+        let narration_count = guard
+            .narration_history
+            .iter()
+            .filter(|e| e.log_type == LogType::Narration)
+            .count();
+        assert!(
+            narration_count >= 2,
+            "Should have main narration + trigger continuation narration"
         );
     }
 }

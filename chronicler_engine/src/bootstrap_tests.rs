@@ -1,5 +1,5 @@
 use crate::bootstrap::{
-    inject_scenario_logs, initialize_world_from_manifest, load_world_manifest, validate_loaded_data,
+    initialize_world_from_manifest, inject_scenario_logs, load_world_manifest, validate_loaded_data,
 };
 use crate::model::character::{CharacterSheet, NpcCard, PlayerCard};
 use crate::model::map::{MapDef, Overworld, Region, Room};
@@ -432,7 +432,8 @@ fn test_validate_loaded_data_invalid_trigger_room() {
 
 #[test]
 fn test_load_world_manifest_invalid_json() {
-    let temp_dir = std::env::temp_dir().join(format!("chronicler_bootstrap_json_{}", std::process::id()));
+    let temp_dir =
+        std::env::temp_dir().join(format!("chronicler_bootstrap_json_{}", std::process::id()));
     let world_dir = temp_dir.join("worlds").join("bad_json");
     std::fs::create_dir_all(&world_dir).unwrap();
     std::fs::write(world_dir.join("world.json"), "not valid json").unwrap();
@@ -451,7 +452,8 @@ fn test_load_world_manifest_invalid_json() {
 
 #[test]
 fn test_initialize_world_with_characters_dir() {
-    let temp_dir = std::env::temp_dir().join(format!("chronicler_bootstrap_chars_{}", std::process::id()));
+    let temp_dir =
+        std::env::temp_dir().join(format!("chronicler_bootstrap_chars_{}", std::process::id()));
 
     // World manifest with custom characters_dir
     let world_dir = temp_dir.join("worlds").join("char_world");
@@ -638,12 +640,15 @@ fn test_inject_scenario_logs_adds_narration() {
     inject_scenario_logs(&mut state, &manifest, &player);
 
     assert_eq!(state.narration_history.len(), 2);
-    assert_eq!(state.narration_history[0].sender, Some("Room start".to_string()));
     assert_eq!(
-        state.narration_history[1].text,
-        "Welcome, Alice."
+        state.narration_history[0].sender,
+        Some("Room start".to_string())
     );
-    assert_eq!(state.narration_history[1].log_type, crate::model::state::LogType::Narration);
+    assert_eq!(state.narration_history[1].text, "Welcome, Alice.");
+    assert_eq!(
+        state.narration_history[1].log_type,
+        crate::model::state::LogType::Narration
+    );
 }
 
 #[test]

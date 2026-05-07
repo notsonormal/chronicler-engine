@@ -63,7 +63,7 @@ The HTTP layer for the HTMX web dashboard with polling-based real-time updates.
   - Templates declare required data shapes at compile time.
   - Missing fields = compiler error (not runtime failure).
 
-### 6. The Settings Tier (`crate::settings` + `crate::model::settings`)
+### 5. The Settings Tier (`crate::settings` + `crate::model::settings`)
 Persistent JSON-based settings system for LLM configuration with reusable connection profiles.
 
 | Component | Purpose |
@@ -149,7 +149,10 @@ Static web assets served by the server.
 | `src/narrative/text_check/harper_backend.rs` | `crate::narrative::text_check` | `HarperBackend` — harper-core wrapper |
 | `src/narrative/text_check/types.rs` | `crate::narrative::text_check` | `CheckResult`, `CheckIssue`, `IssueKind` |
 | `src/narrative/llm_client.rs` | `crate::narrative::llm_client` | HTTP client helpers for OpenRouter and Ollama |
+| `src/model/llm_backend.rs` | `crate::model::llm_backend` | `LlmBackendType` enum for backend selection |
 | `src/server/mod.rs` | `crate::server` | Axum router, `AppState`, `run_server`, `create_app_for_testing` |
+| `src/server/debug.rs` | `crate::server::debug` | Dev diagnostic endpoint (`/debug/state`) |
+| `src/test_support/mod.rs` | `crate::test_support` | Shared test utilities |
 | `src/server/fragments.rs` | `crate::server` | HTMX endpoint handlers and HTML fragment generators |
 | `src/server/settings_fragment.rs` | `crate::server` | Settings panel fragment handlers |
 | `src/server/templates.rs` | `crate::server` | Askama templates |

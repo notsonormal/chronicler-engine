@@ -143,12 +143,7 @@ pub fn validate_loaded_data(
 }
 
 /// [DOC: docs/architecture/system.md]
-/// Inject default scenario narration logs into the game state.
-pub fn inject_scenario_logs(
-    state: &mut GameState,
-    manifest: &WorldManifest,
-    player: &PlayerCard,
-) {
+pub fn inject_scenario_logs(state: &mut GameState, manifest: &WorldManifest, player: &PlayerCard) {
     let Some(scenario) = manifest.default_scenario() else {
         return;
     };
@@ -156,10 +151,9 @@ pub fn inject_scenario_logs(
         return;
     }
 
-    let room_name =
-        crate::engine::logic::find_room_in_world_map(state, &manifest.starting_room_id)
-            .map(|r| r.name.clone())
-            .unwrap_or_else(|| manifest.starting_room_id.clone());
+    let room_name = crate::engine::logic::find_room_in_world_map(state, &manifest.starting_room_id)
+        .map(|r| r.name.clone())
+        .unwrap_or_else(|| manifest.starting_room_id.clone());
 
     state.add_log(
         String::new(),

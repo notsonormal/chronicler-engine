@@ -407,7 +407,7 @@
   - `tests/ui_tests.rs` - check `.location-header`
 
 ### Added  
-- **build.py** - New build script in `scripts/build.py`
+- **build.py** - New build script in `build.py`
   - Runs: cargo build, cargo clippy, cargo test, cargo llvm-cov
 
 ## 2026-04-14

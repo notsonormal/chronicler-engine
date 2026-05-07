@@ -52,10 +52,11 @@ Cross-module and browser-based tests live in the top-level `tests/` directory:
 | `e2e_tests.rs` | UI structure, layouts, interactions | Browser | Medium |
 | `flow_mock_tests.rs` | Core game loop, polling | Browser + Mock LLM | Fast |
 | `flow_llm_tests.rs` | LLM narrative | Browser + Real LLM | Slow |
-| `game_service_tests.rs` | Game service logic, DI, retry | In-process | Very Fast |
+| `game_service_tests.rs` | Game service logic, DI, retry, error resilience, quantifier integration | In-process | Very Fast |
 | `guardrails.rs` | Custom guardrails (what-comments, import order, single-letter vars, file length) | In-process | Very Fast |
 | `logic_tests.rs` | Movement, room resolution, fuzzy matching | In-process | Very Fast |
 | `text_check_tests.rs` | Spell/grammar checking with harper-core | In-process | Very Fast |
+| `test_data.rs` | Shared test fixtures (world, map, game state builders) | In-process | Very Fast |
 | `trigger_tests.rs` | Trigger evaluation and firing | Browser + Mock LLM | Fast |
 
 ## The `LlmBackend` Interface
@@ -172,16 +173,16 @@ cargo test -- --test-threads=1
 - Visual sidebar
 - Edit mode and retry functionality
 
-**flow_mock_tests.rs** (4 tests):
+**flow_mock_tests.rs** (5 tests):
 - Initial load (header, story-log, status)
 - Connection status indicator
 - Command submission
 - Polling mechanism
+- Double-submit protection (frontend disables submit button during generation)
 
-**flow_llm_tests.rs** (3 tests):
-- LLM narration via polling
-- LLM arrival narration
-- LLM free action narration
+**flow_llm_tests.rs** (2 tests):
+- Real LLM smoke test: verifies API connectivity and basic completion
+- Multi-step stability: verifies server remains healthy after sequential real LLM calls
 
 **guardrails.rs** (11 tests):
 - Import ordering (std → external → local)
@@ -199,10 +200,11 @@ cargo test -- --test-threads=1
 - Movement validation
 - Exit availability
 
-**trigger_tests.rs** (6 tests):
+**trigger_tests.rs** (7 tests):
 - Trigger evaluation and firing
 - Non-repeatable trigger behavior
 - Multiple trigger handling
+- Repeatable trigger refires on subsequent encounters
 
 ### Known Limitations
 
