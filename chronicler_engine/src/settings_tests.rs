@@ -93,6 +93,7 @@ fn test_load_settings_valid_file() {
             narration_connection_id: "test".into(),
             quantifier_connection_id: "test".into(),
             response_length: "flexible".into(),
+            ..Default::default()
         };
         custom.save().expect("should save");
 
@@ -137,6 +138,7 @@ fn test_save_settings_roundtrip() {
             narration_connection_id: "conn-1".into(),
             quantifier_connection_id: "conn-1".into(),
             response_length: "flexible".into(),
+            ..Default::default()
         };
         settings.save().expect("should save");
 

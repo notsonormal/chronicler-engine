@@ -34,6 +34,10 @@ The interface between the synchronous engine and stochastic LLM generation.
   - **`RealQuantifierBackend`**: Production implementation using LLM
   - **`MockQuantifierBackend`**: Test implementation returning configurable NPCs with High confidence
   - **`NpcEventList`**: NPC movement events from quantification (Entered, Left)
+- **`text_check`**: Directory module for spell and grammar checking of player input.
+  - **`HarperBackend`**: Wraps harper-core with curated + user dictionaries
+  - **`check_player_input()`**: Facade that returns `Option<CheckResult>` based on `TextCheckMode`
+  - **`CheckResult`/`CheckIssue`**: Structured lint results with byte spans and suggestions
 
 #### NPC Event Layer
 
@@ -141,6 +145,9 @@ Static web assets served by the server.
 | `src/narrative/quantifier/mod.rs` | `crate::narrative::quantifier` | Quantifier module root |
 | `src/narrative/quantifier/core.rs` | `crate::narrative::quantifier` | Core quantifier logic |
 | `src/narrative/quantifier/backends.rs` | `crate::narrative::quantifier` | Quantifier backend implementations |
+| `src/narrative/text_check/check.rs` | `crate::narrative::text_check` | Facade: `check_player_input()` |
+| `src/narrative/text_check/harper_backend.rs` | `crate::narrative::text_check` | `HarperBackend` — harper-core wrapper |
+| `src/narrative/text_check/types.rs` | `crate::narrative::text_check` | `CheckResult`, `CheckIssue`, `IssueKind` |
 | `src/narrative/llm_client.rs` | `crate::narrative::llm_client` | HTTP client helpers for OpenRouter and Ollama |
 | `src/server/mod.rs` | `crate::server` | Axum router, `AppState`, `run_server`, `create_app_for_testing` |
 | `src/server/fragments.rs` | `crate::server` | HTMX endpoint handlers and HTML fragment generators |
@@ -313,6 +320,8 @@ The retry endpoint (`POST /api/retry`) regenerates the last AI response:
 | `POST` | `/settings` | Save settings from form |
 | `POST` | `/history/:id` | Edit entry text |
 | `POST` | `/retry` | Regenerate last AI response |
+| `POST` | `/action/check` | Pre-flight spell/grammar check |
+| `POST` | `/check-text` | Manual text check |
 
 ### UI Integration
 

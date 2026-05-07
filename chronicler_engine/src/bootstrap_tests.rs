@@ -1,8 +1,12 @@
-use crate::bootstrap::{initialize_world_from_manifest, load_world_manifest, validate_loaded_data};
+use crate::bootstrap::{
+    inject_scenario_logs, initialize_world_from_manifest, load_world_manifest, validate_loaded_data,
+};
 use crate::model::character::{CharacterSheet, NpcCard, PlayerCard};
 use crate::model::map::{MapDef, Overworld, Region, Room};
+use crate::model::scenario::StartingScenario;
 use crate::model::trigger::Trigger;
 use crate::model::world::WorldManifest;
+use crate::test_support::{TestGameState, TestPlayer};
 
 #[test]
 fn test_load_redmist_estate_world() {
@@ -427,6 +431,140 @@ fn test_validate_loaded_data_invalid_trigger_room() {
 }
 
 #[test]
+fn test_load_world_manifest_invalid_json() {
+    let temp_dir = std::env::temp_dir().join(format!("chronicler_bootstrap_json_{}", std::process::id()));
+    let world_dir = temp_dir.join("worlds").join("bad_json");
+    std::fs::create_dir_all(&world_dir).unwrap();
+    std::fs::write(world_dir.join("world.json"), "not valid json").unwrap();
+
+    unsafe {
+        std::env::set_var("CHRONICLER_DATA", &temp_dir);
+    }
+    let result = load_world_manifest("bad_json");
+    unsafe {
+        std::env::remove_var("CHRONICLER_DATA");
+    }
+    let _ = std::fs::remove_dir_all(&temp_dir);
+
+    assert!(result.is_err(), "Should fail for invalid JSON");
+}
+
+#[test]
+fn test_initialize_world_with_characters_dir() {
+    let temp_dir = std::env::temp_dir().join(format!("chronicler_bootstrap_chars_{}", std::process::id()));
+
+    // World manifest with custom characters_dir
+    let world_dir = temp_dir.join("worlds").join("char_world");
+    std::fs::create_dir_all(&world_dir).unwrap();
+
+    let manifest = WorldManifest {
+        id: "char_world".to_string(),
+        name: "Char World".to_string(),
+        starting_room_id: "room_a".to_string(),
+        description: "A world with custom chars dir".to_string(),
+        global_rules: vec![],
+        map_file: "map.json".to_string(),
+        player_file: "player.json".to_string(),
+        characters_dir: "custom_chars".to_string(),
+        scenarios: vec![],
+        default_scenario_id: None,
+        default_room_image: None,
+    };
+    std::fs::write(
+        world_dir.join("world.json"),
+        serde_json::to_string_pretty(&manifest).unwrap(),
+    )
+    .unwrap();
+
+    let room_a = Room {
+        id: "room_a".to_string(),
+        name: "Room A".to_string(),
+        description: "A room".to_string(),
+        exits: std::collections::HashMap::new(),
+        items: vec![],
+        npcs: vec![],
+        image_path: None,
+        navigation_description: None,
+    };
+    let map = MapDef {
+        overworld: Overworld {
+            id: "overworld".to_string(),
+            name: "Overworld".to_string(),
+            regions: vec![Region {
+                id: "region".to_string(),
+                name: "Region".to_string(),
+                rooms: vec![room_a],
+            }],
+        },
+    };
+    std::fs::write(
+        world_dir.join("map.json"),
+        serde_json::to_string_pretty(&map).unwrap(),
+    )
+    .unwrap();
+
+    // Player
+    let player = PlayerCard {
+        sheet: CharacterSheet {
+            name: "Hero".to_string(),
+            description: "A hero".to_string(),
+            personality: "Brave".to_string(),
+            scenario: "Default".to_string(),
+            example_dialogue: "".to_string(),
+            summary: None,
+            profile_image: None,
+            headshot_image: None,
+        },
+        inventory: vec![],
+    };
+    let personas_dir = temp_dir.join("personas");
+    std::fs::create_dir_all(&personas_dir).unwrap();
+    std::fs::write(
+        personas_dir.join("player.json"),
+        serde_json::to_string_pretty(&player).unwrap(),
+    )
+    .unwrap();
+
+    // Custom NPCs
+    let chars_dir = temp_dir.join("characters").join("custom_chars");
+    std::fs::create_dir_all(&chars_dir).unwrap();
+    let npc = NpcCard {
+        id: "custom_npc".to_string(),
+        sheet: CharacterSheet {
+            name: "Custom".to_string(),
+            description: "A custom NPC".to_string(),
+            personality: "Friendly".to_string(),
+            scenario: "Default".to_string(),
+            example_dialogue: "".to_string(),
+            summary: None,
+            profile_image: None,
+            headshot_image: None,
+        },
+        inventory: vec![],
+        triggers: vec![],
+    };
+    std::fs::write(
+        chars_dir.join("npc.json"),
+        serde_json::to_string_pretty(&npc).unwrap(),
+    )
+    .unwrap();
+
+    unsafe {
+        std::env::set_var("CHRONICLER_DATA", &temp_dir);
+    }
+    let result = initialize_world_from_manifest("char_world");
+    unsafe {
+        std::env::remove_var("CHRONICLER_DATA");
+    }
+    let _ = std::fs::remove_dir_all(&temp_dir);
+
+    assert!(result.is_ok(), "Failed to initialize world: {result:?}");
+    let (_manifest, _map, _player, npcs) = result.unwrap();
+    assert_eq!(npcs.len(), 1);
+    assert_eq!(npcs[0].id, "custom_npc");
+}
+
+#[test]
 fn test_validate_loaded_data_multiple_errors() {
     let manifest = WorldManifest {
         id: "test".to_string(),
@@ -471,4 +609,91 @@ fn test_validate_loaded_data_multiple_errors() {
         err.contains("\n") || err.contains("starting_room_id"),
         "Should have errors: {err}"
     );
+}
+
+#[test]
+fn test_inject_scenario_logs_adds_narration() {
+    let mut state = TestGameState::in_room("start");
+    let manifest = WorldManifest {
+        id: "test".to_string(),
+        name: "Test".to_string(),
+        starting_room_id: "start".to_string(),
+        description: "A test world".to_string(),
+        global_rules: vec![],
+        map_file: "map.json".to_string(),
+        player_file: "player.json".to_string(),
+        characters_dir: "".to_string(),
+        scenarios: vec![StartingScenario {
+            id: "intro".to_string(),
+            name: "Introduction".to_string(),
+            description: "The beginning".to_string(),
+            starting_room_id: "start".to_string(),
+            text: "Welcome, {{user}}.".to_string(),
+        }],
+        default_scenario_id: None,
+        default_room_image: None,
+    };
+    let player = TestPlayer::named("Alice");
+
+    inject_scenario_logs(&mut state, &manifest, &player);
+
+    assert_eq!(state.narration_history.len(), 2);
+    assert_eq!(state.narration_history[0].sender, Some("Room start".to_string()));
+    assert_eq!(
+        state.narration_history[1].text,
+        "Welcome, Alice."
+    );
+    assert_eq!(state.narration_history[1].log_type, crate::model::state::LogType::Narration);
+}
+
+#[test]
+fn test_inject_scenario_logs_no_scenario() {
+    let mut state = TestGameState::in_room("start");
+    let manifest = WorldManifest {
+        id: "test".to_string(),
+        name: "Test".to_string(),
+        starting_room_id: "start".to_string(),
+        description: "A test world".to_string(),
+        global_rules: vec![],
+        map_file: "map.json".to_string(),
+        player_file: "player.json".to_string(),
+        characters_dir: "".to_string(),
+        scenarios: vec![],
+        default_scenario_id: None,
+        default_room_image: None,
+    };
+    let player = TestPlayer::standard();
+
+    inject_scenario_logs(&mut state, &manifest, &player);
+
+    assert!(state.narration_history.is_empty());
+}
+
+#[test]
+fn test_inject_scenario_logs_empty_text() {
+    let mut state = TestGameState::in_room("start");
+    let manifest = WorldManifest {
+        id: "test".to_string(),
+        name: "Test".to_string(),
+        starting_room_id: "start".to_string(),
+        description: "A test world".to_string(),
+        global_rules: vec![],
+        map_file: "map.json".to_string(),
+        player_file: "player.json".to_string(),
+        characters_dir: "".to_string(),
+        scenarios: vec![StartingScenario {
+            id: "empty".to_string(),
+            name: "Empty".to_string(),
+            description: "Nothing".to_string(),
+            starting_room_id: "start".to_string(),
+            text: "".to_string(),
+        }],
+        default_scenario_id: None,
+        default_room_image: None,
+    };
+    let player = TestPlayer::standard();
+
+    inject_scenario_logs(&mut state, &manifest, &player);
+
+    assert!(state.narration_history.is_empty());
 }

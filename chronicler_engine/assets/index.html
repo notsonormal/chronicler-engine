@@ -26,10 +26,11 @@
         <div class="action-area" id="action-area">
         <!-- Form targets hidden div, status updates via WS + JS -->
         <form id="command-form"  
-              hx-post="/action"  
-              hx-target="#status-display"  
+              hx-post="/action/check"  
+              hx-target="#action-area"  
               hx-swap="innerHTML"  
-              hx-on::after-request="this.reset(); updateButtonState();">
+              hx-on::before-request="saveActionArea()"
+              hx-on::after-request="onActionFormAfterRequest()">
             <input type="text" name="command" placeholder="Enter command..." required minlength="1" autocomplete="off" />
             <button type="submit" id="submit-btn"><span class="btn-icon">&#9654;</span> Send</button>
         </form>
@@ -222,6 +223,73 @@
                 });
         }
         
+        // Text check helpers
+        function saveActionArea() {
+            const actionArea = document.getElementById('action-area');
+            const input = actionArea.querySelector('input[name="command"]');
+            actionArea.dataset.originalHtml = actionArea.innerHTML;
+            if (input) {
+                actionArea.dataset.originalValue = input.value;
+            }
+        }
+        
+        function onActionFormAfterRequest() {
+            const form = document.getElementById('command-form');
+            if (form && form.querySelector('input[name=command]')) {
+                form.reset();
+                updateButtonState();
+            }
+        }
+        
+        function checkCurrentInput() {
+            const input = document.querySelector('#command-form input[name="command"]');
+            if (!input || !input.value.trim()) return;
+            checkText(input.value.trim());
+        }
+        
+        function htmlUnescape(str) {
+            const textarea = document.createElement('textarea');
+            textarea.innerHTML = str;
+            return textarea.value;
+        }
+        
+        function checkText(text) {
+            const formData = new URLSearchParams();
+            formData.append('command', text);
+            
+            fetch('/check-text', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: formData
+            })
+            .then(response => response.text())
+            .then(html => {
+                const actionArea = document.getElementById('action-area');
+                if (actionArea) {
+                    saveActionArea();
+                    actionArea.innerHTML = html;
+                }
+            });
+        }
+        
+        function checkLogText(rawText) {
+            checkText(htmlUnescape(rawText));
+        }
+        
+        function restoreActionArea() {
+            const actionArea = document.getElementById('action-area');
+            if (actionArea && actionArea.dataset.originalHtml) {
+                actionArea.innerHTML = actionArea.dataset.originalHtml;
+                if (actionArea.dataset.originalValue) {
+                    const input = actionArea.querySelector('input[name="command"]');
+                    if (input) {
+                        input.value = actionArea.dataset.originalValue;
+                    }
+                }
+                htmx.process(actionArea);
+            }
+        }
+        
         // Create a MutationObserver to watch for status changes
         const statusObserver = new MutationObserver(function(mutations) {
             mutations.forEach(function(mutation) {
@@ -243,6 +311,10 @@
         });
         
         // Start observing when DOM is ready
+        document.body.addEventListener('action-area-refresh', function() {
+            htmx.ajax('GET', '/fragment/action-area', {target: '#action-area', swap: 'outerHTML'});
+        });
+        
         document.addEventListener('DOMContentLoaded', function() {
             statusObserver.observe(statusDisplay, { 
                 childList: true, 

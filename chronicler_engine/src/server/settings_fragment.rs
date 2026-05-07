@@ -4,7 +4,7 @@ use askama::Template;
 use axum::{Form, extract::State, response::Html};
 
 use crate::model::llm_backend::LlmBackendType;
-use crate::model::settings::{AppSettings, Connection};
+use crate::model::settings::{AppSettings, Connection, TextCheckMode};
 use crate::server::AppState;
 
 /// [DOC: docs/architecture/system.md]
@@ -103,6 +103,36 @@ fn html_escape(s: &str) -> String {
         <button type="submit" class="primary">Add Connection</button>
     </form>
     <span id="settings-status"></span>
+
+    <h2>Text Check</h2>
+    <div class="connection-card">
+        <div class="card-header">
+            <span class="card-title">Spell &amp; Grammar Check</span>
+        </div>
+        <div class="card-details">
+            Check player input for spelling and grammar issues before sending to the LLM.
+        </div>
+        <form hx-post="/settings/text-check" hx-target="closest .connection-card" hx-swap="outerHTML">
+            <div class="form-group">
+                <label for="check_mode">Check Mode</label>
+                <select name="check_mode" id="check_mode">
+                    <option value="disabled" {% if text_check_mode == "disabled" %}selected{% endif %}>Disabled</option>
+                    <option value="spell" {% if text_check_mode == "spell" %}selected{% endif %}>Spell Check Only</option>
+                    <option value="grammar" {% if text_check_mode == "grammar" %}selected{% endif %}>Grammar Check Only</option>
+                    <option value="spell_grammar" {% if text_check_mode == "spell_grammar" %}selected{% endif %}>Spell + Grammar</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" name="enable_auto_check" value="true" {% if enable_auto_check %}checked{% endif %} />
+                    Check before sending to LLM
+                </label>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="primary">Save</button>
+            </div>
+        </form>
+    </div>
 </div>
 "##,
     ext = "html"
@@ -112,6 +142,8 @@ pub struct SettingsTemplate {
     pub narration_connection_id: String,
     pub quantifier_connection_id: String,
     pub provider_options: String,
+    pub text_check_mode: String,
+    pub enable_auto_check: bool,
 }
 
 impl SettingsTemplate {
@@ -121,6 +153,14 @@ impl SettingsTemplate {
             narration_connection_id: settings.narration_connection_id.clone(),
             quantifier_connection_id: settings.quantifier_connection_id.clone(),
             provider_options: provider_options_html("openrouter"),
+            text_check_mode: match settings.text_check.mode {
+                TextCheckMode::Disabled => "disabled",
+                TextCheckMode::Spell => "spell",
+                TextCheckMode::Grammar => "grammar",
+                TextCheckMode::SpellGrammar => "spell_grammar",
+            }
+            .to_string(),
+            enable_auto_check: settings.text_check.enable_auto_check,
         }
     }
 }
@@ -159,6 +199,13 @@ pub struct ConnectionForm {
     pub single_user_message: bool,
 }
 
+#[derive(Debug, serde::Deserialize)]
+pub struct TextCheckForm {
+    pub check_mode: String,
+    #[serde(default)]
+    pub enable_auto_check: bool,
+}
+
 /// [DOC: docs/architecture/system.md]
 pub async fn save_settings_handler(
     State(app_state): State<AppState>,
@@ -181,6 +228,39 @@ pub async fn save_settings_handler(
     }
 
     Html("Settings saved!".to_string())
+}
+
+/// [DOC: docs/system/text_check.md]
+pub async fn save_text_check_handler(
+    State(app_state): State<AppState>,
+    Form(form): Form<TextCheckForm>,
+) -> Html<String> {
+    let mut settings = match app_state.settings.write() {
+        Ok(g) => g,
+        Err(_) => {
+            return Html(
+                "<span class='error'>Internal error: settings lock poisoned</span>".to_string(),
+            );
+        }
+    };
+
+    settings.text_check.mode = match form.check_mode.as_str() {
+        "spell" => TextCheckMode::Spell,
+        "grammar" => TextCheckMode::Grammar,
+        "spell_grammar" => TextCheckMode::SpellGrammar,
+        _ => TextCheckMode::Disabled,
+    };
+    settings.text_check.enable_auto_check = form.enable_auto_check;
+
+    if let Err(e) = settings.save() {
+        return Html(format!("<span class='error'>Save failed: {e}</span>"));
+    }
+
+    let template = SettingsTemplate::from_settings(&settings);
+    match template.render() {
+        Ok(html) => Html(html),
+        Err(e) => Html(format!("<span class='error'>Template error: {e}</span>")),
+    }
 }
 
 /// [DOC: docs/architecture/system.md]

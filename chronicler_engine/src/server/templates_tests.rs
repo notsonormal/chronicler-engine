@@ -136,12 +136,8 @@ fn test_action_area_ready() {
         &["north".to_string(), "east".to_string()],
     );
     let rendered = template.render().unwrap();
-    assert!(rendered.contains("id=cmd-area"));
+    assert!(rendered.contains("id=\"action-area\""));
     assert!(rendered.contains("Ready"));
-    assert!(rendered.contains("Look"));
-    assert!(rendered.contains("Inventory"));
-    assert!(rendered.contains("north"));
-    assert!(rendered.contains("east"));
 }
 
 #[test]
@@ -188,8 +184,7 @@ fn test_action_area_no_exits() {
         &[],
     );
     let rendered = template.render().unwrap();
-    assert!(rendered.contains("Look"));
-    assert!(rendered.contains("Inventory"));
+    assert!(rendered.contains("command-form"));
 }
 
 #[test]

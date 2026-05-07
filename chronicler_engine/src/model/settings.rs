@@ -2,6 +2,40 @@ use serde::{Deserialize, Serialize};
 
 use crate::model::llm_backend::LlmBackendType;
 
+/// [DOC: docs/system/text_check.md]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub enum TextCheckMode {
+    #[default]
+    Disabled,
+    Spell,
+    Grammar,
+    SpellGrammar,
+}
+
+/// [DOC: docs/system/text_check.md]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TextCheckSettings {
+    pub mode: TextCheckMode,
+    #[serde(default = "default_enable_auto_check")]
+    pub enable_auto_check: bool,
+    #[serde(default)]
+    pub ignored_words: Vec<String>,
+}
+
+fn default_enable_auto_check() -> bool {
+    true
+}
+
+impl Default for TextCheckSettings {
+    fn default() -> Self {
+        Self {
+            mode: TextCheckMode::default(),
+            enable_auto_check: default_enable_auto_check(),
+            ignored_words: Vec::new(),
+        }
+    }
+}
+
 fn default_ollama_base_url() -> String {
     "http://localhost:11434/v1".into()
 }
@@ -41,8 +75,6 @@ impl Connection {
     }
 
     /// Resolve the API key for this connection.
-    /// Returns the connection's own key if set, otherwise falls back to
-    /// the provider-specific environment variable.
     pub fn resolve_api_key(&self) -> Option<String> {
         if self.api_key.is_some() {
             return self.api_key.clone();
@@ -72,8 +104,6 @@ impl Connection {
     }
 
     /// Resolve the context window size for this connection.
-    /// Returns 8192 for Ollama (local models typically have smaller contexts),
-    /// 32768 for API models (OpenRouter, DeepSeek) when unset.
     pub fn resolve_max_context_tokens(&self) -> u32 {
         self.max_context_tokens.unwrap_or(match self.provider {
             LlmBackendType::Ollama => 8192,
@@ -91,6 +121,8 @@ pub struct AppSettings {
     pub quantifier_connection_id: String,
     #[serde(default = "default_response_length")]
     pub response_length: String,
+    #[serde(default)]
+    pub text_check: TextCheckSettings,
 }
 
 fn default_response_length() -> String {
@@ -137,6 +169,7 @@ impl Default for AppSettings {
             narration_connection_id: "openrouter-gpt-4o-mini".into(),
             quantifier_connection_id: "openrouter-gpt-4o-mini".into(),
             response_length: default_response_length(),
+            text_check: TextCheckSettings::default(),
         }
     }
 }

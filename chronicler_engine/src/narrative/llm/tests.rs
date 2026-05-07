@@ -9,6 +9,7 @@ fn make_settings_with_provider(provider: LlmBackendType) -> AppSettings {
         narration_connection_id: "test-conn".into(),
         quantifier_connection_id: "test-conn".into(),
         response_length: "flexible".into(),
+        ..Default::default()
     }
 }
 

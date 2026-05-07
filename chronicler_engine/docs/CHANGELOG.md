@@ -3,6 +3,20 @@
 ## Unreleased
 
 ### Added
+- **Spell & Grammar Check Integration** - Pre-flight text checking for player input via harper-core
+  - New `narrative/text_check/` module: `HarperBackend`, `CheckResult`, `CheckIssue`, `IssueKind`
+  - `TextCheckMode` enum: `Disabled`, `Spell`, `Grammar`, `SpellGrammar`
+  - `TextCheckSettings` in `AppSettings` with mode, `enable_auto_check`, and `ignored_words`
+  - Merged dictionary strategy: `FstDictionary::curated()` + `MutableDictionary` for user-ignored words
+  - `POST /action/check` handler: automatic pre-flight check before LLM submission
+  - `POST /check-text` handler: manual on-demand text checking
+  - `TextCheckPreviewTemplate` Askama template for original vs corrected comparison UI
+  - Player can always choose "Send Original" to bypass corrections
+  - Fail-open: if linting fails, original text is forwarded silently
+  - Tests: `tests/text_check_tests.rs` with 4 integration tests
+  - Documentation: `docs/system/text_check.md`
+
+### Added
 - **File Length Guard Rails** - Enforced 2,000 non-blank line limit on all `.rs` files
   - New `tests/guardrails.rs` rules: `guardrails_file_length_src`, `guardrails_file_length_tests`
   - `docs/architecture/guardrails.md` updated with file length policy

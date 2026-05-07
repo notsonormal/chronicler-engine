@@ -47,6 +47,12 @@ Interactive zone for player input.
 - **Status States**:
   - "Ready" - Green (#00ff00), awaiting input
   - "Thinking..." - Yellow (#ffff00) with pulse animation, LLM generating response
+- **Text Check Preview**: When spell/grammar issues are detected, the action area temporarily shows:
+  - Original vs corrected text comparison
+  - Issue tags (spell = orange, grammar = pink)
+  - **Send Corrected** — submits corrected text to `/action`
+  - **Send Original** — submits original text to `/action`
+  - **Cancel** — restores normal action area
 
 ### 4. Settings Tab
 Configuration panel for LLM connections.
@@ -58,6 +64,12 @@ Configuration panel for LLM connections.
   - Name, Provider (OpenRouter/DeepSeek/Ollama), Model
   - API Key (optional), Base URL (optional)
   - Single User Message checkbox (for models that ignore system prompts)
+- **Text Check Card**:
+  - Mode dropdown (Disabled / Spell / Grammar / Spell + Grammar)
+  - "Check before sending to LLM" checkbox
+- **Text Check Card**:
+  - Mode dropdown (Disabled / Spell / Grammar / Spell + Grammar)
+  - "Check before sending to LLM" checkbox
 
 ## Real-Time Updates
 The dashboard uses HTMX polling for live updates:

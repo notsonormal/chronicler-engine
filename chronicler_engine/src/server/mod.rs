@@ -30,6 +30,9 @@ fn build_router(app_state: AppState) -> Router {
             get(fragments::character_headshots_fragment),
         )
         .route("/action", post(fragments::action_handler))
+        .route("/action/check", post(fragments::action_check_handler))
+        .route("/action/confirm", post(fragments::action_confirm_handler))
+        .route("/check-text", post(fragments::check_text_handler))
         .route("/hints", get(fragments::hints_handler))
         .route("/status/ready", get(fragments::status_ready_handler))
         .route(
@@ -79,6 +82,10 @@ fn build_router(app_state: AppState) -> Router {
         .route(
             "/connections/:id/set-quantifier",
             post(crate::server::settings_fragment::set_quantifier_handler),
+        )
+        .route(
+            "/settings/text-check",
+            post(crate::server::settings_fragment::save_text_check_handler),
         )
         // NOTE: dev-only diagnostic endpoint
         .route("/debug/state", get(debug::debug_state_handler))

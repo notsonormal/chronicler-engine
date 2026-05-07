@@ -45,8 +45,16 @@ def validate_all():
     world_schema = load_json(schemas_dir / "world.schema.json")
     map_schema = load_json(schemas_dir / "map.schema.json")
     char_schema = load_json(schemas_dir / "character.schema.json")
+    settings_schema = load_json(schemas_dir / "settings.schema.json")
 
     errors = 0
+
+    # Validate settings
+    settings_file = data_dir / "settings.json"
+    if settings_file.exists():
+        errors += validate_group([settings_file], settings_schema, "settings")
+    else:
+        print(f"WARN: {settings_file} not found, skipping settings validation")
 
     # Validate worlds, maps, personas, and characters
     errors += validate_group(data_dir.glob("worlds/*/world.json"), world_schema, "worlds")
@@ -59,6 +67,26 @@ def validate_all():
         sys.exit(1)
 
     # Relational Validation
+    # Validate settings connection IDs reference existing connections
+    if settings_file.exists():
+        settings_data = load_json(settings_file)
+        valid_connection_ids = {c["id"] for c in settings_data.get("connections", [])}
+        narration_id = settings_data.get("narration_connection_id")
+        quantifier_id = settings_data.get("quantifier_connection_id")
+
+        if narration_id and narration_id not in valid_connection_ids:
+            print(
+                f"FAIL: {settings_file}\n"
+                f"  narration_connection_id '{narration_id}' not found in connections"
+            )
+            errors += 1
+
+        if quantifier_id and quantifier_id not in valid_connection_ids:
+            print(
+                f"FAIL: {settings_file}\n"
+                f"  quantifier_connection_id '{quantifier_id}' not found in connections"
+            )
+            errors += 1
     print("Running relational validation...")
     for world_file in data_dir.glob("worlds/*/world.json"):
         world_data = load_json(world_file)

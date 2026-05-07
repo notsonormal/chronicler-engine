@@ -831,6 +831,319 @@ body {
     color: var(--color-accent-cyan);
 }
 
+/* Check Button (on log entries) */
+.check-btn {
+    background: transparent;
+    border: none;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    font-size: 18px;
+    padding: 4px 8px;
+    margin-left: var(--spacing-xs);
+    transition: opacity var(--transition-fast), color var(--transition-fast);
+}
+
+.check-btn:hover {
+    color: var(--color-accent-green);
+}
+
+/* Text Check Button */
+.btn-check {
+    background: transparent;
+    border: 1px solid var(--color-accent-cyan);
+    border-radius: 4px;
+    color: var(--color-accent-cyan);
+    padding: 8px 14px;
+    cursor: pointer;
+    height: var(--input-height);
+    font-family: inherit;
+    font-size: var(--font-size-base);
+    font-weight: bold;
+    transition: background var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.btn-check:hover {
+    background: rgba(0, 255, 255, 0.1);
+    box-shadow: 0 0 12px rgba(0, 255, 255, 0.25);
+}
+
+.btn-check:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+/* Text Check Preview */
+.text-check-preview {
+    background: var(--color-bg-header);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: var(--spacing-md);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    max-width: 600px;
+    width: 100%;
+}
+
+.preview-header {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    color: var(--color-accent-cyan);
+    font-weight: bold;
+    font-size: var(--font-size-base);
+}
+
+.preview-icon {
+    font-size: 1.2em;
+}
+
+.preview-compare {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    flex-wrap: wrap;
+}
+
+.preview-original,
+.preview-corrected {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+    flex: 1;
+    min-width: 0;
+}
+
+.preview-original label,
+.preview-corrected label {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.preview-original span {
+    color: var(--color-text-muted);
+    text-decoration: line-through;
+    word-break: break-word;
+}
+
+.preview-corrected span {
+    color: var(--color-accent-green);
+    font-weight: 500;
+    word-break: break-word;
+}
+
+.preview-arrow {
+    color: var(--color-text-muted);
+    font-size: 1.2em;
+    flex-shrink: 0;
+}
+
+.preview-issues {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+}
+
+.issue-tag {
+    font-size: var(--font-size-xs);
+    padding: 2px 8px;
+    border-radius: 4px;
+    border: 1px solid;
+}
+
+.issue-tag.spell {
+    background: rgba(255, 179, 71, 0.12);
+    color: var(--color-accent-orange);
+    border-color: rgba(255, 179, 71, 0.25);
+}
+
+.issue-tag.grammar {
+    background: rgba(255, 107, 107, 0.12);
+    color: var(--color-accent-pink);
+    border-color: rgba(255, 107, 107, 0.25);
+}
+
+.issue-tag.capitalization {
+    background: rgba(255, 255, 0, 0.12);
+    color: var(--color-accent-yellow);
+    border-color: rgba(255, 255, 0, 0.25);
+}
+
+.issue-tag.style {
+    background: rgba(56, 189, 248, 0.12);
+    color: var(--color-accent-blue-cyan);
+    border-color: rgba(56, 189, 248, 0.25);
+}
+
+.issue-tag.formatting {
+    background: rgba(128, 128, 128, 0.12);
+    color: var(--color-text-muted);
+    border-color: rgba(128, 128, 128, 0.25);
+}
+
+.issue-tag.other {
+    background: rgba(128, 128, 128, 0.12);
+    color: var(--color-text-muted);
+    border-color: rgba(128, 128, 128, 0.25);
+}
+
+.preview-actions {
+    display: flex;
+    gap: var(--spacing-sm);
+    flex-wrap: wrap;
+    margin-top: var(--spacing-xs);
+}
+
+.preview-actions form {
+    display: inline;
+}
+
+/* Allow action area to expand when showing text-check preview */
+.action-area:has(.text-check-preview) {
+    height: auto;
+    min-height: var(--action-area-height);
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: var(--spacing-md);
+    padding-bottom: var(--spacing-md);
+}
+
+.btn-corrected {
+    background: linear-gradient(180deg, #00aa00 0%, #006600 100%);
+    border: 1px solid var(--color-accent-green);
+    border-radius: 4px;
+    color: var(--color-accent-green);
+    padding: 8px var(--spacing-md);
+    cursor: pointer;
+    height: var(--input-height);
+    min-width: var(--button-min-width);
+    font-family: inherit;
+    font-size: var(--font-size-base);
+    font-weight: bold;
+    transition: background var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
+    box-shadow: 0 0 8px rgba(0, 255, 0, 0.3);
+}
+
+.btn-corrected:hover {
+    background: linear-gradient(180deg, #00cc00 0%, #008800 100%);
+    border-color: var(--color-accent-green);
+    box-shadow: 0 0 12px rgba(0, 255, 0, 0.5);
+}
+
+.btn-original {
+    background: linear-gradient(180deg, #2a4a5a 0%, #1a3a4a 100%);
+    border: 1px solid var(--color-accent-cyan);
+    border-radius: 4px;
+    color: var(--color-accent-cyan);
+    padding: 8px var(--spacing-md);
+    cursor: pointer;
+    height: var(--input-height);
+    min-width: var(--button-min-width);
+    font-family: inherit;
+    font-size: var(--font-size-base);
+    transition: background var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.btn-original:hover {
+    background: linear-gradient(180deg, #3a5a6a 0%, #2a4a5a 100%);
+    box-shadow: 0 0 10px rgba(0, 255, 255, 0.25);
+}
+
+.btn-cancel {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    color: var(--color-text-muted);
+    padding: 8px var(--spacing-md);
+    cursor: pointer;
+    height: var(--input-height);
+    font-family: inherit;
+    font-size: var(--font-size-base);
+    transition: color var(--transition-fast);
+}
+
+.btn-cancel:hover {
+    color: var(--color-accent-red);
+}
+
+/* Preview editable textarea */
+.preview-edit-textarea {
+    width: 100%;
+    background: var(--color-bg-primary);
+    border: 1px solid var(--color-button-border);
+    border-radius: 4px;
+    color: var(--color-text-primary);
+    padding: 8px 14px;
+    font-family: inherit;
+    font-size: var(--font-size-base);
+    line-height: 1.5;
+    resize: vertical;
+    min-height: 40px;
+    outline: none;
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.preview-edit-textarea:focus {
+    border-color: var(--color-accent-green);
+    box-shadow: 0 0 8px rgba(0, 255, 0, 0.2);
+}
+
+.preview-send-form {
+    display: contents;
+}
+
+/* Custom checkbox for dark theme */
+input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    border: 1px solid var(--color-button-border);
+    border-radius: 3px;
+    background: var(--color-bg-primary);
+    cursor: pointer;
+    position: relative;
+    vertical-align: middle;
+    transition: background var(--transition-fast), border-color var(--transition-fast);
+    flex-shrink: 0;
+}
+
+input[type="checkbox"]:checked {
+    background: var(--color-accent-green);
+    border-color: var(--color-accent-green);
+}
+
+input[type="checkbox"]:checked::after {
+    content: '';
+    position: absolute;
+    left: 5px;
+    top: 2px;
+    width: 4px;
+    height: 8px;
+    border: solid var(--color-bg-primary);
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+input[type="checkbox"]:focus {
+    outline: none;
+    box-shadow: 0 0 4px rgba(0, 255, 0, 0.3);
+}
+
+label:has(> input[type="checkbox"]) {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    cursor: pointer;
+}
+
+.settings-panel label:has(> input[type="checkbox"]) {
+    color: var(--color-text-primary);
+}
+
 /* Responsive Breakpoints */
 @media (max-width: 768px) {
     .main-container {

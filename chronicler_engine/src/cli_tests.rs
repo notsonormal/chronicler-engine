@@ -1,6 +1,6 @@
 use clap::Parser;
 
-use crate::cli::{Args, resolve_engine_data_path};
+use crate::cli::{Args, resolve_engine_data_path, scan_worlds};
 
 #[test]
 fn test_resolve_engine_data_path_default() {
@@ -118,4 +118,103 @@ fn test_list_worlds_nonexistent_worlds_dir() {
         std::env::remove_var("CHRONICLER_DATA");
     }
     let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[test]
+fn test_scan_worlds_with_valid_world() {
+    let temp_dir = std::env::temp_dir().join(format!("chronicler_scan_test_{}", std::process::id()));
+    let world_dir = temp_dir.join("worlds").join("my_world");
+    std::fs::create_dir_all(&world_dir).unwrap();
+
+    let manifest = crate::model::world::WorldManifest {
+        id: "my_world".to_string(),
+        name: "My World".to_string(),
+        starting_room_id: "start".to_string(),
+        description: "A test world".to_string(),
+        global_rules: vec![],
+        map_file: "map.json".to_string(),
+        player_file: "player.json".to_string(),
+        characters_dir: "".to_string(),
+        scenarios: vec![],
+        default_scenario_id: None,
+        default_room_image: None,
+    };
+    let json = serde_json::to_string_pretty(&manifest).unwrap();
+    std::fs::write(world_dir.join("world.json"), json).unwrap();
+
+    let result = scan_worlds(&temp_dir);
+    let _ = std::fs::remove_dir_all(&temp_dir);
+
+    assert!(result.is_ok());
+    let worlds = result.unwrap();
+    assert_eq!(worlds.len(), 1);
+    assert_eq!(worlds[0], ("my_world".to_string(), "My World".to_string()));
+}
+
+#[test]
+fn test_scan_worlds_empty_worlds_dir() {
+    let temp_dir = std::env::temp_dir().join(format!("chronicler_scan_empty_{}", std::process::id()));
+    std::fs::create_dir_all(temp_dir.join("worlds")).unwrap();
+
+    let result = scan_worlds(&temp_dir);
+    let _ = std::fs::remove_dir_all(&temp_dir);
+
+    assert!(result.is_ok());
+    assert!(result.unwrap().is_empty());
+}
+
+#[test]
+fn test_scan_worlds_missing_worlds_dir() {
+    let temp_dir = std::env::temp_dir().join(format!("chronicler_scan_missing_{}", std::process::id()));
+    std::fs::create_dir_all(&temp_dir).unwrap();
+
+    let result = scan_worlds(&temp_dir);
+    let _ = std::fs::remove_dir_all(&temp_dir);
+
+    assert!(result.is_ok());
+    assert!(result.unwrap().is_empty());
+}
+
+#[test]
+fn test_scan_worlds_skips_invalid_json() {
+    let temp_dir = std::env::temp_dir().join(format!("chronicler_scan_badjson_{}", std::process::id()));
+    let world_dir = temp_dir.join("worlds").join("bad_world");
+    std::fs::create_dir_all(&world_dir).unwrap();
+    std::fs::write(world_dir.join("world.json"), "not json").unwrap();
+
+    let result = scan_worlds(&temp_dir);
+    let _ = std::fs::remove_dir_all(&temp_dir);
+
+    assert!(result.is_ok());
+    assert!(result.unwrap().is_empty());
+}
+
+#[test]
+fn test_scan_worlds_skips_non_dir_entries() {
+    let temp_dir = std::env::temp_dir().join(format!("chronicler_scan_nondir_{}", std::process::id()));
+    let worlds_dir = temp_dir.join("worlds");
+    std::fs::create_dir_all(&worlds_dir).unwrap();
+    std::fs::write(worlds_dir.join("not_a_dir.txt"), "hello").unwrap();
+
+    let result = scan_worlds(&temp_dir);
+    let _ = std::fs::remove_dir_all(&temp_dir);
+
+    assert!(result.is_ok());
+    assert!(result.unwrap().is_empty());
+}
+
+#[test]
+fn test_resolve_engine_data_path_from_exe_dir() {
+    let exe_path = std::env::current_exe().unwrap();
+    let exe_dir = exe_path.parent().unwrap();
+    let data_dir = exe_dir.join("data");
+    std::fs::create_dir_all(&data_dir).unwrap();
+
+    unsafe {
+        std::env::remove_var("CHRONICLER_DATA");
+    }
+    let path = resolve_engine_data_path();
+    assert_eq!(path, data_dir);
+
+    let _ = std::fs::remove_dir(&data_dir);
 }

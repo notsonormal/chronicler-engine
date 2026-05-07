@@ -6,6 +6,7 @@ use askama::Template;
 use pulldown_cmark::{Options, Parser, html};
 
 use crate::model::state::{LogEntry, LogType};
+use crate::narrative::text_check::CheckResult;
 
 /// [DOC: docs/architecture/system.md]
 #[allow(private_interfaces)]
@@ -80,7 +81,7 @@ impl From<&LogEntry> for LogEntryView {
 
 #[derive(Template)]
 #[template(
-    source = r#"<div class="story-log" id="story-log">{% for entry in entries %}<div class="log-entry {{ entry.log_type }}" data-id="{{ entry.id }}" data-raw-text="{{ entry.raw_text | escape }}">{% if entry.is_location %}<span class="location-header">{{ entry.sender }}</span><span class="location-timestamp">- {{ entry.timestamp }}</span>{% elif entry.is_event %}<span class="event-header">{{ entry.sender }}</span><span class="event-timestamp">- {{ entry.timestamp }}</span>{% else %}<span class="timestamp">{{ entry.timestamp }}</span>{% if entry.sender != "" %}<span class="sender">{{ entry.sender }}:</span> {% endif %}{% endif %}<span class="text">{{ entry.text }}</span>{% if !entry.is_location && !entry.is_event %}<button class="edit-btn" onclick="showEditForm({{ entry.id }})" title="Edit">&#9998;</button>{% if loop.last %}{% if entry.log_type == "narration" || entry.log_type == "dialogue" %}<button class="retry-btn" onclick="submitRetry()" title="Retry">&#8635;</button>{% endif %}{% endif %}{% endif %}</div>{% endfor %}</div>"#,
+    source = r#"<div class="story-log" id="story-log">{% for entry in entries %}<div class="log-entry {{ entry.log_type }}" data-id="{{ entry.id }}" data-raw-text="{{ entry.raw_text | escape }}">{% if entry.is_location %}<span class="location-header">{{ entry.sender }}</span><span class="location-timestamp">- {{ entry.timestamp }}</span>{% elif entry.is_event %}<span class="event-header">{{ entry.sender }}</span><span class="event-timestamp">- {{ entry.timestamp }}</span>{% else %}<span class="timestamp">{{ entry.timestamp }}</span>{% if entry.sender != "" %}<span class="sender">{{ entry.sender }}:</span> {% endif %}{% endif %}<span class="text">{{ entry.text }}</span>{% if !entry.is_location && !entry.is_event %}<button class="edit-btn" onclick="showEditForm({{ entry.id }})" title="Edit">&#9998;</button>{% if entry.log_type == "input" %}<button class="check-btn" onclick="checkLogText(this.closest('.log-entry').dataset.rawText)" title="Check spelling & grammar">&#x2713;</button>{% endif %}{% if loop.last %}{% if entry.log_type == "narration" || entry.log_type == "dialogue" %}<button class="retry-btn" onclick="submitRetry()" title="Retry">&#8635;</button>{% endif %}{% endif %}{% endif %}</div>{% endfor %}</div>"#,
     ext = "html"
 )]
 pub struct StoryLogTemplate {
@@ -142,7 +143,7 @@ impl CharacterHeadshotsTemplate {
 
 #[derive(Template)]
 #[template(
-    source = r#"<div cmd-area id=cmd-area><form method=post hx-post=/action hx-target=#cmd-area hx-swap=outerHTML class=command-wrapper><input type=text name=command placeholder="Enter command..." value="" {% if is_disabled %}disabled{% endif %} autocomplete=off /><button type=submit {% if is_disabled %}disabled{% endif %}>Send</button></form><div class=command-hints>{% for action in available_actions %}<span class=action-hint>{{ action }}</span>{% endfor %}</div><div id="error-message" class="error-message">{{ error_message }}</div><div class="{{ status_class }}" id="status-display">{{ status_text }}</div></div>"#,
+    source = r##"<div class="action-area" id="action-area"><form id="command-form" hx-post="/action/check" hx-target="#action-area" hx-swap="innerHTML" hx-on::before-request="saveActionArea()" hx-on::after-request="onActionFormAfterRequest()"><input type="text" name="command" placeholder="Enter command..." required minlength="1" autocomplete="off" {% if is_disabled %}disabled{% endif %} /><button type="submit" id="submit-btn" {% if is_disabled %}disabled{% endif %}><span class="btn-icon">&#9654;</span> Send</button></form><div class="action-hints" id="action-hints" hx-get="/hints" hx-trigger="load, every 5s"></div><div class="{{ status_class }}" id="status-display" hx-get="/status/generating" hx-trigger="load, every 5s" hx-swap="innerHTML" hx-on::after-swap="onStatusPoll(this)"><span class="{{ status_class }}">{{ status_text }}</span></div></div>"##,
     ext = "html"
 )]
 pub struct ActionAreaTemplate {
@@ -185,6 +186,77 @@ impl ActionAreaTemplate {
             status_class,
             status_text,
             available_actions,
+        }
+    }
+}
+
+/// [DOC: docs/system/text_check.md]
+#[derive(Template)]
+#[template(
+    source = r##"<div class=text-check-preview>
+    <div class=preview-header>
+        <span class=preview-icon>&#x270D;</span>
+        <span>Did you mean?</span>
+    </div>
+    <div class=preview-original>
+        <label>Original</label>
+        <span>{{ original }}</span>
+    </div>
+    <div class=preview-corrected>
+        <label>Corrected (edit if needed)</label>
+        <textarea name=command class=preview-edit-textarea id=corrected-textarea>{{ corrected }}</textarea>
+    </div>
+    <div class=preview-issues>
+        {% for issue in issues %}<span class="issue-tag {{ issue.kind }}">{{ issue.message }}</span>{% endfor %}
+    </div>
+    <div class=preview-actions>
+        <form method=post hx-post=/action/confirm hx-target="#action-area" hx-swap="outerHTML" hx-include="#corrected-textarea">
+            <button type=submit class=btn-corrected>Send</button>
+        </form>
+        <form method=post hx-post=/action/confirm hx-target="#action-area" hx-swap="outerHTML">
+            <input type=hidden name=command value="{{ original }}" />
+            <button type=submit class=btn-original>Send Original</button>
+        </form>
+        <button type=button class=btn-cancel onclick="restoreActionArea()">Cancel</button>
+    </div>
+</div>"##,
+    ext = "html"
+)]
+pub struct TextCheckPreviewTemplate {
+    pub original: String,
+    pub corrected: String,
+    pub issues: Vec<PreviewIssueView>,
+}
+
+#[derive(Debug, Clone)]
+pub struct PreviewIssueView {
+    pub message: String,
+    pub kind: String,
+}
+
+impl TextCheckPreviewTemplate {
+    pub fn from_check_result(result: &CheckResult) -> Self {
+        let issues = result
+            .issues
+            .iter()
+            .map(|issue| PreviewIssueView {
+                message: issue.message.clone(),
+                kind: match issue.kind {
+                    crate::narrative::text_check::IssueKind::Spelling => "spell",
+                    crate::narrative::text_check::IssueKind::Grammar => "grammar",
+                    crate::narrative::text_check::IssueKind::Capitalization => "capitalization",
+                    crate::narrative::text_check::IssueKind::Style => "style",
+                    crate::narrative::text_check::IssueKind::Formatting => "formatting",
+                    crate::narrative::text_check::IssueKind::Other => "other",
+                }
+                .to_string(),
+            })
+            .collect();
+
+        Self {
+            original: result.original.clone(),
+            corrected: result.corrected.clone(),
+            issues,
         }
     }
 }

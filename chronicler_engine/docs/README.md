@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-06 19:01 UTC*
+*Index last generated: 2026-05-07 21:43 UTC*
 
 ### Root files
 
@@ -35,6 +35,7 @@ This folder contains all documentation for the Chronicler Engine project.
 
 ### `docs/plans/archived/`
 
+- [Plan: Spell & Grammar Check Integration](./plans/archived/ant-man-black-lightning-bobbi-morse.md)
 - [Plan: Raise `game_service.rs` Coverage to 80%+ via Refactoring](./plans/archived/coverage-game-service-archived.md)
 - [Plan: Improve Quantifier Prompt for Movement Certainty](./plans/archived/donna-troy-hercules-warpath-2026-05-03.md)
 - [Plan: Dependency-Inject LLM/Quantifier Backends into DefaultGameService](./plans/archived/drax-psylocke-gamora-2026-05-04.md)
@@ -75,6 +76,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Chronicler Engine Prompt System](./system/prompt_system.md)
 - [Engine Startup & Initialization](./system/startup.md)
 - [Testing Strategy](./system/testing.md)
+- [Specification: Text Check System](./system/text_check.md)
 - [System: Auto-Trigger & Reactive Encounters](./system/triggers.md)
 - [Specification: UI Design](./system/ui_design.md)
 

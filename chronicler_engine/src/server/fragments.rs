@@ -10,10 +10,13 @@ use serde::{Deserialize, Serialize};
 use crate::engine::logic::{get_available_exits, get_current_room};
 use crate::engine::parser::parse_command;
 use crate::error::Result;
+use crate::model::settings::TextCheckMode;
 use crate::model::state::{GameState, LogType};
+use crate::narrative::text_check::check_player_input;
 use crate::server::AppState;
 use crate::server::templates::{
-    ActionAreaTemplate, HeaderTemplate, StoryLogTemplate, VisualSidebarTemplate,
+    ActionAreaTemplate, HeaderTemplate, StoryLogTemplate, TextCheckPreviewTemplate,
+    VisualSidebarTemplate,
 };
 
 const MAX_LOG_DISPLAY: usize = 50;
@@ -250,16 +253,11 @@ pub struct ActionForm {
     pub command: String,
 }
 
+/// Core action processing logic shared between `/action` and `/action/check`.
 /// [DOC: docs/system/game_flow.md]
-// Static response bodies are infallible by construction (valid status + static string).
 #[allow(clippy::expect_used)]
-pub async fn action_handler(
-    State(state): State<AppState>,
-    Form(form): Form<ActionForm>,
-) -> Response<Body> {
-    let command = form.command.trim().to_string();
+async fn process_action(state: &AppState, command: String) -> Response<Body> {
     if command.is_empty() {
-        // Browser should catch invalid actions, but return error just in case
         return Response::builder()
             .status(StatusCode::BAD_REQUEST)
             .body(Body::from(
@@ -269,7 +267,6 @@ pub async fn action_handler(
     }
 
     let (player_name, is_sync) = {
-        // [DOC: docs/system/game_flow.md]
         let mut state_guard = match state.state.lock() {
             Ok(g) => g,
             Err(_) => {
@@ -302,7 +299,6 @@ pub async fn action_handler(
         (name, is_sync)
     };
 
-    // For async actions, spawn a blocking task to process them
     if !is_sync {
         let state_clone = state.state.clone();
         let cmd = command;
@@ -321,8 +317,6 @@ pub async fn action_handler(
         }
 
         // [DOC: docs/architecture/invariants.md#INV-004]
-        // FreeAction runs off the async thread so the HTTP handler returns immediately.
-        // CancellationToken resets status to Idle if the server shuts down mid-flight.
         tokio::task::spawn_blocking(move || {
             if token.is_cancelled() {
                 if let Ok(mut guard) = state_clone.lock() {
@@ -352,6 +346,185 @@ pub async fn action_handler(
                 "<span class=\"status thinking\">Thinking...</span>",
             ))
             .expect("static response body is valid")
+    }
+}
+
+/// [DOC: docs/system/game_flow.md]
+#[allow(clippy::expect_used)]
+pub async fn action_handler(
+    State(state): State<AppState>,
+    Form(form): Form<ActionForm>,
+) -> Response<Body> {
+    let command = form.command.trim().to_string();
+    process_action(&state, command).await
+}
+
+/// [DOC: docs/system/text_check.md]
+#[allow(clippy::expect_used)]
+pub async fn action_confirm_handler(
+    State(state): State<AppState>,
+    Form(form): Form<ActionForm>,
+) -> Response<Body> {
+    let command = form.command.trim().to_string();
+    if command.is_empty() {
+        return Response::builder()
+            .status(StatusCode::BAD_REQUEST)
+            .body(Body::from(
+                "<span class=\"status error\">Enter a command</span>",
+            ))
+            .expect("static response body is valid");
+    }
+
+    let action_response = process_action(&state, command).await;
+    let status = action_response.status();
+
+    let action_area_html = match render_action_area(&state) {
+        Ok(html) => html,
+        Err(e) => {
+            log::error!("Failed to render action area: {e}");
+            render_error(&e.to_string())
+        }
+    };
+
+    let mut builder = Response::builder().status(status);
+    if let Some(hx_trigger) = action_response.headers().get("HX-Trigger") {
+        builder = builder.header("HX-Trigger", hx_trigger.clone());
+    }
+    builder
+        .body(Body::from(action_area_html))
+        .expect("static response body is valid")
+}
+
+/// [DOC: docs/system/text_check.md]
+#[allow(clippy::expect_used)]
+pub async fn action_check_handler(
+    State(state): State<AppState>,
+    Form(form): Form<ActionForm>,
+) -> Response<Body> {
+    let command = form.command.trim().to_string();
+    if command.is_empty() {
+        return Response::builder()
+            .status(StatusCode::BAD_REQUEST)
+            .body(Body::from(
+                "<span class=\"status error\">Enter a command</span>",
+            ))
+            .expect("static response body is valid");
+    }
+
+    let settings = crate::settings::load_settings().unwrap_or_default();
+
+    if settings.text_check.mode == TextCheckMode::Disabled || !settings.text_check.enable_auto_check
+    {
+        let mut response = process_action(&state, command).await;
+        add_status_swap_headers(&mut response);
+        return response;
+    }
+
+    let result = match check_player_input(
+        &command,
+        settings.text_check.mode,
+        &settings.text_check.ignored_words,
+    ) {
+        Ok(result) => result,
+        Err(e) => {
+            log::error!("Text check failed: {e}");
+            let mut response = process_action(&state, command).await;
+            add_status_swap_headers(&mut response);
+            return response;
+        }
+    };
+
+    match result {
+        Some(check_result) => {
+            let template = TextCheckPreviewTemplate::from_check_result(&check_result);
+            match template.render() {
+                Ok(html) => Response::builder()
+                    .status(StatusCode::OK)
+                    .body(Body::from(html))
+                    .expect("static response body is valid"),
+                Err(e) => Response::builder()
+                    .status(StatusCode::INTERNAL_SERVER_ERROR)
+                    .body(Body::from(render_error(&format!("Template error: {e}"))))
+                    .expect("static response body is valid"),
+            }
+        }
+        None => {
+            let mut response = process_action(&state, command).await;
+            add_status_swap_headers(&mut response);
+            response
+        }
+    }
+}
+
+#[allow(clippy::expect_used)]
+fn add_status_swap_headers(response: &mut Response<Body>) {
+    response.headers_mut().insert(
+        "HX-Retarget",
+        "#status-display"
+            .parse()
+            .expect("static header value is valid"),
+    );
+    response.headers_mut().insert(
+        "HX-Reswap",
+        "innerHTML".parse().expect("static header value is valid"),
+    );
+}
+
+/// [DOC: docs/system/text_check.md]
+#[allow(clippy::expect_used)]
+pub async fn check_text_handler(
+    State(_state): State<AppState>,
+    Form(form): Form<ActionForm>,
+) -> Response<Body> {
+    let text = form.command.trim().to_string();
+    if text.is_empty() {
+        return Response::builder()
+            .status(StatusCode::BAD_REQUEST)
+            .body(Body::from(
+                "<span class=\"status error\">Enter text to check</span>",
+            ))
+            .expect("static response body is valid");
+    }
+
+    let settings = crate::settings::load_settings().unwrap_or_default();
+
+    if settings.text_check.mode == TextCheckMode::Disabled {
+        return Response::builder()
+            .status(StatusCode::OK)
+            .body(Body::from(
+                "<span class=\"status ready\">Text check is disabled</span>",
+            ))
+            .expect("static response body is valid");
+    }
+
+    match check_player_input(
+        &text,
+        settings.text_check.mode,
+        &settings.text_check.ignored_words,
+    ) {
+        Ok(Some(result)) => {
+            let template = TextCheckPreviewTemplate::from_check_result(&result);
+            match template.render() {
+                Ok(html) => Response::builder()
+                    .status(StatusCode::OK)
+                    .body(Body::from(html))
+                    .expect("static response body is valid"),
+                Err(e) => Response::builder()
+                    .status(StatusCode::INTERNAL_SERVER_ERROR)
+                    .body(Body::from(render_error(&format!("Template error: {e}"))))
+                    .expect("static response body is valid"),
+            }
+        }
+        Ok(None) => Response::builder()
+            .status(StatusCode::OK)
+            .body(Body::from(
+                "<span class=\"status ready\">No issues found</span>",
+            ))
+            .expect("static response body is valid"),
+        Err(e) => Response::builder()
+            .status(StatusCode::INTERNAL_SERVER_ERROR)
+            .body(Body::from(render_error(&format!("Check failed: {e}"))))
+            .expect("static response body is valid"),
     }
 }
 

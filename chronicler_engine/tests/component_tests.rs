@@ -108,9 +108,6 @@ fn test_header_template_renders_room_name() {
     );
 }
 
-/// Header template currently does not render room_name, so XSS via room_name
-/// is not a concern for this specific template. This test verifies the template
-/// renders correctly regardless of the room_name value.
 #[test]
 fn test_header_template_ignores_room_name() {
     let template = HeaderTemplate {
@@ -141,6 +138,47 @@ fn test_header_template_connection_status() {
         rendered.contains("Connected"),
         "Expected Connected text: {rendered}"
     );
+}
+
+use std::sync::MutexGuard;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static SETTINGS_TEST_LOCK: Mutex<()> = Mutex::new(());
+static SETTINGS_TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+pub struct TempSettingsGuard {
+    _lock: MutexGuard<'static, ()>,
+    temp_path: std::path::PathBuf,
+}
+
+impl Default for TempSettingsGuard {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl TempSettingsGuard {
+    pub fn new() -> Self {
+        let lock = SETTINGS_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let counter = SETTINGS_TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
+        let temp_path = std::env::temp_dir().join(format!(
+            "chronicler_test_settings_{}_{}.json",
+            std::process::id(),
+            counter
+        ));
+        unsafe { std::env::set_var("CHRONICLER_SETTINGS_PATH", &temp_path) };
+        Self {
+            _lock: lock,
+            temp_path,
+        }
+    }
+}
+
+impl Drop for TempSettingsGuard {
+    fn drop(&mut self) {
+        unsafe { std::env::remove_var("CHRONICLER_SETTINGS_PATH") };
+        let _ = std::fs::remove_file(&self.temp_path);
+    }
 }
 
 // HTTP Endpoint Tests (from fragment_tests.rs)
@@ -251,8 +289,8 @@ mod tests {
             .unwrap();
         let body_str = String::from_utf8_lossy(&body);
         assert!(
-            body_str.contains("id=cmd-area"),
-            "Expected cmd-area id: {body_str}"
+            body_str.contains("id=\"action-area\""),
+            "Expected action-area id: {body_str}"
         );
     }
 
@@ -502,43 +540,7 @@ mod tests {
 
     mod settings_tests {
         use super::*;
-        use std::sync::atomic::{AtomicU64, Ordering};
-        use std::sync::{Mutex, MutexGuard};
-
-        static SETTINGS_TEST_LOCK: Mutex<()> = Mutex::new(());
-        static SETTINGS_TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
-
-        /// RAII guard that redirects settings to a temp file and cleans up on drop.
-        /// Uses a process-wide lock to prevent parallel tests from interfering
-        /// with each other's environment variables.
-        struct TempSettingsGuard {
-            _lock: MutexGuard<'static, ()>,
-            temp_path: std::path::PathBuf,
-        }
-
-        impl TempSettingsGuard {
-            fn new() -> Self {
-                let lock = SETTINGS_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-                let counter = SETTINGS_TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-                let temp_path = std::env::temp_dir().join(format!(
-                    "chronicler_test_settings_{}_{}.json",
-                    std::process::id(),
-                    counter
-                ));
-                unsafe { std::env::set_var("CHRONICLER_SETTINGS_PATH", &temp_path) };
-                Self {
-                    _lock: lock,
-                    temp_path,
-                }
-            }
-        }
-
-        impl Drop for TempSettingsGuard {
-            fn drop(&mut self) {
-                unsafe { std::env::remove_var("CHRONICLER_SETTINGS_PATH") };
-                let _ = std::fs::remove_file(&self.temp_path);
-            }
-        }
+        use crate::TempSettingsGuard;
 
         #[tokio::test]
         async fn test_settings_panel_returns_html() {
@@ -1204,8 +1206,6 @@ async fn test_scrollbar_styled() {
     );
 }
 
-/// Integration test that loads actual world data and verifies room image_path
-/// is correctly deserialized from JSON.
 #[test]
 fn test_load_world_includes_room_image_path() {
     // Read the map.json file directly like load_world does
@@ -1308,7 +1308,6 @@ async fn test_visual_sidebar_with_real_world_data() {
     );
 }
 
-/// Test that redmist_estate world loads with image_path correctly.
 #[test]
 fn test_redmist_estate_room_image_path() {
     let map_json = std::fs::read_to_string("data/worlds/redmist_estate/map.json").unwrap();
@@ -1327,7 +1326,6 @@ fn test_redmist_estate_room_image_path() {
     );
 }
 
-/// Test that GameState initializes with empty npcs_in_area
 #[test]
 fn test_npcs_in_area_initialization() {
     let state = create_test_state();
@@ -1340,7 +1338,6 @@ fn test_npcs_in_area_initialization() {
     );
 }
 
-/// Test that npcs_in_area can be populated
 #[test]
 fn test_npcs_in_area_can_be_populated() {
     let state = create_test_state();
@@ -1364,7 +1361,6 @@ fn test_npcs_in_area_can_be_populated() {
     assert_eq!(state_guard.npcs_in_area[0].id, "npc_1", "Should be npc_1");
 }
 
-/// Test that npcs_in_area can be cleared (for re-quantification)
 #[test]
 fn test_npcs_in_area_can_be_cleared() {
     let state = create_test_state();
@@ -1392,7 +1388,6 @@ fn test_npcs_in_area_can_be_cleared() {
     );
 }
 
-/// Test that npcs_in_area can be replaced entirely (for re-quantification)
 #[test]
 fn test_npcs_in_area_can_be_replaced() {
     let state = create_test_state();
@@ -1460,4 +1455,225 @@ async fn test_debug_state_endpoint_returns_json() {
         json.get("narration_history_tail").is_some(),
         "Debug state should include narration_history_tail"
     );
+}
+
+mod text_check_tests {
+    use super::*;
+    use crate::TempSettingsGuard;
+    use chronicler_engine::model::settings::{AppSettings, TextCheckMode, TextCheckSettings};
+    use std::io::Write;
+
+    fn write_text_check_settings(mode: TextCheckMode) {
+        let settings = AppSettings {
+            text_check: TextCheckSettings {
+                mode,
+                enable_auto_check: true,
+                ignored_words: vec![],
+            },
+            ..Default::default()
+        };
+        let path = std::env::var("CHRONICLER_SETTINGS_PATH").unwrap();
+        let mut file = std::fs::File::create(&path).unwrap();
+        file.write_all(serde_json::to_string(&settings).unwrap().as_bytes())
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_action_check_disabled_forwards_to_action() {
+        let _guard = TempSettingsGuard::new();
+        write_text_check_settings(TextCheckMode::Disabled);
+
+        let state = create_test_state();
+        let app = create_app_for_testing(state);
+
+        let req = Request::builder()
+            .uri("/action/check")
+            .method(http::Method::POST)
+            .header(
+                http::header::CONTENT_TYPE,
+                "application/x-www-form-urlencoded",
+            )
+            .body(Body::from("command=look"))
+            .unwrap();
+        let response = app.oneshot(req).await.unwrap();
+
+        assert!(response.status().is_success());
+        let body = axum::body::to_bytes(response.into_body(), 1024)
+            .await
+            .unwrap();
+        let body_str = String::from_utf8_lossy(&body);
+        assert!(
+            body_str.contains("status"),
+            "Expected status fragment: {body_str}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_action_check_empty_command() {
+        let state = create_test_state();
+        let app = create_app_for_testing(state);
+
+        let req = Request::builder()
+            .uri("/action/check")
+            .method(http::Method::POST)
+            .header(
+                http::header::CONTENT_TYPE,
+                "application/x-www-form-urlencoded",
+            )
+            .body(Body::from("command="))
+            .unwrap();
+        let response = app.oneshot(req).await.unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    /// CRITICAL: /action/confirm must return full action area HTML for outerHTML swap.
+    /// Returning only a status span breaks the DOM when hx-swap="outerHTML" targets #action-area.
+    #[tokio::test]
+    async fn test_action_confirm_returns_full_action_area() {
+        let state = create_test_state();
+        let app = create_app_for_testing(state);
+
+        let req = Request::builder()
+            .uri("/action/confirm")
+            .method(http::Method::POST)
+            .header(
+                http::header::CONTENT_TYPE,
+                "application/x-www-form-urlencoded",
+            )
+            .body(Body::from("command=look"))
+            .unwrap();
+        let response = app.oneshot(req).await.unwrap();
+
+        assert!(response.status().is_success());
+        let body = axum::body::to_bytes(response.into_body(), 4096)
+            .await
+            .unwrap();
+        let body_str = String::from_utf8_lossy(&body);
+        assert!(
+            body_str.contains("id=\"action-area\""),
+            "Expected action-area container: {body_str}"
+        );
+        assert!(
+            body_str.contains(r#"<form id="command-form""#),
+            "Expected command form: {body_str}"
+        );
+        assert!(
+            !body_str.starts_with("<span class=\"status"),
+            "Must not return bare status span: {body_str}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_check_text_disabled() {
+        let _guard = TempSettingsGuard::new();
+        write_text_check_settings(TextCheckMode::Disabled);
+
+        let state = create_test_state();
+        let app = create_app_for_testing(state);
+
+        let req = Request::builder()
+            .uri("/check-text")
+            .method(http::Method::POST)
+            .header(
+                http::header::CONTENT_TYPE,
+                "application/x-www-form-urlencoded",
+            )
+            .body(Body::from("command=go to the casle"))
+            .unwrap();
+        let response = app.oneshot(req).await.unwrap();
+
+        assert!(response.status().is_success());
+        let body = axum::body::to_bytes(response.into_body(), 4096)
+            .await
+            .unwrap();
+        let body_str = String::from_utf8_lossy(&body);
+        assert!(
+            body_str.contains("disabled"),
+            "Expected disabled message: {body_str}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_check_text_empty() {
+        let state = create_test_state();
+        let app = create_app_for_testing(state);
+
+        let req = Request::builder()
+            .uri("/check-text")
+            .method(http::Method::POST)
+            .header(
+                http::header::CONTENT_TYPE,
+                "application/x-www-form-urlencoded",
+            )
+            .body(Body::from("command="))
+            .unwrap();
+        let response = app.oneshot(req).await.unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn test_check_text_finds_issues() {
+        let _guard = TempSettingsGuard::new();
+        write_text_check_settings(TextCheckMode::Spell);
+
+        let state = create_test_state();
+        let app = create_app_for_testing(state);
+
+        let req = Request::builder()
+            .uri("/check-text")
+            .method(http::Method::POST)
+            .header(
+                http::header::CONTENT_TYPE,
+                "application/x-www-form-urlencoded",
+            )
+            .body(Body::from("command=go+to+the+casle"))
+            .unwrap();
+        let response = app.oneshot(req).await.unwrap();
+
+        assert!(response.status().is_success());
+        let body = axum::body::to_bytes(response.into_body(), 4096)
+            .await
+            .unwrap();
+        let body_str = String::from_utf8_lossy(&body);
+        assert!(
+            body_str.contains("text-check-preview"),
+            "Expected preview fragment: {body_str}"
+        );
+        assert!(
+            body_str.contains("castle"),
+            "Expected corrected text 'castle': {body_str}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_check_text_no_issues() {
+        let _guard = TempSettingsGuard::new();
+        write_text_check_settings(TextCheckMode::SpellGrammar);
+
+        let state = create_test_state();
+        let app = create_app_for_testing(state);
+
+        let req = Request::builder()
+            .uri("/check-text")
+            .method(http::Method::POST)
+            .header(
+                http::header::CONTENT_TYPE,
+                "application/x-www-form-urlencoded",
+            )
+            .body(Body::from("command=go+to+the+castle"))
+            .unwrap();
+        let response = app.oneshot(req).await.unwrap();
+
+        assert!(response.status().is_success());
+        let body = axum::body::to_bytes(response.into_body(), 1024)
+            .await
+            .unwrap();
+        let body_str = String::from_utf8_lossy(&body);
+        assert!(
+            body_str.contains("No issues found"),
+            "Expected no-issues message: {body_str}"
+        );
+    }
 }

@@ -1,7 +1,7 @@
 // CLI module is allowed to use stdout/stderr for CLI output.
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
-use std::{fs, path::PathBuf};
+use std::{fs, path::{Path, PathBuf}};
 
 use clap::Parser;
 
@@ -51,12 +51,12 @@ pub fn resolve_engine_data_path() -> PathBuf {
 }
 
 /// [DOC: docs/architecture/system.md]
-pub fn list_available_worlds() -> crate::error::Result<()> {
-    let data_dir = resolve_engine_data_path();
+/// Scan the given data directory for available worlds.
+/// Returns a list of (id, name) tuples for each valid world found.
+pub fn scan_worlds(data_dir: &Path) -> crate::error::Result<Vec<(String, String)>> {
     let worlds_dir = data_dir.join("worlds");
     if !worlds_dir.exists() {
-        println!("No worlds found in data/worlds/");
-        return Ok(());
+        return Ok(vec![]);
     }
 
     let mut worlds = Vec::new();
@@ -78,6 +78,13 @@ pub fn list_available_worlds() -> crate::error::Result<()> {
             }
         }
     }
+
+    Ok(worlds)
+}
+
+/// [DOC: docs/architecture/system.md]
+pub fn list_available_worlds() -> crate::error::Result<()> {
+    let worlds = scan_worlds(&resolve_engine_data_path())?;
 
     if worlds.is_empty() {
         println!("No worlds found in data/worlds/");

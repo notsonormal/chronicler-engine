@@ -77,6 +77,7 @@ fn test_settings_template_renders_connections() {
         narration_connection_id: "conn-1".into(),
         quantifier_connection_id: "conn-2".into(),
         response_length: "flexible".into(),
+        ..Default::default()
     };
     let template = SettingsTemplate::from_settings(&settings);
 
@@ -115,6 +116,7 @@ fn test_narrator_badge_renders() {
         narration_connection_id: "conn-1".into(),
         quantifier_connection_id: "conn-2".into(),
         response_length: "flexible".into(),
+        ..Default::default()
     };
     let template = SettingsTemplate::from_settings(&settings);
     let html = template.render().unwrap();
@@ -152,6 +154,7 @@ fn test_quantifier_badge_renders() {
         narration_connection_id: "conn-1".into(),
         quantifier_connection_id: "conn-2".into(),
         response_length: "flexible".into(),
+        ..Default::default()
     };
     let template = SettingsTemplate::from_settings(&settings);
     let html = template.render().unwrap();

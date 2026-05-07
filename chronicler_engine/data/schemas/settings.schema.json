@@ -1,0 +1,95 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Chronicler Engine Settings",
+  "description": "Application settings for Chronicler Engine including LLM connections and text check configuration.",
+  "type": "object",
+  "properties": {
+    "connections": {
+      "type": "array",
+      "description": "LLM API connections available to the engine.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique identifier for this connection."
+          },
+          "name": {
+            "type": "string",
+            "description": "Human-readable name for this connection."
+          },
+          "provider": {
+            "type": "string",
+            "enum": ["OpenRouter", "DeepSeek", "Mock", "Ollama"],
+            "description": "LLM backend provider."
+          },
+          "model": {
+            "type": "string",
+            "description": "Model identifier string (provider-specific)."
+          },
+          "api_key": {
+            "type": "string",
+            "description": "Optional API key. Falls back to environment variable if omitted."
+          },
+          "base_url": {
+            "type": "string",
+            "description": "Optional custom base URL for the provider API."
+          },
+          "single_user_message": {
+            "type": "boolean",
+            "default": false,
+            "description": "Whether to combine system + user into a single user message."
+          },
+          "max_tokens": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Optional maximum tokens per response."
+          },
+          "max_context_tokens": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Optional maximum context window size in tokens."
+          }
+        },
+        "required": ["id", "name", "provider", "model"]
+      },
+      "minItems": 1
+    },
+    "narration_connection_id": {
+      "type": "string",
+      "description": "Connection ID to use for narrative generation. Must reference an entry in connections."
+    },
+    "quantifier_connection_id": {
+      "type": "string",
+      "description": "Connection ID to use for the quantifier/parser. Must reference an entry in connections."
+    },
+    "response_length": {
+      "type": "string",
+      "description": "Guideline for the narrator on response length and pacing."
+    },
+    "text_check": {
+      "type": "object",
+      "description": "Configuration for the text check (spell/grammar) feature.",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["Disabled", "Spell", "Grammar", "SpellGrammar"],
+          "description": "Text check mode."
+        },
+        "enable_auto_check": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to automatically check text before sending."
+        },
+        "ignored_words": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "List of words to ignore during text checking."
+        }
+      },
+      "required": ["mode"]
+    }
+  },
+  "required": ["connections", "narration_connection_id", "quantifier_connection_id"]
+}

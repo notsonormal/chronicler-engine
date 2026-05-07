@@ -143,6 +143,34 @@ pub fn validate_loaded_data(
 }
 
 /// [DOC: docs/architecture/system.md]
+/// Inject default scenario narration logs into the game state.
+pub fn inject_scenario_logs(
+    state: &mut GameState,
+    manifest: &WorldManifest,
+    player: &PlayerCard,
+) {
+    let Some(scenario) = manifest.default_scenario() else {
+        return;
+    };
+    if scenario.text.is_empty() {
+        return;
+    }
+
+    let room_name =
+        crate::engine::logic::find_room_in_world_map(state, &manifest.starting_room_id)
+            .map(|r| r.name.clone())
+            .unwrap_or_else(|| manifest.starting_room_id.clone());
+
+    state.add_log(
+        String::new(),
+        Some(room_name),
+        crate::model::state::LogType::Narration,
+    );
+    let text = scenario.text.replace("{{user}}", &player.sheet.name);
+    state.add_log(text, None, crate::model::state::LogType::Narration);
+}
+
+/// [DOC: docs/architecture/system.md]
 pub fn run(args: Args) -> crate::error::Result<()> {
     if args.list_worlds {
         list_available_worlds()?;
@@ -165,22 +193,7 @@ pub fn run(args: Args) -> crate::error::Result<()> {
         manifest.starting_room_id.clone(),
     );
 
-    if let Some(scenario) = manifest.default_scenario() {
-        if !scenario.text.is_empty() {
-            let room_name =
-                crate::engine::logic::find_room_in_world_map(&state, &manifest.starting_room_id)
-                    .map(|r| r.name.clone())
-                    .unwrap_or_else(|| manifest.starting_room_id.clone());
-
-            state.add_log(
-                String::new(),
-                Some(room_name),
-                crate::model::state::LogType::Narration,
-            );
-            let text = scenario.text.replace("{{user}}", &player.sheet.name);
-            state.add_log(text, None, crate::model::state::LogType::Narration);
-        }
-    }
+    inject_scenario_logs(&mut state, &manifest, &player);
 
     let current_room = crate::engine::logic::get_current_room(&state)?;
 

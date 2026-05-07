@@ -55,6 +55,7 @@ Cross-module and browser-based tests live in the top-level `tests/` directory:
 | `game_service_tests.rs` | Game service logic, DI, retry | In-process | Very Fast |
 | `guardrails.rs` | Custom guardrails (what-comments, import order, single-letter vars, file length) | In-process | Very Fast |
 | `logic_tests.rs` | Movement, room resolution, fuzzy matching | In-process | Very Fast |
+| `text_check_tests.rs` | Spell/grammar checking with harper-core | In-process | Very Fast |
 | `trigger_tests.rs` | Trigger evaluation and firing | Browser + Mock LLM | Fast |
 
 ## The `LlmBackend` Interface
@@ -191,6 +192,7 @@ cargo test -- --test-threads=1
 - File length enforcement (src/ and tests/)
 - No `std::thread` in production code
 - Spawn site documentation
+- Inline test block detection
 
 **logic_tests.rs** (11 tests):
 - Room resolution and fuzzy matching
@@ -305,7 +307,7 @@ cargo llvm-cov test --json --output-path coverage.json
 | Parser (`engine/parser.rs`) | 85% |
 | Data models (`model/*.rs`) | 70% |
 | LLM prompts (`narrative/llm.rs`) | 50% |
-| Server HTTP (`server/*.rs`) | N/A (integration only) |
+| Text check (`narrative/text_check/*.rs`) | 80% |
 
 ### Known Gaps (Acceptable)
 
