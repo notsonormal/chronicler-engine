@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-09 18:31 UTC*
+*Index last generated: 2026-05-09 19:20 UTC*
 
 ### Root files
 
@@ -34,6 +34,7 @@ This folder contains all documentation for the Chronicler Engine project.
 
 ### `docs/plans/`
 
+- [Implementation Plan: Fix Diagnostic Signal Quality for All 12 Scenarios](./plans/diagnostic_fixes_plan.md)
 - [LLM Infrastructure Improvements](./plans/llm-infrastructure-improvements.md)
 - [Implementation Plan: Message Action Buttons Redesign](./plans/message-buttons-redesign-plan.md)
 - [Spec: Message Action Buttons Redesign](./plans/message-buttons-redesign.md)

@@ -15,6 +15,10 @@ pub struct DebugStateResponse {
     pub generation_phase: GenerationPhase,
     pub character_state: HashMap<String, NpcEncounterState>,
     pub narration_history_tail: Vec<LogEntry>,
+    pub narration_history_length: usize,
+    pub dynamic_rooms: Vec<String>,
+    pub dynamic_room_count: usize,
+    pub last_error: Option<String>,
 }
 
 /// NOTE: dev-only diagnostic endpoint
@@ -46,6 +50,13 @@ pub async fn debug_state_handler(
         .map(|npc| npc.id.clone())
         .collect();
 
+    let dynamic_rooms: Vec<String> = guard.dynamic_rooms.keys().cloned().collect();
+
+    let last_error = match &guard.generation_state.status {
+        GenerationStatus::Error(msg) => Some(msg.clone()),
+        _ => None,
+    };
+
     let response = DebugStateResponse {
         current_room_id: guard.current_room_id.clone(),
         npcs_in_area,
@@ -53,6 +64,10 @@ pub async fn debug_state_handler(
         generation_phase: guard.generation_state.phase.clone(),
         character_state: guard.character_state.npcs.clone(),
         narration_history_tail: history_tail,
+        narration_history_length: guard.narration_history.len(),
+        dynamic_rooms,
+        dynamic_room_count: guard.dynamic_rooms.len(),
+        last_error,
     };
 
     Ok(Json(response))

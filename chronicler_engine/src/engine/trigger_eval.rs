@@ -12,15 +12,31 @@ pub fn evaluate_triggers(state: &GameState) -> Vec<(NpcCard, Trigger)> {
         for (index, trigger) in npc.triggers.iter().enumerate() {
             if let Some(room_id) = &trigger.room_id {
                 if room_id != current_room_id {
+                    log::debug!(
+                        "[Trigger] '{}' skipped: room_id mismatch (expected '{}', current '{}')",
+                        trigger.action.name,
+                        room_id,
+                        current_room_id
+                    );
                     continue;
                 }
             }
 
             if check_condition(&state.character_state, &npc.id, &trigger.condition) {
                 if !trigger.repeat && is_trigger_fired(&state.character_state, &npc.id, index) {
+                    log::debug!(
+                        "[Trigger] '{}' skipped: already fired (non-repeatable)",
+                        trigger.action.name
+                    );
                     continue;
                 }
                 results.push((npc.clone(), trigger.clone()));
+            } else {
+                log::debug!(
+                    "[Trigger] '{}' skipped: condition not met for NPC '{}'",
+                    trigger.action.name,
+                    npc.id
+                );
             }
         }
     }

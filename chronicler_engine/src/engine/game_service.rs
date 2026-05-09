@@ -12,7 +12,9 @@ use crate::error::{EngineError, LlmFailure};
 use crate::model::character::NpcCard;
 use crate::model::state::{GameState, LogType};
 use crate::narrative::prompt::make_prompt_context;
-use crate::narrative::quantifier::{QuantifierBackendTrait, determine_npcs_in_room};
+use crate::narrative::quantifier::{
+    QuantifierBackendTrait, QuantifierConfidence, determine_npcs_in_room,
+};
 
 pub trait GameService: Send + Sync {
     fn execute_action(&self, state: Arc<Mutex<GameState>>, input: String, player_name: String);
@@ -80,14 +82,19 @@ fn set_error_and_reset(state: &Arc<Mutex<GameState>>, message: String) {
 fn map_llm_error(e: &EngineError) -> String {
     match e {
         EngineError::Llm(LlmFailure::Timeout) => "LLM Error: request timed out".to_string(),
-        EngineError::Llm(LlmFailure::Network { .. }) => {
-            "LLM Error: response incomplete".to_string()
+        EngineError::Llm(LlmFailure::Network { url, detail }) => {
+            format!("LLM Error: network error ({url}) — {detail}")
         }
-        EngineError::Llm(LlmFailure::ParseError { .. }) => {
-            "LLM Error: unexpected response format".to_string()
+        EngineError::Llm(LlmFailure::ParseError {
+            expected_format, ..
+        }) => {
+            format!("LLM Error: unexpected response format (expected {expected_format})")
         }
         EngineError::Llm(LlmFailure::EmptyResponse) => "LLM Error: empty response".to_string(),
-        EngineError::Llm(LlmFailure::Http { .. }) => "LLM Error: API error".to_string(),
+        EngineError::Llm(LlmFailure::Http { status, body }) => {
+            format!("LLM Error: HTTP {status} — {body}")
+        }
+        EngineError::Narrative(nf) => format!("LLM Error: {nf}"),
         _ => format!("LLM Error: {e}"),
     }
 }
@@ -192,6 +199,11 @@ impl GameService for DefaultGameService {
                     }
                 };
 
+                if narration_text.trim().is_empty() {
+                    set_error_and_reset(&state_for_thread, "LLM Error: empty response".to_string());
+                    return;
+                }
+
                 let quantifier_backend: Arc<dyn QuantifierBackendTrait> = quantifier_backend;
 
                 set_phase(
@@ -214,6 +226,16 @@ impl GameService for DefaultGameService {
                     reset_generating(&state_for_thread);
                     return;
                 };
+
+                if quantifier_result.npcs.confidence == QuantifierConfidence::Low {
+                    with_state_lock(&state_for_thread, |state| {
+                        state.add_log(
+                            "[System] NPC detection uncertain — using room defaults".to_string(),
+                            None,
+                            LogType::System,
+                        );
+                    });
+                }
 
                 let trigger_request = with_state_lock(&state_for_thread, |state| {
                     execute_freeaction_impl(
@@ -246,18 +268,15 @@ impl GameService for DefaultGameService {
                             Ok(t) => t,
                             Err(e) => {
                                 log::error!("Trigger narration failed: {e}");
-                                if let Ok(mut s) = state_for_thread.lock() {
-                                    s.add_log(
+                                with_state_lock(&state_for_thread, |state| {
+                                    state.add_log(
                                         format!("[Trigger narration failed: {e}]"),
                                         None,
                                         crate::model::state::LogType::System,
                                     );
-                                    s.generation_state.status =
-                                        crate::model::state::GenerationStatus::Error(format!(
-                                            "Error: {e}"
-                                        ));
-                                }
-                                String::new()
+                                });
+                                set_error_and_reset(&state_for_thread, format!("Error: {e}"));
+                                return;
                             }
                         };
 
@@ -266,17 +285,15 @@ impl GameService for DefaultGameService {
                                 commit_trigger_narration(state, &request, &continuation_text);
                             });
                         }
+                        reset_generating(&state_for_thread);
                     }
                     Some(Err(e)) => {
-                        if let Ok(mut s) = state_for_thread.lock() {
-                            s.generation_state.status =
-                                crate::model::state::GenerationStatus::Error(format!("Error: {e}"));
-                        }
+                        set_error_and_reset(&state_for_thread, format!("Error: {e}"));
                     }
-                    _ => {}
+                    _ => {
+                        reset_generating(&state_for_thread);
+                    }
                 }
-
-                reset_generating(&state_for_thread);
             }
         }
     }
@@ -351,6 +368,11 @@ impl GameService for DefaultGameService {
                 return;
             }
         };
+
+        if new_narration.trim().is_empty() {
+            set_error_and_reset(&state_clone, "LLM Error: empty response".to_string());
+            return;
+        }
 
         if let Ok(mut state) = state_clone.lock() {
             if let Err(e) = state.replace_last_ai_response(new_narration) {

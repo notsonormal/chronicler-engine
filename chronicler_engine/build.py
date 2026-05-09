@@ -195,7 +195,7 @@ def run(cmd, cwd=None, check=True, show_output=True, env=None):
             print(result.stderr)
         if check and result.returncode != 0:
             print(f"FAILED with code {result.returncode}")
-            sys.exit(process.returncode)
+            sys.exit(result.returncode)
         return result.returncode
 
 
@@ -284,6 +284,12 @@ def main():
         dest="cleanup",
         help="Kill lingering chronicler processes and clean build artifacts",
     )
+    parser.add_argument(
+        "--diagnostic-benchmark",
+        action="store_true",
+        dest="diagnostic_benchmark",
+        help="Run the diagnostic signal quality benchmark and generate a report",
+    )
     args = parser.parse_args()
 
     print("=== Chronicler Engine Build ===")
@@ -293,6 +299,17 @@ def main():
     cargo_target_dir = Path(args.target_dir) if args.target_dir else Path("target")
     build_profile = "release" if args.release else "debug"
     target_dir = cargo_target_dir / build_profile
+
+    if args.diagnostic_benchmark:
+        print("=== Diagnostic Benchmark Mode ===")
+        benchmark_script = Path(__file__).parent / "scripts" / "diagnostic_benchmark.py"
+        if benchmark_script.exists():
+            run(f'python "{benchmark_script}"')
+        else:
+            print(f"ERROR: Benchmark script not found: {benchmark_script}")
+            sys.exit(1)
+        print("=== Diagnostic Benchmark Complete ===")
+        return 0
 
     if args.cleanup:
         print("=== Cleanup Mode ===")
@@ -383,34 +400,41 @@ def main():
         total_steps += 1
     steps = StepCounter(total_steps)
 
+    import time
+    step_timings = []
+    step_failures = []
+
+    def timed_step(label, cmd, check=True, env=None):
+        steps.next(label)
+        start = time.time()
+        try:
+            run(cmd, check=check, env=env)
+            elapsed = time.time() - start
+            step_timings.append({"step": label, "elapsed_sec": round(elapsed, 2), "failed": False})
+        except SystemExit as e:
+            elapsed = time.time() - start
+            step_timings.append({"step": label, "elapsed_sec": round(elapsed, 2), "failed": True})
+            step_failures.append(label)
+            raise
+
     if args.validate_data:
-        steps.next("Validating JSON data...")
-        run("python scripts/validate_data.py")
+        timed_step("Validating JSON data...", "python scripts/validate_data.py")
         print("Data validation successful.")
 
     if not args.no_fmt:
-        steps.next("Formatting...")
-        run("cargo fmt", env=cargo_env)
+        timed_step("Formatting...", "cargo fmt", env=cargo_env)
     else:
         print("Skipping formatting (--no-fmt set).")
 
-    steps.next("Running clippy...")
-    run("cargo clippy --all-targets --all-features -- -D warnings", env=cargo_env)
+    timed_step("Running clippy...", "cargo clippy --all-targets --all-features -- -D warnings", env=cargo_env)
 
-    steps.next("Running architecture guardrail tests...")
-    run("cargo test --test architecture", env=cargo_env)
+    timed_step("Running architecture guardrail tests...", "cargo test --test architecture", env=cargo_env)
 
-    steps.next("Running custom guardrails tests...")
-    run("cargo test --test guardrails", env=cargo_env)
+    timed_step("Running custom guardrails tests...", "cargo test --test guardrails", env=cargo_env)
 
-    steps.next("Running test structure guardrail...")
-    run("python scripts/check_test_structure.py", env=cargo_env)
+    timed_step("Running test structure guardrail...", "python scripts/check_test_structure.py", env=cargo_env)
 
-    steps.next(f"Building ({build_profile})...")
-    run(
-        f"cargo build {'--release' if args.release else ''}".strip(),
-        env=cargo_env,
-    )
+    timed_step(f"Building ({build_profile})...", f"cargo build {'--release' if args.release else ''}".strip(), env=cargo_env)
 
     steps.next("Copying data and assets for deployment...")
     target_dir.mkdir(parents=True, exist_ok=True)
@@ -439,12 +463,7 @@ def main():
     print(f"  Deployment: copy {target_dir}/ folder to your target machine")
 
     if args.coverage:
-        steps.next("Running all tests with coverage...")
-        run(
-            get_coverage_cmd(strict=args.strict),
-            check=False,
-            env=cargo_env,
-        )
+        timed_step("Running all tests with coverage...", get_coverage_cmd(strict=args.strict), check=False, env=cargo_env)
 
         steps.next("Generating coverage report...")
         json_path = cargo_target_dir / "llvm-cov" / "coverage.json"
@@ -462,14 +481,7 @@ def main():
         else:
             print("Warning: Could not generate coverage JSON.")
     else:
-        steps.next("Running all tests...")
-        test_cmd = get_test_cmd(include_llm=args.include_llm, strict=args.strict)
-        if args.include_llm:
-            print("=" * 60)
-            print("NOTE: Including LLM tests. These contact the real OpenRouter API.")
-            print("      Each LLM test takes 1-3 minutes. Total suite: ~3-9 minutes longer.")
-            print("=" * 60)
-        run(test_cmd, check=False, env=cargo_env)
+        timed_step("Running all tests...", get_test_cmd(include_llm=args.include_llm, strict=args.strict), check=False, env=cargo_env)
         if not args.include_llm:
             print(
                 "    NOTE: 3 LLM tests were skipped. "
@@ -478,6 +490,19 @@ def main():
         steps.next("Skipping coverage report (use --coverage to enable)")
 
     print("=== Build Complete ===")
+
+    # Print timing summary
+    if step_timings:
+        print("\n--- Step Timing Summary ---")
+        total = sum(t["elapsed_sec"] for t in step_timings)
+        for t in step_timings:
+            status = "FAILED" if t["failed"] else "OK"
+            print(f"  {t['elapsed_sec']:>6.2f}s  [{status}]  {t['step']}")
+        print(f"  {'':>6}   Total: {total:.2f}s")
+        if step_failures:
+            print(f"\n  Failed steps: {', '.join(step_failures)}")
+        print("---")
+
     return 0
 
 

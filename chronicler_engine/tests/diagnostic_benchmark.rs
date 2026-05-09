@@ -1,0 +1,1133 @@
+#![allow(clippy::uninlined_format_args)]
+
+//! Diagnostic Signal Quality Benchmark
+//!
+//! Run via: cargo test --test diagnostic_benchmark -- --nocapture
+//! Or via: python scripts/diagnostic_benchmark.py
+
+#![allow(dead_code)]
+
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+
+use chronicler_engine::engine::game_service::{DefaultGameService, GameService};
+use chronicler_engine::error::{EngineError, LlmFailure};
+use chronicler_engine::model::character::{CharacterSheet, NpcCard, PlayerCard};
+use chronicler_engine::model::map::{MapDef, Overworld, Region, Room};
+use chronicler_engine::model::state::{GameState, GenerationStatus, LogType};
+use chronicler_engine::model::world::WorldCard;
+use chronicler_engine::narrative::llm::backend::LlmBackend;
+use chronicler_engine::narrative::prompt::PromptContext;
+use chronicler_engine::narrative::quantifier::backends::QuantifierBackendTrait;
+use chronicler_engine::narrative::quantifier::types::{
+    MovementParseResult, MovementType, QuantifierConfidence, QuantifierParseResult,
+    QuantifierPromptContext, QuantifierResult,
+};
+
+// =============================================================================
+// Custom Backends for Failure Simulation
+// =============================================================================
+
+/// Simulates an HTTP error from an LLM provider (401, 429, 503, etc.)
+struct HttpErrorBackend {
+    status: u16,
+    body: String,
+}
+
+impl HttpErrorBackend {
+    fn unauthorized() -> Self {
+        Self {
+            status: 401,
+            body: "Invalid API key".to_string(),
+        }
+    }
+    fn rate_limited() -> Self {
+        Self {
+            status: 429,
+            body: "Rate limit exceeded".to_string(),
+        }
+    }
+    fn service_unavailable() -> Self {
+        Self {
+            status: 503,
+            body: "Provider maintenance".to_string(),
+        }
+    }
+}
+
+impl LlmBackend for HttpErrorBackend {
+    fn generate_dialogue(
+        &self,
+        _ctx: &PromptContext,
+        _npc: &NpcCard,
+    ) -> Result<String, EngineError> {
+        Err(EngineError::Llm(LlmFailure::Http {
+            status: self.status,
+            body: self.body.clone(),
+        }))
+    }
+    fn narrate_action(&self, _ctx: &PromptContext) -> Result<String, EngineError> {
+        Err(EngineError::Llm(LlmFailure::Http {
+            status: self.status,
+            body: self.body.clone(),
+        }))
+    }
+    fn narrate_arrival(&self, _ctx: &PromptContext) -> Result<String, EngineError> {
+        Err(EngineError::Llm(LlmFailure::Http {
+            status: self.status,
+            body: self.body.clone(),
+        }))
+    }
+    fn narrate_continuation(
+        &self,
+        _s: &str,
+        _u: &str,
+        _t: &str,
+        _m: Option<u32>,
+    ) -> Result<String, EngineError> {
+        Err(EngineError::Llm(LlmFailure::Http {
+            status: self.status,
+            body: self.body.clone(),
+        }))
+    }
+    fn narrate_action_from_prompt(
+        &self,
+        _s: &str,
+        _u: &str,
+        _m: Option<u32>,
+    ) -> Result<String, EngineError> {
+        Err(EngineError::Llm(LlmFailure::Http {
+            status: self.status,
+            body: self.body.clone(),
+        }))
+    }
+    fn name(&self) -> &str {
+        "HttpError"
+    }
+}
+
+/// Simulates a network-level failure (DNS, timeout, connection refused)
+struct NetworkErrorBackend {
+    url: String,
+    detail: String,
+}
+
+impl NetworkErrorBackend {
+    fn connection_refused() -> Self {
+        Self {
+            url: "http://localhost:11434".to_string(),
+            detail: "Connection refused".to_string(),
+        }
+    }
+}
+
+impl LlmBackend for NetworkErrorBackend {
+    fn generate_dialogue(
+        &self,
+        _ctx: &PromptContext,
+        _npc: &NpcCard,
+    ) -> Result<String, EngineError> {
+        Err(EngineError::Llm(LlmFailure::Network {
+            url: self.url.clone(),
+            detail: self.detail.clone(),
+        }))
+    }
+    fn narrate_action(&self, _ctx: &PromptContext) -> Result<String, EngineError> {
+        Err(EngineError::Llm(LlmFailure::Network {
+            url: self.url.clone(),
+            detail: self.detail.clone(),
+        }))
+    }
+    fn narrate_arrival(&self, _ctx: &PromptContext) -> Result<String, EngineError> {
+        Err(EngineError::Llm(LlmFailure::Network {
+            url: self.url.clone(),
+            detail: self.detail.clone(),
+        }))
+    }
+    fn narrate_continuation(
+        &self,
+        _s: &str,
+        _u: &str,
+        _t: &str,
+        _m: Option<u32>,
+    ) -> Result<String, EngineError> {
+        Err(EngineError::Llm(LlmFailure::Network {
+            url: self.url.clone(),
+            detail: self.detail.clone(),
+        }))
+    }
+    fn narrate_action_from_prompt(
+        &self,
+        _s: &str,
+        _u: &str,
+        _m: Option<u32>,
+    ) -> Result<String, EngineError> {
+        Err(EngineError::Llm(LlmFailure::Network {
+            url: self.url.clone(),
+            detail: self.detail.clone(),
+        }))
+    }
+    fn name(&self) -> &str {
+        "NetworkError"
+    }
+}
+
+/// Simulates a parse error (model returned non-JSON)
+struct ParseErrorBackend {
+    raw_response: String,
+}
+
+impl LlmBackend for ParseErrorBackend {
+    fn generate_dialogue(
+        &self,
+        _ctx: &PromptContext,
+        _npc: &NpcCard,
+    ) -> Result<String, EngineError> {
+        Err(EngineError::Llm(LlmFailure::ParseError {
+            raw_response: self.raw_response.clone(),
+            expected_format: "valid JSON",
+        }))
+    }
+    fn narrate_action(&self, _ctx: &PromptContext) -> Result<String, EngineError> {
+        Err(EngineError::Llm(LlmFailure::ParseError {
+            raw_response: self.raw_response.clone(),
+            expected_format: "valid JSON",
+        }))
+    }
+    fn narrate_arrival(&self, _ctx: &PromptContext) -> Result<String, EngineError> {
+        Err(EngineError::Llm(LlmFailure::ParseError {
+            raw_response: self.raw_response.clone(),
+            expected_format: "valid JSON",
+        }))
+    }
+    fn narrate_continuation(
+        &self,
+        _s: &str,
+        _u: &str,
+        _t: &str,
+        _m: Option<u32>,
+    ) -> Result<String, EngineError> {
+        Err(EngineError::Llm(LlmFailure::ParseError {
+            raw_response: self.raw_response.clone(),
+            expected_format: "valid JSON",
+        }))
+    }
+    fn narrate_action_from_prompt(
+        &self,
+        _s: &str,
+        _u: &str,
+        _m: Option<u32>,
+    ) -> Result<String, EngineError> {
+        Err(EngineError::Llm(LlmFailure::ParseError {
+            raw_response: self.raw_response.clone(),
+            expected_format: "valid JSON",
+        }))
+    }
+    fn name(&self) -> &str {
+        "ParseError"
+    }
+}
+
+/// Simulates a timeout
+struct TimeoutBackend;
+
+impl LlmBackend for TimeoutBackend {
+    fn generate_dialogue(
+        &self,
+        _ctx: &PromptContext,
+        _npc: &NpcCard,
+    ) -> Result<String, EngineError> {
+        Err(EngineError::Llm(LlmFailure::Timeout))
+    }
+    fn narrate_action(&self, _ctx: &PromptContext) -> Result<String, EngineError> {
+        Err(EngineError::Llm(LlmFailure::Timeout))
+    }
+    fn narrate_arrival(&self, _ctx: &PromptContext) -> Result<String, EngineError> {
+        Err(EngineError::Llm(LlmFailure::Timeout))
+    }
+    fn narrate_continuation(
+        &self,
+        _s: &str,
+        _u: &str,
+        _t: &str,
+        _m: Option<u32>,
+    ) -> Result<String, EngineError> {
+        Err(EngineError::Llm(LlmFailure::Timeout))
+    }
+    fn narrate_action_from_prompt(
+        &self,
+        _s: &str,
+        _u: &str,
+        _m: Option<u32>,
+    ) -> Result<String, EngineError> {
+        Err(EngineError::Llm(LlmFailure::Timeout))
+    }
+    fn name(&self) -> &str {
+        "Timeout"
+    }
+}
+
+/// Quantifier backend that fails entirely (simulates LLM call failure in quantifier)
+struct FailingQuantifierBackend;
+
+impl QuantifierBackendTrait for FailingQuantifierBackend {
+    fn quantify_room(
+        &self,
+        _context: &QuantifierPromptContext,
+        _fallback_npc_ids: &[String],
+    ) -> Result<QuantifierResult, EngineError> {
+        Err(EngineError::Llm(LlmFailure::Network {
+            url: "http://quantifier".to_string(),
+            detail: "Connection refused".to_string(),
+        }))
+    }
+}
+
+/// Quantifier backend that returns low confidence (simulates poor model output)
+struct LowConfidenceQuantifierBackend;
+
+impl QuantifierBackendTrait for LowConfidenceQuantifierBackend {
+    fn quantify_room(
+        &self,
+        _context: &QuantifierPromptContext,
+        _fallback_npc_ids: &[String],
+    ) -> Result<QuantifierResult, EngineError> {
+        Ok(QuantifierResult {
+            npcs: QuantifierParseResult {
+                npc_ids: vec![],
+                confidence: QuantifierConfidence::Low,
+            },
+            movement: MovementParseResult {
+                movement_type: None,
+                destination: None,
+                confidence: QuantifierConfidence::Low,
+            },
+        })
+    }
+}
+
+/// Quantifier backend that returns a movement to a non-existent room
+struct MisleadingMovementQuantifierBackend;
+
+impl QuantifierBackendTrait for MisleadingMovementQuantifierBackend {
+    fn quantify_room(
+        &self,
+        _context: &QuantifierPromptContext,
+        _fallback_npc_ids: &[String],
+    ) -> Result<QuantifierResult, EngineError> {
+        Ok(QuantifierResult {
+            npcs: QuantifierParseResult {
+                npc_ids: vec![],
+                confidence: QuantifierConfidence::High,
+            },
+            movement: MovementParseResult {
+                movement_type: Some(MovementType::Entering),
+                destination: Some("nonexistent_room".to_string()),
+                confidence: QuantifierConfidence::High,
+            },
+        })
+    }
+}
+
+// =============================================================================
+// Benchmark Infrastructure
+// =============================================================================
+
+#[derive(Debug, serde::Serialize)]
+struct BenchmarkResult {
+    scenario: String,
+    category: String,
+    injected_failure: String,
+    error_message: String,
+    generation_phase: String,
+    scores: DiagnosticScores,
+    root_cause_discoverable_from_ui: bool,
+    root_cause_discoverable_from_debug_endpoint: bool,
+    root_cause_discoverable_without_logs: bool,
+    notes: String,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct DiagnosticScores {
+    error_specificity: u8,
+    state_visibility: u8,
+    log_independence: u8,
+}
+
+fn print_benchmark_result(result: &BenchmarkResult) {
+    let json = serde_json::to_string(result).unwrap();
+    println!("BENCHMARK_RESULT:{json}");
+}
+
+fn create_test_state_with_npcs(
+    room_npcs: Vec<String>,
+    npcs: Vec<NpcCard>,
+) -> Arc<Mutex<GameState>> {
+    let world = Arc::new(WorldCard {
+        name: "Test World".into(),
+        description: "A test world".into(),
+        global_rules: vec![],
+        default_room_image: None,
+    });
+
+    let room1 = Room {
+        id: "room1".into(),
+        name: "Test Tavern".into(),
+        description: "A cozy tavern with wooden beams and warm fire.".into(),
+        exits: HashMap::new(),
+        items: vec![],
+        npcs: room_npcs,
+        image_path: None,
+        navigation_description: None,
+    };
+
+    let region = Region {
+        id: "test_region".into(),
+        name: "Test Region".into(),
+        rooms: vec![room1],
+    };
+
+    let map = Arc::new(MapDef {
+        overworld: Overworld {
+            id: "test_overworld".into(),
+            name: "Test World".into(),
+            regions: vec![region],
+        },
+    });
+
+    let player = Arc::new(PlayerCard {
+        sheet: CharacterSheet {
+            name: "Test Player".into(),
+            description: "A test player".into(),
+            personality: "Brave".into(),
+            scenario: "Test scenario".into(),
+            example_dialogue: "Hello!".into(),
+            summary: None,
+            profile_image: None,
+            headshot_image: None,
+        },
+        inventory: vec![],
+    });
+
+    Arc::new(Mutex::new(GameState::new(
+        world,
+        map,
+        player,
+        npcs,
+        "room1".to_string(),
+    )))
+}
+
+fn default_test_state() -> Arc<Mutex<GameState>> {
+    create_test_state_with_npcs(
+        vec!["test_npc".to_string()],
+        vec![NpcCard {
+            id: "test_npc".into(),
+            sheet: CharacterSheet {
+                name: "Innkeeper".into(),
+                description: "A friendly innkeeper".into(),
+                personality: "Helpful".into(),
+                scenario: "Runs the tavern".into(),
+                example_dialogue: "Welcome!".into(),
+                summary: None,
+                profile_image: None,
+                headshot_image: None,
+            },
+            inventory: vec![],
+            triggers: vec![],
+        }],
+    )
+}
+
+fn run_scenario(
+    llm_backend: Arc<dyn LlmBackend>,
+    quantifier_backend: Arc<dyn QuantifierBackendTrait>,
+    _scenario_name: &str,
+    _category: &str,
+    _injected_failure: &str,
+) -> (String, String, Arc<Mutex<GameState>>) {
+    let service = DefaultGameService::with_backends(llm_backend, quantifier_backend);
+    let state = default_test_state();
+
+    service.execute_action(
+        state.clone(),
+        "look around".to_string(),
+        "Test Player".to_string(),
+    );
+
+    let guard = state.lock().unwrap();
+    let error_message = match &guard.generation_state.status {
+        GenerationStatus::Error(msg) => msg.clone(),
+        GenerationStatus::Idle => "(no error, idle)".to_string(),
+        GenerationStatus::Generating => "(still generating)".to_string(),
+    };
+    let phase = format!("{:?}", guard.generation_state.phase);
+
+    // We must release the lock before returning the Arc
+    drop(guard);
+
+    (error_message, phase, state)
+}
+
+// =============================================================================
+// Scenario 1: LLM HTTP 401 Unauthorized
+// =============================================================================
+
+#[test]
+fn benchmark_llm_http_401() {
+    let (error_msg, phase, state) = run_scenario(
+        Arc::new(HttpErrorBackend::unauthorized()),
+        Arc::new(chronicler_engine::narrative::quantifier::MockQuantifierBackend::default()),
+        "llm_http_401",
+        "LLM",
+        "HTTP 401 Unauthorized from LLM provider",
+    );
+
+    let guard = state.lock().unwrap();
+    let _has_dynamic_room = !guard.dynamic_rooms.is_empty();
+    let _current_room = guard.current_room_id.clone();
+
+    let result = BenchmarkResult {
+        scenario: "llm_http_401".to_string(),
+        category: "LLM".to_string(),
+        injected_failure: "HTTP 401 Unauthorized from LLM provider".to_string(),
+        error_message: error_msg.clone(),
+        generation_phase: phase,
+        scores: DiagnosticScores {
+            error_specificity: if error_msg.contains("401") { 10 } else { 2 },
+            state_visibility: 2,
+            log_independence: if error_msg.contains("401") { 8 } else { 1 },
+        },
+        root_cause_discoverable_from_ui: error_msg.contains("401"),
+        root_cause_discoverable_from_debug_endpoint: error_msg.contains("401"),
+        root_cause_discoverable_without_logs: error_msg.contains("401"),
+        notes: format!(
+            "HTTP 401 (bad API key) is collapsed to '{}' by map_llm_error. The actual status code and body are lost. The user cannot tell if it's an auth issue, rate limit, or provider outage without reading logs.",
+            error_msg
+        ),
+    };
+
+    print_benchmark_result(&result);
+
+    // Verify the fix: HTTP status code should now be preserved
+    assert!(
+        error_msg.contains("401"),
+        "EXPECTED: map_llm_error should preserve HTTP status codes after fix."
+    );
+}
+
+// =============================================================================
+// Scenario 2: LLM HTTP 429 Rate Limited
+// =============================================================================
+
+#[test]
+fn benchmark_llm_http_429() {
+    let (error_msg, phase, _state) = run_scenario(
+        Arc::new(HttpErrorBackend::rate_limited()),
+        Arc::new(chronicler_engine::narrative::quantifier::MockQuantifierBackend::default()),
+        "llm_http_429",
+        "LLM",
+        "HTTP 429 Rate Limited from LLM provider",
+    );
+
+    let result = BenchmarkResult {
+        scenario: "llm_http_429".to_string(),
+        category: "LLM".to_string(),
+        injected_failure: "HTTP 429 Rate Limited from LLM provider".to_string(),
+        error_message: error_msg.clone(),
+        generation_phase: phase,
+        scores: DiagnosticScores {
+            error_specificity: if error_msg.contains("429") { 10 } else { 2 },
+            state_visibility: 2,
+            log_independence: if error_msg.contains("429") { 8 } else { 1 },
+        },
+        root_cause_discoverable_from_ui: error_msg.contains("429"),
+        root_cause_discoverable_from_debug_endpoint: error_msg.contains("429"),
+        root_cause_discoverable_without_logs: error_msg.contains("429"),
+        notes: format!(
+            "HTTP 429 (rate limit) is collapsed to '{}'. Same issue as 401 — status code is discarded.",
+            error_msg
+        ),
+    };
+
+    print_benchmark_result(&result);
+}
+
+// =============================================================================
+// Scenario 3: LLM Network Error (Ollama down)
+// =============================================================================
+
+#[test]
+fn benchmark_llm_network_error() {
+    let (error_msg, phase, _state) = run_scenario(
+        Arc::new(NetworkErrorBackend::connection_refused()),
+        Arc::new(chronicler_engine::narrative::quantifier::MockQuantifierBackend::default()),
+        "llm_network_error",
+        "LLM",
+        "Network error: Ollama connection refused",
+    );
+
+    let result = BenchmarkResult {
+        scenario: "llm_network_error".to_string(),
+        category: "LLM".to_string(),
+        injected_failure: "Network error: Ollama connection refused".to_string(),
+        error_message: error_msg.clone(),
+        generation_phase: phase,
+        scores: DiagnosticScores {
+            error_specificity: if error_msg.contains("refused")
+                || error_msg.contains("localhost:11434")
+            {
+                8
+            } else {
+                3
+            },
+            state_visibility: 2,
+            log_independence: if error_msg.contains("refused") { 6 } else { 2 },
+        },
+        root_cause_discoverable_from_ui: error_msg.contains("refused")
+            || error_msg.contains("incomplete"),
+        root_cause_discoverable_from_debug_endpoint: error_msg.contains("refused")
+            || error_msg.contains("incomplete"),
+        root_cause_discoverable_without_logs: error_msg.contains("refused"),
+        notes: format!(
+            "Network error is mapped to '{}'. The URL 'localhost:11434' and detail 'Connection refused' are lost. User sees generic 'response incomplete'.",
+            error_msg
+        ),
+    };
+
+    print_benchmark_result(&result);
+}
+
+// =============================================================================
+// Scenario 4: LLM Parse Error (non-JSON response)
+// =============================================================================
+
+#[test]
+fn benchmark_llm_parse_error() {
+    let (error_msg, phase, _state) = run_scenario(
+        Arc::new(ParseErrorBackend {
+            raw_response: "This is not JSON, just raw text from the model.".to_string(),
+        }),
+        Arc::new(chronicler_engine::narrative::quantifier::MockQuantifierBackend::default()),
+        "llm_parse_error",
+        "LLM",
+        "LLM returned non-JSON response",
+    );
+
+    let result = BenchmarkResult {
+        scenario: "llm_parse_error".to_string(),
+        category: "LLM".to_string(),
+        injected_failure: "LLM returned non-JSON response".to_string(),
+        error_message: error_msg.clone(),
+        generation_phase: phase,
+        scores: DiagnosticScores {
+            error_specificity: if error_msg.contains("parse") || error_msg.contains("format") {
+                6
+            } else {
+                3
+            },
+            state_visibility: 2,
+            log_independence: if error_msg.contains("parse") || error_msg.contains("format") {
+                5
+            } else {
+                2
+            },
+        },
+        root_cause_discoverable_from_ui: error_msg.contains("parse")
+            || error_msg.contains("format"),
+        root_cause_discoverable_from_debug_endpoint: error_msg.contains("parse")
+            || error_msg.contains("format"),
+        root_cause_discoverable_without_logs: error_msg.contains("parse")
+            || error_msg.contains("format"),
+        notes: format!(
+            "Parse error is mapped to '{}'. The raw response text is lost, though 'unexpected response format' gives a hint.",
+            error_msg
+        ),
+    };
+
+    print_benchmark_result(&result);
+}
+
+// =============================================================================
+// Scenario 5: LLM Timeout
+// =============================================================================
+
+#[test]
+fn benchmark_llm_timeout() {
+    let (error_msg, phase, _state) = run_scenario(
+        Arc::new(TimeoutBackend),
+        Arc::new(chronicler_engine::narrative::quantifier::MockQuantifierBackend::default()),
+        "llm_timeout",
+        "LLM",
+        "LLM request timed out after 180s",
+    );
+
+    let result = BenchmarkResult {
+        scenario: "llm_timeout".to_string(),
+        category: "LLM".to_string(),
+        injected_failure: "LLM request timed out after 180s".to_string(),
+        error_message: error_msg.clone(),
+        generation_phase: phase,
+        scores: DiagnosticScores {
+            error_specificity: if error_msg.contains("timed out") {
+                8
+            } else {
+                3
+            },
+            state_visibility: 2,
+            log_independence: if error_msg.contains("timed out") {
+                7
+            } else {
+                2
+            },
+        },
+        root_cause_discoverable_from_ui: error_msg.contains("timed out"),
+        root_cause_discoverable_from_debug_endpoint: error_msg.contains("timed out"),
+        root_cause_discoverable_without_logs: error_msg.contains("timed out"),
+        notes: format!(
+            "Timeout is mapped to '{}'. This is one of the better mappings — 'timed out' is reasonably specific. However, the 180s threshold and whether it was a network vs model slowness is lost.",
+            error_msg
+        ),
+    };
+
+    print_benchmark_result(&result);
+}
+
+// =============================================================================
+// Scenario 6: Empty LLM Response
+// =============================================================================
+
+#[test]
+fn benchmark_llm_empty_response() {
+    let (error_msg, phase, _state) = run_scenario(
+        Arc::new(chronicler_engine::narrative::llm::MockBackend::with_empty_response()),
+        Arc::new(chronicler_engine::narrative::quantifier::MockQuantifierBackend::default()),
+        "llm_empty_response",
+        "LLM",
+        "LLM returned empty content field",
+    );
+
+    let result = BenchmarkResult {
+        scenario: "llm_empty_response".to_string(),
+        category: "LLM".to_string(),
+        injected_failure: "LLM returned empty content field".to_string(),
+        error_message: error_msg.clone(),
+        generation_phase: phase,
+        scores: DiagnosticScores {
+            error_specificity: if error_msg.contains("empty") { 8 } else { 3 },
+            state_visibility: 2,
+            log_independence: if error_msg.contains("empty") { 7 } else { 2 },
+        },
+        root_cause_discoverable_from_ui: error_msg.contains("empty"),
+        root_cause_discoverable_from_debug_endpoint: error_msg.contains("empty"),
+        root_cause_discoverable_without_logs: error_msg.contains("empty"),
+        notes: format!(
+            "Empty response is mapped to '{}'. 'empty response' is specific enough to know the model returned nothing. Good mapping.",
+            error_msg
+        ),
+    };
+
+    print_benchmark_result(&result);
+}
+
+// =============================================================================
+// Scenario 7: Quantifier Complete Failure
+// =============================================================================
+
+#[test]
+fn benchmark_quantifier_complete_failure() {
+    let (error_msg, phase, state) = run_scenario(
+        Arc::new(chronicler_engine::narrative::llm::MockBackend::default()),
+        Arc::new(FailingQuantifierBackend),
+        "quantifier_complete_failure",
+        "Quantifier",
+        "Quantifier LLM call fails completely (connection refused)",
+    );
+
+    let guard = state.lock().unwrap();
+    let npc_count = guard.npcs_in_area.len();
+    let has_system_log = guard
+        .narration_history
+        .iter()
+        .any(|e| e.log_type == LogType::System && e.text.contains("NPC detection uncertain"));
+
+    let result = BenchmarkResult {
+        scenario: "quantifier_complete_failure".to_string(),
+        category: "Quantifier".to_string(),
+        injected_failure: "Quantifier LLM call fails completely (connection refused)".to_string(),
+        error_message: error_msg.clone(),
+        generation_phase: phase,
+        scores: DiagnosticScores {
+            error_specificity: 1,
+            state_visibility: if has_system_log { 5 } else { 3 },
+            log_independence: if has_system_log { 4 } else { 1 },
+        },
+        root_cause_discoverable_from_ui: has_system_log,
+        root_cause_discoverable_from_debug_endpoint: has_system_log,
+        root_cause_discoverable_without_logs: has_system_log,
+        notes: format!(
+            "Quantifier failure falls back to static room NPCs ({} NPCs in area). No error is shown, but a System log entry '{}' is now added to the story log. The game continues with a visible signal.",
+            npc_count,
+            if has_system_log {
+                "was added"
+            } else {
+                "was NOT added — fix may be incomplete"
+            }
+        ),
+    };
+
+    print_benchmark_result(&result);
+
+    assert_eq!(
+        error_msg, "(no error, idle)",
+        "EXPECTED: Quantifier failures are silent. If this fails, quantifier errors now surface to UI."
+    );
+}
+
+// =============================================================================
+// Scenario 8: Quantifier Low Confidence
+// =============================================================================
+
+#[test]
+fn benchmark_quantifier_low_confidence() {
+    let (error_msg, phase, state) = run_scenario(
+        Arc::new(chronicler_engine::narrative::llm::MockBackend::default()),
+        Arc::new(LowConfidenceQuantifierBackend),
+        "quantifier_low_confidence",
+        "Quantifier",
+        "Quantifier returns Low confidence NPC detection",
+    );
+
+    let guard = state.lock().unwrap();
+    let npc_count = guard.npcs_in_area.len();
+    let has_narration = guard
+        .narration_history
+        .iter()
+        .any(|e| e.log_type == LogType::Narration);
+    let has_system_log = guard
+        .narration_history
+        .iter()
+        .any(|e| e.log_type == LogType::System && e.text.contains("NPC detection uncertain"));
+
+    let result = BenchmarkResult {
+        scenario: "quantifier_low_confidence".to_string(),
+        category: "Quantifier".to_string(),
+        injected_failure: "Quantifier returns Low confidence NPC detection".to_string(),
+        error_message: error_msg.clone(),
+        generation_phase: phase,
+        scores: DiagnosticScores {
+            error_specificity: 1,
+            state_visibility: if has_system_log { 5 } else { 3 },
+            log_independence: if has_system_log { 4 } else { 1 },
+        },
+        root_cause_discoverable_from_ui: has_system_log,
+        root_cause_discoverable_from_debug_endpoint: has_system_log,
+        root_cause_discoverable_without_logs: has_system_log,
+        notes: format!(
+            "Low confidence quantifier result falls back to static NPCs ({} NPCs in area). A System log entry '{}' is now added. Narration was generated: {}. User can see that NPC detection was uncertain.",
+            npc_count,
+            if has_system_log {
+                "was added"
+            } else {
+                "was NOT added — fix may be incomplete"
+            },
+            has_narration
+        ),
+    };
+
+    print_benchmark_result(&result);
+}
+
+// =============================================================================
+// Scenario 9: Dynamic Room Creation (navigation bug)
+// =============================================================================
+
+#[test]
+fn benchmark_dynamic_room_creation() {
+    let (error_msg, phase, state) = run_scenario(
+        Arc::new(chronicler_engine::narrative::llm::MockBackend::default()),
+        Arc::new(MisleadingMovementQuantifierBackend),
+        "dynamic_room_creation",
+        "Navigation",
+        "Quantifier returns movement to non-existent room 'nonexistent_room'",
+    );
+
+    let guard = state.lock().unwrap();
+    let current_room = guard.current_room_id.clone();
+    let is_dynamic = current_room.starts_with("dynamic_");
+    let dynamic_room_count = guard.dynamic_rooms.len();
+    let has_system_log = guard
+        .narration_history
+        .iter()
+        .any(|e| e.log_type == LogType::System && e.text.contains("Entered unknown location"));
+
+    let result = BenchmarkResult {
+        scenario: "dynamic_room_creation".to_string(),
+        category: "Navigation".to_string(),
+        injected_failure: "Quantifier returns movement to non-existent room 'nonexistent_room'"
+            .to_string(),
+        error_message: error_msg.clone(),
+        generation_phase: phase,
+        scores: DiagnosticScores {
+            error_specificity: if is_dynamic { 6 } else { 1 },
+            state_visibility: if is_dynamic { 7 } else { 2 },
+            log_independence: if has_system_log { 6 } else { 4 },
+        },
+        root_cause_discoverable_from_ui: has_system_log,
+        root_cause_discoverable_from_debug_endpoint: is_dynamic,
+        root_cause_discoverable_without_logs: has_system_log,
+        notes: format!(
+            "Player ended up in room '{}'. Dynamic room created: {} (count: {}). A System log '{}' is now added. The debug endpoint shows dynamic_rooms list.",
+            current_room,
+            is_dynamic,
+            dynamic_room_count,
+            if has_system_log {
+                "was added"
+            } else {
+                "was NOT added — fix may be incomplete"
+            }
+        ),
+    };
+
+    print_benchmark_result(&result);
+
+    assert!(
+        is_dynamic,
+        "EXPECTED: Failed room resolution creates a dynamic room. If this fails, dynamic room creation behavior changed."
+    );
+}
+
+// =============================================================================
+// Scenario 10: Narrative Generation Failure (MockBackend failing)
+// =============================================================================
+
+#[test]
+fn benchmark_narrative_generation_failure() {
+    let (error_msg, phase, _state) = run_scenario(
+        Arc::new(chronicler_engine::narrative::llm::MockBackend::failing()),
+        Arc::new(chronicler_engine::narrative::quantifier::MockQuantifierBackend::default()),
+        "narrative_generation_failure",
+        "Narrative",
+        "MockBackend configured to fail all narration calls",
+    );
+
+    let result = BenchmarkResult {
+        scenario: "narrative_generation_failure".to_string(),
+        category: "Narrative".to_string(),
+        injected_failure: "MockBackend configured to fail all narration calls".to_string(),
+        error_message: error_msg.clone(),
+        generation_phase: phase,
+        scores: DiagnosticScores {
+            error_specificity: if error_msg.contains("mock") { 5 } else { 4 },
+            state_visibility: 3,
+            log_independence: if error_msg.contains("mock") { 5 } else { 4 },
+        },
+        root_cause_discoverable_from_ui: error_msg.contains("mock")
+            || error_msg.contains("Generation"),
+        root_cause_discoverable_from_debug_endpoint: error_msg.contains("mock")
+            || error_msg.contains("Generation"),
+        root_cause_discoverable_without_logs: error_msg.contains("mock")
+            || error_msg.contains("Generation"),
+        notes: format!(
+            "Narrative failure is mapped to '{}'. The structured error 'Generation {{ stage: \"mock\", reason: \"configured_failure\" }}' propagates through map_llm_error. Decent specificity — you know it's a generation failure, though not why.",
+            error_msg
+        ),
+    };
+
+    print_benchmark_result(&result);
+}
+
+// =============================================================================
+// Scenario 11: Trigger Not Firing (wrong room_id)
+// =============================================================================
+
+#[test]
+fn benchmark_trigger_wrong_room_id() {
+    // Create a state with an NPC that has a trigger scoped to the wrong room
+    let npc_with_trigger = NpcCard {
+        id: "trigger_npc".into(),
+        sheet: CharacterSheet {
+            name: "Mysterious Stranger".into(),
+            description: "A cloaked figure".into(),
+            personality: "Secretive".into(),
+            scenario: "Appears in the garden".into(),
+            example_dialogue: "Psst...".into(),
+            summary: None,
+            profile_image: None,
+            headshot_image: None,
+        },
+        inventory: vec![],
+        triggers: vec![chronicler_engine::model::trigger::Trigger {
+            condition: chronicler_engine::model::trigger::TriggerCondition::TimesMet(
+                chronicler_engine::model::trigger::ComparisonOperator::Eq,
+                0,
+            ),
+            action: chronicler_engine::model::trigger::TriggerAction {
+                name: "Greeting".into(),
+                narration_prompt: "The stranger nods at you.".into(),
+            },
+            repeat: true,
+            room_id: Some("wrong_room".into()), // Wrong room!
+        }],
+    };
+
+    let state =
+        create_test_state_with_npcs(vec!["trigger_npc".to_string()], vec![npc_with_trigger]);
+
+    let service = DefaultGameService::with_backends(
+        Arc::new(chronicler_engine::narrative::llm::MockBackend::default()),
+        Arc::new(
+            chronicler_engine::narrative::quantifier::MockQuantifierBackend {
+                npcs_to_return: vec!["trigger_npc".to_string()],
+                movement_to_return: None,
+            },
+        ),
+    );
+
+    service.execute_action(
+        state.clone(),
+        "look around".to_string(),
+        "Test Player".to_string(),
+    );
+
+    let guard = state.lock().unwrap();
+    let trigger_fired = guard
+        .narration_history
+        .iter()
+        .any(|e| e.text.contains("stranger nods"));
+    let error_msg = match &guard.generation_state.status {
+        GenerationStatus::Error(msg) => msg.clone(),
+        _ => "(no error)".to_string(),
+    };
+
+    let result = BenchmarkResult {
+        scenario: "trigger_wrong_room_id".to_string(),
+        category: "Triggers".to_string(),
+        injected_failure: "Trigger scoped to wrong room_id ('wrong_room' instead of 'room1')"
+            .to_string(),
+        error_message: error_msg.clone(),
+        generation_phase: format!("{:?}", guard.generation_state.phase),
+        scores: DiagnosticScores {
+            error_specificity: 1,
+            state_visibility: 4,
+            log_independence: 2,
+        },
+        root_cause_discoverable_from_ui: false,
+        root_cause_discoverable_from_debug_endpoint: false,
+        root_cause_discoverable_without_logs: false,
+        notes: format!(
+            "Trigger did NOT fire (fired={}). No error is shown. To diagnose, you must check /debug/state → character_state.trigger_npc.triggers_fired, then compare trigger.room_id to current_room_id. This requires reading trigger definitions in data files. Silent failure.",
+            trigger_fired
+        ),
+    };
+
+    print_benchmark_result(&result);
+
+    assert!(
+        !trigger_fired,
+        "EXPECTED: Trigger with wrong room_id should not fire. If this fails, trigger scoping behavior changed."
+    );
+}
+
+// =============================================================================
+// Scenario 12: State Stuck in Generating (mid-pipeline failure)
+// =============================================================================
+
+#[test]
+fn benchmark_state_stuck_generating() {
+    // This tests what happens when the pipeline fails after setting phase but before reset
+    // We simulate by making narrate_action succeed but trigger narration fail
+    let npc_with_trigger = NpcCard {
+        id: "test_npc".into(),
+        sheet: CharacterSheet {
+            name: "Innkeeper".into(),
+            description: "A friendly innkeeper".into(),
+            personality: "Helpful".into(),
+            scenario: "Runs the tavern".into(),
+            example_dialogue: "Welcome!".into(),
+            summary: None,
+            profile_image: None,
+            headshot_image: None,
+        },
+        inventory: vec![],
+        triggers: vec![chronicler_engine::model::trigger::Trigger {
+            condition: chronicler_engine::model::trigger::TriggerCondition::TimesMet(
+                chronicler_engine::model::trigger::ComparisonOperator::Eq,
+                0,
+            ),
+            action: chronicler_engine::model::trigger::TriggerAction {
+                name: "Greeting".into(),
+                narration_prompt: "The innkeeper waves at you.".into(),
+            },
+            repeat: true,
+            room_id: Some("room1".into()),
+        }],
+    };
+
+    let state = create_test_state_with_npcs(vec!["test_npc".to_string()], vec![npc_with_trigger]);
+
+    // Reset times_met so the trigger is eligible to fire
+    {
+        let mut guard = state.lock().unwrap();
+        if let Some(encounter) = guard.character_state.npcs.get_mut("test_npc") {
+            encounter.times_met = 0;
+        }
+    }
+
+    let service = DefaultGameService::with_backends(
+        Arc::new(chronicler_engine::narrative::llm::MockBackend::with_failing_trigger_narration()),
+        Arc::new(
+            chronicler_engine::narrative::quantifier::MockQuantifierBackend {
+                npcs_to_return: vec!["test_npc".to_string()],
+                movement_to_return: None,
+            },
+        ),
+    );
+
+    service.execute_action(
+        state.clone(),
+        "look around".to_string(),
+        "Test Player".to_string(),
+    );
+
+    let guard = state.lock().unwrap();
+    let is_generating = guard.generation_state.status.is_generating();
+    let is_idle = matches!(guard.generation_state.status, GenerationStatus::Idle);
+    let has_error = matches!(guard.generation_state.status, GenerationStatus::Error(_));
+    let error_msg = match &guard.generation_state.status {
+        GenerationStatus::Error(msg) => msg.clone(),
+        _ => "(no error)".to_string(),
+    };
+
+    let result = BenchmarkResult {
+        scenario: "state_stuck_generating".to_string(),
+        category: "State Management".to_string(),
+        injected_failure: "Trigger narration fails after main narration succeeds".to_string(),
+        error_message: error_msg.clone(),
+        generation_phase: format!("{:?}", guard.generation_state.phase),
+        scores: DiagnosticScores {
+            error_specificity: if has_error { 7 } else { 1 },
+            state_visibility: if is_idle || has_error { 7 } else { 2 },
+            log_independence: if is_idle || has_error { 6 } else { 1 },
+        },
+        root_cause_discoverable_from_ui: is_idle || has_error,
+        root_cause_discoverable_from_debug_endpoint: is_idle || has_error,
+        root_cause_discoverable_without_logs: is_idle || has_error,
+        notes: format!(
+            "After trigger narration failure: status={:?}, idle={}, error={}, generating={}. The error message '{}' is set and phase preserved at failure point ({:?}). A system log contains the detailed trigger failure.",
+            guard.generation_state.status,
+            is_idle,
+            has_error,
+            is_generating,
+            error_msg,
+            guard.generation_state.phase
+        ),
+    };
+
+    print_benchmark_result(&result);
+
+    assert!(
+        !is_generating,
+        "EXPECTED: Status should not be Generating after trigger narration failure."
+    );
+}

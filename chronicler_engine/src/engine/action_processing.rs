@@ -26,7 +26,6 @@ pub struct FreeActionContext<'a> {
     pub llm_backend: &'a dyn crate::narrative::llm::LlmBackend,
 }
 
-/// All data needed to generate trigger continuation narration and commit it to the log.
 /// The LLM call itself happens outside the state lock so the frontend can poll the main narration.
 pub struct TriggerContinuationRequest {
     pub npc_id: String,
@@ -58,6 +57,11 @@ pub fn handle_movement(state: &mut GameState, destination: Option<&str>, new_npc
         Ok(_) => true,
         Err(_) => {
             let dynamic_room = create_dynamic_room(trigger, "A place you have never seen before.");
+            state.add_log(
+                format!("[System] Entered unknown location: {}", dynamic_room.id),
+                None,
+                LogType::System,
+            );
             state
                 .dynamic_rooms
                 .insert(dynamic_room.id.clone(), dynamic_room.clone());
@@ -100,7 +104,6 @@ pub fn apply_npc_events(state: &mut GameState, events: &[NpcEvent]) {
     }
 }
 
-/// Commit trigger narration logs and mark the trigger as fired.
 /// Called after the trigger continuation LLM call completes.
 /// [DOC: docs/system/triggers.md]
 pub fn commit_trigger_narration(
@@ -126,7 +129,6 @@ pub fn commit_trigger_narration(
     }
 }
 
-/// Build the system prompt, user prompt, and fitted max tokens for a trigger continuation.
 /// Shared by `build_trigger_request` and `evaluate_and_narrate_triggers`.
 fn build_trigger_prompt_parts(
     world: &WorldCard,

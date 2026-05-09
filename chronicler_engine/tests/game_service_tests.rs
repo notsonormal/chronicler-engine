@@ -782,19 +782,22 @@ mod tests {
 
         let guard = state.lock().unwrap();
         assert!(
-            !guard.generation_state.status.is_generating(),
-            "Status should be Idle after empty LLM response: {:?}",
+            matches!(
+                guard.generation_state.status,
+                GenerationStatus::Error(ref msg) if msg.contains("empty")
+            ),
+            "Status should be Error after empty LLM response: {:?}",
             guard.generation_state.status
         );
 
-        // Empty narration is still logged
+        // Empty narration is NOT logged — it's treated as an error
         let has_narration = guard
             .narration_history
             .iter()
             .any(|e| e.log_type == LogType::Narration);
         assert!(
-            has_narration,
-            "Empty narration should still be added to history"
+            !has_narration,
+            "Empty narration should NOT be added to history"
         );
     }
 
