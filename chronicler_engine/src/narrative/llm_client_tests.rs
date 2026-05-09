@@ -73,14 +73,14 @@ fn test_extract_content_no_content_fields() {
 fn test_parse_chat_response_success_content() {
     let raw = r#"{"choices":[{"message":{"content":"hello"}}]}"#;
     let result = parse_chat_response(raw, 1);
-    assert_eq!(result, Ok("hello".to_string()));
+    assert_eq!(result.unwrap(), "hello");
 }
 
 #[test]
 fn test_parse_chat_response_success_reasoning() {
     let raw = r#"{"choices":[{"message":{"reasoning":"think"}}]}"#;
     let result = parse_chat_response(raw, 1);
-    assert_eq!(result, Ok("think".to_string()));
+    assert_eq!(result.unwrap(), "think");
 }
 
 #[test]
@@ -88,7 +88,7 @@ fn test_parse_chat_response_api_error() {
     let raw = r#"{"error":{"message":"rate limited"}}"#;
     let result = parse_chat_response(raw, 1);
     assert!(result.is_err());
-    assert!(result.unwrap_err().contains("rate limited"));
+    assert!(result.unwrap_err().to_string().contains("rate limited"));
 }
 
 #[test]
@@ -96,7 +96,12 @@ fn test_parse_chat_response_api_error_no_message() {
     let raw = r#"{"error":{}}"#;
     let result = parse_chat_response(raw, 1);
     assert!(result.is_err());
-    assert!(result.unwrap_err().contains("Unknown API error"));
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("Unknown API error")
+    );
 }
 
 #[test]
@@ -104,7 +109,12 @@ fn test_parse_chat_response_missing_content() {
     let raw = r#"{"choices":[{"message":{"role":"assistant"}}]}"#;
     let result = parse_chat_response(raw, 1);
     assert!(result.is_err());
-    assert!(result.unwrap_err().contains("parse error"));
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("Failed to parse LLM response")
+    );
 }
 
 #[test]
@@ -112,7 +122,12 @@ fn test_parse_chat_response_malformed_json() {
     let raw = "not json";
     let result = parse_chat_response(raw, 1);
     assert!(result.is_err());
-    assert!(result.unwrap_err().contains("Failed to parse LLM response"));
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("Failed to parse LLM response")
+    );
 }
 
 #[test]
@@ -120,7 +135,12 @@ fn test_parse_chat_response_empty_json() {
     let raw = "{}";
     let result = parse_chat_response(raw, 1);
     assert!(result.is_err());
-    assert!(result.unwrap_err().contains("parse error"));
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("Failed to parse LLM response")
+    );
 }
 
 // --- Integration-style tests for network calls ---
@@ -148,7 +168,7 @@ fn test_call_openrouter_with_model_rejects_empty_api_key() {
     let result = call_openrouter_with_model("", "system", "user", "model", None);
     assert!(result.is_err());
     let err = result.unwrap_err();
-    assert!(!err.is_empty());
+    assert!(matches!(err, crate::error::EngineError::Llm(_)));
 }
 
 #[test]
@@ -342,7 +362,7 @@ fn test_call_chat_completions_mock_server_success() {
         Some("Test Title"),
         Some(512),
     );
-    assert_eq!(result, Ok("mocked narration".to_string()));
+    assert_eq!(result.unwrap(), "mocked narration");
 }
 
 #[test]
@@ -380,8 +400,9 @@ fn test_call_chat_completions_mock_server_error_status() {
     );
     assert!(result.is_err());
     let err = result.unwrap_err();
+    let msg = err.to_string();
     assert!(
-        err.contains("400") || err.contains("Error communicating"),
-        "Expected API error, got: {err}"
+        msg.contains("400") || msg.contains("Error communicating"),
+        "Expected API error, got: {msg}"
     );
 }

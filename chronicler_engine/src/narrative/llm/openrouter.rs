@@ -1,4 +1,4 @@
-use crate::error::EngineError;
+use crate::error::{EngineError, LlmFailure};
 use crate::model::character::NpcCard;
 use crate::model::settings::Connection;
 use crate::narrative::llm_client::call_openrouter_with_model;
@@ -41,10 +41,9 @@ impl OpenRouterBackend {
         };
         let max_tokens = max_tokens.or(self.max_tokens);
         let result =
-            call_openrouter_with_model(&self.api_key, system, &user, &self.model, max_tokens)
-                .map_err(EngineError::Narrative)?;
+            call_openrouter_with_model(&self.api_key, system, &user, &self.model, max_tokens)?;
         if result.trim().is_empty() {
-            return Err(EngineError::LlmEmptyResponse);
+            return Err(EngineError::Llm(LlmFailure::EmptyResponse));
         }
         Ok(result)
     }

@@ -3,6 +3,19 @@
 ## Unreleased
 
 ### Added
+- **Structured Error Taxonomy** — Migrated `EngineError` from plain `String` payloads to structured types
+  - New `LlmFailure` enum with variants: `EmptyResponse`, `Http { status, body }`, `Network { url, detail }`, `ParseError { raw_response, expected_format }`, `Timeout`
+  - New `NarrativeFailure` enum with variants: `PromptBuild { stage, reason }`, `Generation { stage, reason }`
+  - New `InternalError` struct with `invariant` field and `internal_error()` helper
+  - `EngineError::Llm`, `Narrative`, `Internal` now wrap structured types via `#[source]`
+  - `LlmEmptyResponse` removed — replaced by `Llm(LlmFailure::EmptyResponse)`
+  - `llm_client.rs` return type changed from `Result<String, String>` to `crate::error::Result<String>`
+  - `game_service.rs` `map_llm_error()` now uses structured `match` instead of `msg.contains(...)` string matching
+  - Added `From<LlmFailure>`, `From<NarrativeFailure>`, `From<InternalError>` for `?` operator support
+  - New documentation: `docs/diagnostics/error_catalog.md` — structured reference for every variant
+  - Updated `.agents/rules/DEBUGGING.md` error taxonomy table to reference structured variants
+
+### Added
 - **Message Action Buttons Redesign** — Completed implementation of top-right message action bar
   - `delete_log(id: u64)` method added to `GameState` for safe history removal by ID
   - `POST /history/:id/delete` endpoint for HTMX-compatible deletion

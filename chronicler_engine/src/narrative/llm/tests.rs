@@ -1,3 +1,4 @@
+use crate::error::LlmFailure;
 use crate::model::settings::Connection;
 use crate::narrative::llm::backend::{LlmBackendType, get_llm_backend_with_settings};
 use crate::{AppSettings, EngineError};
@@ -44,6 +45,6 @@ fn test_llm_backend_type_from_env_default() {
 
 #[test]
 fn test_llm_empty_response_error_variant() {
-    let err = EngineError::LlmEmptyResponse;
-    assert_eq!(err.to_string(), "LLM returned an empty response");
+    let err = EngineError::Llm(LlmFailure::EmptyResponse);
+    assert_eq!(err.to_string(), "LLM error: LLM returned an empty response");
 }

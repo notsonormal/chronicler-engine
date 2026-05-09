@@ -6,6 +6,8 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 use serde_json::json;
 
+use crate::error::{EngineError, LlmFailure};
+
 static REQUEST_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 fn next_request_id() -> u64 {
@@ -82,7 +84,7 @@ pub(crate) fn sanitize_llm_output(text: &str) -> String {
 }
 
 /// Parse a raw HTTP response body from an LLM chat completions endpoint.
-pub(crate) fn parse_chat_response(raw_response: &str, req_id: u64) -> Result<String, String> {
+pub(crate) fn parse_chat_response(raw_response: &str, req_id: u64) -> crate::error::Result<String> {
     match serde_json::from_str::<serde_json::Value>(raw_response.trim_start()) {
         Ok(json_response) => {
             log::debug!("[LLM][req:{req_id}] Response JSON: {json_response:#}");
@@ -93,7 +95,10 @@ pub(crate) fn parse_chat_response(raw_response: &str, req_id: u64) -> Result<Str
                     .and_then(|m| m.as_str())
                     .unwrap_or("Unknown API error");
                 log::error!("[LLM][req:{req_id}] API error: {error_msg}");
-                return Err(format!("LLM API error: {error_msg}"));
+                return Err(EngineError::Llm(LlmFailure::Http {
+                    status: 200,
+                    body: error_msg.to_string(),
+                }));
             }
 
             if let Some((content, source)) = extract_content_from_response(&json_response) {
@@ -116,7 +121,10 @@ pub(crate) fn parse_chat_response(raw_response: &str, req_id: u64) -> Result<Str
                     .map(|m| m.keys().cloned().collect::<Vec<_>>())
                     .unwrap_or_default()
             );
-            Err("The world seems to hold its breath (parse error).".to_string())
+            Err(EngineError::Llm(LlmFailure::ParseError {
+                raw_response: raw_response.to_string(),
+                expected_format: "content or reasoning",
+            }))
         }
         Err(e) => {
             log::error!("[LLM][req:{req_id}] JSON parse error: {e}");
@@ -124,7 +132,10 @@ pub(crate) fn parse_chat_response(raw_response: &str, req_id: u64) -> Result<Str
                 "[LLM][req:{req_id}] Raw response that failed to parse: {}",
                 raw_response.trim_start()
             );
-            Err(format!("Failed to parse LLM response: {e}"))
+            Err(EngineError::Llm(LlmFailure::ParseError {
+                raw_response: raw_response.to_string(),
+                expected_format: "valid JSON",
+            }))
         }
     }
 }
@@ -138,7 +149,7 @@ pub fn call_chat_completions(
     user_text: &str,
     title: Option<&str>,
     max_tokens: Option<u32>,
-) -> Result<String, String> {
+) -> crate::error::Result<String> {
     let max_tokens = max_tokens.unwrap_or(DEFAULT_MAX_TOKENS);
     let req_id = next_request_id();
     let start_time = std::time::Instant::now();
@@ -146,7 +157,12 @@ pub fn call_chat_completions(
     let client = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(180))
         .build()
-        .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
+        .map_err(|e| {
+            EngineError::Llm(LlmFailure::Network {
+                url: format!("{base_url}/chat/completions"),
+                detail: format!("Failed to create HTTP client: {e}"),
+            })
+        })?;
 
     log::info!("[LLM][req:{req_id}] Using model: {model}");
     log::debug!(
@@ -224,9 +240,10 @@ pub fn call_chat_completions(
                 } else {
                     error_body.clone()
                 };
-                return Err(format!(
-                    "Error communicating with LLM API: {status}. Body: {snippet}"
-                ));
+                return Err(EngineError::Llm(LlmFailure::Http {
+                    status: status.as_u16(),
+                    body: snippet,
+                }));
             }
 
             // Try to parse JSON response - get raw text first to log on failure
@@ -239,7 +256,10 @@ pub fn call_chat_completions(
                 log::error!(
                     "[LLM][req:{req_id}] This usually means: 1) Overall timeout (body still streaming), 2) Truncated gzip stream, 3) Server closed connection"
                 );
-                format!("Failed to read response body: {e}")
+                EngineError::Llm(LlmFailure::Network {
+                    url: url.clone(),
+                    detail: format!("Failed to read response body: {e}"),
+                })
             })?;
 
             let body_time = start_time.elapsed();
@@ -274,7 +294,10 @@ pub fn call_chat_completions(
                 "[LLM][req:{req_id}] Request failed after {:.2}s: {e}",
                 elapsed.as_secs_f64()
             );
-            Err(format!("Request failed: {e}"))
+            Err(EngineError::Llm(LlmFailure::Network {
+                url,
+                detail: format!("Request failed: {e}"),
+            }))
         }
     }
 }
@@ -286,7 +309,7 @@ pub fn call_openrouter_with_model(
     user_text: &str,
     model: &str,
     max_tokens: Option<u32>,
-) -> Result<String, String> {
+) -> crate::error::Result<String> {
     call_chat_completions(
         "https://openrouter.ai/api/v1",
         Some(api_key),
@@ -305,7 +328,7 @@ pub fn call_ollama(
     system_prompt: &str,
     user_text: &str,
     max_tokens: Option<u32>,
-) -> Result<String, String> {
+) -> crate::error::Result<String> {
     let user_text = apply_gemma4_thinking_suffix(user_text, model);
     call_chat_completions(
         base_url,

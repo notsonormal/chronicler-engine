@@ -1,13 +1,13 @@
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
-use crate::error::EngineError;
+use crate::error::{EngineError, NarrativeFailure};
 use crate::model::character::NpcCard;
 
 use super::backend::LlmBackend;
 
 #[derive(Default)]
 pub struct MockBackend {
-    /// If true, all narration methods return `Err(EngineError::Narrative("Mock failure"))`.
+    /// If true, all narration methods return `Err(EngineError::Narrative(NarrativeFailure::Generation { stage: "mock", reason: "configured_failure" }))`.
     pub should_fail: AtomicBool,
     /// If true, `narrate_action` returns `Ok("")` â€” simulates an empty LLM response.
     pub should_return_empty: AtomicBool,
@@ -58,7 +58,10 @@ impl LlmBackend for MockBackend {
         _npc: &NpcCard,
     ) -> Result<String, EngineError> {
         if self.should_fail.load(Ordering::SeqCst) {
-            return Err(EngineError::Narrative("Mock failure".to_string()));
+            return Err(EngineError::Narrative(NarrativeFailure::Generation {
+                stage: "mock",
+                reason: "configured_failure",
+            }));
         }
         let user_input = context.user_message;
         if user_input.is_empty() {
@@ -77,7 +80,10 @@ impl LlmBackend for MockBackend {
             std::thread::sleep(std::time::Duration::from_millis(delay));
         }
         if self.should_fail.load(Ordering::SeqCst) {
-            return Err(EngineError::Narrative("Mock failure".to_string()));
+            return Err(EngineError::Narrative(NarrativeFailure::Generation {
+                stage: "mock",
+                reason: "configured_failure",
+            }));
         }
         if self.should_return_empty.load(Ordering::SeqCst) {
             return Ok(String::new());
@@ -90,7 +96,10 @@ impl LlmBackend for MockBackend {
         context: &crate::narrative::prompt::PromptContext,
     ) -> Result<String, EngineError> {
         if self.should_fail.load(Ordering::SeqCst) {
-            return Err(EngineError::Narrative("Mock failure".to_string()));
+            return Err(EngineError::Narrative(NarrativeFailure::Generation {
+                stage: "mock",
+                reason: "configured_failure",
+            }));
         }
         Ok(format!(
             "[MockArrival] You enter the {}.",
@@ -106,7 +115,10 @@ impl LlmBackend for MockBackend {
         _max_tokens: Option<u32>,
     ) -> Result<String, EngineError> {
         if self.should_fail.load(Ordering::SeqCst) {
-            return Err(EngineError::Narrative("Mock failure".to_string()));
+            return Err(EngineError::Narrative(NarrativeFailure::Generation {
+                stage: "mock",
+                reason: "configured_failure",
+            }));
         }
         Ok(format!("[Trigger: {trigger_prompt}]"))
     }
@@ -120,9 +132,10 @@ impl LlmBackend for MockBackend {
         if self.should_fail.load(Ordering::SeqCst)
             || self.trigger_narration_should_fail.load(Ordering::SeqCst)
         {
-            return Err(EngineError::Narrative(
-                "Mock trigger narration failure".to_string(),
-            ));
+            return Err(EngineError::Narrative(NarrativeFailure::Generation {
+                stage: "mock_trigger",
+                reason: "configured_failure",
+            }));
         }
         Ok(format!(
             "[Continuation: {}]",

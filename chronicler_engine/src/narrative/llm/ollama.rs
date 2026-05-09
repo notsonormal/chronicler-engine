@@ -1,4 +1,4 @@
-use crate::error::EngineError;
+use crate::error::{EngineError, LlmFailure};
 use crate::model::character::NpcCard;
 use crate::model::settings::Connection;
 use crate::narrative::llm_client::call_ollama;
@@ -39,10 +39,9 @@ impl OllamaBackend {
             (system_prompt, user_text.to_string())
         };
         let max_tokens = max_tokens.or(self.max_tokens);
-        let result = call_ollama(&self.base_url, &self.model, system, &user, max_tokens)
-            .map_err(EngineError::Narrative)?;
+        let result = call_ollama(&self.base_url, &self.model, system, &user, max_tokens)?;
         if result.trim().is_empty() {
-            return Err(EngineError::LlmEmptyResponse);
+            return Err(EngineError::Llm(LlmFailure::EmptyResponse));
         }
         Ok(result)
     }

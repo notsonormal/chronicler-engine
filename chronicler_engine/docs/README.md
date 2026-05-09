@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-09 17:32 UTC*
+*Index last generated: 2026-05-09 18:31 UTC*
 
 ### Root files
 
@@ -27,6 +27,10 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Architecture Guardrails](./architecture/guardrails.md)
 - [Chronicler Engine Runtime Invariants](./architecture/invariants.md)
 - [Specification: Core Architecture (Modular)](./architecture/system.md)
+
+### `docs/diagnostics/`
+
+- [Error Catalog](./diagnostics/error_catalog.md)
 
 ### `docs/plans/`
 
@@ -57,6 +61,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Spec: Align chronicler_engine Prompts with Marinara Engine Battle-Tested Patterns](./plans/archived/prompt-alignment-with-marinara-2026-05-04.md)
 - [Plan: Phase 4 — Replace std::thread::spawn with Tokio](./plans/archived/rocket-silver-surfer-orphan-2026-05-05.md)
 - [Issue Tracker Implementation Plan](./plans/archived/spider-man-impulse-aquaman-2026-05-05.md)
+- [Structured Error Taxonomy](./plans/archived/structured-error-taxonomy-2026-05-09.md)
 
 ### `docs/reference/`
 

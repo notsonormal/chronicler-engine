@@ -233,7 +233,9 @@ impl GameState {
             .iter_mut()
             .find(|e| e.id == id)
             .ok_or_else(|| {
-                crate::error::EngineError::Internal(format!("Log entry not found: {id}"))
+                crate::error::EngineError::Internal(crate::error::internal_error(format!(
+                    "Log entry not found: {id}"
+                )))
             })?;
         entry.text = new_text;
         Ok(())
@@ -246,7 +248,9 @@ impl GameState {
             .iter()
             .position(|e| e.id == id)
             .ok_or_else(|| {
-                crate::error::EngineError::Internal(format!("Log entry not found: {id}"))
+                crate::error::EngineError::Internal(crate::error::internal_error(format!(
+                    "Log entry not found: {id}"
+                )))
             })?;
         self.narration_history.remove(idx);
         Ok(())
@@ -293,23 +297,26 @@ impl GameState {
 
     /// [DOC: docs/architecture/system.md]
     pub fn replace_last_ai_response(&mut self, new_text: String) -> crate::error::Result<()> {
-        let input_idx = self
-            .get_last_input_index()
-            .ok_or_else(|| crate::error::EngineError::Internal("No input to retry".into()))?;
-        let ai_idx = self
-            .get_last_ai_response_index()
-            .ok_or_else(|| crate::error::EngineError::Internal("No AI response to retry".into()))?;
+        let input_idx = self.get_last_input_index().ok_or_else(|| {
+            crate::error::EngineError::Internal(crate::error::internal_error("No input to retry"))
+        })?;
+        let ai_idx = self.get_last_ai_response_index().ok_or_else(|| {
+            crate::error::EngineError::Internal(crate::error::internal_error(
+                "No AI response to retry",
+            ))
+        })?;
 
         if ai_idx <= input_idx {
             return Err(crate::error::EngineError::Internal(
-                "AI response must be after input".into(),
+                crate::error::internal_error("AI response must be after input"),
             ));
         }
 
-        let entry = self
-            .narration_history
-            .get_mut(ai_idx)
-            .ok_or_else(|| crate::error::EngineError::Internal("AI response not found".into()))?;
+        let entry = self.narration_history.get_mut(ai_idx).ok_or_else(|| {
+            crate::error::EngineError::Internal(crate::error::internal_error(
+                "AI response not found",
+            ))
+        })?;
         entry.text = new_text;
         Ok(())
     }

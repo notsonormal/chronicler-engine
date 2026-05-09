@@ -592,7 +592,7 @@ fn test_mock_with_failing_trigger_narration() {
         trigger_result
             .unwrap_err()
             .to_string()
-            .contains("trigger narration failure"),
+            .contains("mock_trigger"),
         "Error message should identify this as a trigger narration failure"
     );
 }

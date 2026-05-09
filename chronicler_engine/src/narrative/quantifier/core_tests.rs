@@ -163,7 +163,7 @@ fn test_quantifier_retry_on_low_confidence() {
     };
 
     let mut call_count = 0;
-    let mock_llm = |_: &str, _: &str, _: &str| -> Result<String, String> {
+    let mock_llm = |_: &str, _: &str, _: &str| -> crate::error::Result<String> {
         call_count += 1;
         if call_count == 1 {
             Ok("I am not sure what to say here.".to_string())
@@ -202,7 +202,7 @@ fn test_quantifier_no_retry_when_high_confidence() {
     };
 
     let mut call_count = 0;
-    let mock_llm = |_: &str, _: &str, _: &str| -> Result<String, String> {
+    let mock_llm = |_: &str, _: &str, _: &str| -> crate::error::Result<String> {
         call_count += 1;
         Ok(r#"{"npcs_in_room": ["carla"], "movement": {"type": null}}"#.to_string())
     };
@@ -296,7 +296,10 @@ impl QuantifierBackendTrait for ErrBackend {
         _context: &QuantifierPromptContext,
         _fallback: &[String],
     ) -> Result<QuantifierResult, EngineError> {
-        Err(EngineError::Llm("mock failure".to_string()))
+        Err(EngineError::Llm(crate::error::LlmFailure::Network {
+            url: "mock".to_string(),
+            detail: "mock failure".to_string(),
+        }))
     }
 }
 
@@ -419,10 +422,15 @@ fn test_quantifier_retry_on_llm_error() {
     };
 
     let mut call_count = 0;
-    let mock_llm = |_: &str, _: &str, _: &str| -> Result<String, String> {
+    let mock_llm = |_: &str, _: &str, _: &str| -> crate::error::Result<String> {
         call_count += 1;
         if call_count == 1 {
-            Err("Network error".to_string())
+            Err(crate::error::EngineError::Llm(
+                crate::error::LlmFailure::Network {
+                    url: "mock".to_string(),
+                    detail: "Network error".to_string(),
+                },
+            ))
         } else {
             Ok(r#"{"npcs_in_room": ["carla"], "movement": {"type": null}}"#.to_string())
         }
@@ -452,8 +460,13 @@ fn test_quantifier_all_attempts_fail_fallback() {
         player_action: "I look around.",
     };
 
-    let mock_llm = |_: &str, _: &str, _: &str| -> Result<String, String> {
-        Err("Persistent error".to_string())
+    let mock_llm = |_: &str, _: &str, _: &str| -> crate::error::Result<String> {
+        Err(crate::error::EngineError::Llm(
+            crate::error::LlmFailure::Network {
+                url: "mock".to_string(),
+                detail: "Persistent error".to_string(),
+            },
+        ))
     };
 
     let result = quantify_room_with_llm_call(&context, &["carla".to_string()], "mock", mock_llm);
@@ -483,12 +496,17 @@ fn test_quantifier_low_confidence_then_error_fallback() {
     };
 
     let mut call_count = 0;
-    let mock_llm = |_: &str, _: &str, _: &str| -> Result<String, String> {
+    let mock_llm = |_: &str, _: &str, _: &str| -> crate::error::Result<String> {
         call_count += 1;
         if call_count == 1 {
             Ok("I am not sure what to say here.".to_string())
         } else {
-            Err("Network error".to_string())
+            Err(crate::error::EngineError::Llm(
+                crate::error::LlmFailure::Network {
+                    url: "mock".to_string(),
+                    detail: "Network error".to_string(),
+                },
+            ))
         }
     };
 

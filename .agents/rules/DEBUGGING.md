@@ -91,15 +91,23 @@ Follow the relevant section for your symptom — do not skip steps.
 
 ## Error Taxonomy
 
+**Primary reference:** `docs/diagnostics/error_catalog.md` — structured catalog with "First Check", "Common Causes", and "Related Invariants" for every variant.
+
+Use `match` on structured variants instead of string grepping. The old `msg.contains(...)` pattern has been removed.
+
 | `EngineError` variant | Most likely cause | First file to check |
 |---|---|---|
-| `Llm(String)` | API key, network, or model routing issue | `src/narrative/llm_client.rs` → `[LLM][req:N]` logs |
-| `LlmEmptyResponse` | Model returned empty content field | `src/narrative/llm_client.rs` → `extract_content_from_response` |
-| `Narrative(String)` | Prompt build or response parse failure | `src/narrative/prompt.rs` → `build_split()` |
+| `Llm(LlmFailure::Http { status, .. })` | API key, rate limit, or model routing issue | `src/narrative/llm_client.rs` → `[LLM][req:N]` logs |
+| `Llm(LlmFailure::EmptyResponse)` | Model returned empty content field | `src/narrative/llm_client.rs` → `extract_content_from_response` |
+| `Llm(LlmFailure::Network { .. })` | Backend unreachable or timeout | `src/narrative/llm_client.rs` → check URL connectivity |
+| `Llm(LlmFailure::ParseError { .. })` | Non-JSON or unexpected response shape | `src/narrative/llm_client.rs` → raw response in debug logs |
+| `Llm(LlmFailure::Timeout)` | Request exceeded 180s | `src/narrative/llm_client.rs` → elapsed time in logs |
+| `Narrative(NarrativeFailure::PromptBuild { .. })` | Prompt budget exceeded | `src/narrative/prompt.rs` → `build_split()` |
+| `Narrative(NarrativeFailure::Generation { .. })` | Backend failed after prompt built | Backend impl (e.g. `mock.rs`, `deepseek.rs`) |
 | `RoomNotFound(String)` | `current_room_id` not in map or `dynamic_rooms` | `src/engine/logic.rs` → `get_current_room()` |
 | `Config(String)` | Settings file missing, malformed, or backend not implemented | `src/settings.rs`, `src/narrative/llm.rs` |
 | `DataLoad { path, .. }` | JSON file doesn't match schema or has wrong field names | `data/schemas/` → run `python build.py --validate-data` |
-| `Internal(String)` | Logic invariant violated — log entry not found, retry with no input | `src/model/state.rs` → method named in the error string |
+| `Internal(InternalError { invariant })` | Logic invariant violated — log entry not found, retry with no input | `src/model/state.rs` → method named in the `invariant` field |
 | `Parse(String)` | Serde deserialization failure on a data file | Check the file path in the error, compare to schema |
 
 ---

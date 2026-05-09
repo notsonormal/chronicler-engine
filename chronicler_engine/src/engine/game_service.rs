@@ -8,7 +8,7 @@ use crate::engine::action_processing::{
 };
 use crate::engine::logic::{find_room_in_map, get_current_room};
 use crate::engine::parser::parse_command;
-use crate::error::EngineError;
+use crate::error::{EngineError, LlmFailure};
 use crate::model::character::NpcCard;
 use crate::model::state::{GameState, LogType};
 use crate::narrative::prompt::make_prompt_context;
@@ -79,16 +79,15 @@ fn set_error_and_reset(state: &Arc<Mutex<GameState>>, message: String) {
 
 fn map_llm_error(e: &EngineError) -> String {
     match e {
-        EngineError::Narrative(msg) if msg.contains("timed out") => {
-            "LLM Error: request timed out".to_string()
-        }
-        EngineError::Narrative(msg) if msg.contains("Failed to read response body") => {
+        EngineError::Llm(LlmFailure::Timeout) => "LLM Error: request timed out".to_string(),
+        EngineError::Llm(LlmFailure::Network { .. }) => {
             "LLM Error: response incomplete".to_string()
         }
-        EngineError::Narrative(msg) if msg.contains("parse") => {
+        EngineError::Llm(LlmFailure::ParseError { .. }) => {
             "LLM Error: unexpected response format".to_string()
         }
-        EngineError::LlmEmptyResponse => "LLM Error: empty response".to_string(),
+        EngineError::Llm(LlmFailure::EmptyResponse) => "LLM Error: empty response".to_string(),
+        EngineError::Llm(LlmFailure::Http { .. }) => "LLM Error: API error".to_string(),
         _ => format!("LLM Error: {e}"),
     }
 }

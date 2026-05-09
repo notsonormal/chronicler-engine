@@ -11,7 +11,7 @@ pub(crate) fn quantify_room_with_llm_call(
     context: &QuantifierPromptContext,
     fallback_npc_ids: &[String],
     model: &str,
-    mut llm_call: impl FnMut(&str, &str, &str) -> Result<String, String>,
+    mut llm_call: impl FnMut(&str, &str, &str) -> crate::error::Result<String>,
 ) -> Result<QuantifierResult, EngineError> {
     let builder = QuantifierPromptBuilder::new(QuantifierPromptContext {
         room: context.room,
@@ -84,7 +84,7 @@ pub(crate) fn quantify_room_with_llm_call(
             }
             Err(e) => {
                 log::warn!("[Quantifier] LLM call failed on attempt {attempt}: {e}");
-                last_error = Some(e);
+                last_error = Some(e.to_string());
                 if attempt < max_attempts {
                     continue;
                 }
