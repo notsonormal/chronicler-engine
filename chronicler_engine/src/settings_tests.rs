@@ -181,8 +181,11 @@ fn test_connection_resolve_api_key() {
         api_key: None,
         ..conn
     };
-    // Without env var, should be None
-    assert_eq!(conn_no_key.resolve_api_key(), None);
+    // When api_key is None, falls back to OPENROUTER_API_KEY env var
+    assert_eq!(
+        conn_no_key.resolve_api_key(),
+        std::env::var("OPENROUTER_API_KEY").ok()
+    );
 }
 
 #[test]

@@ -32,6 +32,13 @@ mod tests {
         false
     }
 
+    fn failing_service() -> DefaultGameService {
+        DefaultGameService::with_backends(
+            Arc::new(MockBackend::failing()),
+            Arc::new(MockQuantifierBackend::default()),
+        )
+    }
+
     fn create_test_state_inner(
         room_npcs: Vec<String>,
         npcs: Vec<NpcCard>,
@@ -256,7 +263,7 @@ mod tests {
     #[test]
     fn test_execute_freeaction_immediate_return() {
         let state = create_test_state();
-        let service = DefaultGameService::new();
+        let service = failing_service();
 
         {
             let mut guard = state.lock().unwrap();
@@ -276,7 +283,7 @@ mod tests {
         // (the thread runs in background)
         let guard = state.lock().unwrap();
         let status = &guard.generation_state.status;
-        // DefaultGameService has no API key, so FreeAction fails and sets Error status
+        // Failing mock backend causes FreeAction to fail and set Error status
         assert!(
             status.error_message().is_some(),
             "Status should be Error after failed FreeAction: {status:?}"
@@ -315,7 +322,7 @@ mod tests {
     #[test]
     fn test_execute_freeaction_state_accessible() {
         let state = create_test_state();
-        let service = DefaultGameService::new();
+        let service = failing_service();
 
         {
             let mut guard = state.lock().unwrap();
@@ -333,7 +340,7 @@ mod tests {
         // State should remain accessible after execute_action returns
         let guard = state.lock().unwrap();
         let status = &guard.generation_state.status;
-        // DefaultGameService has no API key, so FreeAction fails and sets Error status
+        // Failing mock backend causes FreeAction to fail and set Error status
         assert!(
             status.error_message().is_some(),
             "Status should be Error after failed FreeAction: {status:?}"
@@ -343,10 +350,7 @@ mod tests {
     #[test]
     fn test_execute_freeaction_narration_failure() {
         let state = create_test_state();
-        let service = DefaultGameService::with_backends(
-            Arc::new(MockBackend::failing()),
-            Arc::new(MockQuantifierBackend::default()),
-        );
+        let service = failing_service();
 
         {
             let mut guard = state.lock().unwrap();
@@ -679,7 +683,7 @@ mod tests {
     #[test]
     fn test_execute_action_empty_command() {
         let state = create_test_state();
-        let service = DefaultGameService::new();
+        let service = failing_service();
 
         {
             let mut guard = state.lock().unwrap();
@@ -690,7 +694,7 @@ mod tests {
         service.execute_action(state.clone(), "".to_string(), "Player".to_string());
 
         let guard = state.lock().unwrap();
-        // DefaultGameService has no API key, so it fails and sets Error status
+        // Failing mock backend causes FreeAction to fail and set Error status
         assert!(
             guard.generation_state.status.error_message().is_some(),
             "Empty command should result in error status: {:?}",
@@ -701,7 +705,7 @@ mod tests {
     #[test]
     fn test_execute_action_unknown_command() {
         let state = create_test_state();
-        let service = DefaultGameService::new();
+        let service = failing_service();
 
         {
             let mut guard = state.lock().unwrap();
@@ -712,7 +716,7 @@ mod tests {
         service.execute_action(state.clone(), "xyz123".to_string(), "Player".to_string());
 
         let guard = state.lock().unwrap();
-        // DefaultGameService has no API key, so it fails and sets Error status
+        // Failing mock backend causes FreeAction to fail and set Error status
         assert!(
             guard.generation_state.status.error_message().is_some(),
             "Unknown command should result in error status: {:?}",

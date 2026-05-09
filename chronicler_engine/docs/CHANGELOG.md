@@ -3,6 +3,19 @@
 ## Unreleased
 
 ### Fixed
+- **Settings panel encoding and checkbox spacing** - Fixed UI defects in the settings panel
+  - Replaced corrupted UTF-8 em-dash (`â€"`) with simple hyphen (` - `) in provider/model display strings
+  - Added explicit `.checkbox-label` class to checkbox labels for better browser compatibility
+  - Updated CSS to target `.checkbox-label` instead of `label:has(> input[type="checkbox"])`
+  - Increased checkbox label gap from `var(--spacing-xs)` (4px) to `var(--spacing-sm)` (8px)
+
+### Fixed
+- **Test environment isolation** - Fixed tests that failed when `OPENROUTER_API_KEY` env var is set
+  - `settings_tests::test_connection_resolve_api_key` now asserts against the env var value instead of hardcoded `None`
+  - `game_service_tests` that relied on `DefaultGameService::new()` having no API key now use `DefaultGameService::with_backends()` with explicit `MockBackend::failing()`
+  - Tests are now independent of host environment variables
+
+### Fixed
 - **Sequential trigger display** - Main narration and trigger text now appear sequentially instead of simultaneously
   - Split `evaluate_and_narrate_triggers` into three phases: evaluate (lock) → LLM (unlock) → commit (lock)
   - Frontend can now poll and display the main narration while the trigger continuation is still generating

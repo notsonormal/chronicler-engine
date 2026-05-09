@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-09 13:53 UTC*
+*Index last generated: 2026-05-09 15:09 UTC*
 
 ### Root files
 
@@ -42,6 +42,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Plan: Improve Quantifier Prompt for Movement Certainty](./plans/archived/donna-troy-hercules-warpath-2026-05-03.md)
 - [Plan: Dependency-Inject LLM/Quantifier Backends into DefaultGameService](./plans/archived/drax-psylocke-gamora-2026-05-04.md)
 - [Spec: Event Header Entries](./plans/archived/event-header-entries-archived.md)
+- [Plan: Fix Settings Panel Encoding and Checkbox Spacing](./plans/archived/fix-settings-encoding-checkbox-spacing-2026-05-09.md)
 - [Plan: Granular Status Phases for LLM Pipeline](./plans/archived/granular-status-phases-archived.md)
 - [Implementation Plan: Marinara-Style Prompt Architecture](./plans/archived/hercules-she-hulk-doctor-fate-20260503.md)
 - [Implementation Plan: Fix Gemma 4 Thinking Suffix Corruption](./plans/archived/iceman-thor-booster-gold-2026-05-04.md)
