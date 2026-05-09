@@ -287,13 +287,19 @@ impl TestGameState {
             map: Arc::new(TestMap::single_room_with_npc(room_id, &npc_id)),
             player: Arc::new(TestPlayer::standard()),
             npcs: npcs_map,
-            current_room_id: room_id.to_string(),
-            narration_history: Vec::new(),
-            next_log_id: 1,
-            npcs_in_area: Vec::new(),
-            dynamic_rooms: HashMap::new(),
+            movement: crate::model::state::MovementState {
+                current_room_id: room_id.to_string(),
+                dynamic_rooms: HashMap::new(),
+            },
+            narrative: crate::model::state::NarrativeState {
+                history: Vec::new(),
+                next_log_id: 1,
+                generation: Default::default(),
+            },
+            scene: crate::model::state::SceneState {
+                npcs_in_area: Vec::new(),
+            },
             character_state: Default::default(),
-            generation_state: Default::default(),
         }
     }
 
@@ -319,13 +325,19 @@ impl TestGameState {
             }),
             player: Arc::new(TestPlayer::standard()),
             npcs: npcs_map,
-            current_room_id: room_id.to_string(),
-            narration_history: Vec::new(),
-            next_log_id: 1,
-            npcs_in_area: Vec::new(),
-            dynamic_rooms: HashMap::new(),
+            movement: crate::model::state::MovementState {
+                current_room_id: room_id.to_string(),
+                dynamic_rooms: HashMap::new(),
+            },
+            narrative: crate::model::state::NarrativeState {
+                history: Vec::new(),
+                next_log_id: 1,
+                generation: Default::default(),
+            },
+            scene: crate::model::state::SceneState {
+                npcs_in_area: Vec::new(),
+            },
             character_state: Default::default(),
-            generation_state: Default::default(),
         }
     }
 }

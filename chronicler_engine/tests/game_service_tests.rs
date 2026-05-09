@@ -23,7 +23,7 @@ mod tests {
         let timeout = std::time::Duration::from_millis(timeout_ms);
         while start.elapsed() < timeout {
             if let Ok(guard) = state.lock() {
-                if !guard.generation_state.status.is_generating() {
+                if !guard.narrative.generation.status.is_generating() {
                     return true;
                 }
             }
@@ -160,14 +160,15 @@ mod tests {
         // Clear any existing history
         {
             let mut guard = state.lock().unwrap();
-            guard.narration_history.clear();
+            guard.narrative.history.clear();
         }
 
         service.execute_action(state.clone(), "look".to_string(), "Player".to_string());
 
         let guard = state.lock().unwrap();
         let has_narration = guard
-            .narration_history
+            .narrative
+            .history
             .iter()
             .any(|e| e.log_type == LogType::Narration);
         assert!(has_narration, "Look should add narration");
@@ -180,7 +181,7 @@ mod tests {
 
         {
             let mut guard = state.lock().unwrap();
-            guard.narration_history.clear();
+            guard.narrative.history.clear();
         }
 
         service.execute_action(
@@ -191,7 +192,8 @@ mod tests {
 
         let guard = state.lock().unwrap();
         let has_system = guard
-            .narration_history
+            .narrative
+            .history
             .iter()
             .any(|e| e.log_type == LogType::System && e.text.contains("You talk to"));
         assert!(has_system, "Talk should add system log");
@@ -204,14 +206,15 @@ mod tests {
 
         {
             let mut guard = state.lock().unwrap();
-            guard.narration_history.clear();
+            guard.narrative.history.clear();
         }
 
         service.execute_action(state.clone(), "inventory".to_string(), "Player".to_string());
 
         let guard = state.lock().unwrap();
         let has_system = guard
-            .narration_history
+            .narrative
+            .history
             .iter()
             .any(|e| e.log_type == LogType::System && e.text.contains("inventory"));
         assert!(has_system, "Inventory should add system log");
@@ -224,19 +227,20 @@ mod tests {
 
         {
             let mut guard = state.lock().unwrap();
-            guard.narration_history.clear();
+            guard.narrative.history.clear();
         }
 
         service.execute_action(state.clone(), "quit".to_string(), "Player".to_string());
 
         let guard = state.lock().unwrap();
         let has_goodbye = guard
-            .narration_history
+            .narrative
+            .history
             .iter()
             .any(|e| e.log_type == LogType::System && e.text.contains("Goodbye"));
         assert!(has_goodbye, "Quit should add Goodbye log");
         assert!(
-            !guard.generation_state.status.is_generating(),
+            !guard.narrative.generation.status.is_generating(),
             "Quit should reset is_generating"
         );
     }
@@ -249,7 +253,7 @@ mod tests {
         // Ensure history is empty
         {
             let mut guard = state.lock().unwrap();
-            guard.narration_history.clear();
+            guard.narrative.history.clear();
         }
 
         // Should not panic with empty history
@@ -257,7 +261,7 @@ mod tests {
 
         // State should be unchanged
         let guard = state.lock().unwrap();
-        assert!(guard.narration_history.is_empty());
+        assert!(guard.narrative.history.is_empty());
     }
 
     #[test]
@@ -267,8 +271,9 @@ mod tests {
 
         {
             let mut guard = state.lock().unwrap();
-            guard.narration_history.clear();
-            guard.generation_state.status = chronicler_engine::model::state::GenerationStatus::Idle;
+            guard.narrative.history.clear();
+            guard.narrative.generation.status =
+                chronicler_engine::model::state::GenerationStatus::Idle;
         }
 
         // FreeAction should return immediately and spawn a thread
@@ -282,7 +287,7 @@ mod tests {
         // State should be accessible immediately after execute_action returns
         // (the thread runs in background)
         let guard = state.lock().unwrap();
-        let status = &guard.generation_state.status;
+        let status = &guard.narrative.generation.status;
         // Failing mock backend causes FreeAction to fail and set Error status
         assert!(
             status.error_message().is_some(),
@@ -298,10 +303,10 @@ mod tests {
         // Set current_room_id to a room that doesn't exist
         {
             let mut guard = state.lock().unwrap();
-            guard.narration_history.clear();
-            guard.generation_state.status =
+            guard.narrative.history.clear();
+            guard.narrative.generation.status =
                 chronicler_engine::model::state::GenerationStatus::Generating;
-            guard.current_room_id = "non_existent_room".to_string();
+            guard.movement.current_room_id = "non_existent_room".to_string();
         }
 
         // Execute FreeAction - should not panic
@@ -326,8 +331,8 @@ mod tests {
 
         {
             let mut guard = state.lock().unwrap();
-            guard.narration_history.clear();
-            guard.generation_state.status =
+            guard.narrative.history.clear();
+            guard.narrative.generation.status =
                 chronicler_engine::model::state::GenerationStatus::Generating;
         }
 
@@ -339,7 +344,7 @@ mod tests {
 
         // State should remain accessible after execute_action returns
         let guard = state.lock().unwrap();
-        let status = &guard.generation_state.status;
+        let status = &guard.narrative.generation.status;
         // Failing mock backend causes FreeAction to fail and set Error status
         assert!(
             status.error_message().is_some(),
@@ -354,8 +359,8 @@ mod tests {
 
         {
             let mut guard = state.lock().unwrap();
-            guard.narration_history.clear();
-            guard.generation_state.status =
+            guard.narrative.history.clear();
+            guard.narrative.generation.status =
                 chronicler_engine::model::state::GenerationStatus::Generating;
         }
 
@@ -371,9 +376,9 @@ mod tests {
         let guard = state.lock().unwrap();
         // MockBackend::failing() always returns an error
         assert!(
-            guard.generation_state.status.error_message().is_some(),
+            guard.narrative.generation.status.error_message().is_some(),
             "Should have error after failed narration: {:?}",
-            guard.generation_state.status
+            guard.narrative.generation.status
         );
     }
 
@@ -387,8 +392,8 @@ mod tests {
 
         {
             let mut guard = state.lock().unwrap();
-            guard.narration_history.clear();
-            guard.generation_state.status =
+            guard.narrative.history.clear();
+            guard.narrative.generation.status =
                 chronicler_engine::model::state::GenerationStatus::Generating; // set by caller (server)
         }
 
@@ -403,12 +408,13 @@ mod tests {
 
         let guard = state.lock().unwrap();
         assert!(
-            !guard.generation_state.status.is_generating(),
+            !guard.narrative.generation.status.is_generating(),
             "is_generating should be reset after FreeAction completes"
         );
 
         let has_narration = guard
-            .narration_history
+            .narrative
+            .history
             .iter()
             .any(|e| e.log_type == LogType::Narration);
         assert!(has_narration, "Mock LLM should add narration to history");
@@ -425,10 +431,10 @@ mod tests {
         // Set up history with a player input and AI response
         {
             let mut guard = state.lock().unwrap();
-            guard.narration_history.clear();
+            guard.narrative.history.clear();
             guard.add_log("look around".to_string(), None, LogType::Input);
             guard.add_log("Initial narration".to_string(), None, LogType::Narration);
-            guard.generation_state.status =
+            guard.narrative.generation.status =
                 chronicler_engine::model::state::GenerationStatus::Generating; // set by caller (server)
         }
 
@@ -439,13 +445,14 @@ mod tests {
 
         let guard = state.lock().unwrap();
         assert!(
-            !guard.generation_state.status.is_generating(),
+            !guard.narrative.generation.status.is_generating(),
             "is_generating should be reset after retry completes"
         );
 
         // The last AI response should have been replaced with mock narration
         let ai_responses: Vec<_> = guard
-            .narration_history
+            .narrative
+            .history
             .iter()
             .filter(|e| e.log_type == LogType::Narration)
             .collect();
@@ -462,15 +469,15 @@ mod tests {
 
         {
             let mut guard = state.lock().unwrap();
-            guard.narration_history.clear();
-            guard.current_room_id = "non_existent_room".to_string();
+            guard.narrative.history.clear();
+            guard.movement.current_room_id = "non_existent_room".to_string();
         }
 
         service.execute_action(state.clone(), "look".to_string(), "Player".to_string());
 
         let guard = state.lock().unwrap();
         assert!(
-            !guard.generation_state.status.is_generating(),
+            !guard.narrative.generation.status.is_generating(),
             "Look should reset is_generating even when room not found"
         );
     }
@@ -482,7 +489,7 @@ mod tests {
 
         {
             let mut guard = state.lock().unwrap();
-            guard.narration_history.clear();
+            guard.narrative.history.clear();
         }
 
         // "talk to innkeeper" without quoted message parses as ("innkeeper", None)
@@ -493,10 +500,10 @@ mod tests {
         );
 
         let guard = state.lock().unwrap();
-        let has_talk = guard
-            .narration_history
-            .iter()
-            .any(|e| e.log_type == LogType::System && e.text.contains("You talk to innkeeper:"));
+        let has_talk =
+            guard.narrative.history.iter().any(|e| {
+                e.log_type == LogType::System && e.text.contains("You talk to innkeeper:")
+            });
         assert!(has_talk, "Talk without message should add system log");
     }
 
@@ -510,8 +517,8 @@ mod tests {
 
         {
             let mut guard = state.lock().unwrap();
-            guard.narration_history.clear();
-            guard.generation_state.status =
+            guard.narrative.history.clear();
+            guard.narrative.generation.status =
                 chronicler_engine::model::state::GenerationStatus::Generating; // set by caller (server)
         }
 
@@ -530,12 +537,13 @@ mod tests {
 
         let guard = state.lock().unwrap();
         assert!(
-            !guard.generation_state.status.is_generating(),
+            !guard.narrative.generation.status.is_generating(),
             "is_generating should be reset after FreeAction with movement"
         );
 
         let has_narration = guard
-            .narration_history
+            .narrative
+            .history
             .iter()
             .any(|e| e.log_type == LogType::Narration);
         assert!(
@@ -561,7 +569,7 @@ mod tests {
         // If we get here, the function handled poisoned mutex gracefully
         let guard = state.lock().unwrap_or_else(|e| e.into_inner());
         assert!(
-            guard.narration_history.is_empty(),
+            guard.narrative.history.is_empty(),
             "Poisoned mutex should cause early return with no history changes"
         );
     }
@@ -573,8 +581,9 @@ mod tests {
 
         {
             let mut guard = state.lock().unwrap();
-            guard.narration_history.clear();
-            guard.generation_state.status = chronicler_engine::model::state::GenerationStatus::Idle;
+            guard.narrative.history.clear();
+            guard.narrative.generation.status =
+                chronicler_engine::model::state::GenerationStatus::Idle;
         }
 
         service.execute_action(
@@ -588,10 +597,10 @@ mod tests {
         // set_phase(Narrating) runs before the backend call, and set_error_and_reset
         // only updates status (not phase), so phase should still be Narrating.
         assert_eq!(
-            guard.generation_state.phase,
+            guard.narrative.generation.phase,
             chronicler_engine::model::state::GenerationPhase::Narrating,
             "Phase should be Narrating after starting FreeAction: {:?}",
-            guard.generation_state.status
+            guard.narrative.generation.status
         );
     }
 
@@ -605,8 +614,8 @@ mod tests {
 
         {
             let mut guard = state.lock().unwrap();
-            guard.narration_history.clear();
-            guard.generation_state.status =
+            guard.narrative.history.clear();
+            guard.narrative.generation.status =
                 chronicler_engine::model::state::GenerationStatus::Generating;
         }
 
@@ -621,11 +630,11 @@ mod tests {
 
         let guard = state.lock().unwrap();
         assert!(
-            !guard.generation_state.status.is_generating(),
+            !guard.narrative.generation.status.is_generating(),
             "Status should be reset after FreeAction completes"
         );
         assert_eq!(
-            guard.generation_state.phase,
+            guard.narrative.generation.phase,
             chronicler_engine::model::state::GenerationPhase::default(),
             "Phase should be reset to default after completion"
         );
@@ -642,8 +651,8 @@ mod tests {
 
         {
             let mut guard = state.lock().unwrap();
-            guard.narration_history.clear();
-            guard.generation_state.status = GenerationStatus::Generating;
+            guard.narrative.history.clear();
+            guard.narrative.generation.status = GenerationStatus::Generating;
         }
 
         let state_clone = state.clone();
@@ -651,7 +660,7 @@ mod tests {
         let handle = tokio::task::spawn_blocking(move || {
             if token_clone.is_cancelled() {
                 if let Ok(mut guard) = state_clone.lock() {
-                    guard.generation_state.status = GenerationStatus::Idle;
+                    guard.narrative.generation.status = GenerationStatus::Idle;
                 }
                 return;
             }
@@ -662,7 +671,7 @@ mod tests {
             );
             if token_clone.is_cancelled() {
                 if let Ok(mut guard) = state_clone.lock() {
-                    guard.generation_state.status = GenerationStatus::Idle;
+                    guard.narrative.generation.status = GenerationStatus::Idle;
                 }
             }
         });
@@ -675,7 +684,7 @@ mod tests {
 
         let guard = state.lock().unwrap();
         assert!(
-            !guard.generation_state.status.is_generating(),
+            !guard.narrative.generation.status.is_generating(),
             "Status should be Idle after cancellation cleanup"
         );
     }
@@ -687,7 +696,7 @@ mod tests {
 
         {
             let mut guard = state.lock().unwrap();
-            guard.narration_history.clear();
+            guard.narrative.history.clear();
         }
 
         // Empty command parses as FreeAction("") and should not panic
@@ -696,9 +705,9 @@ mod tests {
         let guard = state.lock().unwrap();
         // Failing mock backend causes FreeAction to fail and set Error status
         assert!(
-            guard.generation_state.status.error_message().is_some(),
+            guard.narrative.generation.status.error_message().is_some(),
             "Empty command should result in error status: {:?}",
-            guard.generation_state.status
+            guard.narrative.generation.status
         );
     }
 
@@ -709,7 +718,7 @@ mod tests {
 
         {
             let mut guard = state.lock().unwrap();
-            guard.narration_history.clear();
+            guard.narrative.history.clear();
         }
 
         // Unknown command parses as FreeAction and should not panic
@@ -718,9 +727,9 @@ mod tests {
         let guard = state.lock().unwrap();
         // Failing mock backend causes FreeAction to fail and set Error status
         assert!(
-            guard.generation_state.status.error_message().is_some(),
+            guard.narrative.generation.status.error_message().is_some(),
             "Unknown command should result in error status: {:?}",
-            guard.generation_state.status
+            guard.narrative.generation.status
         );
     }
 
@@ -732,7 +741,7 @@ mod tests {
         // Set up history with only an Input entry (no AI Narration after it)
         {
             let mut guard = state.lock().unwrap();
-            guard.narration_history.clear();
+            guard.narrative.history.clear();
             guard.add_log(
                 "look around".to_string(),
                 Some("Player".to_string()),
@@ -751,10 +760,10 @@ mod tests {
 
         let guard = state.lock().unwrap();
         assert!(
-            guard.generation_state.status.error_message().is_some()
-                || !guard.generation_state.status.is_generating(),
+            guard.narrative.generation.status.error_message().is_some()
+                || !guard.narrative.generation.status.is_generating(),
             "Retry with no AI response should complete: {:?}",
-            guard.generation_state.status
+            guard.narrative.generation.status
         );
     }
 
@@ -770,8 +779,8 @@ mod tests {
 
         {
             let mut guard = state.lock().unwrap();
-            guard.narration_history.clear();
-            guard.generation_state.status = GenerationStatus::Generating;
+            guard.narrative.history.clear();
+            guard.narrative.generation.status = GenerationStatus::Generating;
         }
 
         service.execute_action(
@@ -783,16 +792,17 @@ mod tests {
         let guard = state.lock().unwrap();
         assert!(
             matches!(
-                guard.generation_state.status,
+                guard.narrative.generation.status,
                 GenerationStatus::Error(ref msg) if msg.contains("empty")
             ),
             "Status should be Error after empty LLM response: {:?}",
-            guard.generation_state.status
+            guard.narrative.generation.status
         );
 
         // Empty narration is NOT logged — it's treated as an error
         let has_narration = guard
-            .narration_history
+            .narrative
+            .history
             .iter()
             .any(|e| e.log_type == LogType::Narration);
         assert!(
@@ -814,8 +824,8 @@ mod tests {
 
         {
             let mut guard = state.lock().unwrap();
-            guard.narration_history.clear();
-            guard.generation_state.status = GenerationStatus::Generating;
+            guard.narrative.history.clear();
+            guard.narrative.generation.status = GenerationStatus::Generating;
             // Reset times_met so the trigger is eligible to fire
             if let Some(encounter) = guard.character_state.npcs.get_mut("shopkeeper") {
                 encounter.times_met = 0;
@@ -831,13 +841,14 @@ mod tests {
 
         let guard = state.lock().unwrap();
         assert!(
-            !guard.generation_state.status.is_generating(),
+            !guard.narrative.generation.status.is_generating(),
             "Status should be reset after trigger narration failure"
         );
 
         // Main narration should still be present
         let has_narration = guard
-            .narration_history
+            .narrative
+            .history
             .iter()
             .any(|e| e.log_type == LogType::Narration);
         assert!(
@@ -846,10 +857,10 @@ mod tests {
         );
 
         // Trigger narration failure should be logged as a system message
-        let has_trigger_error = guard
-            .narration_history
-            .iter()
-            .any(|e| e.log_type == LogType::System && e.text.contains("Trigger narration failed"));
+        let has_trigger_error =
+            guard.narrative.history.iter().any(|e| {
+                e.log_type == LogType::System && e.text.contains("Trigger narration failed")
+            });
         assert!(
             has_trigger_error,
             "Trigger narration failure should be logged"
@@ -868,8 +879,8 @@ mod tests {
 
         {
             let mut guard = state.lock().unwrap();
-            guard.narration_history.clear();
-            guard.generation_state.status = GenerationStatus::Generating;
+            guard.narrative.history.clear();
+            guard.narrative.generation.status = GenerationStatus::Generating;
         }
 
         service.execute_action(
@@ -881,11 +892,11 @@ mod tests {
         // execute_action is synchronous — by now the delay has elapsed
         let guard = state.lock().unwrap();
         assert!(
-            !guard.generation_state.status.is_generating(),
+            !guard.narrative.generation.status.is_generating(),
             "Status should be Idle after delayed action completes"
         );
         assert_eq!(
-            guard.generation_state.phase,
+            guard.narrative.generation.phase,
             chronicler_engine::model::state::GenerationPhase::default(),
             "Phase should be reset after completion"
         );
@@ -908,8 +919,8 @@ mod tests {
 
         {
             let mut guard = state.lock().unwrap();
-            guard.narration_history.clear();
-            guard.generation_state.status = GenerationStatus::Generating;
+            guard.narrative.history.clear();
+            guard.narrative.generation.status = GenerationStatus::Generating;
         }
 
         service.execute_action(
@@ -923,13 +934,13 @@ mod tests {
 
         let guard = state.lock().unwrap();
         assert!(
-            !guard.generation_state.status.is_generating(),
+            !guard.narrative.generation.status.is_generating(),
             "Status should be reset after movement action"
         );
 
         // Player should have moved (either to existing room or dynamic room)
         assert_ne!(
-            guard.current_room_id, "room1",
+            guard.movement.current_room_id, "room1",
             "Player should have moved from starting room"
         );
     }
@@ -947,8 +958,8 @@ mod tests {
 
         {
             let mut guard = state.lock().unwrap();
-            guard.narration_history.clear();
-            guard.generation_state.status = GenerationStatus::Generating;
+            guard.narrative.history.clear();
+            guard.narrative.generation.status = GenerationStatus::Generating;
             // Reset times_met so the trigger is eligible to fire
             if let Some(encounter) = guard.character_state.npcs.get_mut("shopkeeper") {
                 encounter.times_met = 0;
@@ -963,20 +974,22 @@ mod tests {
 
         let guard = state.lock().unwrap();
         assert!(
-            !guard.generation_state.status.is_generating(),
+            !guard.narrative.generation.status.is_generating(),
             "Status should be reset after trigger action"
         );
 
         // Trigger should have fired, adding an Event entry
         let has_event = guard
-            .narration_history
+            .narrative
+            .history
             .iter()
             .any(|e| e.log_type == LogType::Event);
         assert!(has_event, "Trigger should add an Event entry");
 
         // And a continuation narration
         let narration_count = guard
-            .narration_history
+            .narrative
+            .history
             .iter()
             .filter(|e| e.log_type == LogType::Narration)
             .count();

@@ -29,7 +29,7 @@ pub struct LogEntry {
 
 const MAX_LOG_ENTRIES: usize = 1000;
 
-#[derive(Debug, Default, Clone, PartialEq, Serialize)]
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub enum GenerationStatus {
     #[default]
     Idle,
@@ -50,7 +50,7 @@ impl GenerationStatus {
     }
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Serialize)]
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub enum GenerationPhase {
     #[default]
     Narrating,
@@ -76,7 +76,7 @@ impl GenerationPhase {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GenerationState {
     pub input: String,
     pub cursor_position: usize,
@@ -104,65 +104,39 @@ impl GenerationState {
     }
 }
 
+// ─── Sub-state structs ────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MovementState {
+    pub current_room_id: String,
+    pub dynamic_rooms: HashMap<String, Room>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct NarrativeState {
+    pub history: Vec<LogEntry>,
+    pub next_log_id: u64,
+    pub generation: GenerationState,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SceneState {
+    pub npcs_in_area: Vec<NpcCard>,
+}
+
+// ─── GameState ────────────────────────────────────────────────────────────────
+
 /// [DOC: docs/architecture/system.md]
-pub struct GeneratingGuard {
-    state: Arc<std::sync::Mutex<GameState>>,
-}
-
-fn with_lock_or_recover(
-    state: &Arc<std::sync::Mutex<GameState>>,
-    f: impl FnOnce(&mut GameState),
-    err_msg: &str,
-) {
-    match state.lock() {
-        Ok(mut guard) => f(&mut guard),
-        Err(poisoned) => {
-            log::error!("{err_msg}");
-            let mut guard = poisoned.into_inner();
-            f(&mut guard);
-            state.clear_poison();
-        }
-    }
-}
-
-impl GeneratingGuard {
-    pub fn new(state: Arc<std::sync::Mutex<GameState>>) -> Self {
-        with_lock_or_recover(
-            &state,
-            |guard| {
-                guard.generation_state.status = GenerationStatus::Generating;
-            },
-            "GeneratingGuard::new encountered poisoned mutex, recovering guard",
-        );
-        Self { state }
-    }
-}
-
-impl Drop for GeneratingGuard {
-    fn drop(&mut self) {
-        with_lock_or_recover(
-            &self.state,
-            |guard| {
-                guard.generation_state.status = GenerationStatus::Idle;
-            },
-            "GeneratingGuard::drop encountered poisoned mutex, recovering guard and resetting status",
-        );
-    }
-}
-
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct GameState {
     pub world: Arc<WorldCard>,
     pub map: Arc<MapDef>,
     pub player: Arc<PlayerCard>,
     pub npcs: HashMap<String, NpcCard>,
-    pub current_room_id: String,
-    pub narration_history: Vec<LogEntry>,
-    pub next_log_id: u64,
-    pub npcs_in_area: Vec<NpcCard>,
-    pub generation_state: GenerationState,
-    pub dynamic_rooms: HashMap<String, Room>,
-    pub character_state: crate::model::trigger::CharacterState,
+    pub movement: MovementState,
+    pub narrative: NarrativeState,
+    pub scene: SceneState,
+    pub character_state: CharacterState,
 }
 
 impl GameState {
@@ -201,23 +175,29 @@ impl GameState {
             map,
             player,
             npcs: npcs_map,
-            current_room_id: starting_room,
-            narration_history: Vec::new(),
-            next_log_id: 1,
-            generation_state: GenerationState::default(),
-            npcs_in_area: Vec::new(),
-            dynamic_rooms: HashMap::new(),
+            movement: MovementState {
+                current_room_id: starting_room,
+                dynamic_rooms: HashMap::new(),
+            },
+            narrative: NarrativeState {
+                history: Vec::new(),
+                next_log_id: 1,
+                generation: GenerationState::default(),
+            },
+            scene: SceneState {
+                npcs_in_area: Vec::new(),
+            },
             character_state,
         }
     }
 
     pub fn add_log(&mut self, text: String, sender: Option<String>, log_type: LogType) {
-        if self.narration_history.len() >= MAX_LOG_ENTRIES {
-            self.narration_history.remove(0);
+        if self.narrative.history.len() >= MAX_LOG_ENTRIES {
+            self.narrative.history.remove(0);
         }
-        let id = self.next_log_id;
-        self.next_log_id += 1;
-        self.narration_history.push(LogEntry {
+        let id = self.narrative.next_log_id;
+        self.narrative.next_log_id += 1;
+        self.narrative.history.push(LogEntry {
             id,
             sender,
             text,
@@ -229,7 +209,8 @@ impl GameState {
     /// [DOC: docs/architecture/system.md]
     pub fn edit_log(&mut self, id: u64, new_text: String) -> crate::error::Result<()> {
         let entry = self
-            .narration_history
+            .narrative
+            .history
             .iter_mut()
             .find(|e| e.id == id)
             .ok_or_else(|| {
@@ -244,7 +225,8 @@ impl GameState {
     /// [DOC: docs/architecture/system.md]
     pub fn delete_log(&mut self, id: u64) -> crate::error::Result<()> {
         let idx = self
-            .narration_history
+            .narrative
+            .history
             .iter()
             .position(|e| e.id == id)
             .ok_or_else(|| {
@@ -252,35 +234,37 @@ impl GameState {
                     "Log entry not found: {id}"
                 )))
             })?;
-        self.narration_history.remove(idx);
+        self.narrative.history.remove(idx);
         Ok(())
     }
 
     pub fn get_log(&self, id: u64) -> Option<&LogEntry> {
-        self.narration_history.iter().find(|e| e.id == id)
+        self.narrative.history.iter().find(|e| e.id == id)
     }
 
     pub fn get_last_ai_response_index(&self) -> Option<usize> {
-        self.narration_history
+        self.narrative
+            .history
             .iter()
             .rposition(|e| e.log_type == LogType::Narration || e.log_type == LogType::Dialogue)
     }
 
     pub fn get_last_input_index(&self) -> Option<usize> {
-        self.narration_history
+        self.narrative
+            .history
             .iter()
             .rposition(|e| e.log_type == LogType::Input)
     }
 
     pub fn get_last_input_text(&self) -> Option<(String, String)> {
         let input_idx = self.get_last_input_index()?;
-        let input_entry = self.narration_history.get(input_idx)?;
+        let input_entry = self.narrative.history.get(input_idx)?;
         let sender = input_entry.sender.clone().unwrap_or_default();
         Some((sender, input_entry.text.clone()))
     }
 
     pub fn get_history_context(&self) -> &[LogEntry] {
-        &self.narration_history
+        &self.narrative.history
     }
 
     /// [DOC: docs/architecture/system.md]
@@ -289,9 +273,9 @@ impl GameState {
         let last_ai_idx = self.get_last_ai_response_index();
         if let Some(idx) = last_ai_idx {
             // Exclude the AI response being retried (and any entries after it)
-            self.narration_history[..idx].to_vec()
+            self.narrative.history[..idx].to_vec()
         } else {
-            self.narration_history.clone()
+            self.narrative.history.clone()
         }
     }
 
@@ -312,12 +296,58 @@ impl GameState {
             ));
         }
 
-        let entry = self.narration_history.get_mut(ai_idx).ok_or_else(|| {
+        let entry = self.narrative.history.get_mut(ai_idx).ok_or_else(|| {
             crate::error::EngineError::Internal(crate::error::internal_error(
                 "AI response not found",
             ))
         })?;
         entry.text = new_text;
         Ok(())
+    }
+}
+
+/// [DOC: docs/architecture/system.md]
+pub struct GeneratingGuard {
+    state: Arc<std::sync::Mutex<GameState>>,
+}
+
+fn with_lock_or_recover(
+    state: &Arc<std::sync::Mutex<GameState>>,
+    f: impl FnOnce(&mut GameState),
+    err_msg: &str,
+) {
+    match state.lock() {
+        Ok(mut guard) => f(&mut guard),
+        Err(poisoned) => {
+            log::error!("{err_msg}");
+            let mut guard = poisoned.into_inner();
+            f(&mut guard);
+            state.clear_poison();
+        }
+    }
+}
+
+impl GeneratingGuard {
+    pub fn new(state: Arc<std::sync::Mutex<GameState>>) -> Self {
+        with_lock_or_recover(
+            &state,
+            |guard| {
+                guard.narrative.generation.status = GenerationStatus::Generating;
+            },
+            "GeneratingGuard::new encountered poisoned mutex, recovering guard",
+        );
+        Self { state }
+    }
+}
+
+impl Drop for GeneratingGuard {
+    fn drop(&mut self) {
+        with_lock_or_recover(
+            &self.state,
+            |guard| {
+                guard.narrative.generation.status = GenerationStatus::Idle;
+            },
+            "GeneratingGuard::drop encountered poisoned mutex, recovering guard and resetting status",
+        );
     }
 }

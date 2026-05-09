@@ -1,25 +1,5 @@
 # Rust Conventions for Chronicler Engine
 
-## Error Handling
-
-- **Prefer `Result` over `panic!`** - Never use `.expect()` or `unwrap()` on fallible operations
-- Use the `EngineError` enum from `src/error.rs` for custom errors
-- Always propagate errors with `?` or `map_err()`
-- Never panick in library code; return meaningful errors instead
-
-```rust
-// Good
-fn get_current_room(state: &GameState) -> Result<&Room, EngineError> {
-    get_room_by_id(state, &state.current_room_id)
-        .ok_or_else(|| EngineError::RoomNotFound(state.current_room_id.clone()))
-}
-
-// Bad - never do this
-fn get_current_room(state: &GameState) -> &Room {
-    get_room_by_id(state, &state.current_room_id).unwrap()
-}
-```
-
 ## Naming Conventions
 
 - **Functions & variables**: `snake_case`
@@ -32,23 +12,6 @@ fn get_current_room(state: &GameState) -> &Room {
 - Use `pub` fields directly for simple data containers (DTOs)
 - Use getter methods for computed/derived values
 - Implement `Debug`, `Clone`, `Serialize`, `Deserialize` where appropriate
-
-## Imports
-
-- Group imports in this order:
-  1. Standard library (`std`, `core`)
-  2. External crates (`serde`, `crossterm`)
-  3. Local modules (`crate::`)
-
-```rust
-use std::sync::Arc;
-
-use serde::{Deserialize, Serialize};
-use crossterm::event::Event;
-
-use crate::model::state::GameState;
-use crate::error::Result;
-```
 
 ## Tests
 

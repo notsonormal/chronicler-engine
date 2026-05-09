@@ -4,7 +4,7 @@ use crate::model::trigger::{CharacterState, ComparisonOperator, Trigger, Trigger
 
 /// [DOC: docs/system/triggers.md]
 pub fn evaluate_triggers(state: &GameState) -> Vec<(NpcCard, Trigger)> {
-    let current_room_id = &state.current_room_id;
+    let current_room_id = &state.movement.current_room_id;
 
     let mut results = Vec::new();
 

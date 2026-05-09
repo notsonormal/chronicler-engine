@@ -377,7 +377,7 @@ fn test_determine_npcs_backend_error_fallback() {
 fn test_determine_npcs_invalid_room_fallback() {
     let carla = TestNpc::named("carla", "Carla");
     let mut state = TestGameState::with_npcs("hall", vec![carla.clone()]);
-    state.current_room_id = "nonexistent".to_string();
+    state.movement.current_room_id = "nonexistent".to_string();
 
     let backend = HighConfidenceBackend {
         npc_ids: vec!["carla".to_string()],

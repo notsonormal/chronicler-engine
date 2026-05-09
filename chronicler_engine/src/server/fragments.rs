@@ -47,7 +47,8 @@ pub fn render_story_log(state: &AppState) -> Result<String> {
     let state_guard = state.lock_state()?;
 
     let entries: Vec<_> = state_guard
-        .narration_history
+        .narrative
+        .history
         .iter()
         .take(MAX_LOG_DISPLAY)
         .cloned()
@@ -73,8 +74,9 @@ fn render_visual_sidebar_unlocked(state: &GameState) -> Result<String> {
         Some((image_path, name))
     };
 
-    let npc_data: Vec<(String, String)> = if !state.npcs_in_area.is_empty() {
+    let npc_data: Vec<(String, String)> = if !state.scene.npcs_in_area.is_empty() {
         state
+            .scene
             .npcs_in_area
             .iter()
             .filter_map(|npc| resolve_headshot(&npc.id))
@@ -102,8 +104,8 @@ pub fn render_visual_sidebar(state: &AppState) -> Result<String> {
 pub fn render_action_area(state: &AppState) -> Result<String> {
     let state_guard = state.lock_state()?;
 
-    let status = state_guard.generation_state.status.clone();
-    let phase = state_guard.generation_state.phase.clone();
+    let status = state_guard.narrative.generation.status.clone();
+    let phase = state_guard.narrative.generation.phase.clone();
     let exits = get_available_exits(&state_guard);
     drop(state_guard);
 
@@ -193,8 +195,8 @@ pub async fn generating_status_handler(State(state): State<AppState>) -> Html<St
         .lock()
         .map(|guard| {
             (
-                guard.generation_state.status.clone(),
-                guard.generation_state.phase.clone(),
+                guard.narrative.generation.status.clone(),
+                guard.narrative.generation.phase.clone(),
             )
         })
         .unwrap_or_default();
@@ -214,7 +216,7 @@ pub async fn reset_generating_handler(State(state): State<AppState>) -> Html<Str
         .state
         .lock()
         .map(|mut guard| {
-            guard.generation_state.status = crate::model::state::GenerationStatus::Idle;
+            guard.narrative.generation.status = crate::model::state::GenerationStatus::Idle;
             true
         })
         .unwrap_or(false);
@@ -289,10 +291,12 @@ async fn process_action(state: &AppState, command: String) -> Response<Body> {
 
         if is_sync {
             process_sync_action(&mut state_guard, &action);
-            state_guard.generation_state.status = crate::model::state::GenerationStatus::Idle;
+            state_guard.narrative.generation.status = crate::model::state::GenerationStatus::Idle;
         } else {
-            state_guard.generation_state.status = crate::model::state::GenerationStatus::Generating;
-            state_guard.generation_state.phase = crate::model::state::GenerationPhase::Narrating;
+            state_guard.narrative.generation.status =
+                crate::model::state::GenerationStatus::Generating;
+            state_guard.narrative.generation.phase =
+                crate::model::state::GenerationPhase::Narrating;
         }
 
         (name, is_sync)
@@ -307,7 +311,7 @@ async fn process_action(state: &AppState, command: String) -> Response<Body> {
 
         if token.is_cancelled() {
             if let Ok(mut guard) = state_clone.lock() {
-                guard.generation_state.status = crate::model::state::GenerationStatus::Idle;
+                guard.narrative.generation.status = crate::model::state::GenerationStatus::Idle;
             }
             return Response::builder()
                 .status(StatusCode::SERVICE_UNAVAILABLE)
@@ -319,14 +323,14 @@ async fn process_action(state: &AppState, command: String) -> Response<Body> {
         tokio::task::spawn_blocking(move || {
             if token.is_cancelled() {
                 if let Ok(mut guard) = state_clone.lock() {
-                    guard.generation_state.status = crate::model::state::GenerationStatus::Idle;
+                    guard.narrative.generation.status = crate::model::state::GenerationStatus::Idle;
                 }
                 return;
             }
             game_service.execute_action(state_clone.clone(), cmd, pname);
             if token.is_cancelled() {
                 if let Ok(mut guard) = state_clone.lock() {
-                    guard.generation_state.status = crate::model::state::GenerationStatus::Idle;
+                    guard.narrative.generation.status = crate::model::state::GenerationStatus::Idle;
                 }
             }
         });
@@ -632,14 +636,14 @@ pub async fn retry_handler(State(state): State<AppState>) -> (StatusCode, String
     tokio::task::spawn_blocking(move || {
         if token.is_cancelled() {
             if let Ok(mut guard) = state_clone.lock() {
-                guard.generation_state.status = crate::model::state::GenerationStatus::Idle;
+                guard.narrative.generation.status = crate::model::state::GenerationStatus::Idle;
             }
             return;
         }
         game_service.retry_last_response(state_clone.clone());
         if token.is_cancelled() {
             if let Ok(mut guard) = state_clone.lock() {
-                guard.generation_state.status = crate::model::state::GenerationStatus::Idle;
+                guard.narrative.generation.status = crate::model::state::GenerationStatus::Idle;
             }
         }
     });

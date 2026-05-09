@@ -15,14 +15,20 @@ pub fn find_room_in_world_map<'a>(state: &'a GameState, target_id: &str) -> Opti
 }
 
 pub fn get_current_room(state: &GameState) -> Result<&Room> {
-    if let Some(room) = find_room_in_world_map(state, &state.current_room_id) {
+    if let Some(room) = find_room_in_world_map(state, &state.movement.current_room_id) {
         return Ok(room);
     }
     // [DOC: docs/architecture/system.md]
-    if let Some(room) = state.dynamic_rooms.get(&state.current_room_id) {
+    if let Some(room) = state
+        .movement
+        .dynamic_rooms
+        .get(&state.movement.current_room_id)
+    {
         return Ok(room);
     }
-    Err(EngineError::RoomNotFound(state.current_room_id.clone()))
+    Err(EngineError::RoomNotFound(
+        state.movement.current_room_id.clone(),
+    ))
 }
 
 pub fn get_available_exits(state: &GameState) -> Vec<String> {
@@ -55,7 +61,7 @@ pub fn process_directional_movement(state: &mut GameState, target: &str) -> Resu
     }
 
     if let Some(next_room_id) = found_dest {
-        state.current_room_id = next_room_id;
+        state.movement.current_room_id = next_room_id;
         Ok(format!("You walk to: {target}."))
     } else {
         Err(EngineError::Navigation(
@@ -68,7 +74,7 @@ pub fn process_directional_movement(state: &mut GameState, target: &str) -> Resu
 pub fn attempt_semantic_walk(state: &mut GameState, room_id: &str) -> Result<String> {
     let room_name = if let Some(room) = find_room_in_world_map(state, room_id) {
         room.name.clone()
-    } else if let Some(room) = state.dynamic_rooms.get(room_id) {
+    } else if let Some(room) = state.movement.dynamic_rooms.get(room_id) {
         room.name.clone()
     } else {
         return Err(EngineError::Navigation(
@@ -76,7 +82,7 @@ pub fn attempt_semantic_walk(state: &mut GameState, room_id: &str) -> Result<Str
         ));
     };
 
-    state.current_room_id = room_id.to_string();
+    state.movement.current_room_id = room_id.to_string();
     Ok(format!("You go to: {room_name}."))
 }
 

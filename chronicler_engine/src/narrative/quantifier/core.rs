@@ -176,7 +176,8 @@ pub fn determine_npcs_in_room(
     };
 
     let recent_history: Vec<_> = state
-        .narration_history
+        .narrative
+        .history
         .iter()
         .rev()
         .take(4)

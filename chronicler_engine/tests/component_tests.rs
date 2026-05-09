@@ -430,9 +430,9 @@ mod tests {
         let state = create_test_state();
         {
             let mut guard = state.lock().unwrap();
-            guard.generation_state.status =
+            guard.narrative.generation.status =
                 chronicler_engine::model::state::GenerationStatus::Generating;
-            guard.generation_state.phase =
+            guard.narrative.generation.phase =
                 chronicler_engine::model::state::GenerationPhase::Narrating;
         }
         let app = create_app_for_testing(state);
@@ -456,9 +456,9 @@ mod tests {
         let state = create_test_state();
         {
             let mut guard = state.lock().unwrap();
-            guard.generation_state.status =
+            guard.narrative.generation.status =
                 chronicler_engine::model::state::GenerationStatus::Generating;
-            guard.generation_state.phase =
+            guard.narrative.generation.phase =
                 chronicler_engine::model::state::GenerationPhase::Quantifying;
         }
         let app = create_app_for_testing(state);
@@ -532,7 +532,7 @@ mod tests {
                 Some("Test".to_string()),
                 chronicler_engine::model::state::LogType::Narration,
             );
-            guard.narration_history.last().unwrap().id
+            guard.narrative.history.last().unwrap().id
         };
 
         let app = create_app_for_testing(state.clone());
@@ -549,7 +549,7 @@ mod tests {
         // Verify the entry was deleted
         let guard = state.lock().unwrap();
         assert!(
-            !guard.narration_history.iter().any(|e| e.id == entry_id),
+            !guard.narrative.history.iter().any(|e| e.id == entry_id),
             "Log entry should be deleted"
         );
     }
@@ -1381,7 +1381,7 @@ fn test_npcs_in_area_initialization() {
 
     // Verify npcs_in_area starts empty
     assert!(
-        state_guard.npcs_in_area.is_empty(),
+        state_guard.scene.npcs_in_area.is_empty(),
         "npcs_in_area should be empty on initialization"
     );
 }
@@ -1399,14 +1399,17 @@ fn test_npcs_in_area_can_be_populated() {
         .expect("Should have npc_1");
 
     // Populate npcs_in_area
-    state_guard.npcs_in_area.push(npc);
+    state_guard.scene.npcs_in_area.push(npc);
 
     assert_eq!(
-        state_guard.npcs_in_area.len(),
+        state_guard.scene.npcs_in_area.len(),
         1,
         "npcs_in_area should have 1 NPC after population"
     );
-    assert_eq!(state_guard.npcs_in_area[0].id, "npc_1", "Should be npc_1");
+    assert_eq!(
+        state_guard.scene.npcs_in_area[0].id, "npc_1",
+        "Should be npc_1"
+    );
 }
 
 #[test]
@@ -1420,18 +1423,18 @@ fn test_npcs_in_area_can_be_cleared() {
         .get("npc_1")
         .cloned()
         .expect("Should have npc_1");
-    state_guard.npcs_in_area.push(npc);
+    state_guard.scene.npcs_in_area.push(npc);
 
     assert!(
-        !state_guard.npcs_in_area.is_empty(),
+        !state_guard.scene.npcs_in_area.is_empty(),
         "npcs_in_area should be populated"
     );
 
     // Clear for re-quantification
-    state_guard.npcs_in_area.clear();
+    state_guard.scene.npcs_in_area.clear();
 
     assert!(
-        state_guard.npcs_in_area.is_empty(),
+        state_guard.scene.npcs_in_area.is_empty(),
         "npcs_in_area should be empty after clear"
     );
 }
@@ -1447,16 +1450,16 @@ fn test_npcs_in_area_can_be_replaced() {
         .get("npc_1")
         .cloned()
         .expect("Should have npc_1");
-    state_guard.npcs_in_area.push(npc1);
+    state_guard.scene.npcs_in_area.push(npc1);
 
-    assert_eq!(state_guard.npcs_in_area.len(), 1, "Should have 1 NPC");
+    assert_eq!(state_guard.scene.npcs_in_area.len(), 1, "Should have 1 NPC");
 
     // Replace with new list (simulating re-quantification)
     let new_npcs = vec![]; // Empty list simulates no NPCs found
-    state_guard.npcs_in_area = new_npcs;
+    state_guard.scene.npcs_in_area = new_npcs;
 
     assert!(
-        state_guard.npcs_in_area.is_empty(),
+        state_guard.scene.npcs_in_area.is_empty(),
         "npcs_in_area should be empty after replacement"
     );
 }

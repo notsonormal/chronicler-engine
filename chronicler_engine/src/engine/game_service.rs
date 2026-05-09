@@ -8,6 +8,7 @@ use crate::engine::action_processing::{
 };
 use crate::engine::logic::{find_room_in_map, get_current_room};
 use crate::engine::parser::parse_command;
+use crate::engine::state_diagnostics::assert_state_consistency;
 use crate::error::{EngineError, LlmFailure};
 use crate::model::character::NpcCard;
 use crate::model::state::{GameState, LogType};
@@ -61,21 +62,21 @@ fn with_state_lock<T>(
 
 fn reset_generating(state: &Arc<Mutex<GameState>>) {
     if let Ok(mut s) = state.lock() {
-        s.generation_state.status = crate::model::state::GenerationStatus::Idle;
-        s.generation_state.phase = crate::model::state::GenerationPhase::default();
+        s.narrative.generation.status = crate::model::state::GenerationStatus::Idle;
+        s.narrative.generation.phase = crate::model::state::GenerationPhase::default();
     }
 }
 
 fn set_phase(state: &Arc<Mutex<GameState>>, phase: crate::model::state::GenerationPhase) {
     if let Ok(mut s) = state.lock() {
-        s.generation_state.status = crate::model::state::GenerationStatus::Generating;
-        s.generation_state.phase = phase;
+        s.narrative.generation.status = crate::model::state::GenerationStatus::Generating;
+        s.narrative.generation.phase = phase;
     }
 }
 
 fn set_error_and_reset(state: &Arc<Mutex<GameState>>, message: String) {
     if let Ok(mut s) = state.lock() {
-        s.generation_state.status = crate::model::state::GenerationStatus::Error(message);
+        s.narrative.generation.status = crate::model::state::GenerationStatus::Error(message);
     }
 }
 
@@ -113,7 +114,8 @@ impl GameService for DefaultGameService {
         match action {
             Action::Quit => {
                 state_guard.add_log("Goodbye!".to_string(), None, LogType::System);
-                state_guard.generation_state.status = crate::model::state::GenerationStatus::Idle;
+                state_guard.narrative.generation.status =
+                    crate::model::state::GenerationStatus::Idle;
             }
             Action::Look => {
                 let room_name;
@@ -128,7 +130,8 @@ impl GameService for DefaultGameService {
                         state_guard.add_log(desc, Some(name), LogType::Narration);
                     }
                 }
-                state_guard.generation_state.status = crate::model::state::GenerationStatus::Idle;
+                state_guard.narrative.generation.status =
+                    crate::model::state::GenerationStatus::Idle;
             }
             Action::Talk(name, msg) => {
                 let msg_str = msg.unwrap_or_default();
@@ -137,7 +140,8 @@ impl GameService for DefaultGameService {
                     None,
                     LogType::System,
                 );
-                state_guard.generation_state.status = crate::model::state::GenerationStatus::Idle;
+                state_guard.narrative.generation.status =
+                    crate::model::state::GenerationStatus::Idle;
             }
             Action::Inventory => {
                 state_guard.add_log(
@@ -145,14 +149,15 @@ impl GameService for DefaultGameService {
                     None,
                     LogType::System,
                 );
-                state_guard.generation_state.status = crate::model::state::GenerationStatus::Idle;
+                state_guard.narrative.generation.status =
+                    crate::model::state::GenerationStatus::Idle;
             }
             Action::FreeAction(text) => {
                 let world = Arc::clone(&state_guard.world);
                 let map = Arc::clone(&state_guard.map);
                 let player = Arc::clone(&state_guard.player);
-                let room_id = state_guard.current_room_id.clone();
-                let history = state_guard.narration_history.clone();
+                let room_id = state_guard.movement.current_room_id.clone();
+                let history = state_guard.narrative.history.clone();
                 let room_npc_ids = get_current_room(&state_guard)
                     .map(|r| r.npcs.clone())
                     .unwrap_or_default();
@@ -212,7 +217,7 @@ impl GameService for DefaultGameService {
                 );
 
                 let quantifier_result = with_state_lock(&state_for_thread, |state| {
-                    let previous_room_npcs: Vec<NpcCard> = state.npcs_in_area.clone();
+                    let previous_room_npcs: Vec<NpcCard> = state.scene.npcs_in_area.clone();
                     determine_npcs_in_room(
                         state,
                         &room.npcs,
@@ -283,6 +288,7 @@ impl GameService for DefaultGameService {
                         if !continuation_text.is_empty() {
                             with_state_lock(&state_for_thread, |state| {
                                 commit_trigger_narration(state, &request, &continuation_text);
+                                assert_state_consistency(state).ok();
                             });
                         }
                         reset_generating(&state_for_thread);
@@ -334,7 +340,7 @@ impl GameService for DefaultGameService {
                 guard.npcs.values().cloned().collect::<Vec<_>>(),
                 room_npc_ids,
                 guard.get_history_context_for_retry(), // Excludes the AI response being retried
-                guard.current_room_id.clone(),
+                guard.movement.current_room_id.clone(),
             )
         };
 
@@ -376,10 +382,10 @@ impl GameService for DefaultGameService {
 
         if let Ok(mut state) = state_clone.lock() {
             if let Err(e) = state.replace_last_ai_response(new_narration) {
-                state.generation_state.status =
+                state.narrative.generation.status =
                     crate::model::state::GenerationStatus::Error(format!("Retry failed: {e}"));
             } else {
-                state.generation_state.status = crate::model::state::GenerationStatus::Idle;
+                state.narrative.generation.status = crate::model::state::GenerationStatus::Idle;
             }
         }
     }

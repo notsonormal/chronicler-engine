@@ -203,7 +203,7 @@ pub fn run(args: Args) -> crate::error::Result<()> {
     let world = state.world.clone();
     let map = state.map.clone();
     let player = state.player.clone();
-    let room_id = state.current_room_id.clone();
+    let room_id = state.movement.current_room_id.clone();
     let history: Vec<crate::model::state::LogEntry> = Vec::new();
 
     let state = Arc::new(std::sync::Mutex::new(state));
@@ -251,7 +251,7 @@ pub fn run(args: Args) -> crate::error::Result<()> {
                     }
                     Err(e) => {
                         if let Ok(mut state) = state_for_task.lock() {
-                            state.generation_state.status =
+                            state.narrative.generation.status =
                                 crate::model::state::GenerationStatus::Error(format!(
                                     "LLM Error: {e}"
                                 ));

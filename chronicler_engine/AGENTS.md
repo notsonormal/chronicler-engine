@@ -79,7 +79,6 @@ let residents = find_npcs_in_current_location(all_npcs, current_room);
 | Dashboard UI | `src/ui/dashboard.rs` | HTMX components |
 
 ## CONVENTIONS
-- **Result over panic**: Use `EngineError` enum, propagate with `?`
 - **Doc Anchors**: Always link complex blocks to `docs/` via `// [DOC: docs/path/to/file.md]`
 - **LLM backend**: Trait-based (`LlmBackend`), mock via `LLM_BACKEND=mock` env var
 - **Validation**: Run `python build.py` before commit (fmt + clippy + tests + guardrails)
@@ -90,9 +89,7 @@ let residents = find_npcs_in_current_location(all_npcs, current_room);
   you MUST also run `python build.py --llm-only` to verify real LLM integration.
 
 ## ANTI-PATTERNS
-- **Never** use redundant "What" comments (e.g., `// Add to log`).
 - **Never** skip architecture/spec update before implementing engine changes.
-- **Never** use `.unwrap()` or `.expect()` in production code.
 
 ## GUARDRAILS (PROGRAMMATIC ENFORCEMENT)
 
@@ -185,3 +182,47 @@ python build.py --cleanup --target-dir target/test_police
 ```
 
 Tests are already concurrency-safe: they allocate ports dynamically from the range 3010-3050 using file-based locking (`get_available_port` in `tests/test_utils.rs`).
+
+## AGENT SKILLS
+
+This project benefits from the **caveman** skill suite for token-efficient agent communication. Use these during long sessions, deep debugging, or when delegating to subagents.
+
+### Caveman Communication Mode
+Trigger: `/caveman` (or `/caveman lite|full|ultra`)
+
+Drops filler, articles, hedging, and pleasantries while preserving full technical accuracy. Code blocks, error strings, and symbols remain unchanged. Modes:
+- **lite** — No filler, keep full sentences. Professional but tight.
+- **full** — Drop articles, fragments OK. Default.
+- **ultra** — Extreme compression: abbreviate prose, arrows for causality, one word when enough.
+- **wenyan-lite|wenyan|wenyan-ultra** — Classical Chinese register, maximum character reduction.
+
+Deactivate with "stop caveman" or "normal mode".
+
+### Cavecrew Subagents
+Trigger: "use cavecrew", "spawn investigator/builder/reviewer", "save context"
+
+Compressed-output alternatives to vanilla subagents. Same jobs, but results injected back into main context are ~60% smaller — the difference between context exhaustion and finishing a long task.
+
+| Subagent | Use when |
+|---|---|
+| `cavecrew-investigator` | Locating definitions, callers, or uses of a symbol |
+| `cavecrew-builder` | Surgical edit in ≤2 files with obvious scope |
+| `cavecrew-reviewer` | Quick diff audit for bugs |
+
+Chain pattern: investigator → builder → reviewer. Avoid builder for 3+ file refactors (returns `too-big.`).
+
+### Utility Skills
+
+| Skill | Trigger | Purpose |
+|---|---|---|
+| `caveman-help` | `/caveman-help` | Quick-reference card for all modes and skills |
+| `caveman-commit` | `/caveman-commit` | Terse commit messages (Conventional Commits, ≤50 char subject) |
+| `caveman-review` | `/caveman-review` | One-line PR comments: `path:line: severity: problem. fix.` |
+| `caveman-compress` | `/caveman:compress <file>` | Compress markdown memory files to caveman prose (~46% token savings) |
+| `caveman-stats` | `/caveman-stats` | Show real session token usage and estimated savings |
+
+### When to Use
+- **Context is running long** (>50k tokens) — switch to `/caveman` to stretch budget.
+- **Delegating to subagents** — prefer `cavecrew-*` over vanilla to keep main context lean.
+- **Writing commits or reviews** — use `/caveman-commit` and `/caveman-review` for terse, actionable output.
+- **Compressing memory files** — use `/caveman:compress` on `.ag-memory/` or `CONTEXT.md` before they bloat.

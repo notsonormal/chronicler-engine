@@ -95,12 +95,16 @@ fn make_state(
         map,
         player,
         npcs,
-        current_room_id: "room_1".into(),
-        narration_history: vec![],
-        next_log_id: 1,
-        npcs_in_area,
-        generation_state: Default::default(),
-        dynamic_rooms: HashMap::new(),
+        movement: crate::model::state::MovementState {
+            current_room_id: "room_1".into(),
+            dynamic_rooms: HashMap::new(),
+        },
+        narrative: crate::model::state::NarrativeState {
+            history: vec![],
+            next_log_id: 1,
+            generation: Default::default(),
+        },
+        scene: crate::model::state::SceneState { npcs_in_area },
         character_state,
     }
 }
@@ -158,7 +162,7 @@ fn test_evaluate_triggers_fires_for_npc_not_in_area() {
         "Gabriella should be in state.npcs"
     );
     assert!(
-        state.npcs_in_area.is_empty(),
+        state.scene.npcs_in_area.is_empty(),
         "npcs_in_area should be empty"
     );
 
@@ -182,7 +186,7 @@ fn test_room_scoped_trigger_fires_in_correct_room() {
     let state = make_state(vec![], &[npc.clone()], CharacterState::default());
 
     // State is in room_1 by default
-    assert_eq!(state.current_room_id, "room_1");
+    assert_eq!(state.movement.current_room_id, "room_1");
 
     let results = evaluate_triggers(&state);
     assert_eq!(
@@ -204,7 +208,7 @@ fn test_room_scoped_trigger_skipped_in_wrong_room() {
     let state = make_state(vec![], &[npc.clone()], CharacterState::default());
 
     // State is in room_1, but trigger is scoped to entrance_hall
-    assert_eq!(state.current_room_id, "room_1");
+    assert_eq!(state.movement.current_room_id, "room_1");
 
     let results = evaluate_triggers(&state);
     assert!(

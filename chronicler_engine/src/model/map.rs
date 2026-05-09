@@ -31,7 +31,7 @@ pub struct Region {
     pub rooms: Vec<Room>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Room {
     pub id: String,
     pub name: String,

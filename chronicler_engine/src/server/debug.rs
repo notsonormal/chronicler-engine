@@ -36,7 +36,8 @@ pub async fn debug_state_handler(
 
     // Only take the last 5 entries to keep the response scannable
     let history_tail: Vec<LogEntry> = guard
-        .narration_history
+        .narrative
+        .history
         .iter()
         .rev()
         .take(5)
@@ -45,28 +46,29 @@ pub async fn debug_state_handler(
         .collect();
 
     let npcs_in_area: Vec<String> = guard
+        .scene
         .npcs_in_area
         .iter()
         .map(|npc| npc.id.clone())
         .collect();
 
-    let dynamic_rooms: Vec<String> = guard.dynamic_rooms.keys().cloned().collect();
+    let dynamic_rooms: Vec<String> = guard.movement.dynamic_rooms.keys().cloned().collect();
 
-    let last_error = match &guard.generation_state.status {
+    let last_error = match &guard.narrative.generation.status {
         GenerationStatus::Error(msg) => Some(msg.clone()),
         _ => None,
     };
 
     let response = DebugStateResponse {
-        current_room_id: guard.current_room_id.clone(),
+        current_room_id: guard.movement.current_room_id.clone(),
         npcs_in_area,
-        generation_status: guard.generation_state.status.clone(),
-        generation_phase: guard.generation_state.phase.clone(),
+        generation_status: guard.narrative.generation.status.clone(),
+        generation_phase: guard.narrative.generation.phase.clone(),
         character_state: guard.character_state.npcs.clone(),
         narration_history_tail: history_tail,
-        narration_history_length: guard.narration_history.len(),
+        narration_history_length: guard.narrative.history.len(),
         dynamic_rooms,
-        dynamic_room_count: guard.dynamic_rooms.len(),
+        dynamic_room_count: guard.movement.dynamic_rooms.len(),
         last_error,
     };
 

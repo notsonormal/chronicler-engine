@@ -100,7 +100,7 @@ fn test_attempt_walk_cardinal() {
     let mut state = setup_test_state();
     let res = process_directional_movement(&mut state, "north");
     assert!(res.is_ok());
-    assert_eq!(state.current_room_id, "room2");
+    assert_eq!(state.movement.current_room_id, "room2");
 }
 
 #[test]
@@ -108,7 +108,7 @@ fn test_attempt_walk_semantic() {
     let mut state = setup_test_state();
     let res = process_directional_movement(&mut state, "kitchen");
     assert!(res.is_ok());
-    assert_eq!(state.current_room_id, "room2");
+    assert_eq!(state.movement.current_room_id, "room2");
 }
 
 #[test]
@@ -116,7 +116,7 @@ fn test_attempt_walk_semantic_partial() {
     let mut state = setup_test_state();
     let res = process_directional_movement(&mut state, "library");
     assert!(res.is_ok());
-    assert_eq!(state.current_room_id, "room3");
+    assert_eq!(state.movement.current_room_id, "room3");
 }
 
 #[test]
@@ -124,7 +124,7 @@ fn test_attempt_walk_fail() {
     let mut state = setup_test_state();
     let res = process_directional_movement(&mut state, "bathroom");
     assert!(res.is_err());
-    assert_eq!(state.current_room_id, "room1");
+    assert_eq!(state.movement.current_room_id, "room1");
 
     let err = res.unwrap_err();
     assert!(err.to_string().contains("don't see a way"));
@@ -290,11 +290,11 @@ fn test_attempt_walk_case_insensitive() {
     let mut state = setup_test_state();
     let res = process_directional_movement(&mut state, "NORTH");
     assert!(res.is_ok());
-    assert_eq!(state.current_room_id, "room2");
+    assert_eq!(state.movement.current_room_id, "room2");
 
-    state.current_room_id = "room1".to_string();
+    state.movement.current_room_id = "room1".to_string();
 
     let res = process_directional_movement(&mut state, "North");
     assert!(res.is_ok());
-    assert_eq!(state.current_room_id, "room2");
+    assert_eq!(state.movement.current_room_id, "room2");
 }

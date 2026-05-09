@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-09 19:20 UTC*
+*Index last generated: 2026-05-09 21:48 UTC*
 
 ### Root files
 
@@ -24,6 +24,7 @@ This folder contains all documentation for the Chronicler Engine project.
 
 ### `docs/architecture/`
 
+- [Chronicler Engine: Defensive Architecture Overview](./architecture/defensive-architecture-overview.md)
 - [Architecture Guardrails](./architecture/guardrails.md)
 - [Chronicler Engine Runtime Invariants](./architecture/invariants.md)
 - [Specification: Core Architecture (Modular)](./architecture/system.md)
@@ -34,10 +35,13 @@ This folder contains all documentation for the Chronicler Engine project.
 
 ### `docs/plans/`
 
+- [Plan: Diagnostic Decision Tree as Agent Infrastructure](./plans/diagnostic-decision-tree-plan.md)
 - [Implementation Plan: Fix Diagnostic Signal Quality for All 12 Scenarios](./plans/diagnostic_fixes_plan.md)
+- [Plan: Fast-Fail Build & Test Localization](./plans/fast-fail-build-test-localization-plan.md)
 - [LLM Infrastructure Improvements](./plans/llm-infrastructure-improvements.md)
 - [Implementation Plan: Message Action Buttons Redesign](./plans/message-buttons-redesign-plan.md)
 - [Spec: Message Action Buttons Redesign](./plans/message-buttons-redesign.md)
+- [Plan: Observability & Automated Forensics](./plans/observability-and-forensics-plan.md)
 - [AI Steering & Guided Generation](./plans/steering-and-guided-generation.md)
 - [Structured Error Taxonomy](./plans/structured-error-taxonomy.md)
 
@@ -46,6 +50,8 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Plan: Spell & Grammar Check Integration](./plans/archived/ant-man-black-lightning-bobbi-morse.md)
 - [Plan: Raise `game_service.rs` Coverage to 80%+ via Refactoring](./plans/archived/coverage-game-service-archived.md)
 - [Fix: Show LLM Text Immediately, Delay Trigger Text Until Generated](./plans/archived/crimson-avenger-robin-iceman.md)
+- [Follow-Up Plan: Complete Defensive Architecture Implementation](./plans/archived/defensive-architecture-follow-up-plan.md)
+- [Plan: Defensive Architecture & Invariant Enforcement](./plans/archived/defensive-architecture-invariant-enforcement-plan.md)
 - [Plan: Improve Quantifier Prompt for Movement Certainty](./plans/archived/donna-troy-hercules-warpath-2026-05-03.md)
 - [Plan: Dependency-Inject LLM/Quantifier Backends into DefaultGameService](./plans/archived/drax-psylocke-gamora-2026-05-04.md)
 - [Spec: Event Header Entries](./plans/archived/event-header-entries-archived.md)
@@ -75,6 +81,17 @@ This folder contains all documentation for the Chronicler Engine project.
 - [SillyTavern Prompt System Reference](./reference/sillytavern_prompt_system.md)
 - [Reference: Normal System Prompt](./reference/system_prompt.md)
 - [Specification: Testing Strategy and Architecture](./reference/testing.md)
+
+### `docs/reviews/`
+
+- [Agent Scalability Assessment: Chronicler vs. Marinara](./reviews/agent-scalability-assessment.md)
+- [Cross-Project Architectural Comparison: Chronicler Engine vs. Marinara Engine](./reviews/cross-project-architectural-comparison.md)
+- [Architectural Review: Defensive Architecture & Invariant Enforcement](./reviews/defensive-architecture-review.md)
+- [Holistic Architectural Review: Chronicler Engine](./reviews/holistic-architectural-review.md)
+- [Phase 1: Domain Alignment — Findings](./reviews/holistic-review-phase1-domain-alignment.md)
+- [Phase 2: Structural Forces — Findings](./reviews/holistic-review-phase2-structural-forces.md)
+- [Phase 3: Evolution Stress Test — Findings](./reviews/holistic-review-phase3-evolution-stress.md)
+- [Phase 4: Health Metrics — Baseline](./reviews/holistic-review-phase4-health-metrics.md)
 
 ### `docs/system/`
 

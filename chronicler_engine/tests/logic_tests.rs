@@ -64,7 +64,7 @@ mod tests {
         let state = create_navigation_test_state();
         {
             let mut guard = state.lock().unwrap();
-            guard.current_room_id = "hall".to_string();
+            guard.movement.current_room_id = "hall".to_string();
         }
 
         let guard = state.lock().unwrap();
@@ -82,12 +82,12 @@ mod tests {
             let mut guard = state.lock().unwrap();
             let result = process_directional_movement(&mut guard, "north");
             assert!(result.is_ok());
-            assert_eq!(guard.current_room_id, "hall");
+            assert_eq!(guard.movement.current_room_id, "hall");
         }
 
         // Verify room changed
         let guard = state.lock().unwrap();
-        assert_eq!(guard.current_room_id, "hall");
+        assert_eq!(guard.movement.current_room_id, "hall");
     }
 
     #[test]
@@ -98,7 +98,7 @@ mod tests {
             // Entrance has only North, not West
             let result = process_directional_movement(&mut guard, "west");
             assert!(result.is_err());
-            assert_eq!(guard.current_room_id, "entrance");
+            assert_eq!(guard.movement.current_room_id, "entrance");
         }
     }
 
@@ -110,7 +110,7 @@ mod tests {
             // Should work with room name too
             let result = process_directional_movement(&mut guard, "Main Hall");
             assert!(result.is_ok());
-            assert_eq!(guard.current_room_id, "hall");
+            assert_eq!(guard.movement.current_room_id, "hall");
         }
     }
 
@@ -122,7 +122,7 @@ mod tests {
             let result = attempt_semantic_walk(&mut guard, "kitchen");
             assert!(result.is_ok());
             assert!(result.unwrap().contains("Kitchen"));
-            assert_eq!(guard.current_room_id, "kitchen");
+            assert_eq!(guard.movement.current_room_id, "kitchen");
         }
     }
 
@@ -134,7 +134,7 @@ mod tests {
             let result = attempt_semantic_walk(&mut guard, "nonexistent_room");
             assert!(result.is_err());
             // Room ID should not change
-            assert_eq!(guard.current_room_id, "entrance");
+            assert_eq!(guard.movement.current_room_id, "entrance");
         }
     }
 
@@ -145,7 +145,7 @@ mod tests {
             let mut guard = state.lock().unwrap();
             let result = process_directional_movement(&mut guard, "NORTH");
             assert!(result.is_ok());
-            assert_eq!(guard.current_room_id, "hall");
+            assert_eq!(guard.movement.current_room_id, "hall");
         }
     }
 
@@ -157,7 +157,7 @@ mod tests {
             let result = process_directional_movement(&mut guard, "upwards");
             assert!(result.is_err(), "Invalid direction should return error");
             assert_eq!(
-                guard.current_room_id, "entrance",
+                guard.movement.current_room_id, "entrance",
                 "Room should not change on invalid direction"
             );
         }
@@ -171,7 +171,7 @@ mod tests {
             let result = process_directional_movement(&mut guard, "   ");
             assert!(result.is_err(), "Whitespace direction should return error");
             assert_eq!(
-                guard.current_room_id, "entrance",
+                guard.movement.current_room_id, "entrance",
                 "Room should not change on whitespace direction"
             );
         }
@@ -192,7 +192,7 @@ mod tests {
         let state = create_navigation_test_state();
         {
             let mut guard = state.lock().unwrap();
-            guard.current_room_id = "nonexistent_room".to_string();
+            guard.movement.current_room_id = "nonexistent_room".to_string();
             let result = get_current_room(&guard);
             assert!(result.is_err(), "Invalid room id should return error");
         }
@@ -203,7 +203,7 @@ mod tests {
         let state = create_navigation_test_state();
         {
             let mut guard = state.lock().unwrap();
-            guard.current_room_id = "nonexistent_room".to_string();
+            guard.movement.current_room_id = "nonexistent_room".to_string();
             let exits = get_available_exits(&guard);
             assert!(exits.is_empty(), "Invalid room should return empty exits");
         }

@@ -3,6 +3,7 @@ pub mod action_processing;
 pub mod game_service;
 pub mod logic;
 pub mod parser;
+pub mod state_diagnostics;
 pub mod trigger_eval;
 
 #[cfg(test)]

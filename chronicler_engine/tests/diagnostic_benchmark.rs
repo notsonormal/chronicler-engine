@@ -456,12 +456,12 @@ fn run_scenario(
     );
 
     let guard = state.lock().unwrap();
-    let error_message = match &guard.generation_state.status {
+    let error_message = match &guard.narrative.generation.status {
         GenerationStatus::Error(msg) => msg.clone(),
         GenerationStatus::Idle => "(no error, idle)".to_string(),
         GenerationStatus::Generating => "(still generating)".to_string(),
     };
-    let phase = format!("{:?}", guard.generation_state.phase);
+    let phase = format!("{:?}", guard.narrative.generation.phase);
 
     // We must release the lock before returning the Arc
     drop(guard);
@@ -484,8 +484,8 @@ fn benchmark_llm_http_401() {
     );
 
     let guard = state.lock().unwrap();
-    let _has_dynamic_room = !guard.dynamic_rooms.is_empty();
-    let _current_room = guard.current_room_id.clone();
+    let _has_dynamic_room = !guard.movement.dynamic_rooms.is_empty();
+    let _current_room = guard.movement.current_room_id.clone();
 
     let result = BenchmarkResult {
         scenario: "llm_http_401".to_string(),
@@ -745,9 +745,10 @@ fn benchmark_quantifier_complete_failure() {
     );
 
     let guard = state.lock().unwrap();
-    let npc_count = guard.npcs_in_area.len();
+    let npc_count = guard.scene.npcs_in_area.len();
     let has_system_log = guard
-        .narration_history
+        .narrative
+        .history
         .iter()
         .any(|e| e.log_type == LogType::System && e.text.contains("NPC detection uncertain"));
 
@@ -799,13 +800,15 @@ fn benchmark_quantifier_low_confidence() {
     );
 
     let guard = state.lock().unwrap();
-    let npc_count = guard.npcs_in_area.len();
+    let npc_count = guard.scene.npcs_in_area.len();
     let has_narration = guard
-        .narration_history
+        .narrative
+        .history
         .iter()
         .any(|e| e.log_type == LogType::Narration);
     let has_system_log = guard
-        .narration_history
+        .narrative
+        .history
         .iter()
         .any(|e| e.log_type == LogType::System && e.text.contains("NPC detection uncertain"));
 
@@ -853,11 +856,12 @@ fn benchmark_dynamic_room_creation() {
     );
 
     let guard = state.lock().unwrap();
-    let current_room = guard.current_room_id.clone();
+    let current_room = guard.movement.current_room_id.clone();
     let is_dynamic = current_room.starts_with("dynamic_");
-    let dynamic_room_count = guard.dynamic_rooms.len();
+    let dynamic_room_count = guard.movement.dynamic_rooms.len();
     let has_system_log = guard
-        .narration_history
+        .narrative
+        .history
         .iter()
         .any(|e| e.log_type == LogType::System && e.text.contains("Entered unknown location"));
 
@@ -992,10 +996,11 @@ fn benchmark_trigger_wrong_room_id() {
 
     let guard = state.lock().unwrap();
     let trigger_fired = guard
-        .narration_history
+        .narrative
+        .history
         .iter()
         .any(|e| e.text.contains("stranger nods"));
-    let error_msg = match &guard.generation_state.status {
+    let error_msg = match &guard.narrative.generation.status {
         GenerationStatus::Error(msg) => msg.clone(),
         _ => "(no error)".to_string(),
     };
@@ -1006,7 +1011,7 @@ fn benchmark_trigger_wrong_room_id() {
         injected_failure: "Trigger scoped to wrong room_id ('wrong_room' instead of 'room1')"
             .to_string(),
         error_message: error_msg.clone(),
-        generation_phase: format!("{:?}", guard.generation_state.phase),
+        generation_phase: format!("{:?}", guard.narrative.generation.phase),
         scores: DiagnosticScores {
             error_specificity: 1,
             state_visibility: 4,
@@ -1091,10 +1096,13 @@ fn benchmark_state_stuck_generating() {
     );
 
     let guard = state.lock().unwrap();
-    let is_generating = guard.generation_state.status.is_generating();
-    let is_idle = matches!(guard.generation_state.status, GenerationStatus::Idle);
-    let has_error = matches!(guard.generation_state.status, GenerationStatus::Error(_));
-    let error_msg = match &guard.generation_state.status {
+    let is_generating = guard.narrative.generation.status.is_generating();
+    let is_idle = matches!(guard.narrative.generation.status, GenerationStatus::Idle);
+    let has_error = matches!(
+        guard.narrative.generation.status,
+        GenerationStatus::Error(_)
+    );
+    let error_msg = match &guard.narrative.generation.status {
         GenerationStatus::Error(msg) => msg.clone(),
         _ => "(no error)".to_string(),
     };
@@ -1104,7 +1112,7 @@ fn benchmark_state_stuck_generating() {
         category: "State Management".to_string(),
         injected_failure: "Trigger narration fails after main narration succeeds".to_string(),
         error_message: error_msg.clone(),
-        generation_phase: format!("{:?}", guard.generation_state.phase),
+        generation_phase: format!("{:?}", guard.narrative.generation.phase),
         scores: DiagnosticScores {
             error_specificity: if has_error { 7 } else { 1 },
             state_visibility: if is_idle || has_error { 7 } else { 2 },
@@ -1115,12 +1123,12 @@ fn benchmark_state_stuck_generating() {
         root_cause_discoverable_without_logs: is_idle || has_error,
         notes: format!(
             "After trigger narration failure: status={:?}, idle={}, error={}, generating={}. The error message '{}' is set and phase preserved at failure point ({:?}). A system log contains the detailed trigger failure.",
-            guard.generation_state.status,
+            guard.narrative.generation.status,
             is_idle,
             has_error,
             is_generating,
             error_msg,
-            guard.generation_state.phase
+            guard.narrative.generation.phase
         ),
     };
 
