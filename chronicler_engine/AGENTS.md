@@ -155,6 +155,7 @@ timeout = 10
 python build.py             # Fast validation (fmt + clippy + guardrails + debug build + tests)
 python build.py --release   # Release build + tests + package
 cargo test                  # All tests
+cargo test <test_name>      # Run a specific test (or pattern)
 cargo run -- --world redmist_estate --port 3000
 ```
 

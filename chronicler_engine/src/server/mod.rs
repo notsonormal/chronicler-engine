@@ -43,8 +43,12 @@ fn build_router(app_state: AppState) -> Router {
             "/status/reset-generating",
             post(fragments::reset_generating_handler),
         )
-        // History edit & retry endpoints
+        // History edit, delete & retry endpoints
         .route("/history/:id", post(fragments::edit_history_handler))
+        .route(
+            "/history/:id/delete",
+            post(fragments::delete_history_handler),
+        )
         .route("/retry", post(fragments::retry_handler))
         // Settings endpoints
         .route(

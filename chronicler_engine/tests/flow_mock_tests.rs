@@ -192,8 +192,12 @@ mod tests {
         // Both submissions should have created Input entries (the server accepts both)
         // but the frontend button should be disabled during generation,
         // preventing the second from being sent.
-        let has_first = input_entries.iter().any(|t| t.contains("alpha-beta-unique-1"));
-        let has_second = input_entries.iter().any(|t| t.contains("gamma-delta-unique-2"));
+        let has_first = input_entries
+            .iter()
+            .any(|t| t.contains("alpha-beta-unique-1"));
+        let has_second = input_entries
+            .iter()
+            .any(|t| t.contains("gamma-delta-unique-2"));
 
         assert!(has_first, "First command should be processed");
 

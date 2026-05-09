@@ -280,12 +280,13 @@ mod tests {
         }
 
         // Check server state via debug endpoint
-        let debug_state: serde_json::Value = reqwest::get(format!("http://127.0.0.1:{port}/debug/state"))
-            .await
-            .expect("Failed to fetch debug state")
-            .json()
-            .await
-            .expect("Failed to parse debug state");
+        let debug_state: serde_json::Value =
+            reqwest::get(format!("http://127.0.0.1:{port}/debug/state"))
+                .await
+                .expect("Failed to fetch debug state")
+                .json()
+                .await
+                .expect("Failed to parse debug state");
 
         let times_met = debug_state
             .pointer("/character_state/forest_ranger/times_met")
@@ -318,7 +319,11 @@ mod tests {
         let npcs_in_area: Vec<String> = debug_state
             .pointer("/npcs_in_area")
             .and_then(|v| v.as_array())
-            .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
             .unwrap_or_default();
         assert!(
             npcs_in_area.contains(&"forest_ranger".to_string()),

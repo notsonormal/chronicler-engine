@@ -95,7 +95,10 @@ mod tests {
 
             // Verify we can still interact with the server
             let entries = count_log_entries(&page).await;
-            assert!(entries >= 2, "Should have at least 2 log entries after two commands");
+            assert!(
+                entries >= 2,
+                "Should have at least 2 log entries after two commands"
+            );
         })
         .await;
     }

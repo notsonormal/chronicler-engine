@@ -165,13 +165,14 @@ cargo test -- --test-threads=1
 - Validation (empty command rejection)
 - Settings UI integration (16+ tests)
 
-**e2e_tests.rs** (22 tests):
+**e2e_tests.rs** (24 tests):
 - Page loads, UI structure
 - Action area elements
 - Story log functionality
 - Layout positioning
 - Visual sidebar
 - Edit mode and retry functionality
+- Delete button exists and removes messages
 
 **flow_mock_tests.rs** (5 tests):
 - Initial load (header, story-log, status)

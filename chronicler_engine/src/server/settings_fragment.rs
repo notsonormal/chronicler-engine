@@ -55,7 +55,7 @@ fn html_escape(s: &str) -> String {
             </div>
         </div>
         <div class="card-details">
-            {{ conn.provider|fmt("{:?}") }} â€” {{ conn.model }}
+            {{ conn.provider|fmt("{:?}") }} - {{ conn.model }}
         </div>
         <div class="card-actions">
             <button hx-get="/fragment/connections/{{ conn.id }}/edit" hx-target="closest .connection-card" hx-swap="outerHTML">Edit</button>
@@ -95,7 +95,7 @@ fn html_escape(s: &str) -> String {
             <input type="text" id="conn_base_url" name="conn_base_url" placeholder="(optional)" />
         </div>
         <div class="form-group">
-            <label>
+            <label class="checkbox-label">
                 <input type="checkbox" name="single_user_message" value="true" />
                 Single User Message (merge system + user for models that ignore system prompts)
             </label>
@@ -123,7 +123,7 @@ fn html_escape(s: &str) -> String {
                 </select>
             </div>
             <div class="form-group">
-                <label>
+                <label class="checkbox-label">
                     <input type="checkbox" name="enable_auto_check" value="true" {% if enable_auto_check %}checked{% endif %} />
                     Check before sending to LLM
                 </label>
@@ -439,7 +439,7 @@ pub async fn delete_connection_handler(
         return Html(format!("<span class='error'>Save failed: {e}</span>"));
     }
 
-    // Return empty string â€” HTMX will remove the card
+    // Return empty string - HTMX will remove the card
     Html(String::new())
 }
 
@@ -546,7 +546,7 @@ fn connection_card_html(conn: &Connection, is_narrator: bool, is_quantifier: boo
         <span class="card-title">{}</span>
         <div class="card-badges">{}</div>
     </div>
-    <div class="card-details">{:?} â€” {}</div>
+    <div class="card-details">{:?} - {}</div>
     <div class="card-actions">{}</div>
 </div>"#,
         html_escape(&conn.name),
@@ -596,7 +596,7 @@ fn connection_edit_form_html(conn: &Connection) -> String {
             <input type="text" id="edit-base-url-{}" name="conn_base_url" value="{}" placeholder="(optional)" />
         </div>
         <div class="form-group">
-            <label>
+            <label class="checkbox-label">
                 <input type="checkbox" name="single_user_message" value="true" {} />
                 Single User Message (merge system + user for models that ignore system prompts)
             </label>

@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-07 22:58 UTC*
+*Index last generated: 2026-05-09 17:32 UTC*
 
 ### Root files
 
@@ -31,21 +31,27 @@ This folder contains all documentation for the Chronicler Engine project.
 ### `docs/plans/`
 
 - [LLM Infrastructure Improvements](./plans/llm-infrastructure-improvements.md)
+- [Implementation Plan: Message Action Buttons Redesign](./plans/message-buttons-redesign-plan.md)
+- [Spec: Message Action Buttons Redesign](./plans/message-buttons-redesign.md)
+- [AI Steering & Guided Generation](./plans/steering-and-guided-generation.md)
 - [Structured Error Taxonomy](./plans/structured-error-taxonomy.md)
 
 ### `docs/plans/archived/`
 
 - [Plan: Spell & Grammar Check Integration](./plans/archived/ant-man-black-lightning-bobbi-morse.md)
 - [Plan: Raise `game_service.rs` Coverage to 80%+ via Refactoring](./plans/archived/coverage-game-service-archived.md)
+- [Fix: Show LLM Text Immediately, Delay Trigger Text Until Generated](./plans/archived/crimson-avenger-robin-iceman.md)
 - [Plan: Improve Quantifier Prompt for Movement Certainty](./plans/archived/donna-troy-hercules-warpath-2026-05-03.md)
 - [Plan: Dependency-Inject LLM/Quantifier Backends into DefaultGameService](./plans/archived/drax-psylocke-gamora-2026-05-04.md)
 - [Spec: Event Header Entries](./plans/archived/event-header-entries-archived.md)
+- [Plan: Fix Settings Panel Encoding and Checkbox Spacing](./plans/archived/fix-settings-encoding-checkbox-spacing-2026-05-09.md)
 - [Plan: Granular Status Phases for LLM Pipeline](./plans/archived/granular-status-phases-archived.md)
 - [Implementation Plan: Marinara-Style Prompt Architecture](./plans/archived/hercules-she-hulk-doctor-fate-20260503.md)
 - [Implementation Plan: Fix Gemma 4 Thinking Suffix Corruption](./plans/archived/iceman-thor-booster-gold-2026-05-04.md)
 - [Implementation Plan: Isolate Slow LLM Tests](./plans/archived/lockjaw-aquaman-sam-alexander-2026-05-03.md)
 - [Plan: Unify PHI Layer — Remove PhiMode::Continuation](./plans/archived/luke-cage-pantha-morbius-2026-05-03.md)
 - [Plan: Unify PHI Layer — Remove PhiMode::Continuation](./plans/archived/luke-cage-pantha-morbius-20260503.md)
+- [Implementation Plan: Message Action Buttons Redesign](./plans/archived/message-buttons-redesign-plan-20260509.md)
 - [Plan: Auto-Generated Index for `chronicler_engine/docs`](./plans/archived/obsidian-doctor-mid-nite-kid-flash-2026-05-05.md)
 - [Async Concurrency & Codebase Hygiene](./plans/archived/polaris-steel-sentry-2026-05-05.md)
 - [Spec: Align chronicler_engine Prompts with Marinara Engine Battle-Tested Patterns](./plans/archived/prompt-alignment-with-marinara-2026-05-04.md)

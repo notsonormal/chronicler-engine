@@ -521,6 +521,55 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_delete_history_handler_success() {
+        let state = create_test_state();
+
+        // Add a log entry first
+        let entry_id = {
+            let mut guard = state.lock().unwrap();
+            guard.add_log(
+                "Test message".to_string(),
+                Some("Test".to_string()),
+                chronicler_engine::model::state::LogType::Narration,
+            );
+            guard.narration_history.last().unwrap().id
+        };
+
+        let app = create_app_for_testing(state.clone());
+
+        let req = Request::builder()
+            .uri(format!("/history/{entry_id}/delete"))
+            .method(http::Method::POST)
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(req).await.unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // Verify the entry was deleted
+        let guard = state.lock().unwrap();
+        assert!(
+            !guard.narration_history.iter().any(|e| e.id == entry_id),
+            "Log entry should be deleted"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_delete_history_handler_not_found() {
+        let state = create_test_state();
+        let app = create_app_for_testing(state);
+
+        let req = Request::builder()
+            .uri("/history/9999/delete")
+            .method(http::Method::POST)
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(req).await.unwrap();
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
     async fn test_retry_handler_no_input() {
         let state = create_test_state();
         let app = create_app_for_testing(state);
@@ -1475,7 +1524,10 @@ mod text_check_tests {
     #[tokio::test]
     async fn test_action_check_disabled_forwards_to_action() {
         let state = create_test_state();
-        let app = create_app_for_testing_with_settings(state, text_check_settings(TextCheckMode::Disabled));
+        let app = create_app_for_testing_with_settings(
+            state,
+            text_check_settings(TextCheckMode::Disabled),
+        );
 
         let req = Request::builder()
             .uri("/action/check")
@@ -1556,7 +1608,10 @@ mod text_check_tests {
     #[tokio::test]
     async fn test_check_text_disabled() {
         let state = create_test_state();
-        let app = create_app_for_testing_with_settings(state, text_check_settings(TextCheckMode::Disabled));
+        let app = create_app_for_testing_with_settings(
+            state,
+            text_check_settings(TextCheckMode::Disabled),
+        );
 
         let req = Request::builder()
             .uri("/check-text")
@@ -1602,7 +1657,8 @@ mod text_check_tests {
     #[tokio::test]
     async fn test_check_text_finds_issues() {
         let state = create_test_state();
-        let app = create_app_for_testing_with_settings(state, text_check_settings(TextCheckMode::Spell));
+        let app =
+            create_app_for_testing_with_settings(state, text_check_settings(TextCheckMode::Spell));
 
         let req = Request::builder()
             .uri("/check-text")
@@ -1633,7 +1689,10 @@ mod text_check_tests {
     #[tokio::test]
     async fn test_check_text_no_issues() {
         let state = create_test_state();
-        let app = create_app_for_testing_with_settings(state, text_check_settings(TextCheckMode::SpellGrammar));
+        let app = create_app_for_testing_with_settings(
+            state,
+            text_check_settings(TextCheckMode::SpellGrammar),
+        );
 
         let req = Request::builder()
             .uri("/check-text")

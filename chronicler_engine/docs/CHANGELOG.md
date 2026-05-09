@@ -3,6 +3,40 @@
 ## Unreleased
 
 ### Added
+- **Message Action Buttons Redesign** — Completed implementation of top-right message action bar
+  - `delete_log(id: u64)` method added to `GameState` for safe history removal by ID
+  - `POST /history/:id/delete` endpoint for HTMX-compatible deletion
+  - `deleteMessage(id)` JavaScript handler with browser confirmation dialog
+  - All action buttons (edit, delete, check, retry) moved to `.message-actions` container at top-right of message bubbles
+  - `.message-header` flex layout with `.message-info` (sender/timestamp) on left and `.message-actions` on right
+  - `.action-btn` CSS with subtle background, per-button hover colors (cyan edit, pink delete, green check, orange retry)
+  - Delete button appears on ALL entry types (narration, dialogue, system, input, event, location)
+  - Template tests: `test_story_log_template_has_message_actions`, `test_story_log_template_input_has_check_button`, `test_story_log_template_renders_event_entry`
+  - E2E tests: `test_delete_button_exists_on_entries`, `test_delete_removes_message`
+  - Component tests: `test_delete_history_handler_success`, `test_delete_history_handler_not_found`
+  - Unit test: `test_delete_log` in `state_tests.rs`
+
+### Fixed
+- **Settings panel encoding and checkbox spacing** - Fixed UI defects in the settings panel
+  - Replaced corrupted UTF-8 em-dash (`â€"`) with simple hyphen (` - `) in provider/model display strings
+  - Added explicit `.checkbox-label` class to checkbox labels for better browser compatibility
+  - Updated CSS to target `.checkbox-label` instead of `label:has(> input[type="checkbox"])`
+  - Increased checkbox label gap from `var(--spacing-xs)` (4px) to `var(--spacing-sm)` (8px)
+
+### Fixed
+- **Test environment isolation** - Fixed tests that failed when `OPENROUTER_API_KEY` env var is set
+  - `settings_tests::test_connection_resolve_api_key` now asserts against the env var value instead of hardcoded `None`
+  - `game_service_tests` that relied on `DefaultGameService::new()` having no API key now use `DefaultGameService::with_backends()` with explicit `MockBackend::failing()`
+  - Tests are now independent of host environment variables
+
+### Fixed
+- **Sequential trigger display** - Main narration and trigger text now appear sequentially instead of simultaneously
+  - Split `evaluate_and_narrate_triggers` into three phases: evaluate (lock) → LLM (unlock) → commit (lock)
+  - Frontend can now poll and display the main narration while the trigger continuation is still generating
+  - `execute_freeaction_impl` returns `Option<TriggerContinuationRequest>` for orchestration in `game_service.rs`
+  - New `commit_trigger_narration()` function adds event header + narration logs and marks triggers fired
+
+### Added
 - **Spell & Grammar Check Integration** - Pre-flight text checking for player input via harper-core
   - New `narrative/text_check/` module: `HarperBackend`, `CheckResult`, `CheckIssue`, `IssueKind`
   - `TextCheckMode` enum: `Disabled`, `Spell`, `Grammar`, `SpellGrammar`

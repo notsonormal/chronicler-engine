@@ -73,6 +73,38 @@ fn test_story_log_template_escapes_html() {
 }
 
 #[test]
+fn test_story_log_template_has_message_actions() {
+    let entries = vec![LogEntry {
+        id: 1,
+        sender: Some("Game Master".to_string()),
+        text: "Welcome!".to_string(),
+        log_type: LogType::Narration,
+        timestamp: Utc::now(),
+    }];
+    let template = StoryLogTemplate::new(&entries);
+    let rendered = template.render().unwrap();
+    assert!(rendered.contains("message-header"));
+    assert!(rendered.contains("message-actions"));
+    assert!(rendered.contains("edit-btn"));
+    assert!(rendered.contains("delete-btn"));
+}
+
+#[test]
+fn test_story_log_template_input_has_check_button() {
+    let entries = vec![LogEntry {
+        id: 1,
+        sender: Some("Player".to_string()),
+        text: "look around".to_string(),
+        log_type: LogType::Input,
+        timestamp: Utc::now(),
+    }];
+    let template = StoryLogTemplate::new(&entries);
+    let rendered = template.render().unwrap();
+    assert!(rendered.contains("check-btn"));
+    assert!(rendered.contains("delete-btn"));
+}
+
+#[test]
 fn test_story_log_template_renders_event_entry() {
     let entries = vec![LogEntry {
         id: 1,
@@ -86,8 +118,10 @@ fn test_story_log_template_renders_event_entry() {
     assert!(rendered.contains("event-header"));
     assert!(rendered.contains("Gabriella Introduction"));
     assert!(rendered.contains("event-timestamp"));
-    // Event entries should not have edit/retry buttons
-    assert!(!rendered.contains("edit-btn"));
+    // Event entries should have edit/delete buttons but no check/retry
+    assert!(rendered.contains("edit-btn"));
+    assert!(rendered.contains("delete-btn"));
+    assert!(!rendered.contains("check-btn"));
     assert!(!rendered.contains("retry-btn"));
 }
 

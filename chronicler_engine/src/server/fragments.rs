@@ -589,6 +589,23 @@ pub async fn edit_history_handler(
 }
 
 /// [DOC: docs/system/game_flow.md]
+pub async fn delete_history_handler(
+    State(state): State<AppState>,
+    axum::extract::Path(id): axum::extract::Path<u64>,
+) -> (StatusCode, String) {
+    let result = state.state.lock().map(|mut guard| guard.delete_log(id));
+
+    match result {
+        Ok(Ok(())) => (StatusCode::OK, String::new()),
+        Ok(Err(e)) => (StatusCode::NOT_FOUND, render_error(&e.to_string())),
+        Err(_) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            render_error("Failed to lock state"),
+        ),
+    }
+}
+
+/// [DOC: docs/system/game_flow.md]
 pub async fn retry_handler(State(state): State<AppState>) -> (StatusCode, String) {
     let has_input = state
         .state

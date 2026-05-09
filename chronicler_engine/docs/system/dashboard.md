@@ -32,8 +32,11 @@ Horizontal split into story context and visual context:
     - Character name prominent above message (bold, larger)
     - Subtle timestamp (HH:MM format, small gray)
     - Fade-in animation for new messages
-    - Edit button (✎) on all non-location, non-event entries
-    - Retry button (↻) on last AI message only
+    - Action buttons at top-right of every message (always visible):
+      - Edit button (✎) on all entries
+      - Delete button (🗑) on all entries
+      - Check button (✓) on input entries (spellcheck)
+      - Retry button (↻) on last AI message only
 - **Visual Sidebar (20%)**:
   - Location Image (top): Full-width location image, max-height 200px, object-fit contain
   - NPC Portraits (bottom): Horizontal scrollable row, 80×80px square images, object-fit cover
@@ -116,11 +119,23 @@ HTML template renders with `data-raw-text` attribute for inline editing:
 
 ```html
 <div class="log-entry" data-id="{{ entry.id }}" data-raw-text="{{ entry.raw_text }}">
+    <div class="message-header">
+        <div class="message-info">
+            <span class="timestamp">HH:MM</span>
+            <span class="sender">Sender:</span>
+        </div>
+        <div class="message-actions">
+            <button class="action-btn edit-btn" title="Edit">✎</button>
+            <button class="action-btn delete-btn" title="Delete">🗑</button>
+            {% if input_entry %}
+            <button class="action-btn check-btn" title="Check">✓</button>
+            {% endif %}
+            {% if last_ai_message %}
+            <button class="action-btn retry-btn" title="Retry">↻</button>
+            {% endif %}
+        </div>
+    </div>
     <span class="text">{{ entry.text }}</span>
-    <button class="edit-btn">✏️</button>
-    {% if last_ai_message %}
-    <button class="retry-btn">🔄</button>
-    {% endif %}
 </div>
 ```
 
@@ -132,6 +147,13 @@ HTML template renders with `data-raw-text` attribute for inline editing:
 4. Edit text in textarea (uses `data-raw-text`, not HTML textContent)
 5. Click save → textarea value sent to server, stored as raw text
 6. Click cancel → restore original text, resume polling
+
+## Delete Flow
+
+1. Click delete button → browser confirmation dialog
+2. On confirm → POST to `/history/:id/delete`
+3. Server removes entry from `narration_history`
+4. Client refreshes story log via HTMX polling or manual trigger
 
 ## Button Logic (JavaScript)
 1. Monitor status element changes via MutationObserver or HTMX events
@@ -158,6 +180,11 @@ HTML template renders with `data-raw-text` attribute for inline editing:
 - `.log-entry .text` - Message content
 - `.log-entry .edit-btn` - Edit pencil icon, always visible (opacity: 1)
 - `.log-entry .retry-btn` - Retry refresh icon, last AI message only
+- `.log-entry .delete-btn` - Delete trash icon, always visible
+- `.log-entry .check-btn` - Check icon, input entries only
+- `.message-header` - Flex container for message info + actions
+- `.message-actions` - Flex container for action buttons (top-right)
+- `.action-btn` - Base style for all message action buttons
 - `.edit-textarea` - Inline edit textarea, full width, no resize
 - `.save-btn` - Save/confirm button (green on hover)
 - `.cancel-btn` - Cancel button (red on hover)

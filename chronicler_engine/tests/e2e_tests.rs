@@ -436,19 +436,40 @@ mod tests {
     #[tokio::test]
     async fn test_edit_button_exists_on_entries() {
         with_test_page(CONFIG_PATH, TEST_WORLD, |page, _port| async move {
-            // Edit buttons should exist on non-location entries
+            // Edit buttons should exist on all entries
             let edit_buttons: i32 = page
                 .evaluate::<(), i32>(
-                    "document.querySelectorAll('.log-entry:not(.location) .edit-btn').length",
+                    "document.querySelectorAll('.log-entry .edit-btn').length",
                     None,
                 )
                 .await
                 .unwrap();
 
-            // There should be at least one edit button (entry with text, not location header)
+            // There should be at least one edit button
             assert!(
                 edit_buttons > 0,
                 "Edit buttons should exist on story entries"
+            );
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn test_delete_button_exists_on_entries() {
+        with_test_page(CONFIG_PATH, TEST_WORLD, |page, _port| async move {
+            // Delete buttons should exist on all entries
+            let delete_buttons: i32 = page
+                .evaluate::<(), i32>(
+                    "document.querySelectorAll('.log-entry .delete-btn').length",
+                    None,
+                )
+                .await
+                .unwrap();
+
+            // There should be at least one delete button
+            assert!(
+                delete_buttons > 0,
+                "Delete buttons should exist on story entries"
             );
         })
         .await;
@@ -532,10 +553,11 @@ mod tests {
                 "Original text should not be empty, got: '{original_text}'"
             );
 
-            // Click edit
+            // Click edit on the same non-location entry
             page.evaluate::<(), bool>(
                 r#"(() => {
-                    const btn = document.querySelector('.edit-btn');
+                    const entry = document.querySelector('.log-entry:not(.location)');
+                    const btn = entry?.querySelector('.edit-btn');
                     if (btn) { btn.click(); return true; }
                     return false;
                 })()"#,
@@ -606,10 +628,11 @@ mod tests {
                 "Should have polling trigger before edit"
             );
 
-            // Click edit
+            // Click edit on the same non-location entry
             page.evaluate::<(), bool>(
                 r#"(() => {
-                    const btn = document.querySelector('.edit-btn');
+                    const entry = document.querySelector('.log-entry:not(.location)');
+                    const btn = entry?.querySelector('.edit-btn');
                     if (btn) { btn.click(); return true; }
                     return false;
                 })()"#,
@@ -663,6 +686,88 @@ mod tests {
                 trigger_after.contains("every"),
                 "Should have polling trigger after cancel"
             );
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn test_delete_removes_message() {
+        with_test_page(CONFIG_PATH, TEST_WORLD, |page, _port| async move {
+            // Get initial entry count
+            let initial_count: i32 = page
+                .evaluate::<(), i32>(
+                    "document.querySelectorAll('#story-log .log-entry').length",
+                    None,
+                )
+                .await
+                .unwrap();
+
+            assert!(initial_count > 0, "Should have at least one log entry");
+
+            // Get the ID of the first deletable entry (one with a delete button)
+            let first_entry_id: String = page
+                .evaluate::<(), String>(
+                    r#"(() => {
+                        const entry = document.querySelector('.log-entry[data-id]');
+                        return entry ? entry.getAttribute('data-id') : '';
+                    })()"#,
+                    None,
+                )
+                .await
+                .unwrap();
+
+            assert!(
+                !first_entry_id.is_empty(),
+                "Should find an entry with data-id"
+            );
+
+            // Override confirm to always return true
+            page.evaluate::<(), ()>("(() => { window.confirm = () => true; })()", None)
+                .await
+                .unwrap();
+
+            // Click the delete button on the first entry
+            page.evaluate::<(), bool>(
+                r#"(() => {
+                    const btn = document.querySelector('.log-entry .delete-btn');
+                    if (btn) { btn.click(); return true; }
+                    return false;
+                })()"#,
+                None,
+            )
+            .await
+            .unwrap();
+
+            // Wait for the entry count to decrease
+            let mut found = false;
+            for _ in 0..50 {
+                let current_count: i32 = page
+                    .evaluate::<(), i32>(
+                        "document.querySelectorAll('#story-log .log-entry').length",
+                        None,
+                    )
+                    .await
+                    .unwrap();
+
+                if current_count < initial_count {
+                    found = true;
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            }
+
+            assert!(found, "Entry count should decrease after delete");
+
+            // Verify the specific entry no longer exists
+            let entry_exists: bool = page
+                .evaluate::<(), bool>(
+                    &format!("document.querySelector('[data-id=\"{first_entry_id}\"]') !== null"),
+                    None,
+                )
+                .await
+                .unwrap();
+
+            assert!(!entry_exists, "Deleted entry should no longer exist in DOM");
         })
         .await;
     }
@@ -729,7 +834,8 @@ mod tests {
             // Click edit
             page.evaluate::<(), bool>(
                 r#"(() => {
-                    const btn = document.querySelector('.edit-btn');
+                    const entry = document.querySelector('.log-entry:not(.location)');
+                    const btn = entry?.querySelector('.edit-btn');
                     if (btn) { btn.click(); return true; }
                     return false;
                 })()"#,

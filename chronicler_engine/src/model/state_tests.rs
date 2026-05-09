@@ -138,6 +138,26 @@ fn test_replace_last_ai_response_no_ai() {
 }
 
 #[test]
+fn test_delete_log() {
+    let mut state = TestGameState::in_room("room1");
+
+    state.add_log("Message 1".into(), Some("A".into()), LogType::Narration);
+    state.add_log("Message 2".into(), Some("B".into()), LogType::Narration);
+    state.add_log("Message 3".into(), Some("C".into()), LogType::Narration);
+
+    let id_to_delete = state.narration_history[1].id;
+
+    // Verify delete works
+    state.delete_log(id_to_delete).unwrap();
+    assert_eq!(state.narration_history.len(), 2);
+    assert_eq!(state.narration_history[0].text, "Message 1");
+    assert_eq!(state.narration_history[1].text, "Message 3");
+
+    // Verify delete fails for invalid ID
+    assert!(state.delete_log(9999).is_err());
+}
+
+#[test]
 fn test_generating_guard_sets_is_generating_on_construct() {
     let state = Arc::new(std::sync::Mutex::new(TestGameState::in_room("room1")));
 
