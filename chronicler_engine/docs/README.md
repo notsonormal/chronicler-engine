@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-09 15:09 UTC*
+*Index last generated: 2026-05-09 17:26 UTC*
 
 ### Root files
 
@@ -31,6 +31,8 @@ This folder contains all documentation for the Chronicler Engine project.
 ### `docs/plans/`
 
 - [LLM Infrastructure Improvements](./plans/llm-infrastructure-improvements.md)
+- [Implementation Plan: Message Action Buttons Redesign](./plans/message-buttons-redesign-plan.md)
+- [Spec: Message Action Buttons Redesign](./plans/message-buttons-redesign.md)
 - [AI Steering & Guided Generation](./plans/steering-and-guided-generation.md)
 - [Structured Error Taxonomy](./plans/structured-error-taxonomy.md)
 
@@ -49,6 +51,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Implementation Plan: Isolate Slow LLM Tests](./plans/archived/lockjaw-aquaman-sam-alexander-2026-05-03.md)
 - [Plan: Unify PHI Layer — Remove PhiMode::Continuation](./plans/archived/luke-cage-pantha-morbius-2026-05-03.md)
 - [Plan: Unify PHI Layer — Remove PhiMode::Continuation](./plans/archived/luke-cage-pantha-morbius-20260503.md)
+- [Implementation Plan: Message Action Buttons Redesign](./plans/archived/message-buttons-redesign-plan-20260509.md)
 - [Plan: Auto-Generated Index for `chronicler_engine/docs`](./plans/archived/obsidian-doctor-mid-nite-kid-flash-2026-05-05.md)
 - [Async Concurrency & Codebase Hygiene](./plans/archived/polaris-steel-sentry-2026-05-05.md)
 - [Spec: Align chronicler_engine Prompts with Marinara Engine Battle-Tested Patterns](./plans/archived/prompt-alignment-with-marinara-2026-05-04.md)

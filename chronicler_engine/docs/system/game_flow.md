@@ -131,7 +131,7 @@ During LLM processing, the UI displays granular status phases instead of a singl
 - An optimistic "Thinking..." is shown immediately on form submit before the first poll response
 
 ### Polling-based Updates
-- HTMX automatically polls every 5 seconds for story-log updates
+- HTMX automatically polls every 2 seconds for story-log updates
 - Status-display polls `/status/generating` for button state
 - `/status/generating` returns phase endpoint values (`idle`, `narrating`, `quantifying`, `generating-event`)
 - No manual reconnection needed

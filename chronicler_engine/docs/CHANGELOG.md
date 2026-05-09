@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### Added
+- **Message Action Buttons Redesign** — Completed implementation of top-right message action bar
+  - `delete_log(id: u64)` method added to `GameState` for safe history removal by ID
+  - `POST /history/:id/delete` endpoint for HTMX-compatible deletion
+  - `deleteMessage(id)` JavaScript handler with browser confirmation dialog
+  - All action buttons (edit, delete, check, retry) moved to `.message-actions` container at top-right of message bubbles
+  - `.message-header` flex layout with `.message-info` (sender/timestamp) on left and `.message-actions` on right
+  - `.action-btn` CSS with subtle background, per-button hover colors (cyan edit, pink delete, green check, orange retry)
+  - Delete button appears on ALL entry types (narration, dialogue, system, input, event, location)
+  - Template tests: `test_story_log_template_has_message_actions`, `test_story_log_template_input_has_check_button`, `test_story_log_template_renders_event_entry`
+  - E2E tests: `test_delete_button_exists_on_entries`, `test_delete_removes_message`
+  - Component tests: `test_delete_history_handler_success`, `test_delete_history_handler_not_found`
+  - Unit test: `test_delete_log` in `state_tests.rs`
+
 ### Fixed
 - **Settings panel encoding and checkbox spacing** - Fixed UI defects in the settings panel
   - Replaced corrupted UTF-8 em-dash (`â€"`) with simple hyphen (` - `) in provider/model display strings

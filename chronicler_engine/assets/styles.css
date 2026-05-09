@@ -762,21 +762,71 @@ body {
     transform: translateY(0);
 }
 
-/* Log Entry Edit Button */
-.log-entry .edit-btn {
-    opacity: 1;
-    background: transparent;
-    border: none;
-    color: var(--color-text-muted);
-    cursor: pointer;
-    font-size: 18px;
-    padding: 4px 8px;
-    margin-left: var(--spacing-sm);
-    transition: opacity var(--transition-fast), color var(--transition-fast);
+/* Message Header with Action Buttons */
+.message-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-xs);
 }
 
-.log-entry .edit-btn:hover {
+.message-info {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--spacing-xs);
+    flex: 1;
+    min-width: 0;
+}
+
+.message-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+/* Action Buttons (Edit, Delete, Check, Retry) */
+.action-btn {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 2px 6px;
+    min-width: 24px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.action-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.25);
+}
+
+.action-btn.edit-btn:hover {
     color: var(--color-accent-cyan);
+    border-color: var(--color-accent-cyan);
+}
+
+.action-btn.delete-btn:hover {
+    color: var(--color-accent-pink);
+    border-color: var(--color-accent-pink);
+}
+
+.action-btn.check-btn:hover {
+    color: var(--color-accent-green);
+    border-color: var(--color-accent-green);
+}
+
+.action-btn.retry-btn:hover {
+    color: var(--color-accent-orange);
+    border-color: var(--color-accent-orange);
 }
 
 /* Inline Edit Textarea */
@@ -798,53 +848,31 @@ body {
 
 /* Save/Cancel Buttons */
 .save-btn, .cancel-btn {
-    background: transparent;
-    border: none;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
     cursor: pointer;
     font-size: 14px;
     padding: 2px 6px;
-    margin-left: var(--spacing-xs);
-    transition: opacity var(--transition-fast);
+    min-width: 24px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+    color: var(--color-text-muted);
 }
 
 .save-btn:hover {
+    background: rgba(0, 255, 0, 0.15);
+    border-color: var(--color-accent-green);
     color: var(--color-accent-green);
 }
 
 .cancel-btn:hover {
+    background: rgba(255, 68, 68, 0.15);
+    border-color: var(--color-accent-red);
     color: var(--color-accent-red);
-}
-
-/* Retry Button (inline on messages) */
-.retry-btn {
-    background: transparent;
-    border: none;
-    color: var(--color-text-muted);
-    cursor: pointer;
-    font-size: 18px;
-    padding: 4px 8px;
-    margin-left: var(--spacing-xs);
-    transition: opacity var(--transition-fast);
-}
-
-.retry-btn:hover {
-    color: var(--color-accent-cyan);
-}
-
-/* Check Button (on log entries) */
-.check-btn {
-    background: transparent;
-    border: none;
-    color: var(--color-text-muted);
-    cursor: pointer;
-    font-size: 18px;
-    padding: 4px 8px;
-    margin-left: var(--spacing-xs);
-    transition: opacity var(--transition-fast), color var(--transition-fast);
-}
-
-.check-btn:hover {
-    color: var(--color-accent-green);
 }
 
 /* Text Check Button */

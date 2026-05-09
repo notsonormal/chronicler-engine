@@ -325,6 +325,7 @@ The retry endpoint (`POST /api/retry`) regenerates the last AI response:
 | `GET` | `/fragment/settings` | Settings panel HTML |
 | `POST` | `/settings` | Save settings from form |
 | `POST` | `/history/:id` | Edit entry text |
+| `POST` | `/history/:id/delete` | Delete entry |
 | `POST` | `/retry` | Regenerate last AI response |
 | `POST` | `/action/check` | Pre-flight spell/grammar check |
 | `POST` | `/check-text` | Manual text check |
@@ -333,6 +334,9 @@ The retry endpoint (`POST /api/retry`) regenerates the last AI response:
 
 The story log displays edit controls always visible:
 
-- Pencil icon (✏️) always shown on every entry
-- Click opens inline edit mode with save/cancel
-- Retry button (↻) appears near the last AI response (narration/dialogue only)
+- Action buttons always visible at top-right of every entry:
+  - Edit button (✎) on all entries
+  - Delete button (🗑) on all entries
+  - Check button (✓) on input entries
+  - Retry button (↻) on last AI message only
+- Click edit → inline textarea with save/cancel, polling pauses

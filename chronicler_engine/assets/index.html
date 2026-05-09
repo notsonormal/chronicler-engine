@@ -169,9 +169,11 @@
                     autoResizeTextarea(this);
                 });
                 
-                // Replace edit button with save/cancel
-                const editBtn = entry.querySelector('.edit-btn');
-                editBtn.outerHTML = `<button class="save-btn" onclick="submitEdit()">✓</button><button class="cancel-btn" onclick="cancelEdit()">✗</button>`;
+                // Replace action buttons with save/cancel
+                const actionsContainer = entry.querySelector('.message-actions');
+                if (actionsContainer) {
+                    actionsContainer.innerHTML = `<button class="save-btn" onclick="submitEdit()" title="Save">✓</button><button class="cancel-btn" onclick="cancelEdit()" title="Cancel">✗</button>`;
+                }
                 
                 // Pause HTMX polling while editing
                 pausePolling();
@@ -184,15 +186,12 @@
             if (entry) {
                 const textSpan = entry.querySelector('.text');
                 textSpan.innerHTML = originalText;
-                // Restore edit button
-                const saveBtn = entry.querySelector('.save-btn');
-                const cancelBtn = entry.querySelector('.cancel-btn');
-                saveBtn.outerHTML = `<button class="edit-btn" onclick="showEditForm(${currentEditId})" title="Edit">&#9998;</button>`;
-                cancelBtn.remove();
             }
             currentEditId = null;
             originalText = null;
             resumePolling();
+            // Refresh to restore original button layout
+            htmx.trigger('#story-log', 'htmx:refresh');
         }
         
         function submitEdit() {
@@ -220,6 +219,22 @@
                 .then(() => {
                     // Refresh story log
                     htmx.trigger('#story-log', 'htmx:refresh');
+                });
+        }
+        
+        function deleteMessage(id) {
+            if (!confirm('Delete this message?')) return;
+            fetch(`/history/${id}/delete`, { method: 'POST' })
+                .then(response => {
+                    if (response.ok) {
+                        htmx.trigger('#story-log', 'htmx:refresh');
+                    } else {
+                        response.text().then(text => showError(text));
+                    }
+                })
+                .catch(err => {
+                    console.error('Delete failed:', err);
+                    showError('Failed to delete message');
                 });
         }
         

@@ -239,6 +239,19 @@ impl GameState {
         Ok(())
     }
 
+    /// [DOC: docs/architecture/system.md]
+    pub fn delete_log(&mut self, id: u64) -> crate::error::Result<()> {
+        let idx = self
+            .narration_history
+            .iter()
+            .position(|e| e.id == id)
+            .ok_or_else(|| {
+                crate::error::EngineError::Internal(format!("Log entry not found: {id}"))
+            })?;
+        self.narration_history.remove(idx);
+        Ok(())
+    }
+
     pub fn get_log(&self, id: u64) -> Option<&LogEntry> {
         self.narration_history.iter().find(|e| e.id == id)
     }
