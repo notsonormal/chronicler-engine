@@ -12,14 +12,17 @@ use crate::engine::action_processing::{
 use crate::engine::logic::{find_room_in_map, get_current_room};
 use crate::engine::parser::parse_command;
 use crate::error::{EngineError, LlmFailure};
+use crate::model::agent::{AgentContext, AgentResult, Confidence, ExecutionPhase, StatePatch};
 use crate::model::character::NpcCard;
 use crate::model::state::{GameState, GenerationPhase, GenerationStatus, LogType};
 use crate::model::state_snapshot::GameStateSnapshot;
 use crate::model::world::WorldCard;
-use crate::narrative::prompt::make_prompt_context;
-use crate::narrative::quantifier::{
-    QuantifierBackendTrait, QuantifierConfidence, determine_npcs_in_room,
+use crate::narrative::agents::quantifier::{
+    MovementParseResult, QuantifierAgent, QuantifierBackendTrait, QuantifierConfidence,
+    QuantifierParseResult, QuantifierResult,
 };
+use crate::narrative::agents::registry::AgentRegistry;
+use crate::narrative::prompt::make_prompt_context;
 use crate::storage::snapshot_storage::SnapshotStorage;
 
 /// Context required by [`GameService`] to load and persist game state.
@@ -64,24 +67,39 @@ pub trait GameService: Send + Sync {
 
 pub struct DefaultGameService {
     llm_backend: Arc<dyn crate::narrative::llm::LlmBackend>,
-    quantifier_backend: Arc<dyn QuantifierBackendTrait>,
+    agent_registry: AgentRegistry,
 }
 
 impl DefaultGameService {
     pub fn new() -> Self {
+        let settings = crate::settings::load_settings().unwrap_or_default();
+        let registry = AgentRegistry::from_configs(&settings.agents).unwrap_or_default();
         Self {
             llm_backend: Arc::from(crate::narrative::llm::get_llm_backend()),
-            quantifier_backend: Arc::from(crate::narrative::quantifier::get_quantifier_backend()),
+            agent_registry: registry,
         }
     }
 
     pub fn with_backends(
         llm_backend: Arc<dyn crate::narrative::llm::LlmBackend>,
-        quantifier_backend: Arc<dyn QuantifierBackendTrait>,
+        agent_registry: AgentRegistry,
     ) -> Self {
         Self {
             llm_backend,
-            quantifier_backend,
+            agent_registry,
+        }
+    }
+
+    /// Convenience constructor for tests that only need a mock quantifier.
+    pub fn with_mock_quantifier(
+        llm_backend: Arc<dyn crate::narrative::llm::LlmBackend>,
+        quantifier_backend: Arc<dyn QuantifierBackendTrait>,
+    ) -> Self {
+        let agent = QuantifierAgent::with_backend("quantifier".to_string(), quantifier_backend);
+        let registry = AgentRegistry::with_agent(Box::new(agent));
+        Self {
+            llm_backend,
+            agent_registry: registry,
         }
     }
 }
@@ -138,20 +156,6 @@ fn map_llm_error(e: &EngineError) -> String {
     }
 }
 
-fn reset_generating(state: &mut GameState) {
-    state.narrative.generation.status = GenerationStatus::Idle;
-    state.narrative.generation.phase = GenerationPhase::default();
-}
-
-fn set_phase(state: &mut GameState, phase: GenerationPhase) {
-    state.narrative.generation.status = GenerationStatus::Generating;
-    state.narrative.generation.phase = phase;
-}
-
-fn set_error_and_reset(state: &mut GameState, message: String) {
-    state.narrative.generation.status = GenerationStatus::Error(message);
-}
-
 impl GameService for DefaultGameService {
     fn execute_action(&self, ctx: GameServiceContext, input: String, _player_name: String) {
         let action = parse_command(&input);
@@ -160,7 +164,8 @@ impl GameService for DefaultGameService {
             Action::Quit => {
                 let mut state = load_state(&ctx);
                 state.add_log("Goodbye!".to_string(), None, LogType::System);
-                reset_generating(&mut state);
+                state.narrative.generation.status = GenerationStatus::Idle;
+                state.narrative.generation.phase = GenerationPhase::default();
                 save_state(&ctx, &state, uuid::Uuid::new_v4().to_string(), 0);
             }
             Action::Look => {
@@ -177,7 +182,8 @@ impl GameService for DefaultGameService {
                         state.add_log(desc, Some(name), LogType::Narration);
                     }
                 }
-                reset_generating(&mut state);
+                state.narrative.generation.status = GenerationStatus::Idle;
+                state.narrative.generation.phase = GenerationPhase::default();
                 save_state(&ctx, &state, uuid::Uuid::new_v4().to_string(), 0);
             }
             Action::Talk(name, msg) => {
@@ -188,7 +194,8 @@ impl GameService for DefaultGameService {
                     None,
                     LogType::System,
                 );
-                reset_generating(&mut state);
+                state.narrative.generation.status = GenerationStatus::Idle;
+                state.narrative.generation.phase = GenerationPhase::default();
                 save_state(&ctx, &state, uuid::Uuid::new_v4().to_string(), 0);
             }
             Action::Inventory => {
@@ -198,7 +205,8 @@ impl GameService for DefaultGameService {
                     None,
                     LogType::System,
                 );
-                reset_generating(&mut state);
+                state.narrative.generation.status = GenerationStatus::Idle;
+                state.narrative.generation.phase = GenerationPhase::default();
                 save_state(&ctx, &state, uuid::Uuid::new_v4().to_string(), 0);
             }
             Action::FreeAction(text) => {
@@ -220,7 +228,8 @@ impl GameService for DefaultGameService {
                 let nearby_npcs = get_static_npcs(&state, &room_npc_ids);
                 let all_npcs: Vec<NpcCard> = state.npcs.values().cloned().collect();
 
-                set_phase(&mut state, GenerationPhase::Narrating);
+                state.narrative.generation.status = GenerationStatus::Generating;
+                state.narrative.generation.phase = GenerationPhase::Narrating;
                 save_state(&ctx, &state, message_id.clone(), 0);
 
                 let room = map
@@ -232,7 +241,8 @@ impl GameService for DefaultGameService {
 
                 let Some(room) = room else {
                     let mut state = load_state(&ctx);
-                    reset_generating(&mut state);
+                    state.narrative.generation.status = GenerationStatus::Idle;
+                    state.narrative.generation.phase = GenerationPhase::default();
                     save_state(&ctx, &state, message_id.clone(), 0);
                     return;
                 };
@@ -251,7 +261,8 @@ impl GameService for DefaultGameService {
                     Ok(t) => t,
                     Err(e) => {
                         let mut state = load_state(&ctx);
-                        set_error_and_reset(&mut state, map_llm_error(&e));
+                        state.narrative.generation.status =
+                            GenerationStatus::Error(map_llm_error(&e));
                         save_state(&ctx, &state, message_id.clone(), 0);
                         return;
                     }
@@ -259,24 +270,63 @@ impl GameService for DefaultGameService {
 
                 if narration_text.trim().is_empty() {
                     let mut state = load_state(&ctx);
-                    set_error_and_reset(&mut state, "LLM Error: empty response".to_string());
+                    state.narrative.generation.status =
+                        GenerationStatus::Error("LLM Error: empty response".to_string());
                     save_state(&ctx, &state, message_id.clone(), 0);
                     return;
                 }
 
-                let quantifier_backend: Arc<dyn QuantifierBackendTrait> =
-                    Arc::clone(&self.quantifier_backend);
-
                 let mut state = load_state(&ctx);
-                set_phase(&mut state, GenerationPhase::Quantifying);
-                let previous_room_npcs: Vec<NpcCard> = state.scene.npcs_in_area.clone();
-                let quantifier_result = determine_npcs_in_room(
-                    &state,
-                    &room.npcs,
-                    &previous_room_npcs,
-                    &narration_text,
-                    quantifier_backend.as_ref(),
-                );
+                state.narrative.generation.status = GenerationStatus::Generating;
+                state.narrative.generation.phase = GenerationPhase::Quantifying;
+
+                let mut quantifier_result = QuantifierResult {
+                    npcs: QuantifierParseResult {
+                        npc_ids: room.npcs.clone(),
+                        confidence: QuantifierConfidence::Low,
+                    },
+                    movement: MovementParseResult {
+                        movement_type: None,
+                        destination: None,
+                        confidence: QuantifierConfidence::Low,
+                    },
+                };
+
+                let agent_ctx = AgentContext {
+                    state: &state,
+                    main_response: Some(&narration_text),
+                    player_input: &text,
+                };
+
+                for agent in self
+                    .agent_registry
+                    .agents_for_phase(ExecutionPhase::PostGeneration)
+                {
+                    match agent.execute(&agent_ctx) {
+                        Ok(AgentResult::StatePatch(patch)) => match patch {
+                            StatePatch::Scene {
+                                npc_ids,
+                                movement_destination,
+                                confidence,
+                            } => {
+                                quantifier_result.npcs.npc_ids = npc_ids;
+                                quantifier_result.movement.destination = movement_destination;
+                                quantifier_result.npcs.confidence = match confidence {
+                                    Confidence::High => QuantifierConfidence::High,
+                                    Confidence::Medium => QuantifierConfidence::Medium,
+                                    Confidence::Low => QuantifierConfidence::Low,
+                                };
+                            }
+                        },
+                        Ok(AgentResult::NoOp) => {}
+                        Ok(AgentResult::PromptDirective(_)) => {
+                            log::warn!("Post-generation agent returned PromptDirective; ignoring");
+                        }
+                        Err(e) => {
+                            log::warn!("Agent {} failed: {e}", agent.name());
+                        }
+                    }
+                }
 
                 if quantifier_result.npcs.confidence == QuantifierConfidence::Low {
                     state.add_log(
@@ -305,7 +355,9 @@ impl GameService for DefaultGameService {
                         let mut next_state = turn_result.next_state;
 
                         if let Some(request) = turn_result.trigger_continuation {
-                            set_phase(&mut next_state, GenerationPhase::GeneratingEvent);
+                            next_state.narrative.generation.status = GenerationStatus::Generating;
+                            next_state.narrative.generation.phase =
+                                GenerationPhase::GeneratingEvent;
                             save_state(&ctx, &next_state, message_id.clone(), 0);
 
                             let continuation_text = match backend.narrate_action_from_prompt(
@@ -321,7 +373,8 @@ impl GameService for DefaultGameService {
                                         None,
                                         LogType::System,
                                     );
-                                    set_error_and_reset(&mut next_state, format!("Error: {e}"));
+                                    next_state.narrative.generation.status =
+                                        GenerationStatus::Error(format!("Error: {e}"));
                                     save_state(&ctx, &next_state, message_id.clone(), 0);
                                     return;
                                 }
@@ -336,22 +389,22 @@ impl GameService for DefaultGameService {
                                     Ok(s) => s,
                                     Err(e) => {
                                         log::error!("Trigger commit failed: {e}");
-                                        set_error_and_reset(
-                                            &mut next_state,
-                                            format!("Trigger error: {e}"),
-                                        );
+                                        next_state.narrative.generation.status =
+                                            GenerationStatus::Error(format!("Trigger error: {e}"));
                                         next_state
                                     }
                                 };
                             }
                         }
 
-                        reset_generating(&mut next_state);
+                        next_state.narrative.generation.status = GenerationStatus::Idle;
+                        next_state.narrative.generation.phase = GenerationPhase::default();
                         save_state(&ctx, &next_state, message_id.clone(), 0);
                     }
                     Err(e) => {
                         let mut state = load_state(&ctx);
-                        set_error_and_reset(&mut state, format!("Error: {e}"));
+                        state.narrative.generation.status =
+                            GenerationStatus::Error(format!("Error: {e}"));
                         save_state(&ctx, &state, message_id.clone(), 0);
                     }
                 }
@@ -423,7 +476,8 @@ impl GameService for DefaultGameService {
 
         let Some(room) = find_room_in_map(&map, &current_room_id) else {
             let mut state = load_state(&ctx);
-            set_error_and_reset(&mut state, "Retry failed: room not found".to_string());
+            state.narrative.generation.status =
+                GenerationStatus::Error("Retry failed: room not found".to_string());
             save_state(
                 &ctx,
                 &state,
@@ -452,7 +506,7 @@ impl GameService for DefaultGameService {
             Ok(t) => t,
             Err(e) => {
                 let mut state = load_state(&ctx);
-                set_error_and_reset(&mut state, map_llm_error(&e));
+                state.narrative.generation.status = GenerationStatus::Error(map_llm_error(&e));
                 save_state(
                     &ctx,
                     &state,
@@ -465,7 +519,8 @@ impl GameService for DefaultGameService {
 
         if new_narration.trim().is_empty() {
             let mut state = load_state(&ctx);
-            set_error_and_reset(&mut state, "LLM Error: empty response".to_string());
+            state.narrative.generation.status =
+                GenerationStatus::Error("LLM Error: empty response".to_string());
             save_state(
                 &ctx,
                 &state,
@@ -477,9 +532,11 @@ impl GameService for DefaultGameService {
 
         let mut state = load_state(&ctx);
         if let Err(e) = state.replace_last_ai_response(new_narration) {
-            set_error_and_reset(&mut state, format!("Retry failed: {e}"));
+            state.narrative.generation.status =
+                GenerationStatus::Error(format!("Retry failed: {e}"));
         } else {
-            reset_generating(&mut state);
+            state.narrative.generation.status = GenerationStatus::Idle;
+            state.narrative.generation.phase = GenerationPhase::default();
         }
         save_state(
             &ctx,

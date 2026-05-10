@@ -133,10 +133,35 @@ pub enum ExecutionPhase {
     PostGeneration,  // After main LLM call
 }
 
+pub enum BackendSelector {
+    UseMain,           // Use the main LLM backend (fallback for quantifier: default quantifier backend)
+    UseNamed(String),  // Look up backend by connection name in settings
+}
+
+pub struct AgentContext<'a> {
+    pub state: &'a GameState,
+    pub main_response: Option<&'a str>,  // None for pre-generation, Some(narration) for post-generation
+    pub player_input: &'a str,
+}
+
 pub enum AgentResult {
-    PromptDirective(String),    // Inject text into prompt
+    PromptDirective(String),    // Inject text into prompt (pre-generation only)
     StatePatch(StatePatch),     // Mutate snapshot
     NoOp,
+}
+
+pub enum StatePatch {
+    Scene {
+        npc_ids: Vec<String>,
+        movement_destination: Option<String>,
+        confidence: Confidence,
+    },
+}
+
+pub enum Confidence {
+    High,
+    Medium,
+    Low,
 }
 
 pub trait Agent: Send + Sync + std::fmt::Debug {
@@ -176,7 +201,7 @@ pub struct TurnResult {
 }
 ```
 
-Note: `agent_results` is added in Phase 2 when the agent trait is introduced.
+Note: `agent_results` is added in Phase 3 when the pipeline dispatcher is introduced. In Phase 2, `game_service.rs` contains a temporary bridge that translates `AgentResult::StatePatch` back into `QuantifierResult` for `action_processing.rs`.
 
 ---
 
@@ -350,25 +375,26 @@ Note: `agent_results` is added in Phase 2 when the agent trait is introduced.
   - [ ] Unknown agent type in config returns error at startup
 
 ### Task 2.3: Migrate Quantifier to Agent
-- Move `determine_npcs_in_room` from `narrative/quantifier/core.rs` to `narrative/agents/quantifier.rs`
-- Implement `Agent` for `QuantifierAgent`
+- Move quantifier code from `narrative/quantifier/` to `narrative/agents/quantifier/` (directory module; preserves tests)
+- Implement `Agent` for `QuantifierAgent` in `agents/quantifier/agent.rs`
 - `phase()` returns `ExecutionPhase::PostGeneration`
-- `execute()` receives `AgentContext` with `main_response` and returns `AgentResult::StatePatch`
+- `execute()` receives `AgentContext` with `main_response` and returns `AgentResult::StatePatch(StatePatch::Scene { ... })`
 - Delete `narrative/quantifier/` directory
-- **Files:** `src/narrative/agents/quantifier.rs`, `src/narrative/quantifier/` (delete)
+- **Files:** `src/narrative/agents/quantifier/`, `src/narrative/quantifier/` (delete)
 - **Acceptance:**
   - [ ] Quantifier agent produces identical `NpcEventList` to old code
-  - [ ] All quantifier tests pass without modification
+  - [ ] All quantifier tests pass (import paths updated)
   - [ ] Disabling quantifier skips NPC detection (documented)
 
 ### Task 2.4: Per-Agent Backend Selection
 - `BackendSelector::UseMain | UseNamed(String)`
-- `AgentRegistry` resolves backend per agent
+- `AgentRegistry` resolves backend per agent at construction time
 - Quantifier defaults to existing quantifier backend config
-- **Files:** `src/engine/game_service.rs`, `src/narrative/llm/mod.rs`
+- `UseMain` for quantifier falls back to default quantifier backend (quantifier uses `QuantifierBackendTrait`, not `LlmBackend`)
+- **Files:** `src/narrative/agents/registry.rs`, `src/narrative/agents/quantifier/backends.rs`
 - **Acceptance:**
   - [ ] Quantifier can use different backend from narrator
-  - [ ] Unknown backend name falls back to main with warning
+  - [ ] Unknown backend name falls back to default with warning
 
 **Phase 2 dependencies:** Phase 1
 **Phase 2 blocks:** Phase 3
@@ -508,7 +534,7 @@ As phases are approved, detailed sub-plans are created as separate files and lin
 | Phase | Status | Plan File |
 |-------|--------|-----------|
 | Phase 1: SQLite + Snapshots + Reset | **Ready** | [`multi-agent-phase1-snapshots-reset.md`](multi-agent-phase1-snapshots-reset.md) |
-| Phase 2: Agent Trait + Quantifier Migration | Not started | *(TBD)* |
+| Phase 2: Agent Trait + Quantifier Migration | **Complete** | [`phase2-agent-trait-quantifier-migration-20260510.md`](archived/phase2-agent-trait-quantifier-migration-20260510.md) |
 | Phase 3: Phase-Based Pipeline | Not started | *(TBD)* |
 | Phase 4: Prompt Assembler | Not started | *(TBD)* |
 

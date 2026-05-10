@@ -157,24 +157,8 @@ mod tests {
     }
 
     // Story Log Tests
-
-    #[tokio::test]
-    async fn test_story_log_populated() {
-        with_test_page(CONFIG_PATH, TEST_WORLD, |page, _port| async move {
-            let log_entries: u32 = page
-                .evaluate::<(), u32>(
-                    "document.querySelectorAll('#story-log .log-entry').length",
-                    None,
-                )
-                .await
-                .unwrap();
-            assert!(
-                log_entries > 0,
-                "Story log should have entries on initial load"
-            );
-        })
-        .await;
-    }
+    // Note: test_initial_load_story_log_has_content in flow_mock_tests.rs covers
+    // story-log population more thoroughly (waits for entries + status ready).
 
     #[tokio::test]
     async fn test_story_log_scrollable() {
@@ -738,36 +722,27 @@ mod tests {
             .await
             .unwrap();
 
-            // Wait for the entry count to decrease
-            let mut found = false;
-            for _ in 0..50 {
-                let current_count: i32 = page
-                    .evaluate::<(), i32>(
-                        "document.querySelectorAll('#story-log .log-entry').length",
-                        None,
-                    )
-                    .await
-                    .unwrap();
+            // Wait for the specific entry to disappear
+            wait_for_element_not_exists(
+                &page,
+                &format!("[data-id=\"{first_entry_id}\"]"),
+                50,
+            )
+            .await;
 
-                if current_count < initial_count {
-                    found = true;
-                    break;
-                }
-                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-            }
-
-            assert!(found, "Entry count should decrease after delete");
-
-            // Verify the specific entry no longer exists
-            let entry_exists: bool = page
-                .evaluate::<(), bool>(
-                    &format!("document.querySelector('[data-id=\"{first_entry_id}\"]') !== null"),
+            // Verify the entry count decreased
+            let current_count: i32 = page
+                .evaluate::<(), i32>(
+                    "document.querySelectorAll('#story-log .log-entry').length",
                     None,
                 )
                 .await
                 .unwrap();
 
-            assert!(!entry_exists, "Deleted entry should no longer exist in DOM");
+            assert!(
+                current_count < initial_count,
+                "Entry count should decrease after delete: {initial_count} -> {current_count}"
+            );
         })
         .await;
     }

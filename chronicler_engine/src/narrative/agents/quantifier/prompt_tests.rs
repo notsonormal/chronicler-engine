@@ -3,9 +3,10 @@ use std::collections::HashMap;
 use crate::model::character::NpcCard;
 use crate::model::map::Room;
 use crate::model::state::LogEntry;
-use crate::narrative::quantifier::prompt::QuantifierPromptBuilder;
-use crate::narrative::quantifier::test_support::{make_history, make_npc, make_room};
-use crate::narrative::quantifier::types::{QuantifierPromptContext, RoomInfo};
+
+use super::prompt::QuantifierPromptBuilder;
+use super::test_support::{make_history, make_npc, make_room};
+use super::types::{QuantifierPromptContext, RoomInfo};
 
 #[test]
 fn test_quantifier_prompt_builder_basic() {

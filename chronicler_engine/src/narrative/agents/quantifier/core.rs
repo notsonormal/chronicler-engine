@@ -1,8 +1,9 @@
 use crate::error::EngineError;
-use crate::narrative::quantifier::backends::QuantifierBackendTrait;
-use crate::narrative::quantifier::parser::parse_quantifier_response_with_movement;
-use crate::narrative::quantifier::prompt::QuantifierPromptBuilder;
-use crate::narrative::quantifier::types::{
+
+use super::backends::QuantifierBackendTrait;
+use super::parser::parse_quantifier_response_with_movement;
+use super::prompt::QuantifierPromptBuilder;
+use super::types::{
     MovementParseResult, QuantifierConfidence, QuantifierParseResult, QuantifierPromptContext,
     QuantifierResult, RoomInfo,
 };

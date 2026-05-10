@@ -162,18 +162,22 @@ mod tests {
         assert!(res1.is_ok(), "First request should succeed");
         assert!(res2.is_ok(), "Second request should succeed");
 
-        // Wait for async processing to complete
-        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-
-        // Verify story log contains both inputs
-        let story = client
-            .get(format!("http://127.0.0.1:{port}/fragment/story-log"))
-            .send()
-            .await
-            .unwrap()
-            .text()
-            .await
-            .unwrap();
+        // Poll story log until both commands appear (targeted wait, max ~3s)
+        let mut story = String::new();
+        for _ in 0..30 {
+            story = client
+                .get(format!("http://127.0.0.1:{port}/fragment/story-log"))
+                .send()
+                .await
+                .unwrap()
+                .text()
+                .await
+                .unwrap();
+            if story.contains("alpha-beta-unique-1") && story.contains("gamma-delta-unique-2") {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
 
         println!("Story log: {story}");
 

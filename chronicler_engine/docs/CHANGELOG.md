@@ -3,6 +3,23 @@
 ## Unreleased
 
 ### Added
+- **Agent Trait + Registry + Quantifier Migration (Phase 2)** — Migrated quantifier from hardcoded pipeline to `dyn Agent` architecture
+  - New `Agent` trait with `name()`, `phase()`, `backend_selector()`, `execute()` methods
+  - New `AgentRegistry` loads agents from `AppSettings.agents` config; supports `PreGeneration` and `PostGeneration` phases
+  - New `AgentResult` enum: `PromptDirective`, `StatePatch`, `NoOp`
+  - New `StatePatch` enum (currently `Scene { npc_ids, movement_destination, confidence }`)
+  - New `AgentContext<'a>` with `state`, `main_response`, `player_input`
+  - New `BackendSelector` enum: `UseMain`, `UseNamed(String)`
+  - New `Confidence` enum: `High`, `Medium`, `Low` (replaces `QuantifierConfidence` in agent interface)
+  - `QuantifierAgent` implements `Agent`; runs in `PostGeneration` phase
+  - `NarratorAgent` stub implements `Agent`; runs in `PreGeneration` phase (reserved for future use)
+  - `DefaultGameService` now owns `AgentRegistry` instead of direct `QuantifierBackendTrait`
+  - `DefaultGameService::with_mock_quantifier()` helper for test injection
+  - `AppSettings.agents` field with `#[serde(default = "default_agent_configs")]` for backward compatibility
+  - Quantifier code moved from `src/narrative/quantifier/` → `src/narrative/agents/quantifier/`
+  - All quantifier tests updated to new module path; test logic unchanged
+
+### Added
 - **Structured Error Taxonomy** — Migrated `EngineError` from plain `String` payloads to structured types
   - New `LlmFailure` enum with variants: `EmptyResponse`, `Http { status, body }`, `Network { url, detail }`, `ParseError { raw_response, expected_format }`, `Timeout`
   - New `NarrativeFailure` enum with variants: `PromptBuild { stage, reason }`, `Generation { stage, reason }`

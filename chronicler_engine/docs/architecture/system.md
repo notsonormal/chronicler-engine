@@ -29,7 +29,12 @@ The interface between the synchronous engine and stochastic LLM generation.
   - **`get_llm_backend_for(connection)`**: Create a backend for a specific `Connection` profile
   - **`DefaultGameService::with_backends(llm, quantifier)`**: Constructor for dependency-injecting mock backends in tests. No globals, no file I/O, fully isolated.
 - **`prompt`**: Directory module for layered prompt construction with token budget management. Uses plain-text instructions + XML-wrapped data for reasoning-model compatibility. Includes `fit_messages_to_context()` for dynamic context-window fitting.
-- **`quantifier`**: Directory module for scene quantification and dynamic room presence detection via secondary LLM. Returns NPC presence, player movement intent, and NPC enter/leave events.
+- **`agents`**: Directory module for the agent trait, registry, and agent implementations.
+  - **`Agent` trait**: Core abstraction for pre-generation and post-generation agents
+  - **`AgentRegistry`**: Loads agents from config and iterates by execution phase
+  - **`QuantifierAgent`**: Post-generation agent for scene quantification and dynamic room presence detection
+  - **`NarratorAgent`**: Stub pre-generation agent (reserved for future use)
+- **`quantifier`** (under `agents/`): Quantifier implementation module. Moved from `narrative/quantifier/` to `narrative/agents/quantifier/`.
   - **`QuantifierBackendTrait`**: Interface for NPC detection backends
   - **`RealQuantifierBackend`**: Production implementation using LLM
   - **`MockQuantifierBackend`**: Test implementation returning configurable NPCs with High confidence
@@ -142,9 +147,13 @@ Static web assets served by the server.
 | `src/narrative/prompt/mod.rs` | `crate::narrative::prompt` | Prompt module root |
 | `src/narrative/prompt/builder.rs` | `crate::narrative::prompt` | `PromptBuilder` with 8-layer construction |
 | `src/narrative/prompt/budget.rs` | `crate::narrative::prompt` | Token budget and context fitting |
-| `src/narrative/quantifier/mod.rs` | `crate::narrative::quantifier` | Quantifier module root |
-| `src/narrative/quantifier/core.rs` | `crate::narrative::quantifier` | Core quantifier logic |
-| `src/narrative/quantifier/backends.rs` | `crate::narrative::quantifier` | Quantifier backend implementations |
+| `src/narrative/agents/mod.rs` | `crate::narrative::agents` | Agent trait, registry, and re-exports |
+| `src/narrative/agents/trait_def.rs` | `crate::narrative::agents` | `Agent` trait definition |
+| `src/narrative/agents/registry.rs` | `crate::narrative::agents` | `AgentRegistry` and `NarratorAgent` |
+| `src/narrative/agents/quantifier/mod.rs` | `crate::narrative::agents::quantifier` | Quantifier module root |
+| `src/narrative/agents/quantifier/agent.rs` | `crate::narrative::agents::quantifier` | `QuantifierAgent` implementing `Agent` trait |
+| `src/narrative/agents/quantifier/core.rs` | `crate::narrative::agents::quantifier` | Core quantifier logic |
+| `src/narrative/agents/quantifier/backends.rs` | `crate::narrative::agents::quantifier` | Quantifier backend implementations |
 | `src/narrative/text_check/check.rs` | `crate::narrative::text_check` | Facade: `check_player_input()` |
 | `src/narrative/text_check/harper_backend.rs` | `crate::narrative::text_check` | `HarperBackend` — harper-core wrapper |
 | `src/narrative/text_check/types.rs` | `crate::narrative::text_check` | `CheckResult`, `CheckIssue`, `IssueKind` |

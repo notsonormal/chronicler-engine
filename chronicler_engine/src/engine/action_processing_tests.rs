@@ -6,9 +6,9 @@ use crate::engine::action_processing::{
 };
 use crate::engine::trigger_eval::{get_times_met, is_currently_meeting, set_currently_meeting};
 use crate::model::state::LogType;
-use crate::narrative::quantifier::{
-    MovementParseResult, MovementType, QuantifierConfidence, QuantifierParseResult,
-    QuantifierResult,
+use crate::narrative::agents::quantifier::{
+    MovementParseResult, MovementType, NpcEvent, NpcEventType, QuantifierConfidence,
+    QuantifierParseResult, QuantifierResult,
 };
 use crate::test_support::{TestGameState, TestNpc, TestPlayer, TestWorld};
 
@@ -287,9 +287,9 @@ fn test_get_static_npcs_empty_for_unknown() {
 #[test]
 fn test_apply_npc_events_entered() {
     let state = make_test_state();
-    let events = vec![crate::narrative::quantifier::NpcEvent {
+    let events = vec![NpcEvent {
         npc_id: "carla".to_string(),
-        event_type: crate::narrative::quantifier::NpcEventType::Entered,
+        event_type: NpcEventType::Entered,
     }];
 
     let state = apply_npc_events(state, &events).unwrap();
@@ -302,9 +302,9 @@ fn test_apply_npc_events_left() {
     let mut state = make_test_state();
     set_currently_meeting(&mut state.character_state, "carla", true);
 
-    let events = vec![crate::narrative::quantifier::NpcEvent {
+    let events = vec![NpcEvent {
         npc_id: "carla".to_string(),
-        event_type: crate::narrative::quantifier::NpcEventType::Left,
+        event_type: NpcEventType::Left,
     }];
 
     let state = apply_npc_events(state, &events).unwrap();
@@ -317,9 +317,9 @@ fn test_apply_npc_events_increments_times_met() {
     let state = make_test_state();
     let initial_times = get_times_met(&state.character_state, "carla");
 
-    let events = vec![crate::narrative::quantifier::NpcEvent {
+    let events = vec![NpcEvent {
         npc_id: "carla".to_string(),
-        event_type: crate::narrative::quantifier::NpcEventType::Entered,
+        event_type: NpcEventType::Entered,
     }];
 
     let state = apply_npc_events(state, &events).unwrap();
@@ -581,16 +581,16 @@ proptest! {
     fn prop_apply_npc_events_preserves_state_consistency(
         events in prop::collection::vec(
             ("[a-z]{1,10}", prop_oneof![
-                Just(crate::narrative::quantifier::NpcEventType::Entered),
-                Just(crate::narrative::quantifier::NpcEventType::Left),
+                Just(NpcEventType::Entered),
+                Just(NpcEventType::Left),
             ]),
             0..10
         ),
     ) {
         let state = TestGameState::with_npc_raw("room1", TestNpc::named("carla", "Carla"));
-        let events: Vec<crate::narrative::quantifier::NpcEvent> = events
+        let events: Vec<NpcEvent> = events
             .into_iter()
-            .map(|(npc_id, event_type)| crate::narrative::quantifier::NpcEvent {
+            .map(|(npc_id, event_type)| NpcEvent {
                 npc_id,
                 event_type,
             })

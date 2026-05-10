@@ -1,10 +1,9 @@
 use crate::model::llm_backend::LlmBackendType;
 use crate::model::settings::Connection;
-use crate::narrative::quantifier::backends::{
-    MockQuantifierBackend, QuantifierBackendTrait, get_quantifier_backend_for,
-};
-use crate::narrative::quantifier::test_support::{make_npc, make_room};
-use crate::narrative::quantifier::types::{
+
+use super::backends::{MockQuantifierBackend, QuantifierBackendTrait, get_quantifier_backend_for};
+use super::test_support::{make_npc, make_room};
+use super::types::{
     MovementParseResult, MovementType, QuantifierConfidence, QuantifierPromptContext,
 };
 

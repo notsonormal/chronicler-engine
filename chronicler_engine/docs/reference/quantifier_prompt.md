@@ -2,7 +2,7 @@
 
 > **Context**: The quantifier prompt is a **separate secondary prompt** used for post-narration scene analysis. It is **not** part of the 8-layer narrative prompt system. For the main narrative prompt architecture, see [`system/prompt_system.md`](../system/prompt_system.md).
 
-The quantifier prompt is rendered by `QuantifierPromptBuilder` in `src/narrative/quantifier/prompt.rs`. It uses a separate LLM model connection to determine which NPCs are present in the current room and whether the player is moving.
+The quantifier prompt is rendered by `QuantifierPromptBuilder` in `src/narrative/agents/quantifier/prompt.rs`. It uses a separate LLM model connection to determine which NPCs are present in the current room and whether the player is moving.
 
 ## Prompt Architecture
 
@@ -128,6 +128,6 @@ If the quantifier returns a **Low confidence** result (e.g., unparseable respons
 
 ## Sources
 
-- System prompt: `src/narrative/quantifier/prompt.rs:build_system_prompt()`
-- User prompt: `src/narrative/quantifier/prompt.rs:build_user_prompt()`
-- Response parsing: `src/narrative/quantifier/parser.rs` (see `parse_quantifier_response` functions)
+- System prompt: `src/narrative/agents/quantifier/prompt.rs:build_system_prompt()`
+- User prompt: `src/narrative/agents/quantifier/prompt.rs:build_user_prompt()`
+- Response parsing: `src/narrative/agents/quantifier/parser.rs` (see `parse_quantifier_response` functions)

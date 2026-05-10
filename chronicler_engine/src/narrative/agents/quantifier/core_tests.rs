@@ -1,18 +1,18 @@
 use crate::error::EngineError;
 use crate::model::character::NpcCard;
 use crate::model::state::LogEntry;
-use crate::narrative::quantifier::QuantifierBackendTrait;
-use crate::narrative::quantifier::core::{
+use crate::test_support::{TestGameState, TestNpc};
+
+use super::QuantifierBackendTrait;
+use super::core::{
     action_boundary_contains, determine_npcs_in_room, quantify_room_with_llm_call,
     static_npc_result,
 };
-use crate::narrative::quantifier::test_support::{make_boundary_chars, make_npc, make_room};
-use crate::narrative::quantifier::types::{
+use super::test_support::{make_boundary_chars, make_npc, make_room};
+use super::types::{
     MovementParseResult, MovementType, QuantifierConfidence, QuantifierParseResult,
     QuantifierPromptContext, QuantifierResult,
 };
-use crate::test_support::TestGameState;
-use crate::test_support::TestNpc;
 
 #[test]
 fn test_action_boundary_exact_match_at_start() {

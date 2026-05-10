@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-10 12:53 UTC*
+*Index last generated: 2026-05-10 14:55 UTC*
 
 ### Root files
 
@@ -39,13 +39,9 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Implementation Plan: Fix Diagnostic Signal Quality for All 12 Scenarios](./plans/diagnostic_fixes_plan.md)
 - [Plan: Fast-Fail Build & Test Localization](./plans/fast-fail-build-test-localization-plan.md)
 - [LLM Infrastructure Improvements](./plans/llm-infrastructure-improvements.md)
-- [Implementation Plan: Message Action Buttons Redesign](./plans/message-buttons-redesign-plan.md)
-- [Spec: Message Action Buttons Redesign](./plans/message-buttons-redesign.md)
 - [Spec: Agent-Ready Pipeline Restructure for Chronicler Engine](./plans/multi-agent-architecture-overarching-spec.md)
-- [Plan: Phase 1 — SQLite Snapshots + Reset Game](./plans/multi-agent-phase1-snapshots-reset.md)
 - [Plan: Observability & Automated Forensics](./plans/observability-and-forensics-plan.md)
 - [AI Steering & Guided Generation](./plans/steering-and-guided-generation.md)
-- [Structured Error Taxonomy](./plans/structured-error-taxonomy.md)
 
 ### `docs/plans/archived/`
 
@@ -64,8 +60,11 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Implementation Plan: Isolate Slow LLM Tests](./plans/archived/lockjaw-aquaman-sam-alexander-2026-05-03.md)
 - [Plan: Unify PHI Layer — Remove PhiMode::Continuation](./plans/archived/luke-cage-pantha-morbius-2026-05-03.md)
 - [Plan: Unify PHI Layer — Remove PhiMode::Continuation](./plans/archived/luke-cage-pantha-morbius-20260503.md)
+- [Spec: Message Action Buttons Redesign](./plans/archived/message-buttons-redesign-20260509.md)
 - [Implementation Plan: Message Action Buttons Redesign](./plans/archived/message-buttons-redesign-plan-20260509.md)
+- [Plan: Phase 1 — SQLite Snapshots + Reset Game](./plans/archived/multi-agent-phase1-snapshots-reset-20260509.md)
 - [Plan: Auto-Generated Index for `chronicler_engine/docs`](./plans/archived/obsidian-doctor-mid-nite-kid-flash-2026-05-05.md)
+- [Plan: Phase 2 — Agent Trait, Registry, and Quantifier Migration](./plans/archived/phase2-agent-trait-quantifier-migration-20260510.md)
 - [Async Concurrency & Codebase Hygiene](./plans/archived/polaris-steel-sentry-2026-05-05.md)
 - [Spec: Align chronicler_engine Prompts with Marinara Engine Battle-Tested Patterns](./plans/archived/prompt-alignment-with-marinara-2026-05-04.md)
 - [Plan: Phase 4 — Replace std::thread::spawn with Tokio](./plans/archived/rocket-silver-surfer-orphan-2026-05-05.md)
@@ -97,6 +96,7 @@ This folder contains all documentation for the Chronicler Engine project.
 
 ### `docs/system/`
 
+- [Agent System](./system/agent_system.md)
 - [System: Character State & Persistence](./system/character_state.md)
 - [Specification: Dashboard UI](./system/dashboard.md)
 - [System: Dynamic Pseudo-Rooms](./system/dynamic_rooms.md)

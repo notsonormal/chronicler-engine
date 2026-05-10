@@ -1,0 +1,163 @@
+# Agent System
+
+> **Status**: Phase 2 complete — trait, registry, and quantifier migration implemented.
+> **Parent Spec**: [`docs/plans/multi-agent-architecture-overarching-spec.md`](../plans/multi-agent-architecture-overarching-spec.md)
+
+## Overview
+
+The Chronicler Engine supports an extensible agent architecture where specialized agents can inject behavior into the narrative pipeline at specific execution phases. An **agent** is any type implementing the `Agent` trait. Agents are loaded from `AppSettings` at startup and registered in the `AgentRegistry`.
+
+**Current agents** (Phase 2):
+- `QuantifierAgent` — Post-generation scene analysis (NPC presence, movement)
+- `NarratorAgent` — Stub pre-generation agent (reserved for future use)
+
+**Future agents** (out of scope for Phase 2):
+- Prose Guardian, Continuity Checker, Expression Engine, Custom Tracker, Lorebook Keeper
+
+---
+
+## Agent Trait
+
+```rust
+pub trait Agent: Send + Sync + std::fmt::Debug {
+    fn name(&self) -> &str;
+    fn phase(&self) -> ExecutionPhase;
+    fn backend_selector(&self) -> BackendSelector;
+    fn execute(&self, ctx: &AgentContext) -> Result<AgentResult>;
+}
+```
+
+| Method | Purpose |
+|--------|---------|
+| `name()` | Human-readable identifier for logging |
+| `phase()` | When the agent runs (`PreGeneration` or `PostGeneration`) |
+| `backend_selector()` | Which LLM backend the agent uses |
+| `execute()` | Run the agent; returns `AgentResult` |
+
+---
+
+## Execution Phases
+
+```rust
+pub enum ExecutionPhase {
+    PreGeneration,   // Before main LLM call (future: prompt injection)
+    PostGeneration,  // After main LLM call (current: quantifier)
+}
+```
+
+**Pipeline flow** (simplified):
+1. Load state from snapshot
+2. Run **PreGeneration** agents (currently empty — `NarratorAgent` returns `NoOp`)
+3. Generate main narration via LLM
+4. Run **PostGeneration** agents (`QuantifierAgent` analyzes narration)
+5. Apply agent results → `execute_freeaction_impl` → save snapshot
+
+---
+
+## Agent Results
+
+```rust
+pub enum AgentResult {
+    PromptDirective(String),  // Inject text into prompt (for future pre-gen agents)
+    StatePatch(StatePatch),   // Mutate game state
+    NoOp,                     // No action
+}
+```
+
+### StatePatch
+
+```rust
+pub enum StatePatch {
+    Scene {
+        npc_ids: Vec<String>,
+        movement_destination: Option<String>,
+        confidence: Confidence,  // High | Medium | Low
+    },
+}
+```
+
+The `QuantifierAgent` returns `StatePatch::Scene` with the NPCs it detected in the narration and any movement destination. `DefaultGameService` translates this patch back into a `QuantifierResult` for `action_processing.rs`.
+
+---
+
+## Agent Registry
+
+`AgentRegistry` is constructed at startup from `AppSettings.agents`:
+
+```rust
+let registry = AgentRegistry::from_configs(&settings.agents)?;
+```
+
+If no agent config exists, defaults are injected for backward compatibility:
+- `quantifier` agent enabled, `PostGeneration`, `UseNamed("quantifier")` backend
+
+### Config Format (settings.json)
+
+```json
+{
+  "agents": [
+    {
+      "name": "quantifier",
+      "agent_type": "quantifier",
+      "enabled": true,
+      "backend": { "type": "use_named", "value": "quantifier" },
+      "phase": "post_generation"
+    }
+  ]
+}
+```
+
+**Fields:**
+- `name` — Display name
+- `agent_type` — `"quantifier"` | `"narrator"` (unknown types fail fast at startup)
+- `enabled` — `true` to register; `false` skips
+- `backend` — `{"type": "use_main"}` or `{"type": "use_named", "value": "<connection_id>"}`
+- `phase` — `"pre_generation"` | `"post_generation"`
+
+---
+
+## Backend Selection
+
+```rust
+pub enum BackendSelector {
+    UseMain,           // Use the main narration backend
+    UseNamed(String),  // Use a named connection from settings
+}
+```
+
+**QuantifierAgent**: Always uses the quantifier backend (resolved via `get_quantifier_backend()` or `get_quantifier_backend_for()`). `UseMain` falls back to the default quantifier backend.
+
+---
+
+## Per-Agent Backends
+
+Each agent can use a different LLM connection:
+- Main narrator → `narration_connection_id`
+- Quantifier → `quantifier_connection_id` (or a custom connection via `UseNamed`)
+
+This enables cost optimization (cheap model for quantifier, powerful model for narration).
+
+---
+
+## Key Files
+
+| File | Purpose |
+|------|---------|
+| `src/model/agent.rs` | `AgentConfig`, `AgentResult`, `AgentContext`, `StatePatch`, `ExecutionPhase`, `BackendSelector`, `Confidence` |
+| `src/narrative/agents/mod.rs` | Module root, re-exports |
+| `src/narrative/agents/trait_def.rs` | `Agent` trait definition |
+| `src/narrative/agents/registry.rs` | `AgentRegistry`, `NarratorAgent` |
+| `src/narrative/agents/quantifier/agent.rs` | `QuantifierAgent` implementing `Agent` |
+| `src/narrative/agents/quantifier/backends.rs` | `QuantifierBackendTrait`, `MockQuantifierBackend`, `RealQuantifierBackend` |
+| `src/engine/game_service.rs` | `DefaultGameService` — orchestrates agent execution |
+
+---
+
+## Adding a New Agent
+
+1. Create a struct implementing `Agent`
+2. Add its `agent_type` string to `AgentRegistry::from_configs`
+3. Register in `default_agent_configs()` (optional)
+4. Add tests in `src/narrative/agents/<name>_tests.rs`
+
+The engine works with **zero agents** — all agent execution is optional.

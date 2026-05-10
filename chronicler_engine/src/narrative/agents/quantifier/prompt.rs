@@ -1,4 +1,4 @@
-use crate::narrative::quantifier::types::QuantifierPromptContext;
+use crate::narrative::agents::quantifier::types::QuantifierPromptContext;
 
 /// [DOC: docs/reference/quantifier_prompt.md]
 pub struct QuantifierPromptBuilder<'a> {

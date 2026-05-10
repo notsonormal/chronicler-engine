@@ -114,6 +114,17 @@ impl Connection {
 }
 
 /// [DOC: docs/architecture/system.md]
+pub fn default_agent_configs() -> Vec<crate::model::agent::AgentConfig> {
+    use crate::model::agent::{AgentConfig, BackendSelector, ExecutionPhase};
+    vec![AgentConfig {
+        name: "quantifier".to_string(),
+        agent_type: "quantifier".to_string(),
+        enabled: true,
+        backend: BackendSelector::UseNamed("quantifier".to_string()),
+        phase: ExecutionPhase::PostGeneration,
+    }]
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AppSettings {
     pub connections: Vec<Connection>,
@@ -123,6 +134,8 @@ pub struct AppSettings {
     pub response_length: String,
     #[serde(default)]
     pub text_check: TextCheckSettings,
+    #[serde(default = "default_agent_configs")]
+    pub agents: Vec<crate::model::agent::AgentConfig>,
 }
 
 fn default_response_length() -> String {
@@ -170,6 +183,7 @@ impl Default for AppSettings {
             quantifier_connection_id: "openrouter-gpt-4o-mini".into(),
             response_length: default_response_length(),
             text_check: TextCheckSettings::default(),
+            agents: default_agent_configs(),
         }
     }
 }

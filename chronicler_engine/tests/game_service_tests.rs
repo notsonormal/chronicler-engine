@@ -1,8 +1,9 @@
 //! [DOC: docs/reference/testing.md]
 
+mod test_data;
+
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
     use std::sync::Arc;
 
     use chronicler_engine::engine::game_service::{DefaultGameService, GameService};
@@ -10,12 +11,13 @@ mod tests {
     use chronicler_engine::model::state::GenerationStatus;
     use chronicler_engine::model::state::LogType;
     use chronicler_engine::model::state_snapshot::GameStateSnapshot;
-    use chronicler_engine::model::{character::*, map::*, world::*};
-    use chronicler_engine::narrative::llm::MockBackend;
-    use chronicler_engine::narrative::quantifier::{
+    use chronicler_engine::model::character::*;
+    use chronicler_engine::narrative::agents::quantifier::{
         MockQuantifierBackend, MovementParseResult, MovementType, QuantifierConfidence,
     };
+    use chronicler_engine::narrative::llm::MockBackend;
     use chronicler_engine::test_support::make_test_context;
+    use crate::test_data::create_test_state;
 
     fn wait_for_generation_complete(
         ctx: &chronicler_engine::engine::game_service::GameServiceContext,
@@ -42,85 +44,14 @@ mod tests {
     }
 
     fn failing_service() -> DefaultGameService {
-        DefaultGameService::with_backends(
+        DefaultGameService::with_mock_quantifier(
             Arc::new(MockBackend::failing()),
             Arc::new(MockQuantifierBackend::default()),
         )
     }
 
-    fn create_test_state_inner(room_npcs: Vec<String>, npcs: Vec<NpcCard>) -> GameState {
-        let world = Arc::new(WorldCard {
-            name: "Test World".into(),
-            description: "A test world".into(),
-            global_rules: vec![],
-            default_room_image: None,
-        });
-
-        let room1 = Room {
-            id: "room1".into(),
-            name: "Test Tavern".into(),
-            description: "A cozy tavern with wooden beams and warm fire.".into(),
-            exits: HashMap::new(),
-            items: vec![],
-            npcs: room_npcs,
-            image_path: None,
-            navigation_description: None,
-        };
-
-        let region = Region {
-            id: "test_region".into(),
-            name: "Test Region".into(),
-            rooms: vec![room1],
-        };
-
-        let map = Arc::new(MapDef {
-            overworld: Overworld {
-                id: "test_overworld".into(),
-                name: "Test World".into(),
-                regions: vec![region],
-            },
-        });
-
-        let player = Arc::new(PlayerCard {
-            sheet: CharacterSheet {
-                name: "Test Player".into(),
-                description: "A test player".into(),
-                personality: "Brave".into(),
-                scenario: "Test scenario".into(),
-                example_dialogue: "Hello!".into(),
-                summary: None,
-                profile_image: None,
-                headshot_image: None,
-            },
-            inventory: vec![],
-        });
-
-        GameState::new(world, map, player, npcs, "room1".to_string())
-    }
-
-    pub fn create_test_state() -> GameState {
-        create_test_state_inner(
-            vec!["test_npc".to_string()],
-            vec![NpcCard {
-                id: "test_npc".into(),
-                sheet: CharacterSheet {
-                    name: "Innkeeper".into(),
-                    description: "A friendly innkeeper".into(),
-                    personality: "Helpful".into(),
-                    scenario: "Runs the tavern".into(),
-                    example_dialogue: "Welcome!".into(),
-                    summary: None,
-                    profile_image: None,
-                    headshot_image: None,
-                },
-                inventory: vec![],
-                triggers: vec![],
-            }],
-        )
-    }
-
-    pub fn create_test_state_with_trigger_npc() -> GameState {
-        create_test_state_inner(
+    fn create_test_state_with_trigger_npc() -> GameState {
+        crate::test_data::create_test_state_with_npcs(
             vec!["shopkeeper".to_string()],
             vec![NpcCard {
                 id: "shopkeeper".into(),
@@ -361,7 +292,7 @@ mod tests {
         state.narrative.history.clear();
         state.narrative.generation.status = GenerationStatus::Generating; // set by caller (server)
         let ctx = make_test_context(state);
-        let service = DefaultGameService::with_backends(
+        let service = DefaultGameService::with_mock_quantifier(
             Arc::new(MockBackend::default()),
             Arc::new(MockQuantifierBackend::default()),
         );
@@ -399,7 +330,7 @@ mod tests {
         state.add_log("Initial narration".to_string(), None, LogType::Narration);
         state.narrative.generation.status = GenerationStatus::Generating; // set by caller (server)
         let ctx = make_test_context(state);
-        let service = DefaultGameService::with_backends(
+        let service = DefaultGameService::with_mock_quantifier(
             Arc::new(MockBackend::default()),
             Arc::new(MockQuantifierBackend::default()),
         );
@@ -479,7 +410,7 @@ mod tests {
         state.narrative.history.clear();
         state.narrative.generation.status = GenerationStatus::Generating; // set by caller (server)
         let ctx = make_test_context(state);
-        let service = DefaultGameService::with_backends(
+        let service = DefaultGameService::with_mock_quantifier(
             Arc::new(MockBackend::default()),
             Arc::new(MockQuantifierBackend::default()),
         );
@@ -550,7 +481,7 @@ mod tests {
         state.narrative.history.clear();
         state.narrative.generation.status = GenerationStatus::Generating;
         let ctx = make_test_context(state);
-        let service = DefaultGameService::with_backends(
+        let service = DefaultGameService::with_mock_quantifier(
             Arc::new(MockBackend::default()),
             Arc::new(MockQuantifierBackend::default()),
         );
@@ -584,7 +515,7 @@ mod tests {
         state.narrative.history.clear();
         state.narrative.generation.status = GenerationStatus::Generating;
         let ctx = make_test_context(state);
-        let service = DefaultGameService::with_backends(
+        let service = DefaultGameService::with_mock_quantifier(
             Arc::new(MockBackend::with_delay(50)),
             Arc::new(MockQuantifierBackend::default()),
         );
@@ -734,7 +665,7 @@ mod tests {
         state.narrative.history.clear();
         state.narrative.generation.status = GenerationStatus::Generating;
         let ctx = make_test_context(state);
-        let service = DefaultGameService::with_backends(
+        let service = DefaultGameService::with_mock_quantifier(
             Arc::new(MockBackend::with_empty_response()),
             Arc::new(MockQuantifierBackend::default()),
         );
@@ -779,7 +710,7 @@ mod tests {
             encounter.times_met = 0;
         }
         let ctx = make_test_context(state);
-        let service = DefaultGameService::with_backends(
+        let service = DefaultGameService::with_mock_quantifier(
             Arc::new(MockBackend::with_failing_trigger_narration()),
             Arc::new(MockQuantifierBackend {
                 npcs_to_return: vec!["shopkeeper".to_string()],
@@ -832,7 +763,7 @@ mod tests {
         state.narrative.history.clear();
         state.narrative.generation.status = GenerationStatus::Generating;
         let ctx = make_test_context(state);
-        let service = DefaultGameService::with_backends(
+        let service = DefaultGameService::with_mock_quantifier(
             Arc::new(MockBackend::with_delay(200)),
             Arc::new(MockQuantifierBackend::default()),
         );
@@ -860,7 +791,7 @@ mod tests {
         state.narrative.history.clear();
         state.narrative.generation.status = GenerationStatus::Generating;
         let ctx = make_test_context(state);
-        let service = DefaultGameService::with_backends(
+        let service = DefaultGameService::with_mock_quantifier(
             Arc::new(MockBackend::default()),
             Arc::new(MockQuantifierBackend {
                 movement_to_return: Some(MovementParseResult {
@@ -906,7 +837,7 @@ mod tests {
             encounter.times_met = 0;
         }
         let ctx = make_test_context(state);
-        let service = DefaultGameService::with_backends(
+        let service = DefaultGameService::with_mock_quantifier(
             Arc::new(MockBackend::default()),
             Arc::new(MockQuantifierBackend {
                 npcs_to_return: vec!["shopkeeper".to_string()],

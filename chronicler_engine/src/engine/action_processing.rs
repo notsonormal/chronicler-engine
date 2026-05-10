@@ -12,8 +12,10 @@ use crate::model::character::PlayerCard;
 use crate::model::map::Room;
 use crate::model::state::{GameState, LogEntry, LogType};
 use crate::model::world::WorldCard;
+use crate::narrative::agents::quantifier::{
+    NpcEvent, NpcEventType, QuantifierResult, compute_npc_events,
+};
 use crate::narrative::prompt::{PromptBuilder, PromptContext};
-use crate::narrative::quantifier::{NpcEvent, QuantifierResult, compute_npc_events};
 
 /// [DOC: docs/architecture/system.md]
 pub struct FreeActionContext<'a> {
@@ -111,11 +113,11 @@ pub fn apply_npc_events(state: GameState, events: &[NpcEvent]) -> Result<GameSta
     let mut state = state;
     for event in events {
         match event.event_type {
-            crate::narrative::quantifier::NpcEventType::Entered => {
+            NpcEventType::Entered => {
                 set_currently_meeting(&mut state.character_state, &event.npc_id, true);
                 increment_times_met(&mut state.character_state, &event.npc_id);
             }
-            crate::narrative::quantifier::NpcEventType::Left => {
+            NpcEventType::Left => {
                 set_currently_meeting(&mut state.character_state, &event.npc_id, false);
             }
         }

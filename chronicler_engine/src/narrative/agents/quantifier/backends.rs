@@ -2,8 +2,9 @@ use crate::error::EngineError;
 use crate::model::llm_backend::LlmBackendType;
 use crate::model::settings::Connection;
 use crate::narrative::llm_client::{call_ollama, call_openrouter_with_model};
-use crate::narrative::quantifier::core::{action_boundary_contains, quantify_room_with_llm_call};
-use crate::narrative::quantifier::types::{
+
+use super::core::{action_boundary_contains, quantify_room_with_llm_call};
+use super::types::{
     MovementParseResult, QuantifierConfidence, QuantifierParseResult, QuantifierPromptContext,
     QuantifierResult,
 };

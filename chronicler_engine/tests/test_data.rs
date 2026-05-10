@@ -109,6 +109,80 @@ pub fn create_test_npcs() -> Vec<NpcCard> {
     }]
 }
 
+/// Create a GameState with configurable room NPCs and NPC cards.
+/// Used by game_service_tests and diagnostic_benchmark.
+pub fn create_test_state_with_npcs(room_npcs: Vec<String>, npcs: Vec<NpcCard>) -> GameState {
+    let world = Arc::new(WorldCard {
+        name: "Test World".into(),
+        description: "A test world".into(),
+        global_rules: vec![],
+        default_room_image: None,
+    });
+
+    let room1 = Room {
+        id: "room1".into(),
+        name: "Test Tavern".into(),
+        description: "A cozy tavern with wooden beams and warm fire.".into(),
+        exits: HashMap::new(),
+        items: vec![],
+        npcs: room_npcs,
+        image_path: None,
+        navigation_description: None,
+    };
+
+    let region = Region {
+        id: "test_region".into(),
+        name: "Test Region".into(),
+        rooms: vec![room1],
+    };
+
+    let map = Arc::new(MapDef {
+        overworld: Overworld {
+            id: "test_overworld".into(),
+            name: "Test World".into(),
+            regions: vec![region],
+        },
+    });
+
+    let player = Arc::new(PlayerCard {
+        sheet: CharacterSheet {
+            name: "Test Player".into(),
+            description: "A test player".into(),
+            personality: "Brave".into(),
+            scenario: "Test scenario".into(),
+            example_dialogue: "Hello!".into(),
+            summary: None,
+            profile_image: None,
+            headshot_image: None,
+        },
+        inventory: vec![],
+    });
+
+    GameState::new(world, map, player, npcs, "room1".to_string())
+}
+
+/// Default test state with a single innkeeper NPC.
+pub fn create_test_state() -> GameState {
+    create_test_state_with_npcs(
+        vec!["test_npc".to_string()],
+        vec![NpcCard {
+            id: "test_npc".into(),
+            sheet: CharacterSheet {
+                name: "Innkeeper".into(),
+                description: "A friendly innkeeper".into(),
+                personality: "Helpful".into(),
+                scenario: "Runs the tavern".into(),
+                example_dialogue: "Welcome!".into(),
+                summary: None,
+                profile_image: None,
+                headshot_image: None,
+            },
+            inventory: vec![],
+            triggers: vec![],
+        }],
+    )
+}
+
 pub fn create_test_game_state() -> Arc<std::sync::Mutex<GameState>> {
     let world = Arc::new(create_test_world());
     let map = Arc::new(create_test_map());

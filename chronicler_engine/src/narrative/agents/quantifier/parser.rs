@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use crate::narrative::quantifier::types::{
+use crate::narrative::agents::quantifier::types::{
     MovementParseResult, MovementType, NpcEvent, NpcEventList, NpcEventType, QuantifierConfidence,
     QuantifierParseResult, QuantifierResult, RoomInfo,
 };

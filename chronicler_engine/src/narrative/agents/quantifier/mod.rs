@@ -1,9 +1,11 @@
+pub mod agent;
 pub mod backends;
 pub mod core;
 pub mod parser;
 pub mod prompt;
 pub mod types;
 
+pub use agent::QuantifierAgent;
 pub use backends::{
     MockQuantifierBackend, QuantifierBackendTrait, RealQuantifierBackend, get_quantifier_backend,
     get_quantifier_backend_for,

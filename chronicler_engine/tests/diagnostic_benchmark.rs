@@ -7,25 +7,24 @@
 
 #![allow(dead_code)]
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use chronicler_engine::engine::game_service::{
     DefaultGameService, GameService, GameServiceContext,
 };
 use chronicler_engine::error::{EngineError, LlmFailure};
-use chronicler_engine::model::character::{CharacterSheet, NpcCard, PlayerCard};
-use chronicler_engine::model::map::{MapDef, Overworld, Region, Room};
-use chronicler_engine::model::state::{GameState, GenerationStatus, LogType};
-use chronicler_engine::model::world::WorldCard;
-use chronicler_engine::narrative::llm::backend::LlmBackend;
-use chronicler_engine::narrative::prompt::PromptContext;
-use chronicler_engine::narrative::quantifier::backends::QuantifierBackendTrait;
-use chronicler_engine::narrative::quantifier::types::{
+use chronicler_engine::model::character::{CharacterSheet, NpcCard};
+use chronicler_engine::model::state::{GenerationStatus, LogType};
+use chronicler_engine::narrative::agents::quantifier::backends::QuantifierBackendTrait;
+use chronicler_engine::narrative::agents::quantifier::types::{
     MovementParseResult, MovementType, QuantifierConfidence, QuantifierParseResult,
     QuantifierPromptContext, QuantifierResult,
 };
+use chronicler_engine::narrative::llm::backend::LlmBackend;
+use chronicler_engine::narrative::prompt::PromptContext;
 use chronicler_engine::test_support::make_test_context;
+
+mod test_data;
 
 // =============================================================================
 // Custom Backends for Failure Simulation
@@ -362,77 +361,6 @@ fn print_benchmark_result(result: &BenchmarkResult) {
     println!("BENCHMARK_RESULT:{json}");
 }
 
-fn create_test_state_with_npcs(room_npcs: Vec<String>, npcs: Vec<NpcCard>) -> GameState {
-    let world = Arc::new(WorldCard {
-        name: "Test World".into(),
-        description: "A test world".into(),
-        global_rules: vec![],
-        default_room_image: None,
-    });
-
-    let room1 = Room {
-        id: "room1".into(),
-        name: "Test Tavern".into(),
-        description: "A cozy tavern with wooden beams and warm fire.".into(),
-        exits: HashMap::new(),
-        items: vec![],
-        npcs: room_npcs,
-        image_path: None,
-        navigation_description: None,
-    };
-
-    let region = Region {
-        id: "test_region".into(),
-        name: "Test Region".into(),
-        rooms: vec![room1],
-    };
-
-    let map = Arc::new(MapDef {
-        overworld: Overworld {
-            id: "test_overworld".into(),
-            name: "Test World".into(),
-            regions: vec![region],
-        },
-    });
-
-    let player = Arc::new(PlayerCard {
-        sheet: CharacterSheet {
-            name: "Test Player".into(),
-            description: "A test player".into(),
-            personality: "Brave".into(),
-            scenario: "Test scenario".into(),
-            example_dialogue: "Hello!".into(),
-            summary: None,
-            profile_image: None,
-            headshot_image: None,
-        },
-        inventory: vec![],
-    });
-
-    GameState::new(world, map, player, npcs, "room1".to_string())
-}
-
-fn default_test_state() -> GameState {
-    create_test_state_with_npcs(
-        vec!["test_npc".to_string()],
-        vec![NpcCard {
-            id: "test_npc".into(),
-            sheet: CharacterSheet {
-                name: "Innkeeper".into(),
-                description: "A friendly innkeeper".into(),
-                personality: "Helpful".into(),
-                scenario: "Runs the tavern".into(),
-                example_dialogue: "Welcome!".into(),
-                summary: None,
-                profile_image: None,
-                headshot_image: None,
-            },
-            inventory: vec![],
-            triggers: vec![],
-        }],
-    )
-}
-
 fn run_scenario(
     llm_backend: Arc<dyn LlmBackend>,
     quantifier_backend: Arc<dyn QuantifierBackendTrait>,
@@ -440,8 +368,8 @@ fn run_scenario(
     _category: &str,
     _injected_failure: &str,
 ) -> (String, String, GameServiceContext) {
-    let service = DefaultGameService::with_backends(llm_backend, quantifier_backend);
-    let state = default_test_state();
+    let service = DefaultGameService::with_mock_quantifier(llm_backend, quantifier_backend);
+    let state = test_data::create_test_state();
     let ctx = make_test_context(state);
 
     service.execute_action(
@@ -469,7 +397,9 @@ fn run_scenario(
 fn benchmark_llm_http_401() {
     let (error_msg, phase, ctx) = run_scenario(
         Arc::new(HttpErrorBackend::unauthorized()),
-        Arc::new(chronicler_engine::narrative::quantifier::MockQuantifierBackend::default()),
+        Arc::new(
+            chronicler_engine::narrative::agents::quantifier::MockQuantifierBackend::default(),
+        ),
         "llm_http_401",
         "LLM",
         "HTTP 401 Unauthorized from LLM provider",
@@ -516,7 +446,9 @@ fn benchmark_llm_http_401() {
 fn benchmark_llm_http_429() {
     let (error_msg, phase, _state) = run_scenario(
         Arc::new(HttpErrorBackend::rate_limited()),
-        Arc::new(chronicler_engine::narrative::quantifier::MockQuantifierBackend::default()),
+        Arc::new(
+            chronicler_engine::narrative::agents::quantifier::MockQuantifierBackend::default(),
+        ),
         "llm_http_429",
         "LLM",
         "HTTP 429 Rate Limited from LLM provider",
@@ -553,7 +485,9 @@ fn benchmark_llm_http_429() {
 fn benchmark_llm_network_error() {
     let (error_msg, phase, _state) = run_scenario(
         Arc::new(NetworkErrorBackend::connection_refused()),
-        Arc::new(chronicler_engine::narrative::quantifier::MockQuantifierBackend::default()),
+        Arc::new(
+            chronicler_engine::narrative::agents::quantifier::MockQuantifierBackend::default(),
+        ),
         "llm_network_error",
         "LLM",
         "Network error: Ollama connection refused",
@@ -600,7 +534,9 @@ fn benchmark_llm_parse_error() {
         Arc::new(ParseErrorBackend {
             raw_response: "This is not JSON, just raw text from the model.".to_string(),
         }),
-        Arc::new(chronicler_engine::narrative::quantifier::MockQuantifierBackend::default()),
+        Arc::new(
+            chronicler_engine::narrative::agents::quantifier::MockQuantifierBackend::default(),
+        ),
         "llm_parse_error",
         "LLM",
         "LLM returned non-JSON response",
@@ -648,7 +584,9 @@ fn benchmark_llm_parse_error() {
 fn benchmark_llm_timeout() {
     let (error_msg, phase, _state) = run_scenario(
         Arc::new(TimeoutBackend),
-        Arc::new(chronicler_engine::narrative::quantifier::MockQuantifierBackend::default()),
+        Arc::new(
+            chronicler_engine::narrative::agents::quantifier::MockQuantifierBackend::default(),
+        ),
         "llm_timeout",
         "LLM",
         "LLM request timed out after 180s",
@@ -693,7 +631,9 @@ fn benchmark_llm_timeout() {
 fn benchmark_llm_empty_response() {
     let (error_msg, phase, _state) = run_scenario(
         Arc::new(chronicler_engine::narrative::llm::MockBackend::with_empty_response()),
-        Arc::new(chronicler_engine::narrative::quantifier::MockQuantifierBackend::default()),
+        Arc::new(
+            chronicler_engine::narrative::agents::quantifier::MockQuantifierBackend::default(),
+        ),
         "llm_empty_response",
         "LLM",
         "LLM returned empty content field",
@@ -901,7 +841,9 @@ fn benchmark_dynamic_room_creation() {
 fn benchmark_narrative_generation_failure() {
     let (error_msg, phase, _state) = run_scenario(
         Arc::new(chronicler_engine::narrative::llm::MockBackend::failing()),
-        Arc::new(chronicler_engine::narrative::quantifier::MockQuantifierBackend::default()),
+        Arc::new(
+            chronicler_engine::narrative::agents::quantifier::MockQuantifierBackend::default(),
+        ),
         "narrative_generation_failure",
         "Narrative",
         "MockBackend configured to fail all narration calls",
@@ -968,13 +910,13 @@ fn benchmark_trigger_wrong_room_id() {
     };
 
     let state =
-        create_test_state_with_npcs(vec!["trigger_npc".to_string()], vec![npc_with_trigger]);
+        test_data::create_test_state_with_npcs(vec!["trigger_npc".to_string()], vec![npc_with_trigger]);
     let ctx = make_test_context(state);
 
-    let service = DefaultGameService::with_backends(
+    let service = DefaultGameService::with_mock_quantifier(
         Arc::new(chronicler_engine::narrative::llm::MockBackend::default()),
         Arc::new(
-            chronicler_engine::narrative::quantifier::MockQuantifierBackend {
+            chronicler_engine::narrative::agents::quantifier::MockQuantifierBackend {
                 npcs_to_return: vec!["trigger_npc".to_string()],
                 movement_to_return: None,
             },
@@ -1063,7 +1005,7 @@ fn benchmark_state_stuck_generating() {
     };
 
     let mut state =
-        create_test_state_with_npcs(vec!["test_npc".to_string()], vec![npc_with_trigger]);
+        test_data::create_test_state_with_npcs(vec!["test_npc".to_string()], vec![npc_with_trigger]);
 
     // Reset times_met so the trigger is eligible to fire
     if let Some(encounter) = state.character_state.npcs.get_mut("test_npc") {
@@ -1072,10 +1014,10 @@ fn benchmark_state_stuck_generating() {
 
     let ctx = make_test_context(state);
 
-    let service = DefaultGameService::with_backends(
+    let service = DefaultGameService::with_mock_quantifier(
         Arc::new(chronicler_engine::narrative::llm::MockBackend::with_failing_trigger_narration()),
         Arc::new(
-            chronicler_engine::narrative::quantifier::MockQuantifierBackend {
+            chronicler_engine::narrative::agents::quantifier::MockQuantifierBackend {
                 npcs_to_return: vec!["test_npc".to_string()],
                 movement_to_return: None,
             },

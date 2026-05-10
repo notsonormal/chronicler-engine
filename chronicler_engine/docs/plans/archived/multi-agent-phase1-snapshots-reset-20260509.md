@@ -562,10 +562,10 @@ With snapshots, there is no shared mutable state to guard. Generation status liv
 - `src/engine/game_service.rs`
 
 **Acceptance Criteria:**
-- [ ] `GeneratingGuard` does not exist in codebase
-- [ ] `with_lock_or_recover` does not exist in codebase
-- [ ] `std::sync::Mutex` is only used in `bootstrap.rs` (not in server code)
-- [ ] Generation status is set by loading/saving snapshots
+- [x] `GeneratingGuard` does not exist in codebase
+- [x] `with_lock_or_recover` does not exist in codebase
+- [x] `std::sync::Mutex` is only used in `bootstrap.rs` (not in server code)
+- [x] Generation status is set by loading/saving snapshots
 
 ---
 
