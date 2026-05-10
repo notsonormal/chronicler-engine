@@ -211,6 +211,39 @@ async fn test_reset_generating_handler() {
 }
 
 #[tokio::test]
+async fn test_edit_history_handler_success() {
+    let mut state = create_test_state();
+    let entry_id = {
+        state.add_log(
+            "Original text".to_string(),
+            Some("Test".to_string()),
+            chronicler_engine::model::state::LogType::Narration,
+        );
+        state.narrative.history.last().unwrap().id
+    };
+
+    let app = create_app_for_testing(state);
+
+    let req = Request::builder()
+        .uri(format!("/history/{entry_id}"))
+        .method(http::Method::POST)
+        .header(
+            http::header::CONTENT_TYPE,
+            "application/x-www-form-urlencoded",
+        )
+        .body(Body::from("text=Edited+text"))
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), 1024)
+        .await
+        .unwrap();
+    let body_str = String::from_utf8_lossy(&body);
+    assert!(body_str.contains("Edited"), "Expected success message: {body_str}");
+}
+
+#[tokio::test]
 async fn test_edit_history_handler_not_found() {
     let app = create_app_for_testing(create_test_state());
 
@@ -275,6 +308,111 @@ async fn test_delete_history_handler_not_found() {
     let response = app.oneshot(req).await.unwrap();
 
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn test_action_confirm_empty_command() {
+    let app = create_app_for_testing(create_test_state());
+
+    let req = Request::builder()
+        .uri("/action/confirm")
+        .method(http::Method::POST)
+        .header(
+            http::header::CONTENT_TYPE,
+            "application/x-www-form-urlencoded",
+        )
+        .body(Body::from("command="))
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body = axum::body::to_bytes(response.into_body(), 1024)
+        .await
+        .unwrap();
+    let body_str = String::from_utf8_lossy(&body);
+    assert!(
+        body_str.contains("Enter a command"),
+        "Expected empty command error: {body_str}"
+    );
+}
+
+#[tokio::test]
+async fn test_action_concurrent_rejection() {
+    let app = create_app_for_testing(create_test_state());
+
+    // First async action sets is_generating = true
+    let req1 = Request::builder()
+        .uri("/action")
+        .method(http::Method::POST)
+        .header(
+            http::header::CONTENT_TYPE,
+            "application/x-www-form-urlencoded",
+        )
+        .body(Body::from("command=go north"))
+        .unwrap();
+    let response1 = app.clone().oneshot(req1).await.unwrap();
+    assert!(response1.status().is_success());
+
+    // Second async action while first is in flight
+    let req2 = Request::builder()
+        .uri("/action")
+        .method(http::Method::POST)
+        .header(
+            http::header::CONTENT_TYPE,
+            "application/x-www-form-urlencoded",
+        )
+        .body(Body::from("command=go south"))
+        .unwrap();
+    let response2 = app.oneshot(req2).await.unwrap();
+    assert!(response2.status().is_success());
+    let body = axum::body::to_bytes(response2.into_body(), 1024)
+        .await
+        .unwrap();
+    let body_str = String::from_utf8_lossy(&body);
+    assert!(
+        body_str.contains("Still thinking..."),
+        "Expected concurrent rejection: {body_str}"
+    );
+}
+
+#[tokio::test]
+async fn test_action_sync_inventory() {
+    let app = create_app_for_testing(create_test_state());
+
+    let req = Request::builder()
+        .uri("/action")
+        .method(http::Method::POST)
+        .header(
+            http::header::CONTENT_TYPE,
+            "application/x-www-form-urlencoded",
+        )
+        .body(Body::from("command=inventory"))
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+
+    assert!(response.status().is_success());
+    let hx_trigger = response.headers().get("HX-Trigger");
+    assert!(hx_trigger.is_some(), "Expected HX-Trigger header for sync action");
+}
+
+#[tokio::test]
+async fn test_action_sync_quit() {
+    let app = create_app_for_testing(create_test_state());
+
+    let req = Request::builder()
+        .uri("/action")
+        .method(http::Method::POST)
+        .header(
+            http::header::CONTENT_TYPE,
+            "application/x-www-form-urlencoded",
+        )
+        .body(Body::from("command=quit"))
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+
+    assert!(response.status().is_success());
+    let hx_trigger = response.headers().get("HX-Trigger");
+    assert!(hx_trigger.is_some(), "Expected HX-Trigger header for sync action");
 }
 
 #[tokio::test]

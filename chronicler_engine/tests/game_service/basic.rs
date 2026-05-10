@@ -1,5 +1,10 @@
+use std::sync::Arc;
+
 use chronicler_engine::engine::game_service::{DefaultGameService, GameService};
 use chronicler_engine::model::state::LogType;
+use chronicler_engine::narrative::agents::quantifier::MockQuantifierBackend;
+use chronicler_engine::narrative::agents::registry::AgentRegistry;
+use chronicler_engine::narrative::llm::MockBackend;
 use chronicler_engine::test_support::make_test_context;
 
 use crate::failing_service;
@@ -131,3 +136,40 @@ fn test_execute_action_unknown_command() {
         guard.narrative.generation.status
     );
 }
+
+#[test]
+fn test_default_game_service_default() {
+    // Default should be constructible (delegates to new())
+    let _service: DefaultGameService = Default::default();
+}
+
+#[test]
+fn test_default_game_service_with_backends() {
+    let service = DefaultGameService::with_backends(
+        Arc::new(MockBackend::default()),
+        AgentRegistry::default(),
+    );
+    // Should be usable without panicking
+    let mut state = create_test_state();
+    state.narrative.history.clear();
+    let ctx = make_test_context(state);
+    service.execute_action(ctx.clone(), "look".to_string(), "Player".to_string());
+    let guard = crate::latest_state(&ctx);
+    assert!(!guard.narrative.generation.status.is_generating());
+}
+
+#[test]
+fn test_default_game_service_with_mock_quantifier() {
+    let service = DefaultGameService::with_mock_quantifier(
+        Arc::new(MockBackend::default()),
+        Arc::new(MockQuantifierBackend::default()),
+    );
+    let mut state = create_test_state();
+    state.narrative.history.clear();
+    let ctx = make_test_context(state);
+    service.execute_action(ctx.clone(), "look".to_string(), "Player".to_string());
+    let guard = crate::latest_state(&ctx);
+    assert!(!guard.narrative.generation.status.is_generating());
+}
+
+

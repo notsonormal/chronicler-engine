@@ -36,6 +36,12 @@ All blocking LLM work runs inside `tokio::task::spawn_blocking`. Spawn closures 
 
 - **Shutdown path:** `Ctrl+C` triggers `axum::serve` graceful shutdown, which cancels the token and lets in-flight tasks finish cleanly.
 
+### INV-004b: No Concurrent Async Actions
+Only one async (`FreeAction`) generation may be in flight at a time. The server rejects subsequent async action requests with `"Still thinking..."` while a generation is active. This prevents snapshot race conditions from overlapping read-modify-write cycles.
+
+- **Enforced by:** `AppState::is_generating` (`AtomicBool`) checked with `compare_exchange` in `process_action`. The flag is cleared by `GenerationGuard::drop` when the `spawn_blocking` task exits, even on panic.
+- **Client-side:** HTMX `hx-sync="this:drop"` on the command form drops duplicate submissions before they reach the server.
+
 ### INV-005: Mutex Poison Recovery
 If a `std::sync::Mutex<GameState>` is poisoned, the engine must recover rather than panic. `GeneratingGuard` recovers poisoned locks by calling `Mutex::clear_poison()` and resetting status.
 

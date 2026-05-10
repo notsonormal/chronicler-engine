@@ -12,14 +12,19 @@ pub fn port_in_use(port: u16) -> bool {
     std::net::TcpStream::connect(format!("127.0.0.1:{port}")).is_ok()
 }
 
-pub fn kill_existing_server() {
+pub fn kill_existing_server(port: u16) {
     // Only kill if we manage the server (to avoid killing other test instances)
     if SERVER_MANAGED.load(Ordering::SeqCst) {
         let _ = Command::new("taskkill")
             .args(["/F", "/IM", "chronicler_engine.exe"])
             .output();
-        // Wait for the port to be released (2 seconds for Windows)
-        std::thread::sleep(std::time::Duration::from_millis(2000));
+        // Poll for port release instead of fixed 2s sleep
+        for _ in 0..40 {
+            if !port_in_use(port) {
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
     }
 }
 
@@ -275,7 +280,7 @@ impl TestServer {
 
     async fn start(port: u16, world: &str, use_mock: bool) -> Self {
         if port_in_use(port) {
-            kill_existing_server();
+            kill_existing_server(port);
         }
         let (child, temp_dir) = start_server_with_env(port, world, use_mock);
         // Increased wait time for server to be fully ready
@@ -301,14 +306,11 @@ impl TestServer {
 impl Drop for TestServer {
     fn drop(&mut self) {
         let _ = self.child.kill();
-        std::thread::sleep(std::time::Duration::from_millis(500));
-        let _ = self.child.kill();
         let _ = self.child.wait();
         SERVER_MANAGED.store(false, Ordering::SeqCst);
         release_port_lock(self.port);
         if let Some(tmp) = &self.temp_dir {
             let _ = std::fs::remove_dir_all(tmp);
         }
-        std::thread::sleep(std::time::Duration::from_millis(500));
     }
 }

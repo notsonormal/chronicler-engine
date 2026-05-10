@@ -144,6 +144,7 @@ fn test_app_state_lock_state_success() {
         game_service: Arc::new(DefaultGameService::new()) as Arc<dyn GameService>,
         settings: Arc::new(std::sync::RwLock::new(AppSettings::default())),
         cancel_token: tokio_util::sync::CancellationToken::new(),
+        is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
     };
 
     let loaded = app_state.load_state();
@@ -240,6 +241,7 @@ fn test_app_state_lock_state_poisoned() {
         game_service: Arc::new(DefaultGameService::new()) as Arc<dyn GameService>,
         settings: Arc::new(std::sync::RwLock::new(AppSettings::default())),
         cancel_token: tokio_util::sync::CancellationToken::new(),
+        is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
     };
 
     let loaded = app_state.load_state();

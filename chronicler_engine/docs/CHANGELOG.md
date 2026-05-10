@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Fixed
+- **Double-submit race condition** — Server now rejects concurrent async actions while generation is in flight
+  - New `AppState::is_generating` (`Arc<AtomicBool>`) acts as a fast generation gate
+  - `process_action` checks `compare_exchange(false, true)` before accepting async actions; rejects with `"Still thinking..."`
+  - `GenerationGuard` (RAII in `src/server/fragments/generation_guard.rs`) ensures `is_generating` is cleared on `spawn_blocking` exit, even on panic
+  - Client-side: HTMX `hx-sync="this:drop"` on command form prevents duplicate submissions from reaching the server
+  - `saveActionArea()` JS helper now disables the submit button during request flight
+  - `test_double_submit_protection` rewritten to verify rejection: first request accepted, second rejected, only first command appears in story log
+  - Fixes flaky test caused by Phase 1.7 snapshot migration removing the old `Arc<Mutex<GameState>>` serialization
+
 ### Added
 - **Agent Trait + Registry + Quantifier Migration (Phase 2)** — Migrated quantifier from hardcoded pipeline to `dyn Agent` architecture
   - New `Agent` trait with `name()`, `phase()`, `backend_selector()`, `execute()` methods

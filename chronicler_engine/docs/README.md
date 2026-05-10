@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-10 18:31 UTC*
+*Index last generated: 2026-05-10 19:45 UTC*
 
 ### Root files
 
@@ -24,7 +24,6 @@ This folder contains all documentation for the Chronicler Engine project.
 
 ### `docs/architecture/`
 
-- [Chronicler Engine: Defensive Architecture Overview](./architecture/defensive-architecture-overview.md)
 - [Architecture Guardrails](./architecture/guardrails.md)
 - [Chronicler Engine Runtime Invariants](./architecture/invariants.md)
 - [Specification: Core Architecture (Modular)](./architecture/system.md)
@@ -56,6 +55,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Plan: Fix Settings Panel Encoding and Checkbox Spacing](./plans/archived/fix-settings-encoding-checkbox-spacing-2026-05-09.md)
 - [Plan: Granular Status Phases for LLM Pipeline](./plans/archived/granular-status-phases-archived.md)
 - [Implementation Plan: Marinara-Style Prompt Architecture](./plans/archived/hercules-she-hulk-doctor-fate-20260503.md)
+- [Plan: Fix Server-Side Action Race Condition](./plans/archived/hulk-doctor-strange-tigra-20260510.md)
 - [Implementation Plan: Fix Gemma 4 Thinking Suffix Corruption](./plans/archived/iceman-thor-booster-gold-2026-05-04.md)
 - [Implementation Plan: Isolate Slow LLM Tests](./plans/archived/lockjaw-aquaman-sam-alexander-2026-05-03.md)
 - [Plan: Unify PHI Layer — Remove PhiMode::Continuation](./plans/archived/luke-cage-pantha-morbius-2026-05-03.md)
@@ -73,7 +73,7 @@ This folder contains all documentation for the Chronicler Engine project.
 
 ### `docs/reference/`
 
-- [Specification: Redmist Estate Map and Data Parsing](./reference/data_schemas.md)
+- [Specification: Engine Data Schemas](./reference/data_schemas.md)
 - [Marinara-Engine Reference](./reference/marinara_engine.md)
 - [Marinara Engine — Default System Prompt](./reference/marinara_engine_system_prompt.md)
 - [Specification: Player Persona System](./reference/persona_system.md)

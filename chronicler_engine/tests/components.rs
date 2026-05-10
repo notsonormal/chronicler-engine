@@ -16,6 +16,8 @@ mod css;
 mod debug;
 #[path = "components/fragment.rs"]
 mod fragment;
+#[path = "components/misc.rs"]
+mod misc;
 #[path = "components/settings.rs"]
 mod settings;
 #[path = "components/template.rs"]

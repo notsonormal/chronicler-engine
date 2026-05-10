@@ -21,5 +21,6 @@ pub fn make_test_context(state: GameState) -> GameServiceContext {
         starting_room_id: state.movement.current_room_id.clone(),
         cancel_token: tokio_util::sync::CancellationToken::new(),
         action_lock: Arc::new(Mutex::new(())),
+        is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
     }
 }

@@ -13,6 +13,10 @@ Contains pure data structures, serialization schemas, and the "Single Source of 
 - **`state`**: The `GameState` aggregation, narration history logs, and TUI state.
 - **`scenario`**: Starting scenario definitions for narrative introductions.
 - **`trigger`**: Trigger definitions, conditions, and character state tracking (`Trigger`, `TriggerCondition`, `TriggerAction`, `NpcEncounterState`, `CharacterState`).
+- **`settings`**: `AppSettings`, `Connection`, and agent configuration data models.
+- **`agent`**: `AgentConfig`, `AgentResult`, `AgentContext`, `StatePatch`, `ExecutionPhase`, `BackendSelector`, `Confidence`.
+- **`llm_backend`**: `LlmBackendType` enum for backend selection.
+- **`state_snapshot`**: `GameStateSnapshot` for SQLite persistence.
 
 ### 2. The Engine Tier (`crate::engine::*`)
 Contains the mechanics that drive the simulation. It translates user intent and state into outcomes.
@@ -21,6 +25,8 @@ Contains the mechanics that drive the simulation. It translates user intent and 
 - **`logic`**: Rules for movement, fuzzy-matching, and room resolution.
 - **`trigger_eval`**: Pure function evaluation of NPC triggers based on character state and room location (`evaluate_triggers(state, current_room_id) -> Vec<(NpcCard, Trigger)>`). Triggers with `room_id` only fire in that room.
 - **`action_processing`**: Extracted pure functions for server handlers (`get_static_npcs`, `handle_movement`, `apply_npc_events`, `evaluate_and_narrate_triggers`, `commit_trigger_narration`, `execute_freeaction_impl`). Enables unit testing of server-side logic.
+- **`game_service`**: `GameService` trait and `DefaultGameService` — game orchestration extracted from fragments.rs. Includes action handling, retry logic, and context helpers.
+- **`state_diagnostics`**: Runtime invariant checks (`INV-ROOM`, `INV-NPC`, `INV-CHAR`, `INV-LOG`), feature-flagged via `diagnostics` feature.
 
 ### 3. The Narrative Tier (`crate::narrative::*`)
 The interface between the synchronous engine and stochastic LLM generation.
@@ -34,7 +40,7 @@ The interface between the synchronous engine and stochastic LLM generation.
   - **`AgentRegistry`**: Loads agents from config and iterates by execution phase
   - **`QuantifierAgent`**: Post-generation agent for scene quantification and dynamic room presence detection
   - **`NarratorAgent`**: Stub pre-generation agent (reserved for future use)
-- **`quantifier`** (under `agents/`): Quantifier implementation module. Moved from `narrative/quantifier/` to `narrative/agents/quantifier/`.
+- **`quantifier`** (under `agents/`): Quantifier implementation module.
   - **`QuantifierBackendTrait`**: Interface for NPC detection backends
   - **`RealQuantifierBackend`**: Production implementation using LLM
   - **`MockQuantifierBackend`**: Test implementation returning configurable NPCs with High confidence
@@ -43,6 +49,7 @@ The interface between the synchronous engine and stochastic LLM generation.
   - **`HarperBackend`**: Wraps harper-core with curated + user dictionaries
   - **`check_player_input()`**: Facade that returns `Option<CheckResult>` based on `TextCheckMode`
   - **`CheckResult`/`CheckIssue`**: Structured lint results with byte spans and suggestions
+- **`llm_client`**: HTTP client helpers for OpenRouter and Ollama.
 
 #### NPC Event Layer
 
@@ -60,16 +67,28 @@ When `Left` fires: `currently_meeting = false`
 
 ### 4. The Server Tier (`crate::server::*`)
 The HTTP layer for the HTMX web dashboard with polling-based real-time updates.
-- **`mod`**: Axum router, request handlers.
-- **`fragments`**: HTML fragment generators for HTMX partial updates.
-  - Uses `pulldown-cmark` for markdown→HTML conversion of LLM narrative text.
-  - Uses `askama` for all 4 templates (header, story_log, visual_sidebar, action_area).
+- **`mod`**: Axum router, request handlers, `AppState`, `run_server`, `create_app_for_testing`, `create_app_for_testing_with_settings`.
+- **`fragments`**: HTML fragment generators for HTMX partial updates. Split into submodules:
+  - **`actions`**: Action form handlers and renderers
+  - **`endpoints`**: HTMX fragment endpoints (`/fragment/story-log`, `/fragment/visual-sidebar`, etc.)
+  - **`history`**: History editing, deletion, and retry endpoints
+  - **`misc`**: Utility endpoints (status, hints, text check)
+  - **`renderers`**: HTML rendering helpers, markdown→HTML via `pulldown-cmark`
+- **`settings_fragment`**: Settings panel fragment handlers and template rendering.
 - **`templates`**: Askama template definitions with type-safe rendering.
   - Templates declare required data shapes at compile time.
   - Missing fields = compiler error (not runtime failure).
+- **`debug`**: Dev diagnostic endpoint (`/debug/state`).
 
 ### 5. The Settings Tier (`crate::settings` + `crate::model::settings`)
 Persistent JSON-based settings system for LLM configuration with reusable connection profiles.
+
+| Component | Purpose |
+|-----------|---------|
+| `data/settings.json` | Persistent settings file |
+| `AppSettings` struct | Configuration data model (connections + active selections) |
+| `Connection` struct | Named provider+model profile |
+| `AppState.settings` | Runtime access via `Arc<RwLock<AppSettings>>` |
 
 | Component | Purpose |
 |-----------|---------|
@@ -114,58 +133,180 @@ Each `Connection` contains: `id`, `name`, `provider`, `model`, `api_key` (option
 - `OPENROUTER_API_KEY` env var used as fallback when connection `api_key` is None
 - `LLM_BACKEND` env var is **not** consulted (settings file is sole source of truth)
 
-### 7. The Presentation Tier (`assets/`)
-Static web assets served by the server.
-- **`index.html`**: HTMX frontend with tabbed interface (Game/Settings tabs)
+### 6. The Error Tier (`crate::error`)
+Unified error type shared across all tiers.
+- **`EngineError`**: Top-level error enum (`Llm`, `Narrative`, `Internal`, `Io`, `Serde`, `Parse`, `Serialize`, `Navigation`, `RoomNotFound`, `NpcNotFound`, `WorldNotFound`, `Config`, `Template`, `DataLoad`, `ContextOverflow`)
+- **`LlmFailure`**: LLM-specific errors (`EmptyResponse`, `Http`, `Network`, `ParseError`, `Timeout`)
+- **`NarrativeFailure`**: Prompt build and generation failures
+- **`InternalError`**: Invariant violations
+
+### 7. The Storage Tier (`crate::storage`)
+SQLite-based snapshot persistence for game state.
+- **`db`**: Database connection and schema management
+- **`snapshot_storage`**: `SnapshotStorage` trait and SQLite implementation (`SqliteSnapshotStorage`)
+- **`GameStateSnapshot`**: Serializable subset of `GameState` for persistence
+
+### 8. The Bootstrap Tier (`crate::bootstrap`)
+World loading, validation, and server initialization.
+- **`load`**: World data loading from `data/worlds/`
+- **`validate`**: World data validation (rooms, NPCs, triggers)
+- **`scenario`**: Starting scenario selection
+- **`logging`**: Structured logging setup
+- **`run`**: Server initialization and startup
+
+### 9. The CLI Tier (`crate::cli`)
+Command-line argument parsing via `clap`.
+- **`Cli`**: CLI args struct (`--world`, `--port`, etc.)
+
+### 10. The Test Support Tier (`crate::test_support`)
+Shared test fixtures and utilities.
+- **`fixtures`**: `TestGameState`, `TestNpc`, `TestMap`, etc.
+- **`context`**: Test context helpers
+- **`in_memory_storage`**: In-memory `SnapshotStorage` implementation for tests
+
+> **Note:** `assets/` contains static web assets (`index.html`) served by the server. It is not a Rust module tier.
 
 ## File Mapping
 
-| File | Domain | Note |
+> **Note:** All test files follow the sibling `*_tests.rs` pattern (e.g. `src/engine/logic_tests.rs` tests `src/engine/logic.rs`).
+
+### Model Tier
+
+| File | Module | Note |
 | :--- | :--- | :--- |
-| `src/model/world.rs` | `crate::model::world` | |
-| `src/model/map.rs` | `crate::model::map` | |
-| `src/model/character.rs` | `crate::model::character` | |
-| `src/model/state.rs` | `crate::model::state` | |
+| `src/model/mod.rs` | `crate::model` | Module root |
+| `src/model/world.rs` | `crate::model::world` | `WorldCard` |
+| `src/model/map.rs` | `crate::model::map` | `MapDef`, `Room`, `Region` |
+| `src/model/character.rs` | `crate::model::character` | `NpcCard`, `PlayerCard`, `CharacterSheet` |
+| `src/model/state.rs` | `crate::model::state` | `GameState`, `MovementState`, `NarrativeState`, `SceneState`, `LogEntry`, `GenerationState` |
+| `src/model/state_snapshot.rs` | `crate::model::state_snapshot` | `GameStateSnapshot` |
 | `src/model/scenario.rs` | `crate::model::scenario` | Starting scenarios |
-| `src/model/trigger.rs` | `crate::model::trigger` | Trigger definitions, conditions, character state |
-| `src/model/settings.rs` | `crate::model::settings` | AppSettings struct for persistence |
-| `src/settings.rs` | `crate::settings` | Settings load/save persistence module |
-| `src/engine/parser.rs` | `crate::engine::parser` | |
-| `src/engine/action.rs` | `crate::engine::action` | |
+| `src/model/trigger.rs` | `crate::model::trigger` | `Trigger`, `TriggerCondition`, `TriggerAction`, `NpcEncounterState`, `CharacterState` |
+| `src/model/settings.rs` | `crate::model::settings` | `AppSettings`, `Connection`, `AgentConfig` |
+| `src/model/agent.rs` | `crate::model::agent` | `AgentResult`, `AgentContext`, `StatePatch`, `ExecutionPhase`, `BackendSelector`, `Confidence` |
+| `src/model/llm_backend.rs` | `crate::model::llm_backend` | `LlmBackendType` |
+
+### Engine Tier
+
+| File | Module | Note |
+| :--- | :--- | :--- |
+| `src/engine/mod.rs` | `crate::engine` | Module root |
+| `src/engine/parser.rs` | `crate::engine::parser` | Natural language command decomposition |
+| `src/engine/action.rs` | `crate::engine::action` | `Action` enum |
 | `src/engine/logic.rs` | `crate::engine::logic` | `get_current_room`, `find_room_in_map`, `find_room_in_world_map` |
-| `src/engine/trigger_eval.rs` | `crate::engine::trigger_eval` | Trigger evaluation based on character state |
-| `src/engine/action_processing.rs` | `crate::engine::action_processing` | Server handler pure functions (NEW) |
-| `src/engine/game_service.rs` | `crate::engine::game_service` | `GameService` trait and `DefaultGameService` — game orchestration extracted from fragments.rs |
-| `src/bootstrap.rs` | `crate::bootstrap` | World loading, server initialization |
-| `src/cli.rs` | `crate::cli` | CLI argument parsing (clap) |
+| `src/engine/trigger_eval.rs` | `crate::engine::trigger_eval` | `evaluate_triggers` |
+| `src/engine/action_processing.rs` | `crate::engine::action_processing` | `execute_freeaction_impl`, `handle_movement`, `apply_npc_events` |
+| `src/engine/state_diagnostics.rs` | `crate::engine::state_diagnostics` | Runtime invariant checks |
+| `src/engine/game_service/mod.rs` | `crate::engine::game_service` | `GameService` trait |
+| `src/engine/game_service/service.rs` | `crate::engine::game_service` | `DefaultGameService` |
+| `src/engine/game_service/actions.rs` | `crate::engine::game_service` | Action handling helpers |
+| `src/engine/game_service/context.rs` | `crate::engine::game_service` | `GameServiceContext` |
+| `src/engine/game_service/helpers.rs` | `crate::engine::game_service` | Orchestration helpers |
+| `src/engine/game_service/retry.rs` | `crate::engine::game_service` | Retry logic |
+
+### Narrative Tier
+
+| File | Module | Note |
+| :--- | :--- | :--- |
+| `src/narrative/mod.rs` | `crate::narrative` | Module root |
 | `src/narrative/llm/mod.rs` | `crate::narrative::llm` | LLM backend module root |
 | `src/narrative/llm/backend.rs` | `crate::narrative::llm` | `LlmBackend` trait |
 | `src/narrative/llm/openrouter.rs` | `crate::narrative::llm` | OpenRouter backend |
 | `src/narrative/llm/deepseek.rs` | `crate::narrative::llm` | DeepSeek backend |
 | `src/narrative/llm/ollama.rs` | `crate::narrative::llm` | Ollama backend |
-| `src/narrative/llm/mock.rs` | `crate::narrative::llm` | Mock backend for tests |
+| `src/narrative/llm/mock.rs` | `crate::narrative::llm` | Mock backend |
+| `src/narrative/llm_client.rs` | `crate::narrative::llm_client` | HTTP client helpers |
 | `src/narrative/prompt/mod.rs` | `crate::narrative::prompt` | Prompt module root |
 | `src/narrative/prompt/builder.rs` | `crate::narrative::prompt` | `PromptBuilder` with 8-layer construction |
 | `src/narrative/prompt/budget.rs` | `crate::narrative::prompt` | Token budget and context fitting |
-| `src/narrative/agents/mod.rs` | `crate::narrative::agents` | Agent trait, registry, and re-exports |
-| `src/narrative/agents/trait_def.rs` | `crate::narrative::agents` | `Agent` trait definition |
-| `src/narrative/agents/registry.rs` | `crate::narrative::agents` | `AgentRegistry` and `NarratorAgent` |
+| `src/narrative/prompt/context.rs` | `crate::narrative::prompt` | Context helpers |
+| `src/narrative/prompt/sanitize.rs` | `crate::narrative::prompt` | Prompt injection sanitization |
+| `src/narrative/prompt/templates.rs` | `crate::narrative::prompt` | Prompt templates |
+| `src/narrative/prompt/types.rs` | `crate::narrative::prompt` | Prompt types |
+| `src/narrative/agents/mod.rs` | `crate::narrative::agents` | Agent module root |
+| `src/narrative/agents/trait_def.rs` | `crate::narrative::agents` | `Agent` trait |
+| `src/narrative/agents/registry.rs` | `crate::narrative::agents` | `AgentRegistry`, `NarratorAgent` |
 | `src/narrative/agents/quantifier/mod.rs` | `crate::narrative::agents::quantifier` | Quantifier module root |
-| `src/narrative/agents/quantifier/agent.rs` | `crate::narrative::agents::quantifier` | `QuantifierAgent` implementing `Agent` trait |
+| `src/narrative/agents/quantifier/agent.rs` | `crate::narrative::agents::quantifier` | `QuantifierAgent` |
 | `src/narrative/agents/quantifier/core.rs` | `crate::narrative::agents::quantifier` | Core quantifier logic |
-| `src/narrative/agents/quantifier/backends.rs` | `crate::narrative::agents::quantifier` | Quantifier backend implementations |
-| `src/narrative/text_check/check.rs` | `crate::narrative::text_check` | Facade: `check_player_input()` |
-| `src/narrative/text_check/harper_backend.rs` | `crate::narrative::text_check` | `HarperBackend` — harper-core wrapper |
-| `src/narrative/text_check/types.rs` | `crate::narrative::text_check` | `CheckResult`, `CheckIssue`, `IssueKind` |
-| `src/narrative/llm_client.rs` | `crate::narrative::llm_client` | HTTP client helpers for OpenRouter and Ollama |
-| `src/model/llm_backend.rs` | `crate::model::llm_backend` | `LlmBackendType` enum for backend selection |
-| `src/server/mod.rs` | `crate::server` | Axum router, `AppState`, `run_server`, `create_app_for_testing` |
+| `src/narrative/agents/quantifier/backends.rs` | `crate::narrative::agents::quantifier` | Quantifier backends |
+| `src/narrative/agents/quantifier/parser.rs` | `crate::narrative::agents::quantifier` | Quantifier response parser |
+| `src/narrative/agents/quantifier/prompt.rs` | `crate::narrative::agents::quantifier` | Quantifier prompt builder |
+| `src/narrative/agents/quantifier/types.rs` | `crate::narrative::agents::quantifier` | Quantifier types |
+| `src/narrative/text_check/mod.rs` | `crate::narrative::text_check` | Text check module root |
+| `src/narrative/text_check/check.rs` | `crate::narrative::text_check` | `check_player_input()` facade |
+| `src/narrative/text_check/harper_backend.rs` | `crate::narrative::text_check` | `HarperBackend` |
+| `src/narrative/text_check/types.rs` | `crate::narrative::text_check` | `CheckResult`, `CheckIssue` |
+
+### Server Tier
+
+| File | Module | Note |
+| :--- | :--- | :--- |
+| `src/server/mod.rs` | `crate::server` | Axum router, `AppState`, `run_server`, `create_app_for_testing`, `create_app_for_testing_with_settings` |
 | `src/server/debug.rs` | `crate::server::debug` | Dev diagnostic endpoint (`/debug/state`) |
-| `src/test_support/mod.rs` | `crate::test_support` | Shared test utilities |
-| `src/server/fragments.rs` | `crate::server` | HTMX endpoint handlers and HTML fragment generators |
-| `src/server/settings_fragment.rs` | `crate::server` | Settings panel fragment handlers |
 | `src/server/templates.rs` | `crate::server` | Askama templates |
-| `assets/index.html` | Presentation | HTMX frontend |
+| `src/server/fragments/mod.rs` | `crate::server::fragments` | Fragments module root |
+| `src/server/fragments/actions.rs` | `crate::server::fragments` | Action form handlers |
+| `src/server/fragments/endpoints.rs` | `crate::server::fragments` | HTMX fragment endpoints |
+| `src/server/fragments/history.rs` | `crate::server::fragments` | History edit/delete/retry |
+| `src/server/fragments/misc.rs` | `crate::server::fragments` | Status, hints, text check |
+| `src/server/fragments/renderers.rs` | `crate::server::fragments` | HTML rendering helpers |
+| `src/server/settings_fragment/mod.rs` | `crate::server::settings_fragment` | Settings panel module root |
+| `src/server/settings_fragment/fragments.rs` | `crate::server::settings_fragment` | Settings fragments |
+| `src/server/settings_fragment/handlers.rs` | `crate::server::settings_fragment` | Settings handlers |
+| `src/server/settings_fragment/template.rs` | `crate::server::settings_fragment` | Settings template data |
+
+### Settings Tier
+
+| File | Module | Note |
+| :--- | :--- | :--- |
+| `src/settings.rs` | `crate::settings` | Settings load/save persistence |
+
+### Error Tier
+
+| File | Module | Note |
+| :--- | :--- | :--- |
+| `src/error.rs` | `crate::error` | `EngineError`, `LlmFailure`, `NarrativeFailure`, `InternalError` |
+
+### Storage Tier
+
+| File | Module | Note |
+| :--- | :--- | :--- |
+| `src/storage/mod.rs` | `crate::storage` | Module root |
+| `src/storage/db.rs` | `crate::storage` | Database connection |
+| `src/storage/snapshot_storage.rs` | `crate::storage` | `SnapshotStorage` trait, `SqliteSnapshotStorage` |
+
+### Bootstrap Tier
+
+| File | Module | Note |
+| :--- | :--- | :--- |
+| `src/bootstrap/mod.rs` | `crate::bootstrap` | Module root |
+| `src/bootstrap/load.rs` | `crate::bootstrap` | World data loading |
+| `src/bootstrap/validate.rs` | `crate::bootstrap` | World validation |
+| `src/bootstrap/scenario.rs` | `crate::bootstrap` | Scenario selection |
+| `src/bootstrap/logging.rs` | `crate::bootstrap` | Logging setup |
+| `src/bootstrap/run.rs` | `crate::bootstrap` | Server startup |
+
+### CLI Tier
+
+| File | Module | Note |
+| :--- | :--- | :--- |
+| `src/cli.rs` | `crate::cli` | CLI argument parsing |
+
+### Test Support Tier
+
+| File | Module | Note |
+| :--- | :--- | :--- |
+| `src/test_support/mod.rs` | `crate::test_support` | Module root |
+| `src/test_support/fixtures.rs` | `crate::test_support` | Test fixtures |
+| `src/test_support/context.rs` | `crate::test_support` | Test context helpers |
+| `src/test_support/in_memory_storage.rs` | `crate::test_support` | In-memory snapshot storage |
+
+### Assets
+
+| File | Purpose |
+| :--- | :--- |
+| `assets/index.html` | HTMX frontend with tabbed interface |
 
 ## UI Specification
 
@@ -309,7 +450,7 @@ pub struct LogEntry {
 
 ### History Editing
 
-Entries can be edited in place via `PUT /api/history/{id}`:
+Entries can be edited in place via `POST /history/:id`:
 
 - Both user inputs (`LogType::Input`) and AI responses (`LogType::Narration`, `LogType::Dialogue`) are editable
 - Event headers (`LogType::Event`) and location headers are not editable
@@ -319,7 +460,7 @@ Entries can be edited in place via `PUT /api/history/{id}`:
 
 ### Retry Feature
 
-The retry endpoint (`POST /api/retry`) regenerates the last AI response:
+The retry endpoint (`POST /retry`) regenerates the last AI response:
 
 - Finds the last `LogType::Input` entry
 - Regenerates its corresponding AI response via LLM
@@ -331,13 +472,35 @@ The retry endpoint (`POST /api/retry`) regenerates the last AI response:
 
 | Method | Path | Description |
 |--------|-----|-------------|
-| `GET` | `/fragment/settings` | Settings panel HTML |
-| `POST` | `/settings` | Save settings from form |
+| `GET` | `/` | Main page (serves `assets/index.html`) |
+| `GET` | `/fragment/header` | Header fragment |
+| `GET` | `/fragment/story-log` | Story log fragment |
+| `GET` | `/fragment/visual-sidebar` | Visual sidebar fragment |
+| `GET` | `/fragment/action-area` | Action area fragment |
+| `GET` | `/fragment/character-headshots` | Character headshots fragment |
+| `POST` | `/action` | Main action handler |
+| `POST` | `/action/check` | Pre-flight spell/grammar check |
+| `POST` | `/action/confirm` | Confirm corrected text submission |
+| `POST` | `/check-text` | Manual text check |
+| `GET` | `/hints` | Action hints |
+| `GET` | `/status/ready` | Ready status |
+| `GET` | `/status/generating` | Generating status with phase |
+| `POST` | `/status/reset-generating` | Reset generating state |
 | `POST` | `/history/:id` | Edit entry text |
 | `POST` | `/history/:id/delete` | Delete entry |
 | `POST` | `/retry` | Regenerate last AI response |
-| `POST` | `/action/check` | Pre-flight spell/grammar check |
-| `POST` | `/check-text` | Manual text check |
+| `POST` | `/reset` | Reset game state |
+| `GET` | `/fragment/settings` | Settings panel HTML |
+| `POST` | `/settings` | Save settings from form |
+| `POST` | `/connections/add` | Add new connection |
+| `GET` | `/fragment/connections/:id` | Connection card fragment |
+| `GET` | `/fragment/connections/:id/edit` | Edit connection form |
+| `POST` | `/connections/:id/edit` | Save edited connection |
+| `POST` | `/connections/:id/delete` | Delete connection |
+| `POST` | `/connections/:id/set-narrator` | Set as narrator connection |
+| `POST` | `/connections/:id/set-quantifier` | Set as quantifier connection |
+| `POST` | `/settings/text-check` | Save text check settings |
+| `GET` | `/debug/state` | Dev diagnostic endpoint (dev only) |
 
 ### UI Integration
 

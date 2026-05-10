@@ -148,21 +148,33 @@ mod tests {
         let client = reqwest::Client::new();
         let url = format!("http://127.0.0.1:{port}/action/check");
 
-        // Submit two commands in rapid succession
-        let req1 = client
+        // Submit first command
+        let res1 = client
             .post(&url)
             .form(&[("command", "alpha-beta-unique-1")])
-            .send();
-        let req2 = client
+            .send()
+            .await
+            .unwrap();
+        let body1 = res1.text().await.unwrap();
+        assert!(
+            body1.contains("Thinking..."),
+            "First request should be accepted: {body1}"
+        );
+
+        // Submit second command immediately while first is generating
+        let res2 = client
             .post(&url)
             .form(&[("command", "gamma-delta-unique-2")])
-            .send();
+            .send()
+            .await
+            .unwrap();
+        let body2 = res2.text().await.unwrap();
+        assert!(
+            body2.contains("Still thinking..."),
+            "Second request should be rejected while generating: {body2}"
+        );
 
-        let (res1, res2) = tokio::join!(req1, req2);
-        assert!(res1.is_ok(), "First request should succeed");
-        assert!(res2.is_ok(), "Second request should succeed");
-
-        // Poll story log until both commands appear (targeted wait, max ~3s)
+        // Wait for first command to complete (mock backend has small delay)
         let mut story = String::new();
         for _ in 0..30 {
             story = client
@@ -173,7 +185,7 @@ mod tests {
                 .text()
                 .await
                 .unwrap();
-            if story.contains("alpha-beta-unique-1") && story.contains("gamma-delta-unique-2") {
+            if story.contains("alpha-beta-unique-1") {
                 break;
             }
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
@@ -181,11 +193,13 @@ mod tests {
 
         println!("Story log: {story}");
 
-        let has_first = story.contains("alpha-beta-unique-1");
-        let has_second = story.contains("gamma-delta-unique-2");
-
-        assert!(has_first, "First command should appear in story log");
-        // Without mutex, both requests are accepted; server processes both
-        assert!(has_second, "Second command should also appear in story log");
+        assert!(
+            story.contains("alpha-beta-unique-1"),
+            "First command should appear in story log"
+        );
+        assert!(
+            !story.contains("gamma-delta-unique-2"),
+            "Second command should NOT appear — it was rejected"
+        );
     }
 }

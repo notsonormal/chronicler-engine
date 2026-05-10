@@ -1,8 +1,7 @@
-# Specification: Redmist Estate Map and Data Parsing
+# Specification: Engine Data Schemas
 
 ## Objective
-Normalize legacy character cards (which bundle multiple disparate fields like Personality and Background into the standard `description` field) to match the separated field model established in the Chronicler Engine `NpcCard`. 
-Create a global dynamic map to place these characters inside the engine.
+Define the JSON data schemas used by the Chronicler Engine for characters, rooms, triggers, world definitions, and game state snapshots.
 
 ## Data Normalization Rules
 Character JSON files contained in `data/characters/` should be scrubbed using regular expressions or textual parsing to locate:

@@ -584,3 +584,115 @@ fn test_quantifier_detects_npc_presence_and_fires_trigger() {
         "Should have main narration + trigger continuation narration"
     );
 }
+
+#[test]
+fn test_retry_no_snapshot() {
+    let ctx = make_test_context(create_test_state());
+    // Clear all snapshots so retry has nothing to load
+    ctx.snapshot_storage.reset().unwrap();
+
+    let service = DefaultGameService::with_mock_quantifier(
+        Arc::new(MockBackend::default()),
+        Arc::new(MockQuantifierBackend::default()),
+    );
+
+    // Should not panic with no snapshot
+    service.retry_last_response(ctx.clone());
+}
+
+#[test]
+fn test_retry_no_input_text() {
+    let mut state = create_test_state();
+    state.narrative.history.clear();
+    // Only add system and narration logs — no input
+    state.add_log("System boot".to_string(), None, LogType::System);
+    state.add_log("You see a room.".to_string(), None, LogType::Narration);
+
+    let ctx = make_test_context(state);
+    let service = DefaultGameService::with_mock_quantifier(
+        Arc::new(MockBackend::default()),
+        Arc::new(MockQuantifierBackend::default()),
+    );
+
+    service.retry_last_response(ctx.clone());
+
+    // State should remain unchanged
+    let guard = crate::latest_state(&ctx);
+    assert_eq!(guard.narrative.history.len(), 2);
+}
+
+#[test]
+fn test_retry_room_not_found() {
+    let mut state = create_test_state();
+    state.narrative.history.clear();
+    state.add_log("look around".to_string(), Some("Player".to_string()), LogType::Input);
+    state.movement.current_room_id = "non_existent_room".to_string();
+
+    let ctx = make_test_context(state);
+    let service = DefaultGameService::with_mock_quantifier(
+        Arc::new(MockBackend::default()),
+        Arc::new(MockQuantifierBackend::default()),
+    );
+
+    service.retry_last_response(ctx.clone());
+
+    let guard = crate::latest_state(&ctx);
+    assert!(
+        matches!(
+            guard.narrative.generation.status,
+            GenerationStatus::Error(ref msg) if msg.contains("room not found")
+        ),
+        "Expected room not found error: {:?}",
+        guard.narrative.generation.status
+    );
+}
+
+#[test]
+fn test_retry_llm_error() {
+    let mut state = create_test_state();
+    state.narrative.history.clear();
+    state.add_log("look around".to_string(), Some("Player".to_string()), LogType::Input);
+
+    let ctx = make_test_context(state);
+    let service = DefaultGameService::with_mock_quantifier(
+        Arc::new(MockBackend::failing()),
+        Arc::new(MockQuantifierBackend::default()),
+    );
+
+    service.retry_last_response(ctx.clone());
+
+    let guard = crate::latest_state(&ctx);
+    assert!(
+        matches!(
+            guard.narrative.generation.status,
+            GenerationStatus::Error(_)
+        ),
+        "Expected error status after failing LLM: {:?}",
+        guard.narrative.generation.status
+    );
+}
+
+#[test]
+fn test_retry_empty_narration() {
+    let mut state = create_test_state();
+    state.narrative.history.clear();
+    state.add_log("look around".to_string(), Some("Player".to_string()), LogType::Input);
+
+    let ctx = make_test_context(state);
+    let service = DefaultGameService::with_mock_quantifier(
+        Arc::new(MockBackend::with_empty_response()),
+        Arc::new(MockQuantifierBackend::default()),
+    );
+
+    service.retry_last_response(ctx.clone());
+
+    let guard = crate::latest_state(&ctx);
+    assert!(
+        matches!(
+            guard.narrative.generation.status,
+            GenerationStatus::Error(ref msg) if msg.contains("empty")
+        ),
+        "Expected empty response error: {:?}",
+        guard.narrative.generation.status
+    );
+}

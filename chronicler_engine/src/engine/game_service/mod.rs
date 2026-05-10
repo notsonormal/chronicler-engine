@@ -8,3 +8,6 @@ mod service;
 
 pub use context::GameServiceContext;
 pub use service::{DefaultGameService, GameService};
+
+#[cfg(test)]
+mod helpers_tests;

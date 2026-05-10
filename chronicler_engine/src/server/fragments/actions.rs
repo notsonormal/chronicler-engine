@@ -5,6 +5,8 @@ use axum::{
     response::Response,
 };
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 use crate::engine::logic::get_current_room;
 use crate::engine::parser::parse_command;
@@ -54,6 +56,21 @@ async fn process_action(state: &AppState, command: String) -> Response<Body> {
             | crate::engine::action::Action::Inventory
             | crate::engine::action::Action::Quit
     );
+
+    // Reject concurrent async actions while generation is in flight.
+    if !is_sync
+        && state
+            .is_generating
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .is_err()
+    {
+        return Response::builder()
+            .status(StatusCode::OK)
+            .body(Body::from(
+                "<span class=\"status wait\">Still thinking...</span>",
+            ))
+            .expect("static response body is valid");
+    }
 
     if is_sync {
         process_sync_action(&mut game_state, &action);
@@ -109,6 +126,7 @@ async fn process_action(state: &AppState, command: String) -> Response<Body> {
 
         // [DOC: docs/architecture/invariants.md#INV-004]
         tokio::task::spawn_blocking(move || {
+            let _guard = crate::server::fragments::GenerationGuard(Arc::clone(&ctx.is_generating));
             if token.is_cancelled() {
                 return;
             }

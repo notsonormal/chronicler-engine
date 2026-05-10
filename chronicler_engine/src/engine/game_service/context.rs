@@ -1,3 +1,4 @@
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
 use tokio_util::sync::CancellationToken;
@@ -21,6 +22,8 @@ pub struct GameServiceContext {
     pub cancel_token: CancellationToken,
     /// Serialize async action processing to prevent snapshot race conditions.
     pub action_lock: Arc<Mutex<()>>,
+    /// Tracks whether an async generation is currently in flight.
+    pub is_generating: Arc<AtomicBool>,
 }
 
 impl GameServiceContext {

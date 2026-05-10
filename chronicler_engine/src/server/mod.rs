@@ -132,6 +132,7 @@ pub fn create_app_with_storage(
             as Arc<dyn crate::engine::game_service::GameService>,
         settings: Arc::new(RwLock::new(settings)),
         cancel_token: CancellationToken::new(),
+        is_generating: Arc::new(AtomicBool::new(false)),
     };
     build_router(app_state)
 }
@@ -144,6 +145,7 @@ use axum::{
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::RwLock;
+use std::sync::atomic::AtomicBool;
 use tokio_util::sync::CancellationToken;
 use tower_http::services::ServeDir;
 
@@ -178,6 +180,7 @@ pub struct AppState {
     pub game_service: Arc<dyn GameService>,
     pub settings: Arc<RwLock<AppSettings>>,
     pub cancel_token: CancellationToken,
+    pub is_generating: Arc<AtomicBool>,
 }
 
 impl AppState {
@@ -211,6 +214,7 @@ impl AppState {
             starting_room_id: self.starting_room_id.clone(),
             cancel_token: self.cancel_token.clone(),
             action_lock: Arc::new(std::sync::Mutex::new(())),
+            is_generating: Arc::clone(&self.is_generating),
         }
     }
 
@@ -257,6 +261,7 @@ pub async fn run_server_with_config(
         map,
         player,
         npcs,
+        is_generating: Arc::new(AtomicBool::new(false)),
         starting_room_id,
         game_service: Arc::new(DefaultGameService::new()) as Arc<dyn GameService>,
         settings: Arc::new(RwLock::new(

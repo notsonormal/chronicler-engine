@@ -29,6 +29,7 @@
               hx-post="/action/check"  
               hx-target="#action-area"  
               hx-swap="innerHTML"  
+              hx-sync="this:drop"
               hx-on::before-request="saveActionArea()"
               hx-on::after-request="onActionFormAfterRequest()">
             <input type="text" name="command" placeholder="Enter command..." required minlength="1" autocomplete="off" />
@@ -242,9 +243,13 @@
         function saveActionArea() {
             const actionArea = document.getElementById('action-area');
             const input = actionArea.querySelector('input[name="command"]');
+            const btn = actionArea.querySelector('#submit-btn');
             actionArea.dataset.originalHtml = actionArea.innerHTML;
             if (input) {
                 actionArea.dataset.originalValue = input.value;
+            }
+            if (btn) {
+                btn.disabled = true;
             }
         }
         

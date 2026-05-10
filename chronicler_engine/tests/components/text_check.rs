@@ -274,3 +274,92 @@ async fn test_async_action_saves_input_to_story_log_with_sqlite() {
         "Async action should add input entry to story log"
     );
 }
+
+#[tokio::test]
+async fn test_action_check_auto_check_disabled() {
+    let state = create_test_state();
+    let app = create_app_for_testing_with_settings(
+        state,
+        AppSettings {
+            text_check: TextCheckSettings {
+                mode: TextCheckMode::Spell,
+                enable_auto_check: false,
+                ignored_words: vec![],
+            },
+            ..Default::default()
+        },
+    );
+
+    let req = Request::builder()
+        .uri("/action/check")
+        .method(http::Method::POST)
+        .header(
+            http::header::CONTENT_TYPE,
+            "application/x-www-form-urlencoded",
+        )
+        .body(Body::from("command=look"))
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+
+    assert!(response.status().is_success());
+    // Should forward to action and include swap headers
+    let hx_retarget = response.headers().get("HX-Retarget");
+    assert!(
+        hx_retarget.is_some(),
+        "Expected HX-Retarget header when auto-check is disabled"
+    );
+}
+
+#[tokio::test]
+async fn test_action_check_finds_issues() {
+    let state = create_test_state();
+    let app = create_app_for_testing_with_settings(state, text_check_settings(TextCheckMode::Spell));
+
+    let req = Request::builder()
+        .uri("/action/check")
+        .method(http::Method::POST)
+        .header(
+            http::header::CONTENT_TYPE,
+            "application/x-www-form-urlencoded",
+        )
+        .body(Body::from("command=go+to+the+casle"))
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+
+    assert!(response.status().is_success());
+    let body = axum::body::to_bytes(response.into_body(), 4096)
+        .await
+        .unwrap();
+    let body_str = String::from_utf8_lossy(&body);
+    assert!(
+        body_str.contains("text-check-preview"),
+        "Expected preview fragment: {body_str}"
+    );
+}
+
+#[tokio::test]
+async fn test_action_check_no_issues() {
+    let state = create_test_state();
+    let app = create_app_for_testing_with_settings(
+        state,
+        text_check_settings(TextCheckMode::SpellGrammar),
+    );
+
+    let req = Request::builder()
+        .uri("/action/check")
+        .method(http::Method::POST)
+        .header(
+            http::header::CONTENT_TYPE,
+            "application/x-www-form-urlencoded",
+        )
+        .body(Body::from("command=go+to+the+castle"))
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+
+    assert!(response.status().is_success());
+    let hx_retarget = response.headers().get("HX-Retarget");
+    assert!(
+        hx_retarget.is_some(),
+        "Expected HX-Retarget header when no issues and forwarding to action"
+    );
+}

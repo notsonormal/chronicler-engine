@@ -147,9 +147,15 @@ This enables cost optimization (cheap model for quantifier, powerful model for n
 | `src/narrative/agents/mod.rs` | Module root, re-exports |
 | `src/narrative/agents/trait_def.rs` | `Agent` trait definition |
 | `src/narrative/agents/registry.rs` | `AgentRegistry`, `NarratorAgent` |
+| `src/narrative/agents/quantifier/mod.rs` | Quantifier module root |
 | `src/narrative/agents/quantifier/agent.rs` | `QuantifierAgent` implementing `Agent` |
+| `src/narrative/agents/quantifier/core.rs` | Core quantifier logic |
 | `src/narrative/agents/quantifier/backends.rs` | `QuantifierBackendTrait`, `MockQuantifierBackend`, `RealQuantifierBackend` |
-| `src/engine/game_service.rs` | `DefaultGameService` — orchestrates agent execution |
+| `src/narrative/agents/quantifier/parser.rs` | Quantifier response parser |
+| `src/narrative/agents/quantifier/prompt.rs` | Quantifier prompt builder |
+| `src/narrative/agents/quantifier/types.rs` | Quantifier types (`NpcEventList`, `NpcEvent`, etc.) |
+| `src/engine/game_service/mod.rs` | `GameService` trait |
+| `src/engine/game_service/service.rs` | `DefaultGameService` — orchestrates agent execution |
 
 ---
 
