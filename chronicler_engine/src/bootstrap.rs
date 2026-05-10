@@ -9,7 +9,7 @@ use crate::cli::{Args, list_available_worlds, resolve_engine_data_path};
 use crate::error::EngineError;
 use crate::model::character::{NpcCard, PlayerCard};
 use crate::model::map::MapDef;
-use crate::model::state::{GameState, GeneratingGuard};
+use crate::model::state::GameState;
 use crate::model::world::WorldManifest;
 use crate::narrative::llm::get_llm_backend;
 use crate::narrative::prompt::PromptContext;
@@ -200,13 +200,32 @@ pub fn run(args: Args) -> crate::error::Result<()> {
 
     let all_npcs: Vec<NpcCard> = state.npcs.values().cloned().collect();
 
-    let world = state.world.clone();
+    let _world = state.world.clone();
     let map = state.map.clone();
     let player = state.player.clone();
     let room_id = state.movement.current_room_id.clone();
     let history: Vec<crate::model::state::LogEntry> = Vec::new();
 
-    let state = Arc::new(std::sync::Mutex::new(state));
+    let db_path = data_dir.join(format!("chronicler_{}.db", args.port));
+    let db_pool = crate::storage::db::DbPool::new(db_path.to_str().unwrap_or("chronicler.db"))?;
+    let snapshot_storage =
+        Arc::new(crate::storage::snapshot_storage::SqliteSnapshotStorage::new(db_pool))
+            as Arc<dyn crate::storage::snapshot_storage::SnapshotStorage>;
+
+    // [DOC: docs/system/startup.md]
+    let initial_snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
+        &state,
+        "initial".to_string(),
+        0,
+    );
+    snapshot_storage.save(&initial_snapshot)?;
+
+    let world_arc: Arc<crate::model::world::WorldCard> = Arc::new(manifest.clone().into());
+    let map_arc: Arc<crate::model::map::MapDef> = map;
+    let player_arc: Arc<crate::model::character::PlayerCard> = player;
+    let npcs_map: std::collections::HashMap<String, NpcCard> = state.npcs.clone();
+    let npcs_arc = Arc::new(npcs_map);
+    let starting_room = manifest.starting_room_id.clone();
 
     // [DOC: docs/architecture/system.md]
     let config = ServerConfig { port: args.port };
@@ -218,13 +237,34 @@ pub fn run(args: Args) -> crate::error::Result<()> {
         .default_scenario()
         .is_some_and(|s| !s.text.is_empty());
     if !has_scenario {
+        let storage_for_task = Arc::clone(&snapshot_storage);
+        let world_for_task = Arc::clone(&world_arc);
+        let map_for_task = Arc::clone(&map_arc);
+        let player_for_task = Arc::clone(&player_arc);
+        let npcs_for_task = Arc::clone(&npcs_arc);
+        let starting_room_for_task = starting_room.clone();
         // [DOC: docs/architecture/invariants.md#INV-004]
-        // Arrival narration runs off the async thread so the server starts immediately.
-        let state_for_task = state.clone();
         let _handle = runtime.spawn_blocking(move || {
-            let _guard = GeneratingGuard::new(state_for_task.clone());
+            let mut state = match storage_for_task.load_latest(None) {
+                Ok(Some(snap)) => GameState::from_snapshot(
+                    &snap,
+                    Arc::clone(&world_for_task),
+                    Arc::clone(&map_for_task),
+                    Arc::clone(&player_for_task),
+                    (*npcs_for_task).clone(),
+                ),
+                _ => GameState::new(
+                    Arc::clone(&world_for_task),
+                    Arc::clone(&map_for_task),
+                    Arc::clone(&player_for_task),
+                    (*npcs_for_task).values().cloned().collect(),
+                    starting_room_for_task.clone(),
+                ),
+            };
 
-            let room = map
+            state.narrative.generation.status = crate::model::state::GenerationStatus::Generating;
+
+            let room = map_for_task
                 .overworld
                 .regions
                 .iter()
@@ -234,35 +274,45 @@ pub fn run(args: Args) -> crate::error::Result<()> {
             if let Some(room) = room {
                 let backend = get_llm_backend();
                 let context = PromptContext {
-                    world: &world,
+                    world: &world_for_task,
                     room,
                     all_npcs: &all_npcs,
                     npcs_in_area: &nearby_npcs,
-                    player: &player,
+                    player: &player_for_task,
                     user_message: "",
                     history: &history,
                 };
                 let narration = backend.narrate_arrival(&context);
                 match narration {
                     Ok(text) => {
-                        if let Ok(mut state) = state_for_task.lock() {
-                            state.add_log(text, None, crate::model::state::LogType::Narration);
-                        }
+                        state.add_log(text, None, crate::model::state::LogType::Narration);
+                        state.narrative.generation.status =
+                            crate::model::state::GenerationStatus::Idle;
                     }
                     Err(e) => {
-                        if let Ok(mut state) = state_for_task.lock() {
-                            state.narrative.generation.status =
-                                crate::model::state::GenerationStatus::Error(format!(
-                                    "LLM Error: {e}"
-                                ));
-                        }
+                        state.narrative.generation.status =
+                            crate::model::state::GenerationStatus::Error(format!("LLM Error: {e}"));
                     }
                 }
+                let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
+                    &state,
+                    "arrival".to_string(),
+                    0,
+                );
+                let _ = storage_for_task.save(&snapshot);
             }
         });
     } // end if !has_scenario
 
-    runtime.block_on(crate::server::run_server_with_config(state, config))?;
+    runtime.block_on(crate::server::run_server_with_config(
+        world_arc,
+        map_arc,
+        player_arc,
+        npcs_arc,
+        starting_room,
+        snapshot_storage,
+        config,
+    ))?;
 
     Ok(())
 }

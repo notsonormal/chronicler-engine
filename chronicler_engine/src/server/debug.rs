@@ -26,10 +26,10 @@ pub struct DebugStateResponse {
 pub async fn debug_state_handler(
     State(state): State<AppState>,
 ) -> Result<Json<DebugStateResponse>, StatusCode> {
-    let guard = match state.state.lock() {
+    let guard = match state.load_state() {
         Ok(g) => g,
         Err(_) => {
-            log::error!("State lock poisoned during /debug/state request");
+            log::error!("State load failed during /debug/state request");
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     };

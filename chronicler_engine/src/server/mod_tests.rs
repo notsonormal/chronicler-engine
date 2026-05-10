@@ -3,6 +3,7 @@ use std::sync::Arc;
 use crate::engine::game_service::{DefaultGameService, GameService};
 use crate::model::settings::AppSettings;
 use crate::server::ServerConfig;
+use crate::storage::snapshot_storage::SnapshotStorage;
 
 #[test]
 fn test_server_config_default() {
@@ -79,9 +80,9 @@ fn test_app_settings_default() {
 #[test]
 fn test_app_state_lock_state_success() {
     use crate::model::state::GameState;
+    use crate::model::state_snapshot::GameStateSnapshot;
     use crate::model::world::{WorldCard, WorldManifest};
     use std::sync::Arc;
-    use std::sync::Mutex;
 
     let manifest = WorldManifest {
         id: "test".to_string(),
@@ -121,31 +122,67 @@ fn test_app_state_lock_state_success() {
         inventory: vec![],
     });
 
-    let state = Arc::new(Mutex::new(GameState::new(
-        world,
-        map,
-        player,
+    let state = GameState::new(
+        world.clone(),
+        map.clone(),
+        player.clone(),
         vec![],
         "room".to_string(),
-    )));
+    );
+
+    let snapshot = GameStateSnapshot::from_game_state(&state, "test".to_string(), 0);
+    let storage = Arc::new(crate::test_support::InMemorySnapshotStorage::new());
+    let _ = storage.save(&snapshot);
 
     let app_state = crate::server::AppState {
-        state: state.clone(),
+        snapshot_storage: storage,
+        world: state.world.clone(),
+        map: state.map.clone(),
+        player: state.player.clone(),
+        npcs: Arc::new(state.npcs.clone()),
+        starting_room_id: state.movement.current_room_id.clone(),
         game_service: Arc::new(DefaultGameService::new()) as Arc<dyn GameService>,
         settings: Arc::new(std::sync::RwLock::new(AppSettings::default())),
         cancel_token: tokio_util::sync::CancellationToken::new(),
     };
 
-    let locked = app_state.lock_state();
-    assert!(locked.is_ok(), "Expected lock_state to succeed");
+    let loaded = app_state.load_state();
+    assert!(loaded.is_ok(), "Expected load_state to succeed");
 }
 
 #[test]
 fn test_app_state_lock_state_poisoned() {
+    use crate::error::EngineError;
     use crate::model::state::GameState;
+    use crate::model::state_snapshot::GameStateSnapshot;
     use crate::model::world::{WorldCard, WorldManifest};
     use std::sync::Arc;
-    use std::sync::Mutex;
+
+    struct FailingStorage;
+    impl SnapshotStorage for FailingStorage {
+        fn save(&self, _snapshot: &GameStateSnapshot) -> Result<(), EngineError> {
+            Ok(())
+        }
+        fn load_latest(
+            &self,
+            _message_id: Option<&str>,
+        ) -> Result<Option<GameStateSnapshot>, EngineError> {
+            Err(EngineError::Config("test error".to_string()))
+        }
+        fn load_by_message(
+            &self,
+            _message_id: &str,
+            _swipe_index: u32,
+        ) -> Result<Option<GameStateSnapshot>, EngineError> {
+            Err(EngineError::Config("test error".to_string()))
+        }
+        fn commit(&self, _snapshot_id: &str) -> Result<(), EngineError> {
+            Ok(())
+        }
+        fn reset(&self) -> Result<(), EngineError> {
+            Ok(())
+        }
+    }
 
     let manifest = WorldManifest {
         id: "test".to_string(),
@@ -185,31 +222,29 @@ fn test_app_state_lock_state_poisoned() {
         inventory: vec![],
     });
 
-    let state = Arc::new(Mutex::new(GameState::new(
-        world,
-        map,
-        player,
+    let state = GameState::new(
+        world.clone(),
+        map.clone(),
+        player.clone(),
         vec![],
         "room".to_string(),
-    )));
+    );
 
     let app_state = crate::server::AppState {
-        state: state.clone(),
+        snapshot_storage: Arc::new(FailingStorage),
+        world: state.world.clone(),
+        map: state.map.clone(),
+        player: state.player.clone(),
+        npcs: Arc::new(state.npcs.clone()),
+        starting_room_id: state.movement.current_room_id.clone(),
         game_service: Arc::new(DefaultGameService::new()) as Arc<dyn GameService>,
         settings: Arc::new(std::sync::RwLock::new(AppSettings::default())),
         cancel_token: tokio_util::sync::CancellationToken::new(),
     };
 
-    // Poison the mutex by panicking while holding the lock
-    let state_for_panic = state.clone();
-    let _ = std::panic::catch_unwind(move || {
-        let _guard = state_for_panic.lock().unwrap();
-        panic!("intentional panic to poison mutex");
-    });
-
-    let locked = app_state.lock_state();
+    let loaded = app_state.load_state();
     assert!(
-        locked.is_err(),
-        "Expected lock_state to fail when mutex is poisoned"
+        loaded.is_err(),
+        "Expected load_state to fail when storage returns error"
     );
 }

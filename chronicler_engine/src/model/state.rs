@@ -140,6 +140,25 @@ pub struct GameState {
 }
 
 impl GameState {
+    pub fn from_snapshot(
+        snapshot: &crate::model::state_snapshot::GameStateSnapshot,
+        world: Arc<WorldCard>,
+        map: Arc<MapDef>,
+        player: Arc<PlayerCard>,
+        npcs: HashMap<String, NpcCard>,
+    ) -> Self {
+        Self {
+            world,
+            map,
+            player,
+            npcs,
+            movement: snapshot.movement.clone(),
+            narrative: snapshot.narrative.clone(),
+            scene: snapshot.scene.clone(),
+            character_state: snapshot.character_state.clone(),
+        }
+    }
+
     pub fn new(
         world: Arc<WorldCard>,
         map: Arc<MapDef>,

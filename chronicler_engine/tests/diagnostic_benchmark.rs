@@ -8,9 +8,11 @@
 #![allow(dead_code)]
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
-use chronicler_engine::engine::game_service::{DefaultGameService, GameService};
+use chronicler_engine::engine::game_service::{
+    DefaultGameService, GameService, GameServiceContext,
+};
 use chronicler_engine::error::{EngineError, LlmFailure};
 use chronicler_engine::model::character::{CharacterSheet, NpcCard, PlayerCard};
 use chronicler_engine::model::map::{MapDef, Overworld, Region, Room};
@@ -23,6 +25,7 @@ use chronicler_engine::narrative::quantifier::types::{
     MovementParseResult, MovementType, QuantifierConfidence, QuantifierParseResult,
     QuantifierPromptContext, QuantifierResult,
 };
+use chronicler_engine::test_support::make_test_context;
 
 // =============================================================================
 // Custom Backends for Failure Simulation
@@ -359,10 +362,7 @@ fn print_benchmark_result(result: &BenchmarkResult) {
     println!("BENCHMARK_RESULT:{json}");
 }
 
-fn create_test_state_with_npcs(
-    room_npcs: Vec<String>,
-    npcs: Vec<NpcCard>,
-) -> Arc<Mutex<GameState>> {
+fn create_test_state_with_npcs(room_npcs: Vec<String>, npcs: Vec<NpcCard>) -> GameState {
     let world = Arc::new(WorldCard {
         name: "Test World".into(),
         description: "A test world".into(),
@@ -409,16 +409,10 @@ fn create_test_state_with_npcs(
         inventory: vec![],
     });
 
-    Arc::new(Mutex::new(GameState::new(
-        world,
-        map,
-        player,
-        npcs,
-        "room1".to_string(),
-    )))
+    GameState::new(world, map, player, npcs, "room1".to_string())
 }
 
-fn default_test_state() -> Arc<Mutex<GameState>> {
+fn default_test_state() -> GameState {
     create_test_state_with_npcs(
         vec!["test_npc".to_string()],
         vec![NpcCard {
@@ -445,28 +439,26 @@ fn run_scenario(
     _scenario_name: &str,
     _category: &str,
     _injected_failure: &str,
-) -> (String, String, Arc<Mutex<GameState>>) {
+) -> (String, String, GameServiceContext) {
     let service = DefaultGameService::with_backends(llm_backend, quantifier_backend);
     let state = default_test_state();
+    let ctx = make_test_context(state);
 
     service.execute_action(
-        state.clone(),
+        ctx.clone(),
         "look around".to_string(),
         "Test Player".to_string(),
     );
 
-    let guard = state.lock().unwrap();
-    let error_message = match &guard.narrative.generation.status {
+    let snapshot = ctx.snapshot_storage.load_latest(None).unwrap().unwrap();
+    let error_message = match &snapshot.narrative.generation.status {
         GenerationStatus::Error(msg) => msg.clone(),
         GenerationStatus::Idle => "(no error, idle)".to_string(),
         GenerationStatus::Generating => "(still generating)".to_string(),
     };
-    let phase = format!("{:?}", guard.narrative.generation.phase);
+    let phase = format!("{:?}", snapshot.narrative.generation.phase);
 
-    // We must release the lock before returning the Arc
-    drop(guard);
-
-    (error_message, phase, state)
+    (error_message, phase, ctx)
 }
 
 // =============================================================================
@@ -475,7 +467,7 @@ fn run_scenario(
 
 #[test]
 fn benchmark_llm_http_401() {
-    let (error_msg, phase, state) = run_scenario(
+    let (error_msg, phase, ctx) = run_scenario(
         Arc::new(HttpErrorBackend::unauthorized()),
         Arc::new(chronicler_engine::narrative::quantifier::MockQuantifierBackend::default()),
         "llm_http_401",
@@ -483,9 +475,9 @@ fn benchmark_llm_http_401() {
         "HTTP 401 Unauthorized from LLM provider",
     );
 
-    let guard = state.lock().unwrap();
-    let _has_dynamic_room = !guard.movement.dynamic_rooms.is_empty();
-    let _current_room = guard.movement.current_room_id.clone();
+    let snapshot = ctx.snapshot_storage.load_latest(None).unwrap().unwrap();
+    let _has_dynamic_room = !snapshot.movement.dynamic_rooms.is_empty();
+    let _current_room = snapshot.movement.current_room_id.clone();
 
     let result = BenchmarkResult {
         scenario: "llm_http_401".to_string(),
@@ -736,7 +728,7 @@ fn benchmark_llm_empty_response() {
 
 #[test]
 fn benchmark_quantifier_complete_failure() {
-    let (error_msg, phase, state) = run_scenario(
+    let (error_msg, phase, ctx) = run_scenario(
         Arc::new(chronicler_engine::narrative::llm::MockBackend::default()),
         Arc::new(FailingQuantifierBackend),
         "quantifier_complete_failure",
@@ -744,9 +736,9 @@ fn benchmark_quantifier_complete_failure() {
         "Quantifier LLM call fails completely (connection refused)",
     );
 
-    let guard = state.lock().unwrap();
-    let npc_count = guard.scene.npcs_in_area.len();
-    let has_system_log = guard
+    let snapshot = ctx.snapshot_storage.load_latest(None).unwrap().unwrap();
+    let npc_count = snapshot.scene.npcs_in_area.len();
+    let has_system_log = snapshot
         .narrative
         .history
         .iter()
@@ -791,7 +783,7 @@ fn benchmark_quantifier_complete_failure() {
 
 #[test]
 fn benchmark_quantifier_low_confidence() {
-    let (error_msg, phase, state) = run_scenario(
+    let (error_msg, phase, ctx) = run_scenario(
         Arc::new(chronicler_engine::narrative::llm::MockBackend::default()),
         Arc::new(LowConfidenceQuantifierBackend),
         "quantifier_low_confidence",
@@ -799,14 +791,14 @@ fn benchmark_quantifier_low_confidence() {
         "Quantifier returns Low confidence NPC detection",
     );
 
-    let guard = state.lock().unwrap();
-    let npc_count = guard.scene.npcs_in_area.len();
-    let has_narration = guard
+    let snapshot = ctx.snapshot_storage.load_latest(None).unwrap().unwrap();
+    let npc_count = snapshot.scene.npcs_in_area.len();
+    let has_narration = snapshot
         .narrative
         .history
         .iter()
         .any(|e| e.log_type == LogType::Narration);
-    let has_system_log = guard
+    let has_system_log = snapshot
         .narrative
         .history
         .iter()
@@ -847,7 +839,7 @@ fn benchmark_quantifier_low_confidence() {
 
 #[test]
 fn benchmark_dynamic_room_creation() {
-    let (error_msg, phase, state) = run_scenario(
+    let (error_msg, phase, ctx) = run_scenario(
         Arc::new(chronicler_engine::narrative::llm::MockBackend::default()),
         Arc::new(MisleadingMovementQuantifierBackend),
         "dynamic_room_creation",
@@ -855,11 +847,11 @@ fn benchmark_dynamic_room_creation() {
         "Quantifier returns movement to non-existent room 'nonexistent_room'",
     );
 
-    let guard = state.lock().unwrap();
-    let current_room = guard.movement.current_room_id.clone();
+    let snapshot = ctx.snapshot_storage.load_latest(None).unwrap().unwrap();
+    let current_room = snapshot.movement.current_room_id.clone();
     let is_dynamic = current_room.starts_with("dynamic_");
-    let dynamic_room_count = guard.movement.dynamic_rooms.len();
-    let has_system_log = guard
+    let dynamic_room_count = snapshot.movement.dynamic_rooms.len();
+    let has_system_log = snapshot
         .narrative
         .history
         .iter()
@@ -977,6 +969,7 @@ fn benchmark_trigger_wrong_room_id() {
 
     let state =
         create_test_state_with_npcs(vec!["trigger_npc".to_string()], vec![npc_with_trigger]);
+    let ctx = make_test_context(state);
 
     let service = DefaultGameService::with_backends(
         Arc::new(chronicler_engine::narrative::llm::MockBackend::default()),
@@ -989,18 +982,18 @@ fn benchmark_trigger_wrong_room_id() {
     );
 
     service.execute_action(
-        state.clone(),
+        ctx.clone(),
         "look around".to_string(),
         "Test Player".to_string(),
     );
 
-    let guard = state.lock().unwrap();
-    let trigger_fired = guard
+    let snapshot = ctx.snapshot_storage.load_latest(None).unwrap().unwrap();
+    let trigger_fired = snapshot
         .narrative
         .history
         .iter()
         .any(|e| e.text.contains("stranger nods"));
-    let error_msg = match &guard.narrative.generation.status {
+    let error_msg = match &snapshot.narrative.generation.status {
         GenerationStatus::Error(msg) => msg.clone(),
         _ => "(no error)".to_string(),
     };
@@ -1011,7 +1004,7 @@ fn benchmark_trigger_wrong_room_id() {
         injected_failure: "Trigger scoped to wrong room_id ('wrong_room' instead of 'room1')"
             .to_string(),
         error_message: error_msg.clone(),
-        generation_phase: format!("{:?}", guard.narrative.generation.phase),
+        generation_phase: format!("{:?}", snapshot.narrative.generation.phase),
         scores: DiagnosticScores {
             error_specificity: 1,
             state_visibility: 4,
@@ -1069,15 +1062,15 @@ fn benchmark_state_stuck_generating() {
         }],
     };
 
-    let state = create_test_state_with_npcs(vec!["test_npc".to_string()], vec![npc_with_trigger]);
+    let mut state =
+        create_test_state_with_npcs(vec!["test_npc".to_string()], vec![npc_with_trigger]);
 
     // Reset times_met so the trigger is eligible to fire
-    {
-        let mut guard = state.lock().unwrap();
-        if let Some(encounter) = guard.character_state.npcs.get_mut("test_npc") {
-            encounter.times_met = 0;
-        }
+    if let Some(encounter) = state.character_state.npcs.get_mut("test_npc") {
+        encounter.times_met = 0;
     }
+
+    let ctx = make_test_context(state);
 
     let service = DefaultGameService::with_backends(
         Arc::new(chronicler_engine::narrative::llm::MockBackend::with_failing_trigger_narration()),
@@ -1090,19 +1083,19 @@ fn benchmark_state_stuck_generating() {
     );
 
     service.execute_action(
-        state.clone(),
+        ctx.clone(),
         "look around".to_string(),
         "Test Player".to_string(),
     );
 
-    let guard = state.lock().unwrap();
-    let is_generating = guard.narrative.generation.status.is_generating();
-    let is_idle = matches!(guard.narrative.generation.status, GenerationStatus::Idle);
+    let snapshot = ctx.snapshot_storage.load_latest(None).unwrap().unwrap();
+    let is_generating = snapshot.narrative.generation.status.is_generating();
+    let is_idle = matches!(snapshot.narrative.generation.status, GenerationStatus::Idle);
     let has_error = matches!(
-        guard.narrative.generation.status,
+        snapshot.narrative.generation.status,
         GenerationStatus::Error(_)
     );
-    let error_msg = match &guard.narrative.generation.status {
+    let error_msg = match &snapshot.narrative.generation.status {
         GenerationStatus::Error(msg) => msg.clone(),
         _ => "(no error)".to_string(),
     };
@@ -1112,7 +1105,7 @@ fn benchmark_state_stuck_generating() {
         category: "State Management".to_string(),
         injected_failure: "Trigger narration fails after main narration succeeds".to_string(),
         error_message: error_msg.clone(),
-        generation_phase: format!("{:?}", guard.narrative.generation.phase),
+        generation_phase: format!("{:?}", snapshot.narrative.generation.phase),
         scores: DiagnosticScores {
             error_specificity: if has_error { 7 } else { 1 },
             state_visibility: if is_idle || has_error { 7 } else { 2 },
@@ -1123,12 +1116,12 @@ fn benchmark_state_stuck_generating() {
         root_cause_discoverable_without_logs: is_idle || has_error,
         notes: format!(
             "After trigger narration failure: status={:?}, idle={}, error={}, generating={}. The error message '{}' is set and phase preserved at failure point ({:?}). A system log contains the detailed trigger failure.",
-            guard.narrative.generation.status,
+            snapshot.narrative.generation.status,
             is_idle,
             has_error,
             is_generating,
             error_msg,
-            guard.narrative.generation.phase
+            snapshot.narrative.generation.phase
         ),
     };
 

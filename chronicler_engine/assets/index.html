@@ -227,7 +227,7 @@
             fetch(`/history/${id}/delete`, { method: 'POST' })
                 .then(response => {
                     if (response.ok) {
-                        htmx.trigger('#story-log', 'htmx:refresh');
+                        htmx.ajax('GET', '/fragment/story-log', {target: '#story-log', swap: 'innerHTML'});
                     } else {
                         response.text().then(text => showError(text));
                     }

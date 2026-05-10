@@ -6,10 +6,12 @@ Uses cargo-nextest for parallel test execution.
 
 import argparse
 import io
+import json
 import os
 import re
 import shutil
 import signal
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -142,6 +144,77 @@ def kill_by_name(name: str):
                             print(f"Failed to kill PID {pid}: {e}")
     except Exception as e:
         print(f"Note: Could not search for processes: {e}")
+
+
+def clean_sqlite_dbs(data_dir: Path):
+    """Remove any SQLite database files from the data directory."""
+    if not data_dir.exists():
+        return
+    removed = []
+    for pattern in ["*.db", "*.db-journal", "*.db-wal", "*.db-shm"]:
+        for f in data_dir.glob(pattern):
+            f.unlink()
+            removed.append(f.name)
+    if removed:
+        print(f"  Removed stale SQLite DBs: {', '.join(removed)}")
+
+
+def clean_old_dumps(dump_dir: Path, max_age_days: int = 3):
+    """Remove dump files older than max_age_days from the dump directory."""
+    if not dump_dir.exists():
+        return
+    import time
+    now = time.time()
+    max_age_sec = max_age_days * 86400
+    removed = []
+    for f in dump_dir.iterdir():
+        if f.is_file() and (now - f.stat().st_mtime) > max_age_sec:
+            f.unlink()
+            removed.append(f.name)
+    if removed:
+        print(f"  Removed old dumps (> {max_age_days} days): {', '.join(removed)}")
+
+
+def dump_sqlite_to_jsonl(db_path: Path, output_dir: Path):
+    """Dump all tables from a SQLite database to JSONL files.
+
+    One file per table: {output_dir}/{table_name}.jsonl
+    Each line is a JSON object representing one row.
+    """
+    if not db_path.exists():
+        return
+    output_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        conn = sqlite3.connect(str(db_path))
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        # Get all user tables (exclude sqlite_internal tables)
+        cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+        )
+        tables = [row[0] for row in cursor.fetchall()]
+
+        dumped = []
+        for table in tables:
+            cursor.execute(f'SELECT * FROM "{table}"')
+            rows = cursor.fetchall()
+            if not rows:
+                continue
+            out_file = output_dir / f"{table}.jsonl"
+            with open(out_file, "w", encoding="utf-8") as f:
+                for row in rows:
+                    record = dict(row)
+                    f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+            dumped.append(f"{table} ({len(rows)} rows)")
+
+        conn.close()
+        if dumped:
+            print(f"  Dumped tables to {output_dir}/: {', '.join(dumped)}")
+        else:
+            print(f"  No data to dump in {db_path}")
+    except Exception as e:
+        print(f"  Warning: Could not dump SQLite DB: {e}")
 
 
 def run(cmd, cwd=None, check=True, show_output=True, env=None):
@@ -462,6 +535,11 @@ def main():
     print(f"  Package ready in {target_dir}/")
     print(f"  Deployment: copy {target_dir}/ folder to your target machine")
 
+    # Clean stale SQLite databases before tests/application run.
+    # DB lives inside the target folder so each build profile has its own instance.
+    target_data_dir = target_dir / "data"
+    clean_sqlite_dbs(target_data_dir)
+
     if args.coverage:
         timed_step("Running all tests with coverage...", get_coverage_cmd(strict=args.strict), check=False, env=cargo_env)
 
@@ -490,6 +568,14 @@ def main():
         steps.next("Skipping coverage report (use --coverage to enable)")
 
     print("=== Build Complete ===")
+
+    # Dump SQLite database contents to JSONL for easy inspection
+    db_path = target_dir / "data" / "chronicler.db"
+    if db_path.exists():
+        dump_dir = Path("tmp") / "db_dumps"
+        dump_dir.mkdir(parents=True, exist_ok=True)
+        clean_old_dumps(dump_dir, max_age_days=3)
+        dump_sqlite_to_jsonl(db_path, dump_dir)
 
     # Print timing summary
     if step_timings:

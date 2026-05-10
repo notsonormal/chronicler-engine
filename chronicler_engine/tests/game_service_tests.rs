@@ -3,26 +3,35 @@
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
-    use std::sync::{Arc, Mutex};
+    use std::sync::Arc;
 
     use chronicler_engine::engine::game_service::{DefaultGameService, GameService};
+    use chronicler_engine::model::state::GameState;
     use chronicler_engine::model::state::GenerationStatus;
     use chronicler_engine::model::state::LogType;
+    use chronicler_engine::model::state_snapshot::GameStateSnapshot;
     use chronicler_engine::model::{character::*, map::*, world::*};
     use chronicler_engine::narrative::llm::MockBackend;
     use chronicler_engine::narrative::quantifier::{
         MockQuantifierBackend, MovementParseResult, MovementType, QuantifierConfidence,
     };
-    use tokio_util::sync::CancellationToken;
+    use chronicler_engine::test_support::make_test_context;
 
     fn wait_for_generation_complete(
-        state: &Arc<Mutex<chronicler_engine::model::state::GameState>>,
+        ctx: &chronicler_engine::engine::game_service::GameServiceContext,
         timeout_ms: u64,
     ) -> bool {
         let start = std::time::Instant::now();
         let timeout = std::time::Duration::from_millis(timeout_ms);
         while start.elapsed() < timeout {
-            if let Ok(guard) = state.lock() {
+            if let Ok(Some(snap)) = ctx.snapshot_storage.load_latest(None) {
+                let guard = GameState::from_snapshot(
+                    &snap,
+                    ctx.world.clone(),
+                    ctx.map.clone(),
+                    ctx.player.clone(),
+                    (*ctx.npcs).clone(),
+                );
                 if !guard.narrative.generation.status.is_generating() {
                     return true;
                 }
@@ -39,10 +48,7 @@ mod tests {
         )
     }
 
-    fn create_test_state_inner(
-        room_npcs: Vec<String>,
-        npcs: Vec<NpcCard>,
-    ) -> Arc<Mutex<chronicler_engine::model::state::GameState>> {
+    fn create_test_state_inner(room_npcs: Vec<String>, npcs: Vec<NpcCard>) -> GameState {
         let world = Arc::new(WorldCard {
             name: "Test World".into(),
             description: "A test world".into(),
@@ -89,16 +95,10 @@ mod tests {
             inventory: vec![],
         });
 
-        Arc::new(Mutex::new(chronicler_engine::model::state::GameState::new(
-            world,
-            map,
-            player,
-            npcs,
-            "room1".to_string(),
-        )))
+        GameState::new(world, map, player, npcs, "room1".to_string())
     }
 
-    pub fn create_test_state() -> Arc<Mutex<chronicler_engine::model::state::GameState>> {
+    pub fn create_test_state() -> GameState {
         create_test_state_inner(
             vec!["test_npc".to_string()],
             vec![NpcCard {
@@ -119,8 +119,7 @@ mod tests {
         )
     }
 
-    pub fn create_test_state_with_trigger_npc()
-    -> Arc<Mutex<chronicler_engine::model::state::GameState>> {
+    pub fn create_test_state_with_trigger_npc() -> GameState {
         create_test_state_inner(
             vec!["shopkeeper".to_string()],
             vec![NpcCard {
@@ -154,18 +153,16 @@ mod tests {
 
     #[test]
     fn test_execute_look_action() {
-        let state = create_test_state();
+        let mut state = create_test_state();
+        state.narrative.history.clear();
+        let ctx = make_test_context(state);
         let service = DefaultGameService::new();
 
-        // Clear any existing history
-        {
-            let mut guard = state.lock().unwrap();
-            guard.narrative.history.clear();
-        }
+        service.execute_action(ctx.clone(), "look".to_string(), "Player".to_string());
 
-        service.execute_action(state.clone(), "look".to_string(), "Player".to_string());
-
-        let guard = state.lock().unwrap();
+        let snap = ctx.snapshot_storage.load_latest(None).unwrap().unwrap();
+        let guard =
+            GameState::from_snapshot(&snap, ctx.world, ctx.map, ctx.player, (*ctx.npcs).clone());
         let has_narration = guard
             .narrative
             .history
@@ -176,21 +173,20 @@ mod tests {
 
     #[test]
     fn test_execute_talk_action() {
-        let state = create_test_state();
+        let mut state = create_test_state();
+        state.narrative.history.clear();
+        let ctx = make_test_context(state);
         let service = DefaultGameService::new();
 
-        {
-            let mut guard = state.lock().unwrap();
-            guard.narrative.history.clear();
-        }
-
         service.execute_action(
-            state.clone(),
+            ctx.clone(),
             "talk to innkeeper".to_string(),
             "Player".to_string(),
         );
 
-        let guard = state.lock().unwrap();
+        let snap = ctx.snapshot_storage.load_latest(None).unwrap().unwrap();
+        let guard =
+            GameState::from_snapshot(&snap, ctx.world, ctx.map, ctx.player, (*ctx.npcs).clone());
         let has_system = guard
             .narrative
             .history
@@ -201,17 +197,16 @@ mod tests {
 
     #[test]
     fn test_execute_inventory_action() {
-        let state = create_test_state();
+        let mut state = create_test_state();
+        state.narrative.history.clear();
+        let ctx = make_test_context(state);
         let service = DefaultGameService::new();
 
-        {
-            let mut guard = state.lock().unwrap();
-            guard.narrative.history.clear();
-        }
+        service.execute_action(ctx.clone(), "inventory".to_string(), "Player".to_string());
 
-        service.execute_action(state.clone(), "inventory".to_string(), "Player".to_string());
-
-        let guard = state.lock().unwrap();
+        let snap = ctx.snapshot_storage.load_latest(None).unwrap().unwrap();
+        let guard =
+            GameState::from_snapshot(&snap, ctx.world, ctx.map, ctx.player, (*ctx.npcs).clone());
         let has_system = guard
             .narrative
             .history
@@ -222,17 +217,16 @@ mod tests {
 
     #[test]
     fn test_execute_quit_action() {
-        let state = create_test_state();
+        let mut state = create_test_state();
+        state.narrative.history.clear();
+        let ctx = make_test_context(state);
         let service = DefaultGameService::new();
 
-        {
-            let mut guard = state.lock().unwrap();
-            guard.narrative.history.clear();
-        }
+        service.execute_action(ctx.clone(), "quit".to_string(), "Player".to_string());
 
-        service.execute_action(state.clone(), "quit".to_string(), "Player".to_string());
-
-        let guard = state.lock().unwrap();
+        let snap = ctx.snapshot_storage.load_latest(None).unwrap().unwrap();
+        let guard =
+            GameState::from_snapshot(&snap, ctx.world, ctx.map, ctx.player, (*ctx.npcs).clone());
         let has_goodbye = guard
             .narrative
             .history
@@ -247,46 +241,42 @@ mod tests {
 
     #[test]
     fn test_retry_with_no_history() {
-        let state = create_test_state();
+        let mut state = create_test_state();
+        state.narrative.history.clear();
+        let ctx = make_test_context(state);
         let service = DefaultGameService::new();
 
-        // Ensure history is empty
-        {
-            let mut guard = state.lock().unwrap();
-            guard.narrative.history.clear();
-        }
-
         // Should not panic with empty history
-        service.retry_last_response(state.clone());
+        service.retry_last_response(ctx.clone());
 
         // State should be unchanged
-        let guard = state.lock().unwrap();
+        let snap = ctx.snapshot_storage.load_latest(None).unwrap().unwrap();
+        let guard =
+            GameState::from_snapshot(&snap, ctx.world, ctx.map, ctx.player, (*ctx.npcs).clone());
         assert!(guard.narrative.history.is_empty());
     }
 
     #[test]
     fn test_execute_freeaction_immediate_return() {
-        let state = create_test_state();
+        let mut state = create_test_state();
+        state.narrative.history.clear();
+        state.narrative.generation.status = GenerationStatus::Idle;
+        let ctx = make_test_context(state);
         let service = failing_service();
-
-        {
-            let mut guard = state.lock().unwrap();
-            guard.narrative.history.clear();
-            guard.narrative.generation.status =
-                chronicler_engine::model::state::GenerationStatus::Idle;
-        }
 
         // FreeAction should return immediately and spawn a thread
         // The function should not block
         service.execute_action(
-            state.clone(),
+            ctx.clone(),
             "examine the room".to_string(),
             "Player".to_string(),
         );
 
         // State should be accessible immediately after execute_action returns
         // (the thread runs in background)
-        let guard = state.lock().unwrap();
+        let snap = ctx.snapshot_storage.load_latest(None).unwrap().unwrap();
+        let guard =
+            GameState::from_snapshot(&snap, ctx.world, ctx.map, ctx.player, (*ctx.npcs).clone());
         let status = &guard.narrative.generation.status;
         // Failing mock backend causes FreeAction to fail and set Error status
         assert!(
@@ -297,27 +287,22 @@ mod tests {
 
     #[test]
     fn test_execute_freeaction_room_not_found() {
-        let state = create_test_state();
+        let mut state = create_test_state();
+        state.narrative.history.clear();
+        state.narrative.generation.status = GenerationStatus::Generating;
+        state.movement.current_room_id = "non_existent_room".to_string();
+        let ctx = make_test_context(state);
         let service = DefaultGameService::new();
-
-        // Set current_room_id to a room that doesn't exist
-        {
-            let mut guard = state.lock().unwrap();
-            guard.narrative.history.clear();
-            guard.narrative.generation.status =
-                chronicler_engine::model::state::GenerationStatus::Generating;
-            guard.movement.current_room_id = "non_existent_room".to_string();
-        }
 
         // Execute FreeAction - should not panic
         service.execute_action(
-            state.clone(),
+            ctx.clone(),
             "examine the room".to_string(),
             "Player".to_string(),
         );
 
         // Verify is_generating was reset (room not found path)
-        let completed = wait_for_generation_complete(&state, 1000);
+        let completed = wait_for_generation_complete(&ctx, 1000);
         assert!(
             completed,
             "is_generating should be reset when room not found"
@@ -326,24 +311,18 @@ mod tests {
 
     #[test]
     fn test_execute_freeaction_state_accessible() {
-        let state = create_test_state();
+        let mut state = create_test_state();
+        state.narrative.history.clear();
+        state.narrative.generation.status = GenerationStatus::Generating;
+        let ctx = make_test_context(state);
         let service = failing_service();
 
-        {
-            let mut guard = state.lock().unwrap();
-            guard.narrative.history.clear();
-            guard.narrative.generation.status =
-                chronicler_engine::model::state::GenerationStatus::Generating;
-        }
-
-        service.execute_action(
-            state.clone(),
-            "look around".to_string(),
-            "Player".to_string(),
-        );
+        service.execute_action(ctx.clone(), "look around".to_string(), "Player".to_string());
 
         // State should remain accessible after execute_action returns
-        let guard = state.lock().unwrap();
+        let snap = ctx.snapshot_storage.load_latest(None).unwrap().unwrap();
+        let guard =
+            GameState::from_snapshot(&snap, ctx.world, ctx.map, ctx.player, (*ctx.npcs).clone());
         let status = &guard.narrative.generation.status;
         // Failing mock backend causes FreeAction to fail and set Error status
         assert!(
@@ -354,26 +333,20 @@ mod tests {
 
     #[test]
     fn test_execute_freeaction_narration_failure() {
-        let state = create_test_state();
+        let mut state = create_test_state();
+        state.narrative.history.clear();
+        state.narrative.generation.status = GenerationStatus::Generating;
+        let ctx = make_test_context(state);
         let service = failing_service();
 
-        {
-            let mut guard = state.lock().unwrap();
-            guard.narrative.history.clear();
-            guard.narrative.generation.status =
-                chronicler_engine::model::state::GenerationStatus::Generating;
-        }
+        service.execute_action(ctx.clone(), "test action".to_string(), "Player".to_string());
 
-        service.execute_action(
-            state.clone(),
-            "test action".to_string(),
-            "Player".to_string(),
-        );
-
-        let completed = wait_for_generation_complete(&state, 200);
+        let completed = wait_for_generation_complete(&ctx, 200);
         assert!(completed, "FreeAction should complete within timeout");
 
-        let guard = state.lock().unwrap();
+        let snap = ctx.snapshot_storage.load_latest(None).unwrap().unwrap();
+        let guard =
+            GameState::from_snapshot(&snap, ctx.world, ctx.map, ctx.player, (*ctx.npcs).clone());
         // MockBackend::failing() always returns an error
         assert!(
             guard.narrative.generation.status.error_message().is_some(),
@@ -384,29 +357,27 @@ mod tests {
 
     #[test]
     fn test_execute_freeaction_with_mock_backend() {
-        let state = create_test_state();
+        let mut state = create_test_state();
+        state.narrative.history.clear();
+        state.narrative.generation.status = GenerationStatus::Generating; // set by caller (server)
+        let ctx = make_test_context(state);
         let service = DefaultGameService::with_backends(
             Arc::new(MockBackend::default()),
             Arc::new(MockQuantifierBackend::default()),
         );
 
-        {
-            let mut guard = state.lock().unwrap();
-            guard.narrative.history.clear();
-            guard.narrative.generation.status =
-                chronicler_engine::model::state::GenerationStatus::Generating; // set by caller (server)
-        }
-
         service.execute_action(
-            state.clone(),
+            ctx.clone(),
             "examine the room carefully".to_string(),
             "Player".to_string(),
         );
 
-        let completed = wait_for_generation_complete(&state, 200);
+        let completed = wait_for_generation_complete(&ctx, 200);
         assert!(completed, "FreeAction should complete within timeout");
 
-        let guard = state.lock().unwrap();
+        let snap = ctx.snapshot_storage.load_latest(None).unwrap().unwrap();
+        let guard =
+            GameState::from_snapshot(&snap, ctx.world, ctx.map, ctx.player, (*ctx.npcs).clone());
         assert!(
             !guard.narrative.generation.status.is_generating(),
             "is_generating should be reset after FreeAction completes"
@@ -422,28 +393,25 @@ mod tests {
 
     #[test]
     fn test_retry_with_mock_backend() {
-        let state = create_test_state();
+        let mut state = create_test_state();
+        state.narrative.history.clear();
+        state.add_log("look around".to_string(), None, LogType::Input);
+        state.add_log("Initial narration".to_string(), None, LogType::Narration);
+        state.narrative.generation.status = GenerationStatus::Generating; // set by caller (server)
+        let ctx = make_test_context(state);
         let service = DefaultGameService::with_backends(
             Arc::new(MockBackend::default()),
             Arc::new(MockQuantifierBackend::default()),
         );
 
-        // Set up history with a player input and AI response
-        {
-            let mut guard = state.lock().unwrap();
-            guard.narrative.history.clear();
-            guard.add_log("look around".to_string(), None, LogType::Input);
-            guard.add_log("Initial narration".to_string(), None, LogType::Narration);
-            guard.narrative.generation.status =
-                chronicler_engine::model::state::GenerationStatus::Generating; // set by caller (server)
-        }
+        service.retry_last_response(ctx.clone());
 
-        service.retry_last_response(state.clone());
-
-        let completed = wait_for_generation_complete(&state, 1000);
+        let completed = wait_for_generation_complete(&ctx, 1000);
         assert!(completed, "Retry should complete within timeout");
 
-        let guard = state.lock().unwrap();
+        let snap = ctx.snapshot_storage.load_latest(None).unwrap().unwrap();
+        let guard =
+            GameState::from_snapshot(&snap, ctx.world, ctx.map, ctx.player, (*ctx.npcs).clone());
         assert!(
             !guard.narrative.generation.status.is_generating(),
             "is_generating should be reset after retry completes"
@@ -464,18 +432,17 @@ mod tests {
 
     #[test]
     fn test_execute_look_room_not_found() {
-        let state = create_test_state();
+        let mut state = create_test_state();
+        state.narrative.history.clear();
+        state.movement.current_room_id = "non_existent_room".to_string();
+        let ctx = make_test_context(state);
         let service = DefaultGameService::new();
 
-        {
-            let mut guard = state.lock().unwrap();
-            guard.narrative.history.clear();
-            guard.movement.current_room_id = "non_existent_room".to_string();
-        }
+        service.execute_action(ctx.clone(), "look".to_string(), "Player".to_string());
 
-        service.execute_action(state.clone(), "look".to_string(), "Player".to_string());
-
-        let guard = state.lock().unwrap();
+        let snap = ctx.snapshot_storage.load_latest(None).unwrap().unwrap();
+        let guard =
+            GameState::from_snapshot(&snap, ctx.world, ctx.map, ctx.player, (*ctx.npcs).clone());
         assert!(
             !guard.narrative.generation.status.is_generating(),
             "Look should reset is_generating even when room not found"
@@ -484,22 +451,21 @@ mod tests {
 
     #[test]
     fn test_execute_talk_no_message() {
-        let state = create_test_state();
+        let mut state = create_test_state();
+        state.narrative.history.clear();
+        let ctx = make_test_context(state);
         let service = DefaultGameService::new();
-
-        {
-            let mut guard = state.lock().unwrap();
-            guard.narrative.history.clear();
-        }
 
         // "talk to innkeeper" without quoted message parses as ("innkeeper", None)
         service.execute_action(
-            state.clone(),
+            ctx.clone(),
             "talk to innkeeper".to_string(),
             "Player".to_string(),
         );
 
-        let guard = state.lock().unwrap();
+        let snap = ctx.snapshot_storage.load_latest(None).unwrap().unwrap();
+        let guard =
+            GameState::from_snapshot(&snap, ctx.world, ctx.map, ctx.player, (*ctx.npcs).clone());
         let has_talk =
             guard.narrative.history.iter().any(|e| {
                 e.log_type == LogType::System && e.text.contains("You talk to innkeeper:")
@@ -509,33 +475,31 @@ mod tests {
 
     #[test]
     fn test_execute_freeaction_with_movement_mock() {
-        let state = create_test_state();
+        let mut state = create_test_state();
+        state.narrative.history.clear();
+        state.narrative.generation.status = GenerationStatus::Generating; // set by caller (server)
+        let ctx = make_test_context(state);
         let service = DefaultGameService::with_backends(
             Arc::new(MockBackend::default()),
             Arc::new(MockQuantifierBackend::default()),
         );
 
-        {
-            let mut guard = state.lock().unwrap();
-            guard.narrative.history.clear();
-            guard.narrative.generation.status =
-                chronicler_engine::model::state::GenerationStatus::Generating; // set by caller (server)
-        }
-
         // Action that implies movement
         service.execute_action(
-            state.clone(),
+            ctx.clone(),
             "walk to the north".to_string(),
             "Player".to_string(),
         );
 
-        let completed = wait_for_generation_complete(&state, 1000);
+        let completed = wait_for_generation_complete(&ctx, 1000);
         assert!(
             completed,
             "FreeAction with movement should complete within timeout"
         );
 
-        let guard = state.lock().unwrap();
+        let snap = ctx.snapshot_storage.load_latest(None).unwrap().unwrap();
+        let guard =
+            GameState::from_snapshot(&snap, ctx.world, ctx.map, ctx.player, (*ctx.npcs).clone());
         assert!(
             !guard.narrative.generation.status.is_generating(),
             "is_generating should be reset after FreeAction with movement"
@@ -553,46 +517,22 @@ mod tests {
     }
 
     #[test]
-    fn test_execute_action_poisoned_mutex() {
-        let state = create_test_state();
-        let service = DefaultGameService::new();
-
-        // Poison the mutex by panicking while holding the lock
-        let _ = std::panic::catch_unwind(|| {
-            let _guard = state.lock().unwrap();
-            panic!("intentional panic to poison mutex");
-        });
-
-        // Should return early without panicking
-        service.execute_action(state.clone(), "look".to_string(), "Player".to_string());
-
-        // If we get here, the function handled poisoned mutex gracefully
-        let guard = state.lock().unwrap_or_else(|e| e.into_inner());
-        assert!(
-            guard.narrative.history.is_empty(),
-            "Poisoned mutex should cause early return with no history changes"
-        );
-    }
-
-    #[test]
     fn test_freeaction_phase_starts_narrating() {
-        let state = create_test_state();
+        let mut state = create_test_state();
+        state.narrative.history.clear();
+        state.narrative.generation.status = GenerationStatus::Idle;
+        let ctx = make_test_context(state);
         let service = DefaultGameService::new();
-
-        {
-            let mut guard = state.lock().unwrap();
-            guard.narrative.history.clear();
-            guard.narrative.generation.status =
-                chronicler_engine::model::state::GenerationStatus::Idle;
-        }
 
         service.execute_action(
-            state.clone(),
+            ctx.clone(),
             "examine the room".to_string(),
             "Player".to_string(),
         );
 
-        let guard = state.lock().unwrap();
+        let snap = ctx.snapshot_storage.load_latest(None).unwrap().unwrap();
+        let guard =
+            GameState::from_snapshot(&snap, ctx.world, ctx.map, ctx.player, (*ctx.npcs).clone());
         // DefaultGameService has no API key, so FreeAction fails.
         // set_phase(Narrating) runs before the backend call, and set_error_and_reset
         // only updates status (not phase), so phase should still be Narrating.
@@ -606,29 +546,27 @@ mod tests {
 
     #[test]
     fn test_freeaction_phase_transitions_mock() {
-        let state = create_test_state();
+        let mut state = create_test_state();
+        state.narrative.history.clear();
+        state.narrative.generation.status = GenerationStatus::Generating;
+        let ctx = make_test_context(state);
         let service = DefaultGameService::with_backends(
             Arc::new(MockBackend::default()),
             Arc::new(MockQuantifierBackend::default()),
         );
 
-        {
-            let mut guard = state.lock().unwrap();
-            guard.narrative.history.clear();
-            guard.narrative.generation.status =
-                chronicler_engine::model::state::GenerationStatus::Generating;
-        }
-
         service.execute_action(
-            state.clone(),
+            ctx.clone(),
             "examine the room carefully".to_string(),
             "Player".to_string(),
         );
 
-        let completed = wait_for_generation_complete(&state, 200);
+        let completed = wait_for_generation_complete(&ctx, 200);
         assert!(completed, "FreeAction should complete within timeout");
 
-        let guard = state.lock().unwrap();
+        let snap = ctx.snapshot_storage.load_latest(None).unwrap().unwrap();
+        let guard =
+            GameState::from_snapshot(&snap, ctx.world, ctx.map, ctx.player, (*ctx.npcs).clone());
         assert!(
             !guard.narrative.generation.status.is_generating(),
             "Status should be reset after FreeAction completes"
@@ -642,36 +580,59 @@ mod tests {
 
     #[tokio::test]
     async fn test_cancellation_resets_state_to_idle() {
-        let state = create_test_state();
+        let mut state = create_test_state();
+        state.narrative.history.clear();
+        state.narrative.generation.status = GenerationStatus::Generating;
+        let ctx = make_test_context(state);
         let service = DefaultGameService::with_backends(
             Arc::new(MockBackend::with_delay(50)),
             Arc::new(MockQuantifierBackend::default()),
         );
-        let token = CancellationToken::new();
-
-        {
-            let mut guard = state.lock().unwrap();
-            guard.narrative.history.clear();
-            guard.narrative.generation.status = GenerationStatus::Generating;
-        }
-
-        let state_clone = state.clone();
+        let token = ctx.cancel_token.clone();
         let token_clone = token.clone();
+
+        let ctx_clone = ctx.clone();
         let handle = tokio::task::spawn_blocking(move || {
             if token_clone.is_cancelled() {
-                if let Ok(mut guard) = state_clone.lock() {
-                    guard.narrative.generation.status = GenerationStatus::Idle;
+                if let Ok(Some(snap)) = ctx_clone.snapshot_storage.load_latest(None) {
+                    let mut state = GameState::from_snapshot(
+                        &snap,
+                        ctx_clone.world.clone(),
+                        ctx_clone.map.clone(),
+                        ctx_clone.player.clone(),
+                        (*ctx_clone.npcs).clone(),
+                    );
+                    state.narrative.generation.status = GenerationStatus::Idle;
+                    let snapshot = GameStateSnapshot::from_game_state(
+                        &state,
+                        snap.message_id,
+                        snap.swipe_index,
+                    );
+                    let _ = ctx_clone.snapshot_storage.save(&snapshot);
                 }
                 return;
             }
             service.execute_action(
-                state_clone.clone(),
+                ctx_clone.clone(),
                 "look around".to_string(),
                 "Player".to_string(),
             );
             if token_clone.is_cancelled() {
-                if let Ok(mut guard) = state_clone.lock() {
-                    guard.narrative.generation.status = GenerationStatus::Idle;
+                if let Ok(Some(snap)) = ctx_clone.snapshot_storage.load_latest(None) {
+                    let mut state = GameState::from_snapshot(
+                        &snap,
+                        ctx_clone.world.clone(),
+                        ctx_clone.map.clone(),
+                        ctx_clone.player.clone(),
+                        (*ctx_clone.npcs).clone(),
+                    );
+                    state.narrative.generation.status = GenerationStatus::Idle;
+                    let snapshot = GameStateSnapshot::from_game_state(
+                        &state,
+                        snap.message_id,
+                        snap.swipe_index,
+                    );
+                    let _ = ctx_clone.snapshot_storage.save(&snapshot);
                 }
             }
         });
@@ -682,7 +643,9 @@ mod tests {
         // Wait for the blocking task to finish
         handle.await.unwrap();
 
-        let guard = state.lock().unwrap();
+        let snap = ctx.snapshot_storage.load_latest(None).unwrap().unwrap();
+        let guard =
+            GameState::from_snapshot(&snap, ctx.world, ctx.map, ctx.player, (*ctx.npcs).clone());
         assert!(
             !guard.narrative.generation.status.is_generating(),
             "Status should be Idle after cancellation cleanup"
@@ -691,18 +654,17 @@ mod tests {
 
     #[test]
     fn test_execute_action_empty_command() {
-        let state = create_test_state();
+        let mut state = create_test_state();
+        state.narrative.history.clear();
+        let ctx = make_test_context(state);
         let service = failing_service();
 
-        {
-            let mut guard = state.lock().unwrap();
-            guard.narrative.history.clear();
-        }
-
         // Empty command parses as FreeAction("") and should not panic
-        service.execute_action(state.clone(), "".to_string(), "Player".to_string());
+        service.execute_action(ctx.clone(), "".to_string(), "Player".to_string());
 
-        let guard = state.lock().unwrap();
+        let snap = ctx.snapshot_storage.load_latest(None).unwrap().unwrap();
+        let guard =
+            GameState::from_snapshot(&snap, ctx.world, ctx.map, ctx.player, (*ctx.npcs).clone());
         // Failing mock backend causes FreeAction to fail and set Error status
         assert!(
             guard.narrative.generation.status.error_message().is_some(),
@@ -713,18 +675,17 @@ mod tests {
 
     #[test]
     fn test_execute_action_unknown_command() {
-        let state = create_test_state();
+        let mut state = create_test_state();
+        state.narrative.history.clear();
+        let ctx = make_test_context(state);
         let service = failing_service();
 
-        {
-            let mut guard = state.lock().unwrap();
-            guard.narrative.history.clear();
-        }
-
         // Unknown command parses as FreeAction and should not panic
-        service.execute_action(state.clone(), "xyz123".to_string(), "Player".to_string());
+        service.execute_action(ctx.clone(), "xyz123".to_string(), "Player".to_string());
 
-        let guard = state.lock().unwrap();
+        let snap = ctx.snapshot_storage.load_latest(None).unwrap().unwrap();
+        let guard =
+            GameState::from_snapshot(&snap, ctx.world, ctx.map, ctx.player, (*ctx.npcs).clone());
         // Failing mock backend causes FreeAction to fail and set Error status
         assert!(
             guard.narrative.generation.status.error_message().is_some(),
@@ -735,30 +696,28 @@ mod tests {
 
     #[test]
     fn test_retry_last_response_not_ai_generated() {
-        let state = create_test_state();
+        let mut state = create_test_state();
+        state.narrative.history.clear();
+        state.add_log(
+            "look around".to_string(),
+            Some("Player".to_string()),
+            LogType::Input,
+        );
+        state.add_log("System message".to_string(), None, LogType::System);
+        let ctx = make_test_context(state);
         let service = DefaultGameService::new();
-
-        // Set up history with only an Input entry (no AI Narration after it)
-        {
-            let mut guard = state.lock().unwrap();
-            guard.narrative.history.clear();
-            guard.add_log(
-                "look around".to_string(),
-                Some("Player".to_string()),
-                LogType::Input,
-            );
-            guard.add_log("System message".to_string(), None, LogType::System);
-        }
 
         // Retry should find the last input and attempt to process it
         // With DefaultGameService (no API key), it will fail
-        service.retry_last_response(state.clone());
+        service.retry_last_response(ctx.clone());
 
         // Wait for the retry to complete
-        let completed = wait_for_generation_complete(&state, 1000);
+        let completed = wait_for_generation_complete(&ctx, 1000);
         assert!(completed, "Retry should complete within timeout");
 
-        let guard = state.lock().unwrap();
+        let snap = ctx.snapshot_storage.load_latest(None).unwrap().unwrap();
+        let guard =
+            GameState::from_snapshot(&snap, ctx.world, ctx.map, ctx.player, (*ctx.npcs).clone());
         assert!(
             guard.narrative.generation.status.error_message().is_some()
                 || !guard.narrative.generation.status.is_generating(),
@@ -771,25 +730,24 @@ mod tests {
 
     #[test]
     fn test_empty_llm_response_handled_gracefully() {
-        let state = create_test_state();
+        let mut state = create_test_state();
+        state.narrative.history.clear();
+        state.narrative.generation.status = GenerationStatus::Generating;
+        let ctx = make_test_context(state);
         let service = DefaultGameService::with_backends(
             Arc::new(MockBackend::with_empty_response()),
             Arc::new(MockQuantifierBackend::default()),
         );
 
-        {
-            let mut guard = state.lock().unwrap();
-            guard.narrative.history.clear();
-            guard.narrative.generation.status = GenerationStatus::Generating;
-        }
-
         service.execute_action(
-            state.clone(),
+            ctx.clone(),
             "examine the room".to_string(),
             "Player".to_string(),
         );
 
-        let guard = state.lock().unwrap();
+        let snap = ctx.snapshot_storage.load_latest(None).unwrap().unwrap();
+        let guard =
+            GameState::from_snapshot(&snap, ctx.world, ctx.map, ctx.player, (*ctx.npcs).clone());
         assert!(
             matches!(
                 guard.narrative.generation.status,
@@ -813,7 +771,14 @@ mod tests {
 
     #[test]
     fn test_failing_trigger_narration_does_not_crash() {
-        let state = create_test_state_with_trigger_npc();
+        let mut state = create_test_state_with_trigger_npc();
+        state.narrative.history.clear();
+        state.narrative.generation.status = GenerationStatus::Generating;
+        // Reset times_met so the trigger is eligible to fire
+        if let Some(encounter) = state.character_state.npcs.get_mut("shopkeeper") {
+            encounter.times_met = 0;
+        }
+        let ctx = make_test_context(state);
         let service = DefaultGameService::with_backends(
             Arc::new(MockBackend::with_failing_trigger_narration()),
             Arc::new(MockQuantifierBackend {
@@ -822,24 +787,16 @@ mod tests {
             }),
         );
 
-        {
-            let mut guard = state.lock().unwrap();
-            guard.narrative.history.clear();
-            guard.narrative.generation.status = GenerationStatus::Generating;
-            // Reset times_met so the trigger is eligible to fire
-            if let Some(encounter) = guard.character_state.npcs.get_mut("shopkeeper") {
-                encounter.times_met = 0;
-            }
-        }
-
         // Use a FreeAction so the backend is invoked ("talk to" parses as Talk, not FreeAction)
         service.execute_action(
-            state.clone(),
+            ctx.clone(),
             "examine the shopkeeper".to_string(),
             "Player".to_string(),
         );
 
-        let guard = state.lock().unwrap();
+        let snap = ctx.snapshot_storage.load_latest(None).unwrap().unwrap();
+        let guard =
+            GameState::from_snapshot(&snap, ctx.world, ctx.map, ctx.player, (*ctx.npcs).clone());
         assert!(
             !guard.narrative.generation.status.is_generating(),
             "Status should be reset after trigger narration failure"
@@ -871,26 +828,21 @@ mod tests {
 
     #[test]
     fn test_delayed_llm_completes_without_deadlock() {
-        let state = create_test_state();
+        let mut state = create_test_state();
+        state.narrative.history.clear();
+        state.narrative.generation.status = GenerationStatus::Generating;
+        let ctx = make_test_context(state);
         let service = DefaultGameService::with_backends(
             Arc::new(MockBackend::with_delay(200)),
             Arc::new(MockQuantifierBackend::default()),
         );
 
-        {
-            let mut guard = state.lock().unwrap();
-            guard.narrative.history.clear();
-            guard.narrative.generation.status = GenerationStatus::Generating;
-        }
-
-        service.execute_action(
-            state.clone(),
-            "look around".to_string(),
-            "Player".to_string(),
-        );
+        service.execute_action(ctx.clone(), "look around".to_string(), "Player".to_string());
 
         // execute_action is synchronous — by now the delay has elapsed
-        let guard = state.lock().unwrap();
+        let snap = ctx.snapshot_storage.load_latest(None).unwrap().unwrap();
+        let guard =
+            GameState::from_snapshot(&snap, ctx.world, ctx.map, ctx.player, (*ctx.npcs).clone());
         assert!(
             !guard.narrative.generation.status.is_generating(),
             "Status should be Idle after delayed action completes"
@@ -904,7 +856,10 @@ mod tests {
 
     #[test]
     fn test_quantifier_detects_movement() {
-        let state = create_test_state();
+        let mut state = create_test_state();
+        state.narrative.history.clear();
+        state.narrative.generation.status = GenerationStatus::Generating;
+        let ctx = make_test_context(state);
         let service = DefaultGameService::with_backends(
             Arc::new(MockBackend::default()),
             Arc::new(MockQuantifierBackend {
@@ -917,22 +872,18 @@ mod tests {
             }),
         );
 
-        {
-            let mut guard = state.lock().unwrap();
-            guard.narrative.history.clear();
-            guard.narrative.generation.status = GenerationStatus::Generating;
-        }
-
         service.execute_action(
-            state.clone(),
+            ctx.clone(),
             "walk to the village square".to_string(),
             "Player".to_string(),
         );
 
-        let completed = wait_for_generation_complete(&state, 500);
+        let completed = wait_for_generation_complete(&ctx, 500);
         assert!(completed, "Movement action should complete within timeout");
 
-        let guard = state.lock().unwrap();
+        let snap = ctx.snapshot_storage.load_latest(None).unwrap().unwrap();
+        let guard =
+            GameState::from_snapshot(&snap, ctx.world, ctx.map, ctx.player, (*ctx.npcs).clone());
         assert!(
             !guard.narrative.generation.status.is_generating(),
             "Status should be reset after movement action"
@@ -947,7 +898,14 @@ mod tests {
 
     #[test]
     fn test_quantifier_detects_npc_presence_and_fires_trigger() {
-        let state = create_test_state_with_trigger_npc();
+        let mut state = create_test_state_with_trigger_npc();
+        state.narrative.history.clear();
+        state.narrative.generation.status = GenerationStatus::Generating;
+        // Reset times_met so the trigger is eligible to fire
+        if let Some(encounter) = state.character_state.npcs.get_mut("shopkeeper") {
+            encounter.times_met = 0;
+        }
+        let ctx = make_test_context(state);
         let service = DefaultGameService::with_backends(
             Arc::new(MockBackend::default()),
             Arc::new(MockQuantifierBackend {
@@ -956,23 +914,15 @@ mod tests {
             }),
         );
 
-        {
-            let mut guard = state.lock().unwrap();
-            guard.narrative.history.clear();
-            guard.narrative.generation.status = GenerationStatus::Generating;
-            // Reset times_met so the trigger is eligible to fire
-            if let Some(encounter) = guard.character_state.npcs.get_mut("shopkeeper") {
-                encounter.times_met = 0;
-            }
-        }
-
         service.execute_action(
-            state.clone(),
+            ctx.clone(),
             "enter the shop".to_string(),
             "Player".to_string(),
         );
 
-        let guard = state.lock().unwrap();
+        let snap = ctx.snapshot_storage.load_latest(None).unwrap().unwrap();
+        let guard =
+            GameState::from_snapshot(&snap, ctx.world, ctx.map, ctx.player, (*ctx.npcs).clone());
         assert!(
             !guard.narrative.generation.status.is_generating(),
             "Status should be reset after trigger action"

@@ -31,6 +31,7 @@ pub mod model;
 pub mod narrative;
 pub mod server;
 pub mod settings;
+pub mod storage;
 
 pub use error::{EngineError, Result};
 
@@ -38,7 +39,6 @@ pub use model::settings::AppSettings;
 pub use server::AppState;
 pub use server::{create_app_for_testing, create_app_for_testing_with_settings};
 
-#[cfg(test)]
 pub mod test_support;
 
 #[cfg(test)]

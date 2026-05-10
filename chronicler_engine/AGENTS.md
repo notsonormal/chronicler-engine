@@ -1,4 +1,4 @@
-# Chronicler Engine Knowledge Base
+You# Chronicler Engine Knowledge Base
 
 **Generated:** 2026-04-21
 **Language:** Rust (Edition 2024)
@@ -49,7 +49,8 @@ This project follows a **Spec-Driven Implementation** (SDI) strategy.
 This project relies on a comprehensive suite of integration tests as the ultimate source of truth for behavior.
 - **Tests as Documentation**: If you don't understand how a component works, read its tests in `tests/` before reading the source code.
 - **Test-Driven Debugging**: Before fixing a bug, find or create a failing test case. If tests pass but the bug exists, the test suite is missing a scenario.
-- **No Regression**: Every change must be verified by running `python build.py` (fast path: debug build + tests).
+- **No Regression**: Every change must pass `python build.py` before commit.  
+  *During development*, iterate with the specific tool (e.g. `cargo clippy` for lint fixes, `cargo test <pattern>` for test fixes). Run `build.py` only for final verification.
 
 ### Example: Semantic vs. Traditional
 **❌ BAD (Traditional)**
@@ -148,13 +149,30 @@ timeout = 10
 ```
 
 ## COMMANDS
+
+### Iteration (use these while fixing)
 ```bash
-python build.py             # Fast validation (fmt + clippy + guardrails + debug build + tests)
-python build.py --release   # Release build + tests + package
-cargo test                  # All tests
-cargo test <test_name>      # Run a specific test (or pattern)
-cargo run -- --world redmist_estate --port 3000
+cargo fmt                                       # Check formatting
+cargo clippy --all-targets -- -D warnings       # ~10s — fix warnings here
+cargo test <test_name>                          # Run one test or pattern
+cargo test --tests                              # Run integration test suite (~2–3 min)
+cargo run -- --world redmist_estate --port 3000 # Run the server
 ```
+
+### Final Validation (run once before considering done)
+```bash
+python build.py             # Full gate: fmt + clippy + guardrails + tests
+python build.py --release   # Release build + package
+```
+
+## DEVELOPMENT LOOP
+
+When fixing a known failure (e.g. clippy warning, single test):
+1. Run only the failing tool until green.
+2. Then run `python build.py` once to confirm nothing else broke.
+
+❌ Inefficient: `build.py` → fix one line → `build.py` → fix one line → `build.py`  
+✅ Efficient: `cargo clippy` → fix all warnings → `python build.py` (once)
 
 ## CONCURRENT BUILDS
 Multiple KimiCode agents building simultaneously can conflict because:

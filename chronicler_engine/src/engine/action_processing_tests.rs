@@ -42,14 +42,14 @@ fn make_quantifier_result_with_movement(destination: &str) -> QuantifierResult {
 
 #[test]
 fn test_execute_freeaction_impl_no_movement() {
-    let mut state = TestGameState::with_npc_raw("room1", TestNpc::named("carla", "Carla"));
+    let state = TestGameState::with_npc_raw("room1", TestNpc::named("carla", "Carla"));
     let world = Arc::new(TestWorld::minimal());
     let player = Arc::new(TestPlayer::standard());
     let all_npcs = vec![TestNpc::named("carla", "Carla")];
     let history = vec![];
 
     let result = execute_freeaction_impl(
-        &mut state,
+        &state,
         &FreeActionContext {
             narration_text: "You examine the room.",
             user_input: "examine the room",
@@ -67,17 +67,18 @@ fn test_execute_freeaction_impl_no_movement() {
         "execute_freeaction_impl failed: {:?}",
         result.err()
     );
+    let next_state = result.unwrap().next_state;
     // Narration should be logged
-    assert_eq!(state.narrative.history.len(), 1);
-    assert_eq!(state.narrative.history[0].log_type, LogType::Narration);
+    assert_eq!(next_state.narrative.history.len(), 1);
+    assert_eq!(next_state.narrative.history[0].log_type, LogType::Narration);
     // NPCs in area should be updated
-    assert_eq!(state.scene.npcs_in_area.len(), 1);
-    assert_eq!(state.scene.npcs_in_area[0].id, "carla");
+    assert_eq!(next_state.scene.npcs_in_area.len(), 1);
+    assert_eq!(next_state.scene.npcs_in_area[0].id, "carla");
 }
 
 #[test]
 fn test_execute_freeaction_impl_with_movement() {
-    let mut state = TestGameState::with_npc_raw("room1", TestNpc::named("carla", "Carla"));
+    let state = TestGameState::with_npc_raw("room1", TestNpc::named("carla", "Carla"));
     let world = Arc::new(TestWorld::minimal());
     let player = Arc::new(TestPlayer::standard());
     let all_npcs = vec![TestNpc::named("carla", "Carla")];
@@ -85,7 +86,7 @@ fn test_execute_freeaction_impl_with_movement() {
 
     // quantifier result with movement to a new room
     let result = execute_freeaction_impl(
-        &mut state,
+        &state,
         &FreeActionContext {
             narration_text: "You walk to the tavern.",
             user_input: "walk to the tavern",
@@ -103,21 +104,22 @@ fn test_execute_freeaction_impl_with_movement() {
         "execute_freeaction_impl failed: {:?}",
         result.err()
     );
+    let next_state = result.unwrap().next_state;
     // Narration logged
-    assert!(!state.narrative.history.is_empty());
+    assert!(!next_state.narrative.history.is_empty());
     // Room changed to a dynamic room (since destination doesn't exist)
-    assert!(state.movement.current_room_id.starts_with("dynamic_"));
+    assert!(next_state.movement.current_room_id.starts_with("dynamic_"));
     assert!(
-        state
+        next_state
             .movement
             .dynamic_rooms
-            .contains_key(&state.movement.current_room_id)
+            .contains_key(&next_state.movement.current_room_id)
     );
 }
 
 #[test]
 fn test_execute_freeaction_impl_updates_npcs_in_area() {
-    let mut state = TestGameState::with_npc_raw("room1", TestNpc::named("carla", "Carla"));
+    let state = TestGameState::with_npc_raw("room1", TestNpc::named("carla", "Carla"));
     let world = Arc::new(TestWorld::minimal());
     let player = Arc::new(TestPlayer::standard());
     let all_npcs = vec![TestNpc::named("carla", "Carla")];
@@ -125,7 +127,7 @@ fn test_execute_freeaction_impl_updates_npcs_in_area() {
     assert!(state.scene.npcs_in_area.is_empty());
 
     let result = execute_freeaction_impl(
-        &mut state,
+        &state,
         &FreeActionContext {
             narration_text: "You look around.",
             user_input: "look around",
@@ -139,9 +141,10 @@ fn test_execute_freeaction_impl_updates_npcs_in_area() {
     );
 
     assert!(result.is_ok());
+    let next_state = result.unwrap().next_state;
     // npcs_in_area should now contain carla
-    assert_eq!(state.scene.npcs_in_area.len(), 1);
-    assert_eq!(state.scene.npcs_in_area[0].id, "carla");
+    assert_eq!(next_state.scene.npcs_in_area.len(), 1);
+    assert_eq!(next_state.scene.npcs_in_area[0].id, "carla");
 }
 
 #[test]
@@ -153,12 +156,12 @@ fn test_execute_freeaction_impl_returns_trigger_request_when_trigger_matches() {
         0,
     );
 
-    let mut state = TestGameState::with_npc_raw("room1", npc.clone());
+    let state = TestGameState::with_npc_raw("room1", npc.clone());
     let world = Arc::new(TestWorld::minimal());
     let player = Arc::new(TestPlayer::standard());
 
     let result = execute_freeaction_impl(
-        &mut state,
+        &state,
         &FreeActionContext {
             narration_text: "You enter the room.",
             user_input: "enter",
@@ -172,7 +175,7 @@ fn test_execute_freeaction_impl_returns_trigger_request_when_trigger_matches() {
     );
 
     assert!(result.is_ok(), "execute_freeaction_impl should succeed");
-    let trigger_request = result.unwrap();
+    let trigger_request = result.unwrap().trigger_continuation;
     assert!(
         trigger_request.is_some(),
         "Should return TriggerContinuationRequest when trigger matches"
@@ -189,12 +192,12 @@ fn test_execute_freeaction_impl_returns_trigger_request_when_trigger_matches() {
 #[test]
 fn test_execute_freeaction_impl_returns_none_when_no_trigger_matches() {
     // bartender has no triggers
-    let mut state = TestGameState::with_npc_raw("room1", TestNpc::named("bartender", "Bartender"));
+    let state = TestGameState::with_npc_raw("room1", TestNpc::named("bartender", "Bartender"));
     let world = Arc::new(TestWorld::minimal());
     let player = Arc::new(TestPlayer::standard());
 
     let result = execute_freeaction_impl(
-        &mut state,
+        &state,
         &FreeActionContext {
             narration_text: "You look around.",
             user_input: "look around",
@@ -209,7 +212,7 @@ fn test_execute_freeaction_impl_returns_none_when_no_trigger_matches() {
 
     assert!(result.is_ok(), "execute_freeaction_impl should succeed");
     assert!(
-        result.unwrap().is_none(),
+        result.unwrap().trigger_continuation.is_none(),
         "Should return None when no trigger matches"
     );
 }
@@ -224,7 +227,7 @@ fn test_execute_freeaction_impl_npc_events_entered() {
     let all_npcs = vec![TestNpc::named("carla", "Carla")];
 
     let result = execute_freeaction_impl(
-        &mut state,
+        &state,
         &FreeActionContext {
             narration_text: "You see Carla.",
             user_input: "look around",
@@ -239,7 +242,8 @@ fn test_execute_freeaction_impl_npc_events_entered() {
 
     assert!(result.is_ok());
     // NPC enters - times_met should increment
-    let times_met = state
+    let next_state = result.unwrap().next_state;
+    let times_met = next_state
         .character_state
         .npcs
         .get("carla")
@@ -282,13 +286,13 @@ fn test_get_static_npcs_empty_for_unknown() {
 
 #[test]
 fn test_apply_npc_events_entered() {
-    let mut state = make_test_state();
+    let state = make_test_state();
     let events = vec![crate::narrative::quantifier::NpcEvent {
         npc_id: "carla".to_string(),
         event_type: crate::narrative::quantifier::NpcEventType::Entered,
     }];
 
-    apply_npc_events(&mut state, &events);
+    let state = apply_npc_events(state, &events).unwrap();
 
     assert!(is_currently_meeting(&state.character_state, "carla"));
 }
@@ -303,14 +307,14 @@ fn test_apply_npc_events_left() {
         event_type: crate::narrative::quantifier::NpcEventType::Left,
     }];
 
-    apply_npc_events(&mut state, &events);
+    let state = apply_npc_events(state, &events).unwrap();
 
     assert!(!is_currently_meeting(&state.character_state, "carla"));
 }
 
 #[test]
 fn test_apply_npc_events_increments_times_met() {
-    let mut state = make_test_state();
+    let state = make_test_state();
     let initial_times = get_times_met(&state.character_state, "carla");
 
     let events = vec![crate::narrative::quantifier::NpcEvent {
@@ -318,7 +322,7 @@ fn test_apply_npc_events_increments_times_met() {
         event_type: crate::narrative::quantifier::NpcEventType::Entered,
     }];
 
-    apply_npc_events(&mut state, &events);
+    let state = apply_npc_events(state, &events).unwrap();
 
     assert_eq!(
         get_times_met(&state.character_state, "carla"),
@@ -328,10 +332,10 @@ fn test_apply_npc_events_increments_times_met() {
 
 #[test]
 fn test_handle_movement_no_destination() {
-    let mut state = make_test_state();
+    let state = make_test_state();
     let original_room = state.movement.current_room_id.clone();
 
-    handle_movement(&mut state, None, &["carla".to_string()]);
+    let state = handle_movement(state, None, &["carla".to_string()]).unwrap();
 
     // Room should not change when destination is None
     assert_eq!(state.movement.current_room_id, original_room);
@@ -344,7 +348,7 @@ fn test_handle_movement_same_room_no_increment() {
     state.movement.current_room_id = "test_room".to_string();
     let initial_times = get_times_met(&state.character_state, "carla");
 
-    handle_movement(&mut state, Some("test_room"), &["carla".to_string()]);
+    let state = handle_movement(state, Some("test_room"), &["carla".to_string()]).unwrap();
 
     // times_met should not increment when room doesn't change
     assert_eq!(
@@ -355,11 +359,11 @@ fn test_handle_movement_same_room_no_increment() {
 
 #[test]
 fn test_handle_movement_creates_dynamic_room() {
-    let mut state = make_test_state();
+    let state = make_test_state();
     let original_room = state.movement.current_room_id.clone();
 
     // Attempt to move to a non-existent room
-    handle_movement(&mut state, Some("nonexistent_room"), &[]);
+    let state = handle_movement(state, Some("nonexistent_room"), &[]).unwrap();
 
     // Should create a dynamic room
     assert_ne!(state.movement.current_room_id, original_room);
@@ -373,9 +377,9 @@ fn test_handle_movement_creates_dynamic_room() {
 
 #[test]
 fn test_handle_movement_success_adds_room_log() {
-    let mut state = make_test_state();
+    let state = make_test_state();
 
-    handle_movement(&mut state, Some("test_room"), &["carla".to_string()]);
+    let state = handle_movement(state, Some("test_room"), &["carla".to_string()]).unwrap();
 
     assert!(!state.narrative.history.is_empty());
     let last_entry = state.narrative.history.last().unwrap();
@@ -385,9 +389,9 @@ fn test_handle_movement_success_adds_room_log() {
 
 #[test]
 fn test_handle_movement_sets_currently_meeting() {
-    let mut state = make_test_state();
+    let state = make_test_state();
 
-    handle_movement(&mut state, Some("new_room"), &["carla".to_string()]);
+    let state = handle_movement(state, Some("new_room"), &["carla".to_string()]).unwrap();
 
     // Should set currently_meeting for NPCs in new room
     assert!(is_currently_meeting(&state.character_state, "carla"));
@@ -425,12 +429,9 @@ fn test_evaluate_and_narrate_triggers_adds_event_header() {
         history: &history,
     };
 
-    evaluate_and_narrate_triggers(
-        &mut state,
-        "You enter the room.",
-        &trigger_context,
-        &llm_backend,
-    );
+    let state =
+        evaluate_and_narrate_triggers(state, "You enter the room.", &trigger_context, &llm_backend)
+            .unwrap();
 
     // Should have at least 2 entries: event header + narration
     assert!(
@@ -452,7 +453,7 @@ fn test_evaluate_and_narrate_triggers_adds_event_header() {
 
 #[test]
 fn test_commit_trigger_narration_adds_event_header_and_narration() {
-    let mut state = make_test_state();
+    let state = make_test_state();
 
     let request = TriggerContinuationRequest {
         npc_id: "carla".to_string(),
@@ -464,7 +465,8 @@ fn test_commit_trigger_narration_adds_event_header_and_narration() {
         max_tokens: None,
     };
 
-    commit_trigger_narration(&mut state, &request, "Gabriella emerges from the shadows.");
+    let state =
+        commit_trigger_narration(state, &request, "Gabriella emerges from the shadows.").unwrap();
 
     assert_eq!(state.narrative.history.len(), 2);
 
@@ -480,7 +482,7 @@ fn test_commit_trigger_narration_adds_event_header_and_narration() {
 
 #[test]
 fn test_commit_trigger_narration_marks_non_repeat_trigger_fired() {
-    let mut state = make_test_state();
+    let state = make_test_state();
 
     let request = TriggerContinuationRequest {
         npc_id: "carla".to_string(),
@@ -492,7 +494,7 @@ fn test_commit_trigger_narration_marks_non_repeat_trigger_fired() {
         max_tokens: None,
     };
 
-    commit_trigger_narration(&mut state, &request, "Some text.");
+    let state = commit_trigger_narration(state, &request, "Some text.").unwrap();
 
     assert!(
         crate::engine::trigger_eval::is_trigger_fired(&state.character_state, "carla", 0),
@@ -502,7 +504,7 @@ fn test_commit_trigger_narration_marks_non_repeat_trigger_fired() {
 
 #[test]
 fn test_commit_trigger_narration_does_not_mark_repeat_trigger_fired() {
-    let mut state = make_test_state();
+    let state = make_test_state();
 
     let request = TriggerContinuationRequest {
         npc_id: "carla".to_string(),
@@ -514,7 +516,7 @@ fn test_commit_trigger_narration_does_not_mark_repeat_trigger_fired() {
         max_tokens: None,
     };
 
-    commit_trigger_narration(&mut state, &request, "Some text.");
+    let state = commit_trigger_narration(state, &request, "Some text.").unwrap();
 
     assert!(
         !crate::engine::trigger_eval::is_trigger_fired(&state.character_state, "carla", 0),
@@ -524,7 +526,7 @@ fn test_commit_trigger_narration_does_not_mark_repeat_trigger_fired() {
 
 #[test]
 fn test_commit_trigger_narration_empty_text_is_noop() {
-    let mut state = make_test_state();
+    let state = make_test_state();
 
     let request = TriggerContinuationRequest {
         npc_id: "carla".to_string(),
@@ -536,10 +538,10 @@ fn test_commit_trigger_narration_empty_text_is_noop() {
         max_tokens: None,
     };
 
-    commit_trigger_narration(&mut state, &request, "");
+    let state = commit_trigger_narration(state, &request, "").unwrap();
     assert!(state.narrative.history.is_empty());
 
-    commit_trigger_narration(&mut state, &request, "   ");
+    let state = commit_trigger_narration(state, &request, "   ").unwrap();
     assert!(state.narrative.history.is_empty());
 }
 
@@ -569,8 +571,8 @@ proptest! {
         ],
         new_npc_ids in prop::collection::vec("[a-z]{1,10}", 0..3),
     ) {
-        let mut state = make_two_room_state();
-        handle_movement(&mut state, destination, &new_npc_ids);
+        let state = make_two_room_state();
+        let state = handle_movement(state, destination, &new_npc_ids).unwrap();
         // The primary invariant: state remains consistent after movement
         crate::engine::state_diagnostics::assert_state_consistency(&state).ok();
     }
@@ -585,7 +587,7 @@ proptest! {
             0..10
         ),
     ) {
-        let mut state = TestGameState::with_npc_raw("room1", TestNpc::named("carla", "Carla"));
+        let state = TestGameState::with_npc_raw("room1", TestNpc::named("carla", "Carla"));
         let events: Vec<crate::narrative::quantifier::NpcEvent> = events
             .into_iter()
             .map(|(npc_id, event_type)| crate::narrative::quantifier::NpcEvent {
@@ -593,7 +595,7 @@ proptest! {
                 event_type,
             })
             .collect();
-        apply_npc_events(&mut state, &events);
+        let state = apply_npc_events(state, &events).unwrap();
         crate::engine::state_diagnostics::assert_state_consistency(&state).ok();
     }
 
@@ -602,7 +604,7 @@ proptest! {
         has_movement in prop::bool::ANY,
         destination in "[a-z]{1,15}",
     ) {
-        let mut state = TestGameState::with_npc_raw("room1", TestNpc::named("carla", "Carla"));
+        let state = TestGameState::with_npc_raw("room1", TestNpc::named("carla", "Carla"));
         let world = Arc::new(TestWorld::minimal());
         let player = Arc::new(TestPlayer::standard());
         let all_npcs = vec![TestNpc::named("carla", "Carla")];
@@ -630,7 +632,7 @@ proptest! {
         };
 
         let result = execute_freeaction_impl(
-            &mut state,
+            &state,
             &FreeActionContext {
                 narration_text: "You do something.",
                 user_input: "do something",
@@ -648,6 +650,7 @@ proptest! {
             "execute_freeaction_impl failed: {:?}",
             result.err()
         );
-        crate::engine::state_diagnostics::assert_state_consistency(&state).ok();
+        let next_state = result.unwrap().next_state;
+        crate::engine::state_diagnostics::assert_state_consistency(&next_state).ok();
     }
 }

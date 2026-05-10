@@ -50,6 +50,7 @@ fn build_router(app_state: AppState) -> Router {
             post(fragments::delete_history_handler),
         )
         .route("/retry", post(fragments::retry_handler))
+        .route("/reset", post(fragments::reset_handler))
         // Settings endpoints
         .route(
             "/fragment/settings",
@@ -99,17 +100,36 @@ fn build_router(app_state: AppState) -> Router {
         .with_state(app_state)
 }
 
-pub fn create_app_for_testing(state: Arc<std::sync::Mutex<GameState>>) -> Router {
+pub fn create_app_for_testing(state: GameState) -> Router {
     create_app_for_testing_with_settings(state, AppSettings::default())
 }
 
-pub fn create_app_for_testing_with_settings(
-    state: Arc<std::sync::Mutex<GameState>>,
+pub fn create_app_for_testing_with_settings(state: GameState, settings: AppSettings) -> Router {
+    let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
+        &state,
+        "test".to_string(),
+        0,
+    );
+    let storage = Arc::new(crate::test_support::InMemorySnapshotStorage::new())
+        as Arc<dyn crate::storage::snapshot_storage::SnapshotStorage>;
+    let _ = storage.save(&snapshot);
+    create_app_with_storage(state, storage, settings)
+}
+
+pub fn create_app_with_storage(
+    state: GameState,
+    storage: Arc<dyn crate::storage::snapshot_storage::SnapshotStorage>,
     settings: AppSettings,
 ) -> Router {
     let app_state = AppState {
-        state,
-        game_service: Arc::new(DefaultGameService::new()) as Arc<dyn GameService>,
+        snapshot_storage: storage,
+        world: state.world.clone(),
+        map: state.map.clone(),
+        player: state.player.clone(),
+        npcs: Arc::new(state.npcs.clone()),
+        starting_room_id: state.movement.current_room_id.clone(),
+        game_service: Arc::new(crate::engine::game_service::DefaultGameService::new())
+            as Arc<dyn crate::engine::game_service::GameService>,
         settings: Arc::new(RwLock::new(settings)),
         cancel_token: CancellationToken::new(),
     };
@@ -121,6 +141,7 @@ use axum::{
     response::Html,
     routing::{get, post},
 };
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::RwLock;
 use tokio_util::sync::CancellationToken;
@@ -128,8 +149,12 @@ use tower_http::services::ServeDir;
 
 use crate::engine::game_service::{DefaultGameService, GameService};
 use crate::error::{EngineError, Result};
+use crate::model::character::NpcCard;
+use crate::model::map::MapDef;
 use crate::model::settings::AppSettings;
 use crate::model::state::GameState;
+use crate::model::world::WorldCard;
+use crate::storage::snapshot_storage::SnapshotStorage;
 
 #[derive(Clone, Debug)]
 pub struct ServerConfig {
@@ -144,27 +169,49 @@ impl Default for ServerConfig {
 
 #[derive(Clone)]
 pub struct AppState {
-    pub state: Arc<std::sync::Mutex<GameState>>,
+    pub snapshot_storage: Arc<dyn SnapshotStorage>,
+    pub world: Arc<WorldCard>,
+    pub map: Arc<MapDef>,
+    pub player: Arc<crate::model::character::PlayerCard>,
+    pub npcs: Arc<HashMap<String, NpcCard>>,
+    pub starting_room_id: String,
     pub game_service: Arc<dyn GameService>,
     pub settings: Arc<RwLock<AppSettings>>,
     pub cancel_token: CancellationToken,
 }
 
 impl AppState {
-    pub async fn new(state: Arc<std::sync::Mutex<GameState>>) -> Self {
-        let settings = crate::settings::load_settings().unwrap_or_else(|_| AppSettings::default());
-        Self {
-            state,
-            game_service: Arc::new(DefaultGameService::new()) as Arc<dyn GameService>,
-            settings: Arc::new(RwLock::new(settings)),
-            cancel_token: CancellationToken::new(),
+    pub fn load_state(&self) -> crate::error::Result<GameState> {
+        let snapshot = self.snapshot_storage.load_latest(None)?;
+        match snapshot {
+            Some(snap) => Ok(GameState::from_snapshot(
+                &snap,
+                Arc::clone(&self.world),
+                Arc::clone(&self.map),
+                Arc::clone(&self.player),
+                (*self.npcs).clone(),
+            )),
+            None => Ok(GameState::new(
+                Arc::clone(&self.world),
+                Arc::clone(&self.map),
+                Arc::clone(&self.player),
+                (*self.npcs).values().cloned().collect(),
+                self.starting_room_id.clone(),
+            )),
         }
     }
 
-    pub fn lock_state(&self) -> crate::error::Result<std::sync::MutexGuard<GameState>> {
-        self.state
-            .lock()
-            .map_err(|_| crate::error::EngineError::Config("Lock poisoned".into()))
+    pub fn as_game_service_context(&self) -> crate::engine::game_service::GameServiceContext {
+        crate::engine::game_service::GameServiceContext {
+            snapshot_storage: Arc::clone(&self.snapshot_storage),
+            world: Arc::clone(&self.world),
+            map: Arc::clone(&self.map),
+            player: Arc::clone(&self.player),
+            npcs: Arc::clone(&self.npcs),
+            starting_room_id: self.starting_room_id.clone(),
+            cancel_token: self.cancel_token.clone(),
+            action_lock: Arc::new(std::sync::Mutex::new(())),
+        }
     }
 
     /// Read a snapshot of the current settings.
@@ -174,16 +221,49 @@ impl AppState {
     }
 }
 
-pub async fn run_server(state: Arc<std::sync::Mutex<GameState>>) -> Result<()> {
-    run_server_with_config(state, ServerConfig::default()).await
+pub async fn run_server(
+    world: Arc<WorldCard>,
+    map: Arc<MapDef>,
+    player: Arc<crate::model::character::PlayerCard>,
+    npcs: Arc<HashMap<String, NpcCard>>,
+    starting_room_id: String,
+    snapshot_storage: Arc<dyn SnapshotStorage>,
+) -> Result<()> {
+    run_server_with_config(
+        world,
+        map,
+        player,
+        npcs,
+        starting_room_id,
+        snapshot_storage,
+        ServerConfig::default(),
+    )
+    .await
 }
 
 /// [DOC: docs/architecture/system.md]
 pub async fn run_server_with_config(
-    state: Arc<std::sync::Mutex<GameState>>,
+    world: Arc<WorldCard>,
+    map: Arc<MapDef>,
+    player: Arc<crate::model::character::PlayerCard>,
+    npcs: Arc<HashMap<String, NpcCard>>,
+    starting_room_id: String,
+    snapshot_storage: Arc<dyn SnapshotStorage>,
     config: ServerConfig,
 ) -> Result<()> {
-    let app_state = AppState::new(state.clone()).await;
+    let app_state = AppState {
+        snapshot_storage,
+        world,
+        map,
+        player,
+        npcs,
+        starting_room_id,
+        game_service: Arc::new(DefaultGameService::new()) as Arc<dyn GameService>,
+        settings: Arc::new(RwLock::new(
+            crate::settings::load_settings().unwrap_or_else(|_| AppSettings::default()),
+        )),
+        cancel_token: CancellationToken::new(),
+    };
     let cancel_token = app_state.cancel_token.clone();
 
     let app = build_router(app_state);

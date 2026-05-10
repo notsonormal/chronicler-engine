@@ -6,6 +6,7 @@ use axum::{
     response::{Html, Response},
 };
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 use crate::engine::logic::{get_available_exits, get_current_room};
 use crate::engine::parser::parse_command;
@@ -39,12 +40,12 @@ fn render_header_unlocked(state: &GameState) -> Result<String> {
 }
 
 pub fn render_header(state: &AppState) -> Result<String> {
-    let state_guard = state.lock_state()?;
+    let state_guard = state.load_state()?;
     render_header_unlocked(&state_guard)
 }
 
 pub fn render_story_log(state: &AppState) -> Result<String> {
-    let state_guard = state.lock_state()?;
+    let state_guard = state.load_state()?;
 
     let entries: Vec<_> = state_guard
         .narrative
@@ -96,13 +97,13 @@ fn render_visual_sidebar_unlocked(state: &GameState) -> Result<String> {
 }
 
 pub fn render_visual_sidebar(state: &AppState) -> Result<String> {
-    let state_guard = state.lock_state()?;
+    let state_guard = state.load_state()?;
     render_visual_sidebar_unlocked(&state_guard)
 }
 
 /// [DOC: docs/system/game_flow.md]
 pub fn render_action_area(state: &AppState) -> Result<String> {
-    let state_guard = state.lock_state()?;
+    let state_guard = state.load_state()?;
 
     let status = state_guard.narrative.generation.status.clone();
     let phase = state_guard.narrative.generation.phase.clone();
@@ -152,7 +153,7 @@ fn render_character_headshots(state: &AppState) -> Result<String> {
     use crate::server::templates::CharacterHeadshotsTemplate;
     use askama::Template;
 
-    let state_guard = state.lock_state()?;
+    let state_guard = state.load_state()?;
 
     let npc_data: Vec<(String, String)> = state_guard
         .npcs
@@ -190,16 +191,13 @@ pub async fn status_ready_handler(State(_state): State<AppState>) -> Html<String
 
 /// [DOC: docs/system/game_flow.md]
 pub async fn generating_status_handler(State(state): State<AppState>) -> Html<String> {
-    let (status, phase) = state
-        .state
-        .lock()
-        .map(|guard| {
-            (
-                guard.narrative.generation.status.clone(),
-                guard.narrative.generation.phase.clone(),
-            )
-        })
-        .unwrap_or_default();
+    let (status, phase) = match state.load_state() {
+        Ok(guard) => (
+            guard.narrative.generation.status.clone(),
+            guard.narrative.generation.phase.clone(),
+        ),
+        _ => Default::default(),
+    };
 
     if let Some(err) = status.error_message() {
         Html(format!("<span class=\"status error\">Error: {err}</span>"))
@@ -212,14 +210,18 @@ pub async fn generating_status_handler(State(state): State<AppState>) -> Html<St
 
 /// [DOC: docs/system/game_flow.md]
 pub async fn reset_generating_handler(State(state): State<AppState>) -> Html<String> {
-    let result = state
-        .state
-        .lock()
-        .map(|mut guard| {
+    let result = match state.load_state() {
+        Ok(mut guard) => {
             guard.narrative.generation.status = crate::model::state::GenerationStatus::Idle;
-            true
-        })
-        .unwrap_or(false);
+            let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
+                &guard,
+                uuid::Uuid::new_v4().to_string(),
+                0,
+            );
+            state.snapshot_storage.save(&snapshot).is_ok()
+        }
+        Err(_) => false,
+    };
 
     if result {
         Html("reset".to_string())
@@ -229,7 +231,7 @@ pub async fn reset_generating_handler(State(state): State<AppState>) -> Html<Str
 }
 
 fn render_action_hints(state: &AppState) -> Result<String> {
-    let state_guard = state.lock_state()?;
+    let state_guard = state.load_state()?;
 
     let exits = get_available_exits(&state_guard);
     let available_actions = if exits.is_empty() {
@@ -267,52 +269,73 @@ async fn process_action(state: &AppState, command: String) -> Response<Body> {
             .expect("static response body is valid");
     }
 
-    let (player_name, is_sync) = {
-        let mut state_guard = match state.state.lock() {
-            Ok(g) => g,
-            Err(_) => {
-                return Response::builder()
-                    .status(StatusCode::INTERNAL_SERVER_ERROR)
-                    .body(Body::new(String::new()))
-                    .expect("static response body is valid");
-            }
-        };
-
-        let name = state_guard.player.sheet.name.clone();
-        state_guard.add_log(command.clone(), Some(name.clone()), LogType::Input);
-
-        let action = parse_command(&command);
-        let is_sync = matches!(
-            action,
-            crate::engine::action::Action::Look
-                | crate::engine::action::Action::Inventory
-                | crate::engine::action::Action::Quit
-        );
-
-        if is_sync {
-            process_sync_action(&mut state_guard, &action);
-            state_guard.narrative.generation.status = crate::model::state::GenerationStatus::Idle;
-        } else {
-            state_guard.narrative.generation.status =
-                crate::model::state::GenerationStatus::Generating;
-            state_guard.narrative.generation.phase =
-                crate::model::state::GenerationPhase::Narrating;
+    let mut game_state = match state.load_state() {
+        Ok(s) => s,
+        Err(_) => {
+            return Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(Body::new(String::new()))
+                .expect("static response body is valid");
         }
-
-        (name, is_sync)
     };
 
-    if !is_sync {
-        let state_clone = state.state.clone();
+    let player_name = game_state.player.sheet.name.clone();
+    game_state.add_log(command.clone(), Some(player_name.clone()), LogType::Input);
+
+    let action = parse_command(&command);
+    let is_sync = matches!(
+        action,
+        crate::engine::action::Action::Look
+            | crate::engine::action::Action::Inventory
+            | crate::engine::action::Action::Quit
+    );
+
+    if is_sync {
+        process_sync_action(&mut game_state, &action);
+        game_state.narrative.generation.status = crate::model::state::GenerationStatus::Idle;
+        let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
+            &game_state,
+            uuid::Uuid::new_v4().to_string(),
+            0,
+        );
+        if let Err(e) = state.snapshot_storage.save(&snapshot) {
+            log::error!("Failed to save snapshot: {e}");
+        }
+    } else {
+        game_state.narrative.generation.status = crate::model::state::GenerationStatus::Generating;
+        game_state.narrative.generation.phase = crate::model::state::GenerationPhase::Narrating;
+        let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
+            &game_state,
+            uuid::Uuid::new_v4().to_string(),
+            0,
+        );
+        if let Err(e) = state.snapshot_storage.save(&snapshot) {
+            log::error!("Failed to save snapshot: {e}");
+        }
+
+        let ctx = state.as_game_service_context();
         let cmd = command;
         let pname = player_name;
         let game_service = state.game_service.clone();
         let token = state.cancel_token.clone();
 
         if token.is_cancelled() {
-            if let Ok(mut guard) = state_clone.lock() {
-                guard.narrative.generation.status = crate::model::state::GenerationStatus::Idle;
-            }
+            let mut gs = match state.load_state() {
+                Ok(s) => s,
+                Err(_) => {
+                    return Response::builder()
+                        .status(StatusCode::SERVICE_UNAVAILABLE)
+                        .body(Body::from(render_error("Server is shutting down")))
+                        .expect("static response body is valid");
+                }
+            };
+            gs.narrative.generation.status = crate::model::state::GenerationStatus::Idle;
+            let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
+                &gs,
+                uuid::Uuid::new_v4().to_string(),
+                0,
+            );
+            let _ = state.snapshot_storage.save(&snapshot);
             return Response::builder()
                 .status(StatusCode::SERVICE_UNAVAILABLE)
                 .body(Body::from(render_error("Server is shutting down")))
@@ -322,17 +345,9 @@ async fn process_action(state: &AppState, command: String) -> Response<Body> {
         // [DOC: docs/architecture/invariants.md#INV-004]
         tokio::task::spawn_blocking(move || {
             if token.is_cancelled() {
-                if let Ok(mut guard) = state_clone.lock() {
-                    guard.narrative.generation.status = crate::model::state::GenerationStatus::Idle;
-                }
                 return;
             }
-            game_service.execute_action(state_clone.clone(), cmd, pname);
-            if token.is_cancelled() {
-                if let Ok(mut guard) = state_clone.lock() {
-                    guard.narrative.generation.status = crate::model::state::GenerationStatus::Idle;
-                }
-            }
+            game_service.execute_action(ctx, cmd, pname);
         });
     }
 
@@ -574,21 +589,28 @@ pub async fn edit_history_handler(
     axum::extract::Path(id): axum::extract::Path<u64>,
     Form(form): Form<EditHistoryForm>,
 ) -> (StatusCode, String) {
-    let result = state
-        .state
-        .lock()
-        .map(|mut guard| guard.edit_log(id, form.text));
+    let result = match state.load_state() {
+        Ok(mut guard) => {
+            let result = guard.edit_log(id, form.text);
+            if result.is_ok() {
+                let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
+                    &guard,
+                    uuid::Uuid::new_v4().to_string(),
+                    0,
+                );
+                let _ = state.snapshot_storage.save(&snapshot);
+            }
+            result
+        }
+        Err(e) => Err(e),
+    };
 
     match result {
-        Ok(Ok(())) => (
+        Ok(()) => (
             StatusCode::OK,
             "<span class=\"status ready\">Edited</span>".to_string(),
         ),
-        Ok(Err(e)) => (StatusCode::NOT_FOUND, render_error(&e.to_string())),
-        Err(_) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            render_error("Failed to lock state"),
-        ),
+        Err(e) => (StatusCode::NOT_FOUND, render_error(&e.to_string())),
     }
 }
 
@@ -597,30 +619,39 @@ pub async fn delete_history_handler(
     State(state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<u64>,
 ) -> (StatusCode, String) {
-    let result = state.state.lock().map(|mut guard| guard.delete_log(id));
+    let result = match state.load_state() {
+        Ok(mut guard) => {
+            let result = guard.delete_log(id);
+            if result.is_ok() {
+                let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
+                    &guard,
+                    uuid::Uuid::new_v4().to_string(),
+                    0,
+                );
+                let _ = state.snapshot_storage.save(&snapshot);
+            }
+            result
+        }
+        Err(e) => Err(e),
+    };
 
     match result {
-        Ok(Ok(())) => (StatusCode::OK, String::new()),
-        Ok(Err(e)) => (StatusCode::NOT_FOUND, render_error(&e.to_string())),
-        Err(_) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            render_error("Failed to lock state"),
-        ),
+        Ok(()) => (StatusCode::OK, String::new()),
+        Err(e) => (StatusCode::NOT_FOUND, render_error(&e.to_string())),
     }
 }
 
 /// [DOC: docs/system/game_flow.md]
 pub async fn retry_handler(State(state): State<AppState>) -> (StatusCode, String) {
-    let has_input = state
-        .state
-        .lock()
-        .map(|g| g.get_last_input_text().is_some())
-        .unwrap_or(false);
+    let has_input = match state.load_state() {
+        Ok(g) => g.get_last_input_text().is_some(),
+        Err(_) => false,
+    };
     if !has_input {
         return (StatusCode::BAD_REQUEST, render_error("No input to retry"));
     }
 
-    let state_clone = state.state.clone();
+    let ctx = state.as_game_service_context();
     let game_service = state.game_service.clone();
     let token = state.cancel_token.clone();
 
@@ -635,21 +666,45 @@ pub async fn retry_handler(State(state): State<AppState>) -> (StatusCode, String
     // Retry runs off the async thread so the HTTP handler returns immediately.
     tokio::task::spawn_blocking(move || {
         if token.is_cancelled() {
-            if let Ok(mut guard) = state_clone.lock() {
-                guard.narrative.generation.status = crate::model::state::GenerationStatus::Idle;
-            }
             return;
         }
-        game_service.retry_last_response(state_clone.clone());
-        if token.is_cancelled() {
-            if let Ok(mut guard) = state_clone.lock() {
-                guard.narrative.generation.status = crate::model::state::GenerationStatus::Idle;
-            }
-        }
+        game_service.retry_last_response(ctx);
     });
 
     (
         StatusCode::OK,
         "<span class=\"status ready\">Retrying...</span>".to_string(),
     )
+}
+
+/// [DOC: docs/system/game_flow.md]
+pub async fn reset_handler(State(state): State<AppState>) -> Html<String> {
+    state.cancel_token.cancel();
+
+    if let Err(e) = state.snapshot_storage.reset() {
+        log::error!("Reset failed: {e}");
+        return Html(render_error(&e.to_string()));
+    }
+
+    let initial_state = GameState::new(
+        Arc::clone(&state.world),
+        Arc::clone(&state.map),
+        Arc::clone(&state.player),
+        (*state.npcs).values().cloned().collect(),
+        state.starting_room_id.clone(),
+    );
+
+    let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
+        &initial_state,
+        "initial".to_string(),
+        0,
+    );
+    let _ = state.snapshot_storage.save(&snapshot);
+
+    let header = render_header(&state).unwrap_or_default();
+    let story = render_story_log(&state).unwrap_or_default();
+    let sidebar = render_visual_sidebar(&state).unwrap_or_default();
+    let action = render_action_area(&state).unwrap_or_default();
+
+    Html(format!("{header}{story}{sidebar}{action}"))
 }

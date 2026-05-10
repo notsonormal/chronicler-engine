@@ -1,6 +1,4 @@
-use std::sync::Arc;
-
-use crate::model::state::{GeneratingGuard, GenerationState, GenerationStatus, LogType};
+use crate::model::state::{GenerationState, GenerationStatus, LogType};
 use crate::test_support::*;
 
 #[test]
@@ -157,75 +155,7 @@ fn test_delete_log() {
     assert!(state.delete_log(9999).is_err());
 }
 
-#[test]
-fn test_generating_guard_sets_is_generating_on_construct() {
-    let state = Arc::new(std::sync::Mutex::new(TestGameState::in_room("room1")));
-
-    assert!(
-        !state
-            .lock()
-            .unwrap()
-            .narrative
-            .generation
-            .status
-            .is_generating()
-    );
-
-    {
-        let _guard = GeneratingGuard::new(state.clone());
-        assert!(
-            state
-                .lock()
-                .unwrap()
-                .narrative
-                .generation
-                .status
-                .is_generating()
-        );
-    }
-
-    // Guard dropped â€” status reset to Idle
-    assert!(
-        !state
-            .lock()
-            .unwrap()
-            .narrative
-            .generation
-            .status
-            .is_generating()
-    );
-}
-
-#[test]
-fn test_generating_guard_resets_on_drop() {
-    let state = Arc::new(std::sync::Mutex::new(TestGameState::in_room("room1")));
-
-    {
-        let guard = GeneratingGuard::new(state.clone());
-        assert!(
-            state
-                .lock()
-                .unwrap()
-                .narrative
-                .generation
-                .status
-                .is_generating()
-        );
-        drop(guard);
-    }
-
-    assert!(
-        !state
-            .lock()
-            .unwrap()
-            .narrative
-            .generation
-            .status
-            .is_generating()
-    );
-}
-
-// ─── Property-based tests ────────────────────────────────────────────────────
+// ─── Property-based tests ──────────────────────────────────────────────────────
 
 use proptest::prelude::*;
 

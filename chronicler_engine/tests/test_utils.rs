@@ -368,15 +368,20 @@ pub async fn send_action(page: &playwright_rs::Page, text: &str) {
             r#"
             (text) => {
                 const input = document.querySelector('#command-form input[name="command"]');
+                const btn = document.querySelector('#command-form button[type="submit"]');
                 if (input) {
                     input.value = text;
-                    input.form?.requestSubmit();
+                }
+                if (btn) {
+                    btn.click();
                 }
             }
             "#,
             Some(&text_owned),
         )
         .await;
+    // Give HTMX time to send request and update DOM before caller polls status
+    sleep(Duration::from_millis(200)).await;
 }
 
 /// Get current status text from the status display element

@@ -4,6 +4,7 @@ pub mod map;
 pub mod scenario;
 pub mod settings;
 pub mod state;
+pub mod state_snapshot;
 pub mod trigger;
 pub mod world;
 

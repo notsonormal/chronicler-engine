@@ -1,6 +1,9 @@
 //! [DOC: docs/architecture/system.md]
 
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+
+use tokio_util::sync::CancellationToken;
 
 use crate::engine::action::Action;
 use crate::engine::action_processing::{
@@ -8,19 +11,55 @@ use crate::engine::action_processing::{
 };
 use crate::engine::logic::{find_room_in_map, get_current_room};
 use crate::engine::parser::parse_command;
-use crate::engine::state_diagnostics::assert_state_consistency;
 use crate::error::{EngineError, LlmFailure};
 use crate::model::character::NpcCard;
-use crate::model::state::{GameState, LogType};
+use crate::model::state::{GameState, GenerationPhase, GenerationStatus, LogType};
+use crate::model::state_snapshot::GameStateSnapshot;
+use crate::model::world::WorldCard;
 use crate::narrative::prompt::make_prompt_context;
 use crate::narrative::quantifier::{
     QuantifierBackendTrait, QuantifierConfidence, determine_npcs_in_room,
 };
+use crate::storage::snapshot_storage::SnapshotStorage;
+
+/// Context required by [`GameService`] to load and persist game state.
+#[derive(Clone)]
+pub struct GameServiceContext {
+    pub snapshot_storage: Arc<dyn SnapshotStorage>,
+    pub world: Arc<WorldCard>,
+    pub map: Arc<crate::model::map::MapDef>,
+    pub player: Arc<crate::model::character::PlayerCard>,
+    pub npcs: Arc<HashMap<String, NpcCard>>,
+    pub starting_room_id: String,
+    pub cancel_token: CancellationToken,
+    /// Serialize async action processing to prevent snapshot race conditions.
+    pub action_lock: Arc<Mutex<()>>,
+}
+
+impl GameServiceContext {
+    /// Load the latest game state from snapshot storage.
+    /// Panics if no snapshot exists — use only in tests where a snapshot was pre-seeded.
+    #[cfg(test)]
+    pub fn load_state(&self) -> GameState {
+        let snapshot = match self.snapshot_storage.load_latest(None) {
+            Ok(Some(s)) => s,
+            Ok(None) => panic!("no snapshots found"),
+            Err(e) => panic!("failed to load snapshot: {e}"),
+        };
+        GameState::from_snapshot(
+            &snapshot,
+            Arc::clone(&self.world),
+            Arc::clone(&self.map),
+            Arc::clone(&self.player),
+            (*self.npcs).clone(),
+        )
+    }
+}
 
 pub trait GameService: Send + Sync {
-    fn execute_action(&self, state: Arc<Mutex<GameState>>, input: String, player_name: String);
+    fn execute_action(&self, ctx: GameServiceContext, input: String, player_name: String);
 
-    fn retry_last_response(&self, state: Arc<Mutex<GameState>>);
+    fn retry_last_response(&self, ctx: GameServiceContext);
 }
 
 pub struct DefaultGameService {
@@ -53,30 +92,29 @@ impl Default for DefaultGameService {
     }
 }
 
-fn with_state_lock<T>(
-    state: &Arc<Mutex<GameState>>,
-    f: impl FnOnce(&mut GameState) -> T,
-) -> Option<T> {
-    state.lock().ok().map(|mut guard| f(&mut guard))
-}
-
-fn reset_generating(state: &Arc<Mutex<GameState>>) {
-    if let Ok(mut s) = state.lock() {
-        s.narrative.generation.status = crate::model::state::GenerationStatus::Idle;
-        s.narrative.generation.phase = crate::model::state::GenerationPhase::default();
+fn load_state(ctx: &GameServiceContext) -> GameState {
+    match ctx.snapshot_storage.load_latest(None) {
+        Ok(Some(snapshot)) => GameState::from_snapshot(
+            &snapshot,
+            Arc::clone(&ctx.world),
+            Arc::clone(&ctx.map),
+            Arc::clone(&ctx.player),
+            (*ctx.npcs).clone(),
+        ),
+        _ => GameState::new(
+            Arc::clone(&ctx.world),
+            Arc::clone(&ctx.map),
+            Arc::clone(&ctx.player),
+            (*ctx.npcs).values().cloned().collect(),
+            ctx.starting_room_id.clone(),
+        ),
     }
 }
 
-fn set_phase(state: &Arc<Mutex<GameState>>, phase: crate::model::state::GenerationPhase) {
-    if let Ok(mut s) = state.lock() {
-        s.narrative.generation.status = crate::model::state::GenerationStatus::Generating;
-        s.narrative.generation.phase = phase;
-    }
-}
-
-fn set_error_and_reset(state: &Arc<Mutex<GameState>>, message: String) {
-    if let Ok(mut s) = state.lock() {
-        s.narrative.generation.status = crate::model::state::GenerationStatus::Error(message);
+fn save_state(ctx: &GameServiceContext, state: &GameState, message_id: String, swipe_index: u32) {
+    let snapshot = GameStateSnapshot::from_game_state(state, message_id, swipe_index);
+    if let Err(e) = ctx.snapshot_storage.save(&snapshot) {
+        log::error!("Failed to save snapshot: {e}");
     }
 }
 
@@ -100,75 +138,90 @@ fn map_llm_error(e: &EngineError) -> String {
     }
 }
 
+fn reset_generating(state: &mut GameState) {
+    state.narrative.generation.status = GenerationStatus::Idle;
+    state.narrative.generation.phase = GenerationPhase::default();
+}
+
+fn set_phase(state: &mut GameState, phase: GenerationPhase) {
+    state.narrative.generation.status = GenerationStatus::Generating;
+    state.narrative.generation.phase = phase;
+}
+
+fn set_error_and_reset(state: &mut GameState, message: String) {
+    state.narrative.generation.status = GenerationStatus::Error(message);
+}
+
 impl GameService for DefaultGameService {
-    fn execute_action(&self, state: Arc<Mutex<GameState>>, input: String, _player_name: String) {
-        // NOTE: async actions manage is_generating themselves.
-
+    fn execute_action(&self, ctx: GameServiceContext, input: String, _player_name: String) {
         let action = parse_command(&input);
-
-        let mut state_guard = match state.lock() {
-            Ok(g) => g,
-            Err(_) => return, // Guard will still reset on drop
-        };
 
         match action {
             Action::Quit => {
-                state_guard.add_log("Goodbye!".to_string(), None, LogType::System);
-                state_guard.narrative.generation.status =
-                    crate::model::state::GenerationStatus::Idle;
+                let mut state = load_state(&ctx);
+                state.add_log("Goodbye!".to_string(), None, LogType::System);
+                reset_generating(&mut state);
+                save_state(&ctx, &state, uuid::Uuid::new_v4().to_string(), 0);
             }
             Action::Look => {
+                let mut state = load_state(&ctx);
                 let room_name;
                 let room_desc;
                 {
-                    let room = get_current_room(&state_guard).ok();
+                    let room = get_current_room(&state).ok();
                     room_name = room.as_ref().map(|r| r.name.clone());
                     room_desc = room.map(|r| r.description.clone());
                 }
                 if let Some(name) = room_name {
                     if let Some(desc) = room_desc {
-                        state_guard.add_log(desc, Some(name), LogType::Narration);
+                        state.add_log(desc, Some(name), LogType::Narration);
                     }
                 }
-                state_guard.narrative.generation.status =
-                    crate::model::state::GenerationStatus::Idle;
+                reset_generating(&mut state);
+                save_state(&ctx, &state, uuid::Uuid::new_v4().to_string(), 0);
             }
             Action::Talk(name, msg) => {
+                let mut state = load_state(&ctx);
                 let msg_str = msg.unwrap_or_default();
-                state_guard.add_log(
+                state.add_log(
                     format!("You talk to {name}: {msg_str}"),
                     None,
                     LogType::System,
                 );
-                state_guard.narrative.generation.status =
-                    crate::model::state::GenerationStatus::Idle;
+                reset_generating(&mut state);
+                save_state(&ctx, &state, uuid::Uuid::new_v4().to_string(), 0);
             }
             Action::Inventory => {
-                state_guard.add_log(
+                let mut state = load_state(&ctx);
+                state.add_log(
                     "Your inventory is empty.".to_string(),
                     None,
                     LogType::System,
                 );
-                state_guard.narrative.generation.status =
-                    crate::model::state::GenerationStatus::Idle;
+                reset_generating(&mut state);
+                save_state(&ctx, &state, uuid::Uuid::new_v4().to_string(), 0);
             }
             Action::FreeAction(text) => {
-                let world = Arc::clone(&state_guard.world);
-                let map = Arc::clone(&state_guard.map);
-                let player = Arc::clone(&state_guard.player);
-                let room_id = state_guard.movement.current_room_id.clone();
-                let history = state_guard.narrative.history.clone();
-                let room_npc_ids = get_current_room(&state_guard)
+                let _lock = match ctx.action_lock.lock() {
+                    Ok(guard) => guard,
+                    Err(poisoned) => poisoned.into_inner(),
+                };
+                let message_id = uuid::Uuid::new_v4().to_string();
+                let mut state = load_state(&ctx);
+
+                let world = Arc::clone(&state.world);
+                let map = Arc::clone(&state.map);
+                let player = Arc::clone(&state.player);
+                let room_id = state.movement.current_room_id.clone();
+                let history = state.narrative.history.clone();
+                let room_npc_ids = get_current_room(&state)
                     .map(|r| r.npcs.clone())
                     .unwrap_or_default();
-                let nearby_npcs = get_static_npcs(&state_guard, &room_npc_ids);
-                let all_npcs: Vec<NpcCard> = state_guard.npcs.values().cloned().collect();
+                let nearby_npcs = get_static_npcs(&state, &room_npc_ids);
+                let all_npcs: Vec<NpcCard> = state.npcs.values().cloned().collect();
 
-                drop(state_guard);
-
-                let state_for_thread = state.clone();
-                let backend = Arc::clone(&self.llm_backend);
-                let quantifier_backend = Arc::clone(&self.quantifier_backend);
+                set_phase(&mut state, GenerationPhase::Narrating);
+                save_state(&ctx, &state, message_id.clone(), 0);
 
                 let room = map
                     .overworld
@@ -178,7 +231,9 @@ impl GameService for DefaultGameService {
                     .find(|r| r.id == room_id);
 
                 let Some(room) = room else {
-                    reset_generating(&state_for_thread);
+                    let mut state = load_state(&ctx);
+                    reset_generating(&mut state);
+                    save_state(&ctx, &state, message_id.clone(), 0);
                     return;
                 };
                 let context = make_prompt_context(
@@ -191,142 +246,162 @@ impl GameService for DefaultGameService {
                     &history,
                 );
 
-                set_phase(
-                    &state_for_thread,
-                    crate::model::state::GenerationPhase::Narrating,
-                );
-
+                let backend = Arc::clone(&self.llm_backend);
                 let narration_text = match backend.narrate_action(&context) {
                     Ok(t) => t,
                     Err(e) => {
-                        set_error_and_reset(&state_for_thread, map_llm_error(&e));
+                        let mut state = load_state(&ctx);
+                        set_error_and_reset(&mut state, map_llm_error(&e));
+                        save_state(&ctx, &state, message_id.clone(), 0);
                         return;
                     }
                 };
 
                 if narration_text.trim().is_empty() {
-                    set_error_and_reset(&state_for_thread, "LLM Error: empty response".to_string());
+                    let mut state = load_state(&ctx);
+                    set_error_and_reset(&mut state, "LLM Error: empty response".to_string());
+                    save_state(&ctx, &state, message_id.clone(), 0);
                     return;
                 }
 
-                let quantifier_backend: Arc<dyn QuantifierBackendTrait> = quantifier_backend;
+                let quantifier_backend: Arc<dyn QuantifierBackendTrait> =
+                    Arc::clone(&self.quantifier_backend);
 
-                set_phase(
-                    &state_for_thread,
-                    crate::model::state::GenerationPhase::Quantifying,
+                let mut state = load_state(&ctx);
+                set_phase(&mut state, GenerationPhase::Quantifying);
+                let previous_room_npcs: Vec<NpcCard> = state.scene.npcs_in_area.clone();
+                let quantifier_result = determine_npcs_in_room(
+                    &state,
+                    &room.npcs,
+                    &previous_room_npcs,
+                    &narration_text,
+                    quantifier_backend.as_ref(),
                 );
 
-                let quantifier_result = with_state_lock(&state_for_thread, |state| {
-                    let previous_room_npcs: Vec<NpcCard> = state.scene.npcs_in_area.clone();
-                    determine_npcs_in_room(
-                        state,
-                        &room.npcs,
-                        &previous_room_npcs,
-                        &narration_text,
-                        quantifier_backend.as_ref(),
-                    )
-                });
-
-                let Some(quantifier_result) = quantifier_result else {
-                    reset_generating(&state_for_thread);
-                    return;
-                };
-
                 if quantifier_result.npcs.confidence == QuantifierConfidence::Low {
-                    with_state_lock(&state_for_thread, |state| {
-                        state.add_log(
-                            "[System] NPC detection uncertain — using room defaults".to_string(),
-                            None,
-                            LogType::System,
-                        );
-                    });
+                    state.add_log(
+                        "[System] NPC detection uncertain — using room defaults".to_string(),
+                        None,
+                        LogType::System,
+                    );
                 }
 
-                let trigger_request = with_state_lock(&state_for_thread, |state| {
-                    execute_freeaction_impl(
-                        state,
-                        &crate::engine::action_processing::FreeActionContext {
-                            narration_text: &narration_text,
-                            user_input: &text,
-                            quantifier_result: &quantifier_result,
-                            world: &world,
-                            player: &player,
-                            all_npcs: &all_npcs,
-                            history: &history,
-                            llm_backend: backend.as_ref(),
-                        },
-                    )
-                });
+                let trigger_request = execute_freeaction_impl(
+                    &state,
+                    &crate::engine::action_processing::FreeActionContext {
+                        narration_text: &narration_text,
+                        user_input: &text,
+                        quantifier_result: &quantifier_result,
+                        world: &world,
+                        player: &player,
+                        all_npcs: &all_npcs,
+                        history: &history,
+                        llm_backend: backend.as_ref(),
+                    },
+                );
 
                 match trigger_request {
-                    Some(Ok(Some(request))) => {
-                        set_phase(
-                            &state_for_thread,
-                            crate::model::state::GenerationPhase::GeneratingEvent,
-                        );
+                    Ok(turn_result) => {
+                        let mut next_state = turn_result.next_state;
 
-                        let continuation_text = match backend.narrate_action_from_prompt(
-                            &request.system_prompt,
-                            &request.user_prompt,
-                            request.max_tokens,
-                        ) {
-                            Ok(t) => t,
-                            Err(e) => {
-                                log::error!("Trigger narration failed: {e}");
-                                with_state_lock(&state_for_thread, |state| {
-                                    state.add_log(
+                        if let Some(request) = turn_result.trigger_continuation {
+                            set_phase(&mut next_state, GenerationPhase::GeneratingEvent);
+                            save_state(&ctx, &next_state, message_id.clone(), 0);
+
+                            let continuation_text = match backend.narrate_action_from_prompt(
+                                &request.system_prompt,
+                                &request.user_prompt,
+                                request.max_tokens,
+                            ) {
+                                Ok(t) => t,
+                                Err(e) => {
+                                    log::error!("Trigger narration failed: {e}");
+                                    next_state.add_log(
                                         format!("[Trigger narration failed: {e}]"),
                                         None,
-                                        crate::model::state::LogType::System,
+                                        LogType::System,
                                     );
-                                });
-                                set_error_and_reset(&state_for_thread, format!("Error: {e}"));
-                                return;
-                            }
-                        };
+                                    set_error_and_reset(&mut next_state, format!("Error: {e}"));
+                                    save_state(&ctx, &next_state, message_id.clone(), 0);
+                                    return;
+                                }
+                            };
 
-                        if !continuation_text.is_empty() {
-                            with_state_lock(&state_for_thread, |state| {
-                                commit_trigger_narration(state, &request, &continuation_text);
-                                assert_state_consistency(state).ok();
-                            });
+                            if !continuation_text.is_empty() {
+                                next_state = match commit_trigger_narration(
+                                    next_state.clone(),
+                                    &request,
+                                    &continuation_text,
+                                ) {
+                                    Ok(s) => s,
+                                    Err(e) => {
+                                        log::error!("Trigger commit failed: {e}");
+                                        set_error_and_reset(
+                                            &mut next_state,
+                                            format!("Trigger error: {e}"),
+                                        );
+                                        next_state
+                                    }
+                                };
+                            }
                         }
-                        reset_generating(&state_for_thread);
+
+                        reset_generating(&mut next_state);
+                        save_state(&ctx, &next_state, message_id.clone(), 0);
                     }
-                    Some(Err(e)) => {
-                        set_error_and_reset(&state_for_thread, format!("Error: {e}"));
-                    }
-                    _ => {
-                        reset_generating(&state_for_thread);
+                    Err(e) => {
+                        let mut state = load_state(&ctx);
+                        set_error_and_reset(&mut state, format!("Error: {e}"));
+                        save_state(&ctx, &state, message_id.clone(), 0);
                     }
                 }
             }
         }
     }
 
-    fn retry_last_response(&self, state: Arc<Mutex<GameState>>) {
-        let (input_text, _player_name) = match state.lock() {
-            Ok(guard) => match guard.get_last_input_text() {
-                Some((sender, text)) => (text, sender),
+    fn retry_last_response(&self, ctx: GameServiceContext) {
+        let (input_text, snapshot_message_id, snapshot_swipe_index) = {
+            let snapshot = match ctx.snapshot_storage.load_latest(None) {
+                Ok(Some(s)) => s,
+                _ => {
+                    log::error!("No snapshot to retry");
+                    return;
+                }
+            };
+
+            let state = GameState::from_snapshot(
+                &snapshot,
+                Arc::clone(&ctx.world),
+                Arc::clone(&ctx.map),
+                Arc::clone(&ctx.player),
+                (*ctx.npcs).clone(),
+            );
+
+            match state.get_last_input_text() {
+                Some((_sender, text)) => (text, snapshot.message_id, snapshot.swipe_index),
                 None => {
                     log::error!("No input to retry");
                     return;
                 }
-            },
-            Err(_) => {
-                log::error!("Failed to lock state");
-                return;
             }
         };
 
         let (world, map, player, all_npcs, room_npc_ids, history_for_retry, current_room_id) = {
-            let guard = match state.lock() {
-                Ok(g) => g,
-                Err(_) => {
-                    log::error!("Failed to lock state");
+            let snapshot = match ctx.snapshot_storage.load_latest(None) {
+                Ok(Some(s)) => s,
+                _ => {
+                    log::error!("No snapshot to retry");
                     return;
                 }
             };
+
+            let guard = GameState::from_snapshot(
+                &snapshot,
+                Arc::clone(&ctx.world),
+                Arc::clone(&ctx.map),
+                Arc::clone(&ctx.player),
+                (*ctx.npcs).clone(),
+            );
 
             let room_npc_ids = match get_current_room(&guard) {
                 Ok(room) => room.npcs.clone(),
@@ -339,16 +414,22 @@ impl GameService for DefaultGameService {
                 Arc::clone(&guard.player),
                 guard.npcs.values().cloned().collect::<Vec<_>>(),
                 room_npc_ids,
-                guard.get_history_context_for_retry(), // Excludes the AI response being retried
+                guard.get_history_context_for_retry(),
                 guard.movement.current_room_id.clone(),
             )
         };
 
-        let state_clone = state.clone();
         let backend = Arc::clone(&self.llm_backend);
 
         let Some(room) = find_room_in_map(&map, &current_room_id) else {
-            set_error_and_reset(&state_clone, "Retry failed: room not found".to_string());
+            let mut state = load_state(&ctx);
+            set_error_and_reset(&mut state, "Retry failed: room not found".to_string());
+            save_state(
+                &ctx,
+                &state,
+                snapshot_message_id.clone(),
+                snapshot_swipe_index + 1,
+            );
             return;
         };
 
@@ -370,23 +451,41 @@ impl GameService for DefaultGameService {
         let new_narration = match backend.narrate_action(&context) {
             Ok(t) => t,
             Err(e) => {
-                set_error_and_reset(&state_clone, map_llm_error(&e));
+                let mut state = load_state(&ctx);
+                set_error_and_reset(&mut state, map_llm_error(&e));
+                save_state(
+                    &ctx,
+                    &state,
+                    snapshot_message_id.clone(),
+                    snapshot_swipe_index + 1,
+                );
                 return;
             }
         };
 
         if new_narration.trim().is_empty() {
-            set_error_and_reset(&state_clone, "LLM Error: empty response".to_string());
+            let mut state = load_state(&ctx);
+            set_error_and_reset(&mut state, "LLM Error: empty response".to_string());
+            save_state(
+                &ctx,
+                &state,
+                snapshot_message_id.clone(),
+                snapshot_swipe_index + 1,
+            );
             return;
         }
 
-        if let Ok(mut state) = state_clone.lock() {
-            if let Err(e) = state.replace_last_ai_response(new_narration) {
-                state.narrative.generation.status =
-                    crate::model::state::GenerationStatus::Error(format!("Retry failed: {e}"));
-            } else {
-                state.narrative.generation.status = crate::model::state::GenerationStatus::Idle;
-            }
+        let mut state = load_state(&ctx);
+        if let Err(e) = state.replace_last_ai_response(new_narration) {
+            set_error_and_reset(&mut state, format!("Retry failed: {e}"));
+        } else {
+            reset_generating(&mut state);
         }
+        save_state(
+            &ctx,
+            &state,
+            snapshot_message_id.clone(),
+            snapshot_swipe_index + 1,
+        );
     }
 }

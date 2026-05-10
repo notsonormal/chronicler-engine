@@ -38,6 +38,13 @@ pub struct TriggerContinuationRequest {
     pub max_tokens: Option<u32>,
 }
 
+/// Result of processing a single free action turn.
+pub struct TurnResult {
+    pub next_state: GameState,
+    pub narration: String,
+    pub trigger_continuation: Option<TriggerContinuationRequest>,
+}
+
 /// [DOC: docs/architecture/system.md]
 pub fn get_static_npcs(state: &GameState, room_npc_ids: &[String]) -> Vec<NpcCard> {
     room_npc_ids
@@ -47,14 +54,19 @@ pub fn get_static_npcs(state: &GameState, room_npc_ids: &[String]) -> Vec<NpcCar
 }
 
 /// [DOC: docs/architecture/system.md]
-pub fn handle_movement(state: &mut GameState, destination: Option<&str>, new_npc_ids: &[String]) {
+pub fn handle_movement(
+    state: GameState,
+    destination: Option<&str>,
+    new_npc_ids: &[String],
+) -> Result<GameState, EngineError> {
     let Some(trigger) = destination else {
-        return;
+        return Ok(state);
     };
 
+    let mut state = state;
     let previous_room_id = state.movement.current_room_id.clone();
 
-    let success = match attempt_semantic_walk(state, trigger) {
+    let success = match attempt_semantic_walk(&mut state, trigger) {
         Ok(_) => true,
         Err(_) => {
             let dynamic_room = create_dynamic_room(trigger, "A place you have never seen before.");
@@ -73,7 +85,7 @@ pub fn handle_movement(state: &mut GameState, destination: Option<&str>, new_npc
     };
 
     if !success {
-        return;
+        return Ok(state);
     }
 
     if previous_room_id != state.movement.current_room_id {
@@ -82,7 +94,7 @@ pub fn handle_movement(state: &mut GameState, destination: Option<&str>, new_npc
         }
     }
 
-    if let Ok(current_room) = get_current_room(state) {
+    if let Ok(current_room) = get_current_room(&state) {
         state.add_log(
             String::new(),
             Some(current_room.name.clone()),
@@ -90,11 +102,13 @@ pub fn handle_movement(state: &mut GameState, destination: Option<&str>, new_npc
         );
     }
 
-    assert_state_consistency(state).ok();
+    assert_state_consistency(&state)?;
+    Ok(state)
 }
 
 /// [DOC: docs/architecture/system.md]
-pub fn apply_npc_events(state: &mut GameState, events: &[NpcEvent]) {
+pub fn apply_npc_events(state: GameState, events: &[NpcEvent]) -> Result<GameState, EngineError> {
+    let mut state = state;
     for event in events {
         match event.event_type {
             crate::narrative::quantifier::NpcEventType::Entered => {
@@ -107,19 +121,21 @@ pub fn apply_npc_events(state: &mut GameState, events: &[NpcEvent]) {
         }
     }
 
-    assert_state_consistency(state).ok();
+    assert_state_consistency(&state)?;
+    Ok(state)
 }
 
 /// Called after the trigger continuation LLM call completes.
 /// [DOC: docs/system/triggers.md]
 pub fn commit_trigger_narration(
-    state: &mut GameState,
+    state: GameState,
     request: &TriggerContinuationRequest,
     continuation_text: &str,
-) {
+) -> Result<GameState, EngineError> {
     if continuation_text.trim().is_empty() {
-        return;
+        return Ok(state);
     }
+    let mut state = state;
     state.add_log(
         String::new(),
         Some(request.trigger_name.clone()),
@@ -134,7 +150,8 @@ pub fn commit_trigger_narration(
         );
     }
 
-    assert_state_consistency(state).ok();
+    assert_state_consistency(&state)?;
+    Ok(state)
 }
 
 /// Shared by `build_trigger_request` and `evaluate_and_narrate_triggers`.
@@ -217,17 +234,18 @@ fn build_trigger_request(
 
 /// [DOC: docs/system/triggers.md]
 pub fn evaluate_and_narrate_triggers(
-    state: &mut GameState,
+    state: GameState,
     narration_text: &str,
     trigger_context: &PromptContext<'_>,
     llm_backend: &dyn crate::narrative::llm::LlmBackend,
-) {
-    let matching_triggers = evaluate_triggers(state);
+) -> Result<GameState, EngineError> {
+    let matching_triggers = evaluate_triggers(&state);
 
     let Some((trigger_idx, (npc, trigger))) = matching_triggers.iter().enumerate().next() else {
-        return;
+        return Ok(state);
     };
 
+    let mut state = state;
     state.narrative.generation.phase = crate::model::state::GenerationPhase::GeneratingEvent;
 
     let continuation_user_msg = format!(
@@ -247,7 +265,7 @@ pub fn evaluate_and_narrate_triggers(
         &state.narrative.history,
     ) {
         Some(parts) => parts,
-        None => return,
+        None => return Ok(state),
     };
 
     let continuation_text = match llm_backend.narrate_action_from_prompt(
@@ -263,12 +281,12 @@ pub fn evaluate_and_narrate_triggers(
                 None,
                 LogType::System,
             );
-            return;
+            return Ok(state);
         }
     };
 
     if continuation_text.trim().is_empty() {
-        return;
+        return Ok(state);
     }
     state.add_log(
         String::new(),
@@ -280,48 +298,53 @@ pub fn evaluate_and_narrate_triggers(
         mark_trigger_fired(&mut state.character_state, &npc.id, trigger_idx);
     }
 
-    assert_state_consistency(state).ok();
+    assert_state_consistency(&state)?;
+    Ok(state)
 }
 
 /// [DOC: docs/architecture/system.md]
 pub fn execute_freeaction_impl(
-    state: &mut GameState,
+    state: &GameState,
     ctx: &FreeActionContext<'_>,
-) -> Result<Option<TriggerContinuationRequest>, EngineError> {
+) -> Result<TurnResult, EngineError> {
     let previous_room_npcs: Vec<NpcCard> = state.scene.npcs_in_area.clone();
     let previous_npc_ids: Vec<String> = previous_room_npcs.iter().map(|n| n.id.clone()).collect();
 
-    handle_movement(
-        state,
+    let mut next_state = handle_movement(
+        state.clone(),
         ctx.quantifier_result.movement.destination.as_deref(),
         &ctx.quantifier_result.npcs.npc_ids,
-    );
-    assert_state_consistency(state)?;
+    )?;
+    assert_state_consistency(&next_state)?;
 
     let current_npcs: Vec<NpcCard> = ctx
         .quantifier_result
         .npcs
         .npc_ids
         .iter()
-        .filter_map(|id| state.npcs.get(id).cloned())
+        .filter_map(|id| next_state.npcs.get(id).cloned())
         .collect();
     let current_npc_ids: Vec<String> = current_npcs.iter().map(|n| n.id.clone()).collect();
 
-    let room_data = get_current_room(state)
+    let room_data = get_current_room(&next_state)
         .map_err(|_| EngineError::RoomNotFound("current room not found".to_string()))?
         .clone();
 
-    // [DOC: docs/system/triggers.md Â§Mutation Order Invariant]
+    // [DOC: docs/system/triggers.md §Mutation Order Invariant]
     // Order is load-bearing: narration logged first (step 1), then triggers evaluated
     // which read history for context (step 2), then NPC events applied (step 3).
-    state.add_log(ctx.narration_text.to_string(), None, LogType::Narration);
-    state.scene.npcs_in_area = current_npcs.clone();
+    next_state.add_log(ctx.narration_text.to_string(), None, LogType::Narration);
+    next_state.scene.npcs_in_area = current_npcs.clone();
 
-    let trigger_request = build_trigger_request(state, ctx, &room_data);
+    let trigger_request = build_trigger_request(&next_state, ctx, &room_data);
 
     let events = compute_npc_events(&previous_npc_ids, &current_npc_ids);
-    apply_npc_events(state, &events.events);
-    assert_state_consistency(state)?;
+    next_state = apply_npc_events(next_state, &events.events)?;
+    assert_state_consistency(&next_state)?;
 
-    Ok(trigger_request)
+    Ok(TurnResult {
+        next_state,
+        narration: ctx.narration_text.to_string(),
+        trigger_continuation: trigger_request,
+    })
 }

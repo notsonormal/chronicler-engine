@@ -16,7 +16,7 @@ use chronicler_engine::model::state::GameState;
 use chronicler_engine::model::world::WorldCard;
 use chronicler_engine::server::templates::HeaderTemplate;
 
-fn create_test_state() -> Arc<Mutex<GameState>> {
+fn create_test_state() -> GameState {
     use chronicler_engine::model::map::Room;
 
     let world = Arc::new(WorldCard {
@@ -79,8 +79,7 @@ fn create_test_state() -> Arc<Mutex<GameState>> {
         triggers: vec![],
     }];
 
-    let state = GameState::new(world, map, player, npcs, "room_1".to_string());
-    Arc::new(Mutex::new(state))
+    GameState::new(world, map, player, npcs, "room_1".to_string())
 }
 
 // Template Tests (from template_tests.rs)
@@ -427,14 +426,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_generating_status_handler_narrating() {
-        let state = create_test_state();
-        {
-            let mut guard = state.lock().unwrap();
-            guard.narrative.generation.status =
-                chronicler_engine::model::state::GenerationStatus::Generating;
-            guard.narrative.generation.phase =
-                chronicler_engine::model::state::GenerationPhase::Narrating;
-        }
+        let mut state = create_test_state();
+        state.narrative.generation.status =
+            chronicler_engine::model::state::GenerationStatus::Generating;
+        state.narrative.generation.phase =
+            chronicler_engine::model::state::GenerationPhase::Narrating;
         let app = create_app_for_testing(state);
 
         let req = Request::builder()
@@ -453,14 +449,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_generating_status_handler_quantifying() {
-        let state = create_test_state();
-        {
-            let mut guard = state.lock().unwrap();
-            guard.narrative.generation.status =
-                chronicler_engine::model::state::GenerationStatus::Generating;
-            guard.narrative.generation.phase =
-                chronicler_engine::model::state::GenerationPhase::Quantifying;
-        }
+        let mut state = create_test_state();
+        state.narrative.generation.status =
+            chronicler_engine::model::state::GenerationStatus::Generating;
+        state.narrative.generation.phase =
+            chronicler_engine::model::state::GenerationPhase::Quantifying;
         let app = create_app_for_testing(state);
 
         let req = Request::builder()
@@ -522,17 +515,16 @@ mod tests {
 
     #[tokio::test]
     async fn test_delete_history_handler_success() {
-        let state = create_test_state();
+        let mut state = create_test_state();
 
         // Add a log entry first
         let entry_id = {
-            let mut guard = state.lock().unwrap();
-            guard.add_log(
+            state.add_log(
                 "Test message".to_string(),
                 Some("Test".to_string()),
                 chronicler_engine::model::state::LogType::Narration,
             );
-            guard.narrative.history.last().unwrap().id
+            state.narrative.history.last().unwrap().id
         };
 
         let app = create_app_for_testing(state.clone());
@@ -542,15 +534,27 @@ mod tests {
             .method(http::Method::POST)
             .body(Body::empty())
             .unwrap();
-        let response = app.oneshot(req).await.unwrap();
+        let response = app.clone().oneshot(req).await.unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
 
-        // Verify the entry was deleted
-        let guard = state.lock().unwrap();
+        // Verify the entry was deleted by fetching the story log fragment
+        let req = Request::builder()
+            .uri("/fragment/story-log")
+            .method(http::Method::GET)
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(req).await.unwrap();
+        let body = String::from_utf8(
+            axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap()
+                .to_vec(),
+        )
+        .unwrap();
         assert!(
-            !guard.narrative.history.iter().any(|e| e.id == entry_id),
-            "Log entry should be deleted"
+            !body.contains("Test message"),
+            "Log entry should be deleted from rendered story log"
         );
     }
 
@@ -1330,8 +1334,7 @@ async fn test_visual_sidebar_with_real_world_data() {
         eprintln!("DEBUG: room.image_path = {:?}", room.image_path);
     }
 
-    // Create app and test the endpoint - state needs to be wrapped in Arc<Mutex<...>>
-    let state = Arc::new(Mutex::new(state));
+    // Create app and test the endpoint
     let app = create_app_for_testing(state);
 
     let req = Request::builder()
@@ -1377,89 +1380,71 @@ fn test_redmist_estate_room_image_path() {
 #[test]
 fn test_npcs_in_area_initialization() {
     let state = create_test_state();
-    let state_guard = state.lock().unwrap();
 
     // Verify npcs_in_area starts empty
     assert!(
-        state_guard.scene.npcs_in_area.is_empty(),
+        state.scene.npcs_in_area.is_empty(),
         "npcs_in_area should be empty on initialization"
     );
 }
 
 #[test]
 fn test_npcs_in_area_can_be_populated() {
-    let state = create_test_state();
-    let mut state_guard = state.lock().unwrap();
+    let mut state = create_test_state();
 
     // Get an NPC from the state
-    let npc: chronicler_engine::model::character::NpcCard = state_guard
-        .npcs
-        .get("npc_1")
-        .cloned()
-        .expect("Should have npc_1");
+    let npc: chronicler_engine::model::character::NpcCard =
+        state.npcs.get("npc_1").cloned().expect("Should have npc_1");
 
     // Populate npcs_in_area
-    state_guard.scene.npcs_in_area.push(npc);
+    state.scene.npcs_in_area.push(npc);
 
     assert_eq!(
-        state_guard.scene.npcs_in_area.len(),
+        state.scene.npcs_in_area.len(),
         1,
         "npcs_in_area should have 1 NPC after population"
     );
-    assert_eq!(
-        state_guard.scene.npcs_in_area[0].id, "npc_1",
-        "Should be npc_1"
-    );
+    assert_eq!(state.scene.npcs_in_area[0].id, "npc_1", "Should be npc_1");
 }
 
 #[test]
 fn test_npcs_in_area_can_be_cleared() {
-    let state = create_test_state();
-    let mut state_guard = state.lock().unwrap();
+    let mut state = create_test_state();
 
     // Get an NPC and populate npcs_in_area
-    let npc = state_guard
-        .npcs
-        .get("npc_1")
-        .cloned()
-        .expect("Should have npc_1");
-    state_guard.scene.npcs_in_area.push(npc);
+    let npc = state.npcs.get("npc_1").cloned().expect("Should have npc_1");
+    state.scene.npcs_in_area.push(npc);
 
     assert!(
-        !state_guard.scene.npcs_in_area.is_empty(),
+        !state.scene.npcs_in_area.is_empty(),
         "npcs_in_area should be populated"
     );
 
     // Clear for re-quantification
-    state_guard.scene.npcs_in_area.clear();
+    state.scene.npcs_in_area.clear();
 
     assert!(
-        state_guard.scene.npcs_in_area.is_empty(),
+        state.scene.npcs_in_area.is_empty(),
         "npcs_in_area should be empty after clear"
     );
 }
 
 #[test]
 fn test_npcs_in_area_can_be_replaced() {
-    let state = create_test_state();
-    let mut state_guard = state.lock().unwrap();
+    let mut state = create_test_state();
 
     // Add one NPC
-    let npc1 = state_guard
-        .npcs
-        .get("npc_1")
-        .cloned()
-        .expect("Should have npc_1");
-    state_guard.scene.npcs_in_area.push(npc1);
+    let npc1 = state.npcs.get("npc_1").cloned().expect("Should have npc_1");
+    state.scene.npcs_in_area.push(npc1);
 
-    assert_eq!(state_guard.scene.npcs_in_area.len(), 1, "Should have 1 NPC");
+    assert_eq!(state.scene.npcs_in_area.len(), 1, "Should have 1 NPC");
 
     // Replace with new list (simulating re-quantification)
     let new_npcs = vec![]; // Empty list simulates no NPCs found
-    state_guard.scene.npcs_in_area = new_npcs;
+    state.scene.npcs_in_area = new_npcs;
 
     assert!(
-        state_guard.scene.npcs_in_area.is_empty(),
+        state.scene.npcs_in_area.is_empty(),
         "npcs_in_area should be empty after replacement"
     );
 }
@@ -1716,6 +1701,68 @@ mod text_check_tests {
         assert!(
             body_str.contains("No issues found"),
             "Expected no-issues message: {body_str}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_async_action_saves_input_to_story_log_with_sqlite() {
+        use chronicler_engine::model::state_snapshot::GameStateSnapshot;
+        use chronicler_engine::storage::db::DbPool;
+        use chronicler_engine::storage::snapshot_storage::SqliteSnapshotStorage;
+        let state = create_test_state();
+        let tmp_dir =
+            std::env::temp_dir().join(format!("chronicler_component_test_{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&tmp_dir);
+        let db_path = tmp_dir.join("test.db");
+        let db_pool = DbPool::new(db_path.to_str().unwrap()).unwrap();
+        let storage = Arc::new(SqliteSnapshotStorage::new(db_pool))
+            as Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage>;
+
+        let snapshot = GameStateSnapshot::from_game_state(&state, "initial".to_string(), 0);
+        storage.save(&snapshot).unwrap();
+
+        let app = chronicler_engine::server::create_app_with_storage(
+            state,
+            storage,
+            chronicler_engine::model::settings::AppSettings::default(),
+        );
+
+        // Submit an async (free-action) command
+        let req = Request::builder()
+            .uri("/action/check")
+            .method(http::Method::POST)
+            .header(
+                http::header::CONTENT_TYPE,
+                "application/x-www-form-urlencoded",
+            )
+            .body(Body::from("command=hello+test"))
+            .unwrap();
+        let response = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // Poll story log until input entry appears (max ~3s)
+        let mut found_input = false;
+        for _ in 0..30 {
+            let req = Request::builder()
+                .uri("/fragment/story-log")
+                .method(http::Method::GET)
+                .body(Body::empty())
+                .unwrap();
+            let response = app.clone().oneshot(req).await.unwrap();
+            let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+                .await
+                .unwrap();
+            let body_str = String::from_utf8_lossy(&body);
+            if body_str.contains("log-entry input") && body_str.contains("hello test") {
+                found_input = true;
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+
+        assert!(
+            found_input,
+            "Async action should add input entry to story log"
         );
     }
 }

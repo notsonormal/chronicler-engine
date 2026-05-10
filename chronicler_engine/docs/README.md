@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-09 21:48 UTC*
+*Index last generated: 2026-05-10 11:21 UTC*
 
 ### Root files
 
@@ -41,6 +41,8 @@ This folder contains all documentation for the Chronicler Engine project.
 - [LLM Infrastructure Improvements](./plans/llm-infrastructure-improvements.md)
 - [Implementation Plan: Message Action Buttons Redesign](./plans/message-buttons-redesign-plan.md)
 - [Spec: Message Action Buttons Redesign](./plans/message-buttons-redesign.md)
+- [Spec: Agent-Ready Pipeline Restructure for Chronicler Engine](./plans/multi-agent-architecture-overarching-spec.md)
+- [Plan: Phase 1 — SQLite Snapshots + Reset Game](./plans/multi-agent-phase1-snapshots-reset.md)
 - [Plan: Observability & Automated Forensics](./plans/observability-and-forensics-plan.md)
 - [AI Steering & Guided Generation](./plans/steering-and-guided-generation.md)
 - [Structured Error Taxonomy](./plans/structured-error-taxonomy.md)

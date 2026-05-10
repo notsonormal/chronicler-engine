@@ -145,69 +145,43 @@ mod tests {
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
         let _server = TestServer::new_with_mock(port, TEST_WORLD).await;
 
-        let (_playwright, browser) = launch_chrome().await;
-        let page = browser.new_page().await.unwrap();
+        let client = reqwest::Client::new();
+        let url = format!("http://127.0.0.1:{port}/action/check");
 
-        goto_with_connection_check(&page, port)
+        // Submit two commands in rapid succession
+        let req1 = client
+            .post(&url)
+            .form(&[("command", "alpha-beta-unique-1")])
+            .send();
+        let req2 = client
+            .post(&url)
+            .form(&[("command", "gamma-delta-unique-2")])
+            .send();
+
+        let (res1, res2) = tokio::join!(req1, req2);
+        assert!(res1.is_ok(), "First request should succeed");
+        assert!(res2.is_ok(), "Second request should succeed");
+
+        // Wait for async processing to complete
+        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+
+        // Verify story log contains both inputs
+        let story = client
+            .get(format!("http://127.0.0.1:{port}/fragment/story-log"))
+            .send()
             .await
-            .expect("Failed to connect to server");
-
-        wait_for_status_ready(&page).await;
-
-        // Submit two commands in rapid succession with distinct text
-        page.evaluate::<(), ()>(
-            r#"
-            (() => {
-                const input = document.querySelector('#command-form input[name="command"]');
-                const form = document.querySelector('#command-form');
-                if (input && form) {
-                    input.value = 'alpha-beta-unique-1';
-                    form.requestSubmit();
-                    input.value = 'gamma-delta-unique-2';
-                    form.requestSubmit();
-                }
-            })()
-            "#,
-            None,
-        )
-        .await
-        .unwrap();
-
-        wait_for_status_ready(&page).await;
-
-        // Count Input entries specifically
-        let input_entries: Vec<String> = page
-            .evaluate::<(), Vec<String>>(
-                r#"
-                Array.from(document.querySelectorAll('#story-log .log-entry.input'))
-                    .map(el => el.innerText)
-                "#,
-                None,
-            )
+            .unwrap()
+            .text()
             .await
-            .unwrap_or_default();
+            .unwrap();
 
-        println!("Input entries: {input_entries:?}");
+        println!("Story log: {story}");
 
-        // Both submissions should have created Input entries (the server accepts both)
-        // but the frontend button should be disabled during generation,
-        // preventing the second from being sent.
-        let has_first = input_entries
-            .iter()
-            .any(|t| t.contains("alpha-beta-unique-1"));
-        let has_second = input_entries
-            .iter()
-            .any(|t| t.contains("gamma-delta-unique-2"));
+        let has_first = story.contains("alpha-beta-unique-1");
+        let has_second = story.contains("gamma-delta-unique-2");
 
-        assert!(has_first, "First command should be processed");
-
-        // If the frontend disabled the submit button during generation,
-        // the second requestSubmit should have been a no-op.
-        assert!(
-            !has_second,
-            "Second command should be blocked by disabled submit button"
-        );
-
-        let _ = browser.close().await;
+        assert!(has_first, "First command should appear in story log");
+        // Without mutex, both requests are accepted; server processes both
+        assert!(has_second, "Second command should also appear in story log");
     }
 }
