@@ -65,20 +65,19 @@ mod tests {
     }
 
     /// Multi-step stability: verify the server remains healthy after two sequential
-    /// real LLM calls. This is the only test that exercises real async latency
-    /// across multiple generation cycles.
+    /// real LLM calls.
     #[ignore = "slow: requires OPENROUTER_API_KEY"]
     #[tokio::test]
     async fn test_real_llm_multi_step_stability() {
         with_real_llm(|page, port| async move {
             // First command
-            send_action(&page, "look around the room").await;
+            send_action(&page, "Look around the room").await;
             let result_a = wait_for_llm_idle(port, Duration::from_secs(180)).await;
             let status_a = wait_for_status_ready_or_error(&page).await;
             println!("Step 1: idle={result_a:?}, status='{status_a}'");
 
             // Second command
-            send_action(&page, "describe what you see in detail").await;
+            send_action(&page, "Describe what you see in detail").await;
             let result_b = wait_for_llm_idle(port, Duration::from_secs(180)).await;
             let status_b = wait_for_status_ready_or_error(&page).await;
             println!("Step 2: idle={result_b:?}, status='{status_b}'");

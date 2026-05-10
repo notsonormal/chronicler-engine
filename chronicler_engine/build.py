@@ -15,6 +15,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 # Force UTF-8 for stdout/stderr on Windows to handle cargo's Unicode output
@@ -25,6 +26,27 @@ if sys.platform == "win32":
     sys.stderr = io.TextIOWrapper(
         sys.stderr.buffer, encoding="utf-8", errors="replace"
     )
+
+
+class TeeLogger:
+    """Write to both stdout and a log file simultaneously."""
+
+    def __init__(self, log_path: Path, original_stdout):
+        self.log_file = open(log_path, "w", encoding="utf-8")
+        self.original_stdout = original_stdout
+        self.log_path = log_path
+
+    def write(self, message):
+        self.original_stdout.write(message)
+        self.log_file.write(message)
+        self.log_file.flush()
+
+    def flush(self):
+        self.original_stdout.flush()
+        self.log_file.flush()
+
+    def close(self):
+        self.log_file.close()
 
 
 class StepCounter:
@@ -159,11 +181,25 @@ def clean_sqlite_dbs(data_dir: Path):
         print(f"  Removed stale SQLite DBs: {', '.join(removed)}")
 
 
+def clean_old_logs(log_dir: Path, max_age_days: int = 3):
+    """Remove log files older than max_age_days from the log directory."""
+    if not log_dir.exists():
+        return
+    now = time.time()
+    max_age_sec = max_age_days * 86400
+    removed = []
+    for f in log_dir.iterdir():
+        if f.is_file() and f.name.startswith("build_") and f.suffix == ".log" and (now - f.stat().st_mtime) > max_age_sec:
+            f.unlink()
+            removed.append(f.name)
+    if removed:
+        print(f"  Removed old build logs (> {max_age_days} days): {', '.join(removed)}")
+
+
 def clean_old_dumps(dump_dir: Path, max_age_days: int = 3):
     """Remove dump files older than max_age_days from the dump directory."""
     if not dump_dir.exists():
         return
-    import time
     now = time.time()
     max_age_sec = max_age_days * 86400
     removed = []
@@ -365,8 +401,18 @@ def main():
     )
     args = parser.parse_args()
 
-    print("=== Chronicler Engine Build ===")
     os.chdir(os.path.dirname(os.path.abspath(__file__)) or os.getcwd())
+
+    # Setup tee logging: stdout goes to both terminal and log file
+    log_dir = Path("logs")
+    log_dir.mkdir(exist_ok=True)
+    clean_old_logs(log_dir, max_age_days=3)
+    log_path = log_dir / f"build_{time.strftime('%Y%m%d_%H%M%S')}.log"
+    tee = TeeLogger(log_path, sys.stdout)
+    sys.stdout = tee
+
+    print("=== Chronicler Engine Build ===")
+    print(f"Build log: {log_path}")
 
     # Resolve target directories
     cargo_target_dir = Path(args.target_dir) if args.target_dir else Path("target")
@@ -473,7 +519,6 @@ def main():
         total_steps += 1
     steps = StepCounter(total_steps)
 
-    import time
     step_timings = []
     step_failures = []
 

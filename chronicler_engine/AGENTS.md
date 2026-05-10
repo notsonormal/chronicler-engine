@@ -33,6 +33,10 @@ chronicler_engine/
 └── scripts/              # Python helpers
 ```
 
+## Windows Development Environment
+
+The development environment is Windows, not Linux. The Chronicler Engine is NOT being developed inside a Linux devcontainer. 
+
 ## DOCUMENTATION STRATEGY: SEMANTIC MAPPING
 This project follows a **Spec-Driven Implementation** (SDI) strategy.
 
@@ -244,3 +248,4 @@ Chain pattern: investigator → builder → reviewer. Avoid builder for 3+ file 
 - **Delegating to subagents** — prefer `cavecrew-*` over vanilla to keep main context lean.
 - **Writing commits or reviews** — use `/caveman-commit` and `/caveman-review` for terse, actionable output.
 - **Compressing memory files** — use `/caveman:compress` on `.ag-memory/` or `CONTEXT.md` before they bloat.
+

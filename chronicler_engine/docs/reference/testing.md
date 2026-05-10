@@ -207,6 +207,27 @@ cargo test -- --test-threads=1
 - Multiple trigger handling
 - Repeatable trigger refires on subsequent encounters
 
+### Debugging Failed Browser Tests
+
+When a browser test fails, diagnostics are captured automatically:
+
+- **Screenshot**: `chronicler_engine/tmp/screenshots/{timestamp}_{test_name}.png`
+- **DOM dump**: `chronicler_engine/tmp/test_diagnostics/{test_name}.html`
+
+In CI, configure artifact upload for `chronicler_engine/tmp/screenshots/` so failed-test screenshots are downloadable.
+
+### Running Tests with Visible Browser
+
+For visual debugging, run tests with a visible browser window:
+
+```bash
+# Windows PowerShell
+$env:HEADED = "1"; cargo test --test e2e_tests test_page_loads
+
+# Slow down operations for easier observation
+$env:HEADED = "1"; $env:SLOW_MO = "500"; cargo test --test e2e_tests test_page_loads
+```
+
 ### Known Limitations
 
 1. **Headless Browser**: HTMX polling is reliable in headless mode; 5-second delay is acceptable for tests
@@ -216,23 +237,50 @@ cargo test -- --test-threads=1
 
 ### Smart Waiting Patterns
 
-Instead of using fixed sleep durations, tests should use smart waiting:
+Instead of using fixed sleep durations, tests use Playwright's built-in auto-retrying assertions via `playwright_rs::expect`:
 
-1. **For LLM completion**: Use `wait_for_llm_idle(port, timeout)` which polls `/status/generating` until the LLM finishes
-2. **For UI elements**: Poll the DOM for expected elements/content instead of fixed delays
-3. **Avoid bare sleeps**: Never use `sleep(Duration::from_millis(X))` without a documented reason
-
-Example:
 ```rust
-// BAD: Fixed 15 second wait
-sleep(Duration::from_millis(15000)).await;
+use playwright_rs::expect;
 
-// GOOD: Wait for LLM to complete
+// Wait for element to be visible (auto-retries up to 5s)
+expect(page.locator("#status-display").await)
+    .to_be_visible()
+    .await?;
+
+// Wait for text to contain "Ready"
+expect(page.locator("#status-display").await)
+    .to_contain_text("Ready")
+    .await?;
+
+// Wait with custom timeout for slow operations
+expect(page.locator("#status-display").await)
+    .with_timeout(Duration::from_secs(30))
+    .to_contain_text("Ready")
+    .await?;
+```
+
+Available assertions: `to_be_visible`, `to_be_hidden`, `to_have_text`, `to_contain_text`, `to_have_value`, `to_be_enabled`, `to_be_disabled`, `to_be_checked`, `to_be_unchecked`, `to_be_editable`, `to_be_focused`.
+
+For explicit state waits:
+```rust
+page.locator("#story-log .log-entry").await
+    .wait_for(Some(playwright_rs::WaitForOptions {
+        state: Some(playwright_rs::WaitForState::Visible),
+        timeout: Some(10000.0),
+    }))
+    .await?;
+```
+
+Available states: `Visible`, `Hidden`, `Attached`, `Detached`.
+
+**Avoid bare sleeps**: Never use `sleep(Duration::from_millis(X))` without a documented reason.
+
+For LLM completion, use `wait_for_llm_idle(port, timeout)` which polls `/status/generating` until the LLM finishes:
+```rust
 let llm_result = wait_for_llm_idle(TEST_PORT, Duration::from_secs(30)).await;
 if llm_result.is_err() {
     println!("Warning: LLM did not become idle within timeout");
 }
-sleep(Duration::from_millis(1000)).await; // Brief wait for poll to catch update
 ```
 
 ### Settings Integration Tests

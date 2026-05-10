@@ -9,7 +9,9 @@ use std::process::{Child, Command};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
+use playwright_rs::LaunchOptions;
 use playwright_rs::Playwright;
+use playwright_rs::expect;
 use serde::{Deserialize, Serialize};
 use tokio::time::sleep;
 
@@ -234,20 +236,18 @@ pub async fn wait_for_more_messages(page: &playwright_rs::Page, initial_count: u
 }
 
 pub async fn wait_for_non_loading_value(page: &playwright_rs::Page, selector: &str) -> String {
-    for _ in 0..50 {
-        let value: String = page
-            .evaluate::<(), String>(
-                &format!("document.querySelector('{selector}')?.innerText || ''"),
-                None,
-            )
-            .await
-            .unwrap_or_default();
+    let locator = page.locator(selector).await;
+    let start = std::time::Instant::now();
+    let timeout = std::time::Duration::from_secs(10);
 
-        if !value.is_empty() {
-            return value;
+    while start.elapsed() < timeout {
+        match locator.inner_text().await {
+            Ok(text) if !text.is_empty() => return text,
+            _ => sleep(Duration::from_millis(200)).await,
         }
-        sleep(Duration::from_millis(200)).await;
     }
+
+    capture_failure_state(page, &format!("wait_for_non_loading_value_{selector}")).await;
     String::new()
 }
 
@@ -279,38 +279,34 @@ pub async fn wait_for_element_children(
     selector: &str,
     min_count: u32,
 ) -> u32 {
-    for _ in 0..50 {
-        let count: u32 = page
-            .evaluate::<(), u32>(
-                &format!("document.querySelectorAll('{selector}').length"),
-                None,
-            )
-            .await
-            .unwrap_or(0);
+    let locator = page.locator(selector).await;
+    let start = std::time::Instant::now();
+    let timeout = std::time::Duration::from_secs(10);
 
-        if count >= min_count {
-            return count;
+    while start.elapsed() < timeout {
+        match locator.count().await {
+            Ok(count) if count as u32 >= min_count => return count as u32,
+            _ => sleep(Duration::from_millis(200)).await,
         }
-        sleep(Duration::from_millis(200)).await;
     }
+
+    capture_failure_state(page, &format!("wait_for_element_children_{selector}")).await;
     0
 }
 
 pub async fn wait_for_element_text(page: &playwright_rs::Page, selector: &str) -> String {
-    for _ in 0..50 {
-        let text: String = page
-            .evaluate::<(), String>(
-                &format!("document.querySelector('{selector}')?.innerText || ''"),
-                None,
-            )
-            .await
-            .unwrap_or_default();
+    let locator = page.locator(selector).await;
+    let start = std::time::Instant::now();
+    let timeout = std::time::Duration::from_secs(10);
 
-        if !text.is_empty() {
-            return text;
+    while start.elapsed() < timeout {
+        match locator.inner_text().await {
+            Ok(text) if !text.is_empty() => return text,
+            _ => sleep(Duration::from_millis(200)).await,
         }
-        sleep(Duration::from_millis(200)).await;
     }
+
+    capture_failure_state(page, &format!("wait_for_element_text_{selector}")).await;
     String::new()
 }
 
@@ -320,15 +316,27 @@ pub async fn wait_for_element_text(page: &playwright_rs::Page, selector: &str) -
 
 /// Launch Chromium browser for UI tests
 pub async fn launch_chrome() -> (playwright_rs::Playwright, playwright_rs::Browser) {
-    use playwright_rs::LaunchOptions;
+    let headed = std::env::var("HEADED").map(|v| v == "1").unwrap_or(false);
+    let slow_mo = std::env::var("SLOW_MO")
+        .ok()
+        .and_then(|v| v.parse::<f64>().ok());
 
     let playwright = Playwright::launch().await.unwrap();
+    let mut options = LaunchOptions {
+        channel: Some("chrome".to_string()),
+        ..Default::default()
+    };
+    if headed {
+        options.headless = Some(false);
+        println!("🖥️  Running browser in headed mode (HEADED=1)");
+    }
+    if let Some(ms) = slow_mo {
+        options.slow_mo = Some(ms);
+        println!("⏱️  Slowing operations by {ms}ms (SLOW_MO={ms})");
+    }
     let browser = playwright
         .chromium()
-        .launch_with_options(LaunchOptions {
-            channel: Some("chrome".to_string()),
-            ..Default::default()
-        })
+        .launch_with_options(options)
         .await
         .unwrap();
     (playwright, browser)
@@ -380,18 +388,45 @@ pub async fn send_action(page: &playwright_rs::Page, text: &str) {
             Some(&text_owned),
         )
         .await;
-    // Give HTMX time to send request and update DOM before caller polls status
-    sleep(Duration::from_millis(200)).await;
+
+    // Wait for status to leave "Ready" (proves the action was received).
+    // For sync actions this times out harmlessly since status stays Ready.
+    let status_locator = page.locator("#status-display").await;
+    let _ = expect(status_locator)
+        .with_timeout(Duration::from_millis(500))
+        .not()
+        .to_contain_text("Ready")
+        .await;
+
+    // If text check dialog appeared, click "Send Original" to proceed.
+    dismiss_text_check_if_present(page).await;
+}
+
+/// Detect and dismiss the text check "Did you mean?" dialog by clicking
+/// "Send Original". Without it, the dialog replaces the action-area and
+/// removes #status-display, breaking status polling.
+pub async fn dismiss_text_check_if_present(page: &playwright_rs::Page) {
+    let locator = page.locator(".text-check-preview .btn-original").await;
+    if let Ok(true) = locator.is_visible().await {
+        eprintln!("⚠️  Text check dialog detected — clicking 'Send Original'");
+        let _ = locator.click(None).await;
+        // Wait for dialog to disappear and action-area to be restored
+        let _ = locator
+            .wait_for(Some(playwright_rs::WaitForOptions {
+                state: Some(playwright_rs::WaitForState::Hidden),
+                timeout: Some(5000.0),
+            }))
+            .await;
+    }
 }
 
 /// Get current status text from the status display element
 pub async fn get_status(page: &playwright_rs::Page) -> String {
-    page.evaluate::<(), String>(
-        "document.querySelector('#status-display')?.innerText || ''",
-        None,
-    )
-    .await
-    .unwrap_or_default()
+    page.locator("#status-display")
+        .await
+        .inner_text()
+        .await
+        .unwrap_or_default()
 }
 
 /// Count log entries in story log (instant snapshot)
@@ -403,108 +438,71 @@ pub async fn count_log_entries(page: &playwright_rs::Page) -> usize {
 }
 
 /// Wait until story log has at least `min_count` entries
-/// Polls every 200ms for up to 5 seconds
 pub async fn wait_for_log_entries(page: &playwright_rs::Page, min_count: usize) -> usize {
-    for _ in 0..25 {
-        let count = count_log_entries(page).await;
-        if count >= min_count {
-            return count;
-        }
-        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
-    }
-    count_log_entries(page).await
+    wait_for_element_children(page, "#story-log .log-entry", min_count as u32).await as usize
 }
 
-/// Wait for an element to exist in the DOM
-/// Polls every 50ms for up to `max_attempts` times
+/// Wait for an element to become visible
 pub async fn wait_for_element_exists(
     page: &playwright_rs::Page,
     selector: &str,
     max_attempts: u32,
-) -> bool {
-    for _ in 0..max_attempts {
-        let exists: bool = page
-            .evaluate::<(), bool>(
-                &format!("document.querySelector('{selector}') !== null"),
-                None,
-            )
-            .await
-            .unwrap_or(false);
-
-        if exists {
-            return true;
-        }
-        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+) {
+    let locator = page.locator(selector).await;
+    let timeout_ms = max_attempts as f64 * 50.0;
+    if let Err(e) = expect(locator)
+        .with_timeout(std::time::Duration::from_millis(timeout_ms as u64))
+        .to_be_visible()
+        .await
+    {
+        capture_failure_state(page, &format!("wait_for_element_exists_{selector}")).await;
+        panic!("Element '{selector}' did not become visible: {e}");
     }
-    false
 }
 
-/// Wait for an element to NOT exist in the DOM
-/// Polls every 50ms for up to `max_attempts` times
+/// Wait for an element to become hidden
 pub async fn wait_for_element_not_exists(
     page: &playwright_rs::Page,
     selector: &str,
     max_attempts: u32,
-) -> bool {
-    for _ in 0..max_attempts {
-        let exists: bool = page
-            .evaluate::<(), bool>(
-                &format!("document.querySelector('{selector}') !== null"),
-                None,
-            )
-            .await
-            .unwrap_or(false);
-
-        if !exists {
-            return true;
-        }
-        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+) {
+    let locator = page.locator(selector).await;
+    let timeout_ms = max_attempts as f64 * 50.0;
+    if let Err(e) = locator
+        .wait_for(Some(playwright_rs::WaitForOptions {
+            state: Some(playwright_rs::WaitForState::Hidden),
+            timeout: Some(timeout_ms),
+        }))
+        .await
+    {
+        capture_failure_state(page, &format!("wait_for_element_not_exists_{selector}")).await;
+        panic!("Element '{selector}' did not become hidden: {e}");
     }
-    false
 }
 
 pub async fn wait_for_status_ready(page: &playwright_rs::Page) {
-    for i in 0..50 {
-        let status: String = page
-            .evaluate::<(), String>(
-                "document.querySelector('#status-display')?.innerText || ''",
-                None,
-            )
-            .await
-            .unwrap_or_default();
-
-        if status.contains("Ready") {
-            return;
-        }
-        if i == 49 {
-            println!("WAIT_FOR_STATUS_READY TIMEOUT - status: '{status}'");
-        }
-        sleep(Duration::from_millis(100)).await;
+    let locator = page.locator("#status-display").await;
+    if let Err(e) = expect(locator).to_contain_text("Ready").await {
+        capture_failure_state(page, "wait_for_status_ready").await;
+        panic!("Status did not become Ready: {e}");
     }
 }
 
 pub async fn wait_for_status_ready_or_error(page: &playwright_rs::Page) -> String {
-    for _ in 0..30 {
-        let status: String = page
-            .evaluate::<(), String>(
-                "document.querySelector('#status-display')?.innerText || ''",
-                None,
-            )
-            .await
-            .unwrap_or_default();
+    let locator = page.locator("#status-display").await;
+    let start = std::time::Instant::now();
+    let timeout = std::time::Duration::from_secs(15);
 
-        if status.contains("Ready") || status.contains("Error") {
-            return status;
+    while start.elapsed() < timeout {
+        match locator.inner_text().await {
+            Ok(text) if text.contains("Ready") || text.contains("Error") => return text,
+            _ => sleep(Duration::from_millis(500)).await,
         }
-        sleep(Duration::from_millis(500)).await;
     }
 
-    page.evaluate::<(), String>(
-        "document.querySelector('#status-display')?.innerText || ''",
-        None,
-    )
-    .await
-    .unwrap_or_default()
+    let final_text = locator.inner_text().await.unwrap_or_default();
+    capture_failure_state(page, "wait_for_status_ready_or_error").await;
+    final_text
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -636,6 +634,39 @@ fn is_process_alive(pid: u32) -> bool {
 pub fn get_config_port(config_path: &str) -> Result<u16, String> {
     let config = TestConfig::from_file(config_path)?;
     get_available_port(config.port_range.min, config.port_range.max)
+}
+
+/// Capture screenshot and DOM dump when a test fails for debugging.
+/// Saves to `tmp/screenshots/` and `tmp/test_diagnostics/`.
+pub async fn capture_failure_state(page: &playwright_rs::Page, test_name: &str) {
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let safe_name = test_name.replace(|c: char| !c.is_alphanumeric() && c != '_', "_");
+
+    let screenshots_dir = std::path::PathBuf::from("tmp/screenshots");
+    let diagnostics_dir = std::path::PathBuf::from("tmp/test_diagnostics");
+    let _ = std::fs::create_dir_all(&screenshots_dir);
+    let _ = std::fs::create_dir_all(&diagnostics_dir);
+
+    let screenshot_path = screenshots_dir.join(format!("{timestamp}_{safe_name}.png"));
+    match page.screenshot_to_file(&screenshot_path, None).await {
+        Ok(_) => println!("📸 Screenshot saved: {}", screenshot_path.display()),
+        Err(e) => println!("⚠️  Failed to capture screenshot: {e}"),
+    }
+
+    let html_path = diagnostics_dir.join(format!("{safe_name}.html"));
+    match page.content().await {
+        Ok(html) => {
+            if let Err(e) = std::fs::write(&html_path, html) {
+                println!("⚠️  Failed to write DOM dump: {e}");
+            } else {
+                println!("📄 DOM dump saved: {}", html_path.display());
+            }
+        }
+        Err(e) => println!("⚠️  Failed to get page content: {e}"),
+    }
 }
 
 pub struct TestServer {
