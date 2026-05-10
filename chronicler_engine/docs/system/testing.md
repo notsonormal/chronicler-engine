@@ -16,8 +16,8 @@ Tests are organized by execution model:
 | File | Purpose | Execution Model | Runtime |
 |------|---------|---------------|---------|
 | `architecture.rs` | Architecture guardrails (clippy, import order, doc anchors) | In-process | Very Fast |
-| `component_tests.rs` | Templates, endpoints, settings, validation | In-process | Very Fast |
-| `e2e_tests.rs` | UI structure, layouts, interactions | Browser | Medium |
+| `components.rs` | Templates, endpoints, settings, validation | In-process | Very Fast |
+| `browser.rs` | UI structure, layouts, interactions | Browser | Medium |
 | `flow_mock_tests.rs` | Game loop, polling, real-time updates | Browser + Mock LLM | Fast |
 | `flow_llm_tests.rs` | LLM narrative generation | Browser + Real LLM | Slow |
 | `game_service_tests.rs` | Game service logic, action handling, retry | In-process | Very Fast |
@@ -28,7 +28,7 @@ Tests are organized by execution model:
 
 ## Test Files Explained
 
-### In-Process Tests (component_tests.rs)
+### In-Process Tests (components.rs)
 
 Fast tests that don't spawn a browser:
 
@@ -38,7 +38,7 @@ Fast tests that don't spawn a browser:
 
 Runtime: ~5 seconds
 
-### Browser Tests (e2e_tests.rs)
+### Browser Tests (browser.rs)
 
 Full browser automation via Playwright:
 
@@ -61,10 +61,10 @@ cargo test
 python build.py
 
 # Fast suite only (in-process)
-cargo test --test component_tests
+cargo test --test components
 
 # Browser tests only
-cargo test --test e2e_tests
+cargo test --test browser
 cargo test --test flow_mock_tests
 
 # Include slow LLM tests in full suite
@@ -109,8 +109,8 @@ Critical tests that must not be removed:
 | Suite | Runtime |
 |-------|---------|
 | Full suite (`python build.py`) | ~70 sec (LLM tests excluded) |
-| component_tests | ~5 sec |
-| e2e_tests | ~60 sec |
+| components | ~5 sec |
+| browser | ~60 sec |
 | flow_mock_tests | ~30 sec |
 | game_service_tests | ~5 sec |
 | guardrails | ~2 sec |

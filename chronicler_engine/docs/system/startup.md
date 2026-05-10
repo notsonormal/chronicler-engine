@@ -4,9 +4,8 @@ This document defines the authoritative sequence for bootstrapping the Chronicle
 
 ## 1. Data Path Resolution
 The engine resolves its `data/` directory using the following priority:
-1.  **Environment Variable**: `CHRONICLER_DATA` (overrides all others).
-2.  **Executable Proximity**: Checks for a `data/` folder in the same directory as the engine binary (for portable deployments).
-3.  **Current Working Directory**: Defaults to `./data` (standard development mode).
+1.  **Executable Proximity**: Checks for a `data/` folder in the same directory as the engine binary (for portable deployments).
+2.  **Current Working Directory**: Defaults to `./data` (standard development mode).
 
 ## 2. World Initialization Sequence
 When a world is loaded via the `--world` flag, the engine performs these steps:

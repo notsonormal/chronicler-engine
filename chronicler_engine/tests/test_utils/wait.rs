@@ -1,0 +1,226 @@
+use std::time::Duration;
+
+use tokio::time::sleep;
+
+use super::browser::capture_failure_state;
+
+pub async fn wait_for_llm_idle(port: u16, timeout: Duration) -> Result<(), ()> {
+    let start = std::time::Instant::now();
+    let client = reqwest::Client::new();
+
+    while start.elapsed() < timeout {
+        if let Ok(resp) = client
+            .get(format!("http://127.0.0.1:{port}/status/generating"))
+            .send()
+            .await
+        {
+            if let Ok(text) = resp.text().await {
+                if text == "idle" {
+                    return Ok(());
+                }
+            }
+        }
+        tokio::time::sleep(Duration::from_millis(200)).await;
+    }
+
+    // Timeout reached - try to reset the flag by posting to a reset endpoint
+    // This ensures is_generating doesn't get stuck
+    let _ = client
+        .post(format!("http://127.0.0.1:{port}/status/reset-generating"))
+        .send()
+        .await;
+
+    Err(())
+}
+
+pub async fn wait_for_location_change(page: &playwright_rs::Page, initial: &str) -> String {
+    for _ in 0..50 {
+        let location: String = page
+            .evaluate::<(), String>("document.querySelector('.location')?.innerText || ''", None)
+            .await
+            .unwrap_or_default();
+
+        if location != initial {
+            return location;
+        }
+        sleep(Duration::from_millis(200)).await;
+    }
+    String::new()
+}
+
+pub async fn wait_for_story_log_change(page: &playwright_rs::Page, initial: &str) -> String {
+    for _ in 0..50 {
+        let content: String = page
+            .evaluate::<(), String>(
+                "document.querySelector('#story-log')?.innerText || ''",
+                None,
+            )
+            .await
+            .unwrap_or_default();
+
+        if content != initial {
+            return content;
+        }
+        sleep(Duration::from_millis(200)).await;
+    }
+    String::new()
+}
+
+pub async fn wait_for_more_messages(page: &playwright_rs::Page, initial_count: usize) -> usize {
+    for _ in 0..50 {
+        let messages: Vec<String> = page
+            .evaluate::<(), Vec<String>>(
+                "Array.from(document.querySelectorAll('#story-log .log-entry .text')).map(el => el.innerText)",
+                None,
+            )
+            .await
+            .unwrap_or_default();
+
+        if messages.len() > initial_count {
+            return messages.len();
+        }
+        sleep(Duration::from_millis(200)).await;
+    }
+    initial_count
+}
+
+pub async fn wait_for_non_loading_value(page: &playwright_rs::Page, selector: &str) -> String {
+    let locator = page.locator(selector).await;
+    let start = std::time::Instant::now();
+    let timeout = std::time::Duration::from_secs(10);
+
+    while start.elapsed() < timeout {
+        match locator.inner_text().await {
+            Ok(text) if !text.is_empty() => return text,
+            _ => sleep(Duration::from_millis(200)).await,
+        }
+    }
+
+    capture_failure_state(page, &format!("wait_for_non_loading_value_{selector}")).await;
+    String::new()
+}
+
+pub async fn wait_for_element_class(
+    page: &playwright_rs::Page,
+    selector: &str,
+    class_name: &str,
+    max_attempts: u32,
+) -> bool {
+    for _ in 0..max_attempts {
+        let has_class: bool = page
+            .evaluate::<(), bool>(
+                &format!("document.querySelector('{selector}')?.classList.contains('{class_name}') ?? false"),
+                None,
+            )
+            .await
+            .unwrap_or(false);
+
+        if has_class {
+            return true;
+        }
+        sleep(Duration::from_millis(250)).await;
+    }
+    false
+}
+
+pub async fn wait_for_element_children(
+    page: &playwright_rs::Page,
+    selector: &str,
+    min_count: u32,
+) -> u32 {
+    let locator = page.locator(selector).await;
+    let start = std::time::Instant::now();
+    let timeout = std::time::Duration::from_secs(10);
+
+    while start.elapsed() < timeout {
+        match locator.count().await {
+            Ok(count) if count as u32 >= min_count => return count as u32,
+            _ => sleep(Duration::from_millis(200)).await,
+        }
+    }
+
+    capture_failure_state(page, &format!("wait_for_element_children_{selector}")).await;
+    0
+}
+
+pub async fn wait_for_element_text(page: &playwright_rs::Page, selector: &str) -> String {
+    let locator = page.locator(selector).await;
+    let start = std::time::Instant::now();
+    let timeout = std::time::Duration::from_secs(10);
+
+    while start.elapsed() < timeout {
+        match locator.inner_text().await {
+            Ok(text) if !text.is_empty() => return text,
+            _ => sleep(Duration::from_millis(200)).await,
+        }
+    }
+
+    capture_failure_state(page, &format!("wait_for_element_text_{selector}")).await;
+    String::new()
+}
+
+/// Wait for an element to become visible
+pub async fn wait_for_element_exists(
+    page: &playwright_rs::Page,
+    selector: &str,
+    max_attempts: u32,
+) {
+    let locator = page.locator(selector).await;
+    let timeout_ms = max_attempts as f64 * 50.0;
+    if let Err(e) = playwright_rs::expect(locator)
+        .with_timeout(std::time::Duration::from_millis(timeout_ms as u64))
+        .to_be_visible()
+        .await
+    {
+        capture_failure_state(page, &format!("wait_for_element_exists_{selector}")).await;
+        panic!("Element '{selector}' did not become visible: {e}");
+    }
+}
+
+/// Wait for an element to become hidden
+pub async fn wait_for_element_not_exists(
+    page: &playwright_rs::Page,
+    selector: &str,
+    max_attempts: u32,
+) {
+    let locator = page.locator(selector).await;
+    let timeout_ms = max_attempts as f64 * 50.0;
+    if let Err(e) = locator
+        .wait_for(Some(playwright_rs::WaitForOptions {
+            state: Some(playwright_rs::WaitForState::Hidden),
+            timeout: Some(timeout_ms),
+        }))
+        .await
+    {
+        capture_failure_state(page, &format!("wait_for_element_not_exists_{selector}")).await;
+        panic!("Element '{selector}' did not become hidden: {e}");
+    }
+}
+
+pub async fn wait_for_status_ready(page: &playwright_rs::Page) {
+    let locator = page.locator("#status-display").await;
+    if let Err(e) = playwright_rs::expect(locator)
+        .to_contain_text("Ready")
+        .await
+    {
+        capture_failure_state(page, "wait_for_status_ready").await;
+        panic!("Status did not become Ready: {e}");
+    }
+}
+
+pub async fn wait_for_status_ready_or_error(page: &playwright_rs::Page) -> String {
+    let locator = page.locator("#status-display").await;
+    let start = std::time::Instant::now();
+    let timeout = std::time::Duration::from_secs(15);
+
+    while start.elapsed() < timeout {
+        match locator.inner_text().await {
+            Ok(text) if text.contains("Ready") || text.contains("Error") => return text,
+            _ => sleep(Duration::from_millis(500)).await,
+        }
+    }
+
+    let final_text = locator.inner_text().await.unwrap_or_default();
+    capture_failure_state(page, "wait_for_status_ready_or_error").await;
+    final_text
+}

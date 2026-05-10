@@ -22,7 +22,7 @@ This plan replaces that inferential loop with structured tracing and automatic f
 
 **Current logging:** `log = "0.4"` + `env_logger = "0.11"` provide flat string logging. There are no spans, no correlation IDs, and no structured context fields.
 
-**Current test failures:** A panic or assertion failure in `component_tests.rs` (1,504 lines) or `e2e_tests.rs` (781 lines) gives only the assertion message. The actual `GameState`, quantifier result, and LLM response context are lost.
+**Current test failures:** A panic or assertion failure in `components.rs` (1,504 lines) or `browser.rs` (781 lines) gives only the assertion message. The actual `GameState`, quantifier result, and LLM response context are lost.
 
 **Documented pain points:**
 - `DEBUGGING.md` instructs checking `GET /debug/state` — but this requires a running server and manual HTTP calls.

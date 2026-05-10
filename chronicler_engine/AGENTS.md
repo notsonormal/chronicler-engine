@@ -1,6 +1,6 @@
 You# Chronicler Engine Knowledge Base
 
-**Generated:** 2026-04-21
+**Generated:** 2026-05-10
 **Language:** Rust (Edition 2024)
 **Type:** Single crate (binary + library)
 
@@ -10,27 +10,77 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
 ## STRUCTURE
 ```
 chronicler_engine/
-├── src/                    # Source code (53+ .rs files)
-│   ├── lib.rs             # Library root (7 modules)
+├── src/                    # Source code (120+ .rs files)
+│   ├── lib.rs             # Library root
 │   ├── main.rs            # Binary entry (CLI + server)
 │   ├── error.rs           # EngineError enum
-│   ├── engine/            # Game logic (action, logic, parser, trigger_eval)
-│   ├── model/             # Data structures (world, map, character, state, scenario, trigger)
-│   ├── narrative/         # LLM integration (llm, prompt, openrouter_client, continuation, quantifier)
-│   ├── server/            # Axum HTTP/WebSocket (mod, templates, template_builders, fragments)
-│   └── ui/                # Dashboard components (mod, dashboard)
-├── tests/                 # Integration tests (7 files)
-├── docs/                  # Extensive documentation (52+ .md files, auto-indexed)
-│   ├── architecture/      # System specs (system.md)
-│   ├── system/            # Domain docs (dashboard, navigation, narration, llm, triggers, etc.)
-│   ├── plans/            # Implementation plans (active + archived/)
-│   ├── adr/              # Architecture Decision Records
-│   ├── diagnostics/      # Audit reports, error catalogs
-│   └── reference/        # Data schemas, API specs, testing strategy
+│   ├── cli.rs             # Command-line argument parsing
+│   ├── settings.rs        # Application settings management
+│   ├── bootstrap/         # Startup initialization (load, logging, run, scenario, validate)
+│   ├── engine/            # Game logic
+│   │   ├── action.rs, action_processing.rs, logic.rs, parser.rs
+│   │   ├── trigger_eval.rs, state_diagnostics.rs
+│   │   └── game_service/  # Game flow orchestration (actions, context, helpers, retry, service)
+│   ├── model/             # Data structures
+│   │   ├── agent.rs, character.rs, map.rs, scenario.rs, settings.rs
+│   │   ├── state.rs, state_snapshot.rs, trigger.rs, world.rs
+│   │   └── llm_backend.rs # LLM backend configuration types
+│   ├── narrative/         # LLM integration
+│   │   ├── llm_client.rs  # High-level LLM client facade
+│   │   ├── agents/        # Agent subsystem (registry, trait_def, quantifier/)
+│   │   ├── llm/           # Backend implementations (backend, deepseek, mock, ollama, openrouter)
+│   │   ├── prompt/        # Prompt building (budget, builder, context, sanitize, templates, types)
+│   │   └── text_check/    # Grammar/spelling checking (check, harper_backend, types)
+│   ├── server/            # Axum HTTP/WebSocket
+│   │   ├── mod.rs, templates.rs, debug.rs
+│   │   ├── fragments/     # HTMX fragment endpoints (actions, endpoints, history, misc, renderers)
+│   │   └── settings_fragment/ # Settings UI fragments (fragments, handlers, template)
+│   ├── storage/           # Persistence layer (db, snapshot_storage)
+│   └── test_support/      # Shared test helpers (context, fixtures, in_memory_storage)
+├── tests/                 # Integration tests
+│   ├── architecture.rs    # arch-lint guardrail tests
+│   ├── browser.rs         # Browser automation tests (editing, interaction, structure)
+│   ├── components.rs      # In-process server tests (connections, css, debug, fragment, settings, template, text_check, world)
+│   ├── diagnostic.rs      # Diagnostic backend tests (backends, scenarios)
+│   ├── flow_llm_tests.rs  # End-to-end LLM flow tests
+│   ├── flow_mock_tests.rs # End-to-end mock flow tests
+│   ├── game_service.rs    # Game flow tests (advanced, basic)
+│   ├── guardrails.rs      # Style and structure guardrails
+│   ├── logic_tests.rs     # Game logic unit tests
+│   ├── test_data.rs       # Test data validation
+│   ├── text_check_tests.rs# Text-check integration tests
+│   ├── trigger_tests.rs   # Trigger evaluation tests
+│   └── test_utils/        # Shared test utilities (browser, server, wait)
+├── docs/                  # Extensive documentation (75+ .md files, auto-indexed)
+│   ├── architecture/      # System specs (system.md, guardrails.md, invariants.md)
+│   ├── system/            # Domain docs (agent_system, character_state, dashboard, dynamic_rooms, game_flow, llm_processing, narration_engine, navigation, prompt_system, startup, text_check, triggers, ui_design)
+│   ├── plans/             # Implementation plans (active + archived/)
+│   ├── adr/               # Architecture Decision Records (adr-001 through adr-007)
+│   ├── diagnostics/       # Error catalog
+│   ├── reference/         # Data schemas, API specs, testing strategy, persona/quantifier docs, SillyTavern references
+│   ├── reviews/           # Architectural reviews (holistic, defensive, agent-scalability)
+│   ├── CHANGELOG.md
+│   └── ROADMAP.md
 ├── data/
-│   ├── worlds/           # Game data (JSON configs per world)
-│   └── images/           # Character sprites and assets
-└── scripts/              # Python helpers
+│   ├── characters/        # Character configs per world
+│   ├── images/            # Character sprites, headshots, room images
+│   ├── personas/          # Player persona configs
+│   ├── schemas/           # JSON schemas (character, map, settings, world)
+│   ├── settings.json      # Default settings
+│   └── worlds/            # World and map JSON configs
+└── scripts/               # Python helpers
+    ├── build.py           # Full validation (fmt + clippy + tests + coverage)
+    ├── check_test_structure.py
+    ├── coverage_summary.py
+    ├── diagnostic_benchmark.py
+    ├── extract_images.py
+    ├── extract_sillytavern_png.py
+    ├── generate_docs_index.py
+    ├── install_git_hooks.py
+    ├── kimi_hook_wrapper.py
+    ├── parse_coverage.py
+    ├── refine_character_json.py
+    └── validate_data.py
 ```
 
 ## Windows Development Environment
@@ -76,12 +126,22 @@ let residents = find_npcs_in_current_location(all_npcs, current_room);
 ## WHERE TO LOOK
 | Task | Location | Notes |
 |------|----------|-------|
-| Add game feature | `src/engine/` | Action enum, parser, logic |
-| Modify data model | `src/model/` | World, map, character, state, scenario, trigger |
-| LLM changes | `src/narrative/` | llm.rs (trait), prompt.rs (templates) |
+| Add game feature | `src/engine/` | Action enum, parser, logic, action_processing |
+| Game flow / service | `src/engine/game_service/` | actions, context, helpers, retry, service |
+| Modify data model | `src/model/` | agent, character, map, scenario, settings, state, trigger, world |
+| LLM client / backends | `src/narrative/llm_client.rs`, `src/narrative/llm/` | High-level client + backend impls (deepseek, mock, ollama, openrouter) |
+| LLM prompts | `src/narrative/prompt/` | budget, builder, context, sanitize, templates, types |
+| Agent system | `src/narrative/agents/` | Registry, trait definitions, quantifier agent |
+| Text checking | `src/narrative/text_check/` | Grammar/spelling via harper_backend |
 | Trigger system | `src/engine/trigger_eval.rs` | Trigger evaluation, condition checking |
 | Web server | `src/server/` | Axum router, WebSocket, HTMX templates |
-| Dashboard UI | `src/ui/dashboard.rs` | HTMX components |
+| HTMX fragments | `src/server/fragments/` | Actions, endpoints, history, renderers |
+| Settings UI | `src/server/settings_fragment/` | Settings fragments, handlers, template |
+| Bootstrap / startup | `src/bootstrap/` | load, logging, run, scenario, validate |
+| CLI args | `src/cli.rs` | Command-line parsing |
+| App settings | `src/settings.rs` | Settings management |
+| Persistence | `src/storage/` | SQLite db, snapshot storage |
+| Shared test helpers | `src/test_support/` | context, fixtures, in_memory_storage |
 
 ## CONVENTIONS
 - **Doc Anchors**: Always link complex blocks to `docs/` via `// [DOC: docs/path/to/file.md]`

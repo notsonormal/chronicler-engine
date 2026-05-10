@@ -48,8 +48,8 @@ Cross-module and browser-based tests live in the top-level `tests/` directory:
 | Test File | Purpose | Execution Model | Runtime |
 |----------|---------|---------------|---------|
 | `architecture.rs` | Architecture guardrails (arch-lint, no-unwrap, layer enforcement) | In-process | Very Fast |
-| `component_tests.rs` | Templates, endpoints, settings, validation | In-process | Very Fast |
-| `e2e_tests.rs` | UI structure, layouts, interactions | Browser | Medium |
+| `components.rs` | Templates, endpoints, settings, validation | In-process | Very Fast |
+| `browser.rs` | UI structure, layouts, interactions | Browser | Medium |
 | `flow_mock_tests.rs` | Core game loop, polling | Browser + Mock LLM | Fast |
 | `flow_llm_tests.rs` | LLM narrative | Browser + Real LLM | Slow |
 | `game_service_tests.rs` | Game service logic, DI, retry, error resilience, quantifier integration | In-process | Very Fast |
@@ -141,8 +141,8 @@ cargo nextest run --run-ignored all --test flow_llm_tests
 python build.py --llm-only
 
 # Run specific non-LLM test suites
-cargo test --test component_tests   # In-process tests (fast)
-cargo test --test e2e_tests         # Browser tests
+cargo test --test components   # In-process tests (fast)
+cargo test --test browser         # Browser tests
 cargo test --test flow_mock_tests   # Fast tests with mock LLM
 
 # Run with single thread (recommended for tests sharing ports)
@@ -157,7 +157,7 @@ cargo test -- --test-threads=1
 
 ### Test Coverage
 
-**component_tests.rs** (52 tests):
+**components.rs** (52 tests):
 - XSS security (template escaping)
 - Template rendering
 - HTTP endpoint responses (game fragments)
@@ -165,7 +165,7 @@ cargo test -- --test-threads=1
 - Validation (empty command rejection)
 - Settings UI integration (16+ tests)
 
-**e2e_tests.rs** (24 tests):
+**browser.rs** (24 tests):
 - Page loads, UI structure
 - Action area elements
 - Story log functionality
@@ -222,10 +222,10 @@ For visual debugging, run tests with a visible browser window:
 
 ```bash
 # Windows PowerShell
-$env:HEADED = "1"; cargo test --test e2e_tests test_page_loads
+$env:HEADED = "1"; cargo test --test browser test_page_loads
 
 # Slow down operations for easier observation
-$env:HEADED = "1"; $env:SLOW_MO = "500"; cargo test --test e2e_tests test_page_loads
+$env:HEADED = "1"; $env:SLOW_MO = "500"; cargo test --test browser test_page_loads
 ```
 
 ### Known Limitations

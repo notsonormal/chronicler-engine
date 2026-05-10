@@ -37,10 +37,6 @@ pub fn parse_args() -> Args {
 /// [DOC: docs/architecture/system.md]
 pub fn resolve_engine_data_path() -> PathBuf {
     // [DOC: docs/system/startup.md]
-    if let Ok(data_dir) = std::env::var("CHRONICLER_DATA") {
-        return PathBuf::from(data_dir);
-    }
-
     if let Ok(exe_path) = std::env::current_exe() {
         if let Some(exe_dir) = exe_path.parent() {
             let data_dir = exe_dir.join("data");

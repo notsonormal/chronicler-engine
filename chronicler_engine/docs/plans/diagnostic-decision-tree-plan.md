@@ -76,7 +76,7 @@ Create `docs/diagnostics/decision_tree.md` with this structure:
 
 ### Branch: Test failure
 1. Quote the verbatim failure message. STOP if you cannot.
-2. Identify the test file. If it is `component_tests.rs`, determine subsystem from assertion context.
+2. Identify the test file. If it is `components.rs`, determine subsystem from assertion context.
 3. Read the test code. Do not form a hypothesis before this step.
 4. Route to subsystem:
    - `trigger/` tests → [Trigger branch](#branch-trigger)

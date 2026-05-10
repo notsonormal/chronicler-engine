@@ -10,7 +10,7 @@
 
 Currently, diagnosing a problem requires:
 1. Running `python build.py` — 8 sequential steps (fmt, clippy, architecture tests, guardrails, test structure check, build, tests, report)
-2. If tests fail, parsing output from `component_tests.rs` (1,504 lines) or `e2e_tests.rs` (781 lines)
+2. If tests fail, parsing output from `components.rs` (1,504 lines) or `browser.rs` (781 lines)
 3. Manually mapping the failure line to a subsystem
 
 This plan restructures the build pipeline and test suite so failures are caught earlier, named more precisely, and linked to relevant documentation automatically.
@@ -26,12 +26,12 @@ fmt → clippy → architecture tests → guardrails → test structure → buil
 A logic error in `trigger_eval.rs` is only caught at the `tests` step, after ~2-5 minutes of prior steps.
 
 **Test structure today:**
-- `tests/component_tests.rs` — 1,504 lines. Tests server routing, template rendering, engine logic, and state mutation in one file.
-- `tests/e2e_tests.rs` — 781 lines. End-to-end flows through the HTTP API.
+- `tests/components.rs` — 1,504 lines. Tests server routing, template rendering, engine logic, and state mutation in one file.
+- `tests/browser.rs` — 781 lines. End-to-end flows through the HTTP API.
 - `tests/game_service_tests.rs` — 33,952 bytes. Game service integration tests.
 - `tests/diagnostic_benchmark.rs` — 40,488 bytes. Diagnostic signal quality tests.
 
-When `cargo nextest` reports a failure in `component_tests.rs:423`, the failure could be in templates, routing, or engine logic. The agent must read the test body to determine the subsystem.
+When `cargo nextest` reports a failure in `components.rs:423`, the failure could be in templates, routing, or engine logic. The agent must read the test body to determine the subsystem.
 
 **Documentation is rich but unlinked from failures:** `docs/system/triggers.md`, `docs/system/navigation.md`, etc. exist, but a failing test does not tell you which doc to read.
 
@@ -49,7 +49,7 @@ When `cargo nextest` reports a failure in `component_tests.rs:423`, the failure 
 ## Phase 1: Investigation — Map Current Failure Modes
 
 ### Task 1.1: Catalog Current Test Coverage by Subsystem
-- Analyze `tests/component_tests.rs`, `tests/e2e_tests.rs`, `tests/game_service_tests.rs`, and `tests/diagnostic_benchmark.rs` to classify every test by subsystem.
+- Analyze `tests/components.rs`, `tests/browser.rs`, `tests/game_service_tests.rs`, and `tests/diagnostic_benchmark.rs` to classify every test by subsystem.
 - Subsystem taxonomy:
   - `server` — routing, templates, fragments, HTTP handlers
   - `engine` — action processing, parser, logic
@@ -82,15 +82,15 @@ Split the monolithic integration test files into focused files. Do not change te
 ```
 tests/
   server/
-    routing_tests.rs      (from component_tests.rs)
-    template_tests.rs     (from component_tests.rs)
-    fragment_tests.rs     (from component_tests.rs)
+    routing_tests.rs      (from components.rs)
+    template_tests.rs     (from components.rs)
+    fragment_tests.rs     (from components.rs)
   engine/
-    action_tests.rs       (from component_tests.rs + game_service_tests.rs)
-    logic_tests.rs        (from component_tests.rs)
-    parser_tests.rs       (from component_tests.rs)
+    action_tests.rs       (from components.rs + game_service_tests.rs)
+    logic_tests.rs        (from components.rs)
+    parser_tests.rs       (from components.rs)
   trigger/
-    eval_tests.rs         (from trigger_tests.rs + component_tests.rs)
+    eval_tests.rs         (from trigger_tests.rs + components.rs)
     timing_tests.rs       (new — extracted invariant tests)
   narrative/
     prompt_tests.rs       (from narrative tests)
@@ -246,7 +246,7 @@ filter = 'test(/^server::/) | test(/^engine::/) | test(/^trigger::/)'
 
 ## Success Criteria
 
-1. A test failure names the subsystem in the test file path (e.g., `tests/trigger/eval_tests.rs` not `tests/component_tests.rs`).
+1. A test failure names the subsystem in the test file path (e.g., `tests/trigger/eval_tests.rs` not `tests/components.rs`).
 2. A type or logic error is caught by `cargo check --tests` or smoke tests within 60 seconds of build start.
 3. Every invariant test runs in <500ms and fails with a message naming the specific invariant.
 4. No regression in total test count or coverage.

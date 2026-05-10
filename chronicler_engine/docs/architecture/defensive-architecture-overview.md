@@ -239,7 +239,7 @@ assert_state_consistency(state).ok();  // logs error, does not fail test
 | Game service orchestration | `engine/game_service.rs` | `tests/game_service_tests.rs` |
 | LLM backends | `narrative/llm/` | `narrative/llm/*_tests.rs` |
 | Quantifier | `narrative/quantifier/` | `narrative/quantifier/*_tests.rs` |
-| HTTP handlers | `server/fragments.rs` | `tests/component_tests.rs`, `tests/e2e_tests.rs` |
+| HTTP handlers | `server/fragments.rs` | `tests/components.rs`, `tests/browser.rs` |
 | Architecture guardrails | `arch-lint.toml` | `tests/architecture.rs` |
 
 ---

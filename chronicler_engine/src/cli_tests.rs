@@ -89,38 +89,6 @@ fn test_cli_args_all_options() {
 }
 
 #[test]
-fn test_resolve_engine_data_path_from_env() {
-    // [DOC: docs/system/startup.md]
-    // CHRONICLER_DATA env var takes precedence over other resolution methods
-    unsafe {
-        std::env::set_var("CHRONICLER_DATA", "/tmp/chronicler_test_data");
-    }
-    let path = resolve_engine_data_path();
-    assert_eq!(path, std::path::PathBuf::from("/tmp/chronicler_test_data"));
-    unsafe {
-        std::env::remove_var("CHRONICLER_DATA");
-    }
-}
-
-#[test]
-fn test_list_worlds_nonexistent_worlds_dir() {
-    // Point to a temp directory that has no worlds/ subdirectory
-    let temp_dir = std::env::temp_dir().join(format!("chronicler_test_{}", std::process::id()));
-    std::fs::create_dir_all(&temp_dir).unwrap();
-    unsafe {
-        std::env::set_var("CHRONICLER_DATA", &temp_dir);
-    }
-
-    let result = crate::cli::list_available_worlds();
-    assert!(result.is_ok());
-
-    unsafe {
-        std::env::remove_var("CHRONICLER_DATA");
-    }
-    let _ = std::fs::remove_dir_all(&temp_dir);
-}
-
-#[test]
 fn test_scan_worlds_with_valid_world() {
     let temp_dir =
         std::env::temp_dir().join(format!("chronicler_scan_test_{}", std::process::id()));
@@ -215,9 +183,6 @@ fn test_resolve_engine_data_path_from_exe_dir() {
     let data_dir = exe_dir.join("data");
     std::fs::create_dir_all(&data_dir).unwrap();
 
-    unsafe {
-        std::env::remove_var("CHRONICLER_DATA");
-    }
     let path = resolve_engine_data_path();
     assert_eq!(path, data_dir);
 

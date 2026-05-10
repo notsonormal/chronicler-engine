@@ -82,26 +82,7 @@ use crate::model::state::GameState;
 **Scope**: `src/` and `tests/`  
 **Exemptions**: None
 
-### 3.2 "What" Comment Detection (`guardrails_what_comments`)
-
-**Standard**: No explanatory comments starting with action verbs (`Loop`, `Check`, `Build`, `Handle`, `Process`, `Create`, `Get`, `Set`, `Update`, `Remove`, `Add`, `Call`, `Apply`, `Evaluate`, `Determine`, `Spawn`, `Validate`).
-
-Instead: use semantic variable names or add a doc anchor.
-
-```rust
-// BAD
-// Loop through NPCs and check if they are in the room
-for npc in all_npcs { ... }
-
-// GOOD
-let residents = find_npcs_in_current_location(all_npcs, current_room);
-// [DOC: docs/system/navigation.md]
-```
-
-**Severity**: warn (14 existing instances)  
-**Goal**: zero warnings, then promote to error.
-
-### 3.3 Doc Anchor Requirements (`guardrails_doc_anchors`)
+### 3.2 Doc Anchor Requirements (`guardrails_doc_anchors`)
 
 **Standard**: Public functions with >5 statements or containing control flow (`if`, `for`, `while`, `match`, `loop`) must contain a doc anchor comment:
 
@@ -118,7 +99,7 @@ Exemptions:
 **Severity**: warn (20 existing instances)  
 **Goal**: zero warnings, then promote to error.
 
-### 3.4 mod.rs Purity (`guardrails_mod_purity`)
+### 3.3 mod.rs Purity (`guardrails_mod_purity`)
 
 **Standard**: `mod.rs` should only contain:
 - `pub mod` declarations
@@ -131,7 +112,7 @@ No `struct`, `enum`, `fn`, `impl`, or `const` definitions.
 **Exemptions**:
 - `src/server/mod.rs` — legacy structural decision; centralizes Axum router, `AppState`, and server entry points.
 
-### 3.5 Long Comment Run Detection (`guardrails_long_comment_runs`)
+### 3.4 Long Comment Run Detection (`guardrails_long_comment_runs`)
 
 **Standard**: No runs of 5 or more consecutive `//` or `///` comment lines. Long explanations belong in external documentation linked via doc anchors.
 
@@ -144,14 +125,14 @@ Exemptions:
 **Severity**: warn  
 **Goal**: zero warnings, then promote to error.
 
-### 3.6 Single-Letter Variables (`guardrails_single_letter_vars`)
+### 3.5 Single-Letter Variables (`guardrails_single_letter_vars`)
 
 **Standard**: No single-letter bindings (`a`, `b`, `i`, `x`, etc.) outside tiny scopes (≤3 statements).
 
 **Severity**: warn  
 **Current status**: zero violations.
 
-### 3.7 File Length (`guardrails_file_length_src`, `guardrails_file_length_tests`)
+### 3.6 File Length (`guardrails_file_length_src`, `guardrails_file_length_tests`)
 
 **Standard**: No `.rs` file may exceed 2,000 non-blank lines.
 
