@@ -240,7 +240,10 @@ async fn test_edit_history_handler_success() {
         .await
         .unwrap();
     let body_str = String::from_utf8_lossy(&body);
-    assert!(body_str.contains("Edited"), "Expected success message: {body_str}");
+    assert!(
+        body_str.contains("Edited"),
+        "Expected success message: {body_str}"
+    );
 }
 
 #[tokio::test]
@@ -392,7 +395,10 @@ async fn test_action_sync_inventory() {
 
     assert!(response.status().is_success());
     let hx_trigger = response.headers().get("HX-Trigger");
-    assert!(hx_trigger.is_some(), "Expected HX-Trigger header for sync action");
+    assert!(
+        hx_trigger.is_some(),
+        "Expected HX-Trigger header for sync action"
+    );
 }
 
 #[tokio::test]
@@ -412,7 +418,10 @@ async fn test_action_sync_quit() {
 
     assert!(response.status().is_success());
     let hx_trigger = response.headers().get("HX-Trigger");
-    assert!(hx_trigger.is_some(), "Expected HX-Trigger header for sync action");
+    assert!(
+        hx_trigger.is_some(),
+        "Expected HX-Trigger header for sync action"
+    );
 }
 
 #[tokio::test]

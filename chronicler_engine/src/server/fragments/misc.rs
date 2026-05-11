@@ -5,7 +5,6 @@ use axum::{
     body::Body,
     extract::{Form, State},
     http::StatusCode,
-    response::Html,
 };
 
 use crate::model::settings::TextCheckMode;
@@ -14,14 +13,12 @@ use crate::narrative::text_check::check_player_input;
 use crate::server::AppState;
 use crate::server::templates::TextCheckPreviewTemplate;
 
-use super::renderers::{
-    render_action_area, render_error, render_header, render_story_log, render_visual_sidebar,
-};
+use super::renderers::render_error;
 
 /// [DOC: docs/system/text_check.md]
 #[allow(clippy::expect_used)]
 pub async fn check_text_handler(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Form(form): Form<super::actions::ActionForm>,
 ) -> axum::response::Response<Body> {
     let text = form.command.trim().to_string();
@@ -34,7 +31,7 @@ pub async fn check_text_handler(
             .expect("static response body is valid");
     }
 
-    let settings = _state.settings();
+    let settings = state.settings();
 
     if settings.text_check.mode == TextCheckMode::Disabled {
         return axum::response::Response::builder()
@@ -78,12 +75,38 @@ pub async fn check_text_handler(
 
 /// [DOC: docs/system/game_flow.md]
 pub async fn retry_handler(State(state): State<AppState>) -> (StatusCode, String) {
-    let has_input = match state.load_state() {
-        Ok(g) => g.get_last_input_text().is_some(),
-        Err(_) => false,
+    let snapshot = match state.snapshot_storage.load_latest(None) {
+        Ok(Some(s)) => s,
+        _ => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                render_error("Failed to load state"),
+            );
+        }
     };
-    if !has_input {
+
+    let mut game_state = GameState::from_snapshot(
+        &snapshot,
+        Arc::clone(&state.world),
+        Arc::clone(&state.map),
+        Arc::clone(&state.player),
+        (*state.npcs).clone(),
+    );
+
+    if game_state.get_last_input_text().is_none() {
         return (StatusCode::BAD_REQUEST, render_error("No input to retry"));
+    }
+
+    game_state.narrative.generation.status = crate::model::state::GenerationStatus::Generating;
+    game_state.narrative.generation.phase = crate::model::state::GenerationPhase::Narrating;
+    let new_swipe = snapshot.swipe_index + 1;
+    let generating_snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
+        &game_state,
+        snapshot.message_id.clone(),
+        new_swipe,
+    );
+    if let Err(e) = state.snapshot_storage.save(&generating_snapshot) {
+        log::error!("Failed to save retry snapshot: {e}");
     }
 
     let ctx = state.as_game_service_context();
@@ -113,21 +136,41 @@ pub async fn retry_handler(State(state): State<AppState>) -> (StatusCode, String
 }
 
 /// [DOC: docs/system/game_flow.md]
-pub async fn reset_handler(State(state): State<AppState>) -> Html<String> {
+#[allow(clippy::expect_used)]
+pub async fn reset_handler(State(state): State<AppState>) -> axum::response::Response<Body> {
     state.cancel_token.cancel();
 
     if let Err(e) = state.snapshot_storage.reset() {
         log::error!("Reset failed: {e}");
-        return Html(render_error(&e.to_string()));
+        return axum::response::Response::builder()
+            .status(StatusCode::INTERNAL_SERVER_ERROR)
+            .body(Body::from(render_error(&e.to_string())))
+            .expect("static response body is valid");
     }
 
-    let initial_state = GameState::new(
+    let mut initial_state = GameState::new(
         Arc::clone(&state.world),
         Arc::clone(&state.map),
         Arc::clone(&state.player),
         (*state.npcs).values().cloned().collect(),
         state.starting_room_id.clone(),
     );
+
+    // Re-inject scenario text so reset produces the same initial state as startup.
+    if let Some(text) = &state.scenario_text {
+        let room_name =
+            crate::engine::logic::find_room_in_world_map(&initial_state, &state.starting_room_id)
+                .map(|r| r.name.clone())
+                .unwrap_or_else(|| state.starting_room_id.clone());
+
+        initial_state.add_log(
+            String::new(),
+            Some(room_name),
+            crate::model::state::LogType::Narration,
+        );
+        let text = text.replace("{{user}}", &state.player.sheet.name);
+        initial_state.add_log(text, None, crate::model::state::LogType::Narration);
+    }
 
     let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
         &initial_state,
@@ -136,10 +179,9 @@ pub async fn reset_handler(State(state): State<AppState>) -> Html<String> {
     );
     let _ = state.snapshot_storage.save(&snapshot);
 
-    let header = render_header(&state).unwrap_or_default();
-    let story = render_story_log(&state).unwrap_or_default();
-    let sidebar = render_visual_sidebar(&state).unwrap_or_default();
-    let action = render_action_area(&state).unwrap_or_default();
-
-    Html(format!("{header}{story}{sidebar}{action}"))
+    axum::response::Response::builder()
+        .status(StatusCode::OK)
+        .header("HX-Refresh", "true")
+        .body(Body::empty())
+        .expect("static response body is valid")
 }

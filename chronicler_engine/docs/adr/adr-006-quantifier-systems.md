@@ -167,6 +167,7 @@ Comparing previous vs current NPC presence in area:
 - **2026-04-17**: Quantified NPCs sidebar
 - **2026-04-18**: Reactive auto-trigger movement
 - **2026-05-01**: NPC Event Layer (see npc-event-layer.md plan)
+- **2026-05-10**: Quantifier migrated to `Agent` trait architecture (see ADR-009)
 
 ---
 

@@ -215,6 +215,7 @@
         }
         
         function submitRetry() {
+            updateToThinking();
             fetch('/retry', { method: 'POST' })
                 .then(response => response.text())
                 .then(() => {

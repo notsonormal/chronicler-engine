@@ -112,11 +112,30 @@ pub struct MovementState {
     pub dynamic_rooms: HashMap<String, Room>,
 }
 
+/// Serializable trigger metadata stored in [`NarrativeState`].
+///
+/// This struct mirrors the data fields of [`TriggerContinuationRequest`]
+/// (defined in `action_processing.rs`), but is pure data without the
+/// runtime `llm_backend` reference, making it serializable for snapshot
+/// storage.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct StoredTriggerContext {
+    pub npc_id: String,
+    pub trigger_idx: usize,
+    pub trigger_name: String,
+    pub trigger_repeat: bool,
+    pub trigger_narration_prompt: String,
+    pub system_prompt: String,
+    pub user_prompt: String,
+    pub max_tokens: Option<u32>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct NarrativeState {
     pub history: Vec<LogEntry>,
     pub next_log_id: u64,
     pub generation: GenerationState,
+    pub last_trigger: Option<StoredTriggerContext>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -202,6 +221,7 @@ impl GameState {
                 history: Vec::new(),
                 next_log_id: 1,
                 generation: GenerationState::default(),
+                last_trigger: None,
             },
             scene: SceneState {
                 npcs_in_area: Vec::new(),
@@ -284,6 +304,24 @@ impl GameState {
 
     pub fn get_history_context(&self) -> &[LogEntry] {
         &self.narrative.history
+    }
+
+    /// [DOC: docs/architecture/system.md]
+    /// Returns true if the last AI response is an event continuation
+    /// (i.e. there is an Event log entry between the last Input and last AI response).
+    pub fn is_last_ai_response_event_continuation(&self) -> bool {
+        let Some(input_idx) = self.get_last_input_index() else {
+            return false;
+        };
+        let Some(ai_idx) = self.get_last_ai_response_index() else {
+            return false;
+        };
+        if ai_idx <= input_idx {
+            return false;
+        }
+        self.narrative.history[input_idx + 1..ai_idx]
+            .iter()
+            .any(|e| e.log_type == LogType::Event)
     }
 
     /// [DOC: docs/architecture/system.md]

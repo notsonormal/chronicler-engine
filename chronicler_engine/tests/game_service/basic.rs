@@ -171,5 +171,3 @@ fn test_default_game_service_with_mock_quantifier() {
     let guard = crate::latest_state(&ctx);
     assert!(!guard.narrative.generation.status.is_generating());
 }
-
-

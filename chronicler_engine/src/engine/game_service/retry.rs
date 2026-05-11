@@ -1,140 +1,228 @@
 use std::sync::Arc;
 
-use crate::engine::logic::{find_room_in_map, get_current_room};
-use crate::model::character::NpcCard;
+use crate::engine::game_service::actions::execute_freeaction_pipeline;
 use crate::model::state::{GameState, GenerationPhase, GenerationStatus};
-use crate::narrative::prompt::make_prompt_context;
 
 use super::context::GameServiceContext;
-use super::helpers::{load_state, map_llm_error, save_state};
+use super::helpers::{load_state, save_state};
 use super::service::DefaultGameService;
 
 /// [DOC: docs/architecture/system.md]
 pub fn retry_last_response_impl(service: &DefaultGameService, ctx: GameServiceContext) {
-    let (
-        input_text,
-        snapshot_message_id,
-        snapshot_swipe_index,
-        world,
-        map,
-        player,
-        all_npcs,
-        room_npc_ids,
-        history_for_retry,
-        current_room_id,
-    ) = {
-        let snapshot = match ctx.snapshot_storage.load_latest(None) {
-            Ok(Some(s)) => s,
-            _ => {
-                log::error!("No snapshot to retry");
-                return;
-            }
-        };
-
-        let guard = GameState::from_snapshot(
-            &snapshot,
-            Arc::clone(&ctx.world),
-            Arc::clone(&ctx.map),
-            Arc::clone(&ctx.player),
-            (*ctx.npcs).clone(),
-        );
-
-        let input_text = match guard.get_last_input_text() {
-            Some((_sender, text)) => text,
-            None => {
-                log::error!("No input to retry");
-                return;
-            }
-        };
-
-        let room_npc_ids = match get_current_room(&guard) {
-            Ok(room) => room.npcs.clone(),
-            Err(_) => vec![],
-        };
-
-        (
-            input_text,
-            snapshot.message_id,
-            snapshot.swipe_index,
-            Arc::clone(&guard.world),
-            Arc::clone(&guard.map),
-            Arc::clone(&guard.player),
-            guard.npcs.values().cloned().collect::<Vec<_>>(),
-            room_npc_ids,
-            guard.get_history_context_for_retry(),
-            guard.movement.current_room_id.clone(),
-        )
+    let snapshot = match ctx.snapshot_storage.load_latest(None) {
+        Ok(Some(s)) => s,
+        _ => {
+            log::error!("No snapshot to retry");
+            return;
+        }
     };
 
-    let backend = Arc::clone(&service.llm_backend);
-
-    let Some(room) = find_room_in_map(&map, &current_room_id) else {
-        let mut state = load_state(&ctx);
-        state.narrative.generation.status =
-            GenerationStatus::Error("Retry failed: room not found".to_string());
-        save_state(
-            &ctx,
-            &state,
-            snapshot_message_id.clone(),
-            snapshot_swipe_index + 1,
-        );
-        return;
-    };
-
-    let nearby_npcs: Vec<NpcCard> = all_npcs
-        .iter()
-        .filter(|npc| room_npc_ids.contains(&npc.id))
-        .cloned()
-        .collect();
-    let context = make_prompt_context(
-        &world,
-        room,
-        &all_npcs,
-        &nearby_npcs,
-        &player,
-        &input_text,
-        &history_for_retry,
+    let guard = GameState::from_snapshot(
+        &snapshot,
+        Arc::clone(&ctx.world),
+        Arc::clone(&ctx.map),
+        Arc::clone(&ctx.player),
+        (*ctx.npcs).clone(),
     );
 
-    let new_narration = match backend.narrate_action(&context) {
-        Ok(t) => t,
+    let input_text = match guard.get_last_input_text() {
+        Some((_sender, text)) => text,
+        None => {
+            log::error!("No input to retry");
+            return;
+        }
+    };
+
+    let turn_uuid = snapshot.message_id.clone();
+    let current_swipe = snapshot.swipe_index;
+    let is_event = guard.is_last_ai_response_event_continuation();
+
+    if is_event {
+        retry_event_continuation(service, &ctx, &turn_uuid, current_swipe, &guard);
+    } else {
+        retry_main_narration(service, &ctx, &turn_uuid, current_swipe, input_text);
+    }
+}
+
+fn save_retry_error(
+    ctx: &GameServiceContext,
+    turn_uuid: &str,
+    swipe: u32,
+    message: impl Into<String>,
+) {
+    let mut state = load_state(ctx);
+    state.narrative.generation.status = GenerationStatus::Error(message.into());
+    save_state(ctx, &state, turn_uuid.to_string(), swipe);
+}
+
+fn retry_event_continuation(
+    service: &DefaultGameService,
+    ctx: &GameServiceContext,
+    turn_uuid: &str,
+    current_swipe: u32,
+    latest_state: &GameState,
+) {
+    let pre_event_id = format!("pre-event:{turn_uuid}");
+    let pre_event_snapshot = match ctx.snapshot_storage.load_by_message(&pre_event_id, 0) {
+        Ok(Some(s)) => s,
+        Ok(None) => {
+            log::warn!(
+                "No pre-event snapshot for {turn_uuid}; falling back to main narration retry"
+            );
+            let input_text = match latest_state.get_last_input_text() {
+                Some((_sender, text)) => text,
+                None => {
+                    log::error!("No input to retry");
+                    return;
+                }
+            };
+            retry_main_narration(service, ctx, turn_uuid, current_swipe, input_text);
+            return;
+        }
         Err(e) => {
-            let mut state = load_state(&ctx);
-            state.narrative.generation.status = GenerationStatus::Error(map_llm_error(&e));
-            save_state(
-                &ctx,
-                &state,
-                snapshot_message_id.clone(),
-                snapshot_swipe_index + 1,
+            log::error!("Failed to load pre-event snapshot: {e}");
+            save_retry_error(
+                ctx,
+                turn_uuid,
+                current_swipe + 1,
+                format!("Retry failed: {e}"),
             );
             return;
         }
     };
 
-    if new_narration.trim().is_empty() {
-        let mut state = load_state(&ctx);
-        state.narrative.generation.status =
-            GenerationStatus::Error("LLM Error: empty response".to_string());
-        save_state(
-            &ctx,
-            &state,
-            snapshot_message_id.clone(),
-            snapshot_swipe_index + 1,
+    let mut pre_event_state = GameState::from_snapshot(
+        &pre_event_snapshot,
+        Arc::clone(&ctx.world),
+        Arc::clone(&ctx.map),
+        Arc::clone(&ctx.player),
+        (*ctx.npcs).clone(),
+    );
+
+    let trigger = match pre_event_state.narrative.last_trigger.clone() {
+        Some(t) => t,
+        None => {
+            log::error!("Pre-event snapshot missing trigger context");
+            save_retry_error(
+                ctx,
+                turn_uuid,
+                current_swipe + 1,
+                "Retry failed: missing trigger context",
+            );
+            return;
+        }
+    };
+
+    pre_event_state.narrative.generation.status = GenerationStatus::Generating;
+    pre_event_state.narrative.generation.phase = GenerationPhase::GeneratingEvent;
+    save_state(
+        ctx,
+        &pre_event_state,
+        turn_uuid.to_string(),
+        current_swipe + 1,
+    );
+
+    let backend = Arc::clone(&service.llm_backend);
+    let continuation_text = match backend.narrate_action_from_prompt(
+        &trigger.system_prompt,
+        &trigger.user_prompt,
+        trigger.max_tokens,
+    ) {
+        Ok(t) => t,
+        Err(e) => {
+            log::error!("Trigger narration retry failed: {e}");
+            save_retry_error(
+                ctx,
+                turn_uuid,
+                current_swipe + 1,
+                format!("Retry failed: {e}"),
+            );
+            return;
+        }
+    };
+
+    if continuation_text.trim().is_empty() {
+        save_retry_error(
+            ctx,
+            turn_uuid,
+            current_swipe + 1,
+            "LLM Error: empty response",
         );
         return;
     }
 
-    let mut state = load_state(&ctx);
-    if let Err(e) = state.replace_last_ai_response(new_narration) {
-        state.narrative.generation.status = GenerationStatus::Error(format!("Retry failed: {e}"));
-    } else {
-        state.narrative.generation.status = GenerationStatus::Idle;
-        state.narrative.generation.phase = GenerationPhase::default();
-    }
+    let request = crate::engine::action_processing::TriggerContinuationRequest { stored: trigger };
+
+    let mut committed_state = match crate::engine::action_processing::commit_trigger_narration(
+        load_state(ctx),
+        &request,
+        &continuation_text,
+    ) {
+        Ok(s) => s,
+        Err(e) => {
+            log::error!("Trigger commit failed on retry: {e}");
+            pre_event_state.narrative.generation.status =
+                GenerationStatus::Error(format!("Trigger error: {e}"));
+            pre_event_state
+        }
+    };
+
+    committed_state.narrative.generation.status = GenerationStatus::Idle;
+    committed_state.narrative.generation.phase = GenerationPhase::default();
     save_state(
-        &ctx,
-        &state,
-        snapshot_message_id.clone(),
-        snapshot_swipe_index + 1,
+        ctx,
+        &committed_state,
+        turn_uuid.to_string(),
+        current_swipe + 1,
+    );
+}
+
+fn retry_main_narration(
+    service: &DefaultGameService,
+    ctx: &GameServiceContext,
+    turn_uuid: &str,
+    current_swipe: u32,
+    input_text: String,
+) {
+    let pre_main_id = format!("pre-main:{turn_uuid}");
+    let pre_main_snapshot = match ctx.snapshot_storage.load_by_message(&pre_main_id, 0) {
+        Ok(Some(s)) => s,
+        Ok(None) => {
+            log::error!("No pre-main snapshot for {turn_uuid}");
+            save_retry_error(
+                ctx,
+                turn_uuid,
+                current_swipe + 1,
+                "Retry failed: no pre-generation snapshot found",
+            );
+            return;
+        }
+        Err(e) => {
+            log::error!("Failed to load pre-main snapshot: {e}");
+            save_retry_error(
+                ctx,
+                turn_uuid,
+                current_swipe + 1,
+                format!("Retry failed: {e}"),
+            );
+            return;
+        }
+    };
+
+    let state = GameState::from_snapshot(
+        &pre_main_snapshot,
+        Arc::clone(&ctx.world),
+        Arc::clone(&ctx.map),
+        Arc::clone(&ctx.player),
+        (*ctx.npcs).clone(),
+    );
+
+    execute_freeaction_pipeline(
+        service,
+        ctx,
+        state,
+        turn_uuid.to_string(),
+        input_text,
+        current_swipe + 1,
     );
 }

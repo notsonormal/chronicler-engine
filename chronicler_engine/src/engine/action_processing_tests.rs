@@ -181,12 +181,12 @@ fn test_execute_freeaction_impl_returns_trigger_request_when_trigger_matches() {
         "Should return TriggerContinuationRequest when trigger matches"
     );
     let request = trigger_request.unwrap();
-    assert_eq!(request.trigger_name, "Carla Introduction");
-    assert_eq!(request.npc_id, "carla");
-    assert!(!request.trigger_repeat);
+    assert_eq!(request.stored.trigger_name, "Carla Introduction");
+    assert_eq!(request.stored.npc_id, "carla");
+    assert!(!request.stored.trigger_repeat);
     // Prompts should be non-empty after successful build
-    assert!(!request.system_prompt.is_empty());
-    assert!(!request.user_prompt.is_empty());
+    assert!(!request.stored.system_prompt.is_empty());
+    assert!(!request.stored.user_prompt.is_empty());
 }
 
 #[test]
@@ -456,13 +456,16 @@ fn test_commit_trigger_narration_adds_event_header_and_narration() {
     let state = make_test_state();
 
     let request = TriggerContinuationRequest {
-        npc_id: "carla".to_string(),
-        trigger_idx: 0,
-        trigger_name: "Carla Introduction".to_string(),
-        trigger_repeat: false,
-        system_prompt: "sys".to_string(),
-        user_prompt: "user".to_string(),
-        max_tokens: None,
+        stored: crate::model::state::StoredTriggerContext {
+            npc_id: "carla".to_string(),
+            trigger_idx: 0,
+            trigger_name: "Carla Introduction".to_string(),
+            trigger_repeat: false,
+            trigger_narration_prompt: "Carla appears".to_string(),
+            system_prompt: "sys".to_string(),
+            user_prompt: "user".to_string(),
+            max_tokens: None,
+        },
     };
 
     let state =
@@ -485,13 +488,16 @@ fn test_commit_trigger_narration_marks_non_repeat_trigger_fired() {
     let state = make_test_state();
 
     let request = TriggerContinuationRequest {
-        npc_id: "carla".to_string(),
-        trigger_idx: 0,
-        trigger_name: "Carla Introduction".to_string(),
-        trigger_repeat: false,
-        system_prompt: "sys".to_string(),
-        user_prompt: "user".to_string(),
-        max_tokens: None,
+        stored: crate::model::state::StoredTriggerContext {
+            npc_id: "carla".to_string(),
+            trigger_idx: 0,
+            trigger_name: "Carla Introduction".to_string(),
+            trigger_repeat: false,
+            trigger_narration_prompt: "Carla appears".to_string(),
+            system_prompt: "sys".to_string(),
+            user_prompt: "user".to_string(),
+            max_tokens: None,
+        },
     };
 
     let state = commit_trigger_narration(state, &request, "Some text.").unwrap();
@@ -507,13 +513,16 @@ fn test_commit_trigger_narration_does_not_mark_repeat_trigger_fired() {
     let state = make_test_state();
 
     let request = TriggerContinuationRequest {
-        npc_id: "carla".to_string(),
-        trigger_idx: 0,
-        trigger_name: "Carla Greeting".to_string(),
-        trigger_repeat: true,
-        system_prompt: "sys".to_string(),
-        user_prompt: "user".to_string(),
-        max_tokens: None,
+        stored: crate::model::state::StoredTriggerContext {
+            npc_id: "carla".to_string(),
+            trigger_idx: 0,
+            trigger_name: "Carla Greeting".to_string(),
+            trigger_repeat: true,
+            trigger_narration_prompt: "Carla greets".to_string(),
+            system_prompt: "sys".to_string(),
+            user_prompt: "user".to_string(),
+            max_tokens: None,
+        },
     };
 
     let state = commit_trigger_narration(state, &request, "Some text.").unwrap();
@@ -529,13 +538,16 @@ fn test_commit_trigger_narration_empty_text_is_noop() {
     let state = make_test_state();
 
     let request = TriggerContinuationRequest {
-        npc_id: "carla".to_string(),
-        trigger_idx: 0,
-        trigger_name: "Carla Introduction".to_string(),
-        trigger_repeat: false,
-        system_prompt: "sys".to_string(),
-        user_prompt: "user".to_string(),
-        max_tokens: None,
+        stored: crate::model::state::StoredTriggerContext {
+            npc_id: "carla".to_string(),
+            trigger_idx: 0,
+            trigger_name: "Carla Introduction".to_string(),
+            trigger_repeat: false,
+            trigger_narration_prompt: "Carla appears".to_string(),
+            system_prompt: "sys".to_string(),
+            user_prompt: "user".to_string(),
+            max_tokens: None,
+        },
     };
 
     let state = commit_trigger_narration(state, &request, "").unwrap();
@@ -543,6 +555,42 @@ fn test_commit_trigger_narration_empty_text_is_noop() {
 
     let state = commit_trigger_narration(state, &request, "   ").unwrap();
     assert!(state.narrative.history.is_empty());
+}
+
+#[test]
+fn test_commit_trigger_narration_stores_trigger_context() {
+    let state = make_test_state();
+
+    let request = TriggerContinuationRequest {
+        stored: crate::model::state::StoredTriggerContext {
+            npc_id: "carla".to_string(),
+            trigger_idx: 0,
+            trigger_name: "Carla Introduction".to_string(),
+            trigger_repeat: false,
+            trigger_narration_prompt: "Carla appears from shadows".to_string(),
+            system_prompt: "system prompt text".to_string(),
+            user_prompt: "user prompt text".to_string(),
+            max_tokens: Some(512),
+        },
+    };
+
+    let state = commit_trigger_narration(state, &request, "Carla emerges.").unwrap();
+
+    let trigger = state
+        .narrative
+        .last_trigger
+        .expect("last_trigger should be set");
+    assert_eq!(trigger.npc_id, "carla");
+    assert_eq!(trigger.trigger_idx, 0);
+    assert_eq!(trigger.trigger_name, "Carla Introduction");
+    assert!(!trigger.trigger_repeat);
+    assert_eq!(
+        trigger.trigger_narration_prompt,
+        "Carla appears from shadows"
+    );
+    assert_eq!(trigger.system_prompt, "system prompt text");
+    assert_eq!(trigger.user_prompt, "user prompt text");
+    assert_eq!(trigger.max_tokens, Some(512));
 }
 
 // ─── Property-based tests ────────────────────────────────────────────────────

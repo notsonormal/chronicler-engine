@@ -24,13 +24,25 @@ fn test_commit_sets_committed_flag() {
 
     storage.save(&snap).expect("save should succeed");
 
-    let loaded_before = storage.load_latest(None).expect("load should succeed").unwrap();
-    assert!(!loaded_before.committed, "new snapshot should not be committed");
+    let loaded_before = storage
+        .load_latest(None)
+        .expect("load should succeed")
+        .unwrap();
+    assert!(
+        !loaded_before.committed,
+        "new snapshot should not be committed"
+    );
 
     storage.commit(&snap_id).expect("commit should succeed");
 
-    let loaded_after = storage.load_latest(None).expect("load should succeed").unwrap();
-    assert!(loaded_after.committed, "committed should be true after commit");
+    let loaded_after = storage
+        .load_latest(None)
+        .expect("load should succeed")
+        .unwrap();
+    assert!(
+        loaded_after.committed,
+        "committed should be true after commit"
+    );
 }
 
 #[test]
@@ -42,7 +54,10 @@ fn test_reset_deletes_all_snapshots() {
     storage.reset().expect("reset should succeed");
 
     let loaded = storage.load_latest(None).expect("load should succeed");
-    assert!(loaded.is_none(), "load_latest should return None after reset");
+    assert!(
+        loaded.is_none(),
+        "load_latest should return None after reset"
+    );
 }
 
 #[test]
@@ -54,7 +69,10 @@ fn test_load_by_message_found() {
     let loaded = storage
         .load_by_message("msg1", 2)
         .expect("load should succeed");
-    assert!(loaded.is_some(), "should find snapshot by message_id and swipe_index");
+    assert!(
+        loaded.is_some(),
+        "should find snapshot by message_id and swipe_index"
+    );
     assert_eq!(loaded.unwrap().message_id, "msg1");
 }
 
@@ -66,12 +84,18 @@ fn test_load_by_message_not_found() {
     let loaded = storage
         .load_by_message("msg2", 0)
         .expect("load should succeed");
-    assert!(loaded.is_none(), "should return None for missing message_id");
+    assert!(
+        loaded.is_none(),
+        "should return None for missing message_id"
+    );
 
     let loaded2 = storage
         .load_by_message("msg1", 99)
         .expect("load should succeed");
-    assert!(loaded2.is_none(), "should return None for missing swipe_index");
+    assert!(
+        loaded2.is_none(),
+        "should return None for missing swipe_index"
+    );
 }
 
 #[test]

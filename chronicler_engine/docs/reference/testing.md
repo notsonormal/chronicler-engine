@@ -1,12 +1,12 @@
 # Specification: Testing Strategy and Architecture
 
 ## Objective
-Establish a formal policy and architectural design pattern for ensuring the Chronicler Engine remains heavily tested locally without incurring financial costs or massive latency from interacting with external LLM APIs (like OpenRouter).
+Establish a formal policy for ensuring the Chronicler Engine remains heavily tested locally without incurring costs or latency from external LLM APIs.
 
 ## Policy Rules
-1. **Isolated Unit Tests**: All modules (`parser`, `map`, `state`) maintain fully isolated unit tests `#[test]` that evaluate standard library behaviors with zero networking overhead. Unit tests live in separate `*_tests.rs` sibling files (not inline `#[cfg(test)]` blocks) to keep source files under the 2,000-line guardrail.
-2. **Integration Capabilities**: As the engine develops, an overarching `tests/` directory will be required. These integration tests will evaluate the state graph moving from end-to-end.
-3. **LLM Abstraction (The Trait Pattern)**: No component outside of the executable `main.rs` loop should ever be hardcoded to contact OpenRouter.
+1. **Isolated Unit Tests**: All modules maintain fully isolated unit tests `#[test]` with zero networking overhead. Unit tests live in separate `*_tests.rs` sibling files (not inline `#[cfg(test)]` blocks) to keep source files under the 2,000-line guardrail.
+2. **Integration Capabilities**: Cross-module and end-to-end tests live in the top-level `tests/` directory.
+3. **LLM Abstraction (The Trait Pattern)**: No component outside of `main.rs` should be hardcoded to contact an external LLM API. Use `MockBackend` and `MockQuantifierBackend` for tests.
 
 ## Test File Organization
 
@@ -18,15 +18,13 @@ Unit tests are co-located with source code in separate `*_tests.rs` files:
 src/
 ├── engine/
 │   ├── logic.rs
-│   ├── logic_tests.rs          ← unit tests for logic.rs
-│   ├── parser.rs
-│   └── parser_tests.rs         ← unit tests for parser.rs
+│   └── logic_tests.rs
 ├── model/
 │   ├── state.rs
-│   └── state_tests.rs          ← unit tests for state.rs
+│   └── state_tests.rs
 └── narrative/
     ├── llm_client.rs
-    └── llm_client_tests.rs     ← unit tests for llm_client.rs
+    └── llm_client_tests.rs
 ```
 
 Parent `mod.rs` declares the test module:
@@ -36,335 +34,87 @@ Parent `mod.rs` declares the test module:
 mod logic_tests;
 ```
 
-Benefits:
-- Source files stay under the 2,000-line file-length limit
-- Tests compile in parallel with `cargo nextest`
-- Clear 1:1 mapping between source and test file
-
 ### Integration Tests (`tests/` Directory)
 
 Cross-module and browser-based tests live in the top-level `tests/` directory:
 
-| Test File | Purpose | Execution Model | Runtime |
-|----------|---------|---------------|---------|
-| `architecture.rs` | Architecture guardrails (arch-lint, no-unwrap, layer enforcement) | In-process | Very Fast |
-| `components.rs` | Templates, endpoints, settings, validation | In-process | Very Fast |
-| `browser.rs` | UI structure, layouts, interactions | Browser | Medium |
-| `flow_mock_tests.rs` | Core game loop, polling | Browser + Mock LLM | Fast |
-| `flow_llm_tests.rs` | LLM narrative | Browser + Real LLM | Slow |
-| `game_service_tests.rs` | Game service logic, DI, retry, error resilience, quantifier integration | In-process | Very Fast |
-| `guardrails.rs` | Custom guardrails (what-comments, import order, single-letter vars, file length) | In-process | Very Fast |
-| `logic_tests.rs` | Movement, room resolution, fuzzy matching | In-process | Very Fast |
-| `text_check_tests.rs` | Spell/grammar checking with harper-core | In-process | Very Fast |
-| `test_data.rs` | Shared test fixtures (world, map, game state builders) | In-process | Very Fast |
-| `trigger_tests.rs` | Trigger evaluation and firing | Browser + Mock LLM | Fast |
+| Test File | Purpose | Execution Model |
+|-----------|---------|-----------------|
+| `architecture.rs` | Architecture guardrails (arch-lint, layer enforcement) | In-process |
+| `components.rs` | Templates, endpoints, settings, validation | In-process |
+| `browser.rs` | UI structure, layouts, interactions | Browser |
+| `flow_mock_tests.rs` | Core game loop with mock LLM | Browser + Mock LLM |
+| `flow_llm_tests.rs` | LLM narrative smoke tests | Browser + Real LLM |
+| `game_service_tests.rs` | Game service logic, DI, retry, snapshots | In-process |
+| `guardrails.rs` | Custom convention tests (imports, comments, file length) | In-process |
+| `logic_tests.rs` | Movement, room resolution, fuzzy matching | In-process |
+| `text_check_tests.rs` | Spell/grammar checking with harper-core | In-process |
+| `trigger_tests.rs` | Trigger evaluation and firing | Browser + Mock LLM |
 
-## The `LlmBackend` Interface
-To satisfy the LLM Abstraction policy, `llm.rs` must implement an interface:
+## Backend Selection
+
+### Dependency Injection (Recommended)
+
+Pass mock backends directly to `DefaultGameService`:
+
 ```rust
-pub trait LlmBackend: Send + Sync {
-    fn generate_dialogue(&self, context: &PromptContext, npc: &NpcCard) -> Result<String, EngineError>;
-    fn narrate_action(&self, context: &PromptContext) -> Result<String, EngineError>;
-    fn narrate_arrival(&self, context: &PromptContext) -> Result<String, EngineError>;
-    fn narrate_continuation(&self, system_prompt: &str, user_prompt: &str, trigger_prompt: &str) -> Result<String, EngineError>;
-    fn narrate_action_from_prompt(&self, system_prompt: &str, user_prompt: &str) -> Result<String, EngineError>;
-    fn name(&self) -> &str;
-}
+let service = DefaultGameService::with_backends(
+    Arc::new(MockBackend),
+    Arc::new(MockQuantifierBackend::default()),
+);
 ```
 
-The engine will provide multiple implementations of this trait:
-- `OpenRouterBackend`: Used by the live executable. Contacts the HTTP API using `reqwest` and parses the JSON response.
-- `MockBackend`: Used in test scenarios. Returns static mock responses immediately.
-- `DeepSeekBackend`: Placeholder for future implementation.
+### Config File (`tests/test_config.json`)
 
-### Backend Selection
-The LLM backend can be selected in three ways:
+For integration tests that need environment-specific overrides.
 
-1. **Dependency Injection** (Recommended for unit tests): Pass mock backends directly to `DefaultGameService`
-   ```rust
-   use chronicler_engine::engine::game_service::DefaultGameService;
-   use chronicler_engine::narrative::llm::MockBackend;
-   use chronicler_engine::narrative::quantifier::MockQuantifierBackend;
-   use std::sync::Arc;
+### Mock Settings File
 
-   #[test]
-   fn test_with_mock_llm() {
-       let service = DefaultGameService::with_backends(
-           Arc::new(MockBackend),
-           Arc::new(MockQuantifierBackend::default()),
-       );
-       // Test code here uses injected mocks directly — no globals, no file I/O
-   }
-   ```
-   - Thread-safe (`Arc<dyn Trait>`)
-   - No file I/O required
-   - No global state — tests are fully isolated
-   - Works in both unit tests and integration tests
+Integration tests write a temporary `settings.json` with Mock connections and set `CHRONICLER_SETTINGS_PATH`.
 
-2. **Config File** (`tests/test_config.json`): For integration tests
-   ```json
-   {
-     "port_range": {"min": 3010, "max": 3030},
-     "default_backend": "mock",
-     "test_specific": {
-       "flow_llm_tests": {"backend": "real"}
-     }
-   }
-   ```
-3. **Mock Settings File**: Integration tests write a temporary settings file with Mock connections and set `CHRONICLER_SETTINGS_PATH` to point to it. This is the preferred approach for subprocess-based tests.
+## Running Tests
 
-The `get_llm_backend()` function checks the test override first, then falls back to the narration connection from `settings.json`.
+```bash
+# Fast suite (default; LLM tests excluded)
+cargo test
+python build.py
+
+# Include slow LLM tests
+cargo test -- --ignored
+python build.py --include-llm
+
+# Run only LLM tests
+cargo test --test flow_llm_tests -- --ignored
+python build.py --llm-only
+
+# Specific suites
+cargo test --test components
+cargo test --test browser
+cargo test --test flow_mock_tests
+```
 
 ## UI Tests
 
-UI tests use **playwright-rs** (Rust bindings for Microsoft Playwright) for browser automation testing.
+UI tests use **playwright-rs** for browser automation. Requires Node.js 18+ and Chromium installed via `npx playwright install chromium`.
 
-### Running UI Tests
-
-```bash
-# Install Playwright browsers first (requires Node.js)
-npx playwright install chromium
-
-# Default: fast suite (LLM tests excluded)
-cargo test
-cargo nextest run
-python build.py
-
-# Include slow LLM tests in full suite
-cargo test -- --ignored
-cargo nextest run --run-ignored all
-python build.py --include-llm
-
-# Run ONLY the LLM tests (focused validation)
-cargo test --test flow_llm_tests -- --ignored
-cargo nextest run --run-ignored all --test flow_llm_tests
-python build.py --llm-only
-
-# Run specific non-LLM test suites
-cargo test --test components   # In-process tests (fast)
-cargo test --test browser         # Browser tests
-cargo test --test flow_mock_tests   # Fast tests with mock LLM
-
-# Run with single thread (recommended for tests sharing ports)
-cargo test -- --test-threads=1
-```
-
-### Test Requirements
-- Node.js 18+ (for Playwright browser installation)
-- Chromium browser installed via `npx playwright install chromium`
-
-
-
-### Test Coverage
-
-**components.rs** (52 tests):
-- XSS security (template escaping)
-- Template rendering
-- HTTP endpoint responses (game fragments)
-- Status endpoint phase responses (`narrating`, `quantifying`)
-- Validation (empty command rejection)
-- Settings UI integration (16+ tests)
-
-**browser.rs** (24 tests):
-- Page loads, UI structure
-- Action area elements
-- Story log functionality
-- Layout positioning
-- Visual sidebar
-- Edit mode and retry functionality
-- Delete button exists and removes messages
-
-**flow_mock_tests.rs** (5 tests):
-- Initial load (header, story-log, status)
-- Connection status indicator
-- Command submission
-- Polling mechanism
-- Double-submit protection (frontend disables submit button during generation)
-
-**flow_llm_tests.rs** (2 tests):
-- Real LLM smoke test: verifies API connectivity and basic completion
-- Multi-step stability: verifies server remains healthy after sequential real LLM calls
-
-**guardrails.rs** (11 tests):
-- Import ordering (std → external → local)
-- Module purity (no side effects in `model/`)
-- "What" comment detection
-- Doc anchor verification
-- Single-letter variable detection
-- File length enforcement (src/ and tests/)
-- No `std::thread` in production code
-- Spawn site documentation
-- Inline test block detection
-
-**logic_tests.rs** (11 tests):
-- Room resolution and fuzzy matching
-- Movement validation
-- Exit availability
-
-**trigger_tests.rs** (7 tests):
-- Trigger evaluation and firing
-- Non-repeatable trigger behavior
-- Multiple trigger handling
-- Repeatable trigger refires on subsequent encounters
-
-### Debugging Failed Browser Tests
-
-When a browser test fails, diagnostics are captured automatically:
-
-- **Screenshot**: `chronicler_engine/tmp/screenshots/{timestamp}_{test_name}.png`
-- **DOM dump**: `chronicler_engine/tmp/test_diagnostics/{test_name}.html`
-
-In CI, configure artifact upload for `chronicler_engine/tmp/screenshots/` so failed-test screenshots are downloadable.
-
-### Running Tests with Visible Browser
-
-For visual debugging, run tests with a visible browser window:
+### Running with Visible Browser
 
 ```bash
-# Windows PowerShell
 $env:HEADED = "1"; cargo test --test browser test_page_loads
-
-# Slow down operations for easier observation
-$env:HEADED = "1"; $env:SLOW_MO = "500"; cargo test --test browser test_page_loads
 ```
 
-### Known Limitations
+### Diagnostics on Failure
 
-1. **Headless Browser**: HTMX polling is reliable in headless mode; 5-second delay is acceptable for tests
-2. **LLM Response Time**: Real LLM tests may be slow; use mock tests for fast iteration
-
-**Port Conflicts Solved**: Dynamic port allocation (3010-3030) eliminates the need for sequential test execution (`--test-threads=1`).
-
-### Smart Waiting Patterns
-
-Instead of using fixed sleep durations, tests use Playwright's built-in auto-retrying assertions via `playwright_rs::expect`:
-
-```rust
-use playwright_rs::expect;
-
-// Wait for element to be visible (auto-retries up to 5s)
-expect(page.locator("#status-display").await)
-    .to_be_visible()
-    .await?;
-
-// Wait for text to contain "Ready"
-expect(page.locator("#status-display").await)
-    .to_contain_text("Ready")
-    .await?;
-
-// Wait with custom timeout for slow operations
-expect(page.locator("#status-display").await)
-    .with_timeout(Duration::from_secs(30))
-    .to_contain_text("Ready")
-    .await?;
-```
-
-Available assertions: `to_be_visible`, `to_be_hidden`, `to_have_text`, `to_contain_text`, `to_have_value`, `to_be_enabled`, `to_be_disabled`, `to_be_checked`, `to_be_unchecked`, `to_be_editable`, `to_be_focused`.
-
-For explicit state waits:
-```rust
-page.locator("#story-log .log-entry").await
-    .wait_for(Some(playwright_rs::WaitForOptions {
-        state: Some(playwright_rs::WaitForState::Visible),
-        timeout: Some(10000.0),
-    }))
-    .await?;
-```
-
-Available states: `Visible`, `Hidden`, `Attached`, `Detached`.
-
-**Avoid bare sleeps**: Never use `sleep(Duration::from_millis(X))` without a documented reason.
-
-For LLM completion, use `wait_for_llm_idle(port, timeout)` which polls `/status/generating` until the LLM finishes:
-```rust
-let llm_result = wait_for_llm_idle(TEST_PORT, Duration::from_secs(30)).await;
-if llm_result.is_err() {
-    println!("Warning: LLM did not become idle within timeout");
-}
-```
-
-### Settings Integration Tests
-
-Settings UI tests use in-process HTTP testing via `tower::ServiceExt::oneshot`. No browser needed.
-
-#### Test Infrastructure
-
-The `create_app_for_testing()` helper in `src/server/mod.rs` creates a test router with:
-- All game fragment routes (`/fragment/header`, `/fragment/story-log`, etc.)
-- Settings routes (`/fragment/settings`, `/settings`)
-- In-memory `AppState` with default settings
-
-#### Patterns
-
-```rust
-#[tokio::test]
-async fn test_settings_panel_returns_html() {
-    let state = create_test_state();
-    let app = create_app_for_testing(state);
-
-    let req = Request::builder()
-        .uri("/fragment/settings")
-        .body(Body::empty())
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-
-    assert!(response.status().is_success());
-    let body = axum::body::to_bytes(response.into_body(), 1024).await.unwrap();
-    let body_str = String::from_utf8_lossy(&body);
-    assert!(body_str.contains("LLM Settings"));
-}
-
-#[tokio::test]
-async fn test_save_settings_updates_memory() {
-    let state = create_test_state();
-    let app = create_app_for_testing(state);
-
-    let req = Request::builder()
-        .uri("/settings")
-        .method(http::Method::POST)
-        .header(http::header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .body(Body::from("narration_connection_id=openrouter-gpt-4o-mini&quantifier_connection_id=openrouter-gpt-4o-mini"))
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-
-    assert!(response.status().is_success());
-}
-```
-
-#### Routes Tested
-- GET `/fragment/settings` - Settings panel HTML fragment
-- POST `/settings` - Save active connection selections (narration_connection_id, quantifier_connection_id)
-- POST `/connections/add` - Add a new connection profile
+- Screenshots: `chronicler_engine/tmp/screenshots/`
+- DOM dumps: `chronicler_engine/tmp/test_diagnostics/`
 
 ## Code Coverage
 
-Coverage is verified using `cargo-llvm-cov`. This tool instruments the code and reports which lines are executed during tests.
-
-### Running Coverage
+Coverage is verified using `cargo-llvm-cov`:
 
 ```bash
-# Install cargo-llvm-cov (once)
 cargo +stable install cargo-llvm-cov --locked
-
-# Run coverage (after tests pass)
 cargo llvm-cov test --json --output-path coverage.json
 ```
 
-### Coverage Thresholds
-
-| Module Type | Minimum Coverage |
-|------------|------------------|
-| Core logic (`engine/logic.rs`) | 90% |
-| Parser (`engine/parser.rs`) | 85% |
-| Data models (`model/*.rs`) | 70% |
-| LLM prompts (`narrative/llm.rs`) | 50% |
-| Text check (`narrative/text_check/*.rs`) | 80% |
-
-### Known Gaps (Acceptable)
-
-These have low coverage but are acceptable:
-- **Runtime env detection** (`LlmBackendType::from_env()`) - cannot be unit tested
-- **API client code** (`OpenRouterBackend`) - LLM requests are slow
-- **`add_log` overflow** - requires >1000 log entries
-
-See `docs/adr/` for detailed rationale behind these patterns.
+See `docs/adr/` for detailed rationale behind testing patterns.

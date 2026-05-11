@@ -10,7 +10,7 @@ Contains pure data structures, serialization schemas, and the "Single Source of 
 - **`world`**: Setting lore, global rules, and starting scenarios.
 - **`map`**: Room/Region hierarchy and cardinal direction definitions.
 - **`character`**: NPC attributes (name, description, personality, scenario, image_path, **profile_image**, **headshot_image**) and Player inventory.
-- **`state`**: The `GameState` aggregation, narration history logs, and TUI state.
+- **`state`**: The `GameState` aggregation, narration history logs, and TUI state. Includes `StoredTriggerContext` for replaying trigger continuations on retry.
 - **`scenario`**: Starting scenario definitions for narrative introductions.
 - **`trigger`**: Trigger definitions, conditions, and character state tracking (`Trigger`, `TriggerCondition`, `TriggerAction`, `NpcEncounterState`, `CharacterState`).
 - **`settings`**: `AppSettings`, `Connection`, and agent configuration data models.
@@ -26,6 +26,9 @@ Contains the mechanics that drive the simulation. It translates user intent and 
 - **`trigger_eval`**: Pure function evaluation of NPC triggers based on character state and room location (`evaluate_triggers(state, current_room_id) -> Vec<(NpcCard, Trigger)>`). Triggers with `room_id` only fire in that room.
 - **`action_processing`**: Extracted pure functions for server handlers (`get_static_npcs`, `handle_movement`, `apply_npc_events`, `evaluate_and_narrate_triggers`, `commit_trigger_narration`, `execute_freeaction_impl`). Enables unit testing of server-side logic.
 - **`game_service`**: `GameService` trait and `DefaultGameService` — game orchestration extracted from fragments.rs. Includes action handling, retry logic, and context helpers.
+  - `execute_freeaction_pipeline()`: Extracted full FreeAction pipeline (narrate → quantify → triggers → event continuation) usable by both normal action handling and retry logic.
+  - `retry_last_response_impl()`: Granular retry that detects event continuations vs main narration and loads the appropriate pre-generation committed snapshot.
+  - `save_committed_state()`: Saves snapshots with `committed = true` for pre-generation anchoring.
 - **`state_diagnostics`**: Runtime invariant checks (`INV-ROOM`, `INV-NPC`, `INV-CHAR`, `INV-LOG`), feature-flagged via `diagnostics` feature.
 
 ### 3. The Narrative Tier (`crate::narrative::*`)
@@ -82,13 +85,6 @@ The HTTP layer for the HTMX web dashboard with polling-based real-time updates.
 
 ### 5. The Settings Tier (`crate::settings` + `crate::model::settings`)
 Persistent JSON-based settings system for LLM configuration with reusable connection profiles.
-
-| Component | Purpose |
-|-----------|---------|
-| `data/settings.json` | Persistent settings file |
-| `AppSettings` struct | Configuration data model (connections + active selections) |
-| `Connection` struct | Named provider+model profile |
-| `AppState.settings` | Runtime access via `Arc<RwLock<AppSettings>>` |
 
 | Component | Purpose |
 |-----------|---------|
@@ -202,7 +198,7 @@ Shared test fixtures and utilities.
 | `src/engine/game_service/actions.rs` | `crate::engine::game_service` | Action handling helpers |
 | `src/engine/game_service/context.rs` | `crate::engine::game_service` | `GameServiceContext` |
 | `src/engine/game_service/helpers.rs` | `crate::engine::game_service` | Orchestration helpers |
-| `src/engine/game_service/retry.rs` | `crate::engine::game_service` | Retry logic |
+| `src/engine/game_service/retry.rs` | `crate::engine::game_service` | Retry logic with granular event/main narration detection and pre-generation snapshot loading |
 
 ### Narrative Tier
 
@@ -460,11 +456,15 @@ Entries can be edited in place via `POST /history/:id`:
 
 ### Retry Feature
 
-The retry endpoint (`POST /retry`) regenerates the last AI response:
+The retry endpoint (`POST /retry`) regenerates the last AI response with granular scoping:
 
-- Finds the last `LogType::Input` entry
-- Regenerates its corresponding AI response via LLM
-- Replaces the existing response with new narration
+- **Pre-generation committed snapshots**: Before every LLM call, a committed snapshot is saved with a prefixed `message_id`:
+  - `pre-main:{uuid}` — saved before the main narration LLM call
+  - `pre-event:{uuid}` — saved before the trigger continuation LLM call
+- **Event continuation detection**: Retry checks for an `Event` log entry between the last `Input` and the last AI response
+- **Event retry path**: Loads `pre-event:{uuid}` snapshot, regenerates only the continuation text using stored trigger prompts (`StoredTriggerContext`), preserves the main narration unchanged
+- **Main retry path**: Loads `pre-main:{uuid}` snapshot, re-runs the full pipeline (narrate → quantify → triggers → event continuation)
+- **Swipe index increment**: Each retry saves with `swipe_index + 1`, preserving the original snapshot
 - Only works on the last exchange, not arbitrary history points
 - **Critical**: History passed to LLM excludes the AI response being retried to prevent the LLM from repeating/paraphrasing the old response
 
@@ -489,7 +489,7 @@ The retry endpoint (`POST /retry`) regenerates the last AI response:
 | `POST` | `/history/:id` | Edit entry text |
 | `POST` | `/history/:id/delete` | Delete entry |
 | `POST` | `/retry` | Regenerate last AI response |
-| `POST` | `/reset` | Reset game state |
+| `POST` | `/reset` | Reset game state — returns `HX-Refresh: true` for clean page reload |
 | `GET` | `/fragment/settings` | Settings panel HTML |
 | `POST` | `/settings` | Save settings from form |
 | `POST` | `/connections/add` | Add new connection |

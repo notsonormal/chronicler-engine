@@ -7,7 +7,8 @@ The Chronicler Engine presents a web-based HTMX dashboard for player interaction
 
 ### 1. Header Bar (48px height)
 Displays system-level context.
-- **Content**: Game title (left), connection status (right)
+- **Content**: Game title (left), reset button (center-right), connection status (right)
+- **Reset Button**: "Reset Game" button styled with danger/red tokens, uses `hx-post="/reset"` with `hx-confirm` dialog
 - **Note**: Location is displayed in the story log, not the header
 
 ### 2. Tab Bar

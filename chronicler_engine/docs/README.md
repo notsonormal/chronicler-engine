@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-10 19:45 UTC*
+*Index last generated: 2026-05-11 18:54 UTC*
 
 ### Root files
 
@@ -21,6 +21,10 @@ This folder contains all documentation for the Chronicler Engine project.
 - [ADR-005: SillyTavern-Style Layered Prompt System](./adr/adr-005-layered-prompts.md)
 - [ADR-006: Quantifier-Driven Game Systems](./adr/adr-006-quantifier-systems.md)
 - [ADR-007: Settings System Architecture](./adr/adr-007-settings-system.md)
+- [ADR-008: SQLite Snapshot Persistence](./adr/adr-008-sqlite-snapshot-persistence.md)
+- [ADR-009: Agent Trait and Registry Architecture](./adr/adr-009-agent-trait-registry.md)
+- [ADR-010: Concurrency and Generation Gate Model](./adr/adr-010-concurrency-generation-gate.md)
+- [ADR-011: Text Check Integration](./adr/adr-011-text-check-integration.md)
 
 ### `docs/architecture/`
 
@@ -32,6 +36,13 @@ This folder contains all documentation for the Chronicler Engine project.
 
 - [Error Catalog](./diagnostics/error_catalog.md)
 
+### `docs/external_applications/`
+
+- [Marinara-Engine Reference](./external_applications/marinara_engine.md)
+- [Marinara Engine — Default System Prompt](./external_applications/marinara_engine_system_prompt.md)
+- [SillyTavern Chat Window Reference](./external_applications/sillytavern_chat_window.md)
+- [SillyTavern Prompt System Reference](./external_applications/sillytavern_prompt_system.md)
+
 ### `docs/plans/`
 
 - [Plan: Diagnostic Decision Tree as Agent Infrastructure](./plans/diagnostic-decision-tree-plan.md)
@@ -42,44 +53,11 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Plan: Observability & Automated Forensics](./plans/observability-and-forensics-plan.md)
 - [AI Steering & Guided Generation](./plans/steering-and-guided-generation.md)
 
-### `docs/plans/archived/`
-
-- [Plan: Spell & Grammar Check Integration](./plans/archived/ant-man-black-lightning-bobbi-morse.md)
-- [Plan: Raise `game_service.rs` Coverage to 80%+ via Refactoring](./plans/archived/coverage-game-service-archived.md)
-- [Fix: Show LLM Text Immediately, Delay Trigger Text Until Generated](./plans/archived/crimson-avenger-robin-iceman.md)
-- [Follow-Up Plan: Complete Defensive Architecture Implementation](./plans/archived/defensive-architecture-follow-up-plan.md)
-- [Plan: Defensive Architecture & Invariant Enforcement](./plans/archived/defensive-architecture-invariant-enforcement-plan.md)
-- [Plan: Improve Quantifier Prompt for Movement Certainty](./plans/archived/donna-troy-hercules-warpath-2026-05-03.md)
-- [Plan: Dependency-Inject LLM/Quantifier Backends into DefaultGameService](./plans/archived/drax-psylocke-gamora-2026-05-04.md)
-- [Spec: Event Header Entries](./plans/archived/event-header-entries-archived.md)
-- [Plan: Fix Settings Panel Encoding and Checkbox Spacing](./plans/archived/fix-settings-encoding-checkbox-spacing-2026-05-09.md)
-- [Plan: Granular Status Phases for LLM Pipeline](./plans/archived/granular-status-phases-archived.md)
-- [Implementation Plan: Marinara-Style Prompt Architecture](./plans/archived/hercules-she-hulk-doctor-fate-20260503.md)
-- [Plan: Fix Server-Side Action Race Condition](./plans/archived/hulk-doctor-strange-tigra-20260510.md)
-- [Implementation Plan: Fix Gemma 4 Thinking Suffix Corruption](./plans/archived/iceman-thor-booster-gold-2026-05-04.md)
-- [Implementation Plan: Isolate Slow LLM Tests](./plans/archived/lockjaw-aquaman-sam-alexander-2026-05-03.md)
-- [Plan: Unify PHI Layer — Remove PhiMode::Continuation](./plans/archived/luke-cage-pantha-morbius-2026-05-03.md)
-- [Plan: Unify PHI Layer — Remove PhiMode::Continuation](./plans/archived/luke-cage-pantha-morbius-20260503.md)
-- [Spec: Message Action Buttons Redesign](./plans/archived/message-buttons-redesign-20260509.md)
-- [Implementation Plan: Message Action Buttons Redesign](./plans/archived/message-buttons-redesign-plan-20260509.md)
-- [Plan: Phase 1 — SQLite Snapshots + Reset Game](./plans/archived/multi-agent-phase1-snapshots-reset-20260509.md)
-- [Plan: Auto-Generated Index for `chronicler_engine/docs`](./plans/archived/obsidian-doctor-mid-nite-kid-flash-2026-05-05.md)
-- [Plan: Phase 2 — Agent Trait, Registry, and Quantifier Migration](./plans/archived/phase2-agent-trait-quantifier-migration-20260510.md)
-- [Async Concurrency & Codebase Hygiene](./plans/archived/polaris-steel-sentry-2026-05-05.md)
-- [Spec: Align chronicler_engine Prompts with Marinara Engine Battle-Tested Patterns](./plans/archived/prompt-alignment-with-marinara-2026-05-04.md)
-- [Plan: Phase 4 — Replace std::thread::spawn with Tokio](./plans/archived/rocket-silver-surfer-orphan-2026-05-05.md)
-- [Issue Tracker Implementation Plan](./plans/archived/spider-man-impulse-aquaman-2026-05-05.md)
-- [Structured Error Taxonomy](./plans/archived/structured-error-taxonomy-2026-05-09.md)
-
 ### `docs/reference/`
 
 - [Specification: Engine Data Schemas](./reference/data_schemas.md)
-- [Marinara-Engine Reference](./reference/marinara_engine.md)
-- [Marinara Engine — Default System Prompt](./reference/marinara_engine_system_prompt.md)
 - [Specification: Player Persona System](./reference/persona_system.md)
 - [Reference: Quantifier Prompt](./reference/quantifier_prompt.md)
-- [SillyTavern Chat Window Reference](./reference/sillytavern_chat_window.md)
-- [SillyTavern Prompt System Reference](./reference/sillytavern_prompt_system.md)
 - [Reference: Normal System Prompt](./reference/system_prompt.md)
 - [Specification: Testing Strategy and Architecture](./reference/testing.md)
 
@@ -130,13 +108,13 @@ When adding a new feature:
 
 1. **Create a plan** in `docs/plans/` (or update existing)
 2. **Update architecture** - Modify `docs/architecture/system.md` to reflect changes
-3. **Update all the other docs as needed* - Read  `docs/*`
-3. **Implement** - Write the code
-4. **Validate** - Run the full build and test suite:
+3. **Update all the other docs as needed** - Read `docs/*`
+4. **Implement** - Write the code
+5. **Validate** - Run the full build and test suite:
    ```bash
    python build.py  # Or manually: cargo fmt && cargo clippy && cargo test
    ```
-5. **Archive** - Move completed plans to `plans/archived/`
+6. **Archive** - Move completed plans to `plans/archived/`
 
 ---
 

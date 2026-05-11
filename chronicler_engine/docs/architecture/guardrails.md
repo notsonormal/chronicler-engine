@@ -69,65 +69,39 @@ AST-parsed convention enforcement. Rules start at `warn` severity; legacy exempt
 
 Each group must be separated by a blank line. Within a group, sort alphabetically.
 
-```rust
-use std::collections::HashMap;
-use std::fs;
-
-use walkdir::WalkDir;
-
-use crate::model::state::GameState;
-```
-
 **Severity**: error  
-**Scope**: `src/` and `tests/`  
-**Exemptions**: None
+**Scope**: `src/` and `tests/`
 
 ### 3.2 Doc Anchor Requirements (`guardrails_doc_anchors`)
 
-**Standard**: Public functions with >5 statements or containing control flow (`if`, `for`, `while`, `match`, `loop`) must contain a doc anchor comment:
+**Standard**: Public functions with >5 statements or containing control flow must contain a doc anchor comment:
 
 ```rust
 // [DOC: docs/path/to/spec.md]
 ```
 
-Exemptions:
-- Getters/setters
-- `From`/`Into` impls
-- Test functions
-- Functions already containing a doc anchor
+Exemptions: getters/setters, `From`/`Into` impls, test functions.
 
-**Severity**: warn (20 existing instances)  
+**Severity**: warn  
 **Goal**: zero warnings, then promote to error.
 
 ### 3.3 mod.rs Purity (`guardrails_mod_purity`)
 
-**Standard**: `mod.rs` should only contain:
-- `pub mod` declarations
-- `use` / `pub use` statements
-- `//!` module-level documentation
-
-No `struct`, `enum`, `fn`, `impl`, or `const` definitions.
+**Standard**: `mod.rs` should only contain `pub mod` declarations, `use` / `pub use` statements, and `//!` module-level documentation. No `struct`, `enum`, `fn`, `impl`, or `const` definitions.
 
 **Severity**: error  
-**Exemptions**:
-- `src/server/mod.rs` — legacy structural decision; centralizes Axum router, `AppState`, and server entry points.
+**Exemptions**: `src/server/mod.rs` — legacy structural decision.
 
 ### 3.4 Long Comment Run Detection (`guardrails_long_comment_runs`)
 
 **Standard**: No runs of 5 or more consecutive `//` or `///` comment lines. Long explanations belong in external documentation linked via doc anchors.
-
-Exemptions:
-- Visual dividers (`////` or more slashes)
-- Doc anchors (`// [DOC: ...]`)
-- Empty comment lines
-- Comments inside `#[cfg(test)]` modules
 
 **Severity**: warn  
 **Goal**: zero warnings, then promote to error.
 
 ### 3.5 Single-Letter Variables (`guardrails_single_letter_vars`)
 
-**Standard**: No single-letter bindings (`a`, `b`, `i`, `x`, etc.) outside tiny scopes (≤3 statements).
+**Standard**: No single-letter bindings outside tiny scopes (≤3 statements).
 
 **Severity**: warn  
 **Current status**: zero violations.
@@ -135,8 +109,6 @@ Exemptions:
 ### 3.6 File Length (`guardrails_file_length_src`, `guardrails_file_length_tests`)
 
 **Standard**: No `.rs` file may exceed 2,000 non-blank lines.
-
-Non-blank means any line that contains at least one non-whitespace character.
 
 **Severity**: error  
 **Scope**: `src/` and `tests/`  
@@ -157,14 +129,3 @@ cargo test
 # CI pipeline
 python build.py
 ```
-
----
-
-## Adding New Rules
-
-1. Implement the check as a standalone function in `tests/guardrails.rs`
-2. Return `Vec<Violation>` with appropriate `severity`
-3. Wire it into `main_runner()`
-4. Add a test function that calls `main_runner()` and asserts no `error` severity violations
-5. Update this document
-6. If the rule affects legacy code, start at `warn` and file a cleanup task

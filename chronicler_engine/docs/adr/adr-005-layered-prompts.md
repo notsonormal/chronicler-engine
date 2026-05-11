@@ -98,6 +98,12 @@ pub struct PromptContext {
 - **RAG for World Info**: Chose keyword matching (simpler, no vector DB)
 - **Per-NPC history**: Chose single unified history (simpler)
 
+## History
+
+- **2025-04-13**: Prompt builder system implemented
+- **2026-05-03**: PHI layer unified — `PhiMode::Continuation` removed; PHI is now a single universal template. Continuation-specific instructions moved to the trigger user message (Layer 6).
+- **2026-05-03**: Marinara-style prompt overhaul — system prompt and PHI converted to plain-text instructions. XML tags retained only for external data (`<GameState>`, `<KnownNpcs>`, etc.). Fixes Gemma 4 reasoning-loop bug triggered by self-referential XML.
+
 ## Historical Note
 
 This was the first major prompt restructuring, introducing conversation history to LLM calls.

@@ -36,7 +36,7 @@ pub(crate) fn markdown_to_html(text: &str) -> String {
 
 #[derive(Template)]
 #[template(
-    source = r#"<div class="header"><span class="game-title">Chronicler Engine</span><span class="connection-status connected" id="connection-status">Connected</span></div>"#,
+    source = r#"<div class="header"><span class="game-title">Chronicler Engine</span><button class="reset-btn" hx-post="/reset" hx-confirm="Are you sure you want to reset the game? All progress will be lost." hx-swap="none">Reset Game</button><span class="connection-status connected" id="connection-status">Connected</span></div>"#,
     ext = "html"
 )]
 pub struct HeaderTemplate {

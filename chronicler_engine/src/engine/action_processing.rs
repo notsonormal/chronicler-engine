@@ -31,13 +31,7 @@ pub struct FreeActionContext<'a> {
 
 /// The LLM call itself happens outside the state lock so the frontend can poll the main narration.
 pub struct TriggerContinuationRequest {
-    pub npc_id: String,
-    pub trigger_idx: usize,
-    pub trigger_name: String,
-    pub trigger_repeat: bool,
-    pub system_prompt: String,
-    pub user_prompt: String,
-    pub max_tokens: Option<u32>,
+    pub stored: crate::model::state::StoredTriggerContext,
 }
 
 /// Result of processing a single free action turn.
@@ -138,17 +132,18 @@ pub fn commit_trigger_narration(
         return Ok(state);
     }
     let mut state = state;
+    state.narrative.last_trigger = Some(request.stored.clone());
     state.add_log(
         String::new(),
-        Some(request.trigger_name.clone()),
+        Some(request.stored.trigger_name.clone()),
         LogType::Event,
     );
     state.add_log(continuation_text.to_string(), None, LogType::Narration);
-    if !request.trigger_repeat {
+    if !request.stored.trigger_repeat {
         mark_trigger_fired(
             &mut state.character_state,
-            &request.npc_id,
-            request.trigger_idx,
+            &request.stored.npc_id,
+            request.stored.trigger_idx,
         );
     }
 
@@ -224,13 +219,16 @@ fn build_trigger_request(
     )?;
 
     Some(TriggerContinuationRequest {
-        npc_id: npc.id.clone(),
-        trigger_idx,
-        trigger_name: trigger.action.name.clone(),
-        trigger_repeat: trigger.repeat,
-        system_prompt,
-        user_prompt,
-        max_tokens: Some(fitted_max_tokens),
+        stored: crate::model::state::StoredTriggerContext {
+            npc_id: npc.id.clone(),
+            trigger_idx,
+            trigger_name: trigger.action.name.clone(),
+            trigger_repeat: trigger.repeat,
+            trigger_narration_prompt: trigger.action.narration_prompt.clone(),
+            system_prompt,
+            user_prompt,
+            max_tokens: Some(fitted_max_tokens),
+        },
     })
 }
 

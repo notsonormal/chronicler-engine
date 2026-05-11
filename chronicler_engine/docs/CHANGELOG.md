@@ -1,9 +1,35 @@
-# Changelog
+﻿# Changelog
 
 ## Unreleased
 
+### Added
+- **Granular Retry Logic with Pre-Generation Snapshots** â€” Retry now detects event continuations vs main narration and regenerates with correct scope
+  - New `StoredTriggerContext` struct stores trigger metadata (`npc_id`, `trigger_idx`, `trigger_name`, `trigger_repeat`, `trigger_prompt`, `system_prompt`, `user_prompt`, `max_tokens`) in `NarrativeState`
+  - `commit_trigger_narration` populates `last_trigger` with stored prompts for exact replay
+  - New player input clears `last_trigger` to `None`
+  - `pre-main:{uuid}` committed snapshot saved before main LLM call
+  - `pre-event:{uuid}` committed snapshot saved before trigger continuation LLM call
+  - `is_last_ai_response_event_continuation()` helper detects Event log between last Input and last AI response
+  - Event retry: loads `pre-event:{uuid}`, regenerates only continuation using stored prompts via `narrate_action_from_prompt`
+  - Main retry: loads `pre-main:{uuid}`, re-runs full `execute_freeaction_pipeline` (narrate â†’ quantify â†’ triggers â†’ event continuation)
+  - `execute_freeaction_pipeline()` extracted from `execute_action_impl` for reuse by normal actions and retry
+  - First turn fallback: if no `pre-main` snapshot exists, falls back to `GameState::new()`
+  - Swipe index increment: retries save with `swipe_index + 1`, preserving original snapshot
+
 ### Fixed
-- **Double-submit race condition** — Server now rejects concurrent async actions while generation is in flight
+- **Retry UI Feedback** â€” Retry now shows immediate visual feedback
+  - `retry_handler` sets `GenerationStatus::Generating` + `GenerationPhase::Narrating` and saves snapshot before spawning blocking task
+  - `submitRetry()` calls `updateToThinking()` before fetch, matching form submission behavior
+  - Status poll returns `narrating` within milliseconds of retry initiation
+
+### Added
+- **Reset Game Button** â€” UI control for resetting game state
+  - "Reset Game" button added to `HeaderTemplate` with danger/red styling (`.reset-btn`)
+  - Uses `hx-post="/reset"` with `hx-confirm` confirmation dialog
+  - `reset_handler` returns `HX-Refresh: true` with empty body for clean page reload
+
+### Fixed
+- **Double-submit race condition** â€” Server now rejects concurrent async actions while generation is in flight
   - New `AppState::is_generating` (`Arc<AtomicBool>`) acts as a fast generation gate
   - `process_action` checks `compare_exchange(false, true)` before accepting async actions; rejects with `"Still thinking..."`
   - `GenerationGuard` (RAII in `src/server/fragments/generation_guard.rs`) ensures `is_generating` is cleared on `spawn_blocking` exit, even on panic
@@ -13,7 +39,7 @@
   - Fixes flaky test caused by Phase 1.7 snapshot migration removing the old `Arc<Mutex<GameState>>` serialization
 
 ### Added
-- **Agent Trait + Registry + Quantifier Migration (Phase 2)** — Migrated quantifier from hardcoded pipeline to `dyn Agent` architecture
+- **Agent Trait + Registry + Quantifier Migration (Phase 2)** â€” Migrated quantifier from hardcoded pipeline to `dyn Agent` architecture
   - New `Agent` trait with `name()`, `phase()`, `backend_selector()`, `execute()` methods
   - New `AgentRegistry` loads agents from `AppSettings.agents` config; supports `PreGeneration` and `PostGeneration` phases
   - New `AgentResult` enum: `PromptDirective`, `StatePatch`, `NoOp`
@@ -26,24 +52,24 @@
   - `DefaultGameService` now owns `AgentRegistry` instead of direct `QuantifierBackendTrait`
   - `DefaultGameService::with_mock_quantifier()` helper for test injection
   - `AppSettings.agents` field with `#[serde(default = "default_agent_configs")]` for backward compatibility
-  - Quantifier code moved from `src/narrative/quantifier/` → `src/narrative/agents/quantifier/`
+  - Quantifier code moved from `src/narrative/quantifier/` â†’ `src/narrative/agents/quantifier/`
   - All quantifier tests updated to new module path; test logic unchanged
 
 ### Added
-- **Structured Error Taxonomy** — Migrated `EngineError` from plain `String` payloads to structured types
+- **Structured Error Taxonomy** â€” Migrated `EngineError` from plain `String` payloads to structured types
   - New `LlmFailure` enum with variants: `EmptyResponse`, `Http { status, body }`, `Network { url, detail }`, `ParseError { raw_response, expected_format }`, `Timeout`
   - New `NarrativeFailure` enum with variants: `PromptBuild { stage, reason }`, `Generation { stage, reason }`
   - New `InternalError` struct with `invariant` field and `internal_error()` helper
   - `EngineError::Llm`, `Narrative`, `Internal` now wrap structured types via `#[source]`
-  - `LlmEmptyResponse` removed — replaced by `Llm(LlmFailure::EmptyResponse)`
+  - `LlmEmptyResponse` removed â€” replaced by `Llm(LlmFailure::EmptyResponse)`
   - `llm_client.rs` return type changed from `Result<String, String>` to `crate::error::Result<String>`
   - `game_service.rs` `map_llm_error()` now uses structured `match` instead of `msg.contains(...)` string matching
   - Added `From<LlmFailure>`, `From<NarrativeFailure>`, `From<InternalError>` for `?` operator support
-  - New documentation: `docs/diagnostics/error_catalog.md` — structured reference for every variant
+  - New documentation: `docs/diagnostics/error_catalog.md` â€” structured reference for every variant
   - Updated `.agents/rules/DEBUGGING.md` error taxonomy table to reference structured variants
 
 ### Added
-- **Message Action Buttons Redesign** — Completed implementation of top-right message action bar
+- **Message Action Buttons Redesign** â€” Completed implementation of top-right message action bar
   - `delete_log(id: u64)` method added to `GameState` for safe history removal by ID
   - `POST /history/:id/delete` endpoint for HTMX-compatible deletion
   - `deleteMessage(id)` JavaScript handler with browser confirmation dialog
@@ -58,7 +84,7 @@
 
 ### Fixed
 - **Settings panel encoding and checkbox spacing** - Fixed UI defects in the settings panel
-  - Replaced corrupted UTF-8 em-dash (`â€"`) with simple hyphen (` - `) in provider/model display strings
+  - Replaced corrupted UTF-8 em-dash (`Ã¢â‚¬"`) with simple hyphen (` - `) in provider/model display strings
   - Added explicit `.checkbox-label` class to checkbox labels for better browser compatibility
   - Updated CSS to target `.checkbox-label` instead of `label:has(> input[type="checkbox"])`
   - Increased checkbox label gap from `var(--spacing-xs)` (4px) to `var(--spacing-sm)` (8px)
@@ -71,7 +97,7 @@
 
 ### Fixed
 - **Sequential trigger display** - Main narration and trigger text now appear sequentially instead of simultaneously
-  - Split `evaluate_and_narrate_triggers` into three phases: evaluate (lock) → LLM (unlock) → commit (lock)
+  - Split `evaluate_and_narrate_triggers` into three phases: evaluate (lock) â†’ LLM (unlock) â†’ commit (lock)
   - Frontend can now poll and display the main narration while the trigger continuation is still generating
   - `execute_freeaction_impl` returns `Option<TriggerContinuationRequest>` for orchestration in `game_service.rs`
   - New `commit_trigger_narration()` function adds event header + narration logs and marks triggers fired
@@ -95,14 +121,14 @@
   - New `tests/guardrails.rs` rules: `guardrails_file_length_src`, `guardrails_file_length_tests`
   - `docs/architecture/guardrails.md` updated with file length policy
 - **Test File Extraction** - All inline `#[cfg(test)]` blocks moved to separate `*_tests.rs` files
-  - 31 new sibling test files across `src/` (e.g., `logic.rs` → `logic_tests.rs`)
+  - 31 new sibling test files across `src/` (e.g., `logic.rs` â†’ `logic_tests.rs`)
   - Parent `mod.rs` files updated with `#[cfg(test)] mod xxx_tests;` declarations
   - Eliminates file-length violations and improves build parallelism
   - New `scripts/check_test_structure.py` guardrail bans inline test blocks
 - **Marinara-Style Prompt Rules** - Overhauled `SYSTEM_PROMPT_TEMPLATE` with battle-tested patterns from Marinara Engine
   - Free will framing: "you have your own free will, intellect, and emotional intelligence"
-  - Anti-repetition rule with concrete example ("Gooner?" → "What type of question is that?")
-  - Anti-GPTism ban on generic structures and clichés ("jaws working", "physical punches")
+  - Anti-repetition rule with concrete example ("Gooner?" â†’ "What type of question is that?")
+  - Anti-GPTism ban on generic structures and clichÃ©s ("jaws working", "physical punches")
   - Knowledge boundary rules: latecomers ignorant, private conversations stay private, rumors travel slowly
   - Character complexity requirement: opinions, contradictions, boundaries, hypocrisies, judgments
   - Proactive narrative momentum: introduce challenges, resist comfort, no plot armor
@@ -123,23 +149,23 @@
   - `apply_gemma4_thinking_suffix()` in `llm_client.rs` detects Gemma 4 models by name
   - Appends `<|turn>model\n<|channel>thought\n<channel|>` to Ollama user messages
   - Tells the model the thinking slot is already filled, bypassing the loop
-  - Validated on `mradermacher/gemma-4-26b-a4b-it-abliterated:iq2xs`: 2048 tokens all-reasoning → ~211 tokens of narrative content
+  - Validated on `mradermacher/gemma-4-26b-a4b-it-abliterated:iq2xs`: 2048 tokens all-reasoning â†’ ~211 tokens of narrative content
   - Non-Gemma models are completely unaffected
 
 ### Fixed
-- **Gemma 4 suffix corruption** — Fixed malformed thinking suffix that was causing `<channel|>` prefixes and `<thought>` blocks in output
+- **Gemma 4 suffix corruption** â€” Fixed malformed thinking suffix that was causing `<channel|>` prefixes and `<thought>` blocks in output
   - Removed erroneous leading `<turn|>` line from suffix (now matches SillyTavern preset exactly)
   - Scoped suffix to Ollama backend only; OpenRouter's native chat template was fighting the injected raw tokens
   - Added `sanitize_llm_output()` to strip leaked thinking artifacts from all responses
 - **Marinara-Style Prompt Architecture** - Refactored prompt construction to plain-text instructions + XML-wrapped data only
-  - System prompt (Layer 0) is now plain text — removed `<SystemPrompt>`, `<Role>`, `<CoreRole>`, etc.
-  - PHI layer (Layer 7) is now plain text — removed `<AuxiliaryInstructions>` wrapper
-  - Quantifier prompt instructions are now plain text — removed `<QuantifierTask>` and `<Query>` wrappers
+  - System prompt (Layer 0) is now plain text â€” removed `<SystemPrompt>`, `<Role>`, `<CoreRole>`, etc.
+  - PHI layer (Layer 7) is now plain text â€” removed `<AuxiliaryInstructions>` wrapper
+  - Quantifier prompt instructions are now plain text â€” removed `<QuantifierTask>` and `<Query>` wrappers
   - XML tags remain only for external data: `<GameState>`, `<KnownNpcs>`, `<ConversationHistory>`, `<CurrentRoom>`, etc.
   - Fixes Gemma 4 reasoning-loop bug where self-referential XML triggered meta-analysis instead of execution
 - **Per-Connection Context Windows** - Added `max_context_tokens` to `Connection` settings
   - Defaults: 8192 for Ollama, 32768 for OpenRouter/DeepSeek, 4096 for Mock
-  - Optional field — existing `settings.json` loads without modification
+  - Optional field â€” existing `settings.json` loads without modification
 - **Context-Aware Token Fitting** - `fit_messages_to_context()` dynamically caps `max_tokens` and trims oldest history first
   - New constants: `SAFETY_MARGIN_TOKENS` (256), `MIN_INPUT_BUDGET_TOKENS` (512)
   - `build_split()` now returns fitted `(system, user, max_tokens)` using the active connection's context window
@@ -156,17 +182,17 @@
   - Added `phase` field to `GenerationState` alongside existing `status`
   - `GenerationStatus` (Idle/Generating/Error) remains unchanged for backward compatibility
   - `is_generating()` remains the single source of truth for disabling UI elements
-  - Phase is a secondary display concern only — all phases use unified `.thinking` CSS class
+  - Phase is a secondary display concern only â€” all phases use unified `.thinking` CSS class
   - `/status/generating` endpoint returns phase names (`narrating`, `quantifying`, `generating-event`)
   - Frontend maps endpoint values to human-readable text via `onStatusPoll()`
   - Optimistic "Thinking..." still shown immediately on form submit before first poll
   - Pipeline phases:
-    - `Narrating` — During main LLM narration (Phase 4)
-    - `Quantifying` — During post-narration quantifier analysis (Phase 4.5)
-    - `GeneratingEvent` — During trigger continuation narration (Phase 5), only when a trigger actually fires
+    - `Narrating` â€” During main LLM narration (Phase 4)
+    - `Quantifying` â€” During post-narration quantifier analysis (Phase 4.5)
+    - `GeneratingEvent` â€” During trigger continuation narration (Phase 5), only when a trigger actually fires
 
 ### Changed
-- **Trigger evaluation simplified** — Only the first matching trigger is processed per action
+- **Trigger evaluation simplified** â€” Only the first matching trigger is processed per action
   - Removed `max_triggers` parameter from `evaluate_and_narrate_triggers`
   - Replaced loop with single `if let Some(...)` for first match only
   - `GeneratingEvent` phase only set when a trigger is found and about to call LLM
@@ -264,7 +290,7 @@
 ### Added
 - **Trigger continuation unified** - Trigger narrations now use full 8-layer sillytavern prompt via `PromptBuilder` with continuation context in user message
 - **Removed continuation.rs** - Functionality migrated to unified prompt system
-- **Added PhiMode** - ~~New enum controlling PHI layer (Layer 7) behavior: Narration vs Continuation~~ (removed in later refactor — PHI is now universal)
+- **Added PhiMode** - ~~New enum controlling PHI layer (Layer 7) behavior: Narration vs Continuation~~ (removed in later refactor â€” PHI is now universal)
 - **Quantifier Backend Trait** - Refactored quantifier to use trait for enable testing
   - New `QuantifierBackendTrait` interface with `quantify_room()` method
   - `RealQuantifierBackend` - Production LLM-based implementation
@@ -291,284 +317,3 @@
   - Excluded `fragments.rs`, `mod.rs` from coverage
   - Added unit tests for action_processing functions
 
-## 2026-04-26
-
-### Added
-- **NPC Event Layer** - Quantifier now tracks NPC enter/leave events
-  - New types: `NpcEventType` (Entered, Left), `NpcEvent`, `NpcEventList`
-  - `compute_npc_events()` function compares previous vs current NPC presence
-  - `QuantifierResult` now includes `npc_events: NpcEventList`
-  - `times_met` only increments on `Entered` events (new encounters)
-  - `currently_meeting` set to true on `Entered`, false on `Left`
-  - This addresses the TODO: tracking NPC movement, not just player movement
-
-### Fixed
-- **Trigger evaluation timing bug** - Triggers not firing because `times_met` was incremented BEFORE trigger evaluation
-  - `TimesMet Eq 0` triggers would never fire because the counter was already 1
-  - Fixed: Evaluate triggers BEFORE incrementing `times_met` in `fragments.rs`
-  - Now triggers see `times_met = 0` when evaluating, allowing `TimesMet Eq 0` conditions to fire
-
-- ** Gabriella not detected** - Second quantifier now runs after main narration to detect NPCs in generated text
-  - Added two-stage quantifier: first before action (movement), second after narration (NPC detection)
-  - This catches NPCs like Gabriella who appear dynamically in the narration
-
-- **Multiple NPCs checked** - Triggers now evaluate ALL NPCs, not just `npcs_in_area`
-  - Changed `evaluate_triggers` to iterate `state.npcs.values()` instead of `state.npcs_in_area`
-  - This catches NPCs who appear in narration but weren't in the initial room config
-
-- **Trigger order** - Main narration now appears BEFORE trigger continuation
-  - Fixed reordering in `fragments.rs`: add_log → then trigger evaluation
-
-- **NPC name prefix** - Trigger narration no longer includes NPC name prefix
-  - Changed sender from `Some(npc.sheet.name.clone())` to `None`
-
-### Added
-- **Unit tests for new trigger behavior**:
-  - `test_currently_meeting_tracks_encounters` - Tests the currently_meeting flag
-  - `test_increment_times_met_always_increments` - Tests increment behavior
-  - `test_character_state_initializes_with_starting_room_npcs` - Tests starting room NPCs
-  - `test_evaluate_triggers_fires_for_npc_not_in_area` - Tests ALL NPCs get evaluated
-
-- **Integration test for second quantifier flow**:
-  - `test_second_quantifier_detects_room_npcs` - Tests movement to room with configured NPCs triggers detection
-
-- **Mock backend support for trigger continuation** - `LLM_BACKEND=mock` now works for trigger narration
-
-### Changed
-- **times_met semantics** - Counter increments on room entry, not on trigger fire
-- **TimesMet conditions** work correctly now that evaluation happens before increment
-
-## 2026-04-20
-
-### Added
-- **Reactive Auto-Trigger Movement** - Character-state-based NPC trigger system
-  - New `model/trigger.rs` module: `Trigger`, `TriggerCondition`, `TriggerAction`, `NpcEncounterState`, `CharacterState`
-  - `TriggerCondition` supports `TimesMet(Eq|Lt|Gte, u32)` comparisons
-  - `CharacterState` tracks per-NPC encounter counts in-memory
-  - `NpcCard.triggers: Vec<Trigger>` field with `#[serde(default)]` for backward compatibility
-  - `GameState.character_state: CharacterState` for persistent in-session NPC encounter tracking
-
-- **Trigger Evaluation Engine** - Pure evaluation functions for NPC triggers
-  - New `engine/trigger_eval.rs`: `evaluate_triggers`, `check_condition`, `increment_times_met`, `mark_trigger_fired`
-  - Returns matching `(NpcCard, Trigger)` tuples for NPCs in current room
-  - Handles missing character state gracefully (defaults to `times_met = 0`)
-  - Non-repeatable triggers tracked and skipped after first fire
-
-- **Continuation Prompt Builder** - Second LLM prompt for trigger narration
-  - New `narrative/continuation.rs`: `build_continuation_prompt`
-  - System prompt instructs LLM to continue scene without repetition
-  - User prompt includes first narration + room context + trigger text
-  - Token budgeting: truncates first narration to fit `MAX_CONTEXT_TOKENS`
-
-- **Recursive Auto-Trigger Flow** - Integration in `fragments.rs` process_action
-  - After first LLM narration + quantifier movement detection
-  - `evaluate_triggers` called on successful room transition
-  - Second LLM call per trigger with continuation prompt (max 3 to prevent runaway)
-  - `is_generating` stays true through ALL LLM calls (no reset between narrations)
-  - Failed second calls: first narration still displays, error logged, state resets
-  - Trigger narrations marked non-movement (quantifier skipped for them)
-  - `times_met` incremented and non-repeatable triggers marked after each fire
-
-- **Trigger Tests** - Comprehensive mock LLM test suite
-  - New `tests/trigger_tests.rs`: 5 integration tests (requires Playwright + mock LLM server)
-  - Tests: first encounter fires, second encounter skipped, multiple triggers, non-repeatable behavior, LLM failure graceful degradation
-
-### Documentation Updated
-- `architecture/system.md` - New Model tier (Trigger, CharacterState), Engine tier (trigger_eval), Narrative tier (continuation)
-- `reference/data_schemas.md` - Trigger, NpcEncounterState, CharacterState schemas; NpcCard updated with triggers field
-- `system/narration_engine.md` - Continuation narration flow, trigger evaluation, `is_generating` behavior
-- `system/navigation.md` - Auto-trigger phase after movement, quantifier skip for triggers
-- `system/game_flow.md` - Phase 3.5: Trigger Evaluation, dual LLM call in Phase 4
-
-### Data Updated
-- `data/worlds/redmist_estate/characters/gabriella.json` - First-encounter trigger example
-- `data/worlds/test/characters/shopkeeper.json` - `TimesMet Eq 0` trigger (non-repeatable)
-- `data/worlds/test/characters/ranger.json` - `TimesMet Lt 3` trigger (repeatable)
-- `data/worlds/test/characters/bartender.json` - No triggers (control case)
-
-## 2026-04-18 (continued)
-
-### Added
-- **Scene Quantification (Dual-LLM Architecture)** - Dynamic NPC presence detection
-  - New `quantifier.rs` module with `QuantifierBackend`, `QuantifierPromptBuilder`, and response parser
-  - Secondary LLM model via `QUANTIFIER_MODEL` env var (defaults to free model)
-  - Quantifier prompt includes: room info, previous room NPCs, last 4 history entries, player action
-  - Response parsing: JSON-first → text fallback → validation against known NPCs
-  - Confidence levels: High (JSON), Medium (text fallback), Low (use static NPCs)
-  - Automatic fallback to static `room.npcs` when quantifier fails
-  - Integration in `fragments.rs` WalkTo action handler
-
-- **Quantified NPCs Sidebar** - Persistent NPC list for visual sidebar
-  - New `npcs_in_area: Vec<NpcCard>` field in `GameState` for storing quantifier results
-  - Visual sidebar now reads from stored quantifier result instead of static room.npcs
-  - Re-quantification triggers after EVERY LLM generation (LLM decides NPC presence)
-  - Fallback to static room.npcs when quantifier unavailable or npcs_in_area empty
-  - Added 4 tests for npcs_in_area field and sidebar behavior
-
-- **OpenRouter Client Enhancement** - Dual model support
-  - Added `call_openrouter_with_model()` for flexible model selection
-  - Added `get_llm_model()` and `get_quantifier_model()` helper functions
-  - Original `call_openrouter()` refactored to use the new helper
-
-- **FreeAction NPC Fix** - Fixed empty NPC list in free actions
-  - `fragments.rs` FreeAction handler now correctly fetches static NPCs from room
-
-## 2026-04-18
-
-### Changed
-- **Visual Sidebar Images** - Improved NPC portrait visibility
-  - Changed NPC grid from 2-column to single column layout
-  - Images now display at approximately double the previous width
-  - Makes character portraits more visible and easier to identify
-
-### Added
-- **Headshot Image Support** - Enhanced character and room image handling
-  - New fields in `CharacterSheet`: `profile_image` and `headshot_image` (both Optional<String>)
-  - Room images use existing `image_path` field in map JSON
-  - Visual sidebar now displays NPC portraits in 2-column grid (per UI spec)
-  - Images in visual sidebar are clickable to toggle sidebar expand/collapse
-  - CSS added: cursor:pointer, hover states for images
-  - Integration tests added for world data loading with image paths
-
-### Changed
-- **Visual Sidebar Layout** - NPCs now displayed inside visual sidebar (20% column) with grid layout
-  - Removed separate character-headshots section that was blocking game text
-  - NPCs use headshot_image with fallback to image_path
-  - Grid: 2 columns desktop, responsive breakpoints
-
-## 2026-04-17
-
-### Added
-- **PromptContext Refactoring** - Unified context for LLM calls
-  - New `PromptContext` struct in `prompt.rs` containing all prompt fields
-  - `PromptBuilder::from_context()` method creates context from game state
-  - Simplified `LlmBackend` trait to use `PromptContext`
-  - All 3 LLM methods now take `&PromptContext` instead of individual fields
-  - Cleaner backend implementations (OpenRouter, Mock, DeepSeek)
-
-- **NPC Prompt Structure** - All characters now included in LLM prompts
-  - New fields in PromptBuilder: `all_npcs` and `npcs_in_area`
-  - Two output sections: `<KnownNpcs>` (condensed roster of all characters) and `<NpcsInRoom>` (room-specific full cards)
-  - Presence status shows "(in room)" or "(elsewhere)"
-
-### Changed
-- **OpenRouter Client** - Enhanced content extraction
-  - Robust fallback chain: content → reasoning → reasoning_content
-  - Added is_non_empty() helper to check both null and empty string
-  - Added logging to show which extraction path was used
-
-## 2026-04-16
-
-### Changed
-- **Location Display** - Location now shown in story log as inline header
-  - Template modified: location entries rendered as "Room Name - HH:MM" inline
-  - Added `is_location` field to `LogEntryView` for detection (sender + empty text)
-  - Location removed from header template to story log
-  - Green color (#4ade80) with bold styling
-  - CSS classes `.location-header` and `.location-timestamp` added
-
-### Changed
-- **Game Start Flow** - Simplified startup
-  - Removed "Welcome to..." and "Logged in as..." system messages
-  - Scenario text directly shows without extra system entries
-  - Location entry created when using WalkTo action
-
-### Fixed
-- **Tests Updated** - Updated tests for new location display behavior
-  - `tests/template_tests.rs` - check connection-status instead of location in header
-  - `tests/spec_tests.rs` - check `.location-header` in story log
-  - `tests/flow_mock_tests.rs` - check `.location-header`
-  - `tests/ui_tests.rs` - check `.location-header`
-
-### Added  
-- **build.py** - New build script in `build.py`
-  - Runs: cargo build, cargo clippy, cargo test, cargo llvm-cov
-
-## 2026-04-14
-
-### Added
-- **Starting Scenarios** - Configurable narrative introductions that play at game start
-  - New `src/model/scenario.rs` with `StartingScenario` struct
-  - New `scenarios` field in `WorldManifest` (in `world.json`)
-  - Template variable `{{user}}` substituted with player name
-  - Scenario text replaces LLM call for first response
-  - Backward compatible (worlds without scenarios use LLM fallback)
-  - Example scenarios added to `redmist_estate` and `test` worlds
-  - Auto-selects first scenario in array
-
-### Added
-- **Integration Test Infrastructure** - Dynamic port allocation and config-based LLM backend
-  - New `tests/test_config.json` with port range (3010-3030) and backend settings
-  - New `TestConfig`, `get_available_port()`, `get_config_port()` in test_utils.rs
-  - All 6 test files now use dynamic port allocation
-  - Config-based LLM backend selection with test-specific overrides
-  - Backward compatibility with LLM_BACKEND env var
-
-### Changed
-- **Room Entry LLM** - Room entry now shows LLM-generated narration
-  - WalkTo shows minimal header (room name) instead of static description
-  - LLM auto-triggers on first game load
-  - NPCs from target room now included in LLM prompts
-
-## 2025-04-14
-
-### Added
-- **System Prompt XML Refactor** - Converted prompt sections from `=== HEADER ===` to XML-wrapped format
-  - All 8 prompt sections now use `<Header>content</Header>` format
-  - Updated `src/narrative/prompt.rs` with opening and closing XML tags
-  - All 108 tests pass
-  - Sections: SystemPrompt, GameState, NpcPresence, PlayerCharacter, WorldLore, ConversationHistory, PlayerInput, AuxiliaryInstructions
-
-### Changed
-- **LLM Context Pipeline** - SillyTavern-style layered prompt system
-  - New `src/narrative/prompt.rs` module with `PromptBuilder`
-  - 8-layer prompt construction (System, Game State, NPC Cards, Player, World Info, History, User Input, PHI)
-  - Token budget management with hard truncation
-  - Prompt injection sanitization
-  - Updated `src/narrative/llm.rs` to use PromptBuilder with full history
-  - Support for OpenRouter and DeepSeek backends
-  - 30+ unit tests for prompt building and sanitization
-  - See `docs/architecture/system.md` and `docs/system/llm_processing.md` for specs
-
-### Added
-- **Askama template migration (pilot)** - Migrated header template from manual `format!` strings to Askama
-  - New `src/server/templates.rs` with compile-time validated `HeaderTemplate`
-  - New `tests/template_tests.rs` with fast unit tests (<1ms vs ~5s for integration tests)
-  - Compile-time validation: missing field = compiler error
-  - Added `askama = "0.12"` to dependencies
-
-### Changed
-- `src/server/fragments.rs` now uses `HeaderTemplate` instead of manual string formatting
-
-### Added (Full Migration)
-- **Full Askama migration** - All 4 templates now use Askama (complete)
-  - `StoryLogTemplate` - Renders narration history with auto-escaped text
-  - `VisualSidebarTemplate` - Renders room image + NPC portraits
-  - `ActionAreaTemplate` - Renders command form with state-aware disabled
-  - 12 unit tests in `src/server/templates.rs` (all pass)
-  - Rust 2024 compatible (avoided reserved words in CSS)
-
-## 2025-04-12
-
-### Added
-- Multi-world support with CLI arguments (`--world`, `--port`, `--list-worlds`)
-- Data organized under `data/worlds/<world_id>/`
-- Test world at `data/worlds/test/` for UI tests
-- UI tests spawn self-managed server on port 3001
-- Auto-kill existing process when port is in use
-- Static file serving for `/data/images/` and `/assets/`
-- Image endpoint route `/data/images/:file` for serving character images
-- UI tests for image loading and NPC image visibility
-- `run_background.ps1` script for manual testing
-
-### Changed
-- Migrated from Ratatui TUI to HTMX web dashboard
-- Server added with Axum + WebSocket for real-time updates
-- Added `crate::server::*` module, removed `crate::ui::*`
-- Fallback service now serves from `assets` directory
-- Use `unpkg.com` CDN for HTMX and WS extension (jsdelivr issues on Windows)
-
-### Fixed
-- Static image 404s by adding explicit routes and services for `/data/images/`
-- Server not binding on Windows (use `Start-Process -WindowStyle Hidden`)
-- WS extension not loading (CDN issue - switched to older version 2.0.3)

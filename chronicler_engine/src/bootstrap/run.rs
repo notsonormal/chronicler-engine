@@ -76,6 +76,7 @@ pub fn run(args: Args) -> crate::error::Result<()> {
     let npcs_map: std::collections::HashMap<String, NpcCard> = state.npcs.clone();
     let npcs_arc = Arc::new(npcs_map);
     let starting_room = manifest.starting_room_id.clone();
+    let scenario_text = manifest.default_scenario().map(|s| s.text.clone());
 
     // [DOC: docs/architecture/system.md]
     let config = ServerConfig { port: args.port };
@@ -84,9 +85,7 @@ pub fn run(args: Args) -> crate::error::Result<()> {
     })?;
 
     // [DOC: docs/system/narration_engine.md]
-    let has_scenario = manifest
-        .default_scenario()
-        .is_some_and(|s| !s.text.is_empty());
+    let has_scenario = scenario_text.as_ref().is_some_and(|t| !t.is_empty());
     if !has_scenario {
         let storage_for_task = Arc::clone(&snapshot_storage);
         let world_for_task = Arc::clone(&world_arc);
@@ -163,6 +162,7 @@ pub fn run(args: Args) -> crate::error::Result<()> {
         starting_room,
         snapshot_storage,
         config,
+        scenario_text,
     ))?;
 
     Ok(())

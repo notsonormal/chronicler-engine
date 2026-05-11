@@ -1,0 +1,73 @@
+# ADR-010: Concurrency and Generation Gate Model
+
+**Date:** 2026-05-10
+
+---
+
+## Context
+
+The engine used `std::thread::spawn` for all LLM work, creating OS threads invisible to the Tokio runtime. These threads could not be cancelled and silently poisoned mutexes on panic. When Phase 1.7 replaced `Arc<Mutex<GameState>>` with SQLite snapshots, the application-level serialization was lost, exposing a read-modify-write race in `process_action`.
+
+Additionally, `std::thread::sleep(Duration::from_millis(50))` hacks were used to let "inner threads" start before HTTP responses returned.
+
+---
+
+## Decision
+
+**Remove all `std::thread::spawn` from production code and replace with `tokio::task::spawn_blocking`, plus an `AtomicBool` generation gate for domain-level action serialization.**
+
+### Tokio Migration
+
+| Before | After |
+|--------|-------|
+| `std::thread::spawn` in `game_service.rs` | Synchronous methods; callers spawn |
+| `std::thread::spawn` in `fragments.rs` handlers | `tokio::task::spawn_blocking` |
+| `std::thread::spawn` in `bootstrap.rs` arrival | `runtime.spawn_blocking()` |
+| `std::thread::sleep(50ms)` hack | Removed entirely |
+
+Backend traits (`LlmBackend`, `QuantifierBackendTrait`) remain synchronous. The HTTP layer (Axum/Tokio) is responsible for non-blocking execution.
+
+### Generation Gate
+
+```rust
+pub struct AppState {
+    pub is_generating: AtomicBool,
+    // ...
+}
+```
+
+- `compare_exchange(false, true, SeqCst, SeqCst)` in `process_action` for async actions
+- `GenerationGuard` (RAII) ensures flag is cleared on task exit, even on panic
+- Client-side: HTMX `hx-sync="this:drop"` + `saveActionArea()` button disable
+- Sync actions (`Look`, `Inventory`, `Quit`) bypass the gate
+
+---
+
+## Consequences
+
+### Positive
+- **Runtime observability**: `spawn_blocking` tasks are visible to Tokio
+- **No mutex poisoning**: `AtomicBool` + RAII guard is panic-safe
+- **Domain semantics**: "Can't act while generating" is correct for a text adventure
+- **Simpler tests**: Mock backends are synchronous; no thread timing issues
+
+### Negative
+- **Runtime dependency**: Requires active Tokio runtime (guaranteed by Axum)
+- **No cancellation**: `spawn_blocking` tasks still run to completion
+
+### Trade-offs
+- Chose `spawn_blocking` over `tokio::spawn` + `async` traits because backend traits are sync and `dyn async Trait` is complex in Rust 2024
+- Chose generation gate over mutex because it rejects rather than queues, matching single-player semantics
+
+---
+
+## Related ADRs
+
+- [ADR-008: SQLite Snapshot Persistence](./adr-008-sqlite-snapshot-persistence.md) — Snapshots removed the old mutex; generation gate replaced it
+
+---
+
+## History
+
+- **2026-05-05**: Initial plan to replace `std::thread::spawn` with Tokio
+- **2026-05-10**: Generation gate added to fix race condition exposed by snapshot migration

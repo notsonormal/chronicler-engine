@@ -625,10 +625,22 @@ fn test_retry_no_input_text() {
 fn test_retry_room_not_found() {
     let mut state = create_test_state();
     state.narrative.history.clear();
-    state.add_log("look around".to_string(), Some("Player".to_string()), LogType::Input);
+    state.add_log(
+        "look around".to_string(),
+        Some("Player".to_string()),
+        LogType::Input,
+    );
     state.movement.current_room_id = "non_existent_room".to_string();
 
-    let ctx = make_test_context(state);
+    let ctx = make_test_context(state.clone());
+    // Save pre-main snapshot so retry uses the state with non-existent room
+    let pre_main = GameStateSnapshot::from_game_state(&state, "pre-main:test".to_string(), 0);
+    let _ = ctx.snapshot_storage.save(&pre_main);
+
+    // Re-save the main snapshot so it remains the latest (load_latest uses max created_at)
+    let main = GameStateSnapshot::from_game_state(&state, "test".to_string(), 0);
+    let _ = ctx.snapshot_storage.save(&main);
+
     let service = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::default()),
         Arc::new(MockQuantifierBackend::default()),
@@ -640,7 +652,7 @@ fn test_retry_room_not_found() {
     assert!(
         matches!(
             guard.narrative.generation.status,
-            GenerationStatus::Error(ref msg) if msg.contains("room not found")
+            GenerationStatus::Error(ref msg) if msg.contains("Room not found")
         ),
         "Expected room not found error: {:?}",
         guard.narrative.generation.status
@@ -651,7 +663,11 @@ fn test_retry_room_not_found() {
 fn test_retry_llm_error() {
     let mut state = create_test_state();
     state.narrative.history.clear();
-    state.add_log("look around".to_string(), Some("Player".to_string()), LogType::Input);
+    state.add_log(
+        "look around".to_string(),
+        Some("Player".to_string()),
+        LogType::Input,
+    );
 
     let ctx = make_test_context(state);
     let service = DefaultGameService::with_mock_quantifier(
@@ -676,9 +692,22 @@ fn test_retry_llm_error() {
 fn test_retry_empty_narration() {
     let mut state = create_test_state();
     state.narrative.history.clear();
-    state.add_log("look around".to_string(), Some("Player".to_string()), LogType::Input);
+    state.add_log(
+        "look around".to_string(),
+        Some("Player".to_string()),
+        LogType::Input,
+    );
 
-    let ctx = make_test_context(state);
+    let ctx = make_test_context(state.clone());
+
+    // Save a pre-main snapshot so retry has something to work with
+    let pre_main = GameStateSnapshot::from_game_state(&state, "pre-main:test".to_string(), 0);
+    let _ = ctx.snapshot_storage.save(&pre_main);
+
+    // Re-save the main snapshot so it remains the latest (load_latest uses max created_at)
+    let main = GameStateSnapshot::from_game_state(&state, "test".to_string(), 0);
+    let _ = ctx.snapshot_storage.save(&main);
+
     let service = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::with_empty_response()),
         Arc::new(MockQuantifierBackend::default()),
@@ -694,5 +723,203 @@ fn test_retry_empty_narration() {
         ),
         "Expected empty response error: {:?}",
         guard.narrative.generation.status
+    );
+}
+
+#[test]
+fn test_pre_main_snapshot_saved_before_narration() {
+    let mut state = create_test_state();
+    state.narrative.history.clear();
+    state.narrative.generation.status = GenerationStatus::Idle;
+    let ctx = make_test_context(state);
+    let service = DefaultGameService::with_mock_quantifier(
+        Arc::new(MockBackend::default()),
+        Arc::new(MockQuantifierBackend::default()),
+    );
+
+    service.execute_action(
+        ctx.clone(),
+        "examine the room".to_string(),
+        "Player".to_string(),
+    );
+
+    let completed = wait_for_generation_complete(&ctx, 1000);
+    assert!(completed, "FreeAction should complete within timeout");
+
+    // Find the latest snapshot to get the turn UUID
+    let latest = ctx.snapshot_storage.load_latest(None).unwrap().unwrap();
+    let turn_uuid = latest.message_id.clone();
+
+    // Verify pre-main snapshot exists
+    let pre_main = ctx
+        .snapshot_storage
+        .load_by_message(&format!("pre-main:{turn_uuid}"), 0)
+        .unwrap();
+    assert!(pre_main.is_some(), "pre-main snapshot should exist");
+    let pre_main = pre_main.unwrap();
+    assert!(pre_main.committed, "pre-main snapshot should be committed");
+    assert_eq!(pre_main.swipe_index, 0);
+}
+
+#[test]
+fn test_pre_event_snapshot_saved_before_continuation() {
+    let mut state = create_test_state_with_trigger_npc();
+    state.narrative.history.clear();
+    state.narrative.generation.status = GenerationStatus::Idle;
+    // Reset times_met so the trigger is eligible to fire
+    if let Some(encounter) = state.character_state.npcs.get_mut("shopkeeper") {
+        encounter.times_met = 0;
+    }
+    let ctx = make_test_context(state);
+
+    // Use a quantifier that explicitly returns the shopkeeper NPC
+    let quantifier = MockQuantifierBackend {
+        npcs_to_return: vec!["shopkeeper".to_string()],
+        movement_to_return: None,
+    };
+
+    let service = DefaultGameService::with_mock_quantifier(
+        Arc::new(MockBackend::default()),
+        Arc::new(quantifier),
+    );
+
+    service.execute_action(
+        ctx.clone(),
+        "examine the shopkeeper".to_string(),
+        "Player".to_string(),
+    );
+
+    let completed = wait_for_generation_complete(&ctx, 1000);
+    assert!(
+        completed,
+        "FreeAction with trigger should complete within timeout"
+    );
+
+    // Find the latest snapshot to get the turn UUID
+    let latest = ctx.snapshot_storage.load_latest(None).unwrap().unwrap();
+    let turn_uuid = latest.message_id.clone();
+
+    // Verify pre-event snapshot exists
+    let pre_event = ctx
+        .snapshot_storage
+        .load_by_message(&format!("pre-event:{turn_uuid}"), 0)
+        .unwrap();
+    assert!(pre_event.is_some(), "pre-event snapshot should exist");
+    let pre_event = pre_event.unwrap();
+    assert!(
+        pre_event.committed,
+        "pre-event snapshot should be committed"
+    );
+    assert_eq!(pre_event.swipe_index, 0);
+    // pre-event snapshot should have last_trigger set
+    assert!(
+        pre_event.narrative.last_trigger.is_some(),
+        "pre-event should store trigger context"
+    );
+}
+
+#[test]
+fn test_retry_main_narration_uses_pre_main_snapshot() {
+    let mut state = create_test_state();
+    state.narrative.history.clear();
+    state.add_log(
+        "look around".to_string(),
+        Some("Player".to_string()),
+        LogType::Input,
+    );
+    state.narrative.generation.status = GenerationStatus::Idle;
+
+    let ctx = make_test_context(state.clone());
+
+    // Save pre-main snapshot to simulate normal action execution
+    let pre_main = GameStateSnapshot::from_game_state(&state, "pre-main:test".to_string(), 0);
+    let _ = ctx.snapshot_storage.save(&pre_main);
+
+    // Re-save the main snapshot so it remains the latest (load_latest uses max created_at)
+    let main = GameStateSnapshot::from_game_state(&state, "test".to_string(), 0);
+    let _ = ctx.snapshot_storage.save(&main);
+
+    let service = DefaultGameService::with_mock_quantifier(
+        Arc::new(MockBackend::default()),
+        Arc::new(MockQuantifierBackend::default()),
+    );
+
+    service.retry_last_response(ctx.clone());
+
+    let completed = wait_for_generation_complete(&ctx, 1000);
+    assert!(completed, "Retry should complete within timeout");
+
+    let guard = crate::latest_state(&ctx);
+    // Should have a narration (from mock backend)
+    let narrations: Vec<_> = guard
+        .narrative
+        .history
+        .iter()
+        .filter(|e| e.log_type == LogType::Narration)
+        .collect();
+    assert!(!narrations.is_empty(), "Retry should generate narration");
+}
+
+#[test]
+fn test_retry_event_continuation_uses_pre_event_snapshot() {
+    let mut state = create_test_state_with_trigger_npc();
+    state.narrative.history.clear();
+    state.add_log(
+        "look around".to_string(),
+        Some("Player".to_string()),
+        LogType::Input,
+    );
+    // Add a main narration
+    state.add_log(
+        "You look around the shop.".to_string(),
+        None,
+        LogType::Narration,
+    );
+    // Add an event + continuation to simulate trigger having fired
+    state.add_log(String::new(), Some("Greeting".to_string()), LogType::Event);
+    state.add_log(
+        "The shopkeeper looks up with a smile.".to_string(),
+        None,
+        LogType::Narration,
+    );
+    state.narrative.generation.status = GenerationStatus::Idle;
+    state.narrative.last_trigger = Some(chronicler_engine::model::state::StoredTriggerContext {
+        npc_id: "shopkeeper".to_string(),
+        trigger_idx: 0,
+        trigger_name: "Greeting".to_string(),
+        trigger_repeat: false,
+        trigger_narration_prompt: "The shopkeeper looks up with a smile.".to_string(),
+        system_prompt: "sys".to_string(),
+        user_prompt: "user".to_string(),
+        max_tokens: None,
+    });
+
+    let ctx = make_test_context(state.clone());
+
+    // Save pre-event snapshot
+    let pre_event = GameStateSnapshot::from_game_state(&state, "pre-event:test".to_string(), 0);
+    let _ = ctx.snapshot_storage.save(&pre_event);
+
+    let service = DefaultGameService::with_mock_quantifier(
+        Arc::new(MockBackend::default()),
+        Arc::new(MockQuantifierBackend::default()),
+    );
+
+    service.retry_last_response(ctx.clone());
+
+    let completed = wait_for_generation_complete(&ctx, 1000);
+    assert!(completed, "Event retry should complete within timeout");
+
+    let guard = crate::latest_state(&ctx);
+    // Main narration should be unchanged (still from original)
+    let main_narrations: Vec<_> = guard
+        .narrative
+        .history
+        .iter()
+        .filter(|e| e.log_type == LogType::Narration)
+        .collect();
+    assert!(
+        !main_narrations.is_empty(),
+        "Should have at least one narration after retry"
     );
 }

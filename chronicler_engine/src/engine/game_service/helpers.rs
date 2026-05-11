@@ -39,6 +39,20 @@ pub fn save_state(
 }
 
 /// [DOC: docs/architecture/system.md]
+pub fn save_committed_state(
+    ctx: &GameServiceContext,
+    state: &GameState,
+    message_id: String,
+    swipe_index: u32,
+) {
+    let mut snapshot = GameStateSnapshot::from_game_state(state, message_id, swipe_index);
+    snapshot.committed = true;
+    if let Err(e) = ctx.snapshot_storage.save(&snapshot) {
+        log::error!("Failed to save committed snapshot: {e}");
+    }
+}
+
+/// [DOC: docs/architecture/system.md]
 pub fn map_llm_error(e: &EngineError) -> String {
     match e {
         EngineError::Llm(LlmFailure::Timeout) => "LLM Error: request timed out".to_string(),

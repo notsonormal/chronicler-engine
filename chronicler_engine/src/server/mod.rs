@@ -133,6 +133,7 @@ pub fn create_app_with_storage(
         settings: Arc::new(RwLock::new(settings)),
         cancel_token: CancellationToken::new(),
         is_generating: Arc::new(AtomicBool::new(false)),
+        scenario_text: None,
     };
     build_router(app_state)
 }
@@ -181,6 +182,8 @@ pub struct AppState {
     pub settings: Arc<RwLock<AppSettings>>,
     pub cancel_token: CancellationToken,
     pub is_generating: Arc<AtomicBool>,
+    /// Scenario text injected on first load; used by reset to re-create initial state.
+    pub scenario_text: Option<String>,
 }
 
 impl AppState {
@@ -241,11 +244,13 @@ pub async fn run_server(
         starting_room_id,
         snapshot_storage,
         ServerConfig::default(),
+        None,
     )
     .await
 }
 
 /// [DOC: docs/architecture/system.md]
+#[allow(clippy::too_many_arguments)]
 pub async fn run_server_with_config(
     world: Arc<WorldCard>,
     map: Arc<MapDef>,
@@ -254,6 +259,7 @@ pub async fn run_server_with_config(
     starting_room_id: String,
     snapshot_storage: Arc<dyn SnapshotStorage>,
     config: ServerConfig,
+    scenario_text: Option<String>,
 ) -> Result<()> {
     let app_state = AppState {
         snapshot_storage,
@@ -268,6 +274,7 @@ pub async fn run_server_with_config(
             crate::settings::load_settings().unwrap_or_else(|_| AppSettings::default()),
         )),
         cancel_token: CancellationToken::new(),
+        scenario_text,
     };
     let cancel_token = app_state.cancel_token.clone();
 

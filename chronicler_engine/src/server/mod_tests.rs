@@ -145,6 +145,7 @@ fn test_app_state_lock_state_success() {
         settings: Arc::new(std::sync::RwLock::new(AppSettings::default())),
         cancel_token: tokio_util::sync::CancellationToken::new(),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        scenario_text: None,
     };
 
     let loaded = app_state.load_state();
@@ -242,6 +243,7 @@ fn test_app_state_lock_state_poisoned() {
         settings: Arc::new(std::sync::RwLock::new(AppSettings::default())),
         cancel_token: tokio_util::sync::CancellationToken::new(),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        scenario_text: None,
     };
 
     let loaded = app_state.load_state();

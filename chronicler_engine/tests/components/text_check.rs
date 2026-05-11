@@ -313,7 +313,8 @@ async fn test_action_check_auto_check_disabled() {
 #[tokio::test]
 async fn test_action_check_finds_issues() {
     let state = create_test_state();
-    let app = create_app_for_testing_with_settings(state, text_check_settings(TextCheckMode::Spell));
+    let app =
+        create_app_for_testing_with_settings(state, text_check_settings(TextCheckMode::Spell));
 
     let req = Request::builder()
         .uri("/action/check")

@@ -22,15 +22,27 @@ fn test_apply_to_restores_state() {
     );
 
     // Verify target starts differently
-    assert_ne!(target.movement.current_room_id, original.movement.current_room_id);
+    assert_ne!(
+        target.movement.current_room_id,
+        original.movement.current_room_id
+    );
 
     snapshot.apply_to(&mut target);
 
     // After apply_to, target should match original's snapshot data
-    assert_eq!(target.movement.current_room_id, original.movement.current_room_id);
-    assert_eq!(target.narrative.history.len(), original.narrative.history.len());
+    assert_eq!(
+        target.movement.current_room_id,
+        original.movement.current_room_id
+    );
+    assert_eq!(
+        target.narrative.history.len(),
+        original.narrative.history.len()
+    );
     assert_eq!(target.scene.npcs_in_area, original.scene.npcs_in_area);
-    assert_eq!(target.character_state.npcs.len(), original.character_state.npcs.len());
+    assert_eq!(
+        target.character_state.npcs.len(),
+        original.character_state.npcs.len()
+    );
 }
 
 #[test]

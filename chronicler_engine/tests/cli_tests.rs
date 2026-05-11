@@ -11,7 +11,10 @@ fn temp_dir(test_name: &str) -> std::path::PathBuf {
 #[test]
 fn test_resolve_engine_data_path_returns_path() {
     let path = resolve_engine_data_path();
-    assert!(!path.as_os_str().is_empty(), "Should return a non-empty path");
+    assert!(
+        !path.as_os_str().is_empty(),
+        "Should return a non-empty path"
+    );
 }
 
 #[test]
@@ -20,7 +23,10 @@ fn test_scan_worlds_missing_dir() {
     let _ = std::fs::create_dir_all(&tmp);
     // No 'worlds' subdirectory
     let result = scan_worlds(&tmp).expect("scan should succeed");
-    assert!(result.is_empty(), "Missing worlds dir should return empty vec");
+    assert!(
+        result.is_empty(),
+        "Missing worlds dir should return empty vec"
+    );
     let _ = std::fs::remove_dir_all(&tmp);
 }
 
@@ -93,7 +99,10 @@ fn test_list_available_worlds_empty() {
 
     // Test via scan_worlds which list_available_worlds calls.
     let result = scan_worlds(&tmp).expect("scan should succeed");
-    assert!(result.is_empty(), "Empty worlds dir should yield empty list");
+    assert!(
+        result.is_empty(),
+        "Empty worlds dir should yield empty list"
+    );
 
     let _ = std::fs::remove_dir_all(&tmp);
 }
