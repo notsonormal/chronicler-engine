@@ -50,6 +50,7 @@ fn test_story_log_template_with_entries() {
         text: "Welcome to the adventure!".to_string(),
         log_type: LogType::Narration,
         timestamp: Utc::now(),
+        ..Default::default()
     }];
     let template = StoryLogTemplate::new(&entries);
     let rendered = template.render().unwrap();
@@ -66,6 +67,7 @@ fn test_story_log_template_escapes_html() {
         text: "<script>alert('xss')</script>".to_string(),
         log_type: LogType::Narration,
         timestamp: Utc::now(),
+        ..Default::default()
     }];
     let template = StoryLogTemplate::new(&entries);
     let rendered = template.render().unwrap();
@@ -80,6 +82,7 @@ fn test_story_log_template_has_message_actions() {
         text: "Welcome!".to_string(),
         log_type: LogType::Narration,
         timestamp: Utc::now(),
+        ..Default::default()
     }];
     let template = StoryLogTemplate::new(&entries);
     let rendered = template.render().unwrap();
@@ -97,6 +100,7 @@ fn test_story_log_template_input_has_check_button() {
         text: "look around".to_string(),
         log_type: LogType::Input,
         timestamp: Utc::now(),
+        ..Default::default()
     }];
     let template = StoryLogTemplate::new(&entries);
     let rendered = template.render().unwrap();
@@ -105,24 +109,46 @@ fn test_story_log_template_input_has_check_button() {
 }
 
 #[test]
-fn test_story_log_template_renders_event_entry() {
+fn test_story_log_template_renders_event_header() {
     let entries = vec![LogEntry {
         id: 1,
-        sender: Some("Gabriella Introduction".to_string()),
-        text: "".to_string(),
-        log_type: LogType::Event,
+        sender: None,
+        text: "Gabriella steps forward.".to_string(),
+        log_type: LogType::Narration,
         timestamp: Utc::now(),
+        event_header: Some("Gabriella Introduction".to_string()),
+        ..Default::default()
     }];
     let template = StoryLogTemplate::new(&entries);
     let rendered = template.render().unwrap();
     assert!(rendered.contains("event-header"));
     assert!(rendered.contains("Gabriella Introduction"));
     assert!(rendered.contains("event-timestamp"));
-    // Event entries should have edit/delete buttons but no check/retry
     assert!(rendered.contains("edit-btn"));
     assert!(rendered.contains("delete-btn"));
     assert!(!rendered.contains("check-btn"));
-    assert!(!rendered.contains("retry-btn"));
+    // Retry button should appear on last narration
+    assert!(rendered.contains("retry-btn"));
+}
+
+#[test]
+fn test_story_log_template_renders_location_header() {
+    let entries = vec![LogEntry {
+        id: 1,
+        sender: None,
+        text: "You walk into the hall.".to_string(),
+        log_type: LogType::Narration,
+        timestamp: Utc::now(),
+        location_header: Some("Entrance Hall".to_string()),
+        ..Default::default()
+    }];
+    let template = StoryLogTemplate::new(&entries);
+    let rendered = template.render().unwrap();
+    assert!(rendered.contains("location-header"));
+    assert!(rendered.contains("Entrance Hall"));
+    assert!(rendered.contains("location-timestamp"));
+    assert!(rendered.contains("edit-btn"));
+    assert!(rendered.contains("delete-btn"));
 }
 
 #[test]

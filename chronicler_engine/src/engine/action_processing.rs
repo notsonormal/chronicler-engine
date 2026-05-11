@@ -91,11 +91,7 @@ pub fn handle_movement(
     }
 
     if let Ok(current_room) = get_current_room(&state) {
-        state.add_log(
-            String::new(),
-            Some(current_room.name.clone()),
-            LogType::Narration,
-        );
+        state.narrative.pending_location = Some(current_room.name.clone());
     }
 
     assert_state_consistency(&state)?;
@@ -133,11 +129,7 @@ pub fn commit_trigger_narration(
     }
     let mut state = state;
     state.narrative.last_trigger = Some(request.stored.clone());
-    state.add_log(
-        String::new(),
-        Some(request.stored.trigger_name.clone()),
-        LogType::Event,
-    );
+    state.narrative.pending_event = Some(request.stored.trigger_name.clone());
     state.add_log(continuation_text.to_string(), None, LogType::Narration);
     if !request.stored.trigger_repeat {
         mark_trigger_fired(
@@ -288,11 +280,7 @@ pub fn evaluate_and_narrate_triggers(
     if continuation_text.trim().is_empty() {
         return Ok(state);
     }
-    state.add_log(
-        String::new(),
-        Some(trigger.action.name.clone()),
-        LogType::Event,
-    );
+    state.narrative.pending_event = Some(trigger.action.name.clone());
     state.add_log(continuation_text, None, LogType::Narration);
     if !trigger.repeat {
         mark_trigger_fired(&mut state.character_state, &npc.id, trigger_idx);

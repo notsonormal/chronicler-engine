@@ -322,7 +322,7 @@ All within guardrail limits.
 
 ### For Bug Fixes
 1. Check Section 2.4 for error handling gaps.
-2. Run `cargo test --features diagnostics`.
+2. Run `cargo nextest run --features diagnostics`.
 3. Consider if the bug is a missing invariant — add to `state_diagnostics.rs`.
 
 ### For Refactors
@@ -352,7 +352,7 @@ All within guardrail limits.
 ## 9. Verification Log
 
 All findings in this review were verified against:
-- `cargo test --features diagnostics` — all 631+ tests pass
+- `cargo nextest run --features diagnostics` — all 631+ tests pass
 - `python build.py` — fmt + clippy + guardrails + build + 644 tests pass
-- `cargo test --test architecture` — arch-lint passes
+- `cargo nextest run --test architecture` — arch-lint passes
 - `cargo clippy --all-targets --all-features -D warnings` — clean

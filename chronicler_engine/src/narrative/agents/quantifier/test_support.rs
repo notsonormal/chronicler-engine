@@ -45,6 +45,7 @@ pub fn make_history() -> Vec<LogEntry> {
             text: "You enter the front gate.".to_string(),
             log_type: LogType::Narration,
             timestamp: Utc::now(),
+            ..Default::default()
         },
         LogEntry {
             id: 2,
@@ -52,6 +53,7 @@ pub fn make_history() -> Vec<LogEntry> {
             text: "I'll follow you inside.".to_string(),
             log_type: LogType::Dialogue,
             timestamp: Utc::now(),
+            ..Default::default()
         },
     ]
 }

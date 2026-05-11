@@ -322,8 +322,8 @@ No dead code introduced. No orphan imports detected by clippy.
 
 ```bash
 cd chronicler_engine
-cargo test --features diagnostics        # 474 unit tests + all integration tests pass
+cargo nextest run --features diagnostics        # 474 unit tests + all integration tests pass
 python build.py                          # fmt + clippy + guardrails + build + 644 tests pass
-cargo test --test architecture           # arch-lint passes
+cargo nextest run --test architecture           # arch-lint passes
 cargo clippy --all-targets --all-features -D warnings  # clean
 ```

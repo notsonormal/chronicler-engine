@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use chronicler_engine::engine::game_service::{DefaultGameService, GameService};
 use chronicler_engine::model::character::{CharacterSheet, NpcCard};
-use chronicler_engine::model::state::{GameState, LogType};
+use chronicler_engine::model::state::GameState;
 use chronicler_engine::model::trigger::{
     ComparisonOperator, Trigger, TriggerAction, TriggerCondition,
 };
@@ -58,7 +58,7 @@ fn test_retry_event_continuation_preserves_quantifier_result() {
         .narrative
         .history
         .iter()
-        .filter(|e| e.log_type == LogType::Event)
+        .filter(|e| e.event_header.is_some())
         .count();
     assert_eq!(
         event_count, 1,
@@ -188,7 +188,7 @@ fn test_trigger_continuation_runs_quantifier_and_detects_new_npc() {
         .narrative
         .history
         .iter()
-        .filter(|e| e.log_type == LogType::Event)
+        .filter(|e| e.event_header.is_some())
         .count();
     assert_eq!(
         event_count, 1,

@@ -224,9 +224,9 @@
                 });
         }
         
-        function deleteMessage(id) {
+        function deleteMessage() {
             if (!confirm('Delete this message?')) return;
-            fetch(`/history/${id}/delete`, { method: 'POST' })
+            fetch('/history/delete', { method: 'POST' })
                 .then(response => {
                     if (response.ok) {
                         htmx.ajax('GET', '/fragment/story-log', {target: '#story-log', swap: 'innerHTML'});

@@ -104,6 +104,8 @@ fn make_state(
             next_log_id: 1,
             generation: Default::default(),
             last_trigger: None,
+            pending_location: None,
+            pending_event: None,
         },
         scene: crate::model::state::SceneState { npcs_in_area },
         character_state,

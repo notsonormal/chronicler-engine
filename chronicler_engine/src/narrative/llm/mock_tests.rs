@@ -86,6 +86,7 @@ fn test_mock_with_history() {
             text: "You see a mysterious figure.".to_string(),
             log_type: LogType::Narration,
             timestamp: Utc::now(),
+            ..Default::default()
         },
         LogEntry {
             id: 2,
@@ -93,6 +94,7 @@ fn test_mock_with_history() {
             text: "Hello?".to_string(),
             log_type: LogType::Input,
             timestamp: Utc::now(),
+            ..Default::default()
         },
     ];
 
@@ -221,6 +223,7 @@ fn test_mock_with_substantial_history() {
                 LogType::Input
             },
             timestamp: Utc::now(),
+            ..Default::default()
         })
         .collect();
 

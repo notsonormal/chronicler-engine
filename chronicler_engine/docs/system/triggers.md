@@ -42,6 +42,9 @@ Each trigger is checked against the current `CharacterState`:
 ### 9. Narration
 Trigger actions now use the unified 8-layer prompt with continuation context in the user message.
 
+### 10. Inline Event Header
+When a trigger fires, the engine stores the event name in `NarrativeState.pending_event`. The next `add_log` call (which adds the trigger continuation narration) absorbs this pending metadata into `LogEntry.event_header`. The frontend renders the event header inside the same div as the continuation narration. There is no standalone `LogType::Event` entry.
+
 ## Timing: Evaluate BEFORE Increment
 
 A critical implementation detail: triggers are evaluated BEFORE `times_met` is incremented.
@@ -139,7 +142,6 @@ Gabriella emerges from the shadows...
 ```
 
 Event headers:
-- Use `LogType::Event` internally
 - Have no edit or retry buttons
 - Are rendered with `.event-header` and `.event-timestamp` CSS classes
 

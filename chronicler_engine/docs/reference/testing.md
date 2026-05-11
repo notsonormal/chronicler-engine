@@ -76,21 +76,21 @@ Integration tests write a temporary `settings.json` with Mock connections and se
 
 ```bash
 # Fast suite (default; LLM tests excluded)
-cargo test
+cargo nextest run
 python build.py
 
 # Include slow LLM tests
-cargo test -- --ignored
+cargo nextest run --run-ignored only
 python build.py --include-llm
 
 # Run only LLM tests
-cargo test --test flow_llm_tests -- --ignored
+cargo nextest run --test flow_llm_tests --run-ignored only
 python build.py --llm-only
 
 # Specific suites
-cargo test --test components
-cargo test --test browser
-cargo test --test flow_mock_tests
+cargo nextest run --test components
+cargo nextest run --test browser
+cargo nextest run --test flow_mock_tests
 ```
 
 ## UI Tests
@@ -100,7 +100,7 @@ UI tests use **playwright-rs** for browser automation. Requires Node.js 18+ and 
 ### Running with Visible Browser
 
 ```bash
-$env:HEADED = "1"; cargo test --test browser test_page_loads
+$env:HEADED = "1"; cargo nextest run --test browser test_page_loads
 ```
 
 ### Diagnostics on Failure

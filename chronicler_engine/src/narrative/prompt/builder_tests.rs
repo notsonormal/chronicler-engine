@@ -73,6 +73,7 @@ fn create_test_history() -> Vec<LogEntry> {
             text: "Welcome to the game!".to_string(),
             log_type: crate::model::state::LogType::Narration,
             timestamp: chrono::Utc::now(),
+            ..Default::default()
         },
         LogEntry {
             id: 2,
@@ -80,6 +81,7 @@ fn create_test_history() -> Vec<LogEntry> {
             text: "I look around.".to_string(),
             log_type: crate::model::state::LogType::Input,
             timestamp: chrono::Utc::now(),
+            ..Default::default()
         },
     ]
 }

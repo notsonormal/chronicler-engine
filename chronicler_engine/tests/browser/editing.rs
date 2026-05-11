@@ -70,13 +70,12 @@ async fn test_edit_mode_activates_on_click() {
 #[tokio::test]
 async fn test_edit_cancel_restores_original() {
     with_test_page(CONFIG_PATH, TEST_WORLD, |page, _port| async move {
-        // Get text from first non-location entry with actual text content
+        // Get text from first entry with actual text content
         let original_text: String = page
             .evaluate::<(), String>(
                 r#"(() => {
                     const entries = document.querySelectorAll('.log-entry');
                     for (const entry of entries) {
-                        if (entry.classList.contains('location')) continue;
                         const text = entry.querySelector('.text');
                         if (text && text.textContent.trim()) {
                             return text.textContent;
@@ -94,10 +93,10 @@ async fn test_edit_cancel_restores_original() {
             "Original text should not be empty, got: '{original_text}'"
         );
 
-        // Click edit on the same non-location entry
+        // Click edit on the first entry
         page.evaluate::<(), bool>(
             r#"(() => {
-                const entry = document.querySelector('.log-entry:not(.location)');
+                const entry = document.querySelector('.log-entry');
                 const btn = entry?.querySelector('.edit-btn');
                 if (btn) { btn.click(); return true; }
                 return false;
@@ -131,7 +130,6 @@ async fn test_edit_cancel_restores_original() {
                 r#"(() => {
                     const entries = document.querySelectorAll('.log-entry');
                     for (const entry of entries) {
-                        if (entry.classList.contains('location')) continue;
                         const text = entry.querySelector('.text');
                         if (text && text.textContent.trim()) {
                             return text.textContent;
@@ -169,10 +167,10 @@ async fn test_polling_pauses_during_edit() {
             "Should have polling trigger before edit"
         );
 
-        // Click edit on the same non-location entry
+        // Click edit on the first entry
         page.evaluate::<(), bool>(
             r#"(() => {
-                const entry = document.querySelector('.log-entry:not(.location)');
+                const entry = document.querySelector('.log-entry');
                 const btn = entry?.querySelector('.edit-btn');
                 if (btn) { btn.click(); return true; }
                 return false;
@@ -237,12 +235,13 @@ async fn test_delete_removes_message() {
         let initial_count = element_count(&page, "#story-log .log-entry").await;
         assert!(initial_count > 0, "Should have at least one log entry");
 
-        // Get the ID of the first deletable entry (one with a delete button)
-        let first_entry_id: String = page
+        // Get the ID of the last entry
+        let last_entry_id: String = page
             .evaluate::<(), String>(
                 r#"(() => {
-                    const entry = document.querySelector('.log-entry[data-id]');
-                    return entry ? entry.getAttribute('data-id') : '';
+                    const entries = document.querySelectorAll('.log-entry[data-id]');
+                    const last = entries[entries.length - 1];
+                    return last ? last.getAttribute('data-id') : '';
                 })()"#,
                 None,
             )
@@ -250,7 +249,7 @@ async fn test_delete_removes_message() {
             .unwrap();
 
         assert!(
-            !first_entry_id.is_empty(),
+            !last_entry_id.is_empty(),
             "Should find an entry with data-id"
         );
 
@@ -259,7 +258,7 @@ async fn test_delete_removes_message() {
             .await
             .unwrap();
 
-        // Click the delete button on the first entry
+        // Click any delete button (always deletes the last entry)
         page.evaluate::<(), bool>(
             r#"(() => {
                 const btn = document.querySelector('.log-entry .delete-btn');
@@ -271,8 +270,8 @@ async fn test_delete_removes_message() {
         .await
         .unwrap();
 
-        // Wait for the specific entry to disappear
-        wait_for_element_not_exists(&page, &format!("[data-id=\"{first_entry_id}\"]"), 50).await;
+        // Wait for the last entry to disappear
+        wait_for_element_not_exists(&page, &format!("[data-id=\"{last_entry_id}\"]"), 50).await;
 
         let current_count = element_count(&page, "#story-log .log-entry").await;
         assert!(
@@ -323,7 +322,7 @@ async fn test_edit_textarea_matches_original_height() {
         let original_height: f64 = page
             .evaluate::<(), f64>(
                 r#"(() => {
-                    const text = document.querySelector('.log-entry:not(.location) .text');
+                    const text = document.querySelector('.log-entry .text');
                     if (!text) return -1;
                     const rect = text.getBoundingClientRect();
                     return rect.height;
@@ -341,7 +340,7 @@ async fn test_edit_textarea_matches_original_height() {
         // Click edit
         page.evaluate::<(), bool>(
             r#"(() => {
-                const entry = document.querySelector('.log-entry:not(.location)');
+                const entry = document.querySelector('.log-entry');
                 const btn = entry?.querySelector('.edit-btn');
                 if (btn) { btn.click(); return true; }
                 return false;

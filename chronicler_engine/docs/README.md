@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-11 21:33 UTC*
+*Index last generated: 2026-05-11 23:16 UTC*
 
 ### Root files
 
@@ -52,6 +52,12 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Spec: Agent-Ready Pipeline Restructure for Chronicler Engine](./plans/multi-agent-architecture-overarching-spec.md)
 - [Plan: Observability & Automated Forensics](./plans/observability-and-forensics-plan.md)
 - [AI Steering & Guided Generation](./plans/steering-and-guided-generation.md)
+
+### `docs/plans/archived/`
+
+- [Implementation Plan: Restrict Message Deletion & Inline Location/Event Headers](./plans/archived/cyborg-obsidian-riri-williams.md)
+- [Plan: Restrict Message Deletion & Rethink Location/Event Headers](./plans/archived/lightray-thor-hulk.md)
+- [Implementation Plan: Test Suite Improvements](./plans/archived/test-fix-plan.md)
 
 ### `docs/reference/`
 
@@ -112,7 +118,7 @@ When adding a new feature:
 4. **Implement** - Write the code
 5. **Validate** - Run the full build and test suite:
    ```bash
-   python build.py  # Or manually: cargo fmt && cargo clippy && cargo test
+   python build.py  # Or manually: cargo fmt && cargo clippy && cargo nextest run
    ```
 6. **Archive** - Move completed plans to `plans/archived/`
 

@@ -210,13 +210,6 @@ body {
     border-bottom-left-radius: 4px;
 }
 
-/* Event - Left Aligned, Dark Cyan (same bubble as narration) */
-.log-entry.event {
-    margin-right: auto;
-    background: var(--color-log-narration);
-    border-bottom-left-radius: 4px;
-}
-
 /* Dialogue - Left Aligned, Orange Tinted */
 .log-entry.dialogue {
     margin-right: auto;

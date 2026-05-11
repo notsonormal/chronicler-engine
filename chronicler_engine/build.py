@@ -82,36 +82,29 @@ def check_rust_version():
     print(f"Rust version: {major}.{minor} (OK)")
 
 
-def has_nextest():
-    """Check if cargo-nextest is installed."""
+def require_nextest():
+    """Ensure cargo-nextest is installed; exit with error if not."""
     result = subprocess.run(
         ["cargo", "nextest", "--version"],
         capture_output=True,
         text=True,
     )
-    return result.returncode == 0
+    if result.returncode != 0:
+        print("ERROR: The nextest library is required. Install it with: cargo install cargo-nextest --locked")
+        sys.exit(1)
 
 
-def get_test_cmd(include_llm=False, strict=False):
-    """Return the test command, using nextest if available."""
-    if has_nextest():
-        cmd = "cargo nextest run --retries 2 -j 4"
-        if include_llm:
-            cmd += " --run-ignored all"
-        return cmd
-    print("WARNING: cargo-nextest not found. Falling back to cargo test (slower).")
-    cmd = "cargo test"
+def get_test_cmd(include_llm=False):
+    """Return the test command using nextest."""
+    cmd = "cargo nextest run --retries 2 -j 4"
     if include_llm:
-        cmd += " -- --ignored"
+        cmd += " --run-ignored all"
     return cmd
 
 
-def get_coverage_cmd(strict=False):
-    """Return the coverage test command, using nextest if available."""
-    if has_nextest():
-        return "cargo llvm-cov nextest --no-report --retries 2 -j 4"
-    print("WARNING: cargo-nextest not found. Falling back to cargo test for coverage.")
-    return "cargo llvm-cov --no-report"
+def get_coverage_cmd():
+    """Return the coverage test command using nextest."""
+    return "cargo llvm-cov nextest --no-report --retries 2 -j 4"
 
 
 def kill_port(port: int):
@@ -452,6 +445,7 @@ def main():
         return 0
 
     check_rust_version()
+    require_nextest()
 
     if args.strict:
         os.environ["RUSTFLAGS"] = "-D warnings"
@@ -500,7 +494,7 @@ def main():
         print("      Each test takes 1-3 minutes. Total: ~3-9 minutes.")
         print("      Do not interrupt. Set your tool timeout to >= 600s.")
         print("=" * 60)
-        llm_cmd = get_test_cmd(include_llm=True, strict=args.strict)
+        llm_cmd = get_test_cmd(include_llm=True)
         if "nextest" in llm_cmd:
             llm_cmd += " --test flow_llm_tests"
         else:
@@ -546,9 +540,9 @@ def main():
 
     timed_step("Running clippy...", "cargo clippy --all-targets --all-features -- -D warnings", env=cargo_env)
 
-    timed_step("Running architecture guardrail tests...", "cargo test --test architecture", env=cargo_env)
+    timed_step("Running architecture guardrail tests...", "cargo nextest run --test architecture", env=cargo_env)
 
-    timed_step("Running custom guardrails tests...", "cargo test --test guardrails", env=cargo_env)
+    timed_step("Running custom guardrails tests...", "cargo nextest run --test guardrails", env=cargo_env)
 
     timed_step("Running test structure guardrail...", "python scripts/check_test_structure.py", env=cargo_env)
 
@@ -586,7 +580,7 @@ def main():
     clean_sqlite_dbs(target_data_dir)
 
     if args.coverage:
-        timed_step("Running all tests with coverage...", get_coverage_cmd(strict=args.strict), check=False, env=cargo_env)
+        timed_step("Running all tests with coverage...", get_coverage_cmd(), check=False, env=cargo_env)
 
         steps.next("Generating coverage report...")
         json_path = cargo_target_dir / "llvm-cov" / "coverage.json"
@@ -604,7 +598,7 @@ def main():
         else:
             print("Warning: Could not generate coverage JSON.")
     else:
-        timed_step("Running all tests...", get_test_cmd(include_llm=args.include_llm, strict=args.strict), check=False, env=cargo_env)
+        timed_step("Running all tests...", get_test_cmd(include_llm=args.include_llm), check=False, env=cargo_env)
         if not args.include_llm:
             print(
                 "    NOTE: 3 LLM tests were skipped. "

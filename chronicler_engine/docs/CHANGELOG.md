@@ -68,19 +68,29 @@
   - New documentation: `docs/diagnostics/error_catalog.md` â€” structured reference for every variant
   - Updated `.agents/rules/DEBUGGING.md` error taxonomy table to reference structured variants
 
-### Added
-- **Message Action Buttons Redesign** â€” Completed implementation of top-right message action bar
-  - `delete_log(id: u64)` method added to `GameState` for safe history removal by ID
-  - `POST /history/:id/delete` endpoint for HTMX-compatible deletion
-  - `deleteMessage(id)` JavaScript handler with browser confirmation dialog
-  - All action buttons (edit, delete, check, retry) moved to `.message-actions` container at top-right of message bubbles
-  - `.message-header` flex layout with `.message-info` (sender/timestamp) on left and `.message-actions` on right
-  - `.action-btn` CSS with subtle background, per-button hover colors (cyan edit, pink delete, green check, orange retry)
-  - Delete button appears on ALL entry types (narration, dialogue, system, input, event, location)
-  - Template tests: `test_story_log_template_has_message_actions`, `test_story_log_template_input_has_check_button`, `test_story_log_template_renders_event_entry`
-  - E2E tests: `test_delete_button_exists_on_entries`, `test_delete_removes_message`
-  - Component tests: `test_delete_history_handler_success`, `test_delete_history_handler_not_found`
-  - Unit test: `test_delete_log` in `state_tests.rs`
+### Changed
+- **Restrict deletion to last message only** â€” Deleting any message now removes only the last entry in history
+  - `delete_log(id: u64)` replaced with `delete_last_log()` which pops the final `LogEntry`
+  - `POST /history/:id/delete` endpoint changed to parameterless `POST /history/delete`
+  - `deleteMessage()` JavaScript handler no longer takes an `id` argument
+  - Returns `400 Bad Request` when history is empty instead of `404 Not Found`
+  - Component tests updated: `test_delete_history_handler_success`, `test_delete_history_handler_empty`
+  - Unit test: `test_delete_last_log` in `state_tests.rs`
+
+### Changed
+- **Inline location and event headers** â€” Location and event metadata moved from separate `LogEntry` records into optional fields on the narration they annotate
+  - `LogEntry` gains `location_header: Option<String>` and `event_header: Option<String>`
+  - `NarrativeState` gains `pending_location: Option<String>` and `pending_event: Option<String>`
+  - `add_log` consumes pending metadata into the new entry's fields
+  - `handle_movement` sets `pending_location` instead of calling `add_log` for a standalone location entry
+  - `commit_trigger_narration` and `evaluate_and_narrate_triggers` set `pending_event` instead of adding a `LogType::Event` entry
+  - `is_last_ai_response_event_continuation` simplified to check `event_header.is_some()` on the last AI response
+  - `StoryLogTemplate` renders headers inside the same div as the narration text
+  - Browser tests updated to stop skipping `.location` entries (they now have text)
+
+  - Template tests: `test_story_log_template_renders_event_header`, `test_story_log_template_renders_location_header`
+  - Engine tests: `test_handle_movement_sets_pending_location`, `test_commit_trigger_narration_adds_event_header_and_narration`, `test_evaluate_and_narrate_triggers_adds_event_header`
+  - State tests: `test_add_log_absorbs_pending_location`, `test_add_log_absorbs_pending_event`
 
 ### Fixed
 - **Settings panel encoding and checkbox spacing** - Fixed UI defects in the settings panel

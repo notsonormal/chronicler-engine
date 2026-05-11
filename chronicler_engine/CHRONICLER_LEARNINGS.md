@@ -59,7 +59,7 @@
 
 ### Test Port Conflicts
 - **Problem**: Multiple test files use different ports but may conflict when run in parallel with `--test-threads=1`.
-- **Solution**: Run sequential with `cargo test -- --test-threads=1` or use distinct ports per test file.
+- **Solution**: Run sequential with `cargo nextest run --test-threads 1` or use distinct ports per test file.
 - **Current ports**:
   - `flow_mock_tests.rs`: 3006
   - `flow_llm_tests.rs`: 3007

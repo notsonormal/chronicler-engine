@@ -68,7 +68,7 @@ cargo build
 cargo run -- --world redmist_estate --port 3000
 
 # Run tests
-cargo test --test flow_mock_tests    # Fast - no API key needed
+cargo nextest run --test flow_mock_tests    # Fast - no API key needed
 python build.py --llm-only           # LLM integration tests only
 python build.py --include-llm        # Full suite including LLM tests
 ```

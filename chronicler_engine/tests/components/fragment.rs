@@ -271,19 +271,16 @@ async fn test_delete_history_handler_success() {
     let mut state = create_test_state();
 
     // Add a log entry first
-    let entry_id = {
-        state.add_log(
-            "Test message".to_string(),
-            Some("Test".to_string()),
-            chronicler_engine::model::state::LogType::Narration,
-        );
-        state.narrative.history.last().unwrap().id
-    };
+    state.add_log(
+        "Test message".to_string(),
+        Some("Test".to_string()),
+        chronicler_engine::model::state::LogType::Narration,
+    );
 
     let app = create_app_for_testing(state.clone());
 
     let req = Request::builder()
-        .uri(format!("/history/{entry_id}/delete"))
+        .uri("/history/delete")
         .method(http::Method::POST)
         .body(Body::empty())
         .unwrap();
@@ -300,17 +297,17 @@ async fn test_delete_history_handler_success() {
 }
 
 #[tokio::test]
-async fn test_delete_history_handler_not_found() {
+async fn test_delete_history_handler_empty() {
     let app = create_app_for_testing(create_test_state());
 
     let req = Request::builder()
-        .uri("/history/9999/delete")
+        .uri("/history/delete")
         .method(http::Method::POST)
         .body(Body::empty())
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
 
-    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
 
 #[tokio::test]

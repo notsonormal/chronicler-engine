@@ -105,7 +105,7 @@ tests/
 - **Files:** All `tests/*.rs` files
 - **Acceptance criteria:**
   - [ ] Every test function lives in a file whose name indicates the subsystem
-  - [ ] `cargo test` passes with same count as before
+  - [ ] `cargo nextest run` passes with same count as before
   - [ ] No test logic changed (only imports and module-level helpers)
 
 ### Task 2.2: Add Invariant Contract Tests

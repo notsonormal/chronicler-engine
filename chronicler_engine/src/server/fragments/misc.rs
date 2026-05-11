@@ -163,11 +163,7 @@ pub async fn reset_handler(State(state): State<AppState>) -> axum::response::Res
                 .map(|r| r.name.clone())
                 .unwrap_or_else(|| state.starting_room_id.clone());
 
-        initial_state.add_log(
-            String::new(),
-            Some(room_name),
-            crate::model::state::LogType::Narration,
-        );
+        initial_state.narrative.pending_location = Some(room_name);
         let text = text.replace("{{user}}", &state.player.sheet.name);
         initial_state.add_log(text, None, crate::model::state::LogType::Narration);
     }

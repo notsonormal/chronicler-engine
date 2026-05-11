@@ -222,7 +222,7 @@ After implementing fixes, the benchmark tests will need updated assertions and p
 - [ ] Benchmark compiles without clippy warnings
 
 **Verification:**
-- [ ] `cargo test --test diagnostic_benchmark -- --nocapture` passes
+- [ ] `cargo nextest run --test diagnostic_benchmark --no-capture` passes
 - [ ] `python scripts/diagnostic_benchmark.py` shows overall score ≥ 6.0
 
 **Estimated scope:** Medium (1 file, ~30 lines of changes across 12 functions)
@@ -234,7 +234,7 @@ After implementing fixes, the benchmark tests will need updated assertions and p
 
 Before updating the benchmark scores (Task 8), verify:
 
-- [ ] `cargo test` passes (all existing tests)
+- [ ] `cargo nextest run` passes (all existing tests)
 - [ ] `python build.py` passes (full validation)
 - [ ] `python scripts/diagnostic_benchmark.py` runs without errors
 - [ ] Overall benchmark score is ≥ 6.0

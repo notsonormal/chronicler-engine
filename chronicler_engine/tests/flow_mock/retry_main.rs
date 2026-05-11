@@ -335,7 +335,7 @@ fn test_main_retry_reevaluates_triggers() {
         .narrative
         .history
         .iter()
-        .filter(|e| e.log_type == LogType::Event)
+        .filter(|e| e.event_header.is_some())
         .count();
     assert_eq!(
         events_after_execute, 0,
@@ -350,7 +350,7 @@ fn test_main_retry_reevaluates_triggers() {
         .narrative
         .history
         .iter()
-        .filter(|e| e.log_type == LogType::Event)
+        .filter(|e| e.event_header.is_some())
         .count();
     assert_eq!(
         events_after_retry, 1,

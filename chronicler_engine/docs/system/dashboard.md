@@ -152,7 +152,7 @@ HTML template renders with `data-raw-text` attribute for inline editing:
 ## Delete Flow
 
 1. Click delete button → browser confirmation dialog
-2. On confirm → POST to `/history/:id/delete`
+2. On confirm → POST to `/history/delete`
 3. Server removes entry from `narration_history`
 4. Client refreshes story log via HTMX polling or manual trigger
 

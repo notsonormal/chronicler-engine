@@ -57,23 +57,23 @@ Runtime: ~60 seconds
 
 ```bash
 # Default: fast suite (~3 min, LLM tests excluded)
-cargo test
+cargo nextest run
 python build.py
 
 # Fast suite only (in-process)
-cargo test --test components
+cargo nextest run --test components
 
 # Browser tests only
-cargo test --test browser
-cargo test --test flow_mock_tests
+cargo nextest run --test browser
+cargo nextest run --test flow_mock_tests
 
 # Include slow LLM tests in full suite
-cargo test -- --ignored
+cargo nextest run --run-ignored only
 cargo nextest run --run-ignored all
 python build.py --include-llm
 
 # Run ONLY the LLM tests (focused validation)
-cargo test --test flow_llm_tests -- --ignored
+cargo nextest run --test flow_llm_tests --run-ignored only
 cargo nextest run --run-ignored all --test flow_llm_tests
 python build.py --llm-only
 ```

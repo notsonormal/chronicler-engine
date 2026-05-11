@@ -26,8 +26,8 @@ Address the gaps and inconsistencies identified in the Test Police review. The w
 - [ ] Existing `flow_mock_tests.rs` behavior is unchanged
 
 **Verification:**
-- [ ] `cargo test --test flow_mock_tests` passes
-- [ ] `cargo test --test browser` passes (before using helper — just confirming no breakage)
+- [ ] `cargo nextest run --test flow_mock_tests` passes
+- [ ] `cargo nextest run --test browser` passes (before using helper — just confirming no breakage)
 
 **Dependencies:** None
 **Files likely touched:**
@@ -46,7 +46,7 @@ Address the gaps and inconsistencies identified in the Test Police review. The w
 - [ ] No remaining `browser.close().await.unwrap();` calls in browser.rs
 
 **Verification:**
-- [ ] `cargo test --test browser` passes
+- [ ] `cargo nextest run --test browser` passes
 - [ ] `grep -n "browser.close().await.unwrap()" tests/browser.rs` returns nothing
 
 **Dependencies:** Task 1 (for `with_test_page`), or can be done in parallel if we standardize on `launch_chrome()` first
@@ -58,7 +58,7 @@ Address the gaps and inconsistencies identified in the Test Police review. The w
 ---
 
 ### Checkpoint: Foundation
-- [ ] `cargo test --tests` passes
+- [ ] `cargo nextest run --tests` passes
 - [ ] No manual Playwright launch boilerplate remains in browser.rs
 - [ ] `cargo clippy --tests` clean
 
@@ -76,8 +76,8 @@ Address the gaps and inconsistencies identified in the Test Police review. The w
 - [ ] `test_connection_card_shows_single_user_message` — verifies connection card HTML includes indicator when flag is true
 
 **Verification:**
-- [ ] `cargo test --test components settings_tests` passes
-- [ ] `cargo test --test components` full suite passes
+- [ ] `cargo nextest run --test components settings_tests` passes
+- [ ] `cargo nextest run --test components` full suite passes
 
 **Dependencies:** None (component tests don't depend on e2e refactor)
 **Files likely touched:**
@@ -96,8 +96,8 @@ Address the gaps and inconsistencies identified in the Test Police review. The w
 - [ ] `test_merge_single_user_message_both_empty` — both empty
 
 **Verification:**
-- [ ] `cargo test --lib merge_single_user_message` passes
-- [ ] `cargo test --lib` full suite passes
+- [ ] `cargo nextest run --lib merge_single_user_message` passes
+- [ ] `cargo nextest run --lib` full suite passes
 
 **Dependencies:** None
 **Files likely touched:**
@@ -117,8 +117,8 @@ Address the gaps and inconsistencies identified in the Test Police review. The w
 - [ ] E2E test count drops from 23 to 21
 
 **Verification:**
-- [ ] `cargo test --test components` passes
-- [ ] `cargo test --test browser` passes
+- [ ] `cargo nextest run --test components` passes
+- [ ] `cargo nextest run --test browser` passes
 - [ ] Total test count unchanged (moved, not deleted)
 
 **Dependencies:** Task 2 (browser.rs should be stable before removing tests from it)
@@ -134,7 +134,7 @@ Address the gaps and inconsistencies identified in the Test Police review. The w
 - [ ] All new component tests pass
 - [ ] E2E test count reduced by 2 (moved to component)
 - [ ] `single_user_message` has integration test coverage
-- [ ] `cargo test --tests` passes
+- [ ] `cargo nextest run --tests` passes
 
 ---
 
@@ -148,7 +148,7 @@ Address the gaps and inconsistencies identified in the Test Police review. The w
 - [ ] Scan browser.rs for similar "used to be" / "now is" comments and rephrase or remove
 
 **Verification:**
-- [ ] `cargo test --tests` passes (no code changes, only comments)
+- [ ] `cargo nextest run --tests` passes (no code changes, only comments)
 - [ ] `cargo clippy --tests` clean
 
 **Dependencies:** None
@@ -169,7 +169,7 @@ Address the gaps and inconsistencies identified in the Test Police review. The w
 - [ ] No test behavior changes (same assertions, same page interactions)
 
 **Verification:**
-- [ ] `cargo test --test browser` passes after each batch
+- [ ] `cargo nextest run --test browser` passes after each batch
 - [ ] Line count of browser.rs reduced measurably
 
 **Dependencies:** Task 1 and Task 2
@@ -181,7 +181,7 @@ Address the gaps and inconsistencies identified in the Test Police review. The w
 ---
 
 ### Checkpoint: Complete
-- [ ] All tests pass (`cargo test --tests`)
+- [ ] All tests pass (`cargo nextest run --tests`)
 - [ ] Clippy clean (`cargo clippy --all-targets -- -D warnings`)
 - [ ] Coverage maintained or improved
 - [ ] Plan review: verify each issue from Test Police review is addressed

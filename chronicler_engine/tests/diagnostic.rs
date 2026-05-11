@@ -2,7 +2,7 @@
 
 //! Diagnostic Signal Quality Benchmark
 //!
-//! Run via: cargo test --test diagnostic -- --nocapture
+//! Run via: cargo nextest run --test diagnostic --no-capture
 //! Or via: python scripts/diagnostic_benchmark.py
 
 #![allow(dead_code)]

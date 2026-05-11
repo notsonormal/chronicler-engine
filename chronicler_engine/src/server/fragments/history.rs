@@ -41,13 +41,10 @@ pub async fn edit_history_handler(
 }
 
 /// [DOC: docs/system/game_flow.md]
-pub async fn delete_history_handler(
-    State(state): State<AppState>,
-    axum::extract::Path(id): axum::extract::Path<u64>,
-) -> (StatusCode, String) {
+pub async fn delete_history_handler(State(state): State<AppState>) -> (StatusCode, String) {
     let result = match state.load_state() {
         Ok(mut guard) => {
-            let result = guard.delete_log(id);
+            let result = guard.delete_last_log();
             if result.is_ok() {
                 let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
                     &guard,
@@ -63,6 +60,6 @@ pub async fn delete_history_handler(
 
     match result {
         Ok(()) => (StatusCode::OK, String::new()),
-        Err(e) => (StatusCode::NOT_FOUND, render_error(&e.to_string())),
+        Err(e) => (StatusCode::BAD_REQUEST, render_error(&e.to_string())),
     }
 }

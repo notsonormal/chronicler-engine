@@ -376,15 +376,16 @@ fn test_handle_movement_creates_dynamic_room() {
 }
 
 #[test]
-fn test_handle_movement_success_adds_room_log() {
+fn test_handle_movement_sets_pending_location() {
     let state = make_test_state();
 
     let state = handle_movement(state, Some("test_room"), &["carla".to_string()]).unwrap();
 
-    assert!(!state.narrative.history.is_empty());
-    let last_entry = state.narrative.history.last().unwrap();
-    assert_eq!(last_entry.log_type, LogType::Narration);
-    assert_eq!(last_entry.sender, Some("Test Room".to_string()));
+    assert!(state.narrative.history.is_empty());
+    assert_eq!(
+        state.narrative.pending_location,
+        Some("Test Room".to_string())
+    );
 }
 
 #[test]
@@ -433,22 +434,19 @@ fn test_evaluate_and_narrate_triggers_adds_event_header() {
         evaluate_and_narrate_triggers(state, "You enter the room.", &trigger_context, &llm_backend)
             .unwrap();
 
-    // Should have at least 2 entries: event header + narration
+    // Should have 1 entry: narration with inline event header
     assert!(
-        state.narrative.history.len() >= 2,
-        "Expected event header + narration, got {:?}",
+        state.narrative.history.len() == 1,
+        "Expected one narration with event header, got {:?}",
         state.narrative.history
     );
 
-    // First trigger-related entry should be the event header
-    let event_entry = &state.narrative.history[0];
-    assert_eq!(event_entry.log_type, LogType::Event);
-    assert_eq!(event_entry.sender, Some("Carla Introduction".to_string()));
-    assert_eq!(event_entry.text, "");
-
-    // Second entry should be the narration
-    let narration_entry = &state.narrative.history[1];
+    let narration_entry = &state.narrative.history[0];
     assert_eq!(narration_entry.log_type, LogType::Narration);
+    assert_eq!(
+        narration_entry.event_header,
+        Some("Carla Introduction".to_string())
+    );
 }
 
 #[test]
@@ -471,15 +469,14 @@ fn test_commit_trigger_narration_adds_event_header_and_narration() {
     let state =
         commit_trigger_narration(state, &request, "Gabriella emerges from the shadows.").unwrap();
 
-    assert_eq!(state.narrative.history.len(), 2);
+    assert_eq!(state.narrative.history.len(), 1);
 
-    let event_entry = &state.narrative.history[0];
-    assert_eq!(event_entry.log_type, LogType::Event);
-    assert_eq!(event_entry.sender, Some("Carla Introduction".to_string()));
-    assert_eq!(event_entry.text, "");
-
-    let narration_entry = &state.narrative.history[1];
+    let narration_entry = &state.narrative.history[0];
     assert_eq!(narration_entry.log_type, LogType::Narration);
+    assert_eq!(
+        narration_entry.event_header,
+        Some("Carla Introduction".to_string())
+    );
     assert_eq!(narration_entry.text, "Gabriella emerges from the shadows.");
 }
 

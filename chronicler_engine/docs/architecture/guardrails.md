@@ -55,7 +55,7 @@ Declarative architecture rules in `arch-lint.toml`.
 | `require-tracing` | disabled | Project uses `log` crate instead |
 | `no-sync-io` | disabled | Intentional sync I/O during startup |
 
-Run: `cargo test --test architecture`
+Run: `cargo nextest run --test architecture`
 
 ---
 
@@ -120,11 +120,11 @@ Exemptions: getters/setters, `From`/`Into` impls, test functions.
 
 ```bash
 # Individual test files
-cargo test --test architecture
-cargo test --test guardrails
+cargo nextest run --test architecture
+cargo nextest run --test guardrails
 
 # Full suite (includes both)
-cargo test
+cargo nextest run
 
 # CI pipeline
 python build.py

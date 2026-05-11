@@ -15,7 +15,6 @@ pub enum LogType {
     Dialogue,
     System,
     Input,
-    Event,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -25,6 +24,24 @@ pub struct LogEntry {
     pub text: String,
     pub log_type: LogType,
     pub timestamp: DateTime<Utc>,
+    #[serde(default)]
+    pub location_header: Option<String>,
+    #[serde(default)]
+    pub event_header: Option<String>,
+}
+
+impl Default for LogEntry {
+    fn default() -> Self {
+        Self {
+            id: 0,
+            sender: None,
+            text: String::new(),
+            log_type: LogType::Narration,
+            timestamp: Utc::now(),
+            location_header: None,
+            event_header: None,
+        }
+    }
 }
 
 const MAX_LOG_ENTRIES: usize = 1000;
@@ -136,6 +153,10 @@ pub struct NarrativeState {
     pub next_log_id: u64,
     pub generation: GenerationState,
     pub last_trigger: Option<StoredTriggerContext>,
+    #[serde(default)]
+    pub pending_location: Option<String>,
+    #[serde(default)]
+    pub pending_event: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -222,6 +243,8 @@ impl GameState {
                 next_log_id: 1,
                 generation: GenerationState::default(),
                 last_trigger: None,
+                pending_location: None,
+                pending_event: None,
             },
             scene: SceneState {
                 npcs_in_area: Vec::new(),
@@ -236,12 +259,16 @@ impl GameState {
         }
         let id = self.narrative.next_log_id;
         self.narrative.next_log_id += 1;
+        let location_header = self.narrative.pending_location.take();
+        let event_header = self.narrative.pending_event.take();
         self.narrative.history.push(LogEntry {
             id,
             sender,
             text,
             log_type,
             timestamp: Utc::now(),
+            location_header,
+            event_header,
         });
     }
 
@@ -262,18 +289,13 @@ impl GameState {
     }
 
     /// [DOC: docs/architecture/system.md]
-    pub fn delete_log(&mut self, id: u64) -> crate::error::Result<()> {
-        let idx = self
-            .narrative
-            .history
-            .iter()
-            .position(|e| e.id == id)
-            .ok_or_else(|| {
-                crate::error::EngineError::Internal(crate::error::internal_error(format!(
-                    "Log entry not found: {id}"
-                )))
-            })?;
-        self.narrative.history.remove(idx);
+    pub fn delete_last_log(&mut self) -> crate::error::Result<()> {
+        if self.narrative.history.is_empty() {
+            return Err(crate::error::EngineError::Internal(
+                crate::error::internal_error("History is empty".to_string()),
+            ));
+        }
+        self.narrative.history.pop();
         Ok(())
     }
 
@@ -308,20 +330,12 @@ impl GameState {
 
     /// [DOC: docs/architecture/system.md]
     /// Returns true if the last AI response is an event continuation
-    /// (i.e. there is an Event log entry between the last Input and last AI response).
+    /// (i.e. the last narration/dialogue entry has an event header).
     pub fn is_last_ai_response_event_continuation(&self) -> bool {
-        let Some(input_idx) = self.get_last_input_index() else {
-            return false;
-        };
         let Some(ai_idx) = self.get_last_ai_response_index() else {
             return false;
         };
-        if ai_idx <= input_idx {
-            return false;
-        }
-        self.narrative.history[input_idx + 1..ai_idx]
-            .iter()
-            .any(|e| e.log_type == LogType::Event)
+        self.narrative.history[ai_idx].event_header.is_some()
     }
 
     /// [DOC: docs/architecture/system.md]

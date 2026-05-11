@@ -564,13 +564,13 @@ fn test_quantifier_detects_npc_presence_and_fires_trigger() {
         "Status should be reset after trigger action"
     );
 
-    // Trigger should have fired, adding an Event entry
+    // Trigger should have fired, adding an event header
     let has_event = guard
         .narrative
         .history
         .iter()
-        .any(|e| e.log_type == LogType::Event);
-    assert!(has_event, "Trigger should add an Event entry");
+        .any(|e| e.event_header.is_some());
+    assert!(has_event, "Trigger should add an event header");
 
     // And a continuation narration
     let narration_count = guard
@@ -877,7 +877,7 @@ fn test_retry_event_continuation_uses_pre_event_snapshot() {
         LogType::Narration,
     );
     // Add an event + continuation to simulate trigger having fired
-    state.add_log(String::new(), Some("Greeting".to_string()), LogType::Event);
+    state.narrative.pending_event = Some("Greeting".to_string());
     state.add_log(
         "The shopkeeper looks up with a smile.".to_string(),
         None,

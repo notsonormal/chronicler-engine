@@ -136,23 +136,68 @@ fn test_replace_last_ai_response_no_ai() {
 }
 
 #[test]
-fn test_delete_log() {
+fn test_delete_last_log() {
     let mut state = TestGameState::in_room("room1");
 
     state.add_log("Message 1".into(), Some("A".into()), LogType::Narration);
     state.add_log("Message 2".into(), Some("B".into()), LogType::Narration);
     state.add_log("Message 3".into(), Some("C".into()), LogType::Narration);
 
-    let id_to_delete = state.narrative.history[1].id;
-
-    // Verify delete works
-    state.delete_log(id_to_delete).unwrap();
+    // Verify delete last works
+    state.delete_last_log().unwrap();
     assert_eq!(state.narrative.history.len(), 2);
     assert_eq!(state.narrative.history[0].text, "Message 1");
-    assert_eq!(state.narrative.history[1].text, "Message 3");
+    assert_eq!(state.narrative.history[1].text, "Message 2");
 
-    // Verify delete fails for invalid ID
-    assert!(state.delete_log(9999).is_err());
+    // Verify delete fails for empty history
+    state.delete_last_log().unwrap();
+    state.delete_last_log().unwrap();
+    assert!(state.delete_last_log().is_err());
+}
+
+#[test]
+fn test_add_log_absorbs_pending_location() {
+    let mut state = TestGameState::in_room("room1");
+    state.narrative.pending_location = Some("Entrance Hall".to_string());
+    state.add_log("You walk in.".into(), None, LogType::Narration);
+
+    let entry = state.narrative.history.last().unwrap();
+    assert_eq!(entry.location_header, Some("Entrance Hall".to_string()));
+    assert!(state.narrative.pending_location.is_none());
+}
+
+#[test]
+fn test_add_log_absorbs_pending_event() {
+    let mut state = TestGameState::in_room("room1");
+    state.narrative.pending_event = Some("Gabriella Introduction".to_string());
+    state.add_log("Gabriella steps forward.".into(), None, LogType::Narration);
+
+    let entry = state.narrative.history.last().unwrap();
+    assert_eq!(
+        entry.event_header,
+        Some("Gabriella Introduction".to_string())
+    );
+    assert!(state.narrative.pending_event.is_none());
+}
+
+#[test]
+fn test_is_last_ai_response_event_continuation_with_event_header() {
+    let mut state = TestGameState::in_room("room1");
+    state.add_log("go north".into(), Some("Player".into()), LogType::Input);
+    state.add_log("You walk north.".into(), None, LogType::Narration);
+    state.narrative.pending_event = Some("Carla Introduction".into());
+    state.add_log("Carla appears.".into(), None, LogType::Narration);
+
+    assert!(state.is_last_ai_response_event_continuation());
+}
+
+#[test]
+fn test_is_last_ai_response_event_continuation_without_event_header() {
+    let mut state = TestGameState::in_room("room1");
+    state.add_log("go north".into(), Some("Player".into()), LogType::Input);
+    state.add_log("You walk north.".into(), None, LogType::Narration);
+
+    assert!(!state.is_last_ai_response_event_continuation());
 }
 
 // ─── Property-based tests ──────────────────────────────────────────────────────
@@ -169,7 +214,6 @@ fn log_type_strategy() -> impl Strategy<Value = LogType> {
         Just(LogType::Dialogue),
         Just(LogType::System),
         Just(LogType::Input),
-        Just(LogType::Event),
     ]
 }
 

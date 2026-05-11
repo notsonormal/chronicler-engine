@@ -95,8 +95,7 @@ When the user enters "I walk to the village square" and submits
 Then the status shows "Generating narration..."
 And after LLM generates response, the quantifier detects movement intent
 Then the status shows "Quantifying scene..."
-And the story-log shows a minimal header with the new room name
-And the story-log shows the LLM narration for arrival
+And the story-log shows the LLM narration for arrival with an inline location header for the new room
 And the visual-sidebar shows the new room's image and NPCs
 And the status shows "Ready"
 ```

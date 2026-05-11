@@ -10,7 +10,7 @@ Contains pure data structures, serialization schemas, and the "Single Source of 
 - **`world`**: Setting lore, global rules, and starting scenarios.
 - **`map`**: Room/Region hierarchy and cardinal direction definitions.
 - **`character`**: NPC attributes (name, description, personality, scenario, image_path, **profile_image**, **headshot_image**) and Player inventory.
-- **`state`**: The `GameState` aggregation, narration history logs, and TUI state. Includes `StoredTriggerContext` for replaying trigger continuations on retry.
+- **`state`**: The `GameState` aggregation, narration history logs, and TUI state. Includes `StoredTriggerContext` for replaying trigger continuations on retry. `LogEntry` carries optional `location_header` and `event_header` metadata for visual rendering; `NarrativeState` tracks `pending_location` and `pending_event` for consumption by the next `add_log` call.
 - **`scenario`**: Starting scenario definitions for narrative introductions.
 - **`trigger`**: Trigger definitions, conditions, and character state tracking (`Trigger`, `TriggerCondition`, `TriggerAction`, `NpcEncounterState`, `CharacterState`).
 - **`settings`**: `AppSettings`, `Connection`, and agent configuration data models.
@@ -449,7 +449,7 @@ pub struct LogEntry {
 Entries can be edited in place via `POST /history/:id`:
 
 - Both user inputs (`LogType::Input`) and AI responses (`LogType::Narration`, `LogType::Dialogue`) are editable
-- Event headers (`LogType::Event`) and location headers are not editable
+- Location and event headers are not editable
 - Editing replaces `text` field; other fields unchanged
 - Subsequent history entries are unaffected
 - In-memory only (not persisted to disk)
@@ -487,7 +487,7 @@ The retry endpoint (`POST /retry`) regenerates the last AI response with granula
 | `GET` | `/status/generating` | Generating status with phase |
 | `POST` | `/status/reset-generating` | Reset generating state |
 | `POST` | `/history/:id` | Edit entry text |
-| `POST` | `/history/:id/delete` | Delete entry |
+| `POST` | `/history/delete` | Delete last entry |
 | `POST` | `/retry` | Regenerate last AI response |
 | `POST` | `/reset` | Reset game state — returns `HX-Refresh: true` for clean page reload |
 | `GET` | `/fragment/settings` | Settings panel HTML |

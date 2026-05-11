@@ -642,7 +642,7 @@ The agent executor is pure: given `AgentExecConfig`, `AgentContext`, and `BaseLL
 ---
 
 *All Chronicler findings verified against:*
-- `cargo test --features diagnostics` — all tests pass
+- `cargo nextest run --features diagnostics` — all tests pass
 - `python build.py` — fmt + clippy + guardrails + tests pass
 
 *All Marinara findings verified against:*

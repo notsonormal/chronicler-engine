@@ -23,7 +23,7 @@ When you (the AI) are tasked with building, debugging, or extending the `chronic
 5. **Archive** - Move completed plans to `plans/archived/`
 
 ## Rust Idioms and Best Practices
-- Ensure `cargo fmt`, `cargo clippy`, and `cargo test` pass successfully.
+- Ensure `cargo fmt`, `cargo clippy`, and `cargo nextest run` pass successfully.
 - Prefer explicit error handling logic. Use `Result` heavily for parsing strings/data.
 
 ## Visual Verification Rule

@@ -76,7 +76,7 @@ This plan replaces that inferential loop with structured tracing and automatic f
   - `src/lib.rs` (test subscriber)
 - **Acceptance criteria:**
   - [ ] `RUST_LOG=info cargo run` produces formatted output
-  - [ ] `cargo test` runs without trace pollution in default output
+  - [ ] `cargo nextest run` runs without trace pollution in default output
   - [ ] No regression in existing test pass rate
 
 ### Task 2.2: Instrument Core Decision Paths

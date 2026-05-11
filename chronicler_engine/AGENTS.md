@@ -104,7 +104,7 @@ This project relies on a comprehensive suite of integration tests as the ultimat
 - **Tests as Documentation**: If you don't understand how a component works, read its tests in `tests/` before reading the source code.
 - **Test-Driven Debugging**: Before fixing a bug, find or create a failing test case. If tests pass but the bug exists, the test suite is missing a scenario.
 - **No Regression**: Every change must pass `python build.py` before commit.  
-  *During development*, iterate with the specific tool (e.g. `cargo clippy` for lint fixes, `cargo test <pattern>` for test fixes). Run `build.py` only for final verification.
+  *During development*, iterate with the specific tool (e.g. `cargo clippy` for lint fixes, `cargo nextest run <pattern>` for test fixes). Run `build.py` only for final verification.
 
 ### Example: Semantic vs. Traditional
 **❌ BAD (Traditional)**
@@ -218,8 +218,8 @@ timeout = 10
 ```bash
 cargo fmt                                       # Check formatting
 cargo clippy --all-targets -- -D warnings       # ~10s — fix warnings here
-cargo test <test_name>                          # Run one test or pattern
-cargo test --tests                              # Run integration test suite (~2–3 min)
+cargo nextest run <test_name>                          # Run one test or pattern
+cargo nextest run --tests                              # Run integration test suite (~2–3 min)
 cargo run -- --world redmist_estate --port 3000 # Run the server
 ```
 

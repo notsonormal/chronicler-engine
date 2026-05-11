@@ -3,7 +3,7 @@
 #
 # This file defines the architectural guardrails that enforce
 # the project's coding standards via arch-lint.
-# Run with: cargo test --test architecture
+# Run with: cargo nextest run --test architecture
 
 preset = "recommended"
 fail_on = "error"

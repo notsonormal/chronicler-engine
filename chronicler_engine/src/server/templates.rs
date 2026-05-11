@@ -51,15 +51,13 @@ pub struct LogEntryView {
     pub text: SafeHtml,
     pub raw_text: String,
     pub log_type: String,
-    pub is_location: bool,
-    pub is_event: bool,
+    pub location_header: Option<String>,
+    pub event_header: Option<String>,
 }
 
 impl From<&LogEntry> for LogEntryView {
     fn from(entry: &LogEntry) -> Self {
         let parsed_text = markdown_to_html(&entry.text);
-        let is_event = entry.log_type == LogType::Event;
-        let is_location = entry.sender.is_some() && entry.text.is_empty() && !is_event;
         Self {
             id: entry.id,
             timestamp: entry.timestamp.format("%H:%M").to_string(),
@@ -71,17 +69,16 @@ impl From<&LogEntry> for LogEntryView {
                 LogType::Dialogue => "dialogue".to_string(),
                 LogType::System => "system".to_string(),
                 LogType::Input => "input".to_string(),
-                LogType::Event => "event".to_string(),
             },
-            is_location,
-            is_event,
+            location_header: entry.location_header.clone(),
+            event_header: entry.event_header.clone(),
         }
     }
 }
 
 #[derive(Template)]
 #[template(
-    source = r#"<div class="story-log" id="story-log">{% for entry in entries %}<div class="log-entry {{ entry.log_type }}{% if entry.is_location %} location{% endif %}" data-id="{{ entry.id }}" data-raw-text="{{ entry.raw_text | escape }}"><div class="message-header"><div class="message-info">{% if entry.is_location %}<span class="location-header">{{ entry.sender }}</span><span class="location-timestamp">- {{ entry.timestamp }}</span>{% elif entry.is_event %}<span class="event-header">{{ entry.sender }}</span><span class="event-timestamp">- {{ entry.timestamp }}</span>{% else %}<span class="timestamp">{{ entry.timestamp }}</span>{% if entry.sender != "" %}<span class="sender">{{ entry.sender }}:</span>{% endif %}{% endif %}</div><div class="message-actions"><button class="action-btn edit-btn" onclick="showEditForm({{ entry.id }})" title="Edit">&#9998;</button><button class="action-btn delete-btn" onclick="deleteMessage({{ entry.id }})" title="Delete">&#128465;</button>{% if !entry.is_location && !entry.is_event %}{% if entry.log_type == "input" %}<button class="action-btn check-btn" onclick="checkLogText(this.closest('.log-entry').dataset.rawText)" title="Check spelling & grammar">&#x2713;</button>{% endif %}{% if loop.last %}{% if entry.log_type == "narration" || entry.log_type == "dialogue" %}<button class="action-btn retry-btn" onclick="submitRetry()" title="Retry">&#8635;</button>{% endif %}{% endif %}{% endif %}</div></div><span class="text">{{ entry.text }}</span></div>{% endfor %}</div>"#,
+    source = r#"<div class="story-log" id="story-log">{% for entry in entries %}<div class="log-entry {{ entry.log_type }}{% if entry.location_header.is_some() %} location{% endif %}" data-id="{{ entry.id }}" data-raw-text="{{ entry.raw_text | escape }}"><div class="message-header"><div class="message-info">{% if entry.location_header.is_some() %}<span class="location-header">{{ entry.location_header.as_ref().unwrap() }}</span><span class="location-timestamp">- {{ entry.timestamp }}</span>{% elif entry.event_header.is_some() %}<span class="event-header">{{ entry.event_header.as_ref().unwrap() }}</span><span class="event-timestamp">- {{ entry.timestamp }}</span>{% else %}<span class="timestamp">{{ entry.timestamp }}</span>{% if entry.sender != "" %}<span class="sender">{{ entry.sender }}:</span>{% endif %}{% endif %}</div><div class="message-actions"><button class="action-btn edit-btn" onclick="showEditForm({{ entry.id }})" title="Edit">&#9998;</button><button class="action-btn delete-btn" onclick="deleteMessage()" title="Delete">&#128465;</button>{% if entry.log_type == "input" %}<button class="action-btn check-btn" onclick="checkLogText(this.closest('.log-entry').dataset.rawText)" title="Check spelling & grammar">&#x2713;</button>{% endif %}{% if loop.last %}{% if entry.log_type == "narration" || entry.log_type == "dialogue" %}<button class="action-btn retry-btn" onclick="submitRetry()" title="Retry">&#8635;</button>{% endif %}{% endif %}</div></div><span class="text">{{ entry.text }}</span></div>{% endfor %}</div>"#,
     ext = "html"
 )]
 pub struct StoryLogTemplate {
