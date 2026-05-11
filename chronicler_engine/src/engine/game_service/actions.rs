@@ -101,7 +101,7 @@ fn save_pipeline_error(
     save_state(ctx, &state, message_id.to_string(), swipe_index);
 }
 
-fn default_quantifier_result(fallback_npc_ids: &[String]) -> QuantifierResult {
+pub(crate) fn default_quantifier_result(fallback_npc_ids: &[String]) -> QuantifierResult {
     QuantifierResult {
         npcs: QuantifierParseResult {
             npc_ids: fallback_npc_ids.to_vec(),
@@ -115,7 +115,7 @@ fn default_quantifier_result(fallback_npc_ids: &[String]) -> QuantifierResult {
     }
 }
 
-fn run_post_generation_agents(
+pub(crate) fn run_post_generation_agents(
     service: &DefaultGameService,
     state: &GameState,
     player_input: &str,

@@ -152,7 +152,8 @@ flowchart TD
     PreMain["Load `pre-main:{message_id}` snapshot"]
     PreEvent["Load `pre-event:{message_id}` snapshot"]
     ReGenMain["Re-run Phase 4→5→5.5<br>(new quantifier + triggers)"]
-    ReGenEvent["Re-run Phase 5 only<br>(same quantifier result preserved)"]
+    ReGenEvent["Re-run Phase 5 only"]
+    Phase55["**PHASE 5.5: POST-EVENT QUANTIFIER**<br>*(Phase: Quantifying)*<br>1. Post-continuation Quantifier analyzes<br>2. Detect NPCs introduced by retried text<br>3. Update scene.npcs_in_area"]
     IncSwipe["`swipe_index += 1`"]
     Save["Save final state"]
 
@@ -164,13 +165,14 @@ flowchart TD
     PreMain --> ReGenMain
     PreEvent --> ReGenEvent
     ReGenMain --> IncSwipe
-    ReGenEvent --> IncSwipe
+    ReGenEvent --> Phase55
+    Phase55 --> IncSwipe
     IncSwipe --> Save
 ```
 
 **Key behaviors** (enforced by `tests/flow_mock/`):
 - **Main retry** reruns the full pipeline: quantifier, movement, triggers, and post-event quantifier (`test_retry_main_narration_applies_new_quantifier_result`, `test_main_retry_reevaluates_triggers`).
-- **Event retry** skips the post-event quantifier (Phase 5.5) to preserve deterministic state — it only regenerates the continuation text (`test_retry_event_continuation_preserves_quantifier_result`).
+- **Event retry** reruns the post-event quantifier (Phase 5.5) so that NPCs introduced by the retried continuation text are properly detected (`test_retry_event_continuation_preserves_quantifier_result`).
 - Both paths increment `swipe_index` (`test_double_retry_increments_swipe_and_reruns_quantifier`).
 - If the pre-main or pre-event snapshot is missing, retry fails gracefully (`test_retry_no_pre_main_snapshot`).
 
