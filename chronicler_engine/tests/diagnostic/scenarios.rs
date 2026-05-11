@@ -542,6 +542,7 @@ fn benchmark_trigger_wrong_room_id() {
             chronicler_engine::narrative::agents::quantifier::MockQuantifierBackend {
                 npcs_to_return: vec!["trigger_npc".to_string()],
                 movement_to_return: None,
+                ..Default::default()
             },
         ),
     );
@@ -645,6 +646,7 @@ fn benchmark_state_stuck_generating() {
             chronicler_engine::narrative::agents::quantifier::MockQuantifierBackend {
                 npcs_to_return: vec!["test_npc".to_string()],
                 movement_to_return: None,
+                ..Default::default()
             },
         ),
     );

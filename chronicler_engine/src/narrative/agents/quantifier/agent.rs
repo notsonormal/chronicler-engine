@@ -6,9 +6,7 @@ use crate::model::agent::{
 };
 use crate::narrative::agents::Agent;
 
-use super::{
-    QuantifierBackendTrait, QuantifierConfidence, determine_npcs_in_room, get_quantifier_backend,
-};
+use super::{QuantifierBackendTrait, determine_npcs_in_room, get_quantifier_backend};
 
 pub struct QuantifierAgent {
     name: String,
@@ -69,11 +67,7 @@ impl Agent for QuantifierAgent {
             self.backend.as_ref(),
         );
 
-        let confidence = match result.npcs.confidence {
-            QuantifierConfidence::High => Confidence::High,
-            QuantifierConfidence::Medium => Confidence::Medium,
-            QuantifierConfidence::Low => Confidence::Low,
-        };
+        let confidence = Confidence::from(result.npcs.confidence);
 
         Ok(AgentResult::StatePatch(StatePatch::Scene {
             npc_ids: result.npcs.npc_ids,

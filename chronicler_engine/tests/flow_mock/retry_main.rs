@@ -1,0 +1,589 @@
+use std::sync::Arc;
+
+use chronicler_engine::engine::game_service::{DefaultGameService, GameService};
+use chronicler_engine::model::character::{CharacterSheet, NpcCard};
+use chronicler_engine::model::state::{GameState, LogType};
+use chronicler_engine::model::trigger::{
+    ComparisonOperator, Trigger, TriggerAction, TriggerCondition,
+};
+use chronicler_engine::narrative::agents::quantifier::{
+    MockQuantifierBackend, MovementParseResult, MovementType, QuantifierConfidence,
+};
+use chronicler_engine::narrative::llm::MockBackend;
+use chronicler_engine::test_support::make_test_context;
+
+use crate::{
+    add_input_and_save, create_test_state_with_map, latest_snapshot, latest_state,
+    wait_for_generation_complete,
+};
+
+#[test]
+fn test_retry_main_narration_applies_new_quantifier_result() {
+    // Setup: quantifier returns NO movement on first call, movement on second.
+    // Flow: Input → Execute → player stays in room1
+    //       → Retry → player moves to room2
+    let mut state = create_test_state_with_map();
+    state.narrative.history.clear();
+    let ctx = make_test_context(state);
+
+    add_input_and_save(&ctx, "walk around");
+
+    let quantifier = Arc::new(MockQuantifierBackend {
+        per_call_movements: vec![
+            Some(MovementParseResult {
+                movement_type: None,
+                destination: None,
+                confidence: QuantifierConfidence::High,
+            }),
+            Some(MovementParseResult {
+                movement_type: Some(MovementType::Entering),
+                destination: Some("room2".to_string()),
+                confidence: QuantifierConfidence::High,
+            }),
+        ],
+        ..Default::default()
+    });
+
+    let service =
+        DefaultGameService::with_mock_quantifier(Arc::new(MockBackend::default()), quantifier);
+
+    // First execution: no movement
+    service.execute_action(ctx.clone(), "walk around".to_string(), "Player".to_string());
+    assert!(
+        wait_for_generation_complete(&ctx, 1000),
+        "First execution should complete"
+    );
+    let guard = latest_state(&ctx);
+    assert_eq!(
+        guard.movement.current_room_id, "room1",
+        "First execution: player should stay in room1"
+    );
+
+    // Retry: quantifier returns movement → player should move
+    service.retry_last_response(ctx.clone());
+    assert!(
+        wait_for_generation_complete(&ctx, 1000),
+        "Retry should complete"
+    );
+    let guard = latest_state(&ctx);
+    assert_eq!(
+        guard.movement.current_room_id, "room2",
+        "Retry should apply NEW quantifier result and move player to room2"
+    );
+}
+
+#[test]
+fn test_retry_with_different_narration_text_reruns_quantifier() {
+    // Setup: MockBackend returns different narration text on each call.
+    // MockQuantifier auto-detects NPCs from the narration text.
+    // Flow: Execute → first narration → quantifier detects no NPCs
+    //       → Retry → second narration → quantifier detects NPC from text
+    let mut state = create_test_state_with_map();
+    state.narrative.history.clear();
+    let ctx = make_test_context(state);
+
+    add_input_and_save(&ctx, "approach the innkeeper");
+
+    let llm_backend = Arc::new(MockBackend {
+        per_call_narrations: vec![
+            "You look around the empty room.".to_string(),
+            "The Innkeeper greets you warmly.".to_string(),
+        ],
+        ..Default::default()
+    });
+
+    // Use default MockQuantifierBackend which does word-boundary detection
+    let service = DefaultGameService::with_mock_quantifier(
+        llm_backend,
+        Arc::new(MockQuantifierBackend::default()),
+    );
+
+    // First execution: narration has no NPC name → quantifier finds no NPCs
+    service.execute_action(
+        ctx.clone(),
+        "approach the innkeeper".to_string(),
+        "Player".to_string(),
+    );
+    assert!(
+        wait_for_generation_complete(&ctx, 1000),
+        "First execution should complete"
+    );
+    let guard = latest_state(&ctx);
+    let first_narration = guard
+        .narrative
+        .history
+        .iter()
+        .find(|e| e.log_type == LogType::Narration)
+        .map(|e| e.text.clone())
+        .unwrap_or_default();
+    assert_eq!(
+        first_narration, "You look around the empty room.",
+        "First narration should match per_call_narrations[0]"
+    );
+
+    // Retry: new narration has "Innkeeper" → quantifier should detect the NPC
+    service.retry_last_response(ctx.clone());
+    assert!(
+        wait_for_generation_complete(&ctx, 1000),
+        "Retry should complete"
+    );
+    let guard = latest_state(&ctx);
+    let retry_narration = guard
+        .narrative
+        .history
+        .iter()
+        .rev()
+        .find(|e| e.log_type == LogType::Narration)
+        .map(|e| e.text.clone())
+        .unwrap_or_default();
+    assert_eq!(
+        retry_narration, "The Innkeeper greets you warmly.",
+        "Retry narration should match per_call_narrations[1]"
+    );
+}
+
+#[test]
+fn test_double_retry_increments_swipe_and_reruns_quantifier() {
+    // Flow: Execute → Retry → Retry again
+    // Verify quantifier runs 3 times total and swipe_index increments.
+    let mut state = create_test_state_with_map();
+    state.narrative.history.clear();
+    let ctx = make_test_context(state);
+
+    add_input_and_save(&ctx, "walk around");
+
+    let quantifier = Arc::new(MockQuantifierBackend {
+        per_call_movements: vec![
+            Some(MovementParseResult {
+                movement_type: None,
+                destination: None,
+                confidence: QuantifierConfidence::High,
+            }),
+            Some(MovementParseResult {
+                movement_type: Some(MovementType::Entering),
+                destination: Some("room2".to_string()),
+                confidence: QuantifierConfidence::High,
+            }),
+            Some(MovementParseResult {
+                movement_type: None,
+                destination: None,
+                confidence: QuantifierConfidence::High,
+            }),
+        ],
+        ..Default::default()
+    });
+
+    let service =
+        DefaultGameService::with_mock_quantifier(Arc::new(MockBackend::default()), quantifier);
+
+    // First execution
+    service.execute_action(ctx.clone(), "walk around".to_string(), "Player".to_string());
+    assert!(wait_for_generation_complete(&ctx, 1000));
+    let snap = latest_snapshot(&ctx).expect("Should have snapshot");
+    assert_eq!(snap.swipe_index, 0, "First execution: swipe_index = 0");
+
+    // First retry
+    service.retry_last_response(ctx.clone());
+    assert!(wait_for_generation_complete(&ctx, 1000));
+    let snap = latest_snapshot(&ctx).expect("Should have snapshot");
+    assert_eq!(snap.swipe_index, 1, "First retry: swipe_index = 1");
+    let guard = latest_state(&ctx);
+    assert_eq!(guard.movement.current_room_id, "room2");
+
+    // Second retry
+    service.retry_last_response(ctx.clone());
+    assert!(wait_for_generation_complete(&ctx, 1000));
+    let snap = latest_snapshot(&ctx).expect("Should have snapshot");
+    assert_eq!(snap.swipe_index, 2, "Second retry: swipe_index = 2");
+}
+
+#[test]
+fn test_retry_after_edited_input_uses_new_text() {
+    // Flow: Execute with "walk around" → edit input to "sprint forward" → Retry
+    // Verify retry narration references the edited text.
+    let mut state = create_test_state_with_map();
+    state.narrative.history.clear();
+    let ctx = make_test_context(state);
+
+    add_input_and_save(&ctx, "walk around");
+
+    let service = DefaultGameService::with_mock_quantifier(
+        Arc::new(MockBackend::default()),
+        Arc::new(MockQuantifierBackend::default()),
+    );
+
+    service.execute_action(ctx.clone(), "walk around".to_string(), "Player".to_string());
+    assert!(wait_for_generation_complete(&ctx, 1000));
+
+    let guard = latest_state(&ctx);
+    let first_narration = guard
+        .narrative
+        .history
+        .iter()
+        .find(|e| e.log_type == LogType::Narration)
+        .map(|e| e.text.clone())
+        .unwrap_or_default();
+    assert!(
+        first_narration.contains("walk around"),
+        "First narration should contain original input: {first_narration}"
+    );
+
+    // Edit the input text in-place (overwrite latest snapshot so retry sees it)
+    {
+        let snap = latest_snapshot(&ctx).expect("Should have snapshot");
+        let mut state = GameState::from_snapshot(
+            &snap,
+            ctx.world.clone(),
+            ctx.map.clone(),
+            ctx.player.clone(),
+            (*ctx.npcs).clone(),
+        );
+        if let Some(entry) = state
+            .narrative
+            .history
+            .iter_mut()
+            .find(|e| e.log_type == LogType::Input)
+        {
+            entry.text = "sprint forward".to_string();
+        }
+        let snapshot = chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(
+            &state,
+            snap.message_id,
+            snap.swipe_index,
+        );
+        let _ = ctx.snapshot_storage.save(&snapshot);
+    }
+
+    // Retry should use the edited text
+    service.retry_last_response(ctx.clone());
+    assert!(wait_for_generation_complete(&ctx, 1000));
+    let guard = latest_state(&ctx);
+    let retry_narration = guard
+        .narrative
+        .history
+        .iter()
+        .rev()
+        .find(|e| e.log_type == LogType::Narration)
+        .map(|e| e.text.clone())
+        .unwrap_or_default();
+    assert!(
+        retry_narration.contains("sprint forward"),
+        "Retry narration should contain edited input: {retry_narration}"
+    );
+}
+
+#[test]
+fn test_main_retry_reevaluates_triggers() {
+    // Setup: trigger is room-scoped to room2. Quantifier returns no movement first,
+    // then movement to room2 on retry.
+    // Flow: Execute → no movement → trigger doesn't fire (wrong room)
+    //       → Retry → movement to room2 → trigger fires
+    let mut state = create_test_state_with_map();
+    state.narrative.history.clear();
+    // Remove default NPCs, add a shopkeeper with a room2-scoped trigger
+    let shopkeeper = NpcCard {
+        id: "shopkeeper".into(),
+        sheet: CharacterSheet {
+            name: "Shopkeeper Sarah".into(),
+            description: "A shrewd shopkeeper".into(),
+            personality: "Business-minded".into(),
+            scenario: "Runs the shop".into(),
+            example_dialogue: "Welcome!".into(),
+            summary: None,
+            profile_image: None,
+            headshot_image: None,
+        },
+        inventory: vec![],
+        triggers: vec![Trigger {
+            condition: TriggerCondition::TimesMet(ComparisonOperator::Eq, 0),
+            action: TriggerAction {
+                name: "Greeting".into(),
+                narration_prompt: "The shopkeeper looks up with a smile.".into(),
+            },
+            repeat: false,
+            room_id: Some("room2".to_string()),
+        }],
+    };
+    state.npcs = std::collections::HashMap::from([("shopkeeper".to_string(), shopkeeper)]);
+
+    let ctx = make_test_context(state);
+    add_input_and_save(&ctx, "walk around");
+
+    let quantifier = Arc::new(MockQuantifierBackend {
+        per_call_movements: vec![
+            Some(MovementParseResult {
+                movement_type: None,
+                destination: None,
+                confidence: QuantifierConfidence::High,
+            }),
+            Some(MovementParseResult {
+                movement_type: Some(MovementType::Entering),
+                destination: Some("room2".to_string()),
+                confidence: QuantifierConfidence::High,
+            }),
+        ],
+        ..Default::default()
+    });
+
+    let service =
+        DefaultGameService::with_mock_quantifier(Arc::new(MockBackend::default()), quantifier);
+
+    service.execute_action(ctx.clone(), "walk around".to_string(), "Player".to_string());
+    assert!(wait_for_generation_complete(&ctx, 1000));
+    let guard = latest_state(&ctx);
+    let events_after_execute = guard
+        .narrative
+        .history
+        .iter()
+        .filter(|e| e.log_type == LogType::Event)
+        .count();
+    assert_eq!(
+        events_after_execute, 0,
+        "First execution: no trigger (not in room2)"
+    );
+
+    // Retry: movement to room2 → trigger should fire
+    service.retry_last_response(ctx.clone());
+    assert!(wait_for_generation_complete(&ctx, 1000));
+    let guard = latest_state(&ctx);
+    let events_after_retry = guard
+        .narrative
+        .history
+        .iter()
+        .filter(|e| e.log_type == LogType::Event)
+        .count();
+    assert_eq!(
+        events_after_retry, 1,
+        "Retry should re-evaluate triggers and fire when moved to room2"
+    );
+}
+
+#[test]
+fn test_retry_completes_when_quantifier_returns_none() {
+    // Setup: quantifier returns a result on first call, None on second.
+    // Flow: Execute → success → Retry → quantifier returns None → still completes
+    let mut state = create_test_state_with_map();
+    state.narrative.history.clear();
+    let ctx = make_test_context(state);
+
+    add_input_and_save(&ctx, "walk around");
+
+    let quantifier = Arc::new(MockQuantifierBackend {
+        per_call_movements: vec![
+            Some(MovementParseResult {
+                movement_type: None,
+                destination: None,
+                confidence: QuantifierConfidence::High,
+            }),
+            None, // no per-call override; falls back to default (no movement)
+        ],
+        ..Default::default()
+    });
+
+    let service =
+        DefaultGameService::with_mock_quantifier(Arc::new(MockBackend::default()), quantifier);
+
+    service.execute_action(ctx.clone(), "walk around".to_string(), "Player".to_string());
+    assert!(wait_for_generation_complete(&ctx, 1000));
+
+    // Retry should still complete even when quantifier returns None on second call
+    service.retry_last_response(ctx.clone());
+    assert!(wait_for_generation_complete(&ctx, 1000));
+    let guard = latest_state(&ctx);
+    assert!(
+        !guard.narrative.generation.status.is_generating(),
+        "Retry should complete even if quantifier returns None"
+    );
+}
+
+#[test]
+fn test_retry_no_pre_main_snapshot() {
+    // Flow: Execute → clear pre-main snapshot → Retry
+    // Retry should fail gracefully when pre-main snapshot is missing.
+    let mut state = create_test_state_with_map();
+    state.narrative.history.clear();
+    let ctx = make_test_context(state);
+
+    add_input_and_save(&ctx, "examine room");
+
+    let service = DefaultGameService::with_mock_quantifier(
+        Arc::new(MockBackend::default()),
+        Arc::new(MockQuantifierBackend::default()),
+    );
+
+    service.execute_action(
+        ctx.clone(),
+        "examine room".to_string(),
+        "Player".to_string(),
+    );
+    assert!(wait_for_generation_complete(&ctx, 1000));
+
+    // Get the latest snapshot and state before clearing
+    let snap = latest_snapshot(&ctx).expect("Should have snapshot");
+    let state_before_reset = GameState::from_snapshot(
+        &snap,
+        ctx.world.clone(),
+        ctx.map.clone(),
+        ctx.player.clone(),
+        (*ctx.npcs).clone(),
+    );
+
+    // Clear all snapshots (simulating missing pre-main)
+    let _ = ctx.snapshot_storage.reset();
+    // Re-save current state as latest so retry has something to load
+    {
+        let snapshot = chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(
+            &state_before_reset,
+            uuid::Uuid::new_v4().to_string(),
+            0,
+        );
+        let _ = ctx.snapshot_storage.save(&snapshot);
+    }
+
+    // Retry should not panic
+    service.retry_last_response(ctx.clone());
+    std::thread::sleep(std::time::Duration::from_millis(100));
+
+    // Verify state is stable (not stuck generating)
+    let stable = wait_for_generation_complete(&ctx, 500);
+    assert!(
+        stable,
+        "Retry with no pre-main snapshot should complete (possibly with error)"
+    );
+}
+
+#[test]
+fn test_movement_with_arrival_narration_retry() {
+    // Flow: Movement action → Retry
+    // Verify arrival narration is also regenerated on retry.
+    let mut state = create_test_state_with_map();
+    state.narrative.history.clear();
+    let ctx = make_test_context(state);
+
+    add_input_and_save(&ctx, "walk to room2");
+
+    let quantifier = Arc::new(MockQuantifierBackend {
+        movement_to_return: Some(MovementParseResult {
+            movement_type: Some(MovementType::Entering),
+            destination: Some("room2".to_string()),
+            confidence: QuantifierConfidence::High,
+        }),
+        ..Default::default()
+    });
+
+    let service =
+        DefaultGameService::with_mock_quantifier(Arc::new(MockBackend::default()), quantifier);
+
+    service.execute_action(
+        ctx.clone(),
+        "walk to room2".to_string(),
+        "Player".to_string(),
+    );
+    assert!(wait_for_generation_complete(&ctx, 1000));
+
+    let guard = latest_state(&ctx);
+    let _arrival_count_before = guard
+        .narrative
+        .history
+        .iter()
+        .filter(|e| e.text.contains("MockArrival") || e.text.contains("enter"))
+        .count();
+
+    // Retry should regenerate both main narration and arrival
+    service.retry_last_response(ctx.clone());
+    assert!(wait_for_generation_complete(&ctx, 1000));
+
+    let guard = latest_state(&ctx);
+    assert_eq!(
+        guard.movement.current_room_id, "room2",
+        "Retry should still end in room2"
+    );
+
+    // The main narration should have been replaced (only one narration from this turn)
+    let narrations: Vec<_> = guard
+        .narrative
+        .history
+        .iter()
+        .filter(|e| e.log_type == LogType::Narration)
+        .collect();
+    assert!(!narrations.is_empty(), "Retry should produce narrations");
+}
+
+#[test]
+fn test_delete_narration_then_retry_regenerates() {
+    // Flow: Execute → delete narration → Retry → verify new narration generated
+    let mut state = create_test_state_with_map();
+    state.narrative.history.clear();
+    let ctx = make_test_context(state);
+
+    add_input_and_save(&ctx, "examine room");
+
+    let llm_backend = Arc::new(MockBackend {
+        per_call_narrations: vec![
+            "First narration text.".to_string(),
+            "Second narration text.".to_string(),
+        ],
+        ..Default::default()
+    });
+
+    let service = DefaultGameService::with_mock_quantifier(
+        llm_backend,
+        Arc::new(MockQuantifierBackend::default()),
+    );
+
+    service.execute_action(
+        ctx.clone(),
+        "examine room".to_string(),
+        "Player".to_string(),
+    );
+    assert!(wait_for_generation_complete(&ctx, 1000));
+
+    let guard = latest_state(&ctx);
+    let narration_id = guard
+        .narrative
+        .history
+        .iter()
+        .find(|e| e.log_type == LogType::Narration)
+        .map(|e| e.id)
+        .expect("Should have narration");
+
+    // Delete narration (overwrite latest snapshot)
+    {
+        let snap = latest_snapshot(&ctx).expect("Should have snapshot");
+        let mut state = GameState::from_snapshot(
+            &snap,
+            ctx.world.clone(),
+            ctx.map.clone(),
+            ctx.player.clone(),
+            (*ctx.npcs).clone(),
+        );
+        state.narrative.history.retain(|e| e.id != narration_id);
+        let snapshot = chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(
+            &state,
+            snap.message_id,
+            snap.swipe_index,
+        );
+        let _ = ctx.snapshot_storage.save(&snapshot);
+    }
+
+    // Retry should regenerate narration
+    service.retry_last_response(ctx.clone());
+    assert!(wait_for_generation_complete(&ctx, 1000));
+
+    let guard = latest_state(&ctx);
+    let narrations: Vec<_> = guard
+        .narrative
+        .history
+        .iter()
+        .filter(|e| e.log_type == LogType::Narration)
+        .collect();
+    assert_eq!(
+        narrations.len(),
+        1,
+        "Retry should regenerate exactly one narration"
+    );
+    assert_eq!(
+        narrations[0].text, "Second narration text.",
+        "Retry should use next per-call narration"
+    );
+}

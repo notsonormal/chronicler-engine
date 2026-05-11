@@ -106,6 +106,11 @@ pub struct MockQuantifierBackend {
     pub npcs_to_return: Vec<String>,
     /// Movement to return (optional).
     pub movement_to_return: Option<MovementParseResult>,
+    /// Return different movement results per call (rotates).
+    pub per_call_movements: Vec<Option<MovementParseResult>>,
+    /// Return different NPC lists per call (rotates).
+    pub per_call_npcs: Vec<Vec<String>>,
+    pub call_index: std::sync::atomic::AtomicUsize,
 }
 
 impl QuantifierBackendTrait for MockQuantifierBackend {
@@ -114,8 +119,14 @@ impl QuantifierBackendTrait for MockQuantifierBackend {
         context: &QuantifierPromptContext,
         _fallback_npc_ids: &[String],
     ) -> Result<QuantifierResult, EngineError> {
+        let idx = self
+            .call_index
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+
         // Auto-detect NPCs from player action text if none specified
-        let npc_ids = if !self.npcs_to_return.is_empty() {
+        let npc_ids = if !self.per_call_npcs.is_empty() {
+            self.per_call_npcs[idx % self.per_call_npcs.len()].clone()
+        } else if !self.npcs_to_return.is_empty() {
             self.npcs_to_return.clone()
         } else {
             // Word-boundary matching - look for known NPC names as whole words in player action
@@ -140,19 +151,23 @@ impl QuantifierBackendTrait for MockQuantifierBackend {
                 .collect()
         };
 
+        let movement_source = if !self.per_call_movements.is_empty() {
+            self.per_call_movements[idx % self.per_call_movements.len()].clone()
+        } else {
+            self.movement_to_return.clone()
+        };
+        let movement = movement_source.unwrap_or(MovementParseResult {
+            movement_type: None,
+            destination: None,
+            confidence: QuantifierConfidence::High,
+        });
+
         Ok(QuantifierResult {
             npcs: QuantifierParseResult {
                 npc_ids,
                 confidence: QuantifierConfidence::High,
             },
-            movement: self
-                .movement_to_return
-                .clone()
-                .unwrap_or(MovementParseResult {
-                    movement_type: None,
-                    destination: None,
-                    confidence: QuantifierConfidence::High,
-                }),
+            movement,
         })
     }
 }

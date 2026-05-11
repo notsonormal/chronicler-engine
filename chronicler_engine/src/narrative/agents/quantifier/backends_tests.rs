@@ -43,6 +43,7 @@ fn test_mock_quantifier_backend_explicit_npcs() {
             destination: Some("entrance".to_string()),
             confidence: QuantifierConfidence::High,
         }),
+        ..Default::default()
     };
 
     let room = make_room();

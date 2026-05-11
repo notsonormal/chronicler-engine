@@ -13,6 +13,26 @@ pub enum QuantifierConfidence {
     Low,
 }
 
+impl From<crate::model::agent::Confidence> for QuantifierConfidence {
+    fn from(c: crate::model::agent::Confidence) -> Self {
+        match c {
+            crate::model::agent::Confidence::High => Self::High,
+            crate::model::agent::Confidence::Medium => Self::Medium,
+            crate::model::agent::Confidence::Low => Self::Low,
+        }
+    }
+}
+
+impl From<QuantifierConfidence> for crate::model::agent::Confidence {
+    fn from(c: QuantifierConfidence) -> Self {
+        match c {
+            QuantifierConfidence::High => Self::High,
+            QuantifierConfidence::Medium => Self::Medium,
+            QuantifierConfidence::Low => Self::Low,
+        }
+    }
+}
+
 /// [DOC: docs/system/navigation.md]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct QuantifierParseResult {

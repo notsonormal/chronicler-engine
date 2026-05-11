@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 
 use crate::error::{EngineError, NarrativeFailure};
 use crate::model::character::NpcCard;
@@ -9,16 +9,18 @@ use super::backend::LlmBackend;
 pub struct MockBackend {
     /// If true, all narration methods return `Err(EngineError::Narrative(NarrativeFailure::Generation { stage: "mock", reason: "configured_failure" }))`.
     pub should_fail: AtomicBool,
-    /// If true, `narrate_action` returns `Ok("")` â€” simulates an empty LLM response.
+    /// If true, `narrate_action` returns `Ok("")` - simulates an empty LLM response.
     pub should_return_empty: AtomicBool,
     /// If true, `narrate_action_from_prompt` (trigger narration) returns `Err`.
     pub trigger_narration_should_fail: AtomicBool,
     /// Milliseconds to sleep in `narrate_action` to simulate a slow LLM.
     pub delay_ms: AtomicU64,
+    /// Return different narration text per call (rotates).
+    pub per_call_narrations: Vec<String>,
+    pub call_index: AtomicUsize,
 }
 
 impl MockBackend {
-    /// Backend that fails all narration calls.
     pub fn failing() -> Self {
         Self {
             should_fail: AtomicBool::new(true),
@@ -26,7 +28,6 @@ impl MockBackend {
         }
     }
 
-    /// Backend whose `narrate_action` returns an empty string â€” simulates `LlmEmptyResponse`.
     pub fn with_empty_response() -> Self {
         Self {
             should_return_empty: AtomicBool::new(true),
@@ -34,7 +35,6 @@ impl MockBackend {
         }
     }
 
-    /// Backend whose trigger narration (`narrate_action_from_prompt`) fails.
     pub fn with_failing_trigger_narration() -> Self {
         Self {
             trigger_narration_should_fail: AtomicBool::new(true),
@@ -42,7 +42,6 @@ impl MockBackend {
         }
     }
 
-    /// Backend with a configurable delay in `narrate_action`.
     pub fn with_delay(ms: u64) -> Self {
         Self {
             delay_ms: AtomicU64::new(ms),
@@ -87,6 +86,10 @@ impl LlmBackend for MockBackend {
         }
         if self.should_return_empty.load(Ordering::SeqCst) {
             return Ok(String::new());
+        }
+        if !self.per_call_narrations.is_empty() {
+            let idx = self.call_index.fetch_add(1, Ordering::SeqCst);
+            return Ok(self.per_call_narrations[idx % self.per_call_narrations.len()].clone());
         }
         Ok(format!("[MockNarration] {}", context.user_message))
     }

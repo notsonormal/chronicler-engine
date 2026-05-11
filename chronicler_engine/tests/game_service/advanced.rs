@@ -776,6 +776,7 @@ fn test_pre_event_snapshot_saved_before_continuation() {
     let quantifier = MockQuantifierBackend {
         npcs_to_return: vec!["shopkeeper".to_string()],
         movement_to_return: None,
+        ..Default::default()
     };
 
     let service = DefaultGameService::with_mock_quantifier(

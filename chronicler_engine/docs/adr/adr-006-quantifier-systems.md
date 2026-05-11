@@ -60,13 +60,14 @@ NPCs in the visual sidebar use quantifier's dynamic detection (not static map.js
 // GameState persists quantifier result
 pub npcs_in_area: Vec<NpcCard>  // Dynamic from quantifier
 
-// Re-quantification after EVERY main narration
-// Note: This is now a SINGLE PASS post-narration that extracts both movement and NPCs
+// Re-quantification after EVERY main narration AND after trigger continuation
+// Note: The quantifier runs twice when a trigger fires: once after main narration,
+// and again after the event continuation to detect NPCs introduced by the event
 ```
 
 - **Storage**: Quantifier result persisted in `GameState`
 - **Fallback**: Static `room.npcs` when quantifier unavailable
-- **Quantification**: Runs once post-narration to grab both movement and NPC presence
+- **Quantification**: Runs post-narration AND post-trigger-continuation to detect NPCs introduced by events
 
 ### Feature 3: Reactive Auto-Trigger Movement
 

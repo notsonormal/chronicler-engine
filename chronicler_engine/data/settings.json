@@ -34,11 +34,23 @@
     }
   ],
   "narration_connection_id": "openrouter-gpt-4o-mini",
-  "quantifier_connection_id": "openrouter-euryale",
+  "quantifier_connection_id": "openrouter-gpt-4o-mini",
   "response_length": "flexible, based on the current scene. During a conversation, keep it concise (under 150 words) to allow back-and-forth. For scene transitions, travel, or plot developments, build content (above 150 words), but allow the player to react.",
   "text_check": {
     "mode": "SpellGrammar",
     "enable_auto_check": true,
     "ignored_words": []
-  }
+  },
+  "agents": [
+    {
+      "name": "quantifier",
+      "agent_type": "quantifier",
+      "enabled": true,
+      "backend": {
+        "type": "use_named",
+        "value": "quantifier"
+      },
+      "phase": "post_generation"
+    }
+  ]
 }

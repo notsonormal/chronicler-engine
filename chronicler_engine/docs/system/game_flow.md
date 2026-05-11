@@ -10,7 +10,7 @@ This document defines the core game loop - the play-by-play experience from star
 flowchart TD
     Start(["**START GAME**<br>*(Server starts, loads world)*"])
     
-    Phase1["**PHASE 1: INITIALIZE**<br>1. Load world data<br>2. Set player in starting room<br>3. Render initial UI (Header, Story Log, Sidebar)<br>4. Establish HTMX polling (every 5s)"]
+    Phase1["**PHASE 1: INITIALIZE**<br>1. Load world data<br>2. Set player in starting room<br>3. Render initial UI (Header, Story Log, Sidebar)<br>4. Establish HTMX polling (story-log every 2s, others every 5s)"]
     
     Phase2["**PHASE 2: AWAIT INPUT**<br>*(Status: 'Ready')*<br>User types command → submits form"]
     
@@ -20,9 +20,11 @@ flowchart TD
     
     Phase45["**PHASE 4.5: QUANTIFIER & MOVEMENT**<br>*(Phase: Quantifying)*<br>1. Post-narration Quantifier analyzes<br>2. Process movement intent<br>3. If moved: trigger `narrate_arrival` LLM call<br>4. Determine NPC Enter/Leave events"]
     
-    Phase5["**PHASE 5: TRIGGER EVALUATION**<br>*(Phase: GeneratingEvent — only if trigger fires)*<br>1. `evaluate_triggers(state)` — first match only (inside lock)<br>2. Build prompt with continuation context<br>3. Release lock → call LLM (frontend can poll main narration)<br>4. Re-acquire lock → add event header + trigger narration<br>5. Mark trigger as fired → set status back to 'Ready']]
+    Phase5["**PHASE 5: TRIGGER EVALUATION**<br>*(Phase: GeneratingEvent — only if trigger fires)*<br>1. `evaluate_triggers(state)` — first match only (inside lock)<br>2. Build prompt with continuation context<br>3. Release lock → call LLM (frontend can poll main narration)<br>4. Re-acquire lock → add event header + trigger narration<br>5. Mark trigger as fired"]
+
+    Phase55["**PHASE 5.5: POST-EVENT QUANTIFIER**<br>*(Phase: Quantifying)*<br>1. Post-continuation Quantifier analyzes<br>2. Detect NPCs introduced by event text<br>3. Determine NPC Enter/Leave events<br>4. Update scene.npcs_in_area"]
     
-    Phase6["**PHASE 6: POLLING UPDATE**<br>1. Client polls /fragment/story-log (5s)<br>2. Server returns updated HTML<br>3. HTMX swaps content"]
+    Phase6["**PHASE 6: POLLING UPDATE**<br>1. Client polls /fragment/story-log (2s)<br>2. Server returns updated HTML<br>3. HTMX swaps content"]
 
     Start --> Phase1
     Phase1 --> Phase2
@@ -30,7 +32,8 @@ flowchart TD
     Phase3 --> Phase4
     Phase4 --> Phase45
     Phase45 --> Phase5
-    Phase5 --> Phase6
+    Phase5 --> Phase55
+    Phase55 --> Phase6
     Phase6 -.->|BACK TO 2| Phase2
 ```
 
@@ -62,6 +65,8 @@ flowchart TD
 
 ## Test Scenarios
 
+These Gherkin scenarios are covered by **browser/integration tests** (`tests/trigger_tests.rs`, `tests/browser/structure.rs`). The `flow_mock/` test suite covers sequential service-level retry and state consistency flows rather than end-to-end browser scenarios.
+
 ### Scenario 1: Initial Load
 ```gherkin
 Given the server is running with "test" world
@@ -71,6 +76,7 @@ And the story-log shows a minimal header with the room name
 And after LLM generates: the story-log shows LLM-generated arrival narration
 And the status shows "Ready"
 ```
+- **Covered by**: `tests/browser/structure.rs` — `test_page_loads`, `test_header_displays_game_title`
 
 ### Scenario 2: Look Command
 ```gherkin
@@ -80,6 +86,7 @@ Then the status shows "Generating narration..."
 And after LLM generates response, the story-log shows the LLM description
 And the status shows "Ready"
 ```
+- **Covered by**: `tests/trigger_tests.rs` — `test_look_command_adds_narration_entries`, `test_freeaction_without_movement_works`
 
 ### Scenario 3: Quantifier-Driven Movement
 ```gherkin
@@ -93,6 +100,7 @@ And the story-log shows the LLM narration for arrival
 And the visual-sidebar shows the new room's image and NPCs
 And the status shows "Ready"
 ```
+- **Covered by**: `tests/trigger_tests.rs` — `test_freeaction_with_movement_no_triggers`
 
 ### Scenario 4: Free Action (LLM Narration)
 ```gherkin
@@ -102,11 +110,12 @@ Then the status shows "Generating narration..."
 And after LLM generates response, the story-log shows the LLM's description of the orb
 And the status shows "Ready"
 ```
+- **Covered by**: `tests/trigger_tests.rs` — `test_freeaction_without_movement_works`
 
 ## Error Handling
 
 ### LLM Timeout
-- If LLM takes >30 seconds, show error in story-log
+- ~~If LLM takes >30 seconds, show error in story-log~~ *(Not yet implemented — no timeout logic exists in the backend.)*
 - Status returns to "Ready"
 
 ### Invalid Command
@@ -120,7 +129,7 @@ During LLM processing, the UI displays granular status phases instead of a singl
 | Phase | Display Text | Endpoint Value | When Active |
 |-------|-------------|----------------|-------------|
 | `Narrating` | "Generating narration..." | `narrating` | During main LLM narration (Phase 4) |
-| `Quantifying` | "Quantifying scene..." | `quantifying` | During post-narration quantifier analysis (Phase 4.5) |
+| `Quantifying` | "Quantifying scene..." | `quantifying` | During post-narration quantifier analysis (Phase 4.5 or 5.5) |
 | `GeneratingEvent` | "Generating event..." | `generating-event` | During trigger continuation narration (Phase 5) |
 
 **Design Principles:**
@@ -129,6 +138,41 @@ During LLM processing, the UI displays granular status phases instead of a singl
 - Phase is a secondary display concern only — all phases use the same `.thinking` CSS class
 - The frontend maps endpoint values (`narrating`, `quantifying`, `generating-event`) to human-readable text
 - An optimistic "Thinking..." is shown immediately on form submit before the first poll response
+
+### Retry Flow
+
+Retrying a response (via the UI retry button) branches based on whether the last AI-generated content was a **main narration** or a **trigger event continuation**:
+
+```mermaid
+flowchart TD
+    Start(["User clicks Retry"])
+    Check{Last response was event?}
+    Main["**Main Narration Retry**"]
+    Event["**Event Continuation Retry**"]
+    PreMain["Load `pre-main:{message_id}` snapshot"]
+    PreEvent["Load `pre-event:{message_id}` snapshot"]
+    ReGenMain["Re-run Phase 4→5→5.5<br>(new quantifier + triggers)"]
+    ReGenEvent["Re-run Phase 5 only<br>(same quantifier result preserved)"]
+    IncSwipe["`swipe_index += 1`"]
+    Save["Save final state"]
+
+    Start --> Check
+    Check -->|No| Main
+    Check -->|Yes| Event
+    Main --> PreMain
+    Event --> PreEvent
+    PreMain --> ReGenMain
+    PreEvent --> ReGenEvent
+    ReGenMain --> IncSwipe
+    ReGenEvent --> IncSwipe
+    IncSwipe --> Save
+```
+
+**Key behaviors** (enforced by `tests/flow_mock/`):
+- **Main retry** reruns the full pipeline: quantifier, movement, triggers, and post-event quantifier (`test_retry_main_narration_applies_new_quantifier_result`, `test_main_retry_reevaluates_triggers`).
+- **Event retry** skips the post-event quantifier (Phase 5.5) to preserve deterministic state — it only regenerates the continuation text (`test_retry_event_continuation_preserves_quantifier_result`).
+- Both paths increment `swipe_index` (`test_double_retry_increments_swipe_and_reruns_quantifier`).
+- If the pre-main or pre-event snapshot is missing, retry fails gracefully (`test_retry_no_pre_main_snapshot`).
 
 ### Polling-based Updates
 - HTMX automatically polls every 2 seconds for story-log updates
@@ -139,7 +183,8 @@ During LLM processing, the UI displays granular status phases instead of a singl
 ## Reference Implementation
 
 - **Server**: `src/server/fragments/actions.rs` - `action_handler`, `process_action`
-- **HTMX Polling**: `assets/index.html` - `hx-trigger="load, every 5s"`
+- **HTMX Polling**: `assets/index.html` - story-log `hx-trigger="load, every 2s"`; visual-sidebar & status-display `hx-trigger="load, every 5s"`
 - **LLM**: `src/narrative/llm/backend.rs` - `LlmBackend` trait (`narrate_action`, `narrate_arrival`)
 - **Prompt Builder**: `src/narrative/prompt/builder.rs` - 8-layer prompt construction
-- **LLM Tests**: `tests/flow_llm_tests.rs` - Real LLM integration tests
+- **Mock Flow Tests**: `tests/flow_mock/` - Sequential service-level flow tests with mock backends (retry, state consistency, quantifier movement)
+- **LLM Tests**: `tests/flow_llm_tests.rs` - Real LLM smoke tests (requires `OPENROUTER_API_KEY`)

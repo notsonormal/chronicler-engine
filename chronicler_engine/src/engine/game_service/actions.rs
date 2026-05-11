@@ -2,15 +2,16 @@ use std::sync::Arc;
 
 use crate::engine::action::Action;
 use crate::engine::action_processing::{
-    commit_trigger_narration, execute_freeaction_impl, get_static_npcs,
+    apply_npc_events, commit_trigger_narration, execute_freeaction_impl, get_static_npcs,
 };
 use crate::engine::logic::get_current_room;
 use crate::engine::parser::parse_command;
-use crate::model::agent::{AgentContext, AgentResult, Confidence, ExecutionPhase, StatePatch};
+use crate::model::agent::{AgentContext, AgentResult, ExecutionPhase, StatePatch};
 use crate::model::character::NpcCard;
 use crate::model::state::{GameState, GenerationPhase, GenerationStatus, LogType};
 use crate::narrative::agents::quantifier::{
     MovementParseResult, QuantifierConfidence, QuantifierParseResult, QuantifierResult,
+    compute_npc_events,
 };
 use crate::narrative::prompt::make_prompt_context;
 
@@ -100,9 +101,59 @@ fn save_pipeline_error(
     save_state(ctx, &state, message_id.to_string(), swipe_index);
 }
 
+fn default_quantifier_result(fallback_npc_ids: &[String]) -> QuantifierResult {
+    QuantifierResult {
+        npcs: QuantifierParseResult {
+            npc_ids: fallback_npc_ids.to_vec(),
+            confidence: QuantifierConfidence::Low,
+        },
+        movement: MovementParseResult {
+            movement_type: None,
+            destination: None,
+            confidence: QuantifierConfidence::Low,
+        },
+    }
+}
+
+fn run_post_generation_agents(
+    service: &DefaultGameService,
+    state: &GameState,
+    player_input: &str,
+    main_response: &str,
+    result: &mut QuantifierResult,
+) {
+    let agent_ctx = AgentContext {
+        state,
+        main_response: Some(main_response),
+        player_input,
+    };
+
+    for agent in service
+        .agent_registry
+        .agents_for_phase(ExecutionPhase::PostGeneration)
+    {
+        match agent.execute(&agent_ctx) {
+            Ok(AgentResult::StatePatch(StatePatch::Scene {
+                npc_ids,
+                movement_destination,
+                confidence,
+            })) => {
+                result.npcs.npc_ids = npc_ids;
+                result.movement.destination = movement_destination;
+                result.npcs.confidence = QuantifierConfidence::from(confidence);
+            }
+            Ok(AgentResult::NoOp) => {}
+            Ok(AgentResult::PromptDirective(_)) => {
+                log::warn!("Post-generation agent returned PromptDirective; ignoring");
+            }
+            Err(e) => {
+                log::warn!("Agent {} failed: {e}", agent.name());
+            }
+        }
+    }
+}
+
 /// [DOC: docs/architecture/system.md]
-/// Run the full free-action pipeline from a given starting state.
-/// Used by both normal action handling and retry logic.
 /// `swipe_index` should be 0 for fresh turns, or incremented for retries.
 pub fn execute_freeaction_pipeline(
     service: &DefaultGameService,
@@ -166,53 +217,14 @@ pub fn execute_freeaction_pipeline(
     state.narrative.generation.status = GenerationStatus::Generating;
     state.narrative.generation.phase = GenerationPhase::Quantifying;
 
-    let mut quantifier_result = QuantifierResult {
-        npcs: QuantifierParseResult {
-            npc_ids: room.npcs.clone(),
-            confidence: QuantifierConfidence::Low,
-        },
-        movement: MovementParseResult {
-            movement_type: None,
-            destination: None,
-            confidence: QuantifierConfidence::Low,
-        },
-    };
-
-    let agent_ctx = AgentContext {
-        state: &state,
-        main_response: Some(&narration_text),
-        player_input: &text,
-    };
-
-    for agent in service
-        .agent_registry
-        .agents_for_phase(ExecutionPhase::PostGeneration)
-    {
-        match agent.execute(&agent_ctx) {
-            Ok(AgentResult::StatePatch(patch)) => match patch {
-                StatePatch::Scene {
-                    npc_ids,
-                    movement_destination,
-                    confidence,
-                } => {
-                    quantifier_result.npcs.npc_ids = npc_ids;
-                    quantifier_result.movement.destination = movement_destination;
-                    quantifier_result.npcs.confidence = match confidence {
-                        Confidence::High => QuantifierConfidence::High,
-                        Confidence::Medium => QuantifierConfidence::Medium,
-                        Confidence::Low => QuantifierConfidence::Low,
-                    };
-                }
-            },
-            Ok(AgentResult::NoOp) => {}
-            Ok(AgentResult::PromptDirective(_)) => {
-                log::warn!("Post-generation agent returned PromptDirective; ignoring");
-            }
-            Err(e) => {
-                log::warn!("Agent {} failed: {e}", agent.name());
-            }
-        }
-    }
+    let mut quantifier_result = default_quantifier_result(&room.npcs);
+    run_post_generation_agents(
+        service,
+        &state,
+        &text,
+        &narration_text,
+        &mut quantifier_result,
+    );
 
     if quantifier_result.npcs.confidence == QuantifierConfidence::Low {
         state.add_log(
@@ -280,6 +292,52 @@ pub fn execute_freeaction_pipeline(
                             next_state
                         }
                     };
+
+                    next_state.narrative.generation.phase = GenerationPhase::Quantifying;
+
+                    let fallback_ids: Vec<String> = next_state
+                        .scene
+                        .npcs_in_area
+                        .iter()
+                        .map(|n| n.id.clone())
+                        .collect();
+                    let mut post_trigger_result = default_quantifier_result(&fallback_ids);
+                    run_post_generation_agents(
+                        service,
+                        &next_state,
+                        &text,
+                        &continuation_text,
+                        &mut post_trigger_result,
+                    );
+
+                    let previous_ids: Vec<String> = next_state
+                        .scene
+                        .npcs_in_area
+                        .iter()
+                        .map(|n| n.id.clone())
+                        .collect();
+
+                    let npc_cards: Vec<NpcCard> = post_trigger_result
+                        .npcs
+                        .npc_ids
+                        .iter()
+                        .filter_map(|id| next_state.npcs.get(id).cloned())
+                        .collect();
+                    let new_ids: Vec<String> = npc_cards.iter().map(|n| n.id.clone()).collect();
+
+                    next_state.scene.npcs_in_area = npc_cards;
+
+                    let events = compute_npc_events(&previous_ids, &new_ids);
+                    match apply_npc_events(next_state.clone(), &events.events) {
+                        Ok(updated) => next_state = updated,
+                        Err(e) => {
+                            log::error!("Failed to apply post-trigger NPC events: {e}");
+                            next_state.narrative.generation.status =
+                                GenerationStatus::Error(format!("NPC event error: {e}"));
+                            save_state(ctx, &next_state, message_id.clone(), swipe_index);
+                            return;
+                        }
+                    }
                 }
             }
 
