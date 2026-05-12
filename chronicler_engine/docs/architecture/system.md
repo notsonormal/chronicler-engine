@@ -506,9 +506,9 @@ The retry endpoint (`POST /retry`) regenerates the last AI response with granula
 
 The story log displays edit controls always visible:
 
-- Action buttons always visible at top-right of every entry:
+- Action buttons at top-right of entries:
   - Edit button (✎) on all entries
-  - Delete button (🗑) on all entries
+  - Delete button (🗑) on last entry only (hidden when only one entry exists)
   - Check button (✓) on input entries
-  - Retry button (↻) on last AI message only
+  - Retry button (↻) on last AI message only (hidden when only one entry exists)
 - Click edit → inline textarea with save/cancel, polling pauses

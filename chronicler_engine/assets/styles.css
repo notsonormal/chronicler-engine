@@ -122,7 +122,6 @@ body {
 
 .location {
     color: var(--color-accent-green);
-    font-weight: bold;
 }
 
 .connection-status {
@@ -249,6 +248,14 @@ body {
     line-height: 1.5;
     overflow-wrap: anywhere;
     word-wrap: break-word;
+}
+
+.log-entry .text p {
+    margin-bottom: var(--spacing-sm);
+}
+
+.log-entry .text p:last-child {
+    margin-bottom: 0;
 }
 
 /* Preformatted / code blocks from markdown need wrapping too */

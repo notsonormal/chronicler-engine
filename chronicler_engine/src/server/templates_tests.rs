@@ -76,14 +76,24 @@ fn test_story_log_template_escapes_html() {
 
 #[test]
 fn test_story_log_template_has_message_actions() {
-    let entries = vec![LogEntry {
-        id: 1,
-        sender: Some("Game Master".to_string()),
-        text: "Welcome!".to_string(),
-        log_type: LogType::Narration,
-        timestamp: Utc::now(),
-        ..Default::default()
-    }];
+    let entries = vec![
+        LogEntry {
+            id: 1,
+            sender: Some("Game Master".to_string()),
+            text: "Welcome!".to_string(),
+            log_type: LogType::Narration,
+            timestamp: Utc::now(),
+            ..Default::default()
+        },
+        LogEntry {
+            id: 2,
+            sender: Some("Player".to_string()),
+            text: "Hello".to_string(),
+            log_type: LogType::Input,
+            timestamp: Utc::now(),
+            ..Default::default()
+        },
+    ];
     let template = StoryLogTemplate::new(&entries);
     let rendered = template.render().unwrap();
     assert!(rendered.contains("message-header"));
@@ -94,14 +104,24 @@ fn test_story_log_template_has_message_actions() {
 
 #[test]
 fn test_story_log_template_input_has_check_button() {
-    let entries = vec![LogEntry {
-        id: 1,
-        sender: Some("Player".to_string()),
-        text: "look around".to_string(),
-        log_type: LogType::Input,
-        timestamp: Utc::now(),
-        ..Default::default()
-    }];
+    let entries = vec![
+        LogEntry {
+            id: 1,
+            sender: Some("Player".to_string()),
+            text: "look around".to_string(),
+            log_type: LogType::Input,
+            timestamp: Utc::now(),
+            ..Default::default()
+        },
+        LogEntry {
+            id: 2,
+            sender: None,
+            text: "You look around.".to_string(),
+            log_type: LogType::Narration,
+            timestamp: Utc::now(),
+            ..Default::default()
+        },
+    ];
     let template = StoryLogTemplate::new(&entries);
     let rendered = template.render().unwrap();
     assert!(rendered.contains("check-btn"));
@@ -110,15 +130,25 @@ fn test_story_log_template_input_has_check_button() {
 
 #[test]
 fn test_story_log_template_renders_event_header() {
-    let entries = vec![LogEntry {
-        id: 1,
-        sender: None,
-        text: "Gabriella steps forward.".to_string(),
-        log_type: LogType::Narration,
-        timestamp: Utc::now(),
-        event_header: Some("Gabriella Introduction".to_string()),
-        ..Default::default()
-    }];
+    let entries = vec![
+        LogEntry {
+            id: 1,
+            sender: None,
+            text: "Gabriella steps forward.".to_string(),
+            log_type: LogType::Narration,
+            timestamp: Utc::now(),
+            event_header: Some("Gabriella Introduction".to_string()),
+            ..Default::default()
+        },
+        LogEntry {
+            id: 2,
+            sender: None,
+            text: "She smiles.".to_string(),
+            log_type: LogType::Narration,
+            timestamp: Utc::now(),
+            ..Default::default()
+        },
+    ];
     let template = StoryLogTemplate::new(&entries);
     let rendered = template.render().unwrap();
     assert!(rendered.contains("event-header"));
@@ -133,15 +163,25 @@ fn test_story_log_template_renders_event_header() {
 
 #[test]
 fn test_story_log_template_renders_location_header() {
-    let entries = vec![LogEntry {
-        id: 1,
-        sender: None,
-        text: "You walk into the hall.".to_string(),
-        log_type: LogType::Narration,
-        timestamp: Utc::now(),
-        location_header: Some("Entrance Hall".to_string()),
-        ..Default::default()
-    }];
+    let entries = vec![
+        LogEntry {
+            id: 1,
+            sender: None,
+            text: "You walk into the hall.".to_string(),
+            log_type: LogType::Narration,
+            timestamp: Utc::now(),
+            location_header: Some("Entrance Hall".to_string()),
+            ..Default::default()
+        },
+        LogEntry {
+            id: 2,
+            sender: None,
+            text: "The hall is grand.".to_string(),
+            log_type: LogType::Narration,
+            timestamp: Utc::now(),
+            ..Default::default()
+        },
+    ];
     let template = StoryLogTemplate::new(&entries);
     let rendered = template.render().unwrap();
     assert!(rendered.contains("location-header"));

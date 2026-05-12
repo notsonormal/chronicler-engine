@@ -97,7 +97,7 @@
 - Color: #888
 - Text: "Chronicler Engine"
 
-### Location
+### Location Header
 - Color: #4ade80
 - Weight: bold
 

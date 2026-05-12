@@ -18,6 +18,12 @@ async fn test_edit_button_exists_on_entries() {
 #[tokio::test]
 async fn test_delete_button_exists_on_entries() {
     with_test_page(CONFIG_PATH, TEST_WORLD, |page, _port| async move {
+        // Send an action to create multiple entries so delete button appears on last
+        let initial_entries = element_count(&page, "#story-log .log-entry").await;
+        send_action(&page, "look").await;
+        wait_for_status_ready(&page).await;
+        wait_for_element_children(&page, "#story-log .log-entry", initial_entries as u32 + 1).await;
+
         let delete_buttons = element_count(&page, ".log-entry .delete-btn").await;
         assert!(
             delete_buttons > 0,
@@ -232,8 +238,17 @@ async fn test_polling_pauses_during_edit() {
 #[tokio::test]
 async fn test_delete_removes_message() {
     with_test_page(CONFIG_PATH, TEST_WORLD, |page, _port| async move {
+        // Send an action to create multiple entries so delete button is available
+        let before_action = element_count(&page, "#story-log .log-entry").await;
+        send_action(&page, "look").await;
+        wait_for_status_ready(&page).await;
+        wait_for_element_children(&page, "#story-log .log-entry", before_action as u32 + 1).await;
+
         let initial_count = element_count(&page, "#story-log .log-entry").await;
-        assert!(initial_count > 0, "Should have at least one log entry");
+        assert!(
+            initial_count > 1,
+            "Should have multiple log entries after action"
+        );
 
         // Get the ID of the last entry
         let last_entry_id: String = page
@@ -258,10 +273,12 @@ async fn test_delete_removes_message() {
             .await
             .unwrap();
 
-        // Click any delete button (always deletes the last entry)
+        // Click the delete button on the last entry
         page.evaluate::<(), bool>(
             r#"(() => {
-                const btn = document.querySelector('.log-entry .delete-btn');
+                const entries = document.querySelectorAll('.log-entry');
+                const last = entries[entries.length - 1];
+                const btn = last?.querySelector('.delete-btn');
                 if (btn) { btn.click(); return true; }
                 return false;
             })()"#,
@@ -285,6 +302,12 @@ async fn test_delete_removes_message() {
 #[tokio::test]
 async fn test_retry_button_on_last_ai_message() {
     with_test_page(CONFIG_PATH, TEST_WORLD, |page, _port| async move {
+        // Send an action to create input + narration so retry appears on last AI message
+        let initial_entries = element_count(&page, "#story-log .log-entry").await;
+        send_action(&page, "look").await;
+        wait_for_status_ready(&page).await;
+        wait_for_element_children(&page, "#story-log .log-entry", initial_entries as u32 + 1).await;
+
         let retry_count = element_count(&page, ".retry-btn").await;
         assert_eq!(
             retry_count, 1,

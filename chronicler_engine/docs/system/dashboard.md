@@ -33,11 +33,11 @@ Horizontal split into story context and visual context:
     - Character name prominent above message (bold, larger)
     - Subtle timestamp (HH:MM format, small gray)
     - Fade-in animation for new messages
-    - Action buttons at top-right of every message (always visible):
+    - Action buttons at top-right of every message:
       - Edit button (✎) on all entries
-      - Delete button (🗑) on all entries
+      - Delete button (🗑) on last entry only (hidden when only one entry exists)
       - Check button (✓) on input entries (spellcheck)
-      - Retry button (↻) on last AI message only
+      - Retry button (↻) on last AI message only (hidden when only one entry exists)
 - **Visual Sidebar (20%)**:
   - Location Image (top): Full-width location image, max-height 200px, object-fit contain
   - NPC Portraits (bottom): Horizontal scrollable row, 80×80px square images, object-fit cover

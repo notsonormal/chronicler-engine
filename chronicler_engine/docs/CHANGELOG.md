@@ -17,6 +17,11 @@
   - Swipe index increment: retries save with `swipe_index + 1`, preserving original snapshot
 
 ### Fixed
+- **Story Log Button Visibility** â€” Delete button now only appears on the last message and is hidden when only one message exists. Retry button is also hidden on the first/only message.
+  - `StoryLogTemplate` delete button wrapped in `{% if loop.last and entries|length > 1 %}`
+  - `StoryLogTemplate` retry button condition changed from `{% if loop.last %}` to `{% if loop.last and entries|length > 1 %}`
+- **Location Entry Text Bolding** â€” Removed CSS leak that caused all text in location entries to render bold. Only the location header (`<span class="location-header">`) is now bold.
+  - Removed `font-weight: bold` from the `.location` rule in `assets/styles.css`
 - **Retry UI Feedback** â€” Retry now shows immediate visual feedback
   - `retry_handler` sets `GenerationStatus::Generating` + `GenerationPhase::Narrating` and saves snapshot before spawning blocking task
   - `submitRetry()` calls `updateToThinking()` before fetch, matching form submission behavior

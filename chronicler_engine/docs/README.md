@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-11 23:16 UTC*
+*Index last generated: 2026-05-12 20:38 UTC*
 
 ### Root files
 
@@ -56,6 +56,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ### `docs/plans/archived/`
 
 - [Implementation Plan: Restrict Message Deletion & Inline Location/Event Headers](./plans/archived/cyborg-obsidian-riri-williams.md)
+- [Plan: Fix Story Log Button Visibility & Text Bolding](./plans/archived/fix-story-log-buttons-and-bolding.md)
 - [Plan: Restrict Message Deletion & Rethink Location/Event Headers](./plans/archived/lightray-thor-hulk.md)
 - [Implementation Plan: Test Suite Improvements](./plans/archived/test-fix-plan.md)
 
