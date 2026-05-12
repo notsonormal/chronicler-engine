@@ -313,7 +313,7 @@
   - Set `LLM_BACKEND=mock` env var to use mock for testing
 
 - **action_processing.rs** - Extracted pure functions from fragments.rs for unit testing
-  - `get_static_npcs()` - Returns NPCs for current room
+  - `get_static_npcs()` - Returns NPCs for current room (removed in later refactor; NPC presence now driven entirely by quantifier + scenario init)
   - `handle_movement()` - Processes player movement
   - `apply_npc_events()` - Handles NPC Entered/Left events
   - `evaluate_and_narrate_triggers()` - Evaluates narrative triggers

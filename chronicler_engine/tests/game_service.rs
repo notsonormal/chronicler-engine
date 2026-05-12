@@ -87,6 +87,7 @@ pub fn create_test_state_with_trigger_npc() -> GameState {
                 repeat: false,
                 room_id: None,
             }],
+            relationships: vec![],
         }],
     )
 }

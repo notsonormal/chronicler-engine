@@ -20,6 +20,7 @@ fn test_deepseek_generate_dialogue() {
         },
         inventory: vec![],
         triggers: vec![],
+        relationships: vec![],
     };
     let result = backend.generate_dialogue(&make_test_context_with_npc(&npc, ""), &npc);
     assert!(
@@ -121,6 +122,7 @@ fn test_deepseek_all_methods_return_not_implemented() {
         },
         inventory: vec![],
         triggers: vec![],
+        relationships: vec![],
     };
 
     let dialogue_result =

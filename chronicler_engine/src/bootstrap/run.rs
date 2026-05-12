@@ -35,15 +35,12 @@ pub fn run(args: Args) -> crate::error::Result<()> {
 
     inject_scenario_logs(&mut state, &manifest, &player);
 
-    let current_room = crate::engine::logic::get_current_room(&state)?;
+    // Initialise character_state and npcs_in_area from scenario NPCs
+    if let Some(scenario) = manifest.default_scenario() {
+        state.init_scenario_npcs(scenario);
+    }
 
-    let room_npc_ids = current_room.npcs.clone();
-
-    let nearby_npcs: Vec<NpcCard> = room_npc_ids
-        .iter()
-        .filter_map(|id| state.npcs.get(id).cloned())
-        .collect();
-
+    let nearby_npcs = state.scene.npcs_in_area.clone();
     let all_npcs: Vec<NpcCard> = state.npcs.values().cloned().collect();
 
     let _world = state.world.clone();
@@ -75,8 +72,6 @@ pub fn run(args: Args) -> crate::error::Result<()> {
     let player_arc: Arc<crate::model::character::PlayerCard> = player;
     let npcs_map: std::collections::HashMap<String, NpcCard> = state.npcs.clone();
     let npcs_arc = Arc::new(npcs_map);
-    let starting_room = manifest.starting_room_id.clone();
-    let scenario_text = manifest.default_scenario().map(|s| s.text.clone());
 
     // [DOC: docs/architecture/system.md]
     let config = ServerConfig { port: args.port };
@@ -85,14 +80,15 @@ pub fn run(args: Args) -> crate::error::Result<()> {
     })?;
 
     // [DOC: docs/system/narration_engine.md]
-    let has_scenario = scenario_text.as_ref().is_some_and(|t| !t.is_empty());
+    let has_scenario = world_arc
+        .default_scenario()
+        .is_some_and(|s| !s.text.is_empty());
     if !has_scenario {
         let storage_for_task = Arc::clone(&snapshot_storage);
         let world_for_task = Arc::clone(&world_arc);
         let map_for_task = Arc::clone(&map_arc);
         let player_for_task = Arc::clone(&player_arc);
         let npcs_for_task = Arc::clone(&npcs_arc);
-        let starting_room_for_task = starting_room.clone();
         // [DOC: docs/architecture/invariants.md#INV-004]
         let _handle = runtime.spawn_blocking(move || {
             let mut state = match storage_for_task.load_latest(None) {
@@ -108,7 +104,7 @@ pub fn run(args: Args) -> crate::error::Result<()> {
                     Arc::clone(&map_for_task),
                     Arc::clone(&player_for_task),
                     (*npcs_for_task).values().cloned().collect(),
-                    starting_room_for_task.clone(),
+                    world_for_task.starting_room_id.clone(),
                 ),
             };
 
@@ -159,10 +155,8 @@ pub fn run(args: Args) -> crate::error::Result<()> {
         map_arc,
         player_arc,
         npcs_arc,
-        starting_room,
         snapshot_storage,
         config,
-        scenario_text,
     ))?;
 
     Ok(())

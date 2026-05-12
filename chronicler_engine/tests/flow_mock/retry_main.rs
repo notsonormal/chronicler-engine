@@ -303,6 +303,7 @@ fn test_main_retry_reevaluates_triggers() {
             repeat: false,
             room_id: Some("room2".to_string()),
         }],
+        relationships: vec![],
     };
     state.npcs = std::collections::HashMap::from([("shopkeeper".to_string(), shopkeeper)]);
 

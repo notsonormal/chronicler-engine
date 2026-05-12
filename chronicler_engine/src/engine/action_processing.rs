@@ -42,14 +42,6 @@ pub struct TurnResult {
 }
 
 /// [DOC: docs/architecture/system.md]
-pub fn get_static_npcs(state: &GameState, room_npc_ids: &[String]) -> Vec<NpcCard> {
-    room_npc_ids
-        .iter()
-        .filter_map(|id| state.npcs.get(id).cloned())
-        .collect()
-}
-
-/// [DOC: docs/architecture/system.md]
 pub fn handle_movement(
     state: GameState,
     destination: Option<&str>,

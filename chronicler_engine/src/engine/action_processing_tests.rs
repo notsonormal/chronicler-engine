@@ -252,9 +252,7 @@ fn test_execute_freeaction_impl_npc_events_entered() {
     assert_eq!(times_met, 1);
 }
 
-use crate::engine::action_processing::{
-    evaluate_and_narrate_triggers, get_static_npcs, handle_movement,
-};
+use crate::engine::action_processing::{evaluate_and_narrate_triggers, handle_movement};
 use crate::test_support::TestMap;
 
 use crate::model::state::GameState;
@@ -265,23 +263,6 @@ fn make_test_state() -> GameState {
         "Test Room",
         TestNpc::named("carla", "Carla"),
     )
-}
-
-#[test]
-fn test_get_static_npcs_returns_npcs() {
-    let state = make_test_state();
-    let room_npcs = vec!["carla".to_string()];
-    let result = get_static_npcs(&state, &room_npcs);
-    assert_eq!(result.len(), 1);
-    assert_eq!(result[0].id, "carla");
-}
-
-#[test]
-fn test_get_static_npcs_empty_for_unknown() {
-    let state = make_test_state();
-    let room_npcs = vec!["unknown".to_string()];
-    let result = get_static_npcs(&state, &room_npcs);
-    assert!(result.is_empty());
 }
 
 #[test]
@@ -413,8 +394,7 @@ fn test_evaluate_and_narrate_triggers_adds_event_header() {
         .npcs
         .insert("carla".to_string(), npc_with_trigger.clone());
 
-    let mut room = TestMap::room_named("test_room", "Test Room");
-    room.npcs.push("carla".to_string());
+    let room = TestMap::room_named("test_room", "Test Room");
 
     let world = state.world.clone();
     let player = state.player.clone();

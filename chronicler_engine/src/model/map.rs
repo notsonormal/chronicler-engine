@@ -40,8 +40,6 @@ pub struct Room {
     #[serde(default)]
     pub items: Vec<String>,
     #[serde(default)]
-    pub npcs: Vec<String>,
-    #[serde(default)]
     pub image_path: Option<String>,
     #[serde(default)]
     pub navigation_description: Option<String>,

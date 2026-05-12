@@ -11,6 +11,7 @@ fn test_world_card_serde() {
     let card: WorldCard = serde_json::from_str(json).unwrap();
     assert_eq!(card.name, "Test World");
     assert_eq!(card.global_rules.len(), 1);
+    assert_eq!(card.starting_room_id, "start");
 }
 
 #[test]
@@ -30,6 +31,7 @@ fn test_world_manifest_serde() {
     assert_eq!(manifest.starting_room_id, "start");
     assert_eq!(manifest.map_file, "map.json");
     assert_eq!(manifest.player_file, "player.json");
+    assert!(manifest.default_scenario().is_none());
 }
 
 #[test]
@@ -67,4 +69,6 @@ fn test_world_manifest_to_card() {
     assert_eq!(card.name, "Test");
     assert_eq!(card.description, "Test desc");
     assert_eq!(card.global_rules.len(), 1);
+    assert_eq!(card.starting_room_id, "start");
+    assert!(card.default_scenario().is_none());
 }

@@ -63,20 +63,12 @@ fn render_visual_sidebar_unlocked(state: &GameState) -> Result<String> {
         Some((image_path, name))
     };
 
-    let npc_data: Vec<(String, String)> = if !state.scene.npcs_in_area.is_empty() {
-        state
-            .scene
-            .npcs_in_area
-            .iter()
-            .filter_map(|npc| resolve_headshot(&npc.id))
-            .collect()
-    } else {
-        // Fallback to static room.npcs
-        room.npcs
-            .iter()
-            .filter_map(|npc_id| resolve_headshot(npc_id))
-            .collect()
-    };
+    let npc_data: Vec<(String, String)> = state
+        .scene
+        .npcs_in_area
+        .iter()
+        .filter_map(|npc| resolve_headshot(&npc.id))
+        .collect();
 
     let template = VisualSidebarTemplate::new(image_path, room.name.clone(), npc_data);
     template

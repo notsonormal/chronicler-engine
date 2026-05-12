@@ -26,22 +26,7 @@ pub fn validate_loaded_data(
         ));
     }
 
-    // 2. Validate all NPCs referenced in the map actually exist
-    let loaded_npc_ids: std::collections::HashSet<_> = npcs.iter().map(|n| n.id.clone()).collect();
-    for region in &map.overworld.regions {
-        for room in &region.rooms {
-            for npc_id in &room.npcs {
-                if !loaded_npc_ids.contains(npc_id) {
-                    errors.push(format!(
-                        "Map room '{}' references missing NPC '{}'",
-                        room.id, npc_id
-                    ));
-                }
-            }
-        }
-    }
-
-    // 3. Validate trigger room_ids exist in the map
+    // 2. Validate trigger room_ids exist in the map
     for npc in npcs {
         for (i, trigger) in npc.triggers.iter().enumerate() {
             if let Some(room_id) = &trigger.room_id {
@@ -51,6 +36,19 @@ pub fn validate_loaded_data(
                         npc.id, i, room_id
                     ));
                 }
+            }
+        }
+    }
+
+    // 3. Validate scenario NPC references exist
+    let loaded_npc_ids: std::collections::HashSet<_> = npcs.iter().map(|n| n.id.clone()).collect();
+    for scenario in &manifest.scenarios {
+        for npc_id in &scenario.npcs {
+            if !loaded_npc_ids.contains(npc_id) {
+                errors.push(format!(
+                    "Scenario '{}' references missing NPC '{}'",
+                    scenario.id, npc_id
+                ));
             }
         }
     }

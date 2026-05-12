@@ -20,7 +20,7 @@ pub fn load_state(ctx: &GameServiceContext) -> GameState {
             Arc::clone(&ctx.map),
             Arc::clone(&ctx.player),
             (*ctx.npcs).values().cloned().collect(),
-            ctx.starting_room_id.clone(),
+            ctx.world.starting_room_id.clone(),
         ),
     }
 }

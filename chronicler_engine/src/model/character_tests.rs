@@ -131,3 +131,38 @@ fn test_preferred_image_none_when_both_absent() {
     };
     assert_eq!(sheet.preferred_image(), None);
 }
+
+#[test]
+fn test_npc_card_relationships_deserialize() {
+    let json = r#"{
+        "id": "carla",
+        "name": "Carla",
+        "description": "Guard",
+        "personality": "Strict",
+        "scenario": "Guarding",
+        "relationships": [
+            {"with": "gabriella", "static": "Carla distrusts Gabriella.", "dynamic": "open hostility"}
+        ]
+    }"#;
+    let npc: NpcCard = serde_json::from_str(json).unwrap();
+    assert_eq!(npc.relationships.len(), 1);
+    assert_eq!(npc.relationships[0].with, "gabriella");
+    assert_eq!(
+        npc.relationships[0].static_text,
+        "Carla distrusts Gabriella."
+    );
+    assert_eq!(npc.relationships[0].dynamic, "open hostility");
+}
+
+#[test]
+fn test_npc_card_relationships_default_empty() {
+    let json = r#"{
+        "id": "carla",
+        "name": "Carla",
+        "description": "Guard",
+        "personality": "Strict",
+        "scenario": "Guarding"
+    }"#;
+    let npc: NpcCard = serde_json::from_str(json).unwrap();
+    assert!(npc.relationships.is_empty());
+}

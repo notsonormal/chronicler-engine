@@ -18,6 +18,8 @@ impl TestWorld {
             name: "Test World".to_string(),
             description: "A test world.".to_string(),
             global_rules: vec![],
+            starting_room_id: "start".to_string(),
+            scenarios: vec![],
             default_room_image: None,
         }
     }
@@ -84,6 +86,7 @@ impl TestNpc {
             sheet: Self::sheet(name),
             inventory: vec![],
             triggers: vec![],
+            relationships: vec![],
         }
     }
 
@@ -102,6 +105,7 @@ impl TestNpc {
                 repeat: false,
                 room_id: None,
             }],
+            relationships: vec![],
         }
     }
 
@@ -126,6 +130,7 @@ impl TestNpc {
                 repeat: false,
                 room_id: Some(room_id.to_string()),
             }],
+            relationships: vec![],
         }
     }
 }
@@ -143,7 +148,6 @@ impl TestMap {
             description: format!("A plain test room ({id})."),
             exits: HashMap::new(),
             items: vec![],
-            npcs: vec![],
             image_path: None,
             navigation_description: None,
         }
@@ -157,17 +161,8 @@ impl TestMap {
             description: format!("A plain test room ({id})."),
             exits: HashMap::new(),
             items: vec![],
-            npcs: vec![],
             image_path: None,
             navigation_description: None,
-        }
-    }
-
-    /// A `Room` with a specific NPC listed in its NPC IDs.
-    pub fn room_with_npc(room_id: &str, npc_id: &str) -> Room {
-        Room {
-            npcs: vec![npc_id.to_string()],
-            ..Self::room(room_id)
         }
     }
 
@@ -181,21 +176,6 @@ impl TestMap {
                     id: "test_region".to_string(),
                     name: "Test Region".to_string(),
                     rooms: vec![Self::room(room_id)],
-                }],
-            },
-        }
-    }
-
-    /// A `MapDef` with one room containing the given NPC ID.
-    pub fn single_room_with_npc(room_id: &str, npc_id: &str) -> MapDef {
-        MapDef {
-            overworld: Overworld {
-                id: "test_overworld".to_string(),
-                name: "Test Overworld".to_string(),
-                regions: vec![Region {
-                    id: "test_region".to_string(),
-                    name: "Test Region".to_string(),
-                    rooms: vec![Self::room_with_npc(room_id, npc_id)],
                 }],
             },
         }
@@ -240,10 +220,10 @@ impl TestGameState {
 
     /// A `GameState` in the given room with one NPC loaded (and listed in the room).
     pub fn with_npc(room_id: &str, npc: NpcCard) -> GameState {
-        let npc_id = npc.id.clone();
+        let _npc_id = npc.id.clone();
         GameState::new(
             Arc::new(TestWorld::minimal()),
-            Arc::new(TestMap::single_room_with_npc(room_id, &npc_id)),
+            Arc::new(TestMap::single_room(room_id)),
             Arc::new(TestPlayer::standard()),
             vec![npc],
             room_id.to_string(),
@@ -252,7 +232,7 @@ impl TestGameState {
 
     /// A `GameState` in the given room with multiple NPCs loaded.
     pub fn with_npcs(room_id: &str, npcs: Vec<NpcCard>) -> GameState {
-        let npc_ids: Vec<String> = npcs.iter().map(|n| n.id.clone()).collect();
+        let _npc_ids: Vec<String> = npcs.iter().map(|n| n.id.clone()).collect();
         let map = MapDef {
             overworld: Overworld {
                 id: "test_overworld".to_string(),
@@ -260,10 +240,7 @@ impl TestGameState {
                 regions: vec![Region {
                     id: "test_region".to_string(),
                     name: "Test Region".to_string(),
-                    rooms: vec![Room {
-                        npcs: npc_ids,
-                        ..TestMap::room(room_id)
-                    }],
+                    rooms: vec![TestMap::room(room_id)],
                 }],
             },
         };
@@ -284,7 +261,7 @@ impl TestGameState {
         npcs_map.insert(npc_id.clone(), npc);
         GameState {
             world: Arc::new(TestWorld::minimal()),
-            map: Arc::new(TestMap::single_room_with_npc(room_id, &npc_id)),
+            map: Arc::new(TestMap::single_room(room_id)),
             player: Arc::new(TestPlayer::standard()),
             npcs: npcs_map,
             movement: crate::model::state::MovementState {
@@ -309,8 +286,7 @@ impl TestGameState {
     /// Like `with_npc_raw` but with a custom room display name.
     pub fn with_npc_in_named_room_raw(room_id: &str, room_name: &str, npc: NpcCard) -> GameState {
         let npc_id = npc.id.clone();
-        let mut room = TestMap::room_named(room_id, room_name);
-        room.npcs.push(npc_id.clone());
+        let room = TestMap::room_named(room_id, room_name);
         let mut npcs_map = HashMap::new();
         npcs_map.insert(npc_id, npc);
         GameState {

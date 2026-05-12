@@ -1,14 +1,14 @@
 {
     "id": "redmist_estate",
     "name": "Redmist Estate",
-    "description": "The world setting derived from character lorebooks.",
+    "description": "The Redmist Estate stands in Islaport, a large coastal city on the eastern seaboard. Built in the colonial era, the estate encompasses a grand mansion, formal gardens, and several outbuildings. For generations the Redmist family wielded influence as surgeons and physicians. Bernard Redmist, the recently deceased patriarch, was renowned for his charitable work — and for the shocking will that left his fortune to an unknown grandson.",
     "global_rules": [
-        "Bernard Redmist was the patriarch of the Redmist Family, well respected for his kindness and charitable attitude. He recently passed away, leaving his wealth to an unknown child. {{char}} considered him her mentor.",
-        "Bernard Redmist is {{char}}'s late husband - an elderly, wealthy man she naively believed was an easy mark. He was peculiar, enjoyed having {{char}} dress up for intimate encounters, and ultimately left her out of his will.",
-        "Gabriella Redmist was Bernard's wife before his death, infamous around the estate for being rude and arrogant. {{char}} despises her and has no doubt she'll try to worm her way into the inheritance.",
-        "The Redmist Family has a long history dating back to the colonisation of the Americas, particularly known as surgeons and doctors. They are one of the more influential families in the city.",
-        "The Redmist Estate is an expansive ground with a large mansion, miscellaneous buildings, and a garden - one of the largest colonial estates still standing, second only to the Small Family Estate nearby.",
-        "Carla Jess was Bernard's bodyguard, known for being a tough and imposing presence wherever she goes."
+        "Bernard Redmist died two weeks ago. His will left nearly his entire fortune to Julian Redmist, a grandson he never knew, bypassing his widow Gabriella.",
+        "Gabriella Redmist, Bernard's 31-year-old widow, still resides in the estate's guest wing. Staff consider her arrogant, demanding, and manipulative.",
+        "Carla Jess is Julian's personal bodyguard, reassigned from Bernard's protection detail. She is an ex-soldier with combat experience and a no-nonsense attitude.",
+        "Jezebel Coleman manages the estate finances and Bernard's charitable foundations. She was Bernard's trusted friend and advisor for over a decade.",
+        "The Redmist Estate employs a small staff including Lisette (personal maid) and Louise (personal chef), both reassigned to serve Julian.",
+        "Islaport is a large coastal city with colonial architecture, a busy harbour, and distinct social classes. The Redmist family is among its most influential."
     ],
     "starting_room_id": "front_gates",
     "map_file": "map.json",
@@ -21,7 +21,8 @@
             "name": "Bodyguard Introduction",
             "description": "Carla introduces herself as your bodyguard at the front gates",
             "starting_room_id": "front_gates",
-            "text": "Standing tall and commanding, Carla approaches {{user}} with a piercing gaze. She extends her arm for a firm handshake. \"I'm Carla. I'll be your bodyguard both inside the Redmist Estate and wherever else you go. You'll notice me around frequently, so don't try to shake me off.\" She steps back, crossing her arms. \"I need you to understand that your safety is my top priority. Everything I do is to keep you safe. Let's work together to make sure nothing compromises that. Firstly, I'll ask to borrow your phone. It won't take long.\""
+            "text": "Standing tall and commanding, Carla approaches {{user}} with a piercing gaze. She extends her arm for a firm handshake. \"I'm Carla. I'll be your bodyguard both inside the Redmist Estate and wherever else you go. You'll notice me around frequently, so don't try to shake me off.\" She steps back, crossing her arms. \"I need you to understand that your safety is my top priority. Everything I do is to keep you safe. Let's work together to make sure nothing compromises that. Firstly, I'll ask to borrow your phone. It won't take long.\"",
+            "npcs": ["carla"]
         }
     ]
 }

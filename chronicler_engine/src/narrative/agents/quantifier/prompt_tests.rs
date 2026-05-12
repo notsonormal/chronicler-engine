@@ -106,7 +106,6 @@ fn test_quantifier_prompt_includes_navigation() {
         description: "A test room.".to_string(),
         exits: HashMap::new(),
         items: vec![],
-        npcs: vec![],
         image_path: None,
         navigation_description: Some("You can go north to the kitchen.".to_string()),
     };
@@ -153,34 +152,6 @@ fn test_quantifier_prompt_builder_empty_npcs() {
 
     assert!(system.contains("AvailableNpcIds"));
     assert!(user.contains("Hero"));
-}
-
-#[test]
-fn test_quantifier_prompt_builder_with_room_npcs() {
-    let mut room = make_room();
-    room.npcs = vec!["gabriella".to_string(), "carla".to_string()];
-
-    let gabriella = make_npc("gabriella", "Gabriella");
-    let all_npcs = vec![gabriella];
-    let previous_npcs: Vec<NpcCard> = vec![];
-    let history: Vec<LogEntry> = vec![];
-
-    let context = QuantifierPromptContext {
-        room: &room,
-        previous_room_npcs: &previous_npcs,
-        all_known_npcs: &all_npcs,
-        all_rooms: &[],
-        player_name: "Hero",
-        recent_history: &history,
-        player_action: "I enter the room.",
-    };
-
-    let builder = QuantifierPromptBuilder::new(context);
-    let (_, user) = builder.build();
-
-    assert!(user.contains("RoomConfiguredNpcs"));
-    assert!(user.contains("gabriella"));
-    assert!(user.contains("carla"));
 }
 
 #[test]
@@ -271,3 +242,5 @@ fn test_quantifier_prompt_references_latest_narration_in_query() {
         "Query should reference <LatestNarration>"
     );
 }
+
+

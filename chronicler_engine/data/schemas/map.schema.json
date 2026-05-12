@@ -32,10 +32,6 @@
                       "type": "array",
                       "items": { "type": "string" }
                     },
-                    "npcs": {
-                      "type": "array",
-                      "items": { "type": "string" }
-                    },
                     "image_path": {
                       "type": ["string", "null"]
                     },

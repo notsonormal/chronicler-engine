@@ -28,6 +28,7 @@ fn make_npc(id: &str, triggers: Vec<Trigger>) -> NpcCard {
         },
         inventory: vec![],
         triggers,
+        relationships: vec![],
     }
 }
 
@@ -292,7 +293,6 @@ fn test_character_state_initializes_with_starting_room_npcs() {
         description: "A room".into(),
         exits: HashMap::new(),
         items: vec![],
-        npcs: vec!["carla".into()],
         image_path: None,
         navigation_description: None,
     };
@@ -323,6 +323,7 @@ fn test_character_state_initializes_with_starting_room_npcs() {
         },
         triggers: vec![],
         inventory: vec![],
+        relationships: vec![],
     };
     let npcs = vec![npc];
 
@@ -346,9 +347,10 @@ fn test_character_state_initializes_with_starting_room_npcs() {
         "start".into(),
     );
 
-    // Carla in starting room should have times_met=1
-    assert_eq!(get_times_met(&state.character_state, "carla"), 1);
-    assert!(is_currently_meeting(&state.character_state, "carla"));
+    // Carla should NOT be auto-initialised by GameState::new anymore
+    // (room.npcs was removed; scenario-driven init happens in bootstrap/run.rs)
+    assert_eq!(get_times_met(&state.character_state, "carla"), 0);
+    assert!(!is_currently_meeting(&state.character_state, "carla"));
 }
 
 #[test]

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::engine::action::Action;
 use crate::engine::action_processing::{
-    apply_npc_events, commit_trigger_narration, execute_freeaction_impl, get_static_npcs,
+    apply_npc_events, commit_trigger_narration, execute_freeaction_impl,
 };
 use crate::engine::logic::get_current_room;
 use crate::engine::parser::parse_command;
@@ -168,10 +168,7 @@ pub fn execute_freeaction_pipeline(
     let player = Arc::clone(&state.player);
     let room_id = state.movement.current_room_id.clone();
     let history = state.narrative.history.clone();
-    let room_npc_ids = get_current_room(&state)
-        .map(|r| r.npcs.clone())
-        .unwrap_or_default();
-    let nearby_npcs = get_static_npcs(&state, &room_npc_ids);
+    let nearby_npcs = state.scene.npcs_in_area.clone();
     let all_npcs: Vec<NpcCard> = state.npcs.values().cloned().collect();
 
     state.narrative.generation.status = GenerationStatus::Generating;
@@ -217,7 +214,7 @@ pub fn execute_freeaction_pipeline(
     state.narrative.generation.status = GenerationStatus::Generating;
     state.narrative.generation.phase = GenerationPhase::Quantifying;
 
-    let mut quantifier_result = default_quantifier_result(&room.npcs);
+    let mut quantifier_result = default_quantifier_result(&[]);
     run_post_generation_agents(
         service,
         &state,

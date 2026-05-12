@@ -89,6 +89,8 @@ fn test_trigger_continuation_runs_quantifier_and_detects_new_npc() {
         name: "Test World".into(),
         description: "A test world".into(),
         global_rules: vec![],
+        starting_room_id: "room1".into(),
+        scenarios: vec![],
         default_room_image: None,
     });
 
@@ -130,6 +132,7 @@ fn test_trigger_continuation_runs_quantifier_and_detects_new_npc() {
             repeat: false,
             room_id: None,
         }],
+        relationships: vec![],
     };
 
     let gabriella = NpcCard {
@@ -146,6 +149,7 @@ fn test_trigger_continuation_runs_quantifier_and_detects_new_npc() {
         },
         inventory: vec![],
         triggers: vec![],
+        relationships: vec![],
     };
 
     let npcs = vec![shopkeeper, gabriella];

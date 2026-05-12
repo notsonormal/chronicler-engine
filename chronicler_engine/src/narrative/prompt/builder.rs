@@ -195,6 +195,9 @@ impl<'a> PromptBuilder<'a> {
         if self.npcs_in_area.is_empty() {
             output.push_str("No NPCs are present in this location.\n");
         } else {
+            let in_area_ids: std::collections::HashSet<_> =
+                self.npcs_in_area.iter().map(|n| n.id.as_str()).collect();
+
             for npc in self.npcs_in_area {
                 output.push_str("--- ");
                 output.push_str(&npc.sheet.name);
@@ -208,8 +211,30 @@ impl<'a> PromptBuilder<'a> {
                 if !npc.sheet.scenario.is_empty() {
                     output.push_str("Context: ");
                     output.push_str(&npc.sheet.scenario);
-                    output.push_str("\n\n");
+                    output.push('\n');
                 }
+
+                // Relationships with other NPCs present in the room
+                let present_relations: Vec<_> = npc
+                    .relationships
+                    .iter()
+                    .filter(|r| in_area_ids.contains(r.with.as_str()))
+                    .collect();
+
+                if !present_relations.is_empty() {
+                    output.push_str("Relationships:\n");
+                    for rel in present_relations {
+                        let partner_name = self
+                            .all_npcs
+                            .iter()
+                            .find(|n| n.id == rel.with)
+                            .map(|n| n.sheet.name.as_str())
+                            .unwrap_or(&rel.with);
+                        output.push_str(&format!("  → {}: {}\n", partner_name, rel.display_text()));
+                    }
+                }
+
+                output.push('\n');
             }
         }
         output.push_str("</NpcsInRoom>\n");

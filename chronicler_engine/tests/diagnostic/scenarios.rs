@@ -528,6 +528,7 @@ fn benchmark_trigger_wrong_room_id() {
             repeat: true,
             room_id: Some("wrong_room".into()), // Wrong room!
         }],
+        relationships: vec![],
     };
 
     let state = crate::test_data::create_test_state_with_npcs(
@@ -626,6 +627,7 @@ fn benchmark_state_stuck_generating() {
             repeat: true,
             room_id: Some("room1".into()),
         }],
+        relationships: vec![],
     };
 
     let mut state = crate::test_data::create_test_state_with_npcs(

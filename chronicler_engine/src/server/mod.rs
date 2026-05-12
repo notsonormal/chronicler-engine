@@ -124,13 +124,11 @@ pub fn create_app_with_storage(
         map: state.map.clone(),
         player: state.player.clone(),
         npcs: Arc::new(state.npcs.clone()),
-        starting_room_id: state.movement.current_room_id.clone(),
         game_service: Arc::new(crate::engine::game_service::DefaultGameService::new())
             as Arc<dyn crate::engine::game_service::GameService>,
         settings: Arc::new(RwLock::new(settings)),
-        cancel_token: CancellationToken::new(),
+        cancel_token: Arc::new(std::sync::RwLock::new(CancellationToken::new())),
         is_generating: Arc::new(AtomicBool::new(false)),
-        scenario_text: None,
     };
     build_router(app_state)
 }
@@ -174,13 +172,10 @@ pub struct AppState {
     pub map: Arc<MapDef>,
     pub player: Arc<crate::model::character::PlayerCard>,
     pub npcs: Arc<HashMap<String, NpcCard>>,
-    pub starting_room_id: String,
     pub game_service: Arc<dyn GameService>,
     pub settings: Arc<RwLock<AppSettings>>,
-    pub cancel_token: CancellationToken,
+    pub cancel_token: Arc<std::sync::RwLock<CancellationToken>>,
     pub is_generating: Arc<AtomicBool>,
-    /// Scenario text injected on first load; used by reset to re-create initial state.
-    pub scenario_text: Option<String>,
 }
 
 impl AppState {
@@ -199,7 +194,7 @@ impl AppState {
                 Arc::clone(&self.map),
                 Arc::clone(&self.player),
                 (*self.npcs).values().cloned().collect(),
-                self.starting_room_id.clone(),
+                self.world.starting_room_id.clone(),
             )),
         }
     }
@@ -211,11 +206,29 @@ impl AppState {
             map: Arc::clone(&self.map),
             player: Arc::clone(&self.player),
             npcs: Arc::clone(&self.npcs),
-            starting_room_id: self.starting_room_id.clone(),
-            cancel_token: self.cancel_token.clone(),
+            cancel_token: self.current_cancel_token(),
             action_lock: Arc::new(std::sync::Mutex::new(())),
             is_generating: Arc::clone(&self.is_generating),
         }
+    }
+
+    /// Returns a clone of the current cancellation token.
+    /// If the lock is poisoned, recovers the inner value.
+    pub fn current_cancel_token(&self) -> CancellationToken {
+        match self.cancel_token.read() {
+            Ok(g) => g.clone(),
+            Err(p) => p.into_inner().clone(),
+        }
+    }
+
+    /// Replaces the current cancellation token with a fresh one.
+    /// If the lock is poisoned, recovers the inner value before replacing.
+    pub fn replace_cancel_token(&self) {
+        let mut token = match self.cancel_token.write() {
+            Ok(g) => g,
+            Err(p) => p.into_inner(),
+        };
+        *token = CancellationToken::new();
     }
 
     /// Read a snapshot of the current settings.
@@ -230,7 +243,6 @@ pub async fn run_server(
     map: Arc<MapDef>,
     player: Arc<crate::model::character::PlayerCard>,
     npcs: Arc<HashMap<String, NpcCard>>,
-    starting_room_id: String,
     snapshot_storage: Arc<dyn SnapshotStorage>,
 ) -> Result<()> {
     run_server_with_config(
@@ -238,10 +250,8 @@ pub async fn run_server(
         map,
         player,
         npcs,
-        starting_room_id,
         snapshot_storage,
         ServerConfig::default(),
-        None,
     )
     .await
 }
@@ -253,10 +263,8 @@ pub async fn run_server_with_config(
     map: Arc<MapDef>,
     player: Arc<crate::model::character::PlayerCard>,
     npcs: Arc<HashMap<String, NpcCard>>,
-    starting_room_id: String,
     snapshot_storage: Arc<dyn SnapshotStorage>,
     config: ServerConfig,
-    scenario_text: Option<String>,
 ) -> Result<()> {
     let app_state = AppState {
         snapshot_storage,
@@ -265,15 +273,13 @@ pub async fn run_server_with_config(
         player,
         npcs,
         is_generating: Arc::new(AtomicBool::new(false)),
-        starting_room_id,
         game_service: Arc::new(DefaultGameService::new()) as Arc<dyn GameService>,
         settings: Arc::new(RwLock::new(
             crate::settings::load_settings().unwrap_or_else(|_| AppSettings::default()),
         )),
-        cancel_token: CancellationToken::new(),
-        scenario_text,
+        cancel_token: Arc::new(std::sync::RwLock::new(CancellationToken::new())),
     };
-    let cancel_token = app_state.cancel_token.clone();
+    let cancel_token_arc = Arc::clone(&app_state.cancel_token);
 
     let app = build_router(app_state);
 
@@ -287,7 +293,11 @@ pub async fn run_server_with_config(
     let shutdown_signal = async move {
         let _ = tokio::signal::ctrl_c().await;
         log::info!("Shutdown signal received, cancelling in-flight tasks...");
-        cancel_token.cancel();
+        let token = match cancel_token_arc.read() {
+            Ok(g) => g.clone(),
+            Err(p) => p.into_inner().clone(),
+        };
+        token.cancel();
     };
 
     axum::serve(listener, app)

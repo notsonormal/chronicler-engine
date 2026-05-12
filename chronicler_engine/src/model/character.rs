@@ -1,6 +1,26 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Relationship {
+    pub with: String,
+    #[serde(rename = "static")]
+    pub static_text: String,
+    #[serde(default)]
+    pub dynamic: String,
+}
+
+impl Relationship {
+    /// Returns the dynamic text if set, otherwise falls back to static text.
+    pub fn display_text(&self) -> &str {
+        if self.dynamic.is_empty() {
+            &self.static_text
+        } else {
+            &self.dynamic
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CharacterSheet {
     pub name: String,
     pub description: String,
@@ -41,4 +61,6 @@ pub struct NpcCard {
     pub inventory: Vec<String>,
     #[serde(default)]
     pub triggers: Vec<crate::model::trigger::Trigger>,
+    #[serde(default)]
+    pub relationships: Vec<Relationship>,
 }

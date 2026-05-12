@@ -26,7 +26,6 @@ fn setup_test_state() -> GameState {
         description: "A huge hall.".to_string(),
         exits: exits1,
         items: vec![],
-        npcs: vec![],
         image_path: None,
         navigation_description: None,
     };
@@ -37,7 +36,6 @@ fn setup_test_state() -> GameState {
         description: "Smells like mold.".to_string(),
         exits: exits2,
         items: vec![],
-        npcs: vec![],
         image_path: None,
         navigation_description: None,
     };
@@ -48,7 +46,6 @@ fn setup_test_state() -> GameState {
         description: "Books everywhere.".to_string(),
         exits: exits3,
         items: vec![],
-        npcs: vec![],
         image_path: None,
         navigation_description: None,
     };
@@ -174,7 +171,6 @@ fn test_get_available_exits_no_exits() {
         description: "Nothing here.".to_string(),
         exits: HashMap::new(),
         items: vec![],
-        npcs: vec![],
         image_path: None,
         navigation_description: None,
     };
@@ -245,7 +241,6 @@ fn test_get_current_room_failure() {
                     description: "D".to_string(),
                     exits: HashMap::new(),
                     items: vec![],
-                    npcs: vec![],
                     image_path: None,
                     navigation_description: None,
                 }],

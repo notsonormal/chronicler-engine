@@ -13,7 +13,6 @@ pub fn make_room() -> Room {
         description: "A grand entrance hall with marble floors.".to_string(),
         exits: HashMap::from([(Direction::North, "library".to_string())]),
         items: vec![],
-        npcs: vec!["gabriella".to_string()],
         image_path: None,
         navigation_description: None,
     }
@@ -34,6 +33,7 @@ pub fn make_npc(id: &str, name: &str) -> NpcCard {
         },
         inventory: vec![],
         triggers: vec![],
+        relationships: vec![],
     }
 }
 

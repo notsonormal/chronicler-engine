@@ -22,6 +22,8 @@ pub fn create_test_state_with_map() -> GameState {
         name: "Test World".into(),
         description: "A test world".into(),
         global_rules: vec![],
+        starting_room_id: "room1".into(),
+        scenarios: vec![],
         default_room_image: None,
     });
 
@@ -55,6 +57,7 @@ pub fn create_test_state_with_map() -> GameState {
         },
         inventory: vec![],
         triggers: vec![],
+        relationships: vec![],
     }];
 
     GameState::new(world, map, player, npcs, "room1".to_string())
@@ -65,6 +68,8 @@ pub fn create_test_state_with_trigger_npc() -> GameState {
         name: "Test World".into(),
         description: "A test world".into(),
         global_rules: vec![],
+        starting_room_id: "room1".into(),
+        scenarios: vec![],
         default_room_image: None,
     });
 
@@ -106,6 +111,7 @@ pub fn create_test_state_with_trigger_npc() -> GameState {
             repeat: false,
             room_id: None,
         }],
+        relationships: vec![],
     }];
 
     GameState::new(world, map, player, npcs, "room1".to_string())

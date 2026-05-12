@@ -18,7 +18,6 @@ pub struct GameServiceContext {
     pub map: Arc<crate::model::map::MapDef>,
     pub player: Arc<crate::model::character::PlayerCard>,
     pub npcs: Arc<std::collections::HashMap<String, NpcCard>>,
-    pub starting_room_id: String,
     pub cancel_token: CancellationToken,
     /// Serialize async action processing to prevent snapshot race conditions.
     pub action_lock: Arc<Mutex<()>>,

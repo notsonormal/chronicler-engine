@@ -99,7 +99,7 @@ async fn process_action(state: &AppState, command: String) -> Response<Body> {
         let cmd = command;
         let pname = player_name;
         let game_service = state.game_service.clone();
-        let token = state.cancel_token.clone();
+        let token = state.current_cancel_token();
 
         if token.is_cancelled() {
             let mut gs = match state.load_state() {

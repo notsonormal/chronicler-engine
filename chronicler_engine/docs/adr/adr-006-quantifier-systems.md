@@ -66,7 +66,7 @@ pub npcs_in_area: Vec<NpcCard>  // Dynamic from quantifier
 ```
 
 - **Storage**: Quantifier result persisted in `GameState`
-- **Fallback**: Static `room.npcs` when quantifier unavailable
+- **Fallback**: `state.scene.npcs_in_area` (previous turn's NPCs) when quantifier unavailable
 - **Quantification**: Runs post-narration AND post-trigger-continuation to detect NPCs introduced by events
 
 ### Feature 3: Reactive Auto-Trigger Movement

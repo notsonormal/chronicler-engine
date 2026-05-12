@@ -40,6 +40,18 @@
         },
         "required": ["condition", "action"]
       }
+    },
+    "relationships": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "with": { "type": "string" },
+          "static": { "type": "string" },
+          "dynamic": { "type": "string" }
+        },
+        "required": ["with", "static"]
+      }
     }
   },
   "required": ["name", "description", "personality", "scenario"]

@@ -25,7 +25,6 @@ fn create_test_room() -> Room {
         description: "A small test room with four walls.".to_string(),
         exits: std::collections::HashMap::new(),
         items: vec![],
-        npcs: vec![],
         image_path: None,
         navigation_description: None,
     }
@@ -62,6 +61,7 @@ fn create_test_npcs() -> Vec<NpcCard> {
         },
         inventory: vec![],
         triggers: vec![],
+        relationships: vec![],
     }]
 }
 
@@ -734,4 +734,129 @@ fn test_build_user_only() {
     assert!(user.contains("<PlayerInput>"));
     assert!(user.contains("Narrate the outcome"));
     assert!(!user.contains("You are an interactive fiction author"));
+}
+
+#[test]
+fn test_npc_relationships_appear_in_prompt() {
+    let world = create_test_world();
+    let room = create_test_room();
+    let player = create_test_player();
+
+    let carla = NpcCard {
+        id: "carla".to_string(),
+        sheet: crate::model::character::CharacterSheet {
+            name: "Carla".to_string(),
+            description: "A mysterious woman.".to_string(),
+            personality: "Secretive".to_string(),
+            scenario: "Standing in the corner".to_string(),
+            example_dialogue: String::new(),
+            summary: None,
+            profile_image: None,
+            headshot_image: None,
+        },
+        inventory: vec![],
+        triggers: vec![],
+        relationships: vec![crate::model::character::Relationship {
+            with: "gabriella".to_string(),
+            dynamic: "tense rivalry".to_string(),
+            static_text: "They are sisters".to_string(),
+        }],
+    };
+
+    let gabriella = NpcCard {
+        id: "gabriella".to_string(),
+        sheet: crate::model::character::CharacterSheet {
+            name: "Gabriella".to_string(),
+            description: "An elegant lady.".to_string(),
+            personality: "Proud".to_string(),
+            scenario: "Watching from the balcony".to_string(),
+            example_dialogue: String::new(),
+            summary: None,
+            profile_image: None,
+            headshot_image: None,
+        },
+        inventory: vec![],
+        triggers: vec![],
+        relationships: vec![],
+    };
+
+    let all_npcs = vec![carla.clone(), gabriella.clone()];
+    let npcs_in_area = vec![carla.clone(), gabriella.clone()];
+
+    let builder = PromptBuilder {
+        world: &world,
+        room: &room,
+        all_npcs: &all_npcs,
+        npcs_in_area: &npcs_in_area,
+        player: &player,
+        user_message: "I look at Carla and Gabriella.",
+        history: &[],
+        max_context_tokens: None,
+        requested_max_tokens: None,
+        response_length: None,
+    };
+    let user = builder.build_user_only();
+
+    assert!(
+        user.contains("Relationships:"),
+        "Prompt should contain Relationships section when NPCs have relations: {user}"
+    );
+    assert!(
+        user.contains("tense rivalry"),
+        "Prompt should include dynamic relationship text: {user}"
+    );
+    assert!(
+        user.contains("Gabriella"),
+        "Prompt should resolve partner name: {user}"
+    );
+}
+
+#[test]
+fn test_npc_relationships_filter_to_present_only() {
+    let world = create_test_world();
+    let room = create_test_room();
+    let player = create_test_player();
+
+    let carla = NpcCard {
+        id: "carla".to_string(),
+        sheet: crate::model::character::CharacterSheet {
+            name: "Carla".to_string(),
+            description: "A mysterious woman.".to_string(),
+            personality: "Secretive".to_string(),
+            scenario: "Standing in the corner".to_string(),
+            example_dialogue: String::new(),
+            summary: None,
+            profile_image: None,
+            headshot_image: None,
+        },
+        inventory: vec![],
+        triggers: vec![],
+        relationships: vec![crate::model::character::Relationship {
+            with: "absent_npc".to_string(),
+            dynamic: "secret alliance".to_string(),
+            static_text: "Old friends".to_string(),
+        }],
+    };
+
+    let all_npcs = vec![carla.clone()];
+    let npcs_in_area = vec![carla.clone()];
+
+    let builder = PromptBuilder {
+        world: &world,
+        room: &room,
+        all_npcs: &all_npcs,
+        npcs_in_area: &npcs_in_area,
+        player: &player,
+        user_message: "I look around.",
+        history: &[],
+        max_context_tokens: None,
+        requested_max_tokens: None,
+        response_length: None,
+    };
+    let user = builder.build_user_only();
+
+    assert!(
+        !user.contains("Relationships:"),
+        "Prompt should NOT contain Relationships section when related NPC is absent: {user}"
+    );
 }

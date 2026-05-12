@@ -11,63 +11,99 @@
                         "id": "front_gates",
                         "name": "Front Gates",
                         "description": "The imposing wrought iron gates of the Redmist Estate. Security is tight here.",
-                        "exits": {
-                            "north": "entrance_hall"
-                        },
-                        "navigation_description": "You can go north to enter the entrance hall.",
+                        "exits": { "north": "courtyard" },
+                        "navigation_description": "You can go north to enter the courtyard.",
                         "items": [],
-                        "npcs": ["carla"],
+                        "image_path": "data/images/Redmist Estate.png"
+                    },
+                    {
+                        "id": "courtyard",
+                        "name": "Main Courtyard",
+                        "description": "A wide gravel driveway lined with manicured hedges and stone statues. The mansion looms ahead.",
+                        "exits": { "south": "front_gates", "north": "entrance_hall", "west": "gardens" },
+                        "navigation_description": "You can go south to the front gates, north to the entrance hall, or west to the gardens.",
+                        "items": [],
+                        "image_path": "data/images/Redmist Estate.png"
+                    },
+                    {
+                        "id": "gardens",
+                        "name": "Formal Gardens",
+                        "description": "Neat flower beds, topiary, and a marble fountain. The scent of roses hangs in the air.",
+                        "exits": { "east": "courtyard" },
+                        "navigation_description": "You can go east to return to the courtyard.",
+                        "items": [],
                         "image_path": "data/images/Redmist Estate.png"
                     },
                     {
                         "id": "entrance_hall",
                         "name": "Entrance Hall",
                         "description": "A grand and luxurious foyer, decorated with expensive portraits of the Redmist ancestry.",
-                        "exits": {
-                            "south": "front_gates",
-                            "west": "kitchen",
-                            "east": "financial_office",
-                            "north": "master_quarters"
-                        },
-                        "navigation_description": "You can go south to the front gates, west to the kitchen, east to the financial office, or north to the master quarters.",
+                        "exits": { "south": "courtyard", "west": "kitchen", "east": "financial_office", "north": "library" },
+                        "navigation_description": "You can go south to the courtyard, west to the kitchen, east to the financial office, or north to the library.",
                         "items": [],
-                        "npcs": ["gabriella"],
+                        "image_path": "data/images/Redmist Estate.png"
+                    },
+                    {
+                        "id": "library",
+                        "name": "Library & Study",
+                        "description": "Floor-to-ceiling mahogany shelves hold leather-bound medical journals and family histories. Bernard's desk sits by the window, still covered in his papers.",
+                        "exits": { "south": "entrance_hall", "north": "master_quarters" },
+                        "navigation_description": "You can go south to the entrance hall or north to the master quarters.",
+                        "items": [],
+                        "image_path": "data/images/Redmist Estate.png"
+                    },
+                    {
+                        "id": "master_quarters",
+                        "name": "Master Quarters",
+                        "description": "Your luxurious bedroom. A massive bed sits in the center overlooking the estate gardens through tall windows.",
+                        "exits": { "south": "library" },
+                        "navigation_description": "You can go south to return to the library.",
+                        "items": [],
                         "image_path": "data/images/Redmist Estate.png"
                     },
                     {
                         "id": "kitchen",
                         "name": "Mansion Kitchen",
-                        "description": "An incredibly clean and extravagantly stocked stainless steel kitchen.",
-                        "exits": {
-                            "east": "entrance_hall"
-                        },
-                        "navigation_description": "You can go east to return to the entrance hall.",
+                        "description": "An incredibly clean and extravagantly stocked stainless steel kitchen. Copper pots hang from wrought-iron racks.",
+                        "exits": { "east": "entrance_hall", "north": "dining_room", "west": "staff_quarters" },
+                        "navigation_description": "You can go east to the entrance hall, north to the dining room, or west to the staff quarters.",
                         "items": [],
-                        "npcs": ["louise"],
+                        "image_path": "data/images/Redmist Estate.png"
+                    },
+                    {
+                        "id": "dining_room",
+                        "name": "Dining Room",
+                        "description": "A long mahogany dining table beneath a crystal chandelier. The room seats twenty but feels empty now.",
+                        "exits": { "south": "kitchen" },
+                        "navigation_description": "You can go south to return to the kitchen.",
+                        "items": [],
+                        "image_path": "data/images/Redmist Estate.png"
+                    },
+                    {
+                        "id": "staff_quarters",
+                        "name": "Staff Quarters",
+                        "description": "A modest corridor with small bedrooms for the live-in staff. Neat and clean, but a world away from the mansion's luxury.",
+                        "exits": { "east": "kitchen" },
+                        "navigation_description": "You can go east to return to the kitchen.",
+                        "items": [],
                         "image_path": "data/images/Redmist Estate.png"
                     },
                     {
                         "id": "financial_office",
                         "name": "Financial Office",
                         "description": "A quiet office with plush leather seating and a heavy mahogany desk stacked with financial records.",
-                        "exits": {
-                            "west": "entrance_hall"
-                        },
-                        "navigation_description": "You can go west to return to the entrance hall.",
+                        "exits": { "west": "entrance_hall", "north": "guest_wing" },
+                        "navigation_description": "You can go west to the entrance hall or north to the guest wing.",
                         "items": [],
-                        "npcs": ["jezebel"],
                         "image_path": "data/images/Redmist Estate.png"
                     },
                     {
-                        "id": "master_quarters",
-                        "name": "Master Quarters",
-                        "description": "Your luxurious bedroom. A massive bed sits in the center overlooking the estate gardens.",
-                        "exits": {
-                            "south": "entrance_hall"
-                        },
-                        "navigation_description": "You can go south to return to the entrance hall.",
+                        "id": "guest_wing",
+                        "name": "Guest Wing",
+                        "description": "A separate suite of rooms for visitors. Gabriella has made herself at home here since Bernard's passing.",
+                        "exits": { "south": "financial_office" },
+                        "navigation_description": "You can go south to return to the financial office.",
                         "items": [],
-                        "npcs": ["lisette"],
                         "image_path": "data/images/Redmist Estate.png"
                     }
                 ]

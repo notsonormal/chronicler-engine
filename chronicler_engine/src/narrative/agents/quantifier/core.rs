@@ -114,13 +114,25 @@ pub(crate) fn static_npc_result(
     room_npc_ids: &[String],
     movement: MovementParseResult,
 ) -> QuantifierResult {
+    let npc_ids = if room_npc_ids.is_empty() {
+        // Fallback: preserve previous turn's NPCs when no static room NPCs are configured.
+        state
+            .scene
+            .npcs_in_area
+            .iter()
+            .map(|n| n.id.clone())
+            .collect()
+    } else {
+        room_npc_ids
+            .iter()
+            .filter_map(|id| state.npcs.get(id).cloned())
+            .map(|n| n.id)
+            .collect()
+    };
+
     QuantifierResult {
         npcs: QuantifierParseResult {
-            npc_ids: room_npc_ids
-                .iter()
-                .filter_map(|id| state.npcs.get(id).cloned())
-                .map(|n| n.id)
-                .collect(),
+            npc_ids,
             confidence: QuantifierConfidence::Low,
         },
         movement,

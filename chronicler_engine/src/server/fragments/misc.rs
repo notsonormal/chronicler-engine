@@ -111,7 +111,7 @@ pub async fn retry_handler(State(state): State<AppState>) -> (StatusCode, String
 
     let ctx = state.as_game_service_context();
     let game_service = state.game_service.clone();
-    let token = state.cancel_token.clone();
+    let token = state.current_cancel_token();
 
     if token.is_cancelled() {
         return (
@@ -138,7 +138,7 @@ pub async fn retry_handler(State(state): State<AppState>) -> (StatusCode, String
 /// [DOC: docs/system/game_flow.md]
 #[allow(clippy::expect_used)]
 pub async fn reset_handler(State(state): State<AppState>) -> axum::response::Response<Body> {
-    state.cancel_token.cancel();
+    state.current_cancel_token().cancel();
 
     if let Err(e) = state.snapshot_storage.reset() {
         log::error!("Reset failed: {e}");
@@ -153,19 +153,26 @@ pub async fn reset_handler(State(state): State<AppState>) -> axum::response::Res
         Arc::clone(&state.map),
         Arc::clone(&state.player),
         (*state.npcs).values().cloned().collect(),
-        state.starting_room_id.clone(),
+        state.world.starting_room_id.clone(),
     );
 
     // Re-inject scenario text so reset produces the same initial state as startup.
-    if let Some(text) = &state.scenario_text {
-        let room_name =
-            crate::engine::logic::find_room_in_world_map(&initial_state, &state.starting_room_id)
-                .map(|r| r.name.clone())
-                .unwrap_or_else(|| state.starting_room_id.clone());
+    if let Some(scenario) = state.world.default_scenario() {
+        let room_name = crate::engine::logic::find_room_in_world_map(
+            &initial_state,
+            &state.world.starting_room_id,
+        )
+        .map(|r| r.name.clone())
+        .unwrap_or_else(|| state.world.starting_room_id.clone());
 
         initial_state.narrative.pending_location = Some(room_name);
-        let text = text.replace("{{user}}", &state.player.sheet.name);
-        initial_state.add_log(text, None, crate::model::state::LogType::Narration);
+        let text = scenario.text.replace("{{user}}", &state.player.sheet.name);
+        if !text.is_empty() {
+            initial_state.add_log(text, None, crate::model::state::LogType::Narration);
+        }
+
+        // Re-populate character_state and npcs_in_area from scenario NPCs.
+        initial_state.init_scenario_npcs(scenario);
     }
 
     let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
@@ -174,6 +181,12 @@ pub async fn reset_handler(State(state): State<AppState>) -> axum::response::Res
         0,
     );
     let _ = state.snapshot_storage.save(&snapshot);
+
+    // Reset generation flags so subsequent actions work after reset.
+    state
+        .is_generating
+        .store(false, std::sync::atomic::Ordering::SeqCst);
+    state.replace_cancel_token();
 
     axum::response::Response::builder()
         .status(StatusCode::OK)

@@ -153,7 +153,6 @@ fn test_validate_loaded_data_success() {
         description: "A room".to_string(),
         exits: std::collections::HashMap::new(),
         items: vec![],
-        npcs: vec!["npc1".to_string()],
         image_path: None,
         navigation_description: None,
     };
@@ -200,6 +199,7 @@ fn test_validate_loaded_data_success() {
         },
         inventory: vec![],
         triggers: vec![],
+        relationships: vec![],
     };
 
     let result = validate_loaded_data(&manifest, &map, &player, &[npc]);
@@ -228,7 +228,6 @@ fn test_validate_loaded_data_missing_starting_room() {
         description: "A room".to_string(),
         exits: std::collections::HashMap::new(),
         items: vec![],
-        npcs: vec![],
         image_path: None,
         navigation_description: None,
     };
@@ -274,7 +273,7 @@ fn test_validate_loaded_data_missing_starting_room() {
 }
 
 #[test]
-fn test_validate_loaded_data_missing_npc_reference() {
+fn test_validate_loaded_data_basic_manifest_succeeds() {
     let manifest = WorldManifest {
         id: "test".to_string(),
         name: "Test".to_string(),
@@ -295,7 +294,6 @@ fn test_validate_loaded_data_missing_npc_reference() {
         description: "A room".to_string(),
         exits: std::collections::HashMap::new(),
         items: vec![],
-        npcs: vec!["missing_npc".to_string()],
         image_path: None,
         navigation_description: None,
     };
@@ -330,13 +328,8 @@ fn test_validate_loaded_data_missing_npc_reference() {
 
     let result = validate_loaded_data(&manifest, &map, &player, &[]);
     assert!(
-        result.is_err(),
-        "Expected validation to fail for missing NPC"
-    );
-    let err = result.unwrap_err();
-    assert!(
-        err.contains("missing NPC"),
-        "Error should mention missing NPC: {err}"
+        result.is_ok(),
+        "Basic manifest with no NPCs and empty scenarios should validate successfully"
     );
 }
 
@@ -362,7 +355,6 @@ fn test_validate_loaded_data_invalid_trigger_room() {
         description: "A room".to_string(),
         exits: std::collections::HashMap::new(),
         items: vec![],
-        npcs: vec![],
         image_path: None,
         navigation_description: None,
     };
@@ -420,6 +412,7 @@ fn test_validate_loaded_data_invalid_trigger_room() {
             repeat: false,
             room_id: Some("nonexistent_room".to_string()),
         }],
+        relationships: vec![],
     };
 
     let result = validate_loaded_data(&manifest, &map, &player, &[npc]);
@@ -482,7 +475,6 @@ fn test_initialize_world_with_characters_dir() {
         description: "A room".to_string(),
         exits: std::collections::HashMap::new(),
         items: vec![],
-        npcs: vec![],
         image_path: None,
         navigation_description: None,
     };
@@ -542,6 +534,7 @@ fn test_initialize_world_with_characters_dir() {
         },
         inventory: vec![],
         triggers: vec![],
+        relationships: vec![],
     };
     std::fs::write(
         chars_dir.join("npc.json"),
@@ -623,6 +616,7 @@ fn test_inject_scenario_logs_adds_narration() {
             description: "The beginning".to_string(),
             starting_room_id: "start".to_string(),
             text: "Welcome, {{user}}.".to_string(),
+            npcs: vec![],
         }],
         default_scenario_id: None,
         default_room_image: None,
@@ -679,6 +673,7 @@ fn test_inject_scenario_logs_empty_text() {
             description: "Nothing".to_string(),
             starting_room_id: "start".to_string(),
             text: "".to_string(),
+            npcs: vec![],
         }],
         default_scenario_id: None,
         default_room_image: None,

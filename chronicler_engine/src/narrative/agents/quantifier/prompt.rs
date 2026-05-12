@@ -100,13 +100,6 @@ Examples:
             prompt.push_str("</PreviousRoomNpcs>\n\n");
         }
 
-        if !self.context.room.npcs.is_empty() {
-            prompt.push_str("<RoomConfiguredNpcs>\n");
-            prompt.push_str("  ");
-            prompt.push_str(&self.context.room.npcs.join(", "));
-            prompt.push_str("\n</RoomConfiguredNpcs>\n\n");
-        }
-
         if !self.context.recent_history.is_empty() {
             prompt.push_str("<RecentHistory>\n");
             for entry in self.context.recent_history {

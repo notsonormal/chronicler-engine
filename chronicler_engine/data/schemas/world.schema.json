@@ -49,7 +49,11 @@
           "name": { "type": "string" },
           "description": { "type": "string" },
           "starting_room_id": { "type": "string" },
-          "text": { "type": "string" }
+          "text": { "type": "string" },
+          "npcs": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
         },
         "required": ["id", "name", "description", "starting_room_id", "text"]
       }

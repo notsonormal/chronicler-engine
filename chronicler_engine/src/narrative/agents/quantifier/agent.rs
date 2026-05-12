@@ -54,14 +54,11 @@ impl Agent for QuantifierAgent {
             .ok_or_else(|| EngineError::Config("Quantifier requires main_response".into()))?;
 
         let state = ctx.state;
-        let room_npc_ids = crate::engine::logic::get_current_room(state)
-            .map(|r| r.npcs.clone())
-            .unwrap_or_default();
         let previous_room_npcs: Vec<_> = state.scene.npcs_in_area.clone();
 
         let result = determine_npcs_in_room(
             state,
-            &room_npc_ids,
+            &[],
             &previous_room_npcs,
             main_response,
             self.backend.as_ref(),

@@ -34,6 +34,8 @@ pub fn create_test_state() -> GameState {
         name: "Test World".into(),
         description: "A test world".into(),
         global_rules: vec![],
+        starting_room_id: "room_1".into(),
+        scenarios: vec![],
         default_room_image: None,
     });
 
@@ -44,7 +46,6 @@ pub fn create_test_state() -> GameState {
         image_path: Some("data/images/test_room.png".into()),
         exits: std::collections::HashMap::new(),
         items: vec![],
-        npcs: vec![],
         navigation_description: None,
     };
 
@@ -88,6 +89,7 @@ pub fn create_test_state() -> GameState {
         },
         inventory: vec![],
         triggers: vec![],
+        relationships: vec![],
     }];
 
     GameState::new(world, map, player, npcs, "room_1".to_string())

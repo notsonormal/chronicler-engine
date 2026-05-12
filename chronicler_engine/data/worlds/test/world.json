@@ -16,7 +16,8 @@
             "name": "Test World Introduction",
             "description": "A simple test scenario for validation",
             "starting_room_id": "start",
-            "text": "Welcome to the Test World, {{user}}! This is a simple scenario for testing the starting scenarios feature. Feel free to explore and test the game engine."
+            "text": "Welcome to the Test World, {{user}}! This is a simple scenario for testing the starting scenarios feature. Feel free to explore and test the game engine.\n\nThe tavern around you is warm and inviting. Wooden beams stretch across the ceiling, and a crackling fire in the hearth casts dancing shadows on the walls. The smell of fresh bread and mulled cider fills the air.\n\nBehind the bar, the bartender wipes down a mug and glances your way. \"First time in the Test Realm?\" he asks with a knowing smile. \"Don't worry, everyone here is friendly. Mostly.\"\n\nA merchant in the corner adjusts her pack and catches your eye. \"If you're heading north to the village square, mind the cobblestones. They get slippery after dark,\" she advises.\n\nYou take a moment to gather your bearings. The road ahead promises adventure, but for now, the warmth of the tavern offers a brief respite.",
+            "npcs": ["bartender", "shopkeeper"]
         }
     ]
 }

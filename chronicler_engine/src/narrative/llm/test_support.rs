@@ -13,7 +13,6 @@ pub fn make_test_room() -> Room {
         description: "A plain room.".to_string(),
         exits: HashMap::new(),
         items: vec![],
-        npcs: vec![],
         image_path: None,
         navigation_description: None,
     }

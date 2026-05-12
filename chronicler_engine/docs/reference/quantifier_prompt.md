@@ -68,10 +68,6 @@ Examples:
   <Npc id="npc_id" name="NPC Name">NPC description from character sheet.</Npc>
 </PreviousRoomNpcs>
 
-<RoomConfiguredNpcs>
-  comma-separated NPC IDs from room.npcs in map.json
-</RoomConfiguredNpcs>
-
 <RecentHistory>
   <Entry sender="CharacterName">Recent dialogue or narration.</Entry>
 </RecentHistory>

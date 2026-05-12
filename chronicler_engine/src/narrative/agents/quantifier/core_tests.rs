@@ -572,3 +572,20 @@ fn test_static_npc_result_preserves_movement() {
     assert_eq!(result.movement.movement_type, Some(MovementType::Leaving));
     assert_eq!(result.movement.destination, Some("garden".to_string()));
 }
+
+#[test]
+fn test_static_npc_result_fallback_to_scene_npcs() {
+    let carla = TestNpc::named("carla", "Carla");
+    let mut state = TestGameState::with_npcs("hall", vec![carla.clone()]);
+    state.scene.npcs_in_area.push(carla.clone());
+
+    let movement = MovementParseResult {
+        movement_type: None,
+        destination: None,
+        confidence: QuantifierConfidence::Low,
+    };
+
+    let result = static_npc_result(&state, &[], movement);
+
+    assert_eq!(result.npcs.npc_ids, vec!["carla"]);
+}

@@ -65,7 +65,6 @@ Rooms in map.json have the following structure:
     }
   ],
   "items": ["item_id_1"],
-  "npcs": ["npc_id_1"],
   "navigation_description": "string (optional, custom movement narration)",
   "image_path": "string"
 }
@@ -89,7 +88,14 @@ The `semantic_exits` array enables quantifier-driven movement:
   "inventory": ["item_id_1", "item_id_2"],
   "profile_image": "string (optional, preferred profile image)",
   "headshot_image": "string (optional, headshot/portrait for sidebar grid)",
-  "triggers": [Trigger, ...]  // NEW: Array of Trigger objects. Defaults to [] if missing.
+  "triggers": [Trigger, ...],  // Array of Trigger objects. Defaults to [] if missing.
+  "relationships": [
+    {
+      "with": "npc_id",
+      "dynamic": "current relationship state (e.g. 'tense rivalry')",
+      "static": "underlying relationship fact (e.g. 'They are sisters')"
+    }
+  ]  // Defaults to [] if missing.
 }
 ```
 
@@ -183,6 +189,17 @@ Top-level world definition loaded from `data/worlds/*/world.json`.
   "name": "string",
   "description": "string",
   "global_rules": ["rule 1", "rule 2"],
+  "starting_room_id": "string",
+  "scenarios": [
+    {
+      "id": "string",
+      "name": "string",
+      "description": "string",
+      "starting_room_id": "string",
+      "text": "string (optional)",
+      "npcs": ["npc_id_1"]
+    }
+  ],
   "default_room_image": "string (optional, fallback image for rooms without one)"
 }
 ```

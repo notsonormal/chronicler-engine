@@ -34,6 +34,7 @@ fn test_mock_generate_dialogue_with_message() {
         },
         inventory: vec![],
         triggers: vec![],
+        relationships: vec![],
     };
     let message = "Hello, guard!";
 
@@ -62,6 +63,7 @@ fn test_mock_generate_dialogue_no_message() {
         },
         inventory: vec![],
         triggers: vec![],
+        relationships: vec![],
     };
 
     let result = backend.generate_dialogue(&make_test_context_with_npc(&npc, ""), &npc);
@@ -162,6 +164,7 @@ fn test_mock_dialogue_with_message() {
         },
         inventory: vec![],
         triggers: vec![],
+        relationships: vec![],
     };
 
     let message = Some("Hello, guard!".to_string());
@@ -192,6 +195,7 @@ fn test_mock_dialogue_without_message() {
         },
         inventory: vec![],
         triggers: vec![],
+        relationships: vec![],
     };
 
     let result = backend.generate_dialogue(&make_test_context_with_npc(&npc, ""), &npc);
@@ -304,6 +308,7 @@ fn test_mock_generate_dialogue_very_long_message() {
         },
         inventory: vec![],
         triggers: vec![],
+        relationships: vec![],
     };
     let result = backend.generate_dialogue(&make_test_context_with_npc(&npc, long_message), &npc);
     assert!(result.is_ok());
@@ -373,6 +378,7 @@ fn test_mock_dialogue_with_unicode() {
         },
         inventory: vec![],
         triggers: vec![],
+        relationships: vec![],
     };
     let result = backend.generate_dialogue(&make_test_context_with_npc(&npc, "こんにちは"), &npc);
     assert!(result.is_ok());
@@ -480,6 +486,7 @@ fn test_npc_with_no_triggers() {
         },
         inventory: vec![],
         triggers: vec![],
+        relationships: vec![],
     };
     let result = backend.generate_dialogue(&make_test_context_with_npc(&npc, "Hello"), &npc);
     assert!(result.is_ok());
@@ -522,6 +529,7 @@ fn test_npc_with_multiple_triggers() {
                 room_id: None,
             },
         ],
+        relationships: vec![],
     };
     let result = backend.generate_dialogue(&make_test_context_with_npc(&npc, "Test"), &npc);
     assert!(result.is_ok());
@@ -650,7 +658,6 @@ fn test_room_with_items() {
             "Barrel".to_string(),
             "Table".to_string(),
         ],
-        npcs: vec![],
         image_path: None,
         navigation_description: None,
     };
@@ -686,7 +693,6 @@ fn test_room_with_exits() {
         description: "A central room with many exits".to_string(),
         exits,
         items: vec![],
-        npcs: vec![],
         image_path: None,
         navigation_description: None,
     };
@@ -714,6 +720,8 @@ fn test_world_with_default_room_image() {
         name: "World with Image".to_string(),
         description: "A world with default room image".to_string(),
         global_rules: vec!["Rule".to_string()],
+        starting_room_id: "room1".to_string(),
+        scenarios: vec![],
         default_room_image: Some("default_room.png".to_string()),
     };
     let room = make_test_room();
@@ -750,6 +758,7 @@ fn test_npc_with_inventory() {
         },
         inventory: vec!["Gold".to_string(), "Gem".to_string(), "Map".to_string()],
         triggers: vec![],
+        relationships: vec![],
     };
     let result =
         backend.generate_dialogue(&make_test_context_with_npc(&npc, "What do you sell?"), &npc);
@@ -773,6 +782,7 @@ fn test_context_with_npcs_in_area() {
         },
         inventory: vec![],
         triggers: vec![],
+        relationships: vec![],
     };
     let npc2 = NpcCard {
         id: "npc2".to_string(),
@@ -788,6 +798,7 @@ fn test_context_with_npcs_in_area() {
         },
         inventory: vec![],
         triggers: vec![],
+        relationships: vec![],
     };
 
     let world = make_test_world();

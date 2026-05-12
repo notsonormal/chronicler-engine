@@ -211,23 +211,7 @@ impl GameState {
             npcs_map.insert(npc.id.clone(), npc);
         }
 
-        let mut character_state = CharacterState::default();
-
-        for region in &map.overworld.regions {
-            for room in &region.rooms {
-                if room.id == starting_room {
-                    for npc_id in &room.npcs {
-                        if let Some(npc) = npcs_map.get(npc_id) {
-                            let encounter_state =
-                                character_state.npcs.entry(npc.id.clone()).or_default();
-                            encounter_state.times_met = 1;
-                            encounter_state.currently_meeting = true;
-                        }
-                    }
-                    break;
-                }
-            }
-        }
+        let character_state = CharacterState::default();
 
         Self {
             world,
@@ -250,6 +234,21 @@ impl GameState {
                 npcs_in_area: Vec::new(),
             },
             character_state,
+        }
+    }
+
+    /// Initialise character_state and npcs_in_area from scenario NPCs.
+    /// Skips NPCs already present in the scene to avoid duplicates.
+    pub fn init_scenario_npcs(&mut self, scenario: &crate::model::scenario::StartingScenario) {
+        for npc_id in &scenario.npcs {
+            if let Some(npc) = self.npcs.get(npc_id).cloned() {
+                let encounter = self.character_state.npcs.entry(npc_id.clone()).or_default();
+                encounter.times_met = 1;
+                encounter.currently_meeting = true;
+                if !self.scene.npcs_in_area.iter().any(|n| n.id == *npc_id) {
+                    self.scene.npcs_in_area.push(npc);
+                }
+            }
         }
     }
 

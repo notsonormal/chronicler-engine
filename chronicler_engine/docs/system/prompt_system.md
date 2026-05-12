@@ -69,7 +69,8 @@ The Chronicler Engine implements an 8-layer prompt structure mapped from SillyTa
 - **Role**: User (data)
 - **Content**: Two sections:
   - `<KnownNpcs>`: Condensed roster of **all** NPCs the player has met (name, location, 3-line summary)
-  - `<NpcsInRoom>`: Full character sheets for NPCs **currently present** (name, description, personality, scenario, goals)
+  - `<NpcsInRoom>`: Full character sheets for NPCs **currently present** (name, description, personality, scenario, goals, relationships)
+- **Relationships**: For each in-room NPC, if they have `relationships` with other NPCs also present in the room, a `Relationships:` subsection is appended. Uses the `dynamic` text if non-empty, otherwise falls back to `static_text`.
 - **Why two-tier**: The LLM needs awareness of off-screen characters to reference them or write introduction scenes, but full cards for every NPC would bloat the prompt. Condensed cards (~40-60 words) preserve identity and motivation without the bulk.
 
 ### Layer 3: Player Persona

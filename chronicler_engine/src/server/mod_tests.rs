@@ -140,12 +140,12 @@ fn test_app_state_lock_state_success() {
         map: state.map.clone(),
         player: state.player.clone(),
         npcs: Arc::new(state.npcs.clone()),
-        starting_room_id: state.movement.current_room_id.clone(),
         game_service: Arc::new(DefaultGameService::new()) as Arc<dyn GameService>,
         settings: Arc::new(std::sync::RwLock::new(AppSettings::default())),
-        cancel_token: tokio_util::sync::CancellationToken::new(),
+        cancel_token: Arc::new(std::sync::RwLock::new(
+            tokio_util::sync::CancellationToken::new(),
+        )),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
-        scenario_text: None,
     };
 
     let loaded = app_state.load_state();
@@ -238,12 +238,12 @@ fn test_app_state_lock_state_poisoned() {
         map: state.map.clone(),
         player: state.player.clone(),
         npcs: Arc::new(state.npcs.clone()),
-        starting_room_id: state.movement.current_room_id.clone(),
         game_service: Arc::new(DefaultGameService::new()) as Arc<dyn GameService>,
         settings: Arc::new(std::sync::RwLock::new(AppSettings::default())),
-        cancel_token: tokio_util::sync::CancellationToken::new(),
+        cancel_token: Arc::new(std::sync::RwLock::new(
+            tokio_util::sync::CancellationToken::new(),
+        )),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
-        scenario_text: None,
     };
 
     let loaded = app_state.load_state();

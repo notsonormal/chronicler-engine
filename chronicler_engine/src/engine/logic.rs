@@ -102,7 +102,6 @@ pub fn create_dynamic_room(name: &str, description: &str) -> Room {
         description: description.to_string(),
         exits: HashMap::new(),
         items: vec![],
-        npcs: vec![],
         image_path: None,
         navigation_description: None,
     }

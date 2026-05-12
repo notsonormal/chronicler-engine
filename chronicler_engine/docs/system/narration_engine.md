@@ -34,7 +34,7 @@ The Game Master responds to three primary events:
    - After narration is generated, the engine calls `QuantifierBackendTrait::quantify_room()` to detect:
      - **NPCs**: Which NPCs are present in the generated narration text
      - **Movement**: If the narration indicates player moved to a new room (destination detection)
-   - Falls back to static `room.npcs` from map.json if LLM fails or returns Low confidence.
+   - Falls back to `state.scene.npcs_in_area` (previous turn's NPCs) if LLM fails or returns Low confidence.
    - Set `LLM_BACKEND=mock` env var to use MockQuantifierBackend for testing.
 5. **Movement Processing**: If movement was detected, `handle_movement()` updates `GameState.current_room_id` and the location header is shown.
 6. **Trigger Evaluation**: After quantification, the engine evaluates NPC triggers (see Continuation Narration below).

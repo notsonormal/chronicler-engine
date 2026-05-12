@@ -13,6 +13,8 @@ pub fn create_test_world() -> WorldCard {
         name: "Test Realm".to_string(),
         description: "A small testing kingdom".to_string(),
         global_rules: vec![],
+        starting_room_id: "room1".to_string(),
+        scenarios: vec![],
         default_room_image: None,
     }
 }
@@ -49,7 +51,6 @@ pub fn create_test_map() -> MapDef {
         description: "A cozy tavern with wooden beams and warm fire.".to_string(),
         exits: room1_exits,
         items: vec![],
-        npcs: vec!["test_npc".to_string()],
         image_path: None,
         navigation_description: None,
     };
@@ -60,7 +61,6 @@ pub fn create_test_map() -> MapDef {
         description: "A bustling village square with a fountain.".to_string(),
         exits: room2_exits,
         items: vec![],
-        npcs: vec![],
         image_path: None,
         navigation_description: None,
     };
@@ -71,7 +71,6 @@ pub fn create_test_map() -> MapDef {
         description: "A quiet path through the woods.".to_string(),
         exits: room3_exits,
         items: vec![],
-        npcs: vec![],
         image_path: None,
         navigation_description: None,
     };
@@ -106,6 +105,7 @@ pub fn create_test_npcs() -> Vec<NpcCard> {
         },
         inventory: vec![],
         triggers: vec![],
+        relationships: vec![],
     }]
 }
 
@@ -116,6 +116,8 @@ pub fn create_test_state_with_npcs(room_npcs: Vec<String>, npcs: Vec<NpcCard>) -
         name: "Test World".into(),
         description: "A test world".into(),
         global_rules: vec![],
+        starting_room_id: "room1".into(),
+        scenarios: vec![],
         default_room_image: None,
     });
 
@@ -125,7 +127,6 @@ pub fn create_test_state_with_npcs(room_npcs: Vec<String>, npcs: Vec<NpcCard>) -
         description: "A cozy tavern with wooden beams and warm fire.".into(),
         exits: HashMap::new(),
         items: vec![],
-        npcs: room_npcs,
         image_path: None,
         navigation_description: None,
     };
@@ -158,7 +159,13 @@ pub fn create_test_state_with_npcs(room_npcs: Vec<String>, npcs: Vec<NpcCard>) -
         inventory: vec![],
     });
 
-    GameState::new(world, map, player, npcs, "room1".to_string())
+    let mut state = GameState::new(world, map, player, npcs, "room1".to_string());
+    for id in room_npcs {
+        if let Some(npc) = state.npcs.get(&id).cloned() {
+            state.scene.npcs_in_area.push(npc);
+        }
+    }
+    state
 }
 
 /// Default test state with a single innkeeper NPC.
@@ -179,6 +186,7 @@ pub fn create_test_state() -> GameState {
             },
             inventory: vec![],
             triggers: vec![],
+            relationships: vec![],
         }],
     )
 }
@@ -216,7 +224,6 @@ pub fn create_navigation_test_map() -> MapDef {
         description: "A grand entrance to the mansion.".to_string(),
         exits: entrance_exits,
         items: vec![],
-        npcs: vec![],
         image_path: None,
         navigation_description: None,
     };
@@ -227,7 +234,6 @@ pub fn create_navigation_test_map() -> MapDef {
         description: "A spacious hall with marble floors.".to_string(),
         exits: hall_exits,
         items: vec![],
-        npcs: vec![],
         image_path: None,
         navigation_description: None,
     };
@@ -238,7 +244,6 @@ pub fn create_navigation_test_map() -> MapDef {
         description: "A busy kitchen with delicious smells.".to_string(),
         exits: kitchen_exits,
         items: vec![],
-        npcs: vec!["chef".to_string()],
         image_path: None,
         navigation_description: None,
     };
@@ -249,7 +254,6 @@ pub fn create_navigation_test_map() -> MapDef {
         description: "Rows of ancient books line the walls.".to_string(),
         exits: library_exits,
         items: vec![],
-        npcs: vec![],
         image_path: None,
         navigation_description: None,
     };
@@ -277,7 +281,6 @@ pub fn create_simple_test_map() -> MapDef {
         description: "A simple test room.".to_string(),
         exits: HashMap::new(),
         items: vec![],
-        npcs: vec![],
         image_path: None,
         navigation_description: None,
     };

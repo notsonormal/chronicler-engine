@@ -16,7 +16,6 @@
                         },
                         "navigation_description": "You can go north to reach the village square, or exit through the tavern entrance.",
                         "items": [],
-                        "npcs": ["bartender", "shopkeeper"],
                         "image_path": "data/images/test_room.jpg"
                     },
                     {
@@ -30,7 +29,7 @@
                         },
                         "navigation_description": "You can go south to return to the tavern, east to the forest path, or west to the general store.",
                         "items": [],
-                        "npcs": []
+                        "image_path": "data/images/test_room.jpg"
                     },
                     {
                         "id": "forest_path",
@@ -41,7 +40,7 @@
                         },
                         "navigation_description": "You can go west to return to the village square.",
                         "items": [],
-                        "npcs": []
+                        "image_path": "data/images/test_room.jpg"
                     },
                     {
                         "id": "shop",
@@ -52,7 +51,7 @@
                         },
                         "navigation_description": "You can go east to return to the village square.",
                         "items": [],
-                        "npcs": []
+                        "image_path": "data/images/test_room.jpg"
                     }
                 ]
             }
