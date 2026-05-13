@@ -301,7 +301,7 @@ fn benchmark_quantifier_complete_failure() {
     let npc_count = snapshot.scene.npcs_in_area.len();
     let has_system_log = snapshot
         .narrative
-        .history
+        .history()
         .iter()
         .any(|e| e.log_type == LogType::System && e.text.contains("NPC detection uncertain"));
 
@@ -356,12 +356,12 @@ fn benchmark_quantifier_low_confidence() {
     let npc_count = snapshot.scene.npcs_in_area.len();
     let has_narration = snapshot
         .narrative
-        .history
+        .history()
         .iter()
         .any(|e| e.log_type == LogType::Narration);
     let has_system_log = snapshot
         .narrative
-        .history
+        .history()
         .iter()
         .any(|e| e.log_type == LogType::System && e.text.contains("NPC detection uncertain"));
 
@@ -414,7 +414,7 @@ fn benchmark_dynamic_room_creation() {
     let dynamic_room_count = snapshot.movement.dynamic_rooms.len();
     let has_system_log = snapshot
         .narrative
-        .history
+        .history()
         .iter()
         .any(|e| e.log_type == LogType::System && e.text.contains("Entered unknown location"));
 
@@ -557,7 +557,7 @@ fn benchmark_trigger_wrong_room_id() {
     let snapshot = ctx.snapshot_storage.load_latest(None).unwrap().unwrap();
     let trigger_fired = snapshot
         .narrative
-        .history
+        .history()
         .iter()
         .any(|e| e.text.contains("stranger nods"));
     let error_msg = match &snapshot.narrative.generation.status {

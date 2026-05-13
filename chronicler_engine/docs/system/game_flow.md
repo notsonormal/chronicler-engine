@@ -148,12 +148,14 @@ flowchart TD
     Check{Last response was event?}
     Main["**Main Narration Retry**"]
     Event["**Event Continuation Retry**"]
-    PreMain["Load `pre-main:{message_id}` snapshot"]
-    PreEvent["Load `pre-event:{message_id}` snapshot"]
+    PreMain["Load `pre-main:{turn_id}` snapshot"]
+    PreEvent["Load `pre-event:{turn_id}` snapshot"]
+    NewSwipeMain["Create new Swipe on Turn<br>(empty entries)"]
+    NewSwipeEvent["Create new Swipe on Turn<br>(copy main narration from previous)"]
     ReGenMain["Re-run Phase 4→5→5.5<br>(new quantifier + triggers)"]
     ReGenEvent["Re-run Phase 5 only"]
     Phase55["**PHASE 5.5: POST-EVENT QUANTIFIER**<br>*(Phase: Quantifying)*<br>1. Post-continuation Quantifier analyzes<br>2. Detect NPCs introduced by retried text<br>3. Update scene.npcs_in_area"]
-    IncSwipe["`swipe_index += 1`"]
+    IncSwipe["Set active_swipe_index = new_swipe<br>Save snapshot with swipe_index + 1"]
     Save["Save final state"]
 
     Start --> Check
@@ -161,8 +163,10 @@ flowchart TD
     Check -->|Yes| Event
     Main --> PreMain
     Event --> PreEvent
-    PreMain --> ReGenMain
-    PreEvent --> ReGenEvent
+    PreMain --> NewSwipeMain
+    PreEvent --> NewSwipeEvent
+    NewSwipeMain --> ReGenMain
+    NewSwipeEvent --> ReGenEvent
     ReGenMain --> IncSwipe
     ReGenEvent --> Phase55
     Phase55 --> IncSwipe
@@ -170,9 +174,10 @@ flowchart TD
 ```
 
 **Key behaviors** (enforced by `tests/flow_mock/`):
-- **Main retry** reruns the full pipeline: quantifier, movement, triggers, and post-event quantifier (`test_retry_main_narration_applies_new_quantifier_result`, `test_main_retry_reevaluates_triggers`).
-- **Event retry** reruns the post-event quantifier (Phase 5.5) so that NPCs introduced by the retried continuation text are properly detected (`test_retry_event_continuation_preserves_quantifier_result`).
-- Both paths increment `swipe_index` (`test_double_retry_increments_swipe_and_reruns_quantifier`).
+- **Main retry** loads `pre-main:{turn_id}`, creates a new empty `Swipe`, re-runs the full pipeline: quantifier, movement, triggers, and post-event quantifier (`test_retry_main_narration_applies_new_quantifier_result`, `test_main_retry_reevaluates_triggers`).
+- **Event retry** loads `pre-event:{turn_id}`, creates a new `Swipe` copying the main narration from the previous swipe, regenerates only the continuation text using stored trigger prompts (`StoredTriggerContext`) (`test_retry_event_continuation_preserves_quantifier_result`).
+- Both paths create a new `Swipe` and increment `swipe_index` (`test_double_retry_increments_swipe_and_reruns_quantifier`).
+- The `turn_id` used for snapshots matches the `Turn.id` in `NarrativeState`, ensuring retry correlation is structurally enforced.
 - If the pre-main or pre-event snapshot is missing, retry fails gracefully (`test_retry_no_pre_main_snapshot`).
 
 ### Polling-based Updates

@@ -26,13 +26,8 @@ pub fn load_state(ctx: &GameServiceContext) -> GameState {
 }
 
 /// [DOC: docs/architecture/system.md]
-pub fn save_state(
-    ctx: &GameServiceContext,
-    state: &GameState,
-    message_id: String,
-    swipe_index: u32,
-) {
-    let snapshot = GameStateSnapshot::from_game_state(state, message_id, swipe_index);
+pub fn save_state(ctx: &GameServiceContext, state: &GameState, turn_id: String, swipe_index: u32) {
+    let snapshot = GameStateSnapshot::from_game_state(state, turn_id, swipe_index);
     if let Err(e) = ctx.snapshot_storage.save(&snapshot) {
         log::error!("Failed to save snapshot: {e}");
     }
@@ -42,10 +37,10 @@ pub fn save_state(
 pub fn save_committed_state(
     ctx: &GameServiceContext,
     state: &GameState,
-    message_id: String,
+    turn_id: String,
     swipe_index: u32,
 ) {
-    let mut snapshot = GameStateSnapshot::from_game_state(state, message_id, swipe_index);
+    let mut snapshot = GameStateSnapshot::from_game_state(state, turn_id, swipe_index);
     snapshot.committed = true;
     if let Err(e) = ctx.snapshot_storage.save(&snapshot) {
         log::error!("Failed to save committed snapshot: {e}");

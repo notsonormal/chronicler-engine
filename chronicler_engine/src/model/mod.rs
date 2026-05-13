@@ -1,5 +1,6 @@
 pub mod agent;
 pub mod character;
+pub mod checkpoint;
 pub mod llm_backend;
 pub mod map;
 pub mod scenario;
@@ -7,6 +8,7 @@ pub mod settings;
 pub mod state;
 pub mod state_snapshot;
 pub mod trigger;
+pub mod turn;
 pub mod world;
 
 #[cfg(test)]

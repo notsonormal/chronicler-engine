@@ -190,7 +190,7 @@ pub fn determine_npcs_in_room(
 
     let recent_history: Vec<_> = state
         .narrative
-        .history
+        .history()
         .iter()
         .rev()
         .take(4)

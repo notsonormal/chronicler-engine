@@ -161,10 +161,14 @@ pub fn add_input_and_save(
     let mut state = latest_state(ctx);
     let player_name = state.player.sheet.name.clone();
     state.add_log(text.to_string(), Some(player_name), LogType::Input);
+    let turn_id = state
+        .narrative
+        .turns
+        .last()
+        .map(|t| t.id.clone())
+        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
     let snapshot = chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(
-        &state,
-        uuid::Uuid::new_v4().to_string(),
-        0,
+        &state, turn_id, 0,
     );
     let _ = ctx.snapshot_storage.save(&snapshot);
 }

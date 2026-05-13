@@ -13,44 +13,54 @@ The Chronicler Engine uses a dual-layer testing strategy:
 
 Tests are organized by execution model:
 
-| File | Purpose | Execution Model | Runtime |
-|------|---------|---------------|---------|
+| File / Directory | Purpose | Execution Model | Runtime |
+|----------------|---------|---------------|---------|
 | `architecture.rs` | Architecture guardrails (clippy, import order, doc anchors) | In-process | Very Fast |
-| `components.rs` | Templates, endpoints, settings, validation | In-process | Very Fast |
-| `browser.rs` | UI structure, layouts, interactions | Browser | Medium |
-| `flow_mock_tests.rs` | Game loop, polling, real-time updates | Browser + Mock LLM | Fast |
+| `components/` | Templates, endpoints, settings, validation, fragments | In-process | Very Fast |
+| `browser/` | UI structure, layouts, interactions, editing | Browser | Medium |
+| `flow_mock/` | Game loop, retry, polling, state consistency | In-process + Mock LLM | Fast |
 | `flow_llm_tests.rs` | LLM narrative generation | Browser + Real LLM | Slow |
-| `game_service_tests.rs` | Game service logic, action handling, retry | In-process | Very Fast |
-| `guardrails.rs` | Custom guardrails (what-comments, long comment runs, single-letter vars) | In-process | Very Fast |
+| `game_service/` | Game service logic, action handling, retry | In-process | Very Fast |
+| `guardrails/` | Custom guardrails (what-comments, long comment runs, single-letter vars) | In-process | Very Fast |
 | `logic_tests.rs` | Movement, room resolution, fuzzy matching | In-process | Very Fast |
+| `snapshot_storage_tests.rs` | SQLite snapshot persistence, checkpoints | In-process | Very Fast |
+| `state_snapshot_tests.rs` | Snapshot serialization/deserialization | In-process | Very Fast |
 | `test_data.rs` | Shared test fixtures (world, map, game state builders) | In-process | Very Fast |
 | `trigger_tests.rs` | Trigger evaluation and firing | Browser + Mock LLM | Fast |
+| `text_check_tests.rs` | Spell/grammar checking | In-process | Very Fast |
+| `diagnostic/` | Backend diagnostics, scenario validation | In-process | Very Fast |
 
 ## Test Files Explained
 
-### In-Process Tests (components.rs)
+### In-Process Tests (`components/`, `game_service/`, `guardrails/`)
 
 Fast tests that don't spawn a browser:
 
 - **Template tests**: Askama template rendering, XSS escaping
 - **Fragment tests**: HTTP endpoint responses
 - **Validation**: Empty command rejection
+- **Game service**: Action handling, retry logic, trigger evaluation
+- **Snapshot storage**: SQLite persistence, checkpoint CRUD
+- **Guardrails**: Code style enforcement
 
 Runtime: ~5 seconds
 
-### Browser Tests (browser.rs)
+### Browser Tests (`browser/`)
 
 Full browser automation via Playwright:
 
 - **UI structure**: Header, story log, action area exist
 - **Layout**: Overflow, positioning, scrollability
 - **Interactions**: Form submission, element updates
+- **Editing**: Inline edit, save/cancel flow
 
 Runtime: ~60 seconds
 
-### Flow Tests (separate per intent)
+### Flow Tests (`flow_mock/`)
 
-- **flow_mock_tests.rs**: Fast CI - mocked LLM responses
+- **sequence.rs**: Sequential service-level flow tests with mock backends
+- **retry_main.rs**: Main narration retry with swipe creation
+- **retry_event.rs**: Event continuation retry preserving quantifier results
 - **flow_llm_tests.rs**: Full integration - real API calls
 
 ## Running Tests
@@ -62,10 +72,11 @@ python build.py
 
 # Fast suite only (in-process)
 cargo nextest run --test components
+cargo nextest run --test game_service
 
 # Browser tests only
 cargo nextest run --test browser
-cargo nextest run --test flow_mock_tests
+cargo nextest run --test flow_mock
 
 # Include slow LLM tests in full suite
 cargo nextest run --run-ignored only
@@ -111,12 +122,15 @@ Critical tests that must not be removed:
 | Full suite (`python build.py`) | ~70 sec (LLM tests excluded) |
 | components | ~5 sec |
 | browser | ~60 sec |
-| flow_mock_tests | ~30 sec |
-| game_service_tests | ~5 sec |
+| flow_mock | ~30 sec |
+| game_service | ~5 sec |
 | guardrails | ~2 sec |
 | logic_tests | ~2 sec |
+| snapshot_storage_tests | ~2 sec |
+| state_snapshot_tests | ~2 sec |
 | trigger_tests | ~30 sec |
-| flow_llm_tests | ~30–120 sec (requires API key) |
+| text_check_tests | ~2 sec |
+| flow_llm_tests | ~30–120 sec |
 
 ## Smart Waiting Patterns
 

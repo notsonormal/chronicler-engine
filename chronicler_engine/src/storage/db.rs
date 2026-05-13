@@ -28,7 +28,7 @@ fn run_migrations(conn: &Connection) -> Result<(), crate::error::EngineError> {
     conn.execute(
         "CREATE TABLE IF NOT EXISTS game_state_snapshots (
             id TEXT PRIMARY KEY,
-            message_id TEXT NOT NULL,
+            turn_id TEXT NOT NULL,
             swipe_index INTEGER NOT NULL DEFAULT 0,
             movement TEXT NOT NULL,
             narrative TEXT NOT NULL,
@@ -36,14 +36,14 @@ fn run_migrations(conn: &Connection) -> Result<(), crate::error::EngineError> {
             character_state TEXT NOT NULL,
             committed INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL,
-            UNIQUE(message_id, swipe_index)
+            UNIQUE(turn_id, swipe_index)
         )",
         [],
     )
     .map_err(|e| crate::error::EngineError::Config(format!("Migration failed: {e}")))?;
 
     conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_snapshots_message ON game_state_snapshots(message_id, swipe_index)",
+        "CREATE INDEX IF NOT EXISTS idx_snapshots_turn ON game_state_snapshots(turn_id, swipe_index)",
         [],
     )
     .map_err(|e| {
@@ -52,6 +52,24 @@ fn run_migrations(conn: &Connection) -> Result<(), crate::error::EngineError> {
 
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_snapshots_latest ON game_state_snapshots(created_at DESC)",
+        [],
+    )
+    .map_err(|e| crate::error::EngineError::Config(format!("Migration failed: {e}")))?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS checkpoints (
+            id TEXT PRIMARY KEY,
+            turn_id TEXT NOT NULL,
+            swipe_index INTEGER NOT NULL DEFAULT 0,
+            name TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )",
+        [],
+    )
+    .map_err(|e| crate::error::EngineError::Config(format!("Migration failed: {e}")))?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_checkpoints_turn ON checkpoints(turn_id, swipe_index)",
         [],
     )
     .map_err(|e| crate::error::EngineError::Config(format!("Migration failed: {e}")))?;

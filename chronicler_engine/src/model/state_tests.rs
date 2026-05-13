@@ -59,9 +59,9 @@ fn test_log_ordering() {
     state.add_log("Message 1".into(), None, LogType::Narration);
     state.add_log("Message 2".into(), None, LogType::Narration);
 
-    assert_eq!(state.narrative.history.len(), 2);
-    assert_eq!(state.narrative.history[0].text, "Message 1");
-    assert_eq!(state.narrative.history[1].text, "Message 2");
+    assert_eq!(state.narrative.history().len(), 2);
+    assert_eq!(state.narrative.history()[0].text, "Message 1");
+    assert_eq!(state.narrative.history()[1].text, "Message 2");
 }
 
 #[test]
@@ -69,11 +69,11 @@ fn test_edit_log() {
     let mut state = TestGameState::in_room("room1");
 
     state.add_log("Original text".into(), None, LogType::Narration);
-    let id = state.narrative.history[0].id;
+    let id = state.narrative.history()[0].id;
 
     // Verify edit works
     state.edit_log(id, "Edited text".into()).unwrap();
-    assert_eq!(state.narrative.history[0].text, "Edited text");
+    assert_eq!(state.narrative.history()[0].text, "Edited text");
 
     // Verify edit fails for invalid ID
     assert!(state.edit_log(9999, "Not found".into()).is_err());
@@ -91,7 +91,7 @@ fn test_get_last_input_index() {
 
     let idx = state.get_last_input_index();
     assert!(idx.is_some());
-    assert_eq!(state.narrative.history[idx.unwrap()].text, "User input");
+    assert_eq!(state.narrative.history()[idx.unwrap()].text, "User input");
 }
 
 #[test]
@@ -108,7 +108,7 @@ fn test_replace_last_ai_response() {
 
     // Verify the AI response was replaced
     let ai_idx = state.get_last_ai_response_index().unwrap();
-    assert_eq!(state.narrative.history[ai_idx].text, "New AI response");
+    assert_eq!(state.narrative.history()[ai_idx].text, "New AI response");
 }
 
 #[test]
@@ -145,9 +145,9 @@ fn test_delete_last_log() {
 
     // Verify delete last works
     state.delete_last_log().unwrap();
-    assert_eq!(state.narrative.history.len(), 2);
-    assert_eq!(state.narrative.history[0].text, "Message 1");
-    assert_eq!(state.narrative.history[1].text, "Message 2");
+    assert_eq!(state.narrative.history().len(), 2);
+    assert_eq!(state.narrative.history()[0].text, "Message 1");
+    assert_eq!(state.narrative.history()[1].text, "Message 2");
 
     // Verify delete fails for empty history
     state.delete_last_log().unwrap();
@@ -161,7 +161,8 @@ fn test_add_log_absorbs_pending_location() {
     state.narrative.pending_location = Some("Entrance Hall".to_string());
     state.add_log("You walk in.".into(), None, LogType::Narration);
 
-    let entry = state.narrative.history.last().unwrap();
+    let history = state.narrative.history();
+    let entry = history.last().unwrap();
     assert_eq!(entry.location_header, Some("Entrance Hall".to_string()));
     assert!(state.narrative.pending_location.is_none());
 }
@@ -172,7 +173,8 @@ fn test_add_log_absorbs_pending_event() {
     state.narrative.pending_event = Some("Gabriella Introduction".to_string());
     state.add_log("Gabriella steps forward.".into(), None, LogType::Narration);
 
-    let entry = state.narrative.history.last().unwrap();
+    let history = state.narrative.history();
+    let entry = history.last().unwrap();
     assert_eq!(
         entry.event_header,
         Some("Gabriella Introduction".to_string())
@@ -229,7 +231,8 @@ proptest! {
         let mut previous_id = 0u64;
         for (text, log_type) in entries {
             state.add_log(text, None, log_type);
-            let last = state.narrative.history.last().unwrap();
+            let history = state.narrative.history();
+            let last = history.last().unwrap();
             prop_assert!(
                 last.id > previous_id,
                 "log id {} should be > previous id {}",
@@ -240,7 +243,7 @@ proptest! {
     }
 
     #[test]
-    fn prop_log_history_never_exceeds_max_capacity(
+    fn prop_log_turns_never_exceed_max_capacity(
         mut state in Just(TestGameState::in_room("room1")),
         entries in prop::collection::vec(
             (log_text_strategy(), log_type_strategy()),
@@ -251,9 +254,9 @@ proptest! {
             state.add_log(text, None, log_type);
         }
         prop_assert!(
-            state.narrative.history.len() <= 1000,
-            "history length {} exceeds max 1000",
-            state.narrative.history.len()
+            state.narrative.turns.len() <= 1000,
+            "turn count {} exceeds max 1000",
+            state.narrative.turns.len()
         );
     }
 

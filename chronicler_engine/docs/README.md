@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-12 23:29 UTC*
+*Index last generated: 2026-05-13 23:27 UTC*
 
 ### Root files
 
@@ -25,6 +25,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [ADR-009: Agent Trait and Registry Architecture](./adr/adr-009-agent-trait-registry.md)
 - [ADR-010: Concurrency and Generation Gate Model](./adr/adr-010-concurrency-generation-gate.md)
 - [ADR-011: Text Check Integration](./adr/adr-011-text-check-integration.md)
+- [ADR-012: Turn + Swipe Domain Model](./adr/adr-012-turn-swipe-model.md)
 
 ### `docs/architecture/`
 
@@ -58,6 +59,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Implementation Plan: Restrict Message Deletion & Inline Location/Event Headers](./plans/archived/cyborg-obsidian-riri-williams.md)
 - [Plan: Fix Story Log Button Visibility & Text Bolding](./plans/archived/fix-story-log-buttons-and-bolding.md)
 - [Implementation Plan: Redmist Estate Data Overhaul](./plans/archived/ice-winter-soldier-bobbi-morse.md)
+- [Plan: Migrate Chronicler Engine to Turn + Swipe Model](./plans/archived/jericho-huntress-devil-dinosaur-20260513.md)
 - [Plan: Restrict Message Deletion & Rethink Location/Event Headers](./plans/archived/lightray-thor-hulk.md)
 - [Implementation Plan: Test Suite Improvements](./plans/archived/test-fix-plan.md)
 - [Plan: Address Code Review Findings](./plans/archived/wonder-woman-star-lord-war-machine.md)

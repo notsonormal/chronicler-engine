@@ -234,6 +234,7 @@ fn test_action_area_ready() {
         &crate::model::state::GenerationStatus::Idle,
         &crate::model::state::GenerationPhase::default(),
         &["north".to_string(), "east".to_string()],
+        None,
     );
     let rendered = template.render().unwrap();
     assert!(rendered.contains("id=\"action-area\""));
@@ -246,6 +247,7 @@ fn test_action_area_thinking() {
         &crate::model::state::GenerationStatus::Generating,
         &crate::model::state::GenerationPhase::Narrating,
         &[],
+        None,
     );
     let rendered = template.render().unwrap();
     assert!(rendered.contains("Generating narration..."));
@@ -258,6 +260,7 @@ fn test_action_area_quantifying() {
         &crate::model::state::GenerationStatus::Generating,
         &crate::model::state::GenerationPhase::Quantifying,
         &[],
+        None,
     );
     let rendered = template.render().unwrap();
     assert!(rendered.contains("Quantifying scene..."));
@@ -270,6 +273,7 @@ fn test_action_area_generating_event() {
         &crate::model::state::GenerationStatus::Generating,
         &crate::model::state::GenerationPhase::GeneratingEvent,
         &[],
+        None,
     );
     let rendered = template.render().unwrap();
     assert!(rendered.contains("Generating event..."));
@@ -282,6 +286,7 @@ fn test_action_area_no_exits() {
         &crate::model::state::GenerationStatus::Idle,
         &crate::model::state::GenerationPhase::default(),
         &[],
+        None,
     );
     let rendered = template.render().unwrap();
     assert!(rendered.contains("command-form"));

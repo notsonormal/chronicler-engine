@@ -57,7 +57,7 @@ Logic invariant violated. These should never happen in normal operation.
 
 - **First Check:** The `invariant` field names the violated rule.
 - **Common Causes:**
-  - `History is empty` — `delete_last_log` called when history has no entries.
+  - `History is empty` — `delete_last_turn()` called when no turns exist.
   - `No input to retry` — `retry_last_response` called when the last log entry is not player input.
   - `No AI response to retry` — `retry_last_response` called when there is no AI narration to replace.
   - `AI response must be after input` — history ordering invariant violated.

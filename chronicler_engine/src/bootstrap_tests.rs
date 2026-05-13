@@ -625,8 +625,8 @@ fn test_inject_scenario_logs_adds_narration() {
 
     inject_scenario_logs(&mut state, &manifest, &player);
 
-    assert_eq!(state.narrative.history.len(), 1);
-    let entry = &state.narrative.history[0];
+    assert_eq!(state.narrative.history().len(), 1);
+    let entry = &state.narrative.history()[0];
     assert_eq!(entry.text, "Welcome, Alice.");
     assert_eq!(entry.log_type, crate::model::state::LogType::Narration);
     assert_eq!(entry.location_header, Some("Room start".to_string()));
@@ -652,7 +652,7 @@ fn test_inject_scenario_logs_no_scenario() {
 
     inject_scenario_logs(&mut state, &manifest, &player);
 
-    assert!(state.narrative.history.is_empty());
+    assert!(state.narrative.history().is_empty());
 }
 
 #[test]
@@ -682,5 +682,5 @@ fn test_inject_scenario_logs_empty_text() {
 
     inject_scenario_logs(&mut state, &manifest, &player);
 
-    assert!(state.narrative.history.is_empty());
+    assert!(state.narrative.history().is_empty());
 }

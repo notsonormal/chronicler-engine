@@ -38,18 +38,21 @@ mod logic_tests;
 
 Cross-module and browser-based tests live in the top-level `tests/` directory:
 
-| Test File | Purpose | Execution Model |
-|-----------|---------|-----------------|
+| Test File / Directory | Purpose | Execution Model |
+|----------------------|---------|-----------------|
 | `architecture.rs` | Architecture guardrails (arch-lint, layer enforcement) | In-process |
-| `components.rs` | Templates, endpoints, settings, validation | In-process |
-| `browser.rs` | UI structure, layouts, interactions | Browser |
-| `flow_mock_tests.rs` | Core game loop with mock LLM | Browser + Mock LLM |
+| `components/` | Templates, endpoints, settings, validation, fragments | In-process |
+| `browser/` | UI structure, layouts, interactions, editing | Browser |
+| `flow_mock/` | Core game loop, retry, state consistency with mock LLM | In-process + Mock LLM |
 | `flow_llm_tests.rs` | LLM narrative smoke tests | Browser + Real LLM |
-| `game_service_tests.rs` | Game service logic, DI, retry, snapshots | In-process |
-| `guardrails.rs` | Custom convention tests (imports, comments, file length) | In-process |
+| `game_service/` | Game service logic, DI, retry, snapshots | In-process |
+| `guardrails/` | Custom convention tests (imports, comments, file length) | In-process |
 | `logic_tests.rs` | Movement, room resolution, fuzzy matching | In-process |
+| `snapshot_storage_tests.rs` | SQLite snapshot persistence, checkpoints | In-process |
+| `state_snapshot_tests.rs` | Snapshot serialization/deserialization | In-process |
 | `text_check_tests.rs` | Spell/grammar checking with harper-core | In-process |
 | `trigger_tests.rs` | Trigger evaluation and firing | Browser + Mock LLM |
+| `diagnostic/` | Backend diagnostics, scenario validation | In-process |
 
 ## Backend Selection
 
@@ -90,7 +93,8 @@ python build.py --llm-only
 # Specific suites
 cargo nextest run --test components
 cargo nextest run --test browser
-cargo nextest run --test flow_mock_tests
+cargo nextest run --test flow_mock
+cargo nextest run --test game_service
 ```
 
 ## UI Tests

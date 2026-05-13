@@ -100,7 +100,7 @@ The original plan's goal was "reduce direct field mutations by >=50%." This has 
 
 Adding `Clone` to `GameState` (and all sub-structs) was necessary for proptest's `Just` strategy. This is a long-term architectural commitment:
 
-- `GameState` contains `HashMap<String, NpcCard>` and `Vec<LogEntry>` (up to 1000 entries).
+- `GameState` contains `HashMap<String, NpcCard>` and `Vec<Turn>` (each turn contains input + swipes with entries; up to ~1000 entries total).
 - Each proptest case clones the entire state.
 - Future developers may clone `GameState` in production code without realizing the cost.
 

@@ -82,23 +82,28 @@ pub fn execute_action_impl(
                 Ok(guard) => guard,
                 Err(poisoned) => poisoned.into_inner(),
             };
-            let message_id = uuid::Uuid::new_v4().to_string();
             let mut state = load_state(&ctx);
+            let turn_id = state
+                .narrative
+                .turns
+                .last()
+                .map(|t| t.id.clone())
+                .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
             state.narrative.last_trigger = None;
-            execute_freeaction_pipeline(service, &ctx, state, message_id, text, 0);
+            execute_freeaction_pipeline(service, &ctx, state, turn_id, text, 0);
         }
     }
 }
 
 fn save_pipeline_error(
     ctx: &GameServiceContext,
-    message_id: &str,
+    turn_id: &str,
     swipe_index: u32,
     error: impl Into<String>,
 ) {
     let mut state = load_state(ctx);
     state.narrative.generation.status = GenerationStatus::Error(error.into());
-    save_state(ctx, &state, message_id.to_string(), swipe_index);
+    save_state(ctx, &state, turn_id.to_string(), swipe_index);
 }
 
 pub(crate) fn default_quantifier_result(fallback_npc_ids: &[String]) -> QuantifierResult {
@@ -159,7 +164,7 @@ pub fn execute_freeaction_pipeline(
     service: &DefaultGameService,
     ctx: &GameServiceContext,
     mut state: GameState,
-    message_id: String,
+    turn_id: String,
     text: String,
     swipe_index: u32,
 ) {
@@ -167,13 +172,13 @@ pub fn execute_freeaction_pipeline(
     let map = Arc::clone(&state.map);
     let player = Arc::clone(&state.player);
     let room_id = state.movement.current_room_id.clone();
-    let history = state.narrative.history.clone();
+    let history = state.narrative.history();
     let nearby_npcs = state.scene.npcs_in_area.clone();
     let all_npcs: Vec<NpcCard> = state.npcs.values().cloned().collect();
 
     state.narrative.generation.status = GenerationStatus::Generating;
     state.narrative.generation.phase = GenerationPhase::Narrating;
-    save_committed_state(ctx, &state, format!("pre-main:{message_id}"), 0);
+    save_committed_state(ctx, &state, format!("pre-main:{turn_id}"), 0);
 
     let room = map
         .overworld
@@ -183,7 +188,7 @@ pub fn execute_freeaction_pipeline(
         .find(|r| r.id == room_id);
 
     let Some(room) = room else {
-        save_pipeline_error(ctx, &message_id, swipe_index, "Room not found");
+        save_pipeline_error(ctx, &turn_id, swipe_index, "Room not found");
         return;
     };
     let context = make_prompt_context(
@@ -200,13 +205,13 @@ pub fn execute_freeaction_pipeline(
     let narration_text = match backend.narrate_action(&context) {
         Ok(t) => t,
         Err(e) => {
-            save_pipeline_error(ctx, &message_id, swipe_index, map_llm_error(&e));
+            save_pipeline_error(ctx, &turn_id, swipe_index, map_llm_error(&e));
             return;
         }
     };
 
     if narration_text.trim().is_empty() {
-        save_pipeline_error(ctx, &message_id, swipe_index, "LLM Error: empty response");
+        save_pipeline_error(ctx, &turn_id, swipe_index, "LLM Error: empty response");
         return;
     }
 
@@ -253,7 +258,7 @@ pub fn execute_freeaction_pipeline(
                 next_state.narrative.generation.status = GenerationStatus::Generating;
                 next_state.narrative.generation.phase = GenerationPhase::GeneratingEvent;
                 next_state.narrative.last_trigger = Some(request.stored.clone());
-                save_committed_state(ctx, &next_state, format!("pre-event:{message_id}"), 0);
+                save_committed_state(ctx, &next_state, format!("pre-event:{turn_id}"), 0);
 
                 let continuation_text = match backend.narrate_action_from_prompt(
                     &request.stored.system_prompt,
@@ -270,7 +275,7 @@ pub fn execute_freeaction_pipeline(
                         );
                         next_state.narrative.generation.status =
                             GenerationStatus::Error(format!("Error: {e}"));
-                        save_state(ctx, &next_state, message_id.clone(), swipe_index);
+                        save_state(ctx, &next_state, turn_id.clone(), swipe_index);
                         return;
                     }
                 };
@@ -331,7 +336,7 @@ pub fn execute_freeaction_pipeline(
                             log::error!("Failed to apply post-trigger NPC events: {e}");
                             next_state.narrative.generation.status =
                                 GenerationStatus::Error(format!("NPC event error: {e}"));
-                            save_state(ctx, &next_state, message_id.clone(), swipe_index);
+                            save_state(ctx, &next_state, turn_id.clone(), swipe_index);
                             return;
                         }
                     }
@@ -340,10 +345,10 @@ pub fn execute_freeaction_pipeline(
 
             next_state.narrative.generation.status = GenerationStatus::Idle;
             next_state.narrative.generation.phase = GenerationPhase::default();
-            save_state(ctx, &next_state, message_id.clone(), swipe_index);
+            save_state(ctx, &next_state, turn_id.clone(), swipe_index);
         }
         Err(e) => {
-            save_pipeline_error(ctx, &message_id, swipe_index, format!("Error: {e}"));
+            save_pipeline_error(ctx, &turn_id, swipe_index, format!("Error: {e}"));
         }
     }
 }

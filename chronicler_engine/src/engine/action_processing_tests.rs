@@ -69,8 +69,11 @@ fn test_execute_freeaction_impl_no_movement() {
     );
     let next_state = result.unwrap().next_state;
     // Narration should be logged
-    assert_eq!(next_state.narrative.history.len(), 1);
-    assert_eq!(next_state.narrative.history[0].log_type, LogType::Narration);
+    assert_eq!(next_state.narrative.history().len(), 1);
+    assert_eq!(
+        next_state.narrative.history()[0].log_type,
+        LogType::Narration
+    );
     // NPCs in area should be updated
     assert_eq!(next_state.scene.npcs_in_area.len(), 1);
     assert_eq!(next_state.scene.npcs_in_area[0].id, "carla");
@@ -106,7 +109,7 @@ fn test_execute_freeaction_impl_with_movement() {
     );
     let next_state = result.unwrap().next_state;
     // Narration logged
-    assert!(!next_state.narrative.history.is_empty());
+    assert!(!next_state.narrative.history().is_empty());
     // Room changed to a dynamic room (since destination doesn't exist)
     assert!(next_state.movement.current_room_id.starts_with("dynamic_"));
     assert!(
@@ -362,7 +365,7 @@ fn test_handle_movement_sets_pending_location() {
 
     let state = handle_movement(state, Some("test_room"), &["carla".to_string()]).unwrap();
 
-    assert!(state.narrative.history.is_empty());
+    assert!(state.narrative.history().is_empty());
     assert_eq!(
         state.narrative.pending_location,
         Some("Test Room".to_string())
@@ -398,7 +401,7 @@ fn test_evaluate_and_narrate_triggers_adds_event_header() {
 
     let world = state.world.clone();
     let player = state.player.clone();
-    let history = state.narrative.history.clone();
+    let history = state.narrative.history();
 
     let trigger_context = crate::narrative::prompt::PromptContext {
         world: &world,
@@ -416,12 +419,12 @@ fn test_evaluate_and_narrate_triggers_adds_event_header() {
 
     // Should have 1 entry: narration with inline event header
     assert!(
-        state.narrative.history.len() == 1,
+        state.narrative.history().len() == 1,
         "Expected one narration with event header, got {:?}",
-        state.narrative.history
+        state.narrative.history()
     );
 
-    let narration_entry = &state.narrative.history[0];
+    let narration_entry = &state.narrative.history()[0];
     assert_eq!(narration_entry.log_type, LogType::Narration);
     assert_eq!(
         narration_entry.event_header,
@@ -449,9 +452,9 @@ fn test_commit_trigger_narration_adds_event_header_and_narration() {
     let state =
         commit_trigger_narration(state, &request, "Gabriella emerges from the shadows.").unwrap();
 
-    assert_eq!(state.narrative.history.len(), 1);
+    assert_eq!(state.narrative.history().len(), 1);
 
-    let narration_entry = &state.narrative.history[0];
+    let narration_entry = &state.narrative.history()[0];
     assert_eq!(narration_entry.log_type, LogType::Narration);
     assert_eq!(
         narration_entry.event_header,
@@ -528,10 +531,10 @@ fn test_commit_trigger_narration_empty_text_is_noop() {
     };
 
     let state = commit_trigger_narration(state, &request, "").unwrap();
-    assert!(state.narrative.history.is_empty());
+    assert!(state.narrative.history().is_empty());
 
     let state = commit_trigger_narration(state, &request, "   ").unwrap();
-    assert!(state.narrative.history.is_empty());
+    assert!(state.narrative.history().is_empty());
 }
 
 #[test]

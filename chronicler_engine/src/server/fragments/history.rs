@@ -15,21 +15,24 @@ pub async fn edit_history_handler(
     axum::extract::Path(id): axum::extract::Path<u64>,
     Form(form): Form<EditHistoryForm>,
 ) -> (StatusCode, String) {
-    let result = match state.load_state() {
-        Ok(mut guard) => {
-            let result = guard.edit_log(id, form.text);
-            if result.is_ok() {
-                let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
-                    &guard,
-                    uuid::Uuid::new_v4().to_string(),
-                    0,
-                );
-                let _ = state.snapshot_storage.save(&snapshot);
-            }
-            result
+    let result = (|| {
+        let latest = state.snapshot_storage.load_latest(None)?;
+        let (turn_id, swipe_index) = match latest {
+            Some(s) => (s.turn_id, s.swipe_index),
+            None => (String::new(), 0),
+        };
+        let mut guard = state.load_state()?;
+        let result = guard.edit_log(id, form.text);
+        if result.is_ok() && !turn_id.is_empty() {
+            let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
+                &guard,
+                turn_id,
+                swipe_index,
+            );
+            let _ = state.snapshot_storage.save(&snapshot);
         }
-        Err(e) => Err(e),
-    };
+        result
+    })();
 
     match result {
         Ok(()) => (
@@ -42,21 +45,32 @@ pub async fn edit_history_handler(
 
 /// [DOC: docs/system/game_flow.md]
 pub async fn delete_history_handler(State(state): State<AppState>) -> (StatusCode, String) {
-    let result = match state.load_state() {
-        Ok(mut guard) => {
-            let result = guard.delete_last_log();
-            if result.is_ok() {
+    let result = (|| {
+        let _latest = state.snapshot_storage.load_latest(None)?;
+        let mut guard = state.load_state()?;
+        match guard.delete_last_turn() {
+            Some(removed_turn_id) => {
+                let _ = state
+                    .snapshot_storage
+                    .delete_turn_snapshots(&removed_turn_id);
+                let new_turn_id = guard
+                    .narrative
+                    .turns
+                    .last()
+                    .map(|t| t.id.clone())
+                    .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
                 let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
                     &guard,
-                    uuid::Uuid::new_v4().to_string(),
+                    new_turn_id,
                     0,
                 );
-                let _ = state.snapshot_storage.save(&snapshot);
+                state.snapshot_storage.save(&snapshot)
             }
-            result
+            None => Err(crate::error::EngineError::Internal(
+                crate::error::internal_error("History is empty".to_string()),
+            )),
         }
-        Err(e) => Err(e),
-    };
+    })();
 
     match result {
         Ok(()) => (StatusCode::OK, String::new()),

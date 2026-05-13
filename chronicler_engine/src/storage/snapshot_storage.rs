@@ -1,22 +1,26 @@
 use chrono::{DateTime, Utc};
 
 use crate::error::EngineError;
+use crate::model::checkpoint::Checkpoint;
 use crate::model::state_snapshot::GameStateSnapshot;
 use crate::storage::db::DbPool;
 
 pub trait SnapshotStorage: Send + Sync {
     fn save(&self, snapshot: &GameStateSnapshot) -> Result<(), EngineError>;
-    fn load_latest(
+    fn load_latest(&self, turn_id: Option<&str>) -> Result<Option<GameStateSnapshot>, EngineError>;
+    fn load_by_turn(
         &self,
-        message_id: Option<&str>,
-    ) -> Result<Option<GameStateSnapshot>, EngineError>;
-    fn load_by_message(
-        &self,
-        message_id: &str,
+        turn_id: &str,
         swipe_index: u32,
     ) -> Result<Option<GameStateSnapshot>, EngineError>;
+    fn delete_turn_snapshots(&self, turn_id: &str) -> Result<(), EngineError>;
     fn commit(&self, snapshot_id: &str) -> Result<(), EngineError>;
     fn reset(&self) -> Result<(), EngineError>;
+
+    fn save_checkpoint(&self, checkpoint: &Checkpoint) -> Result<(), EngineError>;
+    fn load_checkpoint(&self, id: &str) -> Result<Option<Checkpoint>, EngineError>;
+    fn list_checkpoints(&self) -> Result<Vec<Checkpoint>, EngineError>;
+    fn delete_checkpoint(&self, id: &str) -> Result<(), EngineError>;
 }
 
 pub struct SqliteSnapshotStorage {
@@ -45,9 +49,9 @@ impl SnapshotStorage for SqliteSnapshotStorage {
 
         conn.execute(
             "INSERT INTO game_state_snapshots
-             (id, message_id, swipe_index, movement, narrative, scene, character_state, committed, created_at)
+             (id, turn_id, swipe_index, movement, narrative, scene, character_state, committed, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
-             ON CONFLICT(message_id, swipe_index) DO UPDATE SET
+             ON CONFLICT(turn_id, swipe_index) DO UPDATE SET
                  id=excluded.id,
                  movement=excluded.movement,
                  narrative=excluded.narrative,
@@ -57,7 +61,7 @@ impl SnapshotStorage for SqliteSnapshotStorage {
                  created_at=excluded.created_at",
             rusqlite::params![
                 snapshot.id,
-                snapshot.message_id,
+                snapshot.turn_id,
                 snapshot.swipe_index,
                 movement_json,
                 narrative_json,
@@ -72,23 +76,20 @@ impl SnapshotStorage for SqliteSnapshotStorage {
         Ok(())
     }
 
-    fn load_latest(
-        &self,
-        message_id: Option<&str>,
-    ) -> Result<Option<GameStateSnapshot>, EngineError> {
+    fn load_latest(&self, turn_id: Option<&str>) -> Result<Option<GameStateSnapshot>, EngineError> {
         let conn = self.pool.conn();
-        let mut stmt = if message_id.is_some() {
+        let mut stmt = if turn_id.is_some() {
             conn.prepare(
-                "SELECT id, message_id, swipe_index, movement, narrative, scene, character_state, committed, created_at
+                "SELECT id, turn_id, swipe_index, movement, narrative, scene, character_state, committed, created_at
                  FROM game_state_snapshots
-                 WHERE message_id = ?1
+                 WHERE turn_id = ?1
                  ORDER BY created_at DESC
                  LIMIT 1",
             )
             .map_err(|e| EngineError::Config(format!("Failed to prepare query: {e}")))?
         } else {
             conn.prepare(
-                "SELECT id, message_id, swipe_index, movement, narrative, scene, character_state, committed, created_at
+                "SELECT id, turn_id, swipe_index, movement, narrative, scene, character_state, committed, created_at
                  FROM game_state_snapshots
                  ORDER BY created_at DESC
                  LIMIT 1",
@@ -96,7 +97,7 @@ impl SnapshotStorage for SqliteSnapshotStorage {
             .map_err(|e| EngineError::Config(format!("Failed to prepare query: {e}")))?
         };
 
-        let row = if let Some(msg_id) = message_id {
+        let row = if let Some(msg_id) = turn_id {
             stmt.query_row(rusqlite::params![msg_id], row_to_snapshot)
         } else {
             stmt.query_row([], row_to_snapshot)
@@ -111,28 +112,40 @@ impl SnapshotStorage for SqliteSnapshotStorage {
         }
     }
 
-    fn load_by_message(
+    fn load_by_turn(
         &self,
-        message_id: &str,
+        turn_id: &str,
         swipe_index: u32,
     ) -> Result<Option<GameStateSnapshot>, EngineError> {
         let conn = self.pool.conn();
         let mut stmt = conn
             .prepare(
-                "SELECT id, message_id, swipe_index, movement, narrative, scene, character_state, committed, created_at
+                "SELECT id, turn_id, swipe_index, movement, narrative, scene, character_state, committed, created_at
                  FROM game_state_snapshots
-                 WHERE message_id = ?1 AND swipe_index = ?2
+                 WHERE turn_id = ?1 AND swipe_index = ?2
                  LIMIT 1",
             )
             .map_err(|e| EngineError::Config(format!("Failed to prepare query: {e}")))?;
 
-        match stmt.query_row(rusqlite::params![message_id, swipe_index], row_to_snapshot) {
+        match stmt.query_row(rusqlite::params![turn_id, swipe_index], row_to_snapshot) {
             Ok(snapshot) => Ok(Some(snapshot)),
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
             Err(e) => Err(EngineError::Config(format!(
-                "Failed to load snapshot by message: {e}"
+                "Failed to load snapshot by turn: {e}"
             ))),
         }
+    }
+
+    fn delete_turn_snapshots(&self, turn_id: &str) -> Result<(), EngineError> {
+        let conn = self.pool.conn();
+        let pre_main = format!("pre-main:{turn_id}");
+        let pre_event = format!("pre-event:{turn_id}");
+        conn.execute(
+            "DELETE FROM game_state_snapshots WHERE turn_id = ?1 OR turn_id = ?2 OR turn_id = ?3",
+            rusqlite::params![turn_id, pre_main, pre_event],
+        )
+        .map_err(|e| EngineError::Config(format!("Failed to delete turn snapshots: {e}")))?;
+        Ok(())
     }
 
     fn commit(&self, snapshot_id: &str) -> Result<(), EngineError> {
@@ -149,6 +162,85 @@ impl SnapshotStorage for SqliteSnapshotStorage {
         let conn = self.pool.conn();
         conn.execute("DELETE FROM game_state_snapshots", [])
             .map_err(|e| EngineError::Config(format!("Failed to reset snapshots: {e}")))?;
+        conn.execute("DELETE FROM checkpoints", [])
+            .map_err(|e| EngineError::Config(format!("Failed to reset checkpoints: {e}")))?;
+        Ok(())
+    }
+
+    fn save_checkpoint(&self, checkpoint: &Checkpoint) -> Result<(), EngineError> {
+        let conn = self.pool.conn();
+        conn.execute(
+            "INSERT INTO checkpoints (id, turn_id, swipe_index, name, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)
+             ON CONFLICT(id) DO UPDATE SET
+                 turn_id=excluded.turn_id,
+                 swipe_index=excluded.swipe_index,
+                 name=excluded.name,
+                 created_at=excluded.created_at",
+            rusqlite::params![
+                checkpoint.id,
+                checkpoint.turn_id,
+                checkpoint.swipe_index,
+                checkpoint.name,
+                checkpoint.created_at.to_rfc3339(),
+            ],
+        )
+        .map_err(|e| EngineError::Config(format!("Failed to save checkpoint: {e}")))?;
+        Ok(())
+    }
+
+    fn load_checkpoint(&self, id: &str) -> Result<Option<Checkpoint>, EngineError> {
+        let conn = self.pool.conn();
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, turn_id, swipe_index, name, created_at
+                 FROM checkpoints
+                 WHERE id = ?1
+                 LIMIT 1",
+            )
+            .map_err(|e| EngineError::Config(format!("Failed to prepare query: {e}")))?;
+
+        match stmt.query_row(rusqlite::params![id], row_to_checkpoint) {
+            Ok(cp) => Ok(Some(cp)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(EngineError::Config(format!(
+                "Failed to load checkpoint: {e}"
+            ))),
+        }
+    }
+
+    fn list_checkpoints(&self) -> Result<Vec<Checkpoint>, EngineError> {
+        let conn = self.pool.conn();
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, turn_id, swipe_index, name, created_at
+                 FROM checkpoints
+                 ORDER BY created_at DESC",
+            )
+            .map_err(|e| EngineError::Config(format!("Failed to prepare query: {e}")))?;
+
+        let rows = stmt
+            .query_map([], row_to_checkpoint)
+            .map_err(|e| EngineError::Config(format!("Failed to list checkpoints: {e}")))?;
+
+        let mut checkpoints = Vec::new();
+        for row in rows {
+            checkpoints.push(
+                row.map_err(|e| {
+                    EngineError::Config(format!("Failed to read checkpoint row: {e}"))
+                })?,
+            );
+        }
+        Ok(checkpoints)
+    }
+
+    fn delete_checkpoint(&self, id: &str) -> Result<(), EngineError> {
+        let conn = self.pool.conn();
+        conn.execute(
+            "DELETE FROM checkpoints WHERE id = ?1",
+            rusqlite::params![id],
+        )
+        .map_err(|e| EngineError::Config(format!("Failed to delete checkpoint: {e}")))?;
         Ok(())
     }
 }
@@ -180,13 +272,30 @@ fn row_to_snapshot(row: &rusqlite::Row) -> Result<GameStateSnapshot, rusqlite::E
 
     Ok(GameStateSnapshot {
         id: row.get(0)?,
-        message_id: row.get(1)?,
+        turn_id: row.get(1)?,
         swipe_index: row.get(2)?,
         movement,
         narrative,
         scene,
         character_state,
         committed: row.get::<_, i32>(7)? != 0,
+        created_at,
+    })
+}
+
+fn row_to_checkpoint(row: &rusqlite::Row) -> Result<Checkpoint, rusqlite::Error> {
+    let created_at_str: String = row.get(4)?;
+    let created_at = DateTime::parse_from_rfc3339(&created_at_str)
+        .map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(4, rusqlite::types::Type::Text, Box::new(e))
+        })?
+        .with_timezone(&Utc);
+
+    Ok(Checkpoint {
+        id: row.get(0)?,
+        turn_id: row.get(1)?,
+        swipe_index: row.get(2)?,
+        name: row.get(3)?,
         created_at,
     })
 }

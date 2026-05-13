@@ -37,7 +37,7 @@ pub async fn debug_state_handler(
     // Only take the last 5 entries to keep the response scannable
     let history_tail: Vec<LogEntry> = guard
         .narrative
-        .history
+        .history()
         .iter()
         .rev()
         .take(5)
@@ -66,7 +66,7 @@ pub async fn debug_state_handler(
         generation_phase: guard.narrative.generation.phase.clone(),
         character_state: guard.character_state.npcs.clone(),
         narration_history_tail: history_tail,
-        narration_history_length: guard.narrative.history.len(),
+        narration_history_length: guard.narrative.history().len(),
         dynamic_rooms,
         dynamic_room_count: guard.movement.dynamic_rooms.len(),
         last_error,

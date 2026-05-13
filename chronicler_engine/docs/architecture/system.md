@@ -10,13 +10,13 @@ Contains pure data structures, serialization schemas, and the "Single Source of 
 - **`world`**: Setting lore, global rules, and starting scenarios.
 - **`map`**: Room/Region hierarchy and cardinal direction definitions.
 - **`character`**: NPC attributes (name, description, personality, scenario, image_path, **profile_image**, **headshot_image**) and Player inventory.
-- **`state`**: The `GameState` aggregation, narration history logs, and TUI state. Includes `StoredTriggerContext` for replaying trigger continuations on retry. `LogEntry` carries optional `location_header` and `event_header` metadata for visual rendering; `NarrativeState` tracks `pending_location` and `pending_event` for consumption by the next `add_log` call.
+- **`state`**: The `GameState` aggregation, narration history logs, and TUI state. `NarrativeState` uses a `Vec<Turn>` where each `Turn` groups one player `Input` with all its AI `Swipe` attempts. `LogEntry` remains the atomic rendering unit; `Turn` and `Swipe` are structural containers. `StoredTriggerContext` enables replaying trigger continuations on retry. `LogEntry` carries optional `location_header` and `event_header` metadata for visual rendering; `NarrativeState` tracks `pending_location` and `pending_event` for consumption by the next `add_log` call.
 - **`scenario`**: Starting scenario definitions for narrative introductions.
 - **`trigger`**: Trigger definitions, conditions, and character state tracking (`Trigger`, `TriggerCondition`, `TriggerAction`, `NpcEncounterState`, `CharacterState`).
 - **`settings`**: `AppSettings`, `Connection`, and agent configuration data models.
 - **`agent`**: `AgentConfig`, `AgentResult`, `AgentContext`, `StatePatch`, `ExecutionPhase`, `BackendSelector`, `Confidence`.
 - **`llm_backend`**: `LlmBackendType` enum for backend selection.
-- **`state_snapshot`**: `GameStateSnapshot` for SQLite persistence.
+- **`state_snapshot`**: `GameStateSnapshot` for SQLite persistence. Snapshots are keyed by `(turn_id, swipe_index)`.
 
 ### 2. The Engine Tier (`crate::engine::*`)
 Contains the mechanics that drive the simulation. It translates user intent and state into outcomes.
@@ -175,6 +175,8 @@ Shared test fixtures and utilities.
 | `src/model/map.rs` | `crate::model::map` | `MapDef`, `Room`, `Region` |
 | `src/model/character.rs` | `crate::model::character` | `NpcCard`, `PlayerCard`, `CharacterSheet` |
 | `src/model/state.rs` | `crate::model::state` | `GameState`, `MovementState`, `NarrativeState`, `SceneState`, `LogEntry`, `GenerationState` |
+| `src/model/turn.rs` | `crate::model::turn` | `Turn`, `Swipe` |
+| `src/model/checkpoint.rs` | `crate::model::checkpoint` | `Checkpoint` |
 | `src/model/state_snapshot.rs` | `crate::model::state_snapshot` | `GameStateSnapshot` |
 | `src/model/scenario.rs` | `crate::model::scenario` | Starting scenarios |
 | `src/model/trigger.rs` | `crate::model::trigger` | `Trigger`, `TriggerCondition`, `TriggerAction`, `NpcEncounterState`, `CharacterState` |
@@ -430,9 +432,26 @@ A unified error type (`crate::error::EngineError`) is shared across all tiers to
 
 The engine supports editing and regenerating conversation history via the History API.
 
-### LogEntry Structure
+### Turn + Swipe Structure
 
-Each history entry has a unique auto-incrementing ID:
+History is grouped into `Turn`s, each containing one player input and all its generation attempts:
+
+```rust
+pub struct Turn {
+    pub id: String,                    // UUID — stable turn identity
+    pub input: LogEntry,               // LogType::Input
+    pub swipes: Vec<Swipe>,            // All generation attempts
+    pub active_swipe_index: u32,       // Which swipe is displayed
+    pub created_at: DateTime<Utc>,
+}
+
+pub struct Swipe {
+    pub index: u32,
+    pub entries: Vec<LogEntry>,        // Narration, Dialogue, System
+}
+```
+
+Each `LogEntry` still has a unique auto-incrementing ID:
 
 ```rust
 pub struct LogEntry {
@@ -443,6 +462,8 @@ pub struct LogEntry {
     pub timestamp: DateTime<Utc>,     // When recorded
 }
 ```
+
+All rendering and prompt building consume `Vec<LogEntry>` via `NarrativeState::history()`, which flattens the active swipes of all turns.
 
 ### History Editing
 
@@ -458,13 +479,13 @@ Entries can be edited in place via `POST /history/:id`:
 
 The retry endpoint (`POST /retry`) regenerates the last AI response with granular scoping:
 
-- **Pre-generation committed snapshots**: Before every LLM call, a committed snapshot is saved with a prefixed `message_id`:
-  - `pre-main:{uuid}` — saved before the main narration LLM call
-  - `pre-event:{uuid}` — saved before the trigger continuation LLM call
+- **Pre-generation committed snapshots**: Before every LLM call, a committed snapshot is saved with a prefixed `turn_id`:
+  - `pre-main:{turn_id}` — saved before the main narration LLM call
+  - `pre-event:{turn_id}` — saved before the trigger continuation LLM call
 - **Event continuation detection**: Retry checks for an `Event` log entry between the last `Input` and the last AI response
-- **Event retry path**: Loads `pre-event:{uuid}` snapshot, regenerates only the continuation text using stored trigger prompts (`StoredTriggerContext`), preserves the main narration unchanged
-- **Main retry path**: Loads `pre-main:{uuid}` snapshot, re-runs the full pipeline (narrate → quantify → triggers → event continuation)
-- **Swipe index increment**: Each retry saves with `swipe_index + 1`, preserving the original snapshot
+- **Event retry path**: Loads `pre-event:{turn_id}` snapshot, creates a new `Swipe` copying the main narration from the previous swipe, regenerates only the continuation text using stored trigger prompts (`StoredTriggerContext`)
+- **Main retry path**: Loads `pre-main:{turn_id}` snapshot, creates a new empty `Swipe`, re-runs the full pipeline (narrate → quantify → triggers → event continuation)
+- **Swipe index increment**: Each retry creates a new `Swipe` with `index = current_swipe + 1` and sets it as active; the snapshot is saved with the new `swipe_index`
 - Only works on the last exchange, not arbitrary history points
 - **Critical**: History passed to LLM excludes the AI response being retried to prevent the LLM from repeating/paraphrasing the old response
 
@@ -487,9 +508,14 @@ The retry endpoint (`POST /retry`) regenerates the last AI response with granula
 | `GET` | `/status/generating` | Generating status with phase |
 | `POST` | `/status/reset-generating` | Reset generating state |
 | `POST` | `/history/:id` | Edit entry text |
-| `POST` | `/history/delete` | Delete last entry |
-| `POST` | `/retry` | Regenerate last AI response |
+| `POST` | `/history/delete` | Delete last turn (and cascade-delete its snapshots) |
+| `POST` | `/retry` | Regenerate last AI response (creates new swipe) |
 | `POST` | `/reset` | Reset game state — returns `HX-Refresh: true` for clean page reload |
+| `POST` | `/checkpoint` | Create checkpoint at current turn+swipe |
+| `POST` | `/checkpoint/:id/restore` | Restore checkpoint (sets active swipe) |
+| `POST` | `/checkpoint/:id/delete` | Delete checkpoint |
+| `GET` | `/fragment/checkpoints` | List checkpoints fragment |
+| `POST` | `/turn/:id/swipe/:index` | Switch active swipe on a turn |
 | `GET` | `/fragment/settings` | Settings panel HTML |
 | `POST` | `/settings` | Save settings from form |
 | `POST` | `/connections/add` | Add new connection |

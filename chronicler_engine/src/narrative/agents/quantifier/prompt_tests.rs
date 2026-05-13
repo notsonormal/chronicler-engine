@@ -242,5 +242,3 @@ fn test_quantifier_prompt_references_latest_narration_in_query() {
         "Query should reference <LatestNarration>"
     );
 }
-
-

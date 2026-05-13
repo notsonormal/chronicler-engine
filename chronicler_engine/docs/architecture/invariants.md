@@ -14,7 +14,7 @@ These invariants are machine-checkable statements about the engine's runtime beh
 `execute_freeaction_impl` must apply mutations in this order:
 1. Parse quantifier result for world-state changes (movement, item transfers).
 2. Update `npcs_in_area` based on quantifier output.
-3. Append narration to `narration_history`.
+3. Append narration to `narrative` history via `add_log()`.
 4. Evaluate triggers against the mutated state (inside lock).
 5. Apply NPC events (`times_met` increments, `currently_meeting` updates).
 6. Release lock → trigger LLM call (frontend can poll main narration).

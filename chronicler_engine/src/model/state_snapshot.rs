@@ -7,7 +7,7 @@ use crate::model::trigger::CharacterState;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct GameStateSnapshot {
     pub id: String,
-    pub message_id: String,
+    pub turn_id: String,
     pub swipe_index: u32,
     pub movement: MovementState,
     pub narrative: NarrativeState,
@@ -18,10 +18,10 @@ pub struct GameStateSnapshot {
 }
 
 impl GameStateSnapshot {
-    pub fn from_game_state(state: &GameState, message_id: String, swipe_index: u32) -> Self {
+    pub fn from_game_state(state: &GameState, turn_id: String, swipe_index: u32) -> Self {
         Self {
             id: uuid::Uuid::new_v4().to_string(),
-            message_id,
+            turn_id,
             swipe_index,
             movement: state.movement.clone(),
             narrative: state.narrative.clone(),

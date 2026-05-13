@@ -35,8 +35,8 @@ fn test_apply_to_restores_state() {
         original.movement.current_room_id
     );
     assert_eq!(
-        target.narrative.history.len(),
-        original.narrative.history.len()
+        target.narrative.history().len(),
+        original.narrative.history().len()
     );
     assert_eq!(target.scene.npcs_in_area, original.scene.npcs_in_area);
     assert_eq!(
@@ -50,7 +50,7 @@ fn test_from_game_state_sets_defaults() {
     let state = create_test_state();
     let snapshot = GameStateSnapshot::from_game_state(&state, "msg2".to_string(), 3);
 
-    assert_eq!(snapshot.message_id, "msg2");
+    assert_eq!(snapshot.turn_id, "msg2");
     assert_eq!(snapshot.swipe_index, 3);
     assert!(!snapshot.committed, "New snapshot should not be committed");
     assert!(

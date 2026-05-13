@@ -199,7 +199,7 @@ fn build_trigger_request(
         &state.scene.npcs_in_area,
         ctx.player,
         &continuation_user_msg,
-        &state.narrative.history,
+        &state.narrative.history(),
     )?;
 
     Some(TriggerContinuationRequest {
@@ -246,7 +246,7 @@ pub fn evaluate_and_narrate_triggers(
         &state.scene.npcs_in_area,
         trigger_context.player,
         &continuation_user_msg,
-        &state.narrative.history,
+        &state.narrative.history(),
     ) {
         Some(parts) => parts,
         None => return Ok(state),

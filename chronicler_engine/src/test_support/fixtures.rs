@@ -269,7 +269,7 @@ impl TestGameState {
                 dynamic_rooms: HashMap::new(),
             },
             narrative: crate::model::state::NarrativeState {
-                history: Vec::new(),
+                turns: Vec::new(),
                 next_log_id: 1,
                 generation: Default::default(),
                 last_trigger: None,
@@ -309,7 +309,7 @@ impl TestGameState {
                 dynamic_rooms: HashMap::new(),
             },
             narrative: crate::model::state::NarrativeState {
-                history: Vec::new(),
+                turns: Vec::new(),
                 next_log_id: 1,
                 generation: Default::default(),
                 last_trigger: None,

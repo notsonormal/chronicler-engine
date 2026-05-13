@@ -48,6 +48,23 @@ fn build_router(app_state: AppState) -> Router {
         .route("/history/delete", post(fragments::delete_history_handler))
         .route("/retry", post(fragments::retry_handler))
         .route("/reset", post(fragments::reset_handler))
+        .route("/checkpoint", post(fragments::create_checkpoint_handler))
+        .route(
+            "/checkpoint/:id/restore",
+            post(fragments::restore_checkpoint_handler),
+        )
+        .route(
+            "/checkpoint/:id/delete",
+            post(fragments::delete_checkpoint_handler),
+        )
+        .route(
+            "/fragment/checkpoints",
+            get(fragments::list_checkpoints_fragment),
+        )
+        .route(
+            "/turn/:id/swipe/:index",
+            post(fragments::switch_swipe_handler),
+        )
         // Settings endpoints
         .route(
             "/fragment/settings",

@@ -16,7 +16,7 @@ fn run_action(
     service: &DefaultGameService,
 ) -> chronicler_engine::model::state::GameState {
     let mut state = state;
-    state.narrative.history.clear();
+    state.narrative.turns.clear();
     let ctx = make_test_context(state);
     service.execute_action(ctx.clone(), command.to_string(), "Player".to_string());
     crate::latest_state(&ctx)
@@ -27,7 +27,7 @@ fn test_execute_look_action() {
     let guard = run_action(create_test_state(), "look", &DefaultGameService::new());
     let has_narration = guard
         .narrative
-        .history
+        .history()
         .iter()
         .any(|e| e.log_type == LogType::Narration);
     assert!(has_narration, "Look should add narration");
@@ -42,7 +42,7 @@ fn test_execute_talk_action() {
     );
     let has_system = guard
         .narrative
-        .history
+        .history()
         .iter()
         .any(|e| e.log_type == LogType::System && e.text.contains("You talk to"));
     assert!(has_system, "Talk should add system log");
@@ -53,7 +53,7 @@ fn test_execute_inventory_action() {
     let guard = run_action(create_test_state(), "inventory", &DefaultGameService::new());
     let has_system = guard
         .narrative
-        .history
+        .history()
         .iter()
         .any(|e| e.log_type == LogType::System && e.text.contains("inventory"));
     assert!(has_system, "Inventory should add system log");
@@ -64,7 +64,7 @@ fn test_execute_quit_action() {
     let guard = run_action(create_test_state(), "quit", &DefaultGameService::new());
     let has_goodbye = guard
         .narrative
-        .history
+        .history()
         .iter()
         .any(|e| e.log_type == LogType::System && e.text.contains("Goodbye"));
     assert!(has_goodbye, "Quit should add Goodbye log");
@@ -77,7 +77,7 @@ fn test_execute_quit_action() {
 #[test]
 fn test_retry_with_no_history() {
     let mut state = create_test_state();
-    state.narrative.history.clear();
+    state.narrative.turns.clear();
     let ctx = make_test_context(state);
     let service = DefaultGameService::new();
 
@@ -86,7 +86,7 @@ fn test_retry_with_no_history() {
 
     // State should be unchanged
     let guard = crate::latest_state(&ctx);
-    assert!(guard.narrative.history.is_empty());
+    assert!(guard.narrative.history().is_empty());
 }
 
 #[test]
@@ -109,7 +109,7 @@ fn test_execute_talk_no_message() {
     );
     let has_talk = guard
         .narrative
-        .history
+        .history()
         .iter()
         .any(|e| e.log_type == LogType::System && e.text.contains("You talk to innkeeper:"));
     assert!(has_talk, "Talk without message should add system log");
@@ -151,7 +151,7 @@ fn test_default_game_service_with_backends() {
     );
     // Should be usable without panicking
     let mut state = create_test_state();
-    state.narrative.history.clear();
+    state.narrative.turns.clear();
     let ctx = make_test_context(state);
     service.execute_action(ctx.clone(), "look".to_string(), "Player".to_string());
     let guard = crate::latest_state(&ctx);
@@ -165,7 +165,7 @@ fn test_default_game_service_with_mock_quantifier() {
         Arc::new(MockQuantifierBackend::default()),
     );
     let mut state = create_test_state();
-    state.narrative.history.clear();
+    state.narrative.turns.clear();
     let ctx = make_test_context(state);
     service.execute_action(ctx.clone(), "look".to_string(), "Player".to_string());
     let guard = crate::latest_state(&ctx);

@@ -1,6 +1,54 @@
 ﻿# Changelog
 
-## Unreleased
+## 2026-05-13
+
+### Added
+- **Turn + Swipe Domain Model** — Migrated from flat `Vec<LogEntry>` to structured `Vec<Turn>` with swipe-based retry
+  - New `Turn` struct: stable UUID `id`, `input: LogEntry`, `swipes: Vec<Swipe>`, `active_swipe_index: u32`
+  - New `Swipe` struct: `index: u32`, `entries: Vec<LogEntry>` — one generation attempt per swipe
+  - `NarrativeState.history()` returns derived `Vec<LogEntry>` by flattening active swipes; all rendering/prompts unchanged
+  - `Turn::create_swipe()` and `Turn::create_swipe_copying_active()` helpers for retry
+  - New `Checkpoint` struct with dedicated SQLite `checkpoints` table (not in snapshot JSON)
+  - `SnapshotStorage` trait extended with checkpoint CRUD: `save_checkpoint`, `load_checkpoint`, `list_checkpoints`, `delete_checkpoint`
+
+### Changed
+- **Snapshot correlation is now structural** — `turn_id` in snapshots matches `Turn.id` instead of random UUIDs
+  - Renamed `message_id` → `turn_id` everywhere (`GameStateSnapshot`, `SnapshotStorage`, SQLite schema)
+  - Server extracts `turn_id` from `Turn.id` after `add_log(Input)`; engine uses this ID for `pre-main:{turn_id}` and `pre-event:{turn_id}`
+  - `delete_turn_snapshots()` cascades to `pre-main:{turn_id}` and `pre-event:{turn_id}` prefixed rows
+  - Retry no longer breaks after delete/edit because turn identity is preserved
+
+### Changed
+- **History mutation is now turn-level** — Delete removes entire turns, not individual entries
+  - `delete_history_handler` calls `delete_last_turn()` and cascades snapshot deletion via `delete_turn_snapshots()`
+  - `edit_history_handler` preserves `turn_id` and `swipe_index` on the saved snapshot
+  - Returns `400 Bad Request` when no turns exist (same behavior as before)
+
+### Added
+- **Swipe-aware Retry** — Retry creates new swipes instead of overwriting the same one
+  - Main retry: loads `pre-main:{turn_id}`, creates new empty swipe, sets active, re-runs full pipeline
+  - Event retry: loads `pre-event:{turn_id}`, creates new swipe copying main narration from previous swipe, regenerates continuation
+  - `swipe_index` increments with each retry; original swipe preserved
+
+### Added
+- **Swipe Navigation UI** — Action area shows left/right arrows when a turn has multiple swipes
+  - Swipe counter: "2 / 5" display
+  - `POST /turn/:id/swipe/:index` endpoint switches active swipe without regeneration
+  - Disabled-state bounds checking on navigation buttons
+
+### Added
+- **Checkpoint Bookmark System** — Save and restore specific turn+swipe combinations
+  - `POST /checkpoint` — creates checkpoint at current turn+swipe
+  - `POST /checkpoint/:id/restore` — loads snapshot, sets turn's `active_swipe_index`, re-saves state
+  - `POST /checkpoint/:id/delete` — removes checkpoint
+  - `GET /fragment/checkpoints` — server-rendered checkpoint list with restore/delete buttons
+
+### Changed
+- **Documentation updated** — `docs/architecture/system.md` and `docs/system/game_flow.md` reflect Turn + Swipe model
+  - New ADR `docs/adr/adr-012-turn-swipe-model.md` documents rationale and trade-offs
+  - Resolved TODO item: retry-after-delete bug fixed by structural turn identity
+
+## 2026-05-12
 
 ### Added
 - **Granular Retry Logic with Pre-Generation Snapshots** â€” Retry now detects event continuations vs main narration and regenerates with correct scope

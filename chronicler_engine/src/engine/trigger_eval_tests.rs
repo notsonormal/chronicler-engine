@@ -101,7 +101,7 @@ fn make_state(
             dynamic_rooms: HashMap::new(),
         },
         narrative: crate::model::state::NarrativeState {
-            history: vec![],
+            turns: vec![],
             next_log_id: 1,
             generation: Default::default(),
             last_trigger: None,

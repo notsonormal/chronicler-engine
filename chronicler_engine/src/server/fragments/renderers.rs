@@ -37,7 +37,7 @@ pub fn render_story_log(state: &AppState) -> Result<String> {
 
     let entries: Vec<_> = state_guard
         .narrative
-        .history
+        .history()
         .iter()
         .take(MAX_LOG_DISPLAY)
         .cloned()
@@ -88,9 +88,14 @@ pub fn render_action_area(state: &AppState) -> Result<String> {
     let status = state_guard.narrative.generation.status.clone();
     let phase = state_guard.narrative.generation.phase.clone();
     let exits = get_available_exits(&state_guard);
+    let turn_data = state_guard
+        .narrative
+        .turns
+        .last()
+        .map(|t| (t.id.clone(), t.active_swipe_index, t.swipes.len() as u32));
     drop(state_guard);
 
-    let template = ActionAreaTemplate::new(&status, &phase, &exits);
+    let template = ActionAreaTemplate::new(&status, &phase, &exits, turn_data);
     template
         .render()
         .map_err(|e| crate::error::EngineError::Template(e.to_string()))

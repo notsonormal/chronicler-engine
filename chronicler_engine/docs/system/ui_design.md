@@ -181,6 +181,19 @@
 - Font size: 12px
 - Color: #888
 
+### Swipe Navigation
+- Display: flex row, gap 8px, align-items center
+- Visible only when current turn has multiple swipes
+- **Left arrow button**: "←" text, disabled when on first swipe
+- **Swipe counter**: "{current} / {total}" in muted text (#888)
+- **Right arrow button**: "→" text, disabled when on last swipe
+- Buttons trigger `POST /turn/:id/swipe/:index` with `hx-swap="none"`
+
+### Checkpoint Button
+- Same styling as send button but smaller (cyan gradient)
+- Triggers `POST /checkpoint` to save current turn+swipe
+- Displays "Checkpoint saved" confirmation on success
+
 ### Status Display
 - Font size: 12px
 - Margin-left: auto
@@ -283,6 +296,15 @@
 - Z-index above all content
 
 ---
+
+### Checkpoint List
+- Container: flex column, gap 8px, max-height 200px, overflow-y: auto
+- **Checkpoint item**: flex row, align-items center, gap 12px, padding 8px 12px
+  - Background: #111, border: 1px solid #333, border-radius: 4px
+  - **Name**: primary text, flex 1
+  - **Meta**: muted text, "Turn {id} | Swipe {index}"
+  - **Restore button**: cyan border, cyan text, `hx-post="/checkpoint/{id}/restore"`, `hx-swap="none"`
+  - **Delete button**: "×" text, red on hover, `hx-post="/checkpoint/{id}/delete"`, `hx-target="closest .checkpoint-item"`, `hx-swap="outerHTML"`
 
 ### Settings Panel
 - Padding: 16px

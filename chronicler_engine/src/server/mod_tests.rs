@@ -167,21 +167,44 @@ fn test_app_state_lock_state_poisoned() {
         }
         fn load_latest(
             &self,
-            _message_id: Option<&str>,
+            _turn_id: Option<&str>,
         ) -> Result<Option<GameStateSnapshot>, EngineError> {
             Err(EngineError::Config("test error".to_string()))
         }
-        fn load_by_message(
+        fn load_by_turn(
             &self,
-            _message_id: &str,
+            _turn_id: &str,
             _swipe_index: u32,
         ) -> Result<Option<GameStateSnapshot>, EngineError> {
             Err(EngineError::Config("test error".to_string()))
+        }
+        fn delete_turn_snapshots(&self, _turn_id: &str) -> Result<(), EngineError> {
+            Ok(())
         }
         fn commit(&self, _snapshot_id: &str) -> Result<(), EngineError> {
             Ok(())
         }
         fn reset(&self) -> Result<(), EngineError> {
+            Ok(())
+        }
+        fn save_checkpoint(
+            &self,
+            _checkpoint: &crate::model::checkpoint::Checkpoint,
+        ) -> Result<(), EngineError> {
+            Ok(())
+        }
+        fn load_checkpoint(
+            &self,
+            _id: &str,
+        ) -> Result<Option<crate::model::checkpoint::Checkpoint>, EngineError> {
+            Err(EngineError::Config("test error".to_string()))
+        }
+        fn list_checkpoints(
+            &self,
+        ) -> Result<Vec<crate::model::checkpoint::Checkpoint>, EngineError> {
+            Err(EngineError::Config("test error".to_string()))
+        }
+        fn delete_checkpoint(&self, _id: &str) -> Result<(), EngineError> {
             Ok(())
         }
     }

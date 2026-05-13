@@ -102,7 +102,7 @@ pub async fn retry_handler(State(state): State<AppState>) -> (StatusCode, String
     let new_swipe = snapshot.swipe_index + 1;
     let generating_snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
         &game_state,
-        snapshot.message_id.clone(),
+        snapshot.turn_id.clone(),
         new_swipe,
     );
     if let Err(e) = state.snapshot_storage.save(&generating_snapshot) {

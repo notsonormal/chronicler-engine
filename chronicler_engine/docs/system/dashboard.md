@@ -44,7 +44,7 @@ Horizontal split into story context and visual context:
 
 #### Action Area (64px height)
 Interactive zone for player input.
-- **Content**: Text input field + send button + action hints + status indicator
+- **Content**: Text input field + send button + action hints + status indicator + swipe navigation (when multiple swipes exist)
 - **Button States**:
   - Ready: Green button with "Send" text and play icon (▶)
   - Thinking: Green button with "Stop" text and square icon (■), disabled input
@@ -153,8 +153,9 @@ HTML template renders with `data-raw-text` attribute for inline editing:
 
 1. Click delete button → browser confirmation dialog
 2. On confirm → POST to `/history/delete`
-3. Server removes entry from `narration_history`
-4. Client refreshes story log via HTMX polling or manual trigger
+3. Server calls `delete_last_turn()`, removing the entire last turn (input + all swipes)
+4. Snapshots for the removed turn are cascade-deleted
+5. Client refreshes story log via HTMX polling or manual trigger
 
 ## Button Logic (JavaScript)
 1. Monitor status element changes via MutationObserver or HTMX events
@@ -165,6 +166,20 @@ HTML template renders with `data-raw-text` attribute for inline editing:
 3. When status returns to "Ready":
    - Re-enable the submit button
    - Change button text back to "▶ Send"
+
+## Swipe Navigation
+When a turn has multiple swipes (from retries), the action area shows:
+- **Left arrow** (←): Switch to previous swipe (disabled on first swipe)
+- **Swipe counter**: "2 / 5" display showing current position
+- **Right arrow** (→): Switch to next swipe (disabled on last swipe)
+- **POST** `/turn/:id/swipe/:index` switches active swipe without regeneration
+
+## Checkpoints
+Bookmark system for saving/restoring specific turn+swipe combinations:
+- **Save checkpoint**: Button triggers `POST /checkpoint` at current turn+swipe
+- **Checkpoint list**: `GET /fragment/checkpoints` renders saved checkpoints with restore/delete buttons
+- **Restore**: `POST /checkpoint/:id/restore` loads the snapshot and sets the turn's active swipe
+- **Delete**: `POST /checkpoint/:id/delete` removes the bookmark
 
 ## CSS Classes
 - `.location-header` - Room name in location entry, inline, green bold (#4ade80)

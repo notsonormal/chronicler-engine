@@ -23,7 +23,7 @@ fn test_retry_main_narration_applies_new_quantifier_result() {
     // Flow: Input → Execute → player stays in room1
     //       → Retry → player moves to room2
     let mut state = create_test_state_with_map();
-    state.narrative.history.clear();
+    state.narrative.turns.clear();
     let ctx = make_test_context(state);
 
     add_input_and_save(&ctx, "walk around");
@@ -79,7 +79,7 @@ fn test_retry_with_different_narration_text_reruns_quantifier() {
     // Flow: Execute → first narration → quantifier detects no NPCs
     //       → Retry → second narration → quantifier detects NPC from text
     let mut state = create_test_state_with_map();
-    state.narrative.history.clear();
+    state.narrative.turns.clear();
     let ctx = make_test_context(state);
 
     add_input_and_save(&ctx, "approach the innkeeper");
@@ -111,8 +111,8 @@ fn test_retry_with_different_narration_text_reruns_quantifier() {
     let guard = latest_state(&ctx);
     let first_narration = guard
         .narrative
-        .history
-        .iter()
+        .history()
+        .into_iter()
         .find(|e| e.log_type == LogType::Narration)
         .map(|e| e.text.clone())
         .unwrap_or_default();
@@ -130,8 +130,8 @@ fn test_retry_with_different_narration_text_reruns_quantifier() {
     let guard = latest_state(&ctx);
     let retry_narration = guard
         .narrative
-        .history
-        .iter()
+        .history()
+        .into_iter()
         .rev()
         .find(|e| e.log_type == LogType::Narration)
         .map(|e| e.text.clone())
@@ -147,7 +147,7 @@ fn test_double_retry_increments_swipe_and_reruns_quantifier() {
     // Flow: Execute → Retry → Retry again
     // Verify quantifier runs 3 times total and swipe_index increments.
     let mut state = create_test_state_with_map();
-    state.narrative.history.clear();
+    state.narrative.turns.clear();
     let ctx = make_test_context(state);
 
     add_input_and_save(&ctx, "walk around");
@@ -202,7 +202,7 @@ fn test_retry_after_edited_input_uses_new_text() {
     // Flow: Execute with "walk around" → edit input to "sprint forward" → Retry
     // Verify retry narration references the edited text.
     let mut state = create_test_state_with_map();
-    state.narrative.history.clear();
+    state.narrative.turns.clear();
     let ctx = make_test_context(state);
 
     add_input_and_save(&ctx, "walk around");
@@ -218,8 +218,8 @@ fn test_retry_after_edited_input_uses_new_text() {
     let guard = latest_state(&ctx);
     let first_narration = guard
         .narrative
-        .history
-        .iter()
+        .history()
+        .into_iter()
         .find(|e| e.log_type == LogType::Narration)
         .map(|e| e.text.clone())
         .unwrap_or_default();
@@ -238,17 +238,12 @@ fn test_retry_after_edited_input_uses_new_text() {
             ctx.player.clone(),
             (*ctx.npcs).clone(),
         );
-        if let Some(entry) = state
-            .narrative
-            .history
-            .iter_mut()
-            .find(|e| e.log_type == LogType::Input)
-        {
-            entry.text = "sprint forward".to_string();
+        if let Some(turn) = state.narrative.turns.last_mut() {
+            turn.input.text = "sprint forward".to_string();
         }
         let snapshot = chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(
             &state,
-            snap.message_id,
+            snap.turn_id,
             snap.swipe_index,
         );
         let _ = ctx.snapshot_storage.save(&snapshot);
@@ -260,8 +255,8 @@ fn test_retry_after_edited_input_uses_new_text() {
     let guard = latest_state(&ctx);
     let retry_narration = guard
         .narrative
-        .history
-        .iter()
+        .history()
+        .into_iter()
         .rev()
         .find(|e| e.log_type == LogType::Narration)
         .map(|e| e.text.clone())
@@ -279,7 +274,7 @@ fn test_main_retry_reevaluates_triggers() {
     // Flow: Execute → no movement → trigger doesn't fire (wrong room)
     //       → Retry → movement to room2 → trigger fires
     let mut state = create_test_state_with_map();
-    state.narrative.history.clear();
+    state.narrative.turns.clear();
     // Remove default NPCs, add a shopkeeper with a room2-scoped trigger
     let shopkeeper = NpcCard {
         id: "shopkeeper".into(),
@@ -334,8 +329,8 @@ fn test_main_retry_reevaluates_triggers() {
     let guard = latest_state(&ctx);
     let events_after_execute = guard
         .narrative
-        .history
-        .iter()
+        .history()
+        .into_iter()
         .filter(|e| e.event_header.is_some())
         .count();
     assert_eq!(
@@ -349,8 +344,8 @@ fn test_main_retry_reevaluates_triggers() {
     let guard = latest_state(&ctx);
     let events_after_retry = guard
         .narrative
-        .history
-        .iter()
+        .history()
+        .into_iter()
         .filter(|e| e.event_header.is_some())
         .count();
     assert_eq!(
@@ -364,7 +359,7 @@ fn test_retry_completes_when_quantifier_returns_none() {
     // Setup: quantifier returns a result on first call, None on second.
     // Flow: Execute → success → Retry → quantifier returns None → still completes
     let mut state = create_test_state_with_map();
-    state.narrative.history.clear();
+    state.narrative.turns.clear();
     let ctx = make_test_context(state);
 
     add_input_and_save(&ctx, "walk around");
@@ -402,7 +397,7 @@ fn test_retry_no_pre_main_snapshot() {
     // Flow: Execute → clear pre-main snapshot → Retry
     // Retry should fail gracefully when pre-main snapshot is missing.
     let mut state = create_test_state_with_map();
-    state.narrative.history.clear();
+    state.narrative.turns.clear();
     let ctx = make_test_context(state);
 
     add_input_and_save(&ctx, "examine room");
@@ -443,7 +438,6 @@ fn test_retry_no_pre_main_snapshot() {
 
     // Retry should not panic
     service.retry_last_response(ctx.clone());
-    std::thread::sleep(std::time::Duration::from_millis(100));
 
     // Verify state is stable (not stuck generating)
     let stable = wait_for_generation_complete(&ctx, 500);
@@ -458,7 +452,7 @@ fn test_movement_with_arrival_narration_retry() {
     // Flow: Movement action → Retry
     // Verify arrival narration is also regenerated on retry.
     let mut state = create_test_state_with_map();
-    state.narrative.history.clear();
+    state.narrative.turns.clear();
     let ctx = make_test_context(state);
 
     add_input_and_save(&ctx, "walk to room2");
@@ -485,8 +479,8 @@ fn test_movement_with_arrival_narration_retry() {
     let guard = latest_state(&ctx);
     let _arrival_count_before = guard
         .narrative
-        .history
-        .iter()
+        .history()
+        .into_iter()
         .filter(|e| e.text.contains("MockArrival") || e.text.contains("enter"))
         .count();
 
@@ -503,8 +497,8 @@ fn test_movement_with_arrival_narration_retry() {
     // The main narration should have been replaced (only one narration from this turn)
     let narrations: Vec<_> = guard
         .narrative
-        .history
-        .iter()
+        .history()
+        .into_iter()
         .filter(|e| e.log_type == LogType::Narration)
         .collect();
     assert!(!narrations.is_empty(), "Retry should produce narrations");
@@ -514,7 +508,7 @@ fn test_movement_with_arrival_narration_retry() {
 fn test_delete_narration_then_retry_regenerates() {
     // Flow: Execute → delete narration → Retry → verify new narration generated
     let mut state = create_test_state_with_map();
-    state.narrative.history.clear();
+    state.narrative.turns.clear();
     let ctx = make_test_context(state);
 
     add_input_and_save(&ctx, "examine room");
@@ -542,8 +536,8 @@ fn test_delete_narration_then_retry_regenerates() {
     let guard = latest_state(&ctx);
     let narration_id = guard
         .narrative
-        .history
-        .iter()
+        .history()
+        .into_iter()
         .find(|e| e.log_type == LogType::Narration)
         .map(|e| e.id)
         .expect("Should have narration");
@@ -558,10 +552,14 @@ fn test_delete_narration_then_retry_regenerates() {
             ctx.player.clone(),
             (*ctx.npcs).clone(),
         );
-        state.narrative.history.retain(|e| e.id != narration_id);
+        for turn in &mut state.narrative.turns {
+            if let Some(swipe) = turn.active_swipe_mut() {
+                swipe.entries.retain(|e| e.id != narration_id);
+            }
+        }
         let snapshot = chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(
             &state,
-            snap.message_id,
+            snap.turn_id,
             snap.swipe_index,
         );
         let _ = ctx.snapshot_storage.save(&snapshot);
@@ -574,8 +572,8 @@ fn test_delete_narration_then_retry_regenerates() {
     let guard = latest_state(&ctx);
     let narrations: Vec<_> = guard
         .narrative
-        .history
-        .iter()
+        .history()
+        .into_iter()
         .filter(|e| e.log_type == LogType::Narration)
         .collect();
     assert_eq!(

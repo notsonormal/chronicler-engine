@@ -180,7 +180,7 @@ pub trait Agent: Send + Sync + std::fmt::Debug {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct GameStateSnapshot {
     pub id: String,                    // uuid v4
-    pub message_id: String,
+    pub turn_id: String,
     pub swipe_index: u32,
     pub movement: MovementState,
     pub narrative: NarrativeState,
@@ -267,7 +267,7 @@ Note: `agent_results` is added in Phase 3 when the pipeline dispatcher is introd
 - Create `storage/db.rs` with connection pooling and migrations
 - Migration 001: `game_state_snapshots` table
   - `id TEXT PRIMARY KEY`
-  - `message_id TEXT NOT NULL`
+  - `turn_id TEXT NOT NULL`
   - `swipe_index INTEGER NOT NULL DEFAULT 0`
   - `movement TEXT NOT NULL` (JSON)
   - `narrative TEXT NOT NULL` (JSON)
@@ -294,7 +294,7 @@ Note: `agent_results` is added in Phase 3 when the pipeline dispatcher is introd
   ```rust
   pub trait SnapshotStorage: Send + Sync {
       fn save(&self, snapshot: &GameStateSnapshot) -> Result<(), EngineError>;
-      fn load_latest(&self, message_id: Option<&str>) -> Result<Option<GameStateSnapshot>, EngineError>;
+      fn load_latest(&self, turn_id: Option<&str>) -> Result<Option<GameStateSnapshot>, EngineError>;
       fn commit(&self, snapshot_id: &str) -> Result<(), EngineError>;
       fn reset(&self) -> Result<(), EngineError>;
   }

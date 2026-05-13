@@ -16,7 +16,7 @@ use crate::{
 fn test_sequential_execute_retry_execute() {
     // Flow: Action A → Retry A → Action B → Verify history order and state consistency
     let mut state = create_test_state_with_map();
-    state.narrative.history.clear();
+    state.narrative.turns.clear();
     let ctx = make_test_context(state);
     let service = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::default()),
@@ -53,16 +53,16 @@ fn test_sequential_execute_retry_execute() {
     let guard = latest_state(&ctx);
     let inputs: Vec<_> = guard
         .narrative
-        .history
-        .iter()
+        .history()
+        .into_iter()
         .filter(|e| e.log_type == LogType::Input)
         .collect();
     assert_eq!(inputs.len(), 2, "Should have exactly 2 input entries");
 
     let narrations: Vec<_> = guard
         .narrative
-        .history
-        .iter()
+        .history()
+        .into_iter()
         .filter(|e| e.log_type == LogType::Narration)
         .collect();
     assert!(
@@ -75,7 +75,7 @@ fn test_sequential_execute_retry_execute() {
 fn test_sequential_execute_delete_execute() {
     // Flow: Action A → Delete A's narration → Action B → Verify clean state
     let mut state = create_test_state_with_map();
-    state.narrative.history.clear();
+    state.narrative.turns.clear();
     let ctx = make_test_context(state);
     let service = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::default()),
@@ -97,8 +97,8 @@ fn test_sequential_execute_delete_execute() {
     let guard = latest_state(&ctx);
     let narration_id = guard
         .narrative
-        .history
-        .iter()
+        .history()
+        .into_iter()
         .find(|e| e.log_type == LogType::Narration)
         .map(|e| e.id)
         .expect("Should have a narration entry");
@@ -106,7 +106,11 @@ fn test_sequential_execute_delete_execute() {
     // Step 2: Delete the narration
     {
         let mut state = latest_state(&ctx);
-        state.narrative.history.retain(|e| e.id != narration_id);
+        for turn in &mut state.narrative.turns {
+            if let Some(swipe) = turn.active_swipe_mut() {
+                swipe.entries.retain(|e| e.id != narration_id);
+            }
+        }
         let snapshot = chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(
             &state,
             "test".to_string(),
@@ -124,7 +128,11 @@ fn test_sequential_execute_delete_execute() {
     );
 
     let guard = latest_state(&ctx);
-    let has_deleted_narration = guard.narrative.history.iter().any(|e| e.id == narration_id);
+    let has_deleted_narration = guard
+        .narrative
+        .history()
+        .iter()
+        .any(|e| e.id == narration_id);
     assert!(
         !has_deleted_narration,
         "Deleted narration should not reappear"
@@ -136,7 +144,7 @@ fn test_sync_look_then_async_freeaction_then_retry() {
     // Flow: look (sync) → free action (async) → retry
     // Verify sync action adds narration immediately, then async + retry work.
     let mut state = create_test_state_with_map();
-    state.narrative.history.clear();
+    state.narrative.turns.clear();
     let ctx = make_test_context(state);
 
     let service = DefaultGameService::with_mock_quantifier(
@@ -151,8 +159,8 @@ fn test_sync_look_then_async_freeaction_then_retry() {
     let guard = latest_state(&ctx);
     let look_narrations: Vec<_> = guard
         .narrative
-        .history
-        .iter()
+        .history()
+        .into_iter()
         .filter(|e| e.log_type == LogType::Narration)
         .collect();
     assert!(
@@ -176,8 +184,8 @@ fn test_sync_look_then_async_freeaction_then_retry() {
     let guard = latest_state(&ctx);
     let inputs: Vec<_> = guard
         .narrative
-        .history
-        .iter()
+        .history()
+        .into_iter()
         .filter(|e| e.log_type == LogType::Input)
         .collect();
     assert_eq!(inputs.len(), 2, "Should have 2 input entries");
@@ -187,7 +195,7 @@ fn test_sync_look_then_async_freeaction_then_retry() {
 fn test_three_actions_in_sequence() {
     // Flow: Action A → Action B → Action C
     let mut state = create_test_state_with_map();
-    state.narrative.history.clear();
+    state.narrative.turns.clear();
     let ctx = make_test_context(state);
 
     let service = DefaultGameService::with_mock_quantifier(
@@ -207,16 +215,16 @@ fn test_three_actions_in_sequence() {
     let guard = latest_state(&ctx);
     let inputs: Vec<_> = guard
         .narrative
-        .history
-        .iter()
+        .history()
+        .into_iter()
         .filter(|e| e.log_type == LogType::Input)
         .collect();
     assert_eq!(inputs.len(), 3, "Should have 3 input entries");
 
     let narrations: Vec<_> = guard
         .narrative
-        .history
-        .iter()
+        .history()
+        .into_iter()
         .filter(|e| e.log_type == LogType::Narration)
         .collect();
     assert!(
@@ -230,7 +238,7 @@ fn test_delete_input_then_retry_fails_gracefully() {
     // Flow: Execute → delete input → Retry
     // Retry should find no input and fail gracefully.
     let mut state = create_test_state_with_map();
-    state.narrative.history.clear();
+    state.narrative.turns.clear();
     let ctx = make_test_context(state);
 
     add_input_and_save(&ctx, "examine room");
@@ -250,10 +258,7 @@ fn test_delete_input_then_retry_fails_gracefully() {
     // Delete the input entry
     {
         let mut state = latest_state(&ctx);
-        state
-            .narrative
-            .history
-            .retain(|e| e.log_type != LogType::Input);
+        state.narrative.turns.clear();
         let snapshot = chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(
             &state,
             uuid::Uuid::new_v4().to_string(),
@@ -264,9 +269,6 @@ fn test_delete_input_then_retry_fails_gracefully() {
 
     // Retry should not panic or hang
     service.retry_last_response(ctx.clone());
-    // Since retry returns early when no input is found, we can't wait for generation.
-    // Just verify state is stable after a short delay.
-    std::thread::sleep(std::time::Duration::from_millis(100));
     let guard = latest_state(&ctx);
     assert!(
         !guard.narrative.generation.status.is_generating(),
@@ -278,7 +280,7 @@ fn test_delete_input_then_retry_fails_gracefully() {
 fn test_reset_clears_history_and_state() {
     // Flow: Execute action with movement → Reset → verify back to initial state
     let mut state = create_test_state_with_map();
-    state.narrative.history.clear();
+    state.narrative.turns.clear();
     let ctx = make_test_context(state);
 
     add_input_and_save(&ctx, "walk to room2");
@@ -303,7 +305,7 @@ fn test_reset_clears_history_and_state() {
     assert!(wait_for_generation_complete(&ctx, 1000));
     let guard = latest_state(&ctx);
     assert_eq!(guard.movement.current_room_id, "room2");
-    assert!(!guard.narrative.history.is_empty());
+    assert!(!guard.narrative.history().is_empty());
 
     // Reset: create fresh initial state
     let fresh_state = create_test_state_with_map();
@@ -320,7 +322,7 @@ fn test_reset_clears_history_and_state() {
         "After reset: back to room1"
     );
     assert!(
-        guard.narrative.history.is_empty(),
+        guard.narrative.history().is_empty(),
         "After reset: history cleared"
     );
 }
@@ -329,7 +331,7 @@ fn test_reset_clears_history_and_state() {
 fn test_reset_then_execute_works() {
     // Flow: Execute → Reset → Execute again
     let mut state = create_test_state_with_map();
-    state.narrative.history.clear();
+    state.narrative.turns.clear();
     let ctx = make_test_context(state);
 
     let service = DefaultGameService::with_mock_quantifier(
@@ -366,8 +368,8 @@ fn test_reset_then_execute_works() {
     let guard = latest_state(&ctx);
     let inputs: Vec<_> = guard
         .narrative
-        .history
-        .iter()
+        .history()
+        .into_iter()
         .filter(|e| e.log_type == LogType::Input)
         .collect();
     assert_eq!(
@@ -381,7 +383,7 @@ fn test_reset_then_execute_works() {
 fn test_delete_mid_sequence() {
     // Flow: Action A → Action B → delete B's narration → Action C
     let mut state = create_test_state_with_map();
-    state.narrative.history.clear();
+    state.narrative.turns.clear();
     let ctx = make_test_context(state);
 
     let service = DefaultGameService::with_mock_quantifier(
@@ -406,8 +408,8 @@ fn test_delete_mid_sequence() {
     let guard = latest_state(&ctx);
     let narration_b_id = guard
         .narrative
-        .history
-        .iter()
+        .history()
+        .into_iter()
         .rev()
         .find(|e| e.log_type == LogType::Narration)
         .map(|e| e.id)
@@ -416,7 +418,11 @@ fn test_delete_mid_sequence() {
     // Delete B's narration
     {
         let mut state = latest_state(&ctx);
-        state.narrative.history.retain(|e| e.id != narration_b_id);
+        for turn in &mut state.narrative.turns {
+            if let Some(swipe) = turn.active_swipe_mut() {
+                swipe.entries.retain(|e| e.id != narration_b_id);
+            }
+        }
         let snapshot = chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(
             &state,
             uuid::Uuid::new_v4().to_string(),
@@ -433,16 +439,16 @@ fn test_delete_mid_sequence() {
     let guard = latest_state(&ctx);
     let inputs: Vec<_> = guard
         .narrative
-        .history
-        .iter()
+        .history()
+        .into_iter()
         .filter(|e| e.log_type == LogType::Input)
         .collect();
     assert_eq!(inputs.len(), 3, "Should have 3 input entries");
 
     let has_b_narration = guard
         .narrative
-        .history
-        .iter()
+        .history()
+        .into_iter()
         .any(|e| e.id == narration_b_id);
     assert!(!has_b_narration, "Deleted narration B should not reappear");
 }

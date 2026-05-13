@@ -38,7 +38,7 @@ pub fn retry_last_response_impl(service: &DefaultGameService, ctx: GameServiceCo
         }
     };
 
-    let turn_uuid = snapshot.message_id.clone();
+    let turn_uuid = snapshot.turn_id.clone();
     let current_swipe = snapshot.swipe_index;
     let is_event = guard.is_last_ai_response_event_continuation();
 
@@ -68,20 +68,17 @@ fn retry_event_continuation(
     latest_state: &GameState,
 ) {
     let pre_event_id = format!("pre-event:{turn_uuid}");
-    let pre_event_snapshot = match ctx.snapshot_storage.load_by_message(&pre_event_id, 0) {
+    let pre_event_snapshot = match ctx.snapshot_storage.load_by_turn(&pre_event_id, 0) {
         Ok(Some(s)) => s,
         Ok(None) => {
             log::warn!(
                 "No pre-event snapshot for {turn_uuid}; falling back to main narration retry"
             );
-            let input_text = match latest_state.get_last_input_text() {
-                Some((_sender, text)) => text,
-                None => {
-                    log::error!("No input to retry");
-                    return;
-                }
-            };
-            retry_main_narration(service, ctx, turn_uuid, current_swipe, input_text);
+            let input_text = latest_state.get_last_input_text().map(|(_, t)| t);
+            match input_text {
+                Some(text) => retry_main_narration(service, ctx, turn_uuid, current_swipe, text),
+                None => log::error!("No input to retry"),
+            }
             return;
         }
         Err(e) => {
@@ -117,6 +114,10 @@ fn retry_event_continuation(
             return;
         }
     };
+
+    if let Some(turn) = pre_event_state.narrative.turns.last_mut() {
+        turn.create_swipe_copying_active(current_swipe + 1);
+    }
 
     pre_event_state.narrative.generation.status = GenerationStatus::Generating;
     pre_event_state.narrative.generation.phase = GenerationPhase::GeneratingEvent;
@@ -159,20 +160,18 @@ fn retry_event_continuation(
     let request = crate::engine::action_processing::TriggerContinuationRequest { stored: trigger };
 
     let mut committed_state = match crate::engine::action_processing::commit_trigger_narration(
-        load_state(ctx),
+        pre_event_state,
         &request,
         &continuation_text,
     ) {
         Ok(s) => s,
         Err(e) => {
             log::error!("Trigger commit failed on retry: {e}");
-            pre_event_state.narrative.generation.status =
-                GenerationStatus::Error(format!("Trigger error: {e}"));
-            save_state(
+            save_retry_error(
                 ctx,
-                &pre_event_state,
-                turn_uuid.to_string(),
+                turn_uuid,
                 current_swipe + 1,
+                format!("Trigger error: {e}"),
             );
             return;
         }
@@ -189,7 +188,7 @@ fn retry_event_continuation(
         .collect();
     let mut post_trigger_result = default_quantifier_result(&fallback_ids);
 
-    let input_text = match pre_event_state.get_last_input_text() {
+    let input_text = match committed_state.get_last_input_text() {
         Some((_sender, text)) => text,
         None => String::new(),
     };
@@ -254,7 +253,7 @@ fn retry_main_narration(
     input_text: String,
 ) {
     let pre_main_id = format!("pre-main:{turn_uuid}");
-    let pre_main_snapshot = match ctx.snapshot_storage.load_by_message(&pre_main_id, 0) {
+    let pre_main_snapshot = match ctx.snapshot_storage.load_by_turn(&pre_main_id, 0) {
         Ok(Some(s)) => s,
         Ok(None) => {
             log::error!("No pre-main snapshot for {turn_uuid}");
@@ -278,13 +277,17 @@ fn retry_main_narration(
         }
     };
 
-    let state = GameState::from_snapshot(
+    let mut state = GameState::from_snapshot(
         &pre_main_snapshot,
         Arc::clone(&ctx.world),
         Arc::clone(&ctx.map),
         Arc::clone(&ctx.player),
         (*ctx.npcs).clone(),
     );
+
+    if let Some(turn) = state.narrative.turns.last_mut() {
+        turn.create_swipe(current_swipe + 1);
+    }
 
     execute_freeaction_pipeline(
         service,
