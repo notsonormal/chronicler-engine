@@ -1,5 +1,7 @@
 # Specification: Game Flow
 
+> **Related Decisions**: [ADR-006](../adr/adr-006-quantifier-systems.md), [ADR-008](../adr/adr-008-sqlite-snapshot-persistence.md), [ADR-010](../adr/adr-010-concurrency-generation-gate.md), [ADR-012](../adr/adr-012-turn-swipe-model.md)
+
 ## Overview
 
 This document defines the core game loop - the play-by-play experience from starting the game to receiving LLM responses. This is the fundamental user experience that must work reliably.
@@ -112,10 +114,6 @@ And the status shows "Ready"
 - **Covered by**: `tests/trigger_tests.rs` — `test_freeaction_without_movement_works`
 
 ## Error Handling
-
-### LLM Timeout
-- ~~If LLM takes >30 seconds, show error in story-log~~ *(Not yet implemented — no timeout logic exists in the backend.)*
-- Status returns to "Ready"
 
 ### Invalid Command
 - Show helpful error in story-log

@@ -1,119 +1,75 @@
 # ADR-007: Settings System Architecture
 
 **Date:** 2026-05-01
-**Updated:** 2026-05-02
+**Status:** Superseded (partially) — the flat settings design was replaced by the Connection Profiles system. Core principles (JSON persistence, runtime mutability, HTMX tabbed UI) remain unchanged.
 
-> **Note:** This ADR describes the original flat settings system. It has been superseded by the **Connection Profiles** system (see implementation in `src/model/settings.rs`), which adds a `Connection` abstraction for reusable provider+model profiles. The core principles (JSON persistence, runtime mutability, HTMX UI) remain unchanged.
+> **Reference**: Current settings schema and configuration details are in the implementation at `src/model/settings.rs`.
 
 ---
 
 ## Context
 
-LLM backend configuration previously relied on environment variables (`LLM_BACKEND`, `LLM_MODEL`, `QUANTIFIER_MODEL`, `OPENROUTER_API_KEY`), which presented significant operational challenges:
+LLM backend configuration previously relied on environment variables (`LLM_BACKEND`, `LLM_MODEL`, `QUANTIFIER_MODEL`, `OPENROUTER_API_KEY`). This had three hard problems:
 
-- **Server restart required**: Any configuration change demands stopping and restarting the server, making iterative testing with different backends cumbersome
-- **No UI configuration**: Non-technical users cannot modify settings without direct access to deployment environment variables
-- **Poor UX**: Players or team members without CLI knowledge cannot experiment with different LLM providers or models
-
-The team needed a solution that enabled runtime configuration without server restarts, provided a user-friendly interface for settings management, and maintained backward compatibility with existing deployments.
+1. **Server restart required** — Any configuration change required stopping and restarting the server
+2. **No UI** — Non-technical users could not change settings without CLI access to the deployment environment
+3. **Test coupling** — Integration tests were tightly coupled to environment variable state
 
 ---
 
 ## Decision
 
-**Adopt JSON-based settings with tabbed Settings UI.**
+**Adopt JSON-based settings persisted to `data/settings.json`, with a tabbed Settings UI for runtime configuration.**
 
-The Chronicler Engine now loads configuration from `data/settings.json` into an `AppSettings` struct, exposes it via `AppState` (wrapped in `Arc<RwLock<AppSettings>>`), and provides a dedicated Settings tab for runtime configuration.
+### Why JSON over YAML/TOML
 
-### Configuration Scope (v2 — Connection-Based)
+Native `serde` support, human-readable, and no additional dependencies.
 
-| Setting | Type | Description |
-|---------|------|-------------|
-| `connections` | `Vec<Connection>` | Named profiles containing provider, model, API key, and base URL |
-| `narration_connection_id` | string | ID of the connection used for narrative generation |
-| `quantifier_connection_id` | string | ID of the connection used for scene quantification |
+### Why tabbed UI over modal or slide-out
 
-Each `Connection` has:
-- `id`: Unique identifier (e.g. `"conn-1"`)
-- `name`: Display name (e.g. `"GPT-4o Mini"`)
-- `provider`: `LlmBackendType` (`OpenRouter`, `DeepSeek`, `Ollama`, `Mock`)
-- `model`: Model string (e.g. `"openai/gpt-4o-mini"`)
-- `api_key`: Optional per-connection API key
-- `base_url`: Optional per-connection base URL
-- `single_user_message`: When `true`, merges system and user prompts into a single user message (for models that ignore the system role)
+Persistent visibility. The Settings tab mirrors the SillyTavern convention; users of AI chat interfaces expect a permanent settings panel, not a hidden modal.
 
-### Data Flow
+### Why Connection Profiles replaced flat settings (v2)
 
-```mermaid
-flowchart TD
-    A["settings.json"] --> B["AppSettings<br/>(loaded at startup, defaults if missing)"]
-    B --> C["AppState.settings<br/>(Arc<RwLock<AppSettings>>)"]
-    C --> D["get_llm_backend()<br/>(uses narration connection)"]
-    C --> E["get_quantifier_backend()<br/>(uses quantifier connection)"]
-```
+The flat design stored a single `LLM_MODEL` and `QUANTIFIER_MODEL`. Adding a third endpoint (e.g., a dedicated agent model) would have required adding more top-level fields indefinitely. Connection Profiles introduce a named `Vec<Connection>` with `narration_connection_id` and `quantifier_connection_id` pointing into it — extensible without schema changes.
 
-The settings file serves as the single source of truth for backend selection. On first launch, the system auto-creates `settings.json` with default values if missing.
+### Environment variable policy
 
-### Tabbed UI Design
+- **API keys**: Fall back to provider-specific env vars (`OPENROUTER_API_KEY`) if not in the connection — preserved for deployment convenience.
+- **Backend type**: `LLM_BACKEND` env var is **no longer consulted** — settings file is sole authority. Integration tests should write a mock settings file and set `CHRONICLER_SETTINGS_PATH`.
 
-Following Silly Tavern conventions, the dashboard provides a tabbed interface:
+### Concurrency
 
-```html
-<div class="dashboard">
-  <div class="tab-bar">
-    <button class="tab active">Game Tab</button>
-    <button class="tab">Settings Tab</button>
-  </div>
-  <div class="tab-content">
-    <!-- Tab content here -->
-  </div>
-</div>
-```
-
-- **Game Tab**: Current layout (story log, visual sidebar, action area)
-- **Settings Tab**: Connection management (add/list connections) and active-connection selection for Narration and Quantifier
-
-### Environment Fallback
-
-- **API key fallback**: If a connection's `api_key` is `None`, the system falls back to the provider-specific environment variable (`OPENROUTER_API_KEY` for OpenRouter/DeepSeek)
-- **Backend selection**: The `LLM_BACKEND` environment variable is **no longer consulted**; the settings file is the sole source of truth. Integration tests should write a mock settings file and set `CHRONICLER_SETTINGS_PATH`.
+Settings exposed via `Arc<RwLock<AppSettings>>` in `AppState`. Write-lock held only during save.
 
 ---
 
 ## Consequences
 
 ### Positive
-- **Runtime configuration**: Settings changes take effect without server restart, enabling rapid iteration
-- **User-friendly UI**: Non-technical users can modify LLM settings through the browser
-- **Test simplification**: Mock backend tests use a temporary mock settings file via `CHRONICLER_SETTINGS_PATH`
-- **Centralized configuration**: All LLM settings in one JSON file simplifies deployment management
-- **Connection reuse**: Multiple named profiles enable switching between providers without retyping credentials
+- Runtime reconfiguration without server restart
+- Non-technical users can manage LLM backends through the browser UI
+- Test isolation via `CHRONICLER_SETTINGS_PATH` pointing to a temp file
 
 ### Negative
-- **Persistence complexity**: Requires file I/O for settings load/save operations, introducing potential failure modes
-- **Security consideration**: API key stored in plain JSON (mitigated by masked UI display and `.gitignore` exclusion)
-- **Race conditions**: Concurrent settings writes need handling (mitigated by RwLock)
+- API keys stored in plain JSON (mitigated by masked UI display and `.gitignore` exclusion)
+- Flat-to-Connection migration was a breaking schema change (acceptable — settings file is ephemeral)
 
 ### Trade-offs
-- Chose JSON over YAML/TOML for native `serde` support and human readability
-- Chose tabbed UI over modal/slide-out for persistent visibility
-- Env var fallback preserved for API keys (deployment convenience) but removed for backend type (settings file authority)
+- Chose JSON over YAML/TOML (native serde, no extra deps)
+- Chose tabbed UI over modal (persistent visibility, SillyTavern convention)
+- Chose env var fallback for API keys only (deployment convenience preserved)
 
 ---
 
 ## Related ADRs
 
-- [ADR-001: HTMX Web Dashboard](./adr-001-htmx-web-dashboard.md) - UI foundation that hosts the Settings tab
-- [ADR-006: Quantifier-Driven Game Systems](./adr-006-quantifier-systems.md) - Quantifier model configuration via settings
+- [ADR-001: HTMX Web Dashboard](./adr-001-htmx-web-dashboard.md) — UI foundation hosting the Settings tab
+- [ADR-006: Quantifier-Driven Game Systems](./adr-006-quantifier-systems.md) — Quantifier model configuration via settings
 
 ---
 
 ## History
 
-- **2026-05-01**: Initial decision based on settings-system.md plan
-
----
-
-## Historical Note
-
-This ADR formalizes the Settings System that was designed to replace environment variable-based LLM configuration. The tabbed UI approach mirrors best practices from Silly Tavern and similar AI chat interfaces, providing a familiar experience for users accustomed to configuring AI backends through web interfaces.
+- **2026-05-01**: Flat settings system — env vars replaced by `settings.json` with `LLM_MODEL` / `QUANTIFIER_MODEL`
+- **2026-05-02**: Connection Profiles v2 — flat model fields replaced by `Vec<Connection>` with named profiles and `narration_connection_id` / `quantifier_connection_id` selectors

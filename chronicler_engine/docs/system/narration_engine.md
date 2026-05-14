@@ -1,5 +1,7 @@
 # Specification: Game Master Narration System
 
+> **Related Decisions**: [ADR-005](../adr/adr-005-layered-prompts.md), [ADR-006](../adr/adr-006-quantifier-systems.md)
+
 ## Objective
 Transform the engine from a strict command parser into a hybrid free-text narrative engine. Player input that does not match a recognized system command is interpreted by an LLM acting as a **Game Master**, who narrates the outcome based on the current game state.
 

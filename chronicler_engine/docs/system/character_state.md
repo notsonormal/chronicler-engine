@@ -1,5 +1,7 @@
 # System: Character State & Persistence
 
+> **Related Decisions**: [ADR-006](../adr/adr-006-quantifier-systems.md)
+
 The `CharacterState` system tracks the player's relationship and history with every NPC in the world.
 
 ## Overview

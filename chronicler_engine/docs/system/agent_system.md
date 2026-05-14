@@ -1,7 +1,7 @@
 # Agent System
 
-> **Status**: Phase 2 complete — trait, registry, and quantifier migration implemented.
-> **Parent Spec**: [`docs/plans/multi-agent-architecture-overarching-spec.md`](../plans/multi-agent-architecture-overarching-spec.md)
+> **Related Decisions**: [ADR-009](../adr/adr-009-agent-trait-registry.md)
+> **Parent Spec**: [multi-agent-architecture-overarching-spec.md](../plans/multi-agent-architecture-overarching-spec.md)
 
 ## Overview
 

@@ -1,5 +1,7 @@
 # Specification: Text Check System
 
+> **Related Decisions**: [ADR-011](../adr/adr-011-text-check-integration.md)
+
 ## Overview
 
 The Text Check system provides spell-checking and grammar-checking for player input before it reaches the LLM. It uses [harper-core](https://github.com/Automattic/harper) (v0.25.0) — a pure-Rust linter from Automattic — with a built-in FST dictionary (~8MB stripped) and configurable lint rules.

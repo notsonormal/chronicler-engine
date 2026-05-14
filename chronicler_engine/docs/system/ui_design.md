@@ -1,5 +1,7 @@
 # Specification: UI Design
 
+> **Related Decisions**: [ADR-001](../adr/adr-001-htmx-web-dashboard.md), [ADR-003](../adr/adr-003-askama-templates.md)
+
 ## Design Tokens
 
 ### Colors
@@ -279,24 +281,6 @@
 - `htmx.process()` called to force HTMX to re-read the trigger attribute
 - Polling resumes on save or cancel
 
-## JavaScript Features
-
-### Status Polling
-- Polls `/status/generating` every 5 seconds
-- Updates button state based on response ("generating" vs "idle")
-
-### Button State Management
-- Ready: Shows "▶ Send", enabled
-- Thinking: Shows "■ Stop", disabled, green gradient
-- Uses MutationObserver to watch status changes
-
-### Error Notification System
-- Shows slide-down banner for LLM errors
-- Auto-hides after 5 seconds
-- Z-index above all content
-
----
-
 ### Checkpoint List
 - Container: flex column, gap 8px, max-height 200px, overflow-y: auto
 - **Checkpoint item**: flex row, align-items center, gap 12px, padding 8px 12px
@@ -340,6 +324,24 @@
 - Primary (save/add): cyan gradient (#2a4a5a → #1a3a4a), cyan border, cyan text
 - Danger (delete): red gradient (#5a2a2a → #4a1a1a), red border, red text
 - Set as Narrator/Quantifier: green gradient (#2a5a2a → #1a4a1a), green border, green text
+
+---
+
+## JavaScript Features
+
+### Status Polling
+- Polls `/status/generating` every 5 seconds
+- Updates button state based on response ("generating" vs "idle")
+
+### Button State Management
+- Ready: Shows "▶ Send", enabled
+- Thinking: Shows "■ Stop", disabled, green gradient
+- Uses MutationObserver to watch status changes
+
+### Error Notification System
+- Shows slide-down banner for LLM errors
+- Auto-hides after 5 seconds
+- Z-index above all content
 
 ## Implementation
 

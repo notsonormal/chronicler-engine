@@ -1,5 +1,7 @@
 # Testing Strategy
 
+ | **Reference**: [reference/testing.md](../reference/testing.md)
+
 > **Note**: See `docs/reference/testing.md` for command reference and coverage thresholds.
 
 ## Overview

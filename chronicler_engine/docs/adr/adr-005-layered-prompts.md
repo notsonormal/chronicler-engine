@@ -2,13 +2,15 @@
 
 **Date:** 2025-04-13
 
+> **Reference**: Full prompt layer specs, token budgets, and implementation details are in [`docs/system/prompt_system.md`](../system/prompt_system.md).
+
 ---
 
 ## Context
 
 Pre-layered prompt system sent single-turn prompts without comprehensive context:
 - No conversation history sent to LLM
-- Fragmented game state (room, inventory, NPCs)
+- Fragmented game state (room, inventory, NPCs in separate calls)
 - No world info triggers
 - Limited token budget management
 
@@ -18,92 +20,46 @@ The team wanted SillyTavern-style comprehensive prompting for better narrative q
 
 ## Decision
 
-**Adopt layered prompt system sending full context to LLM.**
+**Adopt an 8-layer prompt system sending full context to the LLM on every turn.**
 
-### 8-Layer Prompt Structure
+### Key choices and why
 
-Based on SillyTavern's Prompt Manager:
+**Hard truncation over summarization** — Simpler and more reliable. Summarization requires a second LLM call, adds latency, and can hallucinate. Oldest history entries are trimmed first.
 
-| Layer | Content | Token Budget |
-|-------|---------|--------------|
-| Layer 0 | System prompt (game rules, role) | ~500 |
-| Layer 1 | Game state (room, inventory, NPC states) | ~500 |
-| Layer 2 | NPC cards (only in-room NPCs) | ~1500 |
-| Layer 3 | Player persona | ~300 |
-| Layer 4 | World info (keyword-triggered) | ~500 |
-| Layer 5 | Full narration history | ~3000 |
-| Layer 6 | User message | ~200 |
-| Layer 7 | PHI (Post-History Instructions) — universal behavioral constraints | ~300 |
+**Keyword triggers over RAG** — No vector database dependency. For a game with bounded lore, string matching against history is fast and sufficient. RAG adds operational complexity with marginal benefit at this scale.
 
-### Implementation Features
+**Full history over a sliding window** — The LLM needs full context for coherent long-form narrative. A fixed window risks cutting off plot-critical earlier entries arbitrarily.
 
-1. **Token budget**: MAX_CONTEXT_TOKENS = 32768 (fallback), context-aware fitting via `fit_messages_to_context()` — dynamically caps `max_tokens` and trims oldest history first
-2. **Per-connection context windows**: `max_context_tokens` configurable per connection (8192 for Ollama, 32768 for API models)
-3. **Prompt injection sanitization**: Filter `{{variable}}` patterns, instruction overrides
-4. **World Info triggers**: Keyword matching from history (not RAG)
-5. **Full history**: All conversation retained and sent (no summarization)
-
-### Prompt Classes
-
-```rust
-pub struct PromptContext {
-    pub current_room: Option<Room>,
-    pub npcs_in_area: Vec<NpcCard>,
-    pub player: &Player,
-    pub history: Vec<LogEntry>,
-    pub user_input: &str,
-    // ...
-}
-```
+**Single unified PHI layer** — Previously `PhiMode::Continuation` existed as a separate variant; removed 2026-05-03. Continuation-specific instructions moved to the trigger user message (Layer 6) instead.
 
 ---
 
 ## Consequences
 
 ### Positive
-- **Context-rich**: LLM receives full game state + history
-- **Narrative quality**: Better responses with comprehensive context
-- **Token management**: Hard truncation prevents overflow
-- **Security**: Prompt injection sanitization
+- Context-rich prompts produce meaningfully better narrative quality
+- Token budget management is deterministic (no LLM-in-the-loop summarization)
+- Prompt injection sanitization via `{{variable}}` pattern filtering
 
 ### Negative
-- **Token overhead**: More context = more tokens used
-- **Latency**: Longer prompts = longer LLM processing
-- **Cost**: More tokens = higher API costs
+- More tokens per request → higher latency and API cost
+- Full history means no compression — context window eventually limits session length
 
 ### Trade-offs
-- Chose hard truncation over summarization (simpler, more reliable)
-- Chose full history over sliding window (better context)
-- Chose keyword triggers over RAG (simpler, no vector DB)
+- Chose hard truncation over summarization (simpler, no recursive LLM cost)
+- Chose keyword triggers over RAG (no vector DB to run/maintain)
+- Chose full history over sliding window (better narrative coherence)
 
 ---
 
 ## Related ADRs
 
-- [ADR-004: XML-Structured LLM Prompts](./adr-004-xml-prompt-format.md) - Format used for layer boundaries
-- **Note**: These ADRs complement each other - ADR-004 defines *how* to format (XML tags), ADR-005 defines *what* to include (8 layers of content)
+- [ADR-004: XML-Structured LLM Prompts](./adr-004-xml-prompt-format.md) — Format used within each layer
 
 ---
 
 ## History
 
-- **2025-04-13**: Prompt builder system implemented
-
----
-
-## Alternative Considerations
-
-### Rejected Approaches
-- **Summarization**: Chose hard truncation (simpler, no LLMsummaries-LLM)
-- **RAG for World Info**: Chose keyword matching (simpler, no vector DB)
-- **Per-NPC history**: Chose single unified history (simpler)
-
-## History
-
-- **2025-04-13**: Prompt builder system implemented
-- **2026-05-03**: PHI layer unified — `PhiMode::Continuation` removed; PHI is now a single universal template. Continuation-specific instructions moved to the trigger user message (Layer 6).
-- **2026-05-03**: Marinara-style prompt overhaul — system prompt and PHI converted to plain-text instructions. XML tags retained only for external data (`<GameState>`, `<KnownNpcs>`, etc.). Fixes Gemma 4 reasoning-loop bug triggered by self-referential XML.
-
-## Historical Note
-
-This was the first major prompt restructuring, introducing conversation history to LLM calls.
+- **2025-04-13**: Layered prompt system implemented; conversation history added to LLM calls for the first time
+- **2026-05-03**: `PhiMode::Continuation` removed; PHI unified to a single universal template
+- **2026-05-03**: System prompt and PHI converted to plain-text instructions (Marinara pattern); XML retained only for external data layers. Fixes Gemma 4 reasoning-loop bug. See ADR-004 v3 for full context.

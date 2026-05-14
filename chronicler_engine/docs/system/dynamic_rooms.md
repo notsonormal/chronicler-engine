@@ -1,5 +1,7 @@
 # System: Dynamic Pseudo-Rooms
 
+> **Related Decisions**: [ADR-006](../adr/adr-006-quantifier-systems.md)
+
 Dynamic Rooms are a safety mechanism used when the LLM's narrative intent contradicts the static game map.
 
 ## Overview

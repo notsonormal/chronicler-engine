@@ -1,5 +1,7 @@
 # System: Auto-Trigger & Reactive Encounters
 
+> **Related Decisions**: [ADR-006](../adr/adr-006-quantifier-systems.md)
+
 The Auto-Trigger system allows the game world to react dynamically to the player's presence based on NPC-specific conditions.
 
 ## Overview

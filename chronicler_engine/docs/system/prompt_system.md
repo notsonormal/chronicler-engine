@@ -1,5 +1,7 @@
 # Chronicler Engine Prompt System
 
+> **Related Decisions**: [ADR-004](../adr/adr-004-xml-prompt-format.md), [ADR-005](../adr/adr-005-layered-prompts.md)
+
 ## Overview
 
 The Chronicler Engine uses a layered prompt construction system inspired by SillyTavern's Prompt Manager. The system builds comprehensive context for game narration by combining game state, character information, world lore, and conversation history into a structured prompt sent to the LLM.

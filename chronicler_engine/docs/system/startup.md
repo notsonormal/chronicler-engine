@@ -1,5 +1,7 @@
 # Engine Startup & Initialization
 
+
+
 This document defines the authoritative sequence for bootstrapping the Chronicler Engine, from environment resolution to world state creation.
 
 ## 1. Data Path Resolution

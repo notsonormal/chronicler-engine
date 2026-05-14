@@ -1,5 +1,7 @@
 # Specification: LLM Processing & Integration
 
+> **Related Decisions**: [ADR-004](../adr/adr-004-xml-prompt-format.md), [ADR-007](../adr/adr-007-settings-system.md), [ADR-010](../adr/adr-010-concurrency-generation-gate.md)
+
 ## Objective
 The engine utilizes Large Language Models (LLMs) via the OpenRouter API, DeepSeek, or local Ollama to handle Game Master narration and NPC dialogue.
 

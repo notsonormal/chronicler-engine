@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-13 23:27 UTC*
+*Index last generated: 2026-05-14 19:04 UTC*
 
 ### Root files
 
@@ -131,9 +131,17 @@ When adding a new feature:
 
 ## Quick Reference
 
-| Question | Answer |
-|----------|--------|
-| What modules exist? | `architecture/system.md` |
-| How does navigation work? | `system/navigation.md` |
-| What data formats are used? | `reference/data_schemas.md` |
-| What's the current roadmap? | `ROADMAP.md` |
+| Question | Document |
+|----------|----------|
+| What modules/tiers exist? | [`architecture/system.md`](./architecture/system.md) |
+| How do I start the engine? | [`system/startup.md`](./system/startup.md) |
+| How does movement/navigation work? | [`system/navigation.md`](./system/navigation.md) |
+| How are LLM prompts built? | [`system/prompt_system.md`](./system/prompt_system.md) |
+| How does the dashboard UI work? | [`system/dashboard.md`](./system/dashboard.md) |
+| How do NPC triggers/encounters work? | [`system/triggers.md`](./system/triggers.md) |
+| How does game state persist (snapshots)? | [`system/game_flow.md`](./system/game_flow.md) + [ADR-008](./adr/adr-008-sqlite-snapshot-persistence.md) |
+| How do I configure an LLM connection? | [`system/llm_processing.md`](./system/llm_processing.md) |
+| What `data/` JSON schemas are used? | [`reference/data_schemas.md`](./reference/data_schemas.md) |
+| How do I run tests? | [`system/testing.md`](./system/testing.md) |
+| Why was X designed this way? | [`docs/adr/`](./adr/) |
+| What's the current roadmap? | [`ROADMAP.md`](./ROADMAP.md) |

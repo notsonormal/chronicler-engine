@@ -1,5 +1,7 @@
 # Specification: Dashboard UI
 
+> **Related Decisions**: [ADR-001](../adr/adr-001-htmx-web-dashboard.md), [ADR-002](../adr/adr-002-sse-realtime-updates.md), [ADR-003](../adr/adr-003-askama-templates.md)
+
 ## Overview
 The Chronicler Engine presents a web-based HTMX dashboard for player interaction. The UI provides narrative immersion, visual grounding, and user input in a modern chat-app aesthetic inspired by SillyTavern.
 

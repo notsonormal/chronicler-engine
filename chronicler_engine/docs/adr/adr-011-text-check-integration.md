@@ -2,63 +2,54 @@
 
 **Date:** 2026-05-09
 
+> **Reference**: Full architecture, types, endpoints, settings schema, and UI integration details are in [`docs/system/text_check.md`](../system/text_check.md).
+
 ---
 
 ## Context
 
-Player input was sent directly to the LLM without any pre-flight validation. Typos, grammar errors, and unclear commands reached the narrator unchecked, degrading narrative quality. The engine needed a lightweight, local, privacy-respecting way to catch common errors before LLM submission.
+Player input was forwarded directly to the LLM without any pre-flight validation. Typos and grammar errors in player commands degraded narrative quality and occasionally confused the narrator into generating off-topic responses.
 
 ---
 
 ## Decision
 
-**Integrate `harper-core` for pre-flight spell and grammar checking of player input.**
+**Integrate `harper-core` for local spell and grammar checking before LLM submission.**
 
-### Modes
+### Why `harper-core` over alternatives
 
-| Mode | Behavior |
-|------|----------|
-| `Disabled` | No checking |
-| `Spell` | Spell check only |
-| `Grammar` | Grammar check only |
-| `SpellGrammar` | Both |
+| Option | Reason rejected |
+|--------|----------------|
+| `nlprule` | Archived / unmaintained |
+| LLM-based checking | Adds a full round-trip API call; privacy leak; latency |
+| `languagetool` (JVM) | Requires JVM runtime; heavyweight for this use case |
+| `harper-core` | Pure Rust, no network, ~8MB FST dictionary, fast (<10ms per check) |
 
-### Architecture
+### Why fail-open
 
-- **`HarperBackend`** wraps `harper-core` with a merged dictionary: `FstDictionary::curated()` + `MutableDictionary` for user-ignored words
-- **`TextCheckSettings`** in `AppSettings`: mode, `enable_auto_check`, `ignored_words`
-- **Automatic pre-flight**: `POST /action/check` intercepts player input before LLM submission
-- **Manual on-demand**: `POST /check-text` for checking any text
-- **Fail-open**: If linting fails, original text is forwarded silently
-- **Player choice**: Preview UI shows original vs corrected; player can always choose "Send Original"
+Blocking gameplay on a linter bug is worse than forwarding an unchecked typo. If harper fails, the original text is forwarded silently.
 
-### UI Flow
+### Why pre-flight interception, not post-hoc correction
 
-1. Player hits **Send**
-2. Form POSTs to `/action/check`
-3. If no issues → silently forwarded to `/action`
-4. If issues → `TextCheckPreviewTemplate` replaces action area via HTMX
-5. Player chooses "Send Corrected" or "Send Original"
+Players should choose between their original text and the corrected version — never have the engine silently change what they typed. The preview UI (`Send Corrected` / `Send Original` / `Cancel`) preserves agency.
 
 ---
 
 ## Consequences
 
 ### Positive
-- **Local-only**: No network calls; pure Rust, no API keys
-- **Privacy**: Player text never leaves the machine for checking
-- **Fail-open**: Broken linter does not block gameplay
-- **Configurable**: Per-mode settings + personal ignore list
+- Entirely local — no network call, no API key, no privacy exposure
+- Fail-open — linter failure never blocks gameplay
+- Configurable per-mode (Disabled / Spell / Grammar / Both) + personal ignore list for fantasy names
 
 ### Negative
-- **Dictionary size**: `FstDictionary::curated()` is ~8 MB stripped; ~130 MB full
-- **Fantasy names**: Game-specific terms require manual addition to ignore list
-- **False positives**: Aggressive grammar rules may flag stylistic choices
+- `FstDictionary::curated()` is ~8MB stripped binary size
+- Fantasy proper nouns and game-specific terms require manual addition to the ignore list
+- Aggressive grammar rules can flag stylistic choices
 
 ### Trade-offs
-- Chose `harper-core` over `nlprule` or LLM-based checking for speed, privacy, and no external dependencies
-- Chose pre-flight interception over post-hoc correction to give player agency
-- Chose fail-open over fail-closed to avoid blocking gameplay on linter bugs
+- Chose `harper-core` over all alternatives for speed, privacy, and zero runtime dependencies
+- Chose pre-flight interception over silent auto-correction to preserve player agency
 
 ---
 
@@ -70,4 +61,4 @@ Player input was sent directly to the LLM without any pre-flight validation. Typ
 
 ## History
 
-- **2026-05-09**: Initial implementation — automatic pre-flight + manual check + preview UI
+- **2026-05-09**: Initial implementation — automatic pre-flight check + manual check button + preview UI

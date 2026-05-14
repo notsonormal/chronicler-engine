@@ -1,5 +1,7 @@
 # Specification: Semantic Navigation
 
+> **Related Decisions**: [ADR-006](../adr/adr-006-quantifier-systems.md)
+
 ## Objective
 The engine's movement system uses quantifier-driven detection. Player types natural language ("I walk through the front gate") and the LLM quantifier detects movement intent, then validates against semantic exits in map.json.
 
