@@ -163,9 +163,9 @@ pub fn add_input_and_save(
     state.add_log(text.to_string(), Some(player_name), LogType::Input);
     let turn_id = state
         .narrative
-        .turns
+        .messages
         .last()
-        .map(|t| t.id.clone())
+        .map(|m| m.turn_id.clone())
         .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
     let snapshot = chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(
         &state, turn_id, 0,

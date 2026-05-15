@@ -48,12 +48,7 @@ async fn process_action(state: &AppState, command: String) -> Response<Body> {
 
     let player_name = game_state.player.sheet.name.clone();
     game_state.add_log(command.clone(), Some(player_name.clone()), LogType::Input);
-    let turn_id = game_state
-        .narrative
-        .turns
-        .last()
-        .map(|t| t.id.clone())
-        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+    let turn_id = game_state.narrative.current_turn_id.clone();
 
     let action = parse_command(&command);
     let is_sync = matches!(
@@ -118,12 +113,7 @@ async fn process_action(state: &AppState, command: String) -> Response<Body> {
                 }
             };
             gs.narrative.generation.status = crate::model::state::GenerationStatus::Idle;
-            let shutdown_turn_id = gs
-                .narrative
-                .turns
-                .last()
-                .map(|t| t.id.clone())
-                .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+            let shutdown_turn_id = gs.narrative.current_turn_id.clone();
             let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
                 &gs,
                 shutdown_turn_id,

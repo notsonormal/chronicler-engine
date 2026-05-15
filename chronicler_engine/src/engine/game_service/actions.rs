@@ -83,12 +83,7 @@ pub fn execute_action_impl(
                 Err(poisoned) => poisoned.into_inner(),
             };
             let mut state = load_state(&ctx);
-            let turn_id = state
-                .narrative
-                .turns
-                .last()
-                .map(|t| t.id.clone())
-                .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+            let turn_id = state.narrative.current_turn_id.clone();
             state.narrative.last_trigger = None;
             execute_freeaction_pipeline(service, &ctx, state, turn_id, text, 0);
         }

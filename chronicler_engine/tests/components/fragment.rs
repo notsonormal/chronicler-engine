@@ -491,10 +491,10 @@ async fn test_switch_swipe_success() {
         Some("Player".to_string()),
         chronicler_engine::model::state::LogType::Input,
     );
-    let turn_id = state.narrative.turns.last().unwrap().id.clone();
+    let turn_id = state.narrative.messages.last().unwrap().turn_id.clone();
     {
-        let turn = state.narrative.turns.last_mut().unwrap();
-        turn.create_swipe(1);
+        let msg = state.narrative.messages.last_mut().unwrap();
+        msg.create_swipe("alternate text");
     }
 
     let storage = Arc::new(chronicler_engine::test_support::InMemorySnapshotStorage::new())
@@ -537,7 +537,7 @@ async fn test_switch_swipe_invalid_index() {
         Some("Player".to_string()),
         chronicler_engine::model::state::LogType::Input,
     );
-    let turn_id = state.narrative.turns.last().unwrap().id.clone();
+    let turn_id = state.narrative.messages.last().unwrap().turn_id.clone();
 
     let app = create_app_for_testing(state);
     let req = Request::builder()
@@ -590,7 +590,7 @@ async fn test_restore_checkpoint_success() {
         Some("Player".to_string()),
         chronicler_engine::model::state::LogType::Input,
     );
-    let turn_id = state.narrative.turns.last().unwrap().id.clone();
+    let turn_id = state.narrative.messages.last().unwrap().turn_id.clone();
 
     let storage = Arc::new(chronicler_engine::test_support::InMemorySnapshotStorage::new())
         as Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage>;
@@ -641,7 +641,7 @@ async fn test_restore_checkpoint_snapshot_missing() {
         Some("Player".to_string()),
         chronicler_engine::model::state::LogType::Input,
     );
-    let turn_id = state.narrative.turns.last().unwrap().id.clone();
+    let turn_id = state.narrative.messages.last().unwrap().turn_id.clone();
 
     let storage = Arc::new(chronicler_engine::test_support::InMemorySnapshotStorage::new())
         as Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage>;
@@ -848,7 +848,7 @@ async fn test_restore_checkpoint_load_checkpoint_error() {
         Some("Player".to_string()),
         chronicler_engine::model::state::LogType::Input,
     );
-    let turn_id = state.narrative.turns.last().unwrap().id.clone();
+    let turn_id = state.narrative.messages.last().unwrap().turn_id.clone();
     let inner = Arc::new(chronicler_engine::test_support::InMemorySnapshotStorage::new())
         as Arc<dyn SnapshotStorage>;
     let snapshot = GameStateSnapshot::from_game_state(&state, turn_id.clone(), 0);
@@ -894,7 +894,7 @@ async fn test_restore_checkpoint_load_by_turn_error() {
         Some("Player".to_string()),
         chronicler_engine::model::state::LogType::Input,
     );
-    let turn_id = state.narrative.turns.last().unwrap().id.clone();
+    let turn_id = state.narrative.messages.last().unwrap().turn_id.clone();
     let inner = Arc::new(chronicler_engine::test_support::InMemorySnapshotStorage::new())
         as Arc<dyn SnapshotStorage>;
     let snapshot = GameStateSnapshot::from_game_state(&state, turn_id.clone(), 0);
@@ -940,7 +940,7 @@ async fn test_restore_checkpoint_save_error() {
         Some("Player".to_string()),
         chronicler_engine::model::state::LogType::Input,
     );
-    let turn_id = state.narrative.turns.last().unwrap().id.clone();
+    let turn_id = state.narrative.messages.last().unwrap().turn_id.clone();
     let inner = Arc::new(chronicler_engine::test_support::InMemorySnapshotStorage::new())
         as Arc<dyn SnapshotStorage>;
     let snapshot = GameStateSnapshot::from_game_state(&state, turn_id.clone(), 0);

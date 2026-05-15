@@ -48,28 +48,19 @@ pub async fn delete_history_handler(State(state): State<AppState>) -> (StatusCod
     let result = (|| {
         let _latest = state.snapshot_storage.load_latest(None)?;
         let mut guard = state.load_state()?;
-        match guard.delete_last_turn() {
-            Some(removed_turn_id) => {
-                let _ = state
-                    .snapshot_storage
-                    .delete_turn_snapshots(&removed_turn_id);
-                let new_turn_id = guard
-                    .narrative
-                    .turns
-                    .last()
-                    .map(|t| t.id.clone())
-                    .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-                let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
-                    &guard,
-                    new_turn_id,
-                    0,
-                );
-                state.snapshot_storage.save(&snapshot)
-            }
-            None => Err(crate::error::EngineError::Internal(
-                crate::error::internal_error("History is empty".to_string()),
-            )),
-        }
+        guard.delete_last_log()?;
+        let new_turn_id = guard
+            .narrative
+            .messages
+            .last()
+            .map(|m| m.turn_id.clone())
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
+            &guard,
+            new_turn_id,
+            0,
+        );
+        state.snapshot_storage.save(&snapshot)
     })();
 
     match result {

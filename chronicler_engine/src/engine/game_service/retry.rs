@@ -115,8 +115,8 @@ fn retry_event_continuation(
         }
     };
 
-    if let Some(turn) = pre_event_state.narrative.turns.last_mut() {
-        turn.create_swipe_copying_active(current_swipe + 1);
+    if let Some(msg) = pre_event_state.narrative.messages.last_mut() {
+        msg.create_swipe_copying_active();
     }
 
     pre_event_state.narrative.generation.status = GenerationStatus::Generating;
@@ -287,8 +287,8 @@ fn retry_main_narration(
         (*ctx.npcs).clone(),
     );
 
-    if let Some(turn) = state.narrative.turns.last_mut() {
-        turn.create_swipe(current_swipe + 1);
+    if let Some(msg) = state.narrative.messages.last_mut() {
+        msg.create_swipe("");
     }
 
     execute_freeaction_pipeline(

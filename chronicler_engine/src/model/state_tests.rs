@@ -254,9 +254,9 @@ proptest! {
             state.add_log(text, None, log_type);
         }
         prop_assert!(
-            state.narrative.turns.len() <= 1000,
-            "turn count {} exceeds max 1000",
-            state.narrative.turns.len()
+            state.narrative.messages.len() <= 1000,
+            "message count {} exceeds max 1000",
+            state.narrative.messages.len()
         );
     }
 

@@ -4,6 +4,7 @@ pub mod checkpoint;
 pub mod llm_backend;
 pub mod llm_message;
 pub mod map;
+pub mod message;
 pub mod scenario;
 pub mod settings;
 pub mod state;

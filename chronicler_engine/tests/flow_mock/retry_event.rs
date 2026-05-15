@@ -26,7 +26,7 @@ fn test_retry_event_continuation_preserves_quantifier_result() {
     // Flow: Execute → player moves → event added
     //       → Retry event → player STILL in same room (quantifier NOT rerun)
     let mut state = create_test_state_with_trigger_npc();
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
     add_input_and_save(&ctx, "enter shop");
@@ -163,7 +163,7 @@ fn test_trigger_continuation_runs_quantifier_and_detects_new_npc() {
 
     let npcs = vec![shopkeeper, gabriella];
     let mut state = GameState::new(world, map, player, npcs, "room1".to_string());
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
     add_input_and_save(&ctx, "enter shop");

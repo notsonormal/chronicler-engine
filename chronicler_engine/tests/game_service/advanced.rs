@@ -15,7 +15,7 @@ use crate::{create_test_state_with_trigger_npc, failing_service, wait_for_genera
 #[test]
 fn test_execute_freeaction_immediate_return() {
     let mut state = create_test_state();
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     state.narrative.generation.status = GenerationStatus::Idle;
     let ctx = make_test_context(state);
     let service = failing_service();
@@ -42,7 +42,7 @@ fn test_execute_freeaction_immediate_return() {
 #[test]
 fn test_execute_freeaction_room_not_found() {
     let mut state = create_test_state();
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     state.narrative.generation.status = GenerationStatus::Generating;
     state.movement.current_room_id = "non_existent_room".to_string();
     let ctx = make_test_context(state);
@@ -66,7 +66,7 @@ fn test_execute_freeaction_room_not_found() {
 #[test]
 fn test_execute_freeaction_state_accessible() {
     let mut state = create_test_state();
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     state.narrative.generation.status = GenerationStatus::Generating;
     let ctx = make_test_context(state);
     let service = failing_service();
@@ -86,7 +86,7 @@ fn test_execute_freeaction_state_accessible() {
 #[test]
 fn test_execute_freeaction_narration_failure() {
     let mut state = create_test_state();
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     state.narrative.generation.status = GenerationStatus::Generating;
     let ctx = make_test_context(state);
     let service = failing_service();
@@ -108,7 +108,7 @@ fn test_execute_freeaction_narration_failure() {
 #[test]
 fn test_execute_freeaction_with_mock_backend() {
     let mut state = create_test_state();
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     state.narrative.generation.status = GenerationStatus::Generating; // set by caller (server)
     let ctx = make_test_context(state);
     let service = DefaultGameService::with_mock_quantifier(
@@ -142,7 +142,7 @@ fn test_execute_freeaction_with_mock_backend() {
 #[test]
 fn test_retry_with_mock_backend() {
     let mut state = create_test_state();
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     state.add_log("look around".to_string(), None, LogType::Input);
     state.add_log("Initial narration".to_string(), None, LogType::Narration);
     state.narrative.generation.status = GenerationStatus::Generating; // set by caller (server)
@@ -179,7 +179,7 @@ fn test_retry_with_mock_backend() {
 #[test]
 fn test_execute_freeaction_with_movement_mock() {
     let mut state = create_test_state();
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     state.narrative.generation.status = GenerationStatus::Generating; // set by caller (server)
     let ctx = make_test_context(state);
     let service = DefaultGameService::with_mock_quantifier(
@@ -220,7 +220,7 @@ fn test_execute_freeaction_with_movement_mock() {
 #[test]
 fn test_freeaction_phase_starts_narrating() {
     let mut state = create_test_state();
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     state.narrative.generation.status = GenerationStatus::Idle;
     let ctx = make_test_context(state);
     let service = DefaultGameService::new();
@@ -246,7 +246,7 @@ fn test_freeaction_phase_starts_narrating() {
 #[test]
 fn test_freeaction_phase_transitions_mock() {
     let mut state = create_test_state();
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     state.narrative.generation.status = GenerationStatus::Generating;
     let ctx = make_test_context(state);
     let service = DefaultGameService::with_mock_quantifier(
@@ -278,7 +278,7 @@ fn test_freeaction_phase_transitions_mock() {
 #[tokio::test]
 async fn test_cancellation_resets_state_to_idle() {
     let mut state = create_test_state();
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     state.narrative.generation.status = GenerationStatus::Generating;
     let ctx = make_test_context(state);
     let service = DefaultGameService::with_mock_quantifier(
@@ -344,7 +344,7 @@ async fn test_cancellation_resets_state_to_idle() {
 #[test]
 fn test_retry_last_response_not_ai_generated() {
     let mut state = create_test_state();
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     state.add_log(
         "look around".to_string(),
         Some("Player".to_string()),
@@ -376,7 +376,7 @@ fn test_retry_last_response_not_ai_generated() {
 #[test]
 fn test_empty_llm_response_handled_gracefully() {
     let mut state = create_test_state();
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     state.narrative.generation.status = GenerationStatus::Generating;
     let ctx = make_test_context(state);
     let service = DefaultGameService::with_mock_quantifier(
@@ -415,7 +415,7 @@ fn test_empty_llm_response_handled_gracefully() {
 #[test]
 fn test_failing_trigger_narration_does_not_crash() {
     let mut state = create_test_state_with_trigger_npc();
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     state.narrative.generation.status = GenerationStatus::Generating;
     // Reset times_met so the trigger is eligible to fire
     if let Some(encounter) = state.character_state.npcs.get_mut("shopkeeper") {
@@ -471,7 +471,7 @@ fn test_failing_trigger_narration_does_not_crash() {
 #[test]
 fn test_delayed_llm_completes_without_deadlock() {
     let mut state = create_test_state();
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     state.narrative.generation.status = GenerationStatus::Generating;
     let ctx = make_test_context(state);
     let service = DefaultGameService::with_mock_quantifier(
@@ -497,7 +497,7 @@ fn test_delayed_llm_completes_without_deadlock() {
 #[test]
 fn test_quantifier_detects_movement() {
     let mut state = create_test_state();
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     state.narrative.generation.status = GenerationStatus::Generating;
     let ctx = make_test_context(state);
     let service = DefaultGameService::with_mock_quantifier(
@@ -537,7 +537,7 @@ fn test_quantifier_detects_movement() {
 #[test]
 fn test_quantifier_detects_npc_presence_and_fires_trigger() {
     let mut state = create_test_state_with_trigger_npc();
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     state.narrative.generation.status = GenerationStatus::Generating;
     // Reset times_met so the trigger is eligible to fire
     if let Some(encounter) = state.character_state.npcs.get_mut("shopkeeper") {
@@ -603,7 +603,7 @@ fn test_retry_no_snapshot() {
 #[test]
 fn test_retry_no_input_text() {
     let mut state = create_test_state();
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     // Only add system and narration logs — no input
     state.add_log("System boot".to_string(), None, LogType::System);
     state.add_log("You see a room.".to_string(), None, LogType::Narration);
@@ -624,7 +624,7 @@ fn test_retry_no_input_text() {
 #[test]
 fn test_retry_room_not_found() {
     let mut state = create_test_state();
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     state.add_log(
         "look around".to_string(),
         Some("Player".to_string()),
@@ -662,7 +662,7 @@ fn test_retry_room_not_found() {
 #[test]
 fn test_retry_llm_error() {
     let mut state = create_test_state();
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     state.add_log(
         "look around".to_string(),
         Some("Player".to_string()),
@@ -691,7 +691,7 @@ fn test_retry_llm_error() {
 #[test]
 fn test_retry_empty_narration() {
     let mut state = create_test_state();
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     state.add_log(
         "look around".to_string(),
         Some("Player".to_string()),
@@ -729,7 +729,7 @@ fn test_retry_empty_narration() {
 #[test]
 fn test_pre_main_snapshot_saved_before_narration() {
     let mut state = create_test_state();
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     state.narrative.generation.status = GenerationStatus::Idle;
     let ctx = make_test_context(state);
     let service = DefaultGameService::with_mock_quantifier(
@@ -764,7 +764,7 @@ fn test_pre_main_snapshot_saved_before_narration() {
 #[test]
 fn test_pre_event_snapshot_saved_before_continuation() {
     let mut state = create_test_state_with_trigger_npc();
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     state.narrative.generation.status = GenerationStatus::Idle;
     // Reset times_met so the trigger is eligible to fire
     if let Some(encounter) = state.character_state.npcs.get_mut("shopkeeper") {
@@ -822,7 +822,7 @@ fn test_pre_event_snapshot_saved_before_continuation() {
 #[test]
 fn test_retry_main_narration_uses_pre_main_snapshot() {
     let mut state = create_test_state();
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     state.add_log(
         "look around".to_string(),
         Some("Player".to_string()),
@@ -864,7 +864,7 @@ fn test_retry_main_narration_uses_pre_main_snapshot() {
 #[test]
 fn test_retry_event_continuation_uses_pre_event_snapshot() {
     let mut state = create_test_state_with_trigger_npc();
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     state.add_log(
         "look around".to_string(),
         Some("Player".to_string()),

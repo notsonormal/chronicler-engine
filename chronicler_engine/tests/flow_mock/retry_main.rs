@@ -23,7 +23,7 @@ fn test_retry_main_narration_applies_new_quantifier_result() {
     // Flow: Input → Execute → player stays in room1
     //       → Retry → player moves to room2
     let mut state = create_test_state_with_map();
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
     add_input_and_save(&ctx, "walk around");
@@ -88,7 +88,7 @@ fn test_retry_with_different_narration_text_reruns_quantifier() {
     // Flow: Execute → first narration → quantifier detects no NPCs
     //       → Retry → second narration → quantifier detects NPC from text
     let mut state = create_test_state_with_map();
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
     add_input_and_save(&ctx, "approach the innkeeper");
@@ -156,7 +156,7 @@ fn test_double_retry_increments_swipe_and_reruns_quantifier() {
     // Flow: Execute → Retry → Retry again
     // Verify quantifier runs 3 times total and swipe_index increments.
     let mut state = create_test_state_with_map();
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
     add_input_and_save(&ctx, "walk around");
@@ -221,7 +221,7 @@ fn test_retry_after_edited_input_uses_new_text() {
     // Flow: Execute with "walk around" → edit input to "sprint forward" → Retry
     // Verify retry narration references the edited text.
     let mut state = create_test_state_with_map();
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
     add_input_and_save(&ctx, "walk around");
@@ -257,8 +257,16 @@ fn test_retry_after_edited_input_uses_new_text() {
             ctx.player.clone(),
             (*ctx.npcs).clone(),
         );
-        if let Some(turn) = state.narrative.turns.last_mut() {
-            turn.input.text = "sprint forward".to_string();
+        if let Some(msg) = state
+            .narrative
+            .messages
+            .iter_mut()
+            .find(|m| m.log_type == LogType::Input)
+        {
+            msg.text = "sprint forward".to_string();
+            if let Some(swipe) = msg.active_swipe_mut() {
+                swipe.text = "sprint forward".to_string();
+            }
         }
         let snapshot = chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(
             &state,
@@ -293,7 +301,7 @@ fn test_main_retry_reevaluates_triggers() {
     // Flow: Execute → no movement → trigger doesn't fire (wrong room)
     //       → Retry → movement to room2 → trigger fires
     let mut state = create_test_state_with_map();
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     // Remove default NPCs, add a shopkeeper with a room2-scoped trigger
     let shopkeeper = NpcCard {
         id: "shopkeeper".into(),
@@ -380,7 +388,7 @@ fn test_retry_completes_when_quantifier_returns_none() {
     // Setup: quantifier returns a result on first call, None on second.
     // Flow: Execute → success → Retry → quantifier returns None → still completes
     let mut state = create_test_state_with_map();
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
     add_input_and_save(&ctx, "walk around");
@@ -420,7 +428,7 @@ fn test_retry_no_pre_main_snapshot() {
     // Flow: Execute → clear pre-main snapshot → Retry
     // Retry should fail gracefully when pre-main snapshot is missing.
     let mut state = create_test_state_with_map();
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
     add_input_and_save(&ctx, "examine room");
@@ -475,7 +483,7 @@ fn test_movement_with_arrival_narration_retry() {
     // Flow: Movement action → Retry
     // Verify arrival narration is also regenerated on retry.
     let mut state = create_test_state_with_map();
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
     add_input_and_save(&ctx, "walk to room2");
@@ -533,7 +541,7 @@ fn test_movement_with_arrival_narration_retry() {
 fn test_delete_narration_then_retry_regenerates() {
     // Flow: Execute → delete narration → Retry → verify new narration generated
     let mut state = create_test_state_with_map();
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
     add_input_and_save(&ctx, "examine room");
@@ -577,11 +585,7 @@ fn test_delete_narration_then_retry_regenerates() {
             ctx.player.clone(),
             (*ctx.npcs).clone(),
         );
-        for turn in &mut state.narrative.turns {
-            if let Some(swipe) = turn.active_swipe_mut() {
-                swipe.entries.retain(|e| e.id != narration_id);
-            }
-        }
+        state.narrative.messages.retain(|m| m.id != narration_id);
         let snapshot = chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(
             &state,
             snap.turn_id,

@@ -16,7 +16,7 @@ use crate::{
 fn test_sequential_execute_retry_execute() {
     // Flow: Action A → Retry A → Action B → Verify history order and state consistency
     let mut state = create_test_state_with_map();
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let service = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.llm_message_storage)))),
@@ -82,7 +82,7 @@ fn test_sequential_execute_retry_execute() {
 fn test_sequential_execute_delete_execute() {
     // Flow: Action A → Delete A's narration → Action B → Verify clean state
     let mut state = create_test_state_with_map();
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let service = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.llm_message_storage)))),
@@ -113,11 +113,7 @@ fn test_sequential_execute_delete_execute() {
     // Step 2: Delete the narration
     {
         let mut state = latest_state(&ctx);
-        for turn in &mut state.narrative.turns {
-            if let Some(swipe) = turn.active_swipe_mut() {
-                swipe.entries.retain(|e| e.id != narration_id);
-            }
-        }
+        state.narrative.messages.retain(|m| m.id != narration_id);
         let snapshot = chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(
             &state,
             "test".to_string(),
@@ -151,7 +147,7 @@ fn test_sync_look_then_async_freeaction_then_retry() {
     // Flow: look (sync) → free action (async) → retry
     // Verify sync action adds narration immediately, then async + retry work.
     let mut state = create_test_state_with_map();
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
     let service = DefaultGameService::with_mock_quantifier(
@@ -202,7 +198,7 @@ fn test_sync_look_then_async_freeaction_then_retry() {
 fn test_three_actions_in_sequence() {
     // Flow: Action A → Action B → Action C
     let mut state = create_test_state_with_map();
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
     let service = DefaultGameService::with_mock_quantifier(
@@ -245,7 +241,7 @@ fn test_delete_input_then_retry_fails_gracefully() {
     // Flow: Execute → delete input → Retry
     // Retry should find no input and fail gracefully.
     let mut state = create_test_state_with_map();
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
     add_input_and_save(&ctx, "examine room");
@@ -265,7 +261,7 @@ fn test_delete_input_then_retry_fails_gracefully() {
     // Delete the input entry
     {
         let mut state = latest_state(&ctx);
-        state.narrative.turns.clear();
+        state.narrative.messages.clear();
         let snapshot = chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(
             &state,
             uuid::Uuid::new_v4().to_string(),
@@ -287,7 +283,7 @@ fn test_delete_input_then_retry_fails_gracefully() {
 fn test_reset_clears_history_and_state() {
     // Flow: Execute action with movement → Reset → verify back to initial state
     let mut state = create_test_state_with_map();
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
     add_input_and_save(&ctx, "walk to room2");
@@ -340,7 +336,7 @@ fn test_reset_clears_history_and_state() {
 fn test_reset_then_execute_works() {
     // Flow: Execute → Reset → Execute again
     let mut state = create_test_state_with_map();
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
     let service = DefaultGameService::with_mock_quantifier(
@@ -392,7 +388,7 @@ fn test_reset_then_execute_works() {
 fn test_delete_mid_sequence() {
     // Flow: Action A → Action B → delete B's narration → Action C
     let mut state = create_test_state_with_map();
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
     let service = DefaultGameService::with_mock_quantifier(
@@ -427,11 +423,7 @@ fn test_delete_mid_sequence() {
     // Delete B's narration
     {
         let mut state = latest_state(&ctx);
-        for turn in &mut state.narrative.turns {
-            if let Some(swipe) = turn.active_swipe_mut() {
-                swipe.entries.retain(|e| e.id != narration_b_id);
-            }
-        }
+        state.narrative.messages.retain(|m| m.id != narration_b_id);
         let snapshot = chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(
             &state,
             uuid::Uuid::new_v4().to_string(),

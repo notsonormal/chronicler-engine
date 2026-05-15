@@ -6,8 +6,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::model::character::{NpcCard, PlayerCard};
 use crate::model::map::{MapDef, Room};
+use crate::model::message::Message;
 use crate::model::trigger::CharacterState;
-use crate::model::turn::Turn;
 use crate::model::world::WorldCard;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -150,7 +150,7 @@ pub struct StoredTriggerContext {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct NarrativeState {
-    pub turns: Vec<Turn>,
+    pub messages: Vec<Message>,
     pub next_log_id: u64,
     pub generation: GenerationState,
     pub last_trigger: Option<StoredTriggerContext>,
@@ -158,26 +158,46 @@ pub struct NarrativeState {
     pub pending_location: Option<String>,
     #[serde(default)]
     pub pending_event: Option<String>,
+    #[serde(default = "new_turn_id")]
+    pub current_turn_id: String,
+}
+
+fn new_turn_id() -> String {
+    uuid::Uuid::new_v4().to_string()
 }
 
 impl Default for NarrativeState {
     fn default() -> Self {
         Self {
-            turns: Vec::new(),
+            messages: Vec::new(),
             next_log_id: 1,
             generation: GenerationState::default(),
             last_trigger: None,
             pending_location: None,
             pending_event: None,
+            current_turn_id: new_turn_id(),
         }
     }
 }
 
 impl NarrativeState {
+    /// Flatten active swipes into a Vec<LogEntry> for backward compatibility
+    /// with templates and other consumers that expect the old shape.
     pub fn history(&self) -> Vec<LogEntry> {
-        self.turns
+        self.messages
             .iter()
-            .flat_map(|turn| turn.flattened_entries())
+            .map(|msg| {
+                let text = msg.active_text().to_string();
+                LogEntry {
+                    id: msg.id,
+                    sender: msg.sender.clone(),
+                    text,
+                    log_type: msg.log_type.clone(),
+                    timestamp: msg.timestamp,
+                    location_header: msg.location_header.clone(),
+                    event_header: msg.event_header.clone(),
+                }
+            })
             .collect()
     }
 }
@@ -274,80 +294,60 @@ impl GameState {
             return;
         }
 
+        if self.narrative.messages.len() >= MAX_LOG_ENTRIES {
+            self.narrative.messages.remove(0);
+        }
+
         let id = self.narrative.next_log_id;
         self.narrative.next_log_id += 1;
         let location_header = self.narrative.pending_location.take();
         let event_header = self.narrative.pending_event.take();
-        let entry = LogEntry {
+
+        let turn_id = self.narrative.current_turn_id.clone();
+        let message = Message::new(
             id,
+            turn_id,
             sender,
             text,
             log_type,
-            timestamp: Utc::now(),
             location_header,
             event_header,
-        };
+        );
 
-        if let Some(turn) = self.narrative.turns.last_mut() {
-            if let Some(swipe) = turn.active_swipe_mut() {
-                swipe.entries.push(entry);
-            }
-        } else {
-            // Fallback: no turn exists yet. Create a placeholder turn so the
-            // entry isn't lost. This shouldn't happen in normal game flow.
-            let placeholder_input = LogEntry {
-                id: self.narrative.next_log_id,
-                sender: None,
-                text: String::new(),
-                log_type: LogType::Input,
-                timestamp: Utc::now(),
-                location_header: None,
-                event_header: None,
-            };
-            self.narrative.next_log_id += 1;
-            let mut turn = Turn::new(placeholder_input);
-            if let Some(swipe) = turn.active_swipe_mut() {
-                swipe.entries.push(entry);
-            }
-            self.narrative.turns.push(turn);
-        }
+        self.narrative.messages.push(message);
     }
 
     fn add_input(&mut self, text: String, sender: Option<String>) {
-        if self.narrative.turns.len() >= MAX_LOG_ENTRIES {
-            self.narrative.turns.remove(0);
+        if self.narrative.messages.len() >= MAX_LOG_ENTRIES {
+            self.narrative.messages.remove(0);
         }
         let id = self.narrative.next_log_id;
         self.narrative.next_log_id += 1;
         let location_header = self.narrative.pending_location.take();
         let event_header = self.narrative.pending_event.take();
-        let input = LogEntry {
+        let turn_id = self.narrative.current_turn_id.clone();
+        let message = Message::new(
             id,
+            turn_id,
             sender,
             text,
-            log_type: LogType::Input,
-            timestamp: Utc::now(),
+            LogType::Input,
             location_header,
             event_header,
-        };
-        let turn = Turn::new(input);
-        self.narrative.turns.push(turn);
+        );
+        self.narrative.messages.push(message);
+        self.narrative.current_turn_id = uuid::Uuid::new_v4().to_string();
     }
 
     /// [DOC: docs/architecture/system.md]
     pub fn edit_log(&mut self, id: u64, new_text: String) -> crate::error::Result<()> {
-        for turn in &mut self.narrative.turns {
-            if turn.input.id == id {
-                turn.input.text = new_text;
-                return Ok(());
-            }
-            for swipe in &mut turn.swipes {
-                for entry in &mut swipe.entries {
-                    if entry.id == id {
-                        entry.text = new_text;
-                        return Ok(());
-                    }
+        for message in &mut self.narrative.messages {
+            if message.id == id {
+                message.text = new_text.clone();
+                if let Some(swipe) = message.active_swipe_mut() {
+                    swipe.text = new_text;
                 }
+                return Ok(());
             }
         }
         Err(crate::error::EngineError::Internal(
@@ -357,51 +357,28 @@ impl GameState {
 
     /// [DOC: docs/architecture/system.md]
     pub fn delete_last_log(&mut self) -> crate::error::Result<()> {
-        if self.narrative.turns.is_empty() {
+        if self.narrative.messages.is_empty() {
             return Err(crate::error::EngineError::Internal(
                 crate::error::internal_error("History is empty".to_string()),
             ));
         }
 
-        let should_remove_turn = self
-            .narrative
-            .turns
-            .last()
-            .map(|t| {
-                t.active_swipe()
-                    .map(|s| s.entries.len() <= 1)
-                    .unwrap_or(true)
-            })
-            .unwrap_or(true);
-
-        if should_remove_turn {
-            self.narrative.turns.pop();
-        } else if let Some(last_turn) = self.narrative.turns.last_mut() {
-            if let Some(swipe) = last_turn.active_swipe_mut() {
-                swipe.entries.pop();
-            }
-        }
+        self.narrative.messages.pop();
         Ok(())
     }
 
     pub fn delete_last_turn(&mut self) -> Option<String> {
-        self.narrative.turns.pop().map(|turn| turn.id)
+        let last_input_idx = self
+            .narrative
+            .messages
+            .iter()
+            .rposition(|m| m.log_type == LogType::Input)?;
+        let removed: Vec<Message> = self.narrative.messages.drain(last_input_idx..).collect();
+        removed.first().map(|m| m.id.to_string())
     }
 
-    pub fn get_log(&self, id: u64) -> Option<&LogEntry> {
-        for turn in &self.narrative.turns {
-            if turn.input.id == id {
-                return Some(&turn.input);
-            }
-            for swipe in &turn.swipes {
-                for entry in &swipe.entries {
-                    if entry.id == id {
-                        return Some(entry);
-                    }
-                }
-            }
-        }
-        None
+    pub fn get_log(&self, id: u64) -> Option<LogEntry> {
+        self.narrative.history().into_iter().find(|e| e.id == id)
     }
 
     pub fn get_last_ai_response_index(&self) -> Option<usize> {

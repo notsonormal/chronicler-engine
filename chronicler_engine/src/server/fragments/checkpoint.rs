@@ -16,10 +16,16 @@ pub async fn switch_swipe_handler(
 ) -> (StatusCode, String) {
     let result = match state.load_state() {
         Ok(mut guard) => {
-            let turn = guard.narrative.turns.iter_mut().find(|t| t.id == turn_id);
-            match turn {
-                Some(t) if (swipe_index as usize) < t.swipes.len() => {
-                    t.active_swipe_index = swipe_index;
+            let msg = guard
+                .narrative
+                .messages
+                .iter_mut()
+                .rev()
+                .find(|m| m.turn_id == turn_id);
+            match msg {
+                Some(m) if (swipe_index as usize) < m.swipes.len() => {
+                    m.active_swipe_index = swipe_index;
+                    m.text = m.active_text().to_string();
                     let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
                         &guard,
                         turn_id,
@@ -93,21 +99,15 @@ pub async fn restore_checkpoint_handler(
                     "Checkpoint snapshot not found".to_string(),
                 ))
             })?;
-        let mut game_state = crate::model::state::GameState::from_snapshot(
+        let game_state = crate::model::state::GameState::from_snapshot(
             &snapshot,
             state.world.clone(),
             state.map.clone(),
             state.player.clone(),
             (*state.npcs).clone(),
         );
-        if let Some(turn) = game_state
-            .narrative
-            .turns
-            .iter_mut()
-            .find(|t| t.id == checkpoint.turn_id)
-        {
-            turn.active_swipe_index = checkpoint.swipe_index;
-        }
+        // Snapshot already contains correct active_swipe_index for all messages.
+        // No manual adjustment needed in the Message model.
         let new_snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
             &game_state,
             checkpoint.turn_id,

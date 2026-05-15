@@ -16,7 +16,7 @@ fn run_action(
     service: &DefaultGameService,
 ) -> chronicler_engine::model::state::GameState {
     let mut state = state;
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     let ctx = make_test_context(state);
     service.execute_action(ctx.clone(), command.to_string(), "Player".to_string());
     crate::latest_state(&ctx)
@@ -77,7 +77,7 @@ fn test_execute_quit_action() {
 #[test]
 fn test_retry_with_no_history() {
     let mut state = create_test_state();
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     let ctx = make_test_context(state);
     let service = DefaultGameService::new();
 
@@ -151,7 +151,7 @@ fn test_default_game_service_with_backends() {
     );
     // Should be usable without panicking
     let mut state = create_test_state();
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     let ctx = make_test_context(state);
     service.execute_action(ctx.clone(), "look".to_string(), "Player".to_string());
     let guard = crate::latest_state(&ctx);
@@ -165,7 +165,7 @@ fn test_default_game_service_with_mock_quantifier() {
         Arc::new(MockQuantifierBackend::default()),
     );
     let mut state = create_test_state();
-    state.narrative.turns.clear();
+    state.narrative.messages.clear();
     let ctx = make_test_context(state);
     service.execute_action(ctx.clone(), "look".to_string(), "Player".to_string());
     let guard = crate::latest_state(&ctx);
