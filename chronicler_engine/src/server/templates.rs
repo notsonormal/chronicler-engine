@@ -141,7 +141,7 @@ impl CharacterHeadshotsTemplate {
 
 #[derive(Template)]
 #[template(
-    source = r##"<div class="action-area" id="action-area"><form id="command-form" hx-post="/action/check" hx-target="#action-area" hx-swap="innerHTML" hx-sync="this:drop" hx-on::before-request="saveActionArea()" hx-on::after-request="onActionFormAfterRequest()"><input type="text" name="command" placeholder="Enter command..." required minlength="1" autocomplete="off" {% if is_disabled %}disabled{% endif %} /><button type="submit" id="submit-btn" {% if is_disabled %}disabled{% endif %}><span class="btn-icon">&#9654;</span> Send</button></form><div class="action-hints" id="action-hints" hx-get="/hints" hx-trigger="load, every 5s"></div><div class="{{ status_class }}" id="status-display" hx-get="/status/generating" hx-trigger="load, every 5s" hx-swap="innerHTML" hx-on::after-swap="onStatusPoll(this)"><span class="{{ status_class }}">{{ status_text }}</span></div>{% if show_swipe_nav %}<div class="swipe-nav"><button class="swipe-btn" hx-post="/turn/{{ turn_id }}/swipe/{{ prev_swipe }}" hx-swap="none" {% if !has_prev %}disabled{% endif %}>&#9664;</button><span class="swipe-counter">{{ current_swipe + 1 }} / {{ total_swipes }}</span><button class="swipe-btn" hx-post="/turn/{{ turn_id }}/swipe/{{ next_swipe }}" hx-swap="none" {% if !has_next %}disabled{% endif %}>&#9654;</button></div>{% endif %}<button class="checkpoint-btn" hx-post="/checkpoint" hx-swap="none">&#128204; Bookmark</button></div>"##,
+    source = r##"<div class="action-area" id="action-area"><form id="command-form" hx-post="/action/check" hx-target="#action-area" hx-swap="innerHTML" hx-sync="this:drop" hx-on::before-request="saveActionArea()" hx-on::after-request="onActionFormAfterRequest()"><input type="text" name="command" placeholder="Enter command..." required minlength="1" autocomplete="off" {% if is_disabled %}disabled{% endif %} /><button type="submit" id="submit-btn" {% if is_disabled %}disabled{% endif %}><span class="btn-icon">&#9654;</span> Send</button></form><div class="action-hints" id="action-hints" hx-get="/hints" hx-trigger="load, every 5s"></div><div class="{{ status_class }}" id="status-display" hx-get="/status/generating" hx-trigger="load, every 5s" hx-swap="innerHTML" hx-on::after-swap="onStatusPoll(this)"><span class="{{ status_class }}">{{ status_text }}</span></div><button class="checkpoint-btn" hx-post="/checkpoint" hx-swap="none">&#128204; Bookmark</button></div>"##,
     ext = "html"
 )]
 pub struct ActionAreaTemplate {
@@ -150,14 +150,6 @@ pub struct ActionAreaTemplate {
     pub status_class: String,
     pub status_text: String,
     pub available_actions: Vec<String>,
-    pub show_swipe_nav: bool,
-    pub current_swipe: u32,
-    pub total_swipes: u32,
-    pub turn_id: String,
-    pub has_prev: bool,
-    pub has_next: bool,
-    pub prev_swipe: u32,
-    pub next_swipe: u32,
 }
 
 impl ActionAreaTemplate {
@@ -165,7 +157,6 @@ impl ActionAreaTemplate {
         status: &crate::model::state::GenerationStatus,
         phase: &crate::model::state::GenerationPhase,
         exits: &[String],
-        turn_data: Option<(String, u32, u32)>,
     ) -> Self {
         let is_disabled = status.is_generating();
         let error_msg = status.error_message().unwrap_or_default().to_string();
@@ -187,48 +178,12 @@ impl ActionAreaTemplate {
         let mut available_actions = vec!["Look".to_string(), "Inventory".to_string()];
         available_actions.extend(exits.iter().cloned());
 
-        let (
-            show_swipe_nav,
-            current_swipe,
-            total_swipes,
-            turn_id,
-            has_prev,
-            has_next,
-            prev_swipe,
-            next_swipe,
-        ) = if let Some((tid, csw, total)) = turn_data {
-            let has_prev = csw > 0;
-            let has_next = csw + 1 < total;
-            let prev_swipe = csw.saturating_sub(1);
-            let next_swipe = if has_next { csw + 1 } else { csw };
-            (
-                total > 1,
-                csw,
-                total,
-                tid,
-                has_prev,
-                has_next,
-                prev_swipe,
-                next_swipe,
-            )
-        } else {
-            (false, 0, 0, String::new(), false, false, 0, 0)
-        };
-
         Self {
             is_disabled,
             error_message: error_msg,
             status_class,
             status_text,
             available_actions,
-            show_swipe_nav,
-            current_swipe,
-            total_swipes,
-            turn_id,
-            has_prev,
-            has_next,
-            prev_swipe,
-            next_swipe,
         }
     }
 }

@@ -89,16 +89,9 @@ pub fn render_action_area(state: &AppState) -> Result<String> {
     let status = state_guard.narrative.generation.status.clone();
     let phase = state_guard.narrative.generation.phase.clone();
     let exits = get_available_exits(&state_guard);
-    let turn_data = state_guard.narrative.messages.last().map(|m| {
-        (
-            m.turn_id.clone(),
-            m.active_swipe_index,
-            m.swipes.len() as u32,
-        )
-    });
     drop(state_guard);
 
-    let template = ActionAreaTemplate::new(&status, &phase, &exits, turn_data);
+    let template = ActionAreaTemplate::new(&status, &phase, &exits);
     template
         .render()
         .map_err(|e| crate::error::EngineError::Template(e.to_string()))

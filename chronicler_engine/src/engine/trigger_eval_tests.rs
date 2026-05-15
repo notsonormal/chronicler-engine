@@ -368,6 +368,30 @@ fn test_increment_times_met_and_mark_fired() {
 }
 
 #[test]
+fn test_trigger_index_with_skipped_triggers() {
+    // NPC with 2 triggers: trigger 0 (already fired), trigger 1 (not fired).
+    // evaluate_triggers should return trigger 1 with original index 1.
+    let trigger_0 = make_trigger(TriggerCondition::TimesMet(ComparisonOperator::Eq, 0), false);
+    let trigger_1 = make_trigger(
+        TriggerCondition::TimesMet(ComparisonOperator::Gte, 0),
+        false,
+    );
+    let npc = make_npc("gabriella", vec![trigger_0.clone(), trigger_1.clone()]);
+    let mut character_state = CharacterState::default();
+    mark_trigger_fired(&mut character_state, "gabriella", 0);
+    let mut state = make_state(vec![npc.clone()], &[npc.clone()], character_state);
+
+    let results = evaluate_triggers(&state);
+    assert_eq!(results.len(), 1, "Only trigger 1 should match");
+    assert_eq!(results[0].2, 1, "Original index should be 1, not 0");
+
+    // After marking trigger 1 as fired, no triggers should match
+    mark_trigger_fired(&mut state.character_state, "gabriella", 1);
+    let results = evaluate_triggers(&state);
+    assert!(results.is_empty(), "All triggers should now be skipped");
+}
+
+#[test]
 fn test_check_condition_missing_npc_defaults_to_zero() {
     let character_state = CharacterState::default();
     let condition = TriggerCondition::TimesMet(ComparisonOperator::Eq, 0);

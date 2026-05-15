@@ -54,26 +54,18 @@ pub fn handle_movement(
     let mut state = state;
     let previous_room_id = state.movement.current_room_id.clone();
 
-    let success = match attempt_semantic_walk(&mut state, trigger) {
-        Ok(_) => true,
-        Err(_) => {
-            let dynamic_room = create_dynamic_room(trigger, "A place you have never seen before.");
-            state.add_log(
-                format!("[System] Entered unknown location: {}", dynamic_room.id),
-                None,
-                LogType::System,
-            );
-            state
-                .movement
-                .dynamic_rooms
-                .insert(dynamic_room.id.clone(), dynamic_room.clone());
-            state.movement.current_room_id = dynamic_room.id.clone();
-            true
-        }
-    };
-
-    if !success {
-        return Ok(state);
+    if let Err(_) = attempt_semantic_walk(&mut state, trigger) {
+        let dynamic_room = create_dynamic_room(trigger, "A place you have never seen before.");
+        state.add_log(
+            format!("[System] Entered unknown location: {}", dynamic_room.id),
+            None,
+            LogType::System,
+        );
+        state
+            .movement
+            .dynamic_rooms
+            .insert(dynamic_room.id.clone(), dynamic_room.clone());
+        state.movement.current_room_id = dynamic_room.id.clone();
     }
 
     if previous_room_id != state.movement.current_room_id {
@@ -183,7 +175,7 @@ fn build_trigger_request(
 ) -> Option<TriggerContinuationRequest> {
     let matching_triggers = evaluate_triggers(state);
 
-    let (trigger_idx, (npc, trigger)) = matching_triggers.iter().enumerate().next()?;
+    let (npc, trigger, trigger_idx) = matching_triggers.first()?;
 
     let continuation_user_msg = format!(
         "Previous narration:\n{}\n\nTrigger event: {}\n\n\
@@ -205,7 +197,7 @@ fn build_trigger_request(
     Some(TriggerContinuationRequest {
         stored: crate::model::state::StoredTriggerContext {
             npc_id: npc.id.clone(),
-            trigger_idx,
+            trigger_idx: *trigger_idx,
             trigger_name: trigger.action.name.clone(),
             trigger_repeat: trigger.repeat,
             trigger_narration_prompt: trigger.action.narration_prompt.clone(),
@@ -225,7 +217,7 @@ pub fn evaluate_and_narrate_triggers(
 ) -> Result<GameState, EngineError> {
     let matching_triggers = evaluate_triggers(&state);
 
-    let Some((trigger_idx, (npc, trigger))) = matching_triggers.iter().enumerate().next() else {
+    let Some((npc, trigger, trigger_idx)) = matching_triggers.first() else {
         return Ok(state);
     };
 
@@ -276,7 +268,7 @@ pub fn evaluate_and_narrate_triggers(
     state.narrative.pending_event = Some(trigger.action.name.clone());
     state.add_log(continuation_result.text, None, LogType::Narration);
     if !trigger.repeat {
-        mark_trigger_fired(&mut state.character_state, &npc.id, trigger_idx);
+        mark_trigger_fired(&mut state.character_state, &npc.id, *trigger_idx);
     }
 
     assert_state_consistency(&state)?;

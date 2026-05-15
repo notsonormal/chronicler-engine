@@ -65,10 +65,6 @@ fn build_router(app_state: AppState) -> Router {
             "/fragment/llm-messages",
             get(fragments::llm_messages_fragment),
         )
-        .route(
-            "/turn/:id/swipe/:index",
-            post(fragments::switch_swipe_handler),
-        )
         // Settings endpoints
         .route(
             "/fragment/settings",

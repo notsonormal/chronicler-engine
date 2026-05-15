@@ -20,6 +20,62 @@ use crate::{
 };
 
 #[test]
+fn test_event_retry_does_not_create_extra_swipe_on_narration() {
+    // Bug regression: retry was creating unnecessary extra swipes on the main
+    // narration message when retrying an event continuation.
+    let mut state = create_test_state_with_trigger_npc();
+    state.narrative.messages.clear();
+    let ctx = make_test_context_with_sqlite(state).unwrap();
+
+    add_input_and_save(&ctx, "enter shop");
+
+    let quantifier = Arc::new(MockQuantifierBackend {
+        per_call_movements: vec![Some(MovementParseResult {
+            movement_type: Some(MovementType::Entering),
+            destination: Some("room2".to_string()),
+            confidence: QuantifierConfidence::High,
+        })],
+        ..Default::default()
+    });
+
+    let service = DefaultGameService::with_mock_quantifier(
+        Arc::new(MockBackend::new(Some(Arc::clone(&ctx.llm_message_storage)))),
+        quantifier,
+    );
+
+    service.execute_action(ctx.clone(), "enter shop".to_string(), "Player".to_string());
+    assert!(
+        wait_for_generation_complete(&ctx, 1000),
+        "Execute should complete"
+    );
+
+    service.retry_last_response(ctx.clone());
+    assert!(
+        wait_for_generation_complete(&ctx, 1000),
+        "Event retry should complete"
+    );
+
+    let guard = latest_state(&ctx);
+    let narration_msgs: Vec<_> = guard
+        .narrative
+        .messages
+        .iter()
+        .filter(|m| m.log_type == chronicler_engine::model::state::LogType::Narration)
+        .collect();
+    // After event retry there should be 2 Narration messages:
+    // 1) main narration, 2) event continuation
+    assert_eq!(
+        narration_msgs.len(),
+        2,
+        "Should have exactly 2 Narration messages"
+    );
+    assert!(
+        !narration_msgs[0].text.is_empty(),
+        "Main narration must have text after event retry"
+    );
+}
+
+#[test]
 fn test_retry_event_continuation_preserves_quantifier_result() {
     // Setup: Action fires trigger → event continuation.
     // Mock quantifier returns movement on first (and only) call.

@@ -1,12 +1,9 @@
 use std::sync::Arc;
 
-use crate::engine::action_processing::apply_npc_events;
 use crate::engine::game_service::actions::{
-    default_quantifier_result, execute_freeaction_pipeline, run_post_generation_agents,
+    execute_freeaction_pipeline, finish_action, reconcile_post_trigger_npcs,
 };
-use crate::model::character::NpcCard;
 use crate::model::state::{GameState, GenerationPhase, GenerationStatus};
-use crate::narrative::agents::quantifier::compute_npc_events;
 
 use super::context::GameServiceContext;
 use super::helpers::{load_state, save_state};
@@ -115,10 +112,6 @@ fn retry_event_continuation(
         }
     };
 
-    if let Some(msg) = pre_event_state.narrative.messages.last_mut() {
-        msg.create_swipe_copying_active();
-    }
-
     pre_event_state.narrative.generation.status = GenerationStatus::Generating;
     pre_event_state.narrative.generation.phase = GenerationPhase::GeneratingEvent;
     save_state(
@@ -179,49 +172,17 @@ fn retry_event_continuation(
         }
     };
 
-    // Run post-event quantifier to detect NPCs introduced by the retried continuation.
-    committed_state.narrative.generation.phase = GenerationPhase::Quantifying;
-
-    let fallback_ids: Vec<String> = committed_state
-        .scene
-        .npcs_in_area
-        .iter()
-        .map(|n| n.id.clone())
-        .collect();
-    let mut post_trigger_result = default_quantifier_result(&fallback_ids);
-
     let input_text = match committed_state.get_last_input_text() {
         Some((_sender, text)) => text,
         None => String::new(),
     };
 
-    run_post_generation_agents(
+    match reconcile_post_trigger_npcs(
         service,
-        &committed_state,
+        committed_state.clone(),
         &input_text,
         &continuation_text,
-        &mut post_trigger_result,
-    );
-
-    let previous_ids: Vec<String> = committed_state
-        .scene
-        .npcs_in_area
-        .iter()
-        .map(|n| n.id.clone())
-        .collect();
-
-    let npc_cards: Vec<NpcCard> = post_trigger_result
-        .npcs
-        .npc_ids
-        .iter()
-        .filter_map(|id| committed_state.npcs.get(id).cloned())
-        .collect();
-    let new_ids: Vec<String> = npc_cards.iter().map(|n| n.id.clone()).collect();
-
-    committed_state.scene.npcs_in_area = npc_cards;
-
-    let events = compute_npc_events(&previous_ids, &new_ids);
-    match apply_npc_events(committed_state.clone(), &events.events) {
+    ) {
         Ok(updated) => committed_state = updated,
         Err(e) => {
             log::error!("Failed to apply post-trigger NPC events on retry: {e}");
@@ -237,11 +198,9 @@ fn retry_event_continuation(
         }
     }
 
-    committed_state.narrative.generation.status = GenerationStatus::Idle;
-    committed_state.narrative.generation.phase = GenerationPhase::default();
-    save_state(
+    finish_action(
         ctx,
-        &committed_state,
+        committed_state,
         turn_uuid.to_string(),
         current_swipe + 1,
     );
@@ -279,17 +238,13 @@ fn retry_main_narration(
         }
     };
 
-    let mut state = GameState::from_snapshot(
+    let state = GameState::from_snapshot(
         &pre_main_snapshot,
         Arc::clone(&ctx.world),
         Arc::clone(&ctx.map),
         Arc::clone(&ctx.player),
         (*ctx.npcs).clone(),
     );
-
-    if let Some(msg) = state.narrative.messages.last_mut() {
-        msg.create_swipe("");
-    }
 
     execute_freeaction_pipeline(
         service,

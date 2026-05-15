@@ -46,18 +46,11 @@ pub async fn edit_history_handler(
 /// [DOC: docs/system/game_flow.md]
 pub async fn delete_history_handler(State(state): State<AppState>) -> (StatusCode, String) {
     let result = (|| {
-        let _latest = state.snapshot_storage.load_latest(None)?;
         let mut guard = state.load_state()?;
         guard.delete_last_log()?;
-        let new_turn_id = guard
-            .narrative
-            .messages
-            .last()
-            .map(|m| m.turn_id.clone())
-            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
         let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
             &guard,
-            new_turn_id,
+            guard.narrative.current_turn_id.clone(),
             0,
         );
         state.snapshot_storage.save(&snapshot)

@@ -6,6 +6,7 @@ use crate::engine::action_processing::{
 };
 use crate::engine::logic::get_current_room;
 use crate::engine::parser::parse_command;
+use crate::error::EngineError;
 use crate::model::agent::{AgentContext, AgentResult, ExecutionPhase, StatePatch};
 use crate::model::character::NpcCard;
 use crate::model::state::{GameState, GenerationPhase, GenerationStatus, LogType};
@@ -32,9 +33,7 @@ pub fn execute_action_impl(
         Action::Quit => {
             let mut state = load_state(&ctx);
             state.add_log("Goodbye!".to_string(), None, LogType::System);
-            state.narrative.generation.status = GenerationStatus::Idle;
-            state.narrative.generation.phase = GenerationPhase::default();
-            save_state(&ctx, &state, uuid::Uuid::new_v4().to_string(), 0);
+            finish_action(&ctx, state, uuid::Uuid::new_v4().to_string(), 0);
         }
         Action::Look => {
             let mut state = load_state(&ctx);
@@ -50,9 +49,7 @@ pub fn execute_action_impl(
                     state.add_log(desc, Some(name), LogType::Narration);
                 }
             }
-            state.narrative.generation.status = GenerationStatus::Idle;
-            state.narrative.generation.phase = GenerationPhase::default();
-            save_state(&ctx, &state, uuid::Uuid::new_v4().to_string(), 0);
+            finish_action(&ctx, state, uuid::Uuid::new_v4().to_string(), 0);
         }
         Action::Talk(name, msg) => {
             let mut state = load_state(&ctx);
@@ -62,9 +59,7 @@ pub fn execute_action_impl(
                 None,
                 LogType::System,
             );
-            state.narrative.generation.status = GenerationStatus::Idle;
-            state.narrative.generation.phase = GenerationPhase::default();
-            save_state(&ctx, &state, uuid::Uuid::new_v4().to_string(), 0);
+            finish_action(&ctx, state, uuid::Uuid::new_v4().to_string(), 0);
         }
         Action::Inventory => {
             let mut state = load_state(&ctx);
@@ -73,9 +68,7 @@ pub fn execute_action_impl(
                 None,
                 LogType::System,
             );
-            state.narrative.generation.status = GenerationStatus::Idle;
-            state.narrative.generation.phase = GenerationPhase::default();
-            save_state(&ctx, &state, uuid::Uuid::new_v4().to_string(), 0);
+            finish_action(&ctx, state, uuid::Uuid::new_v4().to_string(), 0);
         }
         Action::FreeAction(text) => {
             let _lock = match ctx.action_lock.lock() {
@@ -101,6 +94,12 @@ fn save_pipeline_error(
     save_state(ctx, &state, turn_id.to_string(), swipe_index);
 }
 
+pub(crate) fn finish_action(ctx: &GameServiceContext, mut state: GameState, turn_id: String, swipe_index: u32) {
+    state.narrative.generation.status = GenerationStatus::Idle;
+    state.narrative.generation.phase = GenerationPhase::default();
+    save_state(ctx, &state, turn_id, swipe_index);
+}
+
 pub(crate) fn default_quantifier_result(fallback_npc_ids: &[String]) -> QuantifierResult {
     QuantifierResult {
         npcs: QuantifierParseResult {
@@ -113,6 +112,53 @@ pub(crate) fn default_quantifier_result(fallback_npc_ids: &[String]) -> Quantifi
             confidence: QuantifierConfidence::Low,
         },
     }
+}
+
+/// Re-runs post-generation quantifier and reconciles NPC presence after trigger continuation.
+/// Shared between `execute_freeaction_pipeline` and `retry_event_continuation`.
+pub(crate) fn reconcile_post_trigger_npcs(
+    service: &DefaultGameService,
+    state: GameState,
+    player_input: &str,
+    continuation_text: &str,
+) -> Result<GameState, EngineError> {
+    let mut state = state;
+    state.narrative.generation.phase = GenerationPhase::Quantifying;
+
+    let fallback_ids: Vec<String> = state
+        .scene
+        .npcs_in_area
+        .iter()
+        .map(|n| n.id.clone())
+        .collect();
+    let mut post_trigger_result = default_quantifier_result(&fallback_ids);
+    run_post_generation_agents(
+        service,
+        &state,
+        player_input,
+        continuation_text,
+        &mut post_trigger_result,
+    );
+
+    let previous_ids: Vec<String> = state
+        .scene
+        .npcs_in_area
+        .iter()
+        .map(|n| n.id.clone())
+        .collect();
+
+    let npc_cards: Vec<NpcCard> = post_trigger_result
+        .npcs
+        .npc_ids
+        .iter()
+        .filter_map(|id| state.npcs.get(id).cloned())
+        .collect();
+    let new_ids: Vec<String> = npc_cards.iter().map(|n| n.id.clone()).collect();
+
+    state.scene.npcs_in_area = npc_cards;
+
+    let events = compute_npc_events(&previous_ids, &new_ids);
+    apply_npc_events(state, &events.events)
 }
 
 pub(crate) fn run_post_generation_agents(
@@ -175,12 +221,7 @@ pub fn execute_freeaction_pipeline(
     state.narrative.generation.phase = GenerationPhase::Narrating;
     save_committed_state(ctx, &state, format!("pre-main:{turn_id}"), 0);
 
-    let room = map
-        .overworld
-        .regions
-        .iter()
-        .flat_map(|r| r.rooms.iter())
-        .find(|r| r.id == room_id);
+    let room = map.get_room_by_id(&room_id);
 
     let Some(room) = room else {
         save_pipeline_error(ctx, &turn_id, swipe_index, "Room not found");
@@ -212,7 +253,6 @@ pub fn execute_freeaction_pipeline(
         return;
     }
 
-    let mut state = load_state(ctx);
     state.narrative.generation.status = GenerationStatus::Generating;
     state.narrative.generation.phase = GenerationPhase::Quantifying;
 
@@ -294,42 +334,12 @@ pub fn execute_freeaction_pipeline(
                         }
                     };
 
-                    next_state.narrative.generation.phase = GenerationPhase::Quantifying;
-
-                    let fallback_ids: Vec<String> = next_state
-                        .scene
-                        .npcs_in_area
-                        .iter()
-                        .map(|n| n.id.clone())
-                        .collect();
-                    let mut post_trigger_result = default_quantifier_result(&fallback_ids);
-                    run_post_generation_agents(
+                    match reconcile_post_trigger_npcs(
                         service,
-                        &next_state,
+                        next_state.clone(),
                         &text,
                         &continuation_text,
-                        &mut post_trigger_result,
-                    );
-
-                    let previous_ids: Vec<String> = next_state
-                        .scene
-                        .npcs_in_area
-                        .iter()
-                        .map(|n| n.id.clone())
-                        .collect();
-
-                    let npc_cards: Vec<NpcCard> = post_trigger_result
-                        .npcs
-                        .npc_ids
-                        .iter()
-                        .filter_map(|id| next_state.npcs.get(id).cloned())
-                        .collect();
-                    let new_ids: Vec<String> = npc_cards.iter().map(|n| n.id.clone()).collect();
-
-                    next_state.scene.npcs_in_area = npc_cards;
-
-                    let events = compute_npc_events(&previous_ids, &new_ids);
-                    match apply_npc_events(next_state.clone(), &events.events) {
+                    ) {
                         Ok(updated) => next_state = updated,
                         Err(e) => {
                             log::error!("Failed to apply post-trigger NPC events: {e}");
@@ -342,9 +352,7 @@ pub fn execute_freeaction_pipeline(
                 }
             }
 
-            next_state.narrative.generation.status = GenerationStatus::Idle;
-            next_state.narrative.generation.phase = GenerationPhase::default();
-            save_state(ctx, &next_state, turn_id.clone(), swipe_index);
+            finish_action(ctx, next_state, turn_id.clone(), swipe_index);
         }
         Err(e) => {
             save_pipeline_error(ctx, &turn_id, swipe_index, format!("Error: {e}"));

@@ -1,5 +1,12 @@
 # QUICK TODO List
 
+# Added: 2026-05-14
+
+- [] Pressing "Reset Game" should cancel any LLM generation, as we don't want to have them being pushed into the new game
+- [] This error is a problem: `[System] Entered unknown location: dynamic_1778882402`. We shouldn't be showing an error message here. For one, we shouldn't be writing an error message into the conversation history. For another a 'dynamic location' isn't an error state. It just be displayed normal naturally. Probably just updating the location in the message box to `Foyer (Dynamic)` instead of `foyer`. 
+- [] The style of writing is a bit annoying
+- [] The list of LLM messages doesn't include the quantifier for some reason. 
+
 # Added: 2026-05-13
 
 - [] Some modules do that have associated test files in many cases e.g. `chronicler_engine\src\engine\game_service\retry.rs, chronicler_engine\src\server\fragments\checkpoint.rs. Check whether to simply go through them and add coverage, or explictly add a guardrail to check that rs classes (not enums) over a certain length should always havev and associated _test.rs

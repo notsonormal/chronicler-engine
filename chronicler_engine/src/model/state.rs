@@ -181,22 +181,19 @@ impl Default for NarrativeState {
 }
 
 impl NarrativeState {
-    /// Flatten active swipes into a Vec<LogEntry> for backward compatibility
+    /// Flatten messages into a Vec<LogEntry> for backward compatibility
     /// with templates and other consumers that expect the old shape.
     pub fn history(&self) -> Vec<LogEntry> {
         self.messages
             .iter()
-            .map(|msg| {
-                let text = msg.active_text().to_string();
-                LogEntry {
-                    id: msg.id,
-                    sender: msg.sender.clone(),
-                    text,
-                    log_type: msg.log_type.clone(),
-                    timestamp: msg.timestamp,
-                    location_header: msg.location_header.clone(),
-                    event_header: msg.event_header.clone(),
-                }
+            .map(|msg| LogEntry {
+                id: msg.id,
+                sender: msg.sender.clone(),
+                text: msg.text.clone(),
+                log_type: msg.log_type.clone(),
+                timestamp: msg.timestamp,
+                location_header: msg.location_header.clone(),
+                event_header: msg.event_header.clone(),
             })
             .collect()
     }
@@ -288,21 +285,14 @@ impl GameState {
         }
     }
 
-    pub fn add_log(&mut self, text: String, sender: Option<String>, log_type: LogType) {
-        if log_type == LogType::Input {
-            self.add_input(text, sender);
-            return;
-        }
-
+    fn push_message(&mut self, text: String, sender: Option<String>, log_type: LogType) {
         if self.narrative.messages.len() >= MAX_LOG_ENTRIES {
             self.narrative.messages.remove(0);
         }
-
         let id = self.narrative.next_log_id;
         self.narrative.next_log_id += 1;
         let location_header = self.narrative.pending_location.take();
         let event_header = self.narrative.pending_event.take();
-
         let turn_id = self.narrative.current_turn_id.clone();
         let message = Message::new(
             id,
@@ -313,46 +303,34 @@ impl GameState {
             location_header,
             event_header,
         );
-
         self.narrative.messages.push(message);
     }
 
-    fn add_input(&mut self, text: String, sender: Option<String>) {
-        if self.narrative.messages.len() >= MAX_LOG_ENTRIES {
-            self.narrative.messages.remove(0);
+    pub fn add_log(&mut self, text: String, sender: Option<String>, log_type: LogType) {
+        if log_type == LogType::Input {
+            self.add_input(text, sender);
+            return;
         }
-        let id = self.narrative.next_log_id;
-        self.narrative.next_log_id += 1;
-        let location_header = self.narrative.pending_location.take();
-        let event_header = self.narrative.pending_event.take();
-        let turn_id = self.narrative.current_turn_id.clone();
-        let message = Message::new(
-            id,
-            turn_id,
-            sender,
-            text,
-            LogType::Input,
-            location_header,
-            event_header,
-        );
-        self.narrative.messages.push(message);
+        self.push_message(text, sender, log_type);
+    }
+
+    fn add_input(&mut self, text: String, sender: Option<String>) {
+        self.push_message(text, sender, LogType::Input);
         self.narrative.current_turn_id = uuid::Uuid::new_v4().to_string();
     }
 
     /// [DOC: docs/architecture/system.md]
     pub fn edit_log(&mut self, id: u64, new_text: String) -> crate::error::Result<()> {
-        for message in &mut self.narrative.messages {
-            if message.id == id {
-                message.text = new_text.clone();
-                if let Some(swipe) = message.active_swipe_mut() {
-                    swipe.text = new_text;
-                }
-                return Ok(());
-            }
-        }
-        Err(crate::error::EngineError::Internal(
-            crate::error::internal_error(format!("Log entry not found: {id}")),
-        ))
+        self.narrative
+            .messages
+            .iter_mut()
+            .find(|m| m.id == id)
+            .map(|m| m.text = new_text)
+            .ok_or_else(|| {
+                crate::error::EngineError::Internal(crate::error::internal_error(format!(
+                    "Log entry not found: {id}"
+                )))
+            })
     }
 
     /// [DOC: docs/architecture/system.md]
@@ -364,46 +342,54 @@ impl GameState {
         }
 
         self.narrative.messages.pop();
+        self.narrative.current_turn_id = self
+            .narrative
+            .messages
+            .last()
+            .map(|m| m.turn_id.clone())
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
         Ok(())
     }
 
-    pub fn get_log(&self, id: u64) -> Option<LogEntry> {
-        self.narrative.history().into_iter().find(|e| e.id == id)
+    pub fn get_log(&self, id: u64) -> Option<&Message> {
+        self.narrative.messages.iter().find(|m| m.id == id)
     }
 
     pub fn get_last_ai_response_index(&self) -> Option<usize> {
         self.narrative
-            .history()
+            .messages
             .iter()
-            .rposition(|e| e.log_type == LogType::Narration || e.log_type == LogType::Dialogue)
+            .rposition(|m| m.log_type == LogType::Narration || m.log_type == LogType::Dialogue)
     }
 
     pub fn get_last_input_index(&self) -> Option<usize> {
         self.narrative
-            .history()
+            .messages
             .iter()
-            .rposition(|e| e.log_type == LogType::Input)
+            .rposition(|m| m.log_type == LogType::Input)
     }
 
     pub fn get_last_input_text(&self) -> Option<(String, String)> {
-        let input_idx = self.get_last_input_index()?;
-        let history = self.narrative.history();
-        let input_entry = history.get(input_idx)?;
-        let sender = input_entry.sender.clone().unwrap_or_default();
-        Some((sender, input_entry.text.clone()))
+        let input = self
+            .narrative
+            .messages
+            .iter()
+            .rev()
+            .find(|m| m.log_type == LogType::Input)?;
+        let sender = input.sender.clone().unwrap_or_default();
+        Some((sender, input.text.clone()))
     }
 
     /// [DOC: docs/architecture/system.md]
     /// Returns true if the last AI response is an event continuation
     /// (i.e. the last narration/dialogue entry has an event header).
     pub fn is_last_ai_response_event_continuation(&self) -> bool {
-        let Some(ai_idx) = self.get_last_ai_response_index() else {
-            return false;
-        };
-        let history = self.narrative.history();
-        history
-            .get(ai_idx)
-            .is_some_and(|e| e.event_header.is_some())
+        self.narrative
+            .messages
+            .iter()
+            .rev()
+            .find(|m| m.log_type == LogType::Narration || m.log_type == LogType::Dialogue)
+            .is_some_and(|m| m.event_header.is_some())
     }
 
     /// [DOC: docs/architecture/system.md]
@@ -425,7 +411,7 @@ impl GameState {
 
         let target_id = self
             .narrative
-            .history()
+            .messages
             .get(ai_idx)
             .ok_or_else(|| {
                 crate::error::EngineError::Internal(crate::error::internal_error(

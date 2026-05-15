@@ -156,6 +156,37 @@ fn test_delete_last_log() {
 }
 
 #[test]
+fn test_delete_last_log_recalculates_turn_id() {
+    let mut state = TestGameState::in_room("room1");
+
+    // Add Input + Narration sharing the same turn_id (mimics handler flow)
+    state.add_log("go north".into(), Some("Player".into()), LogType::Input);
+    let turn_id_a = state.narrative.messages.last().unwrap().turn_id.clone();
+    state.narrative.current_turn_id = turn_id_a.clone();
+    state.add_log("You walk north.".into(), None, LogType::Narration);
+
+    assert_eq!(state.narrative.messages.len(), 2);
+    assert_eq!(state.narrative.messages[0].turn_id, turn_id_a);
+    assert_eq!(state.narrative.messages[1].turn_id, turn_id_a);
+
+    // Delete Narration → current_turn_id should still be "A"
+    state.delete_last_log().unwrap();
+    assert_eq!(state.narrative.current_turn_id, turn_id_a);
+
+    // Delete Input → current_turn_id should change to a new UUID
+    state.delete_last_log().unwrap();
+    assert_ne!(state.narrative.current_turn_id, turn_id_a);
+
+    // Verify a new Input gets the current turn_id
+    let turn_id_before = state.narrative.current_turn_id.clone();
+    state.add_log("go south".into(), Some("Player".into()), LogType::Input);
+    assert_eq!(
+        state.narrative.messages.last().unwrap().turn_id,
+        turn_id_before
+    );
+}
+
+#[test]
 fn test_add_log_absorbs_pending_location() {
     let mut state = TestGameState::in_room("room1");
     state.narrative.pending_location = Some("Entrance Hall".to_string());

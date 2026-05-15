@@ -484,84 +484,6 @@ async fn test_checkpoint_delete_not_found() {
 }
 
 #[tokio::test]
-async fn test_switch_swipe_success() {
-    let mut state = create_test_state();
-    state.add_log(
-        "look".to_string(),
-        Some("Player".to_string()),
-        chronicler_engine::model::state::LogType::Input,
-    );
-    let turn_id = state.narrative.messages.last().unwrap().turn_id.clone();
-    {
-        let msg = state.narrative.messages.last_mut().unwrap();
-        msg.create_swipe("alternate text");
-    }
-
-    let storage = Arc::new(chronicler_engine::test_support::InMemorySnapshotStorage::new())
-        as Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage>;
-    let snapshot = chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(
-        &state,
-        turn_id.clone(),
-        0,
-    );
-    storage.save(&snapshot).unwrap();
-
-    let app = chronicler_engine::server::create_app_with_storage(
-        state,
-        storage,
-        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new()),
-        chronicler_engine::model::settings::AppSettings::default(),
-    );
-
-    let req = Request::builder()
-        .uri(format!("/turn/{turn_id}/swipe/1"))
-        .method(http::Method::POST)
-        .body(Body::empty())
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(response.into_body(), 1024)
-        .await
-        .unwrap();
-    assert!(
-        String::from_utf8_lossy(&body).contains("Switched"),
-        "Expected success message"
-    );
-}
-
-#[tokio::test]
-async fn test_switch_swipe_invalid_index() {
-    let mut state = create_test_state();
-    state.add_log(
-        "look".to_string(),
-        Some("Player".to_string()),
-        chronicler_engine::model::state::LogType::Input,
-    );
-    let turn_id = state.narrative.messages.last().unwrap().turn_id.clone();
-
-    let app = create_app_for_testing(state);
-    let req = Request::builder()
-        .uri(format!("/turn/{turn_id}/swipe/99"))
-        .method(http::Method::POST)
-        .body(Body::empty())
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-}
-
-#[tokio::test]
-async fn test_switch_swipe_turn_not_found() {
-    let app = create_app_for_testing(create_test_state());
-    let req = Request::builder()
-        .uri("/turn/nonexistent/swipe/0")
-        .method(http::Method::POST)
-        .body(Body::empty())
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-}
-
-#[tokio::test]
 async fn test_create_checkpoint_no_state() {
     let state = create_test_state();
     let storage = Arc::new(chronicler_engine::test_support::InMemorySnapshotStorage::new())
@@ -776,36 +698,6 @@ impl SnapshotStorage for FailingStorage {
         }
         self.inner.delete_checkpoint(id)
     }
-}
-
-#[tokio::test]
-async fn test_switch_swipe_load_state_error() {
-    let state = create_test_state();
-    let inner = Arc::new(chronicler_engine::test_support::InMemorySnapshotStorage::new())
-        as Arc<dyn SnapshotStorage>;
-    let storage = Arc::new(FailingStorage {
-        inner,
-        fail_load_latest: true,
-        fail_save_checkpoint: false,
-        fail_load_checkpoint: false,
-        fail_load_by_turn: false,
-        fail_save: false,
-        fail_delete_checkpoint: false,
-        fail_list_checkpoints: false,
-    });
-    let app = chronicler_engine::server::create_app_with_storage(
-        state,
-        storage,
-        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new()),
-        chronicler_engine::model::settings::AppSettings::default(),
-    );
-    let req = Request::builder()
-        .uri("/turn/test/swipe/0")
-        .method(http::Method::POST)
-        .body(Body::empty())
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
 
 #[tokio::test]

@@ -10,47 +10,6 @@ use crate::server::AppState;
 use super::renderers::render_error;
 
 /// [DOC: docs/system/game_flow.md]
-pub async fn switch_swipe_handler(
-    State(state): State<AppState>,
-    Path((turn_id, swipe_index)): Path<(String, u32)>,
-) -> (StatusCode, String) {
-    let result = match state.load_state() {
-        Ok(mut guard) => {
-            let msg = guard
-                .narrative
-                .messages
-                .iter_mut()
-                .rev()
-                .find(|m| m.turn_id == turn_id);
-            match msg {
-                Some(m) if (swipe_index as usize) < m.swipes.len() => {
-                    m.active_swipe_index = swipe_index;
-                    m.text = m.active_text().to_string();
-                    let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
-                        &guard,
-                        turn_id,
-                        swipe_index,
-                    );
-                    state.snapshot_storage.save(&snapshot)
-                }
-                _ => Err(crate::error::EngineError::Internal(
-                    crate::error::internal_error("Invalid swipe index".to_string()),
-                )),
-            }
-        }
-        Err(e) => Err(e),
-    };
-
-    match result {
-        Ok(()) => (
-            StatusCode::OK,
-            "<span class=\"status ready\">Switched</span>".to_string(),
-        ),
-        Err(e) => (StatusCode::BAD_REQUEST, render_error(&e.to_string())),
-    }
-}
-
-/// [DOC: docs/system/game_flow.md]
 pub async fn create_checkpoint_handler(State(state): State<AppState>) -> (StatusCode, String) {
     let result = (|| {
         let latest = state.snapshot_storage.load_latest(None)?.ok_or_else(|| {

@@ -3,7 +3,7 @@ use crate::model::state::GameState;
 use crate::model::trigger::{CharacterState, ComparisonOperator, Trigger, TriggerCondition};
 
 /// [DOC: docs/system/triggers.md]
-pub fn evaluate_triggers(state: &GameState) -> Vec<(NpcCard, Trigger)> {
+pub fn evaluate_triggers(state: &GameState) -> Vec<(NpcCard, Trigger, usize)> {
     let current_room_id = &state.movement.current_room_id;
 
     let mut results = Vec::new();
@@ -30,7 +30,7 @@ pub fn evaluate_triggers(state: &GameState) -> Vec<(NpcCard, Trigger)> {
                     );
                     continue;
                 }
-                results.push((npc.clone(), trigger.clone()));
+                results.push((npc.clone(), trigger.clone(), index));
             } else {
                 log::debug!(
                     "[Trigger] '{}' skipped: condition not met for NPC '{}'",

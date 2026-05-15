@@ -17,6 +17,8 @@ mod character_tests;
 #[cfg(test)]
 mod map_tests;
 #[cfg(test)]
+mod message_tests;
+#[cfg(test)]
 mod scenario_tests;
 #[cfg(test)]
 mod state_tests;
