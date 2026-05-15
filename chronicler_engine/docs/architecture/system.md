@@ -10,14 +10,14 @@ Contains pure data structures, serialization schemas, and the "Single Source of 
 - **`world`**: Setting lore, global rules, and starting scenarios.
 - **`map`**: Room/Region hierarchy and cardinal direction definitions.
 - **`character`**: NPC attributes (name, description, personality, scenario, image_path, **profile_image**, **headshot_image**) and Player inventory.
-- **`state`**: The `GameState` aggregation, narration history logs, and TUI state. `NarrativeState` uses a `Vec<Turn>` where each `Turn` groups one player `Input` with all its AI `Swipe` attempts. `LogEntry` remains the atomic rendering unit; `Turn` and `Swipe` are structural containers. `StoredTriggerContext` enables replaying trigger continuations on retry. `LogEntry` carries optional `location_header` and `event_header` metadata for visual rendering; `NarrativeState` tracks `pending_location` and `pending_event` for consumption by the next `add_log` call.
+- **`state`**: The `GameState` aggregation, narration history logs, and TUI state. `NarrativeState` uses a `Vec<Message>` where each `Message` is an independent narrative unit (input, narration, dialogue, or system) with its own `swipes: Vec<MessageSwipe>`. `LogEntry` remains the atomic rendering unit for templates and prompts; `Message` and `MessageSwipe` are structural containers. `StoredTriggerContext` enables replaying trigger continuations on retry. `LogEntry` carries optional `location_header` and `event_header` metadata for visual rendering; `NarrativeState` tracks `pending_location` and `pending_event` for consumption by the next `add_log` call.
 - **`scenario`**: Starting scenario definitions for narrative introductions.
 - **`trigger`**: Trigger definitions, conditions, and character state tracking (`Trigger`, `TriggerCondition`, `TriggerAction`, `NpcEncounterState`, `CharacterState`).
 - **`settings`**: `AppSettings`, `Connection`, and agent configuration data models.
 - **`agent`**: `AgentConfig`, `AgentResult`, `AgentContext`, `StatePatch`, `ExecutionPhase`, `BackendSelector`, `Confidence`.
 - **`llm_backend`**: `LlmBackendType` enum for backend selection.
 - **`llm_message`**: `LlmMessage` struct for LLM call forensics — agent name, backend, model, prompts, raw request/response JSON, parsed response, error, timestamp.
-- **`state_snapshot`**: `GameStateSnapshot` for SQLite persistence. Snapshots are keyed by `(turn_id, swipe_index)`.
+- **`state_snapshot`**: `GameStateSnapshot` for SQLite persistence. Snapshots are keyed by `(turn_id, swipe_index)` where `turn_id` groups messages created between user inputs.
 
 ### 2. The Engine Tier (`crate::engine::*`)
 Contains the mechanics that drive the simulation. It translates user intent and state into outcomes.
@@ -177,7 +177,7 @@ The following concerns are documented in dedicated `docs/system/` files. Those a
 | Dashboard layout, tabs, polling, edit/retry UI | [`system/dashboard.md`](../system/dashboard.md) |
 | UI design tokens, CSS components, animations | [`system/ui_design.md`](../system/ui_design.md) |
 | Full game loop phases, retry flow, status phases | [`system/game_flow.md`](../system/game_flow.md) |
-| History management, Turn + Swipe model | [`system/game_flow.md`](../system/game_flow.md) |
+| History management, Message + Swipe model | [`system/game_flow.md`](../system/game_flow.md) |
 | Server endpoint reference | [`system/game_flow.md`](../system/game_flow.md) |
 | Auto-trigger system and mutation order invariant | [`system/triggers.md`](../system/triggers.md) |
 | Navigation and movement resolution | [`system/navigation.md`](../system/navigation.md) |

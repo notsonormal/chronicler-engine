@@ -1,5 +1,33 @@
 ﻿# Changelog
 
+## 2026-05-15
+
+### Changed
+- **Message + Swipe Domain Model** — Migrated from `Turn` + `Swipe` to independent `Message` + `MessageSwipe`
+  - New `Message` struct: `id: u64`, `turn_id: String`, `sender`, `text`, `log_type`, `swipes: Vec<MessageSwipe>`, `active_swipe_index: u32`
+  - New `MessageSwipe` struct: `index: u32`, `text: String` — one generation attempt per message
+  - `NarrativeState.messages: Vec<Message>` replaces `Vec<Turn>`; `current_turn_id` tracks the active turn
+  - `add_log()` creates a new `Message` for every call (input, narration, event, dialogue, system)
+  - `history()` returns derived `Vec<LogEntry>` by mapping active message swipes; all rendering/prompts unchanged
+  - `delete_last_log()` pops the last message (peeling back layers); `delete_last_turn()` removes all messages back to last input
+
+### Changed
+- **Retry is now per-message** — Retry creates a new swipe on the *last message* only
+  - Main retry: loads `pre-main:{turn_id}`, creates new `MessageSwipe` on last message, re-runs full pipeline
+  - Event retry: loads `pre-event:{turn_id}`, creates new `MessageSwipe` copying active text, regenerates continuation
+  - `execute_freeaction_pipeline` no longer receives a `turn_id` from `Turn.id`; uses `NarrativeState.current_turn_id`
+
+### Changed
+- **Swipe navigation is per-message** — `POST /turn/:id/swipe/:index` switches the active swipe on the last message of that turn
+
+### Changed
+- **Checkpoint restore simplified** — Snapshots carry full `NarrativeState` with active swipe indices; no manual message adjustment needed
+
+### Added
+- **Documentation updated** — `docs/architecture/system.md`, `docs/system/game_flow.md`, `docs/system/dashboard.md`, `docs/system/narration_engine.md`
+  - New ADR `docs/adr/adr-014-message-swipe-model.md` documents rationale and trade-offs
+  - ADR-012 marked as superseded by ADR-014
+
 ## 2026-05-14
 
 ### Added

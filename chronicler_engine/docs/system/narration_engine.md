@@ -18,7 +18,7 @@ The LLM operates as a Game Master / Narrator for the text adventure. Its context
 - **Room Context**: The current `Room.name` and `Room.description` ground the scene.
 - **Present NPCs**: All `NpcCard`s located in the current room, including their `personality`, `scenario`, and `description`.
 - **Player Identity**: The `PlayerCard.name` and `PlayerCard.description` for reference.
-- **Conversation History**: Full narrative history (up to ~1000 entries from flattened active swipes) is sent to maintain continuity.
+- **Conversation History**: Full narrative history (up to ~1000 entries from active message swipes) is sent to maintain continuity.
 
 ### Narrative Modes
 The Game Master responds to three primary events:
@@ -36,7 +36,7 @@ The Game Master responds to three primary events:
    - After narration is generated, the engine calls `QuantifierBackendTrait::quantify_room()` to detect:
      - **NPCs**: Which NPCs are present in the generated narration text
      - **Movement**: If the narration indicates player moved to a new room (destination detection)
-   - Falls back to `state.scene.npcs_in_area` (previous turn's NPCs) if LLM fails or returns Low confidence.
+   - Falls back to `state.scene.npcs_in_area` (previous message's NPCs) if LLM fails or returns Low confidence.
    - Set `LLM_BACKEND=mock` env var to use MockQuantifierBackend for testing.
 5. **Movement Processing**: If movement was detected, `handle_movement()` updates `GameState.current_room_id` and the location header is shown.
 6. **Trigger Evaluation**: After quantification, the engine evaluates NPC triggers (see Continuation Narration below).

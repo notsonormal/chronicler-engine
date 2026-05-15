@@ -2,6 +2,8 @@
 
 ## Status
 
+**Superseded** by [ADR-014: Message + Swipe Domain Model](adr-014-message-swipe-model.md) — 2026-05-15
+
 **Accepted** — Implemented 2026-05-13
 
 ## Context

@@ -367,16 +367,6 @@ impl GameState {
         Ok(())
     }
 
-    pub fn delete_last_turn(&mut self) -> Option<String> {
-        let last_input_idx = self
-            .narrative
-            .messages
-            .iter()
-            .rposition(|m| m.log_type == LogType::Input)?;
-        let removed: Vec<Message> = self.narrative.messages.drain(last_input_idx..).collect();
-        removed.first().map(|m| m.id.to_string())
-    }
-
     pub fn get_log(&self, id: u64) -> Option<LogEntry> {
         self.narrative.history().into_iter().find(|e| e.id == id)
     }

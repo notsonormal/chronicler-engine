@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-15 21:22 UTC*
+*Index last generated: 2026-05-15 21:35 UTC*
 
 ### Root files
 
@@ -27,6 +27,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [ADR-011: Text Check Integration](./adr/adr-011-text-check-integration.md)
 - [ADR-012: Turn + Swipe Domain Model](./adr/adr-012-turn-swipe-model.md)
 - [ADR-013: LLM Call Logging and Forensics](./adr/adr-013-llm-message-logging.md)
+- [ADR-014: Message + Swipe Domain Model](./adr/adr-014-message-swipe-model.md)
 
 ### `docs/architecture/`
 
@@ -61,6 +62,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Implementation Plan: LLM Messages Tab](./plans/archived/dagger-wiccan-martian-manhunter-20260514.md)
 - [Plan: Fix Story Log Button Visibility & Text Bolding](./plans/archived/fix-story-log-buttons-and-bolding.md)
 - [Implementation Plan: Redmist Estate Data Overhaul](./plans/archived/ice-winter-soldier-bobbi-morse.md)
+- [Plan: Message+Swipe Storage (Marinara/SillyTavern Model)](./plans/archived/jakeem-thunder-hal-jordan-dazzler-20260515.md)
 - [Plan: Migrate Chronicler Engine to Turn + Swipe Model](./plans/archived/jericho-huntress-devil-dinosaur-20260513.md)
 - [Plan: Restrict Message Deletion & Rethink Location/Event Headers](./plans/archived/lightray-thor-hulk.md)
 - [Implementation Plan: Test Suite Improvements](./plans/archived/test-fix-plan.md)
