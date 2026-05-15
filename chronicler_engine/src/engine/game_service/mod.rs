@@ -11,3 +11,5 @@ pub use service::{DefaultGameService, GameService};
 
 #[cfg(test)]
 mod helpers_tests;
+#[cfg(test)]
+mod retry_tests;

@@ -391,35 +391,4 @@ impl GameState {
             .find(|m| m.log_type == LogType::Narration || m.log_type == LogType::Dialogue)
             .is_some_and(|m| m.event_header.is_some())
     }
-
-    /// [DOC: docs/architecture/system.md]
-    pub fn replace_last_ai_response(&mut self, new_text: String) -> crate::error::Result<()> {
-        let input_idx = self.get_last_input_index().ok_or_else(|| {
-            crate::error::EngineError::Internal(crate::error::internal_error("No input to retry"))
-        })?;
-        let ai_idx = self.get_last_ai_response_index().ok_or_else(|| {
-            crate::error::EngineError::Internal(crate::error::internal_error(
-                "No AI response to retry",
-            ))
-        })?;
-
-        if ai_idx <= input_idx {
-            return Err(crate::error::EngineError::Internal(
-                crate::error::internal_error("AI response must be after input"),
-            ));
-        }
-
-        let target_id = self
-            .narrative
-            .messages
-            .get(ai_idx)
-            .ok_or_else(|| {
-                crate::error::EngineError::Internal(crate::error::internal_error(
-                    "AI response not found",
-                ))
-            })?
-            .id;
-
-        self.edit_log(target_id, new_text)
-    }
 }

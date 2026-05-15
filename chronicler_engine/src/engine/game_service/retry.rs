@@ -46,7 +46,7 @@ pub fn retry_last_response_impl(service: &DefaultGameService, ctx: GameServiceCo
     }
 }
 
-fn save_retry_error(
+pub(crate) fn save_retry_error(
     ctx: &GameServiceContext,
     turn_uuid: &str,
     swipe: u32,
@@ -57,7 +57,7 @@ fn save_retry_error(
     save_state(ctx, &state, turn_uuid.to_string(), swipe);
 }
 
-fn retry_event_continuation(
+pub(crate) fn retry_event_continuation(
     service: &DefaultGameService,
     ctx: &GameServiceContext,
     turn_uuid: &str,
@@ -206,7 +206,7 @@ fn retry_event_continuation(
     );
 }
 
-fn retry_main_narration(
+pub(crate) fn retry_main_narration(
     service: &DefaultGameService,
     ctx: &GameServiceContext,
     turn_uuid: &str,

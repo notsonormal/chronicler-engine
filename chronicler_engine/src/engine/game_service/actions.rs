@@ -94,7 +94,12 @@ fn save_pipeline_error(
     save_state(ctx, &state, turn_id.to_string(), swipe_index);
 }
 
-pub(crate) fn finish_action(ctx: &GameServiceContext, mut state: GameState, turn_id: String, swipe_index: u32) {
+pub(crate) fn finish_action(
+    ctx: &GameServiceContext,
+    mut state: GameState,
+    turn_id: String,
+    swipe_index: u32,
+) {
     state.narrative.generation.status = GenerationStatus::Idle;
     state.narrative.generation.phase = GenerationPhase::default();
     save_state(ctx, &state, turn_id, swipe_index);

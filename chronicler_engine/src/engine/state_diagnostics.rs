@@ -71,7 +71,6 @@ fn assert_character_state_consistency(state: &GameState) -> Result<(), EngineErr
 }
 
 /// INV-LOG: the last AI response must follow the last player input.
-/// This is the load-bearing invariant for `replace_last_ai_response`.
 #[cfg(feature = "diagnostics")]
 fn assert_log_invariants(state: &GameState) -> Result<(), EngineError> {
     let ai_idx = state.get_last_ai_response_index();

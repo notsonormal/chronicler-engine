@@ -95,47 +95,6 @@ fn test_get_last_input_index() {
 }
 
 #[test]
-fn test_replace_last_ai_response() {
-    let mut state = TestGameState::in_room("room1");
-
-    state.add_log("User input".into(), Some("Player".into()), LogType::Input);
-    state.add_log("Old AI response".into(), None, LogType::Narration);
-
-    // Replace the AI response
-    state
-        .replace_last_ai_response("New AI response".into())
-        .unwrap();
-
-    // Verify the AI response was replaced
-    let ai_idx = state.get_last_ai_response_index().unwrap();
-    assert_eq!(state.narrative.history()[ai_idx].text, "New AI response");
-}
-
-#[test]
-fn test_replace_last_ai_response_no_input() {
-    let mut state = TestGameState::in_room("room1");
-
-    // No input - should fail
-    assert!(
-        state
-            .replace_last_ai_response("New response".into())
-            .is_err()
-    );
-}
-
-#[test]
-fn test_replace_last_ai_response_no_ai() {
-    let mut state = TestGameState::in_room("room1");
-
-    state.add_log("User input".into(), Some("Player".into()), LogType::Input);
-    assert!(
-        state
-            .replace_last_ai_response("New response".into())
-            .is_err()
-    );
-}
-
-#[test]
 fn test_delete_last_log() {
     let mut state = TestGameState::in_room("room1");
 

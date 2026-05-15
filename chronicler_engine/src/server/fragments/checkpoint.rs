@@ -65,8 +65,7 @@ pub async fn restore_checkpoint_handler(
             state.player.clone(),
             (*state.npcs).clone(),
         );
-        // Snapshot already contains correct active_swipe_index for all messages.
-        // No manual adjustment needed in the Message model.
+        // Snapshot contains the full message list; restoring it is sufficient.
         let new_snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
             &game_state,
             checkpoint.turn_id,
