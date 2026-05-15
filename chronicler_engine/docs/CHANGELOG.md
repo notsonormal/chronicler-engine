@@ -1,5 +1,23 @@
 ﻿# Changelog
 
+## 2026-05-14
+
+### Added
+- **LLM Messages Tab** — New dashboard tab showing the last 50 LLM calls with full request/response forensics
+  - `LlmMessage` model: agent name, backend, model, system/user prompts, raw request/response JSON, parsed response, error, timestamp
+  - `llm_messages` SQLite table with `created_at DESC` index and strict 50-row auto-pruning cap
+  - `LlmMessageStorage` trait: `save()` + `list_latest(limit)`; `SqliteLlmMessageStorage` (transactional insert+prune) + `InMemoryLlmMessageStorage` (ring buffer for tests)
+  - `ChatCompletionResult` in `llm_client.rs`: returns full metadata (text, prompts, raw JSON) from the HTTP client chokepoint
+  - `LlmCallResult` in `LlmBackend` trait: wraps `ChatCompletionResult` with `backend_name`, `model_name`, `agent_name`
+  - All 4 LLM backends (OpenRouter, DeepSeek, Ollama, Mock) updated to return `LlmCallResult` and pass `agent_name`
+  - Quantifier path logs via shared `llm_client.rs` with `agent_name = "quantifier"`
+  - `/fragment/llm-messages` endpoint with `LlmMessagesTemplate` (compact expandable list, oldest-first, polled every 4s)
+  - `index.html` tab button + `styles.css` styling for LLM Messages panel
+  - Agent name constants: `AGENT_NARRATOR`, `AGENT_QUANTIFIER`, `AGENT_TRIGGER`, `AGENT_DIALOGUE`
+
+### Changed
+- **Documentation updated** — `docs/architecture/system.md`, `docs/system/dashboard.md`, `docs/system/llm_processing.md`, `docs/reference/testing.md`
+
 ## 2026-05-13
 
 ### Added

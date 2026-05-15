@@ -6,7 +6,7 @@ use chronicler_engine::narrative::agents::quantifier::{
     MockQuantifierBackend, MovementParseResult, MovementType, QuantifierConfidence,
 };
 use chronicler_engine::narrative::llm::MockBackend;
-use chronicler_engine::test_support::make_test_context;
+use chronicler_engine::test_support::make_test_context_with_sqlite;
 
 use crate::{
     add_input_and_save, create_test_state_with_map, latest_state, wait_for_generation_complete,
@@ -17,9 +17,9 @@ fn test_sequential_execute_retry_execute() {
     // Flow: Action A → Retry A → Action B → Verify history order and state consistency
     let mut state = create_test_state_with_map();
     state.narrative.turns.clear();
-    let ctx = make_test_context(state);
+    let ctx = make_test_context_with_sqlite(state).unwrap();
     let service = DefaultGameService::with_mock_quantifier(
-        Arc::new(MockBackend::default()),
+        Arc::new(MockBackend::new(Some(Arc::clone(&ctx.llm_message_storage)))),
         Arc::new(MockQuantifierBackend::default()),
     );
 
@@ -69,6 +69,13 @@ fn test_sequential_execute_retry_execute() {
         narrations.len() >= 2,
         "Should have narrations from both actions"
     );
+
+    // Verify LLM calls were logged to SQLite storage
+    let messages = ctx.llm_message_storage.list_latest(50).unwrap();
+    assert!(
+        !messages.is_empty(),
+        "LLM messages should be logged during gameplay"
+    );
 }
 
 #[test]
@@ -76,9 +83,9 @@ fn test_sequential_execute_delete_execute() {
     // Flow: Action A → Delete A's narration → Action B → Verify clean state
     let mut state = create_test_state_with_map();
     state.narrative.turns.clear();
-    let ctx = make_test_context(state);
+    let ctx = make_test_context_with_sqlite(state).unwrap();
     let service = DefaultGameService::with_mock_quantifier(
-        Arc::new(MockBackend::default()),
+        Arc::new(MockBackend::new(Some(Arc::clone(&ctx.llm_message_storage)))),
         Arc::new(MockQuantifierBackend::default()),
     );
 
@@ -145,10 +152,10 @@ fn test_sync_look_then_async_freeaction_then_retry() {
     // Verify sync action adds narration immediately, then async + retry work.
     let mut state = create_test_state_with_map();
     state.narrative.turns.clear();
-    let ctx = make_test_context(state);
+    let ctx = make_test_context_with_sqlite(state).unwrap();
 
     let service = DefaultGameService::with_mock_quantifier(
-        Arc::new(MockBackend::default()),
+        Arc::new(MockBackend::new(Some(Arc::clone(&ctx.llm_message_storage)))),
         Arc::new(MockQuantifierBackend::default()),
     );
 
@@ -196,10 +203,10 @@ fn test_three_actions_in_sequence() {
     // Flow: Action A → Action B → Action C
     let mut state = create_test_state_with_map();
     state.narrative.turns.clear();
-    let ctx = make_test_context(state);
+    let ctx = make_test_context_with_sqlite(state).unwrap();
 
     let service = DefaultGameService::with_mock_quantifier(
-        Arc::new(MockBackend::default()),
+        Arc::new(MockBackend::new(Some(Arc::clone(&ctx.llm_message_storage)))),
         Arc::new(MockQuantifierBackend::default()),
     );
 
@@ -239,12 +246,12 @@ fn test_delete_input_then_retry_fails_gracefully() {
     // Retry should find no input and fail gracefully.
     let mut state = create_test_state_with_map();
     state.narrative.turns.clear();
-    let ctx = make_test_context(state);
+    let ctx = make_test_context_with_sqlite(state).unwrap();
 
     add_input_and_save(&ctx, "examine room");
 
     let service = DefaultGameService::with_mock_quantifier(
-        Arc::new(MockBackend::default()),
+        Arc::new(MockBackend::new(Some(Arc::clone(&ctx.llm_message_storage)))),
         Arc::new(MockQuantifierBackend::default()),
     );
 
@@ -281,7 +288,7 @@ fn test_reset_clears_history_and_state() {
     // Flow: Execute action with movement → Reset → verify back to initial state
     let mut state = create_test_state_with_map();
     state.narrative.turns.clear();
-    let ctx = make_test_context(state);
+    let ctx = make_test_context_with_sqlite(state).unwrap();
 
     add_input_and_save(&ctx, "walk to room2");
 
@@ -294,8 +301,10 @@ fn test_reset_clears_history_and_state() {
         ..Default::default()
     });
 
-    let service =
-        DefaultGameService::with_mock_quantifier(Arc::new(MockBackend::default()), quantifier);
+    let service = DefaultGameService::with_mock_quantifier(
+        Arc::new(MockBackend::new(Some(Arc::clone(&ctx.llm_message_storage)))),
+        quantifier,
+    );
 
     service.execute_action(
         ctx.clone(),
@@ -332,10 +341,10 @@ fn test_reset_then_execute_works() {
     // Flow: Execute → Reset → Execute again
     let mut state = create_test_state_with_map();
     state.narrative.turns.clear();
-    let ctx = make_test_context(state);
+    let ctx = make_test_context_with_sqlite(state).unwrap();
 
     let service = DefaultGameService::with_mock_quantifier(
-        Arc::new(MockBackend::default()),
+        Arc::new(MockBackend::new(Some(Arc::clone(&ctx.llm_message_storage)))),
         Arc::new(MockQuantifierBackend::default()),
     );
 
@@ -384,10 +393,10 @@ fn test_delete_mid_sequence() {
     // Flow: Action A → Action B → delete B's narration → Action C
     let mut state = create_test_state_with_map();
     state.narrative.turns.clear();
-    let ctx = make_test_context(state);
+    let ctx = make_test_context_with_sqlite(state).unwrap();
 
     let service = DefaultGameService::with_mock_quantifier(
-        Arc::new(MockBackend::default()),
+        Arc::new(MockBackend::new(Some(Arc::clone(&ctx.llm_message_storage)))),
         Arc::new(MockQuantifierBackend::default()),
     );
 

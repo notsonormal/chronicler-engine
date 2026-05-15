@@ -5,7 +5,8 @@ use crate::error::Result;
 use crate::model::state::GameState;
 use crate::server::AppState;
 use crate::server::templates::{
-    ActionAreaTemplate, HeaderTemplate, StoryLogTemplate, VisualSidebarTemplate,
+    ActionAreaTemplate, HeaderTemplate, LlmMessagesTemplate, StoryLogTemplate,
+    VisualSidebarTemplate,
 };
 
 const MAX_LOG_DISPLAY: usize = 50;
@@ -144,6 +145,16 @@ pub fn render_action_hints(state: &AppState) -> Result<String> {
     };
 
     Ok(available_actions)
+}
+
+pub fn render_llm_messages(state: &AppState) -> Result<String> {
+    let messages = state.llm_message_storage.list_latest(50).map_err(|e| {
+        crate::error::EngineError::Template(format!("Failed to load LLM messages: {e}"))
+    })?;
+    let template = LlmMessagesTemplate::new(&messages);
+    template
+        .render()
+        .map_err(|e| crate::error::EngineError::Template(e.to_string()))
 }
 
 pub fn html_escape(s: &str) -> String {

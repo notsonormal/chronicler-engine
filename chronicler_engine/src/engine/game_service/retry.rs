@@ -129,12 +129,13 @@ fn retry_event_continuation(
     );
 
     let backend = Arc::clone(&service.llm_backend);
-    let continuation_text = match backend.narrate_action_from_prompt(
+    let continuation_result = match backend.narrate_action_from_prompt(
+        crate::narrative::llm::backend::AGENT_TRIGGER,
         &trigger.system_prompt,
         &trigger.user_prompt,
         trigger.max_tokens,
     ) {
-        Ok(t) => t,
+        Ok(result) => result,
         Err(e) => {
             log::error!("Trigger narration retry failed: {e}");
             save_retry_error(
@@ -146,6 +147,7 @@ fn retry_event_continuation(
             return;
         }
     };
+    let continuation_text = continuation_result.text;
 
     if continuation_text.trim().is_empty() {
         save_retry_error(

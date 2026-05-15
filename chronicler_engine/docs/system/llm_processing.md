@@ -1,4 +1,4 @@
-# Specification: LLM Processing & Integration
+﻿# Specification: LLM Processing & Integration
 
 > **Related Decisions**: [ADR-004](../adr/adr-004-xml-prompt-format.md), [ADR-007](../adr/adr-007-settings-system.md), [ADR-010](../adr/adr-010-concurrency-generation-gate.md)
 
@@ -56,7 +56,7 @@ The engine uses a layered prompt system inspired by SillyTavern's Prompt Manager
 - **System half**: Plain-text instructions only (Layer 0)
 - **User half**: XML-wrapped data (Layers 1–6) + plain-text PHI (Layer 7)
 
-This separation reduces the chance of reasoning models (e.g., Gemma 4) entering meta-analysis mode. However, the Gemma 4 26B model (particularly abliterated quants) can still get stuck in an infinite `<|channel>thought` loop even with plain-text instructions. An additional prompt-level fix is applied for Gemma 4 models (see §8).
+This separation reduces the chance of reasoning models (e.g., Gemma 4) entering meta-analysis mode. However, the Gemma 4 26B model (particularly abliterated quants) can still get stuck in an infinite `<|channel>thought` loop even with plain-text instructions. An additional prompt-level fix is applied for Gemma 4 models (see section 8).
 
 ### 6. Token Budget Management
 - **MAX_CONTEXT_TOKENS**: 32768 (fallback default; configurable per connection via `max_context_tokens`)
@@ -95,10 +95,36 @@ This matches SillyTavern's `last_output_sequence` preset for Gemma 4. It pre-fil
 - **Safety net**: `sanitize_llm_output()` strips any leaked `<channel|>`, `<thought>`, or `<|channel>thought` artifacts from all responses regardless of model
 - **Ref**: [SillyTavern Reddit discussion](https://old.reddit.com/r/SillyTavernAI/comments/1sbjwke/)
 
+### 9. LLM Call Logging & Forensics
+Every LLM call is logged to a SQLite `llm_messages` table with a strict 50-row global cap. This enables rapid diagnosis when the engine misbehaves — the full request/response JSON is preserved alongside metadata.
+
+#### Architecture
+- **`call_chat_completions()`** in `llm_client.rs` is the single chokepoint. It returns `ChatCompletionResult { text, system_prompt, user_prompt, raw_request_json, raw_response_json }`.
+- **`LlmBackend` trait** methods take `agent_name: &str` and return `LlmCallResult`, which wraps the `ChatCompletionResult` with `backend_name` and `model_name`.
+- **Quantifier path** also logs via `llm_client.rs` directly (not via `LlmBackend`), using the same storage parameter.
+- **`LlmMessageStorage` trait** (`crate::storage::llm_message_storage`) abstracts persistence:
+  - `SqliteLlmMessageStorage`: SQLite with auto-pruning (insert + DELETE oldest in a transaction)
+  - `InMemoryLlmMessageStorage`: Ring buffer for tests
+- **Storage is optional**: Backends accept `Option<Arc<dyn LlmMessageStorage>>`. When `None`, logging is silently skipped (useful for tests that don't care about forensics).
+
+#### Agent Names
+Four agent names are used consistently across the codebase:
+| Agent | Role |
+|-------|------|
+| `narrator` | Game Master narration |
+| `quantifier` | Scene quantification |
+| `trigger` | Trigger event continuation |
+| `dialogue` | NPC dialogue generation |
+
+#### Dashboard Integration
+The LLM Messages tab (`/fragment/llm-messages`) renders the last 50 calls as an expandable list, polled every 4 seconds via HTMX.
+
 ### Module Location
 - **Crate path**: `crate::narrative::llm` — directory module (`mod.rs`, `backend.rs`, `openrouter.rs`, `deepseek.rs`, `ollama.rs`, `mock.rs`)
 - **Crate path**: `crate::narrative::prompt` — directory module (`mod.rs`, `builder.rs`, `budget.rs`, `context.rs`, `sanitize.rs`, `templates.rs`, `types.rs`, plus sibling `*_tests.rs` files)
 - **Crate path**: `crate::narrative::llm_client` — HTTP client helpers (`src/narrative/llm_client.rs`)
+- **Crate path**: `crate::storage::llm_message_storage` — trait + SQLite + in-memory implementations
+- **Crate path**: `crate::model::llm_message` — `LlmMessage` data model
 
 ## Implementation Standards
 - Use the `LlmBackend` trait for all implementations

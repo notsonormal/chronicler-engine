@@ -16,6 +16,7 @@ Contains pure data structures, serialization schemas, and the "Single Source of 
 - **`settings`**: `AppSettings`, `Connection`, and agent configuration data models.
 - **`agent`**: `AgentConfig`, `AgentResult`, `AgentContext`, `StatePatch`, `ExecutionPhase`, `BackendSelector`, `Confidence`.
 - **`llm_backend`**: `LlmBackendType` enum for backend selection.
+- **`llm_message`**: `LlmMessage` struct for LLM call forensics — agent name, backend, model, prompts, raw request/response JSON, parsed response, error, timestamp.
 - **`state_snapshot`**: `GameStateSnapshot` for SQLite persistence. Snapshots are keyed by `(turn_id, swipe_index)`.
 
 ### 2. The Engine Tier (`crate::engine::*`)
@@ -137,9 +138,10 @@ Unified error type shared across all tiers.
 - **`InternalError`**: Invariant violations
 
 ### 7. The Storage Tier (`crate::storage`)
-SQLite-based snapshot persistence for game state.
+SQLite-based persistence for game state and LLM call forensics.
 - **`db`**: Database connection and schema management
 - **`snapshot_storage`**: `SnapshotStorage` trait and SQLite implementation (`SqliteSnapshotStorage`)
+- **`llm_message_storage`**: `LlmMessageStorage` trait + `SqliteLlmMessageStorage` (auto-pruning to 50 rows) + `InMemoryLlmMessageStorage` (tests)
 - **`GameStateSnapshot`**: Serializable subset of `GameState` for persistence
 
 ### 8. The Bootstrap Tier (`crate::bootstrap`)
@@ -158,7 +160,7 @@ Command-line argument parsing via `clap`.
 Shared test fixtures and utilities.
 - **`fixtures`**: `TestGameState`, `TestNpc`, `TestMap`, etc.
 - **`context`**: Test context helpers
-- **`in_memory_storage`**: In-memory `SnapshotStorage` implementation for tests
+- **`in_memory_storage`**: In-memory `SnapshotStorage` and `LlmMessageStorage` implementations for tests
 
 > **Note:** `assets/` contains static web assets (`index.html`) served by the server. It is not a Rust module tier.
 
@@ -180,6 +182,7 @@ The following concerns are documented in dedicated `docs/system/` files. Those a
 | Auto-trigger system and mutation order invariant | [`system/triggers.md`](../system/triggers.md) |
 | Navigation and movement resolution | [`system/navigation.md`](../system/navigation.md) |
 | Narration engine and Game Master logic | [`system/narration_engine.md`](../system/narration_engine.md) |
+| LLM call logging and forensics | [`system/llm_processing.md`](../system/llm_processing.md) |
 
 ## Error Strategy
 

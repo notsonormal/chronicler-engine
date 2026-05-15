@@ -133,14 +133,18 @@ fn test_app_state_lock_state_success() {
     let snapshot = GameStateSnapshot::from_game_state(&state, "test".to_string(), 0);
     let storage = Arc::new(crate::test_support::InMemorySnapshotStorage::new());
     let _ = storage.save(&snapshot);
+    let llm_storage: Arc<dyn crate::storage::llm_message_storage::LlmMessageStorage> =
+        Arc::new(crate::storage::llm_message_storage::InMemoryLlmMessageStorage::new());
 
     let app_state = crate::server::AppState {
         snapshot_storage: storage,
+        llm_message_storage: Arc::clone(&llm_storage),
         world: state.world.clone(),
         map: state.map.clone(),
         player: state.player.clone(),
         npcs: Arc::new(state.npcs.clone()),
-        game_service: Arc::new(DefaultGameService::new()) as Arc<dyn GameService>,
+        game_service: Arc::new(DefaultGameService::with_storage(Some(llm_storage)))
+            as Arc<dyn GameService>,
         settings: Arc::new(std::sync::RwLock::new(AppSettings::default())),
         cancel_token: Arc::new(std::sync::RwLock::new(
             tokio_util::sync::CancellationToken::new(),
@@ -255,13 +259,17 @@ fn test_app_state_lock_state_poisoned() {
         "room".to_string(),
     );
 
+    let llm_storage: Arc<dyn crate::storage::llm_message_storage::LlmMessageStorage> =
+        Arc::new(crate::storage::llm_message_storage::InMemoryLlmMessageStorage::new());
     let app_state = crate::server::AppState {
         snapshot_storage: Arc::new(FailingStorage),
+        llm_message_storage: Arc::clone(&llm_storage),
         world: state.world.clone(),
         map: state.map.clone(),
         player: state.player.clone(),
         npcs: Arc::new(state.npcs.clone()),
-        game_service: Arc::new(DefaultGameService::new()) as Arc<dyn GameService>,
+        game_service: Arc::new(DefaultGameService::with_storage(Some(llm_storage)))
+            as Arc<dyn GameService>,
         settings: Arc::new(std::sync::RwLock::new(AppSettings::default())),
         cancel_token: Arc::new(std::sync::RwLock::new(
             tokio_util::sync::CancellationToken::new(),

@@ -62,6 +62,10 @@ fn build_router(app_state: AppState) -> Router {
             get(fragments::list_checkpoints_fragment),
         )
         .route(
+            "/fragment/llm-messages",
+            get(fragments::llm_messages_fragment),
+        )
+        .route(
             "/turn/:id/swipe/:index",
             post(fragments::switch_swipe_handler),
         )
@@ -126,23 +130,29 @@ pub fn create_app_for_testing_with_settings(state: GameState, settings: AppSetti
     );
     let storage = Arc::new(crate::test_support::InMemorySnapshotStorage::new())
         as Arc<dyn crate::storage::snapshot_storage::SnapshotStorage>;
+    let llm_storage =
+        Arc::new(crate::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
+            as Arc<dyn crate::storage::llm_message_storage::LlmMessageStorage>;
     let _ = storage.save(&snapshot);
-    create_app_with_storage(state, storage, settings)
+    create_app_with_storage(state, storage, llm_storage, settings)
 }
 
 pub fn create_app_with_storage(
     state: GameState,
     storage: Arc<dyn crate::storage::snapshot_storage::SnapshotStorage>,
+    llm_storage: Arc<dyn crate::storage::llm_message_storage::LlmMessageStorage>,
     settings: AppSettings,
 ) -> Router {
     let app_state = AppState {
         snapshot_storage: storage,
+        llm_message_storage: Arc::clone(&llm_storage),
         world: state.world.clone(),
         map: state.map.clone(),
         player: state.player.clone(),
         npcs: Arc::new(state.npcs.clone()),
-        game_service: Arc::new(crate::engine::game_service::DefaultGameService::new())
-            as Arc<dyn crate::engine::game_service::GameService>,
+        game_service: Arc::new(
+            crate::engine::game_service::DefaultGameService::with_storage(Some(llm_storage)),
+        ) as Arc<dyn crate::engine::game_service::GameService>,
         settings: Arc::new(RwLock::new(settings)),
         cancel_token: Arc::new(std::sync::RwLock::new(CancellationToken::new())),
         is_generating: Arc::new(AtomicBool::new(false)),
@@ -169,6 +179,7 @@ use crate::model::map::MapDef;
 use crate::model::settings::AppSettings;
 use crate::model::state::GameState;
 use crate::model::world::WorldCard;
+use crate::storage::llm_message_storage::LlmMessageStorage;
 use crate::storage::snapshot_storage::SnapshotStorage;
 
 #[derive(Clone, Debug)]
@@ -185,6 +196,7 @@ impl Default for ServerConfig {
 #[derive(Clone)]
 pub struct AppState {
     pub snapshot_storage: Arc<dyn SnapshotStorage>,
+    pub llm_message_storage: Arc<dyn LlmMessageStorage>,
     pub world: Arc<WorldCard>,
     pub map: Arc<MapDef>,
     pub player: Arc<crate::model::character::PlayerCard>,
@@ -219,6 +231,7 @@ impl AppState {
     pub fn as_game_service_context(&self) -> crate::engine::game_service::GameServiceContext {
         crate::engine::game_service::GameServiceContext {
             snapshot_storage: Arc::clone(&self.snapshot_storage),
+            llm_message_storage: Arc::clone(&self.llm_message_storage),
             world: Arc::clone(&self.world),
             map: Arc::clone(&self.map),
             player: Arc::clone(&self.player),
@@ -261,6 +274,7 @@ pub async fn run_server(
     player: Arc<crate::model::character::PlayerCard>,
     npcs: Arc<HashMap<String, NpcCard>>,
     snapshot_storage: Arc<dyn SnapshotStorage>,
+    llm_message_storage: Arc<dyn LlmMessageStorage>,
 ) -> Result<()> {
     run_server_with_config(
         world,
@@ -268,6 +282,7 @@ pub async fn run_server(
         player,
         npcs,
         snapshot_storage,
+        llm_message_storage,
         ServerConfig::default(),
     )
     .await
@@ -281,16 +296,19 @@ pub async fn run_server_with_config(
     player: Arc<crate::model::character::PlayerCard>,
     npcs: Arc<HashMap<String, NpcCard>>,
     snapshot_storage: Arc<dyn SnapshotStorage>,
+    llm_message_storage: Arc<dyn LlmMessageStorage>,
     config: ServerConfig,
 ) -> Result<()> {
     let app_state = AppState {
         snapshot_storage,
+        llm_message_storage: Arc::clone(&llm_message_storage),
         world,
         map,
         player,
         npcs,
         is_generating: Arc::new(AtomicBool::new(false)),
-        game_service: Arc::new(DefaultGameService::new()) as Arc<dyn GameService>,
+        game_service: Arc::new(DefaultGameService::with_storage(Some(llm_message_storage)))
+            as Arc<dyn GameService>,
         settings: Arc::new(RwLock::new(
             crate::settings::load_settings().unwrap_or_else(|_| AppSettings::default()),
         )),

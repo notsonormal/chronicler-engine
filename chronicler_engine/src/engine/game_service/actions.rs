@@ -202,13 +202,15 @@ pub fn execute_freeaction_pipeline(
     );
 
     let backend = Arc::clone(&service.llm_backend);
-    let narration_text = match backend.narrate_action(&context) {
-        Ok(t) => t,
-        Err(e) => {
-            save_pipeline_error(ctx, &turn_id, swipe_index, map_llm_error(&e));
-            return;
-        }
-    };
+    let narration_result =
+        match backend.narrate_action(crate::narrative::llm::backend::AGENT_NARRATOR, &context) {
+            Ok(result) => result,
+            Err(e) => {
+                save_pipeline_error(ctx, &turn_id, swipe_index, map_llm_error(&e));
+                return;
+            }
+        };
+    let narration_text = narration_result.text;
 
     if narration_text.trim().is_empty() {
         save_pipeline_error(ctx, &turn_id, swipe_index, "LLM Error: empty response");
@@ -260,12 +262,13 @@ pub fn execute_freeaction_pipeline(
                 next_state.narrative.last_trigger = Some(request.stored.clone());
                 save_committed_state(ctx, &next_state, format!("pre-event:{turn_id}"), 0);
 
-                let continuation_text = match backend.narrate_action_from_prompt(
+                let continuation_result = match backend.narrate_action_from_prompt(
+                    crate::narrative::llm::backend::AGENT_TRIGGER,
                     &request.stored.system_prompt,
                     &request.stored.user_prompt,
                     request.stored.max_tokens,
                 ) {
-                    Ok(t) => t,
+                    Ok(result) => result,
                     Err(e) => {
                         log::error!("Trigger narration failed: {e}");
                         next_state.add_log(
@@ -279,6 +282,7 @@ pub fn execute_freeaction_pipeline(
                         return;
                     }
                 };
+                let continuation_text = continuation_result.text;
 
                 if !continuation_text.is_empty() {
                     next_state = match commit_trigger_narration(

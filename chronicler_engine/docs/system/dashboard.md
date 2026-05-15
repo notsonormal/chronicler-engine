@@ -14,8 +14,8 @@ Displays system-level context.
 - **Note**: Location is displayed in the story log, not the header
 
 ### 2. Tab Bar
-Navigation between Game and Settings views.
-- **Tabs**: Game | Settings
+Navigation between Game, LLM Messages, and Settings views.
+- **Tabs**: Game | LLM Messages | Settings
 - **Active tab**: Green text with green bottom border
 - **Inactive tab**: Muted gray text
 
@@ -83,6 +83,7 @@ The dashboard uses HTMX polling for live updates:
 - Visual sidebar polls `/fragment/visual-sidebar` every 5 seconds
 - Status-display polls `/status/generating` every 5 seconds to update button state
 - Action hints poll `/hints` every 5 seconds
+- LLM Messages polls `/fragment/llm-messages` every 4 seconds
 - New narration appears automatically with fade-in effect
 - Button changes state during LLM processing
 - No manual refresh required
@@ -207,3 +208,20 @@ Bookmark system for saving/restoring specific turn+swipe combinations:
 - `.save-btn` - Save/confirm button (green on hover)
 - `.cancel-btn` - Cancel button (red on hover)
 - `@keyframes fadeIn` - Opacity 0 to 1 for new messages
+
+### 5. LLM Messages Tab
+Forensics panel showing the last 50 LLM calls with full request/response visibility.
+- **Content**: Compact list of LLM calls with agent name, backend, model, and parsed response
+- **Expandable rows**: Click to reveal raw request JSON and raw response JSON
+- **Order**: Oldest-first (newest at bottom), matching chronological narrative flow
+- **Empty state**: "No LLM messages yet" when no calls have been logged
+- **Auto-pruning**: SQLite storage caps at 50 rows globally; oldest evicted on insert
+- **HTMX Polling**: `hx-get="/fragment/llm-messages" hx-trigger="load, every 4s"`
+
+#### LLM Message CSS Classes
+- `.llm-message-list` - Container for the message list
+- `.llm-message-item` - Individual message card
+- `.llm-message-header` - Top row with agent, backend, model, timestamp
+- `.llm-message-summary` - Collapsed view showing parsed response
+- `.llm-message-detail` - Expanded view with raw JSON (hidden by default)
+- `.llm-message-toggle` - Click target to expand/collapse details

@@ -48,6 +48,7 @@ Cross-module and browser-based tests live in the top-level `tests/` directory:
 | `game_service/` | Game service logic, DI, retry, snapshots | In-process |
 | `guardrails/` | Custom convention tests (imports, comments, file length) | In-process |
 | `logic_tests.rs` | Movement, room resolution, fuzzy matching | In-process |
+| `llm_message_storage_tests.rs` | SQLite LLM message persistence, auto-pruning | In-process |
 | `snapshot_storage_tests.rs` | SQLite snapshot persistence, checkpoints | In-process |
 | `state_snapshot_tests.rs` | Snapshot serialization/deserialization | In-process |
 | `text_check_tests.rs` | Spell/grammar checking with harper-core | In-process |

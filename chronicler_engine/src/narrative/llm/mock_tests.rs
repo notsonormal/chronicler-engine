@@ -12,9 +12,12 @@ fn test_mock_narrate_action() {
     let backend = MockBackend::default();
     let context = make_test_context("I look around carefully.");
 
-    let result = backend.narrate_action(&context);
+    let result = backend.narrate_action("test", &context);
     assert!(result.is_ok());
-    assert_eq!(result.unwrap(), "[MockNarration] I look around carefully.");
+    assert_eq!(
+        result.unwrap().text,
+        "[MockNarration] I look around carefully."
+    );
 }
 
 #[test]
@@ -38,10 +41,11 @@ fn test_mock_generate_dialogue_with_message() {
     };
     let message = "Hello, guard!";
 
-    let result = backend.generate_dialogue(&make_test_context_with_npc(&npc, message), &npc);
+    let result =
+        backend.generate_dialogue("test", &make_test_context_with_npc(&npc, message), &npc);
     assert!(result.is_ok());
     assert_eq!(
-        result.unwrap(),
+        result.unwrap().text,
         "[MockGenerated] Replying to: Hello, guard!"
     );
 }
@@ -66,9 +70,9 @@ fn test_mock_generate_dialogue_no_message() {
         relationships: vec![],
     };
 
-    let result = backend.generate_dialogue(&make_test_context_with_npc(&npc, ""), &npc);
+    let result = backend.generate_dialogue("test", &make_test_context_with_npc(&npc, ""), &npc);
     assert!(result.is_ok());
-    assert_eq!(result.unwrap(), "[MockGenerated] Standard greeting.");
+    assert_eq!(result.unwrap().text, "[MockGenerated] Standard greeting.");
 }
 
 #[test]
@@ -100,9 +104,9 @@ fn test_mock_with_history() {
         },
     ];
 
-    let result = backend.narrate_action(&make_test_context("I approach"));
+    let result = backend.narrate_action("test", &make_test_context("I approach"));
     assert!(result.is_ok());
-    assert!(result.unwrap().contains("I approach"));
+    assert!(result.unwrap().text.contains("I approach"));
 }
 
 #[test]
@@ -113,14 +117,14 @@ fn test_mock_response_length_bounds() {
     let long_input =
         "This is a much longer player input that describes what the player wants to do in detail";
 
-    let result_short = backend.narrate_action(&make_test_context(short_input));
-    let result_long = backend.narrate_action(&make_test_context(long_input));
+    let result_short = backend.narrate_action("test", &make_test_context(short_input));
+    let result_long = backend.narrate_action("test", &make_test_context(long_input));
 
     assert!(result_short.is_ok());
     assert!(result_long.is_ok());
 
-    assert!(!result_short.unwrap().is_empty());
-    assert!(!result_long.unwrap().is_empty());
+    assert!(!result_short.unwrap().text.is_empty());
+    assert!(!result_long.unwrap().text.is_empty());
 }
 
 #[test]
@@ -128,10 +132,10 @@ fn test_mock_response_contains_input() {
     let backend = MockBackend::default();
 
     let unique_input = "xyz123_test_input";
-    let result = backend.narrate_action(&make_test_context(unique_input));
+    let result = backend.narrate_action("test", &make_test_context(unique_input));
 
     assert!(result.is_ok());
-    assert!(result.unwrap().contains(unique_input));
+    assert!(result.unwrap().text.contains(unique_input));
 }
 
 #[test]
@@ -139,10 +143,10 @@ fn test_mock_narrate_arrival_includes_room_name() {
     let backend = MockBackend::default();
     let room = make_test_room();
 
-    let result = backend.narrate_arrival(&make_test_context(""));
+    let result = backend.narrate_arrival("test", &make_test_context(""));
 
     assert!(result.is_ok());
-    let response = result.unwrap();
+    let response = result.unwrap().text;
     assert!(response.contains("enter"));
     assert!(response.contains(&room.name));
 }
@@ -169,12 +173,13 @@ fn test_mock_dialogue_with_message() {
 
     let message = Some("Hello, guard!".to_string());
     let result = backend.generate_dialogue(
+        "test",
         &make_test_context_with_npc(&npc, message.as_deref().unwrap_or("")),
         &npc,
     );
 
     assert!(result.is_ok());
-    let response = result.unwrap();
+    let response = result.unwrap().text;
     assert!(response.contains("Hello, guard!"));
 }
 
@@ -198,17 +203,17 @@ fn test_mock_dialogue_without_message() {
         relationships: vec![],
     };
 
-    let result = backend.generate_dialogue(&make_test_context_with_npc(&npc, ""), &npc);
+    let result = backend.generate_dialogue("test", &make_test_context_with_npc(&npc, ""), &npc);
 
     assert!(result.is_ok());
-    assert!(result.unwrap().contains("greeting"));
+    assert!(result.unwrap().text.contains("greeting"));
 }
 
 #[test]
 fn test_mock_with_empty_history() {
     let backend = MockBackend::default();
 
-    let result = backend.narrate_action(&make_test_context("test"));
+    let result = backend.narrate_action("test", &make_test_context("test"));
     assert!(result.is_ok());
 }
 
@@ -231,62 +236,68 @@ fn test_mock_with_substantial_history() {
         })
         .collect();
 
-    let result = backend.narrate_action(&make_test_context("current action"));
+    let result = backend.narrate_action("test", &make_test_context("current action"));
     assert!(result.is_ok());
 }
 
 #[test]
 fn test_mock_narrate_continuation() {
     let backend = MockBackend::default();
-    let result = backend.narrate_continuation("system", "user", "trigger_info", None);
+    let result = backend.narrate_continuation("test", "system", "user", "trigger_info", None);
     assert!(result.is_ok());
-    assert!(result.unwrap().contains("trigger_info"));
+    assert!(result.unwrap().text.contains("trigger_info"));
 }
 
 #[test]
 fn test_mock_narrate_action_from_prompt() {
     let backend = MockBackend::default();
-    let result = backend.narrate_action_from_prompt("system prompt", "user action", None);
+    let result = backend.narrate_action_from_prompt("test", "system prompt", "user action", None);
     assert!(result.is_ok());
-    let response = result.unwrap();
+    let response = result.unwrap().text;
     assert!(response.contains("action") || response.contains("Continuation"));
 }
 
 #[test]
 fn test_mock_narrate_continuation_empty_trigger() {
     let backend = MockBackend::default();
-    let result = backend.narrate_continuation("system", "user", "", None);
+    let result = backend.narrate_continuation("test", "system", "user", "", None);
     assert!(result.is_ok());
-    assert!(result.unwrap().contains("[Trigger: ]"));
+    assert!(result.unwrap().text.contains("[Trigger: ]"));
 }
 
 #[test]
 fn test_mock_narrate_continuation_special_chars() {
     let backend = MockBackend::default();
-    let result =
-        backend.narrate_continuation("sys", "user", "trigger with <special> & chars", None);
+    let result = backend.narrate_continuation(
+        "test",
+        "sys",
+        "user",
+        "trigger with <special> & chars",
+        None,
+    );
     assert!(result.is_ok());
-    assert!(result.unwrap().contains("trigger with"));
+    assert!(result.unwrap().text.contains("trigger with"));
 }
 
 #[test]
 fn test_mock_narrate_action_from_prompt_multiline() {
     let backend = MockBackend::default();
     let result = backend.narrate_action_from_prompt(
+        "test",
         "system prompt\nwith multiple lines",
         "user prompt\nalso multiline",
         None,
     );
     assert!(result.is_ok());
-    assert!(result.unwrap().contains("user prompt"));
+    assert!(result.unwrap().text.contains("user prompt"));
 }
 
 #[test]
 fn test_mock_narrate_action_from_prompt_empty() {
     let backend = MockBackend::default();
-    let result = backend.narrate_action_from_prompt("", "", None);
+    let result = backend.narrate_action_from_prompt("test", "", "", None);
     assert!(result.is_ok());
-    assert!(result.unwrap().contains("..."));
+    assert!(result.unwrap().text.contains("..."));
 }
 
 #[test]
@@ -310,18 +321,22 @@ fn test_mock_generate_dialogue_very_long_message() {
         triggers: vec![],
         relationships: vec![],
     };
-    let result = backend.generate_dialogue(&make_test_context_with_npc(&npc, long_message), &npc);
+    let result = backend.generate_dialogue(
+        "test",
+        &make_test_context_with_npc(&npc, long_message),
+        &npc,
+    );
     assert!(result.is_ok());
-    assert!(result.unwrap().contains(long_message));
+    assert!(result.unwrap().text.contains(long_message));
 }
 
 #[test]
 fn test_mock_narrate_action_special_characters() {
     let backend = MockBackend::default();
     let special_msg = "Player says: \"Hello <world> & goodbye!\"";
-    let result = backend.narrate_action(&make_test_context(special_msg));
+    let result = backend.narrate_action("test", &make_test_context(special_msg));
     assert!(result.is_ok());
-    assert!(result.unwrap().contains(special_msg));
+    assert!(result.unwrap().text.contains(special_msg));
 }
 
 #[test]
@@ -341,9 +356,9 @@ fn test_mock_narrate_arrival_different_rooms() {
         user_message: Box::leak(Box::new("".to_string())),
         history: &[],
     };
-    let result1 = backend.narrate_arrival(&context1);
+    let result1 = backend.narrate_arrival("test", &context1);
     assert!(result1.is_ok());
-    assert!(result1.unwrap().contains("Tavern"));
+    assert!(result1.unwrap().text.contains("Tavern"));
 
     let mut room2 = make_test_room();
     room2.name = "Dungeon".to_string();
@@ -356,9 +371,9 @@ fn test_mock_narrate_arrival_different_rooms() {
         user_message: Box::leak(Box::new("".to_string())),
         history: &[],
     };
-    let result2 = backend.narrate_arrival(&context2);
+    let result2 = backend.narrate_arrival("test", &context2);
     assert!(result2.is_ok());
-    assert!(result2.unwrap().contains("Dungeon"));
+    assert!(result2.unwrap().text.contains("Dungeon"));
 }
 
 #[test]
@@ -380,25 +395,29 @@ fn test_mock_dialogue_with_unicode() {
         triggers: vec![],
         relationships: vec![],
     };
-    let result = backend.generate_dialogue(&make_test_context_with_npc(&npc, "こんにちは"), &npc);
+    let result = backend.generate_dialogue(
+        "test",
+        &make_test_context_with_npc(&npc, "こんにちは"),
+        &npc,
+    );
     assert!(result.is_ok());
-    assert!(result.unwrap().contains("こんにちは"));
+    assert!(result.unwrap().text.contains("こんにちは"));
 }
 
 #[test]
 fn test_mock_narrate_action_unicode() {
     let backend = MockBackend::default();
-    let result = backend.narrate_action(&make_test_context("アクション"));
+    let result = backend.narrate_action("test", &make_test_context("アクション"));
     assert!(result.is_ok());
-    assert!(result.unwrap().contains("アクション"));
+    assert!(result.unwrap().text.contains("アクション"));
 }
 
 #[test]
 fn test_mock_narrate_continuation_unicode_trigger() {
     let backend = MockBackend::default();
-    let result = backend.narrate_continuation("system", "user", "トリガー", None);
+    let result = backend.narrate_continuation("test", "system", "user", "トリガー", None);
     assert!(result.is_ok());
-    assert!(result.unwrap().contains("トリガー"));
+    assert!(result.unwrap().text.contains("トリガー"));
 }
 
 #[test]
@@ -423,7 +442,7 @@ fn test_context_with_empty_world_description() {
         history: &[],
     };
 
-    let result = backend.narrate_action(&context);
+    let result = backend.narrate_action("test", &context);
     assert!(result.is_ok());
 }
 
@@ -455,7 +474,7 @@ fn test_context_with_many_global_rules() {
         history: &[],
     };
 
-    let result = backend.narrate_action(&context);
+    let result = backend.narrate_action("test", &context);
     assert!(result.is_ok());
 }
 
@@ -464,9 +483,9 @@ fn test_mock_narrate_action_from_prompt_very_long_input() {
     let backend = MockBackend::default();
     let long_system = "You are a game master. ".repeat(50);
     let long_user = "The player performs an action. ".repeat(50);
-    let result = backend.narrate_action_from_prompt(&long_system, &long_user, None);
+    let result = backend.narrate_action_from_prompt("test", &long_system, &long_user, None);
     assert!(result.is_ok());
-    assert!(result.unwrap().contains("The player performs"));
+    assert!(result.unwrap().text.contains("The player performs"));
 }
 
 #[test]
@@ -488,7 +507,8 @@ fn test_npc_with_no_triggers() {
         triggers: vec![],
         relationships: vec![],
     };
-    let result = backend.generate_dialogue(&make_test_context_with_npc(&npc, "Hello"), &npc);
+    let result =
+        backend.generate_dialogue("test", &make_test_context_with_npc(&npc, "Hello"), &npc);
     assert!(result.is_ok());
 }
 
@@ -531,7 +551,7 @@ fn test_npc_with_multiple_triggers() {
         ],
         relationships: vec![],
     };
-    let result = backend.generate_dialogue(&make_test_context_with_npc(&npc, "Test"), &npc);
+    let result = backend.generate_dialogue("test", &make_test_context_with_npc(&npc, "Test"), &npc);
     assert!(result.is_ok());
 }
 
@@ -564,21 +584,21 @@ fn test_player_with_empty_inventory() {
         history: &[],
     };
 
-    let result = backend.narrate_action(&context);
+    let result = backend.narrate_action("test", &context);
     assert!(result.is_ok());
 }
 
 #[test]
 fn test_mock_with_empty_response() {
     let backend = MockBackend::with_empty_response();
-    let result = backend.narrate_action(&make_test_context("I look around."));
+    let result = backend.narrate_action("test", &make_test_context("I look around."));
     assert!(
         result.is_ok(),
         "with_empty_response should return Ok, not Err: {:?}",
         result.err()
     );
     assert_eq!(
-        result.unwrap(),
+        result.unwrap().text,
         "",
         "with_empty_response should return an empty string"
     );
@@ -588,13 +608,13 @@ fn test_mock_with_empty_response() {
 fn test_mock_with_failing_trigger_narration() {
     let backend = MockBackend::with_failing_trigger_narration();
     // narrate_action should still succeed
-    let narrate_result = backend.narrate_action(&make_test_context("look"));
+    let narrate_result = backend.narrate_action("test", &make_test_context("look"));
     assert!(
         narrate_result.is_ok(),
         "narrate_action should succeed even with trigger_narration_should_fail set"
     );
     // narrate_action_from_prompt (used for trigger narration) should fail
-    let trigger_result = backend.narrate_action_from_prompt("sys", "user", None);
+    let trigger_result = backend.narrate_action_from_prompt("test", "sys", "user", None);
     assert!(
         trigger_result.is_err(),
         "narrate_action_from_prompt should fail when trigger_narration_should_fail is set"
@@ -641,7 +661,7 @@ fn test_player_with_items_in_inventory() {
         history: &[],
     };
 
-    let result = backend.narrate_action(&context);
+    let result = backend.narrate_action("test", &context);
     assert!(result.is_ok());
 }
 
@@ -674,7 +694,7 @@ fn test_room_with_items() {
         history: &[],
     };
 
-    let result = backend.narrate_action(&context);
+    let result = backend.narrate_action("test", &context);
     assert!(result.is_ok());
 }
 
@@ -709,7 +729,7 @@ fn test_room_with_exits() {
         history: &[],
     };
 
-    let result = backend.narrate_action(&context);
+    let result = backend.narrate_action("test", &context);
     assert!(result.is_ok());
 }
 
@@ -737,7 +757,7 @@ fn test_world_with_default_room_image() {
         history: &[],
     };
 
-    let result = backend.narrate_action(&context);
+    let result = backend.narrate_action("test", &context);
     assert!(result.is_ok());
 }
 
@@ -760,8 +780,11 @@ fn test_npc_with_inventory() {
         triggers: vec![],
         relationships: vec![],
     };
-    let result =
-        backend.generate_dialogue(&make_test_context_with_npc(&npc, "What do you sell?"), &npc);
+    let result = backend.generate_dialogue(
+        "test",
+        &make_test_context_with_npc(&npc, "What do you sell?"),
+        &npc,
+    );
     assert!(result.is_ok());
 }
 
@@ -817,6 +840,49 @@ fn test_context_with_npcs_in_area() {
         history: &[],
     };
 
-    let result = backend.narrate_action(&context);
+    let result = backend.narrate_action("test", &context);
     assert!(result.is_ok());
+}
+
+#[test]
+fn test_mock_backend_logs_to_storage() {
+    use crate::storage::llm_message_storage::{InMemoryLlmMessageStorage, LlmMessageStorage};
+    use std::sync::Arc;
+    let storage = Arc::new(InMemoryLlmMessageStorage::new());
+    let backend = MockBackend {
+        storage: Some(Arc::clone(&storage) as Arc<dyn LlmMessageStorage>),
+        ..Default::default()
+    };
+    let context = make_test_context("test action");
+
+    let result = backend.narrate_action("narrator", &context);
+    assert!(result.is_ok());
+
+    let messages = storage.list_latest(50).unwrap();
+    assert_eq!(messages.len(), 1);
+    assert_eq!(messages[0].agent_name, "narrator");
+    assert_eq!(messages[0].backend_name, "Mock");
+    assert_eq!(messages[0].model_name, "mock");
+    assert_eq!(messages[0].parsed_response, "[MockNarration] test action");
+}
+
+#[test]
+fn test_mock_backend_logs_multiple_calls() {
+    use crate::storage::llm_message_storage::{InMemoryLlmMessageStorage, LlmMessageStorage};
+    use std::sync::Arc;
+    let storage = Arc::new(InMemoryLlmMessageStorage::new());
+    let backend = MockBackend {
+        storage: Some(Arc::clone(&storage) as Arc<dyn LlmMessageStorage>),
+        ..Default::default()
+    };
+
+    let _ = backend.narrate_action("narrator", &make_test_context("first"));
+    let _ = backend.narrate_action("trigger", &make_test_context("second"));
+    let _ = backend.narrate_arrival("narrator", &make_test_context(""));
+
+    let messages = storage.list_latest(50).unwrap();
+    assert_eq!(messages.len(), 3);
+    assert_eq!(messages[0].agent_name, "narrator");
+    assert_eq!(messages[1].agent_name, "trigger");
+    assert_eq!(messages[2].agent_name, "narrator");
 }

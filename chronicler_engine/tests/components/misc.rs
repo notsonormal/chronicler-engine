@@ -212,6 +212,56 @@ async fn test_retry_handler_sets_generating_status() {
 }
 
 #[tokio::test]
+async fn test_retry_handler_preserves_swipe_index() {
+    // Setup: create app with InMemorySnapshotStorage so we can inspect it
+    let mut state = create_test_state();
+    state.add_log(
+        "look around".to_string(),
+        Some("Test Player".to_string()),
+        LogType::Input,
+    );
+    let snapshot = chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(
+        &state,
+        "test-turn".to_string(),
+        0,
+    );
+    let storage = Arc::new(chronicler_engine::test_support::InMemorySnapshotStorage::new())
+        as Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage>;
+    let _ = storage.save(&snapshot);
+
+    let llm_storage =
+        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
+            as Arc<dyn chronicler_engine::storage::llm_message_storage::LlmMessageStorage>;
+
+    let app = chronicler_engine::server::create_app_with_storage(
+        state,
+        Arc::clone(&storage),
+        llm_storage,
+        AppSettings::default(),
+    );
+
+    let req = Request::builder()
+        .uri("/retry")
+        .method(http::Method::POST)
+        .body(Body::empty())
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // The handler should save the generating snapshot with swipe_index = 0,
+    // NOT prematurely increment it to 1.
+    let latest = storage
+        .load_latest(None)
+        .unwrap()
+        .expect("Should have snapshot");
+    assert_eq!(
+        latest.swipe_index, 0,
+        "Retry handler should preserve current swipe_index, not increment it"
+    );
+}
+
+#[tokio::test]
 async fn test_reset_handler() {
     let app = chronicler_engine::create_app_for_testing(create_test_state());
 
@@ -369,6 +419,7 @@ async fn test_reset_preserves_scenario_npcs() {
     let app = chronicler_engine::server::create_app_with_storage(
         state,
         storage,
+        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new()),
         chronicler_engine::model::settings::AppSettings::default(),
     );
 

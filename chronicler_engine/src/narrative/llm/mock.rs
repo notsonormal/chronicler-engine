@@ -1,9 +1,11 @@
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 
 use crate::error::{EngineError, NarrativeFailure};
 use crate::model::character::NpcCard;
+use crate::storage::llm_message_storage::LlmMessageStorage;
 
-use super::backend::LlmBackend;
+use super::backend::{LlmBackend, LlmCallResult};
 
 #[derive(Default)]
 pub struct MockBackend {
@@ -18,9 +20,17 @@ pub struct MockBackend {
     /// Return different narration text per call (rotates).
     pub per_call_narrations: Vec<String>,
     pub call_index: AtomicUsize,
+    pub storage: Option<Arc<dyn LlmMessageStorage>>,
 }
 
 impl MockBackend {
+    pub fn new(storage: Option<Arc<dyn LlmMessageStorage>>) -> Self {
+        Self {
+            storage,
+            ..Default::default()
+        }
+    }
+
     pub fn failing() -> Self {
         Self {
             should_fail: AtomicBool::new(true),
@@ -48,90 +58,116 @@ impl MockBackend {
             ..Default::default()
         }
     }
+
+    fn make_result(&self, agent_name: &str, text: impl Into<String>) -> LlmCallResult {
+        let text = text.into();
+        let result = LlmCallResult {
+            text: text.clone(),
+            system_prompt: String::new(),
+            user_prompt: String::new(),
+            raw_request_json: String::new(),
+            raw_response_json: format!("{{\"content\":\"{text}\"}}"),
+            backend_name: self.name().to_string(),
+            model_name: "mock".to_string(),
+            agent_name: agent_name.to_string(),
+        };
+        if let Some(storage) = &self.storage {
+            let _ = storage.save(&result.to_message());
+        }
+        result
+    }
+
+    fn make_error(&self) -> EngineError {
+        EngineError::Narrative(NarrativeFailure::Generation {
+            stage: "mock",
+            reason: "configured_failure",
+        })
+    }
+
+    fn guard(&self) -> Result<(), EngineError> {
+        if self.should_fail.load(Ordering::SeqCst) {
+            return Err(self.make_error());
+        }
+        Ok(())
+    }
 }
 
 impl LlmBackend for MockBackend {
     fn generate_dialogue(
         &self,
+        agent_name: &str,
         context: &crate::narrative::prompt::PromptContext,
         _npc: &NpcCard,
-    ) -> Result<String, EngineError> {
-        if self.should_fail.load(Ordering::SeqCst) {
-            return Err(EngineError::Narrative(NarrativeFailure::Generation {
-                stage: "mock",
-                reason: "configured_failure",
-            }));
-        }
+    ) -> Result<LlmCallResult, EngineError> {
+        self.guard()?;
         let user_input = context.user_message;
         if user_input.is_empty() {
-            Ok("[MockGenerated] Standard greeting.".to_string())
+            Ok(self.make_result(agent_name, "[MockGenerated] Standard greeting."))
         } else {
-            Ok(format!("[MockGenerated] Replying to: {user_input}"))
+            Ok(self.make_result(
+                agent_name,
+                format!("[MockGenerated] Replying to: {user_input}"),
+            ))
         }
     }
 
     fn narrate_action(
         &self,
+        agent_name: &str,
         context: &crate::narrative::prompt::PromptContext,
-    ) -> Result<String, EngineError> {
+    ) -> Result<LlmCallResult, EngineError> {
         let delay = self.delay_ms.load(Ordering::SeqCst);
         if delay > 0 {
             std::thread::sleep(std::time::Duration::from_millis(delay));
         }
-        if self.should_fail.load(Ordering::SeqCst) {
-            return Err(EngineError::Narrative(NarrativeFailure::Generation {
-                stage: "mock",
-                reason: "configured_failure",
-            }));
-        }
+        self.guard()?;
         if self.should_return_empty.load(Ordering::SeqCst) {
-            return Ok(String::new());
+            return Ok(self.make_result(agent_name, String::new()));
         }
         if !self.per_call_narrations.is_empty() {
             let idx = self.call_index.fetch_add(1, Ordering::SeqCst);
-            return Ok(self.per_call_narrations[idx % self.per_call_narrations.len()].clone());
+            return Ok(self.make_result(
+                agent_name,
+                self.per_call_narrations[idx % self.per_call_narrations.len()].clone(),
+            ));
         }
-        Ok(format!("[MockNarration] {}", context.user_message))
+        Ok(self.make_result(
+            agent_name,
+            format!("[MockNarration] {}", context.user_message),
+        ))
     }
 
     fn narrate_arrival(
         &self,
+        agent_name: &str,
         context: &crate::narrative::prompt::PromptContext,
-    ) -> Result<String, EngineError> {
-        if self.should_fail.load(Ordering::SeqCst) {
-            return Err(EngineError::Narrative(NarrativeFailure::Generation {
-                stage: "mock",
-                reason: "configured_failure",
-            }));
-        }
-        Ok(format!(
-            "[MockArrival] You enter the {}.",
-            context.room.name
+    ) -> Result<LlmCallResult, EngineError> {
+        self.guard()?;
+        Ok(self.make_result(
+            agent_name,
+            format!("[MockArrival] You enter the {}.", context.room.name),
         ))
     }
 
     fn narrate_continuation(
         &self,
+        agent_name: &str,
         _system_prompt: &str,
         _user_prompt: &str,
         trigger_prompt: &str,
         _max_tokens: Option<u32>,
-    ) -> Result<String, EngineError> {
-        if self.should_fail.load(Ordering::SeqCst) {
-            return Err(EngineError::Narrative(NarrativeFailure::Generation {
-                stage: "mock",
-                reason: "configured_failure",
-            }));
-        }
-        Ok(format!("[Trigger: {trigger_prompt}]"))
+    ) -> Result<LlmCallResult, EngineError> {
+        self.guard()?;
+        Ok(self.make_result(agent_name, format!("[Trigger: {trigger_prompt}]")))
     }
 
     fn narrate_action_from_prompt(
         &self,
+        agent_name: &str,
         _system_prompt: &str,
         user_prompt: &str,
         _max_tokens: Option<u32>,
-    ) -> Result<String, EngineError> {
+    ) -> Result<LlmCallResult, EngineError> {
         if self.should_fail.load(Ordering::SeqCst)
             || self.trigger_narration_should_fail.load(Ordering::SeqCst)
         {
@@ -140,9 +176,12 @@ impl LlmBackend for MockBackend {
                 reason: "configured_failure",
             }));
         }
-        Ok(format!(
-            "[Continuation: {}]",
-            user_prompt.lines().next().unwrap_or("...")
+        Ok(self.make_result(
+            agent_name,
+            format!(
+                "[Continuation: {}]",
+                user_prompt.lines().next().unwrap_or("...")
+            ),
         ))
     }
 

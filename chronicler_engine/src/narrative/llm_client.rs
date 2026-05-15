@@ -16,6 +16,15 @@ fn next_request_id() -> u64 {
 
 const DEFAULT_MAX_TOKENS: u32 = 2048;
 
+#[derive(Debug)]
+pub struct ChatCompletionResult {
+    pub text: String,
+    pub system_prompt: String,
+    pub user_prompt: String,
+    pub raw_request_json: String,
+    pub raw_response_json: String,
+}
+
 // [DOC: docs/system/llm_processing.md]
 // Model selection is now connection-driven; these helpers are retained
 // for backward compatibility during transition but delegate to Connection.
@@ -44,7 +53,7 @@ pub(crate) fn extract_content_from_response(
 }
 
 /// Appends the Gemma 4 thinking-channel closure marker to bypass infinite thought loops.
-// [DOC: docs/system/llm_processing.md Â§8]
+// [DOC: docs/system/llm_processing.md section 8]
 pub(crate) fn apply_gemma4_thinking_suffix(user_text: &str, model: &str) -> String {
     let m = model.to_lowercase();
     if m.contains("gemma-4") || m.contains("gemma4") {
@@ -73,7 +82,7 @@ pub(crate) fn sanitize_llm_output(text: &str) -> String {
     let result = RE_TURN_MARKERS.replace_all(&result, "");
 
     // Normalize paragraph indentation.
-    // [DOC: docs/system/llm_processing.md Â§9]
+    // [DOC: docs/system/llm_processing.md section 9]
     result
         .lines()
         .map(|line| line.trim_start())
@@ -149,7 +158,7 @@ pub fn call_chat_completions(
     user_text: &str,
     title: Option<&str>,
     max_tokens: Option<u32>,
-) -> crate::error::Result<String> {
+) -> crate::error::Result<ChatCompletionResult> {
     let max_tokens = max_tokens.unwrap_or(DEFAULT_MAX_TOKENS);
     let req_id = next_request_id();
     let start_time = std::time::Instant::now();
@@ -193,6 +202,9 @@ pub fn call_chat_completions(
         "stream": false,
         "max_tokens": max_tokens
     });
+
+    let raw_request_json =
+        serde_json::to_string(&payload).unwrap_or_else(|_| format!("{{\"model\":\"{model}\"}}"));
 
     log::debug!("[LLM][req:{req_id}] Request payload: {payload:#}");
 
@@ -286,7 +298,14 @@ pub fn call_chat_completions(
                     );
                 }
             }
-            result
+            let text = result?;
+            Ok(ChatCompletionResult {
+                text,
+                system_prompt: system_prompt.to_string(),
+                user_prompt: user_text.to_string(),
+                raw_request_json,
+                raw_response_json: raw_response,
+            })
         }
         Err(e) => {
             let elapsed = start_time.elapsed();
@@ -309,7 +328,7 @@ pub fn call_openrouter_with_model(
     user_text: &str,
     model: &str,
     max_tokens: Option<u32>,
-) -> crate::error::Result<String> {
+) -> crate::error::Result<ChatCompletionResult> {
     call_chat_completions(
         "https://openrouter.ai/api/v1",
         Some(api_key),
@@ -328,7 +347,7 @@ pub fn call_ollama(
     system_prompt: &str,
     user_text: &str,
     max_tokens: Option<u32>,
-) -> crate::error::Result<String> {
+) -> crate::error::Result<ChatCompletionResult> {
     let user_text = apply_gemma4_thinking_suffix(user_text, model);
     call_chat_completions(
         base_url,

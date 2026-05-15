@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crate::narrative::agents::quantifier::{QuantifierAgent, QuantifierBackendTrait};
 use crate::narrative::agents::registry::AgentRegistry;
+use crate::storage::llm_message_storage::LlmMessageStorage;
 
 use super::context::GameServiceContext;
 
@@ -18,10 +19,26 @@ pub struct DefaultGameService {
 
 impl DefaultGameService {
     pub fn new() -> Self {
+        Self::with_storage(None)
+    }
+
+    pub fn with_storage(storage: Option<Arc<dyn LlmMessageStorage>>) -> Self {
         let settings = crate::settings::load_settings().unwrap_or_default();
         let registry = AgentRegistry::from_configs(&settings.agents).unwrap_or_default();
         Self {
-            llm_backend: Arc::from(crate::narrative::llm::get_llm_backend()),
+            llm_backend: Arc::from(crate::narrative::llm::get_llm_backend_for(
+                &settings
+                    .get_narration_connection()
+                    .cloned()
+                    .unwrap_or_else(|| {
+                        crate::model::settings::Connection::new(
+                            "default",
+                            "Default",
+                            crate::model::llm_backend::LlmBackendType::Mock,
+                        )
+                    }),
+                storage,
+            )),
             agent_registry: registry,
         }
     }

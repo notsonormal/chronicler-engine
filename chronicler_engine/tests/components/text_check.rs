@@ -124,6 +124,7 @@ async fn test_async_action_saves_input_to_story_log_with_sqlite() {
     let app = chronicler_engine::server::create_app_with_storage(
         state,
         storage,
+        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new()),
         chronicler_engine::model::settings::AppSettings::default(),
     );
 

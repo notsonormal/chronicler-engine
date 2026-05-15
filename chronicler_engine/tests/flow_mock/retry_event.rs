@@ -11,7 +11,7 @@ use chronicler_engine::narrative::agents::quantifier::{
     MockQuantifierBackend, MovementParseResult, MovementType, QuantifierConfidence,
 };
 use chronicler_engine::narrative::llm::MockBackend;
-use chronicler_engine::test_support::make_test_context;
+use chronicler_engine::test_support::make_test_context_with_sqlite;
 
 use crate::test_data::create_test_map;
 use crate::{
@@ -27,7 +27,7 @@ fn test_retry_event_continuation_preserves_quantifier_result() {
     //       → Retry event → player STILL in same room (quantifier NOT rerun)
     let mut state = create_test_state_with_trigger_npc();
     state.narrative.turns.clear();
-    let ctx = make_test_context(state);
+    let ctx = make_test_context_with_sqlite(state).unwrap();
 
     add_input_and_save(&ctx, "enter shop");
 
@@ -40,8 +40,10 @@ fn test_retry_event_continuation_preserves_quantifier_result() {
         ..Default::default()
     });
 
-    let service =
-        DefaultGameService::with_mock_quantifier(Arc::new(MockBackend::default()), quantifier);
+    let service = DefaultGameService::with_mock_quantifier(
+        Arc::new(MockBackend::new(Some(Arc::clone(&ctx.llm_message_storage)))),
+        quantifier,
+    );
 
     // Execute: quantifier runs, player moves, trigger fires
     service.execute_action(ctx.clone(), "enter shop".to_string(), "Player".to_string());
@@ -75,6 +77,13 @@ fn test_retry_event_continuation_preserves_quantifier_result() {
     assert_eq!(
         guard.movement.current_room_id, "room2",
         "Event retry: room should be unchanged (quantifier not rerun)"
+    );
+
+    // Verify LLM calls were logged to SQLite storage
+    let messages = ctx.llm_message_storage.list_latest(50).unwrap();
+    assert!(
+        !messages.is_empty(),
+        "LLM messages should be logged during gameplay"
     );
 }
 
@@ -155,7 +164,7 @@ fn test_trigger_continuation_runs_quantifier_and_detects_new_npc() {
     let npcs = vec![shopkeeper, gabriella];
     let mut state = GameState::new(world, map, player, npcs, "room1".to_string());
     state.narrative.turns.clear();
-    let ctx = make_test_context(state);
+    let ctx = make_test_context_with_sqlite(state).unwrap();
 
     add_input_and_save(&ctx, "enter shop");
 

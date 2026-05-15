@@ -362,7 +362,7 @@ fn test_call_chat_completions_mock_server_success() {
         Some("Test Title"),
         Some(512),
     );
-    assert_eq!(result.unwrap(), "mocked narration");
+    assert_eq!(result.unwrap().text, "mocked narration");
 }
 
 #[test]

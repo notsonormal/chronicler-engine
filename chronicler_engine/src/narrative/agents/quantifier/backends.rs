@@ -39,7 +39,7 @@ impl QuantifierBackendTrait for QuantifierBackend {
         let model = self.model.clone();
         let max_tokens = self.max_tokens;
         quantify_room_with_llm_call(context, fallback_npc_ids, &model, |system, user, m| {
-            call_openrouter_with_model(&api_key, system, user, m, max_tokens)
+            call_openrouter_with_model(&api_key, system, user, m, max_tokens).map(|r| r.text)
         })
     }
 }
@@ -73,7 +73,7 @@ impl QuantifierBackendTrait for OllamaQuantifierBackend {
         let model = self.model.clone();
         let max_tokens = self.max_tokens;
         quantify_room_with_llm_call(context, fallback_npc_ids, &model, |system, user, m| {
-            call_ollama(&base_url, m, system, user, max_tokens)
+            call_ollama(&base_url, m, system, user, max_tokens).map(|r| r.text)
         })
     }
 }

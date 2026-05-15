@@ -22,7 +22,7 @@ fn test_deepseek_generate_dialogue() {
         triggers: vec![],
         relationships: vec![],
     };
-    let result = backend.generate_dialogue(&make_test_context_with_npc(&npc, ""), &npc);
+    let result = backend.generate_dialogue("test", &make_test_context_with_npc(&npc, ""), &npc);
     assert!(
         result.is_err(),
         "DeepSeek generate_dialogue should return Err (not yet implemented)"
@@ -38,7 +38,7 @@ fn test_deepseek_generate_dialogue() {
 #[test]
 fn test_deepseek_narrate_action() {
     let backend = DeepSeekBackend::default();
-    let result = backend.narrate_action(&make_test_context("test"));
+    let result = backend.narrate_action("test", &make_test_context("test"));
     assert!(
         result.is_err(),
         "DeepSeek narrate_action should return Err (not yet implemented)"
@@ -54,7 +54,7 @@ fn test_deepseek_narrate_action() {
 #[test]
 fn test_deepseek_narrate_arrival() {
     let backend = DeepSeekBackend::default();
-    let result = backend.narrate_arrival(&make_test_context(""));
+    let result = backend.narrate_arrival("test", &make_test_context(""));
     assert!(
         result.is_err(),
         "DeepSeek narrate_arrival should return Err (not yet implemented)"
@@ -76,7 +76,7 @@ fn test_deepseek_name() {
 #[test]
 fn test_deepseek_narrate_continuation() {
     let backend = DeepSeekBackend::default();
-    let result = backend.narrate_continuation("system", "user", "trigger", None);
+    let result = backend.narrate_continuation("test", "system", "user", "trigger", None);
     assert!(
         result.is_err(),
         "DeepSeek narrate_continuation should return Err (not yet implemented)"
@@ -92,7 +92,7 @@ fn test_deepseek_narrate_continuation() {
 #[test]
 fn test_deepseek_narrate_action_from_prompt() {
     let backend = DeepSeekBackend::default();
-    let result = backend.narrate_action_from_prompt("system", "user", None);
+    let result = backend.narrate_action_from_prompt("test", "system", "user", None);
     assert!(
         result.is_err(),
         "DeepSeek narrate_action_from_prompt should return Err (not yet implemented)"
@@ -126,26 +126,26 @@ fn test_deepseek_all_methods_return_not_implemented() {
     };
 
     let dialogue_result =
-        backend.generate_dialogue(&make_test_context_with_npc(&npc, "test"), &npc);
+        backend.generate_dialogue("test", &make_test_context_with_npc(&npc, "test"), &npc);
     assert!(dialogue_result.is_err());
 
-    let action_result = backend.narrate_action(&make_test_context("test"));
+    let action_result = backend.narrate_action("test", &make_test_context("test"));
     assert!(action_result.is_err());
 
-    let arrival_result = backend.narrate_arrival(&make_test_context("test"));
+    let arrival_result = backend.narrate_arrival("test", &make_test_context("test"));
     assert!(arrival_result.is_err());
 
-    let continuation_result = backend.narrate_continuation("sys", "user", "trigger", None);
+    let continuation_result = backend.narrate_continuation("test", "sys", "user", "trigger", None);
     assert!(continuation_result.is_err());
 
-    let prompt_result = backend.narrate_action_from_prompt("sys", "user", None);
+    let prompt_result = backend.narrate_action_from_prompt("test", "sys", "user", None);
     assert!(prompt_result.is_err());
 }
 
 #[test]
 fn test_deepseek_error_message_descriptive() {
     let backend = DeepSeekBackend::default();
-    let result = backend.narrate_action(&make_test_context("test"));
+    let result = backend.narrate_action("test", &make_test_context("test"));
     assert!(
         result.is_err(),
         "DeepSeek should return Err, not a placeholder string"

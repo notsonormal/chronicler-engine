@@ -62,7 +62,7 @@ Logic invariant violated. These should never happen in normal operation.
   - `No AI response to retry` — `retry_last_response` called when there is no AI narration to replace.
   - `AI response must be after input` — history ordering invariant violated.
   - `AI response not found` — index mismatch in `replace_last_ai_response`.
-- **Related Invariants:** `docs/architecture/invariants.md` §State Mutation Order
+- **Related Invariants:** `docs/architecture/invariants.md` section: State Mutation Order
 
 ---
 

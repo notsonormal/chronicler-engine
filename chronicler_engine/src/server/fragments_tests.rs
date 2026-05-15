@@ -1,4 +1,38 @@
+use std::sync::{Arc, RwLock, atomic::AtomicBool};
+use tokio_util::sync::CancellationToken;
+
+use crate::model::llm_message::LlmMessage;
+use crate::model::settings::AppSettings;
 use crate::server::fragments::{ActionForm, html_escape, render_error};
+use crate::storage::llm_message_storage::{InMemoryLlmMessageStorage, LlmMessageStorage};
+use crate::test_support::InMemorySnapshotStorage;
+use crate::test_support::{TestMap, TestPlayer, TestWorld};
+
+fn make_test_app_state(
+    llm_storage: Option<Arc<InMemoryLlmMessageStorage>>,
+) -> crate::server::AppState {
+    let llm_storage: Arc<dyn LlmMessageStorage> = match llm_storage {
+        Some(s) => s,
+        None => Arc::new(InMemoryLlmMessageStorage::new()),
+    };
+    let game_service_storage = Arc::clone(&llm_storage);
+    crate::server::AppState {
+        snapshot_storage: Arc::new(InMemorySnapshotStorage::new()),
+        llm_message_storage: llm_storage,
+        world: Arc::new(TestWorld::minimal()),
+        map: Arc::new(TestMap::single_room("start")),
+        player: Arc::new(TestPlayer::standard()),
+        npcs: Arc::new(std::collections::HashMap::new()),
+        game_service: Arc::new(
+            crate::engine::game_service::DefaultGameService::with_storage(Some(
+                game_service_storage,
+            )),
+        ) as Arc<dyn crate::engine::game_service::GameService>,
+        settings: Arc::new(RwLock::new(AppSettings::default())),
+        cancel_token: Arc::new(RwLock::new(CancellationToken::new())),
+        is_generating: Arc::new(AtomicBool::new(false)),
+    }
+}
 
 #[test]
 fn test_html_escape_basic() {
@@ -180,4 +214,37 @@ fn test_edit_history_form_roundtrip() {
     let json = serde_json::to_string(&original).unwrap();
     let parsed: crate::server::fragments::EditHistoryForm = serde_json::from_str(&json).unwrap();
     assert_eq!(original.text, parsed.text);
+}
+
+#[test]
+fn test_render_llm_messages_empty() {
+    let app_state = make_test_app_state(None);
+    let html = crate::server::fragments::render_llm_messages(&app_state).unwrap();
+    assert!(html.contains("llm-message-list"));
+    assert!(html.contains("No LLM messages yet"));
+}
+
+#[test]
+fn test_render_llm_messages_with_data() {
+    let llm_storage = Arc::new(InMemoryLlmMessageStorage::new());
+    let msg = LlmMessage::new(
+        "narrator",
+        "OpenRouter",
+        "gpt-4",
+        "sys",
+        "user",
+        "req",
+        "res",
+        "hello",
+        None::<String>,
+    );
+    llm_storage.save(&msg).unwrap();
+
+    let app_state = make_test_app_state(Some(llm_storage));
+    let html = crate::server::fragments::render_llm_messages(&app_state).unwrap();
+    assert!(html.contains("llm-message-list"));
+    assert!(html.contains("narrator"));
+    assert!(html.contains("OpenRouter"));
+    assert!(html.contains("gpt-4"));
+    assert!(html.contains("hello"));
 }

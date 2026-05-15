@@ -2,6 +2,7 @@ pub mod agent;
 pub mod character;
 pub mod checkpoint;
 pub mod llm_backend;
+pub mod llm_message;
 pub mod map;
 pub mod scenario;
 pub mod settings;

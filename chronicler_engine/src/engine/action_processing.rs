@@ -252,12 +252,13 @@ pub fn evaluate_and_narrate_triggers(
         None => return Ok(state),
     };
 
-    let continuation_text = match llm_backend.narrate_action_from_prompt(
+    let continuation_result = match llm_backend.narrate_action_from_prompt(
+        crate::narrative::llm::backend::AGENT_TRIGGER,
         &system_prompt,
         &user_prompt,
         Some(fitted_max_tokens),
     ) {
-        Ok(text) => text,
+        Ok(result) => result,
         Err(e) => {
             log::error!("Trigger narration failed: {e}");
             state.add_log(
@@ -269,11 +270,11 @@ pub fn evaluate_and_narrate_triggers(
         }
     };
 
-    if continuation_text.trim().is_empty() {
+    if continuation_result.text.trim().is_empty() {
         return Ok(state);
     }
     state.narrative.pending_event = Some(trigger.action.name.clone());
-    state.add_log(continuation_text, None, LogType::Narration);
+    state.add_log(continuation_result.text, None, LogType::Narration);
     if !trigger.repeat {
         mark_trigger_fired(&mut state.character_state, &npc.id, trigger_idx);
     }
@@ -310,7 +311,7 @@ pub fn execute_freeaction_impl(
         .map_err(|_| EngineError::RoomNotFound("current room not found".to_string()))?
         .clone();
 
-    // [DOC: docs/system/triggers.md §Mutation Order Invariant]
+    // [DOC: docs/system/triggers.md section: Mutation Order Invariant]
     // Order is load-bearing: narration logged first (step 1), then triggers evaluated
     // which read history for context (step 2), then NPC events applied (step 3).
     next_state.add_log(ctx.narration_text.to_string(), None, LogType::Narration);

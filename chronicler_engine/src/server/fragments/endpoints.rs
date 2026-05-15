@@ -4,7 +4,7 @@ use crate::server::AppState;
 
 use super::renderers::{
     render_action_area, render_action_hints, render_character_headshots, render_header,
-    render_story_log, render_visual_sidebar,
+    render_llm_messages, render_story_log, render_visual_sidebar,
 };
 
 fn render_fragment<F>(state: &AppState, render: F, name: &str) -> Html<String>
@@ -52,6 +52,10 @@ pub async fn character_headshots_fragment(State(state): State<AppState>) -> Html
 /// [DOC: docs/system/game_flow.md]
 pub async fn hints_handler(State(state): State<AppState>) -> Html<String> {
     render_fragment(&state, render_action_hints, "hints_handler")
+}
+
+pub async fn llm_messages_fragment(State(state): State<AppState>) -> Html<String> {
+    render_fragment(&state, render_llm_messages, "llm_messages_fragment")
 }
 
 pub async fn status_ready_handler(State(_state): State<AppState>) -> Html<String> {

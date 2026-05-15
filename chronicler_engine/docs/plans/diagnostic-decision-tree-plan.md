@@ -91,7 +91,7 @@ Create `docs/diagnostics/decision_tree.md` with this structure:
 4. If "First Check" is inconclusive, return to this tree for secondary branches.
 
 ### Branch: Trigger
-1. Check `room_id` match → `docs/system/triggers.md §Scope`
+1. Check `room_id` match → `docs/system/triggers.md section: Scope`
 2. Check `times_met` counter → `GET /debug/state` or test state builder
 3. Check `trigger_fired` flag → non-repeatable triggers
 4. Check NPC presence in `state.npcs` → quantifier result or static NPCs

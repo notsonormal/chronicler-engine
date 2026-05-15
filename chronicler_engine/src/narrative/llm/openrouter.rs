@@ -1,11 +1,13 @@
+use std::sync::Arc;
+
 use crate::error::{EngineError, LlmFailure};
 use crate::model::character::NpcCard;
 use crate::model::settings::Connection;
 use crate::narrative::llm_client::call_openrouter_with_model;
 use crate::narrative::prompt::{PromptBuilder, PromptContext};
+use crate::storage::llm_message_storage::LlmMessageStorage;
 
-use super::backend::LlmBackend;
-use super::backend::merge_single_user_message;
+use super::backend::{LlmBackend, LlmCallResult, merge_single_user_message};
 
 #[derive(Clone, Default)]
 pub struct OpenRouterBackend {
@@ -14,10 +16,14 @@ pub struct OpenRouterBackend {
     single_user_message: bool,
     max_tokens: Option<u32>,
     max_context_tokens: u32,
+    storage: Option<Arc<dyn LlmMessageStorage>>,
 }
 
 impl OpenRouterBackend {
-    pub fn from_connection(connection: &Connection) -> Self {
+    pub fn from_connection(
+        connection: &Connection,
+        storage: Option<Arc<dyn LlmMessageStorage>>,
+    ) -> Self {
         let api_key = connection.resolve_api_key().unwrap_or_default();
         Self {
             api_key,
@@ -25,6 +31,7 @@ impl OpenRouterBackend {
             single_user_message: connection.single_user_message,
             max_tokens: connection.max_tokens,
             max_context_tokens: connection.resolve_max_context_tokens(),
+            storage,
         }
     }
 
@@ -33,7 +40,7 @@ impl OpenRouterBackend {
         system_prompt: &str,
         user_text: &str,
         max_tokens: Option<u32>,
-    ) -> Result<String, EngineError> {
+    ) -> Result<crate::narrative::llm_client::ChatCompletionResult, EngineError> {
         let (system, user) = if self.single_user_message {
             ("", merge_single_user_message(system_prompt, user_text))
         } else {
@@ -42,14 +49,30 @@ impl OpenRouterBackend {
         let max_tokens = max_tokens.or(self.max_tokens);
         let result =
             call_openrouter_with_model(&self.api_key, system, &user, &self.model, max_tokens)?;
-        if result.trim().is_empty() {
+        if result.text.trim().is_empty() {
             return Err(EngineError::Llm(LlmFailure::EmptyResponse));
         }
         Ok(result)
     }
 
+    fn wrap_and_save(
+        &self,
+        agent_name: &str,
+        chat: crate::narrative::llm_client::ChatCompletionResult,
+    ) -> LlmCallResult {
+        let result = LlmCallResult::from_chat_result(agent_name, self.name(), &self.model, chat);
+        if let Some(storage) = &self.storage {
+            let _ = storage.save(&result.to_message());
+        }
+        result
+    }
+
     /// Build a prompt from context using this backend's token limits, then call the LLM.
-    fn narrate_from_context(&self, context: &PromptContext) -> Result<String, EngineError> {
+    fn narrate_from_context(
+        &self,
+        agent_name: &str,
+        context: &PromptContext,
+    ) -> Result<LlmCallResult, EngineError> {
         let settings = crate::settings::load_settings().unwrap_or_default();
         let builder = PromptBuilder::from_context(context)
             .with_max_context_tokens(self.max_context_tokens)
@@ -59,16 +82,18 @@ impl OpenRouterBackend {
             )
             .with_response_length(&settings.response_length);
         let (system_prompt, user_text, max_tokens) = builder.build_split()?;
-        self.call(&system_prompt, &user_text, Some(max_tokens))
+        let chat_result = self.call(&system_prompt, &user_text, Some(max_tokens))?;
+        Ok(self.wrap_and_save(agent_name, chat_result))
     }
 }
 
 impl LlmBackend for OpenRouterBackend {
     fn generate_dialogue(
         &self,
+        agent_name: &str,
         context: &PromptContext,
         npc: &NpcCard,
-    ) -> Result<String, EngineError> {
+    ) -> Result<LlmCallResult, EngineError> {
         log::info!("[LLM] Generating dialogue for NPC: {}", npc.sheet.name);
 
         let user_msg = format!(
@@ -86,19 +111,27 @@ impl LlmBackend for OpenRouterBackend {
             history: context.history,
         };
 
-        self.narrate_from_context(&npc_context)
+        self.narrate_from_context(agent_name, &npc_context)
     }
 
-    fn narrate_action(&self, context: &PromptContext) -> Result<String, EngineError> {
+    fn narrate_action(
+        &self,
+        agent_name: &str,
+        context: &PromptContext,
+    ) -> Result<LlmCallResult, EngineError> {
         log::info!(
             "[LLM] Generating action narration for: {}",
             context.user_message
         );
 
-        self.narrate_from_context(context)
+        self.narrate_from_context(agent_name, context)
     }
 
-    fn narrate_arrival(&self, context: &PromptContext) -> Result<String, EngineError> {
+    fn narrate_arrival(
+        &self,
+        agent_name: &str,
+        context: &PromptContext,
+    ) -> Result<LlmCallResult, EngineError> {
         log::info!(
             "[LLM] Generating arrival narration for room: {}",
             context.room.name
@@ -119,30 +152,38 @@ impl LlmBackend for OpenRouterBackend {
             history: context.history,
         };
 
-        self.narrate_from_context(&arrival_context)
+        self.narrate_from_context(agent_name, &arrival_context)
     }
 
     fn narrate_continuation(
         &self,
+        agent_name: &str,
         system_prompt: &str,
         user_prompt: &str,
         _trigger_prompt: &str,
         max_tokens: Option<u32>,
-    ) -> Result<String, EngineError> {
+    ) -> Result<LlmCallResult, EngineError> {
         log::info!("[LLM] Generating continuation narration");
 
-        self.call(system_prompt, user_prompt, max_tokens)
+        Ok(self.wrap_and_save(
+            agent_name,
+            self.call(system_prompt, user_prompt, max_tokens)?,
+        ))
     }
 
     fn narrate_action_from_prompt(
         &self,
+        agent_name: &str,
         system_prompt: &str,
         user_prompt: &str,
         max_tokens: Option<u32>,
-    ) -> Result<String, EngineError> {
+    ) -> Result<LlmCallResult, EngineError> {
         log::info!("[LLM] Generating action from prompt");
 
-        self.call(system_prompt, user_prompt, max_tokens)
+        Ok(self.wrap_and_save(
+            agent_name,
+            self.call(system_prompt, user_prompt, max_tokens)?,
+        ))
     }
 
     fn name(&self) -> &str {

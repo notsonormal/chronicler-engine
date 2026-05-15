@@ -99,7 +99,7 @@ pub async fn retry_handler(State(state): State<AppState>) -> (StatusCode, String
 
     game_state.narrative.generation.status = crate::model::state::GenerationStatus::Generating;
     game_state.narrative.generation.phase = crate::model::state::GenerationPhase::Narrating;
-    let new_swipe = snapshot.swipe_index + 1;
+    let new_swipe = snapshot.swipe_index;
     let generating_snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
         &game_state,
         snapshot.turn_id.clone(),

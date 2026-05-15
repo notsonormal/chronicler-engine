@@ -509,6 +509,7 @@ async fn test_switch_swipe_success() {
     let app = chronicler_engine::server::create_app_with_storage(
         state,
         storage,
+        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new()),
         chronicler_engine::model::settings::AppSettings::default(),
     );
 
@@ -568,6 +569,7 @@ async fn test_create_checkpoint_no_state() {
     let app = chronicler_engine::server::create_app_with_storage(
         state,
         storage,
+        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new()),
         chronicler_engine::model::settings::AppSettings::default(),
     );
 
@@ -611,6 +613,7 @@ async fn test_restore_checkpoint_success() {
     let app = chronicler_engine::server::create_app_with_storage(
         state,
         storage,
+        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new()),
         chronicler_engine::model::settings::AppSettings::default(),
     );
 
@@ -655,6 +658,7 @@ async fn test_restore_checkpoint_snapshot_missing() {
     let app = chronicler_engine::server::create_app_with_storage(
         state,
         storage,
+        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new()),
         chronicler_engine::model::settings::AppSettings::default(),
     );
 
@@ -792,6 +796,7 @@ async fn test_switch_swipe_load_state_error() {
     let app = chronicler_engine::server::create_app_with_storage(
         state,
         storage,
+        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new()),
         chronicler_engine::model::settings::AppSettings::default(),
     );
     let req = Request::builder()
@@ -823,6 +828,7 @@ async fn test_create_checkpoint_save_error() {
     let app = chronicler_engine::server::create_app_with_storage(
         state,
         storage,
+        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new()),
         chronicler_engine::model::settings::AppSettings::default(),
     );
     let req = Request::builder()
@@ -868,6 +874,7 @@ async fn test_restore_checkpoint_load_checkpoint_error() {
     let app = chronicler_engine::server::create_app_with_storage(
         state,
         storage,
+        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new()),
         chronicler_engine::model::settings::AppSettings::default(),
     );
     let req = Request::builder()
@@ -913,6 +920,7 @@ async fn test_restore_checkpoint_load_by_turn_error() {
     let app = chronicler_engine::server::create_app_with_storage(
         state,
         storage,
+        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new()),
         chronicler_engine::model::settings::AppSettings::default(),
     );
     let req = Request::builder()
@@ -958,6 +966,7 @@ async fn test_restore_checkpoint_save_error() {
     let app = chronicler_engine::server::create_app_with_storage(
         state,
         storage,
+        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new()),
         chronicler_engine::model::settings::AppSettings::default(),
     );
     let req = Request::builder()
@@ -987,6 +996,7 @@ async fn test_delete_checkpoint_error() {
     let app = chronicler_engine::server::create_app_with_storage(
         state,
         storage,
+        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new()),
         chronicler_engine::model::settings::AppSettings::default(),
     );
     let req = Request::builder()
@@ -1016,6 +1026,7 @@ async fn test_list_checkpoints_error() {
     let app = chronicler_engine::server::create_app_with_storage(
         state,
         storage,
+        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new()),
         chronicler_engine::model::settings::AppSettings::default(),
     );
     let req = Request::builder()

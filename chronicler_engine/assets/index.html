@@ -15,6 +15,7 @@
     <div class="tab-bar">
         <button class="tab active" data-tab="game">Game</button>
         <button class="tab" data-tab="settings">Settings</button>
+        <button class="tab" data-tab="llm-messages">LLM Messages</button>
     </div>
     <div class="tab-content active" id="game-tab">
     <div class="main-container">
@@ -45,6 +46,9 @@
     </div>
     <div class="tab-content" id="settings-tab">
         <div class="settings-panel" hx-get="/fragment/settings" hx-trigger="load"></div>
+    </div>
+    <div class="tab-content" id="llm-messages-tab">
+        <div class="llm-messages-panel" hx-get="/fragment/llm-messages" hx-trigger="load, every 4s" hx-swap="innerHTML" hx-on::after-swap="restoreLlmExpandedState()"></div>
     </div>
     <script>
         console.log('[HTMX] Initializing...');
@@ -359,8 +363,68 @@
                     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
                     btn.classList.add('active');
                     document.getElementById(btn.dataset.tab + '-tab').classList.add('active');
+                    
+                    // Refresh LLM messages when switching to that tab
+                    if (btn.dataset.tab === 'llm-messages') {
+                        const panel = document.querySelector('.llm-messages-panel');
+                        if (panel) {
+                            htmx.trigger(panel, 'htmx:refresh');
+                        }
+                    }
                 });
             });
+            
+            // LLM message expand/collapse - persists across HTMX polls
+            const expandedLlmMessages = new Set();
+            let llmOriginalTrigger = null;
+            
+            function pauseLlmPolling() {
+                const panel = document.querySelector('.llm-messages-panel');
+                if (panel) {
+                    llmOriginalTrigger = panel.getAttribute('hx-trigger');
+                    panel.setAttribute('hx-trigger', 'none');
+                    htmx.process(panel);
+                }
+            }
+            
+            function resumeLlmPolling() {
+                const panel = document.querySelector('.llm-messages-panel');
+                if (panel && llmOriginalTrigger) {
+                    panel.setAttribute('hx-trigger', llmOriginalTrigger);
+                    htmx.process(panel);
+                    llmOriginalTrigger = null;
+                }
+            }
+            
+            window.toggleLlmMessage = function(header) {
+                const card = header.closest('.llm-message-card');
+                if (card) {
+                    card.classList.toggle('expanded');
+                    const msgId = card.id;
+                    if (msgId) {
+                        if (card.classList.contains('expanded')) {
+                            expandedLlmMessages.add(msgId);
+                            pauseLlmPolling();
+                        } else {
+                            expandedLlmMessages.delete(msgId);
+                            if (expandedLlmMessages.size === 0) {
+                                resumeLlmPolling();
+                            }
+                        }
+                    }
+                }
+            };
+            
+            window.restoreLlmExpandedState = function() {
+                expandedLlmMessages.forEach(function(msgId) {
+                    const card = document.getElementById(msgId);
+                    if (card) {
+                        card.classList.add('expanded');
+                    } else {
+                        expandedLlmMessages.delete(msgId);
+                    }
+                });
+            };
         });
         
         </script>

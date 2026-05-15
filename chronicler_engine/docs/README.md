@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-14 19:04 UTC*
+*Index last generated: 2026-05-15 19:46 UTC*
 
 ### Root files
 
@@ -26,6 +26,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [ADR-010: Concurrency and Generation Gate Model](./adr/adr-010-concurrency-generation-gate.md)
 - [ADR-011: Text Check Integration](./adr/adr-011-text-check-integration.md)
 - [ADR-012: Turn + Swipe Domain Model](./adr/adr-012-turn-swipe-model.md)
+- [ADR-013: LLM Call Logging and Forensics](./adr/adr-013-llm-message-logging.md)
 
 ### `docs/architecture/`
 
@@ -57,6 +58,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ### `docs/plans/archived/`
 
 - [Implementation Plan: Restrict Message Deletion & Inline Location/Event Headers](./plans/archived/cyborg-obsidian-riri-williams.md)
+- [Implementation Plan: LLM Messages Tab](./plans/archived/dagger-wiccan-martian-manhunter-20260514.md)
 - [Plan: Fix Story Log Button Visibility & Text Bolding](./plans/archived/fix-story-log-buttons-and-bolding.md)
 - [Implementation Plan: Redmist Estate Data Overhaul](./plans/archived/ice-winter-soldier-bobbi-morse.md)
 - [Plan: Migrate Chronicler Engine to Turn + Swipe Model](./plans/archived/jericho-huntress-devil-dinosaur-20260513.md)
@@ -90,7 +92,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Specification: Dashboard UI](./system/dashboard.md)
 - [System: Dynamic Pseudo-Rooms](./system/dynamic_rooms.md)
 - [Specification: Game Flow](./system/game_flow.md)
-- [Specification: LLM Processing & Integration](./system/llm_processing.md)
+- [Llm Processing](./system/llm_processing.md)
 - [Specification: Game Master Narration System](./system/narration_engine.md)
 - [Specification: Semantic Navigation](./system/navigation.md)
 - [Chronicler Engine Prompt System](./system/prompt_system.md)

@@ -8,12 +8,14 @@ use crate::model::world::WorldCard;
 
 #[cfg(test)]
 use crate::model::state::GameState;
+use crate::storage::llm_message_storage::LlmMessageStorage;
 use crate::storage::snapshot_storage::SnapshotStorage;
 
 /// Context required by [`GameService`] to load and persist game state.
 #[derive(Clone)]
 pub struct GameServiceContext {
     pub snapshot_storage: Arc<dyn SnapshotStorage>,
+    pub llm_message_storage: Arc<dyn LlmMessageStorage>,
     pub world: Arc<WorldCard>,
     pub map: Arc<crate::model::map::MapDef>,
     pub player: Arc<crate::model::character::PlayerCard>,

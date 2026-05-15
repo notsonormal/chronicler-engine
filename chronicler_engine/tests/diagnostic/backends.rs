@@ -38,21 +38,30 @@ impl HttpErrorBackend {
 impl LlmBackend for HttpErrorBackend {
     fn generate_dialogue(
         &self,
+        _agent_name: &str,
         _ctx: &PromptContext,
         _npc: &NpcCard,
-    ) -> Result<String, EngineError> {
+    ) -> Result<chronicler_engine::narrative::llm::backend::LlmCallResult, EngineError> {
         Err(EngineError::Llm(LlmFailure::Http {
             status: self.status,
             body: self.body.clone(),
         }))
     }
-    fn narrate_action(&self, _ctx: &PromptContext) -> Result<String, EngineError> {
+    fn narrate_action(
+        &self,
+        _agent_name: &str,
+        _ctx: &PromptContext,
+    ) -> Result<chronicler_engine::narrative::llm::backend::LlmCallResult, EngineError> {
         Err(EngineError::Llm(LlmFailure::Http {
             status: self.status,
             body: self.body.clone(),
         }))
     }
-    fn narrate_arrival(&self, _ctx: &PromptContext) -> Result<String, EngineError> {
+    fn narrate_arrival(
+        &self,
+        _agent_name: &str,
+        _ctx: &PromptContext,
+    ) -> Result<chronicler_engine::narrative::llm::backend::LlmCallResult, EngineError> {
         Err(EngineError::Llm(LlmFailure::Http {
             status: self.status,
             body: self.body.clone(),
@@ -60,11 +69,12 @@ impl LlmBackend for HttpErrorBackend {
     }
     fn narrate_continuation(
         &self,
+        _agent_name: &str,
         _s: &str,
         _u: &str,
         _t: &str,
         _m: Option<u32>,
-    ) -> Result<String, EngineError> {
+    ) -> Result<chronicler_engine::narrative::llm::backend::LlmCallResult, EngineError> {
         Err(EngineError::Llm(LlmFailure::Http {
             status: self.status,
             body: self.body.clone(),
@@ -72,10 +82,11 @@ impl LlmBackend for HttpErrorBackend {
     }
     fn narrate_action_from_prompt(
         &self,
+        _agent_name: &str,
         _s: &str,
         _u: &str,
         _m: Option<u32>,
-    ) -> Result<String, EngineError> {
+    ) -> Result<chronicler_engine::narrative::llm::backend::LlmCallResult, EngineError> {
         Err(EngineError::Llm(LlmFailure::Http {
             status: self.status,
             body: self.body.clone(),
@@ -104,21 +115,30 @@ impl NetworkErrorBackend {
 impl LlmBackend for NetworkErrorBackend {
     fn generate_dialogue(
         &self,
+        _agent_name: &str,
         _ctx: &PromptContext,
         _npc: &NpcCard,
-    ) -> Result<String, EngineError> {
+    ) -> Result<chronicler_engine::narrative::llm::backend::LlmCallResult, EngineError> {
         Err(EngineError::Llm(LlmFailure::Network {
             url: self.url.clone(),
             detail: self.detail.clone(),
         }))
     }
-    fn narrate_action(&self, _ctx: &PromptContext) -> Result<String, EngineError> {
+    fn narrate_action(
+        &self,
+        _agent_name: &str,
+        _ctx: &PromptContext,
+    ) -> Result<chronicler_engine::narrative::llm::backend::LlmCallResult, EngineError> {
         Err(EngineError::Llm(LlmFailure::Network {
             url: self.url.clone(),
             detail: self.detail.clone(),
         }))
     }
-    fn narrate_arrival(&self, _ctx: &PromptContext) -> Result<String, EngineError> {
+    fn narrate_arrival(
+        &self,
+        _agent_name: &str,
+        _ctx: &PromptContext,
+    ) -> Result<chronicler_engine::narrative::llm::backend::LlmCallResult, EngineError> {
         Err(EngineError::Llm(LlmFailure::Network {
             url: self.url.clone(),
             detail: self.detail.clone(),
@@ -126,11 +146,12 @@ impl LlmBackend for NetworkErrorBackend {
     }
     fn narrate_continuation(
         &self,
+        _agent_name: &str,
         _s: &str,
         _u: &str,
         _t: &str,
         _m: Option<u32>,
-    ) -> Result<String, EngineError> {
+    ) -> Result<chronicler_engine::narrative::llm::backend::LlmCallResult, EngineError> {
         Err(EngineError::Llm(LlmFailure::Network {
             url: self.url.clone(),
             detail: self.detail.clone(),
@@ -138,10 +159,11 @@ impl LlmBackend for NetworkErrorBackend {
     }
     fn narrate_action_from_prompt(
         &self,
+        _agent_name: &str,
         _s: &str,
         _u: &str,
         _m: Option<u32>,
-    ) -> Result<String, EngineError> {
+    ) -> Result<chronicler_engine::narrative::llm::backend::LlmCallResult, EngineError> {
         Err(EngineError::Llm(LlmFailure::Network {
             url: self.url.clone(),
             detail: self.detail.clone(),
@@ -160,21 +182,30 @@ pub struct ParseErrorBackend {
 impl LlmBackend for ParseErrorBackend {
     fn generate_dialogue(
         &self,
+        _agent_name: &str,
         _ctx: &PromptContext,
         _npc: &NpcCard,
-    ) -> Result<String, EngineError> {
+    ) -> Result<chronicler_engine::narrative::llm::backend::LlmCallResult, EngineError> {
         Err(EngineError::Llm(LlmFailure::ParseError {
             raw_response: self.raw_response.clone(),
             expected_format: "valid JSON",
         }))
     }
-    fn narrate_action(&self, _ctx: &PromptContext) -> Result<String, EngineError> {
+    fn narrate_action(
+        &self,
+        _agent_name: &str,
+        _ctx: &PromptContext,
+    ) -> Result<chronicler_engine::narrative::llm::backend::LlmCallResult, EngineError> {
         Err(EngineError::Llm(LlmFailure::ParseError {
             raw_response: self.raw_response.clone(),
             expected_format: "valid JSON",
         }))
     }
-    fn narrate_arrival(&self, _ctx: &PromptContext) -> Result<String, EngineError> {
+    fn narrate_arrival(
+        &self,
+        _agent_name: &str,
+        _ctx: &PromptContext,
+    ) -> Result<chronicler_engine::narrative::llm::backend::LlmCallResult, EngineError> {
         Err(EngineError::Llm(LlmFailure::ParseError {
             raw_response: self.raw_response.clone(),
             expected_format: "valid JSON",
@@ -182,11 +213,12 @@ impl LlmBackend for ParseErrorBackend {
     }
     fn narrate_continuation(
         &self,
+        _agent_name: &str,
         _s: &str,
         _u: &str,
         _t: &str,
         _m: Option<u32>,
-    ) -> Result<String, EngineError> {
+    ) -> Result<chronicler_engine::narrative::llm::backend::LlmCallResult, EngineError> {
         Err(EngineError::Llm(LlmFailure::ParseError {
             raw_response: self.raw_response.clone(),
             expected_format: "valid JSON",
@@ -194,10 +226,11 @@ impl LlmBackend for ParseErrorBackend {
     }
     fn narrate_action_from_prompt(
         &self,
+        _agent_name: &str,
         _s: &str,
         _u: &str,
         _m: Option<u32>,
-    ) -> Result<String, EngineError> {
+    ) -> Result<chronicler_engine::narrative::llm::backend::LlmCallResult, EngineError> {
         Err(EngineError::Llm(LlmFailure::ParseError {
             raw_response: self.raw_response.clone(),
             expected_format: "valid JSON",
@@ -214,32 +247,43 @@ pub struct TimeoutBackend;
 impl LlmBackend for TimeoutBackend {
     fn generate_dialogue(
         &self,
+        _agent_name: &str,
         _ctx: &PromptContext,
         _npc: &NpcCard,
-    ) -> Result<String, EngineError> {
+    ) -> Result<chronicler_engine::narrative::llm::backend::LlmCallResult, EngineError> {
         Err(EngineError::Llm(LlmFailure::Timeout))
     }
-    fn narrate_action(&self, _ctx: &PromptContext) -> Result<String, EngineError> {
+    fn narrate_action(
+        &self,
+        _agent_name: &str,
+        _ctx: &PromptContext,
+    ) -> Result<chronicler_engine::narrative::llm::backend::LlmCallResult, EngineError> {
         Err(EngineError::Llm(LlmFailure::Timeout))
     }
-    fn narrate_arrival(&self, _ctx: &PromptContext) -> Result<String, EngineError> {
+    fn narrate_arrival(
+        &self,
+        _agent_name: &str,
+        _ctx: &PromptContext,
+    ) -> Result<chronicler_engine::narrative::llm::backend::LlmCallResult, EngineError> {
         Err(EngineError::Llm(LlmFailure::Timeout))
     }
     fn narrate_continuation(
         &self,
+        _agent_name: &str,
         _s: &str,
         _u: &str,
         _t: &str,
         _m: Option<u32>,
-    ) -> Result<String, EngineError> {
+    ) -> Result<chronicler_engine::narrative::llm::backend::LlmCallResult, EngineError> {
         Err(EngineError::Llm(LlmFailure::Timeout))
     }
     fn narrate_action_from_prompt(
         &self,
+        _agent_name: &str,
         _s: &str,
         _u: &str,
         _m: Option<u32>,
-    ) -> Result<String, EngineError> {
+    ) -> Result<chronicler_engine::narrative::llm::backend::LlmCallResult, EngineError> {
         Err(EngineError::Llm(LlmFailure::Timeout))
     }
     fn name(&self) -> &str {

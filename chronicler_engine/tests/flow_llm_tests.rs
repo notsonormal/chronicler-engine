@@ -15,6 +15,29 @@ mod tests {
         std::env::var("OPENROUTER_API_KEY").is_ok()
     }
 
+    /// Fetch the LLM Messages fragment with retries until messages appear or timeout.
+    async fn verify_llm_messages_logged(port: u16) {
+        let client = reqwest::Client::new();
+        let start = std::time::Instant::now();
+        let timeout = Duration::from_secs(30);
+
+        while start.elapsed() < timeout {
+            if let Ok(resp) = client
+                .get(format!("http://127.0.0.1:{port}/fragment/llm-messages"))
+                .send()
+                .await
+            {
+                if let Ok(text) = resp.text().await {
+                    if text.contains("llm-message-list") && !text.contains("No LLM messages yet") {
+                        return;
+                    }
+                }
+            }
+            tokio::time::sleep(Duration::from_millis(500)).await;
+        }
+        panic!("LLM messages were not logged within timeout");
+    }
+
     async fn with_real_llm<F, Fut>(test_fn: F)
     where
         F: FnOnce(playwright_rs::Page, u16) -> Fut,
@@ -60,6 +83,8 @@ mod tests {
                 status_after.contains("Ready") || status_after.contains("Error"),
                 "Status should be Ready or Error after LLM completes. Got: {status_after}"
             );
+
+            verify_llm_messages_logged(port).await;
         })
         .await;
     }
@@ -98,6 +123,8 @@ mod tests {
                 entries >= 2,
                 "Should have at least 2 log entries after two commands"
             );
+
+            verify_llm_messages_logged(port).await;
         })
         .await;
     }

@@ -3,7 +3,6 @@ use std::sync::Arc;
 use crate::cli::{Args, list_available_worlds, resolve_engine_data_path};
 use crate::model::character::NpcCard;
 use crate::model::state::GameState;
-use crate::narrative::llm::get_llm_backend;
 use crate::narrative::prompt::PromptContext;
 use crate::server::ServerConfig;
 
@@ -56,8 +55,11 @@ pub fn run(args: Args) -> crate::error::Result<()> {
     let db_path = db_dir.join(format!("chronicler_{}.db", args.port));
     let db_pool = crate::storage::db::DbPool::new(db_path.to_str().unwrap_or("chronicler.db"))?;
     let snapshot_storage =
-        Arc::new(crate::storage::snapshot_storage::SqliteSnapshotStorage::new(db_pool))
+        Arc::new(crate::storage::snapshot_storage::SqliteSnapshotStorage::new(db_pool.clone()))
             as Arc<dyn crate::storage::snapshot_storage::SnapshotStorage>;
+    let llm_message_storage =
+        Arc::new(crate::storage::llm_message_storage::SqliteLlmMessageStorage::new(db_pool))
+            as Arc<dyn crate::storage::llm_message_storage::LlmMessageStorage>;
 
     // [DOC: docs/system/startup.md]
     let initial_snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
@@ -85,6 +87,7 @@ pub fn run(args: Args) -> crate::error::Result<()> {
         .is_some_and(|s| !s.text.is_empty());
     if !has_scenario {
         let storage_for_task = Arc::clone(&snapshot_storage);
+        let llm_storage_for_task = Arc::clone(&llm_message_storage);
         let world_for_task = Arc::clone(&world_arc);
         let map_for_task = Arc::clone(&map_arc);
         let player_for_task = Arc::clone(&player_arc);
@@ -118,7 +121,20 @@ pub fn run(args: Args) -> crate::error::Result<()> {
                 .find(|r| r.id == room_id);
 
             if let Some(room) = room {
-                let backend = get_llm_backend();
+                let backend = crate::narrative::llm::get_llm_backend_for(
+                    &crate::settings::load_settings()
+                        .unwrap_or_default()
+                        .get_narration_connection()
+                        .cloned()
+                        .unwrap_or_else(|| {
+                            crate::model::settings::Connection::new(
+                                "default",
+                                "Default",
+                                crate::model::llm_backend::LlmBackendType::Mock,
+                            )
+                        }),
+                    Some(Arc::clone(&llm_storage_for_task)),
+                );
                 let context = PromptContext {
                     world: &world_for_task,
                     room,
@@ -128,10 +144,11 @@ pub fn run(args: Args) -> crate::error::Result<()> {
                     user_message: "",
                     history: &history,
                 };
-                let narration = backend.narrate_arrival(&context);
+                let narration = backend
+                    .narrate_arrival(crate::narrative::llm::backend::AGENT_NARRATOR, &context);
                 match narration {
-                    Ok(text) => {
-                        state.add_log(text, None, crate::model::state::LogType::Narration);
+                    Ok(result) => {
+                        state.add_log(result.text, None, crate::model::state::LogType::Narration);
                         state.narrative.generation.status =
                             crate::model::state::GenerationStatus::Idle;
                     }
@@ -156,6 +173,7 @@ pub fn run(args: Args) -> crate::error::Result<()> {
         player_arc,
         npcs_arc,
         snapshot_storage,
+        llm_message_storage,
         config,
     ))?;
 

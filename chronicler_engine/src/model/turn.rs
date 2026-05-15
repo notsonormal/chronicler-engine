@@ -59,7 +59,7 @@ impl Turn {
             index,
             entries: Vec::new(),
         });
-        self.active_swipe_index = index;
+        self.active_swipe_index = self.swipes.len() as u32 - 1;
     }
 
     /// Create a new swipe copying entries from the currently active swipe,
@@ -70,6 +70,6 @@ impl Turn {
             .map(|s| s.entries.clone())
             .unwrap_or_default();
         self.swipes.push(Swipe { index, entries });
-        self.active_swipe_index = index;
+        self.active_swipe_index = self.swipes.len() as u32 - 1;
     }
 }

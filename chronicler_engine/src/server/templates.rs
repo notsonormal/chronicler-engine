@@ -5,6 +5,7 @@ use std::fmt;
 use askama::Template;
 use pulldown_cmark::{Options, Parser, html};
 
+use crate::model::llm_message::LlmMessage;
 use crate::model::state::{LogEntry, LogType};
 use crate::narrative::text_check::CheckResult;
 
@@ -299,6 +300,106 @@ impl TextCheckPreviewTemplate {
             original: result.original.clone(),
             corrected: result.corrected.clone(),
             issues,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct LlmMessageView {
+    pub id: i64,
+    pub agent_name: String,
+    pub backend_name: String,
+    pub model_name: String,
+    pub timestamp: String,
+    pub system_prompt_preview: String,
+    pub user_prompt_preview: String,
+    pub parsed_response_preview: String,
+    pub has_error: bool,
+    pub raw_request_json: String,
+    pub raw_response_json: String,
+}
+
+impl From<&LlmMessage> for LlmMessageView {
+    fn from(msg: &LlmMessage) -> Self {
+        let pretty_json = |s: &str| -> String {
+            let trimmed = s.trim();
+            if trimmed.is_empty() {
+                return trimmed.to_string();
+            }
+            serde_json::from_str::<serde_json::Value>(trimmed)
+                .ok()
+                .and_then(|v| serde_json::to_string_pretty(&v).ok())
+                .unwrap_or_else(|| trimmed.to_string())
+        };
+        Self {
+            id: msg.id,
+            agent_name: msg.agent_name.clone(),
+            backend_name: msg.backend_name.clone(),
+            model_name: msg.model_name.clone(),
+            timestamp: msg.created_at.format("%H:%M:%S").to_string(),
+            system_prompt_preview: msg.system_prompt.clone(),
+            user_prompt_preview: msg.user_prompt.clone(),
+            parsed_response_preview: msg.parsed_response.clone(),
+            has_error: msg.error_message.is_some(),
+            raw_request_json: pretty_json(&msg.raw_request_json),
+            raw_response_json: pretty_json(&msg.raw_response_json),
+        }
+    }
+}
+
+#[derive(Template)]
+#[template(
+    source = r#"<div class="llm-message-list" id="llm-message-list">
+{% for msg in messages %}
+<div class="llm-message-card" id="llm-msg-{{ msg.id }}">
+    <div class="llm-message-header" onclick="toggleLlmMessage(this)">
+        <span class="llm-message-agent">{{ msg.agent_name }}</span>
+        <span class="llm-message-model">{{ msg.backend_name }} / {{ msg.model_name }}</span>
+        <span class="llm-message-time">{{ msg.timestamp }}</span>
+        {% if msg.has_error %}<span class="llm-message-error">ERROR</span>{% endif %}
+    </div>
+    <div class="llm-message-body">
+        <div class="llm-message-prompts">
+            <details class="llm-message-prompt-details">
+                <summary>System</summary>
+                <pre class="llm-message-prompt-pre">{{ msg.system_prompt_preview }}</pre>
+            </details>
+            <details class="llm-message-prompt-details">
+                <summary>User</summary>
+                <pre class="llm-message-prompt-pre">{{ msg.user_prompt_preview }}</pre>
+            </details>
+            <details class="llm-message-prompt-details" open>
+                <summary>Response</summary>
+                <pre class="llm-message-prompt-pre">{{ msg.parsed_response_preview }}</pre>
+            </details>
+        </div>
+        <div class="llm-message-raw">
+            <details>
+                <summary>Raw Request JSON</summary>
+                <pre>{{ msg.raw_request_json }}</pre>
+            </details>
+            <details>
+                <summary>Raw Response JSON</summary>
+                <pre>{{ msg.raw_response_json }}</pre>
+            </details>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% if messages.is_empty() %}
+<div class="llm-message-empty">No LLM messages yet.</div>
+{% endif %}
+</div>"#,
+    ext = "html"
+)]
+pub struct LlmMessagesTemplate {
+    pub messages: Vec<LlmMessageView>,
+}
+
+impl LlmMessagesTemplate {
+    pub fn new(messages: &[LlmMessage]) -> Self {
+        Self {
+            messages: messages.iter().map(LlmMessageView::from).collect(),
         }
     }
 }
