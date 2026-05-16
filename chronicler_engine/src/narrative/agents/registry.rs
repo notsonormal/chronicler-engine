@@ -1,7 +1,10 @@
+use std::sync::Arc;
+
 use crate::error::EngineError;
 use crate::model::agent::{AgentConfig, AgentResult, BackendSelector, ExecutionPhase};
 use crate::narrative::agents::Agent;
 use crate::narrative::agents::quantifier::QuantifierAgent;
+use crate::storage::llm_message_storage::LlmMessageStorage;
 
 #[derive(Debug, Default)]
 pub struct AgentRegistry {
@@ -10,6 +13,13 @@ pub struct AgentRegistry {
 
 impl AgentRegistry {
     pub fn from_configs(configs: &[AgentConfig]) -> Result<Self, EngineError> {
+        Self::from_configs_with_storage(configs, None)
+    }
+
+    pub fn from_configs_with_storage(
+        configs: &[AgentConfig],
+        storage: Option<Arc<dyn LlmMessageStorage>>,
+    ) -> Result<Self, EngineError> {
         let mut registry = Self::default();
 
         // If no agent configs exist, inject defaults for backward compatibility.
@@ -27,7 +37,9 @@ impl AgentRegistry {
                 continue;
             }
             let agent: Box<dyn Agent> = match config.agent_type.as_str() {
-                "quantifier" => Box::new(QuantifierAgent::from_config(config)?),
+                "quantifier" => {
+                    Box::new(QuantifierAgent::from_config_with_storage(config, storage.clone())?)
+                }
                 "narrator" => Box::new(NarratorAgent::new(config.name.clone())),
                 other => {
                     return Err(EngineError::Config(format!("Unknown agent type: {other}")));

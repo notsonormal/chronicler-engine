@@ -39,6 +39,20 @@ impl DeepSeekBackend {
 }
 
 impl LlmBackend for DeepSeekBackend {
+    fn model(&self) -> &str {
+        &self.model
+    }
+
+    fn name(&self) -> &str {
+        "DeepSeek"
+    }
+
+    fn save_message(&self, message: &crate::model::llm_message::LlmMessage) {
+        if let Some(storage) = &self.storage {
+            let _ = storage.save(message);
+        }
+    }
+
     fn generate_dialogue(
         &self,
         _agent_name: &str,
@@ -75,7 +89,7 @@ impl LlmBackend for DeepSeekBackend {
         Self::not_implemented()
     }
 
-    fn narrate_action_from_prompt(
+    fn complete(
         &self,
         _agent_name: &str,
         _system_prompt: &str,
@@ -83,9 +97,5 @@ impl LlmBackend for DeepSeekBackend {
         _max_tokens: Option<u32>,
     ) -> Result<LlmCallResult, EngineError> {
         Self::not_implemented()
-    }
-
-    fn name(&self) -> &str {
-        "DeepSeek"
     }
 }

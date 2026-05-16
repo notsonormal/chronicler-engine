@@ -249,9 +249,9 @@ fn test_mock_narrate_continuation() {
 }
 
 #[test]
-fn test_mock_narrate_action_from_prompt() {
+fn test_mock_complete() {
     let backend = MockBackend::default();
-    let result = backend.narrate_action_from_prompt("test", "system prompt", "user action", None);
+    let result = backend.complete("test", "system prompt", "user action", None);
     assert!(result.is_ok());
     let response = result.unwrap().text;
     assert!(response.contains("action") || response.contains("Continuation"));
@@ -280,9 +280,9 @@ fn test_mock_narrate_continuation_special_chars() {
 }
 
 #[test]
-fn test_mock_narrate_action_from_prompt_multiline() {
+fn test_mock_complete_multiline() {
     let backend = MockBackend::default();
-    let result = backend.narrate_action_from_prompt(
+    let result = backend.complete(
         "test",
         "system prompt\nwith multiple lines",
         "user prompt\nalso multiline",
@@ -293,11 +293,34 @@ fn test_mock_narrate_action_from_prompt_multiline() {
 }
 
 #[test]
-fn test_mock_narrate_action_from_prompt_empty() {
+fn test_mock_complete_empty() {
     let backend = MockBackend::default();
-    let result = backend.narrate_action_from_prompt("test", "", "", None);
+    let result = backend.complete("test", "", "", None);
     assert!(result.is_ok());
     assert!(result.unwrap().text.contains("..."));
+}
+
+#[test]
+fn test_mock_complete_per_call_responses() {
+    let backend = MockBackend {
+        per_call_prompt_responses: vec![
+            r#"{"npcs_in_room": ["carla"], "movement": {"type": null}}"#.to_string(),
+            r#"{"npcs_in_room": [], "movement": {"type": "entering", "destination": "kitchen"}}"#
+                .to_string(),
+        ],
+        ..Default::default()
+    };
+    let result1 = backend.complete("quantifier", "sys", "user", None);
+    assert!(result1.is_ok());
+    assert!(result1.unwrap().text.contains("carla"));
+
+    let result2 = backend.complete("quantifier", "sys", "user", None);
+    assert!(result2.is_ok());
+    assert!(result2.unwrap().text.contains("kitchen"));
+
+    let result3 = backend.complete("quantifier", "sys", "user", None);
+    assert!(result3.is_ok());
+    assert!(result3.unwrap().text.contains("carla"));
 }
 
 #[test]
@@ -479,11 +502,11 @@ fn test_context_with_many_global_rules() {
 }
 
 #[test]
-fn test_mock_narrate_action_from_prompt_very_long_input() {
+fn test_mock_complete_very_long_input() {
     let backend = MockBackend::default();
     let long_system = "You are a game master. ".repeat(50);
     let long_user = "The player performs an action. ".repeat(50);
-    let result = backend.narrate_action_from_prompt("test", &long_system, &long_user, None);
+    let result = backend.complete("test", &long_system, &long_user, None);
     assert!(result.is_ok());
     assert!(result.unwrap().text.contains("The player performs"));
 }
@@ -613,11 +636,11 @@ fn test_mock_with_failing_trigger_narration() {
         narrate_result.is_ok(),
         "narrate_action should succeed even with trigger_narration_should_fail set"
     );
-    // narrate_action_from_prompt (used for trigger narration) should fail
-    let trigger_result = backend.narrate_action_from_prompt("test", "sys", "user", None);
+    // complete (used for trigger narration) should fail
+    let trigger_result = backend.complete("test", "sys", "user", None);
     assert!(
         trigger_result.is_err(),
-        "narrate_action_from_prompt should fail when trigger_narration_should_fail is set"
+        "complete should fail when trigger_narration_should_fail is set"
     );
     assert!(
         trigger_result

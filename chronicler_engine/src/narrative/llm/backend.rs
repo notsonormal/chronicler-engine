@@ -62,6 +62,22 @@ impl LlmCallResult {
 }
 
 pub trait LlmBackend: Send + Sync {
+    fn model(&self) -> &str;
+    fn name(&self) -> &str;
+
+    fn save_message(&self, _message: &LlmMessage) {}
+
+    fn wrap_and_save(
+        &self,
+        agent_name: &str,
+        chat: ChatCompletionResult,
+    ) -> LlmCallResult {
+        let result =
+            LlmCallResult::from_chat_result(agent_name, self.name(), self.model(), chat);
+        self.save_message(&result.to_message());
+        result
+    }
+
     fn generate_dialogue(
         &self,
         agent_name: &str,
@@ -90,15 +106,13 @@ pub trait LlmBackend: Send + Sync {
         max_tokens: Option<u32>,
     ) -> Result<LlmCallResult, EngineError>;
 
-    fn narrate_action_from_prompt(
+    fn complete(
         &self,
         agent_name: &str,
         system_prompt: &str,
         user_prompt: &str,
         max_tokens: Option<u32>,
     ) -> Result<LlmCallResult, EngineError>;
-
-    fn name(&self) -> &str;
 }
 
 // [DOC: docs/system/llm_processing.md]

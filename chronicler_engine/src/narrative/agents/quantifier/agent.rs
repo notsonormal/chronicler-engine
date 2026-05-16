@@ -4,13 +4,15 @@ use crate::error::EngineError;
 use crate::model::agent::{
     AgentConfig, AgentContext, AgentResult, BackendSelector, Confidence, ExecutionPhase, StatePatch,
 };
+use crate::model::llm_backend::LlmBackendType;
+use crate::model::settings::Connection;
 use crate::narrative::agents::Agent;
 
-use super::{QuantifierBackendTrait, determine_npcs_in_room, get_quantifier_backend};
+use super::determine_npcs_in_room;
 
 pub struct QuantifierAgent {
     name: String,
-    backend: Arc<dyn QuantifierBackendTrait>,
+    backend: Arc<dyn crate::narrative::llm::LlmBackend>,
 }
 
 impl std::fmt::Debug for QuantifierAgent {
@@ -23,14 +25,30 @@ impl std::fmt::Debug for QuantifierAgent {
 
 impl QuantifierAgent {
     pub fn from_config(_config: &AgentConfig) -> Result<Self, EngineError> {
-        let backend = Arc::from(get_quantifier_backend()) as Arc<dyn QuantifierBackendTrait>;
+        Self::from_config_with_storage(_config, None)
+    }
+
+    pub fn from_config_with_storage(
+        _config: &AgentConfig,
+        storage: Option<Arc<dyn crate::storage::llm_message_storage::LlmMessageStorage>>,
+    ) -> Result<Self, EngineError> {
+        let settings = crate::settings::load_settings().unwrap_or_default();
+        let connection = settings
+            .get_quantifier_connection()
+            .cloned()
+            .unwrap_or_else(|| Connection::new("default", "Default", LlmBackendType::Mock));
+        let backend =
+            Arc::from(crate::narrative::llm::get_llm_backend_for(&connection, storage));
         Ok(Self {
             name: "quantifier".to_string(),
             backend,
         })
     }
 
-    pub fn with_backend(name: String, backend: Arc<dyn QuantifierBackendTrait>) -> Self {
+    pub fn with_backend(
+        name: String,
+        backend: Arc<dyn crate::narrative::llm::LlmBackend>,
+    ) -> Self {
         Self { name, backend }
     }
 }

@@ -122,7 +122,7 @@ pub(crate) fn retry_event_continuation(
     );
 
     let backend = Arc::clone(&service.llm_backend);
-    let continuation_result = match backend.narrate_action_from_prompt(
+    let continuation_result = match backend.complete(
         crate::narrative::llm::backend::AGENT_TRIGGER,
         &trigger.system_prompt,
         &trigger.user_prompt,

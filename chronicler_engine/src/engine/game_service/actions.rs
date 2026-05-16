@@ -271,7 +271,7 @@ pub fn execute_freeaction_pipeline(
                 next_state.narrative.last_trigger = Some(request.stored.clone());
                 save_committed_state(ctx, &next_state, format!("pre-event:{turn_id}"), 0);
 
-                let continuation_result = match backend.narrate_action_from_prompt(
+                let continuation_result = match backend.complete(
                     crate::narrative::llm::backend::AGENT_TRIGGER,
                     &request.stored.system_prompt,
                     &request.stored.user_prompt,

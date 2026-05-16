@@ -55,18 +55,6 @@ impl OpenRouterBackend {
         Ok(result)
     }
 
-    fn wrap_and_save(
-        &self,
-        agent_name: &str,
-        chat: crate::narrative::llm_client::ChatCompletionResult,
-    ) -> LlmCallResult {
-        let result = LlmCallResult::from_chat_result(agent_name, self.name(), &self.model, chat);
-        if let Some(storage) = &self.storage {
-            let _ = storage.save(&result.to_message());
-        }
-        result
-    }
-
     /// Build a prompt from context using this backend's token limits, then call the LLM.
     fn narrate_from_context(
         &self,
@@ -88,6 +76,10 @@ impl OpenRouterBackend {
 }
 
 impl LlmBackend for OpenRouterBackend {
+    fn model(&self) -> &str {
+        &self.model
+    }
+
     fn generate_dialogue(
         &self,
         agent_name: &str,
@@ -171,7 +163,7 @@ impl LlmBackend for OpenRouterBackend {
         ))
     }
 
-    fn narrate_action_from_prompt(
+    fn complete(
         &self,
         agent_name: &str,
         system_prompt: &str,
@@ -188,5 +180,11 @@ impl LlmBackend for OpenRouterBackend {
 
     fn name(&self) -> &str {
         "OpenRouter"
+    }
+
+    fn save_message(&self, message: &crate::model::llm_message::LlmMessage) {
+        if let Some(storage) = &self.storage {
+            let _ = storage.save(message);
+        }
     }
 }

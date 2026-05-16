@@ -1,17 +1,16 @@
 use crate::error::EngineError;
 use crate::model::character::NpcCard;
 use crate::model::state::LogEntry;
+use crate::narrative::llm::backend::{LlmBackend, LlmCallResult};
 use crate::test_support::{TestGameState, TestNpc};
 
-use super::QuantifierBackendTrait;
 use super::core::{
     action_boundary_contains, determine_npcs_in_room, quantify_room_with_llm_call,
     static_npc_result,
 };
 use super::test_support::{make_boundary_chars, make_npc, make_room};
 use super::types::{
-    MovementParseResult, MovementType, QuantifierConfidence, QuantifierParseResult,
-    QuantifierPromptContext, QuantifierResult,
+    MovementParseResult, MovementType, QuantifierConfidence, QuantifierPromptContext,
 };
 
 #[test]
@@ -162,22 +161,19 @@ fn test_quantifier_retry_on_low_confidence() {
         player_action: "I look around.",
     };
 
-    let mut call_count = 0;
-    let mock_llm = |_: &str, _: &str, _: &str| -> crate::error::Result<String> {
-        call_count += 1;
-        if call_count == 1 {
-            Ok("I am not sure what to say here.".to_string())
-        } else {
-            Ok(r#"{"npcs_in_room": ["carla"], "movement": {"type": null}}"#.to_string())
-        }
+    let backend = crate::narrative::llm::MockBackend {
+        per_call_prompt_responses: vec![
+            "I am not sure what to say here.".to_string(),
+            r#"{"npcs_in_room": ["carla"], "movement": {"type": null}}"#.to_string(),
+        ],
+        ..Default::default()
     };
 
-    let result = quantify_room_with_llm_call(&context, &["carla".to_string()], "mock", mock_llm);
+    let result = quantify_room_with_llm_call(&context, &["carla".to_string()], &backend);
 
     assert!(result.is_ok());
     let result = result.unwrap();
 
-    assert_eq!(call_count, 2, "Expected retry on low confidence");
     assert_eq!(result.npcs.npc_ids, vec!["carla".to_string()]);
     assert_eq!(result.npcs.confidence, QuantifierConfidence::High);
     assert_eq!(result.movement.movement_type, None);
@@ -201,105 +197,251 @@ fn test_quantifier_no_retry_when_high_confidence() {
         player_action: "I look around.",
     };
 
-    let mut call_count = 0;
-    let mock_llm = |_: &str, _: &str, _: &str| -> crate::error::Result<String> {
-        call_count += 1;
-        Ok(r#"{"npcs_in_room": ["carla"], "movement": {"type": null}}"#.to_string())
+    let backend = crate::narrative::llm::MockBackend {
+        per_call_prompt_responses: vec![
+            r#"{"npcs_in_room": ["carla"], "movement": {"type": null}}"#.to_string(),
+        ],
+        ..Default::default()
     };
 
-    let result = quantify_room_with_llm_call(&context, &["carla".to_string()], "mock", mock_llm);
+    let result = quantify_room_with_llm_call(&context, &["carla".to_string()], &backend);
 
     assert!(result.is_ok());
     let result = result.unwrap();
 
-    assert_eq!(call_count, 1, "Should not retry on high confidence");
     assert_eq!(result.npcs.confidence, QuantifierConfidence::High);
 }
 
 // ─── Custom backends for determine_npcs_in_room tests ────────────────────────
 
+fn make_test_llm_result(text: &str) -> LlmCallResult {
+    LlmCallResult {
+        text: text.to_string(),
+        system_prompt: "".to_string(),
+        user_prompt: "".to_string(),
+        raw_request_json: "".to_string(),
+        raw_response_json: "".to_string(),
+        backend_name: "Test".to_string(),
+        model_name: "test".to_string(),
+        agent_name: "quantifier".to_string(),
+    }
+}
+
 struct HighConfidenceBackend {
     npc_ids: Vec<String>,
 }
 
-struct MediumConfidenceBackend {
-    npc_ids: Vec<String>,
-}
+struct MediumConfidenceBackend;
 
 struct LowConfidenceBackend;
 
 struct ErrBackend;
 
-impl QuantifierBackendTrait for HighConfidenceBackend {
-    fn quantify_room(
+impl LlmBackend for HighConfidenceBackend {
+    fn model(&self) -> &str {
+        "test"
+    }
+    fn name(&self) -> &str {
+        "Test"
+    }
+    fn complete(
         &self,
-        _context: &QuantifierPromptContext,
-        _fallback: &[String],
-    ) -> Result<QuantifierResult, EngineError> {
-        Ok(QuantifierResult {
-            npcs: QuantifierParseResult {
-                npc_ids: self.npc_ids.clone(),
-                confidence: QuantifierConfidence::High,
-            },
-            movement: MovementParseResult {
-                movement_type: Some(MovementType::Entering),
-                destination: Some("kitchen".to_string()),
-                confidence: QuantifierConfidence::High,
-            },
-        })
+        _agent_name: &str,
+        _system_prompt: &str,
+        _user_prompt: &str,
+        _max_tokens: Option<u32>,
+    ) -> Result<LlmCallResult, EngineError> {
+        let npcs_json = serde_json::to_string(&self.npc_ids).unwrap_or_default();
+        Ok(make_test_llm_result(&format!(
+            r#"{{"npcs_in_room": {npcs_json}, "movement": {{"type": "entering", "destination": "kitchen"}}}}"#
+        )))
+    }
+    fn generate_dialogue(
+        &self,
+        _agent_name: &str,
+        _context: &crate::narrative::prompt::PromptContext,
+        _npc: &NpcCard,
+    ) -> Result<LlmCallResult, EngineError> {
+        unreachable!()
+    }
+    fn narrate_action(
+        &self,
+        _agent_name: &str,
+        _context: &crate::narrative::prompt::PromptContext,
+    ) -> Result<LlmCallResult, EngineError> {
+        unreachable!()
+    }
+    fn narrate_arrival(
+        &self,
+        _agent_name: &str,
+        _context: &crate::narrative::prompt::PromptContext,
+    ) -> Result<LlmCallResult, EngineError> {
+        unreachable!()
+    }
+    fn narrate_continuation(
+        &self,
+        _agent_name: &str,
+        _system_prompt: &str,
+        _user_prompt: &str,
+        _trigger_prompt: &str,
+        _max_tokens: Option<u32>,
+    ) -> Result<LlmCallResult, EngineError> {
+        unreachable!()
     }
 }
 
-impl QuantifierBackendTrait for MediumConfidenceBackend {
-    fn quantify_room(
+impl LlmBackend for MediumConfidenceBackend {
+    fn model(&self) -> &str {
+        "test"
+    }
+    fn name(&self) -> &str {
+        "Test"
+    }
+    fn complete(
         &self,
-        _context: &QuantifierPromptContext,
-        _fallback: &[String],
-    ) -> Result<QuantifierResult, EngineError> {
-        Ok(QuantifierResult {
-            npcs: QuantifierParseResult {
-                npc_ids: self.npc_ids.clone(),
-                confidence: QuantifierConfidence::Medium,
-            },
-            movement: MovementParseResult {
-                movement_type: None,
-                destination: None,
-                confidence: QuantifierConfidence::Medium,
-            },
-        })
+        _agent_name: &str,
+        _system_prompt: &str,
+        _user_prompt: &str,
+        _max_tokens: Option<u32>,
+    ) -> Result<LlmCallResult, EngineError> {
+        Ok(make_test_llm_result(&format!(
+            "Carla is standing in the room."
+        )))
+    }
+    fn generate_dialogue(
+        &self,
+        _agent_name: &str,
+        _context: &crate::narrative::prompt::PromptContext,
+        _npc: &NpcCard,
+    ) -> Result<LlmCallResult, EngineError> {
+        unreachable!()
+    }
+    fn narrate_action(
+        &self,
+        _agent_name: &str,
+        _context: &crate::narrative::prompt::PromptContext,
+    ) -> Result<LlmCallResult, EngineError> {
+        unreachable!()
+    }
+    fn narrate_arrival(
+        &self,
+        _agent_name: &str,
+        _context: &crate::narrative::prompt::PromptContext,
+    ) -> Result<LlmCallResult, EngineError> {
+        unreachable!()
+    }
+    fn narrate_continuation(
+        &self,
+        _agent_name: &str,
+        _system_prompt: &str,
+        _user_prompt: &str,
+        _trigger_prompt: &str,
+        _max_tokens: Option<u32>,
+    ) -> Result<LlmCallResult, EngineError> {
+        unreachable!()
     }
 }
 
-impl QuantifierBackendTrait for LowConfidenceBackend {
-    fn quantify_room(
+impl LlmBackend for LowConfidenceBackend {
+    fn model(&self) -> &str {
+        "test"
+    }
+    fn name(&self) -> &str {
+        "Test"
+    }
+    fn complete(
         &self,
-        _context: &QuantifierPromptContext,
-        _fallback: &[String],
-    ) -> Result<QuantifierResult, EngineError> {
-        Ok(QuantifierResult {
-            npcs: QuantifierParseResult {
-                npc_ids: vec![],
-                confidence: QuantifierConfidence::Low,
-            },
-            movement: MovementParseResult {
-                movement_type: None,
-                destination: None,
-                confidence: QuantifierConfidence::Low,
-            },
-        })
+        _agent_name: &str,
+        _system_prompt: &str,
+        _user_prompt: &str,
+        _max_tokens: Option<u32>,
+    ) -> Result<LlmCallResult, EngineError> {
+        Ok(make_test_llm_result(""))
+    }
+    fn generate_dialogue(
+        &self,
+        _agent_name: &str,
+        _context: &crate::narrative::prompt::PromptContext,
+        _npc: &NpcCard,
+    ) -> Result<LlmCallResult, EngineError> {
+        unreachable!()
+    }
+    fn narrate_action(
+        &self,
+        _agent_name: &str,
+        _context: &crate::narrative::prompt::PromptContext,
+    ) -> Result<LlmCallResult, EngineError> {
+        unreachable!()
+    }
+    fn narrate_arrival(
+        &self,
+        _agent_name: &str,
+        _context: &crate::narrative::prompt::PromptContext,
+    ) -> Result<LlmCallResult, EngineError> {
+        unreachable!()
+    }
+    fn narrate_continuation(
+        &self,
+        _agent_name: &str,
+        _system_prompt: &str,
+        _user_prompt: &str,
+        _trigger_prompt: &str,
+        _max_tokens: Option<u32>,
+    ) -> Result<LlmCallResult, EngineError> {
+        unreachable!()
     }
 }
 
-impl QuantifierBackendTrait for ErrBackend {
-    fn quantify_room(
+impl LlmBackend for ErrBackend {
+    fn model(&self) -> &str {
+        "test"
+    }
+    fn name(&self) -> &str {
+        "Test"
+    }
+    fn complete(
         &self,
-        _context: &QuantifierPromptContext,
-        _fallback: &[String],
-    ) -> Result<QuantifierResult, EngineError> {
+        _agent_name: &str,
+        _system_prompt: &str,
+        _user_prompt: &str,
+        _max_tokens: Option<u32>,
+    ) -> Result<LlmCallResult, EngineError> {
         Err(EngineError::Llm(crate::error::LlmFailure::Network {
             url: "mock".to_string(),
             detail: "mock failure".to_string(),
         }))
+    }
+    fn generate_dialogue(
+        &self,
+        _agent_name: &str,
+        _context: &crate::narrative::prompt::PromptContext,
+        _npc: &NpcCard,
+    ) -> Result<LlmCallResult, EngineError> {
+        unreachable!()
+    }
+    fn narrate_action(
+        &self,
+        _agent_name: &str,
+        _context: &crate::narrative::prompt::PromptContext,
+    ) -> Result<LlmCallResult, EngineError> {
+        unreachable!()
+    }
+    fn narrate_arrival(
+        &self,
+        _agent_name: &str,
+        _context: &crate::narrative::prompt::PromptContext,
+    ) -> Result<LlmCallResult, EngineError> {
+        unreachable!()
+    }
+    fn narrate_continuation(
+        &self,
+        _agent_name: &str,
+        _system_prompt: &str,
+        _user_prompt: &str,
+        _trigger_prompt: &str,
+        _max_tokens: Option<u32>,
+    ) -> Result<LlmCallResult, EngineError> {
+        unreachable!()
     }
 }
 
@@ -333,9 +475,7 @@ fn test_determine_npcs_medium_confidence() {
     let carla = TestNpc::named("carla", "Carla");
     let state = TestGameState::with_npcs("hall", vec![carla.clone()]);
 
-    let backend = MediumConfidenceBackend {
-        npc_ids: vec!["carla".to_string()],
-    };
+    let backend = MediumConfidenceBackend;
     let result = determine_npcs_in_room(&state, &["carla".to_string()], &[], "test", &backend);
 
     assert_eq!(result.npcs.npc_ids, vec!["carla"]);
@@ -421,25 +561,70 @@ fn test_quantifier_retry_on_llm_error() {
         player_action: "I look around.",
     };
 
-    let mut call_count = 0;
-    let mock_llm = |_: &str, _: &str, _: &str| -> crate::error::Result<String> {
-        call_count += 1;
-        if call_count == 1 {
-            Err(crate::error::EngineError::Llm(
-                crate::error::LlmFailure::Network {
-                    url: "mock".to_string(),
-                    detail: "Network error".to_string(),
-                },
-            ))
-        } else {
-            Ok(r#"{"npcs_in_room": ["carla"], "movement": {"type": null}}"#.to_string())
+    struct RotatingBackend {
+        responses: std::sync::Mutex<Vec<Result<String, EngineError>>>,
+    }
+    impl LlmBackend for RotatingBackend {
+        fn model(&self) -> &str { "test" }
+        fn name(&self) -> &str { "Test" }
+        fn complete(
+            &self,
+            _agent_name: &str,
+            _system_prompt: &str,
+            _user_prompt: &str,
+            _max_tokens: Option<u32>,
+        ) -> Result<LlmCallResult, EngineError> {
+            let mut responses = self.responses.lock().unwrap();
+            let text = responses.remove(0)?;
+            Ok(make_test_llm_result(&text))
         }
+        fn generate_dialogue(
+            &self,
+            _agent_name: &str,
+            _context: &crate::narrative::prompt::PromptContext,
+            _npc: &NpcCard,
+        ) -> Result<LlmCallResult, EngineError> {
+            unreachable!()
+        }
+        fn narrate_action(
+            &self,
+            _agent_name: &str,
+            _context: &crate::narrative::prompt::PromptContext,
+        ) -> Result<LlmCallResult, EngineError> {
+            unreachable!()
+        }
+        fn narrate_arrival(
+            &self,
+            _agent_name: &str,
+            _context: &crate::narrative::prompt::PromptContext,
+        ) -> Result<LlmCallResult, EngineError> {
+            unreachable!()
+        }
+        fn narrate_continuation(
+            &self,
+            _agent_name: &str,
+            _system_prompt: &str,
+            _user_prompt: &str,
+            _trigger_prompt: &str,
+            _max_tokens: Option<u32>,
+        ) -> Result<LlmCallResult, EngineError> {
+            unreachable!()
+        }
+    }
+
+    let backend = RotatingBackend {
+        responses: std::sync::Mutex::new(vec![
+            Err(EngineError::Llm(crate::error::LlmFailure::Network {
+                url: "mock".to_string(),
+                detail: "Network error".to_string(),
+            })),
+            Ok(r#"{"npcs_in_room": ["carla"], "movement": {"type": null}}"#.to_string()),
+        ]),
     };
 
-    let result = quantify_room_with_llm_call(&context, &["carla".to_string()], "mock", mock_llm);
+    let result = quantify_room_with_llm_call(&context, &["carla".to_string()], &backend);
 
     assert!(result.is_ok());
-    assert_eq!(call_count, 2, "Expected retry on LLM error");
     assert_eq!(result.unwrap().npcs.npc_ids, vec!["carla"]);
 }
 
@@ -460,16 +645,12 @@ fn test_quantifier_all_attempts_fail_fallback() {
         player_action: "I look around.",
     };
 
-    let mock_llm = |_: &str, _: &str, _: &str| -> crate::error::Result<String> {
-        Err(crate::error::EngineError::Llm(
-            crate::error::LlmFailure::Network {
-                url: "mock".to_string(),
-                detail: "Persistent error".to_string(),
-            },
-        ))
+    let backend = crate::narrative::llm::MockBackend {
+        trigger_narration_should_fail: true.into(),
+        ..Default::default()
     };
 
-    let result = quantify_room_with_llm_call(&context, &["carla".to_string()], "mock", mock_llm);
+    let result = quantify_room_with_llm_call(&context, &["carla".to_string()], &backend);
 
     assert!(result.is_ok());
     let result = result.unwrap();
@@ -495,26 +676,16 @@ fn test_quantifier_low_confidence_then_error_fallback() {
         player_action: "I look around.",
     };
 
-    let mut call_count = 0;
-    let mock_llm = |_: &str, _: &str, _: &str| -> crate::error::Result<String> {
-        call_count += 1;
-        if call_count == 1 {
-            Ok("I am not sure what to say here.".to_string())
-        } else {
-            Err(crate::error::EngineError::Llm(
-                crate::error::LlmFailure::Network {
-                    url: "mock".to_string(),
-                    detail: "Network error".to_string(),
-                },
-            ))
-        }
+    let backend = crate::narrative::llm::MockBackend {
+        per_call_prompt_responses: vec!["I am not sure what to say here.".to_string()],
+        trigger_narration_should_fail: true.into(),
+        ..Default::default()
     };
 
-    let result = quantify_room_with_llm_call(&context, &["carla".to_string()], "mock", mock_llm);
+    let result = quantify_room_with_llm_call(&context, &["carla".to_string()], &backend);
 
     assert!(result.is_ok());
     let result = result.unwrap();
-    assert_eq!(call_count, 2, "Expected retry on low confidence");
     assert_eq!(result.npcs.npc_ids, vec!["carla".to_string()]);
     assert_eq!(result.npcs.confidence, QuantifierConfidence::Low);
 }

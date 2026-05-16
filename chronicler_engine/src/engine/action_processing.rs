@@ -245,7 +245,7 @@ pub fn evaluate_and_narrate_triggers(
         None => return Ok(state),
     };
 
-    let continuation_result = match llm_backend.narrate_action_from_prompt(
+    let continuation_result = match llm_backend.complete(
         crate::narrative::llm::backend::AGENT_TRIGGER,
         &system_prompt,
         &user_prompt,

@@ -127,7 +127,7 @@ fn make_empty_context(state: GameState) -> GameServiceContext {
 fn make_service() -> DefaultGameService {
     DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::new(None)),
-        Arc::new(crate::narrative::agents::quantifier::MockQuantifierBackend::default()),
+        Arc::new(crate::narrative::llm::MockBackend::default()),
     )
 }
 
@@ -302,7 +302,7 @@ fn test_retry_event_trigger_narration_fails() {
     let llm = Arc::new(MockBackend::with_failing_trigger_narration());
     let service = DefaultGameService::with_mock_quantifier(
         llm,
-        Arc::new(crate::narrative::agents::quantifier::MockQuantifierBackend::default()),
+        Arc::new(crate::narrative::llm::MockBackend::default()),
     );
 
     add_input_and_save(&ctx, "test input");
@@ -351,7 +351,7 @@ fn test_retry_event_empty_continuation_text() {
     let llm = Arc::new(MockBackend::new(None));
     let service = DefaultGameService::with_mock_quantifier(
         llm,
-        Arc::new(crate::narrative::agents::quantifier::MockQuantifierBackend::default()),
+        Arc::new(crate::narrative::llm::MockBackend::default()),
     );
 
     add_input_and_save(&ctx, "test input");
@@ -532,6 +532,10 @@ fn test_save_retry_error() {
 struct EmptyTriggerBackend;
 
 impl crate::narrative::llm::LlmBackend for EmptyTriggerBackend {
+    fn model(&self) -> &str {
+        "mock"
+    }
+
     fn generate_dialogue(
         &self,
         agent_name: &str,
@@ -604,7 +608,7 @@ impl crate::narrative::llm::LlmBackend for EmptyTriggerBackend {
         })
     }
 
-    fn narrate_action_from_prompt(
+    fn complete(
         &self,
         _agent_name: &str,
         _system_prompt: &str,
@@ -636,7 +640,7 @@ fn test_retry_event_empty_continuation_triggers_error() {
     let llm = Arc::new(EmptyTriggerBackend);
     let service = DefaultGameService::with_mock_quantifier(
         llm,
-        Arc::new(crate::narrative::agents::quantifier::MockQuantifierBackend::default()),
+        Arc::new(crate::narrative::llm::MockBackend::default()),
     );
 
     // Set up the snapshot chain: input → pre-main → pre-event → final (with event_header)

@@ -1,6 +1,6 @@
 use crate::error::EngineError;
+use crate::narrative::llm::backend::LlmBackend;
 
-use super::backends::QuantifierBackendTrait;
 use super::parser::parse_quantifier_response_with_movement;
 use super::prompt::QuantifierPromptBuilder;
 use super::types::{
@@ -11,8 +11,7 @@ use super::types::{
 pub(crate) fn quantify_room_with_llm_call(
     context: &QuantifierPromptContext,
     fallback_npc_ids: &[String],
-    model: &str,
-    mut llm_call: impl FnMut(&str, &str, &str) -> crate::error::Result<String>,
+    backend: &dyn LlmBackend,
 ) -> Result<QuantifierResult, EngineError> {
     let builder = QuantifierPromptBuilder::new(QuantifierPromptContext {
         room: context.room,
@@ -27,7 +26,9 @@ pub(crate) fn quantify_room_with_llm_call(
     let (system_prompt, user_prompt) = builder.build();
 
     log::info!(
-        "[Quantifier] Calling model: {model} for room: {}",
+        "[Quantifier] Calling backend: {} model: {} for room: {}",
+        backend.name(),
+        backend.model(),
         context.room.name
     );
 
@@ -41,8 +42,9 @@ pub(crate) fn quantify_room_with_llm_call(
     let mut last_error = None;
 
     for attempt in 1..=max_attempts {
-        match llm_call(&system_prompt, &user_prompt, model) {
-            Ok(response) => {
+        match backend.complete("quantifier", &system_prompt, &user_prompt, None) {
+            Ok(llm_result) => {
+                let response = &llm_result.text;
                 log::info!("[Quantifier] Player action: {}", context.player_action);
                 log::info!(
                     "[Quantifier] Received response ({} chars) [attempt {}/{}]",
@@ -56,7 +58,7 @@ pub(crate) fn quantify_room_with_llm_call(
                 );
 
                 let result = parse_quantifier_response_with_movement(
-                    &response,
+                    response,
                     &known_ids,
                     context.all_rooms,
                 );
@@ -168,7 +170,7 @@ pub fn determine_npcs_in_room(
     room_npc_ids: &[String],
     previous_room_npcs: &[crate::model::character::NpcCard],
     player_action: &str,
-    backend: &dyn QuantifierBackendTrait,
+    backend: &dyn LlmBackend,
 ) -> QuantifierResult {
     let all_npcs: Vec<crate::model::character::NpcCard> = state.npcs.values().cloned().collect();
 
@@ -221,7 +223,7 @@ pub fn determine_npcs_in_room(
         player_action,
     };
 
-    match backend.quantify_room(&context, room_npc_ids) {
+    match quantify_room_with_llm_call(&context, room_npc_ids, backend) {
         Ok(result) => match result.npcs.confidence {
             QuantifierConfidence::High | QuantifierConfidence::Medium => {
                 log::info!("[Quantifier] Using dynamic NPCs: {:?}", result.npcs.npc_ids);

@@ -7,7 +7,7 @@
 - [] The style of writing is a bit annoying. Should be an issue with the prompts
 - [] The list of LLM messages doesn't include the quantifier for some reason. 
 - [] When you edit the player text and retry the next message, the player text is reverted
-- [] Should remove the meaningless 'sync' actions. Look, inventory, north/south/etc from the options and on the bottom left of the screen. Remove inventory from the system prompt as well
+- [x] Should remove the meaningless 'sync' actions. Look, inventory, north/south/etc from the options and on the bottom left of the screen. Remove inventory from the system prompt as well
 - [] If the "Send" text box is empty. It should trigger a new narrator text generation (e.g. like Silly Tavern/Marina)
 - [] Move connections in a separate connections tab
 - [] Create a presets tab for configuring narrator/event/quantifier prompts

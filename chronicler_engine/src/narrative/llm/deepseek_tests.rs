@@ -90,12 +90,12 @@ fn test_deepseek_narrate_continuation() {
 }
 
 #[test]
-fn test_deepseek_narrate_action_from_prompt() {
+fn test_deepseek_complete() {
     let backend = DeepSeekBackend::default();
-    let result = backend.narrate_action_from_prompt("test", "system", "user", None);
+    let result = backend.complete("test", "system", "user", None);
     assert!(
         result.is_err(),
-        "DeepSeek narrate_action_from_prompt should return Err (not yet implemented)"
+        "DeepSeek complete should return Err (not yet implemented)"
     );
     assert!(
         result
@@ -138,7 +138,7 @@ fn test_deepseek_all_methods_return_not_implemented() {
     let continuation_result = backend.narrate_continuation("test", "sys", "user", "trigger", None);
     assert!(continuation_result.is_err());
 
-    let prompt_result = backend.narrate_action_from_prompt("test", "sys", "user", None);
+    let prompt_result = backend.complete("test", "sys", "user", None);
     assert!(prompt_result.is_err());
 }
 

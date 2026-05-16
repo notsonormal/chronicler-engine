@@ -13,12 +13,14 @@ pub struct MockBackend {
     pub should_fail: AtomicBool,
     /// If true, `narrate_action` returns `Ok("")` - simulates an empty LLM response.
     pub should_return_empty: AtomicBool,
-    /// If true, `narrate_action_from_prompt` (trigger narration) returns `Err`.
+    /// If true, `complete` (trigger narration) returns `Err`.
     pub trigger_narration_should_fail: AtomicBool,
     /// Milliseconds to sleep in `narrate_action` to simulate a slow LLM.
     pub delay_ms: AtomicU64,
     /// Return different narration text per call (rotates).
     pub per_call_narrations: Vec<String>,
+    /// Return different prompt responses per call (rotates). Used for quantifier/testing.
+    pub per_call_prompt_responses: Vec<String>,
     pub call_index: AtomicUsize,
     pub storage: Option<Arc<dyn LlmMessageStorage>>,
 }
@@ -68,12 +70,10 @@ impl MockBackend {
             raw_request_json: String::new(),
             raw_response_json: format!("{{\"content\":\"{text}\"}}"),
             backend_name: self.name().to_string(),
-            model_name: "mock".to_string(),
+            model_name: self.model().to_string(),
             agent_name: agent_name.to_string(),
         };
-        if let Some(storage) = &self.storage {
-            let _ = storage.save(&result.to_message());
-        }
+        self.save_message(&result.to_message());
         result
     }
 
@@ -93,6 +93,10 @@ impl MockBackend {
 }
 
 impl LlmBackend for MockBackend {
+    fn model(&self) -> &str {
+        "mock"
+    }
+
     fn generate_dialogue(
         &self,
         agent_name: &str,
@@ -161,7 +165,7 @@ impl LlmBackend for MockBackend {
         Ok(self.make_result(agent_name, format!("[Trigger: {trigger_prompt}]")))
     }
 
-    fn narrate_action_from_prompt(
+    fn complete(
         &self,
         agent_name: &str,
         _system_prompt: &str,
@@ -176,6 +180,15 @@ impl LlmBackend for MockBackend {
                 reason: "configured_failure",
             }));
         }
+        if !self.per_call_prompt_responses.is_empty() {
+            let idx = self
+                .call_index
+                .fetch_add(1, Ordering::SeqCst);
+            return Ok(self.make_result(
+                agent_name,
+                self.per_call_prompt_responses[idx % self.per_call_prompt_responses.len()].clone(),
+            ));
+        }
         Ok(self.make_result(
             agent_name,
             format!(
@@ -187,5 +200,11 @@ impl LlmBackend for MockBackend {
 
     fn name(&self) -> &str {
         "Mock"
+    }
+
+    fn save_message(&self, message: &crate::model::llm_message::LlmMessage) {
+        if let Some(storage) = &self.storage {
+            let _ = storage.save(message);
+        }
     }
 }

@@ -59,13 +59,13 @@ fn test_registry_from_configs_rejects_unknown_type() {
         backend: BackendSelector::UseMain,
         phase: ExecutionPhase::PostGeneration,
     }];
-    let result = AgentRegistry::from_configs(&configs);
+    let result = AgentRegistry::from_configs_with_storage(&configs, None);
     assert!(result.is_err());
 }
 
 #[test]
 fn test_registry_from_configs_empty_uses_defaults() {
-    let registry = AgentRegistry::from_configs(&[]).unwrap();
+    let registry = AgentRegistry::from_configs_with_storage(&[], None).unwrap();
     // Should contain the default quantifier agent
     let post: Vec<_> = registry
         .agents_for_phase(ExecutionPhase::PostGeneration)
@@ -124,7 +124,7 @@ fn test_registry_from_configs_disabled_skipped() {
         backend: BackendSelector::UseMain,
         phase: ExecutionPhase::PostGeneration,
     }];
-    let registry = AgentRegistry::from_configs(&configs).unwrap();
+    let registry = AgentRegistry::from_configs_with_storage(&configs, None).unwrap();
     assert!(registry.is_empty());
 }
 
@@ -137,7 +137,7 @@ fn test_registry_from_configs_narrator_agent() {
         backend: BackendSelector::UseMain,
         phase: ExecutionPhase::PreGeneration,
     }];
-    let registry = AgentRegistry::from_configs(&configs).unwrap();
+    let registry = AgentRegistry::from_configs_with_storage(&configs, None).unwrap();
     let pre: Vec<_> = registry
         .agents_for_phase(ExecutionPhase::PreGeneration)
         .collect();
