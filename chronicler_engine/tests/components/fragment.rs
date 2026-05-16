@@ -138,7 +138,7 @@ async fn test_action_handler_empty_command() {
 #[tokio::test]
 async fn test_hints_handler() {
     let body = fetch_body(create_app_for_testing(create_test_state()), "/hints").await;
-    assert!(body.contains("Look"));
+    assert!(body.is_empty(), "Expected empty hints but got: {body}");
 }
 
 #[tokio::test]
@@ -382,7 +382,7 @@ async fn test_action_concurrent_rejection() {
 }
 
 #[tokio::test]
-async fn test_action_sync_inventory() {
+async fn test_action_async_inventory() {
     let app = create_app_for_testing(create_test_state());
 
     let req = Request::builder()
@@ -397,34 +397,9 @@ async fn test_action_sync_inventory() {
     let response = app.oneshot(req).await.unwrap();
 
     assert!(response.status().is_success());
+    // Inventory is no longer a sync action — it goes through async generation.
     let hx_trigger = response.headers().get("HX-Trigger");
-    assert!(
-        hx_trigger.is_some(),
-        "Expected HX-Trigger header for sync action"
-    );
-}
-
-#[tokio::test]
-async fn test_action_sync_quit() {
-    let app = create_app_for_testing(create_test_state());
-
-    let req = Request::builder()
-        .uri("/action")
-        .method(http::Method::POST)
-        .header(
-            http::header::CONTENT_TYPE,
-            "application/x-www-form-urlencoded",
-        )
-        .body(Body::from("command=quit"))
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-
-    assert!(response.status().is_success());
-    let hx_trigger = response.headers().get("HX-Trigger");
-    assert!(
-        hx_trigger.is_some(),
-        "Expected HX-Trigger header for sync action"
-    );
+    assert!(hx_trigger.is_none(), "Inventory should be async, not sync");
 }
 
 #[tokio::test]

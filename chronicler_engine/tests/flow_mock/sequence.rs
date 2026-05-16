@@ -143,9 +143,9 @@ fn test_sequential_execute_delete_execute() {
 }
 
 #[test]
-fn test_sync_look_then_async_freeaction_then_retry() {
-    // Flow: look (sync) → free action (async) → retry
-    // Verify sync action adds narration immediately, then async + retry work.
+fn test_async_action_sequence_then_retry() {
+    // Flow: async action A → async action B → retry
+    // Verify sequential async actions and retry work correctly.
     let mut state = create_test_state_with_map();
     state.narrative.messages.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
@@ -155,23 +155,12 @@ fn test_sync_look_then_async_freeaction_then_retry() {
         Arc::new(MockQuantifierBackend::default()),
     );
 
-    // Step 1: Sync look action
-    add_input_and_save(&ctx, "look");
-    service.execute_action(ctx.clone(), "look".to_string(), "Player".to_string());
-    // Look is sync — no need to wait
-    let guard = latest_state(&ctx);
-    let look_narrations: Vec<_> = guard
-        .narrative
-        .history()
-        .into_iter()
-        .filter(|e| e.log_type == LogType::Narration)
-        .collect();
-    assert!(
-        !look_narrations.is_empty(),
-        "Look should add narration immediately"
-    );
+    // Step 1: Async action A
+    add_input_and_save(&ctx, "hello");
+    service.execute_action(ctx.clone(), "hello".to_string(), "Player".to_string());
+    assert!(wait_for_generation_complete(&ctx, 1000));
 
-    // Step 2: Async free action
+    // Step 2: Async action B
     add_input_and_save(&ctx, "examine room");
     service.execute_action(
         ctx.clone(),

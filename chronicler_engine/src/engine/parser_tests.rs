@@ -60,37 +60,6 @@ fn test_parse_quoted_dialogue_free_action() {
 }
 
 #[test]
-fn test_parse_look() {
-    assert_eq!(parse_command("look"), Action::Look);
-    assert_eq!(parse_command("l"), Action::Look);
-    assert_eq!(parse_command("LOOK"), Action::Look);
-    assert_eq!(
-        parse_command("Look around"),
-        Action::FreeAction("Look around".to_string())
-    );
-}
-
-#[test]
-fn test_parse_inventory() {
-    assert_eq!(parse_command("inventory"), Action::Inventory);
-    assert_eq!(parse_command("inv"), Action::Inventory);
-    assert_eq!(parse_command("i"), Action::Inventory);
-    assert_eq!(parse_command("INVENTORY"), Action::Inventory);
-    assert_eq!(
-        parse_command("inventory check"),
-        Action::FreeAction("inventory check".to_string())
-    );
-}
-
-#[test]
-fn test_parse_quit() {
-    assert_eq!(parse_command("quit"), Action::Quit);
-    assert_eq!(parse_command("q"), Action::Quit);
-    assert_eq!(parse_command("exit"), Action::Quit);
-    assert_eq!(parse_command("QUIT"), Action::Quit);
-}
-
-#[test]
 fn test_parse_talk_variants() {
     assert_eq!(
         parse_command("talk guard"),
@@ -120,7 +89,6 @@ fn test_parse_mixed_case_commands() {
         parse_command("Talk TO Carla"),
         Action::Talk("carla".to_string(), None)
     );
-    assert_eq!(parse_command("InVeNtOrY"), Action::Inventory);
 }
 
 #[test]

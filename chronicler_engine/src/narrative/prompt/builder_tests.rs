@@ -242,8 +242,6 @@ fn test_build_layer_1_game_state() {
     assert!(result.contains("<GameState>"));
     assert!(result.contains("Current Location: Test Room"));
     assert!(result.contains("A small test room"));
-    assert!(result.contains("sword"));
-    assert!(result.contains("shield"));
 }
 
 #[test]

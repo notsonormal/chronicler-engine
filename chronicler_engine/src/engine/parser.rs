@@ -26,8 +26,6 @@ pub fn parse_command(input: &str) -> Action {
     }
 
     match tokens[0] {
-        "l" | "look" if tokens.len() == 1 => Action::Look,
-        "i" | "inv" | "inventory" if tokens.len() == 1 => Action::Inventory,
         "t" | "talk" => {
             if tokens.len() >= 2 {
                 if tokens[1] == "to" && tokens.len() >= 3 {
@@ -39,7 +37,6 @@ pub fn parse_command(input: &str) -> Action {
                 Action::FreeAction(input.to_string())
             }
         }
-        "q" | "quit" | "exit" => Action::Quit,
         _ => Action::FreeAction(input.to_string()),
     }
 }

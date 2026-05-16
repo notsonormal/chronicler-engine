@@ -110,7 +110,6 @@ pub async fn send_action(page: &playwright_rs::Page, text: &str) {
         .await;
 
     // Wait for status to leave "Ready" (proves the action was received).
-    // For sync actions this times out harmlessly since status stays Ready.
     let status_locator = page.locator("#status-display").await;
     let _ = expect(status_locator)
         .with_timeout(Duration::from_millis(500))

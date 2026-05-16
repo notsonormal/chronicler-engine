@@ -16,7 +16,7 @@ flowchart TD
     
     Phase2["**PHASE 2: AWAIT INPUT**<br>*(Status: 'Ready')*<br>User types command → submits form"]
     
-    Phase3["**PHASE 3: PROCESS ACTION**<br>1. Generation gate: reject if async action already in flight<br>2. Parse command & execute game logic<br>3. Log command as 'Input'<br>4. Set status to 'Generating' + phase 'Narrating'<br>5. Offload to `tokio::task::spawn_blocking` for LLM work"]
+    Phase3["**PHASE 3: PROCESS ACTION**<br>1. Generation gate: reject if action already in flight<br>2. Parse command & execute game logic<br>3. Log command as 'Input'<br>4. Set status to 'Generating' + phase 'Narrating'<br>5. Offload to `tokio::task::spawn_blocking` for LLM work"]
     
     Phase4["**PHASE 4: MAIN LLM NARRATION**<br>*(Phase: Narrating)*<br>1. Build prompt via PromptBuilder<br>2. Send to LLM (see Context Pipeline below)<br>3. Add to history as 'Narration'"]
     
@@ -48,7 +48,7 @@ flowchart TD
     Start(["**PHASE 4: LLM GENERATION**<br>*(If narrative action)*"])
     
     Step1["**1. Build 8-layer prompt (SillyTavern-style)**"]
-    Sub1["Layer 0: System prompt (game rules, narrator persona)<br>Layer 1: Game state (room, inventory, NPCs)<br>Layer 2: NPC cards (in-room NPCs only)<br>Layer 3: Player persona<br>Layer 4: World info (keyword-triggered lore)<br>Layer 5: Full narration history (up to 1000 entries)<br>Layer 6: User input (current action)<br>Layer 7: Post-History Instructions"]
+    Sub1["Layer 0: System prompt (game rules, narrator persona)<br>Layer 1: Game state (room, NPCs)<br>Layer 2: NPC cards (in-room NPCs only)<br>Layer 3: Player persona<br>Layer 4: World info (keyword-triggered lore)<br>Layer 5: Full narration history (up to 1000 entries)<br>Layer 6: User input (current action)<br>Layer 7: Post-History Instructions"]
     
     Step2["**2. Token budget check**<br>*(8192 max, truncate if overflow)*"]
     Step3["**3. Send to LLM**<br>*(OpenRouter/DeepSeek)*"]
@@ -80,10 +80,10 @@ And the status shows "Ready"
 ```
 - **Covered by**: `tests/browser/structure.rs` — `test_page_loads`, `test_header_displays_game_title`
 
-### Scenario 2: Look Command
+### Scenario 2: Free Action (e.g., "look around")
 ```gherkin
 Given the game is loaded
-When the user enters "look" and submits
+When the user enters "look around" and submits
 Then the status shows "Generating narration..."
 And after LLM generates response, the story-log shows the LLM description
 And the status shows "Ready"

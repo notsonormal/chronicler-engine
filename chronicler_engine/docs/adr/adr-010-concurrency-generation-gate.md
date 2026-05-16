@@ -36,10 +36,9 @@ pub struct AppState {
 }
 ```
 
-- `compare_exchange(false, true, SeqCst, SeqCst)` in `process_action` for async actions
+- `compare_exchange(false, true, SeqCst, SeqCst)` in `process_action` before accepting any action
 - `GenerationGuard` (RAII) ensures flag is cleared on task exit, even on panic
 - Client-side: HTMX `hx-sync="this:drop"` + `saveActionArea()` button disable
-- Sync actions (`Look`, `Inventory`, `Quit`) bypass the gate
 
 ---
 

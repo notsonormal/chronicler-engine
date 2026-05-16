@@ -44,7 +44,7 @@ The engine uses a layered prompt system inspired by SillyTavern's Prompt Manager
 | Layer | Name | Content | Role |
 |-------|------|---------|------|
 | 0 | System | Plain-text game rules, role instructions, narrative style | System |
-| 1 | Game State | `<GameState>` — Current room, inventory, present NPCs | User (data) |
+| 1 | Game State | `<GameState>` — Current room, present NPCs | User (data) |
 | 2 | NPC Cards | `<KnownNpcs>` roster (all NPCs, condensed) + `<NpcsInRoom>` full cards (present NPCs only) | User (data) |
 | 3 | Player | `<PlayerCharacter>` — Player persona and description | User (data) |
 | 4 | World Info | `<WorldLore>` — World lore triggered by keywords | User (data) |

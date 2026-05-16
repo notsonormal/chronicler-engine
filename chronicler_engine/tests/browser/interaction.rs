@@ -21,7 +21,7 @@ async fn test_form_submission() {
     page.evaluate::<(), ()>(
         "(() => { 
             const input = document.querySelector('#command-form input');
-            if (input) input.value = 'look';
+            if (input) input.value = 'hello';
             const form = document.querySelector('#command-form');
             if (form) form.requestSubmit();
         })()",

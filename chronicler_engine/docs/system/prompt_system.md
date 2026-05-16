@@ -28,7 +28,7 @@ The Chronicler Engine implements an 8-layer prompt structure mapped from SillyTa
 | Layer | Name | SillyTavern Equivalent | Purpose |
 |-------|------|----------------------|---------|
 | 0 | System | Main Prompt | Game rules, role instructions, narrative style |
-| 1 | Game State | Context | Current room, inventory, present NPCs |
+| 1 | Game State | Context | Current room, present NPCs |
 | 2 | NPC Cards | Character Description | In-room NPC character sheets |
 | 3 | Player | Persona Description | Player persona and description |
 | 4 | World Info | World Info / Lorebook | World lore triggered by keywords |
@@ -52,7 +52,7 @@ The Chronicler Engine implements an 8-layer prompt structure mapped from SillyTa
 
 ### Layer 1: Game State
 - **Role**: User (data)
-- **Content**: Current room name, description, player inventory, NPCs in the current room
+- **Content**: Current room name, description, NPCs in the current room
 - **Format**: XML-wrapped (`<GameState>... </GameState>`)
 - **Example**:
   ```xml
@@ -60,10 +60,6 @@ The Chronicler Engine implements an 8-layer prompt structure mapped from SillyTa
   Current Location: Grand Foyer
 
   A cavernous entrance hall with marble floors.
-
-  --- Inventory ---
-  - Rusty Key
-  - Candle
   </GameState>
   ```
 

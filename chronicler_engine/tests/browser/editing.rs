@@ -20,7 +20,7 @@ async fn test_delete_button_exists_on_entries() {
     with_test_page(CONFIG_PATH, TEST_WORLD, |page, _port| async move {
         // Send an action to create multiple entries so delete button appears on last
         let initial_entries = element_count(&page, "#story-log .log-entry").await;
-        send_action(&page, "look").await;
+        send_action(&page, "hello").await;
         wait_for_status_ready(&page).await;
         wait_for_element_children(&page, "#story-log .log-entry", initial_entries as u32 + 1).await;
 
@@ -240,7 +240,7 @@ async fn test_delete_removes_message() {
     with_test_page(CONFIG_PATH, TEST_WORLD, |page, _port| async move {
         // Send an action to create multiple entries so delete button is available
         let before_action = element_count(&page, "#story-log .log-entry").await;
-        send_action(&page, "look").await;
+        send_action(&page, "hello").await;
         wait_for_status_ready(&page).await;
         wait_for_element_children(&page, "#story-log .log-entry", before_action as u32 + 1).await;
 
@@ -306,7 +306,7 @@ async fn test_retry_button_on_last_ai_message() {
         let initial_entries = element_count(&page, "#story-log .log-entry").await;
         send_action(&page, "look").await;
         wait_for_status_ready(&page).await;
-        wait_for_element_children(&page, "#story-log .log-entry", initial_entries as u32 + 1).await;
+        wait_for_element_children(&page, "#story-log .log-entry", initial_entries as u32 + 2).await;
 
         let retry_count = element_count(&page, ".retry-btn").await;
         assert_eq!(

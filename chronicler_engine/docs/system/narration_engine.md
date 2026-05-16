@@ -5,11 +5,8 @@
 ## Objective
 Transform the engine from a strict command parser into a hybrid free-text narrative engine. Player input that does not match a recognized system command is interpreted by an LLM acting as a **Game Master**, who narrates the outcome based on the current game state.
 
-## System Commands vs Free Actions
-The engine recognizes two categories of player input:
-
-1. **System Commands**: Hard-coded actions that directly mutate engine state. These are not sent to the LLM. Examples: `look`, `inventory`, `quit`.
-2. **Free Actions**: Everything else including navigation attempts. All player input goes to the LLM, which generates narration. The quantifier then detects if movement occurred. The engine must never respond with an error message for non-empty free-text input.
+## Free Actions
+All player input is treated as a **Free Action** and sent to the LLM for narration. The quantifier then detects if movement occurred. The engine must never respond with an error message for non-empty free-text input.
 
 ## Game Master Role
 The LLM operates as a Game Master / Narrator for the text adventure. Its context window is constructed using the **PromptBuilder** (see `llm_processing.md`) from the current game state:

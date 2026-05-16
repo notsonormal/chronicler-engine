@@ -129,18 +129,6 @@ impl<'a> PromptBuilder<'a> {
         output.push_str(&self.room.description);
         output.push_str("\n\n");
 
-        // Inventory
-        if !self.player.inventory.is_empty() {
-            output.push_str("--- Inventory ---\n");
-            for item in &self.player.inventory {
-                output.push_str("- ");
-                output.push_str(item);
-                output.push('\n');
-            }
-        } else {
-            output.push_str("--- Inventory ---\n(empty)\n");
-        }
-
         output.push_str("</GameState>\n");
         output
     }

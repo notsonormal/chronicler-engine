@@ -47,8 +47,8 @@ If a `std::sync::Mutex<GameState>` is poisoned, the engine must recover rather t
 
 ## HTTP Layer
 
-### INV-006: Sync Actions Are Truly Synchronous
-`Look`, `Inventory`, `Quit`, and `Talk` actions complete entirely within the HTTP request handler. They do not spawn tasks.
+### INV-006: All Actions Are Async
+All player input is parsed as `FreeAction` or `Talk` and offloaded to `tokio::task::spawn_blocking` for LLM generation. There are no synchronous action paths.
 
-### INV-007: Async Actions Return Immediately
-`FreeAction` handlers set `status = Generating`, drop the lock, and spawn a blocking task. The HTTP response returns `"Thinking..."` before the LLM call begins.
+### INV-007: Actions Return Immediately
+All action handlers set `status = Generating`, save a snapshot, and spawn a blocking task. The HTTP response returns `"Thinking..."` before the LLM call begins.

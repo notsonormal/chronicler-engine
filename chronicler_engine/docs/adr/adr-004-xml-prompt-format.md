@@ -32,7 +32,7 @@ Problems:
 8 XML-tagged sections in prompt construction:
 
 1. `<SystemPrompt>` - Core game rules
-2. `<GameState>` - Room, inventory, NPCs in area
+2. `<GameState>` - Room, NPCs in area
 3. `<NpcPresence>` - Dynamic NPC presence
 4. `<PlayerCharacter>` - Player persona
 5. `<WorldLore>` - World context

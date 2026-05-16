@@ -51,27 +51,13 @@ fn test_execute_talk_action() {
 #[test]
 fn test_execute_inventory_action() {
     let guard = run_action(create_test_state(), "inventory", &DefaultGameService::new());
-    let has_system = guard
+    // Inventory is now a FreeAction — it goes through LLM generation.
+    let has_narration = guard
         .narrative
         .history()
         .iter()
-        .any(|e| e.log_type == LogType::System && e.text.contains("inventory"));
-    assert!(has_system, "Inventory should add system log");
-}
-
-#[test]
-fn test_execute_quit_action() {
-    let guard = run_action(create_test_state(), "quit", &DefaultGameService::new());
-    let has_goodbye = guard
-        .narrative
-        .history()
-        .iter()
-        .any(|e| e.log_type == LogType::System && e.text.contains("Goodbye"));
-    assert!(has_goodbye, "Quit should add Goodbye log");
-    assert!(
-        !guard.narrative.generation.status.is_generating(),
-        "Quit should reset is_generating"
-    );
+        .any(|e| e.log_type == LogType::Narration);
+    assert!(has_narration, "Inventory should add narration via LLM");
 }
 
 #[test]

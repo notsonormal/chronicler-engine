@@ -1,9 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::engine::logic::{
-    find_room_in_world_map, get_available_exits, get_current_room, process_directional_movement,
-};
+use crate::engine::logic::{find_room_in_world_map, get_current_room};
 use crate::model::character::{CharacterSheet, PlayerCard};
 use crate::model::map::{Direction, MapDef, Overworld, Region, Room};
 use crate::model::state::GameState;
@@ -93,41 +91,6 @@ fn setup_test_state() -> GameState {
 }
 
 #[test]
-fn test_attempt_walk_cardinal() {
-    let mut state = setup_test_state();
-    let res = process_directional_movement(&mut state, "north");
-    assert!(res.is_ok());
-    assert_eq!(state.movement.current_room_id, "room2");
-}
-
-#[test]
-fn test_attempt_walk_semantic() {
-    let mut state = setup_test_state();
-    let res = process_directional_movement(&mut state, "kitchen");
-    assert!(res.is_ok());
-    assert_eq!(state.movement.current_room_id, "room2");
-}
-
-#[test]
-fn test_attempt_walk_semantic_partial() {
-    let mut state = setup_test_state();
-    let res = process_directional_movement(&mut state, "library");
-    assert!(res.is_ok());
-    assert_eq!(state.movement.current_room_id, "room3");
-}
-
-#[test]
-fn test_attempt_walk_fail() {
-    let mut state = setup_test_state();
-    let res = process_directional_movement(&mut state, "bathroom");
-    assert!(res.is_err());
-    assert_eq!(state.movement.current_room_id, "room1");
-
-    let err = res.unwrap_err();
-    assert!(err.to_string().contains("don't see a way"));
-}
-
-#[test]
 fn test_get_room_by_id_missing() {
     let state = setup_test_state();
     let res = find_room_in_world_map(&state, "phantom_room");
@@ -145,70 +108,6 @@ fn test_attempt_walk_dangling_exit() {
     // NOTE: Map is behind Arc, so we clone the reference for the guard.
     let res = find_room_in_world_map(&state, "non_existent_id");
     assert!(res.is_none());
-}
-
-#[test]
-fn test_get_available_exits() {
-    let state = setup_test_state();
-    let exits = get_available_exits(&state);
-    assert_eq!(exits.len(), 2);
-    assert!(exits.contains(&"north".to_string()) || exits.contains(&"North".to_string()));
-    assert!(exits.contains(&"east".to_string()) || exits.contains(&"East".to_string()));
-}
-
-#[test]
-fn test_get_available_exits_no_exits() {
-    let world = Arc::new(WorldCard {
-        name: "W".into(),
-        description: "D".into(),
-        global_rules: vec![],
-        ..Default::default()
-    });
-
-    let room_no_exits = Room {
-        id: "empty".to_string(),
-        name: "Empty Room".to_string(),
-        description: "Nothing here.".to_string(),
-        exits: HashMap::new(),
-        items: vec![],
-        image_path: None,
-        navigation_description: None,
-    };
-
-    let map = MapDef {
-        overworld: Overworld {
-            id: "o".into(),
-            name: "W".into(),
-            regions: vec![Region {
-                id: "r".into(),
-                name: "R".into(),
-                rooms: vec![room_no_exits],
-            }],
-        },
-    };
-
-    let state = GameState::new(
-        world,
-        Arc::new(map),
-        Arc::new(PlayerCard {
-            sheet: CharacterSheet {
-                name: "P".into(),
-                description: "P".into(),
-                personality: "P".into(),
-                scenario: "S".into(),
-                example_dialogue: "".into(),
-                summary: None,
-                profile_image: None,
-                headshot_image: None,
-            },
-            inventory: vec![],
-        }),
-        vec![],
-        "empty".to_string(),
-    );
-
-    let exits = get_available_exits(&state);
-    assert!(exits.is_empty());
 }
 
 #[test]
@@ -278,18 +177,4 @@ fn test_get_room_by_id_existing() {
     let room = find_room_in_world_map(&state, "room1");
     assert!(room.is_some());
     assert_eq!(room.unwrap().name, "Grand Hall");
-}
-
-#[test]
-fn test_attempt_walk_case_insensitive() {
-    let mut state = setup_test_state();
-    let res = process_directional_movement(&mut state, "NORTH");
-    assert!(res.is_ok());
-    assert_eq!(state.movement.current_room_id, "room2");
-
-    state.movement.current_room_id = "room1".to_string();
-
-    let res = process_directional_movement(&mut state, "North");
-    assert!(res.is_ok());
-    assert_eq!(state.movement.current_room_id, "room2");
 }

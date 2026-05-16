@@ -1,6 +1,6 @@
 use askama::Template;
 
-use crate::engine::logic::{get_available_exits, get_current_room};
+use crate::engine::logic::get_current_room;
 use crate::error::Result;
 use crate::model::state::GameState;
 use crate::server::AppState;
@@ -88,10 +88,9 @@ pub fn render_action_area(state: &AppState) -> Result<String> {
 
     let status = state_guard.narrative.generation.status.clone();
     let phase = state_guard.narrative.generation.phase.clone();
-    let exits = get_available_exits(&state_guard);
     drop(state_guard);
 
-    let template = ActionAreaTemplate::new(&status, &phase, &exits);
+    let template = ActionAreaTemplate::new(&status, &phase, &[]);
     template
         .render()
         .map_err(|e| crate::error::EngineError::Template(e.to_string()))
@@ -120,26 +119,8 @@ pub fn render_character_headshots(state: &AppState) -> Result<String> {
         .map_err(|e| crate::error::EngineError::Template(e.to_string()))
 }
 
-pub fn render_action_hints(state: &AppState) -> Result<String> {
-    let state_guard = state.load_state()?;
-
-    let exits = get_available_exits(&state_guard);
-    let available_actions = if exits.is_empty() {
-        String::from(
-            "<span class=\"action-hint\">[Look]</span> <span class=\"action-hint\">[Inventory]</span>",
-        )
-    } else {
-        let exit_hints: String = exits
-            .iter()
-            .map(|e| format!("<span class=\"action-hint\">[{e}]</span>"))
-            .collect::<Vec<_>>()
-            .join(" ");
-        format!(
-            "<span class=\"action-hint\">[Look]</span> <span class=\"action-hint\">[Inventory]</span> {exit_hints}"
-        )
-    };
-
-    Ok(available_actions)
+pub fn render_action_hints(_state: &AppState) -> Result<String> {
+    Ok(String::new())
 }
 
 pub fn render_llm_messages(state: &AppState) -> Result<String> {

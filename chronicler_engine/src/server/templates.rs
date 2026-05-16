@@ -156,7 +156,7 @@ impl ActionAreaTemplate {
     pub fn new(
         status: &crate::model::state::GenerationStatus,
         phase: &crate::model::state::GenerationPhase,
-        exits: &[String],
+        _exits: &[String],
     ) -> Self {
         let is_disabled = status.is_generating();
         let error_msg = status.error_message().unwrap_or_default().to_string();
@@ -175,8 +175,7 @@ impl ActionAreaTemplate {
             "Ready".to_string()
         };
 
-        let mut available_actions = vec!["Look".to_string(), "Inventory".to_string()];
-        available_actions.extend(exits.iter().cloned());
+        let available_actions = vec![];
 
         Self {
             is_disabled,

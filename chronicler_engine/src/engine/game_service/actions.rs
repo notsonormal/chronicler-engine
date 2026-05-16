@@ -4,7 +4,6 @@ use crate::engine::action::Action;
 use crate::engine::action_processing::{
     apply_npc_events, commit_trigger_narration, execute_freeaction_impl,
 };
-use crate::engine::logic::get_current_room;
 use crate::engine::parser::parse_command;
 use crate::error::EngineError;
 use crate::model::agent::{AgentContext, AgentResult, ExecutionPhase, StatePatch};
@@ -30,41 +29,11 @@ pub fn execute_action_impl(
     let action = parse_command(&input);
 
     match action {
-        Action::Quit => {
-            let mut state = load_state(&ctx);
-            state.add_log("Goodbye!".to_string(), None, LogType::System);
-            finish_action(&ctx, state, uuid::Uuid::new_v4().to_string(), 0);
-        }
-        Action::Look => {
-            let mut state = load_state(&ctx);
-            let room_name;
-            let room_desc;
-            {
-                let room = get_current_room(&state).ok();
-                room_name = room.as_ref().map(|r| r.name.clone());
-                room_desc = room.map(|r| r.description.clone());
-            }
-            if let Some(name) = room_name {
-                if let Some(desc) = room_desc {
-                    state.add_log(desc, Some(name), LogType::Narration);
-                }
-            }
-            finish_action(&ctx, state, uuid::Uuid::new_v4().to_string(), 0);
-        }
         Action::Talk(name, msg) => {
             let mut state = load_state(&ctx);
             let msg_str = msg.unwrap_or_default();
             state.add_log(
                 format!("You talk to {name}: {msg_str}"),
-                None,
-                LogType::System,
-            );
-            finish_action(&ctx, state, uuid::Uuid::new_v4().to_string(), 0);
-        }
-        Action::Inventory => {
-            let mut state = load_state(&ctx);
-            state.add_log(
-                "Your inventory is empty.".to_string(),
                 None,
                 LogType::System,
             );

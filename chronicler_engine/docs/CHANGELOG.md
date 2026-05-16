@@ -1,5 +1,31 @@
 ﻿# Changelog
 
+## 2026-05-16
+
+### Removed
+- **Sync actions (`Look`, `Inventory`, `Quit`)** — All player input is now treated as `FreeAction` and routed through the LLM generation pipeline
+  - `Action::Look`, `Action::Inventory`, `Action::Quit` variants removed from `Action` enum
+  - Parser no longer recognizes `look`, `inventory`, `quit`, `q`, `exit` as special commands
+  - `process_sync_action` and `is_sync` checks removed from `server/fragments/actions.rs`
+  - `get_available_exits()` and `process_directional_movement()` removed from `engine/logic.rs` (dead code; movement is quantifier-driven)
+  - Action hints UI (`render_action_hints`) now returns empty string — no bottom-left options displayed
+  - `ActionAreaTemplate::available_actions` field emptied (was already unused in template)
+
+### Removed
+- **Inventory from LLM prompts** — `--- Inventory ---` block removed from `PromptBuilder::render_game_state_layer()`
+  - System prompt no longer references "inventory" in state validation rules
+  - `reference/system_prompt.md`, `system/prompt_system.md`, `system/llm_processing.md` updated to reflect prompt changes
+
+### Changed
+- **Server action handling simplified** — All actions uniformly go through `tokio::task::spawn_blocking`
+  - Generation gate (`is_generating` AtomicBool) now applies to all actions
+  - `HX-Trigger` header and sync response path removed from `action_confirm_handler`
+  - `INV-006` invariant updated: "All Actions Are Async" (no sync paths exist)
+
+### Updated
+- **Documentation synced** — `architecture/invariants.md`, `system/game_flow.md`, `system/narration_engine.md`, `adr/adr-010-concurrency-generation-gate.md` updated to remove sync action references
+- **Tests updated** — Parser tests, logic tests, browser tests, component tests, flow_mock tests, game_service tests updated for new async-only behavior
+
 ## 2026-05-15
 
 ### Changed

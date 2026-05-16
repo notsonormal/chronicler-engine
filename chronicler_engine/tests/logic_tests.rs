@@ -50,71 +50,6 @@ mod tests {
     }
 
     #[test]
-    fn test_get_available_exits() {
-        let state = create_navigation_test_state();
-        let guard = state.lock().unwrap();
-        let exits = get_available_exits(&guard);
-        assert!(exits.contains(&"North".to_string()));
-        assert_eq!(exits.len(), 1);
-    }
-
-    #[test]
-    fn test_get_available_exits_multiple() {
-        // Move to hall which has 3 exits
-        let state = create_navigation_test_state();
-        {
-            let mut guard = state.lock().unwrap();
-            guard.movement.current_room_id = "hall".to_string();
-        }
-
-        let guard = state.lock().unwrap();
-        let exits = get_available_exits(&guard);
-        // Hall has South, East, West exits
-        assert!(exits.contains(&"South".to_string()));
-        assert!(exits.contains(&"East".to_string()));
-        assert!(exits.contains(&"West".to_string()));
-    }
-
-    #[test]
-    fn test_process_directional_movement_valid() {
-        let state = create_navigation_test_state();
-        {
-            let mut guard = state.lock().unwrap();
-            let result = process_directional_movement(&mut guard, "north");
-            assert!(result.is_ok());
-            assert_eq!(guard.movement.current_room_id, "hall");
-        }
-
-        // Verify room changed
-        let guard = state.lock().unwrap();
-        assert_eq!(guard.movement.current_room_id, "hall");
-    }
-
-    #[test]
-    fn test_process_directional_movement_invalid() {
-        let state = create_navigation_test_state();
-        {
-            let mut guard = state.lock().unwrap();
-            // Entrance has only North, not West
-            let result = process_directional_movement(&mut guard, "west");
-            assert!(result.is_err());
-            assert_eq!(guard.movement.current_room_id, "entrance");
-        }
-    }
-
-    #[test]
-    fn test_process_directional_movement_by_room_name() {
-        let state = create_navigation_test_state();
-        {
-            let mut guard = state.lock().unwrap();
-            // Should work with room name too
-            let result = process_directional_movement(&mut guard, "Main Hall");
-            assert!(result.is_ok());
-            assert_eq!(guard.movement.current_room_id, "hall");
-        }
-    }
-
-    #[test]
     fn test_attempt_semantic_walk_valid() {
         let state = create_navigation_test_state();
         {
@@ -139,45 +74,6 @@ mod tests {
     }
 
     #[test]
-    fn test_process_directional_movement_case_insensitive() {
-        let state = create_navigation_test_state();
-        {
-            let mut guard = state.lock().unwrap();
-            let result = process_directional_movement(&mut guard, "NORTH");
-            assert!(result.is_ok());
-            assert_eq!(guard.movement.current_room_id, "hall");
-        }
-    }
-
-    #[test]
-    fn test_process_directional_movement_invalid_direction() {
-        let state = create_navigation_test_state();
-        {
-            let mut guard = state.lock().unwrap();
-            let result = process_directional_movement(&mut guard, "upwards");
-            assert!(result.is_err(), "Invalid direction should return error");
-            assert_eq!(
-                guard.movement.current_room_id, "entrance",
-                "Room should not change on invalid direction"
-            );
-        }
-    }
-
-    #[test]
-    fn test_process_directional_movement_whitespace() {
-        let state = create_navigation_test_state();
-        {
-            let mut guard = state.lock().unwrap();
-            let result = process_directional_movement(&mut guard, "   ");
-            assert!(result.is_err(), "Whitespace direction should return error");
-            assert_eq!(
-                guard.movement.current_room_id, "entrance",
-                "Room should not change on whitespace direction"
-            );
-        }
-    }
-
-    #[test]
     fn test_attempt_semantic_walk_empty() {
         let state = create_navigation_test_state();
         {
@@ -195,17 +91,6 @@ mod tests {
             guard.movement.current_room_id = "nonexistent_room".to_string();
             let result = get_current_room(&guard);
             assert!(result.is_err(), "Invalid room id should return error");
-        }
-    }
-
-    #[test]
-    fn test_get_available_exits_invalid_room() {
-        let state = create_navigation_test_state();
-        {
-            let mut guard = state.lock().unwrap();
-            guard.movement.current_room_id = "nonexistent_room".to_string();
-            let exits = get_available_exits(&guard);
-            assert!(exits.is_empty(), "Invalid room should return empty exits");
         }
     }
 }
