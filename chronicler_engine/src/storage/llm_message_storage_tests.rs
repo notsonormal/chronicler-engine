@@ -1,21 +1,21 @@
-use crate::model::llm_message::LlmMessage;
+use crate::model::llm_message::LlmMessageBuilder;
 use crate::storage::llm_message_storage::InMemoryLlmMessageStorage;
 use crate::storage::llm_message_storage::LlmMessageStorage;
 
 #[test]
 fn test_in_memory_save_and_list() {
     let storage = InMemoryLlmMessageStorage::new();
-    let msg = LlmMessage::new(
-        "narrator",
-        "OpenRouter",
-        "gpt-4",
-        "sys",
-        "user",
-        "req",
-        "res",
-        "parsed",
-        None::<String>,
-    );
+    let msg = LlmMessageBuilder::new()
+        .agent_name("narrator")
+        .backend_name("OpenRouter")
+        .model_name("gpt-4")
+        .system_prompt("sys")
+        .user_prompt("user")
+        .raw_request_json("req")
+        .raw_response_json("res")
+        .parsed_response("parsed")
+        .error_message(None::<String>)
+        .build();
     storage.save(&msg).unwrap();
 
     let list = storage.list_latest(50).unwrap();
@@ -29,17 +29,17 @@ fn test_in_memory_save_and_list() {
 fn test_in_memory_ring_buffer_cap() {
     let storage = InMemoryLlmMessageStorage::new();
     for i in 0..55 {
-        let msg = LlmMessage::new(
-            "narrator",
-            "OpenRouter",
-            format!("model-{i}"),
-            "sys",
-            "user",
-            "req",
-            "res",
-            "parsed",
-            None::<String>,
-        );
+        let msg = LlmMessageBuilder::new()
+            .agent_name("narrator")
+            .backend_name("OpenRouter")
+            .model_name(format!("model-{i}"))
+            .system_prompt("sys")
+            .user_prompt("user")
+            .raw_request_json("req")
+            .raw_response_json("res")
+            .parsed_response("parsed")
+            .error_message(None::<String>)
+            .build();
         storage.save(&msg).unwrap();
     }
 
@@ -54,17 +54,17 @@ fn test_in_memory_ring_buffer_cap() {
 fn test_in_memory_list_latest_limit() {
     let storage = InMemoryLlmMessageStorage::new();
     for i in 0..10 {
-        let msg = LlmMessage::new(
-            "narrator",
-            "OpenRouter",
-            format!("model-{i}"),
-            "sys",
-            "user",
-            "req",
-            "res",
-            "parsed",
-            None::<String>,
-        );
+        let msg = LlmMessageBuilder::new()
+            .agent_name("narrator")
+            .backend_name("OpenRouter")
+            .model_name(format!("model-{i}"))
+            .system_prompt("sys")
+            .user_prompt("user")
+            .raw_request_json("req")
+            .raw_response_json("res")
+            .parsed_response("parsed")
+            .error_message(None::<String>)
+            .build();
         storage.save(&msg).unwrap();
     }
 
@@ -89,17 +89,17 @@ fn test_in_memory_len_updates() {
     let storage = InMemoryLlmMessageStorage::new();
     assert_eq!(storage.len(), 0);
 
-    let msg = LlmMessage::new(
-        "narrator",
-        "OpenRouter",
-        "gpt-4",
-        "sys",
-        "user",
-        "req",
-        "res",
-        "parsed",
-        None::<String>,
-    );
+    let msg = LlmMessageBuilder::new()
+        .agent_name("narrator")
+        .backend_name("OpenRouter")
+        .model_name("gpt-4")
+        .system_prompt("sys")
+        .user_prompt("user")
+        .raw_request_json("req")
+        .raw_response_json("res")
+        .parsed_response("parsed")
+        .error_message(None::<String>)
+        .build();
     storage.save(&msg).unwrap();
     assert_eq!(storage.len(), 1);
 

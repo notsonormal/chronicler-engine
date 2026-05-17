@@ -24,5 +24,14 @@ The binary entry point (`src/main.rs`) delegates to two focused modules:
 
 This split keeps `main.rs` minimal and makes the bootstrap logic independently testable.
 
-## 4. Server Startup
+## 4. Settings Loading
+Settings are loaded **once** during bootstrap:
+1. **`bootstrap/run.rs`** calls `load_settings()` and wraps the result in `Arc<RwLock<AppSettings>>`
+2. The `Arc<RwLock<AppSettings>>` is passed to `run_server_with_config()`
+3. `AppState` stores it; `GameServiceContext` carries it; `DefaultGameService` receives it at construction time
+4. Backends (`OpenRouterBackend`, `OllamaBackend`) store a clone of the `Arc` and read `response_length` dynamically per-call
+
+No business logic layer reloads settings from disk. Connection changes still require a server restart.
+
+## 5. Server Startup
 The HTTP server (Axum) is initialized after the game state is synthesized. It binds to the specified `--port` and mounts the `assets/` and `data/` directories for static resource serving.

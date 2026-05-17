@@ -60,3 +60,30 @@ fn test_game_state_snapshot_apply_to() {
     assert_eq!(state.narrative.pending_location, Some("loc".to_string()));
     assert_eq!(state.narrative.pending_event, Some("evt".to_string()));
 }
+
+#[test]
+fn test_from_game_state_sets_defaults() {
+    let state = GameState {
+        world: Arc::new(TestWorld::minimal()),
+        map: Arc::new(TestMap::single_room("start")),
+        player: Arc::new(TestPlayer::named("Test")),
+        npcs: HashMap::new(),
+        movement: MovementState {
+            current_room_id: "start".to_string(),
+            dynamic_rooms: HashMap::new(),
+        },
+        narrative: NarrativeState::default(),
+        scene: SceneState {
+            npcs_in_area: vec![],
+        },
+        character_state: CharacterState::default(),
+    };
+
+    let snapshot = GameStateSnapshot::from_game_state(&state);
+    assert!(snapshot.db_id.is_none());
+    assert!(!snapshot.committed, "New snapshot should not be committed");
+    assert!(
+        snapshot.created_at <= chrono::Utc::now(),
+        "created_at should be in the past"
+    );
+}

@@ -17,6 +17,7 @@ The engine supports flexible model selection via connection profiles in `data/se
 - **Narration Connection**: The connection used for Game Master narration and NPC dialogue
 - **Quantifier Connection**: The connection used for scene quantification (can differ from narration)
 - **Authentication**: Per-connection `api_key`, with provider-specific env var fallback (`OPENROUTER_API_KEY`)
+- **Settings Lifecycle**: Settings are loaded once at startup (`bootstrap/run.rs`) and passed down as `Arc<RwLock<AppSettings>>`. Backends store a clone of the `Arc` and read `response_length` dynamically per-call. No business logic reloads settings from disk.
 
 ### 3. Backend Selection
 Backend is selected per-connection via `Connection.provider`:

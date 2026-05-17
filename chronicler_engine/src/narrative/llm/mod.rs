@@ -13,10 +13,7 @@ mod mock_tests;
 #[cfg(test)]
 mod ollama_tests;
 
-pub use backend::{
-    LlmBackend, LlmBackendType, get_llm_backend, get_llm_backend_for,
-    get_llm_backend_with_settings, merge_single_user_message,
-};
+pub use backend::{LlmBackend, LlmBackendType, get_llm_backend_for, merge_single_user_message};
 pub use deepseek::DeepSeekBackend;
 pub use mock::MockBackend;
 pub use ollama::OllamaBackend;

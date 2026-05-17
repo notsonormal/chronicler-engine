@@ -1,6 +1,8 @@
+use std::sync::{Arc, RwLock};
+
 use crate::error::LlmFailure;
 use crate::model::settings::Connection;
-use crate::narrative::llm::backend::{LlmBackendType, get_llm_backend_with_settings};
+use crate::narrative::llm::backend::{LlmBackendType, get_llm_backend_for};
 use crate::{AppSettings, EngineError};
 
 fn make_settings_with_provider(provider: LlmBackendType) -> AppSettings {
@@ -15,25 +17,48 @@ fn make_settings_with_provider(provider: LlmBackendType) -> AppSettings {
 }
 
 #[test]
-fn test_get_llm_backend_with_settings_all_types() {
+fn test_get_llm_backend_for_all_types() {
     let openrouter_settings = make_settings_with_provider(LlmBackendType::OpenRouter);
     assert_eq!(
-        get_llm_backend_with_settings(&openrouter_settings).name(),
+        get_llm_backend_for(
+            &openrouter_settings.narration_connection(),
+            None,
+            Some(Arc::new(RwLock::new(openrouter_settings))),
+        )
+        .name(),
         "OpenRouter"
     );
 
     let mock_settings = make_settings_with_provider(LlmBackendType::Mock);
-    assert_eq!(get_llm_backend_with_settings(&mock_settings).name(), "Mock");
+    assert_eq!(
+        get_llm_backend_for(
+            &mock_settings.narration_connection(),
+            None,
+            Some(Arc::new(RwLock::new(mock_settings))),
+        )
+        .name(),
+        "Mock"
+    );
 
     let deepseek_settings = make_settings_with_provider(LlmBackendType::DeepSeek);
     assert_eq!(
-        get_llm_backend_with_settings(&deepseek_settings).name(),
+        get_llm_backend_for(
+            &deepseek_settings.narration_connection(),
+            None,
+            Some(Arc::new(RwLock::new(deepseek_settings))),
+        )
+        .name(),
         "DeepSeek"
     );
 
     let ollama_settings = make_settings_with_provider(LlmBackendType::Ollama);
     assert_eq!(
-        get_llm_backend_with_settings(&ollama_settings).name(),
+        get_llm_backend_for(
+            &ollama_settings.narration_connection(),
+            None,
+            Some(Arc::new(RwLock::new(ollama_settings))),
+        )
+        .name(),
         "Ollama"
     );
 }

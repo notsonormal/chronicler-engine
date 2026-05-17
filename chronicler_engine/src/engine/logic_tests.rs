@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::engine::logic::{find_room_in_world_map, get_current_room};
+use crate::engine::logic::{attempt_semantic_walk, find_room_in_world_map, get_current_room};
 use crate::model::character::{CharacterSheet, PlayerCard};
 use crate::model::map::{Direction, MapDef, Overworld, Region, Room};
 use crate::model::state::GameState;
@@ -177,4 +177,29 @@ fn test_get_room_by_id_existing() {
     let room = find_room_in_world_map(&state, "room1");
     assert!(room.is_some());
     assert_eq!(room.unwrap().name, "Grand Hall");
+}
+
+#[test]
+fn test_attempt_semantic_walk_valid() {
+    let mut state = setup_test_state();
+    let result = attempt_semantic_walk(&mut state, "room2");
+    assert!(result.is_ok());
+    assert!(result.unwrap().contains("Dusty Kitchen"));
+    assert_eq!(state.movement.current_room_id, "room2");
+}
+
+#[test]
+fn test_attempt_semantic_walk_invalid() {
+    let mut state = setup_test_state();
+    let result = attempt_semantic_walk(&mut state, "nonexistent_room");
+    assert!(result.is_err());
+    // Room ID should not change
+    assert_eq!(state.movement.current_room_id, "room1");
+}
+
+#[test]
+fn test_attempt_semantic_walk_empty() {
+    let mut state = setup_test_state();
+    let result = attempt_semantic_walk(&mut state, "");
+    assert!(result.is_err(), "Empty room id should return error");
 }

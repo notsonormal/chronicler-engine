@@ -15,30 +15,83 @@ pub struct LlmMessage {
     pub created_at: DateTime<Utc>,
 }
 
-impl LlmMessage {
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        agent_name: impl Into<String>,
-        backend_name: impl Into<String>,
-        model_name: impl Into<String>,
-        system_prompt: impl Into<String>,
-        user_prompt: impl Into<String>,
-        raw_request_json: impl Into<String>,
-        raw_response_json: impl Into<String>,
-        parsed_response: impl Into<String>,
-        error_message: Option<impl Into<String>>,
-    ) -> Self {
-        Self {
+impl LlmMessage {}
+
+#[derive(Debug, Default)]
+pub struct LlmMessageBuilder {
+    agent_name: String,
+    backend_name: String,
+    model_name: String,
+    system_prompt: String,
+    user_prompt: String,
+    raw_request_json: String,
+    raw_response_json: String,
+    parsed_response: String,
+    error_message: Option<String>,
+}
+
+impl LlmMessageBuilder {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn agent_name(mut self, value: impl Into<String>) -> Self {
+        self.agent_name = value.into();
+        self
+    }
+
+    pub fn backend_name(mut self, value: impl Into<String>) -> Self {
+        self.backend_name = value.into();
+        self
+    }
+
+    pub fn model_name(mut self, value: impl Into<String>) -> Self {
+        self.model_name = value.into();
+        self
+    }
+
+    pub fn system_prompt(mut self, value: impl Into<String>) -> Self {
+        self.system_prompt = value.into();
+        self
+    }
+
+    pub fn user_prompt(mut self, value: impl Into<String>) -> Self {
+        self.user_prompt = value.into();
+        self
+    }
+
+    pub fn raw_request_json(mut self, value: impl Into<String>) -> Self {
+        self.raw_request_json = value.into();
+        self
+    }
+
+    pub fn raw_response_json(mut self, value: impl Into<String>) -> Self {
+        self.raw_response_json = value.into();
+        self
+    }
+
+    pub fn parsed_response(mut self, value: impl Into<String>) -> Self {
+        self.parsed_response = value.into();
+        self
+    }
+
+    pub fn error_message(mut self, value: Option<impl Into<String>>) -> Self {
+        self.error_message = value.map(Into::into);
+        self
+    }
+
+    pub fn build(self) -> LlmMessage {
+        LlmMessage {
             id: 0,
-            agent_name: agent_name.into(),
-            backend_name: backend_name.into(),
-            model_name: model_name.into(),
-            system_prompt: system_prompt.into(),
-            user_prompt: user_prompt.into(),
-            raw_request_json: raw_request_json.into(),
-            raw_response_json: raw_response_json.into(),
-            parsed_response: parsed_response.into(),
-            error_message: error_message.map(Into::into),
+            agent_name: self.agent_name,
+            backend_name: self.backend_name,
+            model_name: self.model_name,
+            system_prompt: self.system_prompt,
+            user_prompt: self.user_prompt,
+            raw_request_json: self.raw_request_json,
+            raw_response_json: self.raw_response_json,
+            parsed_response: self.parsed_response,
+            error_message: self.error_message,
             created_at: Utc::now(),
         }
     }

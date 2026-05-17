@@ -20,6 +20,8 @@ pub use types::{
 pub(crate) mod test_support;
 
 #[cfg(test)]
+mod agent_tests;
+#[cfg(test)]
 mod core_tests;
 #[cfg(test)]
 mod parser_tests;

@@ -3,6 +3,19 @@
 ## 2026-05-17
 
 ### Changed
+- **Settings I/O Centralization** — Eliminated scattered `load_settings()` calls across all layers
+  - Settings loaded **once** at startup in `bootstrap/run.rs` and passed down via `Arc<RwLock<AppSettings>>`
+  - `GameServiceContext` now carries `settings: Arc<RwLock<AppSettings>>`
+  - `DefaultGameService::with_storage(storage, settings)` receives settings from caller
+  - `AgentRegistry::from_configs_with_storage(configs, storage, settings)` resolves connections without file I/O
+  - `QuantifierAgent::from_config_with_storage(config, storage, settings)` no longer loads settings
+  - `OpenRouterBackend` and `OllamaBackend` store `Option<Arc<RwLock<AppSettings>>>`; `response_length` read dynamically per-call
+  - `build_trigger_prompt_parts` is now pure — takes `response_length`, `max_context_tokens`, `max_tokens` as explicit parameters
+  - `get_llm_backend()` removed; all callers use `get_llm_backend_for(connection, storage, settings)`
+  - Restart still required for connection changes; only `response_length` and `max_context_tokens` are dynamic at runtime
+  - Zero logic changes; all 762 tests pass
+
+### Changed
 - **Extracted Application Tier** — Moved `game_service` from `engine/` to new top-level `application/` tier
   - `src/engine/game_service/` → `src/application/game_service/`
   - Clean architecture boundary: `server` → `application` → `engine` → `model`

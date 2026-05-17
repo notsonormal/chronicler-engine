@@ -131,16 +131,30 @@ pub async fn wait_for_element_children(
     let locator = page.locator(selector).await;
     let start = std::time::Instant::now();
     let timeout = std::time::Duration::from_secs(10);
+    let mut last_count = 0;
 
     while start.elapsed() < timeout {
         match locator.count().await {
-            Ok(count) if count as u32 >= min_count => return count as u32,
-            _ => sleep(Duration::from_millis(200)).await,
+            Ok(count) => {
+                last_count = count as u32;
+                if last_count >= min_count {
+                    return last_count;
+                }
+            }
+            Err(e) => {
+                eprintln!("⚠️  wait_for_element_children('{selector}') count() failed: {e}");
+            }
         }
+        sleep(Duration::from_millis(200)).await;
     }
 
+    let elapsed = start.elapsed().as_secs_f32();
+    eprintln!(
+        "⏱️  wait_for_element_children('{selector}') TIMED OUT after {elapsed:.1}s \
+         (expected ≥ {min_count}, found {last_count})"
+    );
     capture_failure_state(page, &format!("wait_for_element_children_{selector}")).await;
-    0
+    last_count
 }
 
 pub async fn wait_for_element_text(page: &playwright_rs::Page, selector: &str) -> String {
@@ -192,6 +206,12 @@ pub async fn wait_for_element_not_exists(
         }))
         .await
     {
+        let still_visible = locator.is_visible().await.unwrap_or(true);
+        eprintln!(
+            "⏱️  wait_for_element_not_exists('{selector}') TIMED OUT after {}ms \
+             (still visible: {still_visible})",
+            timeout_ms as u64
+        );
         capture_failure_state(page, &format!("wait_for_element_not_exists_{selector}")).await;
         panic!("Element '{selector}' did not become hidden: {e}");
     }

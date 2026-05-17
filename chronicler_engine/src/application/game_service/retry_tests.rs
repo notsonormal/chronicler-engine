@@ -25,6 +25,7 @@ use crate::test_support::make_test_context_with_sqlite;
 /// Snapshot storage that can be configured to fail specific operations.
 struct FailingSnapshotStorage {
     fallback: Arc<dyn SnapshotStorage>,
+    fail_save: std::sync::atomic::AtomicBool,
     fail_load_latest: std::sync::atomic::AtomicBool,
     fail_load_by_id: std::sync::atomic::AtomicBool,
 }
@@ -33,6 +34,7 @@ impl FailingSnapshotStorage {
     fn new(fallback: Arc<dyn SnapshotStorage>) -> Self {
         Self {
             fallback,
+            fail_save: std::sync::atomic::AtomicBool::new(false),
             fail_load_latest: std::sync::atomic::AtomicBool::new(false),
             fail_load_by_id: std::sync::atomic::AtomicBool::new(false),
         }
@@ -41,6 +43,11 @@ impl FailingSnapshotStorage {
 
 impl SnapshotStorage for FailingSnapshotStorage {
     fn save(&self, snapshot: &GameStateSnapshot) -> Result<u64, EngineError> {
+        if self.fail_save.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err(EngineError::Internal(internal_error(
+                "simulated save failure",
+            )));
+        }
         self.fallback.save(snapshot)
     }
 
@@ -96,6 +103,7 @@ impl SnapshotStorage for FailingSnapshotStorage {
 /// Message storage that can be configured to fail specific operations.
 struct FailingMessageStorage {
     fallback: Arc<dyn MessageStorage>,
+    fail_load_messages: std::sync::atomic::AtomicBool,
     fail_delete_message: std::sync::atomic::AtomicBool,
 }
 
@@ -103,6 +111,7 @@ impl FailingMessageStorage {
     fn new(fallback: Arc<dyn MessageStorage>) -> Self {
         Self {
             fallback,
+            fail_load_messages: std::sync::atomic::AtomicBool::new(false),
             fail_delete_message: std::sync::atomic::AtomicBool::new(false),
         }
     }
@@ -130,6 +139,14 @@ impl MessageStorage for FailingMessageStorage {
     }
 
     fn load_messages(&self) -> Result<Vec<Message>, EngineError> {
+        if self
+            .fail_load_messages
+            .load(std::sync::atomic::Ordering::SeqCst)
+        {
+            return Err(EngineError::Internal(internal_error(
+                "simulated load_messages failure",
+            )));
+        }
         self.fallback.load_messages()
     }
 }
@@ -160,6 +177,9 @@ fn make_empty_context(state: GameState) -> GameServiceContext {
         cancel_token: tokio_util::sync::CancellationToken::new(),
         action_lock: Arc::new(std::sync::Mutex::new(())),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        settings: Arc::new(std::sync::RwLock::new(
+            crate::model::settings::AppSettings::default(),
+        )),
     }
 }
 
@@ -215,6 +235,27 @@ fn test_retry_no_snapshot() {
     let ctx = make_empty_context(state);
     let service = make_service();
     // No snapshots saved → should log error and return cleanly
+    retry_last_response_impl(&service, ctx);
+}
+
+#[test]
+fn test_retry_load_messages_error() {
+    let state = make_test_state();
+    let base_ctx = make_test_context_with_sqlite(state).unwrap();
+
+    let failing_msg_storage = Arc::new(FailingMessageStorage::new(Arc::clone(
+        &base_ctx.message_storage,
+    )));
+    failing_msg_storage
+        .fail_load_messages
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+
+    let ctx = GameServiceContext {
+        message_storage: failing_msg_storage,
+        ..base_ctx.clone()
+    };
+
+    let service = make_service();
     retry_last_response_impl(&service, ctx);
 }
 
@@ -384,8 +425,8 @@ fn test_retry_event_empty_continuation_text() {
     let state = make_test_state();
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
-    // MockBackend doesn't support empty trigger responses directly;
-    // this test exercises the setup path (covered by other tests for the error branch).
+    // Exercise the setup path for event retry with an empty continuation.
+    // The error branch is covered by other tests; this validates the happy-path wiring.
     let llm = Arc::new(MockBackend::new(None));
     let service = DefaultGameService::with_mock_quantifier(
         llm,
@@ -584,6 +625,27 @@ fn test_save_retry_error() {
         ),
         "Should save error status with exact message"
     );
+}
+
+#[test]
+fn test_save_retry_error_persist_fails() {
+    let state = make_test_state();
+    let base_ctx = make_test_context_with_sqlite(state).unwrap();
+
+    let failing = Arc::new(FailingSnapshotStorage::new(Arc::clone(
+        &base_ctx.snapshot_storage,
+    )));
+    failing
+        .fail_save
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+
+    let ctx = GameServiceContext {
+        snapshot_storage: failing,
+        ..base_ctx.clone()
+    };
+
+    // Should not panic when save_state fails inside save_retry_error
+    super::retry::save_retry_error(&ctx, "persist failure");
 }
 
 /// Custom backend that returns empty text for trigger continuation.

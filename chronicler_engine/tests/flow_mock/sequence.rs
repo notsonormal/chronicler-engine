@@ -5,8 +5,9 @@ use chronicler_engine::model::state::LogType;
 use chronicler_engine::narrative::llm::MockBackend;
 use chronicler_engine::test_support::make_test_context_with_sqlite;
 
-use crate::{
-    add_input_and_save, create_test_state_with_map, latest_state, wait_for_generation_complete,
+use crate::game_service_helpers::{
+    add_input_and_save, create_test_state_with_map, latest_state, save_state,
+    wait_for_generation_complete,
 };
 
 #[test]
@@ -111,7 +112,7 @@ fn test_sequential_execute_delete_execute() {
     {
         let mut state = latest_state(&ctx);
         state.narrative.messages.retain(|m| m.id != narration_id);
-        crate::save_state(&ctx, &state);
+        save_state(&ctx, &state);
     }
 
     // Step 3: Action B
@@ -243,7 +244,7 @@ fn test_delete_input_then_retry_fails_gracefully() {
     {
         let mut state = latest_state(&ctx);
         state.narrative.messages.clear();
-        crate::save_state(&ctx, &state);
+        save_state(&ctx, &state);
     }
 
     // Retry should not panic or hang
@@ -289,7 +290,7 @@ fn test_reset_clears_history_and_state() {
 
     // Reset: create fresh initial state
     let fresh_state = create_test_state_with_map();
-    crate::save_state(&ctx, &fresh_state);
+    save_state(&ctx, &fresh_state);
 
     let guard = latest_state(&ctx);
     assert_eq!(
@@ -325,7 +326,7 @@ fn test_reset_then_execute_works() {
 
     // Reset
     let fresh_state = create_test_state_with_map();
-    crate::save_state(&ctx, &fresh_state);
+    save_state(&ctx, &fresh_state);
 
     // Second action after reset
     add_input_and_save(&ctx, "look around");
@@ -389,7 +390,7 @@ fn test_delete_mid_sequence() {
     {
         let mut state = latest_state(&ctx);
         state.narrative.messages.retain(|m| m.id != narration_b_id);
-        crate::save_state(&ctx, &state);
+        save_state(&ctx, &state);
     }
 
     // Action C

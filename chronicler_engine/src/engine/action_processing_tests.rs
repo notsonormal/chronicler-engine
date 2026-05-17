@@ -59,6 +59,9 @@ fn test_execute_freeaction_impl_no_movement() {
             all_npcs: &all_npcs,
             history: &history,
             llm_backend: &crate::narrative::llm::MockBackend::default(),
+            response_length: "",
+            max_context_tokens: crate::narrative::prompt::budget::MAX_CONTEXT_TOKENS,
+            max_tokens: None,
         },
     );
 
@@ -99,6 +102,9 @@ fn test_execute_freeaction_impl_with_movement() {
             all_npcs: &all_npcs,
             history: &history,
             llm_backend: &crate::narrative::llm::MockBackend::default(),
+            response_length: "",
+            max_context_tokens: crate::narrative::prompt::budget::MAX_CONTEXT_TOKENS,
+            max_tokens: None,
         },
     );
 
@@ -140,6 +146,9 @@ fn test_execute_freeaction_impl_updates_npcs_in_area() {
             all_npcs: &all_npcs,
             history: &[],
             llm_backend: &crate::narrative::llm::MockBackend::default(),
+            response_length: "",
+            max_context_tokens: crate::narrative::prompt::budget::MAX_CONTEXT_TOKENS,
+            max_tokens: None,
         },
     );
 
@@ -174,6 +183,9 @@ fn test_execute_freeaction_impl_returns_trigger_request_when_trigger_matches() {
             all_npcs: &[],
             history: &[],
             llm_backend: &crate::narrative::llm::MockBackend::default(),
+            response_length: "",
+            max_context_tokens: crate::narrative::prompt::budget::MAX_CONTEXT_TOKENS,
+            max_tokens: None,
         },
     );
 
@@ -210,6 +222,9 @@ fn test_execute_freeaction_impl_returns_none_when_no_trigger_matches() {
             all_npcs: &[],
             history: &[],
             llm_backend: &crate::narrative::llm::MockBackend::default(),
+            response_length: "",
+            max_context_tokens: crate::narrative::prompt::budget::MAX_CONTEXT_TOKENS,
+            max_tokens: None,
         },
     );
 
@@ -240,6 +255,9 @@ fn test_execute_freeaction_impl_npc_events_entered() {
             all_npcs: &all_npcs,
             history: &[],
             llm_backend: &crate::narrative::llm::MockBackend::default(),
+            response_length: "",
+            max_context_tokens: crate::narrative::prompt::budget::MAX_CONTEXT_TOKENS,
+            max_tokens: None,
         },
     );
 
@@ -413,9 +431,16 @@ fn test_evaluate_and_narrate_triggers_adds_event_header() {
         history: &history,
     };
 
-    let state =
-        evaluate_and_narrate_triggers(state, "You enter the room.", &trigger_context, &llm_backend)
-            .unwrap();
+    let state = evaluate_and_narrate_triggers(
+        state,
+        "You enter the room.",
+        &trigger_context,
+        &llm_backend,
+        "",
+        crate::narrative::prompt::budget::MAX_CONTEXT_TOKENS,
+        None,
+    )
+    .unwrap();
 
     // Should have 1 entry: narration with inline event header
     assert!(
@@ -670,6 +695,9 @@ proptest! {
                 all_npcs: &all_npcs,
                 history: &[],
                 llm_backend: &crate::narrative::llm::MockBackend::default(),
+                response_length: "",
+                max_context_tokens: crate::narrative::prompt::budget::MAX_CONTEXT_TOKENS,
+                max_tokens: None,
             },
         );
 

@@ -145,8 +145,10 @@ fn test_app_state_lock_state_success() {
         map: state.map.clone(),
         player: state.player.clone(),
         npcs: Arc::new(state.npcs.clone()),
-        game_service: Arc::new(DefaultGameService::with_storage(Some(llm_storage)))
-            as Arc<dyn GameService>,
+        game_service: Arc::new(DefaultGameService::with_storage(
+            Some(llm_storage),
+            Arc::new(std::sync::RwLock::new(AppSettings::default())),
+        )) as Arc<dyn GameService>,
         settings: Arc::new(std::sync::RwLock::new(AppSettings::default())),
         cancel_token: Arc::new(std::sync::RwLock::new(
             tokio_util::sync::CancellationToken::new(),
@@ -280,8 +282,10 @@ fn test_app_state_lock_state_poisoned() {
         map: state.map.clone(),
         player: state.player.clone(),
         npcs: Arc::new(state.npcs.clone()),
-        game_service: Arc::new(DefaultGameService::with_storage(Some(llm_storage)))
-            as Arc<dyn GameService>,
+        game_service: Arc::new(DefaultGameService::with_storage(
+            Some(llm_storage),
+            Arc::new(std::sync::RwLock::new(AppSettings::default())),
+        )) as Arc<dyn GameService>,
         settings: Arc::new(std::sync::RwLock::new(AppSettings::default())),
         cancel_token: Arc::new(std::sync::RwLock::new(
             tokio_util::sync::CancellationToken::new(),

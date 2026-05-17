@@ -9,9 +9,9 @@ use chronicler_engine::model::trigger::{
 use chronicler_engine::narrative::llm::MockBackend;
 use chronicler_engine::test_support::make_test_context_with_sqlite;
 
-use crate::{
+use crate::game_service_helpers::{
     add_input_and_save, create_test_state_with_map, latest_snapshot, latest_state,
-    wait_for_generation_complete,
+    save_state, wait_for_generation_complete,
 };
 
 #[test]
@@ -320,7 +320,7 @@ fn test_retry_after_edited_input_uses_new_text() {
         {
             msg.text = "sprint forward".to_string();
         }
-        crate::save_state(&ctx, &state);
+        save_state(&ctx, &state);
     }
 
     // Retry should use the edited text
@@ -495,7 +495,7 @@ fn test_retry_no_pre_main_snapshot() {
     let _ = ctx.snapshot_storage.reset();
     // Re-save current state as latest so retry has something to load
     {
-        crate::save_state(&ctx, &state_before_reset);
+        save_state(&ctx, &state_before_reset);
     }
 
     // Retry should not panic
@@ -607,7 +607,7 @@ fn test_delete_narration_then_retry_regenerates() {
     {
         let mut state = latest_state(&ctx);
         state.narrative.messages.retain(|m| m.id != narration_id);
-        crate::save_state(&ctx, &state);
+        save_state(&ctx, &state);
     }
 
     // Retry should regenerate narration

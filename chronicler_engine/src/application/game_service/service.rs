@@ -1,7 +1,6 @@
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
-use crate::model::llm_backend::LlmBackendType;
-use crate::model::settings::Connection;
+use crate::model::settings::AppSettings;
 use crate::narrative::agents::quantifier::QuantifierAgent;
 use crate::narrative::agents::registry::AgentRegistry;
 use crate::storage::llm_message_storage::LlmMessageStorage;
@@ -21,20 +20,27 @@ pub struct DefaultGameService {
 
 impl DefaultGameService {
     pub fn new() -> Self {
-        Self::with_storage(None)
+        Self::with_storage(None, Arc::new(RwLock::new(AppSettings::default())))
     }
 
-    pub fn with_storage(storage: Option<Arc<dyn LlmMessageStorage>>) -> Self {
-        let settings = crate::settings::load_settings().unwrap_or_default();
-        let registry = AgentRegistry::from_configs_with_storage(&settings.agents, storage.clone())
+    pub fn with_storage(
+        storage: Option<Arc<dyn LlmMessageStorage>>,
+        settings: Arc<RwLock<AppSettings>>,
+    ) -> Self {
+        let (registry, connection) = {
+            let settings_guard = settings.read().unwrap_or_else(|e| e.into_inner());
+            let registry = AgentRegistry::from_configs_with_storage(
+                &settings_guard.agents,
+                storage.clone(),
+                &settings_guard,
+            )
             .unwrap_or_default();
-        let connection = settings
-            .get_narration_connection()
-            .cloned()
-            .unwrap_or_else(|| Connection::new("default", "Default", LlmBackendType::Mock));
+            (registry, settings_guard.narration_connection())
+        };
         let llm_backend = Arc::from(crate::narrative::llm::get_llm_backend_for(
             &connection,
             storage,
+            Some(Arc::clone(&settings)),
         ));
         Self {
             llm_backend,

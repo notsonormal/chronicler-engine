@@ -7,6 +7,7 @@ use chronicler_engine::narrative::llm::MockBackend;
 use chronicler_engine::test_support::make_test_context;
 
 use crate::failing_service;
+use crate::game_service_helpers::latest_state;
 use crate::test_data::create_test_state;
 
 fn run_action(
@@ -18,7 +19,7 @@ fn run_action(
     state.narrative.messages.clear();
     let ctx = make_test_context(state);
     service.execute_action(ctx.clone(), command.to_string(), "Player".to_string());
-    crate::latest_state(&ctx)
+    latest_state(&ctx)
 }
 
 #[test]
@@ -70,7 +71,7 @@ fn test_retry_with_no_history() {
     service.retry_last_response(ctx.clone());
 
     // State should be unchanged
-    let guard = crate::latest_state(&ctx);
+    let guard = latest_state(&ctx);
     assert!(guard.narrative.history().is_empty());
 }
 
@@ -139,7 +140,7 @@ fn test_default_game_service_with_backends() {
     state.narrative.messages.clear();
     let ctx = make_test_context(state);
     service.execute_action(ctx.clone(), "look".to_string(), "Player".to_string());
-    let guard = crate::latest_state(&ctx);
+    let guard = latest_state(&ctx);
     assert!(!guard.narrative.generation.status.is_generating());
 }
 
@@ -153,6 +154,6 @@ fn test_default_game_service_with_mock_quantifier() {
     state.narrative.messages.clear();
     let ctx = make_test_context(state);
     service.execute_action(ctx.clone(), "look".to_string(), "Player".to_string());
-    let guard = crate::latest_state(&ctx);
+    let guard = latest_state(&ctx);
     assert!(!guard.narrative.generation.status.is_generating());
 }

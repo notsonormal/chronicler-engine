@@ -33,11 +33,13 @@ pub fn kill_existing_server(port: u16) {
 /// connections and points the server to it via CHRONICLER_SETTINGS_PATH.
 /// Returns the spawned child process and an optional temp directory path
 /// that should be cleaned up when the server shuts down.
+/// Returns the server child process, temp dir (if mock settings were written),
+/// and the path to the SQLite database file the server will create.
 pub fn start_server_with_env(
     port: u16,
     world: &str,
     use_mock: bool,
-) -> (Child, Option<std::path::PathBuf>) {
+) -> (Child, Option<std::path::PathBuf>, std::path::PathBuf) {
     // Prefer pre-built binary to avoid per-test compilation overhead.
     // Fall back to cargo run for fresh clones or after cargo clean.
     // Respect CARGO_TARGET_DIR for concurrent builds with custom target directories.
@@ -103,7 +105,13 @@ pub fn start_server_with_env(
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
     let child = cmd.spawn().expect("Failed to start server");
-    (child, tmp_dir)
+
+    // Infer where the server will place its SQLite DB.
+    let db_path = std::path::PathBuf::from(&target_dir)
+        .join("debug")
+        .join(format!("chronicler_{port}.db"));
+
+    (child, tmp_dir, db_path)
 }
 
 pub async fn wait_for_server(port: u16, max_attempts: usize) -> bool {
@@ -259,11 +267,24 @@ pub struct TestServer {
     child: Child,
     port: u16,
     temp_dir: Option<std::path::PathBuf>,
+    db_path: std::path::PathBuf,
 }
 
 impl TestServer {
     pub async fn with_config(port: u16, world: &str, use_mock: bool) -> Self {
         Self::start(port, world, use_mock).await
+    }
+
+    /// Remove any stale SQLite database for this port before starting.
+    fn cleanup_stale_db(port: u16, db_path: &std::path::Path) {
+        if db_path.exists() {
+            let size = std::fs::metadata(db_path).map(|m| m.len()).unwrap_or(0);
+            eprintln!(
+                "🧹 Cleaning stale DB for port {port} ({size} bytes): {}",
+                db_path.display()
+            );
+            let _ = std::fs::remove_file(db_path);
+        }
     }
 
     pub async fn from_config(
@@ -282,7 +303,11 @@ impl TestServer {
         if port_in_use(port) {
             kill_existing_server(port);
         }
-        let (child, temp_dir) = start_server_with_env(port, world, use_mock);
+        let (child, temp_dir, db_path) = start_server_with_env(port, world, use_mock);
+
+        // Remove stale database from previous runs so tests don't inherit old state.
+        Self::cleanup_stale_db(port, &db_path);
+
         // Increased wait time for server to be fully ready
         let started = wait_for_server(port, 100).await; // 100 * 100ms = 10s total
         assert!(started, "Server failed to start on port {port}");
@@ -291,6 +316,7 @@ impl TestServer {
             child,
             port,
             temp_dir,
+            db_path,
         }
     }
 
@@ -311,6 +337,10 @@ impl Drop for TestServer {
         release_port_lock(self.port);
         if let Some(tmp) = &self.temp_dir {
             let _ = std::fs::remove_dir_all(tmp);
+        }
+        // Delete the SQLite database so the next test on this port starts clean.
+        if self.db_path.exists() {
+            let _ = std::fs::remove_file(&self.db_path);
         }
     }
 }

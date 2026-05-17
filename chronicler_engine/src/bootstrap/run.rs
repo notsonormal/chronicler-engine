@@ -1,7 +1,8 @@
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use crate::cli::{Args, list_available_worlds, resolve_engine_data_path};
 use crate::model::character::NpcCard;
+use crate::model::settings::AppSettings;
 use crate::model::state::GameState;
 use crate::narrative::prompt::PromptContext;
 use crate::server::ServerConfig;
@@ -81,6 +82,9 @@ pub fn run(args: Args) -> crate::error::Result<()> {
     let npcs_arc = Arc::new(npcs_map);
 
     // [DOC: docs/architecture/system.md]
+    let settings = Arc::new(RwLock::new(
+        crate::settings::load_settings().unwrap_or_else(|_| AppSettings::default()),
+    ));
     let config = ServerConfig { port: args.port };
     let runtime = tokio::runtime::Runtime::new().map_err(|e| {
         crate::error::EngineError::Io(format!("runtime_new {}: {e}", "tokio_runtime"))
@@ -98,6 +102,7 @@ pub fn run(args: Args) -> crate::error::Result<()> {
         let map_for_task = Arc::clone(&map_arc);
         let player_for_task = Arc::clone(&player_arc);
         let npcs_for_task = Arc::clone(&npcs_arc);
+        let settings_for_task = Arc::clone(&settings);
         // [DOC: docs/architecture/invariants.md#INV-004]
         let _handle = runtime.spawn_blocking(move || {
             let mut state = match snapshot_storage_for_task.load_latest() {
@@ -130,20 +135,13 @@ pub fn run(args: Args) -> crate::error::Result<()> {
                 .find(|r| r.id == room_id);
 
             if let Some(room) = room {
+                let settings_guard = settings_for_task.read().unwrap_or_else(|e| e.into_inner());
                 let backend = crate::narrative::llm::get_llm_backend_for(
-                    &crate::settings::load_settings()
-                        .unwrap_or_default()
-                        .get_narration_connection()
-                        .cloned()
-                        .unwrap_or_else(|| {
-                            crate::model::settings::Connection::new(
-                                "default",
-                                "Default",
-                                crate::model::llm_backend::LlmBackendType::Mock,
-                            )
-                        }),
+                    &settings_guard.narration_connection(),
                     Some(Arc::clone(&llm_storage_for_task)),
+                    Some(Arc::clone(&settings_for_task)),
                 );
+                drop(settings_guard);
                 let context = PromptContext {
                     world: &world_for_task,
                     room,
@@ -175,16 +173,17 @@ pub fn run(args: Args) -> crate::error::Result<()> {
         });
     } // end if !has_scenario
 
-    runtime.block_on(crate::server::run_server_with_config(
-        world_arc,
-        map_arc,
-        player_arc,
-        npcs_arc,
+    let resources = crate::server::ServerResources {
+        world: world_arc,
+        map: map_arc,
+        player: player_arc,
+        npcs: npcs_arc,
         snapshot_storage,
         message_storage,
         llm_message_storage,
-        config,
-    ))?;
+        settings,
+    };
+    runtime.block_on(crate::server::run_server_with_config(resources, config))?;
 
     Ok(())
 }

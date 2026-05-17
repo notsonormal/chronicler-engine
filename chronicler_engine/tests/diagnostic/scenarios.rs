@@ -573,8 +573,9 @@ fn benchmark_trigger_wrong_room_id() {
 
 #[test]
 fn benchmark_state_stuck_generating() {
-    // This tests what happens when the pipeline fails after setting phase but before reset
-    // We simulate by making narrate_action succeed but trigger narration fail
+    // Verify resilience when the pipeline sets the generation phase but fails before
+    // resetting status. We simulate this by making narrate_action succeed but trigger
+    // narration to fail.
     let npc_with_trigger = NpcCard {
         id: "test_npc".into(),
         sheet: CharacterSheet {

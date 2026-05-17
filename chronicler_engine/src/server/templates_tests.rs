@@ -14,6 +14,8 @@ fn test_header_template_renders_room_name() {
     let rendered = template.render().unwrap();
     assert!(rendered.contains("Chronicler Engine"));
     assert!(rendered.contains(r#"class="header""#));
+    assert!(rendered.contains(r#"class="game-title""#));
+    assert!(rendered.contains("connection-status"));
 }
 
 #[test]
@@ -23,6 +25,7 @@ fn test_header_template_escapes_html() {
     };
     let rendered = template.render().unwrap();
     assert!(rendered.contains("Chronicler Engine"));
+    assert!(!rendered.contains("<script>"));
 }
 
 #[test]

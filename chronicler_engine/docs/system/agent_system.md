@@ -125,7 +125,7 @@ pub enum BackendSelector {
 }
 ```
 
-**QuantifierAgent**: Resolves its backend via `AgentRegistry::from_configs_with_storage()`, which loads the `quantifier_connection_id` from `settings.json`. `UseMain` falls back to the default narration backend.
+**QuantifierAgent**: Resolves its backend via `AgentRegistry::from_configs_with_storage()`, which receives `&AppSettings` from the caller (no file I/O). The `quantifier_connection_id` is read from the passed settings. `UseMain` falls back to the default narration backend.
 
 ---
 

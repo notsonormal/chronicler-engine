@@ -406,3 +406,83 @@ fn test_call_chat_completions_mock_server_error_status() {
         "Expected API error, got: {msg}"
     );
 }
+
+
+#[test]
+fn test_call_chat_completions_mock_server_no_content() {
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::thread;
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+
+    thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut buf = [0u8; 4096];
+        let _ = stream.read(&mut buf).unwrap_or(0);
+
+        let body = r#"{"choices":[{"message":{"role":"assistant"}}]}"#;
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        stream.write_all(response.as_bytes()).unwrap();
+        let _ = stream.flush();
+    });
+
+    let result = call_chat_completions(
+        &format!("http://127.0.0.1:{port}"),
+        None,
+        "test-model",
+        "system",
+        "user",
+        None,
+        None,
+    );
+    assert!(result.is_err());
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains("parse") || err.contains("Failed to parse"),
+        "Expected parse error, got: {err}"
+    );
+}
+
+#[test]
+fn test_call_chat_completions_mock_server_truncated_body() {
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::thread;
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+
+    thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut buf = [0u8; 4096];
+        let _ = stream.read(&mut buf).unwrap_or(0);
+
+        // Claim a huge body but send nothing, forcing reqwest to fail reading
+        let response =
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 99999\r\nConnection: close\r\n\r\n";
+        stream.write_all(response.as_bytes()).unwrap();
+        let _ = stream.flush();
+    });
+
+    let result = call_chat_completions(
+        &format!("http://127.0.0.1:{port}"),
+        None,
+        "test-model",
+        "system",
+        "user",
+        None,
+        None,
+    );
+    assert!(result.is_err());
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains("read") || err.contains("body") || err.contains("network"),
+        "Expected body read error, got: {err}"
+    );
+}

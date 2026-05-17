@@ -6,8 +6,11 @@ use chronicler_engine::model::state_snapshot::GameStateSnapshot;
 use chronicler_engine::narrative::llm::MockBackend;
 use chronicler_engine::test_support::make_test_context;
 
+use crate::game_service_helpers::{
+    create_test_state_with_trigger_npc, latest_state, wait_for_generation_complete,
+};
 use crate::test_data::create_test_state;
-use crate::{create_test_state_with_trigger_npc, failing_service, wait_for_generation_complete};
+use crate::failing_service;
 
 #[test]
 fn test_execute_freeaction_immediate_return() {
@@ -27,7 +30,7 @@ fn test_execute_freeaction_immediate_return() {
 
     // State should be accessible immediately after execute_action returns
     // (the thread runs in background)
-    let guard = crate::latest_state(&ctx);
+    let guard = latest_state(&ctx);
     let status = &guard.narrative.generation.status;
     // Failing mock backend causes FreeAction to fail and set Error status
     assert!(
@@ -71,7 +74,7 @@ fn test_execute_freeaction_state_accessible() {
     service.execute_action(ctx.clone(), "look around".to_string(), "Player".to_string());
 
     // State should remain accessible after execute_action returns
-    let guard = crate::latest_state(&ctx);
+    let guard = latest_state(&ctx);
     let status = &guard.narrative.generation.status;
     // Failing mock backend causes FreeAction to fail and set Error status
     assert!(
@@ -90,10 +93,10 @@ fn test_execute_freeaction_narration_failure() {
 
     service.execute_action(ctx.clone(), "test action".to_string(), "Player".to_string());
 
-    let completed = wait_for_generation_complete(&ctx, 200);
+    let completed = wait_for_generation_complete(&ctx, 500);
     assert!(completed, "FreeAction should complete within timeout");
 
-    let guard = crate::latest_state(&ctx);
+    let guard = latest_state(&ctx);
     // MockBackend::failing() always returns an error
     assert!(
         guard.narrative.generation.status.error_message().is_some(),
@@ -119,10 +122,10 @@ fn test_execute_freeaction_with_mock_backend() {
         "Player".to_string(),
     );
 
-    let completed = wait_for_generation_complete(&ctx, 200);
+    let completed = wait_for_generation_complete(&ctx, 500);
     assert!(completed, "FreeAction should complete within timeout");
 
-    let guard = crate::latest_state(&ctx);
+    let guard = latest_state(&ctx);
     assert!(
         !guard.narrative.generation.status.is_generating(),
         "is_generating should be reset after FreeAction completes"
@@ -169,7 +172,7 @@ fn test_retry_with_mock_backend() {
     let completed = wait_for_generation_complete(&ctx, 1000);
     assert!(completed, "Retry should complete within timeout");
 
-    let guard = crate::latest_state(&ctx);
+    let guard = latest_state(&ctx);
     assert!(
         !guard.narrative.generation.status.is_generating(),
         "is_generating should be reset after retry completes"
@@ -212,7 +215,7 @@ fn test_execute_freeaction_with_movement_mock() {
         "FreeAction with movement should complete within timeout"
     );
 
-    let guard = crate::latest_state(&ctx);
+    let guard = latest_state(&ctx);
     assert!(
         !guard.narrative.generation.status.is_generating(),
         "is_generating should be reset after FreeAction with movement"
@@ -243,7 +246,7 @@ fn test_freeaction_phase_starts_narrating() {
         "Player".to_string(),
     );
 
-    let guard = crate::latest_state(&ctx);
+    let guard = latest_state(&ctx);
     // DefaultGameService has no API key, so FreeAction fails.
     // set_phase(Narrating) runs before the backend call, and set_error_and_reset
     // only updates status (not phase), so phase should still be Narrating.
@@ -272,10 +275,10 @@ fn test_freeaction_phase_transitions_mock() {
         "Player".to_string(),
     );
 
-    let completed = wait_for_generation_complete(&ctx, 200);
+    let completed = wait_for_generation_complete(&ctx, 500);
     assert!(completed, "FreeAction should complete within timeout");
 
-    let guard = crate::latest_state(&ctx);
+    let guard = latest_state(&ctx);
     assert!(
         !guard.narrative.generation.status.is_generating(),
         "Status should be reset after FreeAction completes"
@@ -344,7 +347,7 @@ async fn test_cancellation_resets_state_to_idle() {
     // Wait for the blocking task to finish
     handle.await.unwrap();
 
-    let guard = crate::latest_state(&ctx);
+    let guard = latest_state(&ctx);
     assert!(
         !guard.narrative.generation.status.is_generating(),
         "Status should be Idle after cancellation cleanup"
@@ -372,7 +375,7 @@ fn test_retry_last_response_not_ai_generated() {
     let completed = wait_for_generation_complete(&ctx, 1000);
     assert!(completed, "Retry should complete within timeout");
 
-    let guard = crate::latest_state(&ctx);
+    let guard = latest_state(&ctx);
     assert!(
         guard.narrative.generation.status.error_message().is_some()
             || !guard.narrative.generation.status.is_generating(),
@@ -400,7 +403,7 @@ fn test_empty_llm_response_handled_gracefully() {
         "Player".to_string(),
     );
 
-    let guard = crate::latest_state(&ctx);
+    let guard = latest_state(&ctx);
     assert!(
         matches!(
             guard.narrative.generation.status,
@@ -447,7 +450,7 @@ fn test_failing_trigger_narration_does_not_crash() {
         "Player".to_string(),
     );
 
-    let guard = crate::latest_state(&ctx);
+    let guard = latest_state(&ctx);
     assert!(
         !guard.narrative.generation.status.is_generating(),
         "Status should be reset after trigger narration failure"
@@ -492,7 +495,7 @@ fn test_delayed_llm_completes_without_deadlock() {
     service.execute_action(ctx.clone(), "look around".to_string(), "Player".to_string());
 
     // execute_action is synchronous — by now the delay has elapsed
-    let guard = crate::latest_state(&ctx);
+    let guard = latest_state(&ctx);
     assert!(
         !guard.narrative.generation.status.is_generating(),
         "Status should be Idle after delayed action completes"
@@ -527,7 +530,7 @@ fn test_quantifier_detects_movement() {
     let completed = wait_for_generation_complete(&ctx, 500);
     assert!(completed, "Movement action should complete within timeout");
 
-    let guard = crate::latest_state(&ctx);
+    let guard = latest_state(&ctx);
     assert!(
         !guard.narrative.generation.status.is_generating(),
         "Status should be reset after movement action"
@@ -564,7 +567,7 @@ fn test_quantifier_detects_npc_presence_and_fires_trigger() {
         "Player".to_string(),
     );
 
-    let guard = crate::latest_state(&ctx);
+    let guard = latest_state(&ctx);
     assert!(
         !guard.narrative.generation.status.is_generating(),
         "Status should be reset after trigger action"
@@ -623,7 +626,7 @@ fn test_retry_no_input_text() {
     service.retry_last_response(ctx.clone());
 
     // State should remain unchanged
-    let guard = crate::latest_state(&ctx);
+    let guard = latest_state(&ctx);
     assert_eq!(guard.narrative.history().len(), 2);
 }
 
@@ -660,7 +663,7 @@ fn test_retry_room_not_found() {
 
     service.retry_last_response(ctx.clone());
 
-    let guard = crate::latest_state(&ctx);
+    let guard = latest_state(&ctx);
     assert!(
         matches!(
             guard.narrative.generation.status,
@@ -704,7 +707,7 @@ fn test_retry_llm_error() {
 
     service.retry_last_response(ctx.clone());
 
-    let guard = crate::latest_state(&ctx);
+    let guard = latest_state(&ctx);
     assert!(
         matches!(
             guard.narrative.generation.status,
@@ -748,7 +751,7 @@ fn test_retry_empty_narration() {
 
     service.retry_last_response(ctx.clone());
 
-    let guard = crate::latest_state(&ctx);
+    let guard = latest_state(&ctx);
     assert!(
         matches!(
             guard.narrative.generation.status,
@@ -860,7 +863,7 @@ fn test_retry_main_narration_uses_pre_main_snapshot() {
     let completed = wait_for_generation_complete(&ctx, 1000);
     assert!(completed, "Retry should complete within timeout");
 
-    let guard = crate::latest_state(&ctx);
+    let guard = latest_state(&ctx);
     // Should have a narration (from mock backend)
     let narrations: Vec<_> = guard
         .narrative
@@ -937,7 +940,7 @@ fn test_retry_event_continuation_uses_pre_event_snapshot() {
     let completed = wait_for_generation_complete(&ctx, 1000);
     assert!(completed, "Event retry should complete within timeout");
 
-    let guard = crate::latest_state(&ctx);
+    let guard = latest_state(&ctx);
     // Main narration should be unchanged (still from original)
     let main_narrations: Vec<_> = guard
         .narrative

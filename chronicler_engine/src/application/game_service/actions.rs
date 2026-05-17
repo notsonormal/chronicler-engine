@@ -233,6 +233,8 @@ pub fn execute_freeaction_pipeline(
         );
     }
 
+    let (response_length, max_context_tokens, max_tokens) = ctx.prompt_build_params();
+
     let trigger_request = execute_freeaction_impl(
         &state,
         &crate::engine::action_processing::FreeActionContext {
@@ -244,6 +246,9 @@ pub fn execute_freeaction_pipeline(
             all_npcs: &all_npcs,
             history: &history,
             llm_backend: backend.as_ref(),
+            response_length: &response_length,
+            max_context_tokens,
+            max_tokens,
         },
     );
 

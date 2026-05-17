@@ -38,8 +38,8 @@ Orchestration layer that coordinates game flow, persistence, and LLM generation.
 ### 3. The Narrative Tier (`crate::narrative::*`)
 The interface between the synchronous engine and stochastic LLM generation.
 - **`llm`**: Directory module with traits (`LlmBackend`) and per-provider implementations (OpenRouter, DeepSeek, Ollama, Mock) for Game Master narration.
-  - **`get_llm_backend()`**: Production entry point that loads the narration connection from `data/settings.json`
-  - **`get_llm_backend_for(connection)`**: Create a backend for a specific `Connection` profile
+  - **`get_llm_backend_for(connection, storage, settings)`**: Create a backend for a specific `Connection` profile. Settings are passed in — no file I/O inside the backend.
+  - **`DefaultGameService::with_storage(storage, settings)`**: Production constructor that receives pre-loaded settings.
   - **`DefaultGameService::with_backends(llm, registry)`**: Constructor for dependency-injecting mock backends and agent registry in tests. No globals, no file I/O, fully isolated.
 - **`prompt`**: Directory module for layered prompt construction with token budget management. Uses plain-text instructions + XML-wrapped data for reasoning-model compatibility. Includes `fit_messages_to_context()` for dynamic context-window fitting.
 - **`agents`**: Directory module for the agent trait, registry, and agent implementations.
@@ -97,14 +97,22 @@ Persistent JSON-based settings system for LLM configuration with reusable connec
 
 #### Settings Flow
 
+Settings are loaded **once** at startup and passed down through the construction chain:
+
 ```mermaid
 flowchart TD
-    A["settings.json"] --> B["load_settings()"]
-    B --> C["AppSettings<br/>(defaults if missing)"]
+    A["bootstrap/run.rs"] --> B["load_settings() — ONCE"]
+    B --> C["Arc<RwLock<AppSettings>>"]
     C --> D["AppState.settings"]
-    D --> E["get_llm_backend()<br/>(uses narration connection)"]
-    D --> F["AgentRegistry::from_configs_with_storage()<br/>(resolves agent backends from settings)"]
+    D --> E["DefaultGameService::with_storage(storage, settings)"]
+    E --> F["get_llm_backend_for(connection, storage, settings)"]
+    E --> G["AgentRegistry::from_configs_with_storage(configs, storage, &settings)"]
+    G --> H["QuantifierAgent::from_config_with_storage(config, storage, &settings)"]
 ```
+
+- Backends store `Option<Arc<RwLock<AppSettings>>>` and read `response_length` dynamically per-call.
+- Connection changes still require a server restart (Approach A).
+- Only `response_length` and `max_context_tokens` are read dynamically at runtime.
 
 #### Configuration Options
 

@@ -1,8 +1,8 @@
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use crate::error::EngineError;
 use crate::model::character::NpcCard;
-use crate::model::settings::Connection;
+use crate::model::settings::{AppSettings, Connection};
 use crate::storage::llm_message_storage::LlmMessageStorage;
 
 use super::backend::{LlmBackend, LlmCallResult};
@@ -20,6 +20,7 @@ impl DeepSeekBackend {
     pub fn from_connection(
         connection: &Connection,
         storage: Option<Arc<dyn LlmMessageStorage>>,
+        _settings: Option<Arc<RwLock<AppSettings>>>,
     ) -> Self {
         let api_key = connection.resolve_api_key().unwrap_or_default();
         Self {

@@ -204,4 +204,18 @@ impl AppSettings {
     pub fn get_quantifier_connection(&self) -> Option<&Connection> {
         self.find_connection(&self.quantifier_connection_id)
     }
+
+    /// Resolved narration connection with Mock fallback.
+    pub fn narration_connection(&self) -> Connection {
+        self.get_narration_connection()
+            .cloned()
+            .unwrap_or_else(|| Connection::new("default", "Default", LlmBackendType::Mock))
+    }
+
+    /// Resolved quantifier connection with Mock fallback.
+    pub fn quantifier_connection(&self) -> Connection {
+        self.get_quantifier_connection()
+            .cloned()
+            .unwrap_or_else(|| Connection::new("default", "Default", LlmBackendType::Mock))
+    }
 }

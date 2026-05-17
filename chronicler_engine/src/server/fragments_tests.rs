@@ -1,7 +1,7 @@
 use std::sync::{Arc, RwLock, atomic::AtomicBool};
 use tokio_util::sync::CancellationToken;
 
-use crate::model::llm_message::LlmMessage;
+use crate::model::llm_message::LlmMessageBuilder;
 use crate::model::settings::AppSettings;
 use crate::server::fragments::{ActionForm, html_escape, render_error};
 use crate::storage::llm_message_storage::{InMemoryLlmMessageStorage, LlmMessageStorage};
@@ -26,9 +26,10 @@ fn make_test_app_state(
         player: Arc::new(TestPlayer::standard()),
         npcs: Arc::new(std::collections::HashMap::new()),
         game_service: Arc::new(
-            crate::application::game_service::DefaultGameService::with_storage(Some(
-                game_service_storage,
-            )),
+            crate::application::game_service::DefaultGameService::with_storage(
+                Some(game_service_storage),
+                Arc::new(RwLock::new(AppSettings::default())),
+            ),
         ) as Arc<dyn crate::application::game_service::GameService>,
         settings: Arc::new(RwLock::new(AppSettings::default())),
         cancel_token: Arc::new(RwLock::new(CancellationToken::new())),
@@ -229,17 +230,17 @@ fn test_render_llm_messages_empty() {
 #[test]
 fn test_render_llm_messages_with_data() {
     let llm_storage = Arc::new(InMemoryLlmMessageStorage::new());
-    let msg = LlmMessage::new(
-        "narrator",
-        "OpenRouter",
-        "gpt-4",
-        "sys",
-        "user",
-        "req",
-        "res",
-        "hello",
-        None::<String>,
-    );
+    let msg = LlmMessageBuilder::new()
+        .agent_name("narrator")
+        .backend_name("OpenRouter")
+        .model_name("gpt-4")
+        .system_prompt("sys")
+        .user_prompt("user")
+        .raw_request_json("req")
+        .raw_response_json("res")
+        .parsed_response("hello")
+        .error_message(None::<String>)
+        .build();
     llm_storage.save(&msg).unwrap();
 
     let app_state = make_test_app_state(Some(llm_storage));

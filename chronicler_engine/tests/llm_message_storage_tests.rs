@@ -1,4 +1,4 @@
-use chronicler_engine::model::llm_message::LlmMessage;
+use chronicler_engine::model::llm_message::LlmMessageBuilder;
 use chronicler_engine::storage::db::DbPool;
 use chronicler_engine::storage::llm_message_storage::{LlmMessageStorage, SqliteLlmMessageStorage};
 
@@ -10,17 +10,17 @@ fn create_storage() -> SqliteLlmMessageStorage {
 #[test]
 fn test_sqlite_save_and_list() {
     let storage = create_storage();
-    let msg = LlmMessage::new(
-        "narrator",
-        "OpenRouter",
-        "gpt-4",
-        "system prompt",
-        "user prompt",
-        "{\"model\":\"gpt-4\"}",
-        "{\"content\":\"hello\"}",
-        "hello",
-        None::<String>,
-    );
+    let msg = LlmMessageBuilder::new()
+        .agent_name("narrator")
+        .backend_name("OpenRouter")
+        .model_name("gpt-4")
+        .system_prompt("system prompt")
+        .user_prompt("user prompt")
+        .raw_request_json("{\"model\":\"gpt-4\"}")
+        .raw_response_json("{\"content\":\"hello\"}")
+        .parsed_response("hello")
+        .error_message(None::<String>)
+        .build();
     storage.save(&msg).unwrap();
 
     let list = storage.list_latest(50).unwrap();
@@ -39,17 +39,17 @@ fn test_sqlite_save_and_list() {
 #[test]
 fn test_sqlite_error_message_preserved() {
     let storage = create_storage();
-    let msg = LlmMessage::new(
-        "quantifier",
-        "Ollama",
-        "llama3",
-        "sys",
-        "user",
-        "req",
-        "error body",
-        "",
-        Some("HTTP 500"),
-    );
+    let msg = LlmMessageBuilder::new()
+        .agent_name("quantifier")
+        .backend_name("Ollama")
+        .model_name("llama3")
+        .system_prompt("sys")
+        .user_prompt("user")
+        .raw_request_json("req")
+        .raw_response_json("error body")
+        .parsed_response("")
+        .error_message(Some("HTTP 500"))
+        .build();
     storage.save(&msg).unwrap();
 
     let list = storage.list_latest(50).unwrap();
@@ -61,17 +61,17 @@ fn test_sqlite_error_message_preserved() {
 fn test_sqlite_global_cap_prunes_oldest() {
     let storage = create_storage();
     for i in 0..55 {
-        let msg = LlmMessage::new(
-            "narrator",
-            "OpenRouter",
-            format!("model-{i}"),
-            "sys",
-            "user",
-            "req",
-            "res",
-            "parsed",
-            None::<String>,
-        );
+        let msg = LlmMessageBuilder::new()
+            .agent_name("narrator")
+            .backend_name("OpenRouter")
+            .model_name(format!("model-{i}"))
+            .system_prompt("sys")
+            .user_prompt("user")
+            .raw_request_json("req")
+            .raw_response_json("res")
+            .parsed_response("parsed")
+            .error_message(None::<String>)
+            .build();
         storage.save(&msg).unwrap();
     }
 
@@ -86,17 +86,17 @@ fn test_sqlite_global_cap_prunes_oldest() {
 fn test_sqlite_list_latest_limit() {
     let storage = create_storage();
     for i in 0..10 {
-        let msg = LlmMessage::new(
-            "narrator",
-            "OpenRouter",
-            format!("model-{i}"),
-            "sys",
-            "user",
-            "req",
-            "res",
-            "parsed",
-            None::<String>,
-        );
+        let msg = LlmMessageBuilder::new()
+            .agent_name("narrator")
+            .backend_name("OpenRouter")
+            .model_name(format!("model-{i}"))
+            .system_prompt("sys")
+            .user_prompt("user")
+            .raw_request_json("req")
+            .raw_response_json("res")
+            .parsed_response("parsed")
+            .error_message(None::<String>)
+            .build();
         storage.save(&msg).unwrap();
     }
 

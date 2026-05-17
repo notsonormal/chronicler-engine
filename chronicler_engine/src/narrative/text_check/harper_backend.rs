@@ -145,3 +145,4 @@ fn apply_suggestions(text: &str, lints: &[harper_core::linting::Lint]) -> String
 
     chars.into_iter().collect()
 }
+

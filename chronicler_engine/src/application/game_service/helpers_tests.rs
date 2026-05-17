@@ -120,6 +120,9 @@ fn minimal_ctx() -> GameServiceContext {
         cancel_token: tokio_util::sync::CancellationToken::new(),
         action_lock: Arc::new(std::sync::Mutex::new(())),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        settings: Arc::new(std::sync::RwLock::new(
+            crate::model::settings::AppSettings::default(),
+        )),
     }
 }
 
@@ -167,6 +170,9 @@ fn test_load_state_fallback_when_empty() {
         cancel_token: tokio_util::sync::CancellationToken::new(),
         action_lock: Arc::new(std::sync::Mutex::new(())),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        settings: Arc::new(std::sync::RwLock::new(
+            crate::model::settings::AppSettings::default(),
+        )),
     };
     let loaded = load_state(&ctx);
     assert_eq!(loaded.movement.current_room_id, "start");

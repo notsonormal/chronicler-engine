@@ -8,9 +8,8 @@ use crate::engine::trigger_eval::{
 use crate::error::EngineError;
 use crate::model::character::NpcCard;
 
-use crate::model::character::PlayerCard;
 use crate::model::map::Room;
-use crate::model::state::{GameState, LogEntry, LogType};
+use crate::model::state::{GameState, LogType};
 use crate::model::world::WorldCard;
 use crate::narrative::agents::quantifier::{
     NpcEvent, NpcEventType, QuantifierResult, compute_npc_events,
@@ -27,6 +26,9 @@ pub struct FreeActionContext<'a> {
     pub all_npcs: &'a [NpcCard],
     pub history: &'a [crate::model::state::LogEntry],
     pub llm_backend: &'a dyn crate::narrative::llm::LlmBackend,
+    pub response_length: &'a str,
+    pub max_context_tokens: u32,
+    pub max_tokens: Option<u32>,
 }
 
 /// The LLM call itself happens outside the state lock so the frontend can poll the main narration.
@@ -130,35 +132,15 @@ pub fn commit_trigger_narration(
 
 /// Shared by `build_trigger_request` and `evaluate_and_narrate_triggers`.
 fn build_trigger_prompt_parts(
-    world: &WorldCard,
-    room: &Room,
-    all_npcs: &[NpcCard],
-    npcs_in_area: &[NpcCard],
-    player: &PlayerCard,
-    user_message: &str,
-    history: &[LogEntry],
+    ctx: &PromptContext,
+    response_length: &str,
+    max_context_tokens: u32,
+    max_tokens: Option<u32>,
 ) -> Option<(String, String, u32)> {
-    let settings = crate::settings::load_settings().unwrap_or_default();
-    let narration_conn = settings.get_narration_connection();
-    let max_context = narration_conn
-        .map(|c| c.resolve_max_context_tokens())
-        .unwrap_or(crate::narrative::prompt::budget::MAX_CONTEXT_TOKENS);
-    let max_tokens = narration_conn.and_then(|c| c.max_tokens);
-
-    let trigger_ctx = PromptContext {
-        world,
-        room,
-        all_npcs,
-        npcs_in_area,
-        player,
-        user_message,
-        history,
-    };
-
-    let mut pb = PromptBuilder::from_context(&trigger_ctx);
-    pb.max_context_tokens = Some(max_context);
+    let mut pb = PromptBuilder::from_context(ctx);
+    pb.max_context_tokens = Some(max_context_tokens);
     pb.requested_max_tokens = max_tokens;
-    pb.response_length = Some(&settings.response_length);
+    pb.response_length = Some(response_length);
 
     match pb.build_split() {
         Ok(parts) => Some(parts),
@@ -185,14 +167,20 @@ fn build_trigger_request(
         ctx.narration_text, trigger.action.narration_prompt
     );
 
+    let trigger_ctx = PromptContext {
+        world: ctx.world,
+        room: room_data,
+        all_npcs: ctx.all_npcs,
+        npcs_in_area: &state.scene.npcs_in_area,
+        player: ctx.player,
+        user_message: &continuation_user_msg,
+        history: &state.narrative.history(),
+    };
     let (system_prompt, user_prompt, fitted_max_tokens) = build_trigger_prompt_parts(
-        ctx.world,
-        room_data,
-        ctx.all_npcs,
-        &state.scene.npcs_in_area,
-        ctx.player,
-        &continuation_user_msg,
-        &state.narrative.history(),
+        &trigger_ctx,
+        ctx.response_length,
+        ctx.max_context_tokens,
+        ctx.max_tokens,
     )?;
 
     Some(TriggerContinuationRequest {
@@ -215,6 +203,9 @@ pub fn evaluate_and_narrate_triggers(
     narration_text: &str,
     trigger_context: &PromptContext<'_>,
     llm_backend: &dyn crate::narrative::llm::LlmBackend,
+    response_length: &str,
+    max_context_tokens: u32,
+    max_tokens: Option<u32>,
 ) -> Result<GameState, EngineError> {
     let matching_triggers = evaluate_triggers(&state);
 
@@ -232,14 +223,20 @@ pub fn evaluate_and_narrate_triggers(
         trigger.action.narration_prompt
     );
 
+    let trigger_ctx = PromptContext {
+        world: trigger_context.world,
+        room: trigger_context.room,
+        all_npcs: trigger_context.all_npcs,
+        npcs_in_area: &state.scene.npcs_in_area,
+        player: trigger_context.player,
+        user_message: &continuation_user_msg,
+        history: &state.narrative.history(),
+    };
     let (system_prompt, user_prompt, fitted_max_tokens) = match build_trigger_prompt_parts(
-        trigger_context.world,
-        trigger_context.room,
-        trigger_context.all_npcs,
-        &state.scene.npcs_in_area,
-        trigger_context.player,
-        &continuation_user_msg,
-        &state.narrative.history(),
+        &trigger_ctx,
+        response_length,
+        max_context_tokens,
+        max_tokens,
     ) {
         Some(parts) => parts,
         None => return Ok(state),

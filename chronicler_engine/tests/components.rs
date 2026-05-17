@@ -8,6 +8,8 @@ use chronicler_engine::model::map::MapDef;
 use chronicler_engine::model::state::GameState;
 use chronicler_engine::model::world::WorldCard;
 
+#[path = "components/actions.rs"]
+mod actions;
 #[path = "components/connections.rs"]
 mod connections;
 #[path = "components/css.rs"]
@@ -20,8 +22,6 @@ mod fragment;
 mod misc;
 #[path = "components/settings.rs"]
 mod settings;
-#[path = "components/template.rs"]
-mod template;
 #[path = "components/text_check.rs"]
 mod text_check;
 #[path = "components/world.rs"]

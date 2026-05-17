@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crate::error::EngineError;
 use crate::model::agent::{AgentConfig, AgentResult, BackendSelector, ExecutionPhase};
+use crate::model::settings::AppSettings;
 use crate::narrative::agents::Agent;
 use crate::narrative::agents::quantifier::QuantifierAgent;
 use crate::storage::llm_message_storage::LlmMessageStorage;
@@ -13,12 +14,13 @@ pub struct AgentRegistry {
 
 impl AgentRegistry {
     pub fn from_configs(configs: &[AgentConfig]) -> Result<Self, EngineError> {
-        Self::from_configs_with_storage(configs, None)
+        Self::from_configs_with_storage(configs, None, &AppSettings::default())
     }
 
     pub fn from_configs_with_storage(
         configs: &[AgentConfig],
         storage: Option<Arc<dyn LlmMessageStorage>>,
+        settings: &AppSettings,
     ) -> Result<Self, EngineError> {
         let mut registry = Self::default();
 
@@ -40,6 +42,7 @@ impl AgentRegistry {
                 "quantifier" => Box::new(QuantifierAgent::from_config_with_storage(
                     config,
                     storage.clone(),
+                    settings,
                 )?),
                 "narrator" => Box::new(NarratorAgent::new(config.name.clone())),
                 other => {

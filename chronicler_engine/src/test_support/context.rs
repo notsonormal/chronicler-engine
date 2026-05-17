@@ -1,6 +1,7 @@
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 use crate::application::game_service::GameServiceContext;
+use crate::model::settings::AppSettings;
 use crate::model::state::GameState;
 use crate::model::state_snapshot::GameStateSnapshot;
 use crate::storage::message_storage::MessageStorage;
@@ -33,6 +34,7 @@ pub fn make_test_context(state: GameState) -> GameServiceContext {
         cancel_token: tokio_util::sync::CancellationToken::new(),
         action_lock: Arc::new(Mutex::new(())),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        settings: Arc::new(RwLock::new(AppSettings::default())),
     }
 }
 
@@ -66,5 +68,6 @@ pub fn make_test_context_with_sqlite(state: GameState) -> crate::error::Result<G
         cancel_token: tokio_util::sync::CancellationToken::new(),
         action_lock: Arc::new(Mutex::new(())),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        settings: Arc::new(RwLock::new(AppSettings::default())),
     })
 }

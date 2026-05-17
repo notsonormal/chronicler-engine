@@ -4,7 +4,7 @@ pub mod message;
 pub mod state_snapshot;
 
 pub use checkpoint::Checkpoint;
-pub use llm_message::LlmMessage;
+pub use llm_message::{LlmMessage, LlmMessageBuilder};
 pub use message::{Message, UNPERSISTED_ID};
 pub use state_snapshot::{GameStateSnapshot, NarrativeSnapshot};
 

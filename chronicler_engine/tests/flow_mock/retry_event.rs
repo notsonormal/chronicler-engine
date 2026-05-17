@@ -10,11 +10,11 @@ use chronicler_engine::model::world::WorldCard;
 use chronicler_engine::narrative::llm::MockBackend;
 use chronicler_engine::test_support::make_test_context_with_sqlite;
 
-use crate::test_data::create_test_map;
-use crate::{
+use crate::game_service_helpers::{
     add_input_and_save, create_test_state_with_trigger_npc, latest_state,
     wait_for_generation_complete,
 };
+use crate::test_data::create_test_map;
 
 #[test]
 fn test_event_retry_does_not_create_extra_swipe_on_narration() {

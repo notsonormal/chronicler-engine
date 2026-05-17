@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use crate::error::EngineError;
 use crate::model::character::NpcCard;
@@ -117,40 +117,20 @@ pub use crate::model::llm_backend::LlmBackendType;
 pub fn get_llm_backend_for(
     connection: &Connection,
     storage: Option<Arc<dyn LlmMessageStorage>>,
+    settings: Option<Arc<RwLock<AppSettings>>>,
 ) -> Box<dyn LlmBackend> {
     match connection.provider {
         LlmBackendType::Mock => Box::new(super::mock::MockBackend::new(storage)),
         LlmBackendType::DeepSeek => Box::new(super::deepseek::DeepSeekBackend::from_connection(
-            connection, storage,
+            connection, storage, settings,
         )),
         LlmBackendType::OpenRouter => Box::new(
-            super::openrouter::OpenRouterBackend::from_connection(connection, storage),
+            super::openrouter::OpenRouterBackend::from_connection(connection, storage, settings),
         ),
         LlmBackendType::Ollama => Box::new(super::ollama::OllamaBackend::from_connection(
-            connection, storage,
+            connection, storage, settings,
         )),
     }
-}
-
-/// Get the LLM backend for the current narration connection.
-/// Respects test overrides for backward compatibility with tests.
-/// [DOC: docs/system/llm_processing.md]
-pub fn get_llm_backend() -> Box<dyn LlmBackend> {
-    let settings = crate::settings::load_settings().unwrap_or_default();
-    let connection = settings
-        .get_narration_connection()
-        .cloned()
-        .unwrap_or_else(|| Connection::new("default", "Default", LlmBackendType::Mock));
-    get_llm_backend_for(&connection, None)
-}
-
-/// Backward-compatible helper used by some tests.
-pub fn get_llm_backend_with_settings(settings: &AppSettings) -> Box<dyn LlmBackend> {
-    let connection = settings
-        .get_narration_connection()
-        .cloned()
-        .unwrap_or_else(|| Connection::new("default", "Default", LlmBackendType::Mock));
-    get_llm_backend_for(&connection, None)
 }
 
 /// Merge system and user prompts into a single user message.

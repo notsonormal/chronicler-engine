@@ -1,1 +1,1 @@
-pub use crate::model::storage::llm_message::LlmMessage;
+pub use crate::model::storage::llm_message::{LlmMessage, LlmMessageBuilder};
