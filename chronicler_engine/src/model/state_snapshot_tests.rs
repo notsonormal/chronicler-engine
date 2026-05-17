@@ -3,14 +3,14 @@ use std::sync::Arc;
 
 use crate::model::state::{GameState, MovementState, NarrativeState, SceneState};
 use crate::model::state_snapshot::{GameStateSnapshot, NarrativeSnapshot};
-use crate::model::trigger::CharacterState;
+use crate::model::trigger::NpcEncounterLog;
 use crate::test_support::fixtures::{TestMap, TestPlayer, TestWorld};
 
 #[test]
 fn test_narrative_snapshot_default() {
     let snap = NarrativeSnapshot::default();
     assert_eq!(
-        snap.generation.status,
+        snap.input_buffer.status,
         crate::model::state::GenerationStatus::Idle
     );
     assert!(snap.last_trigger.is_none());
@@ -33,7 +33,7 @@ fn test_game_state_snapshot_apply_to() {
         scene: SceneState {
             npcs_in_area: vec![],
         },
-        character_state: CharacterState::default(),
+        npc_encounter_log: NpcEncounterLog::default(),
     };
 
     let snapshot = GameStateSnapshot {
@@ -50,7 +50,7 @@ fn test_game_state_snapshot_apply_to() {
         scene: SceneState {
             npcs_in_area: vec![],
         },
-        character_state: CharacterState::default(),
+        npc_encounter_log: NpcEncounterLog::default(),
         committed: true,
         created_at: chrono::Utc::now(),
     };
@@ -76,7 +76,7 @@ fn test_from_game_state_sets_defaults() {
         scene: SceneState {
             npcs_in_area: vec![],
         },
-        character_state: CharacterState::default(),
+        npc_encounter_log: NpcEncounterLog::default(),
     };
 
     let snapshot = GameStateSnapshot::from_game_state(&state);

@@ -118,7 +118,7 @@ Attached to an NPC. Defines a condition and the narration to inject when that co
 - `room_id` (optional): If set, this trigger only fires when the player is in this room. If omitted or `null`, the trigger is global.
 
 ## NpcEncounterState Schema (NEW)
-Tracks character state for a specific NPC. Stored in `GameState.character_state`.
+Tracks character state for a specific NPC. Stored in `GameState.npc_encounter_log`.
 
 ```json
 {
@@ -131,7 +131,7 @@ Tracks character state for a specific NPC. Stored in `GameState.character_state`
 - `times_met`: How many times the player has encountered this NPC
 - `trigger_fired`: Map of trigger index (usize) to boolean (whether that trigger has fired)
 
-## CharacterState Schema (NEW)
+## NpcEncounterLog Schema (NEW)
 Contains all NPC encounter state. Top-level field in `GameState`.
 
 ```json

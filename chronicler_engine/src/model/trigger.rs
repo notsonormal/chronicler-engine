@@ -15,7 +15,7 @@ pub enum TriggerCondition {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct TriggerAction {
+pub struct TriggerEffect {
     pub name: String,
     pub narration_prompt: String,
 }
@@ -23,7 +23,8 @@ pub struct TriggerAction {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Trigger {
     pub condition: TriggerCondition,
-    pub action: TriggerAction,
+    #[serde(rename = "action")]
+    pub effect: TriggerEffect,
     pub repeat: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub room_id: Option<String>,
@@ -37,6 +38,6 @@ pub struct NpcEncounterState {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
-pub struct CharacterState {
+pub struct NpcEncounterLog {
     pub npcs: HashMap<String, NpcEncounterState>,
 }

@@ -89,8 +89,8 @@ pub async fn retry_handler(State(state): State<AppState>) -> (StatusCode, String
         return (StatusCode::BAD_REQUEST, render_error("No input to retry"));
     }
 
-    game_state.narrative.generation.status = crate::model::state::GenerationStatus::Generating;
-    game_state.narrative.generation.phase = crate::model::state::GenerationPhase::Narrating;
+    game_state.narrative.input_buffer.status = crate::model::state::GenerationStatus::Generating;
+    game_state.narrative.input_buffer.phase = crate::model::state::GenerationPhase::Narrating;
     let generating_snapshot =
         crate::model::state_snapshot::GameStateSnapshot::from_game_state(&game_state);
     if let Err(e) = state.snapshot_storage.save(&generating_snapshot) {
@@ -163,7 +163,7 @@ pub async fn reset_handler(State(state): State<AppState>) -> axum::response::Res
             initial_state.add_log(text, None, crate::model::state::LogType::Narration);
         }
 
-        // Re-populate character_state and npcs_in_area from scenario NPCs.
+        // Re-populate npc_encounter_log and npcs_in_area from scenario NPCs.
         initial_state.init_scenario_npcs(scenario);
     }
 

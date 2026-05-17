@@ -81,7 +81,7 @@ fn test_execute_look_room_not_found() {
     state.movement.current_room_id = "non_existent_room".to_string();
     let guard = run_action(state, "look", &DefaultGameService::new());
     assert!(
-        !guard.narrative.generation.status.is_generating(),
+        !guard.narrative.input_buffer.status.is_generating(),
         "Look should reset is_generating even when room not found"
     );
 }
@@ -106,9 +106,14 @@ fn test_execute_action_empty_command() {
     let guard = run_action(create_test_state(), "", &failing_service());
     // Failing mock backend causes FreeAction to fail and set Error status
     assert!(
-        guard.narrative.generation.status.error_message().is_some(),
+        guard
+            .narrative
+            .input_buffer
+            .status
+            .error_message()
+            .is_some(),
         "Empty command should result in error status: {:?}",
-        guard.narrative.generation.status
+        guard.narrative.input_buffer.status
     );
 }
 
@@ -117,9 +122,14 @@ fn test_execute_action_unknown_command() {
     let guard = run_action(create_test_state(), "xyz123", &failing_service());
     // Failing mock backend causes FreeAction to fail and set Error status
     assert!(
-        guard.narrative.generation.status.error_message().is_some(),
+        guard
+            .narrative
+            .input_buffer
+            .status
+            .error_message()
+            .is_some(),
         "Unknown command should result in error status: {:?}",
-        guard.narrative.generation.status
+        guard.narrative.input_buffer.status
     );
 }
 
@@ -141,7 +151,7 @@ fn test_default_game_service_with_backends() {
     let ctx = make_test_context(state);
     service.execute_action(ctx.clone(), "look".to_string(), "Player".to_string());
     let guard = latest_state(&ctx);
-    assert!(!guard.narrative.generation.status.is_generating());
+    assert!(!guard.narrative.input_buffer.status.is_generating());
 }
 
 #[test]
@@ -155,5 +165,5 @@ fn test_default_game_service_with_mock_quantifier() {
     let ctx = make_test_context(state);
     service.execute_action(ctx.clone(), "look".to_string(), "Player".to_string());
     let guard = latest_state(&ctx);
-    assert!(!guard.narrative.generation.status.is_generating());
+    assert!(!guard.narrative.input_buffer.status.is_generating());
 }

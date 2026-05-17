@@ -57,7 +57,7 @@ fn run_migrations(conn: &Connection) -> Result<(), crate::error::EngineError> {
                 movement TEXT NOT NULL,
                 narrative TEXT NOT NULL,
                 scene TEXT NOT NULL,
-                character_state TEXT NOT NULL,
+                npc_encounter_log TEXT NOT NULL,
                 committed INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL
             )",
@@ -119,6 +119,18 @@ fn run_migrations(conn: &Connection) -> Result<(), crate::error::EngineError> {
         .map_err(|e| crate::error::EngineError::Config(format!("Migration failed: {e}")))?;
 
         conn.pragma_update(None, "user_version", 1).map_err(|e| {
+            crate::error::EngineError::Config(format!("Failed to set user_version: {e}"))
+        })?;
+    }
+
+    if version < 2 {
+        // Rename character_state column to npc_encounter_log for domain vocabulary alignment.
+        // Foreign keys are not enforced by default, so ALTER TABLE is safe.
+        let _ = conn.execute(
+            "ALTER TABLE game_state_snapshots RENAME COLUMN character_state TO npc_encounter_log",
+            [],
+        );
+        conn.pragma_update(None, "user_version", 2).map_err(|e| {
             crate::error::EngineError::Config(format!("Failed to set user_version: {e}"))
         })?;
     }

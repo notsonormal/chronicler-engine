@@ -500,7 +500,7 @@ fn benchmark_trigger_wrong_room_id() {
                 chronicler_engine::model::trigger::ComparisonOperator::Eq,
                 0,
             ),
-            action: chronicler_engine::model::trigger::TriggerAction {
+            effect: chronicler_engine::model::trigger::TriggerEffect {
                 name: "Greeting".into(),
                 narration_prompt: "The stranger nods at you.".into(),
             },
@@ -533,7 +533,7 @@ fn benchmark_trigger_wrong_room_id() {
     let snapshot = ctx.snapshot_storage.load_latest().unwrap().unwrap();
     let messages = ctx.message_storage.load_messages().unwrap();
     let trigger_fired = messages.iter().any(|m| m.text.contains("stranger nods"));
-    let error_msg = match &snapshot.narrative.generation.status {
+    let error_msg = match &snapshot.narrative.input_buffer.status {
         GenerationStatus::Error(msg) => msg.clone(),
         _ => "(no error)".to_string(),
     };
@@ -544,7 +544,7 @@ fn benchmark_trigger_wrong_room_id() {
         injected_failure: "Trigger scoped to wrong room_id ('wrong_room' instead of 'room1')"
             .to_string(),
         error_message: error_msg.clone(),
-        generation_phase: format!("{:?}", snapshot.narrative.generation.phase),
+        generation_phase: format!("{:?}", snapshot.narrative.input_buffer.phase),
         scores: DiagnosticScores {
             error_specificity: 1,
             state_visibility: 4,
@@ -554,7 +554,7 @@ fn benchmark_trigger_wrong_room_id() {
         root_cause_discoverable_from_debug_endpoint: false,
         root_cause_discoverable_without_logs: false,
         notes: format!(
-            "Trigger did NOT fire (fired={}). No error is shown. To diagnose, you must check /debug/state → character_state.trigger_npc.triggers_fired, then compare trigger.room_id to current_room_id. This requires reading trigger definitions in data files. Silent failure.",
+            "Trigger did NOT fire (fired={}). No error is shown. To diagnose, you must check /debug/state → npc_encounter_log.trigger_npc.triggers_fired, then compare trigger.room_id to current_room_id. This requires reading trigger definitions in data files. Silent failure.",
             trigger_fired
         ),
     };
@@ -594,7 +594,7 @@ fn benchmark_state_stuck_generating() {
                 chronicler_engine::model::trigger::ComparisonOperator::Eq,
                 0,
             ),
-            action: chronicler_engine::model::trigger::TriggerAction {
+            effect: chronicler_engine::model::trigger::TriggerEffect {
                 name: "Greeting".into(),
                 narration_prompt: "The innkeeper waves at you.".into(),
             },
@@ -610,7 +610,7 @@ fn benchmark_state_stuck_generating() {
     );
 
     // Reset times_met so the trigger is eligible to fire
-    if let Some(encounter) = state.character_state.npcs.get_mut("test_npc") {
+    if let Some(encounter) = state.npc_encounter_log.npcs.get_mut("test_npc") {
         encounter.times_met = 0;
     }
 
@@ -631,13 +631,16 @@ fn benchmark_state_stuck_generating() {
     );
 
     let snapshot = ctx.snapshot_storage.load_latest().unwrap().unwrap();
-    let is_generating = snapshot.narrative.generation.status.is_generating();
-    let is_idle = matches!(snapshot.narrative.generation.status, GenerationStatus::Idle);
+    let is_generating = snapshot.narrative.input_buffer.status.is_generating();
+    let is_idle = matches!(
+        snapshot.narrative.input_buffer.status,
+        GenerationStatus::Idle
+    );
     let has_error = matches!(
-        snapshot.narrative.generation.status,
+        snapshot.narrative.input_buffer.status,
         GenerationStatus::Error(_)
     );
-    let error_msg = match &snapshot.narrative.generation.status {
+    let error_msg = match &snapshot.narrative.input_buffer.status {
         GenerationStatus::Error(msg) => msg.clone(),
         _ => "(no error)".to_string(),
     };
@@ -647,7 +650,7 @@ fn benchmark_state_stuck_generating() {
         category: "State Management".to_string(),
         injected_failure: "Trigger narration fails after main narration succeeds".to_string(),
         error_message: error_msg.clone(),
-        generation_phase: format!("{:?}", snapshot.narrative.generation.phase),
+        generation_phase: format!("{:?}", snapshot.narrative.input_buffer.phase),
         scores: DiagnosticScores {
             error_specificity: if has_error { 7 } else { 1 },
             state_visibility: if is_idle || has_error { 7 } else { 2 },
@@ -658,12 +661,12 @@ fn benchmark_state_stuck_generating() {
         root_cause_discoverable_without_logs: is_idle || has_error,
         notes: format!(
             "After trigger narration failure: status={:?}, idle={}, error={}, generating={}. The error message '{}' is set and phase preserved at failure point ({:?}). A system log contains the detailed trigger failure.",
-            snapshot.narrative.generation.status,
+            snapshot.narrative.input_buffer.status,
             is_idle,
             has_error,
             is_generating,
             error_msg,
-            snapshot.narrative.generation.phase
+            snapshot.narrative.input_buffer.phase
         ),
     };
 

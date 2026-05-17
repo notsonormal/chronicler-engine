@@ -13,7 +13,7 @@ pub struct DebugStateResponse {
     pub npcs_in_area: Vec<String>,
     pub generation_status: GenerationStatus,
     pub generation_phase: GenerationPhase,
-    pub character_state: HashMap<String, NpcEncounterState>,
+    pub npc_encounter_log: HashMap<String, NpcEncounterState>,
     pub narration_history_tail: Vec<LogEntry>,
     pub narration_history_length: usize,
     pub dynamic_rooms: Vec<String>,
@@ -54,7 +54,7 @@ pub async fn debug_state_handler(
 
     let dynamic_rooms: Vec<String> = guard.movement.dynamic_rooms.keys().cloned().collect();
 
-    let last_error = match &guard.narrative.generation.status {
+    let last_error = match &guard.narrative.input_buffer.status {
         GenerationStatus::Error(msg) => Some(msg.clone()),
         _ => None,
     };
@@ -62,9 +62,9 @@ pub async fn debug_state_handler(
     let response = DebugStateResponse {
         current_room_id: guard.movement.current_room_id.clone(),
         npcs_in_area,
-        generation_status: guard.narrative.generation.status.clone(),
-        generation_phase: guard.narrative.generation.phase.clone(),
-        character_state: guard.character_state.npcs.clone(),
+        generation_status: guard.narrative.input_buffer.status.clone(),
+        generation_phase: guard.narrative.input_buffer.phase.clone(),
+        npc_encounter_log: guard.npc_encounter_log.npcs.clone(),
         narration_history_tail: history_tail,
         narration_history_length: guard.narrative.history().len(),
         dynamic_rooms,

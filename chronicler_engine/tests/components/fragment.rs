@@ -176,9 +176,10 @@ async fn test_generating_status_handler_idle() {
 #[tokio::test]
 async fn test_generating_status_handler_narrating() {
     let mut state = create_test_state();
-    state.narrative.generation.status =
+    state.narrative.input_buffer.status =
         chronicler_engine::model::state::GenerationStatus::Generating;
-    state.narrative.generation.phase = chronicler_engine::model::state::GenerationPhase::Narrating;
+    state.narrative.input_buffer.phase =
+        chronicler_engine::model::state::GenerationPhase::Narrating;
 
     let body = fetch_body(create_app_for_testing(state), "/status/generating").await;
     assert!(body.contains("narrating"));
@@ -187,9 +188,9 @@ async fn test_generating_status_handler_narrating() {
 #[tokio::test]
 async fn test_generating_status_handler_quantifying() {
     let mut state = create_test_state();
-    state.narrative.generation.status =
+    state.narrative.input_buffer.status =
         chronicler_engine::model::state::GenerationStatus::Generating;
-    state.narrative.generation.phase =
+    state.narrative.input_buffer.phase =
         chronicler_engine::model::state::GenerationPhase::Quantifying;
 
     let body = fetch_body(create_app_for_testing(state), "/status/generating").await;

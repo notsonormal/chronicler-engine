@@ -33,7 +33,7 @@ For each NPC detected in the narration:
 This ensures NPC introduction triggers (like Gabriella in the Entrance Hall) don't fire in the wrong location.
 
 ### 7. Condition Check
-Each trigger is checked against the current `CharacterState`:
+Each trigger is checked against the current `NpcEncounterLog`:
 - `TimesMet Eq 0`: Fires on first encounter (times_met is 0 when evaluation happens)
 - `TimesMet Gte 1`: Fires on subsequent encounters
 
@@ -116,7 +116,7 @@ This trigger only fires when `state.movement.current_room_id == "entrance_hall"`
 - `narration_prompt` (required): The prompt sent to the LLM to generate continuation narration.
 
 ## Character State Tracking
-The `CharacterState` struct tracks encounter state:
+The `NpcEncounterLog` struct tracks encounter state:
 
 ```rust
 pub struct NpcEncounterState {
@@ -171,7 +171,7 @@ Event headers:
 | 4a | `evaluate_triggers()` + build prompt | Reads `state.narrative.history()` (step 3) to build the trigger continuation prompt |
 | 4b | Trigger LLM call | Runs **outside** the state lock so the frontend can poll the main narration |
 | 4c | `commit_trigger_narration()` | Re-acquires lock to add trigger logs and mark trigger fired |
-| 5 | `apply_npc_events()` — mutates `character_state` | `times_met` increments AFTER trigger evaluation (see Timing section above) |
+| 5 | `apply_npc_events()` — mutates `npc_encounter_log` | `times_met` increments AFTER trigger evaluation (see Timing section above) |
 
 **What breaks if you change the order:**
 

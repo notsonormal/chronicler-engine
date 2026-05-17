@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use crate::model::trigger::{
-    CharacterState, ComparisonOperator, NpcEncounterState, Trigger, TriggerAction, TriggerCondition,
+    ComparisonOperator, NpcEncounterLog, NpcEncounterState, Trigger, TriggerCondition,
+    TriggerEffect,
 };
 
 #[test]
@@ -29,7 +30,7 @@ fn test_trigger_condition_serde() {
 #[test]
 fn test_trigger_action_serde() {
     let json = r#"{"name": "Old Friend", "narration_prompt": "You meet an old friend."}"#;
-    let action: TriggerAction = serde_json::from_str(json).unwrap();
+    let action: TriggerEffect = serde_json::from_str(json).unwrap();
     assert_eq!(action.name, "Old Friend");
     assert_eq!(action.narration_prompt, "You meet an old friend.");
 }
@@ -46,7 +47,7 @@ fn test_trigger_serde_without_room_id() {
         trigger.condition,
         TriggerCondition::TimesMet(ComparisonOperator::Gte, 2)
     );
-    assert_eq!(trigger.action.narration_prompt, "The guard recognizes you.");
+    assert_eq!(trigger.effect.narration_prompt, "The guard recognizes you.");
     assert!(!trigger.repeat);
     assert_eq!(trigger.room_id, None);
 }
@@ -75,8 +76,8 @@ fn test_npc_encounter_state_default() {
 }
 
 #[test]
-fn test_character_state_default() {
-    let state = CharacterState::default();
+fn test_npc_encounter_log_default() {
+    let state = NpcEncounterLog::default();
     assert!(state.npcs.is_empty());
 }
 
@@ -95,8 +96,8 @@ fn test_npc_encounter_state_update() {
 }
 
 #[test]
-fn test_character_state_npc_tracking() {
-    let mut state = CharacterState::default();
+fn test_npc_encounter_log_npc_tracking() {
+    let mut state = NpcEncounterLog::default();
     state.npcs.insert(
         "carla".to_string(),
         NpcEncounterState {

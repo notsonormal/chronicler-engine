@@ -1,6 +1,6 @@
 use crate::model::character::NpcCard;
 use crate::model::state::GameState;
-use crate::model::trigger::{CharacterState, ComparisonOperator, Trigger, TriggerCondition};
+use crate::model::trigger::{ComparisonOperator, NpcEncounterLog, Trigger, TriggerCondition};
 
 /// [DOC: docs/system/triggers.md]
 pub fn evaluate_triggers(state: &GameState) -> Vec<(NpcCard, Trigger, usize)> {
@@ -14,7 +14,7 @@ pub fn evaluate_triggers(state: &GameState) -> Vec<(NpcCard, Trigger, usize)> {
                 if room_id != current_room_id {
                     log::debug!(
                         "[Trigger] '{}' skipped: room_id mismatch (expected '{}', current '{}')",
-                        trigger.action.name,
+                        trigger.effect.name,
                         room_id,
                         current_room_id
                     );
@@ -22,11 +22,11 @@ pub fn evaluate_triggers(state: &GameState) -> Vec<(NpcCard, Trigger, usize)> {
                 }
             }
 
-            if check_condition(&state.character_state, &npc.id, &trigger.condition) {
-                if !trigger.repeat && is_trigger_fired(&state.character_state, &npc.id, index) {
+            if check_condition(&state.npc_encounter_log, &npc.id, &trigger.condition) {
+                if !trigger.repeat && is_trigger_fired(&state.npc_encounter_log, &npc.id, index) {
                     log::debug!(
                         "[Trigger] '{}' skipped: already fired (non-repeatable)",
-                        trigger.action.name
+                        trigger.effect.name
                     );
                     continue;
                 }
@@ -34,7 +34,7 @@ pub fn evaluate_triggers(state: &GameState) -> Vec<(NpcCard, Trigger, usize)> {
             } else {
                 log::debug!(
                     "[Trigger] '{}' skipped: condition not met for NPC '{}'",
-                    trigger.action.name,
+                    trigger.effect.name,
                     npc.id
                 );
             }
@@ -46,13 +46,13 @@ pub fn evaluate_triggers(state: &GameState) -> Vec<(NpcCard, Trigger, usize)> {
 
 /// [DOC: docs/system/triggers.md]
 pub fn check_condition(
-    character_state: &crate::model::trigger::CharacterState,
+    npc_encounter_log: &crate::model::trigger::NpcEncounterLog,
     npc_id: &str,
     condition: &TriggerCondition,
 ) -> bool {
     match condition {
         TriggerCondition::TimesMet(op, threshold) => {
-            let times_met = get_times_met(character_state, npc_id);
+            let times_met = get_times_met(npc_encounter_log, npc_id);
             match op {
                 ComparisonOperator::Eq => times_met == *threshold,
                 ComparisonOperator::Lt => times_met < *threshold,
@@ -62,35 +62,44 @@ pub fn check_condition(
     }
 }
 
-pub fn is_currently_meeting(character_state: &CharacterState, npc_id: &str) -> bool {
-    character_state
+pub fn is_currently_meeting(npc_encounter_log: &NpcEncounterLog, npc_id: &str) -> bool {
+    npc_encounter_log
         .npcs
         .get(npc_id)
         .map(|s| s.currently_meeting)
         .unwrap_or(false)
 }
 
-pub fn increment_times_met(character_state: &mut CharacterState, npc_id: &str) {
-    let entry = character_state.npcs.entry(npc_id.to_string()).or_default();
+pub fn increment_times_met(npc_encounter_log: &mut NpcEncounterLog, npc_id: &str) {
+    let entry = npc_encounter_log
+        .npcs
+        .entry(npc_id.to_string())
+        .or_default();
     entry.times_met += 1;
 }
 
 pub fn mark_trigger_fired(
-    character_state: &mut CharacterState,
+    npc_encounter_log: &mut NpcEncounterLog,
     npc_id: &str,
     trigger_index: usize,
 ) {
-    let entry = character_state.npcs.entry(npc_id.to_string()).or_default();
+    let entry = npc_encounter_log
+        .npcs
+        .entry(npc_id.to_string())
+        .or_default();
     entry.trigger_fired.insert(trigger_index, true);
 }
 
-pub fn set_currently_meeting(character_state: &mut CharacterState, npc_id: &str, meeting: bool) {
-    let entry = character_state.npcs.entry(npc_id.to_string()).or_default();
+pub fn set_currently_meeting(npc_encounter_log: &mut NpcEncounterLog, npc_id: &str, meeting: bool) {
+    let entry = npc_encounter_log
+        .npcs
+        .entry(npc_id.to_string())
+        .or_default();
     entry.currently_meeting = meeting;
 }
 
-pub fn get_times_met(character_state: &CharacterState, npc_id: &str) -> u32 {
-    character_state
+pub fn get_times_met(npc_encounter_log: &NpcEncounterLog, npc_id: &str) -> u32 {
+    npc_encounter_log
         .npcs
         .get(npc_id)
         .map(|s| s.times_met)
@@ -98,11 +107,11 @@ pub fn get_times_met(character_state: &CharacterState, npc_id: &str) -> u32 {
 }
 
 pub fn is_trigger_fired(
-    character_state: &CharacterState,
+    npc_encounter_log: &NpcEncounterLog,
     npc_id: &str,
     trigger_index: usize,
 ) -> bool {
-    character_state
+    npc_encounter_log
         .npcs
         .get(npc_id)
         .and_then(|s| s.trigger_fired.get(&trigger_index))

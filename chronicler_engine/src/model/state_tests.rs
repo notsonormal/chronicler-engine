@@ -1,4 +1,4 @@
-use crate::model::state::{GenerationState, GenerationStatus, LogType};
+use crate::model::state::{GenerationStatus, InputBuffer, LogType};
 use crate::test_support::*;
 
 #[test]
@@ -13,7 +13,7 @@ fn test_game_state_initialization() {
 
 #[test]
 fn test_generation_state_input_edge_cases() {
-    let mut tui = GenerationState::default();
+    let mut tui = InputBuffer::default();
 
     tui.push_char('A');
     assert_eq!(tui.input, "A");
@@ -34,7 +34,7 @@ fn test_generation_state_input_edge_cases() {
 
 #[test]
 fn test_generation_state_status() {
-    let mut tui = GenerationState::default();
+    let mut tui = InputBuffer::default();
 
     assert_eq!(tui.status, GenerationStatus::Idle);
     assert!(!tui.status.is_generating());
@@ -261,19 +261,19 @@ proptest! {
     }
 
     #[test]
-    fn prop_character_state_references_valid_npcs(
+    fn prop_npc_encounter_log_references_valid_npcs(
         mut state in Just(TestGameState::in_room("room1")),
     ) {
         let npc = TestNpc::named("bob", "Bob");
         state.npcs.insert(npc.id.clone(), npc.clone());
 
-        let entry = state.character_state.npcs.entry(npc.id.clone()).or_default();
+        let entry = state.npc_encounter_log.npcs.entry(npc.id.clone()).or_default();
         entry.times_met += 1;
 
-        for npc_id in state.character_state.npcs.keys() {
+        for npc_id in state.npc_encounter_log.npcs.keys() {
             prop_assert!(
                 state.npcs.contains_key(npc_id),
-                "character_state references unknown NPC '{}'",
+                "npc_encounter_log references unknown NPC '{}'",
                 npc_id
             );
         }

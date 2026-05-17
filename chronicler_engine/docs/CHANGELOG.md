@@ -3,6 +3,18 @@
 ## 2026-05-17
 
 ### Changed
+- **Domain vocabulary rename** — Eliminated cognitive tax from three misnamed structures
+  - `CharacterState` → `NpcEncounterLog` (encounter log map, not a single character's status)
+  - `TriggerAction` → `TriggerEffect` (narrative effect payload, not an executable action)
+  - `GenerationState` → `InputBuffer` (UI typing buffer, not LLM inference tracking)
+  - Corresponding field renames: `GameState.character_state` → `npc_encounter_log`, `Trigger.action` → `effect`, `NarrativeState.generation` → `input_buffer`
+  - Backward compatibility: `#[serde(rename)]` preserves old JSON keys for world data and DB snapshots
+  - DB schema updated: `character_state` column → `npc_encounter_log`
+  - All 779 tests pass; clippy clean; zero logic changes
+
+## 2026-05-17
+
+### Changed
 - **Broke engine↔narrative bidirectional coupling** — Full decoupling of peer tiers
   - Moved `get_current_room` from `engine::logic` to `GameState::current_room()` in `model::state`
   - Added `current_room: Option<&Room>` to `AgentContext`; application layer resolves the room and passes it to agents

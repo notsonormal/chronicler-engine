@@ -15,7 +15,7 @@ pub fn assert_state_consistency(state: &GameState) -> Result<(), EngineError> {
     // [DOC: docs/architecture/invariants.md]
     assert_room_exists(state)?;
     assert_npc_consistency(state)?;
-    assert_character_state_consistency(state)?;
+    assert_npc_encounter_log_consistency(state)?;
     assert_log_invariants(state)?;
     Ok(())
 }
@@ -52,13 +52,13 @@ fn assert_npc_consistency(state: &GameState) -> Result<(), EngineError> {
     Ok(())
 }
 
-/// INV-CHAR: character_state entries must reference valid NPCs.
+/// INV-CHAR: npc_encounter_log entries must reference valid NPCs.
 #[cfg(feature = "diagnostics")]
-fn assert_character_state_consistency(state: &GameState) -> Result<(), EngineError> {
-    for npc_id in state.character_state.npcs.keys() {
+fn assert_npc_encounter_log_consistency(state: &GameState) -> Result<(), EngineError> {
+    for npc_id in state.npc_encounter_log.npcs.keys() {
         if !state.npcs.contains_key(npc_id) {
             return Err(EngineError::Internal(internal_error(format!(
-                "character_state references unknown NPC '{npc_id}'"
+                "npc_encounter_log references unknown NPC '{npc_id}'"
             ))));
         }
     }

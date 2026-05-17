@@ -537,7 +537,7 @@ fn test_npc_with_no_triggers() {
 
 #[test]
 fn test_npc_with_multiple_triggers() {
-    use crate::model::trigger::{ComparisonOperator, Trigger, TriggerAction, TriggerCondition};
+    use crate::model::trigger::{ComparisonOperator, Trigger, TriggerCondition, TriggerEffect};
     let backend = MockBackend::default();
     let npc = NpcCard {
         id: "npc1".to_string(),
@@ -555,7 +555,7 @@ fn test_npc_with_multiple_triggers() {
         triggers: vec![
             Trigger {
                 condition: TriggerCondition::TimesMet(ComparisonOperator::Eq, 1),
-                action: TriggerAction {
+                effect: TriggerEffect {
                     name: "Trigger One".to_string(),
                     narration_prompt: "trigger1".to_string(),
                 },
@@ -564,7 +564,7 @@ fn test_npc_with_multiple_triggers() {
             },
             Trigger {
                 condition: TriggerCondition::TimesMet(ComparisonOperator::Gte, 2),
-                action: TriggerAction {
+                effect: TriggerEffect {
                     name: "Trigger Two".to_string(),
                     narration_prompt: "trigger2".to_string(),
                 },

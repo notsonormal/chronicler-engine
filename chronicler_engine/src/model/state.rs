@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use crate::model::character::{NpcCard, PlayerCard};
 use crate::model::map::{MapDef, Room};
 use crate::model::message::Message;
-use crate::model::trigger::CharacterState;
+use crate::model::trigger::NpcEncounterLog;
 use crate::model::world::WorldCard;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -95,7 +95,7 @@ impl GenerationPhase {
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
-pub struct GenerationState {
+pub struct InputBuffer {
     pub input: String,
     pub cursor_position: usize,
     pub scroll_offset: u16,
@@ -103,7 +103,7 @@ pub struct GenerationState {
     pub phase: GenerationPhase,
 }
 
-impl GenerationState {
+impl InputBuffer {
     pub fn push_char(&mut self, c: char) {
         self.input.push(c);
         self.cursor_position += 1;
@@ -146,7 +146,7 @@ pub struct StoredTriggerContext {
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct NarrativeState {
     pub messages: Vec<Message>,
-    pub generation: GenerationState,
+    pub input_buffer: InputBuffer,
     pub last_trigger: Option<StoredTriggerContext>,
     #[serde(default)]
     pub pending_location: Option<String>,
@@ -175,7 +175,7 @@ impl NarrativeState {
     pub fn from_snapshot(snapshot: &crate::model::state_snapshot::NarrativeSnapshot) -> Self {
         Self {
             messages: Vec::new(),
-            generation: snapshot.generation.clone(),
+            input_buffer: snapshot.input_buffer.clone(),
             last_trigger: snapshot.last_trigger.clone(),
             pending_location: snapshot.pending_location.clone(),
             pending_event: snapshot.pending_event.clone(),
@@ -200,7 +200,7 @@ pub struct GameState {
     pub movement: MovementState,
     pub narrative: NarrativeState,
     pub scene: SceneState,
-    pub character_state: CharacterState,
+    pub npc_encounter_log: NpcEncounterLog,
 }
 
 impl GameState {
@@ -219,7 +219,7 @@ impl GameState {
             movement: snapshot.movement.clone(),
             narrative: NarrativeState::from_snapshot(&snapshot.narrative),
             scene: snapshot.scene.clone(),
-            character_state: snapshot.character_state.clone(),
+            npc_encounter_log: snapshot.npc_encounter_log.clone(),
         }
     }
 
@@ -235,7 +235,7 @@ impl GameState {
             npcs_map.insert(npc.id.clone(), npc);
         }
 
-        let character_state = CharacterState::default();
+        let npc_encounter_log = NpcEncounterLog::default();
 
         Self {
             world,
@@ -250,16 +250,20 @@ impl GameState {
             scene: SceneState {
                 npcs_in_area: Vec::new(),
             },
-            character_state,
+            npc_encounter_log,
         }
     }
 
-    /// Initialise character_state and npcs_in_area from scenario NPCs.
+    /// Initialise npc_encounter_log and npcs_in_area from scenario NPCs.
     /// Skips NPCs already present in the scene to avoid duplicates.
     pub fn init_scenario_npcs(&mut self, scenario: &crate::model::scenario::StartingScenario) {
         for npc_id in &scenario.npcs {
             if let Some(npc) = self.npcs.get(npc_id).cloned() {
-                let encounter = self.character_state.npcs.entry(npc_id.clone()).or_default();
+                let encounter = self
+                    .npc_encounter_log
+                    .npcs
+                    .entry(npc_id.clone())
+                    .or_default();
                 encounter.times_met = 1;
                 encounter.currently_meeting = true;
                 if !self.scene.npcs_in_area.iter().any(|n| n.id == *npc_id) {

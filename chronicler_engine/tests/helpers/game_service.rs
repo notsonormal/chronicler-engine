@@ -6,7 +6,7 @@ use chronicler_engine::model::character::{CharacterSheet, NpcCard, PlayerCard};
 use chronicler_engine::model::map::{MapDef, Room};
 use chronicler_engine::model::state::{GameState, LogType};
 use chronicler_engine::model::trigger::{
-    ComparisonOperator, Trigger, TriggerAction, TriggerCondition,
+    ComparisonOperator, Trigger, TriggerCondition, TriggerEffect,
 };
 use chronicler_engine::model::world::WorldCard;
 
@@ -97,7 +97,7 @@ pub fn create_test_state_with_trigger_npc() -> GameState {
         inventory: vec![],
         triggers: vec![Trigger {
             condition: TriggerCondition::TimesMet(ComparisonOperator::Eq, 0),
-            action: TriggerAction {
+            effect: TriggerEffect {
                 name: "Greeting".into(),
                 narration_prompt: "The shopkeeper looks up with a smile.".into(),
             },
@@ -125,7 +125,7 @@ pub fn wait_for_generation_complete(
                 ctx.player.clone(),
                 (*ctx.npcs).clone(),
             );
-            if !guard.narrative.generation.status.is_generating() {
+            if !guard.narrative.input_buffer.status.is_generating() {
                 return true;
             }
         }

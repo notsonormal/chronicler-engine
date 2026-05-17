@@ -19,7 +19,7 @@ fn minimal_state() -> GameState {
         scene: crate::model::state::SceneState {
             npcs_in_area: vec![],
         },
-        character_state: crate::model::trigger::CharacterState::default(),
+        npc_encounter_log: crate::model::trigger::NpcEncounterLog::default(),
     }
 }
 

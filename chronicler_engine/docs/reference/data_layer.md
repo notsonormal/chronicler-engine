@@ -37,7 +37,7 @@ Frozen point-in-time captures of the mutable game state. Used for:
 | `movement`         | TEXT    | JSON: `MovementState`                        |
 | `narrative`        | TEXT    | JSON: `NarrativeSnapshot` (no messages)      |
 | `scene`            | TEXT    | JSON: `SceneState`                           |
-| `character_state`  | TEXT    | JSON: `CharacterState`                       |
+| `npc_encounter_log`  | TEXT    | JSON: `NpcEncounterLog`                       |
 | `committed`        | INTEGER | 0 or 1 — marks pre-generation snapshots      |
 | `created_at`       | TEXT    | ISO 8601 timestamp                           |
 

@@ -40,14 +40,14 @@ impl SnapshotStorage for SqliteGameStorage {
 
         conn.execute(
             "INSERT INTO game_state_snapshots
-             (game_id, movement, narrative, scene, character_state, committed, created_at)
+             (game_id, movement, narrative, scene, npc_encounter_log, committed, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             rusqlite::params![
                 db_snap.game_id,
                 db_snap.movement_json,
                 db_snap.narrative_json,
                 db_snap.scene_json,
-                db_snap.character_state_json,
+                db_snap.npc_encounter_log_json,
                 db_snap.committed,
                 db_snap.created_at,
             ],
@@ -61,7 +61,7 @@ impl SnapshotStorage for SqliteGameStorage {
         let conn = self.pool.conn();
         let mut stmt = conn
             .prepare(
-                "SELECT id, movement, narrative, scene, character_state, committed, created_at
+                "SELECT id, movement, narrative, scene, npc_encounter_log, committed, created_at
                  FROM game_state_snapshots
                  WHERE game_id = ?1
                  ORDER BY created_at DESC, id DESC
@@ -76,7 +76,7 @@ impl SnapshotStorage for SqliteGameStorage {
                 movement_json: row.get(1)?,
                 narrative_json: row.get(2)?,
                 scene_json: row.get(3)?,
-                character_state_json: row.get(4)?,
+                npc_encounter_log_json: row.get(4)?,
                 committed: row.get(5)?,
                 created_at: row.get(6)?,
             })
@@ -95,7 +95,7 @@ impl SnapshotStorage for SqliteGameStorage {
         let conn = self.pool.conn();
         let mut stmt = conn
             .prepare(
-                "SELECT id, movement, narrative, scene, character_state, committed, created_at
+                "SELECT id, movement, narrative, scene, npc_encounter_log, committed, created_at
                  FROM game_state_snapshots
                  WHERE id = ?1 AND game_id = ?2
                  ORDER BY id DESC
@@ -110,7 +110,7 @@ impl SnapshotStorage for SqliteGameStorage {
                 movement_json: row.get(1)?,
                 narrative_json: row.get(2)?,
                 scene_json: row.get(3)?,
-                character_state_json: row.get(4)?,
+                npc_encounter_log_json: row.get(4)?,
                 committed: row.get(5)?,
                 created_at: row.get(6)?,
             })

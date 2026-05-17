@@ -9,7 +9,7 @@ use crate::model::character::{CharacterSheet, NpcCard};
 use crate::model::map::{MapDef, Overworld};
 use crate::model::state::GameState;
 use crate::model::trigger::{
-    CharacterState, ComparisonOperator, Trigger, TriggerAction, TriggerCondition,
+    ComparisonOperator, NpcEncounterLog, Trigger, TriggerCondition, TriggerEffect,
 };
 use crate::model::world::WorldCard;
 
@@ -35,7 +35,7 @@ fn make_npc(id: &str, triggers: Vec<Trigger>) -> NpcCard {
 fn make_trigger(condition: TriggerCondition, repeat: bool) -> Trigger {
     Trigger {
         condition,
-        action: TriggerAction {
+        effect: TriggerEffect {
             name: "Test Event".to_string(),
             narration_prompt: "Test trigger".to_string(),
         },
@@ -47,7 +47,7 @@ fn make_trigger(condition: TriggerCondition, repeat: bool) -> Trigger {
 fn make_trigger_with_room(condition: TriggerCondition, repeat: bool, room_id: &str) -> Trigger {
     Trigger {
         condition,
-        action: TriggerAction {
+        effect: TriggerEffect {
             name: "Test Event".to_string(),
             narration_prompt: "Test trigger".to_string(),
         },
@@ -59,7 +59,7 @@ fn make_trigger_with_room(condition: TriggerCondition, repeat: bool, room_id: &s
 fn make_state(
     npcs_in_area: Vec<NpcCard>,
     all_npcs: &[NpcCard],
-    character_state: CharacterState,
+    npc_encounter_log: NpcEncounterLog,
 ) -> GameState {
     let world = Arc::new(WorldCard {
         name: "Test".into(),
@@ -102,19 +102,19 @@ fn make_state(
         },
         narrative: crate::model::state::NarrativeState {
             messages: vec![],
-            generation: Default::default(),
+            input_buffer: Default::default(),
             last_trigger: None,
             pending_location: None,
             pending_event: None,
         },
         scene: crate::model::state::SceneState { npcs_in_area },
-        character_state,
+        npc_encounter_log,
     }
 }
 
 #[test]
 fn test_evaluate_triggers_empty_room() {
-    let state = make_state(vec![], &[], CharacterState::default());
+    let state = make_state(vec![], &[], NpcEncounterLog::default());
     let results = evaluate_triggers(&state);
     assert!(results.is_empty());
 }
@@ -123,7 +123,11 @@ fn test_evaluate_triggers_empty_room() {
 fn test_evaluate_triggers_first_encounter() {
     let trigger = make_trigger(TriggerCondition::TimesMet(ComparisonOperator::Eq, 0), false);
     let npc = make_npc("gabriella", vec![trigger]);
-    let state = make_state(vec![npc.clone()], &[npc.clone()], CharacterState::default());
+    let state = make_state(
+        vec![npc.clone()],
+        &[npc.clone()],
+        NpcEncounterLog::default(),
+    );
     let results = evaluate_triggers(&state);
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].0.id, "gabriella");
@@ -133,9 +137,9 @@ fn test_evaluate_triggers_first_encounter() {
 fn test_evaluate_triggers_no_match_when_times_met_greater() {
     let trigger = make_trigger(TriggerCondition::TimesMet(ComparisonOperator::Eq, 0), false);
     let npc = make_npc("gabriella", vec![trigger]);
-    let mut character_state = CharacterState::default();
-    increment_times_met(&mut character_state, "gabriella");
-    let state = make_state(vec![npc.clone()], &[npc.clone()], character_state);
+    let mut npc_encounter_log = NpcEncounterLog::default();
+    increment_times_met(&mut npc_encounter_log, "gabriella");
+    let state = make_state(vec![npc.clone()], &[npc.clone()], npc_encounter_log);
     let results = evaluate_triggers(&state);
     assert!(results.is_empty());
 }
@@ -144,9 +148,9 @@ fn test_evaluate_triggers_no_match_when_times_met_greater() {
 fn test_evaluate_triggers_skips_fired_non_repeatable() {
     let trigger = make_trigger(TriggerCondition::TimesMet(ComparisonOperator::Eq, 0), false);
     let npc = make_npc("gabriella", vec![trigger.clone()]);
-    let mut character_state = CharacterState::default();
-    mark_trigger_fired(&mut character_state, "gabriella", 0);
-    let state = make_state(vec![npc.clone()], &[npc.clone()], character_state);
+    let mut npc_encounter_log = NpcEncounterLog::default();
+    mark_trigger_fired(&mut npc_encounter_log, "gabriella", 0);
+    let state = make_state(vec![npc.clone()], &[npc.clone()], npc_encounter_log);
     let results = evaluate_triggers(&state);
     assert!(results.is_empty());
 }
@@ -157,7 +161,7 @@ fn test_evaluate_triggers_fires_for_npc_not_in_area() {
     let trigger = make_trigger(TriggerCondition::TimesMet(ComparisonOperator::Eq, 0), false);
     let npc = make_npc("gabriella", vec![trigger]);
     // npcs_in_area is empty, but Gabriella IS in state.npcs
-    let state = make_state(vec![], &[npc.clone()], CharacterState::default());
+    let state = make_state(vec![], &[npc.clone()], NpcEncounterLog::default());
 
     // Verify Gabriella IS in state.npcs but NOT in npcs_in_area
     assert!(
@@ -186,7 +190,7 @@ fn test_room_scoped_trigger_fires_in_correct_room() {
         "room_1",
     );
     let npc = make_npc("gabriella", vec![trigger]);
-    let state = make_state(vec![], &[npc.clone()], CharacterState::default());
+    let state = make_state(vec![], &[npc.clone()], NpcEncounterLog::default());
 
     // State is in room_1 by default
     assert_eq!(state.movement.current_room_id, "room_1");
@@ -208,7 +212,7 @@ fn test_room_scoped_trigger_skipped_in_wrong_room() {
         "entrance_hall",
     );
     let npc = make_npc("gabriella", vec![trigger]);
-    let state = make_state(vec![], &[npc.clone()], CharacterState::default());
+    let state = make_state(vec![], &[npc.clone()], NpcEncounterLog::default());
 
     // State is in room_1, but trigger is scoped to entrance_hall
     assert_eq!(state.movement.current_room_id, "room_1");
@@ -224,7 +228,7 @@ fn test_room_scoped_trigger_skipped_in_wrong_room() {
 fn test_global_trigger_fires_in_any_room() {
     let trigger = make_trigger(TriggerCondition::TimesMet(ComparisonOperator::Eq, 0), false);
     let npc = make_npc("gabriella", vec![trigger]);
-    let state = make_state(vec![], &[npc.clone()], CharacterState::default());
+    let state = make_state(vec![], &[npc.clone()], NpcEncounterLog::default());
 
     let results = evaluate_triggers(&state);
     assert_eq!(
@@ -238,42 +242,42 @@ fn test_global_trigger_fires_in_any_room() {
 fn test_evaluate_triggers_repeatable_fires_again() {
     let trigger = make_trigger(TriggerCondition::TimesMet(ComparisonOperator::Lt, 3), true);
     let npc = make_npc("ranger", vec![trigger]);
-    let mut character_state = CharacterState::default();
-    increment_times_met(&mut character_state, "ranger");
-    let state = make_state(vec![npc.clone()], &[npc.clone()], character_state);
+    let mut npc_encounter_log = NpcEncounterLog::default();
+    increment_times_met(&mut npc_encounter_log, "ranger");
+    let state = make_state(vec![npc.clone()], &[npc.clone()], npc_encounter_log);
     let results = evaluate_triggers(&state);
     assert_eq!(results.len(), 1);
 }
 
 #[test]
 fn test_currently_meeting_tracks_encounters() {
-    let mut character_state = CharacterState::default();
+    let mut npc_encounter_log = NpcEncounterLog::default();
 
-    assert!(!is_currently_meeting(&character_state, "carla"));
-    set_currently_meeting(&mut character_state, "carla", true);
-    assert!(is_currently_meeting(&character_state, "carla"));
+    assert!(!is_currently_meeting(&npc_encounter_log, "carla"));
+    set_currently_meeting(&mut npc_encounter_log, "carla", true);
+    assert!(is_currently_meeting(&npc_encounter_log, "carla"));
 
     // End meeting (player leaves room)
-    set_currently_meeting(&mut character_state, "carla", false);
-    assert!(!is_currently_meeting(&character_state, "carla"));
+    set_currently_meeting(&mut npc_encounter_log, "carla", false);
+    assert!(!is_currently_meeting(&npc_encounter_log, "carla"));
 }
 
 #[test]
 fn test_increment_times_met_always_increments() {
     // increment_times_met always increments - the guard is in handle_movement
-    let mut character_state = CharacterState::default();
+    let mut npc_encounter_log = NpcEncounterLog::default();
 
     // Always increments when called
-    increment_times_met(&mut character_state, "gabriella");
-    assert_eq!(get_times_met(&character_state, "gabriella"), 1);
+    increment_times_met(&mut npc_encounter_log, "gabriella");
+    assert_eq!(get_times_met(&npc_encounter_log, "gabriella"), 1);
 
     // Can be called multiple times
-    increment_times_met(&mut character_state, "gabriella");
-    assert_eq!(get_times_met(&character_state, "gabriella"), 2);
+    increment_times_met(&mut npc_encounter_log, "gabriella");
+    assert_eq!(get_times_met(&npc_encounter_log, "gabriella"), 2);
 }
 
 #[test]
-fn test_character_state_initializes_with_starting_room_npcs() {
+fn test_npc_encounter_log_initializes_with_starting_room_npcs() {
     // Test that NPCs in the starting room have times_met=1 and currently_meeting=true
     use crate::model::character::NpcCard;
     use crate::model::map::{MapDef, Overworld, Region, Room};
@@ -348,19 +352,23 @@ fn test_character_state_initializes_with_starting_room_npcs() {
 
     // Carla should NOT be auto-initialised by GameState::new anymore
     // (room.npcs was removed; scenario-driven init happens in bootstrap/run.rs)
-    assert_eq!(get_times_met(&state.character_state, "carla"), 0);
-    assert!(!is_currently_meeting(&state.character_state, "carla"));
+    assert_eq!(get_times_met(&state.npc_encounter_log, "carla"), 0);
+    assert!(!is_currently_meeting(&state.npc_encounter_log, "carla"));
 }
 
 #[test]
 fn test_increment_times_met_and_mark_fired() {
     let trigger = make_trigger(TriggerCondition::TimesMet(ComparisonOperator::Eq, 0), false);
     let npc = make_npc("gabriella", vec![trigger]);
-    let mut state = make_state(vec![npc.clone()], &[npc.clone()], CharacterState::default());
+    let mut state = make_state(
+        vec![npc.clone()],
+        &[npc.clone()],
+        NpcEncounterLog::default(),
+    );
     let results = evaluate_triggers(&state);
     assert_eq!(results.len(), 1);
-    increment_times_met(&mut state.character_state, "gabriella");
-    mark_trigger_fired(&mut state.character_state, "gabriella", 0);
+    increment_times_met(&mut state.npc_encounter_log, "gabriella");
+    mark_trigger_fired(&mut state.npc_encounter_log, "gabriella", 0);
     let results = evaluate_triggers(&state);
     assert!(results.is_empty());
 }
@@ -375,23 +383,27 @@ fn test_trigger_index_with_skipped_triggers() {
         false,
     );
     let npc = make_npc("gabriella", vec![trigger_0.clone(), trigger_1.clone()]);
-    let mut character_state = CharacterState::default();
-    mark_trigger_fired(&mut character_state, "gabriella", 0);
-    let mut state = make_state(vec![npc.clone()], &[npc.clone()], character_state);
+    let mut npc_encounter_log = NpcEncounterLog::default();
+    mark_trigger_fired(&mut npc_encounter_log, "gabriella", 0);
+    let mut state = make_state(vec![npc.clone()], &[npc.clone()], npc_encounter_log);
 
     let results = evaluate_triggers(&state);
     assert_eq!(results.len(), 1, "Only trigger 1 should match");
     assert_eq!(results[0].2, 1, "Original index should be 1, not 0");
 
     // After marking trigger 1 as fired, no triggers should match
-    mark_trigger_fired(&mut state.character_state, "gabriella", 1);
+    mark_trigger_fired(&mut state.npc_encounter_log, "gabriella", 1);
     let results = evaluate_triggers(&state);
     assert!(results.is_empty(), "All triggers should now be skipped");
 }
 
 #[test]
 fn test_check_condition_missing_npc_defaults_to_zero() {
-    let character_state = CharacterState::default();
+    let npc_encounter_log = NpcEncounterLog::default();
     let condition = TriggerCondition::TimesMet(ComparisonOperator::Eq, 0);
-    assert!(check_condition(&character_state, "unknown_npc", &condition));
+    assert!(check_condition(
+        &npc_encounter_log,
+        "unknown_npc",
+        &condition
+    ));
 }

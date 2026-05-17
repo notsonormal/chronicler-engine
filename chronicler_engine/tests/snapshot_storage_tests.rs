@@ -118,7 +118,7 @@ fn test_row_to_snapshot_bad_json() {
         // Insert a row with invalid JSON in the movement column
         conn.execute(
             "INSERT INTO game_state_snapshots
-             (movement, narrative, scene, character_state, committed, created_at)
+             (movement, narrative, scene, npc_encounter_log, committed, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             rusqlite::params![
                 "not valid json",
@@ -144,7 +144,7 @@ fn test_row_to_snapshot_bad_date() {
         let conn = pool.conn();
         conn.execute(
             "INSERT INTO game_state_snapshots
-             (movement, narrative, scene, character_state, committed, created_at)
+             (movement, narrative, scene, npc_encounter_log, committed, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             rusqlite::params!["{}", "{}", "{}", "{}", 0, "not-a-date",],
         )

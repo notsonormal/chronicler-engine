@@ -61,8 +61,8 @@ async fn process_action(state: &AppState, command: String) -> Response<Body> {
             .expect("static response body is valid");
     }
 
-    game_state.narrative.generation.status = crate::model::state::GenerationStatus::Generating;
-    game_state.narrative.generation.phase = crate::model::state::GenerationPhase::Narrating;
+    game_state.narrative.input_buffer.status = crate::model::state::GenerationStatus::Generating;
+    game_state.narrative.input_buffer.phase = crate::model::state::GenerationPhase::Narrating;
     let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&game_state);
     let snapshot_id = match state.snapshot_storage.save(&snapshot) {
         Ok(id) => id,
@@ -109,7 +109,7 @@ async fn process_action(state: &AppState, command: String) -> Response<Body> {
                     .expect("static response body is valid");
             }
         };
-        gs.narrative.generation.status = crate::model::state::GenerationStatus::Idle;
+        gs.narrative.input_buffer.status = crate::model::state::GenerationStatus::Idle;
         let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&gs);
         if let Err(e) = state.snapshot_storage.save(&snapshot) {
             log::error!("Failed to save shutdown snapshot: {e}");

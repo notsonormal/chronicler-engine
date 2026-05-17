@@ -68,12 +68,12 @@ pub fn run_scenario(
     );
 
     let snapshot = ctx.snapshot_storage.load_latest().unwrap().unwrap();
-    let error_message = match &snapshot.narrative.generation.status {
+    let error_message = match &snapshot.narrative.input_buffer.status {
         GenerationStatus::Error(msg) => msg.clone(),
         GenerationStatus::Idle => "(no error, idle)".to_string(),
         GenerationStatus::Generating => "(still generating)".to_string(),
     };
-    let phase = format!("{:?}", snapshot.narrative.generation.phase);
+    let phase = format!("{:?}", snapshot.narrative.input_buffer.phase);
 
     (error_message, phase, ctx)
 }

@@ -57,7 +57,7 @@ pub fn execute_action_impl(
 
 fn save_pipeline_error(ctx: &GameServiceContext, error: impl Into<String>) {
     let mut state = load_state(ctx);
-    state.narrative.generation.status = GenerationStatus::Error(error.into());
+    state.narrative.input_buffer.status = GenerationStatus::Error(error.into());
     if let Err(e) = save_state(ctx, &mut state) {
         log::error!("Critical: failed to persist error state: {e}");
     }
@@ -67,8 +67,8 @@ pub(crate) fn finish_action(
     ctx: &GameServiceContext,
     mut state: GameState,
 ) -> Result<u64, EngineError> {
-    state.narrative.generation.status = GenerationStatus::Idle;
-    state.narrative.generation.phase = GenerationPhase::default();
+    state.narrative.input_buffer.status = GenerationStatus::Idle;
+    state.narrative.input_buffer.phase = GenerationPhase::default();
     save_state(ctx, &mut state)
 }
 
@@ -91,7 +91,7 @@ pub(crate) fn reconcile_post_trigger_npcs(
     continuation_text: &str,
 ) -> Result<GameState, EngineError> {
     let mut state = state;
-    state.narrative.generation.phase = GenerationPhase::Quantifying;
+    state.narrative.input_buffer.phase = GenerationPhase::Quantifying;
 
     let previous_ids: Vec<String> = state
         .scene
@@ -228,8 +228,8 @@ pub fn execute_freeaction_pipeline(
     let nearby_npcs = state.scene.npcs_in_area.clone();
     let all_npcs: Vec<NpcCard> = state.npcs.values().cloned().collect();
 
-    state.narrative.generation.status = GenerationStatus::Generating;
-    state.narrative.generation.phase = GenerationPhase::Narrating;
+    state.narrative.input_buffer.status = GenerationStatus::Generating;
+    state.narrative.input_buffer.phase = GenerationPhase::Narrating;
     if let Err(e) = save_committed_state(ctx, &mut state) {
         log::error!("Failed to save pre-main snapshot: {e}");
         return;
@@ -265,8 +265,8 @@ pub fn execute_freeaction_pipeline(
         return;
     }
 
-    state.narrative.generation.status = GenerationStatus::Generating;
-    state.narrative.generation.phase = GenerationPhase::Quantifying;
+    state.narrative.input_buffer.status = GenerationStatus::Generating;
+    state.narrative.input_buffer.phase = GenerationPhase::Quantifying;
 
     let mut quantifier_result = default_quantifier_result(&[]);
     run_post_generation_agents(
@@ -314,8 +314,8 @@ pub fn execute_freeaction_pipeline(
             });
 
             if let Some(request) = trigger_request {
-                next_state.narrative.generation.status = GenerationStatus::Generating;
-                next_state.narrative.generation.phase = GenerationPhase::GeneratingEvent;
+                next_state.narrative.input_buffer.status = GenerationStatus::Generating;
+                next_state.narrative.input_buffer.phase = GenerationPhase::GeneratingEvent;
                 next_state.narrative.last_trigger = Some(request.stored.clone());
 
                 if let Err(e) = save_committed_state(ctx, &mut next_state) {
@@ -337,7 +337,7 @@ pub fn execute_freeaction_pipeline(
                             None,
                             LogType::System,
                         );
-                        next_state.narrative.generation.status =
+                        next_state.narrative.input_buffer.status =
                             GenerationStatus::Error(format!("Error: {e}"));
                         if let Err(e) = save_state(ctx, &mut next_state) {
                             log::error!("Critical: failed to persist trigger error state: {e}");
@@ -356,7 +356,7 @@ pub fn execute_freeaction_pipeline(
                         Ok(s) => s,
                         Err(e) => {
                             log::error!("Trigger commit failed: {e}");
-                            next_state.narrative.generation.status =
+                            next_state.narrative.input_buffer.status =
                                 GenerationStatus::Error(format!("Trigger error: {e}"));
                             next_state
                         }
@@ -371,7 +371,7 @@ pub fn execute_freeaction_pipeline(
                         Ok(updated) => next_state = updated,
                         Err(e) => {
                             log::error!("Failed to apply post-trigger NPC events: {e}");
-                            next_state.narrative.generation.status =
+                            next_state.narrative.input_buffer.status =
                                 GenerationStatus::Error(format!("NPC event error: {e}"));
                             if let Err(e) = save_state(ctx, &mut next_state) {
                                 log::error!("Critical: failed to persist NPC error state: {e}");

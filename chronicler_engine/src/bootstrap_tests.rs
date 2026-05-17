@@ -405,7 +405,7 @@ fn test_validate_loaded_data_invalid_trigger_room() {
                 crate::model::trigger::ComparisonOperator::Eq,
                 0,
             ),
-            action: crate::model::trigger::TriggerAction {
+            effect: crate::model::trigger::TriggerEffect {
                 name: "Test".to_string(),
                 narration_prompt: "Hello".to_string(),
             },

@@ -66,8 +66,8 @@ pub async fn status_ready_handler(State(_state): State<AppState>) -> Html<String
 pub async fn generating_status_handler(State(state): State<AppState>) -> Html<String> {
     let (status, phase) = match state.load_state() {
         Ok(guard) => (
-            guard.narrative.generation.status.clone(),
-            guard.narrative.generation.phase.clone(),
+            guard.narrative.input_buffer.status.clone(),
+            guard.narrative.input_buffer.phase.clone(),
         ),
         _ => Default::default(),
     };
@@ -85,7 +85,7 @@ pub async fn generating_status_handler(State(state): State<AppState>) -> Html<St
 pub async fn reset_generating_handler(State(state): State<AppState>) -> Html<String> {
     let result = match state.load_state() {
         Ok(mut guard) => {
-            guard.narrative.generation.status = crate::model::state::GenerationStatus::Idle;
+            guard.narrative.input_buffer.status = crate::model::state::GenerationStatus::Idle;
             let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&guard);
             state.snapshot_storage.save(&snapshot).is_ok()
         }

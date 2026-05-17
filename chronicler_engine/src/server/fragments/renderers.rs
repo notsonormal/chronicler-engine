@@ -89,8 +89,8 @@ pub fn render_visual_sidebar(state: &AppState) -> Result<String> {
 pub fn render_action_area(state: &AppState) -> Result<String> {
     let state_guard = state.load_state()?;
 
-    let status = state_guard.narrative.generation.status.clone();
-    let phase = state_guard.narrative.generation.phase.clone();
+    let status = state_guard.narrative.input_buffer.status.clone();
+    let phase = state_guard.narrative.input_buffer.phase.clone();
     drop(state_guard);
 
     let template = ActionAreaTemplate::new(&status, &phase, &[]);

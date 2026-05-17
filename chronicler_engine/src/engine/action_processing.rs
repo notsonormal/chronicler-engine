@@ -67,7 +67,7 @@ pub fn handle_movement(
 
     if previous_room_id != state.movement.current_room_id {
         for npc_id in new_npc_ids {
-            set_currently_meeting(&mut state.character_state, npc_id, true);
+            set_currently_meeting(&mut state.npc_encounter_log, npc_id, true);
         }
     }
 
@@ -85,11 +85,11 @@ pub fn apply_npc_events(state: GameState, events: &[NpcEvent]) -> Result<GameSta
     for event in events {
         match event.event_type {
             NpcEventType::Entered => {
-                set_currently_meeting(&mut state.character_state, &event.npc_id, true);
-                increment_times_met(&mut state.character_state, &event.npc_id);
+                set_currently_meeting(&mut state.npc_encounter_log, &event.npc_id, true);
+                increment_times_met(&mut state.npc_encounter_log, &event.npc_id);
             }
             NpcEventType::Left => {
-                set_currently_meeting(&mut state.character_state, &event.npc_id, false);
+                set_currently_meeting(&mut state.npc_encounter_log, &event.npc_id, false);
             }
         }
     }
@@ -114,7 +114,7 @@ pub fn commit_trigger_narration(
     state.add_log(continuation_text.to_string(), None, LogType::Narration);
     if !request.stored.trigger_repeat {
         mark_trigger_fired(
-            &mut state.character_state,
+            &mut state.npc_encounter_log,
             &request.stored.npc_id,
             request.stored.trigger_idx,
         );
@@ -163,9 +163,9 @@ pub fn execute_freeaction_impl(
             .map(|(npc, trigger, idx)| TriggerMatch {
                 npc_id: npc.id,
                 trigger_idx: idx,
-                trigger_name: trigger.action.name,
+                trigger_name: trigger.effect.name,
                 trigger_repeat: trigger.repeat,
-                trigger_narration_prompt: trigger.action.narration_prompt,
+                trigger_narration_prompt: trigger.effect.narration_prompt,
             });
 
     let events = compute_npc_events(&previous_npc_ids, &current_npc_ids);

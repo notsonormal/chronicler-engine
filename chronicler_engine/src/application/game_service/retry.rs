@@ -102,7 +102,7 @@ pub fn retry_last_response_impl(service: &DefaultGameService, ctx: GameServiceCo
 
 pub(crate) fn save_retry_error(ctx: &GameServiceContext, message: impl Into<String>) {
     let mut state = load_state(ctx);
-    state.narrative.generation.status = GenerationStatus::Error(message.into());
+    state.narrative.input_buffer.status = GenerationStatus::Error(message.into());
     if let Err(e) = save_state(ctx, &mut state) {
         log::error!("Critical: failed to persist retry error state: {e}");
     }
@@ -119,8 +119,8 @@ pub(crate) fn retry_event_continuation(
         return;
     };
 
-    state.narrative.generation.status = GenerationStatus::Generating;
-    state.narrative.generation.phase = GenerationPhase::GeneratingEvent;
+    state.narrative.input_buffer.status = GenerationStatus::Generating;
+    state.narrative.input_buffer.phase = GenerationPhase::GeneratingEvent;
 
     let backend = Arc::clone(&service.llm_backend);
     let continuation_result = match backend.complete(
@@ -172,7 +172,7 @@ pub(crate) fn retry_event_continuation(
         Ok(updated) => committed_state = updated,
         Err(e) => {
             log::error!("Failed to apply post-trigger NPC events on retry: {e}");
-            committed_state.narrative.generation.status =
+            committed_state.narrative.input_buffer.status =
                 GenerationStatus::Error(format!("NPC event error: {e}"));
             if let Err(e) = save_state(ctx, &mut committed_state) {
                 log::error!("Critical: failed to persist retry NPC error state: {e}");

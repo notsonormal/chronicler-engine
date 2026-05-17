@@ -133,7 +133,7 @@ fn test_execute_freeaction_impl_npc_events_entered() {
     // NPC enters - times_met should increment
     let next_state = result.unwrap().next_state;
     let times_met = next_state
-        .character_state
+        .npc_encounter_log
         .npcs
         .get("carla")
         .map(|s| s.times_met)
@@ -162,13 +162,13 @@ fn test_apply_npc_events_entered() {
 
     let state = apply_npc_events(state, &events).unwrap();
 
-    assert!(is_currently_meeting(&state.character_state, "carla"));
+    assert!(is_currently_meeting(&state.npc_encounter_log, "carla"));
 }
 
 #[test]
 fn test_apply_npc_events_left() {
     let mut state = make_test_state();
-    set_currently_meeting(&mut state.character_state, "carla", true);
+    set_currently_meeting(&mut state.npc_encounter_log, "carla", true);
 
     let events = vec![NpcEvent {
         npc_id: "carla".to_string(),
@@ -177,13 +177,13 @@ fn test_apply_npc_events_left() {
 
     let state = apply_npc_events(state, &events).unwrap();
 
-    assert!(!is_currently_meeting(&state.character_state, "carla"));
+    assert!(!is_currently_meeting(&state.npc_encounter_log, "carla"));
 }
 
 #[test]
 fn test_apply_npc_events_increments_times_met() {
     let state = make_test_state();
-    let initial_times = get_times_met(&state.character_state, "carla");
+    let initial_times = get_times_met(&state.npc_encounter_log, "carla");
 
     let events = vec![NpcEvent {
         npc_id: "carla".to_string(),
@@ -193,7 +193,7 @@ fn test_apply_npc_events_increments_times_met() {
     let state = apply_npc_events(state, &events).unwrap();
 
     assert_eq!(
-        get_times_met(&state.character_state, "carla"),
+        get_times_met(&state.npc_encounter_log, "carla"),
         initial_times + 1
     );
 }
@@ -214,13 +214,13 @@ fn test_handle_movement_same_room_no_increment() {
     let mut state = make_test_state();
     // Already in test_room, moving to same room
     state.movement.current_room_id = "test_room".to_string();
-    let initial_times = get_times_met(&state.character_state, "carla");
+    let initial_times = get_times_met(&state.npc_encounter_log, "carla");
 
     let state = handle_movement(state, Some("test_room"), &["carla".to_string()]).unwrap();
 
     // times_met should not increment when room doesn't change
     assert_eq!(
-        get_times_met(&state.character_state, "carla"),
+        get_times_met(&state.npc_encounter_log, "carla"),
         initial_times
     );
 }
@@ -263,7 +263,7 @@ fn test_handle_movement_sets_currently_meeting() {
     let state = handle_movement(state, Some("new_room"), &["carla".to_string()]).unwrap();
 
     // Should set currently_meeting for NPCs in new room
-    assert!(is_currently_meeting(&state.character_state, "carla"));
+    assert!(is_currently_meeting(&state.npc_encounter_log, "carla"));
 }
 
 #[test]
@@ -373,7 +373,7 @@ fn test_commit_trigger_narration_marks_non_repeat_trigger_fired() {
     let state = commit_trigger_narration(state, &request, "Some text.").unwrap();
 
     assert!(
-        crate::engine::trigger_eval::is_trigger_fired(&state.character_state, "carla", 0),
+        crate::engine::trigger_eval::is_trigger_fired(&state.npc_encounter_log, "carla", 0),
         "Non-repeating trigger should be marked as fired"
     );
 }
@@ -398,7 +398,7 @@ fn test_commit_trigger_narration_does_not_mark_repeat_trigger_fired() {
     let state = commit_trigger_narration(state, &request, "Some text.").unwrap();
 
     assert!(
-        !crate::engine::trigger_eval::is_trigger_fired(&state.character_state, "carla", 0),
+        !crate::engine::trigger_eval::is_trigger_fired(&state.npc_encounter_log, "carla", 0),
         "Repeating trigger should NOT be marked as fired"
     );
 }

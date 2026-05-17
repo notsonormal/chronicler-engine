@@ -4,7 +4,7 @@ use chronicler_engine::application::game_service::{DefaultGameService, GameServi
 use chronicler_engine::model::character::{CharacterSheet, NpcCard};
 use chronicler_engine::model::state::GameState;
 use chronicler_engine::model::trigger::{
-    ComparisonOperator, Trigger, TriggerAction, TriggerCondition,
+    ComparisonOperator, Trigger, TriggerCondition, TriggerEffect,
 };
 use chronicler_engine::model::world::WorldCard;
 use chronicler_engine::narrative::llm::MockBackend;
@@ -185,7 +185,7 @@ fn test_trigger_continuation_runs_quantifier_and_detects_new_npc() {
         inventory: vec![],
         triggers: vec![Trigger {
             condition: TriggerCondition::TimesMet(ComparisonOperator::Eq, 0),
-            action: TriggerAction {
+            effect: TriggerEffect {
                 name: "Greeting".into(),
                 narration_prompt: "The shopkeeper looks up with a smile.".into(),
             },
@@ -273,7 +273,7 @@ fn test_trigger_continuation_runs_quantifier_and_detects_new_npc() {
 
     // Verify times_met was incremented for Gabriella via Entered event
     let gabriella_state = guard
-        .character_state
+        .npc_encounter_log
         .npcs
         .get("gabriella")
         .expect("Gabriella should have character state");

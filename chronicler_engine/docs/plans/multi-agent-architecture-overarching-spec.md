@@ -192,7 +192,7 @@ pub struct GameStateSnapshot {
     pub movement: MovementState,
     pub narrative: NarrativeState,
     pub scene: SceneState,
-    pub character_state: CharacterState,
+    pub npc_encounter_log: NpcEncounterLog,
     pub committed: bool,
     pub created_at: DateTime<Utc>,
 }
@@ -279,7 +279,7 @@ Note: `agent_results` is added in Phase 3 when the pipeline dispatcher is introd
   - `movement TEXT NOT NULL` (JSON)
   - `narrative TEXT NOT NULL` (JSON)
   - `scene TEXT NOT NULL` (JSON)
-  - `character_state TEXT NOT NULL` (JSON)
+  - `npc_encounter_log TEXT NOT NULL` (JSON)
   - `committed INTEGER NOT NULL DEFAULT 0`
   - `created_at TEXT NOT NULL` (ISO 8601)
 - **Files:** `src/storage/db.rs`, `src/storage/mod.rs`

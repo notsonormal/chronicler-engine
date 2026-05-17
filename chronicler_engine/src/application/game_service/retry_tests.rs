@@ -335,7 +335,7 @@ fn test_retry_event_storage_error_on_pre_event() {
     let state = base_ctx.load_state();
     assert!(
         matches!(
-            state.narrative.generation.status,
+            state.narrative.input_buffer.status,
             GenerationStatus::Error(_)
         ),
         "Should set error status on storage failure"
@@ -413,7 +413,7 @@ fn test_retry_event_trigger_narration_fails() {
     let state = ctx.load_state();
     assert!(
         matches!(
-            state.narrative.generation.status,
+            state.narrative.input_buffer.status,
             GenerationStatus::Error(_)
         ),
         "Should set error status when trigger narration fails"
@@ -495,7 +495,7 @@ fn test_retry_main_no_pre_main_snapshot() {
     let state = ctx.load_state();
     assert!(
         matches!(
-            state.narrative.generation.status,
+            state.narrative.input_buffer.status,
             GenerationStatus::Error(_)
         ),
         "Should set error status when anchor message has no snapshot_id"
@@ -555,9 +555,9 @@ fn test_retry_event_continuation_happy_path() {
 
     let state = ctx.load_state();
     assert!(
-        matches!(state.narrative.generation.status, GenerationStatus::Idle),
+        matches!(state.narrative.input_buffer.status, GenerationStatus::Idle),
         "Should finish with Idle status, got {:?}",
-        state.narrative.generation.status
+        state.narrative.input_buffer.status
     );
 }
 
@@ -602,7 +602,7 @@ fn test_retry_main_storage_error_on_pre_main() {
     let state = ctx.load_state();
     assert!(
         matches!(
-            state.narrative.generation.status,
+            state.narrative.input_buffer.status,
             GenerationStatus::Error(_)
         ),
         "Should set error status on storage failure"
@@ -620,7 +620,7 @@ fn test_save_retry_error() {
     let state = ctx.load_state();
     assert!(
         matches!(
-            state.narrative.generation.status,
+            state.narrative.input_buffer.status,
             GenerationStatus::Error(ref msg) if msg == "test error"
         ),
         "Should save error status with exact message"
@@ -808,9 +808,9 @@ fn test_retry_event_empty_continuation_triggers_error() {
 
     let state = ctx.load_state();
     assert!(
-        matches!(state.narrative.generation.status, GenerationStatus::Error(ref msg) if msg.contains("empty response")),
+        matches!(state.narrative.input_buffer.status, GenerationStatus::Error(ref msg) if msg.contains("empty response")),
         "Should set error status when continuation text is empty, got {:?}",
-        state.narrative.generation.status
+        state.narrative.input_buffer.status
     );
 }
 
@@ -842,11 +842,11 @@ fn test_retry_aborts_when_message_delete_fails() {
     let state = base_ctx.load_state();
     assert!(
         matches!(
-            state.narrative.generation.status,
+            state.narrative.input_buffer.status,
             GenerationStatus::Error(ref msg) if msg.contains("could not delete message")
         ),
         "Should set error status when message deletion fails, got {:?}",
-        state.narrative.generation.status
+        state.narrative.input_buffer.status
     );
 
     // Messages should NOT have been truncated — both input and narration remain

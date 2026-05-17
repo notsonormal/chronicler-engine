@@ -2,15 +2,16 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::model::state::{
-    GameState, GenerationState, MovementState, NarrativeState, SceneState, StoredTriggerContext,
+    GameState, InputBuffer, MovementState, NarrativeState, SceneState, StoredTriggerContext,
 };
-use crate::model::trigger::CharacterState;
+use crate::model::trigger::NpcEncounterLog;
 
 /// Persistable subset of [`NarrativeState`] — everything *except* messages.
 /// Messages are stored in a separate table and hydrated after snapshot load.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct NarrativeSnapshot {
-    pub generation: GenerationState,
+    #[serde(rename = "generation")]
+    pub input_buffer: InputBuffer,
     pub last_trigger: Option<StoredTriggerContext>,
     #[serde(default)]
     pub pending_location: Option<String>,
@@ -21,7 +22,7 @@ pub struct NarrativeSnapshot {
 impl NarrativeSnapshot {
     pub fn from_narrative(state: &NarrativeState) -> Self {
         Self {
-            generation: state.generation.clone(),
+            input_buffer: state.input_buffer.clone(),
             last_trigger: state.last_trigger.clone(),
             pending_location: state.pending_location.clone(),
             pending_event: state.pending_event.clone(),
@@ -36,7 +37,8 @@ pub struct GameStateSnapshot {
     pub movement: MovementState,
     pub narrative: NarrativeSnapshot,
     pub scene: SceneState,
-    pub character_state: CharacterState,
+    #[serde(rename = "character_state")]
+    pub npc_encounter_log: NpcEncounterLog,
     pub committed: bool,
     pub created_at: DateTime<Utc>,
 }
@@ -48,7 +50,7 @@ impl GameStateSnapshot {
             movement: state.movement.clone(),
             narrative: NarrativeSnapshot::from_narrative(&state.narrative),
             scene: state.scene.clone(),
-            character_state: state.character_state.clone(),
+            npc_encounter_log: state.npc_encounter_log.clone(),
             committed: false,
             created_at: Utc::now(),
         }
@@ -56,11 +58,11 @@ impl GameStateSnapshot {
 
     pub fn apply_to(&self, state: &mut crate::model::state::GameState) {
         state.movement = self.movement.clone();
-        state.narrative.generation = self.narrative.generation.clone();
+        state.narrative.input_buffer = self.narrative.input_buffer.clone();
         state.narrative.last_trigger = self.narrative.last_trigger.clone();
         state.narrative.pending_location = self.narrative.pending_location.clone();
         state.narrative.pending_event = self.narrative.pending_event.clone();
         state.scene = self.scene.clone();
-        state.character_state = self.character_state.clone();
+        state.npc_encounter_log = self.npc_encounter_log.clone();
     }
 }

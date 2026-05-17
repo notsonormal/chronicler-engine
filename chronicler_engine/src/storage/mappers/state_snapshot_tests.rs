@@ -4,7 +4,7 @@ use chrono::Utc;
 
 use crate::model::state::{MovementState, SceneState};
 use crate::model::state_snapshot::{GameStateSnapshot, NarrativeSnapshot};
-use crate::model::trigger::CharacterState;
+use crate::model::trigger::NpcEncounterLog;
 use crate::storage::mappers::state_snapshot::snapshot_to_db;
 
 #[test]
@@ -19,7 +19,7 @@ fn test_snapshot_roundtrip() {
         scene: SceneState {
             npcs_in_area: vec![],
         },
-        character_state: CharacterState::default(),
+        npc_encounter_log: NpcEncounterLog::default(),
         committed: true,
         created_at: Utc::now(),
     };
@@ -48,7 +48,7 @@ fn test_snapshot_uncommitted_no_db_id() {
         scene: SceneState {
             npcs_in_area: vec![],
         },
-        character_state: CharacterState::default(),
+        npc_encounter_log: NpcEncounterLog::default(),
         committed: false,
         created_at: Utc::now(),
     };
@@ -71,7 +71,7 @@ fn test_snapshot_json_columns() {
         scene: SceneState {
             npcs_in_area: vec![],
         },
-        character_state: CharacterState::default(),
+        npc_encounter_log: NpcEncounterLog::default(),
         committed: false,
         created_at: Utc::now(),
     };
@@ -80,5 +80,5 @@ fn test_snapshot_json_columns() {
     assert!(db.movement_json.contains("hallway"));
     assert!(db.narrative_json.contains("generation"));
     assert!(db.scene_json.contains("npcs_in_area"));
-    assert!(db.character_state_json.contains("npcs"));
+    assert!(db.npc_encounter_log_json.contains("npcs"));
 }

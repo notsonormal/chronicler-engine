@@ -4,7 +4,7 @@ use chronicler_engine::application::game_service::{DefaultGameService, GameServi
 use chronicler_engine::model::character::{CharacterSheet, NpcCard};
 use chronicler_engine::model::state::{GameState, LogType};
 use chronicler_engine::model::trigger::{
-    ComparisonOperator, Trigger, TriggerAction, TriggerCondition,
+    ComparisonOperator, Trigger, TriggerCondition, TriggerEffect,
 };
 use chronicler_engine::narrative::llm::MockBackend;
 use chronicler_engine::test_support::make_test_context_with_sqlite;
@@ -365,7 +365,7 @@ fn test_main_retry_reevaluates_triggers() {
         inventory: vec![],
         triggers: vec![Trigger {
             condition: TriggerCondition::TimesMet(ComparisonOperator::Eq, 0),
-            action: TriggerAction {
+            effect: TriggerEffect {
                 name: "Greeting".into(),
                 narration_prompt: "The shopkeeper looks up with a smile.".into(),
             },
@@ -454,7 +454,7 @@ fn test_retry_completes_when_quantifier_returns_none() {
     assert!(wait_for_generation_complete(&ctx, 1000));
     let guard = latest_state(&ctx);
     assert!(
-        !guard.narrative.generation.status.is_generating(),
+        !guard.narrative.input_buffer.status.is_generating(),
         "Retry should complete even if quantifier returns None"
     );
 }

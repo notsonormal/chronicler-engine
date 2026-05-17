@@ -5,7 +5,7 @@ use crate::application::game_service::helpers::{
 use crate::error::{EngineError, LlmFailure, NarrativeFailure};
 use crate::model::message::Message;
 use crate::model::state::{GameState, MovementState, NarrativeState, SceneState};
-use crate::model::trigger::CharacterState;
+use crate::model::trigger::NpcEncounterLog;
 use crate::storage::snapshot_storage::SnapshotStorage;
 use crate::test_support::fixtures::{TestMap, TestPlayer, TestWorld};
 use crate::test_support::in_memory_storage::InMemoryGameStorage;
@@ -94,7 +94,7 @@ fn minimal_state() -> GameState {
         scene: SceneState {
             npcs_in_area: vec![],
         },
-        character_state: CharacterState::default(),
+        npc_encounter_log: NpcEncounterLog::default(),
     }
 }
 

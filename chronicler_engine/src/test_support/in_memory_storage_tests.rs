@@ -4,7 +4,7 @@ use crate::model::checkpoint::Checkpoint;
 use crate::model::state::{MovementState, SceneState};
 use crate::model::state_snapshot::GameStateSnapshot;
 use crate::model::state_snapshot::NarrativeSnapshot;
-use crate::model::trigger::CharacterState;
+use crate::model::trigger::NpcEncounterLog;
 use crate::storage::message_storage::MessageStorage;
 use crate::storage::snapshot_storage::SnapshotStorage;
 use crate::test_support::in_memory_storage::InMemoryGameStorage;
@@ -21,7 +21,7 @@ fn empty_snapshot() -> GameStateSnapshot {
         scene: SceneState {
             npcs_in_area: Vec::new(),
         },
-        character_state: CharacterState::default(),
+        npc_encounter_log: NpcEncounterLog::default(),
         committed: false,
         created_at: Utc::now(),
     }

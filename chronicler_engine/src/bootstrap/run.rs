@@ -35,7 +35,7 @@ pub fn run(args: Args) -> crate::error::Result<()> {
 
     inject_scenario_logs(&mut state, &manifest, &player);
 
-    // Initialise character_state and npcs_in_area from scenario NPCs
+    // Initialise npc_encounter_log and npcs_in_area from scenario NPCs
     if let Some(scenario) = manifest.default_scenario() {
         state.init_scenario_npcs(scenario);
     }
@@ -125,7 +125,7 @@ pub fn run(args: Args) -> crate::error::Result<()> {
                 state.narrative.messages = msgs;
             }
 
-            state.narrative.generation.status = crate::model::state::GenerationStatus::Generating;
+            state.narrative.input_buffer.status = crate::model::state::GenerationStatus::Generating;
 
             let room = map_for_task
                 .overworld
@@ -156,11 +156,11 @@ pub fn run(args: Args) -> crate::error::Result<()> {
                 match narration {
                     Ok(result) => {
                         state.add_log(result.text, None, crate::model::state::LogType::Narration);
-                        state.narrative.generation.status =
+                        state.narrative.input_buffer.status =
                             crate::model::state::GenerationStatus::Idle;
                     }
                     Err(e) => {
-                        state.narrative.generation.status =
+                        state.narrative.input_buffer.status =
                             crate::model::state::GenerationStatus::Error(format!("LLM Error: {e}"));
                     }
                 }

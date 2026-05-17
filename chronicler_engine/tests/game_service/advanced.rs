@@ -16,7 +16,7 @@ use crate::test_data::create_test_state;
 fn test_execute_freeaction_immediate_return() {
     let mut state = create_test_state();
     state.narrative.messages.clear();
-    state.narrative.generation.status = GenerationStatus::Idle;
+    state.narrative.input_buffer.status = GenerationStatus::Idle;
     let ctx = make_test_context(state);
     let service = failing_service();
 
@@ -31,7 +31,7 @@ fn test_execute_freeaction_immediate_return() {
     // State should be accessible immediately after execute_action returns
     // (the thread runs in background)
     let guard = latest_state(&ctx);
-    let status = &guard.narrative.generation.status;
+    let status = &guard.narrative.input_buffer.status;
     // Failing mock backend causes FreeAction to fail and set Error status
     assert!(
         status.error_message().is_some(),
@@ -43,7 +43,7 @@ fn test_execute_freeaction_immediate_return() {
 fn test_execute_freeaction_room_not_found() {
     let mut state = create_test_state();
     state.narrative.messages.clear();
-    state.narrative.generation.status = GenerationStatus::Generating;
+    state.narrative.input_buffer.status = GenerationStatus::Generating;
     state.movement.current_room_id = "non_existent_room".to_string();
     let ctx = make_test_context(state);
     let service = DefaultGameService::new();
@@ -67,7 +67,7 @@ fn test_execute_freeaction_room_not_found() {
 fn test_execute_freeaction_state_accessible() {
     let mut state = create_test_state();
     state.narrative.messages.clear();
-    state.narrative.generation.status = GenerationStatus::Generating;
+    state.narrative.input_buffer.status = GenerationStatus::Generating;
     let ctx = make_test_context(state);
     let service = failing_service();
 
@@ -75,7 +75,7 @@ fn test_execute_freeaction_state_accessible() {
 
     // State should remain accessible after execute_action returns
     let guard = latest_state(&ctx);
-    let status = &guard.narrative.generation.status;
+    let status = &guard.narrative.input_buffer.status;
     // Failing mock backend causes FreeAction to fail and set Error status
     assert!(
         status.error_message().is_some(),
@@ -87,7 +87,7 @@ fn test_execute_freeaction_state_accessible() {
 fn test_execute_freeaction_narration_failure() {
     let mut state = create_test_state();
     state.narrative.messages.clear();
-    state.narrative.generation.status = GenerationStatus::Generating;
+    state.narrative.input_buffer.status = GenerationStatus::Generating;
     let ctx = make_test_context(state);
     let service = failing_service();
 
@@ -99,9 +99,14 @@ fn test_execute_freeaction_narration_failure() {
     let guard = latest_state(&ctx);
     // MockBackend::failing() always returns an error
     assert!(
-        guard.narrative.generation.status.error_message().is_some(),
+        guard
+            .narrative
+            .input_buffer
+            .status
+            .error_message()
+            .is_some(),
         "Should have error after failed narration: {:?}",
-        guard.narrative.generation.status
+        guard.narrative.input_buffer.status
     );
 }
 
@@ -109,7 +114,7 @@ fn test_execute_freeaction_narration_failure() {
 fn test_execute_freeaction_with_mock_backend() {
     let mut state = create_test_state();
     state.narrative.messages.clear();
-    state.narrative.generation.status = GenerationStatus::Generating; // set by caller (server)
+    state.narrative.input_buffer.status = GenerationStatus::Generating; // set by caller (server)
     let ctx = make_test_context(state);
     let service = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::default()),
@@ -127,7 +132,7 @@ fn test_execute_freeaction_with_mock_backend() {
 
     let guard = latest_state(&ctx);
     assert!(
-        !guard.narrative.generation.status.is_generating(),
+        !guard.narrative.input_buffer.status.is_generating(),
         "is_generating should be reset after FreeAction completes"
     );
 
@@ -145,7 +150,7 @@ fn test_retry_with_mock_backend() {
     state.narrative.messages.clear();
     state.add_log("look around".to_string(), None, LogType::Input);
     state.add_log("Initial narration".to_string(), None, LogType::Narration);
-    state.narrative.generation.status = GenerationStatus::Generating; // set by caller (server)
+    state.narrative.input_buffer.status = GenerationStatus::Generating; // set by caller (server)
     let ctx = make_test_context(state.clone());
 
     // Save pre-main snapshot so retry has something to work with
@@ -174,7 +179,7 @@ fn test_retry_with_mock_backend() {
 
     let guard = latest_state(&ctx);
     assert!(
-        !guard.narrative.generation.status.is_generating(),
+        !guard.narrative.input_buffer.status.is_generating(),
         "is_generating should be reset after retry completes"
     );
 
@@ -195,7 +200,7 @@ fn test_retry_with_mock_backend() {
 fn test_execute_freeaction_with_movement_mock() {
     let mut state = create_test_state();
     state.narrative.messages.clear();
-    state.narrative.generation.status = GenerationStatus::Generating; // set by caller (server)
+    state.narrative.input_buffer.status = GenerationStatus::Generating; // set by caller (server)
     let ctx = make_test_context(state);
     let service = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::default()),
@@ -217,7 +222,7 @@ fn test_execute_freeaction_with_movement_mock() {
 
     let guard = latest_state(&ctx);
     assert!(
-        !guard.narrative.generation.status.is_generating(),
+        !guard.narrative.input_buffer.status.is_generating(),
         "is_generating should be reset after FreeAction with movement"
     );
 
@@ -236,7 +241,7 @@ fn test_execute_freeaction_with_movement_mock() {
 fn test_freeaction_phase_starts_narrating() {
     let mut state = create_test_state();
     state.narrative.messages.clear();
-    state.narrative.generation.status = GenerationStatus::Idle;
+    state.narrative.input_buffer.status = GenerationStatus::Idle;
     let ctx = make_test_context(state);
     let service = DefaultGameService::new();
 
@@ -251,10 +256,10 @@ fn test_freeaction_phase_starts_narrating() {
     // set_phase(Narrating) runs before the backend call, and set_error_and_reset
     // only updates status (not phase), so phase should still be Narrating.
     assert_eq!(
-        guard.narrative.generation.phase,
+        guard.narrative.input_buffer.phase,
         chronicler_engine::model::state::GenerationPhase::Narrating,
         "Phase should be Narrating after starting FreeAction: {:?}",
-        guard.narrative.generation.status
+        guard.narrative.input_buffer.status
     );
 }
 
@@ -262,7 +267,7 @@ fn test_freeaction_phase_starts_narrating() {
 fn test_freeaction_phase_transitions_mock() {
     let mut state = create_test_state();
     state.narrative.messages.clear();
-    state.narrative.generation.status = GenerationStatus::Generating;
+    state.narrative.input_buffer.status = GenerationStatus::Generating;
     let ctx = make_test_context(state);
     let service = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::default()),
@@ -280,11 +285,11 @@ fn test_freeaction_phase_transitions_mock() {
 
     let guard = latest_state(&ctx);
     assert!(
-        !guard.narrative.generation.status.is_generating(),
+        !guard.narrative.input_buffer.status.is_generating(),
         "Status should be reset after FreeAction completes"
     );
     assert_eq!(
-        guard.narrative.generation.phase,
+        guard.narrative.input_buffer.phase,
         chronicler_engine::model::state::GenerationPhase::default(),
         "Phase should be reset to default after completion"
     );
@@ -294,7 +299,7 @@ fn test_freeaction_phase_transitions_mock() {
 async fn test_cancellation_resets_state_to_idle() {
     let mut state = create_test_state();
     state.narrative.messages.clear();
-    state.narrative.generation.status = GenerationStatus::Generating;
+    state.narrative.input_buffer.status = GenerationStatus::Generating;
     let ctx = make_test_context(state);
     let service = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::with_delay(50)),
@@ -314,7 +319,7 @@ async fn test_cancellation_resets_state_to_idle() {
                     ctx_clone.player.clone(),
                     (*ctx_clone.npcs).clone(),
                 );
-                state.narrative.generation.status = GenerationStatus::Idle;
+                state.narrative.input_buffer.status = GenerationStatus::Idle;
                 let snapshot = GameStateSnapshot::from_game_state(&state);
                 let _ = ctx_clone.snapshot_storage.save(&snapshot);
             }
@@ -334,7 +339,7 @@ async fn test_cancellation_resets_state_to_idle() {
                     ctx_clone.player.clone(),
                     (*ctx_clone.npcs).clone(),
                 );
-                state.narrative.generation.status = GenerationStatus::Idle;
+                state.narrative.input_buffer.status = GenerationStatus::Idle;
                 let snapshot = GameStateSnapshot::from_game_state(&state);
                 let _ = ctx_clone.snapshot_storage.save(&snapshot);
             }
@@ -349,7 +354,7 @@ async fn test_cancellation_resets_state_to_idle() {
 
     let guard = latest_state(&ctx);
     assert!(
-        !guard.narrative.generation.status.is_generating(),
+        !guard.narrative.input_buffer.status.is_generating(),
         "Status should be Idle after cancellation cleanup"
     );
 }
@@ -377,10 +382,15 @@ fn test_retry_last_response_not_ai_generated() {
 
     let guard = latest_state(&ctx);
     assert!(
-        guard.narrative.generation.status.error_message().is_some()
-            || !guard.narrative.generation.status.is_generating(),
+        guard
+            .narrative
+            .input_buffer
+            .status
+            .error_message()
+            .is_some()
+            || !guard.narrative.input_buffer.status.is_generating(),
         "Retry with no AI response should complete: {:?}",
-        guard.narrative.generation.status
+        guard.narrative.input_buffer.status
     );
 }
 
@@ -390,7 +400,7 @@ fn test_retry_last_response_not_ai_generated() {
 fn test_empty_llm_response_handled_gracefully() {
     let mut state = create_test_state();
     state.narrative.messages.clear();
-    state.narrative.generation.status = GenerationStatus::Generating;
+    state.narrative.input_buffer.status = GenerationStatus::Generating;
     let ctx = make_test_context(state);
     let service = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::with_empty_response()),
@@ -406,11 +416,11 @@ fn test_empty_llm_response_handled_gracefully() {
     let guard = latest_state(&ctx);
     assert!(
         matches!(
-            guard.narrative.generation.status,
+            guard.narrative.input_buffer.status,
             GenerationStatus::Error(ref msg) if msg.contains("empty")
         ),
         "Status should be Error after empty LLM response: {:?}",
-        guard.narrative.generation.status
+        guard.narrative.input_buffer.status
     );
 
     // Empty narration is NOT logged — it's treated as an error
@@ -429,9 +439,9 @@ fn test_empty_llm_response_handled_gracefully() {
 fn test_failing_trigger_narration_does_not_crash() {
     let mut state = create_test_state_with_trigger_npc();
     state.narrative.messages.clear();
-    state.narrative.generation.status = GenerationStatus::Generating;
+    state.narrative.input_buffer.status = GenerationStatus::Generating;
     // Reset times_met so the trigger is eligible to fire
-    if let Some(encounter) = state.character_state.npcs.get_mut("shopkeeper") {
+    if let Some(encounter) = state.npc_encounter_log.npcs.get_mut("shopkeeper") {
         encounter.times_met = 0;
     }
     let ctx = make_test_context(state);
@@ -452,7 +462,7 @@ fn test_failing_trigger_narration_does_not_crash() {
 
     let guard = latest_state(&ctx);
     assert!(
-        !guard.narrative.generation.status.is_generating(),
+        !guard.narrative.input_buffer.status.is_generating(),
         "Status should be reset after trigger narration failure"
     );
 
@@ -485,7 +495,7 @@ fn test_failing_trigger_narration_does_not_crash() {
 fn test_delayed_llm_completes_without_deadlock() {
     let mut state = create_test_state();
     state.narrative.messages.clear();
-    state.narrative.generation.status = GenerationStatus::Generating;
+    state.narrative.input_buffer.status = GenerationStatus::Generating;
     let ctx = make_test_context(state);
     let service = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::with_delay(200)),
@@ -497,11 +507,11 @@ fn test_delayed_llm_completes_without_deadlock() {
     // execute_action is synchronous — by now the delay has elapsed
     let guard = latest_state(&ctx);
     assert!(
-        !guard.narrative.generation.status.is_generating(),
+        !guard.narrative.input_buffer.status.is_generating(),
         "Status should be Idle after delayed action completes"
     );
     assert_eq!(
-        guard.narrative.generation.phase,
+        guard.narrative.input_buffer.phase,
         chronicler_engine::model::state::GenerationPhase::default(),
         "Phase should be reset after completion"
     );
@@ -511,7 +521,7 @@ fn test_delayed_llm_completes_without_deadlock() {
 fn test_quantifier_detects_movement() {
     let mut state = create_test_state();
     state.narrative.messages.clear();
-    state.narrative.generation.status = GenerationStatus::Generating;
+    state.narrative.input_buffer.status = GenerationStatus::Generating;
     let ctx = make_test_context(state);
     let service = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::default()),
@@ -532,7 +542,7 @@ fn test_quantifier_detects_movement() {
 
     let guard = latest_state(&ctx);
     assert!(
-        !guard.narrative.generation.status.is_generating(),
+        !guard.narrative.input_buffer.status.is_generating(),
         "Status should be reset after movement action"
     );
 
@@ -547,9 +557,9 @@ fn test_quantifier_detects_movement() {
 fn test_quantifier_detects_npc_presence_and_fires_trigger() {
     let mut state = create_test_state_with_trigger_npc();
     state.narrative.messages.clear();
-    state.narrative.generation.status = GenerationStatus::Generating;
+    state.narrative.input_buffer.status = GenerationStatus::Generating;
     // Reset times_met so the trigger is eligible to fire
-    if let Some(encounter) = state.character_state.npcs.get_mut("shopkeeper") {
+    if let Some(encounter) = state.npc_encounter_log.npcs.get_mut("shopkeeper") {
         encounter.times_met = 0;
     }
     let ctx = make_test_context(state);
@@ -569,7 +579,7 @@ fn test_quantifier_detects_npc_presence_and_fires_trigger() {
 
     let guard = latest_state(&ctx);
     assert!(
-        !guard.narrative.generation.status.is_generating(),
+        !guard.narrative.input_buffer.status.is_generating(),
         "Status should be reset after trigger action"
     );
 
@@ -666,11 +676,11 @@ fn test_retry_room_not_found() {
     let guard = latest_state(&ctx);
     assert!(
         matches!(
-            guard.narrative.generation.status,
+            guard.narrative.input_buffer.status,
             GenerationStatus::Error(ref msg) if msg.contains("Room not found")
         ),
         "Expected room not found error: {:?}",
-        guard.narrative.generation.status
+        guard.narrative.input_buffer.status
     );
 }
 
@@ -710,11 +720,11 @@ fn test_retry_llm_error() {
     let guard = latest_state(&ctx);
     assert!(
         matches!(
-            guard.narrative.generation.status,
+            guard.narrative.input_buffer.status,
             GenerationStatus::Error(_)
         ),
         "Expected error status after failing LLM: {:?}",
-        guard.narrative.generation.status
+        guard.narrative.input_buffer.status
     );
 }
 
@@ -754,11 +764,11 @@ fn test_retry_empty_narration() {
     let guard = latest_state(&ctx);
     assert!(
         matches!(
-            guard.narrative.generation.status,
+            guard.narrative.input_buffer.status,
             GenerationStatus::Error(ref msg) if msg.contains("empty")
         ),
         "Expected empty response error: {:?}",
-        guard.narrative.generation.status
+        guard.narrative.input_buffer.status
     );
 }
 
@@ -766,7 +776,7 @@ fn test_retry_empty_narration() {
 fn test_pre_main_snapshot_saved_before_narration() {
     let mut state = create_test_state();
     state.narrative.messages.clear();
-    state.narrative.generation.status = GenerationStatus::Idle;
+    state.narrative.input_buffer.status = GenerationStatus::Idle;
     let ctx = make_test_context(state);
     let service = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::default()),
@@ -791,9 +801,9 @@ fn test_pre_main_snapshot_saved_before_narration() {
 fn test_pre_event_snapshot_saved_before_continuation() {
     let mut state = create_test_state_with_trigger_npc();
     state.narrative.messages.clear();
-    state.narrative.generation.status = GenerationStatus::Idle;
+    state.narrative.input_buffer.status = GenerationStatus::Idle;
     // Reset times_met so the trigger is eligible to fire
-    if let Some(encounter) = state.character_state.npcs.get_mut("shopkeeper") {
+    if let Some(encounter) = state.npc_encounter_log.npcs.get_mut("shopkeeper") {
         encounter.times_met = 0;
     }
     let ctx = make_test_context(state);
@@ -835,7 +845,7 @@ fn test_retry_main_narration_uses_pre_main_snapshot() {
         Some("Player".to_string()),
         LogType::Input,
     );
-    state.narrative.generation.status = GenerationStatus::Idle;
+    state.narrative.input_buffer.status = GenerationStatus::Idle;
 
     let ctx = make_test_context(state.clone());
 
@@ -896,7 +906,7 @@ fn test_retry_event_continuation_uses_pre_event_snapshot() {
         None,
         LogType::Narration,
     );
-    state.narrative.generation.status = GenerationStatus::Idle;
+    state.narrative.input_buffer.status = GenerationStatus::Idle;
     state.narrative.last_trigger = Some(chronicler_engine::model::state::StoredTriggerContext {
         npc_id: "shopkeeper".to_string(),
         trigger_idx: 0,

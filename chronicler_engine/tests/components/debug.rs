@@ -40,8 +40,8 @@ async fn test_debug_state_endpoint_returns_json() {
         "Debug state should include generation_phase"
     );
     assert!(
-        json.get("character_state").is_some(),
-        "Debug state should include character_state"
+        json.get("npc_encounter_log").is_some(),
+        "Debug state should include npc_encounter_log"
     );
     assert!(
         json.get("narration_history_tail").is_some(),

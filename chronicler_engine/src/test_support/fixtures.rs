@@ -4,7 +4,7 @@ use std::sync::Arc;
 use crate::model::character::{CharacterSheet, NpcCard, PlayerCard};
 use crate::model::map::{MapDef, Overworld, Region, Room};
 use crate::model::state::GameState;
-use crate::model::trigger::{ComparisonOperator, Trigger, TriggerAction, TriggerCondition};
+use crate::model::trigger::{ComparisonOperator, Trigger, TriggerCondition, TriggerEffect};
 use crate::model::world::WorldCard;
 
 // ─── World ───────────────────────────────────────────────────────────────────
@@ -98,7 +98,7 @@ impl TestNpc {
             inventory: vec![],
             triggers: vec![Trigger {
                 condition: TriggerCondition::TimesMet(op, n),
-                action: TriggerAction {
+                effect: TriggerEffect {
                     name: format!("{name} Introduction"),
                     narration_prompt: format!("{name} introduces themselves."),
                 },
@@ -123,7 +123,7 @@ impl TestNpc {
             inventory: vec![],
             triggers: vec![Trigger {
                 condition: TriggerCondition::TimesMet(op, n),
-                action: TriggerAction {
+                effect: TriggerEffect {
                     name: format!("{name} Encounter in {room_id}"),
                     narration_prompt: format!("{name} acknowledges you in this specific room."),
                 },
@@ -254,7 +254,7 @@ impl TestGameState {
     }
 
     /// A `GameState` in the given room with one NPC loaded, but with
-    /// `character_state` set to default (no starting-room encounter tracking).
+    /// `npc_encounter_log` set to default (no starting-room encounter tracking).
     pub fn with_npc_raw(room_id: &str, npc: NpcCard) -> GameState {
         let npc_id = npc.id.clone();
         let mut npcs_map = HashMap::new();
@@ -270,7 +270,7 @@ impl TestGameState {
             },
             narrative: crate::model::state::NarrativeState {
                 messages: Vec::new(),
-                generation: Default::default(),
+                input_buffer: Default::default(),
                 last_trigger: None,
                 pending_location: None,
                 pending_event: None,
@@ -278,7 +278,7 @@ impl TestGameState {
             scene: crate::model::state::SceneState {
                 npcs_in_area: Vec::new(),
             },
-            character_state: Default::default(),
+            npc_encounter_log: Default::default(),
         }
     }
 
@@ -309,7 +309,7 @@ impl TestGameState {
             },
             narrative: crate::model::state::NarrativeState {
                 messages: Vec::new(),
-                generation: Default::default(),
+                input_buffer: Default::default(),
                 last_trigger: None,
                 pending_location: None,
                 pending_event: None,
@@ -317,7 +317,7 @@ impl TestGameState {
             scene: crate::model::state::SceneState {
                 npcs_in_area: Vec::new(),
             },
-            character_state: Default::default(),
+            npc_encounter_log: Default::default(),
         }
     }
 }

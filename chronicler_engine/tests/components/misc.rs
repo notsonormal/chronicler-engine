@@ -235,9 +235,9 @@ async fn test_retry_handler_sets_generating_status() {
         .unwrap()
         .expect("Should have snapshot");
     assert!(
-        latest.narrative.generation.status.is_generating(),
+        latest.narrative.input_buffer.status.is_generating(),
         "Retry handler should set generation status to Generating, got {:?}",
-        latest.narrative.generation.status
+        latest.narrative.input_buffer.status
     );
 }
 

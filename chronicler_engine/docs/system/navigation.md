@@ -44,7 +44,7 @@ Rooms in map.json define semantic exits:
 After `attempt_semantic_walk` succeeds, the engine evaluates NPC triggers for the destination room.
 
 **Trigger evaluation:**
-- `evaluate_triggers(state, room_id)` checks each NPC in the room against `state.character_state`
+- `evaluate_triggers(state, room_id)` checks each NPC in the room against `state.npc_encounter_log`
 - Matching triggers fire a continuation narration via a second LLM call
 - Trigger narrations do NOT cause further movement — the quantifier is skipped for them
 - This prevents infinite trigger chains (e.g., trigger causes movement → new trigger fires → ...)

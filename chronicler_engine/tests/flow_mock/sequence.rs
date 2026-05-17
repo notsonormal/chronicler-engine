@@ -251,7 +251,7 @@ fn test_delete_input_then_retry_fails_gracefully() {
     service.retry_last_response(ctx.clone());
     let guard = latest_state(&ctx);
     assert!(
-        !guard.narrative.generation.status.is_generating(),
+        !guard.narrative.input_buffer.status.is_generating(),
         "Retry with no input should not leave state generating"
     );
 }
