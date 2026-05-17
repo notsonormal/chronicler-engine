@@ -9,14 +9,10 @@ use super::template::{SettingsTemplate, parse_api_key};
 
 macro_rules! try_lock {
     ($lock:expr) => {
-        match $lock {
-            Ok(g) => g,
-            Err(_) => {
-                return Html(
-                    "<span class='error'>Internal error: settings lock poisoned</span>".to_string(),
-                )
-            }
-        }
+        $lock.unwrap_or_else(|p| {
+            log::warn!("Poisoned settings lock recovered in handler");
+            p.into_inner()
+        })
     };
 }
 

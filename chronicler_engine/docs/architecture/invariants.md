@@ -7,7 +7,7 @@ These invariants are machine-checkable statements about the engine's runtime beh
 ### INV-001: Generation Status Lifecycle
 `generation_state.status` must return to `Idle` after every action. No action may leave the engine permanently stuck in `Generating`.
 
-- **Enforced by:** `GeneratingGuard::drop` resets to `Idle` on scope exit. Poisoned mutexes are recovered via `Mutex::clear_poison()`.
+- **Enforced by:** `GenerationGuard::drop` resets `is_generating` to `false` on scope exit, even if the `spawn_blocking` task panics.
 - **Spawn sites:** `fragments.rs` handlers check `CancellationToken` and reset status if cancelled.
 
 ### INV-002: State Mutation Order in FreeAction
@@ -42,8 +42,13 @@ Only one async (`FreeAction`) generation may be in flight at a time. The server 
 - **Enforced by:** `AppState::is_generating` (`AtomicBool`) checked with `compare_exchange` in `process_action`. The flag is cleared by `GenerationGuard::drop` when the `spawn_blocking` task exits, even on panic.
 - **Client-side:** HTMX `hx-sync="this:drop"` on the command form drops duplicate submissions before they reach the server.
 
-### INV-005: Mutex Poison Recovery
-If a `std::sync::Mutex<GameState>` is poisoned, the engine must recover rather than panic. `GeneratingGuard` recovers poisoned locks by calling `Mutex::clear_poison()` and resetting status.
+### INV-005: Lock Poison Recovery
+All `std::sync::Mutex` and `std::sync::RwLock` sites in production code recover from poison rather than panic or return defaults. The recovery strategy is `into_inner()` — the data inside a poisoned lock is still valid; only the poison flag is set.
+
+- **Consistent pattern:** `match lock.read() { Ok(g) => g, Err(p) => { log::warn!(...); p.into_inner() } }`
+- **Applies to:** `AppState::settings`, `AppState::cancel_token`, `action_lock`, `DbPool::conn`, `LlmMessageStorage` impls, LLM backend `settings` references
+- **No silent defaults:** `settings()` no longer returns `AppSettings::default()` on poison; it recovers the actual settings.
+- **No user-facing errors:** `try_lock!` in settings handlers no longer returns an HTML error fragment on poison; it recovers and continues.
 
 ## HTTP Layer
 

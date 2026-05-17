@@ -276,26 +276,32 @@ impl AppState {
     /// Returns a clone of the current cancellation token.
     /// If the lock is poisoned, recovers the inner value.
     pub fn current_cancel_token(&self) -> CancellationToken {
-        match self.cancel_token.read() {
-            Ok(g) => g.clone(),
-            Err(p) => p.into_inner().clone(),
-        }
+        self.cancel_token
+            .read()
+            .map(|g| g.clone())
+            .unwrap_or_else(|p| {
+                log::warn!("Poisoned cancel_token read lock recovered");
+                p.into_inner().clone()
+            })
     }
 
     /// Replaces the current cancellation token with a fresh one.
     /// If the lock is poisoned, recovers the inner value before replacing.
     pub fn replace_cancel_token(&self) {
-        let mut token = match self.cancel_token.write() {
-            Ok(g) => g,
-            Err(p) => p.into_inner(),
-        };
+        let mut token = self.cancel_token.write().unwrap_or_else(|p| {
+            log::warn!("Poisoned cancel_token write lock recovered");
+            p.into_inner()
+        });
         *token = CancellationToken::new();
     }
 
     /// Read a snapshot of the current settings.
-    /// Returns default settings if the lock is poisoned.
+    /// If the lock is poisoned, recovers the inner value.
     pub fn settings(&self) -> AppSettings {
-        self.settings.read().map(|g| g.clone()).unwrap_or_default()
+        self.settings.read().map(|g| g.clone()).unwrap_or_else(|p| {
+            log::warn!("Poisoned settings read lock recovered");
+            p.into_inner().clone()
+        })
     }
 }
 
@@ -359,10 +365,13 @@ pub async fn run_server_with_config(
     let shutdown_signal = async move {
         let _ = tokio::signal::ctrl_c().await;
         log::info!("Shutdown signal received, cancelling in-flight tasks...");
-        let token = match cancel_token_arc.read() {
-            Ok(g) => g.clone(),
-            Err(p) => p.into_inner().clone(),
-        };
+        let token = cancel_token_arc
+            .read()
+            .map(|g| g.clone())
+            .unwrap_or_else(|p| {
+                log::warn!("Poisoned cancel_token read lock recovered during shutdown");
+                p.into_inner().clone()
+            });
         token.cancel();
     };
 

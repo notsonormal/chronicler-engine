@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-17 22:56 UTC*
+*Index last generated: 2026-05-17 23:20 UTC*
 
 ### Root files
 
@@ -53,6 +53,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [LLM Infrastructure Improvements](./plans/llm-infrastructure-improvements.md)
 - [Spec: Agent-Ready Pipeline Restructure for Chronicler Engine](./plans/multi-agent-architecture-overarching-spec.md)
 - [Plan: Observability & Automated Forensics](./plans/observability-and-forensics-plan.md)
+- [Plan: State Patch Reducer for Post-Generation Agent Composition](./plans/state-patch-reducer-plan.md)
 - [AI Steering & Guided Generation](./plans/steering-and-guided-generation.md)
 
 ### `docs/plans/archived/`
@@ -61,6 +62,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Settings I/O Centralization — Implementation Plan](./plans/archived/daredevil-john-stewart-blue-marvel.md)
 - [Implementation Plan: Extract Application Layer (Option A)](./plans/archived/falcon-robin-nick-fury.md)
 - [Plan: Separate Domain Models from DB Models in Chronicler Engine](./plans/archived/jessica-cruz-maria-hill-yelena-belova.md)
+- [Plan: Unify Lock-Poison Recovery on Strategy A (Recover + Log)](./plans/archived/kyle-rayner-domino-hawkgirl-20260518-000440.md)
 - [Plan: Break Engine↔Narrative Bidirectional Coupling](./plans/archived/rocket-nebula-morbius.md)
 - [Plan: GameState Extensibility Fix](./plans/archived/scarlet-witch-cyclone-nightwing.md)
 - [Plan: Rename Domain Vocabulary — CharacterState, TriggerAction, GenerationState](./plans/archived/simon-baz-iron-fist-booster-gold.md)

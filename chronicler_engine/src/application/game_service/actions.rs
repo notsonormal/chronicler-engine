@@ -279,7 +279,7 @@ pub fn execute_freeaction_pipeline(
 
     if quantifier_result.npcs.confidence == QuantifierConfidence::Low {
         state.add_log(
-            "[System] NPC detection uncertain ÔÇö using room defaults".to_string(),
+            "[System] NPC detection uncertain — using room defaults".to_string(),
             None,
             LogType::System,
         );

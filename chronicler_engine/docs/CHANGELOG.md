@@ -2,6 +2,18 @@
 
 ## 2026-05-17
 
+### Changed
+- **Unified lock-poison recovery strategy** — All `Mutex` and `RwLock` sites now recover consistently
+  - `try_lock!` macro in `settings_fragment/handlers.rs` no longer returns HTML error on poison; recovers via `into_inner()` + logs warning
+  - `AppState::settings()` no longer returns `AppSettings::default()` on poison; recovers actual settings + logs warning
+  - `AppState::current_cancel_token()` and `replace_cancel_token()` now log warnings when recovering from poison
+  - `openrouter.rs` and `ollama.rs` `response_length()` no longer silently returns default on poison; recovers + logs warning
+  - Added `test_settings_recover_from_poisoned_rwlock` and `test_cancel_token_recover_from_poisoned_rwlock` to verify recovery
+  - Updated `docs/architecture/invariants.md#INV-005` to document the unified strategy
+  - All 781 tests pass; clippy clean
+
+## 2026-05-17
+
 ### Added
 - **GameStateBuilder** — Structural extensibility for `GameState`
   - Added `GameStateBuilder` in `src/model/state.rs` with required constructor fields (`world`, `map`, `player`, `starting_room`) and optional setters (`with_npcs`, `with_narrative`, `with_scene`, `with_npc_encounter_log`)

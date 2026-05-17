@@ -57,10 +57,16 @@ impl OllamaBackend {
     }
 
     fn response_length(&self) -> String {
-        self.settings
-            .as_ref()
-            .and_then(|s| s.read().ok().map(|g| g.response_length.clone()))
-            .unwrap_or_default()
+        let Some(settings) = self.settings.as_ref() else {
+            return String::new();
+        };
+        settings
+            .read()
+            .map(|g| g.response_length.clone())
+            .unwrap_or_else(|p| {
+                log::warn!("Poisoned settings read lock recovered in response_length");
+                p.into_inner().response_length.clone()
+            })
     }
 
     /// Build a prompt from context using this backend's token limits, then call the LLM.
