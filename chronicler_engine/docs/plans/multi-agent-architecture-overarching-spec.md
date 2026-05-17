@@ -17,7 +17,7 @@ Replace Chronicler's hardcoded `parse → narrate → quantify → apply → tri
 **What this is NOT:** Adding Prose Guardian, Continuity Checker, Expression Engine, or any other agents. Those come later, once the foundation is solid.
 
 **Why do this now:**
-- The current pipeline embeds the quantifier as load-bearing logic in `game_service.rs` and `action_processing.rs`
+- The current pipeline embeds the quantifier as load-bearing logic in `application/game_service/` and `action_processing.rs`
 - Adding even one more agent (e.g. a pre-generation prompt injector) would require rewriting the pipeline anyway
 - The GameState snapshot refactoring is needed for regeneration, reset, and diagnostics regardless of agents
 - The PromptBuilder's 8 hardcoded layers block any form of dynamic prompt injection
@@ -51,7 +51,7 @@ Replace Chronicler's hardcoded `parse → narrate → quantify → apply → tri
 |-------|---------|--------|--------|
 | Language | Rust 2024 | Rust 2024 | None |
 | State | `Arc<Mutex<GameState>>` | SQLite-backed snapshots | Major |
-| Pipeline | Hardcoded in `game_service.rs` | Phase-based `AgentPipeline` | Major |
+| Pipeline | Hardcoded in `application/game_service/` | Phase-based `AgentPipeline` | Major |
 | Prompts | `PromptBuilder` (8 hardcoded layers) | Preset-based assembler | Major |
 | DB | None | SQLite (`rusqlite`) | New dependency |
 | Agents | Hardcoded quantifier | `dyn Agent` trait + registry | Moderate |
@@ -92,8 +92,15 @@ chronicler_engine/
 │   │   ├── state.rs                      # GameState (simplified)
 │   │   ├── state_snapshot.rs             # NEW: Snapshot types
 │   │   └── ... (existing)
+│   ├── application/
+│   │   └── game_service/                 # REFACTORED: thin orchestrator
+│   │       ├── mod.rs
+│   │       ├── service.rs
+│   │       ├── context.rs
+│   │       ├── actions.rs
+│   │       ├── retry.rs
+│   │       └── helpers.rs
 │   ├── engine/
-│   │   ├── game_service.rs               # REFACTORED: thin orchestrator
 │   │   ├── action_processing.rs          # REFACTORED: stateless, returns TurnResult
 │   │   ├── agent_pipeline.rs             # NEW: Phase-based orchestration
 │   │   └── ... (existing)
@@ -201,7 +208,7 @@ pub struct TurnResult {
 }
 ```
 
-Note: `agent_results` is added in Phase 3 when the pipeline dispatcher is introduced. In Phase 2, `game_service.rs` contains a temporary bridge that translates `AgentResult::StatePatch` back into `QuantifierResult` for `action_processing.rs`.
+Note: `agent_results` is added in Phase 3 when the pipeline dispatcher is introduced. In Phase 2, `application/game_service/actions.rs` contains a temporary bridge that translates `AgentResult::StatePatch` back into `QuantifierResult` for `action_processing.rs`.
 
 ---
 
@@ -312,7 +319,7 @@ Note: `agent_results` is added in Phase 3 when the pipeline dispatcher is introd
 - Replace `.ok()` swallow patterns with `?`
 - All helpers (`handle_movement`, `apply_npc_events`, etc.) return new state instead of mutating
 - `GameService::execute_action` saves snapshot via `SnapshotStorage`
-- **Files:** `src/engine/action_processing.rs`, `src/engine/game_service.rs`
+- **Files:** `src/engine/action_processing.rs`, `src/application/game_service/actions.rs`
 - **Acceptance:**
   - [ ] All existing tests pass
   - [ ] `execute_freeaction_impl` signature has no `&mut GameState`
@@ -321,7 +328,7 @@ Note: `agent_results` is added in Phase 3 when the pipeline dispatcher is introd
 ### Task 1.5: Regeneration Support
 - On retry/regen: load committed snapshot from before target message
 - Re-run turn, save new snapshot with incremented `swipe_index`
-- **Files:** `src/engine/game_service.rs`, `src/server/fragments.rs`
+- **Files:** `src/application/game_service/service.rs`, `src/server/fragments.rs`
 - **Acceptance:**
   - [ ] Regeneration creates new snapshot row, leaves original intact
   - [ ] Swiping back restores original snapshot state
@@ -427,12 +434,12 @@ Note: `agent_results` is added in Phase 3 when the pipeline dispatcher is introd
   - [ ] Invalid patch is rejected with error
 
 ### Task 3.3: Delete Old Pipeline
-- Remove hardcoded `execute_action` flow from `game_service.rs`
+- Remove hardcoded `execute_action` flow from `application/game_service/actions.rs`
 - Replace with pipeline orchestration
 - Delete `QuantifierBackendTrait` (quantifier is now just an `Agent`)
-- **Files:** `src/engine/game_service.rs`, `src/narrative/llm/mod.rs`
+- **Files:** `src/application/game_service/service.rs`, `src/narrative/llm/mod.rs`
 - **Acceptance:**
-  - [ ] `game_service.rs` under 250 lines
+  - [ ] `application/game_service/` module under 250 lines per file
   - [ ] No `QuantifierBackendTrait` references remain
   - [ ] All integration tests pass
 

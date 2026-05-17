@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use crate::engine::game_service::GameServiceContext;
+use crate::application::game_service::GameServiceContext;
 use crate::model::state::GameState;
 use crate::model::state_snapshot::GameStateSnapshot;
 use crate::storage::message_storage::MessageStorage;

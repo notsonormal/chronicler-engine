@@ -7,7 +7,7 @@ use crate::model::character::NpcCard;
 use crate::model::world::WorldCard;
 
 #[cfg(test)]
-use crate::engine::game_service::helpers::load_messages_into_state;
+use crate::application::game_service::helpers::load_messages_into_state;
 #[cfg(test)]
 use crate::model::state::GameState;
 use crate::storage::llm_message_storage::LlmMessageStorage;

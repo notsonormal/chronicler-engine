@@ -8,14 +8,14 @@ mod test_data;
 
 use std::sync::Arc;
 
-use chronicler_engine::engine::game_service::DefaultGameService;
+use chronicler_engine::application::game_service::DefaultGameService;
 use chronicler_engine::model::character::{CharacterSheet, NpcCard};
 use chronicler_engine::model::state::GameState;
 
 use chronicler_engine::narrative::llm::MockBackend;
 
 pub fn wait_for_generation_complete(
-    ctx: &chronicler_engine::engine::game_service::GameServiceContext,
+    ctx: &chronicler_engine::application::game_service::GameServiceContext,
     timeout_ms: u64,
 ) -> bool {
     let start = std::time::Instant::now();
@@ -39,7 +39,7 @@ pub fn wait_for_generation_complete(
 }
 
 pub fn latest_state(
-    ctx: &chronicler_engine::engine::game_service::GameServiceContext,
+    ctx: &chronicler_engine::application::game_service::GameServiceContext,
 ) -> GameState {
     let snap = ctx.snapshot_storage.load_latest().unwrap().unwrap();
     let mut state = GameState::from_snapshot(

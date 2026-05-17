@@ -14,13 +14,13 @@ The 12 benchmark scenarios reveal **5 root causes** that can be fixed with **7 t
 
 | Root Cause | Scenarios Affected | Fix Location |
 |-----------|-------------------|--------------|
-| `map_llm_error` collapses structured errors | `llm_http_401`, `llm_http_429`, `llm_network_error`, `llm_parse_error` | `src/engine/game_service.rs:80-92` |
-| Empty LLM response silently accepted | `llm_empty_response` | `src/engine/game_service.rs:187-193` |
-| Quantifier failures are silent | `quantifier_complete_failure`, `quantifier_low_confidence` | `src/engine/game_service.rs` + `src/narrative/quantifier/core.rs` |
+| `map_llm_error` collapses structured errors | `llm_http_401`, `llm_http_429`, `llm_network_error`, `llm_parse_error` | `src/application/game_service/helpers.rs:90` |
+| Empty LLM response silently accepted | `llm_empty_response` | `src/application/game_service/actions.rs:224-227` |
+| Quantifier failures are silent | `quantifier_complete_failure`, `quantifier_low_confidence` | `src/application/game_service/actions.rs:232-247` + `src/narrative/agents/quantifier/core.rs` |
 | Dynamic rooms created without signal | `dynamic_room_creation` | `src/engine/action_processing.rs:57-66` |
 | Debug endpoint too shallow | ALL scenarios (state_visibility dimension) | `src/server/debug.rs` |
 | Trigger skips invisible | `trigger_wrong_room_id` | `src/engine/trigger_eval.rs` |
-| State reset inconsistent | `state_stuck_generating` | `src/engine/game_service.rs:234-279` |
+| State reset inconsistent | `state_stuck_generating` | `src/application/game_service/actions.rs:44-52` |
 
 ---
 
@@ -41,7 +41,7 @@ The 12 benchmark scenarios reveal **5 root causes** that can be fixed with **7 t
 Modify `map_llm_error` to include specific diagnostic details from `LlmFailure` variants instead of collapsing them to generic strings. HTTP status codes, URLs, and parse error hints must be visible in the user-facing error message.
 
 **Files touched:**
-- `src/engine/game_service.rs` (lines 80-92)
+- `src/application/game_service/helpers.rs` (line 90)
 
 **Acceptance criteria:**
 - [ ] `llm_http_401` error message contains `"401"`
@@ -68,7 +68,7 @@ Modify `map_llm_error` to include specific diagnostic details from `LlmFailure` 
 Currently `MockBackend::with_empty_response()` returns `Ok("")`, and the engine accepts it. In production, an empty response from the LLM means something went wrong (model unloaded, context truncated, etc.). Treat empty narration text as an error and set `GenerationStatus::Error`.
 
 **Files touched:**
-- `src/engine/game_service.rs` (around line 187, after `backend.narrate_action`)
+- `src/application/game_service/actions.rs` (lines 224-227 — after `backend.narrate_action`)
 
 **Acceptance criteria:**
 - [ ] Empty narration response sets `GenerationStatus::Error("LLM Error: empty response")`
@@ -89,9 +89,9 @@ Currently `MockBackend::with_empty_response()` returns `Ok("")`, and the engine 
 When the quantifier fails completely or returns low confidence, the engine silently falls back to static NPCs. Add a visible `System` log entry so the user (and debugger) knows quantification was uncertain or failed.
 
 **Files touched:**
-- `src/narrative/quantifier/core.rs` (lines 95-110 — fallback path)
-- `src/narrative/quantifier/core.rs` (lines 228-230 — low confidence path)
-- `src/engine/game_service.rs` (around line 202-216 — quantifier result handling)
+- `src/narrative/agents/quantifier/core.rs` (fallback path)
+- `src/narrative/agents/quantifier/core.rs` (low confidence path)
+- `src/application/game_service/actions.rs` (lines 232-247 — quantifier result handling)
 
 **Acceptance criteria:**
 - [ ] Quantifier complete failure adds a `System` log: `"[System] NPC detection failed — using room defaults"`
@@ -191,7 +191,7 @@ When a trigger is evaluated but skipped (e.g., wrong room_id, already fired, con
 In `execute_action`, the `FreeAction` path has multiple early returns (narration error, quantifier lock failure, trigger error). Some paths call `reset_generating`, some call `set_error_and_reset`, and some just return. Ensure every exit path leaves `generation_state` in a deterministic state.
 
 **Files touched:**
-- `src/engine/game_service.rs` (lines 143-279 — `execute_action` FreeAction path)
+- `src/application/game_service/actions.rs` (lines 44-52 — `execute_action` FreeAction path)
 
 **Acceptance criteria:**
 - [ ] All early returns from `FreeAction` path reset `generation_state` to `Idle` or `Error`
@@ -262,9 +262,9 @@ Task 8 (benchmark updates) ──► Final verification
 ```
 
 **Why this order:**
-- Tasks 1-3 are independent and touch different parts of `game_service.rs` — do them together to avoid merge conflicts
+- Tasks 1-3 are independent and touch different files in `application/game_service/` — do them together to avoid merge conflicts
 - Task 4 is independent
-- Task 7 should come after Tasks 1-3 because it touches the same `FreeAction` path in `game_service.rs`
+- Task 7 should come after Tasks 1-3 because it touches the same `FreeAction` path in `application/game_service/actions.rs`
 - Task 5 (debug endpoint) can happen anytime but should be before Task 8
 - Task 8 is always last
 

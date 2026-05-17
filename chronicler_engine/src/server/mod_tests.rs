@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::engine::game_service::{DefaultGameService, GameService};
+use crate::application::game_service::{DefaultGameService, GameService};
 use crate::model::settings::AppSettings;
 use crate::server::ServerConfig;
 use crate::storage::message_storage::MessageStorage;

@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use crate::model::llm_backend::LlmBackendType;
+use crate::model::settings::Connection;
 use crate::narrative::agents::quantifier::QuantifierAgent;
 use crate::narrative::agents::registry::AgentRegistry;
 use crate::storage::llm_message_storage::LlmMessageStorage;
@@ -26,20 +28,16 @@ impl DefaultGameService {
         let settings = crate::settings::load_settings().unwrap_or_default();
         let registry = AgentRegistry::from_configs_with_storage(&settings.agents, storage.clone())
             .unwrap_or_default();
+        let connection = settings
+            .get_narration_connection()
+            .cloned()
+            .unwrap_or_else(|| Connection::new("default", "Default", LlmBackendType::Mock));
+        let llm_backend = Arc::from(crate::narrative::llm::get_llm_backend_for(
+            &connection,
+            storage,
+        ));
         Self {
-            llm_backend: Arc::from(crate::narrative::llm::get_llm_backend_for(
-                &settings
-                    .get_narration_connection()
-                    .cloned()
-                    .unwrap_or_else(|| {
-                        crate::model::settings::Connection::new(
-                            "default",
-                            "Default",
-                            crate::model::llm_backend::LlmBackendType::Mock,
-                        )
-                    }),
-                storage,
-            )),
+            llm_backend,
             agent_registry: registry,
         }
     }

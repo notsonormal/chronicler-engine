@@ -1,7 +1,7 @@
 # Specification: Core Architecture (Modular)
 
 ## Objective
-Establish a domain-driven modular architecture for the Chronicler Engine. This structure separates core data models from game mechanics, narrative processing, and user interface logic.
+Establish a domain-driven modular architecture for the Chronicler Engine. This structure separates core data models, game mechanics, application orchestration, narrative processing, and user interface logic.
 
 ## Module Domains
 
@@ -26,11 +26,14 @@ Contains the mechanics that drive the simulation. It translates user intent and 
 - **`logic`**: Rules for movement, fuzzy-matching, and room resolution.
 - **`trigger_eval`**: Pure function evaluation of NPC triggers based on character state and room location (`evaluate_triggers(state) -> Vec<(NpcCard, Trigger, usize)>`). Triggers with `room_id` only fire in that room.
 - **`action_processing`**: Extracted pure functions for server handlers (`handle_movement`, `apply_npc_events`, `evaluate_and_narrate_triggers`, `commit_trigger_narration`, `execute_freeaction_impl`). Enables unit testing of server-side logic.
+- **`state_diagnostics`**: Runtime invariant checks (`INV-ROOM`, `INV-NPC`, `INV-CHAR`, `INV-LOG`), feature-flagged via `diagnostics` feature.
+
+### 2.5. The Application Tier (`crate::application::*`)
+Orchestration layer that coordinates game flow, persistence, and LLM generation. Sits between the HTTP server and the pure simulation engine.
 - **`game_service`**: `GameService` trait and `DefaultGameService` — game orchestration extracted from fragments.rs. Includes action handling, retry logic, and context helpers.
   - `execute_freeaction_pipeline()`: Extracted full FreeAction pipeline (narrate → quantify → triggers → event continuation) usable by both normal action handling and retry logic.
   - `retry_last_response_impl()`: Message-aligned retry that detects event continuations vs main narration, finds the anchor message, loads its `snapshot_id` snapshot, and regenerates.
   - `save_committed_state()`: Saves snapshots with `committed = true` for pre-generation anchoring.
-- **`state_diagnostics`**: Runtime invariant checks (`INV-ROOM`, `INV-NPC`, `INV-CHAR`, `INV-LOG`), feature-flagged via `diagnostics` feature.
 
 ### 3. The Narrative Tier (`crate::narrative::*`)
 The interface between the synchronous engine and stochastic LLM generation.

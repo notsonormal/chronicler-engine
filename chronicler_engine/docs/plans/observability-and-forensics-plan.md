@@ -47,7 +47,7 @@ This plan replaces that inferential loop with structured tracing and automatic f
 ### Task 1.1: Baseline Measurement
 - Introduce a controlled failure in a mock backend (e.g., `MockBackend::with_empty_response()`) and time how long it takes an agent to locate the root cause using only existing tooling.
 - Record: time to first relevant file, time to correct diagnosis, number of files read.
-- **Files:** `tests/flow_mock_tests.rs`, `src/engine/game_service.rs`
+- **Files:** `tests/flow_mock_tests.rs`, `src/application/game_service/actions.rs`
 - **Acceptance criteria:**
   - [ ] Documented baseline MTTD in this plan (target: >5 minutes)
   - [ ] List of files an agent typically reads before finding the cause
@@ -57,9 +57,9 @@ This plan replaces that inferential loop with structured tracing and automatic f
 - **Priority locations:**
   - `src/engine/action_processing.rs` — state mutation order
   - `src/engine/trigger_eval.rs` — trigger firing decisions
-  - `src/narrative/quantifier/core.rs` — quantifier confidence and NPC resolution
+  - `src/narrative/agents/quantifier/core.rs` — quantifier confidence and NPC resolution
   - `src/narrative/llm_client.rs` — LLM request/response lifecycle
-  - `src/engine/game_service.rs` — action dispatch and error mapping
+  - `src/application/game_service/actions.rs` — action dispatch and error mapping
 - **Deliverable:** A markdown table of "decision points" with current log coverage (none/partial/good).
 
 ---
@@ -96,7 +96,7 @@ Add `#[instrument(skip(...), fields(...))]` spans and `tracing::info!`/`warn!` e
    - `determine_npcs_in_room`: span with `room_id`, `backend_type`
    - Events for `High`/`Medium`/`Low` confidence with parsed NPC list
    - Events for fallback to static NPCs
-   - **File:** `src/narrative/quantifier/core.rs`
+   - **File:** `src/narrative/agents/quantifier/core.rs`
 
 4. **LLM Client**
    - `narrate_action`: span with `backend`, `model`, `prompt_token_estimate`
@@ -106,7 +106,7 @@ Add `#[instrument(skip(...), fields(...))]` spans and `tracing::info!`/`warn!` e
 5. **Game Service**
    - `execute_action`: span with `player_name`, `input`
    - `map_llm_error`: event with original `LlmFailure` variant before stringification
-   - **File:** `src/engine/game_service.rs`
+   - **File:** `src/application/game_service/actions.rs`
 
 - **Acceptance criteria:**
   - [ ] Running with `RUST_LOG=info` shows a coherent trace of a player action from input to narration
@@ -163,7 +163,7 @@ Add `#[instrument(skip(...), fields(...))]` spans and `tracing::info!`/`warn!` e
   - [ ] Agent diagnoses the issue without reading more than 3 source files
 
 ### Task 4.2: Add Observability Guardrails
-- Add a custom guardrail test that verifies every function in `action_processing.rs`, `trigger_eval.rs`, and `game_service.rs` has either an `#[instrument]` attribute or a `// [OBS: no-instrument-reason]` comment.
+- Add a custom guardrail test that verifies every function in `action_processing.rs`, `trigger_eval.rs`, and `application/game_service/actions.rs` has either an `#[instrument]` attribute or a `// [OBS: no-instrument-reason]` comment.
 - **File:** `tests/guardrails.rs` (extend existing)
 - **Acceptance criteria:**
   - [ ] Build fails if a new decision-path function is added without instrumentation

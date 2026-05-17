@@ -43,8 +43,9 @@ Declarative architecture rules in `arch-lint.toml`.
 
 | Scope | Cannot depend on |
 |-------|-----------------|
-| `model` | `server`, `narrative`, `engine` |
-| `engine` | `server` |
+| `model` | `server`, `narrative`, `engine`, `application` |
+| `engine` | `server`, `application` |
+| `application` | `server` |
 
 ### Rules
 

@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-05-17
+
+### Changed
+- **Extracted Application Tier** — Moved `game_service` from `engine/` to new top-level `application/` tier
+  - `src/engine/game_service/` → `src/application/game_service/`
+  - Clean architecture boundary: `server` → `application` → `engine` → `model`
+  - `engine/` now contains only pure domain rules (parser, logic, trigger_eval, action_processing)
+  - `application/` contains orchestration (DB I/O, LLM coordination, retry logic)
+  - All imports updated across ~25 files; zero logic changes
+
+### Changed
+- **Architecture guardrails** — Updated `arch-lint.toml` to enforce layer separation
+  - `engine` cannot depend on `application` or `server`
+  - `application` cannot depend on `server`
+  - `model` cannot depend on `application`
+
+### Changed
+- **Documentation** — Updated `docs/architecture/system.md` and `docs/architecture/guardrails.md` to document the new Application Tier
+
 ## 2026-05-16
 
 ### Changed

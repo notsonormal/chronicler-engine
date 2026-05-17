@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-17 15:48 UTC*
+*Index last generated: 2026-05-17 16:43 UTC*
 
 ### Root files
 
@@ -54,6 +54,11 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Spec: Agent-Ready Pipeline Restructure for Chronicler Engine](./plans/multi-agent-architecture-overarching-spec.md)
 - [Plan: Observability & Automated Forensics](./plans/observability-and-forensics-plan.md)
 - [AI Steering & Guided Generation](./plans/steering-and-guided-generation.md)
+
+### `docs/plans/archived/`
+
+- [Implementation Plan: Extract Application Layer (Option A)](./plans/archived/falcon-robin-nick-fury.md)
+- [Plan: Restructure Engine/Application Boundary in Chronicler Engine](./plans/archived/wildcat-flash-havok.md)
 
 ### `docs/reference/`
 

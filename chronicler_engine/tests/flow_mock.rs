@@ -118,7 +118,7 @@ pub fn create_test_state_with_trigger_npc() -> GameState {
 }
 
 pub fn wait_for_generation_complete(
-    ctx: &chronicler_engine::engine::game_service::GameServiceContext,
+    ctx: &chronicler_engine::application::game_service::GameServiceContext,
     timeout_ms: u64,
 ) -> bool {
     let start = std::time::Instant::now();
@@ -142,7 +142,7 @@ pub fn wait_for_generation_complete(
 }
 
 pub fn latest_state(
-    ctx: &chronicler_engine::engine::game_service::GameServiceContext,
+    ctx: &chronicler_engine::application::game_service::GameServiceContext,
 ) -> GameState {
     let snap = ctx.snapshot_storage.load_latest().unwrap().unwrap();
     let mut state = GameState::from_snapshot(
@@ -161,7 +161,7 @@ pub fn latest_state(
 }
 
 pub fn save_state(
-    ctx: &chronicler_engine::engine::game_service::GameServiceContext,
+    ctx: &chronicler_engine::application::game_service::GameServiceContext,
     state: &GameState,
 ) {
     let snapshot =
@@ -181,7 +181,7 @@ pub fn save_state(
 }
 
 pub fn add_input_and_save(
-    ctx: &chronicler_engine::engine::game_service::GameServiceContext,
+    ctx: &chronicler_engine::application::game_service::GameServiceContext,
     text: &str,
 ) {
     let mut state = latest_state(ctx);
@@ -191,7 +191,7 @@ pub fn add_input_and_save(
 }
 
 pub fn latest_snapshot(
-    ctx: &chronicler_engine::engine::game_service::GameServiceContext,
+    ctx: &chronicler_engine::application::game_service::GameServiceContext,
 ) -> Option<chronicler_engine::model::state_snapshot::GameStateSnapshot> {
     ctx.snapshot_storage.load_latest().unwrap_or(None)
 }

@@ -78,7 +78,7 @@ async fn process_action(state: &AppState, command: String) -> Response<Body> {
         }
     };
     let ctx_for_persist = state.as_game_service_context();
-    if let Err(e) = crate::engine::game_service::persist_new_messages(
+    if let Err(e) = crate::application::game_service::persist_new_messages(
         &ctx_for_persist,
         &mut game_state,
         snapshot_id,

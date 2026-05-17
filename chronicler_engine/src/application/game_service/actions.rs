@@ -95,13 +95,13 @@ pub(crate) fn reconcile_post_trigger_npcs(
     let mut state = state;
     state.narrative.generation.phase = GenerationPhase::Quantifying;
 
-    let fallback_ids: Vec<String> = state
+    let previous_ids: Vec<String> = state
         .scene
         .npcs_in_area
         .iter()
         .map(|n| n.id.clone())
         .collect();
-    let mut post_trigger_result = default_quantifier_result(&fallback_ids);
+    let mut post_trigger_result = default_quantifier_result(&previous_ids);
     run_post_generation_agents(
         service,
         &state,
@@ -109,13 +109,6 @@ pub(crate) fn reconcile_post_trigger_npcs(
         continuation_text,
         &mut post_trigger_result,
     );
-
-    let previous_ids: Vec<String> = state
-        .scene
-        .npcs_in_area
-        .iter()
-        .map(|n| n.id.clone())
-        .collect();
 
     let npc_cards: Vec<NpcCard> = post_trigger_result
         .npcs
@@ -179,24 +172,18 @@ pub fn execute_freeaction_pipeline(
     let world = Arc::clone(&state.world);
     let map = Arc::clone(&state.map);
     let player = Arc::clone(&state.player);
-    let room_id = state.movement.current_room_id.clone();
     let history = state.narrative.history();
     let nearby_npcs = state.scene.npcs_in_area.clone();
     let all_npcs: Vec<NpcCard> = state.npcs.values().cloned().collect();
 
     state.narrative.generation.status = GenerationStatus::Generating;
     state.narrative.generation.phase = GenerationPhase::Narrating;
-    let _pre_main_id = match save_committed_state(ctx, &mut state) {
-        Ok(id) => id,
-        Err(e) => {
-            log::error!("Failed to save pre-main snapshot: {e}");
-            return;
-        }
-    };
+    if let Err(e) = save_committed_state(ctx, &mut state) {
+        log::error!("Failed to save pre-main snapshot: {e}");
+        return;
+    }
 
-    let room = map.get_room_by_id(&room_id);
-
-    let Some(room) = room else {
+    let Some(room) = map.get_room_by_id(&state.movement.current_room_id) else {
         save_pipeline_error(ctx, "Room not found");
         return;
     };
@@ -240,7 +227,7 @@ pub fn execute_freeaction_pipeline(
 
     if quantifier_result.npcs.confidence == QuantifierConfidence::Low {
         state.add_log(
-            "[System] NPC detection uncertain — using room defaults".to_string(),
+            "[System] NPC detection uncertain ÔÇö using room defaults".to_string(),
             None,
             LogType::System,
         );
@@ -269,13 +256,10 @@ pub fn execute_freeaction_pipeline(
                 next_state.narrative.generation.phase = GenerationPhase::GeneratingEvent;
                 next_state.narrative.last_trigger = Some(request.stored.clone());
 
-                let _pre_event_id = match save_committed_state(ctx, &mut next_state) {
-                    Ok(id) => id,
-                    Err(e) => {
-                        log::error!("Failed to save pre-event snapshot: {e}");
-                        return;
-                    }
-                };
+                if let Err(e) = save_committed_state(ctx, &mut next_state) {
+                    log::error!("Failed to save pre-event snapshot: {e}");
+                    return;
+                }
 
                 let continuation_result = match backend.complete(
                     crate::narrative::llm::backend::AGENT_TRIGGER,
@@ -334,11 +318,8 @@ pub fn execute_freeaction_pipeline(
                         }
                     }
                 }
-
-                if let Err(e) = finish_action(ctx, next_state) {
-                    log::error!("Failed to persist finished action: {e}");
-                }
-            } else if let Err(e) = finish_action(ctx, next_state) {
+            }
+            if let Err(e) = finish_action(ctx, next_state) {
                 log::error!("Failed to persist finished action: {e}");
             }
         }

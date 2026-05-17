@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use chronicler_engine::engine::game_service::{DefaultGameService, GameService};
+use chronicler_engine::application::game_service::{DefaultGameService, GameService};
 use chronicler_engine::model::state::LogType;
 use chronicler_engine::narrative::agents::registry::AgentRegistry;
 use chronicler_engine::narrative::llm::MockBackend;

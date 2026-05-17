@@ -1,5 +1,5 @@
-use crate::engine::game_service::context::GameServiceContext;
-use crate::engine::game_service::helpers::{
+use crate::application::game_service::context::GameServiceContext;
+use crate::application::game_service::helpers::{
     load_state, map_llm_error, save_committed_state, save_state,
 };
 use crate::error::{EngineError, LlmFailure, NarrativeFailure};

@@ -26,10 +26,10 @@ fn make_test_app_state(
         player: Arc::new(TestPlayer::standard()),
         npcs: Arc::new(std::collections::HashMap::new()),
         game_service: Arc::new(
-            crate::engine::game_service::DefaultGameService::with_storage(Some(
+            crate::application::game_service::DefaultGameService::with_storage(Some(
                 game_service_storage,
             )),
-        ) as Arc<dyn crate::engine::game_service::GameService>,
+        ) as Arc<dyn crate::application::game_service::GameService>,
         settings: Arc::new(RwLock::new(AppSettings::default())),
         cancel_token: Arc::new(RwLock::new(CancellationToken::new())),
         is_generating: Arc::new(AtomicBool::new(false)),

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::engine::game_service::actions::{
+use crate::application::game_service::actions::{
     execute_freeaction_pipeline, finish_action, reconcile_post_trigger_npcs,
 };
 use crate::model::state::{GameState, GenerationPhase, GenerationStatus, LogType};
@@ -45,13 +45,10 @@ pub fn retry_last_response_impl(service: &DefaultGameService, ctx: GameServiceCo
     };
 
     let anchor_msg = &messages[anchor_idx];
-    let snapshot_id = match anchor_msg.snapshot_id {
-        Some(id) => id,
-        None => {
-            log::error!("Anchor message has no snapshot_id");
-            save_retry_error(&ctx, "Retry failed: missing snapshot_id");
-            return;
-        }
+    let Some(snapshot_id) = anchor_msg.snapshot_id else {
+        log::error!("Anchor message has no snapshot_id");
+        save_retry_error(&ctx, "Retry failed: missing snapshot_id");
+        return;
     };
 
     // Delete messages after the anchor.
@@ -116,13 +113,10 @@ pub(crate) fn retry_event_continuation(
     ctx: &GameServiceContext,
     mut state: GameState,
 ) {
-    let trigger = match state.narrative.last_trigger.clone() {
-        Some(t) => t,
-        None => {
-            log::error!("Missing trigger context for event retry");
-            save_retry_error(ctx, "Retry failed: missing trigger context");
-            return;
-        }
+    let Some(trigger) = state.narrative.last_trigger.clone() else {
+        log::error!("Missing trigger context for event retry");
+        save_retry_error(ctx, "Retry failed: missing trigger context");
+        return;
     };
 
     state.narrative.generation.status = GenerationStatus::Generating;

@@ -154,8 +154,8 @@ This enables cost optimization (cheap model for quantifier, powerful model for n
 | `src/narrative/agents/quantifier/parser.rs` | Quantifier response parser |
 | `src/narrative/agents/quantifier/prompt.rs` | Quantifier prompt builder |
 | `src/narrative/agents/quantifier/types.rs` | Quantifier types (`NpcEventList`, `NpcEvent`, etc.) |
-| `src/engine/game_service/mod.rs` | `GameService` trait |
-| `src/engine/game_service/service.rs` | `DefaultGameService` — orchestrates agent execution |
+| `src/application/game_service/mod.rs` | `GameService` trait |
+| `src/application/game_service/service.rs` | `DefaultGameService` — orchestrates agent execution |
 
 ---
 

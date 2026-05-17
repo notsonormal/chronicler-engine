@@ -1,21 +1,21 @@
 use std::sync::Arc;
 
-use crate::engine::game_service::context::GameServiceContext;
-use crate::engine::game_service::retry::{
+use crate::application::game_service::context::GameServiceContext;
+use crate::application::game_service::retry::{
     retry_event_continuation, retry_last_response_impl, retry_main_narration,
 };
 
 #[allow(unused_imports)]
 // retry_main_narration is kept for explicit test coverage even though
 // most tests exercise it indirectly via retry_last_response_impl.
-use crate::engine::game_service::service::DefaultGameService;
+use crate::application::game_service::service::DefaultGameService;
 use crate::error::{EngineError, internal_error};
 use crate::model::checkpoint::Checkpoint;
+use crate::model::message::Message;
 use crate::model::state::{GameState, GenerationStatus, LogType};
 use crate::model::state_snapshot::GameStateSnapshot;
 use crate::narrative::llm::MockBackend;
 use crate::narrative::llm::backend::LlmCallResult;
-use crate::model::message::Message;
 use crate::storage::message_storage::MessageStorage;
 use crate::storage::snapshot_storage::SnapshotStorage;
 use crate::test_support::fixtures::{TestMap, TestNpc, TestPlayer, TestWorld};

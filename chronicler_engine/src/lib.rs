@@ -23,6 +23,7 @@
     )
 )]
 
+pub mod application;
 pub mod bootstrap;
 pub mod cli;
 pub mod engine;

@@ -118,8 +118,9 @@ fn run_migrations(conn: &Connection) -> Result<(), crate::error::EngineError> {
         )
         .map_err(|e| crate::error::EngineError::Config(format!("Migration failed: {e}")))?;
 
-        conn.pragma_update(None, "user_version", 1)
-            .map_err(|e| crate::error::EngineError::Config(format!("Failed to set user_version: {e}")))?;
+        conn.pragma_update(None, "user_version", 1).map_err(|e| {
+            crate::error::EngineError::Config(format!("Failed to set user_version: {e}"))
+        })?;
     }
 
     // llm_messages is independent and uses IF NOT EXISTS so it is safe to rerun.

@@ -70,6 +70,6 @@ This is simpler, more robust, and matches how the engine actually works.
 - `src/model/message.rs` — `Message` struct
 - `src/model/state.rs` — `NarrativeState` with `Vec<Message>`
 - `src/model/state_snapshot.rs` — `GameStateSnapshot` (standalone, no `turn_id` or `base_snapshot_id`)
-- `src/engine/game_service/retry.rs` — Snapshot-based retry logic
+- `src/application/game_service/retry.rs` — Snapshot-based retry logic
 - `src/server/fragments/history.rs` — Message-level mutation handlers
 - `docs/system/game_flow.md` — Updated retry flow diagram

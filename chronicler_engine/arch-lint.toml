@@ -51,17 +51,27 @@ name = "narrative"
 paths = ["src/narrative/**"]
 
 [[scopes]]
+name = "application"
+paths = ["src/application/**"]
+
+[[scopes]]
 name = "server"
 paths = ["src/server/**"]
 
 # Model (innermost) must not depend on any outer layer.
 [[deny-scope-dep]]
 from = "model"
-to = ["server", "narrative", "engine"]
-message = "Model layer must be pure; cannot depend on server, narrative, or engine layers."
+to = ["server", "narrative", "engine", "application"]
+message = "Model layer must be pure; cannot depend on outer layers."
 
-# Engine should not depend directly on server.
+# Engine must not depend on outer layers (server or application).
 [[deny-scope-dep]]
 from = "engine"
+to = ["server", "application"]
+message = "Engine layer must not depend on server or application layers."
+
+# Application must not depend on server.
+[[deny-scope-dep]]
+from = "application"
 to = ["server"]
-message = "Engine layer should not depend directly on server layer."
+message = "Application layer must not depend on server layer."

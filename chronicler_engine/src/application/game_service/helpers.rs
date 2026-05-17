@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::engine::game_service::context::GameServiceContext;
+use crate::application::game_service::context::GameServiceContext;
 use crate::error::{EngineError, LlmFailure};
 use crate::model::state::GameState;
 use crate::model::state_snapshot::GameStateSnapshot;
@@ -32,18 +32,14 @@ pub fn load_state(ctx: &GameServiceContext) -> GameState {
 pub fn load_messages_into_state(ctx: &GameServiceContext, state: &mut GameState) {
     // [DOC: docs/architecture/system.md]
     if let Ok(msgs) = ctx.message_storage.load_messages() {
-        if !msgs.is_empty() {
-            state.narrative.messages = msgs;
-        }
+        state.narrative.messages = msgs;
     }
 }
 
 /// [DOC: docs/architecture/system.md]
 pub fn save_state(ctx: &GameServiceContext, state: &mut GameState) -> Result<u64, EngineError> {
     let snapshot = GameStateSnapshot::from_game_state(state);
-    let snapshot_id = ctx.snapshot_storage.save(&snapshot)?;
-    persist_new_messages(ctx, state, snapshot_id)?;
-    Ok(snapshot_id)
+    save_snapshot(ctx, state, snapshot)
 }
 
 /// [DOC: docs/architecture/system.md]
@@ -53,6 +49,14 @@ pub fn save_committed_state(
 ) -> Result<u64, EngineError> {
     let mut snapshot = GameStateSnapshot::from_game_state(state);
     snapshot.committed = true;
+    save_snapshot(ctx, state, snapshot)
+}
+
+fn save_snapshot(
+    ctx: &GameServiceContext,
+    state: &mut GameState,
+    snapshot: GameStateSnapshot,
+) -> Result<u64, EngineError> {
     let snapshot_id = ctx.snapshot_storage.save(&snapshot)?;
     persist_new_messages(ctx, state, snapshot_id)?;
     Ok(snapshot_id)
@@ -91,7 +95,7 @@ pub fn map_llm_error(e: &EngineError) -> String {
     match e {
         EngineError::Llm(LlmFailure::Timeout) => "LLM Error: request timed out".to_string(),
         EngineError::Llm(LlmFailure::Network { url, detail }) => {
-            format!("LLM Error: network error ({url}) — {detail}")
+            format!("LLM Error: network error ({url}) \u{2014} {detail}")
         }
         EngineError::Llm(LlmFailure::ParseError {
             expected_format, ..
@@ -100,7 +104,7 @@ pub fn map_llm_error(e: &EngineError) -> String {
         }
         EngineError::Llm(LlmFailure::EmptyResponse) => "LLM Error: empty response".to_string(),
         EngineError::Llm(LlmFailure::Http { status, body }) => {
-            format!("LLM Error: HTTP {status} — {body}")
+            format!("LLM Error: HTTP {status} \u{2014} {body}")
         }
         EngineError::Narrative(nf) => format!("LLM Error: {nf}"),
         _ => format!("LLM Error: {e}"),

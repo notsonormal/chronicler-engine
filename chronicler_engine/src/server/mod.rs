@@ -157,8 +157,8 @@ pub fn create_app_with_storage(
         player: state.player.clone(),
         npcs: Arc::new(state.npcs.clone()),
         game_service: Arc::new(
-            crate::engine::game_service::DefaultGameService::with_storage(Some(llm_storage)),
-        ) as Arc<dyn crate::engine::game_service::GameService>,
+            crate::application::game_service::DefaultGameService::with_storage(Some(llm_storage)),
+        ) as Arc<dyn crate::application::game_service::GameService>,
         settings: Arc::new(RwLock::new(settings)),
         cancel_token: Arc::new(std::sync::RwLock::new(CancellationToken::new())),
         is_generating: Arc::new(AtomicBool::new(false)),
@@ -178,7 +178,7 @@ use std::sync::atomic::AtomicBool;
 use tokio_util::sync::CancellationToken;
 use tower_http::services::ServeDir;
 
-use crate::engine::game_service::{DefaultGameService, GameService};
+use crate::application::game_service::{DefaultGameService, GameService};
 use crate::error::{EngineError, Result};
 use crate::model::character::NpcCard;
 use crate::model::map::MapDef;
@@ -240,8 +240,8 @@ impl AppState {
         Ok(game_state)
     }
 
-    pub fn as_game_service_context(&self) -> crate::engine::game_service::GameServiceContext {
-        crate::engine::game_service::GameServiceContext {
+    pub fn as_game_service_context(&self) -> crate::application::game_service::GameServiceContext {
+        crate::application::game_service::GameServiceContext {
             snapshot_storage: Arc::clone(&self.snapshot_storage),
             message_storage: Arc::clone(&self.message_storage),
             llm_message_storage: Arc::clone(&self.llm_message_storage),

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use chronicler_engine::engine::game_service::{DefaultGameService, GameService};
+use chronicler_engine::application::game_service::{DefaultGameService, GameService};
 use chronicler_engine::model::character::{CharacterSheet, NpcCard};
 use chronicler_engine::model::state::GameState;
 use chronicler_engine::model::trigger::{

@@ -1,6 +1,7 @@
 # ADR-009: Agent Trait and Registry Architecture
 
 **Date:** 2026-05-10
+**Updated:** 2026-05-17 — `game_service` extracted from `engine/` to `application/game_service/`
 
 ---
 
