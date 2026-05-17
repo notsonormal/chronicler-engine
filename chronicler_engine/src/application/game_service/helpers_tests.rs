@@ -4,12 +4,10 @@ use crate::application::game_service::helpers::{
 };
 use crate::error::{EngineError, LlmFailure, NarrativeFailure};
 use crate::model::message::Message;
-use crate::model::state::{GameState, MovementState, NarrativeState, SceneState};
-use crate::model::trigger::NpcEncounterLog;
+use crate::model::state::GameState;
 use crate::storage::snapshot_storage::SnapshotStorage;
 use crate::test_support::fixtures::{TestMap, TestPlayer, TestWorld};
 use crate::test_support::in_memory_storage::InMemoryGameStorage;
-use std::collections::HashMap;
 use std::sync::Arc;
 
 #[test]
@@ -81,21 +79,13 @@ fn test_map_llm_error_fallback() {
 }
 
 fn minimal_state() -> GameState {
-    GameState {
-        world: Arc::new(TestWorld::minimal()),
-        map: Arc::new(TestMap::single_room("start")),
-        player: Arc::new(TestPlayer::named("Test")),
-        npcs: HashMap::new(),
-        movement: MovementState {
-            current_room_id: "start".to_string(),
-            dynamic_rooms: HashMap::new(),
-        },
-        narrative: NarrativeState::default(),
-        scene: SceneState {
-            npcs_in_area: vec![],
-        },
-        npc_encounter_log: NpcEncounterLog::default(),
-    }
+    crate::model::state::GameStateBuilder::new(
+        Arc::new(TestWorld::minimal()),
+        Arc::new(TestMap::single_room("start")),
+        Arc::new(TestPlayer::named("Test")),
+        "start",
+    )
+    .build()
 }
 
 fn minimal_ctx() -> GameServiceContext {

@@ -256,68 +256,37 @@ impl TestGameState {
     /// A `GameState` in the given room with one NPC loaded, but with
     /// `npc_encounter_log` set to default (no starting-room encounter tracking).
     pub fn with_npc_raw(room_id: &str, npc: NpcCard) -> GameState {
-        let npc_id = npc.id.clone();
-        let mut npcs_map = HashMap::new();
-        npcs_map.insert(npc_id.clone(), npc);
-        GameState {
-            world: Arc::new(TestWorld::minimal()),
-            map: Arc::new(TestMap::single_room(room_id)),
-            player: Arc::new(TestPlayer::standard()),
-            npcs: npcs_map,
-            movement: crate::model::state::MovementState {
-                current_room_id: room_id.to_string(),
-                dynamic_rooms: HashMap::new(),
-            },
-            narrative: crate::model::state::NarrativeState {
-                messages: Vec::new(),
-                input_buffer: Default::default(),
-                last_trigger: None,
-                pending_location: None,
-                pending_event: None,
-            },
-            scene: crate::model::state::SceneState {
-                npcs_in_area: Vec::new(),
-            },
-            npc_encounter_log: Default::default(),
-        }
+        crate::model::state::GameStateBuilder::new(
+            Arc::new(TestWorld::minimal()),
+            Arc::new(TestMap::single_room(room_id)),
+            Arc::new(TestPlayer::standard()),
+            room_id,
+        )
+        .with_npcs(vec![npc])
+        .build()
     }
 
     /// Like `with_npc_raw` but with a custom room display name.
     pub fn with_npc_in_named_room_raw(room_id: &str, room_name: &str, npc: NpcCard) -> GameState {
-        let npc_id = npc.id.clone();
         let room = TestMap::room_named(room_id, room_name);
-        let mut npcs_map = HashMap::new();
-        npcs_map.insert(npc_id, npc);
-        GameState {
-            world: Arc::new(TestWorld::minimal()),
-            map: Arc::new(MapDef {
-                overworld: Overworld {
-                    id: "test_overworld".to_string(),
-                    name: "Test Overworld".to_string(),
-                    regions: vec![Region {
-                        id: "test_region".to_string(),
-                        name: "Test Region".to_string(),
-                        rooms: vec![room],
-                    }],
-                },
-            }),
-            player: Arc::new(TestPlayer::standard()),
-            npcs: npcs_map,
-            movement: crate::model::state::MovementState {
-                current_room_id: room_id.to_string(),
-                dynamic_rooms: HashMap::new(),
+        let map = MapDef {
+            overworld: Overworld {
+                id: "test_overworld".to_string(),
+                name: "Test Overworld".to_string(),
+                regions: vec![Region {
+                    id: "test_region".to_string(),
+                    name: "Test Region".to_string(),
+                    rooms: vec![room],
+                }],
             },
-            narrative: crate::model::state::NarrativeState {
-                messages: Vec::new(),
-                input_buffer: Default::default(),
-                last_trigger: None,
-                pending_location: None,
-                pending_event: None,
-            },
-            scene: crate::model::state::SceneState {
-                npcs_in_area: Vec::new(),
-            },
-            npc_encounter_log: Default::default(),
-        }
+        };
+        crate::model::state::GameStateBuilder::new(
+            Arc::new(TestWorld::minimal()),
+            Arc::new(map),
+            Arc::new(TestPlayer::standard()),
+            room_id,
+        )
+        .with_npcs(vec![npc])
+        .build()
     }
 }

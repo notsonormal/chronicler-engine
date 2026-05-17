@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::model::state::{GameState, MovementState, NarrativeState, SceneState};
+use crate::model::state::{GameStateBuilder, MovementState, SceneState};
 use crate::model::state_snapshot::{GameStateSnapshot, NarrativeSnapshot};
 use crate::model::trigger::NpcEncounterLog;
 use crate::test_support::fixtures::{TestMap, TestPlayer, TestWorld};
@@ -20,21 +20,13 @@ fn test_narrative_snapshot_default() {
 
 #[test]
 fn test_game_state_snapshot_apply_to() {
-    let mut state = GameState {
-        world: Arc::new(TestWorld::minimal()),
-        map: Arc::new(TestMap::single_room("old_room")),
-        player: Arc::new(TestPlayer::named("Test")),
-        npcs: HashMap::new(),
-        movement: MovementState {
-            current_room_id: "old_room".to_string(),
-            dynamic_rooms: HashMap::new(),
-        },
-        narrative: NarrativeState::default(),
-        scene: SceneState {
-            npcs_in_area: vec![],
-        },
-        npc_encounter_log: NpcEncounterLog::default(),
-    };
+    let mut state = GameStateBuilder::new(
+        Arc::new(TestWorld::minimal()),
+        Arc::new(TestMap::single_room("old_room")),
+        Arc::new(TestPlayer::named("Test")),
+        "old_room",
+    )
+    .build();
 
     let snapshot = GameStateSnapshot {
         db_id: None,
@@ -63,21 +55,13 @@ fn test_game_state_snapshot_apply_to() {
 
 #[test]
 fn test_from_game_state_sets_defaults() {
-    let state = GameState {
-        world: Arc::new(TestWorld::minimal()),
-        map: Arc::new(TestMap::single_room("start")),
-        player: Arc::new(TestPlayer::named("Test")),
-        npcs: HashMap::new(),
-        movement: MovementState {
-            current_room_id: "start".to_string(),
-            dynamic_rooms: HashMap::new(),
-        },
-        narrative: NarrativeState::default(),
-        scene: SceneState {
-            npcs_in_area: vec![],
-        },
-        npc_encounter_log: NpcEncounterLog::default(),
-    };
+    let state = GameStateBuilder::new(
+        Arc::new(TestWorld::minimal()),
+        Arc::new(TestMap::single_room("start")),
+        Arc::new(TestPlayer::named("Test")),
+        "start",
+    )
+    .build();
 
     let snapshot = GameStateSnapshot::from_game_state(&state);
     assert!(snapshot.db_id.is_none());

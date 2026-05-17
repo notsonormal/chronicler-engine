@@ -155,8 +155,6 @@ pub struct NarrativeState {
 }
 
 impl NarrativeState {
-    /// Flatten messages into a Vec<LogEntry> for backward compatibility
-    /// with templates and other consumers that expect the old shape.
     pub fn history(&self) -> Vec<LogEntry> {
         self.messages
             .iter()
@@ -183,7 +181,7 @@ impl NarrativeState {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SceneState {
     pub npcs_in_area: Vec<NpcCard>,
 }
@@ -192,6 +190,7 @@ pub struct SceneState {
 
 /// [DOC: docs/architecture/system.md]
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct GameState {
     pub world: Arc<WorldCard>,
     pub map: Arc<MapDef>,
@@ -201,6 +200,82 @@ pub struct GameState {
     pub narrative: NarrativeState,
     pub scene: SceneState,
     pub npc_encounter_log: NpcEncounterLog,
+}
+
+/// Builder for [`GameState`].
+///
+/// New fields added to `GameState` get a `Default::default()` fallback here,
+/// so existing call sites do not break when the struct grows.
+pub struct GameStateBuilder {
+    world: Arc<WorldCard>,
+    map: Arc<MapDef>,
+    player: Arc<PlayerCard>,
+    starting_room: String,
+    npcs: Vec<NpcCard>,
+    narrative: Option<NarrativeState>,
+    scene: Option<SceneState>,
+    npc_encounter_log: Option<NpcEncounterLog>,
+}
+
+impl GameStateBuilder {
+    pub fn new(
+        world: Arc<WorldCard>,
+        map: Arc<MapDef>,
+        player: Arc<PlayerCard>,
+        starting_room: impl Into<String>,
+    ) -> Self {
+        Self {
+            world,
+            map,
+            player,
+            starting_room: starting_room.into(),
+            npcs: Vec::new(),
+            narrative: None,
+            scene: None,
+            npc_encounter_log: None,
+        }
+    }
+
+    pub fn with_npcs(mut self, npcs: Vec<NpcCard>) -> Self {
+        self.npcs = npcs;
+        self
+    }
+
+    pub fn with_narrative(mut self, narrative: NarrativeState) -> Self {
+        self.narrative = Some(narrative);
+        self
+    }
+
+    pub fn with_scene(mut self, scene: SceneState) -> Self {
+        self.scene = Some(scene);
+        self
+    }
+
+    pub fn with_npc_encounter_log(mut self, log: NpcEncounterLog) -> Self {
+        self.npc_encounter_log = Some(log);
+        self
+    }
+
+    pub fn build(self) -> GameState {
+        let mut npcs_map = HashMap::new();
+        for npc in self.npcs {
+            npcs_map.insert(npc.id.clone(), npc);
+        }
+
+        GameState {
+            world: self.world,
+            map: self.map,
+            player: self.player,
+            npcs: npcs_map,
+            movement: MovementState {
+                current_room_id: self.starting_room,
+                dynamic_rooms: HashMap::new(),
+            },
+            narrative: self.narrative.unwrap_or_default(),
+            scene: self.scene.unwrap_or_default(),
+            npc_encounter_log: self.npc_encounter_log.unwrap_or_default(),
+        }
+    }
 }
 
 impl GameState {
@@ -230,32 +305,11 @@ impl GameState {
         npcs: Vec<NpcCard>,
         starting_room: String,
     ) -> Self {
-        let mut npcs_map = HashMap::new();
-        for npc in npcs {
-            npcs_map.insert(npc.id.clone(), npc);
-        }
-
-        let npc_encounter_log = NpcEncounterLog::default();
-
-        Self {
-            world,
-            map,
-            player,
-            npcs: npcs_map,
-            movement: MovementState {
-                current_room_id: starting_room,
-                dynamic_rooms: HashMap::new(),
-            },
-            narrative: NarrativeState::default(),
-            scene: SceneState {
-                npcs_in_area: Vec::new(),
-            },
-            npc_encounter_log,
-        }
+        GameStateBuilder::new(world, map, player, starting_room)
+            .with_npcs(npcs)
+            .build()
     }
 
-    /// Initialise npc_encounter_log and npcs_in_area from scenario NPCs.
-    /// Skips NPCs already present in the scene to avoid duplicates.
     pub fn init_scenario_npcs(&mut self, scenario: &crate::model::scenario::StartingScenario) {
         for npc_id in &scenario.npcs {
             if let Some(npc) = self.npcs.get(npc_id).cloned() {
@@ -358,8 +412,6 @@ impl GameState {
     }
 
     /// [DOC: docs/architecture/system.md]
-    /// Returns true if the last AI response is an event continuation
-    /// (i.e. the last narration/dialogue entry has an event header).
     pub fn is_last_ai_response_event_continuation(&self) -> bool {
         self.narrative
             .messages
@@ -369,7 +421,6 @@ impl GameState {
             .is_some_and(|m| m.event_header.is_some())
     }
 
-    /// Resolve the player's current room from the map or dynamic rooms.
     /// [DOC: docs/system/navigation.md]
     pub fn current_room(&self) -> Option<&Room> {
         self.map

@@ -87,29 +87,12 @@ fn make_state(
         },
         inventory: vec![],
     });
-    let mut npcs = HashMap::new();
-    for npc in all_npcs {
-        npcs.insert(npc.id.clone(), npc.clone());
-    }
-    GameState {
-        world,
-        map,
-        player,
-        npcs,
-        movement: crate::model::state::MovementState {
-            current_room_id: "room_1".into(),
-            dynamic_rooms: HashMap::new(),
-        },
-        narrative: crate::model::state::NarrativeState {
-            messages: vec![],
-            input_buffer: Default::default(),
-            last_trigger: None,
-            pending_location: None,
-            pending_event: None,
-        },
-        scene: crate::model::state::SceneState { npcs_in_area },
-        npc_encounter_log,
-    }
+    let npcs: Vec<NpcCard> = all_npcs.to_vec();
+    crate::model::state::GameStateBuilder::new(world, map, player, "room_1")
+        .with_npcs(npcs)
+        .with_scene(crate::model::state::SceneState { npcs_in_area })
+        .with_npc_encounter_log(npc_encounter_log)
+        .build()
 }
 
 #[test]
@@ -267,18 +250,15 @@ fn test_increment_times_met_always_increments() {
     // increment_times_met always increments - the guard is in handle_movement
     let mut npc_encounter_log = NpcEncounterLog::default();
 
-    // Always increments when called
     increment_times_met(&mut npc_encounter_log, "gabriella");
     assert_eq!(get_times_met(&npc_encounter_log, "gabriella"), 1);
 
-    // Can be called multiple times
     increment_times_met(&mut npc_encounter_log, "gabriella");
     assert_eq!(get_times_met(&npc_encounter_log, "gabriella"), 2);
 }
 
 #[test]
 fn test_npc_encounter_log_initializes_with_starting_room_npcs() {
-    // Test that NPCs in the starting room have times_met=1 and currently_meeting=true
     use crate::model::character::NpcCard;
     use crate::model::map::{MapDef, Overworld, Region, Room};
     use crate::model::world::WorldCard;

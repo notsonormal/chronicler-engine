@@ -2,6 +2,18 @@
 
 ## 2026-05-17
 
+### Added
+- **GameStateBuilder** — Structural extensibility for `GameState`
+  - Added `GameStateBuilder` in `src/model/state.rs` with required constructor fields (`world`, `map`, `player`, `starting_room`) and optional setters (`with_npcs`, `with_narrative`, `with_scene`, `with_npc_encounter_log`)
+  - New fields added to `GameState` get `Default::default()` fallback in `build()`, so existing call sites do not break
+  - `GameState::new` now delegates to `GameStateBuilder`
+  - Marked `GameState` with `#[non_exhaustive]` to prevent integration tests from constructing with struct literals
+  - Refactored all 7 manual `GameState { ... }` struct literal constructions across tests to use `GameStateBuilder` or `GameState::new`
+  - Added `#[derive(Default)]` to `SceneState` (required for builder fallback)
+  - All 779 tests pass; clippy clean; 84.4% coverage
+
+## 2026-05-17
+
 ### Changed
 - **Domain vocabulary rename** — Eliminated cognitive tax from three misnamed structures
   - `CharacterState` → `NpcEncounterLog` (encounter log map, not a single character's status)
