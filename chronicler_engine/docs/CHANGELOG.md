@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-05-18
+
+### Changed
+- **Pipeline cancellation checkpoints** — `execute_freeaction_pipeline` now checks `ctx.cancel_token.is_cancelled()` at three stage boundaries
+  - After main narration LLM call (prevents wasted quantifier + trigger work)
+  - Before trigger continuation LLM call (prevents second LLM call on stale request)
+  - After trigger continuation LLM call (prevents committing partial trigger state)
+  - New `handle_pipeline_cancellation()` helper resets `GenerationStatus::Idle`, clears phase, and persists state
+  - `retry_event_continuation` now also checks cancellation before running the trigger retry LLM call
+  - Updated `docs/adr/adr-010-concurrency-generation-gate.md`, `docs/architecture/invariants.md`, `docs/architecture/system.md`, `docs/system/game_flow.md`, `docs/system/llm_processing.md`
+  - All 781 tests pass; clippy clean
+
 ## 2026-05-17
 
 ### Changed

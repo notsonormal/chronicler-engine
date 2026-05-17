@@ -17,6 +17,8 @@ pub struct MockBackend {
     pub trigger_narration_should_fail: AtomicBool,
     /// Milliseconds to sleep in `narrate_action` to simulate a slow LLM.
     pub delay_ms: AtomicU64,
+    /// Milliseconds to sleep in `complete` to simulate a slow trigger LLM.
+    pub trigger_delay_ms: AtomicU64,
     /// Return different narration text per call (rotates).
     pub per_call_narrations: Vec<String>,
     /// Return different prompt responses per call (rotates). Used for quantifier/testing.
@@ -57,6 +59,13 @@ impl MockBackend {
     pub fn with_delay(ms: u64) -> Self {
         Self {
             delay_ms: AtomicU64::new(ms),
+            ..Default::default()
+        }
+    }
+
+    pub fn with_trigger_delay(ms: u64) -> Self {
+        Self {
+            trigger_delay_ms: AtomicU64::new(ms),
             ..Default::default()
         }
     }
@@ -172,6 +181,10 @@ impl LlmBackend for MockBackend {
         user_prompt: &str,
         _max_tokens: Option<u32>,
     ) -> Result<LlmCallResult, EngineError> {
+        let delay = self.trigger_delay_ms.load(Ordering::SeqCst);
+        if delay > 0 {
+            std::thread::sleep(std::time::Duration::from_millis(delay));
+        }
         if self.should_fail.load(Ordering::SeqCst)
             || self.trigger_narration_should_fail.load(Ordering::SeqCst)
         {

@@ -1,7 +1,7 @@
 # ADR-010: Concurrency and Generation Gate Model
 
 **Date:** 2026-05-10
-**Updated:** 2026-05-17 — `game_service` extracted from `engine/` to `application/game_service/`
+**Updated:** 2026-05-18 — Cooperative cancellation checkpoints added to `execute_freeaction_pipeline`
 
 ---
 
@@ -53,7 +53,7 @@ pub struct AppState {
 
 ### Negative
 - **Runtime dependency**: Requires active Tokio runtime (guaranteed by Axum)
-- **No cancellation**: `spawn_blocking` tasks still run to completion
+- **Cooperative cancellation only**: `spawn_blocking` tasks cannot be forcibly killed; they must poll `CancellationToken::is_cancelled()` at internal checkpoints to abort early. The pipeline checks at stage boundaries (post-narration, pre-trigger, post-trigger) and resets status to `Idle` before returning.
 
 ### Trade-offs
 - Chose `spawn_blocking` over `tokio::spawn` + `async` traits because backend traits are sync and `dyn async Trait` is complex in Rust 2024

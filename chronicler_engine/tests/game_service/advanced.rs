@@ -359,6 +359,112 @@ async fn test_cancellation_resets_state_to_idle() {
     );
 }
 
+#[tokio::test]
+async fn test_pipeline_cancels_after_main_narration() {
+    let mut state = create_test_state();
+    state.narrative.messages.clear();
+    state.narrative.input_buffer.status = GenerationStatus::Generating;
+    let ctx = make_test_context(state);
+    let service = DefaultGameService::with_mock_quantifier(
+        Arc::new(MockBackend::with_delay(50)),
+        Arc::new(MockBackend::default()),
+    );
+    let token = ctx.cancel_token.clone();
+
+    let ctx_clone = ctx.clone();
+    let handle = tokio::task::spawn_blocking(move || {
+        service.execute_action(
+            ctx_clone.clone(),
+            "look around".to_string(),
+            "Player".to_string(),
+        );
+    });
+
+    // Cancel while the mock backend is sleeping inside narrate_action
+    tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+    token.cancel();
+
+    handle.await.unwrap();
+
+    let guard = latest_state(&ctx);
+    assert!(
+        !guard.narrative.input_buffer.status.is_generating(),
+        "Status should be Idle after cancellation at post-narration checkpoint"
+    );
+
+    // Narration should NOT have been added because pipeline aborted before
+    // execute_freeaction_impl could append it and persist messages.
+    let has_narration = guard
+        .narrative
+        .history()
+        .into_iter()
+        .any(|e| e.log_type == LogType::Narration);
+    assert!(
+        !has_narration,
+        "Narration should be discarded when cancelled after main LLM call"
+    );
+}
+
+#[tokio::test]
+async fn test_pipeline_cancels_during_trigger_continuation() {
+    let mut state = create_test_state_with_trigger_npc();
+    state.narrative.messages.clear();
+    state.narrative.input_buffer.status = GenerationStatus::Generating;
+    // Reset times_met so the trigger is eligible to fire
+    if let Some(encounter) = state.npc_encounter_log.npcs.get_mut("shopkeeper") {
+        encounter.times_met = 0;
+    }
+    let ctx = make_test_context(state);
+    let service = DefaultGameService::with_mock_quantifier(
+        Arc::new(MockBackend::with_trigger_delay(50)),
+        Arc::new(MockBackend {
+            per_call_prompt_responses: vec![r#"{"npcs_in_room": ["shopkeeper"]}"#.to_string()],
+            ..Default::default()
+        }),
+    );
+    let token = ctx.cancel_token.clone();
+
+    let ctx_clone = ctx.clone();
+    let handle = tokio::task::spawn_blocking(move || {
+        service.execute_action(
+            ctx_clone.clone(),
+            "enter the shop".to_string(),
+            "Player".to_string(),
+        );
+    });
+
+    // Cancel while the mock backend is sleeping inside complete (trigger continuation)
+    tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+    token.cancel();
+
+    handle.await.unwrap();
+
+    let guard = latest_state(&ctx);
+    assert!(
+        !guard.narrative.input_buffer.status.is_generating(),
+        "Status should be Idle after cancellation at post-trigger checkpoint"
+    );
+
+    // Main narration should exist (added by execute_freeaction_impl before the trigger LLM call)
+    let has_narration = guard
+        .narrative
+        .history()
+        .into_iter()
+        .any(|e| e.log_type == LogType::Narration);
+    assert!(has_narration, "Main narration should be preserved");
+
+    // Trigger event should NOT have been committed
+    let has_event = guard
+        .narrative
+        .history()
+        .into_iter()
+        .any(|e| e.event_header.is_some());
+    assert!(
+        !has_event,
+        "Trigger event should be discarded when cancelled after trigger LLM call"
+    );
+}
+
 #[test]
 fn test_retry_last_response_not_ai_generated() {
     let mut state = create_test_state();

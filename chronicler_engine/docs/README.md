@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-17 23:20 UTC*
+*Index last generated: 2026-05-17 23:48 UTC*
 
 ### Root files
 
@@ -49,6 +49,8 @@ This folder contains all documentation for the Chronicler Engine project.
 
 - [Plan: Diagnostic Decision Tree as Agent Infrastructure](./plans/diagnostic-decision-tree-plan.md)
 - [Implementation Plan: Fix Diagnostic Signal Quality for All 12 Scenarios](./plans/diagnostic_fixes_plan.md)
+- [Plan: Extract `ActionPipeline` to Unify Action and Retry Flows](./plans/extract-action-pipeline-plan.md)
+- [Review: Extract MessageHistory from GameState](./plans/extract-message-history-from-gamestate-plan.md)
 - [Plan: Fast-Fail Build & Test Localization](./plans/fast-fail-build-test-localization-plan.md)
 - [LLM Infrastructure Improvements](./plans/llm-infrastructure-improvements.md)
 - [Spec: Agent-Ready Pipeline Restructure for Chronicler Engine](./plans/multi-agent-architecture-overarching-spec.md)
@@ -58,6 +60,7 @@ This folder contains all documentation for the Chronicler Engine project.
 
 ### `docs/plans/archived/`
 
+- [Plan: Fix Pipeline Cancellation Blindness](./plans/archived/big-barda-supergirl-vixen.md)
 - [Plan: Remove Legacy Synchronous Dead Code (`evaluate_and_narrate_triggers`)](./plans/archived/black-widow-monet-aqualad.md)
 - [Settings I/O Centralization — Implementation Plan](./plans/archived/daredevil-john-stewart-blue-marvel.md)
 - [Implementation Plan: Extract Application Layer (Option A)](./plans/archived/falcon-robin-nick-fury.md)

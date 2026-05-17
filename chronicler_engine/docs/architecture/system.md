@@ -32,7 +32,7 @@ Contains the mechanics that drive the simulation. It translates user intent and 
 ### 2.5. The Application Tier (`crate::application::*`)
 Orchestration layer that coordinates game flow, persistence, and LLM generation. Sits between the HTTP server and the pure simulation engine.
 - **`game_service`**: `GameService` trait and `DefaultGameService` — game orchestration extracted from fragments.rs. Includes action handling, retry logic, and context helpers.
-  - `execute_freeaction_pipeline()`: Extracted full FreeAction pipeline (narrate → quantify → triggers → event continuation) usable by both normal action handling and retry logic.
+  - `execute_freeaction_pipeline()`: Extracted full FreeAction pipeline (narrate → quantify → triggers → event continuation) usable by both normal action handling and retry logic. Checks `CancellationToken::is_cancelled()` at stage boundaries (post-narration, pre-trigger, post-trigger) and aborts gracefully via `handle_pipeline_cancellation()` to avoid wasted LLM calls on stale requests.
   - `retry_last_response_impl()`: Message-aligned retry that detects event continuations vs main narration, finds the anchor message, loads its `snapshot_id` snapshot, and regenerates.
   - `save_committed_state()`: Saves snapshots with `committed = true` for pre-generation anchoring.
 

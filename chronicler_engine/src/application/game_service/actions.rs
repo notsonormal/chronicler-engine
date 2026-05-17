@@ -63,6 +63,16 @@ fn save_pipeline_error(ctx: &GameServiceContext, error: impl Into<String>) {
     }
 }
 
+fn handle_pipeline_cancellation(ctx: &GameServiceContext) {
+    log::warn!("Pipeline cancelled — aborting remaining stages");
+    let mut state = load_state(ctx);
+    state.narrative.input_buffer.status = GenerationStatus::Idle;
+    state.narrative.input_buffer.phase = GenerationPhase::default();
+    if let Err(e) = save_state(ctx, &mut state) {
+        log::error!("Critical: failed to persist cancelled state: {e}");
+    }
+}
+
 pub(crate) fn finish_action(
     ctx: &GameServiceContext,
     mut state: GameState,
@@ -260,6 +270,11 @@ pub fn execute_freeaction_pipeline(
         };
     let narration_text = narration_result.text;
 
+    if ctx.cancel_token.is_cancelled() {
+        handle_pipeline_cancellation(ctx);
+        return;
+    }
+
     if narration_text.trim().is_empty() {
         save_pipeline_error(ctx, "LLM Error: empty response");
         return;
@@ -318,6 +333,11 @@ pub fn execute_freeaction_pipeline(
                 next_state.narrative.input_buffer.phase = GenerationPhase::GeneratingEvent;
                 next_state.narrative.last_trigger = Some(request.stored.clone());
 
+                if ctx.cancel_token.is_cancelled() {
+                    handle_pipeline_cancellation(ctx);
+                    return;
+                }
+
                 if let Err(e) = save_committed_state(ctx, &mut next_state) {
                     log::error!("Failed to save pre-event snapshot: {e}");
                     return;
@@ -346,6 +366,11 @@ pub fn execute_freeaction_pipeline(
                     }
                 };
                 let continuation_text = continuation_result.text;
+
+                if ctx.cancel_token.is_cancelled() {
+                    handle_pipeline_cancellation(ctx);
+                    return;
+                }
 
                 if !continuation_text.is_empty() {
                     next_state = match commit_trigger_narration(

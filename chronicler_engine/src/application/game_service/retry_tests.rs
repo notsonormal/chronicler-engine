@@ -363,6 +363,49 @@ fn test_retry_event_missing_trigger_context() {
 }
 
 #[test]
+fn test_retry_event_continuation_cancels_before_llm() {
+    let state = make_test_state();
+    let ctx = make_test_context_with_sqlite(state).unwrap();
+    let service = make_service();
+
+    let _input_id = add_input_and_save(&ctx, "test input");
+    let _pre_main_id = save_pre_main(&ctx);
+
+    // Set up a pre-event snapshot with last_trigger so retry_event_continuation is reached
+    let mut pre_event_state = ctx.load_state();
+    pre_event_state.narrative.last_trigger = Some(crate::model::state::StoredTriggerContext {
+        npc_id: "npc1".to_string(),
+        trigger_idx: 0,
+        trigger_name: "Test".to_string(),
+        trigger_repeat: false,
+        trigger_narration_prompt: "Test prompt".to_string(),
+        system_prompt: "sys".to_string(),
+        user_prompt: "user".to_string(),
+        max_tokens: None,
+    });
+    pre_event_state.add_log("Main narration".to_string(), None, LogType::Narration);
+    let snapshot =
+        crate::model::state_snapshot::GameStateSnapshot::from_game_state(&pre_event_state);
+    let pre_event_id = ctx.snapshot_storage.save(&snapshot).unwrap();
+    if let Some(last) = pre_event_state.narrative.messages.last_mut() {
+        last.snapshot_id = Some(pre_event_id);
+        let _ = ctx.message_storage.insert_message(last);
+    }
+
+    // Cancel the token before retry runs
+    ctx.cancel_token.cancel();
+
+    retry_event_continuation(&service, &ctx, pre_event_state);
+
+    let state = ctx.load_state();
+    assert!(
+        matches!(state.narrative.input_buffer.status, GenerationStatus::Idle),
+        "Cancelled retry should reset status to Idle, got {:?}",
+        state.narrative.input_buffer.status
+    );
+}
+
+#[test]
 fn test_retry_event_trigger_narration_fails() {
     let state = make_test_state();
     let ctx = make_test_context_with_sqlite(state).unwrap();

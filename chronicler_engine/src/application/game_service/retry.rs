@@ -119,6 +119,14 @@ pub(crate) fn retry_event_continuation(
         return;
     };
 
+    if ctx.cancel_token.is_cancelled() {
+        log::warn!("Retry event continuation cancelled — aborting");
+        if let Err(e) = finish_action(ctx, state) {
+            log::error!("Failed to persist cancelled retry state: {e}");
+        }
+        return;
+    }
+
     state.narrative.input_buffer.status = GenerationStatus::Generating;
     state.narrative.input_buffer.phase = GenerationPhase::GeneratingEvent;
 

@@ -9,7 +9,7 @@ The engine utilizes Large Language Models (LLMs) via the OpenRouter API, DeepSee
 
 ### 1. The Blocking Task Pattern
 - **Concurrency**: The engine keeps the `GameService` trait fully synchronous. HTTP handlers in `src/server/fragments/actions.rs` offload LLM work to the async runtime via `tokio::task::spawn_blocking`. This prevents the Axum event loop from stalling during network I/O while avoiding the `#[async_trait]` + `dyn Trait` incompatibility in Rust 2024 edition.
-- **Cancellation**: Each spawned task checks a `CancellationToken` before and after execution to handle graceful shutdown.
+- **Cancellation**: Each spawned task checks a `CancellationToken` before and after execution to handle graceful shutdown. Long-running pipelines (`execute_freeaction_pipeline`) also check the token at internal stage boundaries (after main narration, before trigger continuation, after trigger continuation) to abort early and avoid wasting LLM calls on stale requests. When cancelled mid-pipeline, `handle_pipeline_cancellation()` resets `GenerationStatus::Idle`, clears the phase, and persists the state.
 
 ### 2. Model Configuration
 The engine supports flexible model selection via connection profiles in `data/settings.json`.
