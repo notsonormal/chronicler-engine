@@ -3,6 +3,43 @@
 ## 2026-05-17
 
 ### Changed
+- **Broke engine↔narrative bidirectional coupling** — Full decoupling of peer tiers
+  - Moved `get_current_room` from `engine::logic` to `GameState::current_room()` in `model::state`
+  - Added `current_room: Option<&Room>` to `AgentContext`; application layer resolves the room and passes it to agents
+  - `determine_npcs_in_room` now accepts `&Room` instead of calling engine logic
+  - Created `model::quantifier` module; moved `QuantifierResult`, `QuantifierParseResult`, `MovementParseResult`, `QuantifierConfidence`, `NpcEvent`, `NpcEventType`, `NpcEventList`, and `compute_npc_events` from `narrative::agents::quantifier`
+  - Extracted trigger prompt building from `engine/action_processing.rs` to `application/game_service/actions.rs`
+  - Simplified `FreeActionContext` to `narration_text` + `quantifier_result` only
+  - `TurnResult` now carries `trigger_match: Option<TriggerMatch>` (raw engine data) instead of `trigger_continuation: Option<TriggerContinuationRequest>` (pre-built prompts)
+  - Preserved mutation order invariant: trigger evaluation still happens before `apply_npc_events`
+  - Added `engine → narrative` denial rule to `arch-lint.toml`
+  - Removed dead code `evaluate_and_narrate_triggers` from engine
+  - All 779 tests pass; clippy clean; architecture guardrails pass
+
+## 2026-05-17
+
+### Removed
+- **Legacy synchronous trigger dead code** — Eliminated `evaluate_and_narrate_triggers()` from `engine/action_processing.rs`
+  - This function performed a blocking LLM call inside the state lock; production has used the split architecture since the Application Tier extraction
+  - Current pipeline: `execute_freeaction_impl` builds `TriggerContinuationRequest` (no LLM) → LLM call runs async outside the lock → `commit_trigger_narration` applies the result
+  - Rewrote `test_evaluate_and_narrate_triggers_adds_event_header` to exercise the production split path (`execute_freeaction_impl` + `commit_trigger_narration`)
+  - Updated `docs/architecture/system.md` to remove the obsolete function reference
+  - All 782 tests pass; zero logic changes
+
+## 2026-05-17
+
+### Changed
+- **Separated DB Models from Domain Models** — Storage layer now has clean internal architecture
+  - New `src/storage/models/` — DB row structs (`DbGame`, `DbGameStateSnapshot`, `DbCheckpoint`, `DbMessage`, `DbLlmMessage`)
+  - New `src/storage/mappers/` — Conversion logic between DB models and domain models
+  - Domain models (`Message`, `Checkpoint`, `LlmMessage`, `GameStateSnapshot`, `NarrativeSnapshot`) moved from `src/model/storage/` to `src/model/`
+  - Storage implementations (`SqliteGameStorage`, `SqliteLlmMessageStorage`) use DB models internally, map at the boundary
+  - Arch-lint guardrails prevent any non-storage code from importing `storage-models`
+  - All 772 tests pass; zero logic changes
+
+## 2026-05-17
+
+### Changed
 - **Settings I/O Centralization** — Eliminated scattered `load_settings()` calls across all layers
   - Settings loaded **once** at startup in `bootstrap/run.rs` and passed down via `Arc<RwLock<AppSettings>>`
   - `GameServiceContext` now carries `settings: Arc<RwLock<AppSettings>>`

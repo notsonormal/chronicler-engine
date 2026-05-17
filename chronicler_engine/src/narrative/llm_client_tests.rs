@@ -407,7 +407,6 @@ fn test_call_chat_completions_mock_server_error_status() {
     );
 }
 
-
 #[test]
 fn test_call_chat_completions_mock_server_no_content() {
     use std::io::{Read, Write};
@@ -464,8 +463,7 @@ fn test_call_chat_completions_mock_server_truncated_body() {
         let _ = stream.read(&mut buf).unwrap_or(0);
 
         // Claim a huge body but send nothing, forcing reqwest to fail reading
-        let response =
-            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 99999\r\nConnection: close\r\n\r\n";
+        let response = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 99999\r\nConnection: close\r\n\r\n";
         stream.write_all(response.as_bytes()).unwrap();
         let _ = stream.flush();
     });

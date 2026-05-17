@@ -3,8 +3,8 @@ use crate::application::game_service::helpers::{
     load_state, map_llm_error, save_committed_state, save_state,
 };
 use crate::error::{EngineError, LlmFailure, NarrativeFailure};
+use crate::model::message::Message;
 use crate::model::state::{GameState, MovementState, NarrativeState, SceneState};
-use crate::model::storage::message::Message;
 use crate::model::trigger::CharacterState;
 use crate::storage::snapshot_storage::SnapshotStorage;
 use crate::test_support::fixtures::{TestMap, TestPlayer, TestWorld};

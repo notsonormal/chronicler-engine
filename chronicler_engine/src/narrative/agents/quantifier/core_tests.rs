@@ -445,6 +445,23 @@ impl LlmBackend for ErrBackend {
 
 // ─── determine_npcs_in_room tests ────────────────────────────────────────────
 
+fn determine_npcs_with_room(
+    state: &crate::model::state::GameState,
+    room_npc_ids: &[String],
+    previous_room_npcs: &[crate::model::character::NpcCard],
+    player_action: &str,
+    backend: &dyn crate::narrative::llm::backend::LlmBackend,
+) -> crate::model::quantifier::QuantifierResult {
+    determine_npcs_in_room(
+        state,
+        state.current_room().unwrap(),
+        room_npc_ids,
+        previous_room_npcs,
+        player_action,
+        backend,
+    )
+}
+
 #[test]
 fn test_determine_npcs_high_confidence() {
     let carla = TestNpc::named("carla", "Carla");
@@ -454,7 +471,7 @@ fn test_determine_npcs_high_confidence() {
     let backend = HighConfidenceBackend {
         npc_ids: vec!["carla".to_string()],
     };
-    let result = determine_npcs_in_room(
+    let result = determine_npcs_with_room(
         &state,
         &["carla".to_string(), "gabriella".to_string()],
         &[],
@@ -474,7 +491,7 @@ fn test_determine_npcs_medium_confidence() {
     let state = TestGameState::with_npcs("hall", vec![carla.clone()]);
 
     let backend = MediumConfidenceBackend;
-    let result = determine_npcs_in_room(&state, &["carla".to_string()], &[], "test", &backend);
+    let result = determine_npcs_with_room(&state, &["carla".to_string()], &[], "test", &backend);
 
     assert_eq!(result.npcs.npc_ids, vec!["carla"]);
     assert_eq!(result.npcs.confidence, QuantifierConfidence::Medium);
@@ -487,7 +504,7 @@ fn test_determine_npcs_low_confidence_fallback() {
     let state = TestGameState::with_npcs("hall", vec![carla.clone(), gabriella.clone()]);
 
     let backend = LowConfidenceBackend;
-    let result = determine_npcs_in_room(
+    let result = determine_npcs_with_room(
         &state,
         &["carla".to_string(), "gabriella".to_string()],
         &[],
@@ -505,22 +522,7 @@ fn test_determine_npcs_backend_error_fallback() {
     let state = TestGameState::with_npcs("hall", vec![carla.clone()]);
 
     let backend = ErrBackend;
-    let result = determine_npcs_in_room(&state, &["carla".to_string()], &[], "test", &backend);
-
-    assert_eq!(result.npcs.npc_ids, vec!["carla"]);
-    assert_eq!(result.npcs.confidence, QuantifierConfidence::Low);
-}
-
-#[test]
-fn test_determine_npcs_invalid_room_fallback() {
-    let carla = TestNpc::named("carla", "Carla");
-    let mut state = TestGameState::with_npcs("hall", vec![carla.clone()]);
-    state.movement.current_room_id = "nonexistent".to_string();
-
-    let backend = HighConfidenceBackend {
-        npc_ids: vec!["carla".to_string()],
-    };
-    let result = determine_npcs_in_room(&state, &["carla".to_string()], &[], "test", &backend);
+    let result = determine_npcs_with_room(&state, &["carla".to_string()], &[], "test", &backend);
 
     assert_eq!(result.npcs.npc_ids, vec!["carla"]);
     assert_eq!(result.npcs.confidence, QuantifierConfidence::Low);
@@ -534,7 +536,7 @@ fn test_determine_npcs_filters_unknown_backend_ids() {
     let backend = HighConfidenceBackend {
         npc_ids: vec!["carla".to_string(), "unknown".to_string()],
     };
-    let result = determine_npcs_in_room(&state, &["carla".to_string()], &[], "test", &backend);
+    let result = determine_npcs_with_room(&state, &["carla".to_string()], &[], "test", &backend);
 
     assert_eq!(result.npcs.npc_ids, vec!["carla"]);
 }
@@ -715,16 +717,10 @@ fn test_static_npc_result_valid_ids() {
 fn test_static_npc_result_filters_unknown_ids() {
     let carla = TestNpc::named("carla", "Carla");
     let state = TestGameState::with_npcs("hall", vec![carla.clone()]);
-    let movement = MovementParseResult {
-        movement_type: None,
-        destination: None,
-        confidence: QuantifierConfidence::Low,
-    };
-
     let result = static_npc_result(
         &state,
         &["carla".to_string(), "unknown".to_string()],
-        movement,
+        MovementParseResult::default(),
     );
 
     assert_eq!(result.npcs.npc_ids, vec!["carla"]);
@@ -752,13 +748,7 @@ fn test_static_npc_result_fallback_to_scene_npcs() {
     let mut state = TestGameState::with_npcs("hall", vec![carla.clone()]);
     state.scene.npcs_in_area.push(carla.clone());
 
-    let movement = MovementParseResult {
-        movement_type: None,
-        destination: None,
-        confidence: QuantifierConfidence::Low,
-    };
-
-    let result = static_npc_result(&state, &[], movement);
+    let result = static_npc_result(&state, &[], MovementParseResult::default());
 
     assert_eq!(result.npcs.npc_ids, vec!["carla"]);
 }

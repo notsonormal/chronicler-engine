@@ -71,7 +71,7 @@ pub fn persist_new_messages(
 ) -> Result<(), EngineError> {
     // [DOC: docs/architecture/system.md]
     for msg in state.narrative.messages.iter_mut() {
-        if msg.id == crate::model::storage::UNPERSISTED_ID {
+        if msg.id == crate::model::message::UNPERSISTED_ID {
             msg.snapshot_id = Some(snapshot_id);
             ctx.message_storage.insert_message(msg)?;
         }

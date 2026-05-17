@@ -73,8 +73,13 @@ impl Agent for QuantifierAgent {
         let state = ctx.state;
         let previous_room_npcs: Vec<_> = state.scene.npcs_in_area.clone();
 
+        let current_room = ctx
+            .current_room
+            .ok_or_else(|| EngineError::RoomNotFound("current room not found".to_string()))?;
+
         let result = determine_npcs_in_room(
             state,
+            current_room,
             &[],
             &previous_room_npcs,
             main_response,

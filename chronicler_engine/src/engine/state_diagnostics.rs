@@ -1,11 +1,6 @@
 //! Runtime consistency checks for GameState.
-//!
-//! These checks are enabled via the `diagnostics` feature flag.
-//! They verify load-bearing invariants after state mutations.
 //! [DOC: docs/architecture/invariants.md]
 
-#[cfg(feature = "diagnostics")]
-use crate::engine::logic::get_current_room;
 use crate::error::EngineError;
 #[cfg(feature = "diagnostics")]
 use crate::error::internal_error;
@@ -34,7 +29,7 @@ pub fn assert_state_consistency(_state: &GameState) -> Result<(), EngineError> {
 /// INV-ROOM: current_room_id must exist in the map or dynamic_rooms.
 #[cfg(feature = "diagnostics")]
 fn assert_room_exists(state: &GameState) -> Result<(), EngineError> {
-    if get_current_room(state).is_err() {
+    if state.current_room().is_none() {
         return Err(EngineError::Internal(internal_error(format!(
             "current_room_id '{}' not found in map or dynamic_rooms",
             state.movement.current_room_id

@@ -1,34 +1,19 @@
 //! [DOC: docs/architecture/system.md]
 
-use crate::engine::logic::{attempt_semantic_walk, create_dynamic_room, get_current_room};
+use crate::engine::logic::{attempt_semantic_walk, create_dynamic_room};
 use crate::engine::state_diagnostics::assert_state_consistency;
 use crate::engine::trigger_eval::{
     evaluate_triggers, increment_times_met, mark_trigger_fired, set_currently_meeting,
 };
 use crate::error::EngineError;
 use crate::model::character::NpcCard;
-
-use crate::model::map::Room;
+use crate::model::quantifier::{NpcEvent, NpcEventType, QuantifierResult, compute_npc_events};
 use crate::model::state::{GameState, LogType};
-use crate::model::world::WorldCard;
-use crate::narrative::agents::quantifier::{
-    NpcEvent, NpcEventType, QuantifierResult, compute_npc_events,
-};
-use crate::narrative::prompt::{PromptBuilder, PromptContext};
 
 /// [DOC: docs/architecture/system.md]
 pub struct FreeActionContext<'a> {
     pub narration_text: &'a str,
-    pub user_input: &'a str,
     pub quantifier_result: &'a QuantifierResult,
-    pub world: &'a WorldCard,
-    pub player: &'a crate::model::character::PlayerCard,
-    pub all_npcs: &'a [NpcCard],
-    pub history: &'a [crate::model::state::LogEntry],
-    pub llm_backend: &'a dyn crate::narrative::llm::LlmBackend,
-    pub response_length: &'a str,
-    pub max_context_tokens: u32,
-    pub max_tokens: Option<u32>,
 }
 
 /// The LLM call itself happens outside the state lock so the frontend can poll the main narration.
@@ -36,11 +21,20 @@ pub struct TriggerContinuationRequest {
     pub stored: crate::model::state::StoredTriggerContext,
 }
 
+/// Raw trigger match data for the application tier to build continuation prompts.
+pub struct TriggerMatch {
+    pub npc_id: String,
+    pub trigger_idx: usize,
+    pub trigger_name: String,
+    pub trigger_repeat: bool,
+    pub trigger_narration_prompt: String,
+}
+
 /// Result of processing a single free action turn.
 pub struct TurnResult {
     pub next_state: GameState,
     pub narration: String,
-    pub trigger_continuation: Option<TriggerContinuationRequest>,
+    pub trigger_match: Option<TriggerMatch>,
 }
 
 /// [DOC: docs/architecture/system.md]
@@ -77,7 +71,7 @@ pub fn handle_movement(
         }
     }
 
-    if let Ok(current_room) = get_current_room(&state) {
+    if let Some(current_room) = state.current_room() {
         state.narrative.pending_location = Some(current_room.name.clone());
     }
 
@@ -130,149 +124,6 @@ pub fn commit_trigger_narration(
     Ok(state)
 }
 
-/// Shared by `build_trigger_request` and `evaluate_and_narrate_triggers`.
-fn build_trigger_prompt_parts(
-    ctx: &PromptContext,
-    response_length: &str,
-    max_context_tokens: u32,
-    max_tokens: Option<u32>,
-) -> Option<(String, String, u32)> {
-    let mut pb = PromptBuilder::from_context(ctx);
-    pb.max_context_tokens = Some(max_context_tokens);
-    pb.requested_max_tokens = max_tokens;
-    pb.response_length = Some(response_length);
-
-    match pb.build_split() {
-        Ok(parts) => Some(parts),
-        Err(e) => {
-            log::error!("Failed to build trigger continuation prompt: {e}");
-            None
-        }
-    }
-}
-
-fn build_trigger_request(
-    state: &GameState,
-    ctx: &FreeActionContext<'_>,
-    room_data: &Room,
-) -> Option<TriggerContinuationRequest> {
-    let matching_triggers = evaluate_triggers(state);
-
-    let (npc, trigger, trigger_idx) = matching_triggers.first()?;
-
-    let continuation_user_msg = format!(
-        "Previous narration:\n{}\n\nTrigger event: {}\n\n\
-         Continue the scene naturally, incorporating the trigger event into the narrative. \
-         Do NOT repeat or contradict what was already described. Build naturally on the existing scene.",
-        ctx.narration_text, trigger.action.narration_prompt
-    );
-
-    let trigger_ctx = PromptContext {
-        world: ctx.world,
-        room: room_data,
-        all_npcs: ctx.all_npcs,
-        npcs_in_area: &state.scene.npcs_in_area,
-        player: ctx.player,
-        user_message: &continuation_user_msg,
-        history: &state.narrative.history(),
-    };
-    let (system_prompt, user_prompt, fitted_max_tokens) = build_trigger_prompt_parts(
-        &trigger_ctx,
-        ctx.response_length,
-        ctx.max_context_tokens,
-        ctx.max_tokens,
-    )?;
-
-    Some(TriggerContinuationRequest {
-        stored: crate::model::state::StoredTriggerContext {
-            npc_id: npc.id.clone(),
-            trigger_idx: *trigger_idx,
-            trigger_name: trigger.action.name.clone(),
-            trigger_repeat: trigger.repeat,
-            trigger_narration_prompt: trigger.action.narration_prompt.clone(),
-            system_prompt,
-            user_prompt,
-            max_tokens: Some(fitted_max_tokens),
-        },
-    })
-}
-
-/// [DOC: docs/system/triggers.md]
-pub fn evaluate_and_narrate_triggers(
-    state: GameState,
-    narration_text: &str,
-    trigger_context: &PromptContext<'_>,
-    llm_backend: &dyn crate::narrative::llm::LlmBackend,
-    response_length: &str,
-    max_context_tokens: u32,
-    max_tokens: Option<u32>,
-) -> Result<GameState, EngineError> {
-    let matching_triggers = evaluate_triggers(&state);
-
-    let Some((npc, trigger, trigger_idx)) = matching_triggers.first() else {
-        return Ok(state);
-    };
-
-    let mut state = state;
-    state.narrative.generation.phase = crate::model::state::GenerationPhase::GeneratingEvent;
-
-    let continuation_user_msg = format!(
-        "Previous narration:\n{narration_text}\n\nTrigger event: {}\n\n\
-         Continue the scene naturally, incorporating the trigger event into the narrative. \
-         Do NOT repeat or contradict what was already described. Build naturally on the existing scene.",
-        trigger.action.narration_prompt
-    );
-
-    let trigger_ctx = PromptContext {
-        world: trigger_context.world,
-        room: trigger_context.room,
-        all_npcs: trigger_context.all_npcs,
-        npcs_in_area: &state.scene.npcs_in_area,
-        player: trigger_context.player,
-        user_message: &continuation_user_msg,
-        history: &state.narrative.history(),
-    };
-    let (system_prompt, user_prompt, fitted_max_tokens) = match build_trigger_prompt_parts(
-        &trigger_ctx,
-        response_length,
-        max_context_tokens,
-        max_tokens,
-    ) {
-        Some(parts) => parts,
-        None => return Ok(state),
-    };
-
-    let continuation_result = match llm_backend.complete(
-        crate::narrative::llm::backend::AGENT_TRIGGER,
-        &system_prompt,
-        &user_prompt,
-        Some(fitted_max_tokens),
-    ) {
-        Ok(result) => result,
-        Err(e) => {
-            log::error!("Trigger narration failed: {e}");
-            state.add_log(
-                format!("[Trigger narration failed: {e}]"),
-                None,
-                LogType::System,
-            );
-            return Ok(state);
-        }
-    };
-
-    if continuation_result.text.trim().is_empty() {
-        return Ok(state);
-    }
-    state.narrative.pending_event = Some(trigger.action.name.clone());
-    state.add_log(continuation_result.text, None, LogType::Narration);
-    if !trigger.repeat {
-        mark_trigger_fired(&mut state.character_state, &npc.id, *trigger_idx);
-    }
-
-    assert_state_consistency(&state)?;
-    Ok(state)
-}
-
 /// [DOC: docs/architecture/system.md]
 pub fn execute_freeaction_impl(
     state: &GameState,
@@ -297,17 +148,25 @@ pub fn execute_freeaction_impl(
         .collect();
     let current_npc_ids: Vec<String> = current_npcs.iter().map(|n| n.id.clone()).collect();
 
-    let room_data = get_current_room(&next_state)
-        .map_err(|_| EngineError::RoomNotFound("current room not found".to_string()))?
-        .clone();
-
     // [DOC: docs/system/triggers.md section: Mutation Order Invariant]
     // Order is load-bearing: narration logged first (step 1), then triggers evaluated
     // which read history for context (step 2), then NPC events applied (step 3).
     next_state.add_log(ctx.narration_text.to_string(), None, LogType::Narration);
     next_state.scene.npcs_in_area = current_npcs.clone();
 
-    let trigger_request = build_trigger_request(&next_state, ctx, &room_data);
+    // Evaluate triggers BEFORE applying NPC events so that trigger conditions
+    // (e.g., times_met) are checked against the pre-event state.
+    let trigger_match =
+        evaluate_triggers(&next_state)
+            .into_iter()
+            .next()
+            .map(|(npc, trigger, idx)| TriggerMatch {
+                npc_id: npc.id,
+                trigger_idx: idx,
+                trigger_name: trigger.action.name,
+                trigger_repeat: trigger.repeat,
+                trigger_narration_prompt: trigger.action.narration_prompt,
+            });
 
     let events = compute_npc_events(&previous_npc_ids, &current_npc_ids);
     next_state = apply_npc_events(next_state, &events.events)?;
@@ -316,6 +175,6 @@ pub fn execute_freeaction_impl(
     Ok(TurnResult {
         next_state,
         narration: ctx.narration_text.to_string(),
-        trigger_continuation: trigger_request,
+        trigger_match,
     })
 }

@@ -55,4 +55,5 @@ pub struct AgentContext<'a> {
     pub state: &'a crate::model::state::GameState,
     pub main_response: Option<&'a str>,
     pub player_input: &'a str,
+    pub current_room: Option<&'a crate::model::map::Room>,
 }

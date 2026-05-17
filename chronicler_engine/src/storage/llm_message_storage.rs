@@ -1,10 +1,9 @@
 use std::sync::Mutex;
 
-use chrono::{DateTime, Utc};
-
 use crate::error::EngineError;
 use crate::model::llm_message::LlmMessage;
 use crate::storage::db::DbPool;
+use crate::storage::models::llm_message::DbLlmMessage;
 
 pub trait LlmMessageStorage: Send + Sync {
     fn save(&self, message: &LlmMessage) -> Result<(), EngineError>;
@@ -24,22 +23,23 @@ impl SqliteLlmMessageStorage {
 impl LlmMessageStorage for SqliteLlmMessageStorage {
     fn save(&self, message: &LlmMessage) -> Result<(), EngineError> {
         let conn = self.pool.conn();
+        let db_msg = DbLlmMessage::from(message);
         conn.execute(
             "INSERT INTO llm_messages
              (agent_name, backend_name, model_name, system_prompt, user_prompt,
               raw_request_json, raw_response_json, parsed_response, error_message, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             rusqlite::params![
-                message.agent_name,
-                message.backend_name,
-                message.model_name,
-                message.system_prompt,
-                message.user_prompt,
-                message.raw_request_json,
-                message.raw_response_json,
-                message.parsed_response,
-                message.error_message,
-                message.created_at.to_rfc3339(),
+                db_msg.agent_name,
+                db_msg.backend_name,
+                db_msg.model_name,
+                db_msg.system_prompt,
+                db_msg.user_prompt,
+                db_msg.raw_request_json,
+                db_msg.raw_response_json,
+                db_msg.parsed_response,
+                db_msg.error_message,
+                db_msg.created_at,
             ],
         )
         .map_err(|e| EngineError::Config(format!("Failed to save LLM message: {e}")))?;
@@ -69,41 +69,32 @@ impl LlmMessageStorage for SqliteLlmMessageStorage {
             .map_err(|e| EngineError::Config(format!("Failed to prepare query: {e}")))?;
 
         let rows = stmt
-            .query_map([limit as i64], row_to_message)
+            .query_map([limit as i64], |row| {
+                Ok(DbLlmMessage {
+                    id: row.get(0)?,
+                    agent_name: row.get(1)?,
+                    backend_name: row.get(2)?,
+                    model_name: row.get(3)?,
+                    system_prompt: row.get(4)?,
+                    user_prompt: row.get(5)?,
+                    raw_request_json: row.get(6)?,
+                    raw_response_json: row.get(7)?,
+                    parsed_response: row.get(8)?,
+                    error_message: row.get(9)?,
+                    created_at: row.get(10)?,
+                })
+            })
             .map_err(|e| EngineError::Config(format!("Failed to query LLM messages: {e}")))?;
 
         let mut messages = Vec::new();
         for row in rows {
-            messages.push(row.map_err(|e| {
-                EngineError::Config(format!("Failed to read LLM message row: {e}"))
-            })?);
+            let db_msg = row
+                .map_err(|e| EngineError::Config(format!("Failed to read LLM message row: {e}")))?;
+            messages.push(LlmMessage::try_from(&db_msg)?);
         }
         messages.reverse();
         Ok(messages)
     }
-}
-
-fn row_to_message(row: &rusqlite::Row) -> Result<LlmMessage, rusqlite::Error> {
-    let created_at_str: String = row.get(10)?;
-    let created_at = DateTime::parse_from_rfc3339(&created_at_str)
-        .map_err(|e| {
-            rusqlite::Error::FromSqlConversionFailure(10, rusqlite::types::Type::Text, Box::new(e))
-        })?
-        .with_timezone(&Utc);
-
-    Ok(LlmMessage {
-        id: row.get(0)?,
-        agent_name: row.get(1)?,
-        backend_name: row.get(2)?,
-        model_name: row.get(3)?,
-        system_prompt: row.get(4)?,
-        user_prompt: row.get(5)?,
-        raw_request_json: row.get(6)?,
-        raw_response_json: row.get(7)?,
-        parsed_response: row.get(8)?,
-        error_message: row.get(9)?,
-        created_at,
-    })
 }
 
 pub struct InMemoryLlmMessageStorage {

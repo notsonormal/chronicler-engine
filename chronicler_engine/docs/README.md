@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-17 20:04 UTC*
+*Index last generated: 2026-05-17 21:41 UTC*
 
 ### Root files
 
@@ -57,8 +57,11 @@ This folder contains all documentation for the Chronicler Engine project.
 
 ### `docs/plans/archived/`
 
+- [Plan: Remove Legacy Synchronous Dead Code (`evaluate_and_narrate_triggers`)](./plans/archived/black-widow-monet-aqualad.md)
 - [Settings I/O Centralization — Implementation Plan](./plans/archived/daredevil-john-stewart-blue-marvel.md)
 - [Implementation Plan: Extract Application Layer (Option A)](./plans/archived/falcon-robin-nick-fury.md)
+- [Plan: Separate Domain Models from DB Models in Chronicler Engine](./plans/archived/jessica-cruz-maria-hill-yelena-belova.md)
+- [Plan: Break Engine↔Narrative Bidirectional Coupling](./plans/archived/rocket-nebula-morbius.md)
 - [Plan: Restructure Engine/Application Boundary in Chronicler Engine](./plans/archived/wildcat-flash-havok.md)
 
 ### `docs/reference/`

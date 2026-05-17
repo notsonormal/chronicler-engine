@@ -14,23 +14,6 @@ pub fn find_room_in_world_map<'a>(state: &'a GameState, target_id: &str) -> Opti
     state.map.get_room_by_id(target_id)
 }
 
-pub fn get_current_room(state: &GameState) -> Result<&Room> {
-    if let Some(room) = find_room_in_world_map(state, &state.movement.current_room_id) {
-        return Ok(room);
-    }
-    // [DOC: docs/architecture/system.md]
-    if let Some(room) = state
-        .movement
-        .dynamic_rooms
-        .get(&state.movement.current_room_id)
-    {
-        return Ok(room);
-    }
-    Err(EngineError::RoomNotFound(
-        state.movement.current_room_id.clone(),
-    ))
-}
-
 /// [DOC: docs/system/navigation.md]
 pub fn attempt_semantic_walk(state: &mut GameState, room_id: &str) -> Result<String> {
     let room_name = if let Some(room) = find_room_in_world_map(state, room_id) {

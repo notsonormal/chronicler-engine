@@ -1,8 +1,8 @@
 use chrono::Utc;
 
 use crate::model::state::{MovementState, SceneState};
-use crate::model::storage::NarrativeSnapshot;
-use crate::model::storage::state_snapshot::GameStateSnapshot;
+use crate::model::state_snapshot::GameStateSnapshot;
+use crate::model::state_snapshot::NarrativeSnapshot;
 use crate::model::trigger::CharacterState;
 use crate::storage::db::DbPool;
 use crate::storage::message_storage::MessageStorage;
@@ -53,7 +53,7 @@ fn test_sqlite_messages_respect_game_id() {
     let storage_a = SqliteGameStorage::new(pool.clone(), 1);
     let storage_b = SqliteGameStorage::new(pool.clone(), 2);
 
-    let mut msg_a = crate::model::storage::message::Message {
+    let mut msg_a = crate::model::message::Message {
         id: 1,
         sender: Some("A".to_string()),
         text: "hello".to_string(),
@@ -63,7 +63,7 @@ fn test_sqlite_messages_respect_game_id() {
         event_header: None,
         snapshot_id: None,
     };
-    let mut msg_b = crate::model::storage::message::Message {
+    let mut msg_b = crate::model::message::Message {
         id: 2,
         sender: Some("B".to_string()),
         text: "world".to_string(),

@@ -64,14 +64,68 @@ from = "model"
 to = ["server", "narrative", "engine", "application"]
 message = "Model layer must be pure; cannot depend on outer layers."
 
-# Engine must not depend on outer layers (server or application).
+# Engine must not depend on outer layers (server, application, or narrative).
 [[deny-scope-dep]]
 from = "engine"
-to = ["server", "application"]
-message = "Engine layer must not depend on server or application layers."
+to = ["server", "application", "narrative"]
+message = "Engine layer must not depend on server, application, or narrative layers."
 
 # Application must not depend on server.
 [[deny-scope-dep]]
 from = "application"
 to = ["server"]
 message = "Application layer must not depend on server layer."
+
+# ── Storage model isolation ──
+# DB models and mappers are an internal storage concern.
+
+[[scopes]]
+name = "storage"
+paths = ["src/storage/**"]
+
+[[scopes]]
+name = "storage-models"
+paths = ["src/storage/models/**", "src/storage/mappers/**"]
+
+[[scopes]]
+name = "bootstrap"
+paths = ["src/bootstrap/**"]
+
+[[scopes]]
+name = "test-support"
+paths = ["src/test_support/**"]
+
+[[deny-scope-dep]]
+from = "model"
+to = ["storage-models"]
+message = "Model layer must not depend on storage DB models/mappers."
+
+[[deny-scope-dep]]
+from = "engine"
+to = ["storage-models"]
+message = "Engine layer must not depend on storage DB models/mappers."
+
+[[deny-scope-dep]]
+from = "narrative"
+to = ["storage-models"]
+message = "Narrative layer must not depend on storage DB models/mappers."
+
+[[deny-scope-dep]]
+from = "application"
+to = ["storage-models"]
+message = "Application layer must not depend on storage DB models/mappers."
+
+[[deny-scope-dep]]
+from = "server"
+to = ["storage-models"]
+message = "Server layer must not depend on storage DB models/mappers."
+
+[[deny-scope-dep]]
+from = "bootstrap"
+to = ["storage-models"]
+message = "Bootstrap layer must not depend on storage DB models/mappers."
+
+[[deny-scope-dep]]
+from = "test-support"
+to = ["storage-models"]
+message = "Test support must not depend on storage DB models/mappers."

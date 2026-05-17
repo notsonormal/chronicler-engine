@@ -6,15 +6,18 @@ pub mod types;
 
 pub use agent::QuantifierAgent;
 pub use core::determine_npcs_in_room;
+// compute_npc_events now lives in model::quantifier; re-export for convenience.
+pub use crate::model::quantifier::compute_npc_events;
 pub use parser::{
-    compute_npc_events, extract_movement_from_text, parse_quantifier_response,
-    parse_quantifier_response_with_movement,
+    extract_movement_from_text, parse_quantifier_response, parse_quantifier_response_with_movement,
 };
 pub use prompt::QuantifierPromptBuilder;
-pub use types::{
+// Mechanical types now live in model::quantifier; re-export for convenience.
+pub use crate::model::quantifier::{
     MovementParseResult, MovementType, NpcEvent, NpcEventList, NpcEventType, QuantifierConfidence,
-    QuantifierParseResult, QuantifierPromptContext, QuantifierResult, RoomInfo,
+    QuantifierParseResult, QuantifierResult,
 };
+pub use types::{QuantifierPromptContext, RoomInfo};
 
 #[cfg(test)]
 pub(crate) mod test_support;

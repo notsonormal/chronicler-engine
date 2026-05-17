@@ -165,6 +165,7 @@ fn test_narrator_agent_returns_noop() {
         state: &state,
         main_response: None,
         player_input: "hello",
+        current_room: None,
     };
     let result = agent.execute(&ctx).unwrap();
     assert_eq!(result, AgentResult::NoOp);

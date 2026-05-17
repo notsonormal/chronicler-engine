@@ -204,7 +204,7 @@ pub struct GameStateSnapshot {
 pub struct TurnResult {
     pub next_state: GameState,         // fully populated with re-attached world data
     pub narration: String,
-    pub trigger_continuation: Option<TriggerContinuationRequest>,
+    pub trigger_match: Option<TriggerMatch>, // raw trigger data for application to build continuation prompt
 }
 ```
 

@@ -1,9 +1,10 @@
 use serde::Deserialize;
 
-use crate::narrative::agents::quantifier::types::{
-    MovementParseResult, MovementType, NpcEvent, NpcEventList, NpcEventType, QuantifierConfidence,
-    QuantifierParseResult, QuantifierResult, RoomInfo,
+use crate::model::quantifier::{
+    MovementParseResult, MovementType, QuantifierConfidence, QuantifierParseResult,
+    QuantifierResult,
 };
+use crate::narrative::agents::quantifier::types::RoomInfo;
 
 #[derive(Deserialize, Debug)]
 struct QuantifierJsonResponse {
@@ -58,42 +59,6 @@ pub fn parse_quantifier_response(
         npc_ids: Vec::new(),
         confidence: QuantifierConfidence::Low,
     }
-}
-
-/// [DOC: docs/system/llm_processing.md]
-pub fn compute_npc_events(previous_npc_ids: &[String], current_npc_ids: &[String]) -> NpcEventList {
-    let previous_set: std::collections::HashSet<_> = previous_npc_ids.iter().collect();
-    let current_set: std::collections::HashSet<_> = current_npc_ids.iter().collect();
-
-    let mut events = Vec::new();
-
-    for npc_id in current_npc_ids {
-        if !previous_set.contains(npc_id) {
-            events.push(NpcEvent {
-                npc_id: npc_id.clone(),
-                event_type: NpcEventType::Entered,
-            });
-        }
-    }
-
-    for npc_id in previous_npc_ids {
-        if !current_set.contains(npc_id) {
-            events.push(NpcEvent {
-                npc_id: npc_id.clone(),
-                event_type: NpcEventType::Left,
-            });
-        }
-    }
-
-    // If we detected any events, use Medium confidence (since we can't be 100% sure)
-    // If no events, use Low (nothing happened)
-    let confidence = if !events.is_empty() {
-        QuantifierConfidence::Medium
-    } else {
-        QuantifierConfidence::Low
-    };
-
-    NpcEventList { events, confidence }
 }
 
 /// [DOC: docs/reference/quantifier_prompt.md]

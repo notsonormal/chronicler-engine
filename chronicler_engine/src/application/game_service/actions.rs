@@ -2,18 +2,20 @@ use std::sync::Arc;
 
 use crate::engine::action::Action;
 use crate::engine::action_processing::{
-    apply_npc_events, commit_trigger_narration, execute_freeaction_impl,
+    FreeActionContext, TriggerContinuationRequest, TriggerMatch, apply_npc_events,
+    commit_trigger_narration, execute_freeaction_impl,
 };
 use crate::engine::parser::parse_command;
+
 use crate::error::EngineError;
 use crate::model::agent::{AgentContext, AgentResult, ExecutionPhase, StatePatch};
 use crate::model::character::NpcCard;
-use crate::model::state::{GameState, GenerationPhase, GenerationStatus, LogType};
-use crate::narrative::agents::quantifier::{
+use crate::model::quantifier::{
     MovementParseResult, QuantifierConfidence, QuantifierParseResult, QuantifierResult,
     compute_npc_events,
 };
-use crate::narrative::prompt::make_prompt_context;
+use crate::model::state::{GameState, GenerationPhase, GenerationStatus, LogType};
+use crate::narrative::prompt::{PromptBuilder, make_prompt_context};
 
 use super::context::GameServiceContext;
 use super::helpers::{load_state, map_llm_error, save_committed_state, save_state};
@@ -76,11 +78,7 @@ pub(crate) fn default_quantifier_result(fallback_npc_ids: &[String]) -> Quantifi
             npc_ids: fallback_npc_ids.to_vec(),
             confidence: QuantifierConfidence::Low,
         },
-        movement: MovementParseResult {
-            movement_type: None,
-            destination: None,
-            confidence: QuantifierConfidence::Low,
-        },
+        movement: MovementParseResult::default(),
     }
 }
 
@@ -135,6 +133,7 @@ pub(crate) fn run_post_generation_agents(
         state,
         main_response: Some(main_response),
         player_input,
+        current_room: state.current_room(),
     };
 
     for agent in service
@@ -160,6 +159,59 @@ pub(crate) fn run_post_generation_agents(
             }
         }
     }
+}
+
+/// Build a trigger continuation request from raw engine match data.
+#[allow(clippy::too_many_arguments)]
+fn build_trigger_request(
+    state: &GameState,
+    narration_text: &str,
+    world: &crate::model::world::WorldCard,
+    player: &crate::model::character::PlayerCard,
+    all_npcs: &[NpcCard],
+    response_length: &str,
+    max_context_tokens: u32,
+    max_tokens: Option<u32>,
+    trigger_match: &TriggerMatch,
+) -> Option<TriggerContinuationRequest> {
+    let continuation_user_msg = format!(
+        "Previous narration:\n{}\n\nTrigger event: {}\n\n\
+         Continue the scene naturally, incorporating the trigger event into the narrative. \
+         Do NOT repeat or contradict what was already described. Build naturally on the existing scene.",
+        narration_text, trigger_match.trigger_narration_prompt
+    );
+
+    let room_data = state.current_room()?;
+    let history = state.narrative.history();
+    let trigger_ctx = make_prompt_context(
+        world,
+        room_data,
+        all_npcs,
+        &state.scene.npcs_in_area,
+        player,
+        &continuation_user_msg,
+        &history,
+    );
+
+    let mut pb = PromptBuilder::from_context(&trigger_ctx);
+    pb.max_context_tokens = Some(max_context_tokens);
+    pb.requested_max_tokens = max_tokens;
+    pb.response_length = Some(response_length);
+
+    let (system_prompt, user_prompt, fitted_max_tokens) = pb.build_split().ok()?;
+
+    Some(TriggerContinuationRequest {
+        stored: crate::model::state::StoredTriggerContext {
+            npc_id: trigger_match.npc_id.clone(),
+            trigger_idx: trigger_match.trigger_idx,
+            trigger_name: trigger_match.trigger_name.clone(),
+            trigger_repeat: trigger_match.trigger_repeat,
+            trigger_narration_prompt: trigger_match.trigger_narration_prompt.clone(),
+            system_prompt,
+            user_prompt,
+            max_tokens: Some(fitted_max_tokens),
+        },
+    })
 }
 
 /// [DOC: docs/architecture/system.md]
@@ -235,28 +287,33 @@ pub fn execute_freeaction_pipeline(
 
     let (response_length, max_context_tokens, max_tokens) = ctx.prompt_build_params();
 
-    let trigger_request = execute_freeaction_impl(
+    let turn_result = execute_freeaction_impl(
         &state,
-        &crate::engine::action_processing::FreeActionContext {
+        &FreeActionContext {
             narration_text: &narration_text,
-            user_input: &text,
             quantifier_result: &quantifier_result,
-            world: &world,
-            player: &player,
-            all_npcs: &all_npcs,
-            history: &history,
-            llm_backend: backend.as_ref(),
-            response_length: &response_length,
-            max_context_tokens,
-            max_tokens,
         },
     );
 
-    match trigger_request {
+    match turn_result {
         Ok(turn_result) => {
             let mut next_state = turn_result.next_state;
 
-            if let Some(request) = turn_result.trigger_continuation {
+            let trigger_request = turn_result.trigger_match.and_then(|m| {
+                build_trigger_request(
+                    &next_state,
+                    &narration_text,
+                    &world,
+                    &player,
+                    &all_npcs,
+                    &response_length,
+                    max_context_tokens,
+                    max_tokens,
+                    &m,
+                )
+            });
+
+            if let Some(request) = trigger_request {
                 next_state.narrative.generation.status = GenerationStatus::Generating;
                 next_state.narrative.generation.phase = GenerationPhase::GeneratingEvent;
                 next_state.narrative.last_trigger = Some(request.stored.clone());

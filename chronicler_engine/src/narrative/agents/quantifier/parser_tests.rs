@@ -1,8 +1,9 @@
 use super::parser::{
-    compute_npc_events, extract_movement_from_text, parse_quantifier_response,
-    parse_quantifier_response_with_movement,
+    extract_movement_from_text, parse_quantifier_response, parse_quantifier_response_with_movement,
 };
-use super::types::{MovementType, NpcEventType, QuantifierConfidence, RoomInfo};
+use super::types::RoomInfo;
+use crate::model::quantifier::compute_npc_events;
+use crate::model::quantifier::{MovementType, NpcEventType, QuantifierConfidence};
 
 #[test]
 fn test_parse_json_response() {

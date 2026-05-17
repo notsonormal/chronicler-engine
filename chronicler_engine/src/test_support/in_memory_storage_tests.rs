@@ -2,8 +2,8 @@ use chrono::Utc;
 
 use crate::model::checkpoint::Checkpoint;
 use crate::model::state::{MovementState, SceneState};
-use crate::model::storage::NarrativeSnapshot;
-use crate::model::storage::state_snapshot::GameStateSnapshot;
+use crate::model::state_snapshot::GameStateSnapshot;
+use crate::model::state_snapshot::NarrativeSnapshot;
 use crate::model::trigger::CharacterState;
 use crate::storage::message_storage::MessageStorage;
 use crate::storage::snapshot_storage::SnapshotStorage;

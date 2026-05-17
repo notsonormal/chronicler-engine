@@ -1,7 +1,6 @@
 use askama::Template;
 
-use crate::engine::logic::get_current_room;
-use crate::error::Result;
+use crate::error::{EngineError, Result};
 use crate::model::state::GameState;
 use crate::server::AppState;
 use crate::server::templates::{
@@ -19,7 +18,9 @@ pub fn render_error(message: &str) -> String {
 }
 
 fn render_header_unlocked(state: &GameState) -> Result<String> {
-    let room = get_current_room(state)?;
+    let room = state
+        .current_room()
+        .ok_or_else(|| EngineError::RoomNotFound("current room not found".to_string()))?;
     let template = HeaderTemplate {
         room_name: room.name.clone(),
     };
@@ -50,7 +51,9 @@ pub fn render_story_log(state: &AppState) -> Result<String> {
 }
 
 fn render_visual_sidebar_unlocked(state: &GameState) -> Result<String> {
-    let room = get_current_room(state)?;
+    let room = state
+        .current_room()
+        .ok_or_else(|| EngineError::RoomNotFound("current room not found".to_string()))?;
 
     let image_path = room
         .image_path

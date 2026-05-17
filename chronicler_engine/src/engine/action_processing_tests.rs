@@ -1,16 +1,14 @@
-use std::sync::Arc;
-
 use crate::engine::action_processing::{
     FreeActionContext, TriggerContinuationRequest, apply_npc_events, commit_trigger_narration,
     execute_freeaction_impl,
 };
 use crate::engine::trigger_eval::{get_times_met, is_currently_meeting, set_currently_meeting};
-use crate::model::state::LogType;
-use crate::narrative::agents::quantifier::{
+use crate::model::quantifier::{
     MovementParseResult, MovementType, NpcEvent, NpcEventType, QuantifierConfidence,
     QuantifierParseResult, QuantifierResult,
 };
-use crate::test_support::{TestGameState, TestNpc, TestPlayer, TestWorld};
+use crate::model::state::LogType;
+use crate::test_support::{TestGameState, TestNpc};
 
 fn make_quantifier_result_no_movement() -> QuantifierResult {
     QuantifierResult {
@@ -18,11 +16,7 @@ fn make_quantifier_result_no_movement() -> QuantifierResult {
             npc_ids: vec!["carla".to_string()],
             confidence: QuantifierConfidence::High,
         },
-        movement: MovementParseResult {
-            movement_type: None,
-            destination: None,
-            confidence: QuantifierConfidence::Low,
-        },
+        movement: MovementParseResult::default(),
     }
 }
 
@@ -43,25 +37,12 @@ fn make_quantifier_result_with_movement(destination: &str) -> QuantifierResult {
 #[test]
 fn test_execute_freeaction_impl_no_movement() {
     let state = TestGameState::with_npc_raw("room1", TestNpc::named("carla", "Carla"));
-    let world = Arc::new(TestWorld::minimal());
-    let player = Arc::new(TestPlayer::standard());
-    let all_npcs = vec![TestNpc::named("carla", "Carla")];
-    let history = vec![];
 
     let result = execute_freeaction_impl(
         &state,
         &FreeActionContext {
             narration_text: "You examine the room.",
-            user_input: "examine the room",
             quantifier_result: &make_quantifier_result_no_movement(),
-            world: &world,
-            player: &player,
-            all_npcs: &all_npcs,
-            history: &history,
-            llm_backend: &crate::narrative::llm::MockBackend::default(),
-            response_length: "",
-            max_context_tokens: crate::narrative::prompt::budget::MAX_CONTEXT_TOKENS,
-            max_tokens: None,
         },
     );
 
@@ -85,26 +66,13 @@ fn test_execute_freeaction_impl_no_movement() {
 #[test]
 fn test_execute_freeaction_impl_with_movement() {
     let state = TestGameState::with_npc_raw("room1", TestNpc::named("carla", "Carla"));
-    let world = Arc::new(TestWorld::minimal());
-    let player = Arc::new(TestPlayer::standard());
-    let all_npcs = vec![TestNpc::named("carla", "Carla")];
-    let history = vec![];
 
     // quantifier result with movement to a new room
     let result = execute_freeaction_impl(
         &state,
         &FreeActionContext {
             narration_text: "You walk to the tavern.",
-            user_input: "walk to the tavern",
             quantifier_result: &make_quantifier_result_with_movement("nonexistent_room"),
-            world: &world,
-            player: &player,
-            all_npcs: &all_npcs,
-            history: &history,
-            llm_backend: &crate::narrative::llm::MockBackend::default(),
-            response_length: "",
-            max_context_tokens: crate::narrative::prompt::budget::MAX_CONTEXT_TOKENS,
-            max_tokens: None,
         },
     );
 
@@ -129,9 +97,6 @@ fn test_execute_freeaction_impl_with_movement() {
 #[test]
 fn test_execute_freeaction_impl_updates_npcs_in_area() {
     let state = TestGameState::with_npc_raw("room1", TestNpc::named("carla", "Carla"));
-    let world = Arc::new(TestWorld::minimal());
-    let player = Arc::new(TestPlayer::standard());
-    let all_npcs = vec![TestNpc::named("carla", "Carla")];
 
     assert!(state.scene.npcs_in_area.is_empty());
 
@@ -139,16 +104,7 @@ fn test_execute_freeaction_impl_updates_npcs_in_area() {
         &state,
         &FreeActionContext {
             narration_text: "You look around.",
-            user_input: "look around",
             quantifier_result: &make_quantifier_result_no_movement(),
-            world: &world,
-            player: &player,
-            all_npcs: &all_npcs,
-            history: &[],
-            llm_backend: &crate::narrative::llm::MockBackend::default(),
-            response_length: "",
-            max_context_tokens: crate::narrative::prompt::budget::MAX_CONTEXT_TOKENS,
-            max_tokens: None,
         },
     );
 
@@ -160,104 +116,16 @@ fn test_execute_freeaction_impl_updates_npcs_in_area() {
 }
 
 #[test]
-fn test_execute_freeaction_impl_returns_trigger_request_when_trigger_matches() {
-    let npc = TestNpc::with_times_met_trigger(
-        "carla",
-        "Carla",
-        crate::model::trigger::ComparisonOperator::Eq,
-        0,
-    );
-
-    let state = TestGameState::with_npc_raw("room1", npc.clone());
-    let world = Arc::new(TestWorld::minimal());
-    let player = Arc::new(TestPlayer::standard());
-
-    let result = execute_freeaction_impl(
-        &state,
-        &FreeActionContext {
-            narration_text: "You enter the room.",
-            user_input: "enter",
-            quantifier_result: &make_quantifier_result_no_movement(),
-            world: &world,
-            player: &player,
-            all_npcs: &[],
-            history: &[],
-            llm_backend: &crate::narrative::llm::MockBackend::default(),
-            response_length: "",
-            max_context_tokens: crate::narrative::prompt::budget::MAX_CONTEXT_TOKENS,
-            max_tokens: None,
-        },
-    );
-
-    assert!(result.is_ok(), "execute_freeaction_impl should succeed");
-    let trigger_request = result.unwrap().trigger_continuation;
-    assert!(
-        trigger_request.is_some(),
-        "Should return TriggerContinuationRequest when trigger matches"
-    );
-    let request = trigger_request.unwrap();
-    assert_eq!(request.stored.trigger_name, "Carla Introduction");
-    assert_eq!(request.stored.npc_id, "carla");
-    assert!(!request.stored.trigger_repeat);
-    // Prompts should be non-empty after successful build
-    assert!(!request.stored.system_prompt.is_empty());
-    assert!(!request.stored.user_prompt.is_empty());
-}
-
-#[test]
-fn test_execute_freeaction_impl_returns_none_when_no_trigger_matches() {
-    // bartender has no triggers
-    let state = TestGameState::with_npc_raw("room1", TestNpc::named("bartender", "Bartender"));
-    let world = Arc::new(TestWorld::minimal());
-    let player = Arc::new(TestPlayer::standard());
-
-    let result = execute_freeaction_impl(
-        &state,
-        &FreeActionContext {
-            narration_text: "You look around.",
-            user_input: "look around",
-            quantifier_result: &make_quantifier_result_no_movement(),
-            world: &world,
-            player: &player,
-            all_npcs: &[],
-            history: &[],
-            llm_backend: &crate::narrative::llm::MockBackend::default(),
-            response_length: "",
-            max_context_tokens: crate::narrative::prompt::budget::MAX_CONTEXT_TOKENS,
-            max_tokens: None,
-        },
-    );
-
-    assert!(result.is_ok(), "execute_freeaction_impl should succeed");
-    assert!(
-        result.unwrap().trigger_continuation.is_none(),
-        "Should return None when no trigger matches"
-    );
-}
-
-#[test]
 fn test_execute_freeaction_impl_npc_events_entered() {
     let mut state = TestGameState::with_npc_raw("room1", TestNpc::named("carla", "Carla"));
     // NPC already in area (simulating re-encounter after leaving)
     state.scene.npcs_in_area = vec![]; // Empty - NPC is not currently in area
-    let world = Arc::new(TestWorld::minimal());
-    let player = Arc::new(TestPlayer::standard());
-    let all_npcs = vec![TestNpc::named("carla", "Carla")];
 
     let result = execute_freeaction_impl(
         &state,
         &FreeActionContext {
             narration_text: "You see Carla.",
-            user_input: "look around",
             quantifier_result: &make_quantifier_result_no_movement(),
-            world: &world,
-            player: &player,
-            all_npcs: &all_npcs,
-            history: &[],
-            llm_backend: &crate::narrative::llm::MockBackend::default(),
-            response_length: "",
-            max_context_tokens: crate::narrative::prompt::budget::MAX_CONTEXT_TOKENS,
-            max_tokens: None,
         },
     );
 
@@ -273,9 +141,7 @@ fn test_execute_freeaction_impl_npc_events_entered() {
     assert_eq!(times_met, 1);
 }
 
-use crate::engine::action_processing::{evaluate_and_narrate_triggers, handle_movement};
-use crate::test_support::TestMap;
-
+use crate::engine::action_processing::handle_movement;
 use crate::model::state::GameState;
 
 fn make_test_state() -> GameState {
@@ -401,60 +267,59 @@ fn test_handle_movement_sets_currently_meeting() {
 }
 
 #[test]
-fn test_evaluate_and_narrate_triggers_adds_event_header() {
-    let llm_backend = crate::narrative::llm::MockBackend::default();
-
-    let mut state = make_test_state();
-    let npc_with_trigger = TestNpc::with_times_met_trigger(
+fn test_trigger_split_architecture_produces_event_header() {
+    let npc = TestNpc::with_times_met_trigger(
         "carla",
         "Carla",
         crate::model::trigger::ComparisonOperator::Eq,
         0,
     );
-    state
-        .npcs
-        .insert("carla".to_string(), npc_with_trigger.clone());
+    let state = TestGameState::with_npc_raw("test_room", npc);
 
-    let room = TestMap::room_named("test_room", "Test Room");
-
-    let world = state.world.clone();
-    let player = state.player.clone();
-    let history = state.narrative.history();
-
-    let trigger_context = crate::narrative::prompt::PromptContext {
-        world: &world,
-        room: &room,
-        all_npcs: &[],
-        npcs_in_area: &[],
-        player: &player,
-        user_message: "test",
-        history: &history,
-    };
-
-    let state = evaluate_and_narrate_triggers(
-        state,
-        "You enter the room.",
-        &trigger_context,
-        &llm_backend,
-        "",
-        crate::narrative::prompt::budget::MAX_CONTEXT_TOKENS,
-        None,
+    let turn_result = execute_freeaction_impl(
+        &state,
+        &FreeActionContext {
+            narration_text: "You enter the room.",
+            quantifier_result: &make_quantifier_result_no_movement(),
+        },
     )
     .unwrap();
 
-    // Should have 1 entry: narration with inline event header
-    assert!(
-        state.narrative.history().len() == 1,
-        "Expected one narration with event header, got {:?}",
-        state.narrative.history()
-    );
+    let request = TriggerContinuationRequest {
+        stored: crate::model::state::StoredTriggerContext {
+            npc_id: "carla".to_string(),
+            trigger_idx: 0,
+            trigger_name: "Carla Introduction".to_string(),
+            trigger_repeat: false,
+            trigger_narration_prompt: "Carla appears".to_string(),
+            system_prompt: "sys".to_string(),
+            user_prompt: "user".to_string(),
+            max_tokens: None,
+        },
+    };
 
-    let narration_entry = &state.narrative.history()[0];
-    assert_eq!(narration_entry.log_type, LogType::Narration);
+    let state = commit_trigger_narration(
+        turn_result.next_state,
+        &request,
+        "Carla emerges from the shadows.",
+    )
+    .unwrap();
+
+    // Should have 2 entries: main narration + trigger continuation
+    assert_eq!(state.narrative.history().len(), 2);
+
+    let main_entry = &state.narrative.history()[0];
+    assert_eq!(main_entry.log_type, LogType::Narration);
+    assert_eq!(main_entry.text, "You enter the room.");
+    assert_eq!(main_entry.event_header, None);
+
+    let trigger_entry = &state.narrative.history()[1];
+    assert_eq!(trigger_entry.log_type, LogType::Narration);
     assert_eq!(
-        narration_entry.event_header,
+        trigger_entry.event_header,
         Some("Carla Introduction".to_string())
     );
+    assert_eq!(trigger_entry.text, "Carla emerges from the shadows.");
 }
 
 #[test]
@@ -658,9 +523,6 @@ proptest! {
         destination in "[a-z]{1,15}",
     ) {
         let state = TestGameState::with_npc_raw("room1", TestNpc::named("carla", "Carla"));
-        let world = Arc::new(TestWorld::minimal());
-        let player = Arc::new(TestPlayer::standard());
-        let all_npcs = vec![TestNpc::named("carla", "Carla")];
 
         let movement = if has_movement {
             MovementParseResult {
@@ -669,11 +531,7 @@ proptest! {
                 confidence: QuantifierConfidence::High,
             }
         } else {
-            MovementParseResult {
-                movement_type: None,
-                destination: None,
-                confidence: QuantifierConfidence::Low,
-            }
+            MovementParseResult::default()
         };
 
         let quantifier_result = QuantifierResult {
@@ -688,16 +546,7 @@ proptest! {
             &state,
             &FreeActionContext {
                 narration_text: "You do something.",
-                user_input: "do something",
                 quantifier_result: &quantifier_result,
-                world: &world,
-                player: &player,
-                all_npcs: &all_npcs,
-                history: &[],
-                llm_backend: &crate::narrative::llm::MockBackend::default(),
-                response_length: "",
-                max_context_tokens: crate::narrative::prompt::budget::MAX_CONTEXT_TOKENS,
-                max_tokens: None,
             },
         );
 

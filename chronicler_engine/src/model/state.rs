@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::model::character::{NpcCard, PlayerCard};
 use crate::model::map::{MapDef, Room};
-use crate::model::storage::Message;
+use crate::model::message::Message;
 use crate::model::trigger::CharacterState;
 use crate::model::world::WorldCard;
 
@@ -131,11 +131,6 @@ pub struct MovementState {
 }
 
 /// Serializable trigger metadata stored in [`NarrativeState`].
-///
-/// This struct mirrors the data fields of [`TriggerContinuationRequest`]
-/// (defined in `action_processing.rs`), but is pure data without the
-/// runtime `llm_backend` reference, making it serializable for snapshot
-/// storage.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct StoredTriggerContext {
     pub npc_id: String,
@@ -177,7 +172,7 @@ impl NarrativeState {
             .collect()
     }
 
-    pub fn from_snapshot(snapshot: &crate::model::storage::NarrativeSnapshot) -> Self {
+    pub fn from_snapshot(snapshot: &crate::model::state_snapshot::NarrativeSnapshot) -> Self {
         Self {
             messages: Vec::new(),
             generation: snapshot.generation.clone(),
@@ -281,7 +276,7 @@ impl GameState {
         let location_header = self.narrative.pending_location.take();
         let event_header = self.narrative.pending_event.take();
         let message = Message::new(
-            crate::model::storage::UNPERSISTED_ID,
+            crate::model::message::UNPERSISTED_ID,
             sender,
             text,
             log_type,
@@ -368,5 +363,17 @@ impl GameState {
             .rev()
             .find(|m| m.log_type == LogType::Narration || m.log_type == LogType::Dialogue)
             .is_some_and(|m| m.event_header.is_some())
+    }
+
+    /// Resolve the player's current room from the map or dynamic rooms.
+    /// [DOC: docs/system/navigation.md]
+    pub fn current_room(&self) -> Option<&Room> {
+        self.map
+            .get_room_by_id(&self.movement.current_room_id)
+            .or_else(|| {
+                self.movement
+                    .dynamic_rooms
+                    .get(&self.movement.current_room_id)
+            })
     }
 }

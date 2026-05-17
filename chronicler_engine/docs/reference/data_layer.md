@@ -116,6 +116,16 @@ games (1)
 llm_messages (*)  [independent]
 ```
 
+## Code Mapping
+
+The Rust code maps to the database as follows:
+
+- **`src/storage/models/`** — One DB model struct per table (`DbGame`, `DbGameStateSnapshot`, `DbCheckpoint`, `DbMessage`, `DbLlmMessage`). These use raw SQLite types (`String` for JSON and timestamps, `i64` for IDs).
+- **`src/storage/mappers/`** — Conversion logic between DB models and domain models. Mappers handle JSON serialization, RFC 3339 parsing, and integer↔unsigned mapping.
+- **`src/storage/snapshot_storage.rs`** — `SqliteGameStorage` uses `DbGameStateSnapshot`/`DbCheckpoint`/`DbMessage` internally and maps to/from domain models at the trait boundary.
+- **`src/storage/llm_message_storage.rs`** — `SqliteLlmMessageStorage` uses `DbLlmMessage` internally.
+- **`src/model/`** — Domain models (`Message`, `Checkpoint`, `LlmMessage`, `GameStateSnapshot`, `NarrativeSnapshot`) have no knowledge of `rusqlite`, JSON strategy, or timestamp formatting.
+
 ## Migration Policy
 
 Schema migrations are **breaking** — old save data is discarded on schema change. The `run_migrations` function drops and recreates tables. This is acceptable because Chronicler is currently pre-release and has no backward-compatibility guarantee for save files.

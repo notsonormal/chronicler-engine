@@ -127,8 +127,8 @@ pub(crate) fn static_npc_result(
     } else {
         room_npc_ids
             .iter()
-            .filter_map(|id| state.npcs.get(id).cloned())
-            .map(|n| n.id)
+            .filter_map(|id| state.npcs.get(id))
+            .map(|n| n.id.clone())
             .collect()
     };
 
@@ -168,28 +168,13 @@ pub(crate) fn action_boundary_contains(
 /// [DOC: docs/system/llm_processing.md]
 pub fn determine_npcs_in_room(
     state: &crate::model::state::GameState,
+    current_room: &crate::model::map::Room,
     room_npc_ids: &[String],
     previous_room_npcs: &[crate::model::character::NpcCard],
     player_action: &str,
     backend: &dyn LlmBackend,
 ) -> QuantifierResult {
     let all_npcs: Vec<crate::model::character::NpcCard> = state.npcs.values().cloned().collect();
-
-    let room = match crate::engine::logic::get_current_room(state) {
-        Ok(r) => r,
-        Err(_) => {
-            log::warn!("[Quantifier] Cannot get current room, using static NPCs");
-            return static_npc_result(
-                state,
-                room_npc_ids,
-                MovementParseResult {
-                    movement_type: None,
-                    destination: None,
-                    confidence: QuantifierConfidence::Low,
-                },
-            );
-        }
-    };
 
     let recent_history: Vec<_> = state
         .narrative
@@ -215,7 +200,7 @@ pub fn determine_npcs_in_room(
         .collect();
 
     let context = QuantifierPromptContext {
-        room,
+        room: current_room,
         previous_room_npcs,
         all_known_npcs: &all_npcs,
         all_rooms: &all_rooms,
@@ -249,15 +234,7 @@ pub fn determine_npcs_in_room(
         },
         Err(e) => {
             log::warn!("[Quantifier] Failed: {e}, using static NPCs");
-            static_npc_result(
-                state,
-                room_npc_ids,
-                MovementParseResult {
-                    movement_type: None,
-                    destination: None,
-                    confidence: QuantifierConfidence::Low,
-                },
-            )
+            static_npc_result(state, room_npc_ids, MovementParseResult::default())
         }
     }
 }

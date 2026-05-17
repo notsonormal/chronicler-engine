@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::model::state::{GameState, MovementState, NarrativeState, SceneState};
-use crate::model::storage::state_snapshot::{GameStateSnapshot, NarrativeSnapshot};
+use crate::model::state_snapshot::{GameStateSnapshot, NarrativeSnapshot};
 use crate::model::trigger::CharacterState;
 use crate::test_support::fixtures::{TestMap, TestPlayer, TestWorld};
 

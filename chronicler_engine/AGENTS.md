@@ -23,8 +23,7 @@ chronicler_engine/
 │   │   └── game_service/  # Game flow orchestration (actions, context, helpers, retry, service)
 │   ├── model/             # Data structures
 │   │   ├── agent.rs, character.rs, checkpoint.rs, llm_backend.rs, llm_message.rs
-│   │   ├── map.rs, scenario.rs, settings.rs, state.rs, state_snapshot.rs
-│   │   ├── storage/         # Message, snapshot, LLM message storage models
+│   │   ├── map.rs, message.rs, scenario.rs, settings.rs, state.rs, state_snapshot.rs
 │   │   ├── trigger.rs, world.rs
 │   ├── narrative/         # LLM integration
 │   │   ├── llm_client.rs  # High-level LLM client facade
@@ -36,7 +35,7 @@ chronicler_engine/
 │   │   ├── mod.rs, templates.rs, debug.rs
 │   │   ├── fragments/     # HTMX fragment endpoints (actions, endpoints, history, misc, renderers)
 │   │   └── settings_fragment/ # Settings UI fragments (fragments, handlers, template)
-│   ├── storage/           # Persistence layer (db, snapshot_storage, llm_message_storage)
+│   ├── storage/           # Persistence layer (db, models, mappers, snapshot_storage, llm_message_storage)
 │   └── test_support/      # Shared test helpers (context, fixtures, in_memory_storage)
 ├── tests/                 # Integration tests
 │   ├── architecture.rs    # arch-lint guardrail tests

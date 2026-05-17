@@ -1,6 +1,8 @@
 pub mod db;
 pub mod llm_message_storage;
+pub mod mappers;
 pub mod message_storage;
+pub mod models;
 pub mod snapshot_storage;
 
 #[cfg(test)]

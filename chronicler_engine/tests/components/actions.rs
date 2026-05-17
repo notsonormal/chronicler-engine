@@ -2,8 +2,8 @@ use axum::{
     body::Body,
     http::{Method, Request, StatusCode},
 };
-use tower::ServiceExt;
 use std::sync::Arc;
+use tower::ServiceExt;
 
 use chronicler_engine::model::settings::{AppSettings, TextCheckMode, TextCheckSettings};
 use chronicler_engine::model::state::LogType;
@@ -28,7 +28,11 @@ async fn test_action_check_handler_empty_command() {
 #[tokio::test]
 async fn test_action_check_handler_disabled_mode() {
     let mut state = create_test_state();
-    state.add_log("look".to_string(), Some("Player".to_string()), LogType::Input);
+    state.add_log(
+        "look".to_string(),
+        Some("Player".to_string()),
+        LogType::Input,
+    );
     let app = chronicler_engine::create_app_for_testing_with_settings(
         state,
         AppSettings {
@@ -63,13 +67,29 @@ async fn test_action_handler_load_state_failure() {
     }
 
     impl chronicler_engine::storage::snapshot_storage::SnapshotStorage for FailingLoadStorage {
-        fn save(&self, snapshot: &chronicler_engine::model::state_snapshot::GameStateSnapshot) -> Result<u64, chronicler_engine::error::EngineError> {
+        fn save(
+            &self,
+            snapshot: &chronicler_engine::model::state_snapshot::GameStateSnapshot,
+        ) -> Result<u64, chronicler_engine::error::EngineError> {
             self.inner.save(snapshot)
         }
-        fn load_latest(&self) -> Result<Option<chronicler_engine::model::state_snapshot::GameStateSnapshot>, chronicler_engine::error::EngineError> {
-            Err(chronicler_engine::error::EngineError::Internal(chronicler_engine::error::internal_error("simulated load failure")))
+        fn load_latest(
+            &self,
+        ) -> Result<
+            Option<chronicler_engine::model::state_snapshot::GameStateSnapshot>,
+            chronicler_engine::error::EngineError,
+        > {
+            Err(chronicler_engine::error::EngineError::Internal(
+                chronicler_engine::error::internal_error("simulated load failure"),
+            ))
         }
-        fn load_by_id(&self, id: u64) -> Result<Option<chronicler_engine::model::state_snapshot::GameStateSnapshot>, chronicler_engine::error::EngineError> {
+        fn load_by_id(
+            &self,
+            id: u64,
+        ) -> Result<
+            Option<chronicler_engine::model::state_snapshot::GameStateSnapshot>,
+            chronicler_engine::error::EngineError,
+        > {
             self.inner.load_by_id(id)
         }
         fn commit(&self, snapshot_id: u64) -> Result<(), chronicler_engine::error::EngineError> {
@@ -78,13 +98,27 @@ async fn test_action_handler_load_state_failure() {
         fn reset(&self) -> Result<(), chronicler_engine::error::EngineError> {
             self.inner.reset()
         }
-        fn save_checkpoint(&self, checkpoint: &chronicler_engine::model::checkpoint::Checkpoint) -> Result<(), chronicler_engine::error::EngineError> {
+        fn save_checkpoint(
+            &self,
+            checkpoint: &chronicler_engine::model::checkpoint::Checkpoint,
+        ) -> Result<(), chronicler_engine::error::EngineError> {
             self.inner.save_checkpoint(checkpoint)
         }
-        fn load_checkpoint(&self, id: &str) -> Result<Option<chronicler_engine::model::checkpoint::Checkpoint>, chronicler_engine::error::EngineError> {
+        fn load_checkpoint(
+            &self,
+            id: &str,
+        ) -> Result<
+            Option<chronicler_engine::model::checkpoint::Checkpoint>,
+            chronicler_engine::error::EngineError,
+        > {
             self.inner.load_checkpoint(id)
         }
-        fn list_checkpoints(&self) -> Result<Vec<chronicler_engine::model::checkpoint::Checkpoint>, chronicler_engine::error::EngineError> {
+        fn list_checkpoints(
+            &self,
+        ) -> Result<
+            Vec<chronicler_engine::model::checkpoint::Checkpoint>,
+            chronicler_engine::error::EngineError,
+        > {
             self.inner.list_checkpoints()
         }
         fn delete_checkpoint(&self, id: &str) -> Result<(), chronicler_engine::error::EngineError> {
@@ -93,14 +127,16 @@ async fn test_action_handler_load_state_failure() {
     }
 
     let storage_dyn: Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage> =
-        Arc::clone(&storage) as Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage>;
+        Arc::clone(&storage)
+            as Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage>;
     let snapshot_storage: Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage> =
         Arc::new(FailingLoadStorage { inner: storage_dyn });
     let message_storage: Arc<dyn chronicler_engine::storage::message_storage::MessageStorage> =
-        Arc::clone(&storage) as Arc<dyn chronicler_engine::storage::message_storage::MessageStorage>;
-    let llm_storage = Arc::new(
-        chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new(),
-    ) as Arc<dyn chronicler_engine::storage::llm_message_storage::LlmMessageStorage>;
+        Arc::clone(&storage)
+            as Arc<dyn chronicler_engine::storage::message_storage::MessageStorage>;
+    let llm_storage =
+        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
+            as Arc<dyn chronicler_engine::storage::llm_message_storage::LlmMessageStorage>;
 
     let app = chronicler_engine::server::create_app_with_storage(
         state,
@@ -131,13 +167,29 @@ async fn test_action_handler_snapshot_save_failure() {
     }
 
     impl chronicler_engine::storage::snapshot_storage::SnapshotStorage for FailingSaveStorage {
-        fn save(&self, _snapshot: &chronicler_engine::model::state_snapshot::GameStateSnapshot) -> Result<u64, chronicler_engine::error::EngineError> {
-            Err(chronicler_engine::error::EngineError::Internal(chronicler_engine::error::internal_error("simulated save failure")))
+        fn save(
+            &self,
+            _snapshot: &chronicler_engine::model::state_snapshot::GameStateSnapshot,
+        ) -> Result<u64, chronicler_engine::error::EngineError> {
+            Err(chronicler_engine::error::EngineError::Internal(
+                chronicler_engine::error::internal_error("simulated save failure"),
+            ))
         }
-        fn load_latest(&self) -> Result<Option<chronicler_engine::model::state_snapshot::GameStateSnapshot>, chronicler_engine::error::EngineError> {
+        fn load_latest(
+            &self,
+        ) -> Result<
+            Option<chronicler_engine::model::state_snapshot::GameStateSnapshot>,
+            chronicler_engine::error::EngineError,
+        > {
             self.inner.load_latest()
         }
-        fn load_by_id(&self, id: u64) -> Result<Option<chronicler_engine::model::state_snapshot::GameStateSnapshot>, chronicler_engine::error::EngineError> {
+        fn load_by_id(
+            &self,
+            id: u64,
+        ) -> Result<
+            Option<chronicler_engine::model::state_snapshot::GameStateSnapshot>,
+            chronicler_engine::error::EngineError,
+        > {
             self.inner.load_by_id(id)
         }
         fn commit(&self, snapshot_id: u64) -> Result<(), chronicler_engine::error::EngineError> {
@@ -146,13 +198,27 @@ async fn test_action_handler_snapshot_save_failure() {
         fn reset(&self) -> Result<(), chronicler_engine::error::EngineError> {
             self.inner.reset()
         }
-        fn save_checkpoint(&self, checkpoint: &chronicler_engine::model::checkpoint::Checkpoint) -> Result<(), chronicler_engine::error::EngineError> {
+        fn save_checkpoint(
+            &self,
+            checkpoint: &chronicler_engine::model::checkpoint::Checkpoint,
+        ) -> Result<(), chronicler_engine::error::EngineError> {
             self.inner.save_checkpoint(checkpoint)
         }
-        fn load_checkpoint(&self, id: &str) -> Result<Option<chronicler_engine::model::checkpoint::Checkpoint>, chronicler_engine::error::EngineError> {
+        fn load_checkpoint(
+            &self,
+            id: &str,
+        ) -> Result<
+            Option<chronicler_engine::model::checkpoint::Checkpoint>,
+            chronicler_engine::error::EngineError,
+        > {
             self.inner.load_checkpoint(id)
         }
-        fn list_checkpoints(&self) -> Result<Vec<chronicler_engine::model::checkpoint::Checkpoint>, chronicler_engine::error::EngineError> {
+        fn list_checkpoints(
+            &self,
+        ) -> Result<
+            Vec<chronicler_engine::model::checkpoint::Checkpoint>,
+            chronicler_engine::error::EngineError,
+        > {
             self.inner.list_checkpoints()
         }
         fn delete_checkpoint(&self, id: &str) -> Result<(), chronicler_engine::error::EngineError> {
@@ -161,14 +227,16 @@ async fn test_action_handler_snapshot_save_failure() {
     }
 
     let storage_dyn: Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage> =
-        Arc::clone(&storage) as Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage>;
+        Arc::clone(&storage)
+            as Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage>;
     let snapshot_storage: Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage> =
         Arc::new(FailingSaveStorage { inner: storage_dyn });
     let message_storage: Arc<dyn chronicler_engine::storage::message_storage::MessageStorage> =
-        Arc::clone(&storage) as Arc<dyn chronicler_engine::storage::message_storage::MessageStorage>;
-    let llm_storage = Arc::new(
-        chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new(),
-    ) as Arc<dyn chronicler_engine::storage::llm_message_storage::LlmMessageStorage>;
+        Arc::clone(&storage)
+            as Arc<dyn chronicler_engine::storage::message_storage::MessageStorage>;
+    let llm_storage =
+        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
+            as Arc<dyn chronicler_engine::storage::llm_message_storage::LlmMessageStorage>;
 
     let app = chronicler_engine::server::create_app_with_storage(
         state,
@@ -189,7 +257,6 @@ async fn test_action_handler_snapshot_save_failure() {
     assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
 }
 
-
 #[tokio::test]
 async fn test_action_confirm_handler_render_error_fallback() {
     let state = create_test_state();
@@ -200,13 +267,29 @@ async fn test_action_confirm_handler_render_error_fallback() {
     }
 
     impl chronicler_engine::storage::snapshot_storage::SnapshotStorage for FailingLoadStorage {
-        fn save(&self, snapshot: &chronicler_engine::model::state_snapshot::GameStateSnapshot) -> Result<u64, chronicler_engine::error::EngineError> {
+        fn save(
+            &self,
+            snapshot: &chronicler_engine::model::state_snapshot::GameStateSnapshot,
+        ) -> Result<u64, chronicler_engine::error::EngineError> {
             self.inner.save(snapshot)
         }
-        fn load_latest(&self) -> Result<Option<chronicler_engine::model::state_snapshot::GameStateSnapshot>, chronicler_engine::error::EngineError> {
-            Err(chronicler_engine::error::EngineError::Internal(chronicler_engine::error::internal_error("simulated load failure")))
+        fn load_latest(
+            &self,
+        ) -> Result<
+            Option<chronicler_engine::model::state_snapshot::GameStateSnapshot>,
+            chronicler_engine::error::EngineError,
+        > {
+            Err(chronicler_engine::error::EngineError::Internal(
+                chronicler_engine::error::internal_error("simulated load failure"),
+            ))
         }
-        fn load_by_id(&self, id: u64) -> Result<Option<chronicler_engine::model::state_snapshot::GameStateSnapshot>, chronicler_engine::error::EngineError> {
+        fn load_by_id(
+            &self,
+            id: u64,
+        ) -> Result<
+            Option<chronicler_engine::model::state_snapshot::GameStateSnapshot>,
+            chronicler_engine::error::EngineError,
+        > {
             self.inner.load_by_id(id)
         }
         fn commit(&self, snapshot_id: u64) -> Result<(), chronicler_engine::error::EngineError> {
@@ -215,13 +298,27 @@ async fn test_action_confirm_handler_render_error_fallback() {
         fn reset(&self) -> Result<(), chronicler_engine::error::EngineError> {
             self.inner.reset()
         }
-        fn save_checkpoint(&self, checkpoint: &chronicler_engine::model::checkpoint::Checkpoint) -> Result<(), chronicler_engine::error::EngineError> {
+        fn save_checkpoint(
+            &self,
+            checkpoint: &chronicler_engine::model::checkpoint::Checkpoint,
+        ) -> Result<(), chronicler_engine::error::EngineError> {
             self.inner.save_checkpoint(checkpoint)
         }
-        fn load_checkpoint(&self, id: &str) -> Result<Option<chronicler_engine::model::checkpoint::Checkpoint>, chronicler_engine::error::EngineError> {
+        fn load_checkpoint(
+            &self,
+            id: &str,
+        ) -> Result<
+            Option<chronicler_engine::model::checkpoint::Checkpoint>,
+            chronicler_engine::error::EngineError,
+        > {
             self.inner.load_checkpoint(id)
         }
-        fn list_checkpoints(&self) -> Result<Vec<chronicler_engine::model::checkpoint::Checkpoint>, chronicler_engine::error::EngineError> {
+        fn list_checkpoints(
+            &self,
+        ) -> Result<
+            Vec<chronicler_engine::model::checkpoint::Checkpoint>,
+            chronicler_engine::error::EngineError,
+        > {
             self.inner.list_checkpoints()
         }
         fn delete_checkpoint(&self, id: &str) -> Result<(), chronicler_engine::error::EngineError> {
@@ -230,14 +327,16 @@ async fn test_action_confirm_handler_render_error_fallback() {
     }
 
     let storage_dyn: Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage> =
-        Arc::clone(&storage) as Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage>;
+        Arc::clone(&storage)
+            as Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage>;
     let snapshot_storage: Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage> =
         Arc::new(FailingLoadStorage { inner: storage_dyn });
     let message_storage: Arc<dyn chronicler_engine::storage::message_storage::MessageStorage> =
-        Arc::clone(&storage) as Arc<dyn chronicler_engine::storage::message_storage::MessageStorage>;
-    let llm_storage = Arc::new(
-        chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new(),
-    ) as Arc<dyn chronicler_engine::storage::llm_message_storage::LlmMessageStorage>;
+        Arc::clone(&storage)
+            as Arc<dyn chronicler_engine::storage::message_storage::MessageStorage>;
+    let llm_storage =
+        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
+            as Arc<dyn chronicler_engine::storage::llm_message_storage::LlmMessageStorage>;
 
     let app = chronicler_engine::server::create_app_with_storage(
         state,

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::engine::logic::{attempt_semantic_walk, find_room_in_world_map, get_current_room};
+use crate::engine::logic::{attempt_semantic_walk, find_room_in_world_map};
 use crate::model::character::{CharacterSheet, PlayerCard};
 use crate::model::map::{Direction, MapDef, Overworld, Region, Room};
 use crate::model::state::GameState;
@@ -111,10 +111,10 @@ fn test_attempt_walk_dangling_exit() {
 }
 
 #[test]
-fn test_get_current_room_success() {
+fn test_current_room_success() {
     let state = setup_test_state();
-    let result = get_current_room(&state);
-    assert!(result.is_ok());
+    let result = state.current_room();
+    assert!(result.is_some());
     assert_eq!(result.unwrap().name, "Grand Hall");
 }
 
@@ -167,8 +167,8 @@ fn test_get_current_room_failure() {
         "non_existent_room".to_string(),
     );
 
-    let result = get_current_room(&state);
-    assert!(result.is_err());
+    let result = state.current_room();
+    assert!(result.is_none());
 }
 
 #[test]

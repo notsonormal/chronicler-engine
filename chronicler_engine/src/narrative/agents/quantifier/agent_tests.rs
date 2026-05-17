@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use crate::model::agent::{AgentContext, BackendSelector, ExecutionPhase};
 use crate::model::state::GameState;
-use crate::narrative::agents::quantifier::agent::QuantifierAgent;
 use crate::narrative::agents::Agent;
+use crate::narrative::agents::quantifier::agent::QuantifierAgent;
 use crate::narrative::llm::MockBackend;
 use crate::test_support::fixtures::{TestMap, TestPlayer, TestWorld};
 
@@ -68,6 +68,7 @@ fn test_execute_missing_main_response() {
         state: &state,
         main_response: None,
         player_input: "look",
+        current_room: None,
     };
 
     let result = agent.execute(&ctx);

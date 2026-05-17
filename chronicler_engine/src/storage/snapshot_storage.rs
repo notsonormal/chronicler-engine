@@ -1,26 +1,12 @@
-use chrono::{DateTime, Utc};
-use serde::de::DeserializeOwned;
-
 use crate::error::EngineError;
 use crate::model::checkpoint::Checkpoint;
 use crate::model::message::Message;
 use crate::model::state_snapshot::GameStateSnapshot;
 use crate::storage::db::DbPool;
 use crate::storage::message_storage::MessageStorage;
-
-fn parse_json<T: DeserializeOwned>(col: usize, json: &str) -> Result<T, rusqlite::Error> {
-    serde_json::from_str(json).map_err(|e| {
-        rusqlite::Error::FromSqlConversionFailure(col, rusqlite::types::Type::Text, Box::new(e))
-    })
-}
-
-fn parse_datetime(col: usize, s: &str) -> Result<DateTime<Utc>, rusqlite::Error> {
-    Ok(DateTime::parse_from_rfc3339(s)
-        .map_err(|e| {
-            rusqlite::Error::FromSqlConversionFailure(col, rusqlite::types::Type::Text, Box::new(e))
-        })?
-        .with_timezone(&Utc))
-}
+use crate::storage::models::checkpoint::DbCheckpoint;
+use crate::storage::models::game_state_snapshot::DbGameStateSnapshot;
+use crate::storage::models::message::DbMessage;
 
 pub trait SnapshotStorage: Send + Sync {
     fn save(&self, snapshot: &GameStateSnapshot) -> Result<u64, EngineError>;
@@ -49,29 +35,21 @@ impl SqliteGameStorage {
 impl SnapshotStorage for SqliteGameStorage {
     fn save(&self, snapshot: &GameStateSnapshot) -> Result<u64, EngineError> {
         let conn = self.pool.conn();
-        let movement_json = serde_json::to_string(&snapshot.movement)
-            .map_err(|e| EngineError::Config(format!("Failed to serialize movement: {e}")))?;
-        let narrative_json = serde_json::to_string(&snapshot.narrative)
-            .map_err(|e| EngineError::Config(format!("Failed to serialize narrative: {e}")))?;
-        let scene_json = serde_json::to_string(&snapshot.scene)
-            .map_err(|e| EngineError::Config(format!("Failed to serialize scene: {e}")))?;
-        let character_state_json =
-            serde_json::to_string(&snapshot.character_state).map_err(|e| {
-                EngineError::Config(format!("Failed to serialize character_state: {e}"))
-            })?;
+        let db_snap =
+            crate::storage::mappers::state_snapshot::snapshot_to_db(snapshot, self.game_id as i64)?;
 
         conn.execute(
             "INSERT INTO game_state_snapshots
              (game_id, movement, narrative, scene, character_state, committed, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             rusqlite::params![
-                self.game_id as i64,
-                movement_json,
-                narrative_json,
-                scene_json,
-                character_state_json,
-                snapshot.committed as i32,
-                snapshot.created_at.to_rfc3339(),
+                db_snap.game_id,
+                db_snap.movement_json,
+                db_snap.narrative_json,
+                db_snap.scene_json,
+                db_snap.character_state_json,
+                db_snap.committed,
+                db_snap.created_at,
             ],
         )
         .map_err(|e| EngineError::Config(format!("Failed to save snapshot: {e}")))?;
@@ -91,8 +69,21 @@ impl SnapshotStorage for SqliteGameStorage {
             )
             .map_err(|e| EngineError::Config(format!("Failed to prepare query: {e}")))?;
 
-        match stmt.query_row(rusqlite::params![self.game_id as i64], row_to_snapshot) {
-            Ok(snapshot) => Ok(Some(snapshot)),
+        let db_result = stmt.query_row(rusqlite::params![self.game_id as i64], |row| {
+            Ok(DbGameStateSnapshot {
+                id: row.get(0)?,
+                game_id: self.game_id as i64,
+                movement_json: row.get(1)?,
+                narrative_json: row.get(2)?,
+                scene_json: row.get(3)?,
+                character_state_json: row.get(4)?,
+                committed: row.get(5)?,
+                created_at: row.get(6)?,
+            })
+        });
+
+        match db_result {
+            Ok(db_snap) => Ok(Some(GameStateSnapshot::try_from(&db_snap)?)),
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
             Err(e) => Err(EngineError::Config(format!(
                 "Failed to load latest snapshot: {e}"
@@ -112,8 +103,21 @@ impl SnapshotStorage for SqliteGameStorage {
             )
             .map_err(|e| EngineError::Config(format!("Failed to prepare query: {e}")))?;
 
-        match stmt.query_row(rusqlite::params![id, self.game_id as i64], row_to_snapshot) {
-            Ok(snapshot) => Ok(Some(snapshot)),
+        let db_result = stmt.query_row(rusqlite::params![id, self.game_id as i64], |row| {
+            Ok(DbGameStateSnapshot {
+                id: row.get(0)?,
+                game_id: self.game_id as i64,
+                movement_json: row.get(1)?,
+                narrative_json: row.get(2)?,
+                scene_json: row.get(3)?,
+                character_state_json: row.get(4)?,
+                committed: row.get(5)?,
+                created_at: row.get(6)?,
+            })
+        });
+
+        match db_result {
+            Ok(db_snap) => Ok(Some(GameStateSnapshot::try_from(&db_snap)?)),
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
             Err(e) => Err(EngineError::Config(format!(
                 "Failed to load snapshot by id: {e}"
@@ -152,6 +156,7 @@ impl SnapshotStorage for SqliteGameStorage {
 
     fn save_checkpoint(&self, checkpoint: &Checkpoint) -> Result<(), EngineError> {
         let conn = self.pool.conn();
+        let db_cp = DbCheckpoint::from(checkpoint);
         conn.execute(
             "INSERT INTO checkpoints (id, snapshot_id, name, created_at)
              VALUES (?1, ?2, ?3, ?4)
@@ -159,12 +164,7 @@ impl SnapshotStorage for SqliteGameStorage {
                  snapshot_id=excluded.snapshot_id,
                  name=excluded.name,
                  created_at=excluded.created_at",
-            rusqlite::params![
-                checkpoint.id,
-                checkpoint.snapshot_id,
-                checkpoint.name,
-                checkpoint.created_at.to_rfc3339(),
-            ],
+            rusqlite::params![db_cp.id, db_cp.snapshot_id, db_cp.name, db_cp.created_at,],
         )
         .map_err(|e| EngineError::Config(format!("Failed to save checkpoint: {e}")))?;
         Ok(())
@@ -181,8 +181,17 @@ impl SnapshotStorage for SqliteGameStorage {
             )
             .map_err(|e| EngineError::Config(format!("Failed to prepare query: {e}")))?;
 
-        match stmt.query_row(rusqlite::params![id], row_to_checkpoint) {
-            Ok(cp) => Ok(Some(cp)),
+        let db_result = stmt.query_row(rusqlite::params![id], |row| {
+            Ok(DbCheckpoint {
+                id: row.get(0)?,
+                snapshot_id: row.get(1)?,
+                name: row.get(2)?,
+                created_at: row.get(3)?,
+            })
+        });
+
+        match db_result {
+            Ok(db_cp) => Ok(Some(Checkpoint::try_from(&db_cp)?)),
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
             Err(e) => Err(EngineError::Config(format!(
                 "Failed to load checkpoint: {e}"
@@ -201,11 +210,20 @@ impl SnapshotStorage for SqliteGameStorage {
             .map_err(|e| EngineError::Config(format!("Failed to prepare query: {e}")))?;
 
         let rows = stmt
-            .query_map([], row_to_checkpoint)
+            .query_map([], |row| {
+                Ok(DbCheckpoint {
+                    id: row.get(0)?,
+                    snapshot_id: row.get(1)?,
+                    name: row.get(2)?,
+                    created_at: row.get(3)?,
+                })
+            })
             .map_err(|e| EngineError::Config(format!("Failed to list checkpoints: {e}")))?;
 
         rows.map(|row| {
-            row.map_err(|e| EngineError::Config(format!("Failed to read checkpoint row: {e}")))
+            let db_cp = row
+                .map_err(|e| EngineError::Config(format!("Failed to read checkpoint row: {e}")))?;
+            Checkpoint::try_from(&db_cp)
         })
         .collect()
     }
@@ -224,20 +242,19 @@ impl SnapshotStorage for SqliteGameStorage {
 impl MessageStorage for SqliteGameStorage {
     fn insert_message(&self, msg: &mut Message) -> Result<(), EngineError> {
         let conn = self.pool.conn();
-        let log_type_str = serde_json::to_string(&msg.log_type)
-            .map_err(|e| EngineError::Config(format!("Failed to serialize log_type: {e}")))?;
+        let db_msg = crate::storage::mappers::message::message_to_db(msg, self.game_id as i64)?;
         conn.execute(
             "INSERT INTO messages (game_id, sender, text, log_type, timestamp, location_header, event_header, snapshot_id)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             rusqlite::params![
-                self.game_id as i64,
-                msg.sender.as_deref(),
-                &msg.text,
-                log_type_str,
-                msg.timestamp.to_rfc3339(),
-                msg.location_header.as_deref(),
-                msg.event_header.as_deref(),
-                msg.snapshot_id.map(|id| id as i64),
+                db_msg.game_id,
+                db_msg.sender.as_deref(),
+                db_msg.text,
+                db_msg.log_type_json,
+                db_msg.timestamp,
+                db_msg.location_header.as_deref(),
+                db_msg.event_header.as_deref(),
+                db_msg.snapshot_id,
             ],
         )
         .map_err(|e| EngineError::Config(format!("Failed to insert message: {e}")))?;
@@ -278,77 +295,25 @@ impl MessageStorage for SqliteGameStorage {
 
         let rows = stmt
             .query_map(rusqlite::params![self.game_id as i64], |row| {
-                let log_type_str: String = row.get(3)?;
-                let log_type = serde_json::from_str(&log_type_str).map_err(|e| {
-                    rusqlite::Error::FromSqlConversionFailure(
-                        3,
-                        rusqlite::types::Type::Text,
-                        Box::new(e),
-                    )
-                })?;
-                let timestamp_str: String = row.get(4)?;
-                let timestamp = DateTime::parse_from_rfc3339(&timestamp_str)
-                    .map_err(|e| {
-                        rusqlite::Error::FromSqlConversionFailure(
-                            4,
-                            rusqlite::types::Type::Text,
-                            Box::new(e),
-                        )
-                    })?
-                    .with_timezone(&Utc);
-
-                Ok(Message {
-                    id: row.get::<_, i64>(0)? as u64,
+                Ok(DbMessage {
+                    id: row.get(0)?,
+                    game_id: self.game_id as i64,
                     sender: row.get(1)?,
                     text: row.get(2)?,
-                    log_type,
-                    timestamp,
+                    log_type_json: row.get(3)?,
+                    timestamp: row.get(4)?,
                     location_header: row.get(5)?,
                     event_header: row.get(6)?,
-                    snapshot_id: row.get::<_, Option<i64>>(7)?.map(|id| id as u64),
+                    snapshot_id: row.get(7)?,
                 })
             })
             .map_err(|e| EngineError::Config(format!("Failed to query messages: {e}")))?;
 
         rows.map(|row| {
-            row.map_err(|e| EngineError::Config(format!("Failed to read message row: {e}")))
+            let db_msg =
+                row.map_err(|e| EngineError::Config(format!("Failed to read message row: {e}")))?;
+            Message::try_from(&db_msg)
         })
         .collect()
     }
-}
-
-fn row_to_snapshot(row: &rusqlite::Row) -> Result<GameStateSnapshot, rusqlite::Error> {
-    let movement_json: String = row.get(1)?;
-    let narrative_json: String = row.get(2)?;
-    let scene_json: String = row.get(3)?;
-    let character_state_json: String = row.get(4)?;
-    let created_at_str: String = row.get(6)?;
-
-    let movement = parse_json(1, &movement_json)?;
-    let narrative = parse_json(2, &narrative_json)?;
-    let scene = parse_json(3, &scene_json)?;
-    let character_state = parse_json(4, &character_state_json)?;
-    let created_at = parse_datetime(6, &created_at_str)?;
-
-    Ok(GameStateSnapshot {
-        db_id: Some(row.get::<_, i64>(0)? as u64),
-        movement,
-        narrative,
-        scene,
-        character_state,
-        committed: row.get::<_, i32>(5)? != 0,
-        created_at,
-    })
-}
-
-fn row_to_checkpoint(row: &rusqlite::Row) -> Result<Checkpoint, rusqlite::Error> {
-    let created_at_str: String = row.get(3)?;
-    let created_at = parse_datetime(3, &created_at_str)?;
-
-    Ok(Checkpoint {
-        id: row.get(0)?,
-        snapshot_id: row.get::<_, i64>(1)? as u64,
-        name: row.get(2)?,
-        created_at,
-    })
 }
