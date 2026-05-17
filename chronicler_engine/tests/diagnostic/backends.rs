@@ -1,12 +1,20 @@
 use chronicler_engine::error::{EngineError, LlmFailure};
 use chronicler_engine::model::character::NpcCard;
-use chronicler_engine::narrative::agents::quantifier::backends::QuantifierBackendTrait;
-use chronicler_engine::narrative::agents::quantifier::types::{
-    MovementParseResult, MovementType, QuantifierConfidence, QuantifierParseResult,
-    QuantifierPromptContext, QuantifierResult,
-};
-use chronicler_engine::narrative::llm::backend::LlmBackend;
+use chronicler_engine::narrative::llm::backend::{LlmBackend, LlmCallResult};
 use chronicler_engine::narrative::prompt::PromptContext;
+
+fn empty_llm_result(backend_name: &str, model_name: &str, agent_name: &str) -> LlmCallResult {
+    LlmCallResult {
+        text: String::new(),
+        system_prompt: String::new(),
+        user_prompt: String::new(),
+        raw_request_json: String::new(),
+        raw_response_json: String::new(),
+        backend_name: backend_name.to_string(),
+        model_name: model_name.to_string(),
+        agent_name: agent_name.to_string(),
+    }
+}
 
 /// Simulates an HTTP error from an LLM provider (401, 429, 503, etc.)
 pub struct HttpErrorBackend {
@@ -36,12 +44,15 @@ impl HttpErrorBackend {
 }
 
 impl LlmBackend for HttpErrorBackend {
+    fn model(&self) -> &str {
+        "mock"
+    }
     fn generate_dialogue(
         &self,
         _agent_name: &str,
         _ctx: &PromptContext,
         _npc: &NpcCard,
-    ) -> Result<chronicler_engine::narrative::llm::backend::LlmCallResult, EngineError> {
+    ) -> Result<LlmCallResult, EngineError> {
         Err(EngineError::Llm(LlmFailure::Http {
             status: self.status,
             body: self.body.clone(),
@@ -51,7 +62,7 @@ impl LlmBackend for HttpErrorBackend {
         &self,
         _agent_name: &str,
         _ctx: &PromptContext,
-    ) -> Result<chronicler_engine::narrative::llm::backend::LlmCallResult, EngineError> {
+    ) -> Result<LlmCallResult, EngineError> {
         Err(EngineError::Llm(LlmFailure::Http {
             status: self.status,
             body: self.body.clone(),
@@ -61,7 +72,7 @@ impl LlmBackend for HttpErrorBackend {
         &self,
         _agent_name: &str,
         _ctx: &PromptContext,
-    ) -> Result<chronicler_engine::narrative::llm::backend::LlmCallResult, EngineError> {
+    ) -> Result<LlmCallResult, EngineError> {
         Err(EngineError::Llm(LlmFailure::Http {
             status: self.status,
             body: self.body.clone(),
@@ -74,19 +85,19 @@ impl LlmBackend for HttpErrorBackend {
         _u: &str,
         _t: &str,
         _m: Option<u32>,
-    ) -> Result<chronicler_engine::narrative::llm::backend::LlmCallResult, EngineError> {
+    ) -> Result<LlmCallResult, EngineError> {
         Err(EngineError::Llm(LlmFailure::Http {
             status: self.status,
             body: self.body.clone(),
         }))
     }
-    fn narrate_action_from_prompt(
+    fn complete(
         &self,
         _agent_name: &str,
-        _s: &str,
-        _u: &str,
-        _m: Option<u32>,
-    ) -> Result<chronicler_engine::narrative::llm::backend::LlmCallResult, EngineError> {
+        _system_prompt: &str,
+        _user_prompt: &str,
+        _max_tokens: Option<u32>,
+    ) -> Result<LlmCallResult, EngineError> {
         Err(EngineError::Llm(LlmFailure::Http {
             status: self.status,
             body: self.body.clone(),
@@ -113,12 +124,15 @@ impl NetworkErrorBackend {
 }
 
 impl LlmBackend for NetworkErrorBackend {
+    fn model(&self) -> &str {
+        "mock"
+    }
     fn generate_dialogue(
         &self,
         _agent_name: &str,
         _ctx: &PromptContext,
         _npc: &NpcCard,
-    ) -> Result<chronicler_engine::narrative::llm::backend::LlmCallResult, EngineError> {
+    ) -> Result<LlmCallResult, EngineError> {
         Err(EngineError::Llm(LlmFailure::Network {
             url: self.url.clone(),
             detail: self.detail.clone(),
@@ -128,7 +142,7 @@ impl LlmBackend for NetworkErrorBackend {
         &self,
         _agent_name: &str,
         _ctx: &PromptContext,
-    ) -> Result<chronicler_engine::narrative::llm::backend::LlmCallResult, EngineError> {
+    ) -> Result<LlmCallResult, EngineError> {
         Err(EngineError::Llm(LlmFailure::Network {
             url: self.url.clone(),
             detail: self.detail.clone(),
@@ -138,7 +152,7 @@ impl LlmBackend for NetworkErrorBackend {
         &self,
         _agent_name: &str,
         _ctx: &PromptContext,
-    ) -> Result<chronicler_engine::narrative::llm::backend::LlmCallResult, EngineError> {
+    ) -> Result<LlmCallResult, EngineError> {
         Err(EngineError::Llm(LlmFailure::Network {
             url: self.url.clone(),
             detail: self.detail.clone(),
@@ -151,19 +165,19 @@ impl LlmBackend for NetworkErrorBackend {
         _u: &str,
         _t: &str,
         _m: Option<u32>,
-    ) -> Result<chronicler_engine::narrative::llm::backend::LlmCallResult, EngineError> {
+    ) -> Result<LlmCallResult, EngineError> {
         Err(EngineError::Llm(LlmFailure::Network {
             url: self.url.clone(),
             detail: self.detail.clone(),
         }))
     }
-    fn narrate_action_from_prompt(
+    fn complete(
         &self,
         _agent_name: &str,
-        _s: &str,
-        _u: &str,
-        _m: Option<u32>,
-    ) -> Result<chronicler_engine::narrative::llm::backend::LlmCallResult, EngineError> {
+        _system_prompt: &str,
+        _user_prompt: &str,
+        _max_tokens: Option<u32>,
+    ) -> Result<LlmCallResult, EngineError> {
         Err(EngineError::Llm(LlmFailure::Network {
             url: self.url.clone(),
             detail: self.detail.clone(),
@@ -180,12 +194,15 @@ pub struct ParseErrorBackend {
 }
 
 impl LlmBackend for ParseErrorBackend {
+    fn model(&self) -> &str {
+        "mock"
+    }
     fn generate_dialogue(
         &self,
         _agent_name: &str,
         _ctx: &PromptContext,
         _npc: &NpcCard,
-    ) -> Result<chronicler_engine::narrative::llm::backend::LlmCallResult, EngineError> {
+    ) -> Result<LlmCallResult, EngineError> {
         Err(EngineError::Llm(LlmFailure::ParseError {
             raw_response: self.raw_response.clone(),
             expected_format: "valid JSON",
@@ -195,7 +212,7 @@ impl LlmBackend for ParseErrorBackend {
         &self,
         _agent_name: &str,
         _ctx: &PromptContext,
-    ) -> Result<chronicler_engine::narrative::llm::backend::LlmCallResult, EngineError> {
+    ) -> Result<LlmCallResult, EngineError> {
         Err(EngineError::Llm(LlmFailure::ParseError {
             raw_response: self.raw_response.clone(),
             expected_format: "valid JSON",
@@ -205,7 +222,7 @@ impl LlmBackend for ParseErrorBackend {
         &self,
         _agent_name: &str,
         _ctx: &PromptContext,
-    ) -> Result<chronicler_engine::narrative::llm::backend::LlmCallResult, EngineError> {
+    ) -> Result<LlmCallResult, EngineError> {
         Err(EngineError::Llm(LlmFailure::ParseError {
             raw_response: self.raw_response.clone(),
             expected_format: "valid JSON",
@@ -218,19 +235,19 @@ impl LlmBackend for ParseErrorBackend {
         _u: &str,
         _t: &str,
         _m: Option<u32>,
-    ) -> Result<chronicler_engine::narrative::llm::backend::LlmCallResult, EngineError> {
+    ) -> Result<LlmCallResult, EngineError> {
         Err(EngineError::Llm(LlmFailure::ParseError {
             raw_response: self.raw_response.clone(),
             expected_format: "valid JSON",
         }))
     }
-    fn narrate_action_from_prompt(
+    fn complete(
         &self,
         _agent_name: &str,
-        _s: &str,
-        _u: &str,
-        _m: Option<u32>,
-    ) -> Result<chronicler_engine::narrative::llm::backend::LlmCallResult, EngineError> {
+        _system_prompt: &str,
+        _user_prompt: &str,
+        _max_tokens: Option<u32>,
+    ) -> Result<LlmCallResult, EngineError> {
         Err(EngineError::Llm(LlmFailure::ParseError {
             raw_response: self.raw_response.clone(),
             expected_format: "valid JSON",
@@ -245,26 +262,29 @@ impl LlmBackend for ParseErrorBackend {
 pub struct TimeoutBackend;
 
 impl LlmBackend for TimeoutBackend {
+    fn model(&self) -> &str {
+        "mock"
+    }
     fn generate_dialogue(
         &self,
         _agent_name: &str,
         _ctx: &PromptContext,
         _npc: &NpcCard,
-    ) -> Result<chronicler_engine::narrative::llm::backend::LlmCallResult, EngineError> {
+    ) -> Result<LlmCallResult, EngineError> {
         Err(EngineError::Llm(LlmFailure::Timeout))
     }
     fn narrate_action(
         &self,
         _agent_name: &str,
         _ctx: &PromptContext,
-    ) -> Result<chronicler_engine::narrative::llm::backend::LlmCallResult, EngineError> {
+    ) -> Result<LlmCallResult, EngineError> {
         Err(EngineError::Llm(LlmFailure::Timeout))
     }
     fn narrate_arrival(
         &self,
         _agent_name: &str,
         _ctx: &PromptContext,
-    ) -> Result<chronicler_engine::narrative::llm::backend::LlmCallResult, EngineError> {
+    ) -> Result<LlmCallResult, EngineError> {
         Err(EngineError::Llm(LlmFailure::Timeout))
     }
     fn narrate_continuation(
@@ -274,16 +294,16 @@ impl LlmBackend for TimeoutBackend {
         _u: &str,
         _t: &str,
         _m: Option<u32>,
-    ) -> Result<chronicler_engine::narrative::llm::backend::LlmCallResult, EngineError> {
+    ) -> Result<LlmCallResult, EngineError> {
         Err(EngineError::Llm(LlmFailure::Timeout))
     }
-    fn narrate_action_from_prompt(
+    fn complete(
         &self,
         _agent_name: &str,
-        _s: &str,
-        _u: &str,
-        _m: Option<u32>,
-    ) -> Result<chronicler_engine::narrative::llm::backend::LlmCallResult, EngineError> {
+        _system_prompt: &str,
+        _user_prompt: &str,
+        _max_tokens: Option<u32>,
+    ) -> Result<LlmCallResult, EngineError> {
         Err(EngineError::Llm(LlmFailure::Timeout))
     }
     fn name(&self) -> &str {
@@ -294,12 +314,64 @@ impl LlmBackend for TimeoutBackend {
 /// Quantifier backend that fails entirely (simulates LLM call failure in quantifier)
 pub struct FailingQuantifierBackend;
 
-impl QuantifierBackendTrait for FailingQuantifierBackend {
-    fn quantify_room(
+impl LlmBackend for FailingQuantifierBackend {
+    fn model(&self) -> &str {
+        "mock"
+    }
+    fn name(&self) -> &str {
+        "FailingQuantifier"
+    }
+    fn generate_dialogue(
         &self,
-        _context: &QuantifierPromptContext,
-        _fallback_npc_ids: &[String],
-    ) -> Result<QuantifierResult, EngineError> {
+        _agent_name: &str,
+        _ctx: &PromptContext,
+        _npc: &NpcCard,
+    ) -> Result<LlmCallResult, EngineError> {
+        Err(EngineError::Llm(LlmFailure::Network {
+            url: "http://quantifier".to_string(),
+            detail: "Connection refused".to_string(),
+        }))
+    }
+    fn narrate_action(
+        &self,
+        _agent_name: &str,
+        _ctx: &PromptContext,
+    ) -> Result<LlmCallResult, EngineError> {
+        Err(EngineError::Llm(LlmFailure::Network {
+            url: "http://quantifier".to_string(),
+            detail: "Connection refused".to_string(),
+        }))
+    }
+    fn narrate_arrival(
+        &self,
+        _agent_name: &str,
+        _ctx: &PromptContext,
+    ) -> Result<LlmCallResult, EngineError> {
+        Err(EngineError::Llm(LlmFailure::Network {
+            url: "http://quantifier".to_string(),
+            detail: "Connection refused".to_string(),
+        }))
+    }
+    fn narrate_continuation(
+        &self,
+        _agent_name: &str,
+        _s: &str,
+        _u: &str,
+        _t: &str,
+        _m: Option<u32>,
+    ) -> Result<LlmCallResult, EngineError> {
+        Err(EngineError::Llm(LlmFailure::Network {
+            url: "http://quantifier".to_string(),
+            detail: "Connection refused".to_string(),
+        }))
+    }
+    fn complete(
+        &self,
+        _agent_name: &str,
+        _system_prompt: &str,
+        _user_prompt: &str,
+        _max_tokens: Option<u32>,
+    ) -> Result<LlmCallResult, EngineError> {
         Err(EngineError::Llm(LlmFailure::Network {
             url: "http://quantifier".to_string(),
             detail: "Connection refused".to_string(),
@@ -310,22 +382,78 @@ impl QuantifierBackendTrait for FailingQuantifierBackend {
 /// Quantifier backend that returns low confidence (simulates poor model output)
 pub struct LowConfidenceQuantifierBackend;
 
-impl QuantifierBackendTrait for LowConfidenceQuantifierBackend {
-    fn quantify_room(
+impl LlmBackend for LowConfidenceQuantifierBackend {
+    fn model(&self) -> &str {
+        "mock"
+    }
+    fn name(&self) -> &str {
+        "LowConfidenceQuantifier"
+    }
+    fn generate_dialogue(
         &self,
-        _context: &QuantifierPromptContext,
-        _fallback_npc_ids: &[String],
-    ) -> Result<QuantifierResult, EngineError> {
-        Ok(QuantifierResult {
-            npcs: QuantifierParseResult {
-                npc_ids: vec![],
-                confidence: QuantifierConfidence::Low,
-            },
-            movement: MovementParseResult {
-                movement_type: None,
-                destination: None,
-                confidence: QuantifierConfidence::Low,
-            },
+        agent_name: &str,
+        _ctx: &PromptContext,
+        _npc: &NpcCard,
+    ) -> Result<LlmCallResult, EngineError> {
+        Ok(empty_llm_result(
+            "LowConfidenceQuantifier",
+            "mock",
+            agent_name,
+        ))
+    }
+    fn narrate_action(
+        &self,
+        agent_name: &str,
+        _ctx: &PromptContext,
+    ) -> Result<LlmCallResult, EngineError> {
+        Ok(empty_llm_result(
+            "LowConfidenceQuantifier",
+            "mock",
+            agent_name,
+        ))
+    }
+    fn narrate_arrival(
+        &self,
+        agent_name: &str,
+        _ctx: &PromptContext,
+    ) -> Result<LlmCallResult, EngineError> {
+        Ok(empty_llm_result(
+            "LowConfidenceQuantifier",
+            "mock",
+            agent_name,
+        ))
+    }
+    fn narrate_continuation(
+        &self,
+        agent_name: &str,
+        _s: &str,
+        _u: &str,
+        _t: &str,
+        _m: Option<u32>,
+    ) -> Result<LlmCallResult, EngineError> {
+        Ok(empty_llm_result(
+            "LowConfidenceQuantifier",
+            "mock",
+            agent_name,
+        ))
+    }
+    fn complete(
+        &self,
+        agent_name: &str,
+        _system_prompt: &str,
+        _user_prompt: &str,
+        _max_tokens: Option<u32>,
+    ) -> Result<LlmCallResult, EngineError> {
+        let text = r#"{"npcs_in_room": []}"#;
+        Ok(LlmCallResult {
+            text: text.to_string(),
+            system_prompt: String::new(),
+            user_prompt: String::new(),
+            raw_request_json: String::new(),
+            raw_response_json: format!("{{\"content\":\"{text}\"}}"),
+            backend_name: "LowConfidenceQuantifier".to_string(),
+            model_name: "mock".to_string(),
+            agent_name: agent_name.to_string(),
         })
     }
 }
@@ -333,22 +461,78 @@ impl QuantifierBackendTrait for LowConfidenceQuantifierBackend {
 /// Quantifier backend that returns a movement to a non-existent room
 pub struct MisleadingMovementQuantifierBackend;
 
-impl QuantifierBackendTrait for MisleadingMovementQuantifierBackend {
-    fn quantify_room(
+impl LlmBackend for MisleadingMovementQuantifierBackend {
+    fn model(&self) -> &str {
+        "mock"
+    }
+    fn name(&self) -> &str {
+        "MisleadingMovementQuantifier"
+    }
+    fn generate_dialogue(
         &self,
-        _context: &QuantifierPromptContext,
-        _fallback_npc_ids: &[String],
-    ) -> Result<QuantifierResult, EngineError> {
-        Ok(QuantifierResult {
-            npcs: QuantifierParseResult {
-                npc_ids: vec![],
-                confidence: QuantifierConfidence::High,
-            },
-            movement: MovementParseResult {
-                movement_type: Some(MovementType::Entering),
-                destination: Some("nonexistent_room".to_string()),
-                confidence: QuantifierConfidence::High,
-            },
+        agent_name: &str,
+        _ctx: &PromptContext,
+        _npc: &NpcCard,
+    ) -> Result<LlmCallResult, EngineError> {
+        Ok(empty_llm_result(
+            "MisleadingMovementQuantifier",
+            "mock",
+            agent_name,
+        ))
+    }
+    fn narrate_action(
+        &self,
+        agent_name: &str,
+        _ctx: &PromptContext,
+    ) -> Result<LlmCallResult, EngineError> {
+        Ok(empty_llm_result(
+            "MisleadingMovementQuantifier",
+            "mock",
+            agent_name,
+        ))
+    }
+    fn narrate_arrival(
+        &self,
+        agent_name: &str,
+        _ctx: &PromptContext,
+    ) -> Result<LlmCallResult, EngineError> {
+        Ok(empty_llm_result(
+            "MisleadingMovementQuantifier",
+            "mock",
+            agent_name,
+        ))
+    }
+    fn narrate_continuation(
+        &self,
+        agent_name: &str,
+        _s: &str,
+        _u: &str,
+        _t: &str,
+        _m: Option<u32>,
+    ) -> Result<LlmCallResult, EngineError> {
+        Ok(empty_llm_result(
+            "MisleadingMovementQuantifier",
+            "mock",
+            agent_name,
+        ))
+    }
+    fn complete(
+        &self,
+        agent_name: &str,
+        _system_prompt: &str,
+        _user_prompt: &str,
+        _max_tokens: Option<u32>,
+    ) -> Result<LlmCallResult, EngineError> {
+        let text = r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "nonexistent_room"}}"#;
+        Ok(LlmCallResult {
+            text: text.to_string(),
+            system_prompt: String::new(),
+            user_prompt: String::new(),
+            raw_request_json: String::new(),
+            raw_response_json: format!("{{\"content\":\"{text}\"}}"),
+            backend_name: "MisleadingMovementQuantifier".to_string(),
+            model_name: "mock".to_string(),
+            agent_name: agent_name.to_string(),
         })
     }
 }

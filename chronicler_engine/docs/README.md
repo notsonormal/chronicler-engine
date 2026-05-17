@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-16 17:04 UTC*
+*Index last generated: 2026-05-17 15:48 UTC*
 
 ### Root files
 
@@ -25,9 +25,8 @@ This folder contains all documentation for the Chronicler Engine project.
 - [ADR-009: Agent Trait and Registry Architecture](./adr/adr-009-agent-trait-registry.md)
 - [ADR-010: Concurrency and Generation Gate Model](./adr/adr-010-concurrency-generation-gate.md)
 - [ADR-011: Text Check Integration](./adr/adr-011-text-check-integration.md)
-- [ADR-012: Turn + Swipe Domain Model](./adr/adr-012-turn-swipe-model.md)
-- [ADR-013: LLM Call Logging and Forensics](./adr/adr-013-llm-message-logging.md)
-- [ADR-014: Message Domain Model](./adr/adr-014-message-swipe-model.md)
+- [ADR-012: LLM Call Logging and Forensics](./adr/adr-012-llm-message-logging.md)
+- [ADR-013: Message Domain Model](./adr/adr-013-message-domain-model.md)
 
 ### `docs/architecture/`
 
@@ -56,37 +55,25 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Plan: Observability & Automated Forensics](./plans/observability-and-forensics-plan.md)
 - [AI Steering & Guided Generation](./plans/steering-and-guided-generation.md)
 
-### `docs/plans/archived/`
-
-- [Plan: Remove Meaningless Sync Actions from UI and Prompts](./plans/archived/barry-allen-aqualad-us-agent_20260516_151500.md)
-- [Implementation Plan: Restrict Message Deletion & Inline Location/Event Headers](./plans/archived/cyborg-obsidian-riri-williams.md)
-- [Implementation Plan: LLM Messages Tab](./plans/archived/dagger-wiccan-martian-manhunter-20260514.md)
-- [Plan: Fix Story Log Button Visibility & Text Bolding](./plans/archived/fix-story-log-buttons-and-bolding.md)
-- [Implementation Plan: Redmist Estate Data Overhaul](./plans/archived/ice-winter-soldier-bobbi-morse.md)
-- [Plan: Message+Swipe Storage (Marinara/SillyTavern Model)](./plans/archived/jakeem-thunder-hal-jordan-dazzler-20260515.md)
-- [Plan: Migrate Chronicler Engine to Turn + Swipe Model](./plans/archived/jericho-huntress-devil-dinosaur-20260513.md)
-- [Plan: Restrict Message Deletion & Rethink Location/Event Headers](./plans/archived/lightray-thor-hulk.md)
-- [Implementation Plan: Test Suite Improvements](./plans/archived/test-fix-plan.md)
-- [Plan: Address Code Review Findings](./plans/archived/wonder-woman-star-lord-war-machine.md)
-
 ### `docs/reference/`
 
+- [Data Layer Reference](./reference/data_layer.md)
 - [Specification: Engine Data Schemas](./reference/data_schemas.md)
 - [Specification: Player Persona System](./reference/persona_system.md)
 - [Reference: Quantifier Prompt](./reference/quantifier_prompt.md)
 - [Reference: Normal System Prompt](./reference/system_prompt.md)
 - [Specification: Testing Strategy and Architecture](./reference/testing.md)
 
-### `docs/reviews/`
+### `docs/reviews/archived/`
 
-- [Agent Scalability Assessment: Chronicler vs. Marinara](./reviews/agent-scalability-assessment.md)
-- [Cross-Project Architectural Comparison: Chronicler Engine vs. Marinara Engine](./reviews/cross-project-architectural-comparison.md)
-- [Architectural Review: Defensive Architecture & Invariant Enforcement](./reviews/defensive-architecture-review.md)
-- [Holistic Architectural Review: Chronicler Engine](./reviews/holistic-architectural-review.md)
-- [Phase 1: Domain Alignment — Findings](./reviews/holistic-review-phase1-domain-alignment.md)
-- [Phase 2: Structural Forces — Findings](./reviews/holistic-review-phase2-structural-forces.md)
-- [Phase 3: Evolution Stress Test — Findings](./reviews/holistic-review-phase3-evolution-stress.md)
-- [Phase 4: Health Metrics — Baseline](./reviews/holistic-review-phase4-health-metrics.md)
+- [Agent Scalability Assessment: Chronicler vs. Marinara](./reviews/archived/agent-scalability-assessment.md)
+- [Cross-Project Architectural Comparison: Chronicler Engine vs. Marinara Engine](./reviews/archived/cross-project-architectural-comparison.md)
+- [Architectural Review: Defensive Architecture & Invariant Enforcement](./reviews/archived/defensive-architecture-review.md)
+- [Holistic Architectural Review: Chronicler Engine](./reviews/archived/holistic-architectural-review.md)
+- [Phase 1: Domain Alignment — Findings](./reviews/archived/holistic-review-phase1-domain-alignment.md)
+- [Phase 2: Structural Forces — Findings](./reviews/archived/holistic-review-phase2-structural-forces.md)
+- [Phase 3: Evolution Stress Test — Findings](./reviews/archived/holistic-review-phase3-evolution-stress.md)
+- [Phase 4: Health Metrics — Baseline](./reviews/archived/holistic-review-phase4-health-metrics.md)
 
 ### `docs/system/`
 

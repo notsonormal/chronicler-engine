@@ -46,7 +46,6 @@ async fn process_action(state: &AppState, command: String) -> Response<Body> {
 
     let player_name = game_state.player.sheet.name.clone();
     game_state.add_log(command.clone(), Some(player_name.clone()), LogType::Input);
-    let turn_id = game_state.narrative.current_turn_id.clone();
 
     // Reject concurrent actions while generation is in flight.
     if state
@@ -64,13 +63,34 @@ async fn process_action(state: &AppState, command: String) -> Response<Body> {
 
     game_state.narrative.generation.status = crate::model::state::GenerationStatus::Generating;
     game_state.narrative.generation.phase = crate::model::state::GenerationPhase::Narrating;
-    let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
-        &game_state,
-        turn_id.clone(),
-        0,
-    );
-    if let Err(e) = state.snapshot_storage.save(&snapshot) {
-        log::error!("Failed to save snapshot: {e}");
+    let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&game_state);
+    let snapshot_id = match state.snapshot_storage.save(&snapshot) {
+        Ok(id) => id,
+        Err(e) => {
+            log::error!("Failed to save snapshot: {e}");
+            state.is_generating.store(false, Ordering::SeqCst);
+            return Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(Body::from(render_error(&format!(
+                    "Failed to save state: {e}"
+                ))))
+                .expect("static response body is valid");
+        }
+    };
+    let ctx_for_persist = state.as_game_service_context();
+    if let Err(e) = crate::engine::game_service::persist_new_messages(
+        &ctx_for_persist,
+        &mut game_state,
+        snapshot_id,
+    ) {
+        log::error!("Failed to persist input message: {e}");
+        state.is_generating.store(false, Ordering::SeqCst);
+        return Response::builder()
+            .status(StatusCode::INTERNAL_SERVER_ERROR)
+            .body(Body::from(render_error(&format!(
+                "Failed to persist message: {e}"
+            ))))
+            .expect("static response body is valid");
     }
 
     let ctx = state.as_game_service_context();
@@ -90,13 +110,10 @@ async fn process_action(state: &AppState, command: String) -> Response<Body> {
             }
         };
         gs.narrative.generation.status = crate::model::state::GenerationStatus::Idle;
-        let shutdown_turn_id = gs.narrative.current_turn_id.clone();
-        let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
-            &gs,
-            shutdown_turn_id,
-            0,
-        );
-        let _ = state.snapshot_storage.save(&snapshot);
+        let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&gs);
+        if let Err(e) = state.snapshot_storage.save(&snapshot) {
+            log::error!("Failed to save shutdown snapshot: {e}");
+        }
         return Response::builder()
             .status(StatusCode::SERVICE_UNAVAILABLE)
             .body(Body::from(render_error("Server is shutting down")))

@@ -3,6 +3,7 @@ use std::sync::Arc;
 use crate::engine::game_service::{DefaultGameService, GameService};
 use crate::model::settings::AppSettings;
 use crate::server::ServerConfig;
+use crate::storage::message_storage::MessageStorage;
 use crate::storage::snapshot_storage::SnapshotStorage;
 
 #[test]
@@ -130,14 +131,15 @@ fn test_app_state_lock_state_success() {
         "room".to_string(),
     );
 
-    let snapshot = GameStateSnapshot::from_game_state(&state, "test".to_string(), 0);
-    let storage = Arc::new(crate::test_support::InMemorySnapshotStorage::new());
+    let snapshot = GameStateSnapshot::from_game_state(&state);
+    let storage = Arc::new(crate::test_support::InMemoryGameStorage::new());
     let _ = storage.save(&snapshot);
     let llm_storage: Arc<dyn crate::storage::llm_message_storage::LlmMessageStorage> =
         Arc::new(crate::storage::llm_message_storage::InMemoryLlmMessageStorage::new());
 
     let app_state = crate::server::AppState {
-        snapshot_storage: storage,
+        snapshot_storage: storage.clone(),
+        message_storage: storage,
         llm_message_storage: Arc::clone(&llm_storage),
         world: state.world.clone(),
         map: state.map.clone(),
@@ -166,26 +168,16 @@ fn test_app_state_lock_state_poisoned() {
 
     struct FailingStorage;
     impl SnapshotStorage for FailingStorage {
-        fn save(&self, _snapshot: &GameStateSnapshot) -> Result<(), EngineError> {
-            Ok(())
+        fn save(&self, _snapshot: &GameStateSnapshot) -> Result<u64, EngineError> {
+            Ok(1)
         }
-        fn load_latest(
-            &self,
-            _turn_id: Option<&str>,
-        ) -> Result<Option<GameStateSnapshot>, EngineError> {
+        fn load_latest(&self) -> Result<Option<GameStateSnapshot>, EngineError> {
             Err(EngineError::Config("test error".to_string()))
         }
-        fn load_by_turn(
-            &self,
-            _turn_id: &str,
-            _swipe_index: u32,
-        ) -> Result<Option<GameStateSnapshot>, EngineError> {
+        fn load_by_id(&self, _id: u64) -> Result<Option<GameStateSnapshot>, EngineError> {
             Err(EngineError::Config("test error".to_string()))
         }
-        fn delete_turn_snapshots(&self, _turn_id: &str) -> Result<(), EngineError> {
-            Ok(())
-        }
-        fn commit(&self, _snapshot_id: &str) -> Result<(), EngineError> {
+        fn commit(&self, _snapshot_id: u64) -> Result<(), EngineError> {
             Ok(())
         }
         fn reset(&self) -> Result<(), EngineError> {
@@ -210,6 +202,24 @@ fn test_app_state_lock_state_poisoned() {
         }
         fn delete_checkpoint(&self, _id: &str) -> Result<(), EngineError> {
             Ok(())
+        }
+    }
+
+    impl MessageStorage for FailingStorage {
+        fn insert_message(
+            &self,
+            _msg: &mut crate::model::message::Message,
+        ) -> Result<(), EngineError> {
+            Ok(())
+        }
+        fn update_message(&self, _id: u64, _text: &str) -> Result<(), EngineError> {
+            Ok(())
+        }
+        fn delete_message(&self, _id: u64) -> Result<(), EngineError> {
+            Ok(())
+        }
+        fn load_messages(&self) -> Result<Vec<crate::model::message::Message>, EngineError> {
+            Ok(vec![])
         }
     }
 
@@ -261,8 +271,10 @@ fn test_app_state_lock_state_poisoned() {
 
     let llm_storage: Arc<dyn crate::storage::llm_message_storage::LlmMessageStorage> =
         Arc::new(crate::storage::llm_message_storage::InMemoryLlmMessageStorage::new());
+    let failing_storage = Arc::new(FailingStorage);
     let app_state = crate::server::AppState {
-        snapshot_storage: Arc::new(FailingStorage),
+        snapshot_storage: failing_storage.clone(),
+        message_storage: failing_storage,
         llm_message_storage: Arc::clone(&llm_storage),
         world: state.world.clone(),
         map: state.map.clone(),

@@ -54,20 +54,25 @@ pub fn run(args: Args) -> crate::error::Result<()> {
         .unwrap_or_else(|| data_dir.clone());
     let db_path = db_dir.join(format!("chronicler_{}.db", args.port));
     let db_pool = crate::storage::db::DbPool::new(db_path.to_str().unwrap_or("chronicler.db"))?;
-    let snapshot_storage =
-        Arc::new(crate::storage::snapshot_storage::SqliteSnapshotStorage::new(db_pool.clone()))
-            as Arc<dyn crate::storage::snapshot_storage::SnapshotStorage>;
-    let llm_message_storage =
-        Arc::new(crate::storage::llm_message_storage::SqliteLlmMessageStorage::new(db_pool))
-            as Arc<dyn crate::storage::llm_message_storage::LlmMessageStorage>;
+    let storage = Arc::new(crate::storage::snapshot_storage::SqliteGameStorage::new(
+        db_pool.clone(),
+        1,
+    ));
+    let snapshot_storage: Arc<dyn crate::storage::snapshot_storage::SnapshotStorage> =
+        storage.clone();
+    let message_storage: Arc<dyn crate::storage::message_storage::MessageStorage> = storage.clone();
+    let llm_message_storage: Arc<dyn crate::storage::llm_message_storage::LlmMessageStorage> =
+        Arc::new(crate::storage::llm_message_storage::SqliteLlmMessageStorage::new(db_pool));
 
     // [DOC: docs/system/startup.md]
-    let initial_snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
-        &state,
-        "initial".to_string(),
-        0,
-    );
-    snapshot_storage.save(&initial_snapshot)?;
+    let initial_snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
+    let snapshot_id = snapshot_storage.save(&initial_snapshot)?;
+    for msg in state.narrative.messages.iter_mut() {
+        if msg.id == crate::model::storage::UNPERSISTED_ID {
+            msg.snapshot_id = Some(snapshot_id);
+            message_storage.insert_message(msg)?;
+        }
+    }
 
     let world_arc: Arc<crate::model::world::WorldCard> = Arc::new(manifest.clone().into());
     let map_arc: Arc<crate::model::map::MapDef> = map;
@@ -86,7 +91,8 @@ pub fn run(args: Args) -> crate::error::Result<()> {
         .default_scenario()
         .is_some_and(|s| !s.text.is_empty());
     if !has_scenario {
-        let storage_for_task = Arc::clone(&snapshot_storage);
+        let snapshot_storage_for_task = Arc::clone(&snapshot_storage);
+        let message_storage_for_task = Arc::clone(&message_storage);
         let llm_storage_for_task = Arc::clone(&llm_message_storage);
         let world_for_task = Arc::clone(&world_arc);
         let map_for_task = Arc::clone(&map_arc);
@@ -94,7 +100,7 @@ pub fn run(args: Args) -> crate::error::Result<()> {
         let npcs_for_task = Arc::clone(&npcs_arc);
         // [DOC: docs/architecture/invariants.md#INV-004]
         let _handle = runtime.spawn_blocking(move || {
-            let mut state = match storage_for_task.load_latest(None) {
+            let mut state = match snapshot_storage_for_task.load_latest() {
                 Ok(Some(snap)) => GameState::from_snapshot(
                     &snap,
                     Arc::clone(&world_for_task),
@@ -110,6 +116,9 @@ pub fn run(args: Args) -> crate::error::Result<()> {
                     world_for_task.starting_room_id.clone(),
                 ),
             };
+            if let Ok(msgs) = message_storage_for_task.load_messages() {
+                state.narrative.messages = msgs;
+            }
 
             state.narrative.generation.status = crate::model::state::GenerationStatus::Generating;
 
@@ -157,12 +166,11 @@ pub fn run(args: Args) -> crate::error::Result<()> {
                             crate::model::state::GenerationStatus::Error(format!("LLM Error: {e}"));
                     }
                 }
-                let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
-                    &state,
-                    "arrival".to_string(),
-                    0,
-                );
-                let _ = storage_for_task.save(&snapshot);
+                let snapshot =
+                    crate::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
+                if let Err(e) = snapshot_storage_for_task.save(&snapshot) {
+                    log::error!("Failed to save arrival snapshot: {e}");
+                }
             }
         });
     } // end if !has_scenario
@@ -173,6 +181,7 @@ pub fn run(args: Args) -> crate::error::Result<()> {
         player_arc,
         npcs_arc,
         snapshot_storage,
+        message_storage,
         llm_message_storage,
         config,
     ))?;

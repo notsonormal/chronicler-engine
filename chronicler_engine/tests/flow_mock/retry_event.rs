@@ -7,9 +7,6 @@ use chronicler_engine::model::trigger::{
     ComparisonOperator, Trigger, TriggerAction, TriggerCondition,
 };
 use chronicler_engine::model::world::WorldCard;
-use chronicler_engine::narrative::agents::quantifier::{
-    MockQuantifierBackend, MovementParseResult, MovementType, QuantifierConfidence,
-};
 use chronicler_engine::narrative::llm::MockBackend;
 use chronicler_engine::test_support::make_test_context_with_sqlite;
 
@@ -29,12 +26,11 @@ fn test_event_retry_does_not_create_extra_swipe_on_narration() {
 
     add_input_and_save(&ctx, "enter shop");
 
-    let quantifier = Arc::new(MockQuantifierBackend {
-        per_call_movements: vec![Some(MovementParseResult {
-            movement_type: Some(MovementType::Entering),
-            destination: Some("room2".to_string()),
-            confidence: QuantifierConfidence::High,
-        })],
+    let quantifier = Arc::new(MockBackend {
+        per_call_prompt_responses: vec![
+            r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#
+                .to_string(),
+        ],
         ..Default::default()
     });
 
@@ -87,12 +83,11 @@ fn test_retry_event_continuation_preserves_quantifier_result() {
 
     add_input_and_save(&ctx, "enter shop");
 
-    let quantifier = Arc::new(MockQuantifierBackend {
-        per_call_movements: vec![Some(MovementParseResult {
-            movement_type: Some(MovementType::Entering),
-            destination: Some("room2".to_string()),
-            confidence: QuantifierConfidence::High,
-        })],
+    let quantifier = Arc::new(MockBackend {
+        per_call_prompt_responses: vec![
+            r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#
+                .to_string(),
+        ],
         ..Default::default()
     });
 
@@ -234,10 +229,10 @@ fn test_trigger_continuation_runs_quantifier_and_detects_new_npc() {
     });
 
     // Mock quantifier: first call = no NPCs, second call = Gabriella detected
-    let quantifier = Arc::new(MockQuantifierBackend {
-        per_call_npcs: vec![
-            vec![],                        // first call: after main narration
-            vec!["gabriella".to_string()], // second call: after trigger continuation
+    let quantifier = Arc::new(MockBackend {
+        per_call_prompt_responses: vec![
+            r#"{"npcs_in_room": []}"#.to_string(),
+            r#"{"npcs_in_room": ["gabriella"]}"#.to_string(),
         ],
         ..Default::default()
     });

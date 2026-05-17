@@ -15,16 +15,18 @@ use crate::model::state::{GameState, GenerationStatus, LogType};
 use crate::model::state_snapshot::GameStateSnapshot;
 use crate::narrative::llm::MockBackend;
 use crate::narrative::llm::backend::LlmCallResult;
+use crate::model::message::Message;
+use crate::storage::message_storage::MessageStorage;
 use crate::storage::snapshot_storage::SnapshotStorage;
 use crate::test_support::fixtures::{TestMap, TestNpc, TestPlayer, TestWorld};
-use crate::test_support::in_memory_storage::InMemorySnapshotStorage;
+use crate::test_support::in_memory_storage::InMemoryGameStorage;
 use crate::test_support::make_test_context_with_sqlite;
 
 /// Snapshot storage that can be configured to fail specific operations.
 struct FailingSnapshotStorage {
     fallback: Arc<dyn SnapshotStorage>,
     fail_load_latest: std::sync::atomic::AtomicBool,
-    fail_load_by_turn: std::sync::atomic::AtomicBool,
+    fail_load_by_id: std::sync::atomic::AtomicBool,
 }
 
 impl FailingSnapshotStorage {
@@ -32,17 +34,17 @@ impl FailingSnapshotStorage {
         Self {
             fallback,
             fail_load_latest: std::sync::atomic::AtomicBool::new(false),
-            fail_load_by_turn: std::sync::atomic::AtomicBool::new(false),
+            fail_load_by_id: std::sync::atomic::AtomicBool::new(false),
         }
     }
 }
 
 impl SnapshotStorage for FailingSnapshotStorage {
-    fn save(&self, snapshot: &GameStateSnapshot) -> Result<(), EngineError> {
+    fn save(&self, snapshot: &GameStateSnapshot) -> Result<u64, EngineError> {
         self.fallback.save(snapshot)
     }
 
-    fn load_latest(&self, turn_id: Option<&str>) -> Result<Option<GameStateSnapshot>, EngineError> {
+    fn load_latest(&self) -> Result<Option<GameStateSnapshot>, EngineError> {
         if self
             .fail_load_latest
             .load(std::sync::atomic::Ordering::SeqCst)
@@ -51,30 +53,22 @@ impl SnapshotStorage for FailingSnapshotStorage {
                 "simulated load_latest failure",
             )));
         }
-        self.fallback.load_latest(turn_id)
+        self.fallback.load_latest()
     }
 
-    fn load_by_turn(
-        &self,
-        turn_id: &str,
-        swipe_index: u32,
-    ) -> Result<Option<GameStateSnapshot>, EngineError> {
+    fn load_by_id(&self, id: u64) -> Result<Option<GameStateSnapshot>, EngineError> {
         if self
-            .fail_load_by_turn
+            .fail_load_by_id
             .load(std::sync::atomic::Ordering::SeqCst)
         {
             return Err(EngineError::Internal(internal_error(
-                "simulated load_by_turn failure",
+                "simulated load_by_id failure",
             )));
         }
-        self.fallback.load_by_turn(turn_id, swipe_index)
+        self.fallback.load_by_id(id)
     }
 
-    fn delete_turn_snapshots(&self, turn_id: &str) -> Result<(), EngineError> {
-        self.fallback.delete_turn_snapshots(turn_id)
-    }
-
-    fn commit(&self, snapshot_id: &str) -> Result<(), EngineError> {
+    fn commit(&self, snapshot_id: u64) -> Result<(), EngineError> {
         self.fallback.commit(snapshot_id)
     }
 
@@ -99,6 +93,47 @@ impl SnapshotStorage for FailingSnapshotStorage {
     }
 }
 
+/// Message storage that can be configured to fail specific operations.
+struct FailingMessageStorage {
+    fallback: Arc<dyn MessageStorage>,
+    fail_delete_message: std::sync::atomic::AtomicBool,
+}
+
+impl FailingMessageStorage {
+    fn new(fallback: Arc<dyn MessageStorage>) -> Self {
+        Self {
+            fallback,
+            fail_delete_message: std::sync::atomic::AtomicBool::new(false),
+        }
+    }
+}
+
+impl MessageStorage for FailingMessageStorage {
+    fn insert_message(&self, msg: &mut Message) -> Result<(), EngineError> {
+        self.fallback.insert_message(msg)
+    }
+
+    fn update_message(&self, id: u64, text: &str) -> Result<(), EngineError> {
+        self.fallback.update_message(id, text)
+    }
+
+    fn delete_message(&self, id: u64) -> Result<(), EngineError> {
+        if self
+            .fail_delete_message
+            .load(std::sync::atomic::Ordering::SeqCst)
+        {
+            return Err(EngineError::Internal(internal_error(
+                "simulated delete_message failure",
+            )));
+        }
+        self.fallback.delete_message(id)
+    }
+
+    fn load_messages(&self) -> Result<Vec<Message>, EngineError> {
+        self.fallback.load_messages()
+    }
+}
+
 fn make_test_state() -> GameState {
     let world = Arc::new(TestWorld::minimal());
     let map = Arc::new(TestMap::single_room("start"));
@@ -108,9 +143,13 @@ fn make_test_state() -> GameState {
 }
 
 fn make_empty_context(state: GameState) -> GameServiceContext {
-    let storage = Arc::new(InMemorySnapshotStorage::new()) as Arc<dyn SnapshotStorage>;
+    let storage = Arc::new(InMemoryGameStorage::new());
+    let snapshot_storage: Arc<dyn SnapshotStorage> =
+        Arc::clone(&storage) as Arc<dyn SnapshotStorage>;
+    let message_storage: Arc<dyn MessageStorage> = Arc::clone(&storage) as Arc<dyn MessageStorage>;
     GameServiceContext {
-        snapshot_storage: storage,
+        snapshot_storage,
+        message_storage,
         llm_message_storage: Arc::new(
             crate::storage::llm_message_storage::InMemoryLlmMessageStorage::new(),
         ),
@@ -131,50 +170,41 @@ fn make_service() -> DefaultGameService {
     )
 }
 
-fn add_input_and_save(ctx: &GameServiceContext, text: &str) {
+fn add_input_and_save(ctx: &GameServiceContext, text: &str) -> u64 {
     let mut state = ctx.load_state();
     let player_name = state.player.sheet.name.clone();
     state.add_log(text.to_string(), Some(player_name), LogType::Input);
-    let turn_id = state
-        .narrative
-        .messages
-        .last()
-        .map(|m| m.turn_id.clone())
-        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-    let snapshot =
-        crate::model::state_snapshot::GameStateSnapshot::from_game_state(&state, turn_id, 0);
-    let _ = ctx.snapshot_storage.save(&snapshot);
+    let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
+    let id = ctx.snapshot_storage.save(&snapshot).unwrap();
+    if let Some(last) = state.narrative.messages.last_mut() {
+        last.snapshot_id = Some(id);
+        let _ = ctx.message_storage.insert_message(last);
+    }
+    id
 }
 
-fn add_narration_and_save(ctx: &GameServiceContext, text: &str, turn_id: &str) {
+fn add_narration_and_save(ctx: &GameServiceContext, text: &str) -> u64 {
     let mut state = ctx.load_state();
     state.add_log(text.to_string(), None, LogType::Narration);
-    let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
-        &state,
-        turn_id.to_string(),
-        0,
-    );
-    let _ = ctx.snapshot_storage.save(&snapshot);
+    let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
+    let id = ctx.snapshot_storage.save(&snapshot).unwrap();
+    if let Some(last) = state.narrative.messages.last_mut() {
+        last.snapshot_id = Some(id);
+        let _ = ctx.message_storage.insert_message(last);
+    }
+    id
 }
 
-fn save_pre_main(ctx: &GameServiceContext, turn_id: &str) {
+fn save_pre_main(ctx: &GameServiceContext) -> u64 {
     let state = ctx.load_state();
-    let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
-        &state,
-        format!("pre-main:{turn_id}"),
-        0,
-    );
-    let _ = ctx.snapshot_storage.save(&snapshot);
+    let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
+    ctx.snapshot_storage.save(&snapshot).unwrap()
 }
 
-fn save_pre_event(ctx: &GameServiceContext, turn_id: &str) {
+fn save_pre_event(ctx: &GameServiceContext) -> u64 {
     let state = ctx.load_state();
-    let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
-        &state,
-        format!("pre-event:{turn_id}"),
-        0,
-    );
-    let _ = ctx.snapshot_storage.save(&snapshot);
+    let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
+    ctx.snapshot_storage.save(&snapshot).unwrap()
 }
 
 // ─── retry_last_response_impl ────────────────────────────────────────────────
@@ -203,18 +233,13 @@ fn test_retry_event_with_no_pre_event_fallback_to_main() {
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let service = make_service();
 
-    add_input_and_save(&ctx, "test input");
-    let turn_id = ctx.load_state().narrative.current_turn_id.clone();
+    let _input_id = add_input_and_save(&ctx, "test input");
 
     // Save a narration with event header (marks it as event continuation)
     let mut state = ctx.load_state();
     state.add_log("Event narration".to_string(), None, LogType::Narration);
     state.narrative.messages.last_mut().unwrap().event_header = Some("Event".to_string());
-    let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
-        &state,
-        turn_id.clone(),
-        0,
-    );
+    let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
     let _ = ctx.snapshot_storage.save(&snapshot);
 
     // No pre-event snapshot → falls back to main narration retry
@@ -232,11 +257,7 @@ fn test_retry_event_with_no_pre_event_and_no_input() {
     let mut state = ctx.load_state();
     state.add_log("Event only".to_string(), None, LogType::Narration);
     state.narrative.messages.last_mut().unwrap().event_header = Some("Event".to_string());
-    let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
-        &state,
-        "turn-1".to_string(),
-        0,
-    );
+    let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
     let _ = ctx.snapshot_storage.save(&snapshot);
 
     // No pre-event, no input → logs error and returns
@@ -250,14 +271,14 @@ fn test_retry_event_storage_error_on_pre_event() {
     let state = make_test_state();
     let base_ctx = make_test_context_with_sqlite(state).unwrap();
 
-    add_input_and_save(&base_ctx, "test input");
-    let turn_id = base_ctx.load_state().narrative.current_turn_id.clone();
+    let _input_id = add_input_and_save(&base_ctx, "test input");
+    let _pre_event_id = save_pre_event(&base_ctx);
 
     let failing = Arc::new(FailingSnapshotStorage::new(Arc::clone(
         &base_ctx.snapshot_storage,
     )));
     failing
-        .fail_load_by_turn
+        .fail_load_by_id
         .store(true, std::sync::atomic::Ordering::SeqCst);
 
     let ctx = GameServiceContext {
@@ -268,7 +289,7 @@ fn test_retry_event_storage_error_on_pre_event() {
     let service = make_service();
     let latest = ctx.load_state();
 
-    retry_event_continuation(&service, &ctx, &turn_id, 0, &latest);
+    retry_event_continuation(&service, &ctx, latest);
 
     let state = base_ctx.load_state();
     assert!(
@@ -286,9 +307,15 @@ fn test_retry_event_missing_trigger_context() {
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let service = make_service();
 
-    add_input_and_save(&ctx, "test input");
-    let turn_id = ctx.load_state().narrative.current_turn_id.clone();
-    save_pre_event(&ctx, &turn_id);
+    let _input_id = add_input_and_save(&ctx, "test input");
+    let _pre_event_id = save_pre_event(&ctx);
+
+    // Build a final snapshot that points to the pre-event snapshot
+    let mut state = ctx.load_state();
+    state.add_log("Event narration".to_string(), None, LogType::Narration);
+    state.narrative.messages.last_mut().unwrap().event_header = Some("Event".to_string());
+    let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
+    let _ = ctx.snapshot_storage.save(&snapshot);
 
     // Pre-event snapshot exists but has no last_trigger
     retry_last_response_impl(&service, ctx);
@@ -305,9 +332,8 @@ fn test_retry_event_trigger_narration_fails() {
         Arc::new(crate::narrative::llm::MockBackend::default()),
     );
 
-    add_input_and_save(&ctx, "test input");
-    let turn_id = ctx.load_state().narrative.current_turn_id.clone();
-    save_pre_event(&ctx, &turn_id);
+    let _input_id = add_input_and_save(&ctx, "test input");
+    let _pre_event_id = save_pre_event(&ctx);
 
     // Set up trigger context in pre-event snapshot
     let mut state = ctx.load_state();
@@ -321,12 +347,24 @@ fn test_retry_event_trigger_narration_fails() {
         user_prompt: "user".to_string(),
         max_tokens: None,
     });
-    let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
-        &state,
-        format!("pre-event:{turn_id}"),
-        0,
-    );
-    let _ = ctx.snapshot_storage.save(&snapshot);
+    let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
+    let _pre_event_with_trigger_id = ctx.snapshot_storage.save(&snapshot).unwrap();
+
+    // Final snapshot points to pre-event
+    let mut final_state = state;
+    final_state.add_log("Event narration".to_string(), None, LogType::Narration);
+    final_state
+        .narrative
+        .messages
+        .last_mut()
+        .unwrap()
+        .event_header = Some("Event".to_string());
+    let final_snapshot =
+        crate::model::state_snapshot::GameStateSnapshot::from_game_state(&final_state);
+    let _ = ctx.snapshot_storage.save(&final_snapshot);
+    if let Some(last) = final_state.narrative.messages.last_mut() {
+        let _ = ctx.message_storage.insert_message(last);
+    }
 
     retry_last_response_impl(&service, ctx.clone());
 
@@ -354,9 +392,8 @@ fn test_retry_event_empty_continuation_text() {
         Arc::new(crate::narrative::llm::MockBackend::default()),
     );
 
-    add_input_and_save(&ctx, "test input");
-    let turn_id = ctx.load_state().narrative.current_turn_id.clone();
-    save_pre_event(&ctx, &turn_id);
+    let _input_id = add_input_and_save(&ctx, "test input");
+    let _pre_event_id = save_pre_event(&ctx);
 
     let mut state = ctx.load_state();
     state.narrative.last_trigger = Some(crate::model::state::StoredTriggerContext {
@@ -369,12 +406,20 @@ fn test_retry_event_empty_continuation_text() {
         user_prompt: "user".to_string(),
         max_tokens: None,
     });
-    let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
-        &state,
-        format!("pre-event:{turn_id}"),
-        0,
-    );
-    let _ = ctx.snapshot_storage.save(&snapshot);
+    let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
+    let _pre_event_with_trigger_id = ctx.snapshot_storage.save(&snapshot).unwrap();
+
+    let mut final_state = state;
+    final_state.add_log("Event narration".to_string(), None, LogType::Narration);
+    final_state
+        .narrative
+        .messages
+        .last_mut()
+        .unwrap()
+        .event_header = Some("Event".to_string());
+    let final_snapshot =
+        crate::model::state_snapshot::GameStateSnapshot::from_game_state(&final_state);
+    let _ = ctx.snapshot_storage.save(&final_snapshot);
 
     retry_last_response_impl(&service, ctx);
 }
@@ -387,11 +432,22 @@ fn test_retry_main_no_pre_main_snapshot() {
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let service = make_service();
 
-    add_input_and_save(&ctx, "test input");
-    let turn_id = ctx.load_state().narrative.current_turn_id.clone();
+    // Save input WITHOUT snapshot_id — retry should fail
+    let mut state = ctx.load_state();
+    let player_name = state.player.sheet.name.clone();
+    state.add_log("test input".to_string(), Some(player_name), LogType::Input);
+    if let Some(last) = state.narrative.messages.last_mut() {
+        let _ = ctx.message_storage.insert_message(last);
+    }
 
-    // Save narration snapshot but NOT pre-main snapshot
-    add_narration_and_save(&ctx, "Narration text", &turn_id);
+    // Save narration
+    let mut state = ctx.load_state();
+    state.add_log("Narration text".to_string(), None, LogType::Narration);
+    let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
+    let _ = ctx.snapshot_storage.save(&snapshot);
+    if let Some(last) = state.narrative.messages.last_mut() {
+        let _ = ctx.message_storage.insert_message(last);
+    }
 
     retry_last_response_impl(&service, ctx.clone());
 
@@ -401,7 +457,7 @@ fn test_retry_main_no_pre_main_snapshot() {
             state.narrative.generation.status,
             GenerationStatus::Error(_)
         ),
-        "Should set error status when pre-main snapshot is missing"
+        "Should set error status when anchor message has no snapshot_id"
     );
 }
 
@@ -412,11 +468,11 @@ fn test_retry_event_continuation_happy_path() {
 
     let service = make_service();
 
-    // Set up the full snapshot chain for an event retry
-    add_input_and_save(&ctx, "test input");
-    let turn_id = ctx.load_state().narrative.current_turn_id.clone();
-    save_pre_main(&ctx, &turn_id);
+    // Set up the full message chain for an event retry
+    let _input_id = add_input_and_save(&ctx, "test input");
+    let _pre_main_id = save_pre_main(&ctx);
 
+    // Add main narration with snapshot_id pointing to pre-event snapshot
     let mut pre_event_state = ctx.load_state();
     pre_event_state.narrative.last_trigger = Some(crate::model::state::StoredTriggerContext {
         npc_id: "npc1".to_string(),
@@ -428,12 +484,14 @@ fn test_retry_event_continuation_happy_path() {
         user_prompt: "user".to_string(),
         max_tokens: None,
     });
-    let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
-        &pre_event_state,
-        format!("pre-event:{turn_id}"),
-        0,
-    );
-    let _ = ctx.snapshot_storage.save(&snapshot);
+    pre_event_state.add_log("Main narration".to_string(), None, LogType::Narration);
+    let snapshot =
+        crate::model::state_snapshot::GameStateSnapshot::from_game_state(&pre_event_state);
+    let pre_event_id = ctx.snapshot_storage.save(&snapshot).unwrap();
+    if let Some(last) = pre_event_state.narrative.messages.last_mut() {
+        last.snapshot_id = Some(pre_event_id);
+        let _ = ctx.message_storage.insert_message(last);
+    }
 
     // Final state with event narration
     let mut final_state = pre_event_state;
@@ -444,12 +502,13 @@ fn test_retry_event_continuation_happy_path() {
         .last_mut()
         .unwrap()
         .event_header = Some("Event".to_string());
-    let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
-        &final_state,
-        turn_id.clone(),
-        0,
-    );
-    let _ = ctx.snapshot_storage.save(&snapshot);
+    let final_snapshot =
+        crate::model::state_snapshot::GameStateSnapshot::from_game_state(&final_state);
+    let _ = ctx.snapshot_storage.save(&final_snapshot);
+    if let Some(last) = final_state.narrative.messages.last_mut() {
+        last.snapshot_id = Some(final_snapshot.db_id.unwrap_or(0));
+        let _ = ctx.message_storage.insert_message(last);
+    }
 
     retry_last_response_impl(&service, ctx.clone());
 
@@ -466,13 +525,13 @@ fn test_retry_main_narration_happy_path() {
     let state = make_test_state();
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
-    add_input_and_save(&ctx, "test input");
-    let turn_id = ctx.load_state().narrative.current_turn_id.clone();
-    add_narration_and_save(&ctx, "Narration text", &turn_id);
-    save_pre_main(&ctx, &turn_id);
+    let _input_id = add_input_and_save(&ctx, "test input");
+    let _pre_main_id = save_pre_main(&ctx);
+    let _final_id = add_narration_and_save(&ctx, "Narration text");
 
     let service = make_service();
-    retry_main_narration(&service, &ctx, &turn_id, 0, "test input".to_string());
+    let state = ctx.load_state();
+    retry_main_narration(&service, &ctx, state, "test input".to_string());
 }
 
 #[test]
@@ -480,16 +539,15 @@ fn test_retry_main_storage_error_on_pre_main() {
     let state = make_test_state();
     let base_ctx = make_test_context_with_sqlite(state).unwrap();
 
-    add_input_and_save(&base_ctx, "test input");
-    let turn_id = base_ctx.load_state().narrative.current_turn_id.clone();
-    add_narration_and_save(&base_ctx, "Narration text", &turn_id);
-    save_pre_main(&base_ctx, &turn_id);
+    let _input_id = add_input_and_save(&base_ctx, "test input");
+    let _pre_main_id = save_pre_main(&base_ctx);
+    let _final_id = add_narration_and_save(&base_ctx, "Narration text");
 
     let failing = Arc::new(FailingSnapshotStorage::new(Arc::clone(
         &base_ctx.snapshot_storage,
     )));
     failing
-        .fail_load_by_turn
+        .fail_load_by_id
         .store(true, std::sync::atomic::Ordering::SeqCst);
 
     let ctx = GameServiceContext {
@@ -516,7 +574,7 @@ fn test_save_retry_error() {
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
     // Directly test save_retry_error by calling it
-    super::retry::save_retry_error(&ctx, "turn-1", 1, "test error");
+    super::retry::save_retry_error(&ctx, "test error");
 
     let state = ctx.load_state();
     assert!(
@@ -643,12 +701,11 @@ fn test_retry_event_empty_continuation_triggers_error() {
         Arc::new(crate::narrative::llm::MockBackend::default()),
     );
 
-    // Set up the snapshot chain: input → pre-main → pre-event → final (with event_header)
-    add_input_and_save(&ctx, "test input");
-    let turn_id = ctx.load_state().narrative.current_turn_id.clone();
-    save_pre_main(&ctx, &turn_id);
+    // Set up the message chain for an event retry
+    let _input_id = add_input_and_save(&ctx, "test input");
+    let _pre_main_id = save_pre_main(&ctx);
 
-    // Create pre-event state with trigger context
+    // Create pre-event state with trigger context and main narration
     let mut pre_event_state = ctx.load_state();
     pre_event_state.narrative.last_trigger = Some(crate::model::state::StoredTriggerContext {
         npc_id: "npc1".to_string(),
@@ -660,12 +717,14 @@ fn test_retry_event_empty_continuation_triggers_error() {
         user_prompt: "user".to_string(),
         max_tokens: None,
     });
-    let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
-        &pre_event_state,
-        format!("pre-event:{turn_id}"),
-        0,
-    );
-    let _ = ctx.snapshot_storage.save(&snapshot);
+    pre_event_state.add_log("Main narration".to_string(), None, LogType::Narration);
+    let snapshot =
+        crate::model::state_snapshot::GameStateSnapshot::from_game_state(&pre_event_state);
+    let pre_event_id = ctx.snapshot_storage.save(&snapshot).unwrap();
+    if let Some(last) = pre_event_state.narrative.messages.last_mut() {
+        last.snapshot_id = Some(pre_event_id);
+        let _ = ctx.message_storage.insert_message(last);
+    }
 
     // Create final state with event narration and event header
     let mut final_state = pre_event_state;
@@ -676,12 +735,12 @@ fn test_retry_event_empty_continuation_triggers_error() {
         .last_mut()
         .unwrap()
         .event_header = Some("Event".to_string());
-    let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
-        &final_state,
-        turn_id.clone(),
-        0,
-    );
-    let _ = ctx.snapshot_storage.save(&snapshot);
+    let final_snapshot =
+        crate::model::state_snapshot::GameStateSnapshot::from_game_state(&final_state);
+    let _ = ctx.snapshot_storage.save(&final_snapshot);
+    if let Some(last) = final_state.narrative.messages.last_mut() {
+        let _ = ctx.message_storage.insert_message(last);
+    }
 
     retry_last_response_impl(&service, ctx.clone());
 
@@ -690,5 +749,49 @@ fn test_retry_event_empty_continuation_triggers_error() {
         matches!(state.narrative.generation.status, GenerationStatus::Error(ref msg) if msg.contains("empty response")),
         "Should set error status when continuation text is empty, got {:?}",
         state.narrative.generation.status
+    );
+}
+
+#[test]
+fn test_retry_aborts_when_message_delete_fails() {
+    let state = make_test_state();
+    let base_ctx = make_test_context_with_sqlite(state).unwrap();
+
+    let _input_id = add_input_and_save(&base_ctx, "test input");
+    let _pre_main_id = save_pre_main(&base_ctx);
+    let _narration_id = add_narration_and_save(&base_ctx, "Narration text");
+
+    let failing_msg_storage = Arc::new(FailingMessageStorage::new(Arc::clone(
+        &base_ctx.message_storage,
+    )));
+    failing_msg_storage
+        .fail_delete_message
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+
+    let ctx = GameServiceContext {
+        message_storage: failing_msg_storage,
+        ..base_ctx.clone()
+    };
+
+    let service = make_service();
+    retry_last_response_impl(&service, ctx.clone());
+
+    // The error state should be saved
+    let state = base_ctx.load_state();
+    assert!(
+        matches!(
+            state.narrative.generation.status,
+            GenerationStatus::Error(ref msg) if msg.contains("could not delete message")
+        ),
+        "Should set error status when message deletion fails, got {:?}",
+        state.narrative.generation.status
+    );
+
+    // Messages should NOT have been truncated — both input and narration remain
+    let msgs = ctx.message_storage.load_messages().unwrap();
+    assert_eq!(
+        msgs.len(),
+        2,
+        "Messages should not be truncated when deletion fails"
     );
 }

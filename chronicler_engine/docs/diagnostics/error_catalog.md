@@ -120,7 +120,7 @@ Player movement failure.
 
 Room lookup failure.
 
-- **First Check:** `state.current_room_id` — if it starts with `dynamic_`, the quantifier returned an unrecognized destination.
+- **First Check:** `state.movement.current_room_id` — if it starts with `dynamic_`, the quantifier returned an unrecognized destination.
 - **Common Causes:** `room_id` mismatch between map and trigger; quantifier movement detection returned an unknown room.
 - **Related Invariants:** `docs/system/dynamic_rooms.md`
 

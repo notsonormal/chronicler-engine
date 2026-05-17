@@ -61,7 +61,7 @@ Runtime: ~60 seconds
 ### Flow Tests (`flow_mock/`)
 
 - **sequence.rs**: Sequential service-level flow tests with mock backends
-- **retry_main.rs**: Main narration retry with swipe creation
+- **retry_main.rs**: Main narration retry via snapshot rollback
 - **retry_event.rs**: Event continuation retry preserving quantifier results
 - **flow_llm_tests.rs**: Full integration - real API calls
 

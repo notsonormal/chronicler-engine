@@ -6,7 +6,7 @@ Establish a formal policy for ensuring the Chronicler Engine remains heavily tes
 ## Policy Rules
 1. **Isolated Unit Tests**: All modules maintain fully isolated unit tests `#[test]` with zero networking overhead. Unit tests live in separate `*_tests.rs` sibling files (not inline `#[cfg(test)]` blocks) to keep source files under the 2,000-line guardrail.
 2. **Integration Capabilities**: Cross-module and end-to-end tests live in the top-level `tests/` directory.
-3. **LLM Abstraction (The Trait Pattern)**: No component outside of `main.rs` should be hardcoded to contact an external LLM API. Use `MockBackend` and `MockQuantifierBackend` for tests.
+3. **LLM Abstraction (The Trait Pattern)**: No component outside of `main.rs` should be hardcoded to contact an external LLM API. Use `MockBackend` (implements `LlmBackend`) for tests.
 
 ## Test File Organization
 
@@ -62,9 +62,9 @@ Cross-module and browser-based tests live in the top-level `tests/` directory:
 Pass mock backends directly to `DefaultGameService`:
 
 ```rust
-let service = DefaultGameService::with_backends(
-    Arc::new(MockBackend),
-    Arc::new(MockQuantifierBackend::default()),
+let service = DefaultGameService::with_mock_quantifier(
+    Arc::new(MockBackend::new(None)),
+    Arc::new(MockBackend::new(None)),
 );
 ```
 

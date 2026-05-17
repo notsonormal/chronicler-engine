@@ -47,15 +47,15 @@ The engine uses a trait-based `LlmBackend` design for flexible LLM integration:
 - **Implementations**: 
   - `OpenRouterClient` - Real API calls to OpenRouter
   - `MockLlmBackend` - For testing without API calls
-- **Configuration**: Set `LLM_BACKEND=mock` to use mock backend
+- **Configuration**: Configure connections in `data/settings.json` — see `docs/adr/adr-007-settings-system.md`
 
 ## Environment Variables
 
 The engine requires a `.env` file or environment variables to be set for AI functionality:
 
 - `OPENROUTER_API_KEY`: **(Required for real LLM)** Your API key from OpenRouter.
-- `LLM_MODEL`: The OpenRouter model ID to use. Defaults to `openai/gpt-4o-mini` if unset.
-- `LLM_BACKEND`: Set to `mock` to use mock LLM backend (no API key needed for testing).
+- `CHRONICLER_SETTINGS_PATH`: Path to `settings.json` (optional; defaults to `data/settings.json`).
+- Configure models and backends in `data/settings.json` — see `docs/adr/adr-007-settings-system.md`.
 
 ## Quick Start
 

@@ -115,7 +115,7 @@ Add a `#[diagnostic(...)]` attribute macro (or doc comment convention) to `Engin
 pub enum EngineError {
     #[error("Room not found: {0}")]
     #[diagnostic(
-        check_first = "state.current_room_id",
+        check_first = "state.movement.current_room_id",
         likely_causes = ["dynamic_room_creation", "room_id_typo"],
         doc = "docs/system/navigation.md",
         test_file = "tests/engine/logic_tests.rs"
@@ -127,7 +127,7 @@ pub enum EngineError {
 
 If a proc macro is too heavy, use a doc-comment convention:
 ```rust
-/// [DIAGNOSTIC: check_first="state.current_room_id", doc="docs/system/navigation.md"]
+/// [DIAGNOSTIC: check_first="state.movement.current_room_id", doc="docs/system/navigation.md"]
 ```
 
 - **Files:**

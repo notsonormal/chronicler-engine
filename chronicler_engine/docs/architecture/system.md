@@ -17,18 +17,18 @@ Contains pure data structures, serialization schemas, and the "Single Source of 
 - **`agent`**: `AgentConfig`, `AgentResult`, `AgentContext`, `StatePatch`, `ExecutionPhase`, `BackendSelector`, `Confidence`.
 - **`llm_backend`**: `LlmBackendType` enum for backend selection.
 - **`llm_message`**: `LlmMessage` struct for LLM call forensics — agent name, backend, model, prompts, raw request/response JSON, parsed response, error, timestamp.
-- **`state_snapshot`**: `GameStateSnapshot` for SQLite persistence. Snapshots are keyed by `(turn_id, swipe_index)` where `turn_id` groups messages created between user inputs.
+- **`state_snapshot`**: `GameStateSnapshot` for SQLite persistence. Snapshots are standalone state blobs with an auto-increment `id`. Each message stores `snapshot_id` referencing the snapshot saved after it was created.
 
 ### 2. The Engine Tier (`crate::engine::*`)
 Contains the mechanics that drive the simulation. It translates user intent and state into outcomes.
 - **`parser`**: Natural language command decomposition.
 - **`action`**: The `Action` enum defining all supported system intents.
 - **`logic`**: Rules for movement, fuzzy-matching, and room resolution.
-- **`trigger_eval`**: Pure function evaluation of NPC triggers based on character state and room location (`evaluate_triggers(state, current_room_id) -> Vec<(NpcCard, Trigger)>`). Triggers with `room_id` only fire in that room.
+- **`trigger_eval`**: Pure function evaluation of NPC triggers based on character state and room location (`evaluate_triggers(state) -> Vec<(NpcCard, Trigger, usize)>`). Triggers with `room_id` only fire in that room.
 - **`action_processing`**: Extracted pure functions for server handlers (`handle_movement`, `apply_npc_events`, `evaluate_and_narrate_triggers`, `commit_trigger_narration`, `execute_freeaction_impl`). Enables unit testing of server-side logic.
 - **`game_service`**: `GameService` trait and `DefaultGameService` — game orchestration extracted from fragments.rs. Includes action handling, retry logic, and context helpers.
   - `execute_freeaction_pipeline()`: Extracted full FreeAction pipeline (narrate → quantify → triggers → event continuation) usable by both normal action handling and retry logic.
-  - `retry_last_response_impl()`: Granular retry that detects event continuations vs main narration and loads the appropriate pre-generation committed snapshot.
+  - `retry_last_response_impl()`: Message-aligned retry that detects event continuations vs main narration, finds the anchor message, loads its `snapshot_id` snapshot, and regenerates.
   - `save_committed_state()`: Saves snapshots with `committed = true` for pre-generation anchoring.
 - **`state_diagnostics`**: Runtime invariant checks (`INV-ROOM`, `INV-NPC`, `INV-CHAR`, `INV-LOG`), feature-flagged via `diagnostics` feature.
 
@@ -37,7 +37,7 @@ The interface between the synchronous engine and stochastic LLM generation.
 - **`llm`**: Directory module with traits (`LlmBackend`) and per-provider implementations (OpenRouter, DeepSeek, Ollama, Mock) for Game Master narration.
   - **`get_llm_backend()`**: Production entry point that loads the narration connection from `data/settings.json`
   - **`get_llm_backend_for(connection)`**: Create a backend for a specific `Connection` profile
-  - **`DefaultGameService::with_backends(llm, quantifier)`**: Constructor for dependency-injecting mock backends in tests. No globals, no file I/O, fully isolated.
+  - **`DefaultGameService::with_backends(llm, registry)`**: Constructor for dependency-injecting mock backends and agent registry in tests. No globals, no file I/O, fully isolated.
 - **`prompt`**: Directory module for layered prompt construction with token budget management. Uses plain-text instructions + XML-wrapped data for reasoning-model compatibility. Includes `fit_messages_to_context()` for dynamic context-window fitting.
 - **`agents`**: Directory module for the agent trait, registry, and agent implementations.
   - **`Agent` trait**: Core abstraction for pre-generation and post-generation agents
@@ -45,9 +45,7 @@ The interface between the synchronous engine and stochastic LLM generation.
   - **`QuantifierAgent`**: Post-generation agent for scene quantification and dynamic room presence detection
   - **`NarratorAgent`**: Stub pre-generation agent (reserved for future use)
 - **`quantifier`** (under `agents/`): Quantifier implementation module.
-  - **`QuantifierBackendTrait`**: Interface for NPC detection backends
-  - **`RealQuantifierBackend`**: Production implementation using LLM
-  - **`MockQuantifierBackend`**: Test implementation returning configurable NPCs with High confidence
+  - **`QuantifierAgent`**: Post-generation agent that uses `LlmBackend::complete()` for scene quantification
   - **`NpcEventList`**: NPC movement events from quantification (Entered, Left)
 - **`text_check`**: Directory module for spell and grammar checking of player input.
   - **`HarperBackend`**: Wraps harper-core with curated + user dictionaries
@@ -102,7 +100,7 @@ flowchart TD
     B --> C["AppSettings<br/>(defaults if missing)"]
     C --> D["AppState.settings"]
     D --> E["get_llm_backend()<br/>(uses narration connection)"]
-    D --> F["get_quantifier_backend()<br/>(uses quantifier connection)"]
+    D --> F["AgentRegistry::from_configs_with_storage()<br/>(resolves agent backends from settings)"]
 ```
 
 #### Configuration Options
@@ -139,10 +137,15 @@ Unified error type shared across all tiers.
 
 ### 7. The Storage Tier (`crate::storage`)
 SQLite-based persistence for game state and LLM call forensics.
-- **`db`**: Database connection and schema management
-- **`snapshot_storage`**: `SnapshotStorage` trait and SQLite implementation (`SqliteSnapshotStorage`)
+- **`db`**: Database connection and schema management. Schema includes:
+  - `games` — top-level game session record (`id`, `world_name`, `created_at`, `updated_at`)
+  - `game_state_snapshots` — serialized game state metadata, scoped to `game_id`
+  - `messages` — narrative history, scoped to `game_id`
+  - `checkpoints` — named save points referencing snapshots
+  - `llm_messages` — LLM API call logging (not game-scoped)
+- **`snapshot_storage`**: `SnapshotStorage` trait and SQLite implementation (`SqliteGameStorage`). All operations filter by `game_id`.
 - **`llm_message_storage`**: `LlmMessageStorage` trait + `SqliteLlmMessageStorage` (auto-pruning to 50 rows) + `InMemoryLlmMessageStorage` (tests)
-- **`GameStateSnapshot`**: Serializable subset of `GameState` for persistence
+- **`GameStateSnapshot`**: Serializable subset of `GameState` for persistence (messages excluded; hydrated separately)
 
 ### 8. The Bootstrap Tier (`crate::bootstrap`)
 World loading, validation, and server initialization.
@@ -177,7 +180,7 @@ The following concerns are documented in dedicated `docs/system/` files. Those a
 | Dashboard layout, tabs, polling, edit/retry UI | [`system/dashboard.md`](../system/dashboard.md) |
 | UI design tokens, CSS components, animations | [`system/ui_design.md`](../system/ui_design.md) |
 | Full game loop phases, retry flow, status phases | [`system/game_flow.md`](../system/game_flow.md) |
-| History management, Message + Swipe model | [`system/game_flow.md`](../system/game_flow.md) |
+| History management, Message model | [`system/game_flow.md`](../system/game_flow.md) |
 | Server endpoint reference | [`system/game_flow.md`](../system/game_flow.md) |
 | Auto-trigger system and mutation order invariant | [`system/triggers.md`](../system/triggers.md) |
 | Navigation and movement resolution | [`system/navigation.md`](../system/navigation.md) |

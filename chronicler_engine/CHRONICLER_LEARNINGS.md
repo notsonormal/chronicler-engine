@@ -21,7 +21,7 @@
 - **Problem**: Need to support both mock LLM (for testing/fast iteration) and real LLM (OpenRouter).
 - **Solution**: Define `LlmBackend` trait in `src/narrative/llm.rs` with methods like `generate()`.
 - **Implementation**: `MockLlmBackend` for tests, `OpenRouterClient` for production.
-- **Configuration**: Set `LLM_BACKEND=mock` env var to use mock backend.
+- **Configuration**: Configure connections in `data/settings.json` — see `docs/adr/adr-007-settings-system.md`.
 
 ## Repeating Mistakes & Gotchas
 

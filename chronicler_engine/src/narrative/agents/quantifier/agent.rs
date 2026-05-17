@@ -37,18 +37,17 @@ impl QuantifierAgent {
             .get_quantifier_connection()
             .cloned()
             .unwrap_or_else(|| Connection::new("default", "Default", LlmBackendType::Mock));
-        let backend =
-            Arc::from(crate::narrative::llm::get_llm_backend_for(&connection, storage));
+        let backend = Arc::from(crate::narrative::llm::get_llm_backend_for(
+            &connection,
+            storage,
+        ));
         Ok(Self {
             name: "quantifier".to_string(),
             backend,
         })
     }
 
-    pub fn with_backend(
-        name: String,
-        backend: Arc<dyn crate::narrative::llm::LlmBackend>,
-    ) -> Self {
+    pub fn with_backend(name: String, backend: Arc<dyn crate::narrative::llm::LlmBackend>) -> Self {
         Self { name, backend }
     }
 }

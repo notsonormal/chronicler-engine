@@ -1,6 +1,6 @@
 # Specification: Game Flow
 
-> **Related Decisions**: [ADR-006](../adr/adr-006-quantifier-systems.md), [ADR-008](../adr/adr-008-sqlite-snapshot-persistence.md), [ADR-010](../adr/adr-010-concurrency-generation-gate.md), [ADR-012](../adr/adr-012-turn-swipe-model.md), [ADR-014](../adr/adr-014-message-swipe-model.md)
+> **Related Decisions**: [ADR-006](../adr/adr-006-quantifier-systems.md), [ADR-008](../adr/adr-008-sqlite-snapshot-persistence.md), [ADR-010](../adr/adr-010-concurrency-generation-gate.md), [ADR-013](../adr/adr-013-message-domain-model.md)
 
 ## Overview
 
@@ -146,31 +146,35 @@ flowchart TD
     Check{Last response was event?}
     Main["**Main Narration Retry**"]
     Event["**Event Continuation Retry**"]
-    PreMain["Load `pre-main:{turn_id}` snapshot"]
-    PreEvent["Load `pre-event:{turn_id}` snapshot"]
+    FindMain["Find last Input message<br>load its `snapshot_id`"]
+    FindEvent["Find last non-event message<br>load its `snapshot_id`"]
+    Pop["Delete messages after anchor"]
+    Apply["Apply snapshot to structural state"]
     ReGenMain["Re-run Phase 4→5→5.5<br>(new quantifier + triggers)"]
     ReGenEvent["Re-run Phase 5 only"]
     Phase55["**PHASE 5.5: POST-EVENT QUANTIFIER**<br>*(Phase: Quantifying)*<br>1. Post-continuation Quantifier analyzes<br>2. Detect NPCs introduced by retried text<br>3. Update scene.npcs_in_area"]
-    Save["Save final state with swipe_index + 1"]
+    Save["Save final state"]
 
     Start --> Check
     Check -->|No| Main
     Check -->|Yes| Event
-    Main --> PreMain
-    Event --> PreEvent
-    PreMain --> ReGenMain
-    PreEvent --> ReGenEvent
+    Main --> FindMain
+    Event --> FindEvent
+    FindMain --> Pop
+    FindEvent --> Pop
+    Pop --> Apply
+    Apply --> ReGenMain
+    Apply --> ReGenEvent
     ReGenMain --> Save
     ReGenEvent --> Phase55
     Phase55 --> Save
 ```
 
 **Key behaviors** (enforced by `tests/flow_mock/`):
-- **Main retry** loads `pre-main:{turn_id}` (state before LLM call) and re-runs the full pipeline: quantifier, movement, triggers, and post-event quantifier (`test_retry_main_narration_applies_new_quantifier_result`, `test_main_retry_reevaluates_triggers`).
-- **Event retry** loads `pre-event:{turn_id}` (state after main narration, before trigger continuation) and regenerates only the continuation text using stored trigger prompts (`StoredTriggerContext`) (`test_retry_event_continuation_preserves_quantifier_result`).
-- Both paths increment `swipe_index` on the snapshot to track retry count (`test_double_retry_increments_swipe_and_reruns_quantifier`).
-- The `turn_id` used for snapshots is `NarrativeState.current_turn_id`, ensuring retry correlation is structurally enforced.
-- If the pre-main or pre-event snapshot is missing, retry fails gracefully (`test_retry_no_pre_main_snapshot`).
+- **Main retry** finds the last `Input` message, loads the snapshot stored in its `snapshot_id`, deletes all messages after that input, and re-runs the full pipeline: quantifier, movement, triggers, and post-event quantifier (`test_retry_main_narration_applies_new_quantifier_result`, `test_main_retry_reevaluates_triggers`).
+- **Event retry** finds the last non-event message (the anchor before any event messages), loads its `snapshot_id` snapshot, deletes event messages, and regenerates only the continuation text using stored trigger prompts (`StoredTriggerContext`) (`test_retry_event_continuation_preserves_quantifier_result`).
+- Snapshots are standalone — no `base_snapshot_id` chain. Each message carries the `snapshot_id` of the state captured after it was created.
+- If the anchor message has no `snapshot_id` or the snapshot is missing, retry fails gracefully (`test_retry_no_pre_main_snapshot`).
 
 ### Polling-based Updates
 - HTMX automatically polls every 2 seconds for story-log updates

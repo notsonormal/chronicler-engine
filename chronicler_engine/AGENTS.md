@@ -22,9 +22,10 @@ chronicler_engine/
 │   │   ├── trigger_eval.rs, state_diagnostics.rs
 │   │   └── game_service/  # Game flow orchestration (actions, context, helpers, retry, service)
 │   ├── model/             # Data structures
-│   │   ├── agent.rs, character.rs, map.rs, scenario.rs, settings.rs
-│   │   ├── state.rs, state_snapshot.rs, trigger.rs, world.rs
-│   │   └── llm_backend.rs # LLM backend configuration types
+│   │   ├── agent.rs, character.rs, checkpoint.rs, llm_backend.rs, llm_message.rs
+│   │   ├── map.rs, scenario.rs, settings.rs, state.rs, state_snapshot.rs
+│   │   ├── storage/         # Message, snapshot, LLM message storage models
+│   │   ├── trigger.rs, world.rs
 │   ├── narrative/         # LLM integration
 │   │   ├── llm_client.rs  # High-level LLM client facade
 │   │   ├── agents/        # Agent subsystem (registry, trait_def, quantifier/)
@@ -35,7 +36,7 @@ chronicler_engine/
 │   │   ├── mod.rs, templates.rs, debug.rs
 │   │   ├── fragments/     # HTMX fragment endpoints (actions, endpoints, history, misc, renderers)
 │   │   └── settings_fragment/ # Settings UI fragments (fragments, handlers, template)
-│   ├── storage/           # Persistence layer (db, snapshot_storage)
+│   ├── storage/           # Persistence layer (db, snapshot_storage, llm_message_storage)
 │   └── test_support/      # Shared test helpers (context, fixtures, in_memory_storage)
 ├── tests/                 # Integration tests
 │   ├── architecture.rs    # arch-lint guardrail tests
@@ -55,7 +56,7 @@ chronicler_engine/
 │   ├── architecture/      # System specs (system.md, guardrails.md, invariants.md)
 │   ├── system/            # Domain docs (agent_system, character_state, dashboard, dynamic_rooms, game_flow, llm_processing, narration_engine, navigation, prompt_system, startup, text_check, triggers, ui_design)
 │   ├── plans/             # Implementation plans (active + archived/)
-│   ├── adr/               # Architecture Decision Records (adr-001 through adr-007)
+│   ├── adr/               # Architecture Decision Records (adr-001 through adr-013)
 │   ├── diagnostics/       # Error catalog
 │   ├── reference/         # Data schemas, API specs, testing strategy, persona/quantifier docs, SillyTavern references
 │   ├── reviews/           # Architectural reviews (holistic, defensive, agent-scalability)
@@ -145,7 +146,7 @@ let residents = find_npcs_in_current_location(all_npcs, current_room);
 
 ## CONVENTIONS
 - **Doc Anchors**: Always link complex blocks to `docs/` via `// [DOC: docs/path/to/file.md]`
-- **LLM backend**: Trait-based (`LlmBackend`), mock via `LLM_BACKEND=mock` env var
+- **LLM backend**: Trait-based (`LlmBackend`), mock via `MockBackend` in tests
 - **Validation**: Run `python build.py` before commit (fmt + clippy + tests + guardrails)
 
 ## LLM TEST POLICY

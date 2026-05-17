@@ -11,6 +11,7 @@ use chronicler_engine::create_app_for_testing;
 use chronicler_engine::error::{EngineError, internal_error};
 use chronicler_engine::model::checkpoint::Checkpoint;
 use chronicler_engine::model::state_snapshot::GameStateSnapshot;
+use chronicler_engine::storage::message_storage::MessageStorage;
 use chronicler_engine::storage::snapshot_storage::SnapshotStorage;
 
 use crate::create_test_state;
@@ -219,16 +220,35 @@ async fn test_reset_generating_handler() {
 #[tokio::test]
 async fn test_edit_history_handler_success() {
     let mut state = create_test_state();
-    let entry_id = {
-        state.add_log(
-            "Original text".to_string(),
-            Some("Test".to_string()),
-            chronicler_engine::model::state::LogType::Narration,
-        );
-        state.narrative.history().last().unwrap().id
-    };
+    state.add_log(
+        "Original text".to_string(),
+        Some("Test".to_string()),
+        chronicler_engine::model::state::LogType::Narration,
+    );
 
-    let app = create_app_for_testing(state);
+    let storage = Arc::new(chronicler_engine::test_support::InMemoryGameStorage::new());
+    let snapshot =
+        chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
+    let _ = storage.save(&snapshot);
+    for mut msg in state.narrative.messages.clone() {
+        let _ = storage.insert_message(&mut msg);
+    }
+
+    let entry_id = storage.load_messages().unwrap().last().unwrap().id;
+
+    let llm_storage =
+        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
+            as Arc<dyn chronicler_engine::storage::llm_message_storage::LlmMessageStorage>;
+
+    let app = chronicler_engine::server::create_app_with_storage(
+        state,
+        Arc::clone(&storage)
+            as Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage>,
+        Arc::clone(&storage)
+            as Arc<dyn chronicler_engine::storage::message_storage::MessageStorage>,
+        llm_storage,
+        chronicler_engine::model::settings::AppSettings::default(),
+    );
 
     let req = Request::builder()
         .uri(format!("/history/{entry_id}"))
@@ -461,11 +481,11 @@ async fn test_checkpoint_delete_not_found() {
 #[tokio::test]
 async fn test_create_checkpoint_no_state() {
     let state = create_test_state();
-    let storage = Arc::new(chronicler_engine::test_support::InMemorySnapshotStorage::new())
-        as Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage>;
+    let storage = Arc::new(chronicler_engine::test_support::InMemoryGameStorage::new());
     let app = chronicler_engine::server::create_app_with_storage(
         state,
-        storage,
+        Arc::clone(&storage) as Arc<dyn SnapshotStorage>,
+        Arc::clone(&storage) as Arc<dyn MessageStorage>,
         Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new()),
         chronicler_engine::model::settings::AppSettings::default(),
     );
@@ -487,21 +507,14 @@ async fn test_restore_checkpoint_success() {
         Some("Player".to_string()),
         chronicler_engine::model::state::LogType::Input,
     );
-    let turn_id = state.narrative.messages.last().unwrap().turn_id.clone();
-
-    let storage = Arc::new(chronicler_engine::test_support::InMemorySnapshotStorage::new())
-        as Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage>;
-    let snapshot = chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(
-        &state,
-        turn_id.clone(),
-        0,
-    );
-    storage.save(&snapshot).unwrap();
+    let storage = Arc::new(chronicler_engine::test_support::InMemoryGameStorage::new());
+    let snapshot =
+        chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
+    let snapshot_id = storage.save(&snapshot).unwrap();
 
     let checkpoint = chronicler_engine::model::checkpoint::Checkpoint {
         id: "cp1".to_string(),
-        turn_id: turn_id.clone(),
-        swipe_index: 0,
+        snapshot_id,
         name: "Test".to_string(),
         created_at: chrono::Utc::now(),
     };
@@ -509,7 +522,8 @@ async fn test_restore_checkpoint_success() {
 
     let app = chronicler_engine::server::create_app_with_storage(
         state,
-        storage,
+        Arc::clone(&storage) as Arc<dyn SnapshotStorage>,
+        Arc::clone(&storage) as Arc<dyn MessageStorage>,
         Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new()),
         chronicler_engine::model::settings::AppSettings::default(),
     );
@@ -538,15 +552,11 @@ async fn test_restore_checkpoint_snapshot_missing() {
         Some("Player".to_string()),
         chronicler_engine::model::state::LogType::Input,
     );
-    let turn_id = state.narrative.messages.last().unwrap().turn_id.clone();
-
-    let storage = Arc::new(chronicler_engine::test_support::InMemorySnapshotStorage::new())
-        as Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage>;
+    let storage = Arc::new(chronicler_engine::test_support::InMemoryGameStorage::new());
 
     let checkpoint = chronicler_engine::model::checkpoint::Checkpoint {
         id: "cp1".to_string(),
-        turn_id: turn_id.clone(),
-        swipe_index: 0,
+        snapshot_id: 0,
         name: "Test".to_string(),
         created_at: chrono::Utc::now(),
     };
@@ -554,7 +564,8 @@ async fn test_restore_checkpoint_snapshot_missing() {
 
     let app = chronicler_engine::server::create_app_with_storage(
         state,
-        storage,
+        Arc::clone(&storage) as Arc<dyn SnapshotStorage>,
+        Arc::clone(&storage) as Arc<dyn MessageStorage>,
         Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new()),
         chronicler_engine::model::settings::AppSettings::default(),
     );
@@ -591,46 +602,39 @@ async fn test_list_checkpoints_empty() {
 // Failing storage wrapper for testing error paths
 struct FailingStorage {
     inner: Arc<dyn SnapshotStorage>,
+    message_inner: Arc<dyn MessageStorage>,
     fail_load_latest: bool,
     fail_save_checkpoint: bool,
     fail_load_checkpoint: bool,
-    fail_load_by_turn: bool,
+    fail_load_by_id: bool,
     fail_save: bool,
     fail_delete_checkpoint: bool,
     fail_list_checkpoints: bool,
 }
 
 impl SnapshotStorage for FailingStorage {
-    fn save(&self, snapshot: &GameStateSnapshot) -> Result<(), EngineError> {
+    fn save(&self, snapshot: &GameStateSnapshot) -> Result<u64, EngineError> {
         if self.fail_save {
             return Err(EngineError::Internal(internal_error("save fail")));
         }
         self.inner.save(snapshot)
     }
 
-    fn load_latest(&self, turn_id: Option<&str>) -> Result<Option<GameStateSnapshot>, EngineError> {
+    fn load_latest(&self) -> Result<Option<GameStateSnapshot>, EngineError> {
         if self.fail_load_latest {
             return Err(EngineError::Internal(internal_error("load_latest fail")));
         }
-        self.inner.load_latest(turn_id)
+        self.inner.load_latest()
     }
 
-    fn load_by_turn(
-        &self,
-        turn_id: &str,
-        swipe_index: u32,
-    ) -> Result<Option<GameStateSnapshot>, EngineError> {
-        if self.fail_load_by_turn {
-            return Err(EngineError::Internal(internal_error("load_by_turn fail")));
+    fn load_by_id(&self, id: u64) -> Result<Option<GameStateSnapshot>, EngineError> {
+        if self.fail_load_by_id {
+            return Err(EngineError::Internal(internal_error("load_by_id fail")));
         }
-        self.inner.load_by_turn(turn_id, swipe_index)
+        self.inner.load_by_id(id)
     }
 
-    fn delete_turn_snapshots(&self, turn_id: &str) -> Result<(), EngineError> {
-        self.inner.delete_turn_snapshots(turn_id)
-    }
-
-    fn commit(&self, snapshot_id: &str) -> Result<(), EngineError> {
+    fn commit(&self, snapshot_id: u64) -> Result<(), EngineError> {
         self.inner.commit(snapshot_id)
     }
 
@@ -675,19 +679,42 @@ impl SnapshotStorage for FailingStorage {
     }
 }
 
+impl MessageStorage for FailingStorage {
+    fn insert_message(
+        &self,
+        msg: &mut chronicler_engine::model::message::Message,
+    ) -> Result<(), EngineError> {
+        self.message_inner.insert_message(msg)
+    }
+
+    fn update_message(&self, id: u64, text: &str) -> Result<(), EngineError> {
+        self.message_inner.update_message(id, text)
+    }
+
+    fn delete_message(&self, id: u64) -> Result<(), EngineError> {
+        self.message_inner.delete_message(id)
+    }
+
+    fn load_messages(
+        &self,
+    ) -> Result<Vec<chronicler_engine::model::message::Message>, EngineError> {
+        self.message_inner.load_messages()
+    }
+}
+
 #[tokio::test]
 async fn test_create_checkpoint_save_error() {
     let state = create_test_state();
-    let inner = Arc::new(chronicler_engine::test_support::InMemorySnapshotStorage::new())
-        as Arc<dyn SnapshotStorage>;
-    let snapshot = GameStateSnapshot::from_game_state(&state, "test".to_string(), 0);
+    let inner = Arc::new(chronicler_engine::test_support::InMemoryGameStorage::new());
+    let snapshot = GameStateSnapshot::from_game_state(&state);
     inner.save(&snapshot).unwrap();
     let storage = Arc::new(FailingStorage {
-        inner,
+        inner: Arc::clone(&inner) as Arc<dyn SnapshotStorage>,
+        message_inner: Arc::clone(&inner) as Arc<dyn MessageStorage>,
         fail_load_latest: false,
         fail_save_checkpoint: true,
         fail_load_checkpoint: false,
-        fail_load_by_turn: false,
+        fail_load_by_id: false,
         fail_save: false,
         fail_delete_checkpoint: false,
         fail_list_checkpoints: false,
@@ -695,6 +722,7 @@ async fn test_create_checkpoint_save_error() {
     let app = chronicler_engine::server::create_app_with_storage(
         state,
         storage,
+        Arc::clone(&inner) as Arc<dyn MessageStorage>,
         Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new()),
         chronicler_engine::model::settings::AppSettings::default(),
     );
@@ -715,25 +743,23 @@ async fn test_restore_checkpoint_load_checkpoint_error() {
         Some("Player".to_string()),
         chronicler_engine::model::state::LogType::Input,
     );
-    let turn_id = state.narrative.messages.last().unwrap().turn_id.clone();
-    let inner = Arc::new(chronicler_engine::test_support::InMemorySnapshotStorage::new())
-        as Arc<dyn SnapshotStorage>;
-    let snapshot = GameStateSnapshot::from_game_state(&state, turn_id.clone(), 0);
-    inner.save(&snapshot).unwrap();
+    let inner = Arc::new(chronicler_engine::test_support::InMemoryGameStorage::new());
+    let snapshot = GameStateSnapshot::from_game_state(&state);
+    let snapshot_id = inner.save(&snapshot).unwrap();
     let checkpoint = Checkpoint {
         id: "cp1".to_string(),
-        turn_id: turn_id.clone(),
-        swipe_index: 0,
+        snapshot_id,
         name: "Test".to_string(),
         created_at: chrono::Utc::now(),
     };
     inner.save_checkpoint(&checkpoint).unwrap();
     let storage = Arc::new(FailingStorage {
-        inner,
+        inner: Arc::clone(&inner) as Arc<dyn SnapshotStorage>,
+        message_inner: Arc::clone(&inner) as Arc<dyn MessageStorage>,
         fail_load_latest: false,
         fail_save_checkpoint: false,
         fail_load_checkpoint: true,
-        fail_load_by_turn: false,
+        fail_load_by_id: false,
         fail_save: false,
         fail_delete_checkpoint: false,
         fail_list_checkpoints: false,
@@ -741,6 +767,7 @@ async fn test_restore_checkpoint_load_checkpoint_error() {
     let app = chronicler_engine::server::create_app_with_storage(
         state,
         storage,
+        Arc::clone(&inner) as Arc<dyn MessageStorage>,
         Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new()),
         chronicler_engine::model::settings::AppSettings::default(),
     );
@@ -761,25 +788,23 @@ async fn test_restore_checkpoint_load_by_turn_error() {
         Some("Player".to_string()),
         chronicler_engine::model::state::LogType::Input,
     );
-    let turn_id = state.narrative.messages.last().unwrap().turn_id.clone();
-    let inner = Arc::new(chronicler_engine::test_support::InMemorySnapshotStorage::new())
-        as Arc<dyn SnapshotStorage>;
-    let snapshot = GameStateSnapshot::from_game_state(&state, turn_id.clone(), 0);
-    inner.save(&snapshot).unwrap();
+    let inner = Arc::new(chronicler_engine::test_support::InMemoryGameStorage::new());
+    let snapshot = GameStateSnapshot::from_game_state(&state);
+    let snapshot_id = inner.save(&snapshot).unwrap();
     let checkpoint = Checkpoint {
         id: "cp1".to_string(),
-        turn_id: turn_id.clone(),
-        swipe_index: 0,
+        snapshot_id,
         name: "Test".to_string(),
         created_at: chrono::Utc::now(),
     };
     inner.save_checkpoint(&checkpoint).unwrap();
     let storage = Arc::new(FailingStorage {
-        inner,
+        inner: Arc::clone(&inner) as Arc<dyn SnapshotStorage>,
+        message_inner: Arc::clone(&inner) as Arc<dyn MessageStorage>,
         fail_load_latest: false,
         fail_save_checkpoint: false,
         fail_load_checkpoint: false,
-        fail_load_by_turn: true,
+        fail_load_by_id: true,
         fail_save: false,
         fail_delete_checkpoint: false,
         fail_list_checkpoints: false,
@@ -787,6 +812,7 @@ async fn test_restore_checkpoint_load_by_turn_error() {
     let app = chronicler_engine::server::create_app_with_storage(
         state,
         storage,
+        Arc::clone(&inner) as Arc<dyn MessageStorage>,
         Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new()),
         chronicler_engine::model::settings::AppSettings::default(),
     );
@@ -807,25 +833,23 @@ async fn test_restore_checkpoint_save_error() {
         Some("Player".to_string()),
         chronicler_engine::model::state::LogType::Input,
     );
-    let turn_id = state.narrative.messages.last().unwrap().turn_id.clone();
-    let inner = Arc::new(chronicler_engine::test_support::InMemorySnapshotStorage::new())
-        as Arc<dyn SnapshotStorage>;
-    let snapshot = GameStateSnapshot::from_game_state(&state, turn_id.clone(), 0);
-    inner.save(&snapshot).unwrap();
+    let inner = Arc::new(chronicler_engine::test_support::InMemoryGameStorage::new());
+    let snapshot = GameStateSnapshot::from_game_state(&state);
+    let snapshot_id = inner.save(&snapshot).unwrap();
     let checkpoint = Checkpoint {
         id: "cp1".to_string(),
-        turn_id: turn_id.clone(),
-        swipe_index: 0,
+        snapshot_id,
         name: "Test".to_string(),
         created_at: chrono::Utc::now(),
     };
     inner.save_checkpoint(&checkpoint).unwrap();
     let storage = Arc::new(FailingStorage {
-        inner,
+        inner: Arc::clone(&inner) as Arc<dyn SnapshotStorage>,
+        message_inner: Arc::clone(&inner) as Arc<dyn MessageStorage>,
         fail_load_latest: false,
         fail_save_checkpoint: false,
         fail_load_checkpoint: false,
-        fail_load_by_turn: false,
+        fail_load_by_id: false,
         fail_save: true,
         fail_delete_checkpoint: false,
         fail_list_checkpoints: false,
@@ -833,6 +857,7 @@ async fn test_restore_checkpoint_save_error() {
     let app = chronicler_engine::server::create_app_with_storage(
         state,
         storage,
+        Arc::clone(&inner) as Arc<dyn MessageStorage>,
         Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new()),
         chronicler_engine::model::settings::AppSettings::default(),
     );
@@ -848,14 +873,14 @@ async fn test_restore_checkpoint_save_error() {
 #[tokio::test]
 async fn test_delete_checkpoint_error() {
     let state = create_test_state();
-    let inner = Arc::new(chronicler_engine::test_support::InMemorySnapshotStorage::new())
-        as Arc<dyn SnapshotStorage>;
+    let inner = Arc::new(chronicler_engine::test_support::InMemoryGameStorage::new());
     let storage = Arc::new(FailingStorage {
-        inner,
+        inner: Arc::clone(&inner) as Arc<dyn SnapshotStorage>,
+        message_inner: Arc::clone(&inner) as Arc<dyn MessageStorage>,
         fail_load_latest: false,
         fail_save_checkpoint: false,
         fail_load_checkpoint: false,
-        fail_load_by_turn: false,
+        fail_load_by_id: false,
         fail_save: false,
         fail_delete_checkpoint: true,
         fail_list_checkpoints: false,
@@ -863,6 +888,7 @@ async fn test_delete_checkpoint_error() {
     let app = chronicler_engine::server::create_app_with_storage(
         state,
         storage,
+        Arc::clone(&inner) as Arc<dyn MessageStorage>,
         Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new()),
         chronicler_engine::model::settings::AppSettings::default(),
     );
@@ -878,14 +904,14 @@ async fn test_delete_checkpoint_error() {
 #[tokio::test]
 async fn test_list_checkpoints_error() {
     let state = create_test_state();
-    let inner = Arc::new(chronicler_engine::test_support::InMemorySnapshotStorage::new())
-        as Arc<dyn SnapshotStorage>;
+    let inner = Arc::new(chronicler_engine::test_support::InMemoryGameStorage::new());
     let storage = Arc::new(FailingStorage {
-        inner,
+        inner: Arc::clone(&inner) as Arc<dyn SnapshotStorage>,
+        message_inner: Arc::clone(&inner) as Arc<dyn MessageStorage>,
         fail_load_latest: false,
         fail_save_checkpoint: false,
         fail_load_checkpoint: false,
-        fail_load_by_turn: false,
+        fail_load_by_id: false,
         fail_save: false,
         fail_delete_checkpoint: false,
         fail_list_checkpoints: true,
@@ -893,6 +919,7 @@ async fn test_list_checkpoints_error() {
     let app = chronicler_engine::server::create_app_with_storage(
         state,
         storage,
+        Arc::clone(&inner) as Arc<dyn MessageStorage>,
         Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new()),
         chronicler_engine::model::settings::AppSettings::default(),
     );

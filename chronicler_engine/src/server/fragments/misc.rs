@@ -75,8 +75,8 @@ pub async fn check_text_handler(
 
 /// [DOC: docs/system/game_flow.md]
 pub async fn retry_handler(State(state): State<AppState>) -> (StatusCode, String) {
-    let snapshot = match state.snapshot_storage.load_latest(None) {
-        Ok(Some(s)) => s,
+    let mut game_state = match state.load_state() {
+        Ok(gs) => gs,
         _ => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -85,28 +85,20 @@ pub async fn retry_handler(State(state): State<AppState>) -> (StatusCode, String
         }
     };
 
-    let mut game_state = GameState::from_snapshot(
-        &snapshot,
-        Arc::clone(&state.world),
-        Arc::clone(&state.map),
-        Arc::clone(&state.player),
-        (*state.npcs).clone(),
-    );
-
     if game_state.get_last_input_text().is_none() {
         return (StatusCode::BAD_REQUEST, render_error("No input to retry"));
     }
 
     game_state.narrative.generation.status = crate::model::state::GenerationStatus::Generating;
     game_state.narrative.generation.phase = crate::model::state::GenerationPhase::Narrating;
-    let new_swipe = snapshot.swipe_index;
-    let generating_snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
-        &game_state,
-        snapshot.turn_id.clone(),
-        new_swipe,
-    );
+    let generating_snapshot =
+        crate::model::state_snapshot::GameStateSnapshot::from_game_state(&game_state);
     if let Err(e) = state.snapshot_storage.save(&generating_snapshot) {
         log::error!("Failed to save retry snapshot: {e}");
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            render_error(&format!("Failed to save state: {e}")),
+        );
     }
 
     let ctx = state.as_game_service_context();
@@ -175,12 +167,14 @@ pub async fn reset_handler(State(state): State<AppState>) -> axum::response::Res
         initial_state.init_scenario_npcs(scenario);
     }
 
-    let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
-        &initial_state,
-        "initial".to_string(),
-        0,
-    );
-    let _ = state.snapshot_storage.save(&snapshot);
+    let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&initial_state);
+    if let Err(e) = state.snapshot_storage.save(&snapshot) {
+        log::error!("Reset failed: failed to save initial snapshot: {e}");
+        return axum::response::Response::builder()
+            .status(StatusCode::INTERNAL_SERVER_ERROR)
+            .body(Body::from(render_error(&e.to_string())))
+            .expect("static response body is valid");
+    }
 
     // Reset generation flags so subsequent actions work after reset.
     state

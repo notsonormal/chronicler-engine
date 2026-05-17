@@ -46,7 +46,7 @@ Horizontal split into story context and visual context:
 
 #### Action Area (64px height)
 Interactive zone for player input.
-- **Content**: Text input field + send button + action hints + status indicator + swipe navigation (when multiple swipes exist)
+- **Content**: Text input field + send button + action hints + status indicator
 - **Button States**:
   - Ready: Green button with "Send" text and play icon (▶)
   - Thinking: Green button with "Stop" text and square icon (■), disabled input
@@ -170,18 +170,11 @@ HTML template renders with `data-raw-text` attribute for inline editing:
    - Re-enable the submit button
    - Change button text back to "▶ Send"
 
-## Swipe Navigation
-When the last message has multiple swipes (from retries), the action area shows:
-- **Left arrow** (←): Switch to previous swipe (disabled on first swipe)
-- **Swipe counter**: "2 / 5" display showing current position
-- **Right arrow** (→): Switch to next swipe (disabled on last swipe)
-- **POST** `/turn/:id/swipe/:index` switches active swipe on the last message of that turn without regeneration
-
 ## Checkpoints
-Bookmark system for saving/restoring specific turn+swipe combinations:
-- **Save checkpoint**: Button triggers `POST /checkpoint` at current turn+swipe
+Bookmark system for saving/restoring specific snapshots:
+- **Save checkpoint**: Button triggers `POST /checkpoint` at current snapshot
 - **Checkpoint list**: `GET /fragment/checkpoints` renders saved checkpoints with restore/delete buttons
-- **Restore**: `POST /checkpoint/:id/restore` loads the snapshot (active swipe indices are already in the snapshot state)
+- **Restore**: `POST /checkpoint/:id/restore` loads the snapshot
 - **Delete**: `POST /checkpoint/:id/delete` removes the bookmark
 
 ## CSS Classes

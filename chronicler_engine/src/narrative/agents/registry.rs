@@ -37,9 +37,10 @@ impl AgentRegistry {
                 continue;
             }
             let agent: Box<dyn Agent> = match config.agent_type.as_str() {
-                "quantifier" => {
-                    Box::new(QuantifierAgent::from_config_with_storage(config, storage.clone())?)
-                }
+                "quantifier" => Box::new(QuantifierAgent::from_config_with_storage(
+                    config,
+                    storage.clone(),
+                )?),
                 "narrator" => Box::new(NarratorAgent::new(config.name.clone())),
                 other => {
                     return Err(EngineError::Config(format!("Unknown agent type: {other}")));

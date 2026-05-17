@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use chronicler_engine::engine::game_service::{DefaultGameService, GameService};
 use chronicler_engine::model::state::LogType;
-use chronicler_engine::narrative::agents::quantifier::MockQuantifierBackend;
 use chronicler_engine::narrative::agents::registry::AgentRegistry;
 use chronicler_engine::narrative::llm::MockBackend;
 use chronicler_engine::test_support::make_test_context;
@@ -148,7 +147,7 @@ fn test_default_game_service_with_backends() {
 fn test_default_game_service_with_mock_quantifier() {
     let service = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::default()),
-        Arc::new(MockQuantifierBackend::default()),
+        Arc::new(MockBackend::default()),
     );
     let mut state = create_test_state();
     state.narrative.messages.clear();

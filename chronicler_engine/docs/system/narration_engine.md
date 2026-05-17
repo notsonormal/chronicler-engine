@@ -15,7 +15,7 @@ The LLM operates as a Game Master / Narrator for the text adventure. Its context
 - **Room Context**: The current `Room.name` and `Room.description` ground the scene.
 - **Present NPCs**: All `NpcCard`s located in the current room, including their `personality`, `scenario`, and `description`.
 - **Player Identity**: The `PlayerCard.name` and `PlayerCard.description` for reference.
-- **Conversation History**: Full narrative history (up to ~1000 entries from active message swipes) is sent to maintain continuity.
+- **Conversation History**: Full narrative history (up to ~1000 entries from messages) is sent to maintain continuity.
 
 ### Narrative Modes
 The Game Master responds to three primary events:
@@ -24,18 +24,18 @@ The Game Master responds to three primary events:
 3. **Arrivals**: Responding to the player entering a new room via quantifier-detected movement. 
 
 ### Arrival Logic Flow
-1. **State Transition**: The engine validates the move and updates `state.current_room_id` (optional—may not change if player stays in room).
+1. **State Transition**: The engine validates the move and updates `state.movement.current_room_id` (optional—may not change if player stays in room).
 2. **Scene Setup**: The engine prints the standard room dashboard *before* narration to provide system context.
 3. **Action Narration**:
    - The engine calls `llm_backend.narrate_action` with the player's action text.
    - The LLM generates a narrative paragraph describing the outcome.
 4. **Post-Narration Quantification**:
-   - After narration is generated, the engine calls `QuantifierBackendTrait::quantify_room()` to detect:
+   - After narration is generated, the `QuantifierAgent` calls `LlmBackend::complete()` to detect:
      - **NPCs**: Which NPCs are present in the generated narration text
      - **Movement**: If the narration indicates player moved to a new room (destination detection)
    - Falls back to `state.scene.npcs_in_area` (previous message's NPCs) if LLM fails or returns Low confidence.
-   - Set `LLM_BACKEND=mock` env var to use MockQuantifierBackend for testing.
-5. **Movement Processing**: If movement was detected, `handle_movement()` updates `GameState.current_room_id` and the location header is shown.
+   - Backend is selected via `quantifier_connection_id` in `settings.json`.
+5. **Movement Processing**: If movement was detected, `handle_movement()` updates `state.movement.current_room_id` and the location header is shown.
 6. **Trigger Evaluation**: After quantification, the engine evaluates NPC triggers (see Continuation Narration below).
 
 ## Continuation Narration (Auto-Trigger)
@@ -43,7 +43,7 @@ The Game Master responds to three primary events:
 After the player moves to a new room and the first narration is generated, the engine checks for NPC triggers based on character state.
 
 **Flow:**
-1. Player movement is detected via quantifier → `attempt_semantic_walk` updates `GameState.current_room_id`
+1. Player movement is detected via quantifier → `attempt_semantic_walk` updates `state.movement.current_room_id`
 2. `evaluate_triggers(state, new_room_id)` is called to find matching triggers
 3. For each matching trigger:
    a. Uses unified `PromptBuilder` with continuation context in user message:

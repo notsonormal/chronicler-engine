@@ -119,28 +119,38 @@ pub fn create_app_for_testing(state: GameState) -> Router {
 }
 
 pub fn create_app_for_testing_with_settings(state: GameState, settings: AppSettings) -> Router {
-    let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
-        &state,
-        "test".to_string(),
-        0,
-    );
-    let storage = Arc::new(crate::test_support::InMemorySnapshotStorage::new())
-        as Arc<dyn crate::storage::snapshot_storage::SnapshotStorage>;
+    // [DOC: docs/architecture/system.md]
+    let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
+    let storage = Arc::new(crate::test_support::InMemoryGameStorage::new());
+    let snapshot_storage: Arc<dyn crate::storage::snapshot_storage::SnapshotStorage> =
+        storage.clone();
+    let message_storage: Arc<dyn crate::storage::message_storage::MessageStorage> = storage.clone();
     let llm_storage =
         Arc::new(crate::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
             as Arc<dyn crate::storage::llm_message_storage::LlmMessageStorage>;
     let _ = storage.save(&snapshot);
-    create_app_with_storage(state, storage, llm_storage, settings)
+    for mut msg in state.narrative.messages.clone() {
+        let _ = storage.insert_message(&mut msg);
+    }
+    create_app_with_storage(
+        state,
+        snapshot_storage,
+        message_storage,
+        llm_storage,
+        settings,
+    )
 }
 
 pub fn create_app_with_storage(
     state: GameState,
-    storage: Arc<dyn crate::storage::snapshot_storage::SnapshotStorage>,
+    snapshot_storage: Arc<dyn crate::storage::snapshot_storage::SnapshotStorage>,
+    message_storage: Arc<dyn crate::storage::message_storage::MessageStorage>,
     llm_storage: Arc<dyn crate::storage::llm_message_storage::LlmMessageStorage>,
     settings: AppSettings,
 ) -> Router {
     let app_state = AppState {
-        snapshot_storage: storage,
+        snapshot_storage,
+        message_storage,
         llm_message_storage: Arc::clone(&llm_storage),
         world: state.world.clone(),
         map: state.map.clone(),
@@ -176,6 +186,7 @@ use crate::model::settings::AppSettings;
 use crate::model::state::GameState;
 use crate::model::world::WorldCard;
 use crate::storage::llm_message_storage::LlmMessageStorage;
+use crate::storage::message_storage::MessageStorage;
 use crate::storage::snapshot_storage::SnapshotStorage;
 
 #[derive(Clone, Debug)]
@@ -192,6 +203,7 @@ impl Default for ServerConfig {
 #[derive(Clone)]
 pub struct AppState {
     pub snapshot_storage: Arc<dyn SnapshotStorage>,
+    pub message_storage: Arc<dyn crate::storage::message_storage::MessageStorage>,
     pub llm_message_storage: Arc<dyn LlmMessageStorage>,
     pub world: Arc<WorldCard>,
     pub map: Arc<MapDef>,
@@ -205,28 +217,33 @@ pub struct AppState {
 
 impl AppState {
     pub fn load_state(&self) -> crate::error::Result<GameState> {
-        let snapshot = self.snapshot_storage.load_latest(None)?;
-        match snapshot {
-            Some(snap) => Ok(GameState::from_snapshot(
+        let snapshot = self.snapshot_storage.load_latest()?;
+        let mut game_state = match snapshot {
+            Some(snap) => GameState::from_snapshot(
                 &snap,
                 Arc::clone(&self.world),
                 Arc::clone(&self.map),
                 Arc::clone(&self.player),
                 (*self.npcs).clone(),
-            )),
-            None => Ok(GameState::new(
+            ),
+            None => GameState::new(
                 Arc::clone(&self.world),
                 Arc::clone(&self.map),
                 Arc::clone(&self.player),
                 (*self.npcs).values().cloned().collect(),
                 self.world.starting_room_id.clone(),
-            )),
+            ),
+        };
+        if let Ok(messages) = self.message_storage.load_messages() {
+            game_state.narrative.messages = messages;
         }
+        Ok(game_state)
     }
 
     pub fn as_game_service_context(&self) -> crate::engine::game_service::GameServiceContext {
         crate::engine::game_service::GameServiceContext {
             snapshot_storage: Arc::clone(&self.snapshot_storage),
+            message_storage: Arc::clone(&self.message_storage),
             llm_message_storage: Arc::clone(&self.llm_message_storage),
             world: Arc::clone(&self.world),
             map: Arc::clone(&self.map),
@@ -270,6 +287,7 @@ pub async fn run_server(
     player: Arc<crate::model::character::PlayerCard>,
     npcs: Arc<HashMap<String, NpcCard>>,
     snapshot_storage: Arc<dyn SnapshotStorage>,
+    message_storage: Arc<dyn crate::storage::message_storage::MessageStorage>,
     llm_message_storage: Arc<dyn LlmMessageStorage>,
 ) -> Result<()> {
     run_server_with_config(
@@ -278,6 +296,7 @@ pub async fn run_server(
         player,
         npcs,
         snapshot_storage,
+        message_storage,
         llm_message_storage,
         ServerConfig::default(),
     )
@@ -292,11 +311,13 @@ pub async fn run_server_with_config(
     player: Arc<crate::model::character::PlayerCard>,
     npcs: Arc<HashMap<String, NpcCard>>,
     snapshot_storage: Arc<dyn SnapshotStorage>,
+    message_storage: Arc<dyn crate::storage::message_storage::MessageStorage>,
     llm_message_storage: Arc<dyn LlmMessageStorage>,
     config: ServerConfig,
 ) -> Result<()> {
     let app_state = AppState {
         snapshot_storage,
+        message_storage,
         llm_message_storage: Arc::clone(&llm_message_storage),
         world,
         map,

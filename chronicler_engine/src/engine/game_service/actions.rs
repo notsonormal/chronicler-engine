@@ -37,7 +37,9 @@ pub fn execute_action_impl(
                 None,
                 LogType::System,
             );
-            finish_action(&ctx, state, uuid::Uuid::new_v4().to_string(), 0);
+            if let Err(e) = finish_action(&ctx, state) {
+                log::error!("Failed to persist talk action: {e}");
+            }
         }
         Action::FreeAction(text) => {
             let _lock = match ctx.action_lock.lock() {
@@ -45,33 +47,27 @@ pub fn execute_action_impl(
                 Err(poisoned) => poisoned.into_inner(),
             };
             let mut state = load_state(&ctx);
-            let turn_id = state.narrative.current_turn_id.clone();
             state.narrative.last_trigger = None;
-            execute_freeaction_pipeline(service, &ctx, state, turn_id, text, 0);
+            execute_freeaction_pipeline(service, &ctx, state, text);
         }
     }
 }
 
-fn save_pipeline_error(
-    ctx: &GameServiceContext,
-    turn_id: &str,
-    swipe_index: u32,
-    error: impl Into<String>,
-) {
+fn save_pipeline_error(ctx: &GameServiceContext, error: impl Into<String>) {
     let mut state = load_state(ctx);
     state.narrative.generation.status = GenerationStatus::Error(error.into());
-    save_state(ctx, &state, turn_id.to_string(), swipe_index);
+    if let Err(e) = save_state(ctx, &mut state) {
+        log::error!("Critical: failed to persist error state: {e}");
+    }
 }
 
 pub(crate) fn finish_action(
     ctx: &GameServiceContext,
     mut state: GameState,
-    turn_id: String,
-    swipe_index: u32,
-) {
+) -> Result<u64, EngineError> {
     state.narrative.generation.status = GenerationStatus::Idle;
     state.narrative.generation.phase = GenerationPhase::default();
-    save_state(ctx, &state, turn_id, swipe_index);
+    save_state(ctx, &mut state)
 }
 
 pub(crate) fn default_quantifier_result(fallback_npc_ids: &[String]) -> QuantifierResult {
@@ -174,14 +170,11 @@ pub(crate) fn run_post_generation_agents(
 }
 
 /// [DOC: docs/architecture/system.md]
-/// `swipe_index` should be 0 for fresh turns, or incremented for retries.
 pub fn execute_freeaction_pipeline(
     service: &DefaultGameService,
     ctx: &GameServiceContext,
     mut state: GameState,
-    turn_id: String,
     text: String,
-    swipe_index: u32,
 ) {
     let world = Arc::clone(&state.world);
     let map = Arc::clone(&state.map);
@@ -193,12 +186,18 @@ pub fn execute_freeaction_pipeline(
 
     state.narrative.generation.status = GenerationStatus::Generating;
     state.narrative.generation.phase = GenerationPhase::Narrating;
-    save_committed_state(ctx, &state, format!("pre-main:{turn_id}"), 0);
+    let _pre_main_id = match save_committed_state(ctx, &mut state) {
+        Ok(id) => id,
+        Err(e) => {
+            log::error!("Failed to save pre-main snapshot: {e}");
+            return;
+        }
+    };
 
     let room = map.get_room_by_id(&room_id);
 
     let Some(room) = room else {
-        save_pipeline_error(ctx, &turn_id, swipe_index, "Room not found");
+        save_pipeline_error(ctx, "Room not found");
         return;
     };
     let context = make_prompt_context(
@@ -216,14 +215,14 @@ pub fn execute_freeaction_pipeline(
         match backend.narrate_action(crate::narrative::llm::backend::AGENT_NARRATOR, &context) {
             Ok(result) => result,
             Err(e) => {
-                save_pipeline_error(ctx, &turn_id, swipe_index, map_llm_error(&e));
+                save_pipeline_error(ctx, map_llm_error(&e));
                 return;
             }
         };
     let narration_text = narration_result.text;
 
     if narration_text.trim().is_empty() {
-        save_pipeline_error(ctx, &turn_id, swipe_index, "LLM Error: empty response");
+        save_pipeline_error(ctx, "LLM Error: empty response");
         return;
     }
 
@@ -269,7 +268,14 @@ pub fn execute_freeaction_pipeline(
                 next_state.narrative.generation.status = GenerationStatus::Generating;
                 next_state.narrative.generation.phase = GenerationPhase::GeneratingEvent;
                 next_state.narrative.last_trigger = Some(request.stored.clone());
-                save_committed_state(ctx, &next_state, format!("pre-event:{turn_id}"), 0);
+
+                let _pre_event_id = match save_committed_state(ctx, &mut next_state) {
+                    Ok(id) => id,
+                    Err(e) => {
+                        log::error!("Failed to save pre-event snapshot: {e}");
+                        return;
+                    }
+                };
 
                 let continuation_result = match backend.complete(
                     crate::narrative::llm::backend::AGENT_TRIGGER,
@@ -287,7 +293,9 @@ pub fn execute_freeaction_pipeline(
                         );
                         next_state.narrative.generation.status =
                             GenerationStatus::Error(format!("Error: {e}"));
-                        save_state(ctx, &next_state, turn_id.clone(), swipe_index);
+                        if let Err(e) = save_state(ctx, &mut next_state) {
+                            log::error!("Critical: failed to persist trigger error state: {e}");
+                        }
                         return;
                     }
                 };
@@ -319,17 +327,23 @@ pub fn execute_freeaction_pipeline(
                             log::error!("Failed to apply post-trigger NPC events: {e}");
                             next_state.narrative.generation.status =
                                 GenerationStatus::Error(format!("NPC event error: {e}"));
-                            save_state(ctx, &next_state, turn_id.clone(), swipe_index);
+                            if let Err(e) = save_state(ctx, &mut next_state) {
+                                log::error!("Critical: failed to persist NPC error state: {e}");
+                            }
                             return;
                         }
                     }
                 }
-            }
 
-            finish_action(ctx, next_state, turn_id.clone(), swipe_index);
+                if let Err(e) = finish_action(ctx, next_state) {
+                    log::error!("Failed to persist finished action: {e}");
+                }
+            } else if let Err(e) = finish_action(ctx, next_state) {
+                log::error!("Failed to persist finished action: {e}");
+            }
         }
         Err(e) => {
-            save_pipeline_error(ctx, &turn_id, swipe_index, format!("Error: {e}"));
+            save_pipeline_error(ctx, format!("Error: {e}"));
         }
     }
 }

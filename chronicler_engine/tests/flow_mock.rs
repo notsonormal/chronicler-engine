@@ -124,7 +124,7 @@ pub fn wait_for_generation_complete(
     let start = std::time::Instant::now();
     let timeout = std::time::Duration::from_millis(timeout_ms);
     while start.elapsed() < timeout {
-        if let Ok(Some(snap)) = ctx.snapshot_storage.load_latest(None) {
+        if let Ok(Some(snap)) = ctx.snapshot_storage.load_latest() {
             let guard = GameState::from_snapshot(
                 &snap,
                 ctx.world.clone(),
@@ -144,14 +144,40 @@ pub fn wait_for_generation_complete(
 pub fn latest_state(
     ctx: &chronicler_engine::engine::game_service::GameServiceContext,
 ) -> GameState {
-    let snap = ctx.snapshot_storage.load_latest(None).unwrap().unwrap();
-    GameState::from_snapshot(
+    let snap = ctx.snapshot_storage.load_latest().unwrap().unwrap();
+    let mut state = GameState::from_snapshot(
         &snap,
         ctx.world.clone(),
         ctx.map.clone(),
         ctx.player.clone(),
         (*ctx.npcs).clone(),
-    )
+    );
+    if let Ok(msgs) = ctx.message_storage.load_messages() {
+        if !msgs.is_empty() {
+            state.narrative.messages = msgs;
+        }
+    }
+    state
+}
+
+pub fn save_state(
+    ctx: &chronicler_engine::engine::game_service::GameServiceContext,
+    state: &GameState,
+) {
+    let snapshot =
+        chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(state);
+    let snapshot_id = ctx.snapshot_storage.save(&snapshot).unwrap();
+    // Clear and re-insert all messages to keep storage in sync with state
+    let existing = ctx.message_storage.load_messages().unwrap_or_default();
+    for msg in existing {
+        let _ = ctx.message_storage.delete_message(msg.id);
+    }
+    for mut msg in state.narrative.messages.clone() {
+        if msg.snapshot_id.is_none() {
+            msg.snapshot_id = Some(snapshot_id);
+        }
+        let _ = ctx.message_storage.insert_message(&mut msg);
+    }
 }
 
 pub fn add_input_and_save(
@@ -161,20 +187,11 @@ pub fn add_input_and_save(
     let mut state = latest_state(ctx);
     let player_name = state.player.sheet.name.clone();
     state.add_log(text.to_string(), Some(player_name), LogType::Input);
-    let turn_id = state
-        .narrative
-        .messages
-        .last()
-        .map(|m| m.turn_id.clone())
-        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-    let snapshot = chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(
-        &state, turn_id, 0,
-    );
-    let _ = ctx.snapshot_storage.save(&snapshot);
+    save_state(ctx, &state);
 }
 
 pub fn latest_snapshot(
     ctx: &chronicler_engine::engine::game_service::GameServiceContext,
 ) -> Option<chronicler_engine::model::state_snapshot::GameStateSnapshot> {
-    ctx.snapshot_storage.load_latest(None).unwrap_or(None)
+    ctx.snapshot_storage.load_latest().unwrap_or(None)
 }

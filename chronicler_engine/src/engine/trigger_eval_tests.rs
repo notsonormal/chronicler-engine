@@ -102,12 +102,10 @@ fn make_state(
         },
         narrative: crate::model::state::NarrativeState {
             messages: vec![],
-            next_log_id: 1,
             generation: Default::default(),
             last_trigger: None,
             pending_location: None,
             pending_event: None,
-            current_turn_id: uuid::Uuid::new_v4().to_string(),
         },
         scene: crate::model::state::SceneState { npcs_in_area },
         character_state,

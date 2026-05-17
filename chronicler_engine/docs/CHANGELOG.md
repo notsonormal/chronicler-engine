@@ -1,6 +1,40 @@
-﻿# Changelog
+# Changelog
 
 ## 2026-05-16
+
+### Changed
+- **Unified quantifier backend with `LlmBackend` trait**
+  - Deleted `QuantifierBackendTrait`, `RealQuantifierBackend`, `MockQuantifierBackend`, `OllamaQuantifierBackend`
+  - `QuantifierAgent` now holds `Arc<dyn LlmBackend>` and calls `backend.complete()`
+  - Extracted `wrap_and_save` as `LlmBackend` trait default method; added `model()` to trait
+  - Renamed `narrate_action_from_prompt` → `complete` (generic prompt-completion primitive)
+  - `MockBackend` gained `per_call_prompt_responses` for quantifier test scenarios
+  - All documentation updated to reflect unified backend architecture
+
+### Changed
+- **Message-Aligned Snapshots** — Replaced `base_snapshot_id` chain with message-aligned snapshot model
+  - Removed `base_snapshot_id` from `GameStateSnapshot` — snapshots are standalone state blobs
+  - Replaced `turn_id` with `snapshot_id` on `Message` — references the snapshot saved **after** the message was created
+  - Retry: find anchor message → load its `snapshot_id` → delete messages after anchor → apply snapshot → regenerate
+  - Main retry anchor: last `Input` message; Event retry anchor: last non-event message
+  - `save_state` and `save_committed_state` no longer take `base_snapshot_id`; they tag newly persisted messages with the saved snapshot's ID
+  - All snapshot `turn_id`/`swipe_index` keying removed; snapshots use auto-increment `id` only
+
+### Added
+- **`games` table** — Top-level game session record scoping all state and messages
+  - `games(id, world_name, created_at, updated_at)`
+  - Default game row (`id=1`) auto-inserted on migration
+  - Foundation for future multi-game support
+
+### Changed
+- **Game-scoped storage** — `game_id` added to `game_state_snapshots` and `messages`
+  - `SqliteGameStorage::new(pool, game_id)` filters all queries by game
+  - `InMemoryGameStorage` tracks `game_id` for test parity
+  - `reset()` clears only the current game's data (was global)
+  - New indexes: `idx_snapshots_game_latest`, `idx_messages_game_id`
+
+### Added
+- **Data layer reference doc** — `docs/reference/data_layer.md` documents all SQLite tables, columns, relationships, and migration policy
 
 ### Removed
 - **Sync actions (`Look`, `Inventory`, `Quit`)** — All player input is now treated as `FreeAction` and routed through the LLM generation pipeline
@@ -52,7 +86,7 @@
 - **Swipe navigation UI** — `POST /turn/:id/swipe/:index` endpoint and action-area swipe buttons removed (were dead code)
 
 ### Added
-- **Documentation updated** — `docs/architecture/system.md`, `docs/system/game_flow.md`, `docs/adr/adr-014-message-swipe-model.md`
+- **Documentation updated** — `docs/architecture/system.md`, `docs/system/game_flow.md`, `docs/adr/adr-013-message-domain-model.md`
   - ADR-012 marked as superseded by ADR-014
 
 ## 2026-05-14

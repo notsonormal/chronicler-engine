@@ -304,9 +304,7 @@ impl LlmBackend for MediumConfidenceBackend {
         _user_prompt: &str,
         _max_tokens: Option<u32>,
     ) -> Result<LlmCallResult, EngineError> {
-        Ok(make_test_llm_result(&format!(
-            "Carla is standing in the room."
-        )))
+        Ok(make_test_llm_result("Carla is standing in the room."))
     }
     fn generate_dialogue(
         &self,
@@ -565,8 +563,12 @@ fn test_quantifier_retry_on_llm_error() {
         responses: std::sync::Mutex<Vec<Result<String, EngineError>>>,
     }
     impl LlmBackend for RotatingBackend {
-        fn model(&self) -> &str { "test" }
-        fn name(&self) -> &str { "Test" }
+        fn model(&self) -> &str {
+            "test"
+        }
+        fn name(&self) -> &str {
+            "Test"
+        }
         fn complete(
             &self,
             _agent_name: &str,

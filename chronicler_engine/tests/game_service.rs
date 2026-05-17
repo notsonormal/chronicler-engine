@@ -12,7 +12,6 @@ use chronicler_engine::engine::game_service::DefaultGameService;
 use chronicler_engine::model::character::{CharacterSheet, NpcCard};
 use chronicler_engine::model::state::GameState;
 
-use chronicler_engine::narrative::agents::quantifier::MockQuantifierBackend;
 use chronicler_engine::narrative::llm::MockBackend;
 
 pub fn wait_for_generation_complete(
@@ -22,7 +21,7 @@ pub fn wait_for_generation_complete(
     let start = std::time::Instant::now();
     let timeout = std::time::Duration::from_millis(timeout_ms);
     while start.elapsed() < timeout {
-        if let Ok(Some(snap)) = ctx.snapshot_storage.load_latest(None) {
+        if let Ok(Some(snap)) = ctx.snapshot_storage.load_latest() {
             let guard = GameState::from_snapshot(
                 &snap,
                 ctx.world.clone(),
@@ -42,20 +41,26 @@ pub fn wait_for_generation_complete(
 pub fn latest_state(
     ctx: &chronicler_engine::engine::game_service::GameServiceContext,
 ) -> GameState {
-    let snap = ctx.snapshot_storage.load_latest(None).unwrap().unwrap();
-    GameState::from_snapshot(
+    let snap = ctx.snapshot_storage.load_latest().unwrap().unwrap();
+    let mut state = GameState::from_snapshot(
         &snap,
         ctx.world.clone(),
         ctx.map.clone(),
         ctx.player.clone(),
         (*ctx.npcs).clone(),
-    )
+    );
+    if let Ok(msgs) = ctx.message_storage.load_messages() {
+        if !msgs.is_empty() {
+            state.narrative.messages = msgs;
+        }
+    }
+    state
 }
 
 pub fn failing_service() -> DefaultGameService {
     DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::failing()),
-        Arc::new(MockQuantifierBackend::default()),
+        Arc::new(MockBackend::default()),
     )
 }
 

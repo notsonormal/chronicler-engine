@@ -8,6 +8,7 @@ use tower::util::ServiceExt;
 
 use chronicler_engine::create_app_for_testing_with_settings;
 use chronicler_engine::model::settings::{AppSettings, TextCheckMode, TextCheckSettings};
+use chronicler_engine::storage::snapshot_storage::SnapshotStorage;
 
 use crate::create_test_state;
 
@@ -108,22 +109,24 @@ async fn test_action_confirm_returns_full_action_area() {
 async fn test_async_action_saves_input_to_story_log_with_sqlite() {
     use chronicler_engine::model::state_snapshot::GameStateSnapshot;
     use chronicler_engine::storage::db::DbPool;
-    use chronicler_engine::storage::snapshot_storage::SqliteSnapshotStorage;
+    use chronicler_engine::storage::snapshot_storage::SqliteGameStorage;
     let state = create_test_state();
     let tmp_dir =
         std::env::temp_dir().join(format!("chronicler_component_test_{}", std::process::id()));
     let _ = std::fs::create_dir_all(&tmp_dir);
     let db_path = tmp_dir.join("test.db");
     let db_pool = DbPool::new(db_path.to_str().unwrap()).unwrap();
-    let storage = Arc::new(SqliteSnapshotStorage::new(db_pool))
-        as Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage>;
+    let storage = Arc::new(SqliteGameStorage::new(db_pool, 1));
 
-    let snapshot = GameStateSnapshot::from_game_state(&state, "initial".to_string(), 0);
+    let snapshot = GameStateSnapshot::from_game_state(&state);
     storage.save(&snapshot).unwrap();
 
     let app = chronicler_engine::server::create_app_with_storage(
         state,
-        storage,
+        Arc::clone(&storage)
+            as Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage>,
+        Arc::clone(&storage)
+            as Arc<dyn chronicler_engine::storage::message_storage::MessageStorage>,
         Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new()),
         chronicler_engine::model::settings::AppSettings::default(),
     );

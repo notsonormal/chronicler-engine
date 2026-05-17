@@ -115,34 +115,28 @@ fn test_delete_last_log() {
 }
 
 #[test]
-fn test_delete_last_log_recalculates_turn_id() {
+fn test_delete_last_log_recalculates_ids() {
     let mut state = TestGameState::in_room("room1");
 
-    // Add Input + Narration sharing the same turn_id (mimics handler flow)
+    // Add Input + Narration (mimics handler flow)
     state.add_log("go north".into(), Some("Player".into()), LogType::Input);
-    let turn_id_a = state.narrative.messages.last().unwrap().turn_id.clone();
-    state.narrative.current_turn_id = turn_id_a.clone();
     state.add_log("You walk north.".into(), None, LogType::Narration);
 
     assert_eq!(state.narrative.messages.len(), 2);
-    assert_eq!(state.narrative.messages[0].turn_id, turn_id_a);
-    assert_eq!(state.narrative.messages[1].turn_id, turn_id_a);
 
-    // Delete Narration → current_turn_id should still be "A"
+    // Delete Narration
     state.delete_last_log().unwrap();
-    assert_eq!(state.narrative.current_turn_id, turn_id_a);
+    assert_eq!(state.narrative.messages.len(), 1);
+    assert_eq!(state.narrative.messages[0].text, "go north");
 
-    // Delete Input → current_turn_id should change to a new UUID
+    // Delete Input
     state.delete_last_log().unwrap();
-    assert_ne!(state.narrative.current_turn_id, turn_id_a);
+    assert!(state.narrative.messages.is_empty());
 
-    // Verify a new Input gets the current turn_id
-    let turn_id_before = state.narrative.current_turn_id.clone();
+    // Verify a new Input can be added after delete
     state.add_log("go south".into(), Some("Player".into()), LogType::Input);
-    assert_eq!(
-        state.narrative.messages.last().unwrap().turn_id,
-        turn_id_before
-    );
+    assert_eq!(state.narrative.messages.len(), 1);
+    assert_eq!(state.narrative.messages.last().unwrap().text, "go south");
 }
 
 #[test]
@@ -211,24 +205,23 @@ fn log_type_strategy() -> impl Strategy<Value = LogType> {
 
 proptest! {
     #[test]
-    fn prop_log_ids_are_strictly_increasing(
+    fn prop_log_appends_in_order(
         mut state in Just(TestGameState::in_room("room1")),
         entries in prop::collection::vec(
             (log_text_strategy(), log_type_strategy()),
             1..20
         )
     ) {
-        let mut previous_id = 0u64;
+        let mut expected = Vec::new();
         for (text, log_type) in entries {
-            state.add_log(text, None, log_type);
-            let history = state.narrative.history();
-            let last = history.last().unwrap();
-            prop_assert!(
-                last.id > previous_id,
-                "log id {} should be > previous id {}",
-                last.id, previous_id
-            );
-            previous_id = last.id;
+            state.add_log(text.clone(), None, log_type.clone());
+            expected.push((text, log_type));
+        }
+        let history = state.narrative.history();
+        prop_assert_eq!(history.len(), expected.len());
+        for (i, (expected_text, expected_type)) in expected.iter().enumerate() {
+            prop_assert_eq!(&history[i].text, expected_text);
+            prop_assert_eq!(history[i].log_type.clone(), expected_type.clone());
         }
     }
 

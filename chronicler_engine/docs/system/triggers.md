@@ -97,7 +97,7 @@ By default, triggers are **global** — they fire regardless of where the player
 }
 ```
 
-This trigger only fires when `state.current_room_id == "entrance_hall"`.
+This trigger only fires when `state.movement.current_room_id == "entrance_hall"`.
 
 ## Trigger Actions
 | Action | Description |
@@ -165,8 +165,8 @@ Event headers:
 
 | Step | Operation | Why it must come here |
 | :--- | :--- | :--- |
-| 1 | `handle_movement()` — may update `current_room_id` | Room must be current before NPCs are resolved |
-| 2 | Resolve current NPCs from quantifier result | Uses updated `current_room_id` from step 1 |
+| 1 | `handle_movement()` — may update `movement.current_room_id` | Room must be current before NPCs are resolved |
+| 2 | Resolve current NPCs from quantifier result | Uses updated `movement.current_room_id` from step 1 |
 | 3 | `state.add_log(narration_text)` | Narration must be in history before triggers read it |
 | 4a | `evaluate_triggers()` + build prompt | Reads `state.narrative.history()` (step 3) to build the trigger continuation prompt |
 | 4b | Trigger LLM call | Runs **outside** the state lock so the frontend can poll the main narration |

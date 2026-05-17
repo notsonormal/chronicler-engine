@@ -24,9 +24,8 @@ impl DefaultGameService {
 
     pub fn with_storage(storage: Option<Arc<dyn LlmMessageStorage>>) -> Self {
         let settings = crate::settings::load_settings().unwrap_or_default();
-        let registry =
-            AgentRegistry::from_configs_with_storage(&settings.agents, storage.clone())
-                .unwrap_or_default();
+        let registry = AgentRegistry::from_configs_with_storage(&settings.agents, storage.clone())
+            .unwrap_or_default();
         Self {
             llm_backend: Arc::from(crate::narrative::llm::get_llm_backend_for(
                 &settings

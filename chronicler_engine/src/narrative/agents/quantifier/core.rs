@@ -141,6 +141,7 @@ pub(crate) fn static_npc_result(
     }
 }
 
+#[allow(dead_code)]
 pub(crate) fn action_boundary_contains(
     text: &str,
     substring: &str,

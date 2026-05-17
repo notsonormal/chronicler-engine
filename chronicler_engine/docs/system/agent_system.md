@@ -125,7 +125,7 @@ pub enum BackendSelector {
 }
 ```
 
-**QuantifierAgent**: Always uses the quantifier backend (resolved via `get_quantifier_backend()` or `get_quantifier_backend_for()`). `UseMain` falls back to the default quantifier backend.
+**QuantifierAgent**: Resolves its backend via `AgentRegistry::from_configs_with_storage()`, which loads the `quantifier_connection_id` from `settings.json`. `UseMain` falls back to the default narration backend.
 
 ---
 
@@ -150,7 +150,7 @@ This enables cost optimization (cheap model for quantifier, powerful model for n
 | `src/narrative/agents/quantifier/mod.rs` | Quantifier module root |
 | `src/narrative/agents/quantifier/agent.rs` | `QuantifierAgent` implementing `Agent` |
 | `src/narrative/agents/quantifier/core.rs` | Core quantifier logic |
-| `src/narrative/agents/quantifier/backends.rs` | `QuantifierBackendTrait`, `MockQuantifierBackend`, `RealQuantifierBackend` |
+| `src/narrative/agents/quantifier/agent.rs` | `QuantifierAgent` implementing `Agent` |
 | `src/narrative/agents/quantifier/parser.rs` | Quantifier response parser |
 | `src/narrative/agents/quantifier/prompt.rs` | Quantifier prompt builder |
 | `src/narrative/agents/quantifier/types.rs` | Quantifier types (`NpcEventList`, `NpcEvent`, etc.) |

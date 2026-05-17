@@ -5,7 +5,7 @@ These invariants are machine-checkable statements about the engine's runtime beh
 ## State Mutations
 
 ### INV-001: Generation Status Lifecycle
-`generation_state.status` must return to `Idle` after every action (sync or async). No action may leave the engine permanently stuck in `Generating`.
+`generation_state.status` must return to `Idle` after every action. No action may leave the engine permanently stuck in `Generating`.
 
 - **Enforced by:** `GeneratingGuard::drop` resets to `Idle` on scope exit. Poisoned mutexes are recovered via `Mutex::clear_poison()`.
 - **Spawn sites:** `fragments.rs` handlers check `CancellationToken` and reset status if cancelled.

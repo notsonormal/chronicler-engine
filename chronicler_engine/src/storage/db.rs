@@ -1,5 +1,6 @@
 use std::sync::{Arc, Mutex};
 
+use chrono::Utc;
 use rusqlite::Connection;
 
 #[derive(Clone)]
@@ -26,55 +27,102 @@ impl DbPool {
 }
 
 fn run_migrations(conn: &Connection) -> Result<(), crate::error::EngineError> {
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS game_state_snapshots (
-            id TEXT PRIMARY KEY,
-            turn_id TEXT NOT NULL,
-            swipe_index INTEGER NOT NULL DEFAULT 0,
-            movement TEXT NOT NULL,
-            narrative TEXT NOT NULL,
-            scene TEXT NOT NULL,
-            character_state TEXT NOT NULL,
-            committed INTEGER NOT NULL DEFAULT 0,
-            created_at TEXT NOT NULL,
-            UNIQUE(turn_id, swipe_index)
-        )",
-        [],
-    )
-    .map_err(|e| crate::error::EngineError::Config(format!("Migration failed: {e}")))?;
+    let version: i32 = conn
+        .query_row("PRAGMA user_version", [], |row| row.get(0))
+        .unwrap_or(0);
 
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_snapshots_turn ON game_state_snapshots(turn_id, swipe_index)",
-        [],
-    )
-    .map_err(|e| {
-        crate::error::EngineError::Config(format!("Migration failed: {e}"))
-    })?;
+    if version < 1 {
+        // Breaking change: drop old tables and recreate with the new schema.
+        // Old saves are discarded once during the transition to integer IDs.
+        let _ = conn.execute("DROP TABLE IF EXISTS game_state_snapshots", []);
+        let _ = conn.execute("DROP TABLE IF EXISTS checkpoints", []);
+        let _ = conn.execute("DROP TABLE IF EXISTS messages", []);
+        let _ = conn.execute("DROP TABLE IF EXISTS games", []);
 
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_snapshots_latest ON game_state_snapshots(created_at DESC)",
-        [],
-    )
-    .map_err(|e| crate::error::EngineError::Config(format!("Migration failed: {e}")))?;
+        conn.execute(
+            "CREATE TABLE games (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                world_name TEXT NOT NULL DEFAULT 'default',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )",
+            [],
+        )
+        .map_err(|e| crate::error::EngineError::Config(format!("Migration failed: {e}")))?;
 
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS checkpoints (
-            id TEXT PRIMARY KEY,
-            turn_id TEXT NOT NULL,
-            swipe_index INTEGER NOT NULL DEFAULT 0,
-            name TEXT NOT NULL,
-            created_at TEXT NOT NULL
-        )",
-        [],
-    )
-    .map_err(|e| crate::error::EngineError::Config(format!("Migration failed: {e}")))?;
+        conn.execute(
+            "CREATE TABLE game_state_snapshots (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                game_id INTEGER NOT NULL DEFAULT 1,
+                movement TEXT NOT NULL,
+                narrative TEXT NOT NULL,
+                scene TEXT NOT NULL,
+                character_state TEXT NOT NULL,
+                committed INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL
+            )",
+            [],
+        )
+        .map_err(|e| crate::error::EngineError::Config(format!("Migration failed: {e}")))?;
 
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_checkpoints_turn ON checkpoints(turn_id, swipe_index)",
-        [],
-    )
-    .map_err(|e| crate::error::EngineError::Config(format!("Migration failed: {e}")))?;
+        conn.execute(
+            "CREATE INDEX idx_snapshots_game_latest ON game_state_snapshots(game_id, created_at DESC)",
+            [],
+        )
+        .map_err(|e| crate::error::EngineError::Config(format!("Migration failed: {e}")))?;
 
+        conn.execute(
+            "CREATE TABLE checkpoints (
+                id TEXT PRIMARY KEY,
+                snapshot_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )",
+            [],
+        )
+        .map_err(|e| crate::error::EngineError::Config(format!("Migration failed: {e}")))?;
+
+        conn.execute(
+            "CREATE INDEX idx_checkpoints_snapshot ON checkpoints(snapshot_id)",
+            [],
+        )
+        .map_err(|e| crate::error::EngineError::Config(format!("Migration failed: {e}")))?;
+
+        conn.execute(
+            "CREATE TABLE messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                game_id INTEGER NOT NULL DEFAULT 1,
+                sender TEXT,
+                text TEXT NOT NULL,
+                log_type TEXT NOT NULL,
+                timestamp TEXT NOT NULL,
+                location_header TEXT,
+                event_header TEXT,
+                snapshot_id INTEGER
+            )",
+            [],
+        )
+        .map_err(|e| crate::error::EngineError::Config(format!("Migration failed: {e}")))?;
+
+        conn.execute(
+            "CREATE INDEX idx_messages_game_id ON messages(game_id, id)",
+            [],
+        )
+        .map_err(|e| crate::error::EngineError::Config(format!("Migration failed: {e}")))?;
+
+        // Insert default game row so storage impls have something to reference
+        let now = Utc::now().to_rfc3339();
+        conn.execute(
+            "INSERT INTO games (id, world_name, created_at, updated_at) VALUES (1, 'default', ?1, ?1)",
+            rusqlite::params![&now],
+        )
+        .map_err(|e| crate::error::EngineError::Config(format!("Migration failed: {e}")))?;
+
+        conn.pragma_update(None, "user_version", 1)
+            .map_err(|e| crate::error::EngineError::Config(format!("Failed to set user_version: {e}")))?;
+    }
+
+    // llm_messages is independent and uses IF NOT EXISTS so it is safe to rerun.
     conn.execute(
         "CREATE TABLE IF NOT EXISTS llm_messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

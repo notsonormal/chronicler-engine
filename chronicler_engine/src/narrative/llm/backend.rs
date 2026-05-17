@@ -67,13 +67,8 @@ pub trait LlmBackend: Send + Sync {
 
     fn save_message(&self, _message: &LlmMessage) {}
 
-    fn wrap_and_save(
-        &self,
-        agent_name: &str,
-        chat: ChatCompletionResult,
-    ) -> LlmCallResult {
-        let result =
-            LlmCallResult::from_chat_result(agent_name, self.name(), self.model(), chat);
+    fn wrap_and_save(&self, agent_name: &str, chat: ChatCompletionResult) -> LlmCallResult {
+        let result = LlmCallResult::from_chat_result(agent_name, self.name(), self.model(), chat);
         self.save_message(&result.to_message());
         result
     }

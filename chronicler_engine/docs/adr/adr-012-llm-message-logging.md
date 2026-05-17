@@ -1,4 +1,4 @@
-# ADR-013: LLM Call Logging and Forensics
+# ADR-012: LLM Call Logging and Forensics
 
 ## Status
 Accepted

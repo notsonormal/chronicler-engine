@@ -52,9 +52,7 @@ pub fn print_benchmark_result(result: &BenchmarkResult) {
 
 pub fn run_scenario(
     llm_backend: Arc<dyn LlmBackend>,
-    quantifier_backend: Arc<
-        dyn chronicler_engine::narrative::agents::quantifier::backends::QuantifierBackendTrait,
-    >,
+    quantifier_backend: Arc<dyn LlmBackend>,
     _scenario_name: &str,
     _category: &str,
     _injected_failure: &str,
@@ -69,7 +67,7 @@ pub fn run_scenario(
         "Test Player".to_string(),
     );
 
-    let snapshot = ctx.snapshot_storage.load_latest(None).unwrap().unwrap();
+    let snapshot = ctx.snapshot_storage.load_latest().unwrap().unwrap();
     let error_message = match &snapshot.narrative.generation.status {
         GenerationStatus::Error(msg) => msg.clone(),
         GenerationStatus::Idle => "(no error, idle)".to_string(),

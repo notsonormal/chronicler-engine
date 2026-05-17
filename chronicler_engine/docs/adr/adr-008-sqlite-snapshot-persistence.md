@@ -57,7 +57,7 @@ An `AtomicBool` in `AppState` acts as a domain-level generation gate:
 - **Per-turn anchoring**: Pre-generation snapshots enable safe retry and regeneration
 - **Reset without restart**: Clear SQLite and reload world JSON
 - **Test isolation**: Each test can use an in-memory or temp-file database
-- **Swipe support**: Retry saves with `swipe_index + 1`, preserving original snapshot
+- **Retry tracking**: Retry saves with incremented retry count, preserving original snapshot
 
 ### Negative
 - **Disk I/O**: Every turn writes to SQLite (mitigated by WAL mode)

@@ -2,9 +2,6 @@ use std::sync::Arc;
 
 use chronicler_engine::engine::game_service::{DefaultGameService, GameService};
 use chronicler_engine::model::state::LogType;
-use chronicler_engine::narrative::agents::quantifier::{
-    MockQuantifierBackend, MovementParseResult, MovementType, QuantifierConfidence,
-};
 use chronicler_engine::narrative::llm::MockBackend;
 use chronicler_engine::test_support::make_test_context_with_sqlite;
 
@@ -20,7 +17,7 @@ fn test_sequential_execute_retry_execute() {
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let service = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.llm_message_storage)))),
-        Arc::new(MockQuantifierBackend::default()),
+        Arc::new(MockBackend::default()),
     );
 
     // Step 1: Action A
@@ -86,7 +83,7 @@ fn test_sequential_execute_delete_execute() {
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let service = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.llm_message_storage)))),
-        Arc::new(MockQuantifierBackend::default()),
+        Arc::new(MockBackend::default()),
     );
 
     // Step 1: Action A
@@ -114,12 +111,7 @@ fn test_sequential_execute_delete_execute() {
     {
         let mut state = latest_state(&ctx);
         state.narrative.messages.retain(|m| m.id != narration_id);
-        let snapshot = chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(
-            &state,
-            "test".to_string(),
-            0,
-        );
-        let _ = ctx.snapshot_storage.save(&snapshot);
+        crate::save_state(&ctx, &state);
     }
 
     // Step 3: Action B
@@ -152,7 +144,7 @@ fn test_async_action_sequence_then_retry() {
 
     let service = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.llm_message_storage)))),
-        Arc::new(MockQuantifierBackend::default()),
+        Arc::new(MockBackend::default()),
     );
 
     // Step 1: Async action A
@@ -192,7 +184,7 @@ fn test_three_actions_in_sequence() {
 
     let service = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.llm_message_storage)))),
-        Arc::new(MockQuantifierBackend::default()),
+        Arc::new(MockBackend::default()),
     );
 
     for action in ["examine room", "look around", "check inventory"] {
@@ -237,7 +229,7 @@ fn test_delete_input_then_retry_fails_gracefully() {
 
     let service = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.llm_message_storage)))),
-        Arc::new(MockQuantifierBackend::default()),
+        Arc::new(MockBackend::default()),
     );
 
     service.execute_action(
@@ -251,12 +243,7 @@ fn test_delete_input_then_retry_fails_gracefully() {
     {
         let mut state = latest_state(&ctx);
         state.narrative.messages.clear();
-        let snapshot = chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(
-            &state,
-            uuid::Uuid::new_v4().to_string(),
-            0,
-        );
-        let _ = ctx.snapshot_storage.save(&snapshot);
+        crate::save_state(&ctx, &state);
     }
 
     // Retry should not panic or hang
@@ -277,12 +264,11 @@ fn test_reset_clears_history_and_state() {
 
     add_input_and_save(&ctx, "walk to room2");
 
-    let quantifier = Arc::new(MockQuantifierBackend {
-        movement_to_return: Some(MovementParseResult {
-            movement_type: Some(MovementType::Entering),
-            destination: Some("room2".to_string()),
-            confidence: QuantifierConfidence::High,
-        }),
+    let quantifier = Arc::new(MockBackend {
+        per_call_prompt_responses: vec![
+            r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#
+                .to_string(),
+        ],
         ..Default::default()
     });
 
@@ -303,12 +289,7 @@ fn test_reset_clears_history_and_state() {
 
     // Reset: create fresh initial state
     let fresh_state = create_test_state_with_map();
-    let snapshot = chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(
-        &fresh_state,
-        uuid::Uuid::new_v4().to_string(),
-        0,
-    );
-    let _ = ctx.snapshot_storage.save(&snapshot);
+    crate::save_state(&ctx, &fresh_state);
 
     let guard = latest_state(&ctx);
     assert_eq!(
@@ -330,7 +311,7 @@ fn test_reset_then_execute_works() {
 
     let service = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.llm_message_storage)))),
-        Arc::new(MockQuantifierBackend::default()),
+        Arc::new(MockBackend::default()),
     );
 
     // First action
@@ -344,12 +325,7 @@ fn test_reset_then_execute_works() {
 
     // Reset
     let fresh_state = create_test_state_with_map();
-    let snapshot = chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(
-        &fresh_state,
-        uuid::Uuid::new_v4().to_string(),
-        0,
-    );
-    let _ = ctx.snapshot_storage.save(&snapshot);
+    crate::save_state(&ctx, &fresh_state);
 
     // Second action after reset
     add_input_and_save(&ctx, "look around");
@@ -382,7 +358,7 @@ fn test_delete_mid_sequence() {
 
     let service = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.llm_message_storage)))),
-        Arc::new(MockQuantifierBackend::default()),
+        Arc::new(MockBackend::default()),
     );
 
     // Action A
@@ -413,12 +389,7 @@ fn test_delete_mid_sequence() {
     {
         let mut state = latest_state(&ctx);
         state.narrative.messages.retain(|m| m.id != narration_b_id);
-        let snapshot = chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(
-            &state,
-            uuid::Uuid::new_v4().to_string(),
-            0,
-        );
-        let _ = ctx.snapshot_storage.save(&snapshot);
+        crate::save_state(&ctx, &state);
     }
 
     // Action C

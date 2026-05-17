@@ -7,14 +7,18 @@ use crate::model::character::NpcCard;
 use crate::model::world::WorldCard;
 
 #[cfg(test)]
+use crate::engine::game_service::helpers::load_messages_into_state;
+#[cfg(test)]
 use crate::model::state::GameState;
 use crate::storage::llm_message_storage::LlmMessageStorage;
+use crate::storage::message_storage::MessageStorage;
 use crate::storage::snapshot_storage::SnapshotStorage;
 
 /// Context required by [`GameService`] to load and persist game state.
 #[derive(Clone)]
 pub struct GameServiceContext {
     pub snapshot_storage: Arc<dyn SnapshotStorage>,
+    pub message_storage: Arc<dyn MessageStorage>,
     pub llm_message_storage: Arc<dyn LlmMessageStorage>,
     pub world: Arc<WorldCard>,
     pub map: Arc<crate::model::map::MapDef>,
@@ -32,17 +36,19 @@ impl GameServiceContext {
     /// Panics if no snapshot exists — use only in tests where a snapshot was pre-seeded.
     #[cfg(test)]
     pub fn load_state(&self) -> GameState {
-        let snapshot = match self.snapshot_storage.load_latest(None) {
+        let snapshot = match self.snapshot_storage.load_latest() {
             Ok(Some(s)) => s,
             Ok(None) => panic!("no snapshots found"),
             Err(e) => panic!("failed to load snapshot: {e}"),
         };
-        GameState::from_snapshot(
+        let mut state = GameState::from_snapshot(
             &snapshot,
             Arc::clone(&self.world),
             Arc::clone(&self.map),
             Arc::clone(&self.player),
             (*self.npcs).clone(),
-        )
+        );
+        load_messages_into_state(self, &mut state);
+        state
     }
 }

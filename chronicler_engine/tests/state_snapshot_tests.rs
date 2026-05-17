@@ -10,7 +10,7 @@ use test_data::create_test_state;
 #[test]
 fn test_apply_to_restores_state() {
     let original = create_test_state();
-    let snapshot = GameStateSnapshot::from_game_state(&original, "msg1".to_string(), 0);
+    let snapshot = GameStateSnapshot::from_game_state(&original);
 
     // Create a fresh empty-ish state with different starting room
     let mut target = GameState::new(
@@ -48,14 +48,12 @@ fn test_apply_to_restores_state() {
 #[test]
 fn test_from_game_state_sets_defaults() {
     let state = create_test_state();
-    let snapshot = GameStateSnapshot::from_game_state(&state, "msg2".to_string(), 3);
+    let snapshot = GameStateSnapshot::from_game_state(&state);
 
-    assert_eq!(snapshot.turn_id, "msg2");
-    assert_eq!(snapshot.swipe_index, 3);
+    assert!(snapshot.db_id.is_none());
     assert!(!snapshot.committed, "New snapshot should not be committed");
     assert!(
         snapshot.created_at <= chrono::Utc::now(),
         "created_at should be in the past"
     );
-    assert!(!snapshot.id.is_empty(), "id should be generated");
 }

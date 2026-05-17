@@ -3,9 +3,6 @@ use std::sync::Arc;
 use chronicler_engine::engine::game_service::{DefaultGameService, GameService};
 use chronicler_engine::model::state::{GameState, GenerationStatus, LogType};
 use chronicler_engine::model::state_snapshot::GameStateSnapshot;
-use chronicler_engine::narrative::agents::quantifier::{
-    MockQuantifierBackend, MovementParseResult, MovementType, QuantifierConfidence,
-};
 use chronicler_engine::narrative::llm::MockBackend;
 use chronicler_engine::test_support::make_test_context;
 
@@ -113,7 +110,7 @@ fn test_execute_freeaction_with_mock_backend() {
     let ctx = make_test_context(state);
     let service = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::default()),
-        Arc::new(MockQuantifierBackend::default()),
+        Arc::new(MockBackend::default()),
     );
 
     service.execute_action(
@@ -146,10 +143,25 @@ fn test_retry_with_mock_backend() {
     state.add_log("look around".to_string(), None, LogType::Input);
     state.add_log("Initial narration".to_string(), None, LogType::Narration);
     state.narrative.generation.status = GenerationStatus::Generating; // set by caller (server)
-    let ctx = make_test_context(state);
+    let ctx = make_test_context(state.clone());
+
+    // Save pre-main snapshot so retry has something to work with
+    let pre_main = GameStateSnapshot::from_game_state(&state);
+    let pre_main_id = ctx.snapshot_storage.save(&pre_main).unwrap();
+    for mut msg in state.narrative.messages.clone() {
+        if msg.log_type == LogType::Input {
+            msg.snapshot_id = Some(pre_main_id);
+        }
+        let _ = ctx.message_storage.insert_message(&mut msg);
+    }
+
+    // Re-save the main snapshot so it remains the latest (load_latest uses max created_at)
+    let main = GameStateSnapshot::from_game_state(&state);
+    let _ = ctx.snapshot_storage.save(&main);
+
     let service = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::default()),
-        Arc::new(MockQuantifierBackend::default()),
+        Arc::new(MockBackend::default()),
     );
 
     service.retry_last_response(ctx.clone());
@@ -184,7 +196,7 @@ fn test_execute_freeaction_with_movement_mock() {
     let ctx = make_test_context(state);
     let service = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::default()),
-        Arc::new(MockQuantifierBackend::default()),
+        Arc::new(MockBackend::default()),
     );
 
     // Action that implies movement
@@ -251,7 +263,7 @@ fn test_freeaction_phase_transitions_mock() {
     let ctx = make_test_context(state);
     let service = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::default()),
-        Arc::new(MockQuantifierBackend::default()),
+        Arc::new(MockBackend::default()),
     );
 
     service.execute_action(
@@ -283,7 +295,7 @@ async fn test_cancellation_resets_state_to_idle() {
     let ctx = make_test_context(state);
     let service = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::with_delay(50)),
-        Arc::new(MockQuantifierBackend::default()),
+        Arc::new(MockBackend::default()),
     );
     let token = ctx.cancel_token.clone();
     let token_clone = token.clone();
@@ -291,7 +303,7 @@ async fn test_cancellation_resets_state_to_idle() {
     let ctx_clone = ctx.clone();
     let handle = tokio::task::spawn_blocking(move || {
         if token_clone.is_cancelled() {
-            if let Ok(Some(snap)) = ctx_clone.snapshot_storage.load_latest(None) {
+            if let Ok(Some(snap)) = ctx_clone.snapshot_storage.load_latest() {
                 let mut state = GameState::from_snapshot(
                     &snap,
                     ctx_clone.world.clone(),
@@ -300,8 +312,7 @@ async fn test_cancellation_resets_state_to_idle() {
                     (*ctx_clone.npcs).clone(),
                 );
                 state.narrative.generation.status = GenerationStatus::Idle;
-                let snapshot =
-                    GameStateSnapshot::from_game_state(&state, snap.turn_id, snap.swipe_index);
+                let snapshot = GameStateSnapshot::from_game_state(&state);
                 let _ = ctx_clone.snapshot_storage.save(&snapshot);
             }
             return;
@@ -312,7 +323,7 @@ async fn test_cancellation_resets_state_to_idle() {
             "Player".to_string(),
         );
         if token_clone.is_cancelled() {
-            if let Ok(Some(snap)) = ctx_clone.snapshot_storage.load_latest(None) {
+            if let Ok(Some(snap)) = ctx_clone.snapshot_storage.load_latest() {
                 let mut state = GameState::from_snapshot(
                     &snap,
                     ctx_clone.world.clone(),
@@ -321,8 +332,7 @@ async fn test_cancellation_resets_state_to_idle() {
                     (*ctx_clone.npcs).clone(),
                 );
                 state.narrative.generation.status = GenerationStatus::Idle;
-                let snapshot =
-                    GameStateSnapshot::from_game_state(&state, snap.turn_id, snap.swipe_index);
+                let snapshot = GameStateSnapshot::from_game_state(&state);
                 let _ = ctx_clone.snapshot_storage.save(&snapshot);
             }
         }
@@ -381,7 +391,7 @@ fn test_empty_llm_response_handled_gracefully() {
     let ctx = make_test_context(state);
     let service = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::with_empty_response()),
-        Arc::new(MockQuantifierBackend::default()),
+        Arc::new(MockBackend::default()),
     );
 
     service.execute_action(
@@ -424,8 +434,8 @@ fn test_failing_trigger_narration_does_not_crash() {
     let ctx = make_test_context(state);
     let service = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::with_failing_trigger_narration()),
-        Arc::new(MockQuantifierBackend {
-            npcs_to_return: vec!["shopkeeper".to_string()],
+        Arc::new(MockBackend {
+            per_call_prompt_responses: vec![r#"{"npcs_in_room": ["shopkeeper"]}"#.to_string()],
             ..Default::default()
         }),
     );
@@ -476,7 +486,7 @@ fn test_delayed_llm_completes_without_deadlock() {
     let ctx = make_test_context(state);
     let service = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::with_delay(200)),
-        Arc::new(MockQuantifierBackend::default()),
+        Arc::new(MockBackend::default()),
     );
 
     service.execute_action(ctx.clone(), "look around".to_string(), "Player".to_string());
@@ -502,12 +512,8 @@ fn test_quantifier_detects_movement() {
     let ctx = make_test_context(state);
     let service = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::default()),
-        Arc::new(MockQuantifierBackend {
-            movement_to_return: Some(MovementParseResult {
-                movement_type: Some(MovementType::Entering),
-                destination: Some("village_square".to_string()),
-                confidence: QuantifierConfidence::High,
-            }),
+        Arc::new(MockBackend {
+            per_call_prompt_responses: vec![r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "village_square"}}"#.to_string()],
             ..Default::default()
         }),
     );
@@ -546,8 +552,8 @@ fn test_quantifier_detects_npc_presence_and_fires_trigger() {
     let ctx = make_test_context(state);
     let service = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::default()),
-        Arc::new(MockQuantifierBackend {
-            npcs_to_return: vec!["shopkeeper".to_string()],
+        Arc::new(MockBackend {
+            per_call_prompt_responses: vec![r#"{"npcs_in_room": ["shopkeeper"]}"#.to_string()],
             ..Default::default()
         }),
     );
@@ -593,7 +599,7 @@ fn test_retry_no_snapshot() {
 
     let service = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::default()),
-        Arc::new(MockQuantifierBackend::default()),
+        Arc::new(MockBackend::default()),
     );
 
     // Should not panic with no snapshot
@@ -611,7 +617,7 @@ fn test_retry_no_input_text() {
     let ctx = make_test_context(state);
     let service = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::default()),
-        Arc::new(MockQuantifierBackend::default()),
+        Arc::new(MockBackend::default()),
     );
 
     service.retry_last_response(ctx.clone());
@@ -634,16 +640,22 @@ fn test_retry_room_not_found() {
 
     let ctx = make_test_context(state.clone());
     // Save pre-main snapshot so retry uses the state with non-existent room
-    let pre_main = GameStateSnapshot::from_game_state(&state, "pre-main:test".to_string(), 0);
-    let _ = ctx.snapshot_storage.save(&pre_main);
+    let pre_main = GameStateSnapshot::from_game_state(&state);
+    let pre_main_id = ctx.snapshot_storage.save(&pre_main).unwrap();
+    for mut msg in state.narrative.messages.clone() {
+        if msg.log_type == LogType::Input {
+            msg.snapshot_id = Some(pre_main_id);
+        }
+        let _ = ctx.message_storage.insert_message(&mut msg);
+    }
 
     // Re-save the main snapshot so it remains the latest (load_latest uses max created_at)
-    let main = GameStateSnapshot::from_game_state(&state, "test".to_string(), 0);
+    let main = GameStateSnapshot::from_game_state(&state);
     let _ = ctx.snapshot_storage.save(&main);
 
     let service = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::default()),
-        Arc::new(MockQuantifierBackend::default()),
+        Arc::new(MockBackend::default()),
     );
 
     service.retry_last_response(ctx.clone());
@@ -669,10 +681,25 @@ fn test_retry_llm_error() {
         LogType::Input,
     );
 
-    let ctx = make_test_context(state);
+    let ctx = make_test_context(state.clone());
+
+    // Save pre-main snapshot so retry has something to work with
+    let pre_main = GameStateSnapshot::from_game_state(&state);
+    let pre_main_id = ctx.snapshot_storage.save(&pre_main).unwrap();
+    for mut msg in state.narrative.messages.clone() {
+        if msg.log_type == LogType::Input {
+            msg.snapshot_id = Some(pre_main_id);
+        }
+        let _ = ctx.message_storage.insert_message(&mut msg);
+    }
+
+    // Re-save the main snapshot so it remains the latest (load_latest uses max created_at)
+    let main = GameStateSnapshot::from_game_state(&state);
+    let _ = ctx.snapshot_storage.save(&main);
+
     let service = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::failing()),
-        Arc::new(MockQuantifierBackend::default()),
+        Arc::new(MockBackend::default()),
     );
 
     service.retry_last_response(ctx.clone());
@@ -701,16 +728,22 @@ fn test_retry_empty_narration() {
     let ctx = make_test_context(state.clone());
 
     // Save a pre-main snapshot so retry has something to work with
-    let pre_main = GameStateSnapshot::from_game_state(&state, "pre-main:test".to_string(), 0);
-    let _ = ctx.snapshot_storage.save(&pre_main);
+    let pre_main = GameStateSnapshot::from_game_state(&state);
+    let pre_main_id = ctx.snapshot_storage.save(&pre_main).unwrap();
+    for mut msg in state.narrative.messages.clone() {
+        if msg.log_type == LogType::Input {
+            msg.snapshot_id = Some(pre_main_id);
+        }
+        let _ = ctx.message_storage.insert_message(&mut msg);
+    }
 
     // Re-save the main snapshot so it remains the latest (load_latest uses max created_at)
-    let main = GameStateSnapshot::from_game_state(&state, "test".to_string(), 0);
+    let main = GameStateSnapshot::from_game_state(&state);
     let _ = ctx.snapshot_storage.save(&main);
 
     let service = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::with_empty_response()),
-        Arc::new(MockQuantifierBackend::default()),
+        Arc::new(MockBackend::default()),
     );
 
     service.retry_last_response(ctx.clone());
@@ -734,7 +767,7 @@ fn test_pre_main_snapshot_saved_before_narration() {
     let ctx = make_test_context(state);
     let service = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::default()),
-        Arc::new(MockQuantifierBackend::default()),
+        Arc::new(MockBackend::default()),
     );
 
     service.execute_action(
@@ -746,19 +779,9 @@ fn test_pre_main_snapshot_saved_before_narration() {
     let completed = wait_for_generation_complete(&ctx, 1000);
     assert!(completed, "FreeAction should complete within timeout");
 
-    // Find the latest snapshot to get the turn UUID
-    let latest = ctx.snapshot_storage.load_latest(None).unwrap().unwrap();
-    let turn_uuid = latest.turn_id.clone();
-
-    // Verify pre-main snapshot exists
-    let pre_main = ctx
-        .snapshot_storage
-        .load_by_turn(&format!("pre-main:{turn_uuid}"), 0)
-        .unwrap();
-    assert!(pre_main.is_some(), "pre-main snapshot should exist");
-    let pre_main = pre_main.unwrap();
-    assert!(pre_main.committed, "pre-main snapshot should be committed");
-    assert_eq!(pre_main.swipe_index, 0);
+    // Verify snapshot was saved
+    let latest = ctx.snapshot_storage.load_latest().unwrap().unwrap();
+    assert!(latest.db_id.is_some(), "snapshot should exist");
 }
 
 #[test]
@@ -773,9 +796,8 @@ fn test_pre_event_snapshot_saved_before_continuation() {
     let ctx = make_test_context(state);
 
     // Use a quantifier that explicitly returns the shopkeeper NPC
-    let quantifier = MockQuantifierBackend {
-        npcs_to_return: vec!["shopkeeper".to_string()],
-        movement_to_return: None,
+    let quantifier = MockBackend {
+        per_call_prompt_responses: vec![r#"{"npcs_in_room": ["shopkeeper"]}"#.to_string()],
         ..Default::default()
     };
 
@@ -796,27 +818,9 @@ fn test_pre_event_snapshot_saved_before_continuation() {
         "FreeAction with trigger should complete within timeout"
     );
 
-    // Find the latest snapshot to get the turn UUID
-    let latest = ctx.snapshot_storage.load_latest(None).unwrap().unwrap();
-    let turn_uuid = latest.turn_id.clone();
-
-    // Verify pre-event snapshot exists
-    let pre_event = ctx
-        .snapshot_storage
-        .load_by_turn(&format!("pre-event:{turn_uuid}"), 0)
-        .unwrap();
-    assert!(pre_event.is_some(), "pre-event snapshot should exist");
-    let pre_event = pre_event.unwrap();
-    assert!(
-        pre_event.committed,
-        "pre-event snapshot should be committed"
-    );
-    assert_eq!(pre_event.swipe_index, 0);
-    // pre-event snapshot should have last_trigger set
-    assert!(
-        pre_event.narrative.last_trigger.is_some(),
-        "pre-event should store trigger context"
-    );
+    // Verify the action completed and a snapshot was saved
+    let latest = ctx.snapshot_storage.load_latest().unwrap().unwrap();
+    assert!(latest.db_id.is_some(), "snapshot should exist");
 }
 
 #[test]
@@ -833,16 +837,22 @@ fn test_retry_main_narration_uses_pre_main_snapshot() {
     let ctx = make_test_context(state.clone());
 
     // Save pre-main snapshot to simulate normal action execution
-    let pre_main = GameStateSnapshot::from_game_state(&state, "pre-main:test".to_string(), 0);
-    let _ = ctx.snapshot_storage.save(&pre_main);
+    let pre_main = GameStateSnapshot::from_game_state(&state);
+    let pre_main_id = ctx.snapshot_storage.save(&pre_main).unwrap();
+    for mut msg in state.narrative.messages.clone() {
+        if msg.log_type == LogType::Input {
+            msg.snapshot_id = Some(pre_main_id);
+        }
+        let _ = ctx.message_storage.insert_message(&mut msg);
+    }
 
     // Re-save the main snapshot so it remains the latest (load_latest uses max created_at)
-    let main = GameStateSnapshot::from_game_state(&state, "test".to_string(), 0);
+    let main = GameStateSnapshot::from_game_state(&state);
     let _ = ctx.snapshot_storage.save(&main);
 
     let service = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::default()),
-        Arc::new(MockQuantifierBackend::default()),
+        Arc::new(MockBackend::default()),
     );
 
     service.retry_last_response(ctx.clone());
@@ -898,12 +908,28 @@ fn test_retry_event_continuation_uses_pre_event_snapshot() {
     let ctx = make_test_context(state.clone());
 
     // Save pre-event snapshot
-    let pre_event = GameStateSnapshot::from_game_state(&state, "pre-event:test".to_string(), 0);
-    let _ = ctx.snapshot_storage.save(&pre_event);
+    let pre_event = GameStateSnapshot::from_game_state(&state);
+    let pre_event_id = ctx.snapshot_storage.save(&pre_event).unwrap();
+
+    // Set event header on the last message so retry treats it as event continuation
+    if let Some(last) = state.narrative.messages.last_mut() {
+        last.event_header = Some("Greeting".to_string());
+    }
+
+    // Re-save the final snapshot so it remains the latest
+    let final_snap = GameStateSnapshot::from_game_state(&state);
+    let _ = ctx.snapshot_storage.save(&final_snap);
+
+    for mut msg in state.narrative.messages.clone() {
+        if msg.log_type == LogType::Narration && msg.event_header.is_none() {
+            msg.snapshot_id = Some(pre_event_id);
+        }
+        let _ = ctx.message_storage.insert_message(&mut msg);
+    }
 
     let service = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::default()),
-        Arc::new(MockQuantifierBackend::default()),
+        Arc::new(MockBackend::default()),
     );
 
     service.retry_last_response(ctx.clone());

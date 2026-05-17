@@ -15,23 +15,16 @@ pub async fn edit_history_handler(
     axum::extract::Path(id): axum::extract::Path<u64>,
     Form(form): Form<EditHistoryForm>,
 ) -> (StatusCode, String) {
-    let result = (|| {
-        let latest = state.snapshot_storage.load_latest(None)?;
-        let (turn_id, swipe_index) = match latest {
-            Some(s) => (s.turn_id, s.swipe_index),
-            None => (String::new(), 0),
-        };
+    let result: Result<(), crate::error::EngineError> = (|| {
+        let latest = state.snapshot_storage.load_latest()?;
         let mut guard = state.load_state()?;
-        let result = guard.edit_log(id, form.text);
-        if result.is_ok() && !turn_id.is_empty() {
-            let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
-                &guard,
-                turn_id,
-                swipe_index,
-            );
-            let _ = state.snapshot_storage.save(&snapshot);
+        guard.edit_log(id, form.text.clone())?;
+        if latest.is_some() {
+            let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&guard);
+            state.snapshot_storage.save(&snapshot)?;
+            state.message_storage.update_message(id, &form.text)?;
         }
-        result
+        Ok(())
     })();
 
     match result {
@@ -45,15 +38,23 @@ pub async fn edit_history_handler(
 
 /// [DOC: docs/system/game_flow.md]
 pub async fn delete_history_handler(State(state): State<AppState>) -> (StatusCode, String) {
-    let result = (|| {
+    let result: Result<(), crate::error::EngineError> = (|| {
         let mut guard = state.load_state()?;
+        let last_id = guard
+            .narrative
+            .messages
+            .last()
+            .map(|m| m.id)
+            .ok_or_else(|| {
+                crate::error::EngineError::Internal(crate::error::internal_error(
+                    "History is empty".to_string(),
+                ))
+            })?;
         guard.delete_last_log()?;
-        let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
-            &guard,
-            guard.narrative.current_turn_id.clone(),
-            0,
-        );
-        state.snapshot_storage.save(&snapshot)
+        let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&guard);
+        state.snapshot_storage.save(&snapshot)?;
+        state.message_storage.delete_message(last_id)?;
+        Ok(())
     })();
 
     match result {

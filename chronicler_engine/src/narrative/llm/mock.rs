@@ -181,9 +181,7 @@ impl LlmBackend for MockBackend {
             }));
         }
         if !self.per_call_prompt_responses.is_empty() {
-            let idx = self
-                .call_index
-                .fetch_add(1, Ordering::SeqCst);
+            let idx = self.call_index.fetch_add(1, Ordering::SeqCst);
             return Ok(self.make_result(
                 agent_name,
                 self.per_call_prompt_responses[idx % self.per_call_prompt_responses.len()].clone(),

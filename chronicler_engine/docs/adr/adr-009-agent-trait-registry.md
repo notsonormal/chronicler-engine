@@ -8,7 +8,7 @@
 
 The quantifier was originally a hardcoded pipeline step in `DefaultGameService`. It ran between narration generation and `execute_freeaction_impl`, with direct function calls and no abstraction. Adding any new post-processing step (e.g., a continuity checker or prose guardian) would require rewriting the orchestrator.
 
-Reviews identified that the pipeline shape was deeply coupled: while backend traits (`LlmBackend`, `QuantifierBackendTrait`) allowed swapping implementations, the *orchestration* was fixed in code.
+Reviews identified that the pipeline shape was deeply coupled: while the `LlmBackend` trait allowed swapping implementations, the *orchestration* was fixed in code.
 
 ---
 

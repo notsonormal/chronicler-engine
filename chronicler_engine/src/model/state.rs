@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::model::character::{NpcCard, PlayerCard};
 use crate::model::map::{MapDef, Room};
-use crate::model::message::Message;
+use crate::model::storage::Message;
 use crate::model::trigger::CharacterState;
 use crate::model::world::WorldCard;
 
@@ -148,36 +148,15 @@ pub struct StoredTriggerContext {
     pub max_tokens: Option<u32>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct NarrativeState {
     pub messages: Vec<Message>,
-    pub next_log_id: u64,
     pub generation: GenerationState,
     pub last_trigger: Option<StoredTriggerContext>,
     #[serde(default)]
     pub pending_location: Option<String>,
     #[serde(default)]
     pub pending_event: Option<String>,
-    #[serde(default = "new_turn_id")]
-    pub current_turn_id: String,
-}
-
-fn new_turn_id() -> String {
-    uuid::Uuid::new_v4().to_string()
-}
-
-impl Default for NarrativeState {
-    fn default() -> Self {
-        Self {
-            messages: Vec::new(),
-            next_log_id: 1,
-            generation: GenerationState::default(),
-            last_trigger: None,
-            pending_location: None,
-            pending_event: None,
-            current_turn_id: new_turn_id(),
-        }
-    }
 }
 
 impl NarrativeState {
@@ -196,6 +175,16 @@ impl NarrativeState {
                 event_header: msg.event_header.clone(),
             })
             .collect()
+    }
+
+    pub fn from_snapshot(snapshot: &crate::model::storage::NarrativeSnapshot) -> Self {
+        Self {
+            messages: Vec::new(),
+            generation: snapshot.generation.clone(),
+            last_trigger: snapshot.last_trigger.clone(),
+            pending_location: snapshot.pending_location.clone(),
+            pending_event: snapshot.pending_event.clone(),
+        }
     }
 }
 
@@ -233,7 +222,7 @@ impl GameState {
             player,
             npcs,
             movement: snapshot.movement.clone(),
-            narrative: snapshot.narrative.clone(),
+            narrative: NarrativeState::from_snapshot(&snapshot.narrative),
             scene: snapshot.scene.clone(),
             character_state: snapshot.character_state.clone(),
         }
@@ -289,14 +278,10 @@ impl GameState {
         if self.narrative.messages.len() >= MAX_LOG_ENTRIES {
             self.narrative.messages.remove(0);
         }
-        let id = self.narrative.next_log_id;
-        self.narrative.next_log_id += 1;
         let location_header = self.narrative.pending_location.take();
         let event_header = self.narrative.pending_event.take();
-        let turn_id = self.narrative.current_turn_id.clone();
         let message = Message::new(
-            id,
-            turn_id,
+            crate::model::storage::UNPERSISTED_ID,
             sender,
             text,
             log_type,
@@ -316,7 +301,6 @@ impl GameState {
 
     fn add_input(&mut self, text: String, sender: Option<String>) {
         self.push_message(text, sender, LogType::Input);
-        self.narrative.current_turn_id = uuid::Uuid::new_v4().to_string();
     }
 
     /// [DOC: docs/architecture/system.md]
@@ -342,12 +326,6 @@ impl GameState {
         }
 
         self.narrative.messages.pop();
-        self.narrative.current_turn_id = self
-            .narrative
-            .messages
-            .last()
-            .map(|m| m.turn_id.clone())
-            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
         Ok(())
     }
 

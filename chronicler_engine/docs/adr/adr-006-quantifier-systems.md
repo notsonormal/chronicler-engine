@@ -30,8 +30,10 @@ Separate models optimize for different tasks:
 
 | Model | Purpose | Configuration |
 |-------|---------|-------------|
-| **Storyteller** | Main narrative generation | `LLM_MODEL` env var |
-| **Quantifier** | Scene analysis (NPCs, movement) | `QUANTIFIER_MODEL` env var (defaults to free model) |
+| **Storyteller** | Main narrative generation | `narration_connection_id` in `settings.json` |
+| **Quantifier** | Scene analysis (NPCs, movement) | `quantifier_connection_id` in `settings.json` |
+
+> **Historical note**: Pre-ADR-007, these were configured via `LLM_MODEL` and `QUANTIFIER_MODEL` env vars.
 
 - **Quantifier uses reduced prompt**: 3-4 history entries instead of full history (~7000 tokens vs ~3000)
 - **Separate free model**: Often uses `z-ai/glm-4.5-air:free` or similar for fast/cheap inference

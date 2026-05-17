@@ -18,15 +18,13 @@ use crate::{BenchmarkResult, DiagnosticScores, print_benchmark_result, run_scena
 fn benchmark_llm_http_401() {
     let (error_msg, phase, ctx) = run_scenario(
         Arc::new(HttpErrorBackend::unauthorized()),
-        Arc::new(
-            chronicler_engine::narrative::agents::quantifier::MockQuantifierBackend::default(),
-        ),
+        Arc::new(chronicler_engine::narrative::llm::MockBackend::default()),
         "llm_http_401",
         "LLM",
         "HTTP 401 Unauthorized from LLM provider",
     );
 
-    let snapshot = ctx.snapshot_storage.load_latest(None).unwrap().unwrap();
+    let snapshot = ctx.snapshot_storage.load_latest().unwrap().unwrap();
     let _has_dynamic_room = !snapshot.movement.dynamic_rooms.is_empty();
     let _current_room = snapshot.movement.current_room_id.clone();
 
@@ -67,9 +65,7 @@ fn benchmark_llm_http_401() {
 fn benchmark_llm_http_429() {
     let (error_msg, phase, _state) = run_scenario(
         Arc::new(HttpErrorBackend::rate_limited()),
-        Arc::new(
-            chronicler_engine::narrative::agents::quantifier::MockQuantifierBackend::default(),
-        ),
+        Arc::new(chronicler_engine::narrative::llm::MockBackend::default()),
         "llm_http_429",
         "LLM",
         "HTTP 429 Rate Limited from LLM provider",
@@ -106,9 +102,7 @@ fn benchmark_llm_http_429() {
 fn benchmark_llm_network_error() {
     let (error_msg, phase, _state) = run_scenario(
         Arc::new(NetworkErrorBackend::connection_refused()),
-        Arc::new(
-            chronicler_engine::narrative::agents::quantifier::MockQuantifierBackend::default(),
-        ),
+        Arc::new(chronicler_engine::narrative::llm::MockBackend::default()),
         "llm_network_error",
         "LLM",
         "Network error: Ollama connection refused",
@@ -155,9 +149,7 @@ fn benchmark_llm_parse_error() {
         Arc::new(ParseErrorBackend {
             raw_response: "This is not JSON, just raw text from the model.".to_string(),
         }),
-        Arc::new(
-            chronicler_engine::narrative::agents::quantifier::MockQuantifierBackend::default(),
-        ),
+        Arc::new(chronicler_engine::narrative::llm::MockBackend::default()),
         "llm_parse_error",
         "LLM",
         "LLM returned non-JSON response",
@@ -205,9 +197,7 @@ fn benchmark_llm_parse_error() {
 fn benchmark_llm_timeout() {
     let (error_msg, phase, _state) = run_scenario(
         Arc::new(TimeoutBackend),
-        Arc::new(
-            chronicler_engine::narrative::agents::quantifier::MockQuantifierBackend::default(),
-        ),
+        Arc::new(chronicler_engine::narrative::llm::MockBackend::default()),
         "llm_timeout",
         "LLM",
         "LLM request timed out after 180s",
@@ -252,9 +242,7 @@ fn benchmark_llm_timeout() {
 fn benchmark_llm_empty_response() {
     let (error_msg, phase, _state) = run_scenario(
         Arc::new(chronicler_engine::narrative::llm::MockBackend::with_empty_response()),
-        Arc::new(
-            chronicler_engine::narrative::agents::quantifier::MockQuantifierBackend::default(),
-        ),
+        Arc::new(chronicler_engine::narrative::llm::MockBackend::default()),
         "llm_empty_response",
         "LLM",
         "LLM returned empty content field",
@@ -297,13 +285,12 @@ fn benchmark_quantifier_complete_failure() {
         "Quantifier LLM call fails completely (connection refused)",
     );
 
-    let snapshot = ctx.snapshot_storage.load_latest(None).unwrap().unwrap();
+    let snapshot = ctx.snapshot_storage.load_latest().unwrap().unwrap();
+    let messages = ctx.message_storage.load_messages().unwrap();
     let npc_count = snapshot.scene.npcs_in_area.len();
-    let has_system_log = snapshot
-        .narrative
-        .history()
+    let has_system_log = messages
         .iter()
-        .any(|e| e.log_type == LogType::System && e.text.contains("NPC detection uncertain"));
+        .any(|m| m.log_type == LogType::System && m.text.contains("NPC detection uncertain"));
 
     let result = BenchmarkResult {
         scenario: "quantifier_complete_failure".to_string(),
@@ -352,18 +339,13 @@ fn benchmark_quantifier_low_confidence() {
         "Quantifier returns Low confidence NPC detection",
     );
 
-    let snapshot = ctx.snapshot_storage.load_latest(None).unwrap().unwrap();
+    let snapshot = ctx.snapshot_storage.load_latest().unwrap().unwrap();
+    let messages = ctx.message_storage.load_messages().unwrap();
     let npc_count = snapshot.scene.npcs_in_area.len();
-    let has_narration = snapshot
-        .narrative
-        .history()
+    let has_narration = messages.iter().any(|m| m.log_type == LogType::Narration);
+    let has_system_log = messages
         .iter()
-        .any(|e| e.log_type == LogType::Narration);
-    let has_system_log = snapshot
-        .narrative
-        .history()
-        .iter()
-        .any(|e| e.log_type == LogType::System && e.text.contains("NPC detection uncertain"));
+        .any(|m| m.log_type == LogType::System && m.text.contains("NPC detection uncertain"));
 
     let result = BenchmarkResult {
         scenario: "quantifier_low_confidence".to_string(),
@@ -408,15 +390,14 @@ fn benchmark_dynamic_room_creation() {
         "Quantifier returns movement to non-existent room 'nonexistent_room'",
     );
 
-    let snapshot = ctx.snapshot_storage.load_latest(None).unwrap().unwrap();
+    let snapshot = ctx.snapshot_storage.load_latest().unwrap().unwrap();
+    let messages = ctx.message_storage.load_messages().unwrap();
     let current_room = snapshot.movement.current_room_id.clone();
     let is_dynamic = current_room.starts_with("dynamic_");
     let dynamic_room_count = snapshot.movement.dynamic_rooms.len();
-    let has_system_log = snapshot
-        .narrative
-        .history()
+    let has_system_log = messages
         .iter()
-        .any(|e| e.log_type == LogType::System && e.text.contains("Entered unknown location"));
+        .any(|m| m.log_type == LogType::System && m.text.contains("Entered unknown location"));
 
     let result = BenchmarkResult {
         scenario: "dynamic_room_creation".to_string(),
@@ -462,9 +443,7 @@ fn benchmark_dynamic_room_creation() {
 fn benchmark_narrative_generation_failure() {
     let (error_msg, phase, _state) = run_scenario(
         Arc::new(chronicler_engine::narrative::llm::MockBackend::failing()),
-        Arc::new(
-            chronicler_engine::narrative::agents::quantifier::MockQuantifierBackend::default(),
-        ),
+        Arc::new(chronicler_engine::narrative::llm::MockBackend::default()),
         "narrative_generation_failure",
         "Narrative",
         "MockBackend configured to fail all narration calls",
@@ -539,13 +518,10 @@ fn benchmark_trigger_wrong_room_id() {
 
     let service = DefaultGameService::with_mock_quantifier(
         Arc::new(chronicler_engine::narrative::llm::MockBackend::default()),
-        Arc::new(
-            chronicler_engine::narrative::agents::quantifier::MockQuantifierBackend {
-                npcs_to_return: vec!["trigger_npc".to_string()],
-                movement_to_return: None,
-                ..Default::default()
-            },
-        ),
+        Arc::new(chronicler_engine::narrative::llm::MockBackend {
+            per_call_prompt_responses: vec![r#"{"npcs_in_room": ["trigger_npc"]}"#.to_string()],
+            ..Default::default()
+        }),
     );
 
     service.execute_action(
@@ -554,12 +530,9 @@ fn benchmark_trigger_wrong_room_id() {
         "Test Player".to_string(),
     );
 
-    let snapshot = ctx.snapshot_storage.load_latest(None).unwrap().unwrap();
-    let trigger_fired = snapshot
-        .narrative
-        .history()
-        .iter()
-        .any(|e| e.text.contains("stranger nods"));
+    let snapshot = ctx.snapshot_storage.load_latest().unwrap().unwrap();
+    let messages = ctx.message_storage.load_messages().unwrap();
+    let trigger_fired = messages.iter().any(|m| m.text.contains("stranger nods"));
     let error_msg = match &snapshot.narrative.generation.status {
         GenerationStatus::Error(msg) => msg.clone(),
         _ => "(no error)".to_string(),
@@ -644,13 +617,10 @@ fn benchmark_state_stuck_generating() {
 
     let service = DefaultGameService::with_mock_quantifier(
         Arc::new(chronicler_engine::narrative::llm::MockBackend::with_failing_trigger_narration()),
-        Arc::new(
-            chronicler_engine::narrative::agents::quantifier::MockQuantifierBackend {
-                npcs_to_return: vec!["test_npc".to_string()],
-                movement_to_return: None,
-                ..Default::default()
-            },
-        ),
+        Arc::new(chronicler_engine::narrative::llm::MockBackend {
+            per_call_prompt_responses: vec![r#"{"npcs_in_room": ["test_npc"]}"#.to_string()],
+            ..Default::default()
+        }),
     );
 
     service.execute_action(
@@ -659,7 +629,7 @@ fn benchmark_state_stuck_generating() {
         "Test Player".to_string(),
     );
 
-    let snapshot = ctx.snapshot_storage.load_latest(None).unwrap().unwrap();
+    let snapshot = ctx.snapshot_storage.load_latest().unwrap().unwrap();
     let is_generating = snapshot.narrative.generation.status.is_generating();
     let is_idle = matches!(snapshot.narrative.generation.status, GenerationStatus::Idle);
     let has_error = matches!(

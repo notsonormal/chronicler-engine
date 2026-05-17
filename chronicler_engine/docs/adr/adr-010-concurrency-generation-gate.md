@@ -25,7 +25,7 @@ Additionally, `std::thread::sleep(Duration::from_millis(50))` hacks were used to
 | `std::thread::spawn` in `bootstrap.rs` arrival | `runtime.spawn_blocking()` |
 | `std::thread::sleep(50ms)` hack | Removed entirely |
 
-Backend traits (`LlmBackend`, `QuantifierBackendTrait`) remain synchronous. The HTTP layer (Axum/Tokio) is responsible for non-blocking execution.
+The `LlmBackend` trait remains synchronous. The HTTP layer (Axum/Tokio) is responsible for non-blocking execution.
 
 ### Generation Gate
 

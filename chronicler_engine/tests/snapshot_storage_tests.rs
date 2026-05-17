@@ -2,43 +2,36 @@ mod test_data;
 
 use chronicler_engine::model::state_snapshot::GameStateSnapshot;
 use chronicler_engine::storage::db::DbPool;
-use chronicler_engine::storage::snapshot_storage::{SnapshotStorage, SqliteSnapshotStorage};
+use chronicler_engine::storage::snapshot_storage::{SnapshotStorage, SqliteGameStorage};
 
 use test_data::create_test_state;
 
-fn create_storage() -> SqliteSnapshotStorage {
+fn create_storage() -> SqliteGameStorage {
     let pool = DbPool::new(":memory:").expect("in-memory db should open");
-    SqliteSnapshotStorage::new(pool)
+    SqliteGameStorage::new(pool, 1)
 }
 
-fn create_snapshot(turn_id: &str, swipe_index: u32) -> GameStateSnapshot {
+fn create_snapshot() -> GameStateSnapshot {
     let state = create_test_state();
-    GameStateSnapshot::from_game_state(&state, turn_id.to_string(), swipe_index)
+    GameStateSnapshot::from_game_state(&state)
 }
 
 #[test]
 fn test_commit_sets_committed_flag() {
     let storage = create_storage();
-    let snap = create_snapshot("msg1", 0);
-    let snap_id = snap.id.clone();
+    let snap = create_snapshot();
 
-    storage.save(&snap).expect("save should succeed");
+    let snap_id = storage.save(&snap).expect("save should succeed");
 
-    let loaded_before = storage
-        .load_latest(None)
-        .expect("load should succeed")
-        .unwrap();
+    let loaded_before = storage.load_latest().expect("load should succeed").unwrap();
     assert!(
         !loaded_before.committed,
         "new snapshot should not be committed"
     );
 
-    storage.commit(&snap_id).expect("commit should succeed");
+    storage.commit(snap_id).expect("commit should succeed");
 
-    let loaded_after = storage
-        .load_latest(None)
-        .expect("load should succeed")
-        .unwrap();
+    let loaded_after = storage.load_latest().expect("load should succeed").unwrap();
     assert!(
         loaded_after.committed,
         "committed should be true after commit"
@@ -48,12 +41,12 @@ fn test_commit_sets_committed_flag() {
 #[test]
 fn test_reset_deletes_all_snapshots() {
     let storage = create_storage();
-    storage.save(&create_snapshot("msg1", 0)).unwrap();
-    storage.save(&create_snapshot("msg2", 0)).unwrap();
+    storage.save(&create_snapshot()).unwrap();
+    storage.save(&create_snapshot()).unwrap();
 
     storage.reset().expect("reset should succeed");
 
-    let loaded = storage.load_latest(None).expect("load should succeed");
+    let loaded = storage.load_latest().expect("load should succeed");
     assert!(
         loaded.is_none(),
         "load_latest should return None after reset"
@@ -61,68 +54,60 @@ fn test_reset_deletes_all_snapshots() {
 }
 
 #[test]
-fn test_load_by_turn_found() {
+fn test_load_by_id_found() {
     let storage = create_storage();
-    let snap = create_snapshot("msg1", 2);
-    storage.save(&snap).unwrap();
+    let snap = create_snapshot();
+    let id = storage.save(&snap).unwrap();
 
-    let loaded = storage
-        .load_by_turn("msg1", 2)
-        .expect("load should succeed");
-    assert!(
-        loaded.is_some(),
-        "should find snapshot by turn_id and swipe_index"
-    );
-    assert_eq!(loaded.unwrap().turn_id, "msg1");
+    let loaded = storage.load_by_id(id).expect("load should succeed");
+    assert!(loaded.is_some(), "should find snapshot by id");
+    assert_eq!(loaded.unwrap().db_id, Some(id));
 }
 
 #[test]
-fn test_load_by_turn_not_found() {
+fn test_load_by_id_not_found() {
     let storage = create_storage();
-    storage.save(&create_snapshot("msg1", 0)).unwrap();
+    storage.save(&create_snapshot()).unwrap();
 
-    let loaded = storage
-        .load_by_turn("msg2", 0)
-        .expect("load should succeed");
-    assert!(loaded.is_none(), "should return None for missing turn_id");
-
-    let loaded2 = storage
-        .load_by_turn("msg1", 99)
-        .expect("load should succeed");
-    assert!(
-        loaded2.is_none(),
-        "should return None for missing swipe_index"
-    );
+    let loaded = storage.load_by_id(9999).expect("load should succeed");
+    assert!(loaded.is_none(), "should return None for missing id");
 }
 
 #[test]
-fn test_load_latest_with_turn_id_filter() {
+fn test_load_latest_returns_most_recent() {
     let storage = create_storage();
-    let snap_a = create_snapshot("msg_a", 0);
-    let snap_b = create_snapshot("msg_b", 0);
+    let snap_a = create_snapshot();
+    let snap_b = create_snapshot();
     storage.save(&snap_a).unwrap();
-    storage.save(&snap_b).unwrap();
+    let id_b = storage.save(&snap_b).unwrap();
 
-    let loaded = storage
-        .load_latest(Some("msg_a"))
-        .expect("load should succeed");
-    assert_eq!(loaded.unwrap().turn_id, "msg_a", "should filter by turn_id");
+    let loaded = storage.load_latest().expect("load should succeed");
+    assert_eq!(
+        loaded.unwrap().db_id,
+        Some(id_b),
+        "should return most recent snapshot"
+    );
 }
 
 #[test]
-fn test_save_updates_on_conflict() {
+fn test_save_creates_new_snapshot() {
     let storage = create_storage();
-    let mut snap = create_snapshot("msg1", 0);
-    storage.save(&snap).unwrap();
+    let snap = create_snapshot();
+    let id1 = storage.save(&snap).unwrap();
 
-    snap.committed = true;
-    storage.save(&snap).unwrap();
+    let mut snap2 = create_snapshot();
+    snap2.committed = true;
+    let id2 = storage.save(&snap2).unwrap();
 
     let loaded = storage
-        .load_by_turn("msg1", 0)
+        .load_by_id(id2)
         .expect("load should succeed")
         .unwrap();
-    assert!(loaded.committed, "save on conflict should update committed");
+    assert!(
+        loaded.committed,
+        "second save should create new committed snapshot"
+    );
+    assert_ne!(id1, id2, "each save should get a unique id");
 }
 
 #[test]
@@ -133,12 +118,9 @@ fn test_row_to_snapshot_bad_json() {
         // Insert a row with invalid JSON in the movement column
         conn.execute(
             "INSERT INTO game_state_snapshots
-             (id, turn_id, swipe_index, movement, narrative, scene, character_state, committed, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+             (movement, narrative, scene, character_state, committed, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             rusqlite::params![
-                "bad-id",
-                "msg1",
-                0,
                 "not valid json",
                 "{}",
                 "{}",
@@ -150,8 +132,8 @@ fn test_row_to_snapshot_bad_json() {
         .expect("raw insert should succeed");
     }
 
-    let storage = SqliteSnapshotStorage::new(pool);
-    let result = storage.load_latest(None);
+    let storage = SqliteGameStorage::new(pool, 1);
+    let result = storage.load_latest();
     assert!(result.is_err(), "loading bad JSON should return an error");
 }
 
@@ -162,25 +144,15 @@ fn test_row_to_snapshot_bad_date() {
         let conn = pool.conn();
         conn.execute(
             "INSERT INTO game_state_snapshots
-             (id, turn_id, swipe_index, movement, narrative, scene, character_state, committed, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-            rusqlite::params![
-                "bad-date-id",
-                "msg1",
-                0,
-                "{}",
-                "{}",
-                "{}",
-                "{}",
-                0,
-                "not-a-date",
-            ],
+             (movement, narrative, scene, character_state, committed, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            rusqlite::params!["{}", "{}", "{}", "{}", 0, "not-a-date",],
         )
         .expect("raw insert should succeed");
     }
 
-    let storage = SqliteSnapshotStorage::new(pool);
-    let result = storage.load_latest(None);
+    let storage = SqliteGameStorage::new(pool, 1);
+    let result = storage.load_latest();
     assert!(result.is_err(), "loading bad date should return an error");
 }
 
@@ -191,8 +163,7 @@ fn test_checkpoint_crud() {
 
     let cp = Checkpoint {
         id: "cp1".to_string(),
-        turn_id: "turn1".to_string(),
-        swipe_index: 2,
+        snapshot_id: 42,
         name: "Test Checkpoint".to_string(),
         created_at: chrono::Utc::now(),
     };
@@ -204,8 +175,7 @@ fn test_checkpoint_crud() {
         .expect("load should succeed")
         .expect("checkpoint should exist");
     assert_eq!(loaded.id, "cp1");
-    assert_eq!(loaded.turn_id, "turn1");
-    assert_eq!(loaded.swipe_index, 2);
+    assert_eq!(loaded.snapshot_id, 42);
     assert_eq!(loaded.name, "Test Checkpoint");
 
     let list = storage.list_checkpoints().expect("list should succeed");
@@ -226,19 +196,18 @@ fn test_checkpoint_upsert() {
 
     let mut cp = Checkpoint {
         id: "cp1".to_string(),
-        turn_id: "turn1".to_string(),
-        swipe_index: 0,
+        snapshot_id: 1,
         name: "Original".to_string(),
         created_at: chrono::Utc::now(),
     };
     storage.save_checkpoint(&cp).unwrap();
 
-    cp.swipe_index = 3;
+    cp.snapshot_id = 3;
     cp.name = "Updated".to_string();
     storage.save_checkpoint(&cp).unwrap();
 
     let loaded = storage.load_checkpoint("cp1").unwrap().unwrap();
-    assert_eq!(loaded.swipe_index, 3);
+    assert_eq!(loaded.snapshot_id, 3);
     assert_eq!(loaded.name, "Updated");
 }
 
@@ -249,8 +218,7 @@ fn test_reset_clears_checkpoints() {
 
     let cp = Checkpoint {
         id: "cp1".to_string(),
-        turn_id: "turn1".to_string(),
-        swipe_index: 0,
+        snapshot_id: 1,
         name: "Test".to_string(),
         created_at: chrono::Utc::now(),
     };

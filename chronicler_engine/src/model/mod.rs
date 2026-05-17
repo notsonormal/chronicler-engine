@@ -9,6 +9,7 @@ pub mod scenario;
 pub mod settings;
 pub mod state;
 pub mod state_snapshot;
+pub mod storage;
 pub mod trigger;
 pub mod world;
 
@@ -16,8 +17,6 @@ pub mod world;
 mod character_tests;
 #[cfg(test)]
 mod map_tests;
-#[cfg(test)]
-mod message_tests;
 #[cfg(test)]
 mod scenario_tests;
 #[cfg(test)]

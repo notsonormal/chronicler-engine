@@ -7,14 +7,18 @@ use crate::model::state_snapshot::GameStateSnapshot;
 
 /// [DOC: docs/architecture/system.md]
 pub fn load_state(ctx: &GameServiceContext) -> GameState {
-    match ctx.snapshot_storage.load_latest(None) {
-        Ok(Some(snapshot)) => GameState::from_snapshot(
-            &snapshot,
-            Arc::clone(&ctx.world),
-            Arc::clone(&ctx.map),
-            Arc::clone(&ctx.player),
-            (*ctx.npcs).clone(),
-        ),
+    match ctx.snapshot_storage.load_latest() {
+        Ok(Some(snapshot)) => {
+            let mut state = GameState::from_snapshot(
+                &snapshot,
+                Arc::clone(&ctx.world),
+                Arc::clone(&ctx.map),
+                Arc::clone(&ctx.player),
+                (*ctx.npcs).clone(),
+            );
+            load_messages_into_state(ctx, &mut state);
+            state
+        }
         _ => GameState::new(
             Arc::clone(&ctx.world),
             Arc::clone(&ctx.map),
@@ -25,26 +29,61 @@ pub fn load_state(ctx: &GameServiceContext) -> GameState {
     }
 }
 
-/// [DOC: docs/architecture/system.md]
-pub fn save_state(ctx: &GameServiceContext, state: &GameState, turn_id: String, swipe_index: u32) {
-    let snapshot = GameStateSnapshot::from_game_state(state, turn_id, swipe_index);
-    if let Err(e) = ctx.snapshot_storage.save(&snapshot) {
-        log::error!("Failed to save snapshot: {e}");
+pub fn load_messages_into_state(ctx: &GameServiceContext, state: &mut GameState) {
+    // [DOC: docs/architecture/system.md]
+    if let Ok(msgs) = ctx.message_storage.load_messages() {
+        if !msgs.is_empty() {
+            state.narrative.messages = msgs;
+        }
     }
+}
+
+/// [DOC: docs/architecture/system.md]
+pub fn save_state(ctx: &GameServiceContext, state: &mut GameState) -> Result<u64, EngineError> {
+    let snapshot = GameStateSnapshot::from_game_state(state);
+    let snapshot_id = ctx.snapshot_storage.save(&snapshot)?;
+    persist_new_messages(ctx, state, snapshot_id)?;
+    Ok(snapshot_id)
 }
 
 /// [DOC: docs/architecture/system.md]
 pub fn save_committed_state(
     ctx: &GameServiceContext,
-    state: &GameState,
-    turn_id: String,
-    swipe_index: u32,
-) {
-    let mut snapshot = GameStateSnapshot::from_game_state(state, turn_id, swipe_index);
+    state: &mut GameState,
+) -> Result<u64, EngineError> {
+    let mut snapshot = GameStateSnapshot::from_game_state(state);
     snapshot.committed = true;
-    if let Err(e) = ctx.snapshot_storage.save(&snapshot) {
-        log::error!("Failed to save committed snapshot: {e}");
+    let snapshot_id = ctx.snapshot_storage.save(&snapshot)?;
+    persist_new_messages(ctx, state, snapshot_id)?;
+    Ok(snapshot_id)
+}
+
+/// Persist any messages with `id == 0` (newly added) to storage, assigning
+/// them real DB IDs and `snapshot_id`.
+pub fn persist_new_messages(
+    ctx: &GameServiceContext,
+    state: &mut GameState,
+    snapshot_id: u64,
+) -> Result<(), EngineError> {
+    // [DOC: docs/architecture/system.md]
+    for msg in state.narrative.messages.iter_mut() {
+        if msg.id == crate::model::storage::UNPERSISTED_ID {
+            msg.snapshot_id = Some(snapshot_id);
+            ctx.message_storage.insert_message(msg)?;
+        }
     }
+    Ok(())
+}
+
+pub fn delete_and_remove_message(
+    ctx: &GameServiceContext,
+    state: &mut GameState,
+    id: u64,
+) -> Result<(), EngineError> {
+    // [DOC: docs/architecture/system.md]
+    ctx.message_storage.delete_message(id)?;
+    state.narrative.messages.retain(|m| m.id != id);
+    Ok(())
 }
 
 /// [DOC: docs/architecture/system.md]

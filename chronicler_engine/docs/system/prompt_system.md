@@ -205,7 +205,7 @@ let (system, user, max_tokens) = PromptBuilder::from_context(&ctx)
 |---------|-------------|-------------------|
 | API | Chat Completion | OpenRouter/DeepSeek/Ollama |
 | Context | Characters + Users | Game State |
-| History | Full chat | narrative history (active swipes) |
+| History | Full chat | narrative history (messages) |
 | Memory | Vector RAG | Keyword triggers only |
 | UI | Web GUI | None (server) |
 | Prompt style | XML-wrapped instructions | Plain-text instructions + XML data |

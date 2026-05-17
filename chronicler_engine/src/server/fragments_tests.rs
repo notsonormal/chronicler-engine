@@ -5,7 +5,7 @@ use crate::model::llm_message::LlmMessage;
 use crate::model::settings::AppSettings;
 use crate::server::fragments::{ActionForm, html_escape, render_error};
 use crate::storage::llm_message_storage::{InMemoryLlmMessageStorage, LlmMessageStorage};
-use crate::test_support::InMemorySnapshotStorage;
+use crate::test_support::InMemoryGameStorage;
 use crate::test_support::{TestMap, TestPlayer, TestWorld};
 
 fn make_test_app_state(
@@ -16,8 +16,10 @@ fn make_test_app_state(
         None => Arc::new(InMemoryLlmMessageStorage::new()),
     };
     let game_service_storage = Arc::clone(&llm_storage);
+    let storage = Arc::new(InMemoryGameStorage::new());
     crate::server::AppState {
-        snapshot_storage: Arc::new(InMemorySnapshotStorage::new()),
+        snapshot_storage: storage.clone(),
+        message_storage: storage,
         llm_message_storage: llm_storage,
         world: Arc::new(TestWorld::minimal()),
         map: Arc::new(TestMap::single_room("start")),

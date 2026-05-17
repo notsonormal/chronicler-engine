@@ -8,6 +8,8 @@ use tower::util::ServiceExt;
 use chronicler_engine::create_app_for_testing_with_settings;
 use chronicler_engine::model::settings::{AppSettings, TextCheckMode, TextCheckSettings};
 use chronicler_engine::model::state::{GameState, LogType};
+use chronicler_engine::storage::message_storage::MessageStorage;
+use chronicler_engine::storage::snapshot_storage::SnapshotStorage;
 
 use crate::create_test_state;
 
@@ -213,21 +215,20 @@ async fn test_retry_handler_sets_generating_status() {
 
 #[tokio::test]
 async fn test_retry_handler_preserves_swipe_index() {
-    // Setup: create app with InMemorySnapshotStorage so we can inspect it
+    // Setup: create app with InMemoryGameStorage so we can inspect it
     let mut state = create_test_state();
     state.add_log(
         "look around".to_string(),
         Some("Test Player".to_string()),
         LogType::Input,
     );
-    let snapshot = chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(
-        &state,
-        "test-turn".to_string(),
-        0,
-    );
-    let storage = Arc::new(chronicler_engine::test_support::InMemorySnapshotStorage::new())
-        as Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage>;
+    let snapshot =
+        chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
+    let storage = Arc::new(chronicler_engine::test_support::InMemoryGameStorage::new());
     let _ = storage.save(&snapshot);
+    for mut msg in state.narrative.messages.clone() {
+        let _ = storage.insert_message(&mut msg);
+    }
 
     let llm_storage =
         Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
@@ -235,7 +236,10 @@ async fn test_retry_handler_preserves_swipe_index() {
 
     let app = chronicler_engine::server::create_app_with_storage(
         state,
-        Arc::clone(&storage),
+        Arc::clone(&storage)
+            as Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage>,
+        Arc::clone(&storage)
+            as Arc<dyn chronicler_engine::storage::message_storage::MessageStorage>,
         llm_storage,
         AppSettings::default(),
     );
@@ -252,12 +256,12 @@ async fn test_retry_handler_preserves_swipe_index() {
     // The handler should save the generating snapshot with swipe_index = 0,
     // NOT prematurely increment it to 1.
     let latest = storage
-        .load_latest(None)
+        .load_latest()
         .unwrap()
         .expect("Should have snapshot");
-    assert_eq!(
-        latest.swipe_index, 0,
-        "Retry handler should preserve current swipe_index, not increment it"
+    assert!(
+        !latest.committed,
+        "Retry handler should preserve current snapshot"
     );
 }
 
@@ -407,18 +411,17 @@ async fn test_reset_preserves_scenario_npcs() {
         world.starting_room_id.clone(),
     );
 
-    let storage = Arc::new(chronicler_engine::test_support::InMemorySnapshotStorage::new())
-        as Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage>;
-    let snapshot = chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(
-        &state,
-        "initial".to_string(),
-        0,
-    );
+    let storage = Arc::new(chronicler_engine::test_support::InMemoryGameStorage::new());
+    let snapshot =
+        chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
     storage.save(&snapshot).unwrap();
 
     let app = chronicler_engine::server::create_app_with_storage(
         state,
-        storage,
+        Arc::clone(&storage)
+            as Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage>,
+        Arc::clone(&storage)
+            as Arc<dyn chronicler_engine::storage::message_storage::MessageStorage>,
         Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new()),
         chronicler_engine::model::settings::AppSettings::default(),
     );

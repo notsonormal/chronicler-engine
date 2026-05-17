@@ -48,7 +48,7 @@ The engine uses a layered prompt system inspired by SillyTavern's Prompt Manager
 | 2 | NPC Cards | `<KnownNpcs>` roster (all NPCs, condensed) + `<NpcsInRoom>` full cards (present NPCs only) | User (data) |
 | 3 | Player | `<PlayerCharacter>` — Player persona and description | User (data) |
 | 4 | World Info | `<WorldLore>` — World lore triggered by keywords | User (data) |
-| 5 | History | `<ConversationHistory>` — Full narrative history (flattened active swipes) | User (data) |
+| 5 | History | `<ConversationHistory>` — Full narrative history (flattened messages) | User (data) |
 | 6 | User Input | `<PlayerInput>` — Current player message | User (data) |
 | 7 | PHI | Plain-text post-history behavioral guidance | User (instruction) |
 
@@ -101,7 +101,7 @@ Every LLM call is logged to a SQLite `llm_messages` table with a strict 50-row g
 #### Architecture
 - **`call_chat_completions()`** in `llm_client.rs` is the single chokepoint. It returns `ChatCompletionResult { text, system_prompt, user_prompt, raw_request_json, raw_response_json }`.
 - **`LlmBackend` trait** methods take `agent_name: &str` and return `LlmCallResult`, which wraps the `ChatCompletionResult` with `backend_name` and `model_name`.
-- **Quantifier path** also logs via `llm_client.rs` directly (not via `LlmBackend`), using the same storage parameter.
+- **Quantifier path** logs via `LlmBackend::complete()`, which uses the trait's default `wrap_and_save()` method, routing through the same `llm_client.rs` chokepoint and `LlmMessageStorage` as narration.
 - **`LlmMessageStorage` trait** (`crate::storage::llm_message_storage`) abstracts persistence:
   - `SqliteLlmMessageStorage`: SQLite with auto-pruning (insert + DELETE oldest in a transaction)
   - `InMemoryLlmMessageStorage`: Ring buffer for tests

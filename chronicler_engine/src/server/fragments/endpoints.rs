@@ -86,11 +86,7 @@ pub async fn reset_generating_handler(State(state): State<AppState>) -> Html<Str
     let result = match state.load_state() {
         Ok(mut guard) => {
             guard.narrative.generation.status = crate::model::state::GenerationStatus::Idle;
-            let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(
-                &guard,
-                uuid::Uuid::new_v4().to_string(),
-                0,
-            );
+            let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&guard);
             state.snapshot_storage.save(&snapshot).is_ok()
         }
         Err(_) => false,
