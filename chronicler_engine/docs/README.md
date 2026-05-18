@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-17 23:48 UTC*
+*Index last generated: 2026-05-18 18:41 UTC*
 
 ### Root files
 
