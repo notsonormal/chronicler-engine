@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-18 18:41 UTC*
+*Index last generated: 2026-05-18 21:22 UTC*
 
 ### Root files
 
@@ -49,8 +49,6 @@ This folder contains all documentation for the Chronicler Engine project.
 
 - [Plan: Diagnostic Decision Tree as Agent Infrastructure](./plans/diagnostic-decision-tree-plan.md)
 - [Implementation Plan: Fix Diagnostic Signal Quality for All 12 Scenarios](./plans/diagnostic_fixes_plan.md)
-- [Plan: Extract `ActionPipeline` to Unify Action and Retry Flows](./plans/extract-action-pipeline-plan.md)
-- [Review: Extract MessageHistory from GameState](./plans/extract-message-history-from-gamestate-plan.md)
 - [Plan: Fast-Fail Build & Test Localization](./plans/fast-fail-build-test-localization-plan.md)
 - [LLM Infrastructure Improvements](./plans/llm-infrastructure-improvements.md)
 - [Spec: Agent-Ready Pipeline Restructure for Chronicler Engine](./plans/multi-agent-architecture-overarching-spec.md)
@@ -64,8 +62,10 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Plan: Remove Legacy Synchronous Dead Code (`evaluate_and_narrate_triggers`)](./plans/archived/black-widow-monet-aqualad.md)
 - [Settings I/O Centralization — Implementation Plan](./plans/archived/daredevil-john-stewart-blue-marvel.md)
 - [Implementation Plan: Extract Application Layer (Option A)](./plans/archived/falcon-robin-nick-fury.md)
+- [Plan: Extract MessageHistory from GameState](./plans/archived/jade-black-lightning-killer-frost.md)
 - [Plan: Separate Domain Models from DB Models in Chronicler Engine](./plans/archived/jessica-cruz-maria-hill-yelena-belova.md)
 - [Plan: Unify Lock-Poison Recovery on Strategy A (Recover + Log)](./plans/archived/kyle-rayner-domino-hawkgirl-20260518-000440.md)
+- [Implementation Plan: Extract `ActionPipeline` to Unify Action and Retry Flows](./plans/archived/quasar-ravager-impulse-20260518.md)
 - [Plan: Break Engine↔Narrative Bidirectional Coupling](./plans/archived/rocket-nebula-morbius.md)
 - [Plan: GameState Extensibility Fix](./plans/archived/scarlet-witch-cyclone-nightwing.md)
 - [Plan: Rename Domain Vocabulary — CharacterState, TriggerAction, GenerationState](./plans/archived/simon-baz-iron-fist-booster-gold.md)

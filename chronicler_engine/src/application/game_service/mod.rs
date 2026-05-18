@@ -1,5 +1,6 @@
 //! [DOC: docs/architecture/system.md]
 
+mod action_pipeline;
 mod actions;
 mod context;
 mod helpers;

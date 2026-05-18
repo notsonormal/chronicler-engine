@@ -8,13 +8,12 @@ use crate::storage::message_storage::MessageStorage;
 use crate::storage::snapshot_storage::SnapshotStorage;
 use crate::test_support::in_memory_storage::InMemoryGameStorage;
 
-/// Build a [`GameServiceContext`] from a [`GameState`] for tests (in-memory storage).
 pub fn make_test_context(state: GameState) -> GameServiceContext {
     // [DOC: docs/architecture/system.md]
     let snapshot = GameStateSnapshot::from_game_state(&state);
     let storage = Arc::new(InMemoryGameStorage::new());
     let _ = storage.save(&snapshot);
-    for mut msg in state.narrative.messages.clone() {
+    for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
         let _ = storage.insert_message(&mut msg);
     }
 
@@ -38,7 +37,6 @@ pub fn make_test_context(state: GameState) -> GameServiceContext {
     }
 }
 
-/// Build a [`GameServiceContext`] from a [`GameState`] for tests (SQLite storage).
 /// [DOC: docs/reference/testing.md]
 pub fn make_test_context_with_sqlite(state: GameState) -> crate::error::Result<GameServiceContext> {
     let snapshot = GameStateSnapshot::from_game_state(&state);
@@ -50,7 +48,7 @@ pub fn make_test_context_with_sqlite(state: GameState) -> crate::error::Result<G
     let llm_storage: Arc<dyn crate::storage::llm_message_storage::LlmMessageStorage> =
         Arc::new(crate::storage::llm_message_storage::SqliteLlmMessageStorage::new(db_pool));
     let _ = storage.save(&snapshot);
-    for mut msg in state.narrative.messages.clone() {
+    for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
         let _ = storage.insert_message(&mut msg);
     }
 

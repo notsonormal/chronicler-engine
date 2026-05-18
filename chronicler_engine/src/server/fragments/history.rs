@@ -42,7 +42,7 @@ pub async fn delete_history_handler(State(state): State<AppState>) -> (StatusCod
         let mut guard = state.load_state()?;
         let last_id = guard
             .narrative
-            .messages
+            .history
             .last()
             .map(|m| m.id)
             .ok_or_else(|| {

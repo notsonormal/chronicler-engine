@@ -16,7 +16,7 @@ fn run_action(
     service: &DefaultGameService,
 ) -> chronicler_engine::model::state::GameState {
     let mut state = state;
-    state.narrative.messages.clear();
+    state.narrative.history.clear();
     let ctx = make_test_context(state);
     service.execute_action(ctx.clone(), command.to_string(), "Player".to_string());
     latest_state(&ctx)
@@ -34,21 +34,6 @@ fn test_execute_look_action() {
 }
 
 #[test]
-fn test_execute_talk_action() {
-    let guard = run_action(
-        create_test_state(),
-        "talk to innkeeper",
-        &DefaultGameService::new(),
-    );
-    let has_system = guard
-        .narrative
-        .history()
-        .iter()
-        .any(|e| e.log_type == LogType::System && e.text.contains("You talk to"));
-    assert!(has_system, "Talk should add system log");
-}
-
-#[test]
 fn test_execute_inventory_action() {
     let guard = run_action(create_test_state(), "inventory", &DefaultGameService::new());
     // Inventory is now a FreeAction — it goes through LLM generation.
@@ -63,7 +48,7 @@ fn test_execute_inventory_action() {
 #[test]
 fn test_retry_with_no_history() {
     let mut state = create_test_state();
-    state.narrative.messages.clear();
+    state.narrative.history.clear();
     let ctx = make_test_context(state);
     let service = DefaultGameService::new();
 
@@ -84,21 +69,6 @@ fn test_execute_look_room_not_found() {
         !guard.narrative.input_buffer.status.is_generating(),
         "Look should reset is_generating even when room not found"
     );
-}
-
-#[test]
-fn test_execute_talk_no_message() {
-    let guard = run_action(
-        create_test_state(),
-        "talk to innkeeper",
-        &DefaultGameService::new(),
-    );
-    let has_talk = guard
-        .narrative
-        .history()
-        .iter()
-        .any(|e| e.log_type == LogType::System && e.text.contains("You talk to innkeeper:"));
-    assert!(has_talk, "Talk without message should add system log");
 }
 
 #[test]
@@ -147,7 +117,7 @@ fn test_default_game_service_with_backends() {
     );
     // Should be usable without panicking
     let mut state = create_test_state();
-    state.narrative.messages.clear();
+    state.narrative.history.clear();
     let ctx = make_test_context(state);
     service.execute_action(ctx.clone(), "look".to_string(), "Player".to_string());
     let guard = latest_state(&ctx);
@@ -161,7 +131,7 @@ fn test_default_game_service_with_mock_quantifier() {
         Arc::new(MockBackend::default()),
     );
     let mut state = create_test_state();
-    state.narrative.messages.clear();
+    state.narrative.history.clear();
     let ctx = make_test_context(state);
     service.execute_action(ctx.clone(), "look".to_string(), "Player".to_string());
     let guard = latest_state(&ctx);

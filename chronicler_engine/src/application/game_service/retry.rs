@@ -1,9 +1,7 @@
 use std::sync::Arc;
 
-use crate::application::game_service::actions::{
-    execute_freeaction_pipeline, finish_action, reconcile_post_trigger_npcs,
-};
-use crate::model::state::{GameState, GenerationPhase, GenerationStatus, LogType};
+use crate::application::game_service::action_pipeline::{ActionOutcome, ActionPipeline};
+use crate::model::state::{GameState, GenerationStatus, LogType};
 
 use super::context::GameServiceContext;
 use super::helpers::{load_state, save_state};
@@ -83,7 +81,7 @@ pub fn retry_last_response_impl(service: &DefaultGameService, ctx: GameServiceCo
         Arc::clone(&ctx.player),
         (*ctx.npcs).clone(),
     );
-    state.narrative.messages = messages;
+    state.narrative.history.replace(messages);
 
     let input_text = match state.get_last_input_text() {
         Some((_sender, text)) => text,
@@ -111,7 +109,7 @@ pub(crate) fn save_retry_error(ctx: &GameServiceContext, message: impl Into<Stri
 pub(crate) fn retry_event_continuation(
     service: &DefaultGameService,
     ctx: &GameServiceContext,
-    mut state: GameState,
+    state: GameState,
 ) {
     let Some(trigger) = state.narrative.last_trigger.clone() else {
         log::error!("Missing trigger context for event retry");
@@ -119,78 +117,18 @@ pub(crate) fn retry_event_continuation(
         return;
     };
 
-    if ctx.cancel_token.is_cancelled() {
-        log::warn!("Retry event continuation cancelled — aborting");
-        if let Err(e) = finish_action(ctx, state) {
-            log::error!("Failed to persist cancelled retry state: {e}");
-        }
-        return;
-    }
-
-    state.narrative.input_buffer.status = GenerationStatus::Generating;
-    state.narrative.input_buffer.phase = GenerationPhase::GeneratingEvent;
-
-    let backend = Arc::clone(&service.llm_backend);
-    let continuation_result = match backend.complete(
-        crate::narrative::llm::backend::AGENT_TRIGGER,
-        &trigger.system_prompt,
-        &trigger.user_prompt,
-        trigger.max_tokens,
-    ) {
-        Ok(result) => result,
-        Err(e) => {
-            log::error!("Trigger narration retry failed: {e}");
-            save_retry_error(ctx, format!("Retry failed: {e}"));
-            return;
-        }
-    };
-    let continuation_text = continuation_result.text;
-
-    if continuation_text.trim().is_empty() {
-        save_retry_error(ctx, "LLM Error: empty response");
-        return;
-    }
-
-    let request = crate::engine::action_processing::TriggerContinuationRequest { stored: trigger };
-
-    let mut committed_state = match crate::engine::action_processing::commit_trigger_narration(
-        state,
-        &request,
-        &continuation_text,
-    ) {
-        Ok(s) => s,
-        Err(e) => {
-            log::error!("Trigger commit failed on retry: {e}");
-            save_retry_error(ctx, format!("Trigger error: {e}"));
-            return;
-        }
-    };
-
-    let input_text = match committed_state.get_last_input_text() {
+    let input_text = match state.get_last_input_text() {
         Some((_sender, text)) => text,
         None => String::new(),
     };
 
-    match reconcile_post_trigger_npcs(
-        service,
-        committed_state.clone(),
-        &input_text,
-        &continuation_text,
-    ) {
-        Ok(updated) => committed_state = updated,
-        Err(e) => {
-            log::error!("Failed to apply post-trigger NPC events on retry: {e}");
-            committed_state.narrative.input_buffer.status =
-                GenerationStatus::Error(format!("NPC event error: {e}"));
-            if let Err(e) = save_state(ctx, &mut committed_state) {
-                log::error!("Critical: failed to persist retry NPC error state: {e}");
-            }
-            return;
+    let pipeline = ActionPipeline::new(service, ctx);
+    match pipeline.run_trigger_continuation(state, trigger, &input_text) {
+        ActionOutcome::Completed => {}
+        ActionOutcome::Error { message } => {
+            save_retry_error(ctx, message);
         }
-    }
-
-    if let Err(e) = finish_action(ctx, committed_state) {
-        log::error!("Failed to persist finished retry action: {e}");
+        ActionOutcome::Cancelled => {}
     }
 }
 
@@ -200,5 +138,12 @@ pub(crate) fn retry_main_narration(
     state: GameState,
     input_text: String,
 ) {
-    execute_freeaction_pipeline(service, ctx, state, input_text);
+    let pipeline = ActionPipeline::new(service, ctx);
+    match pipeline.run_from_input(state, input_text) {
+        ActionOutcome::Completed => {}
+        ActionOutcome::Error { message } => {
+            save_retry_error(ctx, message);
+        }
+        ActionOutcome::Cancelled => {}
+    }
 }

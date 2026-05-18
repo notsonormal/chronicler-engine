@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use crate::model::character::{NpcCard, PlayerCard};
 use crate::model::map::{MapDef, Room};
 use crate::model::message::Message;
+use crate::model::message_history::MessageHistory;
 use crate::model::trigger::NpcEncounterLog;
 use crate::model::world::WorldCard;
 
@@ -44,8 +45,6 @@ impl Default for LogEntry {
         }
     }
 }
-
-const MAX_LOG_ENTRIES: usize = 1000;
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub enum GenerationStatus {
@@ -145,7 +144,7 @@ pub struct StoredTriggerContext {
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct NarrativeState {
-    pub messages: Vec<Message>,
+    pub history: MessageHistory,
     pub input_buffer: InputBuffer,
     pub last_trigger: Option<StoredTriggerContext>,
     #[serde(default)]
@@ -156,23 +155,12 @@ pub struct NarrativeState {
 
 impl NarrativeState {
     pub fn history(&self) -> Vec<LogEntry> {
-        self.messages
-            .iter()
-            .map(|msg| LogEntry {
-                id: msg.id,
-                sender: msg.sender.clone(),
-                text: msg.text.clone(),
-                log_type: msg.log_type.clone(),
-                timestamp: msg.timestamp,
-                location_header: msg.location_header.clone(),
-                event_header: msg.event_header.clone(),
-            })
-            .collect()
+        self.history.to_log_entries()
     }
 
     pub fn from_snapshot(snapshot: &crate::model::state_snapshot::NarrativeSnapshot) -> Self {
         Self {
-            messages: Vec::new(),
+            history: MessageHistory::new(),
             input_buffer: snapshot.input_buffer.clone(),
             last_trigger: snapshot.last_trigger.clone(),
             pending_location: snapshot.pending_location.clone(),
@@ -328,9 +316,6 @@ impl GameState {
     }
 
     fn push_message(&mut self, text: String, sender: Option<String>, log_type: LogType) {
-        if self.narrative.messages.len() >= MAX_LOG_ENTRIES {
-            self.narrative.messages.remove(0);
-        }
         let location_header = self.narrative.pending_location.take();
         let event_header = self.narrative.pending_event.take();
         let message = Message::new(
@@ -341,7 +326,7 @@ impl GameState {
             location_header,
             event_header,
         );
-        self.narrative.messages.push(message);
+        self.narrative.history.append(message);
     }
 
     pub fn add_log(&mut self, text: String, sender: Option<String>, log_type: LogType) {
@@ -358,67 +343,35 @@ impl GameState {
 
     /// [DOC: docs/architecture/system.md]
     pub fn edit_log(&mut self, id: u64, new_text: String) -> crate::error::Result<()> {
-        self.narrative
-            .messages
-            .iter_mut()
-            .find(|m| m.id == id)
-            .map(|m| m.text = new_text)
-            .ok_or_else(|| {
-                crate::error::EngineError::Internal(crate::error::internal_error(format!(
-                    "Log entry not found: {id}"
-                )))
-            })
+        self.narrative.history.edit(id, new_text)
     }
 
     /// [DOC: docs/architecture/system.md]
     pub fn delete_last_log(&mut self) -> crate::error::Result<()> {
-        if self.narrative.messages.is_empty() {
-            return Err(crate::error::EngineError::Internal(
-                crate::error::internal_error("History is empty".to_string()),
-            ));
-        }
-
-        self.narrative.messages.pop();
-        Ok(())
+        self.narrative.history.delete_last()
     }
 
     pub fn get_log(&self, id: u64) -> Option<&Message> {
-        self.narrative.messages.iter().find(|m| m.id == id)
+        self.narrative.history.get(id)
     }
 
     pub fn get_last_ai_response_index(&self) -> Option<usize> {
-        self.narrative
-            .messages
-            .iter()
-            .rposition(|m| m.log_type == LogType::Narration || m.log_type == LogType::Dialogue)
+        self.narrative.history.last_ai_response_index()
     }
 
     pub fn get_last_input_index(&self) -> Option<usize> {
-        self.narrative
-            .messages
-            .iter()
-            .rposition(|m| m.log_type == LogType::Input)
+        self.narrative.history.last_input_index()
     }
 
     pub fn get_last_input_text(&self) -> Option<(String, String)> {
-        let input = self
-            .narrative
-            .messages
-            .iter()
-            .rev()
-            .find(|m| m.log_type == LogType::Input)?;
-        let sender = input.sender.clone().unwrap_or_default();
-        Some((sender, input.text.clone()))
+        self.narrative.history.last_input_text()
     }
 
     /// [DOC: docs/architecture/system.md]
     pub fn is_last_ai_response_event_continuation(&self) -> bool {
         self.narrative
-            .messages
-            .iter()
-            .rev()
-            .find(|m| m.log_type == LogType::Narration || m.log_type == LogType::Dialogue)
-            .is_some_and(|m| m.event_header.is_some())
+            .history
+            .is_last_ai_response_event_continuation()
     }
 
     /// [DOC: docs/system/navigation.md]

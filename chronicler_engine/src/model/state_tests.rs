@@ -122,21 +122,21 @@ fn test_delete_last_log_recalculates_ids() {
     state.add_log("go north".into(), Some("Player".into()), LogType::Input);
     state.add_log("You walk north.".into(), None, LogType::Narration);
 
-    assert_eq!(state.narrative.messages.len(), 2);
+    assert_eq!(state.narrative.history.len(), 2);
 
     // Delete Narration
     state.delete_last_log().unwrap();
-    assert_eq!(state.narrative.messages.len(), 1);
-    assert_eq!(state.narrative.messages[0].text, "go north");
+    assert_eq!(state.narrative.history.len(), 1);
+    assert_eq!(state.narrative.history.as_slice()[0].text, "go north");
 
     // Delete Input
     state.delete_last_log().unwrap();
-    assert!(state.narrative.messages.is_empty());
+    assert!(state.narrative.history.is_empty());
 
     // Verify a new Input can be added after delete
     state.add_log("go south".into(), Some("Player".into()), LogType::Input);
-    assert_eq!(state.narrative.messages.len(), 1);
-    assert_eq!(state.narrative.messages.last().unwrap().text, "go south");
+    assert_eq!(state.narrative.history.len(), 1);
+    assert_eq!(state.narrative.history.last().unwrap().text, "go south");
 }
 
 #[test]
@@ -237,9 +237,9 @@ proptest! {
             state.add_log(text, None, log_type);
         }
         prop_assert!(
-            state.narrative.messages.len() <= 1000,
+            state.narrative.history.len() <= 1000,
             "message count {} exceeds max 1000",
-            state.narrative.messages.len()
+            state.narrative.history.len()
         );
     }
 

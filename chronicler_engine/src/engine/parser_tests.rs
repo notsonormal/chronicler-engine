@@ -9,33 +9,9 @@ fn test_parse_extra_whitespace() {
     );
     assert_eq!(
         parse_command("  talk guard  "),
-        Action::Talk("guard".to_string(), None)
+        Action::FreeAction("  talk guard  ".to_string())
     );
     assert_eq!(parse_command("   "), Action::FreeAction("   ".to_string()));
-}
-
-#[test]
-fn test_parse_talk() {
-    assert_eq!(
-        parse_command("talk gary"),
-        Action::Talk("gary".to_string(), None)
-    );
-    assert_eq!(
-        parse_command("talk to gary"),
-        Action::Talk("gary".to_string(), None)
-    );
-}
-
-#[test]
-fn test_parse_talk_with_message() {
-    assert_eq!(
-        parse_command("talk carla \"Who are you?\""),
-        Action::Talk("carla".to_string(), Some("Who are you?".to_string()))
-    );
-    assert_eq!(
-        parse_command("talk to carla \"Hello there!\""),
-        Action::Talk("carla".to_string(), Some("Hello there!".to_string()))
-    );
 }
 
 #[test]
@@ -60,22 +36,6 @@ fn test_parse_quoted_dialogue_free_action() {
 }
 
 #[test]
-fn test_parse_talk_variants() {
-    assert_eq!(
-        parse_command("talk guard"),
-        Action::Talk("guard".to_string(), None)
-    );
-    assert_eq!(
-        parse_command("speak to innkeeper"),
-        Action::FreeAction("speak to innkeeper".to_string())
-    );
-    assert_eq!(
-        parse_command("say hello"),
-        Action::FreeAction("say hello".to_string())
-    );
-}
-
-#[test]
 fn test_parse_mixed_case_commands() {
     assert_eq!(
         parse_command("Go North"),
@@ -87,7 +47,7 @@ fn test_parse_mixed_case_commands() {
     );
     assert_eq!(
         parse_command("Talk TO Carla"),
-        Action::Talk("carla".to_string(), None)
+        Action::FreeAction("Talk TO Carla".to_string())
     );
 }
 

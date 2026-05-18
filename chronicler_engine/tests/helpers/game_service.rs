@@ -147,7 +147,7 @@ pub fn latest_state(
     );
     if let Ok(msgs) = ctx.message_storage.load_messages() {
         if !msgs.is_empty() {
-            state.narrative.messages = msgs;
+            state.narrative.history.replace(msgs);
         }
     }
     state
@@ -164,7 +164,7 @@ pub fn save_state(
     for msg in existing {
         let _ = ctx.message_storage.delete_message(msg.id);
     }
-    for mut msg in state.narrative.messages.clone() {
+    for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
         if msg.snapshot_id.is_none() {
             msg.snapshot_id = Some(snapshot_id);
         }

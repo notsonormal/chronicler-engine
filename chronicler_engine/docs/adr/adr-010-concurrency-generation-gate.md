@@ -1,7 +1,7 @@
 # ADR-010: Concurrency and Generation Gate Model
 
 **Date:** 2026-05-10
-**Updated:** 2026-05-18 — Cooperative cancellation checkpoints added to `execute_freeaction_pipeline`
+**Updated:** 2026-05-18 — Cooperative cancellation checkpoints added to `ActionPipeline::run_from_input`
 
 ---
 

@@ -32,7 +32,7 @@ pub fn load_state(ctx: &GameServiceContext) -> GameState {
 pub fn load_messages_into_state(ctx: &GameServiceContext, state: &mut GameState) {
     // [DOC: docs/architecture/system.md]
     if let Ok(msgs) = ctx.message_storage.load_messages() {
-        state.narrative.messages = msgs;
+        state.narrative.history.replace(msgs);
     }
 }
 
@@ -70,7 +70,7 @@ pub fn persist_new_messages(
     snapshot_id: u64,
 ) -> Result<(), EngineError> {
     // [DOC: docs/architecture/system.md]
-    for msg in state.narrative.messages.iter_mut() {
+    for msg in state.narrative.history.iter_mut() {
         if msg.id == crate::model::message::UNPERSISTED_ID {
             msg.snapshot_id = Some(snapshot_id);
             ctx.message_storage.insert_message(msg)?;
@@ -86,7 +86,7 @@ pub fn delete_and_remove_message(
 ) -> Result<(), EngineError> {
     // [DOC: docs/architecture/system.md]
     ctx.message_storage.delete_message(id)?;
-    state.narrative.messages.retain(|m| m.id != id);
+    state.narrative.history.retain(|m| m.id != id);
     Ok(())
 }
 

@@ -3,6 +3,34 @@
 ## 2026-05-18
 
 ### Changed
+- **Extracted `MessageHistory` from `GameState`** — Encapsulated `Vec<Message>` and all message operations into dedicated `MessageHistory` type
+  - New `src/model/message_history.rs` — `MessageHistory` struct owns message lifecycle (append, edit, delete, query, capacity cap at 1000)
+  - `NarrativeState.messages: Vec<Message>` replaced with `NarrativeState.history: MessageHistory`
+  - `GameState` delegator methods preserved (`add_log`, `edit_log`, `delete_last_log`, etc.) to minimize call-site churn
+  - `#[serde(transparent)]` ensures serialization shape unchanged; `NarrativeSnapshot` already excluded messages
+  - 20 dedicated unit tests in `message_history_tests.rs`; 100% line coverage
+  - All 799 tests pass; clippy clean; architecture guardrails pass
+
+### Changed
+- **Extracted `ActionPipeline` module** — Unified action and retry flows into a single pipeline with explicit phase methods
+  - New `src/application/game_service/action_pipeline.rs` — `ActionPipeline` struct with `run_from_input` and `run_trigger_continuation`
+  - `ActionOutcome` enum captures terminal states: `Completed`, `Error`, `Cancelled`
+  - Private phase methods match documented game flow: pre-main snapshot → narrate → post-gen → engine → trigger → continuation → reconcile → finalize
+  - `actions.rs` reduced from 417 lines to ~35 lines (thin dispatch layer)
+  - `retry.rs` simplified — `retry_event_continuation` delegates to `ActionPipeline::run_trigger_continuation`, eliminating duplicated LLM call + commit + reconcile logic
+  - `finish_action` moved to `helpers.rs` (shared by pipeline finalize and retry cancellation)
+  - Preserved exact behavior: 3 cancellation checkpoints, dual error handling (early vs late), pre-main and pre-event snapshot timing
+
+### Removed
+- **Talk action** — Removed legacy `Action::Talk` variant (should have been removed with Look/Inventory/Quit)
+  - `Action` enum now has only `FreeAction(String)`
+  - Parser simplified — all input becomes `FreeAction`, no quote-parsing logic needed
+  - Removed Talk handler from `actions.rs` and Talk tests from parser tests and integration tests
+  - All 779 tests pass; clippy clean; architecture guardrails pass
+
+## 2026-05-18
+
+### Changed
 - **Pipeline cancellation checkpoints** — `execute_freeaction_pipeline` now checks `ctx.cancel_token.is_cancelled()` at three stage boundaries
   - After main narration LLM call (prevents wasted quantifier + trigger work)
   - Before trigger continuation LLM call (prevents second LLM call on stale request)

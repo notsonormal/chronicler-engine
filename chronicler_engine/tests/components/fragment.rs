@@ -231,7 +231,7 @@ async fn test_edit_history_handler_success() {
     let snapshot =
         chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
     let _ = storage.save(&snapshot);
-    for mut msg in state.narrative.messages.clone() {
+    for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
         let _ = storage.insert_message(&mut msg);
     }
 

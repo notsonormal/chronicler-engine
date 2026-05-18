@@ -8,7 +8,7 @@ These invariants are machine-checkable statements about the engine's runtime beh
 `generation_state.status` must return to `Idle` after every action. No action may leave the engine permanently stuck in `Generating`.
 
 - **Enforced by:** `GenerationGuard::drop` resets `is_generating` to `false` on scope exit, even if the `spawn_blocking` task panics.
-- **Spawn sites:** `fragments.rs` handlers check `CancellationToken` and reset status if cancelled.
+- **Spawn sites:** `server/fragments/actions.rs` handlers check `CancellationToken` before spawning; `ActionPipeline` resets status on cancellation.
 
 ### INV-002: State Mutation Order in FreeAction
 `execute_freeaction_impl` must apply mutations in this order:
@@ -32,12 +32,12 @@ No `std::thread::spawn` or `std::thread::sleep` may appear in `src/`. All concur
 - **Guardrail:** `tests/guardrails.rs` enforces this via `guardrails_no_std_thread`.
 
 ### INV-004: LLM Backend Calls Must Be Cancellable
-All blocking LLM work runs inside `tokio::task::spawn_blocking`. Spawn closures check `CancellationToken::is_cancelled()` before and after the backend call. Additionally, the multi-stage `execute_freeaction_pipeline` checks `CancellationToken::is_cancelled()` at internal stage boundaries:
+All blocking LLM work runs inside `tokio::task::spawn_blocking`. Spawn closures check `CancellationToken::is_cancelled()` before and after the backend call. Additionally, the multi-stage `ActionPipeline::run_from_input` checks `CancellationToken::is_cancelled()` at internal stage boundaries:
 - After the main narration LLM call (before quantifier/trigger processing)
 - Before the trigger continuation LLM call (before the second LLM request)
 - After the trigger continuation LLM call (before committing trigger narration)
 
-If cancelled at any checkpoint, `handle_pipeline_cancellation()` resets `generation_state.status` to `Idle`, clears the phase, and persists the state. `retry_event_continuation` also checks cancellation before running the trigger retry LLM call.
+If cancelled at any checkpoint, `ActionPipeline::handle_cancellation()` resets `generation_state.status` to `Idle`, clears the phase, and persists the state. `ActionPipeline::run_trigger_continuation()` checks cancellation before running the trigger retry LLM call.
 
 - **Shutdown path:** `Ctrl+C` triggers `axum::serve` graceful shutdown, which cancels the token and lets in-flight tasks finish cleanly.
 
@@ -58,7 +58,7 @@ All `std::sync::Mutex` and `std::sync::RwLock` sites in production code recover 
 ## HTTP Layer
 
 ### INV-006: All Actions Are Async
-All player input is parsed as `FreeAction` or `Talk` and offloaded to `tokio::task::spawn_blocking` for LLM generation. There are no synchronous action paths.
+All player input is parsed as `FreeAction` and offloaded to `tokio::task::spawn_blocking` for LLM generation. There are no synchronous action paths.
 
 ### INV-007: Actions Return Immediately
 All action handlers set `status = Generating`, save a snapshot, and spawn a blocking task. The HTTP response returns `"Thinking..."` before the LLM call begins.

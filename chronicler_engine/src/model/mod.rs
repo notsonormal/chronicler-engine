@@ -5,6 +5,7 @@ pub mod llm_backend;
 pub mod llm_message;
 pub mod map;
 pub mod message;
+pub mod message_history;
 pub mod quantifier;
 pub mod scenario;
 pub mod settings;
@@ -17,6 +18,8 @@ pub mod world;
 mod character_tests;
 #[cfg(test)]
 mod map_tests;
+#[cfg(test)]
+mod message_history_tests;
 #[cfg(test)]
 mod scenario_tests;
 #[cfg(test)]

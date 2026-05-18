@@ -70,7 +70,7 @@ pub async fn restore_checkpoint_handler(
             (*state.npcs).clone(),
         );
         if let Ok(messages) = state.message_storage.load_messages() {
-            game_state.narrative.messages = messages;
+            game_state.narrative.history.replace(messages);
         }
         let new_snapshot =
             crate::model::state_snapshot::GameStateSnapshot::from_game_state(&game_state);

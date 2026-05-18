@@ -10,7 +10,7 @@ Contains pure data structures, serialization schemas, and the "Single Source of 
 - **`world`**: Setting lore, global rules, and starting scenarios.
 - **`map`**: Room/Region hierarchy and cardinal direction definitions.
 - **`character`**: NPC attributes (name, description, personality, scenario, image_path, **profile_image**, **headshot_image**) and Player inventory.
-- **`state`**: The `GameState` aggregation, narration history logs, and TUI state. `NarrativeState` uses a `Vec<Message>` where each `Message` is an independent narrative unit (input, narration, dialogue, or system). `LogEntry` remains the atomic rendering unit for templates and prompts. `StoredTriggerContext` enables replaying trigger continuations on retry. `LogEntry` carries optional `location_header` and `event_header` metadata for visual rendering; `NarrativeState` tracks `pending_location` and `pending_event` for consumption by the next `add_log` call. `GameState::current_room()` resolves the player's active room from the map or dynamic rooms.
+- **`state`**: The `GameState` aggregation, narration history logs, and TUI state. `NarrativeState` holds a `MessageHistory` which encapsulates `Vec<Message>` where each `Message` is an independent narrative unit (input, narration, dialogue, or system). `LogEntry` remains the atomic rendering unit for templates and prompts. `StoredTriggerContext` enables replaying trigger continuations on retry. `LogEntry` carries optional `location_header` and `event_header` metadata for visual rendering; `NarrativeState` tracks `pending_location` and `pending_event` for consumption by the next `add_log` call. `GameState::current_room()` resolves the player's active room from the map or dynamic rooms.
 - **`scenario`**: Starting scenario definitions for narrative introductions.
 - **`trigger`**: Trigger definitions, conditions, and NPC encounter tracking (`Trigger`, `TriggerCondition`, `TriggerEffect`, `NpcEncounterState`, `NpcEncounterLog`).
 - **`settings`**: `AppSettings`, `Connection`, and agent configuration data models.
@@ -32,8 +32,10 @@ Contains the mechanics that drive the simulation. It translates user intent and 
 ### 2.5. The Application Tier (`crate::application::*`)
 Orchestration layer that coordinates game flow, persistence, and LLM generation. Sits between the HTTP server and the pure simulation engine.
 - **`game_service`**: `GameService` trait and `DefaultGameService` — game orchestration extracted from fragments.rs. Includes action handling, retry logic, and context helpers.
-  - `execute_freeaction_pipeline()`: Extracted full FreeAction pipeline (narrate → quantify → triggers → event continuation) usable by both normal action handling and retry logic. Checks `CancellationToken::is_cancelled()` at stage boundaries (post-narration, pre-trigger, post-trigger) and aborts gracefully via `handle_pipeline_cancellation()` to avoid wasted LLM calls on stale requests.
-  - `retry_last_response_impl()`: Message-aligned retry that detects event continuations vs main narration, finds the anchor message, loads its `snapshot_id` snapshot, and regenerates.
+  - `action_pipeline.rs`: `ActionPipeline` struct encapsulates the full FreeAction pipeline (narrate → quantify → triggers → event continuation) with explicit phase methods. Used by both normal action handling (`run_from_input`) and retry logic (`run_trigger_continuation`). Checks `CancellationToken::is_cancelled()` at stage boundaries (post-narration, pre-trigger, post-trigger) and aborts gracefully via `handle_cancellation()` to avoid wasted LLM calls on stale requests.
+  - `actions.rs`: Thin dispatch layer — parses input and delegates FreeAction to `ActionPipeline`.
+  - `retry.rs`: Retry-specific setup (anchor finding, message deletion, snapshot loading) delegates continuation regeneration to `ActionPipeline::run_trigger_continuation()` and main narration retry to `ActionPipeline::run_from_input()`.
+  - `helpers.rs`: Shared persistence helpers (`load_state`, `save_state`, `save_committed_state`, `map_llm_error`).
   - `save_committed_state()`: Saves snapshots with `committed = true` for pre-generation anchoring.
 
 ### 3. The Narrative Tier (`crate::narrative::*`)

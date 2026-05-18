@@ -134,8 +134,8 @@ fn test_load_state_hydrates_messages() {
         .unwrap();
 
     let state = load_state(&ctx);
-    assert_eq!(state.narrative.messages.len(), 1);
-    assert_eq!(state.narrative.messages[0].text, "Hello");
+    assert_eq!(state.narrative.history.len(), 1);
+    assert_eq!(state.narrative.history.as_slice()[0].text, "Hello");
 }
 
 #[test]

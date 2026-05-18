@@ -203,7 +203,7 @@ async fn test_retry_handler_sets_generating_status() {
         chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
     let storage = Arc::new(chronicler_engine::test_support::InMemoryGameStorage::new());
     let _ = storage.save(&snapshot);
-    for mut msg in state.narrative.messages.clone() {
+    for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
         let _ = storage.insert_message(&mut msg);
     }
 
@@ -254,7 +254,7 @@ async fn test_retry_handler_creates_uncommitted_snapshot() {
         chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
     let storage = Arc::new(chronicler_engine::test_support::InMemoryGameStorage::new());
     let _ = storage.save(&snapshot);
-    for mut msg in state.narrative.messages.clone() {
+    for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
         let _ = storage.insert_message(&mut msg);
     }
 
@@ -628,7 +628,7 @@ async fn test_retry_handler_snapshot_save_failure() {
     let snapshot =
         chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
     storage.save(&snapshot).unwrap();
-    for mut msg in state.narrative.messages.clone() {
+    for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
         let _ = storage.insert_message(&mut msg);
     }
 

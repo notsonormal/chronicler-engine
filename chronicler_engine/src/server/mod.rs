@@ -129,7 +129,7 @@ pub fn create_app_for_testing_with_settings(state: GameState, settings: AppSetti
         Arc::new(crate::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
             as Arc<dyn crate::storage::llm_message_storage::LlmMessageStorage>;
     let _ = storage.save(&snapshot);
-    for mut msg in state.narrative.messages.clone() {
+    for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
         let _ = storage.insert_message(&mut msg);
     }
     create_app_with_storage(
@@ -252,7 +252,7 @@ impl AppState {
             ),
         };
         if let Ok(messages) = self.message_storage.load_messages() {
-            game_state.narrative.messages = messages;
+            game_state.narrative.history.replace(messages);
         }
         Ok(game_state)
     }
@@ -273,7 +273,6 @@ impl AppState {
         }
     }
 
-    /// Returns a clone of the current cancellation token.
     /// If the lock is poisoned, recovers the inner value.
     pub fn current_cancel_token(&self) -> CancellationToken {
         self.cancel_token
@@ -285,7 +284,6 @@ impl AppState {
             })
     }
 
-    /// Replaces the current cancellation token with a fresh one.
     /// If the lock is poisoned, recovers the inner value before replacing.
     pub fn replace_cancel_token(&self) {
         let mut token = self.cancel_token.write().unwrap_or_else(|p| {

@@ -20,7 +20,7 @@ The LLM operates as a Game Master / Narrator for the text adventure. Its context
 ### Narrative Modes
 The Game Master responds to three primary events:
 1. **Free Actions**: Responding to non-command text input.
-2. **Dialogue**: Responding to the legacy `talk` command.
+2. **Dialogue**: NPC dialogue embedded within narration (no separate command).
 3. **Arrivals**: Responding to the player entering a new room via quantifier-detected movement. 
 
 ### Arrival Logic Flow
@@ -45,7 +45,7 @@ After the player moves to a new room and the first narration is generated, the e
 **Flow:**
 1. Player movement is detected via quantifier → `attempt_semantic_walk` updates `state.movement.current_room_id`
 2. `evaluate_triggers(state, new_room_id)` is called to find matching triggers
-3. For each matching trigger:
+3. For the first matching trigger only:
    a. Uses unified `PromptBuilder` with continuation context in user message:
       - Full 8-layer SillyTavern prompt structure
       - Trigger text as Layer 6 (User Input)

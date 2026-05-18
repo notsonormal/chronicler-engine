@@ -16,7 +16,7 @@ ADR-013 originally proposed `Message` + `MessageSwipe` to solve this by giving e
 
 ## Decision
 
-We use a flat `Vec<Message>` where each `Message` is a single-version narrative unit. Retry is implemented as **snapshot rollback + replay**, not swipe creation.
+We use a flat `Vec<Message>` encapsulated in `MessageHistory` where each `Message` is a single-version narrative unit. Retry is implemented as **snapshot rollback + replay**, not swipe creation.
 
 1. **`Message`** = one narrative unit (input, narration, dialogue, or system). Every `add_log()` call creates a new `Message`.
 2. **`Message.text`** = the single text content. No swipes, no versioning at the message level.
@@ -36,7 +36,7 @@ This is simpler, more robust, and matches how the engine actually works.
 
 | Area | ADR-012 (Turn) | ADR-013 (Message) |
 |------|----------------|-------------------|
-| History storage | `Vec<Turn>` | `Vec<Message>` |
+| History storage | `Vec<Turn>` | `MessageHistory` (wraps `Vec<Message>`) |
 | Turn grouping | `Turn { input, swipes }` | Messages are independent units; no turn grouping |
 | AI outputs per unit | Multiple `LogEntry` items per swipe | One `text` per `Message` |
 | Retry scope | Entire turn (all AI outputs) | Last message only |
@@ -68,7 +68,8 @@ This is simpler, more robust, and matches how the engine actually works.
 ## References
 
 - `src/model/message.rs` — `Message` struct
-- `src/model/state.rs` — `NarrativeState` with `Vec<Message>`
+- `src/model/state.rs` — `NarrativeState` with `MessageHistory`
+- `src/model/message_history.rs` — `MessageHistory` encapsulates message lifecycle
 - `src/model/state_snapshot.rs` — `GameStateSnapshot` (standalone, no `turn_id` or `base_snapshot_id`)
 - `src/application/game_service/retry.rs` — Snapshot-based retry logic
 - `src/server/fragments/history.rs` — Message-level mutation handlers
