@@ -45,7 +45,8 @@ Cross-module and browser-based tests live in the top-level `tests/` directory:
 | `browser/` | UI structure, layouts, interactions, editing | Browser |
 | `flow_mock/` | Core game loop, retry, state consistency with mock LLM | In-process + Mock LLM |
 | `flow_llm_tests.rs` | LLM narrative smoke tests | Browser + Real LLM |
-| `game_service/` | Game service logic, DI, retry, snapshots | In-process |
+| `game_service.rs` | Service boundary — constructors, trait delegation | In-process |
+| `action_pipeline.rs` | Pipeline behavior — narration, quantifier, trigger, retry, cancellation | In-process |
 | `guardrails/` | Custom convention tests (imports, comments, file length) | In-process |
 | `logic_tests.rs` | Movement, room resolution, fuzzy matching | In-process |
 | `llm_message_storage_tests.rs` | SQLite LLM message persistence, auto-pruning | In-process |
@@ -66,6 +67,30 @@ let service = DefaultGameService::with_mock_quantifier(
     Arc::new(MockBackend::new(None)),
     Arc::new(MockBackend::new(None)),
 );
+```
+
+### Pipeline-Only Mocking
+
+For tests that only need to verify pipeline behavior (narration → quantification → trigger continuation), implement the `ActionPipelineBackend` trait directly. This avoids constructing `DefaultGameService` and its full backend/registry graph:
+
+```rust
+use chronicler_engine::application::action_pipeline::ActionPipelineBackend;
+
+struct NarrowMock;
+
+impl ActionPipelineBackend for NarrowMock {
+    fn narrate_action(&self, _ctx: &PromptContext) -> Result<LlmCallResult, EngineError> {
+        Ok(LlmCallResult { /* ... */ })
+    }
+
+    fn complete(&self, _agent: &str, _sys: &str, _usr: &str, _max: Option<u32>) -> Result<LlmCallResult, EngineError> {
+        Ok(LlmCallResult { /* ... */ })
+    }
+
+    fn run_post_generation_agents(&self, _state: &GameState, _input: &str, _response: &str, _result: &mut QuantifierResult) {
+        // Directly set quantifier result without running real agents
+    }
+}
 ```
 
 ### Config File (`tests/test_config.json`)
@@ -96,6 +121,7 @@ cargo nextest run --test components
 cargo nextest run --test browser
 cargo nextest run --test flow_mock
 cargo nextest run --test game_service
+cargo nextest run --test action_pipeline
 ```
 
 ## UI Tests

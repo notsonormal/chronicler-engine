@@ -1,5 +1,31 @@
 # Changelog
 
+## 2026-05-19
+
+### Changed
+- **Consolidated action pipeline integration tests and trimmed redundant `game_service` tests**
+  - `tests/action_pipeline.rs` expanded from 9 to 30 tests — now owns all pipeline-behavior integration tests (narration, errors, cancellation, quantifier, trigger, retry)
+  - Moved 17 tests from `tests/game_service/advanced.rs` to `tests/action_pipeline.rs`, adapted to call `execute_action_impl` / `retry_last_response_impl` directly
+  - Added 4 new pipeline tests: phase transitions, phase-on-error, empty input, quantifier integration
+  - `tests/game_service.rs` collapsed from 36 tests across `basic.rs` + `advanced.rs` to 5 focused service-boundary tests (constructors, trait delegation, edge inputs)
+  - Deleted `tests/game_service/basic.rs` and `tests/game_service/advanced.rs`; `tests/game_service/` directory removed
+  - Renamed `tests/helpers/game_service.rs` → `tests/helpers/pipeline_helpers.rs` — shared across `game_service`, `action_pipeline`, and `flow_mock` test crates
+  - Updated `docs/reference/testing.md` and `docs/system/testing.md` to reflect new test organization
+  - All 806 tests pass; clippy clean; coverage 83.8%
+
+## 2026-05-18
+
+### Changed
+- **Extracted `ActionPipelineBackend` trait + reorganized `application` modules** — Turned the concrete `DefaultGameService` dependency into a real seam and separated concerns across the application tier
+  - New `src/application/action_pipeline/` module — owns `ActionPipelineBackend` trait, `ActionPipeline<B>`, `actions.rs`, `retry.rs`, and `retry_tests.rs`
+  - New `src/application/context.rs` — `GameServiceContext` + persistence helpers (moved from `game_service/context.rs` and `game_service/helpers.rs`)
+  - `game_service/` simplified to service boundary only — `GameService` trait, `DefaultGameService`, and `impl ActionPipelineBackend for DefaultGameService` glue
+  - `ActionPipeline` is now generic over `ActionPipelineBackend` instead of taking `&DefaultGameService` concretely
+  - `DefaultGameService` implements the 3-method trait (`narrate_action`, `complete`, `run_post_generation_agents`), acting as an adapter
+  - Tests can now inject narrow mocks implementing only `ActionPipelineBackend` instead of constructing full `DefaultGameService` instances
+  - Zero breaking changes — all existing constructors and `GameService` re-exports remain unchanged
+  - All 794 tests pass; clippy clean; architecture guardrails pass; test structure guardrail pass
+
 ## 2026-05-18
 
 ### Changed

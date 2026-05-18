@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-18 21:22 UTC*
+*Index last generated: 2026-05-18 23:48 UTC*
 
 ### Root files
 
@@ -68,8 +68,11 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Implementation Plan: Extract `ActionPipeline` to Unify Action and Retry Flows](./plans/archived/quasar-ravager-impulse-20260518.md)
 - [Plan: Break Engine↔Narrative Bidirectional Coupling](./plans/archived/rocket-nebula-morbius.md)
 - [Plan: GameState Extensibility Fix](./plans/archived/scarlet-witch-cyclone-nightwing.md)
+- [Plan: Extract ActionPipelineBackend Trait](./plans/archived/shadowcat-icon-nightcrawler.md)
 - [Plan: Rename Domain Vocabulary — CharacterState, TriggerAction, GenerationState](./plans/archived/simon-baz-iron-fist-booster-gold.md)
+- [Plan: Reorganize game_service Module + Extract ActionPipelineBackend Trait](./plans/archived/wildcat-batman-dagger.md)
 - [Plan: Restructure Engine/Application Boundary in Chronicler Engine](./plans/archived/wildcat-flash-havok.md)
+- [Plan: Consolidate Action Pipeline Tests](./plans/archived/wolverine-miles-morales-forager.md)
 
 ### `docs/reference/`
 

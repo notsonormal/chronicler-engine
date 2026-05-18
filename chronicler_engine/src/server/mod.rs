@@ -204,7 +204,6 @@ impl Default for ServerConfig {
     }
 }
 
-/// Long-lived server dependencies passed to `run_server_with_config`.
 #[derive(Clone)]
 pub struct ServerResources {
     pub world: Arc<WorldCard>,
@@ -267,7 +266,6 @@ impl AppState {
             player: Arc::clone(&self.player),
             npcs: Arc::clone(&self.npcs),
             cancel_token: self.current_cancel_token(),
-            action_lock: Arc::new(std::sync::Mutex::new(())),
             is_generating: Arc::clone(&self.is_generating),
             settings: Arc::clone(&self.settings),
         }
@@ -293,7 +291,6 @@ impl AppState {
         *token = CancellationToken::new();
     }
 
-    /// Read a snapshot of the current settings.
     /// If the lock is poisoned, recovers the inner value.
     pub fn settings(&self) -> AppSettings {
         self.settings.read().map(|g| g.clone()).unwrap_or_else(|p| {

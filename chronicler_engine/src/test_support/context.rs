@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, RwLock};
 
 use crate::application::game_service::GameServiceContext;
 use crate::model::settings::AppSettings;
@@ -31,7 +31,6 @@ pub fn make_test_context(state: GameState) -> GameServiceContext {
         player: state.player.clone(),
         npcs: Arc::new(state.npcs.clone()),
         cancel_token: tokio_util::sync::CancellationToken::new(),
-        action_lock: Arc::new(Mutex::new(())),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         settings: Arc::new(RwLock::new(AppSettings::default())),
     }
@@ -64,7 +63,6 @@ pub fn make_test_context_with_sqlite(state: GameState) -> crate::error::Result<G
         player: state.player.clone(),
         npcs: Arc::new(state.npcs.clone()),
         cancel_token: tokio_util::sync::CancellationToken::new(),
-        action_lock: Arc::new(Mutex::new(())),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         settings: Arc::new(RwLock::new(AppSettings::default())),
     })

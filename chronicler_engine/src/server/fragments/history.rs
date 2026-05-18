@@ -18,7 +18,7 @@ pub async fn edit_history_handler(
     let result: Result<(), crate::error::EngineError> = (|| {
         let latest = state.snapshot_storage.load_latest()?;
         let mut guard = state.load_state()?;
-        guard.edit_log(id, form.text.clone())?;
+        guard.narrative.history.edit(id, form.text.clone())?;
         if latest.is_some() {
             let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&guard);
             state.snapshot_storage.save(&snapshot)?;
@@ -50,7 +50,7 @@ pub async fn delete_history_handler(State(state): State<AppState>) -> (StatusCod
                     "History is empty".to_string(),
                 ))
             })?;
-        guard.delete_last_log()?;
+        guard.narrative.history.delete_last()?;
         let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&guard);
         state.snapshot_storage.save(&snapshot)?;
         state.message_storage.delete_message(last_id)?;

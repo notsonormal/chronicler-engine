@@ -22,7 +22,8 @@ Tests are organized by execution model:
 | `browser/` | UI structure, layouts, interactions, editing | Browser | Medium |
 | `flow_mock/` | Game loop, retry, polling, state consistency | In-process + Mock LLM | Fast |
 | `flow_llm_tests.rs` | LLM narrative generation | Browser + Real LLM | Slow |
-| `game_service/` | Game service logic, action handling, retry | In-process | Very Fast |
+| `game_service.rs` | Service boundary — constructors, trait delegation | In-process | Very Fast |
+| `action_pipeline.rs` | Pipeline behavior — narration, quantifier, trigger, retry, cancellation | In-process | Very Fast |
 | `guardrails/` | Custom guardrails (what-comments, long comment runs, single-letter vars) | In-process | Very Fast |
 | `logic_tests.rs` | Movement, room resolution, fuzzy matching | In-process | Very Fast |
 | `snapshot_storage_tests.rs` | SQLite snapshot persistence, checkpoints | In-process | Very Fast |
@@ -34,14 +35,15 @@ Tests are organized by execution model:
 
 ## Test Files Explained
 
-### In-Process Tests (`components/`, `game_service/`, `guardrails/`)
+### In-Process Tests (`components/`, `game_service.rs`, `action_pipeline.rs`, `guardrails/')
 
 Fast tests that don't spawn a browser:
 
 - **Template tests**: Askama template rendering, XSS escaping
 - **Fragment tests**: HTTP endpoint responses
 - **Validation**: Empty command rejection
-- **Game service**: Action handling, retry logic, trigger evaluation
+- **Game service**: Constructor and trait boundary tests
+- **Action pipeline**: Narration, quantifier, trigger, retry, cancellation
 - **Snapshot storage**: SQLite persistence, checkpoint CRUD
 - **Guardrails**: Code style enforcement
 
@@ -75,6 +77,7 @@ python build.py
 # Fast suite only (in-process)
 cargo nextest run --test components
 cargo nextest run --test game_service
+cargo nextest run --test action_pipeline
 
 # Browser tests only
 cargo nextest run --test browser
@@ -125,7 +128,8 @@ Critical tests that must not be removed:
 | components | ~5 sec |
 | browser | ~60 sec |
 | flow_mock | ~30 sec |
-| game_service | ~5 sec |
+| game_service | ~1 sec |
+| action_pipeline | ~5 sec |
 | guardrails | ~2 sec |
 | logic_tests | ~2 sec |
 | snapshot_storage_tests | ~2 sec |

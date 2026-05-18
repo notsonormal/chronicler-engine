@@ -1,0 +1,237 @@
+use std::sync::Arc;
+
+use crate::application::action_pipeline::execute_action_impl;
+use crate::application::action_pipeline::pipeline::{
+    ActionPipelineBackend, default_quantifier_result,
+};
+use crate::application::context::GameServiceContext;
+use crate::error::EngineError;
+use crate::model::quantifier::QuantifierResult;
+use crate::model::state::{
+    GameState, GenerationPhase, GenerationStatus, LogType, StoredTriggerContext,
+};
+use crate::narrative::llm::backend::LlmCallResult;
+use crate::narrative::prompt::PromptContext;
+use crate::test_support::fixtures::{TestMap, TestNpc, TestPlayer, TestWorld};
+use crate::test_support::make_test_context;
+
+struct MockBackend {
+    narrate_result: Result<String, EngineError>,
+    complete_result: Result<String, EngineError>,
+    quantifier_result: QuantifierResult,
+}
+
+impl Default for MockBackend {
+    fn default() -> Self {
+        Self {
+            narrate_result: Ok("You look around the room.".to_string()),
+            complete_result: Ok("The orb glows brighter.".to_string()),
+            quantifier_result: default_quantifier_result(&[]),
+        }
+    }
+}
+
+impl ActionPipelineBackend for MockBackend {
+    fn narrate_action(&self, _ctx: &PromptContext) -> Result<LlmCallResult, EngineError> {
+        match &self.narrate_result {
+            Ok(text) => Ok(LlmCallResult {
+                text: text.clone(),
+                system_prompt: String::new(),
+                user_prompt: String::new(),
+                raw_request_json: String::new(),
+                raw_response_json: String::new(),
+                backend_name: "mock".to_string(),
+                model_name: "mock".to_string(),
+                agent_name: "narrator".to_string(),
+            }),
+            Err(_) => Err(EngineError::Llm(crate::error::LlmFailure::EmptyResponse)),
+        }
+    }
+
+    fn complete(
+        &self,
+        _agent_name: &str,
+        _system_prompt: &str,
+        _user_prompt: &str,
+        _max_tokens: Option<u32>,
+    ) -> Result<LlmCallResult, EngineError> {
+        match &self.complete_result {
+            Ok(text) => Ok(LlmCallResult {
+                text: text.clone(),
+                system_prompt: String::new(),
+                user_prompt: String::new(),
+                raw_request_json: String::new(),
+                raw_response_json: String::new(),
+                backend_name: "mock".to_string(),
+                model_name: "mock".to_string(),
+                agent_name: "trigger".to_string(),
+            }),
+            Err(_) => Err(EngineError::Llm(crate::error::LlmFailure::EmptyResponse)),
+        }
+    }
+
+    fn run_post_generation_agents(
+        &self,
+        _state: &GameState,
+        _player_input: &str,
+        _main_response: &str,
+        result: &mut QuantifierResult,
+    ) {
+        *result = self.quantifier_result.clone();
+    }
+}
+
+fn make_test_state() -> GameState {
+    let world = Arc::new(TestWorld::minimal());
+    let map = Arc::new(TestMap::single_room("start"));
+    let player = Arc::new(TestPlayer::standard());
+    let npcs = vec![TestNpc::named("npc1", "Test NPC")];
+    GameState::new(world, map, player, npcs, "start".to_string())
+}
+
+fn make_ctx(state: GameState) -> GameServiceContext {
+    make_test_context(state)
+}
+
+#[test]
+fn test_execute_action_impl_completes_and_persists_state() {
+    let state = make_test_state();
+    let ctx = make_ctx(state.clone());
+    let backend = MockBackend::default();
+
+    execute_action_impl(
+        &backend,
+        ctx.clone(),
+        "look".to_string(),
+        "Player".to_string(),
+    );
+
+    let final_state = ctx.load_state();
+    assert_eq!(
+        final_state.narrative.input_buffer.status,
+        GenerationStatus::Idle
+    );
+    assert_eq!(
+        final_state.narrative.input_buffer.phase,
+        GenerationPhase::default()
+    );
+    let has_narration = final_state
+        .narrative
+        .history()
+        .iter()
+        .any(|e| e.log_type == LogType::Narration);
+    assert!(
+        has_narration,
+        "execute_action_impl should persist narration"
+    );
+}
+
+#[test]
+fn test_execute_action_impl_clears_last_trigger() {
+    let mut state = make_test_state();
+    state.narrative.last_trigger = Some(StoredTriggerContext {
+        trigger_name: "Old Trigger".to_string(),
+        npc_id: "npc1".to_string(),
+        trigger_idx: 0,
+        trigger_repeat: false,
+        trigger_narration_prompt: "The old trigger fires.".to_string(),
+        system_prompt: "sys".to_string(),
+        user_prompt: "user".to_string(),
+        max_tokens: None,
+    });
+    let ctx = make_ctx(state);
+    let backend = MockBackend::default();
+
+    execute_action_impl(
+        &backend,
+        ctx.clone(),
+        "look".to_string(),
+        "Player".to_string(),
+    );
+
+    let final_state = ctx.load_state();
+    assert!(
+        final_state.narrative.last_trigger.is_none(),
+        "last_trigger should be cleared before pipeline runs"
+    );
+}
+
+#[test]
+fn test_execute_action_impl_handles_narration_error() {
+    let state = make_test_state();
+    let ctx = make_ctx(state.clone());
+    let backend = MockBackend {
+        narrate_result: Err(EngineError::Llm(crate::error::LlmFailure::EmptyResponse)),
+        ..Default::default()
+    };
+
+    execute_action_impl(
+        &backend,
+        ctx.clone(),
+        "look".to_string(),
+        "Player".to_string(),
+    );
+
+    let final_state = ctx.load_state();
+    assert!(
+        matches!(
+            final_state.narrative.input_buffer.status,
+            GenerationStatus::Error(_)
+        ),
+        "State should reflect error status after failed narration"
+    );
+}
+
+#[test]
+fn test_execute_action_impl_handles_cancellation() {
+    let state = make_test_state();
+    let ctx = make_ctx(state.clone());
+    ctx.cancel_token.cancel();
+    let backend = MockBackend::default();
+
+    execute_action_impl(
+        &backend,
+        ctx.clone(),
+        "look".to_string(),
+        "Player".to_string(),
+    );
+
+    let final_state = ctx.load_state();
+    assert_eq!(
+        final_state.narrative.input_buffer.status,
+        GenerationStatus::Idle,
+        "Cancellation should reset status to Idle"
+    );
+}
+
+#[test]
+fn test_execute_action_impl_preserves_existing_input_log() {
+    let mut state = make_test_state();
+    state.add_log(
+        "examine room".to_string(),
+        Some("Player".to_string()),
+        LogType::Input,
+    );
+    let ctx = make_ctx(state);
+    let backend = MockBackend::default();
+
+    execute_action_impl(
+        &backend,
+        ctx.clone(),
+        "examine room".to_string(),
+        "Player".to_string(),
+    );
+
+    let final_state = ctx.load_state();
+    let entries: Vec<_> = final_state.narrative.history().into_iter().collect();
+    let input_idx = entries.iter().position(|e| e.log_type == LogType::Input);
+    let narration_idx = entries
+        .iter()
+        .position(|e| e.log_type == LogType::Narration);
+    assert!(input_idx.is_some(), "Existing input should be preserved");
+    assert!(narration_idx.is_some(), "Narration should be added");
+    assert!(
+        input_idx.unwrap() < narration_idx.unwrap(),
+        "Input should appear before narration"
+    );
+}

@@ -51,7 +51,7 @@ Only one async (`FreeAction`) generation may be in flight at a time. The server 
 All `std::sync::Mutex` and `std::sync::RwLock` sites in production code recover from poison rather than panic or return defaults. The recovery strategy is `into_inner()` — the data inside a poisoned lock is still valid; only the poison flag is set.
 
 - **Consistent pattern:** `match lock.read() { Ok(g) => g, Err(p) => { log::warn!(...); p.into_inner() } }`
-- **Applies to:** `AppState::settings`, `AppState::cancel_token`, `action_lock`, `DbPool::conn`, `LlmMessageStorage` impls, LLM backend `settings` references
+- **Applies to:** `AppState::settings`, `AppState::cancel_token`, `DbPool::conn`, `LlmMessageStorage` impls, LLM backend `settings` references
 - **No silent defaults:** `settings()` no longer returns `AppSettings::default()` on poison; it recovers the actual settings.
 - **No user-facing errors:** `try_lock!` in settings handlers no longer returns an HTML error fragment on poison; it recovers and continues.
 

@@ -1,6 +1,5 @@
-use crate::application::game_service::context::GameServiceContext;
-use crate::application::game_service::helpers::{
-    load_state, map_llm_error, save_committed_state, save_state,
+use crate::application::context::{
+    GameServiceContext, load_state, map_llm_error, save_committed_state, save_state,
 };
 use crate::error::{EngineError, LlmFailure, NarrativeFailure};
 use crate::model::message::Message;
@@ -108,7 +107,6 @@ fn minimal_ctx() -> GameServiceContext {
         player: state.player.clone(),
         npcs: Arc::new(state.npcs.clone()),
         cancel_token: tokio_util::sync::CancellationToken::new(),
-        action_lock: Arc::new(std::sync::Mutex::new(())),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         settings: Arc::new(std::sync::RwLock::new(
             crate::model::settings::AppSettings::default(),
@@ -158,7 +156,6 @@ fn test_load_state_fallback_when_empty() {
         player: state.player.clone(),
         npcs: Arc::new(state.npcs.clone()),
         cancel_token: tokio_util::sync::CancellationToken::new(),
-        action_lock: Arc::new(std::sync::Mutex::new(())),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         settings: Arc::new(std::sync::RwLock::new(
             crate::model::settings::AppSettings::default(),
@@ -184,6 +181,5 @@ fn test_save_and_save_committed_state() {
         .load_by_id(committed_id)
         .unwrap()
         .unwrap();
-    assert!(loaded.committed);
     assert!(loaded.committed);
 }

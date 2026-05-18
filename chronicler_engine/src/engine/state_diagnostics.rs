@@ -1,4 +1,3 @@
-//! Runtime consistency checks for GameState.
 //! [DOC: docs/architecture/invariants.md]
 
 use crate::error::EngineError;
@@ -6,8 +5,6 @@ use crate::error::EngineError;
 use crate::error::internal_error;
 use crate::model::state::GameState;
 
-/// Run all consistency checks on GameState.
-///
 /// Call this after any public mutation function to catch invariant
 /// violations immediately at the site of the bug.
 #[cfg(feature = "diagnostics")]
@@ -68,8 +65,8 @@ fn assert_npc_encounter_log_consistency(state: &GameState) -> Result<(), EngineE
 /// INV-LOG: the last AI response must follow the last player input.
 #[cfg(feature = "diagnostics")]
 fn assert_log_invariants(state: &GameState) -> Result<(), EngineError> {
-    let ai_idx = state.get_last_ai_response_index();
-    let input_idx = state.get_last_input_index();
+    let ai_idx = state.narrative.history.last_ai_response_index();
+    let input_idx = state.narrative.history.last_input_index();
 
     if let (Some(ai), Some(input)) = (ai_idx, input_idx) {
         if ai <= input {

@@ -1,11 +1,16 @@
 use std::sync::{Arc, RwLock};
 
+use crate::application::action_pipeline::ActionPipelineBackend;
+use crate::application::context::GameServiceContext;
+use crate::error::EngineError;
+use crate::model::agent::{AgentContext, AgentResult, ExecutionPhase, StatePatch};
+use crate::model::quantifier::QuantifierConfidence;
 use crate::model::settings::AppSettings;
+use crate::model::state::GameState;
 use crate::narrative::agents::quantifier::QuantifierAgent;
 use crate::narrative::agents::registry::AgentRegistry;
+use crate::narrative::llm::backend::{AGENT_NARRATOR, LlmCallResult};
 use crate::storage::llm_message_storage::LlmMessageStorage;
-
-use super::context::GameServiceContext;
 
 pub trait GameService: Send + Sync {
     fn execute_action(&self, ctx: GameServiceContext, input: String, player_name: String);
@@ -58,7 +63,6 @@ impl DefaultGameService {
         }
     }
 
-    /// Convenience constructor for tests that only need a mock quantifier.
     pub fn with_mock_quantifier(
         llm_backend: Arc<dyn crate::narrative::llm::LlmBackend>,
         quantifier_backend: Arc<dyn crate::narrative::llm::LlmBackend>,
@@ -78,12 +82,71 @@ impl Default for DefaultGameService {
     }
 }
 
+impl ActionPipelineBackend for DefaultGameService {
+    fn narrate_action(
+        &self,
+        context: &crate::narrative::prompt::PromptContext,
+    ) -> Result<LlmCallResult, EngineError> {
+        self.llm_backend.narrate_action(AGENT_NARRATOR, context)
+    }
+
+    fn complete(
+        &self,
+        agent_name: &str,
+        system_prompt: &str,
+        user_prompt: &str,
+        max_tokens: Option<u32>,
+    ) -> Result<LlmCallResult, EngineError> {
+        self.llm_backend
+            .complete(agent_name, system_prompt, user_prompt, max_tokens)
+    }
+
+    fn run_post_generation_agents(
+        &self,
+        state: &GameState,
+        player_input: &str,
+        main_response: &str,
+        result: &mut crate::model::quantifier::QuantifierResult,
+    ) {
+        let agent_ctx = AgentContext {
+            state,
+            main_response: Some(main_response),
+            player_input,
+            current_room: state.current_room(),
+        };
+
+        for agent in self
+            .agent_registry
+            .agents_for_phase(ExecutionPhase::PostGeneration)
+        {
+            match agent.execute(&agent_ctx) {
+                Ok(AgentResult::StatePatch(StatePatch::Scene {
+                    npc_ids,
+                    movement_destination,
+                    confidence,
+                })) => {
+                    result.npcs.npc_ids = npc_ids;
+                    result.movement.destination = movement_destination;
+                    result.npcs.confidence = QuantifierConfidence::from(confidence);
+                }
+                Ok(AgentResult::NoOp) => {}
+                Ok(AgentResult::PromptDirective(_)) => {
+                    log::warn!("Post-generation agent returned PromptDirective; ignoring");
+                }
+                Err(e) => {
+                    log::warn!("Agent {} failed: {e}", agent.name());
+                }
+            }
+        }
+    }
+}
+
 impl GameService for DefaultGameService {
     fn execute_action(&self, ctx: GameServiceContext, input: String, player_name: String) {
-        super::actions::execute_action_impl(self, ctx, input, player_name);
+        crate::application::action_pipeline::execute_action_impl(self, ctx, input, player_name);
     }
 
     fn retry_last_response(&self, ctx: GameServiceContext) {
-        super::retry::retry_last_response_impl(self, ctx);
+        crate::application::action_pipeline::retry_last_response_impl(self, ctx);
     }
 }

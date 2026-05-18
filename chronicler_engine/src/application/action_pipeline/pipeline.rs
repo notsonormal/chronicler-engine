@@ -1,11 +1,13 @@
 use std::sync::Arc;
 
+use crate::application::context::{
+    GameServiceContext, load_state, map_llm_error, save_committed_state, save_state,
+};
 use crate::engine::action_processing::{
     FreeActionContext, TriggerContinuationRequest, TriggerMatch, apply_npc_events,
     commit_trigger_narration, execute_freeaction_impl,
 };
 use crate::error::EngineError;
-use crate::model::agent::{AgentContext, AgentResult, ExecutionPhase, StatePatch};
 use crate::model::character::{NpcCard, PlayerCard};
 use crate::model::map::MapDef;
 use crate::model::quantifier::{
@@ -15,17 +17,38 @@ use crate::model::quantifier::{
 use crate::model::state::StoredTriggerContext;
 use crate::model::state::{GameState, GenerationPhase, GenerationStatus, LogType};
 use crate::model::world::WorldCard;
+use crate::narrative::llm::backend::LlmCallResult;
 use crate::narrative::prompt::{PromptBuilder, make_prompt_context};
 
-use super::context::GameServiceContext;
-use super::helpers::{load_state, map_llm_error, save_committed_state, save_state};
-use super::service::DefaultGameService;
+pub trait ActionPipelineBackend: Send + Sync {
+    fn narrate_action(
+        &self,
+        context: &crate::narrative::prompt::PromptContext,
+    ) -> Result<LlmCallResult, EngineError>;
 
-pub struct ActionPipeline<'a> {
-    service: &'a DefaultGameService,
+    fn complete(
+        &self,
+        agent_name: &str,
+        system_prompt: &str,
+        user_prompt: &str,
+        max_tokens: Option<u32>,
+    ) -> Result<LlmCallResult, EngineError>;
+
+    fn run_post_generation_agents(
+        &self,
+        state: &GameState,
+        player_input: &str,
+        main_response: &str,
+        result: &mut QuantifierResult,
+    );
+}
+
+pub struct ActionPipeline<'a, B: ActionPipelineBackend> {
+    service: &'a B,
     ctx: &'a GameServiceContext,
 }
 
+#[derive(Debug)]
 pub enum ActionOutcome {
     Completed,
     Error { message: String },
@@ -34,8 +57,8 @@ pub enum ActionOutcome {
 
 type PipelineResult<T> = Result<T, ActionOutcome>;
 
-impl<'a> ActionPipeline<'a> {
-    pub fn new(service: &'a DefaultGameService, ctx: &'a GameServiceContext) -> Self {
+impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
+    pub fn new(service: &'a B, ctx: &'a GameServiceContext) -> Self {
         Self { service, ctx }
     }
 
@@ -140,10 +163,7 @@ impl<'a> ActionPipeline<'a> {
             &history,
         );
 
-        let backend = Arc::clone(&self.service.llm_backend);
-        let narration_result = match backend
-            .narrate_action(crate::narrative::llm::backend::AGENT_NARRATOR, &context)
-        {
+        let narration_result = match self.service.narrate_action(&context) {
             Ok(result) => result,
             Err(e) => return Err(self.save_early_error(map_llm_error(&e))),
         };
@@ -167,8 +187,7 @@ impl<'a> ActionPipeline<'a> {
         narration_text: &str,
     ) -> QuantifierResult {
         let mut quantifier_result = default_quantifier_result(&[]);
-        run_post_generation_agents(
-            self.service,
+        self.service.run_post_generation_agents(
             state,
             input,
             narration_text,
@@ -222,8 +241,7 @@ impl<'a> ActionPipeline<'a> {
             });
         }
 
-        let backend = Arc::clone(&self.service.llm_backend);
-        let continuation_result = match backend.complete(
+        let continuation_result = match self.service.complete(
             crate::narrative::llm::backend::AGENT_TRIGGER,
             &request.stored.system_prompt,
             &request.stored.user_prompt,
@@ -276,7 +294,7 @@ impl<'a> ActionPipeline<'a> {
         input: &str,
         continuation_text: &str,
     ) -> PipelineResult<GameState> {
-        match reconcile_post_trigger_npcs(self.service, state.clone(), input, continuation_text) {
+        match self.reconcile_post_trigger_npcs(state.clone(), input, continuation_text) {
             Ok(updated) => Ok(updated),
             Err(e) => {
                 log::error!("Failed to apply post-trigger NPC events: {e}");
@@ -320,8 +338,7 @@ impl<'a> ActionPipeline<'a> {
         state.narrative.input_buffer.status = GenerationStatus::Generating;
         state.narrative.input_buffer.phase = GenerationPhase::GeneratingEvent;
 
-        let backend = Arc::clone(&self.service.llm_backend);
-        let continuation_result = match backend.complete(
+        let continuation_result = match self.service.complete(
             crate::narrative::llm::backend::AGENT_TRIGGER,
             &trigger.system_prompt,
             &trigger.user_prompt,
@@ -356,8 +373,7 @@ impl<'a> ActionPipeline<'a> {
                 }
             };
 
-        match reconcile_post_trigger_npcs(
-            self.service,
+        match self.reconcile_post_trigger_npcs(
             committed_state.clone(),
             input_text,
             &continuation_text,
@@ -383,6 +399,42 @@ impl<'a> ActionPipeline<'a> {
         }
 
         ActionOutcome::Completed
+    }
+
+    fn reconcile_post_trigger_npcs(
+        &self,
+        mut state: GameState,
+        player_input: &str,
+        continuation_text: &str,
+    ) -> Result<GameState, EngineError> {
+        state.narrative.input_buffer.phase = GenerationPhase::Quantifying;
+
+        let previous_ids: Vec<String> = state
+            .scene
+            .npcs_in_area
+            .iter()
+            .map(|n| n.id.clone())
+            .collect();
+        let mut post_trigger_result = default_quantifier_result(&previous_ids);
+        self.service.run_post_generation_agents(
+            &state,
+            player_input,
+            continuation_text,
+            &mut post_trigger_result,
+        );
+
+        let npc_cards: Vec<NpcCard> = post_trigger_result
+            .npcs
+            .npc_ids
+            .iter()
+            .filter_map(|id| state.npcs.get(id).cloned())
+            .collect();
+        let new_ids: Vec<String> = npc_cards.iter().map(|n| n.id.clone()).collect();
+
+        state.scene.npcs_in_area = npc_cards;
+
+        let events = compute_npc_events(&previous_ids, &new_ids);
+        apply_npc_events(state, &events.events)
     }
 
     fn save_early_error(&self, error: impl Into<String>) -> ActionOutcome {
@@ -415,82 +467,6 @@ pub(crate) fn default_quantifier_result(fallback_npc_ids: &[String]) -> Quantifi
         },
         movement: MovementParseResult::default(),
     }
-}
-
-pub(crate) fn run_post_generation_agents(
-    service: &DefaultGameService,
-    state: &GameState,
-    player_input: &str,
-    main_response: &str,
-    result: &mut QuantifierResult,
-) {
-    let agent_ctx = AgentContext {
-        state,
-        main_response: Some(main_response),
-        player_input,
-        current_room: state.current_room(),
-    };
-
-    for agent in service
-        .agent_registry
-        .agents_for_phase(ExecutionPhase::PostGeneration)
-    {
-        match agent.execute(&agent_ctx) {
-            Ok(AgentResult::StatePatch(StatePatch::Scene {
-                npc_ids,
-                movement_destination,
-                confidence,
-            })) => {
-                result.npcs.npc_ids = npc_ids;
-                result.movement.destination = movement_destination;
-                result.npcs.confidence = QuantifierConfidence::from(confidence);
-            }
-            Ok(AgentResult::NoOp) => {}
-            Ok(AgentResult::PromptDirective(_)) => {
-                log::warn!("Post-generation agent returned PromptDirective; ignoring");
-            }
-            Err(e) => {
-                log::warn!("Agent {} failed: {e}", agent.name());
-            }
-        }
-    }
-}
-
-pub(crate) fn reconcile_post_trigger_npcs(
-    service: &DefaultGameService,
-    mut state: GameState,
-    player_input: &str,
-    continuation_text: &str,
-) -> Result<GameState, EngineError> {
-    state.narrative.input_buffer.phase = GenerationPhase::Quantifying;
-
-    let previous_ids: Vec<String> = state
-        .scene
-        .npcs_in_area
-        .iter()
-        .map(|n| n.id.clone())
-        .collect();
-    let mut post_trigger_result = default_quantifier_result(&previous_ids);
-    run_post_generation_agents(
-        service,
-        &state,
-        player_input,
-        continuation_text,
-        &mut post_trigger_result,
-    );
-
-    let npc_cards: Vec<NpcCard> = post_trigger_result
-        .npcs
-        .npc_ids
-        .iter()
-        .filter_map(|id| state.npcs.get(id).cloned())
-        .collect();
-    let new_ids: Vec<String> = npc_cards.iter().map(|n| n.id.clone()).collect();
-
-    state.scene.npcs_in_area = npc_cards;
-
-    let events = compute_npc_events(&previous_ids, &new_ids);
-    apply_npc_events(state, &events.events)
 }
 
 #[allow(clippy::too_many_arguments)]

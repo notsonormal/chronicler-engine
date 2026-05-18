@@ -31,12 +31,16 @@ Contains the mechanics that drive the simulation. It translates user intent and 
 
 ### 2.5. The Application Tier (`crate::application::*`)
 Orchestration layer that coordinates game flow, persistence, and LLM generation. Sits between the HTTP server and the pure simulation engine.
-- **`game_service`**: `GameService` trait and `DefaultGameService` — game orchestration extracted from fragments.rs. Includes action handling, retry logic, and context helpers.
-  - `action_pipeline.rs`: `ActionPipeline` struct encapsulates the full FreeAction pipeline (narrate → quantify → triggers → event continuation) with explicit phase methods. Used by both normal action handling (`run_from_input`) and retry logic (`run_trigger_continuation`). Checks `CancellationToken::is_cancelled()` at stage boundaries (post-narration, pre-trigger, post-trigger) and aborts gracefully via `handle_cancellation()` to avoid wasted LLM calls on stale requests.
-  - `actions.rs`: Thin dispatch layer — parses input and delegates FreeAction to `ActionPipeline`.
-  - `retry.rs`: Retry-specific setup (anchor finding, message deletion, snapshot loading) delegates continuation regeneration to `ActionPipeline::run_trigger_continuation()` and main narration retry to `ActionPipeline::run_from_input()`.
-  - `helpers.rs`: Shared persistence helpers (`load_state`, `save_state`, `save_committed_state`, `map_llm_error`).
+- **`context`**: Shared infrastructure for game service operations.
+  - `GameServiceContext`: Snapshot storage, message storage, world/map/player/npc references, cancellation token, and settings.
+  - `helpers.rs` (moved to `context.rs`): Shared persistence helpers (`load_state`, `save_state`, `save_committed_state`, `map_llm_error`, `persist_new_messages`).
   - `save_committed_state()`: Saves snapshots with `committed = true` for pre-generation anchoring.
+- **`action_pipeline`**: Action-processing workflows and the `ActionPipeline` orchestration struct.
+  - `pipeline.rs`: `ActionPipelineBackend` trait (narrow seam: `narrate_action`, `complete`, `run_post_generation_agents`) and `ActionPipeline<B>` generic over the trait. Encapsulates the full FreeAction pipeline (narrate → quantify → triggers → event continuation) with explicit phase methods. Used by both normal action handling (`run_from_input`) and retry logic (`run_trigger_continuation`). Checks `CancellationToken::is_cancelled()` at stage boundaries and aborts gracefully via `handle_cancellation()` to avoid wasted LLM calls on stale requests.
+  - `actions.rs`: Thin dispatch layer — `execute_action_impl` creates `ActionPipeline` and delegates to `run_from_input`.
+  - `retry.rs`: Retry-specific setup (anchor finding, message deletion, snapshot loading) delegates continuation regeneration to `ActionPipeline::run_trigger_continuation()` and main narration retry to `ActionPipeline::run_from_input()`.
+- **`game_service`**: Service boundary — `GameService` trait and `DefaultGameService`.
+  - `service.rs`: `GameService` trait (`execute_action`, `retry_last_response`), `DefaultGameService` struct (owns `llm_backend` and `agent_registry`), and `impl ActionPipelineBackend for DefaultGameService` — the adapter that wires internal backends to the pipeline trait.
 
 ### 3. The Narrative Tier (`crate::narrative::*`)
 The interface between the synchronous engine and stochastic LLM generation.

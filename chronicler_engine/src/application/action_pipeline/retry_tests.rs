@@ -1,14 +1,14 @@
 use std::sync::Arc;
 
-use crate::application::game_service::context::GameServiceContext;
-use crate::application::game_service::retry::{
+use crate::application::action_pipeline::retry::{
     retry_event_continuation, retry_last_response_impl, retry_main_narration,
 };
+use crate::application::context::GameServiceContext;
 
 #[allow(unused_imports)]
 // retry_main_narration is kept for explicit test coverage even though
 // most tests exercise it indirectly via retry_last_response_impl.
-use crate::application::game_service::service::DefaultGameService;
+use crate::application::game_service::DefaultGameService;
 use crate::error::{EngineError, internal_error};
 use crate::model::checkpoint::Checkpoint;
 use crate::model::message::Message;
@@ -22,7 +22,6 @@ use crate::test_support::fixtures::{TestMap, TestNpc, TestPlayer, TestWorld};
 use crate::test_support::in_memory_storage::InMemoryGameStorage;
 use crate::test_support::make_test_context_with_sqlite;
 
-/// Snapshot storage that can be configured to fail specific operations.
 struct FailingSnapshotStorage {
     fallback: Arc<dyn SnapshotStorage>,
     fail_save: std::sync::atomic::AtomicBool,
@@ -100,7 +99,6 @@ impl SnapshotStorage for FailingSnapshotStorage {
     }
 }
 
-/// Message storage that can be configured to fail specific operations.
 struct FailingMessageStorage {
     fallback: Arc<dyn MessageStorage>,
     fail_load_messages: std::sync::atomic::AtomicBool,
@@ -175,7 +173,6 @@ fn make_empty_context(state: GameState) -> GameServiceContext {
         player: state.player.clone(),
         npcs: Arc::new(state.npcs.clone()),
         cancel_token: tokio_util::sync::CancellationToken::new(),
-        action_lock: Arc::new(std::sync::Mutex::new(())),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         settings: Arc::new(std::sync::RwLock::new(
             crate::model::settings::AppSettings::default(),
@@ -234,7 +231,6 @@ fn test_retry_no_snapshot() {
     let state = make_test_state();
     let ctx = make_empty_context(state);
     let service = make_service();
-    // No snapshots saved → should log error and return cleanly
     retry_last_response_impl(&service, ctx);
 }
 
@@ -264,7 +260,6 @@ fn test_retry_no_input() {
     let state = make_test_state();
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let service = make_service();
-    // Snapshot exists but contains no input messages
     retry_last_response_impl(&service, ctx);
 }
 
@@ -276,15 +271,12 @@ fn test_retry_event_with_no_pre_event_fallback_to_main() {
 
     let _input_id = add_input_and_save(&ctx, "test input");
 
-    // Save a narration with event header (marks it as event continuation)
     let mut state = ctx.load_state();
     state.add_log("Event narration".to_string(), None, LogType::Narration);
     state.narrative.history.last_mut().unwrap().event_header = Some("Event".to_string());
     let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
     let _ = ctx.snapshot_storage.save(&snapshot);
 
-    // No pre-event snapshot → falls back to main narration retry
-    // But no pre-main snapshot either → should error gracefully
     retry_last_response_impl(&service, ctx);
 }
 
@@ -294,14 +286,12 @@ fn test_retry_event_with_no_pre_event_and_no_input() {
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let service = make_service();
 
-    // Create a state with event header but no input text
     let mut state = ctx.load_state();
     state.add_log("Event only".to_string(), None, LogType::Narration);
     state.narrative.history.last_mut().unwrap().event_header = Some("Event".to_string());
     let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
     let _ = ctx.snapshot_storage.save(&snapshot);
 
-    // No pre-event, no input → logs error and returns
     retry_last_response_impl(&service, ctx);
 }
 
@@ -516,7 +506,6 @@ fn test_retry_main_no_pre_main_snapshot() {
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let service = make_service();
 
-    // Save input WITHOUT snapshot_id — retry should fail
     let mut state = ctx.load_state();
     let player_name = state.player.sheet.name.clone();
     state.add_log("test input".to_string(), Some(player_name), LogType::Input);
@@ -524,7 +513,6 @@ fn test_retry_main_no_pre_main_snapshot() {
         let _ = ctx.message_storage.insert_message(last);
     }
 
-    // Save narration
     let mut state = ctx.load_state();
     state.add_log("Narration text".to_string(), None, LogType::Narration);
     let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
@@ -552,11 +540,9 @@ fn test_retry_event_continuation_happy_path() {
 
     let service = make_service();
 
-    // Set up the full message chain for an event retry
     let _input_id = add_input_and_save(&ctx, "test input");
     let _pre_main_id = save_pre_main(&ctx);
 
-    // Add main narration with snapshot_id pointing to pre-event snapshot
     let mut pre_event_state = ctx.load_state();
     pre_event_state.narrative.last_trigger = Some(crate::model::state::StoredTriggerContext {
         npc_id: "npc1".to_string(),
@@ -577,7 +563,6 @@ fn test_retry_event_continuation_happy_path() {
         let _ = ctx.message_storage.insert_message(last);
     }
 
-    // Final state with event narration
     let mut final_state = pre_event_state;
     final_state.add_log("Event narration".to_string(), None, LogType::Narration);
     final_state
@@ -657,7 +642,6 @@ fn test_save_retry_error() {
     let state = make_test_state();
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
-    // Directly test save_retry_error by calling it
     super::retry::save_retry_error(&ctx, "test error");
 
     let state = ctx.load_state();
@@ -691,7 +675,6 @@ fn test_save_retry_error_persist_fails() {
     super::retry::save_retry_error(&ctx, "persist failure");
 }
 
-/// Custom backend that returns empty text for trigger continuation.
 struct EmptyTriggerBackend;
 
 impl crate::narrative::llm::LlmBackend for EmptyTriggerBackend {
@@ -806,11 +789,9 @@ fn test_retry_event_empty_continuation_triggers_error() {
         Arc::new(crate::narrative::llm::MockBackend::default()),
     );
 
-    // Set up the message chain for an event retry
     let _input_id = add_input_and_save(&ctx, "test input");
     let _pre_main_id = save_pre_main(&ctx);
 
-    // Create pre-event state with trigger context and main narration
     let mut pre_event_state = ctx.load_state();
     pre_event_state.narrative.last_trigger = Some(crate::model::state::StoredTriggerContext {
         npc_id: "npc1".to_string(),
@@ -831,7 +812,6 @@ fn test_retry_event_empty_continuation_triggers_error() {
         let _ = ctx.message_storage.insert_message(last);
     }
 
-    // Create final state with event narration and event header
     let mut final_state = pre_event_state;
     final_state.add_log("Event narration".to_string(), None, LogType::Narration);
     final_state

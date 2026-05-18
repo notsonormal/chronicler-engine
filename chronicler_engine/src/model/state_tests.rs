@@ -65,56 +65,6 @@ fn test_log_ordering() {
 }
 
 #[test]
-fn test_edit_log() {
-    let mut state = TestGameState::in_room("room1");
-
-    state.add_log("Original text".into(), None, LogType::Narration);
-    let id = state.narrative.history()[0].id;
-
-    // Verify edit works
-    state.edit_log(id, "Edited text".into()).unwrap();
-    assert_eq!(state.narrative.history()[0].text, "Edited text");
-
-    // Verify edit fails for invalid ID
-    assert!(state.edit_log(9999, "Not found".into()).is_err());
-}
-
-#[test]
-fn test_get_last_input_index() {
-    let mut state = TestGameState::in_room("room1");
-
-    // Empty history returns None
-    assert!(state.get_last_input_index().is_none());
-
-    state.add_log("Narration".into(), None, LogType::Narration);
-    state.add_log("User input".into(), Some("Player".into()), LogType::Input);
-
-    let idx = state.get_last_input_index();
-    assert!(idx.is_some());
-    assert_eq!(state.narrative.history()[idx.unwrap()].text, "User input");
-}
-
-#[test]
-fn test_delete_last_log() {
-    let mut state = TestGameState::in_room("room1");
-
-    state.add_log("Message 1".into(), Some("A".into()), LogType::Narration);
-    state.add_log("Message 2".into(), Some("B".into()), LogType::Narration);
-    state.add_log("Message 3".into(), Some("C".into()), LogType::Narration);
-
-    // Verify delete last works
-    state.delete_last_log().unwrap();
-    assert_eq!(state.narrative.history().len(), 2);
-    assert_eq!(state.narrative.history()[0].text, "Message 1");
-    assert_eq!(state.narrative.history()[1].text, "Message 2");
-
-    // Verify delete fails for empty history
-    state.delete_last_log().unwrap();
-    state.delete_last_log().unwrap();
-    assert!(state.delete_last_log().is_err());
-}
-
-#[test]
 fn test_delete_last_log_recalculates_ids() {
     let mut state = TestGameState::in_room("room1");
 
@@ -125,12 +75,12 @@ fn test_delete_last_log_recalculates_ids() {
     assert_eq!(state.narrative.history.len(), 2);
 
     // Delete Narration
-    state.delete_last_log().unwrap();
+    state.narrative.history.delete_last().unwrap();
     assert_eq!(state.narrative.history.len(), 1);
     assert_eq!(state.narrative.history.as_slice()[0].text, "go north");
 
     // Delete Input
-    state.delete_last_log().unwrap();
+    state.narrative.history.delete_last().unwrap();
     assert!(state.narrative.history.is_empty());
 
     // Verify a new Input can be added after delete
@@ -164,26 +114,6 @@ fn test_add_log_absorbs_pending_event() {
         Some("Gabriella Introduction".to_string())
     );
     assert!(state.narrative.pending_event.is_none());
-}
-
-#[test]
-fn test_is_last_ai_response_event_continuation_with_event_header() {
-    let mut state = TestGameState::in_room("room1");
-    state.add_log("go north".into(), Some("Player".into()), LogType::Input);
-    state.add_log("You walk north.".into(), None, LogType::Narration);
-    state.narrative.pending_event = Some("Carla Introduction".into());
-    state.add_log("Carla appears.".into(), None, LogType::Narration);
-
-    assert!(state.is_last_ai_response_event_continuation());
-}
-
-#[test]
-fn test_is_last_ai_response_event_continuation_without_event_header() {
-    let mut state = TestGameState::in_room("room1");
-    state.add_log("go north".into(), Some("Player".into()), LogType::Input);
-    state.add_log("You walk north.".into(), None, LogType::Narration);
-
-    assert!(!state.is_last_ai_response_event_continuation());
 }
 
 // ─── Property-based tests ──────────────────────────────────────────────────────

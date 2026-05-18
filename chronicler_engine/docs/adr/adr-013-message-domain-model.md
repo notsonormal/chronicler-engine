@@ -71,6 +71,6 @@ This is simpler, more robust, and matches how the engine actually works.
 - `src/model/state.rs` — `NarrativeState` with `MessageHistory`
 - `src/model/message_history.rs` — `MessageHistory` encapsulates message lifecycle
 - `src/model/state_snapshot.rs` — `GameStateSnapshot` (standalone, no `turn_id` or `base_snapshot_id`)
-- `src/application/game_service/retry.rs` — Snapshot-based retry logic
+- `src/application/action_pipeline/retry.rs` — Snapshot-based retry logic
 - `src/server/fragments/history.rs` — Message-level mutation handlers
 - `docs/system/game_flow.md` — Updated retry flow diagram

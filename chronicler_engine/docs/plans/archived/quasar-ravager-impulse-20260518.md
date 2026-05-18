@@ -163,14 +163,13 @@ Replace the monolithic `execute_freeaction_pipeline` function in `actions.rs` wi
 The FreeAction branch should look like:
 ```rust
 Action::FreeAction(text) => {
-    let _lock = match ctx.action_lock.lock() { ... };
     let mut state = load_state(&ctx);
     state.narrative.last_trigger = None;
     let pipeline = ActionPipeline::new(service, &ctx);
     match pipeline.run_from_input(state, text) {
-        ActionOutcome::Completed(_) => {}
-        ActionOutcome::Error { message, .. } => log::error!("Action failed: {message}"),
-        ActionOutcome::Cancelled(_) => {}
+        ActionOutcome::Completed => {}
+        ActionOutcome::Error { message } => log::error!("Action failed: {message}"),
+        ActionOutcome::Cancelled => {}
     }
 }
 ```

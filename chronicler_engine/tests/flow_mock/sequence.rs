@@ -5,7 +5,7 @@ use chronicler_engine::model::state::LogType;
 use chronicler_engine::narrative::llm::MockBackend;
 use chronicler_engine::test_support::make_test_context_with_sqlite;
 
-use crate::game_service_helpers::{
+use crate::pipeline_helpers::{
     add_input_and_save, create_test_state_with_map, latest_state, save_state,
     wait_for_generation_complete,
 };

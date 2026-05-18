@@ -1,14 +1,13 @@
 use std::sync::Arc;
 
-use crate::application::game_service::action_pipeline::{ActionOutcome, ActionPipeline};
+use crate::application::action_pipeline::pipeline::{
+    ActionOutcome, ActionPipeline, ActionPipelineBackend,
+};
+use crate::application::context::{GameServiceContext, load_state, save_state};
 use crate::model::state::{GameState, GenerationStatus, LogType};
 
-use super::context::GameServiceContext;
-use super::helpers::{load_state, save_state};
-use super::service::DefaultGameService;
-
 /// [DOC: docs/architecture/system.md]
-pub fn retry_last_response_impl(service: &DefaultGameService, ctx: GameServiceContext) {
+pub fn retry_last_response_impl<B: ActionPipelineBackend>(backend: &B, ctx: GameServiceContext) {
     let mut messages = match ctx.message_storage.load_messages() {
         Ok(msgs) => msgs,
         Err(e) => {
@@ -83,7 +82,7 @@ pub fn retry_last_response_impl(service: &DefaultGameService, ctx: GameServiceCo
     );
     state.narrative.history.replace(messages);
 
-    let input_text = match state.get_last_input_text() {
+    let input_text = match state.narrative.history.last_input_text() {
         Some((_sender, text)) => text,
         None => {
             log::error!("No input to retry");
@@ -92,9 +91,9 @@ pub fn retry_last_response_impl(service: &DefaultGameService, ctx: GameServiceCo
     };
 
     if is_event {
-        retry_event_continuation(service, &ctx, state);
+        retry_event_continuation(backend, &ctx, state);
     } else {
-        retry_main_narration(service, &ctx, state, input_text);
+        retry_main_narration(backend, &ctx, state, input_text);
     }
 }
 
@@ -106,8 +105,8 @@ pub(crate) fn save_retry_error(ctx: &GameServiceContext, message: impl Into<Stri
     }
 }
 
-pub(crate) fn retry_event_continuation(
-    service: &DefaultGameService,
+pub(crate) fn retry_event_continuation<B: ActionPipelineBackend>(
+    backend: &B,
     ctx: &GameServiceContext,
     state: GameState,
 ) {
@@ -117,12 +116,12 @@ pub(crate) fn retry_event_continuation(
         return;
     };
 
-    let input_text = match state.get_last_input_text() {
+    let input_text = match state.narrative.history.last_input_text() {
         Some((_sender, text)) => text,
         None => String::new(),
     };
 
-    let pipeline = ActionPipeline::new(service, ctx);
+    let pipeline = ActionPipeline::new(backend, ctx);
     match pipeline.run_trigger_continuation(state, trigger, &input_text) {
         ActionOutcome::Completed => {}
         ActionOutcome::Error { message } => {
@@ -132,13 +131,13 @@ pub(crate) fn retry_event_continuation(
     }
 }
 
-pub(crate) fn retry_main_narration(
-    service: &DefaultGameService,
+pub(crate) fn retry_main_narration<B: ActionPipelineBackend>(
+    backend: &B,
     ctx: &GameServiceContext,
     state: GameState,
     input_text: String,
 ) {
-    let pipeline = ActionPipeline::new(service, ctx);
+    let pipeline = ActionPipeline::new(backend, ctx);
     match pipeline.run_from_input(state, input_text) {
         ActionOutcome::Completed => {}
         ActionOutcome::Error { message } => {

@@ -129,7 +129,6 @@ pub struct MovementState {
     pub dynamic_rooms: HashMap<String, Room>,
 }
 
-/// Serializable trigger metadata stored in [`NarrativeState`].
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct StoredTriggerContext {
     pub npc_id: String,
@@ -190,8 +189,6 @@ pub struct GameState {
     pub npc_encounter_log: NpcEncounterLog,
 }
 
-/// Builder for [`GameState`].
-///
 /// New fields added to `GameState` get a `Default::default()` fallback here,
 /// so existing call sites do not break when the struct grows.
 pub struct GameStateBuilder {
@@ -330,48 +327,7 @@ impl GameState {
     }
 
     pub fn add_log(&mut self, text: String, sender: Option<String>, log_type: LogType) {
-        if log_type == LogType::Input {
-            self.add_input(text, sender);
-            return;
-        }
         self.push_message(text, sender, log_type);
-    }
-
-    fn add_input(&mut self, text: String, sender: Option<String>) {
-        self.push_message(text, sender, LogType::Input);
-    }
-
-    /// [DOC: docs/architecture/system.md]
-    pub fn edit_log(&mut self, id: u64, new_text: String) -> crate::error::Result<()> {
-        self.narrative.history.edit(id, new_text)
-    }
-
-    /// [DOC: docs/architecture/system.md]
-    pub fn delete_last_log(&mut self) -> crate::error::Result<()> {
-        self.narrative.history.delete_last()
-    }
-
-    pub fn get_log(&self, id: u64) -> Option<&Message> {
-        self.narrative.history.get(id)
-    }
-
-    pub fn get_last_ai_response_index(&self) -> Option<usize> {
-        self.narrative.history.last_ai_response_index()
-    }
-
-    pub fn get_last_input_index(&self) -> Option<usize> {
-        self.narrative.history.last_input_index()
-    }
-
-    pub fn get_last_input_text(&self) -> Option<(String, String)> {
-        self.narrative.history.last_input_text()
-    }
-
-    /// [DOC: docs/architecture/system.md]
-    pub fn is_last_ai_response_event_continuation(&self) -> bool {
-        self.narrative
-            .history
-            .is_last_ai_response_event_continuation()
     }
 
     /// [DOC: docs/system/navigation.md]

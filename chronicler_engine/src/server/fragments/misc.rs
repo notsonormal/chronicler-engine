@@ -85,7 +85,7 @@ pub async fn retry_handler(State(state): State<AppState>) -> (StatusCode, String
         }
     };
 
-    if game_state.get_last_input_text().is_none() {
+    if game_state.narrative.history.last_input_text().is_none() {
         return (StatusCode::BAD_REQUEST, render_error("No input to retry"));
     }
 
