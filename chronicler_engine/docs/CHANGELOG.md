@@ -3,6 +3,24 @@
 ## 2026-05-19
 
 ### Changed
+- **Added invariant contract tests and consolidated testing documentation**
+  - New `tests/invariant_contract_tests.rs` with 5 fast regression tests for documented runtime invariants (INV-001, INV-002, INV-004, INV-004b)
+  - Simplified `docs/architecture/invariants.md` from 64 lines to 33 lines — stripped implementation prose, linked every testable invariant to its test function
+  - Merged `docs/system/testing.md` into `docs/reference/testing.md` — single source of truth for testing docs
+  - Removed stale references to unit-test sibling files (`logic_tests.rs`, `text_check_tests.rs`, `state_snapshot_tests.rs`) from integration test tables
+  - Added fast iteration section with measured command durations
+  - Updated `docs/README.md` and `docs/CHANGELOG.md` links to point to `reference/testing.md`
+  - Archived superseded `fast-fail-build-test-localization-plan.md` to `docs/plans/archived/`
+  - All 811 tests pass; clippy clean; coverage unchanged
+
+### Changed
+- **Split `tests/action_pipeline.rs` into submodules** — Mirrored the source module structure (`actions.rs`, `pipeline.rs`, `retry.rs`)
+  - `tests/action_pipeline/` directory with `actions.rs` (8 basic execution tests), `pipeline.rs` (12 advanced behaviour tests), `retry.rs` (10 retry tests)
+  - `tests/action_pipeline.rs` is now a module aggregator with shared helpers (`working_backend`, `failing_backend`, `pipeline_helpers`, `test_data`)
+  - No test names or assertions changed — pure file reorganisation
+  - All 806 tests pass; clippy clean
+
+### Changed
 - **Diagnostic signal quality improvements** — Fixed and updated the diagnostic benchmark suite
   - `map_llm_error` already preserved structured error details (HTTP status, network URL/detail, parse format, empty response) — updated benchmark notes and scores to reflect reality
   - Fixed `LowConfidenceQuantifierBackend` in diagnostic tests to return ambiguous non-JSON text, correctly triggering the low-confidence system log path
@@ -20,7 +38,7 @@
   - `tests/game_service.rs` collapsed from 36 tests across `basic.rs` + `advanced.rs` to 5 focused service-boundary tests (constructors, trait delegation, edge inputs)
   - Deleted `tests/game_service/basic.rs` and `tests/game_service/advanced.rs`; `tests/game_service/` directory removed
   - Renamed `tests/helpers/game_service.rs` → `tests/helpers/pipeline_helpers.rs` — shared across `game_service`, `action_pipeline`, and `flow_mock` test crates
-  - Updated `docs/reference/testing.md` and `docs/system/testing.md` to reflect new test organization
+  - Updated `docs/reference/testing.md` to reflect new test organization
   - All 806 tests pass; clippy clean; coverage 83.8%
 
 ## 2026-05-18

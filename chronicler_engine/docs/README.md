@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-19 18:41 UTC*
+*Index last generated: 2026-05-19 19:36 UTC*
 
 ### Root files
 
@@ -31,7 +31,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ### `docs/architecture/`
 
 - [Architecture Guardrails](./architecture/guardrails.md)
-- [Chronicler Engine Runtime Invariants](./architecture/invariants.md)
+- [Runtime Invariants](./architecture/invariants.md)
 - [Specification: Core Architecture (Modular)](./architecture/system.md)
 
 ### `docs/diagnostics/`
@@ -48,7 +48,6 @@ This folder contains all documentation for the Chronicler Engine project.
 ### `docs/plans/`
 
 - [Plan: Diagnostic Decision Tree as Agent Infrastructure](./plans/diagnostic-decision-tree-plan.md)
-- [Plan: Fast-Fail Build & Test Localization](./plans/fast-fail-build-test-localization-plan.md)
 - [LLM Infrastructure Improvements](./plans/llm-infrastructure-improvements.md)
 - [Spec: Agent-Ready Pipeline Restructure for Chronicler Engine](./plans/multi-agent-architecture-overarching-spec.md)
 - [Plan: Observability & Automated Forensics](./plans/observability-and-forensics-plan.md)
@@ -62,6 +61,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Settings I/O Centralization — Implementation Plan](./plans/archived/daredevil-john-stewart-blue-marvel.md)
 - [Implementation Plan: Fix Diagnostic Signal Quality for All 12 Scenarios](./plans/archived/diagnostic_fixes_plan-20260519.md)
 - [Implementation Plan: Extract Application Layer (Option A)](./plans/archived/falcon-robin-nick-fury.md)
+- [Plan: Fast-Fail Build & Test Localization](./plans/archived/fast-fail-build-test-localization-plan.md)
 - [Plan: Extract MessageHistory from GameState](./plans/archived/jade-black-lightning-killer-frost.md)
 - [Plan: Separate Domain Models from DB Models in Chronicler Engine](./plans/archived/jessica-cruz-maria-hill-yelena-belova.md)
 - [Plan: Unify Lock-Poison Recovery on Strategy A (Recover + Log)](./plans/archived/kyle-rayner-domino-hawkgirl-20260518-000440.md)
@@ -70,6 +70,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Plan: GameState Extensibility Fix](./plans/archived/scarlet-witch-cyclone-nightwing.md)
 - [Plan: Extract ActionPipelineBackend Trait](./plans/archived/shadowcat-icon-nightcrawler.md)
 - [Plan: Rename Domain Vocabulary — CharacterState, TriggerAction, GenerationState](./plans/archived/simon-baz-iron-fist-booster-gold.md)
+- [Plan: Split `action_pipeline.rs` Integration Tests](./plans/archived/split_action_pipeline_tests.md)
 - [Plan: Reorganize game_service Module + Extract ActionPipelineBackend Trait](./plans/archived/wildcat-batman-dagger.md)
 - [Plan: Restructure Engine/Application Boundary in Chronicler Engine](./plans/archived/wildcat-flash-havok.md)
 - [Plan: Consolidate Action Pipeline Tests](./plans/archived/wolverine-miles-morales-forager.md)
@@ -106,7 +107,6 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Specification: Semantic Navigation](./system/navigation.md)
 - [Chronicler Engine Prompt System](./system/prompt_system.md)
 - [Engine Startup & Initialization](./system/startup.md)
-- [Testing Strategy](./system/testing.md)
 - [Specification: Text Check System](./system/text_check.md)
 - [System: Auto-Trigger & Reactive Encounters](./system/triggers.md)
 - [Specification: UI Design](./system/ui_design.md)
@@ -153,6 +153,6 @@ When adding a new feature:
 | How does game state persist (snapshots)? | [`system/game_flow.md`](./system/game_flow.md) + [ADR-008](./adr/adr-008-sqlite-snapshot-persistence.md) |
 | How do I configure an LLM connection? | [`system/llm_processing.md`](./system/llm_processing.md) |
 | What `data/` JSON schemas are used? | [`reference/data_schemas.md`](./reference/data_schemas.md) |
-| How do I run tests? | [`system/testing.md`](./system/testing.md) |
+| How do I run tests? | [`reference/testing.md`](./reference/testing.md) |
 | Why was X designed this way? | [`docs/adr/`](./adr/) |
 | What's the current roadmap? | [`ROADMAP.md`](./ROADMAP.md) |

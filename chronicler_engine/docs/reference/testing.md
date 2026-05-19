@@ -1,9 +1,11 @@
 # Specification: Testing Strategy and Architecture
 
 ## Objective
+
 Establish a formal policy for ensuring the Chronicler Engine remains heavily tested locally without incurring costs or latency from external LLM APIs.
 
 ## Policy Rules
+
 1. **Isolated Unit Tests**: All modules maintain fully isolated unit tests `#[test]` with zero networking overhead. Unit tests live in separate `*_tests.rs` sibling files (not inline `#[cfg(test)]` blocks) to keep source files under the 2,000-line guardrail.
 2. **Integration Capabilities**: Cross-module and end-to-end tests live in the top-level `tests/` directory.
 3. **LLM Abstraction (The Trait Pattern)**: No component outside of `main.rs` should be hardcoded to contact an external LLM API. Use `MockBackend` (implements `LlmBackend`) for tests.
@@ -38,23 +40,23 @@ mod logic_tests;
 
 Cross-module and browser-based tests live in the top-level `tests/` directory:
 
-| Test File / Directory | Purpose | Execution Model |
-|----------------------|---------|-----------------|
-| `architecture.rs` | Architecture guardrails (arch-lint, layer enforcement) | In-process |
-| `components/` | Templates, endpoints, settings, validation, fragments | In-process |
-| `browser/` | UI structure, layouts, interactions, editing | Browser |
-| `flow_mock/` | Core game loop, retry, state consistency with mock LLM | In-process + Mock LLM |
-| `flow_llm_tests.rs` | LLM narrative smoke tests | Browser + Real LLM |
-| `game_service.rs` | Service boundary — constructors, trait delegation | In-process |
-| `action_pipeline.rs` | Pipeline behavior — narration, quantifier, trigger, retry, cancellation | In-process |
-| `guardrails/` | Custom convention tests (imports, comments, file length) | In-process |
-| `logic_tests.rs` | Movement, room resolution, fuzzy matching | In-process |
-| `llm_message_storage_tests.rs` | SQLite LLM message persistence, auto-pruning | In-process |
-| `snapshot_storage_tests.rs` | SQLite snapshot persistence, checkpoints | In-process |
-| `state_snapshot_tests.rs` | Snapshot serialization/deserialization | In-process |
-| `text_check_tests.rs` | Spell/grammar checking with harper-core | In-process |
-| `trigger_tests.rs` | Trigger evaluation and firing | Browser + Mock LLM |
-| `diagnostic/` | Backend diagnostics, scenario validation | In-process |
+| Test File / Directory | Purpose | Execution Model | Runtime |
+|----------------------|---------|-----------------|---------|
+| `architecture.rs` | Architecture guardrails (arch-lint, layer enforcement) | In-process | ~2s |
+| `components/` | Templates, endpoints, settings, validation, fragments | In-process | ~7s |
+| `browser/` | UI structure, layouts, interactions, editing | Browser | ~37s |
+| `flow_mock/` | Core game loop, retry, state consistency with mock LLM | In-process + Mock LLM | ~30s |
+| `flow_llm_tests.rs` | LLM narrative smoke tests | Browser + Real LLM | ~30–120s |
+| `game_service.rs` | Service boundary — constructors, trait delegation | In-process | ~1s |
+| `action_pipeline/` | Pipeline behavior — narration, quantifier, trigger, retry, cancellation | In-process | ~0.7s |
+| `guardrails/` | Custom convention tests (imports, comments, file length) | In-process | ~2s |
+| `llm_message_storage_tests.rs` | SQLite LLM message persistence, auto-pruning | In-process | ~1s |
+| `snapshot_storage_tests.rs` | SQLite snapshot persistence, checkpoints | In-process | ~2s |
+| `poison_recovery.rs` | Lock poison recovery for `Mutex`/`RwLock` | In-process | ~1s |
+| `cli_tests.rs` | CLI argument parsing | In-process | ~1s |
+| `invariant_contract_tests.rs` | Runtime invariant regression tests | In-process | ~0.1s |
+| `trigger_tests.rs` | Trigger evaluation and firing | Browser + Mock LLM | ~30s |
+| `diagnostic/` | Backend diagnostics, scenario validation | In-process | ~2s |
 
 ## Backend Selection
 
@@ -103,8 +105,10 @@ Integration tests write a temporary `settings.json` with Mock connections and se
 
 ## Running Tests
 
+### Full Suite
+
 ```bash
-# Fast suite (default; LLM tests excluded)
+# Default: fast suite (~70 sec, LLM tests excluded)
 cargo nextest run
 python build.py
 
@@ -115,14 +119,21 @@ python build.py --include-llm
 # Run only LLM tests
 cargo nextest run --test flow_llm_tests --run-ignored only
 python build.py --llm-only
-
-# Specific suites
-cargo nextest run --test components
-cargo nextest run --test browser
-cargo nextest run --test flow_mock
-cargo nextest run --test game_service
-cargo nextest run --test action_pipeline
 ```
+
+### Fast Iteration
+
+Run individual test binaries directly (bypasses fmt, clippy, guardrails, and full suite):
+
+| Command | Duration | Use When |
+|---------|----------|----------|
+| `cargo nextest run --test action_pipeline` | ~0.7s | Pipeline changes |
+| `cargo nextest run --test components` | ~7s | Template/endpoint changes |
+| `cargo nextest run --test game_service` | ~1s | Service boundary changes |
+| `cargo nextest run --test guardrails` | ~2s | Guardrail changes |
+| `cargo nextest run --test invariant_contract_tests` | ~0.1s | Invariant changes |
+| `cargo nextest run --test browser` | ~37s | UI changes |
+| `cargo nextest run --test flow_mock` | ~30s | Flow logic changes |
 
 ## UI Tests
 
@@ -149,3 +160,39 @@ cargo llvm-cov test --json --output-path coverage.json
 ```
 
 See `docs/adr/` for detailed rationale behind testing patterns.
+
+## What We Keep
+
+Critical tests that must not be removed:
+
+| Test | Why |
+|------|-----|
+| `test_header_template_escapes_html` | XSS security — only test |
+| `test_action_handler_empty_command` | Validation — rejects blank input |
+| `test_story_log_scrollable` | Functional — can't scroll history |
+| `test_no_horizontal_overflow` | Regression — breaks page layout |
+
+## Smart Waiting Patterns
+
+Tests use polling, not fixed sleep:
+
+```rust
+// BAD: Fixed delay
+sleep(Duration::from_millis(15000)).await;
+
+// GOOD: Wait for condition
+wait_for_llm_idle(port, Duration::from_secs(30)).await;
+wait_for_status_ready(&page).await;
+```
+
+## Test Config
+
+Dynamic port allocation avoids conflicts:
+
+```json
+// tests/test_config.json
+{
+  "port_range": {"min": 3010, "max": 3030},
+  "default_backend": "mock"
+}
+```
