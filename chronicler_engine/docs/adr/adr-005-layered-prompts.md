@@ -8,7 +8,7 @@
 
 ## Context
 
-Pre-layered prompt system sent single-turn prompts without comprehensive context:
+Pre-layered prompt system sent isolated prompts without comprehensive context:
 - No conversation history sent to LLM
 - Fragmented game state (room, inventory, NPCs in separate calls)
 - No world info triggers
@@ -20,7 +20,7 @@ The team wanted SillyTavern-style comprehensive prompting for better narrative q
 
 ## Decision
 
-**Adopt an 8-layer prompt system sending full context to the LLM on every turn.**
+**Adopt an 8-layer prompt system sending full context to the LLM on every action.**
 
 ### Key choices and why
 

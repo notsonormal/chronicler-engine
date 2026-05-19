@@ -8,7 +8,7 @@
 
 The engine previously held all mutable game state in a single `Arc<Mutex<GameState>>`. This central mutex was accessed by HTTP handlers, debug endpoints, and tests. While simple, it had critical limitations:
 
-- **No per-turn history**: State mutations overwrote previous turns in-place
+- **No granular history**: State mutations overwrote previous state in-place
 - **No reset support**: Players could not restart without killing the server process
 - **No regeneration safety**: Retry logic had no stable anchor point to revert to
 - **Test flakiness**: Concurrent tests shared mutable state through the same mutex
@@ -19,7 +19,7 @@ The Phase 1.7 migration (see `docs/plans/multi-agent-phase1-snapshots-reset-2026
 
 ## Decision
 
-**Persist mutable game state as per-turn snapshots in SQLite, with a fast generation gate for concurrency control.**
+**Persist mutable game state as message-aligned snapshots in SQLite, with a fast generation gate for concurrency control.**
 
 ### Snapshot Design
 
@@ -30,7 +30,7 @@ pub struct GameStateSnapshot {
     pub movement: MovementState,
     pub narrative: NarrativeState,
     pub scene: SceneState,
-    pub character_state: CharacterState,
+    pub npc_encounter_log: NpcEncounterLog,
 }
 ```
 
@@ -54,20 +54,20 @@ An `AtomicBool` in `AppState` acts as a domain-level generation gate:
 ## Consequences
 
 ### Positive
-- **Per-turn anchoring**: Pre-generation snapshots enable safe retry and regeneration
+- **Message-level anchoring**: Pre-generation snapshots enable safe retry and regeneration
 - **Reset without restart**: Clear SQLite and reload world JSON
 - **Test isolation**: Each test can use an in-memory or temp-file database
 - **Retry tracking**: Retry saves with incremented retry count, preserving original snapshot
 
 ### Negative
-- **Disk I/O**: Every turn writes to SQLite (mitigated by WAL mode)
+- **Disk I/O**: Every message generation writes to SQLite (mitigated by WAL mode)
 - **Schema evolution**: Future state changes require migration logic
-- **Serialization cost**: `GameState` → `GameStateSnapshot` → JSON on every turn
+- **Serialization cost**: `GameState` → `GameStateSnapshot` → JSON on every action
 
 ### Trade-offs
 - Chose SQLite over in-memory-only or JSON files for ACID guarantees and queryability
 - Chose hard delete for reset over soft-delete for simplicity
-- Chose generation gate over mutex for domain-semantic correctness (one turn at a time)
+- Chose generation gate over mutex for domain-semantic correctness (one action at a time)
 
 ---
 

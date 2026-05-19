@@ -68,7 +68,7 @@ pub npcs_in_area: Vec<NpcCard>  // Dynamic from quantifier
 ```
 
 - **Storage**: Quantifier result persisted in `GameState`
-- **Fallback**: `state.scene.npcs_in_area` (previous turn's NPCs) when quantifier unavailable
+- **Fallback**: `state.scene.npcs_in_area` (previous state's NPCs) when quantifier unavailable
 - **Quantification**: Runs post-narration AND post-trigger-continuation to detect NPCs introduced by events
 
 ### Feature 3: Reactive Auto-Trigger Movement
@@ -128,7 +128,7 @@ Comparing previous vs current NPC presence in area:
 #### Semantics Changes
 
 - `times_met` increments ONLY on `Entered` (first encounter or rejoined after leaving)
-- Not simply when NPC is present in area across multiple turns
+- Not simply when NPC is present in area across multiple interactions
 - `currently_meeting = true` when `Entered` fires
 - `currently_meeting = false` when `Left` fires
 
@@ -197,7 +197,7 @@ pub struct NpcEncounterState {
     pub trigger_fired: HashMap<String, bool>,
 }
 
-pub struct CharacterState {
+pub struct NpcEncounterLog {
     pub npcs: HashMap<String, NpcEncounterState>,
 }
 ```
@@ -207,7 +207,7 @@ pub struct CharacterState {
 ```rust
 pub struct Trigger {
     pub condition: TriggerCondition,  // TimesMet(Eq, 0)
-    pub action: TriggerAction,        // name + narration_prompt
+    pub effect: TriggerEffect,        // name + narration_prompt
     pub repeat: bool,               // fire once or repeatable
 }
 ```

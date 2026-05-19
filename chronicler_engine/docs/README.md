@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-19 19:36 UTC*
+*Index last generated: 2026-05-19 19:50 UTC*
 
 ### Root files
 
@@ -27,6 +27,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [ADR-011: Text Check Integration](./adr/adr-011-text-check-integration.md)
 - [ADR-012: LLM Call Logging and Forensics](./adr/adr-012-llm-message-logging.md)
 - [ADR-013: Message Domain Model](./adr/adr-013-message-domain-model.md)
+- [ADR-014: Action Pipeline Architecture](./adr/adr-014-action-pipeline.md)
 
 ### `docs/architecture/`
 
@@ -53,27 +54,6 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Plan: Observability & Automated Forensics](./plans/observability-and-forensics-plan.md)
 - [Plan: State Patch Reducer for Post-Generation Agent Composition](./plans/state-patch-reducer-plan.md)
 - [AI Steering & Guided Generation](./plans/steering-and-guided-generation.md)
-
-### `docs/plans/archived/`
-
-- [Plan: Fix Pipeline Cancellation Blindness](./plans/archived/big-barda-supergirl-vixen.md)
-- [Plan: Remove Legacy Synchronous Dead Code (`evaluate_and_narrate_triggers`)](./plans/archived/black-widow-monet-aqualad.md)
-- [Settings I/O Centralization — Implementation Plan](./plans/archived/daredevil-john-stewart-blue-marvel.md)
-- [Implementation Plan: Fix Diagnostic Signal Quality for All 12 Scenarios](./plans/archived/diagnostic_fixes_plan-20260519.md)
-- [Implementation Plan: Extract Application Layer (Option A)](./plans/archived/falcon-robin-nick-fury.md)
-- [Plan: Fast-Fail Build & Test Localization](./plans/archived/fast-fail-build-test-localization-plan.md)
-- [Plan: Extract MessageHistory from GameState](./plans/archived/jade-black-lightning-killer-frost.md)
-- [Plan: Separate Domain Models from DB Models in Chronicler Engine](./plans/archived/jessica-cruz-maria-hill-yelena-belova.md)
-- [Plan: Unify Lock-Poison Recovery on Strategy A (Recover + Log)](./plans/archived/kyle-rayner-domino-hawkgirl-20260518-000440.md)
-- [Implementation Plan: Extract `ActionPipeline` to Unify Action and Retry Flows](./plans/archived/quasar-ravager-impulse-20260518.md)
-- [Plan: Break Engine↔Narrative Bidirectional Coupling](./plans/archived/rocket-nebula-morbius.md)
-- [Plan: GameState Extensibility Fix](./plans/archived/scarlet-witch-cyclone-nightwing.md)
-- [Plan: Extract ActionPipelineBackend Trait](./plans/archived/shadowcat-icon-nightcrawler.md)
-- [Plan: Rename Domain Vocabulary — CharacterState, TriggerAction, GenerationState](./plans/archived/simon-baz-iron-fist-booster-gold.md)
-- [Plan: Split `action_pipeline.rs` Integration Tests](./plans/archived/split_action_pipeline_tests.md)
-- [Plan: Reorganize game_service Module + Extract ActionPipelineBackend Trait](./plans/archived/wildcat-batman-dagger.md)
-- [Plan: Restructure Engine/Application Boundary in Chronicler Engine](./plans/archived/wildcat-flash-havok.md)
-- [Plan: Consolidate Action Pipeline Tests](./plans/archived/wolverine-miles-morales-forager.md)
 
 ### `docs/reference/`
 

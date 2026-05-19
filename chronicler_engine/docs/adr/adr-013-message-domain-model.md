@@ -47,7 +47,7 @@ This is simpler, more robust, and matches how the engine actually works.
 
 ### Positive
 
-- **Independent retry per AI output**: The user can retry the last message (narration, event, or dialogue) without affecting earlier messages in the same turn.
+- **Independent retry per AI output**: The user can retry the last message (narration, event, or dialogue) without affecting earlier messages.
 - **Layered deletion**: Deleting removes one message at a time, peeling back layers.
 - **No rendering changes**: `history()` derived view preserves all existing template and prompt builder behavior.
 - **Snapshot correlation preserved**: Every message stores `snapshot_id` — the snapshot saved after it was created. Retry loads the previous message's snapshot, no synthetic turn IDs needed.

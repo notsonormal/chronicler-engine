@@ -24,7 +24,7 @@ We will log every LLM call to a SQLite table with a strict global cap, and expos
 
 4. **SQLite auto-pruning** — `SqliteLlmMessageStorage::save()` wraps insert + "DELETE oldest" in a transaction. No background jobs, no runtime configuration. The 50-row cap is hardcoded and global.
 
-5. **Flat global log** — No `turn_id` foreign key. The log survives game resets and supports future multi-game scenarios.
+5. **Flat global log** — No foreign key. The log survives game resets and supports future multi-game scenarios.
 
 6. **Storage trait abstraction** — `LlmMessageStorage` trait with `save()` and `list_latest()`. This enables:
    - `SqliteLlmMessageStorage` for production
@@ -52,8 +52,8 @@ We will log every LLM call to a SQLite table with a strict global cap, and expos
 ### Structured tracing (`tracing` crate)
 Rejected for this phase. `tracing` spans/events are excellent for request-level tracing but do not persist raw request/response JSON in a queryable form. We may adopt `tracing` later (see observability plan) as a complementary layer.
 
-### Per-turn log with foreign key
-Rejected. A `turn_id` foreign key would tie LLM logs to the narrative state, but this breaks on game reset and complicates the schema. The flat log is simpler and more resilient.
+### Narrative state log with foreign key
+Rejected. A foreign key would tie LLM logs to the narrative state, but this breaks on game reset and complicates the schema. The flat log is simpler and more resilient.
 
 ### File-based logging (JSON lines)
 Rejected. SQLite provides atomicity, queryability, and integrates with the existing `DbPool`. File-based logs would require rotation, parsing, and separate query tooling.
