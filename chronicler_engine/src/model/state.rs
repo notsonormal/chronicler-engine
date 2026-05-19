@@ -150,6 +150,12 @@ pub struct NarrativeState {
     pub pending_location: Option<String>,
     #[serde(default)]
     pub pending_event: Option<String>,
+    /// Name of the backend used for the last narration call.
+    #[serde(default)]
+    pub last_backend_name: Option<String>,
+    /// Name of the model used for the last narration call.
+    #[serde(default)]
+    pub last_model_name: Option<String>,
 }
 
 impl NarrativeState {
@@ -164,6 +170,8 @@ impl NarrativeState {
             last_trigger: snapshot.last_trigger.clone(),
             pending_location: snapshot.pending_location.clone(),
             pending_event: snapshot.pending_event.clone(),
+            last_backend_name: snapshot.last_backend_name.clone(),
+            last_model_name: snapshot.last_model_name.clone(),
         }
     }
 }
@@ -171,6 +179,9 @@ impl NarrativeState {
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SceneState {
     pub npcs_in_area: Vec<NpcCard>,
+    /// Confidence of the last quantifier run (High, Medium, Low, or None if not run).
+    #[serde(default)]
+    pub quantifier_confidence: Option<String>,
 }
 
 // ─── GameState ────────────────────────────────────────────────────────────────

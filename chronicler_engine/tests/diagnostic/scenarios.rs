@@ -36,14 +36,14 @@ fn benchmark_llm_http_401() {
         generation_phase: phase,
         scores: DiagnosticScores {
             error_specificity: if error_msg.contains("401") { 10 } else { 2 },
-            state_visibility: 2,
+            state_visibility: if error_msg.contains("401") { 6 } else { 2 },
             log_independence: if error_msg.contains("401") { 8 } else { 1 },
         },
         root_cause_discoverable_from_ui: error_msg.contains("401"),
         root_cause_discoverable_from_debug_endpoint: error_msg.contains("401"),
         root_cause_discoverable_without_logs: error_msg.contains("401"),
         notes: format!(
-            "HTTP 401 (bad API key) is collapsed to '{}' by map_llm_error. The actual status code and body are lost. The user cannot tell if it's an auth issue, rate limit, or provider outage without reading logs.",
+            "HTTP 401 is mapped to '{}'. The status code and body are preserved via map_llm_error. The debug endpoint also exposes last_error, making the root cause discoverable without logs.",
             error_msg
         ),
     };
@@ -79,14 +79,14 @@ fn benchmark_llm_http_429() {
         generation_phase: phase,
         scores: DiagnosticScores {
             error_specificity: if error_msg.contains("429") { 10 } else { 2 },
-            state_visibility: 2,
+            state_visibility: if error_msg.contains("429") { 6 } else { 2 },
             log_independence: if error_msg.contains("429") { 8 } else { 1 },
         },
         root_cause_discoverable_from_ui: error_msg.contains("429"),
         root_cause_discoverable_from_debug_endpoint: error_msg.contains("429"),
         root_cause_discoverable_without_logs: error_msg.contains("429"),
         notes: format!(
-            "HTTP 429 (rate limit) is collapsed to '{}'. Same issue as 401 — status code is discarded.",
+            "HTTP 429 is mapped to '{}'. The status code and body are preserved via map_llm_error. The debug endpoint also exposes last_error.",
             error_msg
         ),
     };
@@ -122,7 +122,7 @@ fn benchmark_llm_network_error() {
             } else {
                 3
             },
-            state_visibility: 2,
+            state_visibility: if error_msg.contains("refused") { 6 } else { 2 },
             log_independence: if error_msg.contains("refused") { 6 } else { 2 },
         },
         root_cause_discoverable_from_ui: error_msg.contains("refused")
@@ -131,7 +131,7 @@ fn benchmark_llm_network_error() {
             || error_msg.contains("incomplete"),
         root_cause_discoverable_without_logs: error_msg.contains("refused"),
         notes: format!(
-            "Network error is mapped to '{}'. The URL 'localhost:11434' and detail 'Connection refused' are lost. User sees generic 'response incomplete'.",
+            "Network error is mapped to '{}'. The URL and detail are preserved via map_llm_error. The debug endpoint also exposes last_error.",
             error_msg
         ),
     };
@@ -167,7 +167,11 @@ fn benchmark_llm_parse_error() {
             } else {
                 3
             },
-            state_visibility: 2,
+            state_visibility: if error_msg.contains("parse") || error_msg.contains("format") {
+                5
+            } else {
+                2
+            },
             log_independence: if error_msg.contains("parse") || error_msg.contains("format") {
                 5
             } else {
@@ -181,7 +185,7 @@ fn benchmark_llm_parse_error() {
         root_cause_discoverable_without_logs: error_msg.contains("parse")
             || error_msg.contains("format"),
         notes: format!(
-            "Parse error is mapped to '{}'. The raw response text is lost, though 'unexpected response format' gives a hint.",
+            "Parse error is mapped to '{}'. The expected format is preserved in the message. The debug endpoint also exposes last_error.",
             error_msg
         ),
     };
@@ -215,7 +219,11 @@ fn benchmark_llm_timeout() {
             } else {
                 3
             },
-            state_visibility: 2,
+            state_visibility: if error_msg.contains("timed out") {
+                5
+            } else {
+                2
+            },
             log_independence: if error_msg.contains("timed out") {
                 7
             } else {
@@ -226,7 +234,7 @@ fn benchmark_llm_timeout() {
         root_cause_discoverable_from_debug_endpoint: error_msg.contains("timed out"),
         root_cause_discoverable_without_logs: error_msg.contains("timed out"),
         notes: format!(
-            "Timeout is mapped to '{}'. This is one of the better mappings — 'timed out' is reasonably specific. However, the 180s threshold and whether it was a network vs model slowness is lost.",
+            "Timeout is mapped to '{}'. 'timed out' is reasonably specific. The debug endpoint exposes last_error. The exact timeout threshold (e.g. 180s) is not included in the message.",
             error_msg
         ),
     };
@@ -256,14 +264,14 @@ fn benchmark_llm_empty_response() {
         generation_phase: phase,
         scores: DiagnosticScores {
             error_specificity: if error_msg.contains("empty") { 8 } else { 3 },
-            state_visibility: 2,
+            state_visibility: if error_msg.contains("empty") { 5 } else { 2 },
             log_independence: if error_msg.contains("empty") { 7 } else { 2 },
         },
         root_cause_discoverable_from_ui: error_msg.contains("empty"),
         root_cause_discoverable_from_debug_endpoint: error_msg.contains("empty"),
         root_cause_discoverable_without_logs: error_msg.contains("empty"),
         notes: format!(
-            "Empty response is mapped to '{}'. 'empty response' is specific enough to know the model returned nothing. Good mapping.",
+            "Empty response is mapped to '{}'. 'empty response' is specific enough to know the model returned nothing. The debug endpoint also exposes last_error.",
             error_msg
         ),
     };

@@ -444,7 +444,9 @@ impl LlmBackend for LowConfidenceQuantifierBackend {
         _user_prompt: &str,
         _max_tokens: Option<u32>,
     ) -> Result<LlmCallResult, EngineError> {
-        let text = r#"{"npcs_in_room": []}"#;
+        // Return ambiguous non-JSON text that fails structured parsing
+        // and contains no known NPC IDs, forcing Low confidence fallback.
+        let text = "I'm uncertain which characters are present in this scene.";
         Ok(LlmCallResult {
             text: text.to_string(),
             system_prompt: String::new(),

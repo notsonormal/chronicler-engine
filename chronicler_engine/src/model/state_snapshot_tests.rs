@@ -41,6 +41,7 @@ fn test_game_state_snapshot_apply_to() {
         },
         scene: SceneState {
             npcs_in_area: vec![],
+            ..Default::default()
         },
         npc_encounter_log: NpcEncounterLog::default(),
         committed: true,

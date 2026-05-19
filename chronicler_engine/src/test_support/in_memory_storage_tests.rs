@@ -20,6 +20,7 @@ fn empty_snapshot() -> GameStateSnapshot {
         narrative: NarrativeSnapshot::default(),
         scene: SceneState {
             npcs_in_area: Vec::new(),
+            ..Default::default()
         },
         npc_encounter_log: NpcEncounterLog::default(),
         committed: false,

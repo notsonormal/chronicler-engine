@@ -3,6 +3,16 @@
 ## 2026-05-19
 
 ### Changed
+- **Diagnostic signal quality improvements** — Fixed and updated the diagnostic benchmark suite
+  - `map_llm_error` already preserved structured error details (HTTP status, network URL/detail, parse format, empty response) — updated benchmark notes and scores to reflect reality
+  - Fixed `LowConfidenceQuantifierBackend` in diagnostic tests to return ambiguous non-JSON text, correctly triggering the low-confidence system log path
+  - Updated all 12 benchmark scenarios with factually accurate notes; raised `state_visibility` scores for LLM scenarios (debug endpoint now exposes `last_error`)
+  - Added `quantifier_confidence` field to `SceneState` and `DebugStateResponse` — debug endpoint now shows High/Medium/Low
+  - Added `backend_name` and `model_name` fields to `NarrativeState` and `DebugStateResponse` — tracks which backend served the last narration
+  - Fixed cancellation state-reset bugs in `run_trigger_continuation`: trigger retry failures and empty trigger responses now persist `GenerationStatus::Error` instead of leaving state stuck in `Generating`
+  - All 806 tests pass; clippy clean
+
+### Changed
 - **Consolidated action pipeline integration tests and trimmed redundant `game_service` tests**
   - `tests/action_pipeline.rs` expanded from 9 to 30 tests — now owns all pipeline-behavior integration tests (narration, errors, cancellation, quantifier, trigger, retry)
   - Moved 17 tests from `tests/game_service/advanced.rs` to `tests/action_pipeline.rs`, adapted to call `execute_action_impl` / `retry_last_response_impl` directly

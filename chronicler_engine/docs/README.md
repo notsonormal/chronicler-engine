@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-18 23:48 UTC*
+*Index last generated: 2026-05-19 18:41 UTC*
 
 ### Root files
 
@@ -48,7 +48,6 @@ This folder contains all documentation for the Chronicler Engine project.
 ### `docs/plans/`
 
 - [Plan: Diagnostic Decision Tree as Agent Infrastructure](./plans/diagnostic-decision-tree-plan.md)
-- [Implementation Plan: Fix Diagnostic Signal Quality for All 12 Scenarios](./plans/diagnostic_fixes_plan.md)
 - [Plan: Fast-Fail Build & Test Localization](./plans/fast-fail-build-test-localization-plan.md)
 - [LLM Infrastructure Improvements](./plans/llm-infrastructure-improvements.md)
 - [Spec: Agent-Ready Pipeline Restructure for Chronicler Engine](./plans/multi-agent-architecture-overarching-spec.md)
@@ -61,6 +60,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Plan: Fix Pipeline Cancellation Blindness](./plans/archived/big-barda-supergirl-vixen.md)
 - [Plan: Remove Legacy Synchronous Dead Code (`evaluate_and_narrate_triggers`)](./plans/archived/black-widow-monet-aqualad.md)
 - [Settings I/O Centralization — Implementation Plan](./plans/archived/daredevil-john-stewart-blue-marvel.md)
+- [Implementation Plan: Fix Diagnostic Signal Quality for All 12 Scenarios](./plans/archived/diagnostic_fixes_plan-20260519.md)
 - [Implementation Plan: Extract Application Layer (Option A)](./plans/archived/falcon-robin-nick-fury.md)
 - [Plan: Extract MessageHistory from GameState](./plans/archived/jade-black-lightning-killer-frost.md)
 - [Plan: Separate Domain Models from DB Models in Chronicler Engine](./plans/archived/jessica-cruz-maria-hill-yelena-belova.md)

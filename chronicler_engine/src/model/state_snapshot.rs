@@ -17,6 +17,10 @@ pub struct NarrativeSnapshot {
     pub pending_location: Option<String>,
     #[serde(default)]
     pub pending_event: Option<String>,
+    #[serde(default)]
+    pub last_backend_name: Option<String>,
+    #[serde(default)]
+    pub last_model_name: Option<String>,
 }
 
 impl NarrativeSnapshot {
@@ -26,6 +30,8 @@ impl NarrativeSnapshot {
             last_trigger: state.last_trigger.clone(),
             pending_location: state.pending_location.clone(),
             pending_event: state.pending_event.clone(),
+            last_backend_name: state.last_backend_name.clone(),
+            last_model_name: state.last_model_name.clone(),
         }
     }
 }
@@ -62,6 +68,8 @@ impl GameStateSnapshot {
         state.narrative.last_trigger = self.narrative.last_trigger.clone();
         state.narrative.pending_location = self.narrative.pending_location.clone();
         state.narrative.pending_event = self.narrative.pending_event.clone();
+        state.narrative.last_backend_name = self.narrative.last_backend_name.clone();
+        state.narrative.last_model_name = self.narrative.last_model_name.clone();
         state.scene = self.scene.clone();
         state.npc_encounter_log = self.npc_encounter_log.clone();
     }

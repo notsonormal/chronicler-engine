@@ -19,6 +19,9 @@ pub struct DebugStateResponse {
     pub dynamic_rooms: Vec<String>,
     pub dynamic_room_count: usize,
     pub last_error: Option<String>,
+    pub quantifier_confidence: Option<String>,
+    pub backend_name: Option<String>,
+    pub model_name: Option<String>,
 }
 
 /// NOTE: dev-only diagnostic endpoint
@@ -70,6 +73,9 @@ pub async fn debug_state_handler(
         dynamic_rooms,
         dynamic_room_count: guard.movement.dynamic_rooms.len(),
         last_error,
+        quantifier_confidence: guard.scene.quantifier_confidence.clone(),
+        backend_name: guard.narrative.last_backend_name.clone(),
+        model_name: guard.narrative.last_model_name.clone(),
     };
 
     Ok(Json(response))

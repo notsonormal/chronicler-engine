@@ -90,7 +90,10 @@ fn make_state(
     let npcs: Vec<NpcCard> = all_npcs.to_vec();
     crate::model::state::GameStateBuilder::new(world, map, player, "room_1")
         .with_npcs(npcs)
-        .with_scene(crate::model::state::SceneState { npcs_in_area })
+        .with_scene(crate::model::state::SceneState {
+            npcs_in_area,
+            ..Default::default()
+        })
         .with_npc_encounter_log(npc_encounter_log)
         .build()
 }

@@ -74,11 +74,13 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
             Err(outcome) => return outcome,
         };
 
-        let narration_text =
+        let (narration_text, backend_name, model_name) =
             match self.phase_narrate(&state, &input, &world, &map, &player, &all_npcs) {
-                Ok(text) => text,
+                Ok((text, backend, model)) => (text, backend, model),
                 Err(outcome) => return outcome,
             };
+        state.narrative.last_backend_name = Some(backend_name);
+        state.narrative.last_model_name = Some(model_name);
 
         let quantifier_result = self.phase_post_generation(&mut state, &input, &narration_text);
 
@@ -148,7 +150,7 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
         map: &MapDef,
         player: &PlayerCard,
         all_npcs: &[NpcCard],
-    ) -> PipelineResult<String> {
+    ) -> PipelineResult<(String, String, String)> {
         let Some(room) = map.get_room_by_id(&state.movement.current_room_id) else {
             return Err(self.save_early_error("Room not found"));
         };
@@ -177,7 +179,11 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
             return Err(self.save_early_error("LLM Error: empty response"));
         }
 
-        Ok(narration_text)
+        Ok((
+            narration_text,
+            narration_result.backend_name,
+            narration_result.model_name,
+        ))
     }
 
     fn phase_post_generation(
@@ -193,6 +199,9 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
             narration_text,
             &mut quantifier_result,
         );
+
+        state.scene.quantifier_confidence =
+            Some(format!("{:?}", quantifier_result.npcs.confidence));
 
         if quantifier_result.npcs.confidence == QuantifierConfidence::Low {
             state.add_log(
@@ -271,19 +280,31 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
             return Err(self.handle_cancellation());
         }
 
-        if !continuation_text.is_empty() {
-            state = match commit_trigger_narration(state.clone(), request, &continuation_text) {
-                Ok(s) => s,
-                Err(e) => {
-                    log::error!("Trigger commit failed: {e}");
-                    state.narrative.input_buffer.status =
-                        GenerationStatus::Error(format!("Trigger error: {e}"));
-                    return Err(ActionOutcome::Error {
-                        message: format!("Trigger commit failed: {e}"),
-                    });
-                }
-            };
+        if continuation_text.trim().is_empty() {
+            state.narrative.input_buffer.status =
+                GenerationStatus::Error("LLM Error: empty response".to_string());
+            if let Err(e) = save_state(self.ctx, &mut state) {
+                log::error!("Critical: failed to persist empty trigger state: {e}");
+            }
+            return Err(ActionOutcome::Error {
+                message: "LLM Error: empty response".to_string(),
+            });
         }
+
+        state = match commit_trigger_narration(state.clone(), request, &continuation_text) {
+            Ok(s) => s,
+            Err(e) => {
+                log::error!("Trigger commit failed: {e}");
+                state.narrative.input_buffer.status =
+                    GenerationStatus::Error(format!("Trigger error: {e}"));
+                if let Err(e) = save_state(self.ctx, &mut state) {
+                    log::error!("Critical: failed to persist trigger commit error state: {e}");
+                }
+                return Err(ActionOutcome::Error {
+                    message: format!("Trigger commit failed: {e}"),
+                });
+            }
+        };
 
         Ok((state, continuation_text))
     }
@@ -347,6 +368,11 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
             Ok(result) => result,
             Err(e) => {
                 log::error!("Trigger narration retry failed: {e}");
+                state.narrative.input_buffer.status =
+                    GenerationStatus::Error(format!("Trigger narration failed: {e}"));
+                if let Err(e) = save_state(self.ctx, &mut state) {
+                    log::error!("Critical: failed to persist trigger retry error state: {e}");
+                }
                 return ActionOutcome::Error {
                     message: format!("Retry failed: {e}"),
                 };
@@ -355,6 +381,11 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
         let continuation_text = continuation_result.text;
 
         if continuation_text.trim().is_empty() {
+            state.narrative.input_buffer.status =
+                GenerationStatus::Error("LLM Error: empty response".to_string());
+            if let Err(e) = save_state(self.ctx, &mut state) {
+                log::error!("Critical: failed to persist empty trigger retry state: {e}");
+            }
             return ActionOutcome::Error {
                 message: "LLM Error: empty response".to_string(),
             };
@@ -367,6 +398,11 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
                 Ok(s) => s,
                 Err(e) => {
                     log::error!("Trigger commit failed on retry: {e}");
+                    state.narrative.input_buffer.status =
+                        GenerationStatus::Error(format!("Trigger error: {e}"));
+                    if let Err(e) = save_state(self.ctx, &mut state) {
+                        log::error!("Critical: failed to persist trigger commit error state: {e}");
+                    }
                     return ActionOutcome::Error {
                         message: format!("Trigger error: {e}"),
                     };
@@ -422,6 +458,9 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
             continuation_text,
             &mut post_trigger_result,
         );
+
+        state.scene.quantifier_confidence =
+            Some(format!("{:?}", post_trigger_result.npcs.confidence));
 
         let npc_cards: Vec<NpcCard> = post_trigger_result
             .npcs

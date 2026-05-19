@@ -18,6 +18,7 @@ fn test_snapshot_roundtrip() {
         narrative: NarrativeSnapshot::default(),
         scene: SceneState {
             npcs_in_area: vec![],
+            ..Default::default()
         },
         npc_encounter_log: NpcEncounterLog::default(),
         committed: true,
@@ -47,6 +48,7 @@ fn test_snapshot_uncommitted_no_db_id() {
         narrative: NarrativeSnapshot::default(),
         scene: SceneState {
             npcs_in_area: vec![],
+            ..Default::default()
         },
         npc_encounter_log: NpcEncounterLog::default(),
         committed: false,
@@ -70,6 +72,7 @@ fn test_snapshot_json_columns() {
         narrative: NarrativeSnapshot::default(),
         scene: SceneState {
             npcs_in_area: vec![],
+            ..Default::default()
         },
         npc_encounter_log: NpcEncounterLog::default(),
         committed: false,
