@@ -17,6 +17,17 @@ fn test_quantifier_prompt_builder_basic() {
     let previous_npcs = vec![carla];
     let history = make_history();
 
+    let override_text = r#"You are a scene quantifier for a text adventure game.
+Your task is to determine which NPCs are present in the current room.
+
+Respond ONLY with a JSON object in this exact format:
+{"npcs_in_room": ["id1", "id2"]}
+
+How to determine movement:
+1. Read <CurrentRoom> — this is where the player is right now.
+2. Read <LatestNarration> — this is what just happened.
+"#;
+
     let context = QuantifierPromptContext {
         room: &room,
         previous_room_npcs: &previous_npcs,
@@ -25,6 +36,7 @@ fn test_quantifier_prompt_builder_basic() {
         player_name: "Hero",
         recent_history: &history,
         player_action: "I walk into the entrance hall.",
+        quantifier_prompt_override: Some(override_text.to_string()),
     };
 
     let builder = QuantifierPromptBuilder::new(context);
@@ -62,6 +74,7 @@ fn test_quantifier_prompt_builder_token_budget() {
         player_name: "Hero",
         recent_history: &history,
         player_action: "I look around.",
+        quantifier_prompt_override: None,
     };
 
     let builder = QuantifierPromptBuilder::new(context);
@@ -89,6 +102,7 @@ fn test_quantifier_prompt_builder_empty_history() {
         player_name: "Hero",
         recent_history: &history,
         player_action: "I look around.",
+        quantifier_prompt_override: None,
     };
 
     let builder = QuantifierPromptBuilder::new(context);
@@ -121,6 +135,7 @@ fn test_quantifier_prompt_includes_navigation() {
         player_name: "Player",
         recent_history: &[],
         player_action: "I walk to the kitchen",
+        quantifier_prompt_override: None,
     };
 
     let builder = QuantifierPromptBuilder::new(context);
@@ -145,6 +160,7 @@ fn test_quantifier_prompt_builder_empty_npcs() {
         player_name: "Hero",
         recent_history: &history,
         player_action: "I look around.",
+        quantifier_prompt_override: None,
     };
 
     let builder = QuantifierPromptBuilder::new(context);
@@ -177,6 +193,7 @@ fn test_quantifier_prompt_builder_all_rooms() {
         player_name: "Hero",
         recent_history: &[],
         player_action: "I look around.",
+        quantifier_prompt_override: None,
     };
 
     let builder = QuantifierPromptBuilder::new(context);
@@ -202,6 +219,7 @@ fn test_quantifier_prompt_uses_latest_narration_tag() {
         player_name: "Hero",
         recent_history: &history,
         player_action: "I look around.",
+        quantifier_prompt_override: None,
     };
 
     let builder = QuantifierPromptBuilder::new(context);
@@ -232,6 +250,7 @@ fn test_quantifier_prompt_references_latest_narration_in_query() {
         player_name: "Hero",
         recent_history: &history,
         player_action: "I look around.",
+        quantifier_prompt_override: None,
     };
 
     let builder = QuantifierPromptBuilder::new(context);

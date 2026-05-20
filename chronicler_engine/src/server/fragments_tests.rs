@@ -31,6 +31,9 @@ fn make_test_app_state(
                 Arc::new(RwLock::new(AppSettings::default())),
             ),
         ) as Arc<dyn crate::application::game_service::GameService>,
+        prompt_preset_storage: Arc::new(
+            crate::storage::prompt_preset_storage::InMemoryPromptPresetStorage::new(),
+        ),
         settings: Arc::new(RwLock::new(AppSettings::default())),
         cancel_token: Arc::new(RwLock::new(CancellationToken::new())),
         is_generating: Arc::new(AtomicBool::new(false)),
@@ -55,8 +58,8 @@ fn test_html_escape_quotes() {
 #[test]
 fn test_html_escape_all() {
     assert_eq!(
-        html_escape("<foo & \"bar\">"),
-        "&lt;foo &amp; &quot;bar&quot;&gt;"
+        html_escape("<foo & \"bar'\">"),
+        "&lt;foo &amp; &quot;bar&#x27;&quot;&gt;"
     );
 }
 

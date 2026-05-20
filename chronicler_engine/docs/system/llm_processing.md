@@ -51,11 +51,11 @@ The engine uses a layered prompt system inspired by SillyTavern's Prompt Manager
 | 4 | World Info | `<WorldLore>` — World lore triggered by keywords | User (data) |
 | 5 | History | `<ConversationHistory>` — Full narrative history (flattened messages) | User (data) |
 | 6 | User Input | `<PlayerInput>` — Current player message | User (data) |
-| 7 | PHI | Plain-text post-history behavioral guidance | User (instruction) |
+| 7 | Output Format | Writing style and output format behavioral guidance | User (instruction) |
 
 **`build_split()` separation**:
 - **System half**: Plain-text instructions only (Layer 0)
-- **User half**: XML-wrapped data (Layers 1–6) + plain-text PHI (Layer 7)
+- **User half**: XML-wrapped data (Layers 1–6) + plain-text output format (Layer 7)
 
 This separation reduces the chance of reasoning models (e.g., Gemma 4) entering meta-analysis mode. However, the Gemma 4 26B model (particularly abliterated quants) can still get stuck in an infinite `<|channel>thought` loop even with plain-text instructions. An additional prompt-level fix is applied for Gemma 4 models (see section 8).
 
@@ -122,7 +122,7 @@ The LLM Messages tab (`/fragment/llm-messages`) renders the last 50 calls as an 
 
 ### Module Location
 - **Crate path**: `crate::narrative::llm` — directory module (`mod.rs`, `backend.rs`, `openrouter.rs`, `deepseek.rs`, `ollama.rs`, `mock.rs`)
-- **Crate path**: `crate::narrative::prompt` — directory module (`mod.rs`, `builder.rs`, `budget.rs`, `context.rs`, `sanitize.rs`, `templates.rs`, `types.rs`, plus sibling `*_tests.rs` files)
+- **Crate path**: `crate::narrative::prompt` — directory module (`mod.rs`, `builder.rs`, `budget.rs`, `context.rs`, `sanitize.rs`, `types.rs`, plus sibling `*_tests.rs` files)
 - **Crate path**: `crate::narrative::llm_client` — HTTP client helpers (`src/narrative/llm_client.rs`)
 - **Crate path**: `crate::storage::llm_message_storage` — trait + SQLite + in-memory implementations
 - **Crate path**: `crate::model::llm_message` — `LlmMessage` data model

@@ -115,6 +115,7 @@ pub(crate) fn trim_history_to_budget(user: &str, target_user_tokens: usize) -> S
 }
 
 /// [DOC: docs/system/prompt_system.md]
+#[allow(clippy::too_many_arguments)]
 pub fn make_prompt_context<'a>(
     world: &'a WorldCard,
     room: &'a Room,
@@ -123,6 +124,7 @@ pub fn make_prompt_context<'a>(
     player: &'a PlayerCard,
     user_message: &'a str,
     history: &'a [LogEntry],
+    system_prompt_override: Option<String>,
 ) -> PromptContext<'a> {
     PromptContext {
         world,
@@ -132,5 +134,6 @@ pub fn make_prompt_context<'a>(
         player,
         user_message,
         history,
+        system_prompt_override,
     }
 }

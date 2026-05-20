@@ -101,8 +101,9 @@ fn test_make_prompt_context() {
     let npcs = vec![crate::test_support::TestNpc::named("npc1", "Npc")];
     let history = vec![];
 
-    let context: PromptContext =
-        make_prompt_context(&world, &room, &npcs, &npcs, &player, "hello", &history);
+    let context: PromptContext = make_prompt_context(
+        &world, &room, &npcs, &npcs, &player, "hello", &history, None,
+    );
 
     assert_eq!(context.world.name, "Test World");
     assert_eq!(context.room.id, "test_room");

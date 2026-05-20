@@ -1,6 +1,6 @@
 # Reference: Normal System Prompt
 
-> **Context**: This document contains the actual prompt text for **Layer 0 (System Prompt)** and **Layer 7 (PHI)** of the Chronicler Engine's 8-layer narrative prompt system. For the overall architecture, see [`system/prompt_system.md`](../system/prompt_system.md).
+> **Context**: This document contains the actual prompt text for **Layer 0 (System Prompt)** and **Layer 7 (Output Format)** of the Chronicler Engine's 8-layer narrative prompt system. For the overall architecture, see [`system/prompt_system.md`](../system/prompt_system.md).
 
 The normal system prompt (Layer 0) is rendered by `PromptBuilder::render_system_layer()` in `src/narrative/prompt/builder.rs`. It uses **plain-text instructions** — no XML tags wrapping the instructions themselves. XML is reserved for external data sections (`<GameState>`, `<KnownNpcs>`, etc.) only.
 
@@ -64,13 +64,6 @@ General rules:
 - Consequences persist. Actions have permanent effects.
 - Never break the fourth wall or provide meta-commentary.
 
-Writing style:
-- Third-person limited perspective, focused on the player character.
-- Past tense narrative prose.
-- Literary fiction style — show don't tell, sensory details, atmospheric.
-
-The player's next action will be provided separately. Your only job is to narrate what happens now.
-
 Global Rules:
 - (dynamic rules from world.json global_rules)
 
@@ -78,37 +71,41 @@ Response Length:
 - (optional length guidance from settings.json response_length)
 ```
 
-## PHI Layer (Post-History Instructions)
+## Output Format Layer
 
-The PHI layer is rendered by `PromptBuilder::render_phi_layer()`:
-
-```
-Narrate the outcome of the player's action in immersive prose.
-
-Let the scene unfold naturally — some moments call for a single sharp image, others for extended description or dialogue. Match the pacing to what's happening.
-
-Do NOT conclude with any form of player direction, question, or prompt.
-End on a descriptive note — an image, a sound, a feeling, or an unresolved moment.
-```
-
-## PHI Layer
-
-The PHI layer (Layer 7) contains universal behavioral instructions that apply to all narrative generation:
+The output format layer is rendered by `PromptBuilder::render_output_format_layer()`:
 
 ```
-Narrate the outcome of the player's action in immersive prose.
+Writing style:
+- Third-person limited perspective, focused on the player character.
+- Past tense narrative prose.
 
-Let the scene unfold naturally — some moments call for a single sharp image, others for extended description or dialogue. Match the pacing to what's happening.
+The player's next action is provided above. Your only job is to narrate what happens now.
 
-Do NOT conclude with any form of player direction, question, or prompt.
-End on a descriptive note — an image, a sound, a feeling, or an unresolved moment.
+Do not re-narrate events that already occurred in the history above. Move the scene forward from where it left off.
 ```
 
-These constraints apply equally to main narrations and trigger continuation narrations. The distinction between "narrate an action" and "continue the scene" comes from the user message (Layer 6) and chat history (Layer 5), not from the PHI.
+The output format layer (Layer 7) contains writing style instructions and output format guidance that apply to all narrative generation. It is appended to the **user message** so it sits closest to the generation point.
 
-See: `src/narrative/prompt/templates.rs:PHI_NARRATION_TEMPLATE`
+These constraints apply equally to main narrations and trigger continuation narrations. The distinction between "narrate an action" and "continue the scene" comes from the user message (Layer 6) and chat history (Layer 5), not from the output format.
+
+See: `src/narrative/prompt/builder.rs:OUTPUT_FORMAT_TEMPLATE`
+
+## Customization
+
+The system prompt can be customized at runtime via the **Prompt Presets** tab in the dashboard:
+
+1. Navigate to the **Prompt Presets** tab
+2. Create a new System Prompt preset (or edit an existing non-default one)
+3. Click **Set Active** to apply it
+
+The active preset is stored in `AppSettings.active_system_prompt_preset_id` and its text is cached in `AppSettings.active_system_prompt`. When an active preset is set, its text is injected into `PromptContext.system_prompt_override` and used by `PromptBuilder::render_system_layer()`.
+
+Default presets (shipped as `data/prompt_presets/system/default.json`) are protected and cannot be edited or deleted. To modify a default, create a copy and activate it.
 
 ## Sources
 
-- System prompt: `src/narrative/prompt/templates.rs:SYSTEM_PROMPT_TEMPLATE`
-- PHI layer: `src/narrative/prompt/templates.rs:PHI_NARRATION_TEMPLATE`
+- System prompt seed: `data/prompt_presets/system/default.json`
+- Output format layer: `src/narrative/prompt/builder.rs:OUTPUT_FORMAT_TEMPLATE`
+- Prompt preset storage: `src/storage/prompt_preset_storage.rs`
+- Dashboard UI: `src/server/prompt_presets_fragment/`

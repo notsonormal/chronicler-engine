@@ -1,7 +1,8 @@
 use crate::model::llm_backend::LlmBackendType;
 use crate::model::settings::Connection;
 
-use super::template::{html_escape, provider_options_html};
+use super::template::provider_options_html;
+use crate::server::fragments::html_escape;
 
 pub(crate) fn connection_card_html(
     conn: &Connection,

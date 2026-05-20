@@ -1410,3 +1410,195 @@ input[type="checkbox"]:focus {
     padding: var(--spacing-md);
     font-style: italic;
 }
+
+/* Prompt Presets Tab Scrolling */
+#prompt-presets-tab {
+    overflow: hidden;
+}
+
+/* Prompt Presets Panel */
+.prompt-presets-panel {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--spacing-md);
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-lg);
+    max-width: 900px;
+}
+
+.preset-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+}
+
+.preset-section h2 {
+    font-size: 1.2em;
+    color: var(--color-text-primary);
+    border-bottom: 1px solid var(--color-border);
+    padding-bottom: var(--spacing-sm);
+}
+
+.preset-section-desc {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-small);
+    margin-top: calc(-1 * var(--spacing-sm));
+}
+
+.preset-card {
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: var(--spacing-md);
+    margin-bottom: var(--spacing-md);
+    transition: border-color var(--transition-fast);
+}
+
+.preset-card.default {
+    border-left: 3px solid var(--color-accent-cyan);
+}
+
+.preset-card.active {
+    border-color: var(--color-accent-green);
+    box-shadow: 0 0 8px rgba(0, 255, 0, 0.1);
+}
+
+.preset-card .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-sm);
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+}
+
+.preset-card .card-title {
+    font-weight: bold;
+    font-size: 1.05em;
+    color: var(--color-text-primary);
+}
+
+.preset-card .card-badges {
+    display: flex;
+    gap: var(--spacing-xs);
+}
+
+.preset-card .badge {
+    background: var(--color-bg-tertiary);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+}
+
+.preset-card .badge.primary {
+    background: rgba(0, 255, 0, 0.15);
+    border-color: var(--color-accent-green);
+    color: var(--color-accent-green);
+}
+
+.preset-card .preset-preview {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-small);
+    font-style: italic;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin-bottom: var(--spacing-sm);
+}
+
+.preset-card .card-actions {
+    display: flex;
+    gap: var(--spacing-sm);
+    flex-wrap: wrap;
+}
+
+/* Prompt Presets Buttons */
+.prompt-presets-panel button {
+    background: linear-gradient(180deg, #2a4a5a 0%, #1a3a4a 100%);
+    border: 1px solid var(--color-accent-cyan);
+    border-radius: 4px;
+    color: var(--color-accent-cyan);
+    padding: 6px 14px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: var(--font-size-base);
+    transition: background var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.prompt-presets-panel button:hover {
+    background: linear-gradient(180deg, #3a5a6a 0%, #2a4a5a 100%);
+    box-shadow: 0 0 10px rgba(0, 255, 255, 0.25);
+}
+
+.prompt-presets-panel button:active {
+    background: linear-gradient(180deg, #1a3a4a 0%, #0a2a3a 100%);
+}
+
+.prompt-presets-panel button.danger {
+    background: linear-gradient(180deg, #5a2a2a 0%, #4a1a1a 100%);
+    border-color: var(--color-accent-red);
+    color: var(--color-accent-red);
+}
+
+.prompt-presets-panel button.danger:hover {
+    background: linear-gradient(180deg, #6a3a3a 0%, #5a2a2a 100%);
+    box-shadow: 0 0 10px rgba(255, 68, 68, 0.25);
+}
+
+.prompt-presets-panel button.primary {
+    background: linear-gradient(180deg, #2a5a2a 0%, #1a4a1a 100%);
+    border-color: var(--color-accent-green);
+    color: var(--color-accent-green);
+}
+
+.prompt-presets-panel button.primary:hover {
+    background: linear-gradient(180deg, #3a6a3a 0%, #2a5a2a 100%);
+    box-shadow: 0 0 10px rgba(0, 255, 0, 0.25);
+}
+
+/* Prompt Presets Forms */
+.prompt-presets-panel .form-group {
+    margin-bottom: var(--spacing-sm);
+}
+
+.prompt-presets-panel label {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-small);
+}
+
+.prompt-presets-panel input[type="text"],
+.prompt-presets-panel textarea {
+    width: 100%;
+    padding: 8px 12px;
+    background: var(--color-bg-primary);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    color: var(--color-text-primary);
+    font-family: inherit;
+    font-size: var(--font-size-base);
+}
+
+.prompt-presets-panel input[type="text"]:focus,
+.prompt-presets-panel textarea:focus {
+    outline: none;
+    border-color: var(--color-accent-cyan);
+    box-shadow: 0 0 0 2px rgba(0, 255, 255, 0.1);
+}
+
+.prompt-presets-panel textarea {
+    resize: vertical;
+    min-height: 120px;
+    line-height: 1.5;
+}
+
+.prompt-presets-panel .form-actions {
+    display: flex;
+    gap: var(--spacing-sm);
+    margin-top: var(--spacing-sm);
+}

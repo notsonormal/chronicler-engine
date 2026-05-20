@@ -93,6 +93,10 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
 
         if let Some(trigger_match) = turn_result.trigger_match {
             let (response_length, max_context_tokens, max_tokens) = self.ctx.prompt_build_params();
+            let system_prompt_override = {
+                let settings = self.ctx.settings.read().unwrap_or_else(|e| e.into_inner());
+                settings.active_system_prompt.clone()
+            };
             let trigger_request = build_trigger_request(
                 &next_state,
                 &narration_text,
@@ -103,6 +107,7 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
                 max_context_tokens,
                 max_tokens,
                 &trigger_match,
+                system_prompt_override,
             );
 
             if let Some(request) = trigger_request {
@@ -155,6 +160,10 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
             return Err(self.save_early_error("Room not found"));
         };
         let history = state.narrative.history();
+        let system_prompt_override = {
+            let settings = self.ctx.settings.read().unwrap_or_else(|e| e.into_inner());
+            settings.active_system_prompt.clone()
+        };
         let context = make_prompt_context(
             world,
             room,
@@ -163,6 +172,7 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
             player,
             input,
             &history,
+            system_prompt_override,
         );
 
         let narration_result = match self.service.narrate_action(&context) {
@@ -519,6 +529,7 @@ fn build_trigger_request(
     max_context_tokens: u32,
     max_tokens: Option<u32>,
     trigger_match: &TriggerMatch,
+    system_prompt_override: Option<String>,
 ) -> Option<TriggerContinuationRequest> {
     let continuation_user_msg = format!(
         "Previous narration:\n{}\n\nTrigger event: {}\n\n\
@@ -537,6 +548,7 @@ fn build_trigger_request(
         player,
         &continuation_user_msg,
         &history,
+        system_prompt_override,
     );
 
     let mut pb = PromptBuilder::from_context(&trigger_ctx);

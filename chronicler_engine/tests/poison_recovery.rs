@@ -7,6 +7,7 @@ use chronicler_engine::model::settings::AppSettings;
 use chronicler_engine::model::world::WorldCard;
 use chronicler_engine::server::AppState;
 use chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage;
+use chronicler_engine::storage::prompt_preset_storage::InMemoryPromptPresetStorage;
 use chronicler_engine::test_support::InMemoryGameStorage;
 use tokio_util::sync::CancellationToken;
 
@@ -28,6 +29,7 @@ fn test_settings_recover_from_poisoned_rwlock() {
         snapshot_storage: Arc::new(InMemoryGameStorage::new()),
         message_storage: Arc::new(InMemoryGameStorage::new()),
         llm_message_storage: Arc::new(InMemoryLlmMessageStorage::new()),
+        prompt_preset_storage: Arc::new(InMemoryPromptPresetStorage::new()),
         world: Arc::new(WorldCard::default()),
         map: Arc::new(MapDef {
             overworld: Overworld {
@@ -82,6 +84,7 @@ fn test_cancel_token_recover_from_poisoned_rwlock() {
         snapshot_storage: Arc::new(InMemoryGameStorage::new()),
         message_storage: Arc::new(InMemoryGameStorage::new()),
         llm_message_storage: Arc::new(InMemoryLlmMessageStorage::new()),
+        prompt_preset_storage: Arc::new(InMemoryPromptPresetStorage::new()),
         world: Arc::new(WorldCard::default()),
         map: Arc::new(MapDef {
             overworld: Overworld {

@@ -21,6 +21,7 @@ pub(crate) fn quantify_room_with_llm_call(
         player_name: context.player_name,
         recent_history: context.recent_history,
         player_action: context.player_action,
+        quantifier_prompt_override: context.quantifier_prompt_override.clone(),
     });
 
     let (system_prompt, user_prompt) = builder.build();
@@ -173,6 +174,7 @@ pub fn determine_npcs_in_room(
     previous_room_npcs: &[crate::model::character::NpcCard],
     player_action: &str,
     backend: &dyn LlmBackend,
+    quantifier_prompt_override: Option<String>,
 ) -> QuantifierResult {
     let all_npcs: Vec<crate::model::character::NpcCard> = state.npcs.values().cloned().collect();
 
@@ -207,6 +209,7 @@ pub fn determine_npcs_in_room(
         player_name: &state.player.sheet.name,
         recent_history: &recent_history,
         player_action,
+        quantifier_prompt_override,
     };
 
     match quantify_room_with_llm_call(&context, room_npc_ids, backend) {

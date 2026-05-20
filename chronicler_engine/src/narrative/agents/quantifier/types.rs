@@ -21,4 +21,5 @@ pub struct QuantifierPromptContext<'a> {
     pub player_name: &'a str,
     pub recent_history: &'a [LogEntry],
     pub player_action: &'a str,
+    pub quantifier_prompt_override: Option<String>,
 }

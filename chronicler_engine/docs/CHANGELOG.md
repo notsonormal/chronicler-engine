@@ -2,6 +2,38 @@
 
 ## 2026-05-19
 
+### Fixed
+- **Prompt preset review fixes — schema defaults, HTMX nesting, XSS, storage API**
+  - Fixed `data/schemas/settings.schema.json` defaults: `"system_default"` / `"quantifier_default"` now match Rust code
+  - Fixed HTMX nesting bug in prompt presets panel: changed `hx-swap="innerHTML"` to `hx-swap="outerHTML"` on `.prompt-presets-panel` targets
+  - Fixed XSS vulnerability in `PromptPresetsPanelTemplate`: `{{ preset.prompt_text }}` → `{{ preset.prompt_text|escape }}`
+  - Moved `html_escape()` helper from `prompt_presets_fragment/template.rs` to shared `server/fragments/renderers.rs`
+  - Added single-quote escape (`'` → `&#x27;`) to `html_escape()`
+  - Deleted unused `run_server()` from `src/server/mod.rs` — production path is `bootstrap::run` → `run_server_with_config`
+  - All 862 tests pass; clippy clean
+
+### Changed
+- **Prompt preset domain model refinement — `preset_type` ownership and safer parsing**
+  - Added `preset_type: PresetType` to `PromptPreset` domain model (already stored in DB; now carried through domain layer)
+  - Simplified `PromptPresetStorage::save()` signature from `save(&preset, type)` to `save(&preset)` — type read from `preset.preset_type`
+  - Replaced dangerous `impl From<&str> for PresetType` (silent fallback to `System`) with `impl TryFrom<&str>` returning explicit `Err` for unknown strings
+  - Fixed stale cache bug: `update_preset_handler` now updates `AppSettings.active_system_prompt` / `active_quantifier_prompt` when an active preset is edited
+  - `InMemoryPromptPresetStorage` simplified from `Vec<(Preset, Type)>` to `Vec<Preset>`
+  - All 862 tests pass; clippy clean
+
+## 2026-05-19
+
+### Changed
+- **Removed hardcoded system prompt and quantifier templates; renamed PHI → OutputFormat**
+  - Deleted `src/narrative/prompt/templates.rs` — system prompt now comes exclusively from DB-loaded preset (`active_system_prompt`)
+  - Deleted hardcoded fallback from `src/narrative/agents/quantifier/prompt.rs` — quantifier prompt now comes exclusively from DB-loaded preset (`active_quantifier_prompt`)
+  - Added startup preset loading in `src/bootstrap/run.rs` and `src/server/mod.rs` to cache active preset text into settings on boot
+  - Moved writing style + "Your only job" instructions from system prompt seed into inline `OUTPUT_FORMAT_TEMPLATE` in `builder.rs`
+  - Renamed `render_phi_layer()` → `render_output_format_layer()` throughout builder and tests
+  - Updated `docs/reference/system_prompt.md`, `docs/system/llm_processing.md`, `docs/system/prompt_system.md` to replace PHI terminology with Output Format
+  - Updated `data/prompt_presets/system/default.json` — removed writing style section
+  - All 821 tests pass; clippy clean
+
 ### Changed
 - **Added invariant contract tests and consolidated testing documentation**
   - New `tests/invariant_contract_tests.rs` with 5 fast regression tests for documented runtime invariants (INV-001, INV-002, INV-004, INV-004b)

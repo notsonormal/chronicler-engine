@@ -140,7 +140,7 @@ fn test_inv004_cancellable_at_boundaries() {
     let outcome = std::thread::scope(|s| {
         let handle = s.spawn(|| pipeline.run_from_input(state_for_thread, "look".to_string()));
 
-        // Cancel shortly after the pipeline starts.
+        // Brief delay so the pipeline thread starts before we cancel.
         std::thread::sleep(std::time::Duration::from_millis(20));
         cancel_token.cancel();
 

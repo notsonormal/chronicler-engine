@@ -1,0 +1,97 @@
+use askama::Template;
+
+use crate::model::prompt_preset::PromptPreset;
+
+#[derive(Template)]
+#[template(
+    source = r#"
+<div class="prompt-presets-panel">
+    <div class="preset-section">
+        <h2>System Prompts</h2>
+        <p class="preset-section-desc">These prompts are sent as the system message to the narration LLM.</p>
+        {% for preset in system_presets %}
+        <div class="preset-card{% if preset.is_default %} default{% endif %}{% if preset.id == active_system_id %} active{% endif %}">
+            <div class="card-header">
+                <span class="card-title">{{ preset.name }}</span>
+                <div class="card-badges">
+                    {% if preset.is_default %}<span class="badge">Default</span>{% endif %}
+                    {% if preset.id == active_system_id %}<span class="badge primary">Active</span>{% endif %}
+                </div>
+            </div>
+            <div class="card-details preset-preview">{{ preset.prompt_text | escape }}</div>
+            <div class="card-actions">
+                {% if preset.id != active_system_id %}
+                <button hx-post="/prompt-presets/{{ preset.id }}/activate" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="primary">Set Active</button>
+                {% endif %}
+                {% if !preset.is_default %}
+                <button hx-get="/fragment/prompt-presets/{{ preset.id }}/edit" hx-target="closest .preset-card" hx-swap="outerHTML">Edit</button>
+                <button hx-post="/prompt-presets/{{ preset.id }}/delete" hx-confirm="Delete this preset?" hx-target="closest .preset-card" hx-swap="outerHTML swap:0.3s" class="danger">Delete</button>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+
+        <h3>Add System Prompt Preset</h3>
+        <form hx-post="/prompt-presets" hx-target=".prompt-presets-panel" hx-swap="outerHTML">
+            <input type="hidden" name="preset_type" value="system" />
+            <div class="form-group">
+                <label for="system-preset-name">Name</label>
+                <input type="text" id="system-preset-name" name="name" placeholder="My Custom System Prompt" required />
+            </div>
+            <div class="form-group">
+                <label for="system-preset-text">Prompt Text</label>
+                <textarea id="system-preset-text" name="prompt_text" rows="8" placeholder="Enter system prompt..." required></textarea>
+            </div>
+            <button type="submit" class="primary">Add Preset</button>
+        </form>
+    </div>
+
+    <div class="preset-section">
+        <h2>Quantifier Prompts</h2>
+        <p class="preset-section-desc">These prompts guide the quantifier LLM that determines NPC presence and player movement.</p>
+        {% for preset in quantifier_presets %}
+        <div class="preset-card{% if preset.is_default %} default{% endif %}{% if preset.id == active_quantifier_id %} active{% endif %}">
+            <div class="card-header">
+                <span class="card-title">{{ preset.name }}</span>
+                <div class="card-badges">
+                    {% if preset.is_default %}<span class="badge">Default</span>{% endif %}
+                    {% if preset.id == active_quantifier_id %}<span class="badge primary">Active</span>{% endif %}
+                </div>
+            </div>
+            <div class="card-details preset-preview">{{ preset.prompt_text | escape }}</div>
+            <div class="card-actions">
+                {% if preset.id != active_quantifier_id %}
+                <button hx-post="/prompt-presets/{{ preset.id }}/activate" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="primary">Set Active</button>
+                {% endif %}
+                {% if !preset.is_default %}
+                <button hx-get="/fragment/prompt-presets/{{ preset.id }}/edit" hx-target="closest .preset-card" hx-swap="outerHTML">Edit</button>
+                <button hx-post="/prompt-presets/{{ preset.id }}/delete" hx-confirm="Delete this preset?" hx-target="closest .preset-card" hx-swap="outerHTML swap:0.3s" class="danger">Delete</button>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+
+        <h3>Add Quantifier Prompt Preset</h3>
+        <form hx-post="/prompt-presets" hx-target=".prompt-presets-panel" hx-swap="outerHTML">
+            <input type="hidden" name="preset_type" value="quantifier" />
+            <div class="form-group">
+                <label for="quantifier-preset-name">Name</label>
+                <input type="text" id="quantifier-preset-name" name="name" placeholder="My Custom Quantifier Prompt" required />
+            </div>
+            <div class="form-group">
+                <label for="quantifier-preset-text">Prompt Text</label>
+                <textarea id="quantifier-preset-text" name="prompt_text" rows="8" placeholder="Enter quantifier prompt..." required></textarea>
+            </div>
+            <button type="submit" class="primary">Add Preset</button>
+        </form>
+    </div>
+</div>
+"#,
+    ext = "html"
+)]
+pub struct PromptPresetsTemplate {
+    pub system_presets: Vec<PromptPreset>,
+    pub quantifier_presets: Vec<PromptPreset>,
+    pub active_system_id: String,
+    pub active_quantifier_id: String,
+}

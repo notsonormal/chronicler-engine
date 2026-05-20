@@ -89,6 +89,16 @@
         }
       },
       "required": ["mode"]
+    },
+    "active_system_prompt_preset_id": {
+      "type": "string",
+      "default": "system_default",
+      "description": "ID of the active system prompt preset."
+    },
+    "active_quantifier_prompt_preset_id": {
+      "type": "string",
+      "default": "quantifier_default",
+      "description": "ID of the active quantifier prompt preset."
     }
   },
   "required": ["connections", "narration_connection_id", "quantifier_connection_id"]

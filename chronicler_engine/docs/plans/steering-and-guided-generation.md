@@ -33,7 +33,7 @@ Add support for one-off instructions that are not saved to history but are inclu
 
 #### [MODIFY] [builder.rs](file:///e:/John/Github/mrn-general/chronicler_engine/src/narrative/prompt/builder.rs)
 - Implement `render_guided_generation_layer()` which wraps the guide in a `<Consideration>` block.
-- Update `build_split()` to include this layer at the absolute end of the user prompt (after the Phi layer or just before it) to leverage recency bias.
+- Update `build_split()` to include this layer at the absolute end of the user prompt (after the Output Format layer or just before it) to leverage recency bias.
 - Add `with_generation_guide(mut self, guide: &'a str)` to `PromptBuilder`.
 
 **Example Block:**
@@ -68,7 +68,7 @@ Allow the user to force the AI to write as a specific character.
 #### [MODIFY] [builder.rs](file:///e:/John/Github/mrn-general/chronicler_engine/src/narrative/prompt/builder.rs)
 - Implement `render_impersonate_layer()`.
 - If `impersonate_persona` is set, append a strict instruction: `[Write the next response as {{persona}}.]`.
-- This should ideally replace or modify the standard `PHI_NARRATION_TEMPLATE` to ensure the AI doesn't revert to standard narrator mode.
+- This should ideally replace or modify the standard `OUTPUT_FORMAT_TEMPLATE` to ensure the AI doesn't revert to standard narrator mode.
 
 ### Phase 4: UI & Command Integration (Frontend)
 
@@ -102,6 +102,6 @@ Expose the new steering features via the HTMX-based web interface.
 
 ## Design Decisions (Resolved)
 
-- **Recency Bias**: The `Consideration` block will be appended AFTER the Phi layer (the absolute end of the prompt) to ensure it is the freshest instruction in the model's context.
+- **Recency Bias**: The `Consideration` block will be appended AFTER the Output Format layer (the absolute end of the prompt) to ensure it is the freshest instruction in the model's context.
 - **Narrator Role**: We will add `LogType::Narrator` to `state.rs` for semantic clarity and easier UI styling (italics/system-style rendering).
 - **Format**: Narrator instructions in history will use the `[Narrator: <text>]` format, matching the user's preference for Marinara-style steering.

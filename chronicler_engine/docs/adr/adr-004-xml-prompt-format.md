@@ -81,8 +81,9 @@ The quantifier prompt (for NPC detection, movement) was also updated to XML:
 **Problem discovered**: Self-referential XML tags wrapping instructions (`<SystemPrompt>`, `<Role>`, `<AuxiliaryInstructions>`, `<QuantifierTask>`) caused reasoning models (e.g., Gemma 4) to enter meta-analysis mode. The model would analyze the prompt structure instead of executing the instructions, consuming all tokens in `reasoning` fields and leaving `content` empty.
 
 **New decision**: Separate instructions from data:
-- **Instructions stay plain text** — No XML tags wrapping the system prompt or PHI layer. Imperative voice only ("You are...", "Your job is...", "Never...").
+- **Instructions stay plain text** — No XML tags wrapping the system prompt or output format layer (formerly PHI). Imperative voice only ("You are...", "Your job is...", "Never...").
 - **Data keeps XML wrapping** — `<GameState>`, `<KnownNpcs>`, `<ConversationHistory>`, `<CurrentRoom>`, etc. remain XML because they are external context, not instructions.
+- **Output format is generic** — The output format layer contains only structural rules (anti-recap: "Do not re-narrate events that already occurred in the history above"). Tone and style instructions were moved to the customizable system prompt preset, not the generic output format template.
 
 **Consequences of v3**:
 - **Positive**: Reasoning models (Gemma 4, etc.) now execute instructions correctly without meta-analysis loops
@@ -104,6 +105,7 @@ The quantifier prompt (for NPC detection, movement) was also updated to XML:
 - **2025-04-13**: Initial XML refactor (prompt-xml-refactor plan)
 - **Later**: v2 - Silly Tavern integration + quantifier XML (prompt-xml-refactor-v2 plan)
 - **2026-05-03**: v3 - Plain-text instructions for reasoning-model compatibility (hercules-she-hulk-doctor-fate plan)
+- **2026-05-19**: OutputFormat rename — PHI layer renamed to OutputFormat; anti-recap rule added to generic output format template; tone/style instructions moved to system prompt preset (see ADR-005)
 
 ---
 

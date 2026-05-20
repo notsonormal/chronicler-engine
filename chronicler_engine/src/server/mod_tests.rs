@@ -149,6 +149,9 @@ fn test_app_state_lock_state_success() {
             Some(llm_storage),
             Arc::new(std::sync::RwLock::new(AppSettings::default())),
         )) as Arc<dyn GameService>,
+        prompt_preset_storage: Arc::new(
+            crate::storage::prompt_preset_storage::InMemoryPromptPresetStorage::new(),
+        ),
         settings: Arc::new(std::sync::RwLock::new(AppSettings::default())),
         cancel_token: Arc::new(std::sync::RwLock::new(
             tokio_util::sync::CancellationToken::new(),
@@ -286,6 +289,9 @@ fn test_app_state_lock_state_poisoned() {
             Some(llm_storage),
             Arc::new(std::sync::RwLock::new(AppSettings::default())),
         )) as Arc<dyn GameService>,
+        prompt_preset_storage: Arc::new(
+            crate::storage::prompt_preset_storage::InMemoryPromptPresetStorage::new(),
+        ),
         settings: Arc::new(std::sync::RwLock::new(AppSettings::default())),
         cancel_token: Arc::new(std::sync::RwLock::new(
             tokio_util::sync::CancellationToken::new(),

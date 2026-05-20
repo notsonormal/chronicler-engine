@@ -4,7 +4,6 @@ pub mod budget;
 pub mod builder;
 pub mod context;
 pub mod sanitize;
-pub mod templates;
 pub mod types;
 
 pub use context::{fit_messages_to_context, make_prompt_context};

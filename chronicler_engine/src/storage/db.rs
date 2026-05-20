@@ -160,5 +160,31 @@ fn run_migrations(conn: &Connection) -> Result<(), crate::error::EngineError> {
     )
     .map_err(|e| crate::error::EngineError::Config(format!("Migration failed: {e}")))?;
 
+    if version < 3 {
+        conn.execute(
+            "CREATE TABLE prompt_presets (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                preset_type TEXT NOT NULL,
+                prompt_text TEXT NOT NULL,
+                is_default INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )",
+            [],
+        )
+        .map_err(|e| crate::error::EngineError::Config(format!("Migration failed: {e}")))?;
+
+        conn.execute(
+            "CREATE INDEX idx_prompt_presets_type ON prompt_presets(preset_type)",
+            [],
+        )
+        .map_err(|e| crate::error::EngineError::Config(format!("Migration failed: {e}")))?;
+
+        conn.pragma_update(None, "user_version", 3).map_err(|e| {
+            crate::error::EngineError::Config(format!("Failed to set user_version: {e}"))
+        })?;
+    }
+
     Ok(())
 }

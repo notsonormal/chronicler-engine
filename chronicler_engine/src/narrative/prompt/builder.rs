@@ -3,8 +3,15 @@ use crate::narrative::prompt::budget;
 use crate::narrative::prompt::budget::{estimate_tokens, truncate_to_budget};
 use crate::narrative::prompt::context::fit_messages_to_context;
 use crate::narrative::prompt::sanitize::sanitize_for_prompt;
-use crate::narrative::prompt::templates::{PHI_NARRATION_TEMPLATE, SYSTEM_PROMPT_TEMPLATE};
 use crate::narrative::prompt::types::{PromptBuilder, PromptContext};
+
+const OUTPUT_FORMAT_TEMPLATE: &str = r#"Writing style:
+- Third-person limited perspective, focused on the player character.
+- Past tense narrative prose.
+
+The player's next action is provided above. Your only job is to narrate what happens now.
+
+Do not re-narrate events that already occurred in the history above. Move the scene forward from where it left off."#;
 
 impl<'a> PromptBuilder<'a> {
     pub fn from_context(context: &PromptContext<'a>) -> Self {
@@ -19,6 +26,7 @@ impl<'a> PromptBuilder<'a> {
             max_context_tokens: None,
             requested_max_tokens: None,
             response_length: None,
+            system_prompt_override: context.system_prompt_override.clone(),
         }
     }
 
@@ -59,7 +67,7 @@ impl<'a> PromptBuilder<'a> {
         user.push_str("\n\n");
         user.push_str(&self.render_user_layer());
         user.push_str("\n\n");
-        user.push_str(&self.render_phi_layer());
+        user.push_str(&self.render_output_format_layer());
 
         if let Some(max_context) = self.max_context_tokens {
             let (fitted_system, fitted_user, actual_max_tokens) =
@@ -100,13 +108,13 @@ impl<'a> PromptBuilder<'a> {
         user.push_str("\n\n");
         user.push_str(&self.render_user_layer());
         user.push_str("\n\n");
-        user.push_str(&self.render_phi_layer());
+        user.push_str(&self.render_output_format_layer());
         user
     }
 
     /// Layer 0: System prompt - global game rules and AI role
     fn render_system_layer(&self) -> String {
-        let mut output = String::from(SYSTEM_PROMPT_TEMPLATE);
+        let mut output = self.system_prompt_override.clone().unwrap_or_default();
         for rule in &self.world.global_rules {
             output.push_str("- ");
             output.push_str(rule);
@@ -296,7 +304,8 @@ impl<'a> PromptBuilder<'a> {
         output
     }
 
-    fn render_phi_layer(&self) -> String {
-        String::from(PHI_NARRATION_TEMPLATE)
+    /// Layer 7: Output format - writing style and behavioral instructions
+    fn render_output_format_layer(&self) -> String {
+        String::from(OUTPUT_FORMAT_TEMPLATE)
     }
 }

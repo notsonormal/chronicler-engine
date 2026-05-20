@@ -280,6 +280,7 @@ async fn test_pipeline_cancels_after_main_narration() {
         );
     });
 
+    // Let the blocking task begin before cancelling.
     tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
     token.cancel();
 
@@ -331,6 +332,7 @@ async fn test_pipeline_cancels_during_trigger_continuation() {
         );
     });
 
+    // Let the blocking task begin before cancelling.
     tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
     token.cancel();
 

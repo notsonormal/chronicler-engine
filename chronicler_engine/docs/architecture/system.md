@@ -79,7 +79,7 @@ When `Left` fires: `currently_meeting = false`
 
 ### 4. The Server Tier (`crate::server::*`)
 The HTTP layer for the HTMX web dashboard with polling-based real-time updates.
-- **`mod`**: Axum router, request handlers, `AppState`, `run_server`, `create_app_for_testing`, `create_app_for_testing_with_settings`.
+- **`mod`**: Axum router, request handlers, `AppState`, `run_server_with_config`, `create_app_for_testing`, `create_app_for_testing_with_settings`.
 - **`fragments`**: HTML fragment generators for HTMX partial updates. Split into submodules:
   - **`actions`**: Action form handlers and renderers
   - **`endpoints`**: HTMX fragment endpoints (`/fragment/story-log`, `/fragment/visual-sidebar`, etc.)
@@ -87,6 +87,7 @@ The HTTP layer for the HTMX web dashboard with polling-based real-time updates.
   - **`misc`**: Utility endpoints (status, hints, text check)
   - **`renderers`**: HTML rendering helpers, markdown→HTML via `pulldown-cmark`
 - **`settings_fragment`**: Settings panel fragment handlers and template rendering.
+- **`prompt_presets_fragment`**: Prompt Presets panel with two independent collections (System, Quantifier). Supports CRUD operations, active selection, and protected default presets.
 - **`templates`**: Askama template definitions with type-safe rendering.
   - Templates declare required data shapes at compile time.
   - Missing fields = compiler error (not runtime failure).

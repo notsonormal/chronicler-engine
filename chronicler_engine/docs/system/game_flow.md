@@ -48,7 +48,7 @@ flowchart TD
     Start(["**PHASE 4: LLM GENERATION**<br>*(If narrative action)*"])
     
     Step1["**1. Build 8-layer prompt (SillyTavern-style)**"]
-    Sub1["Layer 0: System prompt (game rules, narrator persona)<br>Layer 1: Game state (room, NPCs)<br>Layer 2: NPC cards (in-room NPCs only)<br>Layer 3: Player persona<br>Layer 4: World info (keyword-triggered lore)<br>Layer 5: Full narration history (up to 1000 entries)<br>Layer 6: User input (current action)<br>Layer 7: Post-History Instructions"]
+    Sub1["Layer 0: System prompt (game rules, narrator persona)<br>Layer 1: Game state (room, NPCs)<br>Layer 2: NPC cards (in-room NPCs only)<br>Layer 3: Player persona<br>Layer 4: World info (keyword-triggered lore)<br>Layer 5: Full narration history (up to 1000 entries)<br>Layer 6: User input (current action)<br>Layer 7: Output Format"]
     
     Step2["**2. Token budget check**<br>*(8192 max, truncate if overflow)*"]
     Step3["**3. Send to LLM**<br>*(OpenRouter/DeepSeek)*"]

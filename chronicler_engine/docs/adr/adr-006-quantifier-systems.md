@@ -179,7 +179,7 @@ Comparing previous vs current NPC presence in area:
 These features evolved incrementally:
 - Quantifier movement: detect navigation from narration
 - Quantified NPCs: sidebar shows dynamic NPC presence
-- Reactive triggers: auto-fire scene continuations (unified 8-layer PromptBuilder with universal PHI layer)
+- Reactive triggers: auto-fire scene continuations (unified 8-layer PromptBuilder with universal OutputFormat layer, formerly PHI)
 - Dual-LLM: separate quantifier model for scene analysis
 - NPC Event Layer: track NPC enter/leave events
 

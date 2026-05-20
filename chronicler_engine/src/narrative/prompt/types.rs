@@ -32,6 +32,7 @@ pub struct PromptContext<'a> {
     pub player: &'a PlayerCard,
     pub user_message: &'a str,
     pub history: &'a [LogEntry],
+    pub system_prompt_override: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -46,4 +47,5 @@ pub struct PromptBuilder<'a> {
     pub max_context_tokens: Option<u32>,
     pub requested_max_tokens: Option<u32>,
     pub response_length: Option<&'a str>,
+    pub system_prompt_override: Option<String>,
 }

@@ -136,10 +136,28 @@ pub struct AppSettings {
     pub text_check: TextCheckSettings,
     #[serde(default = "default_agent_configs")]
     pub agents: Vec<crate::model::agent::AgentConfig>,
+    #[serde(default = "default_active_system_prompt_preset_id")]
+    pub active_system_prompt_preset_id: String,
+    #[serde(default = "default_active_quantifier_prompt_preset_id")]
+    pub active_quantifier_prompt_preset_id: String,
+    /// Cached active system prompt text (not persisted to settings.json).
+    #[serde(skip)]
+    pub active_system_prompt: Option<String>,
+    /// Cached active quantifier prompt text (not persisted to settings.json).
+    #[serde(skip)]
+    pub active_quantifier_prompt: Option<String>,
 }
 
 fn default_response_length() -> String {
     "flexible, based on the current scene. During a conversation, keep it concise (under 150 words) to allow back-and-forth. For scene transitions, travel, or plot developments, build content (above 150 words), but allow the player to react.".to_string()
+}
+
+fn default_active_system_prompt_preset_id() -> String {
+    "system_default".to_string()
+}
+
+fn default_active_quantifier_prompt_preset_id() -> String {
+    "quantifier_default".to_string()
 }
 
 impl Default for AppSettings {
@@ -184,6 +202,10 @@ impl Default for AppSettings {
             response_length: default_response_length(),
             text_check: TextCheckSettings::default(),
             agents: default_agent_configs(),
+            active_system_prompt_preset_id: default_active_system_prompt_preset_id(),
+            active_quantifier_prompt_preset_id: default_active_quantifier_prompt_preset_id(),
+            active_system_prompt: None,
+            active_quantifier_prompt: None,
         }
     }
 }

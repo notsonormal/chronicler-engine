@@ -60,6 +60,7 @@ pub fn make_test_context(user_message: &str) -> PromptContext<'static> {
         player: Box::leak(Box::new(player)),
         user_message: Box::leak(Box::new(user_msg)),
         history: &[],
+        system_prompt_override: None,
     }
 }
 
@@ -82,5 +83,6 @@ pub fn make_test_context_with_npc(
         player: Box::leak(Box::new(player)),
         user_message: Box::leak(Box::new(user_msg)),
         history: &[],
+        system_prompt_override: None,
     }
 }

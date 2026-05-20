@@ -28,13 +28,6 @@ pub(crate) fn provider_options_html(selected: &str) -> String {
     .join("\n")
 }
 
-pub(crate) fn html_escape(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-}
-
 #[derive(Template)]
 #[template(
     source = r##"

@@ -6,6 +6,7 @@ use crate::model::settings::AppSettings;
 use crate::model::state::GameState;
 use crate::narrative::prompt::PromptContext;
 use crate::server::ServerConfig;
+use crate::storage::prompt_preset_storage::PromptPresetStorage;
 
 use super::{initialize_world_from_manifest, inject_scenario_logs, validate_loaded_data};
 
@@ -55,6 +56,11 @@ pub fn run(args: Args) -> crate::error::Result<()> {
         .unwrap_or_else(|| data_dir.clone());
     let db_path = db_dir.join(format!("chronicler_{}.db", args.port));
     let db_pool = crate::storage::db::DbPool::new(db_path.to_str().unwrap_or("chronicler.db"))?;
+
+    if let Err(e) = ensure_defaults(&db_pool, &data_dir) {
+        log::warn!("Failed to seed prompt presets: {e}");
+    }
+
     let storage = Arc::new(crate::storage::snapshot_storage::SqliteGameStorage::new(
         db_pool.clone(),
         1,
@@ -63,7 +69,9 @@ pub fn run(args: Args) -> crate::error::Result<()> {
         storage.clone();
     let message_storage: Arc<dyn crate::storage::message_storage::MessageStorage> = storage.clone();
     let llm_message_storage: Arc<dyn crate::storage::llm_message_storage::LlmMessageStorage> =
-        Arc::new(crate::storage::llm_message_storage::SqliteLlmMessageStorage::new(db_pool));
+        Arc::new(
+            crate::storage::llm_message_storage::SqliteLlmMessageStorage::new(db_pool.clone()),
+        );
 
     // [DOC: docs/system/startup.md]
     let initial_snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
@@ -82,9 +90,18 @@ pub fn run(args: Args) -> crate::error::Result<()> {
     let npcs_arc = Arc::new(npcs_map);
 
     // [DOC: docs/architecture/system.md]
-    let settings = Arc::new(RwLock::new(
-        crate::settings::load_settings().unwrap_or_else(|_| AppSettings::default()),
-    ));
+    let mut settings = crate::settings::load_settings().unwrap_or_else(|_| AppSettings::default());
+
+    let preset_storage =
+        crate::storage::prompt_preset_storage::SqlitePromptPresetStorage::new(db_pool.clone());
+    if let Ok(Some(preset)) = preset_storage.get(&settings.active_system_prompt_preset_id) {
+        settings.active_system_prompt = Some(preset.prompt_text);
+    }
+    if let Ok(Some(preset)) = preset_storage.get(&settings.active_quantifier_prompt_preset_id) {
+        settings.active_quantifier_prompt = Some(preset.prompt_text);
+    }
+
+    let settings = Arc::new(RwLock::new(settings));
     let config = ServerConfig { port: args.port };
     let runtime = tokio::runtime::Runtime::new().map_err(|e| {
         crate::error::EngineError::Io(format!("runtime_new {}: {e}", "tokio_runtime"))
@@ -150,6 +167,7 @@ pub fn run(args: Args) -> crate::error::Result<()> {
                     player: &player_for_task,
                     user_message: "",
                     history: &history,
+                    system_prompt_override: None,
                 };
                 let narration = backend
                     .narrate_arrival(crate::narrative::llm::backend::AGENT_NARRATOR, &context);
@@ -173,6 +191,9 @@ pub fn run(args: Args) -> crate::error::Result<()> {
         });
     } // end if !has_scenario
 
+    let prompt_preset_storage: Arc<dyn crate::storage::prompt_preset_storage::PromptPresetStorage> =
+        Arc::new(crate::storage::prompt_preset_storage::SqlitePromptPresetStorage::new(db_pool));
+
     let resources = crate::server::ServerResources {
         world: world_arc,
         map: map_arc,
@@ -181,9 +202,68 @@ pub fn run(args: Args) -> crate::error::Result<()> {
         snapshot_storage,
         message_storage,
         llm_message_storage,
+        prompt_preset_storage,
         settings,
     };
     runtime.block_on(crate::server::run_server_with_config(resources, config))?;
+
+    Ok(())
+}
+
+fn ensure_defaults(
+    db_pool: &crate::storage::db::DbPool,
+    data_dir: &std::path::Path,
+) -> crate::error::Result<()> {
+    use crate::model::prompt_preset::{PresetType, PromptPreset};
+    use crate::storage::prompt_preset_storage::PromptPresetStorage;
+
+    let storage =
+        crate::storage::prompt_preset_storage::SqlitePromptPresetStorage::new(db_pool.clone());
+
+    for preset_type in [PresetType::System, PresetType::Quantifier] {
+        let dir = data_dir.join("prompt_presets").join(preset_type.as_str());
+        if !dir.exists() {
+            log::info!("Prompt preset seed directory not found: {}", dir.display());
+            continue;
+        }
+
+        let existing_ids: std::collections::HashSet<String> = storage
+            .list(preset_type)?
+            .into_iter()
+            .map(|p| p.id)
+            .collect();
+
+        for entry in std::fs::read_dir(&dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) != Some("json") {
+                continue;
+            }
+
+            let content = std::fs::read_to_string(&path)?;
+            let seed: serde_json::Value = serde_json::from_str(&content).map_err(|e| {
+                crate::error::EngineError::Parse(format!(
+                    "Invalid preset seed {}: {e}",
+                    path.display()
+                ))
+            })?;
+
+            let id = seed["id"].as_str().unwrap_or("default").to_string();
+            if existing_ids.contains(&id) {
+                continue;
+            }
+
+            let preset = PromptPreset {
+                id: id.clone(),
+                name: seed["name"].as_str().unwrap_or("Default").to_string(),
+                prompt_text: seed["prompt_text"].as_str().unwrap_or("").to_string(),
+                is_default: true,
+                preset_type,
+            };
+            storage.save(&preset)?;
+            log::info!("Seeded {} prompt preset: {}", preset_type.as_str(), id);
+        }
+    }
 
     Ok(())
 }

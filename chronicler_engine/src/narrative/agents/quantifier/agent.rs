@@ -12,6 +12,7 @@ use super::determine_npcs_in_room;
 pub struct QuantifierAgent {
     name: String,
     backend: Arc<dyn crate::narrative::llm::LlmBackend>,
+    quantifier_prompt_override: Option<String>,
 }
 
 impl std::fmt::Debug for QuantifierAgent {
@@ -44,11 +45,16 @@ impl QuantifierAgent {
         Ok(Self {
             name: "quantifier".to_string(),
             backend,
+            quantifier_prompt_override: settings.active_quantifier_prompt.clone(),
         })
     }
 
     pub fn with_backend(name: String, backend: Arc<dyn crate::narrative::llm::LlmBackend>) -> Self {
-        Self { name, backend }
+        Self {
+            name,
+            backend,
+            quantifier_prompt_override: None,
+        }
     }
 }
 
@@ -84,6 +90,7 @@ impl Agent for QuantifierAgent {
             &previous_room_npcs,
             main_response,
             self.backend.as_ref(),
+            self.quantifier_prompt_override.clone(),
         );
 
         let confidence = Confidence::from(result.npcs.confidence);

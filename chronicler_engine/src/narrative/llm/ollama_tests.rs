@@ -1,8 +1,109 @@
+use std::sync::Arc;
+
+use crate::model::llm_backend::LlmBackendType;
+use crate::model::settings::Connection;
 use crate::narrative::llm::backend::LlmBackend;
 use crate::narrative::llm::ollama::OllamaBackend;
+use crate::storage::llm_message_storage::{InMemoryLlmMessageStorage, LlmMessageStorage};
 
 #[test]
 fn test_ollama_backend_name() {
     let backend = OllamaBackend::default();
     assert_eq!(backend.name(), "Ollama");
+}
+
+#[test]
+fn test_ollama_from_connection() {
+    let conn = Connection {
+        id: "ollama-1".into(),
+        name: "Local Ollama".into(),
+        provider: LlmBackendType::Ollama,
+        model: "llama3".into(),
+        api_key: None,
+        base_url: Some("http://localhost:11434".into()),
+        single_user_message: true,
+        max_tokens: Some(1024),
+        max_context_tokens: Some(4096),
+    };
+
+    let backend = OllamaBackend::from_connection(&conn, None, None);
+    assert_eq!(backend.model(), "llama3");
+    assert_eq!(backend.name(), "Ollama");
+}
+
+#[test]
+fn test_ollama_model() {
+    let conn = Connection {
+        id: "test".into(),
+        name: "Test".into(),
+        provider: LlmBackendType::Ollama,
+        model: "mistral".into(),
+        api_key: None,
+        base_url: None,
+        single_user_message: false,
+        max_tokens: None,
+        max_context_tokens: None,
+    };
+
+    let backend = OllamaBackend::from_connection(&conn, None, None);
+    assert_eq!(backend.model(), "mistral");
+}
+
+#[test]
+fn test_ollama_save_message_with_storage() {
+    let storage = Arc::new(InMemoryLlmMessageStorage::new());
+    let conn = Connection {
+        id: "test".into(),
+        name: "Test".into(),
+        provider: LlmBackendType::Ollama,
+        model: "llama3".into(),
+        api_key: None,
+        base_url: None,
+        single_user_message: false,
+        max_tokens: None,
+        max_context_tokens: None,
+    };
+    let backend = OllamaBackend::from_connection(
+        &conn,
+        Some(Arc::clone(&storage) as Arc<dyn LlmMessageStorage>),
+        None,
+    );
+
+    let msg = crate::model::llm_message::LlmMessageBuilder::new()
+        .agent_name("test")
+        .backend_name("Ollama")
+        .model_name("llama3")
+        .system_prompt("sys")
+        .user_prompt("user")
+        .raw_request_json("req")
+        .raw_response_json("res")
+        .parsed_response("hello")
+        .error_message(None::<String>)
+        .build();
+
+    backend.save_message(&msg);
+
+    let messages = storage.list_latest(10).unwrap();
+    assert_eq!(messages.len(), 1);
+    assert_eq!(messages[0].agent_name, "test");
+}
+
+#[test]
+fn test_ollama_save_message_without_storage() {
+    let backend = OllamaBackend::default();
+
+    let msg = crate::model::llm_message::LlmMessageBuilder::new()
+        .agent_name("test")
+        .backend_name("Ollama")
+        .model_name("llama3")
+        .system_prompt("sys")
+        .user_prompt("user")
+        .raw_request_json("req")
+        .raw_response_json("res")
+        .parsed_response("hello")
+        .error_message(None::<String>)
+        .build();
+
+    // Should not panic when storage is None
+    backend.save_message(&msg);
 }

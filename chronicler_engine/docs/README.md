@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-19 19:50 UTC*
+*Index last generated: 2026-05-20 21:07 UTC*
 
 ### Root files
 
@@ -28,6 +28,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [ADR-012: LLM Call Logging and Forensics](./adr/adr-012-llm-message-logging.md)
 - [ADR-013: Message Domain Model](./adr/adr-013-message-domain-model.md)
 - [ADR-014: Action Pipeline Architecture](./adr/adr-014-action-pipeline.md)
+- [ADR-015: Prompt Presets System](./adr/adr-015-prompt-presets.md)
 
 ### `docs/architecture/`
 

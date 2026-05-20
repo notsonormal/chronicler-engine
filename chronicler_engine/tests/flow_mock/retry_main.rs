@@ -191,56 +191,8 @@ fn test_double_retry_increments_swipe_and_reruns_quantifier() {
 }
 
 #[test]
-fn test_retry_preserves_input_text() {
+fn test_retry_preserves_input_and_does_not_create_extra_swipe() {
     // Bug regression: clicking Retry on Narration was clearing the input message text.
-    let mut state = create_test_state_with_map();
-    state.narrative.history.clear();
-    let ctx = make_test_context_with_sqlite(state).unwrap();
-
-    add_input_and_save(&ctx, "walk around");
-
-    let service = DefaultGameService::with_mock_quantifier(
-        Arc::new(MockBackend::new(Some(Arc::clone(&ctx.llm_message_storage)))),
-        Arc::new(MockBackend::default()),
-    );
-
-    service.execute_action(ctx.clone(), "walk around".to_string(), "Player".to_string());
-    assert!(
-        wait_for_generation_complete(&ctx, 1000),
-        "First execution should complete"
-    );
-
-    let input_text_before = latest_state(&ctx)
-        .narrative
-        .history()
-        .into_iter()
-        .find(|e| e.log_type == LogType::Input)
-        .map(|e| e.text.clone())
-        .unwrap_or_default();
-    assert_eq!(input_text_before, "walk around", "Input text before retry");
-
-    service.retry_last_response(ctx.clone());
-    assert!(
-        wait_for_generation_complete(&ctx, 1000),
-        "Retry should complete"
-    );
-
-    let guard = latest_state(&ctx);
-    let input_text_after = guard
-        .narrative
-        .history()
-        .into_iter()
-        .find(|e| e.log_type == LogType::Input)
-        .map(|e| e.text.clone())
-        .unwrap_or_default();
-    assert_eq!(
-        input_text_after, "walk around",
-        "Input text must be preserved after retry"
-    );
-}
-
-#[test]
-fn test_retry_does_not_create_extra_swipe_on_input() {
     // The input message should never gain extra swipes.
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();

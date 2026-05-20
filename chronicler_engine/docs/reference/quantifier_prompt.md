@@ -122,8 +122,23 @@ This delta-based approach avoids requiring the LLM to reason about transitions, 
 
 If the quantifier returns a **Low confidence** result (e.g., unparseable response), the engine automatically retries the LLM call once. This gives the model a second chance to produce valid JSON. Medium and High confidence results are accepted on the first attempt.
 
+## Customization
+
+The quantifier prompt can be customized at runtime via the **Prompt Presets** tab in the dashboard:
+
+1. Navigate to the **Prompt Presets** tab
+2. Create a new Quantifier Prompt preset (or edit an existing non-default one)
+3. Click **Set Active** to apply it
+
+The active preset is stored in `AppSettings.active_quantifier_prompt_preset_id` and its text is cached in `AppSettings.active_quantifier_prompt`. When an active preset is set, its text is injected into `QuantifierPromptContext.quantifier_prompt_override` and used by `QuantifierPromptBuilder::build_system_prompt()` instead of the hardcoded quantifier instructions.
+
+Default presets (shipped as `data/prompt_presets/quantifier/default.json`) are protected and cannot be edited or deleted. To modify a default, create a copy and activate it.
+
 ## Sources
 
-- System prompt: `src/narrative/agents/quantifier/prompt.rs:build_system_prompt()`
+- System prompt default: `data/prompt_presets/quantifier/default.json`
+- System prompt builder: `src/narrative/agents/quantifier/prompt.rs:build_system_prompt()` (returns `quantifier_prompt_override` when set)
 - User prompt: `src/narrative/agents/quantifier/prompt.rs:build_user_prompt()`
 - Response parsing: `src/narrative/agents/quantifier/parser.rs` (see `parse_quantifier_response` functions)
+- Prompt preset storage: `src/storage/prompt_preset_storage.rs`
+- Dashboard UI: `src/server/prompt_presets_fragment/`

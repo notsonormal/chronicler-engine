@@ -15,41 +15,11 @@ impl<'a> QuantifierPromptBuilder<'a> {
     }
 
     fn build_system_prompt(&self) -> String {
-        let mut prompt = String::from(
-            r#"You are a scene quantifier for a text adventure game.
-Your task is to determine which NPCs are present in the current room
-and whether the player actually moved to a new location.
-
-Respond ONLY with a JSON object in this exact format:
-{"npcs_in_room": ["id1", "id2"], "movement": {"type": "entering|in|leaving", "destination": "room_id"}}
-
-How to determine movement:
-1. Read <CurrentRoom> — this is where the player is right now.
-2. Read <LatestNarration> — this is what just happened.
-3. Ask: does the narration describe the player being in a different place than <CurrentRoom>?
-   - If YES → movement occurred. Set type to "entering" and destination to the new room.
-   - If NO → no movement. Set type to null.
-   - If unclear → assume no movement. Set type to null.
-
-Rules:
-- Only include NPCs that would logically be in the room based on context.
-- NPCs from the previous room may have followed the player.
-- Use the exact NPC IDs provided in the AvailableNpcIds list.
-- If the player is blocked, stopped, prevented, or fails to move in <LatestNarration>, they have NOT moved.
-- An NPC interposing, blocking a path, or saying "you can't go" means the player remains.
-- If no NPCs are present, return an empty array: {"npcs_in_room": []}
-- If no movement detected, set type to null: {"movement": {"type": null}}
-
-Examples:
-- Narration: "You walk through the door into the kitchen." (CurrentRoom was hallway) → {"movement": {"type": "entering", "destination": "kitchen"}}
-- Narration: "The guard blocks your path. 'Halt!' he shouts." (CurrentRoom was courtyard) → {"movement": {"type": null}}
-- Narration: "She swiftly interposes herself between you and the gate." (CurrentRoom was garden) → {"movement": {"type": null}}
-- Narration: "The foyer felt claustrophobic. Carla stood in the doorway." (CurrentRoom was Front Gates) → {"movement": {"type": "entering", "destination": "entrance_hall"}}
-- Narration: "You examine the ancient vase carefully." (CurrentRoom was library) → {"movement": {"type": null}}
-
-<AvailableNpcIds>
-"#,
-        );
+        let mut prompt = self
+            .context
+            .quantifier_prompt_override
+            .clone()
+            .unwrap_or_default();
 
         for npc in self.context.all_known_npcs {
             prompt.push_str(&format!(

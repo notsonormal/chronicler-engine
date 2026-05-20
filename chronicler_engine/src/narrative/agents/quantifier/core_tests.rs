@@ -159,6 +159,7 @@ fn test_quantifier_retry_on_low_confidence() {
         player_name: "Hero",
         recent_history: &history,
         player_action: "I look around.",
+        quantifier_prompt_override: None,
     };
 
     let backend = crate::narrative::llm::MockBackend {
@@ -195,6 +196,7 @@ fn test_quantifier_no_retry_when_high_confidence() {
         player_name: "Hero",
         recent_history: &history,
         player_action: "I look around.",
+        quantifier_prompt_override: None,
     };
 
     let backend = crate::narrative::llm::MockBackend {
@@ -459,6 +461,7 @@ fn determine_npcs_with_room(
         previous_room_npcs,
         player_action,
         backend,
+        None,
     )
 }
 
@@ -559,6 +562,7 @@ fn test_quantifier_retry_on_llm_error() {
         player_name: "Hero",
         recent_history: &history,
         player_action: "I look around.",
+        quantifier_prompt_override: None,
     };
 
     struct RotatingBackend {
@@ -647,6 +651,7 @@ fn test_quantifier_all_attempts_fail_fallback() {
         player_name: "Hero",
         recent_history: &history,
         player_action: "I look around.",
+        quantifier_prompt_override: None,
     };
 
     let backend = crate::narrative::llm::MockBackend {
@@ -678,6 +683,7 @@ fn test_quantifier_low_confidence_then_error_fallback() {
         player_name: "Hero",
         recent_history: &history,
         player_action: "I look around.",
+        quantifier_prompt_override: None,
     };
 
     let backend = crate::narrative::llm::MockBackend {

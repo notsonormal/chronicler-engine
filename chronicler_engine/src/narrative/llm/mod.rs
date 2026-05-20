@@ -12,6 +12,8 @@ mod deepseek_tests;
 mod mock_tests;
 #[cfg(test)]
 mod ollama_tests;
+#[cfg(test)]
+mod openrouter_tests;
 
 pub use backend::{LlmBackend, LlmBackendType, get_llm_backend_for, merge_single_user_message};
 pub use deepseek::DeepSeekBackend;

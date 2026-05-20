@@ -1,5 +1,6 @@
 pub mod debug;
 pub mod fragments;
+pub mod prompt_presets_fragment;
 pub mod settings_fragment;
 pub mod templates;
 
@@ -7,6 +8,8 @@ pub mod templates;
 mod fragments_tests;
 #[cfg(test)]
 mod mod_tests;
+#[cfg(test)]
+mod prompt_presets_fragment_tests;
 #[cfg(test)]
 mod settings_fragment_tests;
 #[cfg(test)]
@@ -106,6 +109,31 @@ fn build_router(app_state: AppState) -> Router {
             "/settings/text-check",
             post(crate::server::settings_fragment::save_text_check_handler),
         )
+        // Prompt Presets endpoints
+        .route(
+            "/fragment/prompt-presets",
+            get(crate::server::prompt_presets_fragment::panel_handler),
+        )
+        .route(
+            "/prompt-presets",
+            post(crate::server::prompt_presets_fragment::save_preset_handler),
+        )
+        .route(
+            "/fragment/prompt-presets/:id/edit",
+            get(crate::server::prompt_presets_fragment::edit_preset_form_handler),
+        )
+        .route(
+            "/prompt-presets/:id",
+            post(crate::server::prompt_presets_fragment::update_preset_handler),
+        )
+        .route(
+            "/prompt-presets/:id/delete",
+            post(crate::server::prompt_presets_fragment::delete_preset_handler),
+        )
+        .route(
+            "/prompt-presets/:id/activate",
+            post(crate::server::prompt_presets_fragment::activate_preset_handler),
+        )
         // NOTE: dev-only diagnostic endpoint
         .route("/debug/state", get(debug::debug_state_handler))
         .nest_service("/assets", ServeDir::new("assets"))
@@ -149,6 +177,8 @@ pub fn create_app_with_storage(
     settings: AppSettings,
 ) -> Router {
     let settings_arc = Arc::new(RwLock::new(settings));
+    let prompt_preset_storage: Arc<dyn crate::storage::prompt_preset_storage::PromptPresetStorage> =
+        Arc::new(crate::storage::prompt_preset_storage::InMemoryPromptPresetStorage::new());
     let app_state = AppState {
         snapshot_storage,
         message_storage,
@@ -163,6 +193,7 @@ pub fn create_app_with_storage(
                 Arc::clone(&settings_arc),
             ),
         ) as Arc<dyn crate::application::game_service::GameService>,
+        prompt_preset_storage,
         settings: settings_arc,
         cancel_token: Arc::new(std::sync::RwLock::new(CancellationToken::new())),
         is_generating: Arc::new(AtomicBool::new(false)),
@@ -213,6 +244,7 @@ pub struct ServerResources {
     pub snapshot_storage: Arc<dyn SnapshotStorage>,
     pub message_storage: Arc<dyn crate::storage::message_storage::MessageStorage>,
     pub llm_message_storage: Arc<dyn LlmMessageStorage>,
+    pub prompt_preset_storage: Arc<dyn crate::storage::prompt_preset_storage::PromptPresetStorage>,
     pub settings: Arc<RwLock<AppSettings>>,
 }
 
@@ -226,6 +258,7 @@ pub struct AppState {
     pub player: Arc<crate::model::character::PlayerCard>,
     pub npcs: Arc<HashMap<String, NpcCard>>,
     pub game_service: Arc<dyn GameService>,
+    pub prompt_preset_storage: Arc<dyn crate::storage::prompt_preset_storage::PromptPresetStorage>,
     pub settings: Arc<RwLock<AppSettings>>,
     pub cancel_token: Arc<std::sync::RwLock<CancellationToken>>,
     pub is_generating: Arc<AtomicBool>,
@@ -300,31 +333,6 @@ impl AppState {
     }
 }
 
-pub async fn run_server(
-    world: Arc<WorldCard>,
-    map: Arc<MapDef>,
-    player: Arc<crate::model::character::PlayerCard>,
-    npcs: Arc<HashMap<String, NpcCard>>,
-    snapshot_storage: Arc<dyn SnapshotStorage>,
-    message_storage: Arc<dyn crate::storage::message_storage::MessageStorage>,
-    llm_message_storage: Arc<dyn LlmMessageStorage>,
-) -> Result<()> {
-    let settings = Arc::new(RwLock::new(
-        crate::settings::load_settings().unwrap_or_else(|_| AppSettings::default()),
-    ));
-    let resources = ServerResources {
-        world,
-        map,
-        player,
-        npcs,
-        snapshot_storage,
-        message_storage,
-        llm_message_storage,
-        settings,
-    };
-    run_server_with_config(resources, ServerConfig::default()).await
-}
-
 /// [DOC: docs/architecture/system.md]
 pub async fn run_server_with_config(
     resources: ServerResources,
@@ -339,6 +347,7 @@ pub async fn run_server_with_config(
         player: resources.player,
         npcs: resources.npcs,
         is_generating: Arc::new(AtomicBool::new(false)),
+        prompt_preset_storage: resources.prompt_preset_storage,
         settings: Arc::clone(&resources.settings),
         game_service: Arc::new(DefaultGameService::with_storage(
             Some(resources.llm_message_storage),

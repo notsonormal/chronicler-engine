@@ -15,6 +15,7 @@
     <div class="tab-bar">
         <button class="tab active" data-tab="game">Game</button>
         <button class="tab" data-tab="settings">Settings</button>
+        <button class="tab" data-tab="prompt-presets">Prompt Presets</button>
         <button class="tab" data-tab="llm-messages">LLM Messages</button>
     </div>
     <div class="tab-content active" id="game-tab">
@@ -46,6 +47,9 @@
     </div>
     <div class="tab-content" id="settings-tab">
         <div class="settings-panel" hx-get="/fragment/settings" hx-trigger="load"></div>
+    </div>
+    <div class="tab-content" id="prompt-presets-tab">
+        <div class="prompt-presets-panel" hx-get="/fragment/prompt-presets" hx-trigger="load"></div>
     </div>
     <div class="tab-content" id="llm-messages-tab">
         <div class="llm-messages-panel" hx-get="/fragment/llm-messages" hx-trigger="load, every 4s" hx-swap="innerHTML" hx-on::after-swap="restoreLlmExpandedState()"></div>

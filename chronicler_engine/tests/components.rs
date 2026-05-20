@@ -20,6 +20,8 @@ mod debug;
 mod fragment;
 #[path = "components/misc.rs"]
 mod misc;
+#[path = "components/prompt_presets.rs"]
+mod prompt_presets;
 #[path = "components/settings.rs"]
 mod settings;
 #[path = "components/text_check.rs"]

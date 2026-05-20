@@ -114,6 +114,7 @@ impl LlmBackend for OllamaBackend {
             player: context.player,
             user_message: &user_msg,
             history: context.history,
+            system_prompt_override: None,
         };
 
         self.narrate_from_context(agent_name, &npc_context)
@@ -155,6 +156,7 @@ impl LlmBackend for OllamaBackend {
             player: context.player,
             user_message: &user_msg,
             history: context.history,
+            system_prompt_override: None,
         };
 
         self.narrate_from_context(agent_name, &arrival_context)

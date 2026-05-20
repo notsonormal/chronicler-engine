@@ -12,7 +12,7 @@ For background on SillyTavern's original system, see [`reference/sillytavern_pro
 
 The engine follows a **Marinara-Engine-inspired pattern** designed for compatibility with reasoning models:
 
-- **Instructions are plain text** — No XML tags wrapping the system prompt or PHI layer. Imperative voice only ("You are...", "Your job is...", "Never...").
+- **Instructions are plain text** — No XML tags wrapping the system prompt or output format layer. Imperative voice only ("You are...", "Your job is...", "Never...").
 - **Data is XML-wrapped** — External context (`<GameState>`, `<KnownNpcs>`, `<ConversationHistory>`, etc.) uses XML tags because it is *data*, not instructions.
 - **Why?** Self-referential XML (`<SystemPrompt>`, `<Role>`, `<AuxiliaryInstructions>`) can trigger reasoning models (e.g., Gemma 4) to enter meta-analysis mode, consuming all tokens in `reasoning` fields and producing empty `content`. Plain-text instructions avoid this trap.
 
@@ -34,7 +34,7 @@ The Chronicler Engine implements an 8-layer prompt structure mapped from SillyTa
 | 4 | World Info | World Info / Lorebook | World lore triggered by keywords |
 | 5 | History | Chat History | Full conversation history |
 | 6 | User Input | User Message | Current player input |
-| 7 | PHI | Post-History Instructions | Behavioral guidance after history |
+| 7 | Output Format | Output Format Instructions | Writing style and behavioral guidance after history |
 
 ## Detailed Layer Descriptions
 
@@ -95,17 +95,21 @@ The Chronicler Engine implements an 8-layer prompt structure mapped from SillyTa
 - **Content**: The player's current message/action
 - **Format**: XML-wrapped (`<PlayerInput>... </PlayerInput>`)
 
-### Layer 7: Post-History Instructions (PHI)
+### Layer 7: Output Format
 - **Role**: User (instruction appended to user message)
 - **Position**: After history, before response
-- **Content**: Final behavioral instructions
+- **Content**: Writing style instructions and final behavioral guidance
 - **Format**: Plain text (no XML wrapper)
-- **Content**: Universal behavioral instructions (immersive prose, don't ask questions, end descriptively)
-- **Split behavior**: In `build_split()`, PHI is appended to the **user message** (not the system prompt) so it sits closest to the generation point, matching the ordering in `build()` where `PlayerInput` precedes the PHI instructions.
+- **Split behavior**: In `build_split()`, the output format is appended to the **user message** (not the system prompt) so it sits closest to the generation point, matching the ordering in `build()` where `PlayerInput` precedes the output format instructions.
 - **Example**:
   ```
-  Narrate the outcome of the player's action in immersive prose.
-  Do NOT conclude with any form of player direction, question, or prompt.
+  Writing style:
+  - Third-person limited perspective, focused on the player character.
+  - Past tense narrative prose.
+
+  The player's next action is provided above. Your only job is to narrate what happens now.
+
+  Do not re-narrate events that already occurred in the history above. Move the scene forward from where it left off.
   ```
 
 ## `build_split()` Separation
@@ -113,7 +117,7 @@ The Chronicler Engine implements an 8-layer prompt structure mapped from SillyTa
 `build_split()` separates instructions from data to maximize compatibility with OpenAI-compatible APIs:
 
 - **System half**: Plain-text instructions only (Layer 0)
-- **User half**: XML-wrapped data (Layers 1–6) + plain-text PHI (Layer 7)
+- **User half**: XML-wrapped data (Layers 1–6) + plain-text output format (Layer 7)
 
 This separation ensures that reasoning models receive clear imperative instructions in the system role, while all external context stays in the user role.
 
