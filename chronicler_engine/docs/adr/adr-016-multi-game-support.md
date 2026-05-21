@@ -47,12 +47,39 @@ Auto-generated names follow `{WorldName}_{Date}_N` where `N` is `max(existing N)
 ### Negative
 - **Data loss for existing users**: Migration v5 drops the `checkpoints` table. Existing checkpoint data is lost.
 - **More database growth**: Multiple games mean multiple independent snapshot/message histories.
-- **UI complexity**: Need a game selector in the header, creation/switching/deletion flows.
+- **UI complexity**: Need a dedicated Save / Load tab with game listing, creation, switching, and deletion flows.
 
 ## Related ADRs
 
 - [ADR-008: SQLite Snapshot Persistence](./adr-008-sqlite-snapshot-persistence.md) — The snapshot system that multi-game support builds on.
 
+## UI Architecture
+
+Game management lives in a dedicated **Save / Load** tab, separate from the main Game tab:
+
+- **Active Game** section — highlights the current game with visual distinction (green accent + "Current" badge)
+- **Saved Games** list — all other games for the current world, each with Switch and Delete actions
+- **Actions** row — "New Game" (creates and switches to a fresh game) and "Reset Current Game" (deletes active game, creates fresh replacement)
+
+The header bar is intentionally minimal — engine title, active game name, and connection status only. Game CRUD does not belong in the header because it is not part of every-session gameplay; it is a session-management concern that deserves its own space.
+
+## State Initialization
+
+Every newly created game must start from the same baseline as a bootstrapped world. This means the creation flow must:
+
+1. Create the game record
+2. Switch the storage layer to the new game ID
+3. Build fresh initial state (scenario logs, NPCs, scene)
+4. Persist the initial snapshot
+5. Persist the starting scenario message
+
+This ensures new games are immediately playable — they do not start empty and require a separate initialization step.
+
+## State Loading
+
+When the engine loads state from storage, it reconstructs `GameState` from the latest snapshot first, then overlays message history from the messages table. Message history is only applied when present; an empty messages table does not override the snapshot-derived state. This separation keeps snapshots (structural state) and messages (display history) independently recoverable.
+
 ## History
 
 - **2026-05-21**: Initial implementation — multi-game CRUD, auto-naming, checkpoint removal.
+- **2026-05-21**: UI redesigned as dedicated Save / Load tab (previously header widget). New-game initialization unified with bootstrap path. Defensive loading added to prevent empty message storage from clearing snapshot history.

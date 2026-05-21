@@ -38,11 +38,9 @@ Client <────SSE──── Server (/sse endpoint)
 | Protocol | Binary/frame | Plain HTTP |
 | Firewall-friendly | No | Yes |
 
-### Implementation
+### Architecture
 
-1. Server endpoint: `GET /sse` using `axum::response::sse::Sse`
-2. Keep-alive: 15-second ping interval
-3. Frontend: `hx-ext="sse" sse-connect="/sse"`
+The server exposes a dedicated SSE endpoint that the client connects to via HTMX's SSE extension. A keep-alive heartbeat prevents connection timeouts. The frontend subscribes to event streams that correspond to server-side broadcast channels.
 
 ---
 

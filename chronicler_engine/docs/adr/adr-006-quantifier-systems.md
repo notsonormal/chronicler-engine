@@ -185,29 +185,3 @@ These features evolved incrementally:
 
 The dual-LLM architecture (scene_quantification_v2) was the latest enhancement, allowing separate cheap/fast model for scene analysis.
 
----
-
-## Implementation Patterns
-
-### Character State (in-memory)
-
-```rust
-pub struct NpcEncounterState {
-    pub times_met: u32,
-    pub trigger_fired: HashMap<String, bool>,
-}
-
-pub struct NpcEncounterLog {
-    pub npcs: HashMap<String, NpcEncounterState>,
-}
-```
-
-### Trigger Definition
-
-```rust
-pub struct Trigger {
-    pub condition: TriggerCondition,  // TimesMet(Eq, 0)
-    pub effect: TriggerEffect,        // name + narration_prompt
-    pub repeat: bool,               // fire once or repeatable
-}
-```

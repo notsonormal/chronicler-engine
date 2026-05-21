@@ -7,9 +7,9 @@
 
 ## Context
 
-The quantifier was originally a hardcoded pipeline step in `DefaultGameService`. It ran between narration generation and `execute_freeaction_impl`, with direct function calls and no abstraction. Adding any new post-processing step (e.g., a continuity checker or prose guardian) would require rewriting the orchestrator.
+The quantifier was originally a hardcoded pipeline step in the game service. It ran between narration generation and action execution, with direct function calls and no abstraction. Adding any new post-processing step (e.g., a continuity checker or prose guardian) would require rewriting the orchestrator.
 
-Reviews identified that the pipeline shape was deeply coupled: while the `LlmBackend` trait allowed swapping implementations, the *orchestration* was fixed in code.
+Reviews identified that the pipeline shape was deeply coupled: while the backend trait allowed swapping implementations, the *orchestration* was fixed in code.
 
 ---
 
@@ -32,8 +32,8 @@ pub trait Agent: Send + Sync {
 
 | Phase | When | Current Agents |
 |-------|------|----------------|
-| `PreGeneration` | Before main LLM call | `NarratorAgent` (stub, reserved) |
-| `PostGeneration` | After main LLM response | `QuantifierAgent` |
+| `PreGeneration` | Before main LLM call | Reserved for future agents |
+| `PostGeneration` | After main LLM response | Scene analysis (quantifier) |
 
 ### Agent Result Types
 
@@ -53,14 +53,6 @@ pub enum StatePatch {
 
 `AgentRegistry` loads agents from `AppSettings.agents` config at startup. Each agent is constructed with its resolved backend (`Arc<dyn ...>`). `BackendSelector` (`UseMain` | `UseNamed(String)`) determines which connection profile the agent uses.
 
-### Quantifier Migration
-
-The existing quantifier code moved from `src/narrative/quantifier/` to `src/narrative/agents/quantifier/` and implements `Agent`. `DefaultGameService` no longer owns a `QuantifierBackendTrait` directly; it owns an `AgentRegistry` and iterates post-generation agents.
-
-### Bridge Pattern
-
-`action_processing.rs` still takes `QuantifierResult` (not `AgentResult`) in Phase 2. `game_service.rs` translates `StatePatch::Scene` back into `QuantifierResult` as a temporary bridge. Phase 3 will replace this with generic dispatch.
-
 ---
 
 ## Consequences
@@ -74,7 +66,7 @@ The existing quantifier code moved from `src/narrative/quantifier/` to `src/narr
 ### Negative
 - **Indirection cost**: `dyn Agent` dispatch adds one vtable call per agent
 - **Config complexity**: `settings.json` now includes an `agents` array
-- **Bridge maintenance**: `StatePatch` → `QuantifierResult` translation is temporary technical debt
+- **Bridge maintenance**: Agent result translation back into legacy quantifier types is temporary technical debt
 
 ### Trade-offs
 - Chose trait objects over generics to avoid infecting the entire call stack with type parameters

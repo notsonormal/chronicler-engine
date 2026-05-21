@@ -1,7 +1,7 @@
 # ADR-010: Concurrency and Generation Gate Model
 
 **Date:** 2026-05-10
-**Updated:** 2026-05-18 — Cooperative cancellation checkpoints added to `ActionPipeline::run_from_input`
+**Updated:** 2026-05-18 — Cooperative cancellation checkpoints added to the action pipeline
 
 ---
 
@@ -19,27 +19,15 @@ Additionally, `std::thread::sleep(Duration::from_millis(50))` hacks were used to
 
 ### Tokio Migration
 
-| Before | After |
-|--------|-------|
-| `std::thread::spawn` in `game_service.rs` | Synchronous methods; callers spawn |
-| `std::thread::spawn` in `fragments.rs` handlers | `tokio::task::spawn_blocking` |
-| `std::thread::spawn` in `bootstrap.rs` arrival | `runtime.spawn_blocking()` |
-| `std::thread::sleep(50ms)` hack | Removed entirely |
-
-The `LlmBackend` trait remains synchronous. The HTTP layer (Axum/Tokio) is responsible for non-blocking execution.
+All blocking work moves into the async runtime's blocking pool. The LLM backend interface stays synchronous; the HTTP layer is responsible for non-blocking execution. Thread sleep hacks are removed.
 
 ### Generation Gate
 
-```rust
-pub struct AppState {
-    pub is_generating: AtomicBool,
-    // ...
-}
-```
+An atomic flag in application state acts as a domain-level action lock:
 
-- `compare_exchange(false, true, SeqCst, SeqCst)` in `process_action` before accepting any action
-- `GenerationGuard` (RAII) ensures flag is cleared on task exit, even on panic
-- Client-side: HTMX `hx-sync="this:drop"` + `saveActionArea()` button disable
+- Set before accepting any player action
+- Cleared automatically when the generation task finishes, even on panic (RAII guard)
+- Client-side: HTMX sync attributes + button disable prevent most double-submits
 
 ---
 
@@ -53,7 +41,7 @@ pub struct AppState {
 
 ### Negative
 - **Runtime dependency**: Requires active Tokio runtime (guaranteed by Axum)
-- **Cooperative cancellation only**: `spawn_blocking` tasks cannot be forcibly killed; they must poll `CancellationToken::is_cancelled()` at internal checkpoints to abort early. The pipeline checks at stage boundaries (post-narration, pre-trigger, post-trigger) and resets status to `Idle` before returning.
+- **Cooperative cancellation only**: Blocking tasks cannot be forcibly killed; they must poll a cancellation token at internal checkpoints to abort early. The pipeline checks at stage boundaries (post-narration, pre-trigger, post-trigger) and resets status to idle before returning.
 
 ### Trade-offs
 - Chose `spawn_blocking` over `tokio::spawn` + `async` traits because backend traits are sync and `dyn async Trait` is complex in Rust 2024

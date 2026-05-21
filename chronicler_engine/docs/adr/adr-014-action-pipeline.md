@@ -14,23 +14,23 @@ Additionally, the pipeline depended directly on the concrete `DefaultGameService
 
 We extracted an `ActionPipeline` module that explicitly models the game flow phases, unifying the normal action flow and retry flows, and introduced an `ActionPipelineBackend` trait to serve as a narrow, testable seam.
 
-1. **Phase-Based Pipeline**: `ActionPipeline` explicitly models the documented game flow phases via private phase methods (e.g., `phase_pre_main_snapshot`, `phase_narrate`, `phase_post_generation`, `phase_engine_commit`, `phase_trigger_build_request`, `phase_trigger_continuation`, `phase_post_trigger_reconcile`, and `phase_finalize`).
-2. **Unified Action and Retry Flows**: Both normal play and retry flows (main narration retry, event continuation retry) utilize the same `ActionPipeline` phase methods, eliminating duplicated logic. 
-3. **`ActionPipelineBackend` Trait**: Instead of depending on `DefaultGameService`, the pipeline depends on this narrow trait, which exposes only three capabilities: `narrate_action`, `complete` (for triggers), and `run_post_generation_agents`.
-4. **Concrete Implementation Adapter**: `DefaultGameService` implements `ActionPipelineBackend`, serving as an adapter that owns the real backends and registry, and wires them to the trait interface.
+1. **Phase-Based Pipeline**: The pipeline explicitly models documented game flow phases as discrete steps (snapshot, narration, post-generation agent dispatch, engine commit, trigger evaluation, trigger continuation, reconciliation, finalization).
+2. **Unified Action and Retry Flows**: Both normal play and retry flows (main narration retry, event continuation retry) utilize the same pipeline phase methods, eliminating duplicated logic. 
+3. **Narrow Backend Trait**: The pipeline depends on a trait that exposes only three capabilities: narrate an action, complete a trigger continuation, and run post-generation agents. The concrete game service implements this trait.
+4. **Concrete Implementation Adapter**: The game service implements the backend trait, owning the real backends and registry and wiring them to the trait interface.
 5. **Strict Error Handling and Cancellation**:
-   - **Early Errors** (before engine commit): Loads the latest state from storage, sets `Error` status, and saves.
-   - **Late Errors** (after engine commit): Uses the current in-memory state, sets `Error` status, and saves.
-   - **Cancellation**: Checks `cancel_token` at three specific boundaries (post-narration, pre-trigger, post-trigger), resetting to `Idle` and saving.
+   - **Early Errors** (before engine commit): Loads the latest state from storage, sets error status, and saves.
+   - **Late Errors** (after engine commit): Uses the current in-memory state, sets error status, and saves.
+   - **Cancellation**: Checked at stage boundaries (post-narration, pre-trigger, post-trigger), resetting to idle and saving.
 
 ## Consequences
 
 ### Positive
 
-- **Testability**: Tests can now inject a narrow mock implementing only `ActionPipelineBackend` (3 methods) instead of constructing a full `DefaultGameService` with mock quantifiers and registries.
-- **Locality and Readability**: Action orchestration lives in one file (`action_pipeline/pipeline.rs`), avoiding monoliths.
+- **Testability**: Tests can now inject a narrow mock implementing only the backend trait (3 methods) instead of constructing a full game service with mock quantifiers and registries.
+- **Locality and Readability**: Action orchestration lives in one module, avoiding monoliths.
 - **Leverage**: Normal play, main retry, and event retry all use the exact same pipeline phases.
-- **Architectural Clarity**: The dependency cycle between `game_service` and `action_pipeline` was broken by moving shared context to an `application/context.rs` module and making the pipeline depend on the `ActionPipelineBackend` trait.
+- **Architectural Clarity**: The dependency cycle between game service and pipeline was broken by extracting shared context into a separate module and making the pipeline depend on the backend trait.
 
 ### Negative
 
