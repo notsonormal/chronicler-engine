@@ -51,7 +51,7 @@ Cross-module and browser-based tests live in the top-level `tests/` directory:
 | `action_pipeline/` | Pipeline behavior — narration, quantifier, trigger, retry, cancellation | In-process | ~0.7s |
 | `guardrails/` | Custom convention tests (imports, comments, file length) | In-process | ~2s |
 | `llm_message_storage_tests.rs` | SQLite LLM message persistence, auto-pruning | In-process | ~1s |
-| `snapshot_storage_tests.rs` | SQLite snapshot persistence, checkpoints | In-process | ~2s |
+| `snapshot_storage_tests.rs` | SQLite snapshot persistence, game CRUD | In-process | ~2s |
 | `poison_recovery.rs` | Lock poison recovery for `Mutex`/`RwLock` | In-process | ~1s |
 | `cli_tests.rs` | CLI argument parsing | In-process | ~1s |
 | `invariant_contract_tests.rs` | Runtime invariant regression tests | In-process | ~0.1s |

@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-05-21
+
+### Changed
+- **Multi-game support — replaced checkpoints with independent games**
+  - Migration v5: added `name TEXT` to `games` table, dropped `checkpoints` table and index
+  - New `Game` domain model with auto-generated names (`{WorldName}_{Date}_N`)
+  - `SnapshotStorage` and `MessageStorage` traits gained `set_game_id` / `current_game_id` for runtime switching
+  - `SqliteGameStorage` and `InMemoryGameStorage` filter all queries by active `game_id`
+  - Game CRUD: `list_games`, `create_game`, `delete_game`, `get_game`
+  - Bootstrap startup: auto-creates game if none exist for world; loads most recent if games exist
+  - Server endpoints: `GET /fragment/games`, `POST /games`, `POST /games/:id/switch`, `POST /games/:id/delete`
+  - UI: header shows active game name + "Games" dropdown with switch/create/delete
+  - **Reset reworked**: deletes current game + creates new one with fresh auto-generated name (full page refresh)
+  - **Checkpoints removed entirely**: all model, mapper, storage, server, test code deleted
+  - All 877 tests pass; clippy clean
+
+### Fixed
+- **Latest-game heuristic**: `find_latest_game_for_world` now orders by most recent message timestamp (with `updated_at` fallback) instead of `updated_at` alone. This ensures the actually-played game is loaded on restart.
+- **`delete_game` transaction**: `SqliteGameStorage::delete_game` now wraps its three cascading `DELETE`s in a SQLite transaction so partial failures cannot leave orphaned data.
+- **Game naming**: `generate_game_name` simplified from gap-filling loop to `max(N) + 1` algorithm.
+- **Code hygiene**: Extracted `game_id()` helper to replace ~25 inline `AtomicU64::load` calls across storage implementations.
+
 ## 2026-05-20
 
 ### Changed

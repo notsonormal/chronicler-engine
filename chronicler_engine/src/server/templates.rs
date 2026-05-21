@@ -37,11 +37,11 @@ pub(crate) fn markdown_to_html(text: &str) -> String {
 
 #[derive(Template)]
 #[template(
-    source = r#"<div class="header"><span class="game-title">Chronicler Engine</span><button class="reset-btn" hx-post="/reset" hx-confirm="Are you sure you want to reset the game? All progress will be lost." hx-swap="none">Reset Game</button><span class="connection-status connected" id="connection-status">Connected</span></div>"#,
+    source = r##"<div class="header"><span class="game-title">Chronicler Engine</span><span class="game-name">{{ game_name }}</span><span class="connection-status connected" id="connection-status">Connected</span></div>"##,
     ext = "html"
 )]
 pub struct HeaderTemplate {
-    pub room_name: String,
+    pub game_name: String,
 }
 
 #[derive(Debug, Clone)]
@@ -141,7 +141,7 @@ impl CharacterHeadshotsTemplate {
 
 #[derive(Template)]
 #[template(
-    source = r##"<div class="action-area" id="action-area"><form id="command-form" hx-post="/action/check" hx-target="#action-area" hx-swap="innerHTML" hx-sync="this:drop" hx-on::before-request="saveActionArea()" hx-on::after-request="onActionFormAfterRequest()"><input type="text" name="command" placeholder="Enter command..." required minlength="1" autocomplete="off" {% if is_disabled %}disabled{% endif %} /><button type="submit" id="submit-btn" {% if is_disabled %}disabled{% endif %}><span class="btn-icon">&#9654;</span> Send</button></form><div class="action-hints" id="action-hints" hx-get="/hints" hx-trigger="load, every 5s"></div><div class="{{ status_class }}" id="status-display" hx-get="/status/generating" hx-trigger="load, every 5s" hx-swap="innerHTML" hx-on::after-swap="onStatusPoll(this)"><span class="{{ status_class }}">{{ status_text }}</span></div><button class="checkpoint-btn" hx-post="/checkpoint" hx-swap="none">&#128204; Bookmark</button></div>"##,
+    source = r##"<div class="action-area" id="action-area"><form id="command-form" hx-post="/action/check" hx-target="#action-area" hx-swap="innerHTML" hx-sync="this:drop" hx-on::before-request="saveActionArea()" hx-on::after-request="onActionFormAfterRequest()"><input type="text" name="command" placeholder="Enter command..." required minlength="1" autocomplete="off" {% if is_disabled %}disabled{% endif %} /><button type="submit" id="submit-btn" {% if is_disabled %}disabled{% endif %}><span class="btn-icon">&#9654;</span> Send</button></form><div class="action-hints" id="action-hints" hx-get="/hints" hx-trigger="load, every 5s"></div><div class="{{ status_class }}" id="status-display" hx-get="/status/generating" hx-trigger="load, every 5s" hx-swap="innerHTML" hx-on::after-swap="onStatusPoll(this)"><span class="{{ status_class }}">{{ status_text }}</span></div></div>"##,
     ext = "html"
 )]
 pub struct ActionAreaTemplate {

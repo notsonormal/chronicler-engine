@@ -7,6 +7,8 @@ use chronicler_engine::model::trigger::{
     ComparisonOperator, Trigger, TriggerCondition, TriggerEffect,
 };
 use chronicler_engine::narrative::llm::MockBackend;
+use chronicler_engine::storage::message_storage::MessageStorage;
+use chronicler_engine::storage::snapshot_storage::SnapshotStorage;
 use chronicler_engine::test_support::make_test_context_with_sqlite;
 
 use crate::pipeline_helpers::{
@@ -417,7 +419,37 @@ fn test_retry_no_pre_main_snapshot() {
     // Retry should fail gracefully when pre-main snapshot is missing.
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
-    let ctx = make_test_context_with_sqlite(state).unwrap();
+
+    let db_pool = chronicler_engine::storage::db::DbPool::new(":memory:").unwrap();
+    let storage = Arc::new(
+        chronicler_engine::storage::snapshot_storage::SqliteGameStorage::new(db_pool.clone(), 1),
+    );
+    let llm_storage: Arc<dyn chronicler_engine::storage::llm_message_storage::LlmMessageStorage> =
+        Arc::new(
+            chronicler_engine::storage::llm_message_storage::SqliteLlmMessageStorage::new(db_pool),
+        );
+
+    let snapshot =
+        chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
+    let _ = storage.save(&snapshot);
+    for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
+        let _ = storage.insert_message(&mut msg);
+    }
+
+    let ctx = chronicler_engine::application::game_service::GameServiceContext {
+        snapshot_storage: storage.clone(),
+        message_storage: storage.clone(),
+        llm_message_storage: llm_storage,
+        world: state.world.clone(),
+        map: state.map.clone(),
+        player: state.player.clone(),
+        npcs: Arc::new(state.npcs.clone()),
+        cancel_token: tokio_util::sync::CancellationToken::new(),
+        is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        settings: Arc::new(std::sync::RwLock::new(
+            chronicler_engine::model::settings::AppSettings::default(),
+        )),
+    };
 
     add_input_and_save(&ctx, "examine room");
 
@@ -444,7 +476,7 @@ fn test_retry_no_pre_main_snapshot() {
     );
 
     // Clear all snapshots (simulating missing pre-main)
-    let _ = ctx.snapshot_storage.reset();
+    let _ = storage.reset();
     // Re-save current state as latest so retry has something to load
     {
         save_state(&ctx, &state_before_reset);

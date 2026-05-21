@@ -660,34 +660,38 @@ async fn test_retry_handler_load_state_failure() {
         > {
             self.inner.load_by_id(id)
         }
-        fn reset(&self) -> Result<(), chronicler_engine::error::EngineError> {
-            self.inner.reset()
+        fn set_game_id(&self, game_id: u64) {
+            self.inner.set_game_id(game_id);
         }
-        fn save_checkpoint(
-            &self,
-            checkpoint: &chronicler_engine::model::checkpoint::Checkpoint,
-        ) -> Result<(), chronicler_engine::error::EngineError> {
-            self.inner.save_checkpoint(checkpoint)
+
+        fn current_game_id(&self) -> u64 {
+            self.inner.current_game_id()
         }
-        fn load_checkpoint(
+
+        fn list_games(
             &self,
-            id: &str,
+        ) -> Result<Vec<chronicler_engine::model::game::Game>, chronicler_engine::error::EngineError>
+        {
+            self.inner.list_games()
+        }
+        fn create_game(
+            &self,
+            world_name: &str,
+            name: &str,
+        ) -> Result<u64, chronicler_engine::error::EngineError> {
+            self.inner.create_game(world_name, name)
+        }
+        fn delete_game(&self, id: u64) -> Result<(), chronicler_engine::error::EngineError> {
+            self.inner.delete_game(id)
+        }
+        fn get_game(
+            &self,
+            id: u64,
         ) -> Result<
-            Option<chronicler_engine::model::checkpoint::Checkpoint>,
+            Option<chronicler_engine::model::game::Game>,
             chronicler_engine::error::EngineError,
         > {
-            self.inner.load_checkpoint(id)
-        }
-        fn list_checkpoints(
-            &self,
-        ) -> Result<
-            Vec<chronicler_engine::model::checkpoint::Checkpoint>,
-            chronicler_engine::error::EngineError,
-        > {
-            self.inner.list_checkpoints()
-        }
-        fn delete_checkpoint(&self, id: &str) -> Result<(), chronicler_engine::error::EngineError> {
-            self.inner.delete_checkpoint(id)
+            self.inner.get_game(id)
         }
     }
 
@@ -767,34 +771,38 @@ async fn test_retry_handler_snapshot_save_failure() {
         > {
             self.inner.load_by_id(id)
         }
-        fn reset(&self) -> Result<(), chronicler_engine::error::EngineError> {
-            self.inner.reset()
+        fn set_game_id(&self, game_id: u64) {
+            self.inner.set_game_id(game_id);
         }
-        fn save_checkpoint(
-            &self,
-            checkpoint: &chronicler_engine::model::checkpoint::Checkpoint,
-        ) -> Result<(), chronicler_engine::error::EngineError> {
-            self.inner.save_checkpoint(checkpoint)
+
+        fn current_game_id(&self) -> u64 {
+            self.inner.current_game_id()
         }
-        fn load_checkpoint(
+
+        fn list_games(
             &self,
-            id: &str,
+        ) -> Result<Vec<chronicler_engine::model::game::Game>, chronicler_engine::error::EngineError>
+        {
+            self.inner.list_games()
+        }
+        fn create_game(
+            &self,
+            world_name: &str,
+            name: &str,
+        ) -> Result<u64, chronicler_engine::error::EngineError> {
+            self.inner.create_game(world_name, name)
+        }
+        fn delete_game(&self, id: u64) -> Result<(), chronicler_engine::error::EngineError> {
+            self.inner.delete_game(id)
+        }
+        fn get_game(
+            &self,
+            id: u64,
         ) -> Result<
-            Option<chronicler_engine::model::checkpoint::Checkpoint>,
+            Option<chronicler_engine::model::game::Game>,
             chronicler_engine::error::EngineError,
         > {
-            self.inner.load_checkpoint(id)
-        }
-        fn list_checkpoints(
-            &self,
-        ) -> Result<
-            Vec<chronicler_engine::model::checkpoint::Checkpoint>,
-            chronicler_engine::error::EngineError,
-        > {
-            self.inner.list_checkpoints()
-        }
-        fn delete_checkpoint(&self, id: &str) -> Result<(), chronicler_engine::error::EngineError> {
-            self.inner.delete_checkpoint(id)
+            self.inner.get_game(id)
         }
     }
 
@@ -863,34 +871,38 @@ async fn test_reset_handler_snapshot_save_failure() {
         > {
             self.inner.load_by_id(id)
         }
-        fn reset(&self) -> Result<(), chronicler_engine::error::EngineError> {
-            self.inner.reset()
+        fn set_game_id(&self, game_id: u64) {
+            self.inner.set_game_id(game_id);
         }
-        fn save_checkpoint(
-            &self,
-            checkpoint: &chronicler_engine::model::checkpoint::Checkpoint,
-        ) -> Result<(), chronicler_engine::error::EngineError> {
-            self.inner.save_checkpoint(checkpoint)
+
+        fn current_game_id(&self) -> u64 {
+            self.inner.current_game_id()
         }
-        fn load_checkpoint(
+
+        fn list_games(
             &self,
-            id: &str,
+        ) -> Result<Vec<chronicler_engine::model::game::Game>, chronicler_engine::error::EngineError>
+        {
+            self.inner.list_games()
+        }
+        fn create_game(
+            &self,
+            world_name: &str,
+            name: &str,
+        ) -> Result<u64, chronicler_engine::error::EngineError> {
+            self.inner.create_game(world_name, name)
+        }
+        fn delete_game(&self, id: u64) -> Result<(), chronicler_engine::error::EngineError> {
+            self.inner.delete_game(id)
+        }
+        fn get_game(
+            &self,
+            id: u64,
         ) -> Result<
-            Option<chronicler_engine::model::checkpoint::Checkpoint>,
+            Option<chronicler_engine::model::game::Game>,
             chronicler_engine::error::EngineError,
         > {
-            self.inner.load_checkpoint(id)
-        }
-        fn list_checkpoints(
-            &self,
-        ) -> Result<
-            Vec<chronicler_engine::model::checkpoint::Checkpoint>,
-            chronicler_engine::error::EngineError,
-        > {
-            self.inner.list_checkpoints()
-        }
-        fn delete_checkpoint(&self, id: &str) -> Result<(), chronicler_engine::error::EngineError> {
-            self.inner.delete_checkpoint(id)
+            self.inner.get_game(id)
         }
     }
 

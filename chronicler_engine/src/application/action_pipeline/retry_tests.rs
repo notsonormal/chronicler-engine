@@ -10,7 +10,6 @@ use crate::application::context::GameServiceContext;
 // most tests exercise it indirectly via retry_last_response_impl.
 use crate::application::game_service::DefaultGameService;
 use crate::error::{EngineError, internal_error};
-use crate::model::checkpoint::Checkpoint;
 use crate::model::message::Message;
 use crate::model::state::{GameState, GenerationStatus, LogType};
 use crate::model::state_snapshot::GameStateSnapshot;
@@ -41,6 +40,14 @@ impl FailingSnapshotStorage {
 }
 
 impl SnapshotStorage for FailingSnapshotStorage {
+    fn set_game_id(&self, game_id: u64) {
+        self.fallback.set_game_id(game_id);
+    }
+
+    fn current_game_id(&self) -> u64 {
+        self.fallback.current_game_id()
+    }
+
     fn save(&self, snapshot: &GameStateSnapshot) -> Result<u64, EngineError> {
         if self.fail_save.load(std::sync::atomic::Ordering::SeqCst) {
             return Err(EngineError::Internal(internal_error(
@@ -74,24 +81,20 @@ impl SnapshotStorage for FailingSnapshotStorage {
         self.fallback.load_by_id(id)
     }
 
-    fn reset(&self) -> Result<(), EngineError> {
-        self.fallback.reset()
+    fn list_games(&self) -> Result<Vec<crate::model::game::Game>, EngineError> {
+        self.fallback.list_games()
     }
 
-    fn save_checkpoint(&self, checkpoint: &Checkpoint) -> Result<(), EngineError> {
-        self.fallback.save_checkpoint(checkpoint)
+    fn create_game(&self, world_name: &str, name: &str) -> Result<u64, EngineError> {
+        self.fallback.create_game(world_name, name)
     }
 
-    fn load_checkpoint(&self, id: &str) -> Result<Option<Checkpoint>, EngineError> {
-        self.fallback.load_checkpoint(id)
+    fn delete_game(&self, id: u64) -> Result<(), EngineError> {
+        self.fallback.delete_game(id)
     }
 
-    fn list_checkpoints(&self) -> Result<Vec<Checkpoint>, EngineError> {
-        self.fallback.list_checkpoints()
-    }
-
-    fn delete_checkpoint(&self, id: &str) -> Result<(), EngineError> {
-        self.fallback.delete_checkpoint(id)
+    fn get_game(&self, id: u64) -> Result<Option<crate::model::game::Game>, EngineError> {
+        self.fallback.get_game(id)
     }
 }
 
@@ -112,6 +115,14 @@ impl FailingMessageStorage {
 }
 
 impl MessageStorage for FailingMessageStorage {
+    fn set_game_id(&self, game_id: u64) {
+        self.fallback.set_game_id(game_id);
+    }
+
+    fn current_game_id(&self) -> u64 {
+        self.fallback.current_game_id()
+    }
+
     fn insert_message(&self, msg: &mut Message) -> Result<(), EngineError> {
         self.fallback.insert_message(msg)
     }

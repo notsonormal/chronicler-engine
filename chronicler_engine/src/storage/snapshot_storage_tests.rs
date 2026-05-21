@@ -103,35 +103,6 @@ fn test_sqlite_reset_clears_only_current_game() {
 }
 
 #[test]
-fn test_sqlite_checkpoint_roundtrip() {
-    let pool = DbPool::new(":memory:").unwrap();
-    let storage = SqliteGameStorage::new(pool, 1);
-
-    let snap = empty_snapshot();
-    let id = storage.save(&snap).unwrap();
-
-    let cp = crate::model::checkpoint::Checkpoint {
-        id: "cp1".to_string(),
-        snapshot_id: id,
-        name: "Test Checkpoint".to_string(),
-        created_at: Utc::now(),
-    };
-
-    storage.save_checkpoint(&cp).unwrap();
-
-    let loaded = storage.load_checkpoint("cp1").unwrap().unwrap();
-    assert_eq!(loaded.snapshot_id, id);
-    assert_eq!(loaded.name, "Test Checkpoint");
-
-    let list = storage.list_checkpoints().unwrap();
-    assert_eq!(list.len(), 1);
-    assert_eq!(list[0].id, "cp1");
-
-    storage.delete_checkpoint("cp1").unwrap();
-    assert!(storage.load_checkpoint("cp1").unwrap().is_none());
-}
-
-#[test]
 fn test_sqlite_load_by_id_not_found() {
     let pool = DbPool::new(":memory:").unwrap();
     let storage = SqliteGameStorage::new(pool, 1);

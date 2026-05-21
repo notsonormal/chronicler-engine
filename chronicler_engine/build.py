@@ -404,8 +404,10 @@ def main():
     tee = TeeLogger(log_path, sys.stdout)
     sys.stdout = tee
 
+    print("=" * 60)
     print("=== Chronicler Engine Build ===")
-    print(f"Build log: {log_path}")
+    print(f"Full build log: {log_path}")
+    print("=" * 60)
 
     # Resolve target directories
     cargo_target_dir = Path(args.target_dir) if args.target_dir else Path("target")
@@ -627,6 +629,11 @@ def main():
         if step_failures:
             print(f"\n  Failed steps: {', '.join(step_failures)}")
         print("---")
+
+    print("=" * 60)
+    print("=== Build Complete ===")
+    print(f"Full build log: {log_path}")
+    print("=" * 60)
 
     return 0
 

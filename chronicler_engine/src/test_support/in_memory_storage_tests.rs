@@ -1,6 +1,5 @@
 use chrono::Utc;
 
-use crate::model::checkpoint::Checkpoint;
 use crate::model::state::{MovementState, SceneState};
 use crate::model::state_snapshot::GameStateSnapshot;
 use crate::model::state_snapshot::NarrativeSnapshot;
@@ -85,22 +84,4 @@ fn test_messages_roundtrip() {
     let loaded = s.load_messages().unwrap();
     assert_eq!(loaded.len(), 1);
     assert_eq!(loaded[0].text, "hello");
-}
-
-#[test]
-fn test_checkpoint_roundtrip() {
-    let s = InMemoryGameStorage::new();
-    let cp = Checkpoint {
-        id: "cp1".to_string(),
-        snapshot_id: 1,
-        name: "Test".to_string(),
-        created_at: Utc::now(),
-    };
-    s.save_checkpoint(&cp).unwrap();
-    let loaded = s.load_checkpoint("cp1").unwrap().unwrap();
-    assert_eq!(loaded.name, "Test");
-    let list = s.list_checkpoints().unwrap();
-    assert_eq!(list.len(), 1);
-    s.delete_checkpoint("cp1").unwrap();
-    assert!(s.load_checkpoint("cp1").unwrap().is_none());
 }

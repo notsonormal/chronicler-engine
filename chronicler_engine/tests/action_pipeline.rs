@@ -12,7 +12,7 @@ use chronicler_engine::model::state::{
 use chronicler_engine::model::state_snapshot::GameStateSnapshot;
 use chronicler_engine::narrative::agents::registry::AgentRegistry;
 use chronicler_engine::narrative::llm::MockBackend;
-use chronicler_engine::test_support::make_test_context;
+use chronicler_engine::test_support::{make_test_context, make_test_context_without_snapshot};
 use pipeline_helpers::{
     create_test_state_with_trigger_npc, latest_state, wait_for_generation_complete,
 };

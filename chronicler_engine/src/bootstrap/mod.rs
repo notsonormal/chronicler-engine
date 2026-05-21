@@ -12,3 +12,6 @@ pub use logging::init_logging;
 pub use run::run;
 pub use scenario::inject_scenario_logs;
 pub use validate::validate_loaded_data;
+
+#[cfg(test)]
+mod run_tests;

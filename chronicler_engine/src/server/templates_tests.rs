@@ -7,9 +7,9 @@ use crate::server::templates::{
 };
 
 #[test]
-fn test_header_template_renders_room_name() {
+fn test_header_template_renders_game_name() {
     let template = HeaderTemplate {
-        room_name: "Test Room".to_string(),
+        game_name: "Test Game".to_string(),
     };
     let rendered = template.render().unwrap();
     assert!(rendered.contains("Chronicler Engine"));
@@ -21,7 +21,7 @@ fn test_header_template_renders_room_name() {
 #[test]
 fn test_header_template_escapes_html() {
     let template = HeaderTemplate {
-        room_name: "<script>alert('xss')</script>".to_string(),
+        game_name: "<script>alert('xss')</script>".to_string(),
     };
     let rendered = template.render().unwrap();
     assert!(rendered.contains("Chronicler Engine"));
@@ -31,7 +31,7 @@ fn test_header_template_escapes_html() {
 #[test]
 fn test_header_template_connection_status() {
     let template = HeaderTemplate {
-        room_name: "Any Room".to_string(),
+        game_name: "Any Game".to_string(),
     };
     let rendered = template.render().unwrap();
     assert!(rendered.contains(r#"id="connection-status""#));

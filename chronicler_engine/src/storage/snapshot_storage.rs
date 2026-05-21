@@ -1,41 +1,107 @@
+use std::sync::atomic::{AtomicU64, Ordering};
+
 use crate::error::EngineError;
-use crate::model::checkpoint::Checkpoint;
+use crate::model::game::Game;
 use crate::model::message::Message;
 use crate::model::state_snapshot::GameStateSnapshot;
 use crate::storage::db::DbPool;
 use crate::storage::message_storage::MessageStorage;
-use crate::storage::models::checkpoint::DbCheckpoint;
+use crate::storage::models::game::DbGame;
 use crate::storage::models::game_state_snapshot::DbGameStateSnapshot;
 use crate::storage::models::message::DbMessage;
 
 pub trait SnapshotStorage: Send + Sync {
+    fn set_game_id(&self, game_id: u64);
+    fn current_game_id(&self) -> u64;
     fn save(&self, snapshot: &GameStateSnapshot) -> Result<u64, EngineError>;
     fn load_latest(&self) -> Result<Option<GameStateSnapshot>, EngineError>;
     fn load_by_id(&self, id: u64) -> Result<Option<GameStateSnapshot>, EngineError>;
-    fn reset(&self) -> Result<(), EngineError>;
 
-    fn save_checkpoint(&self, checkpoint: &Checkpoint) -> Result<(), EngineError>;
-    fn load_checkpoint(&self, id: &str) -> Result<Option<Checkpoint>, EngineError>;
-    fn list_checkpoints(&self) -> Result<Vec<Checkpoint>, EngineError>;
-    fn delete_checkpoint(&self, id: &str) -> Result<(), EngineError>;
+    fn list_games(&self) -> Result<Vec<Game>, EngineError>;
+    fn create_game(&self, world_name: &str, name: &str) -> Result<u64, EngineError>;
+    fn delete_game(&self, id: u64) -> Result<(), EngineError>;
+    fn get_game(&self, id: u64) -> Result<Option<Game>, EngineError>;
 }
 
 pub struct SqliteGameStorage {
     pool: DbPool,
-    game_id: u64,
+    game_id: AtomicU64,
 }
 
 impl SqliteGameStorage {
     pub fn new(pool: DbPool, game_id: u64) -> Self {
-        Self { pool, game_id }
+        Self {
+            pool,
+            game_id: AtomicU64::new(game_id),
+        }
+    }
+
+    fn do_set_game_id(&self, game_id: u64) {
+        let current = self.game_id();
+        if current != game_id {
+            let conn = self.pool.conn();
+            let now = chrono::Utc::now().to_rfc3339();
+            let _ = conn.execute(
+                "UPDATE games SET updated_at = ?1 WHERE id = ?2",
+                rusqlite::params![&now, game_id as i64],
+            );
+            self.game_id.store(game_id, Ordering::SeqCst);
+        }
+    }
+
+    fn do_current_game_id(&self) -> u64 {
+        self.game_id.load(Ordering::SeqCst)
+    }
+
+    fn game_id(&self) -> u64 {
+        self.do_current_game_id()
+    }
+
+    pub fn reset(&self) -> Result<(), EngineError> {
+        let conn = self.pool.conn();
+        conn.execute(
+            "DELETE FROM game_state_snapshots WHERE game_id = ?1",
+            rusqlite::params![self.game_id() as i64],
+        )
+        .map_err(|e| EngineError::Config(format!("Failed to reset snapshots: {e}")))?;
+        conn.execute(
+            "DELETE FROM messages WHERE game_id = ?1",
+            rusqlite::params![self.game_id() as i64],
+        )
+        .map_err(|e| EngineError::Config(format!("Failed to reset messages: {e}")))?;
+        Ok(())
     }
 }
 
+fn db_game_to_game(db: &DbGame) -> Result<Game, EngineError> {
+    Ok(Game {
+        id: db.id as u64,
+        world_name: db.world_name.clone(),
+        name: db.name.clone(),
+        created_at: chrono::DateTime::parse_from_rfc3339(&db.created_at)
+            .map_err(|e| EngineError::Config(format!("Invalid created_at: {e}")))?
+            .with_timezone(&chrono::Utc),
+        updated_at: chrono::DateTime::parse_from_rfc3339(&db.updated_at)
+            .map_err(|e| EngineError::Config(format!("Invalid updated_at: {e}")))?
+            .with_timezone(&chrono::Utc),
+    })
+}
+
 impl SnapshotStorage for SqliteGameStorage {
+    fn set_game_id(&self, game_id: u64) {
+        self.do_set_game_id(game_id);
+    }
+
+    fn current_game_id(&self) -> u64 {
+        self.do_current_game_id()
+    }
+
     fn save(&self, snapshot: &GameStateSnapshot) -> Result<u64, EngineError> {
         let conn = self.pool.conn();
-        let db_snap =
-            crate::storage::mappers::state_snapshot::snapshot_to_db(snapshot, self.game_id as i64)?;
+        let db_snap = crate::storage::mappers::state_snapshot::snapshot_to_db(
+            snapshot,
+            self.game_id() as i64,
+        )?;
 
         conn.execute(
             "INSERT INTO game_state_snapshots
@@ -67,10 +133,10 @@ impl SnapshotStorage for SqliteGameStorage {
             )
             .map_err(|e| EngineError::Config(format!("Failed to prepare query: {e}")))?;
 
-        let db_result = stmt.query_row(rusqlite::params![self.game_id as i64], |row| {
+        let db_result = stmt.query_row(rusqlite::params![self.game_id() as i64], |row| {
             Ok(DbGameStateSnapshot {
                 id: row.get(0)?,
-                game_id: self.game_id as i64,
+                game_id: self.game_id() as i64,
                 movement_json: row.get(1)?,
                 narrative_json: row.get(2)?,
                 scene_json: row.get(3)?,
@@ -94,16 +160,14 @@ impl SnapshotStorage for SqliteGameStorage {
             .prepare(
                 "SELECT id, movement, narrative, scene, npc_encounter_log, created_at
                  FROM game_state_snapshots
-                 WHERE id = ?1 AND game_id = ?2
-                 ORDER BY id DESC
-                 LIMIT 1",
+                 WHERE id = ?1 AND game_id = ?2",
             )
             .map_err(|e| EngineError::Config(format!("Failed to prepare query: {e}")))?;
 
-        let db_result = stmt.query_row(rusqlite::params![id, self.game_id as i64], |row| {
+        let db_result = stmt.query_row(rusqlite::params![id, self.game_id() as i64], |row| {
             Ok(DbGameStateSnapshot {
                 id: row.get(0)?,
-                game_id: self.game_id as i64,
+                game_id: self.game_id() as i64,
                 movement_json: row.get(1)?,
                 narrative_json: row.get(2)?,
                 scene_json: row.get(3)?,
@@ -121,114 +185,110 @@ impl SnapshotStorage for SqliteGameStorage {
         }
     }
 
-    fn reset(&self) -> Result<(), EngineError> {
-        let conn = self.pool.conn();
-        // Delete checkpoints first (they reference snapshots).
-        // Checkpoints table currently lacks game_id, so we clear all checkpoints.
-        conn.execute("DELETE FROM checkpoints", [])
-            .map_err(|e| EngineError::Config(format!("Failed to reset checkpoints: {e}")))?;
-        conn.execute(
-            "DELETE FROM game_state_snapshots WHERE game_id = ?1",
-            rusqlite::params![self.game_id as i64],
-        )
-        .map_err(|e| EngineError::Config(format!("Failed to reset snapshots: {e}")))?;
-        conn.execute(
-            "DELETE FROM messages WHERE game_id = ?1",
-            rusqlite::params![self.game_id as i64],
-        )
-        .map_err(|e| EngineError::Config(format!("Failed to reset messages: {e}")))?;
-        Ok(())
-    }
-
-    fn save_checkpoint(&self, checkpoint: &Checkpoint) -> Result<(), EngineError> {
-        let conn = self.pool.conn();
-        let db_cp = DbCheckpoint::from(checkpoint);
-        conn.execute(
-            "INSERT INTO checkpoints (id, snapshot_id, name, created_at)
-             VALUES (?1, ?2, ?3, ?4)
-             ON CONFLICT(id) DO UPDATE SET
-                 snapshot_id=excluded.snapshot_id,
-                 name=excluded.name,
-                 created_at=excluded.created_at",
-            rusqlite::params![db_cp.id, db_cp.snapshot_id, db_cp.name, db_cp.created_at,],
-        )
-        .map_err(|e| EngineError::Config(format!("Failed to save checkpoint: {e}")))?;
-        Ok(())
-    }
-
-    fn load_checkpoint(&self, id: &str) -> Result<Option<Checkpoint>, EngineError> {
+    fn list_games(&self) -> Result<Vec<Game>, EngineError> {
         let conn = self.pool.conn();
         let mut stmt = conn
             .prepare(
-                "SELECT id, snapshot_id, name, created_at
-                 FROM checkpoints
+                "SELECT id, world_name, name, created_at, updated_at
+                 FROM games
+                 ORDER BY updated_at DESC",
+            )
+            .map_err(|e| EngineError::Config(format!("Failed to prepare list games: {e}")))?;
+
+        let db_games: Vec<DbGame> = stmt
+            .query_map([], |row| {
+                Ok(DbGame {
+                    id: row.get(0)?,
+                    world_name: row.get(1)?,
+                    name: row.get(2)?,
+                    created_at: row.get(3)?,
+                    updated_at: row.get(4)?,
+                })
+            })
+            .map_err(|e| EngineError::Config(format!("Failed to list games: {e}")))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| EngineError::Config(format!("Failed to read game row: {e}")))?;
+
+        db_games.iter().map(db_game_to_game).collect()
+    }
+
+    fn create_game(&self, world_name: &str, name: &str) -> Result<u64, EngineError> {
+        let conn = self.pool.conn();
+        let now = chrono::Utc::now().to_rfc3339();
+        conn.execute(
+            "INSERT INTO games (world_name, name, created_at, updated_at) VALUES (?1, ?2, ?3, ?3)",
+            rusqlite::params![world_name, name, &now],
+        )
+        .map_err(|e| EngineError::Config(format!("Failed to create game: {e}")))?;
+        Ok(conn.last_insert_rowid() as u64)
+    }
+
+    fn delete_game(&self, id: u64) -> Result<(), EngineError> {
+        let mut conn = self.pool.conn();
+        let tx = conn
+            .transaction()
+            .map_err(|e| EngineError::Config(format!("Failed to begin transaction: {e}")))?;
+        tx.execute(
+            "DELETE FROM game_state_snapshots WHERE game_id = ?1",
+            rusqlite::params![id as i64],
+        )
+        .map_err(|e| EngineError::Config(format!("Failed to delete snapshots: {e}")))?;
+        tx.execute(
+            "DELETE FROM messages WHERE game_id = ?1",
+            rusqlite::params![id as i64],
+        )
+        .map_err(|e| EngineError::Config(format!("Failed to delete messages: {e}")))?;
+        tx.execute(
+            "DELETE FROM games WHERE id = ?1",
+            rusqlite::params![id as i64],
+        )
+        .map_err(|e| EngineError::Config(format!("Failed to delete game: {e}")))?;
+        tx.commit()
+            .map_err(|e| EngineError::Config(format!("Failed to commit transaction: {e}")))?;
+        Ok(())
+    }
+
+    fn get_game(&self, id: u64) -> Result<Option<Game>, EngineError> {
+        let conn = self.pool.conn();
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, world_name, name, created_at, updated_at
+                 FROM games
                  WHERE id = ?1
                  LIMIT 1",
             )
-            .map_err(|e| EngineError::Config(format!("Failed to prepare query: {e}")))?;
+            .map_err(|e| EngineError::Config(format!("Failed to prepare get game: {e}")))?;
 
-        let db_result = stmt.query_row(rusqlite::params![id], |row| {
-            Ok(DbCheckpoint {
+        let db_result = stmt.query_row(rusqlite::params![id as i64], |row| {
+            Ok(DbGame {
                 id: row.get(0)?,
-                snapshot_id: row.get(1)?,
+                world_name: row.get(1)?,
                 name: row.get(2)?,
                 created_at: row.get(3)?,
+                updated_at: row.get(4)?,
             })
         });
 
         match db_result {
-            Ok(db_cp) => Ok(Some(Checkpoint::try_from(&db_cp)?)),
+            Ok(db) => Ok(Some(db_game_to_game(&db)?)),
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-            Err(e) => Err(EngineError::Config(format!(
-                "Failed to load checkpoint: {e}"
-            ))),
+            Err(e) => Err(EngineError::Config(format!("Failed to get game: {e}"))),
         }
-    }
-
-    fn list_checkpoints(&self) -> Result<Vec<Checkpoint>, EngineError> {
-        let conn = self.pool.conn();
-        let mut stmt = conn
-            .prepare(
-                "SELECT id, snapshot_id, name, created_at
-                 FROM checkpoints
-                 ORDER BY created_at DESC",
-            )
-            .map_err(|e| EngineError::Config(format!("Failed to prepare query: {e}")))?;
-
-        let rows = stmt
-            .query_map([], |row| {
-                Ok(DbCheckpoint {
-                    id: row.get(0)?,
-                    snapshot_id: row.get(1)?,
-                    name: row.get(2)?,
-                    created_at: row.get(3)?,
-                })
-            })
-            .map_err(|e| EngineError::Config(format!("Failed to list checkpoints: {e}")))?;
-
-        rows.map(|row| {
-            let db_cp = row
-                .map_err(|e| EngineError::Config(format!("Failed to read checkpoint row: {e}")))?;
-            Checkpoint::try_from(&db_cp)
-        })
-        .collect()
-    }
-
-    fn delete_checkpoint(&self, id: &str) -> Result<(), EngineError> {
-        let conn = self.pool.conn();
-        conn.execute(
-            "DELETE FROM checkpoints WHERE id = ?1",
-            rusqlite::params![id],
-        )
-        .map_err(|e| EngineError::Config(format!("Failed to delete checkpoint: {e}")))?;
-        Ok(())
     }
 }
 
 impl MessageStorage for SqliteGameStorage {
+    fn set_game_id(&self, game_id: u64) {
+        self.do_set_game_id(game_id);
+    }
+
+    fn current_game_id(&self) -> u64 {
+        self.do_current_game_id()
+    }
+
     fn insert_message(&self, msg: &mut Message) -> Result<(), EngineError> {
         let conn = self.pool.conn();
-        let db_msg = crate::storage::mappers::message::message_to_db(msg, self.game_id as i64)?;
+        let db_msg = crate::storage::mappers::message::message_to_db(msg, self.game_id() as i64)?;
         conn.execute(
             "INSERT INTO messages (game_id, sender, text, log_type, timestamp, location_header, event_header, snapshot_id)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
@@ -252,7 +312,7 @@ impl MessageStorage for SqliteGameStorage {
         let conn = self.pool.conn();
         conn.execute(
             "UPDATE messages SET text = ?1 WHERE id = ?2 AND game_id = ?3",
-            rusqlite::params![text, id as i64, self.game_id as i64],
+            rusqlite::params![text, id as i64, self.game_id() as i64],
         )
         .map_err(|e| EngineError::Config(format!("Failed to update message: {e}")))?;
         Ok(())
@@ -262,7 +322,7 @@ impl MessageStorage for SqliteGameStorage {
         let conn = self.pool.conn();
         conn.execute(
             "DELETE FROM messages WHERE id = ?1 AND game_id = ?2",
-            rusqlite::params![id as i64, self.game_id as i64],
+            rusqlite::params![id as i64, self.game_id() as i64],
         )
         .map_err(|e| EngineError::Config(format!("Failed to delete message: {e}")))?;
         Ok(())
@@ -280,10 +340,10 @@ impl MessageStorage for SqliteGameStorage {
             .map_err(|e| EngineError::Config(format!("Failed to prepare message query: {e}")))?;
 
         let rows = stmt
-            .query_map(rusqlite::params![self.game_id as i64], |row| {
+            .query_map(rusqlite::params![self.game_id() as i64], |row| {
                 Ok(DbMessage {
                     id: row.get(0)?,
-                    game_id: self.game_id as i64,
+                    game_id: self.game_id() as i64,
                     sender: row.get(1)?,
                     text: row.get(2)?,
                     log_type_json: row.get(3)?,

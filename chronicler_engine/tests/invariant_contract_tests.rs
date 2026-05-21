@@ -127,10 +127,8 @@ fn test_inv004_cancellable_at_boundaries() {
     let cancel_token = ctx.cancel_token.clone();
 
     // Backend with a small delay so cancellation has time to fire.
-    let backend = DefaultGameService::with_backends(
-        Arc::new(MockBackend::with_delay(100)),
-        AgentRegistry::default(),
-    );
+    let mock_backend = Arc::new(MockBackend::with_delay(100));
+    let backend = DefaultGameService::with_backends(mock_backend.clone(), AgentRegistry::default());
 
     let pipeline = ActionPipeline::new(&backend, &ctx);
 
@@ -140,8 +138,13 @@ fn test_inv004_cancellable_at_boundaries() {
     let outcome = std::thread::scope(|s| {
         let handle = s.spawn(|| pipeline.run_from_input(state_for_thread, "look".to_string()));
 
-        // Brief delay so the pipeline thread starts before we cancel.
-        std::thread::sleep(std::time::Duration::from_millis(20));
+        // Wait for the narration call to start before cancelling.
+        while !mock_backend
+            .narration_started
+            .load(std::sync::atomic::Ordering::SeqCst)
+        {
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
         cancel_token.cancel();
 
         handle.join().expect("pipeline thread should not panic")

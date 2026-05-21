@@ -25,6 +25,10 @@ pub struct MockBackend {
     pub per_call_prompt_responses: Vec<String>,
     pub call_index: AtomicUsize,
     pub storage: Option<Arc<dyn LlmMessageStorage>>,
+    /// Set to `true` when `narrate_action` is entered (useful for tests to detect pipeline start).
+    pub narration_started: AtomicBool,
+    /// Set to `true` when `complete` is entered (useful for tests to detect trigger start).
+    pub trigger_started: AtomicBool,
 }
 
 impl MockBackend {
@@ -129,6 +133,7 @@ impl LlmBackend for MockBackend {
         agent_name: &str,
         context: &crate::narrative::prompt::PromptContext,
     ) -> Result<LlmCallResult, EngineError> {
+        self.narration_started.store(true, Ordering::SeqCst);
         let delay = self.delay_ms.load(Ordering::SeqCst);
         if delay > 0 {
             std::thread::sleep(std::time::Duration::from_millis(delay));
@@ -181,6 +186,7 @@ impl LlmBackend for MockBackend {
         user_prompt: &str,
         _max_tokens: Option<u32>,
     ) -> Result<LlmCallResult, EngineError> {
+        self.trigger_started.store(true, Ordering::SeqCst);
         let delay = self.trigger_delay_ms.load(Ordering::SeqCst);
         if delay > 0 {
             std::thread::sleep(std::time::Duration::from_millis(delay));

@@ -51,19 +51,10 @@ fn build_router(app_state: AppState) -> Router {
         .route("/history/delete", post(fragments::delete_history_handler))
         .route("/retry", post(fragments::retry_handler))
         .route("/reset", post(fragments::reset_handler))
-        .route("/checkpoint", post(fragments::create_checkpoint_handler))
-        .route(
-            "/checkpoint/:id/restore",
-            post(fragments::restore_checkpoint_handler),
-        )
-        .route(
-            "/checkpoint/:id/delete",
-            post(fragments::delete_checkpoint_handler),
-        )
-        .route(
-            "/fragment/checkpoints",
-            get(fragments::list_checkpoints_fragment),
-        )
+        .route("/games", post(fragments::create_game_handler))
+        .route("/games/:id/switch", post(fragments::switch_game_handler))
+        .route("/games/:id/delete", post(fragments::delete_game_handler))
+        .route("/fragment/games", get(fragments::list_games_fragment))
         .route(
             "/fragment/llm-messages",
             get(fragments::llm_messages_fragment),
@@ -284,7 +275,9 @@ impl AppState {
             ),
         };
         if let Ok(messages) = self.message_storage.load_messages() {
-            game_state.narrative.history.replace(messages);
+            if !messages.is_empty() {
+                game_state.narrative.history.replace(messages);
+            }
         }
         Ok(game_state)
     }

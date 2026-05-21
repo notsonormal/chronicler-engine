@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chronicler Engine</title>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
-    <link rel="stylesheet" href="/assets/styles.css?v=2">
+    <link rel="stylesheet" href="/assets/styles.css?v=3">
 </head>
 <body>
     <div class="error-notification" id="error-notification"></div>
@@ -16,6 +16,7 @@
         <button class="tab active" data-tab="game">Game</button>
         <button class="tab" data-tab="settings">Settings</button>
         <button class="tab" data-tab="prompt-presets">Prompt Presets</button>
+        <button class="tab" data-tab="save-load">Save / Load</button>
         <button class="tab" data-tab="llm-messages">LLM Messages</button>
     </div>
     <div class="tab-content active" id="game-tab">
@@ -50,6 +51,9 @@
     </div>
     <div class="tab-content" id="prompt-presets-tab">
         <div class="prompt-presets-panel" hx-get="/fragment/prompt-presets" hx-trigger="load"></div>
+    </div>
+    <div class="tab-content" id="save-load-tab">
+        <div class="save-load-panel" hx-get="/fragment/games" hx-trigger="load"></div>
     </div>
     <div class="tab-content" id="llm-messages-tab">
         <div class="llm-messages-panel" hx-get="/fragment/llm-messages" hx-trigger="load, every 4s" hx-swap="innerHTML" hx-on::after-swap="restoreLlmExpandedState()"></div>

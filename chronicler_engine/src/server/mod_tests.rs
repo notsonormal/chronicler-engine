@@ -182,32 +182,36 @@ fn test_app_state_lock_state_poisoned() {
         fn load_by_id(&self, _id: u64) -> Result<Option<GameStateSnapshot>, EngineError> {
             Err(EngineError::Config("test error".to_string()))
         }
-        fn reset(&self) -> Result<(), EngineError> {
-            Ok(())
+        fn set_game_id(&self, _game_id: u64) {}
+
+        fn current_game_id(&self) -> u64 {
+            1
         }
-        fn save_checkpoint(
-            &self,
-            _checkpoint: &crate::model::checkpoint::Checkpoint,
-        ) -> Result<(), EngineError> {
-            Ok(())
-        }
-        fn load_checkpoint(
-            &self,
-            _id: &str,
-        ) -> Result<Option<crate::model::checkpoint::Checkpoint>, EngineError> {
+
+        fn list_games(&self) -> Result<Vec<crate::model::game::Game>, EngineError> {
             Err(EngineError::Config("test error".to_string()))
         }
-        fn list_checkpoints(
-            &self,
-        ) -> Result<Vec<crate::model::checkpoint::Checkpoint>, EngineError> {
+
+        fn create_game(&self, _world_name: &str, _name: &str) -> Result<u64, EngineError> {
             Err(EngineError::Config("test error".to_string()))
         }
-        fn delete_checkpoint(&self, _id: &str) -> Result<(), EngineError> {
+
+        fn delete_game(&self, _id: u64) -> Result<(), EngineError> {
             Ok(())
+        }
+
+        fn get_game(&self, _id: u64) -> Result<Option<crate::model::game::Game>, EngineError> {
+            Err(EngineError::Config("test error".to_string()))
         }
     }
 
     impl MessageStorage for FailingStorage {
+        fn set_game_id(&self, _game_id: u64) {}
+
+        fn current_game_id(&self) -> u64 {
+            1
+        }
+
         fn insert_message(
             &self,
             _msg: &mut crate::model::message::Message,

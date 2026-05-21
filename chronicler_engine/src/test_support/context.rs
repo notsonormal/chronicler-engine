@@ -17,6 +17,20 @@ pub fn make_test_context(state: GameState) -> GameServiceContext {
         let _ = storage.insert_message(&mut msg);
     }
 
+    build_test_context(state, storage)
+}
+
+/// [DOC: docs/reference/testing.md]
+pub fn make_test_context_without_snapshot(state: GameState) -> GameServiceContext {
+    let storage = Arc::new(InMemoryGameStorage::new());
+    for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
+        let _ = storage.insert_message(&mut msg);
+    }
+
+    build_test_context(state, storage)
+}
+
+fn build_test_context(state: GameState, storage: Arc<InMemoryGameStorage>) -> GameServiceContext {
     let snapshot_storage: Arc<dyn SnapshotStorage> = storage.clone();
     let message_storage: Arc<dyn crate::storage::message_storage::MessageStorage> = storage.clone();
 

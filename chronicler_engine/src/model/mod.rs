@@ -1,6 +1,6 @@
 pub mod agent;
 pub mod character;
-pub mod checkpoint;
+pub mod game;
 pub mod llm_backend;
 pub mod llm_message;
 pub mod map;
@@ -17,6 +17,8 @@ pub mod world;
 
 #[cfg(test)]
 mod character_tests;
+#[cfg(test)]
+mod game_tests;
 #[cfg(test)]
 mod map_tests;
 #[cfg(test)]

@@ -7,6 +7,7 @@ use axum::{
     http::StatusCode,
 };
 
+use crate::model::game::generate_game_name;
 use crate::model::settings::TextCheckMode;
 use crate::model::state::GameState;
 use crate::narrative::text_check::check_player_input;
@@ -136,16 +137,7 @@ pub async fn retry_handler(State(state): State<AppState>) -> (StatusCode, String
     )
 }
 
-/// [DOC: docs/system/game_flow.md]
-#[allow(clippy::expect_used)]
-pub async fn reset_handler(State(state): State<AppState>) -> axum::response::Response<Body> {
-    state.current_cancel_token().cancel();
-
-    if let Err(e) = state.snapshot_storage.reset() {
-        log::error!("Reset failed: {e}");
-        return internal_error_response(e.to_string());
-    }
-
+pub(crate) fn build_fresh_initial_state(state: &AppState) -> GameState {
     let mut initial_state = GameState::new(
         Arc::clone(&state.world),
         Arc::clone(&state.map),
@@ -172,6 +164,60 @@ pub async fn reset_handler(State(state): State<AppState>) -> axum::response::Res
         // Re-populate npc_encounter_log and npcs_in_area from scenario NPCs.
         initial_state.init_scenario_npcs(scenario);
     }
+
+    initial_state
+}
+
+/// [DOC: docs/system/game_flow.md]
+#[allow(clippy::expect_used)]
+pub async fn reset_handler(State(state): State<AppState>) -> axum::response::Response<Body> {
+    if state
+        .is_generating
+        .load(std::sync::atomic::Ordering::SeqCst)
+    {
+        return axum::response::Response::builder()
+            .status(StatusCode::SERVICE_UNAVAILABLE)
+            .body(Body::from(
+                "<span class=\"status wait\">Generation in progress, please wait...</span>",
+            ))
+            .expect("static response body is valid");
+    }
+
+    state.current_cancel_token().cancel();
+
+    let current_id = state.snapshot_storage.current_game_id();
+    let world_name = state.world.name.clone();
+
+    if let Err(e) = state.snapshot_storage.delete_game(current_id) {
+        log::error!("Reset failed: could not delete current game: {e}");
+        return internal_error_response(e.to_string());
+    }
+
+    let existing_names: Vec<String> = match state.snapshot_storage.list_games() {
+        Ok(games) => games
+            .into_iter()
+            .filter(|g| g.world_name == world_name)
+            .map(|g| g.name)
+            .collect(),
+        Err(e) => {
+            log::error!("Reset failed: could not list games: {e}");
+            return internal_error_response(e.to_string());
+        }
+    };
+
+    let new_name = generate_game_name(&world_name, &existing_names);
+    let new_id = match state.snapshot_storage.create_game(&world_name, &new_name) {
+        Ok(id) => id,
+        Err(e) => {
+            log::error!("Reset failed: could not create new game: {e}");
+            return internal_error_response(e.to_string());
+        }
+    };
+
+    state.snapshot_storage.set_game_id(new_id);
+    state.message_storage.set_game_id(new_id);
+
+    let mut initial_state = build_fresh_initial_state(&state);
 
     let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&initial_state);
     let snapshot_id = match state.snapshot_storage.save(&snapshot) {

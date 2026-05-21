@@ -8,9 +8,6 @@ use axum::{
 use tower::util::ServiceExt;
 
 use chronicler_engine::create_app_for_testing;
-use chronicler_engine::error::{EngineError, internal_error};
-use chronicler_engine::model::checkpoint::Checkpoint;
-use chronicler_engine::model::state_snapshot::GameStateSnapshot;
 use chronicler_engine::storage::message_storage::MessageStorage;
 use chronicler_engine::storage::snapshot_storage::SnapshotStorage;
 
@@ -20,7 +17,7 @@ async fn fetch_body(app: Router, uri: &str) -> String {
     let req = Request::builder().uri(uri).body(Body::empty()).unwrap();
     let response = app.oneshot(req).await.unwrap();
     assert!(response.status().is_success(), "Expected success for {uri}");
-    let body = axum::body::to_bytes(response.into_body(), 1024)
+    let body = axum::body::to_bytes(response.into_body(), 8192)
         .await
         .unwrap();
     String::from_utf8_lossy(&body).to_string()
@@ -424,473 +421,213 @@ async fn test_action_async_inventory() {
 }
 
 #[tokio::test]
-async fn test_checkpoint_create_and_list() {
+async fn test_list_games_fragment_empty() {
     let app = create_app_for_testing(create_test_state());
 
     let req = Request::builder()
-        .uri("/checkpoint")
-        .method(http::Method::POST)
-        .body(Body::empty())
-        .unwrap();
-    let response = app.clone().oneshot(req).await.unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-
-    let req = Request::builder()
-        .uri("/fragment/checkpoints")
+        .uri("/fragment/games")
         .method(http::Method::GET)
         .body(Body::empty())
         .unwrap();
-    let response = app.clone().oneshot(req).await.unwrap();
+    let response = app.oneshot(req).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     let body = axum::body::to_bytes(response.into_body(), 1024)
         .await
         .unwrap();
     let html = String::from_utf8_lossy(&body);
     assert!(
-        html.contains("checkpoint-item"),
-        "Should render checkpoint item"
+        html.contains(r#"class="games-list""#),
+        "Should render games list container: {html}"
     );
-    assert!(html.contains("Restore"), "Should have restore button");
 }
 
 #[tokio::test]
-async fn test_checkpoint_restore_not_found() {
+async fn test_list_games_fragment_populated() {
     let app = create_app_for_testing(create_test_state());
 
+    // Create two games — the first will be active after the second is created
+    // (since create_game_handler switches to the new game).
     let req = Request::builder()
-        .uri("/checkpoint/nonexistent/restore")
+        .uri("/games")
         .method(http::Method::POST)
         .body(Body::empty())
         .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-}
-
-#[tokio::test]
-async fn test_checkpoint_delete_not_found() {
-    let app = create_app_for_testing(create_test_state());
+    let response = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
 
     let req = Request::builder()
-        .uri("/checkpoint/nonexistent/delete")
+        .uri("/games")
         .method(http::Method::POST)
+        .body(Body::empty())
+        .unwrap();
+    let response = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // Now fetch the fragment — the first game should appear in Saved Games
+    let req = Request::builder()
+        .uri("/fragment/games")
+        .method(http::Method::GET)
         .body(Body::empty())
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-}
-
-#[tokio::test]
-async fn test_create_checkpoint_no_state() {
-    let state = create_test_state();
-    let storage = Arc::new(chronicler_engine::test_support::InMemoryGameStorage::new());
-    let app = chronicler_engine::server::create_app_with_storage(
-        state,
-        Arc::clone(&storage) as Arc<dyn SnapshotStorage>,
-        Arc::clone(&storage) as Arc<dyn MessageStorage>,
-        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new()),
-        chronicler_engine::model::settings::AppSettings::default(),
-    );
-
-    let req = Request::builder()
-        .uri("/checkpoint")
-        .method(http::Method::POST)
-        .body(Body::empty())
+    let body = axum::body::to_bytes(response.into_body(), 8192)
+        .await
         .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let html = String::from_utf8_lossy(&body);
+    assert!(
+        html.contains("game-item"),
+        "Should render game item: {html}"
+    );
+    assert!(html.contains("Switch"), "Should have switch button: {html}");
+    assert!(html.contains("Delete"), "Should have delete button: {html}");
 }
 
 #[tokio::test]
-async fn test_restore_checkpoint_success() {
-    let mut state = create_test_state();
-    state.add_log(
-        "look".to_string(),
-        Some("Player".to_string()),
-        chronicler_engine::model::state::LogType::Input,
-    );
+async fn test_list_games_fragment_escapes_html() {
+    let state = create_test_state();
     let storage = Arc::new(chronicler_engine::test_support::InMemoryGameStorage::new());
     let snapshot =
         chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
-    let snapshot_id = storage.save(&snapshot).unwrap();
+    let _ = storage.save(&snapshot);
+    for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
+        let _ = storage.insert_message(&mut msg);
+    }
 
-    let checkpoint = chronicler_engine::model::checkpoint::Checkpoint {
-        id: "cp1".to_string(),
-        snapshot_id,
-        name: "Test".to_string(),
-        created_at: chrono::Utc::now(),
-    };
-    storage.save_checkpoint(&checkpoint).unwrap();
+    let _ = storage
+        .create_game("Test World", "<script>alert('xss')</script>")
+        .unwrap();
+
+    let llm_storage =
+        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
+            as Arc<dyn chronicler_engine::storage::llm_message_storage::LlmMessageStorage>;
 
     let app = chronicler_engine::server::create_app_with_storage(
         state,
         Arc::clone(&storage) as Arc<dyn SnapshotStorage>,
         Arc::clone(&storage) as Arc<dyn MessageStorage>,
-        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new()),
+        llm_storage,
         chronicler_engine::model::settings::AppSettings::default(),
     );
 
     let req = Request::builder()
-        .uri("/checkpoint/cp1/restore")
-        .method(http::Method::POST)
-        .body(Body::empty())
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(response.into_body(), 1024)
-        .await
-        .unwrap();
-    assert!(
-        String::from_utf8_lossy(&body).contains("Restored"),
-        "Expected restored message"
-    );
-}
-
-#[tokio::test]
-async fn test_restore_checkpoint_snapshot_missing() {
-    let mut state = create_test_state();
-    state.add_log(
-        "look".to_string(),
-        Some("Player".to_string()),
-        chronicler_engine::model::state::LogType::Input,
-    );
-    let storage = Arc::new(chronicler_engine::test_support::InMemoryGameStorage::new());
-
-    let checkpoint = chronicler_engine::model::checkpoint::Checkpoint {
-        id: "cp1".to_string(),
-        snapshot_id: 0,
-        name: "Test".to_string(),
-        created_at: chrono::Utc::now(),
-    };
-    storage.save_checkpoint(&checkpoint).unwrap();
-
-    let app = chronicler_engine::server::create_app_with_storage(
-        state,
-        Arc::clone(&storage) as Arc<dyn SnapshotStorage>,
-        Arc::clone(&storage) as Arc<dyn MessageStorage>,
-        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new()),
-        chronicler_engine::model::settings::AppSettings::default(),
-    );
-
-    let req = Request::builder()
-        .uri("/checkpoint/cp1/restore")
-        .method(http::Method::POST)
-        .body(Body::empty())
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-}
-
-#[tokio::test]
-async fn test_list_checkpoints_empty() {
-    let app = create_app_for_testing(create_test_state());
-    let req = Request::builder()
-        .uri("/fragment/checkpoints")
+        .uri("/fragment/games")
         .method(http::Method::GET)
         .body(Body::empty())
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(response.into_body(), 1024)
+    let body = axum::body::to_bytes(response.into_body(), 8192)
         .await
         .unwrap();
     let html = String::from_utf8_lossy(&body);
     assert!(
-        html.is_empty(),
-        "Empty checkpoints should return empty body"
+        !html.contains("<script>"),
+        "Should escape HTML in game name: {html}"
+    );
+    assert!(
+        html.contains("&lt;script&gt;"),
+        "Should contain escaped script tag: {html}"
     );
 }
 
-// Failing storage wrapper for testing error paths
-struct FailingStorage {
-    inner: Arc<dyn SnapshotStorage>,
-    message_inner: Arc<dyn MessageStorage>,
-    fail_load_latest: bool,
-    fail_save_checkpoint: bool,
-    fail_load_checkpoint: bool,
-    fail_load_by_id: bool,
-    fail_save: bool,
-    fail_delete_checkpoint: bool,
-    fail_list_checkpoints: bool,
-}
-
-impl SnapshotStorage for FailingStorage {
-    fn save(&self, snapshot: &GameStateSnapshot) -> Result<u64, EngineError> {
-        if self.fail_save {
-            return Err(EngineError::Internal(internal_error("save fail")));
-        }
-        self.inner.save(snapshot)
-    }
-
-    fn load_latest(&self) -> Result<Option<GameStateSnapshot>, EngineError> {
-        if self.fail_load_latest {
-            return Err(EngineError::Internal(internal_error("load_latest fail")));
-        }
-        self.inner.load_latest()
-    }
-
-    fn load_by_id(&self, id: u64) -> Result<Option<GameStateSnapshot>, EngineError> {
-        if self.fail_load_by_id {
-            return Err(EngineError::Internal(internal_error("load_by_id fail")));
-        }
-        self.inner.load_by_id(id)
-    }
-
-    fn reset(&self) -> Result<(), EngineError> {
-        self.inner.reset()
-    }
-
-    fn save_checkpoint(&self, checkpoint: &Checkpoint) -> Result<(), EngineError> {
-        if self.fail_save_checkpoint {
-            return Err(EngineError::Internal(internal_error(
-                "save_checkpoint fail",
-            )));
-        }
-        self.inner.save_checkpoint(checkpoint)
-    }
-
-    fn load_checkpoint(&self, id: &str) -> Result<Option<Checkpoint>, EngineError> {
-        if self.fail_load_checkpoint {
-            return Err(EngineError::Internal(internal_error(
-                "load_checkpoint fail",
-            )));
-        }
-        self.inner.load_checkpoint(id)
-    }
-
-    fn list_checkpoints(&self) -> Result<Vec<Checkpoint>, EngineError> {
-        if self.fail_list_checkpoints {
-            return Err(EngineError::Internal(internal_error(
-                "list_checkpoints fail",
-            )));
-        }
-        self.inner.list_checkpoints()
-    }
-
-    fn delete_checkpoint(&self, id: &str) -> Result<(), EngineError> {
-        if self.fail_delete_checkpoint {
-            return Err(EngineError::Internal(internal_error(
-                "delete_checkpoint fail",
-            )));
-        }
-        self.inner.delete_checkpoint(id)
-    }
-}
-
-impl MessageStorage for FailingStorage {
-    fn insert_message(
-        &self,
-        msg: &mut chronicler_engine::model::message::Message,
-    ) -> Result<(), EngineError> {
-        self.message_inner.insert_message(msg)
-    }
-
-    fn update_message(&self, id: u64, text: &str) -> Result<(), EngineError> {
-        self.message_inner.update_message(id, text)
-    }
-
-    fn delete_message(&self, id: u64) -> Result<(), EngineError> {
-        self.message_inner.delete_message(id)
-    }
-
-    fn load_messages(
-        &self,
-    ) -> Result<Vec<chronicler_engine::model::message::Message>, EngineError> {
-        self.message_inner.load_messages()
-    }
-}
-
 #[tokio::test]
-async fn test_create_checkpoint_save_error() {
+async fn test_create_game_handler() {
     let state = create_test_state();
-    let inner = Arc::new(chronicler_engine::test_support::InMemoryGameStorage::new());
-    let snapshot = GameStateSnapshot::from_game_state(&state);
-    inner.save(&snapshot).unwrap();
-    let storage = Arc::new(FailingStorage {
-        inner: Arc::clone(&inner) as Arc<dyn SnapshotStorage>,
-        message_inner: Arc::clone(&inner) as Arc<dyn MessageStorage>,
-        fail_load_latest: false,
-        fail_save_checkpoint: true,
-        fail_load_checkpoint: false,
-        fail_load_by_id: false,
-        fail_save: false,
-        fail_delete_checkpoint: false,
-        fail_list_checkpoints: false,
-    });
+    let storage = Arc::new(chronicler_engine::test_support::InMemoryGameStorage::new());
+    let snapshot =
+        chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
+    let _ = storage.save(&snapshot);
+    for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
+        let _ = storage.insert_message(&mut msg);
+    }
+
+    let llm_storage =
+        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
+            as Arc<dyn chronicler_engine::storage::llm_message_storage::LlmMessageStorage>;
+
     let app = chronicler_engine::server::create_app_with_storage(
         state,
-        storage,
-        Arc::clone(&inner) as Arc<dyn MessageStorage>,
-        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new()),
+        Arc::clone(&storage) as Arc<dyn SnapshotStorage>,
+        Arc::clone(&storage) as Arc<dyn MessageStorage>,
+        llm_storage,
         chronicler_engine::model::settings::AppSettings::default(),
     );
+
+    let old_id = SnapshotStorage::current_game_id(&*storage);
+
     let req = Request::builder()
-        .uri("/checkpoint")
+        .uri("/games")
         .method(http::Method::POST)
         .body(Body::empty())
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response.headers().get("HX-Refresh").unwrap(),
+        "true",
+        "Should return HX-Refresh header"
+    );
+
+    // Verify the new game was created, switched to, and initialized.
+    let new_id = SnapshotStorage::current_game_id(&*storage);
+    assert_ne!(new_id, old_id, "Should have switched to the new game");
+
+    let latest = storage.load_latest().unwrap();
+    assert!(latest.is_some(), "New game should have an initial snapshot");
+
+    // The test world has no scenario, so messages may be empty.
+    // What matters is that the snapshot was saved and the game was switched.
 }
 
 #[tokio::test]
-async fn test_restore_checkpoint_load_checkpoint_error() {
-    let mut state = create_test_state();
-    state.add_log(
-        "look".to_string(),
-        Some("Player".to_string()),
-        chronicler_engine::model::state::LogType::Input,
-    );
-    let inner = Arc::new(chronicler_engine::test_support::InMemoryGameStorage::new());
-    let snapshot = GameStateSnapshot::from_game_state(&state);
-    let snapshot_id = inner.save(&snapshot).unwrap();
-    let checkpoint = Checkpoint {
-        id: "cp1".to_string(),
-        snapshot_id,
-        name: "Test".to_string(),
-        created_at: chrono::Utc::now(),
-    };
-    inner.save_checkpoint(&checkpoint).unwrap();
-    let storage = Arc::new(FailingStorage {
-        inner: Arc::clone(&inner) as Arc<dyn SnapshotStorage>,
-        message_inner: Arc::clone(&inner) as Arc<dyn MessageStorage>,
-        fail_load_latest: false,
-        fail_save_checkpoint: false,
-        fail_load_checkpoint: true,
-        fail_load_by_id: false,
-        fail_save: false,
-        fail_delete_checkpoint: false,
-        fail_list_checkpoints: false,
-    });
-    let app = chronicler_engine::server::create_app_with_storage(
-        state,
-        storage,
-        Arc::clone(&inner) as Arc<dyn MessageStorage>,
-        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new()),
-        chronicler_engine::model::settings::AppSettings::default(),
-    );
-    let req = Request::builder()
-        .uri("/checkpoint/cp1/restore")
-        .method(http::Method::POST)
-        .body(Body::empty())
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-}
-
-#[tokio::test]
-async fn test_restore_checkpoint_load_by_turn_error() {
-    let mut state = create_test_state();
-    state.add_log(
-        "look".to_string(),
-        Some("Player".to_string()),
-        chronicler_engine::model::state::LogType::Input,
-    );
-    let inner = Arc::new(chronicler_engine::test_support::InMemoryGameStorage::new());
-    let snapshot = GameStateSnapshot::from_game_state(&state);
-    let snapshot_id = inner.save(&snapshot).unwrap();
-    let checkpoint = Checkpoint {
-        id: "cp1".to_string(),
-        snapshot_id,
-        name: "Test".to_string(),
-        created_at: chrono::Utc::now(),
-    };
-    inner.save_checkpoint(&checkpoint).unwrap();
-    let storage = Arc::new(FailingStorage {
-        inner: Arc::clone(&inner) as Arc<dyn SnapshotStorage>,
-        message_inner: Arc::clone(&inner) as Arc<dyn MessageStorage>,
-        fail_load_latest: false,
-        fail_save_checkpoint: false,
-        fail_load_checkpoint: false,
-        fail_load_by_id: true,
-        fail_save: false,
-        fail_delete_checkpoint: false,
-        fail_list_checkpoints: false,
-    });
-    let app = chronicler_engine::server::create_app_with_storage(
-        state,
-        storage,
-        Arc::clone(&inner) as Arc<dyn MessageStorage>,
-        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new()),
-        chronicler_engine::model::settings::AppSettings::default(),
-    );
-    let req = Request::builder()
-        .uri("/checkpoint/cp1/restore")
-        .method(http::Method::POST)
-        .body(Body::empty())
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-}
-
-#[tokio::test]
-async fn test_restore_checkpoint_save_error() {
-    let mut state = create_test_state();
-    state.add_log(
-        "look".to_string(),
-        Some("Player".to_string()),
-        chronicler_engine::model::state::LogType::Input,
-    );
-    let inner = Arc::new(chronicler_engine::test_support::InMemoryGameStorage::new());
-    let snapshot = GameStateSnapshot::from_game_state(&state);
-    let snapshot_id = inner.save(&snapshot).unwrap();
-    let checkpoint = Checkpoint {
-        id: "cp1".to_string(),
-        snapshot_id,
-        name: "Test".to_string(),
-        created_at: chrono::Utc::now(),
-    };
-    inner.save_checkpoint(&checkpoint).unwrap();
-    let storage = Arc::new(FailingStorage {
-        inner: Arc::clone(&inner) as Arc<dyn SnapshotStorage>,
-        message_inner: Arc::clone(&inner) as Arc<dyn MessageStorage>,
-        fail_load_latest: false,
-        fail_save_checkpoint: false,
-        fail_load_checkpoint: false,
-        fail_load_by_id: false,
-        fail_save: true,
-        fail_delete_checkpoint: false,
-        fail_list_checkpoints: false,
-    });
-    let app = chronicler_engine::server::create_app_with_storage(
-        state,
-        storage,
-        Arc::clone(&inner) as Arc<dyn MessageStorage>,
-        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new()),
-        chronicler_engine::model::settings::AppSettings::default(),
-    );
-    let req = Request::builder()
-        .uri("/checkpoint/cp1/restore")
-        .method(http::Method::POST)
-        .body(Body::empty())
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-}
-
-#[tokio::test]
-async fn test_delete_checkpoint_error() {
+async fn test_switch_game_handler_success() {
     let state = create_test_state();
-    let inner = Arc::new(chronicler_engine::test_support::InMemoryGameStorage::new());
-    let storage = Arc::new(FailingStorage {
-        inner: Arc::clone(&inner) as Arc<dyn SnapshotStorage>,
-        message_inner: Arc::clone(&inner) as Arc<dyn MessageStorage>,
-        fail_load_latest: false,
-        fail_save_checkpoint: false,
-        fail_load_checkpoint: false,
-        fail_load_by_id: false,
-        fail_save: false,
-        fail_delete_checkpoint: true,
-        fail_list_checkpoints: false,
-    });
+    let storage = Arc::new(chronicler_engine::test_support::InMemoryGameStorage::new());
+    let snapshot =
+        chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
+    let _ = storage.save(&snapshot);
+    for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
+        let _ = storage.insert_message(&mut msg);
+    }
+
+    let other_id = storage
+        .create_game("Test World", "Test World_2026-01-01_1")
+        .unwrap();
+    assert_ne!(other_id, SnapshotStorage::current_game_id(&*storage));
+
+    let llm_storage =
+        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
+            as Arc<dyn chronicler_engine::storage::llm_message_storage::LlmMessageStorage>;
+
     let app = chronicler_engine::server::create_app_with_storage(
         state,
-        storage,
-        Arc::clone(&inner) as Arc<dyn MessageStorage>,
-        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new()),
+        Arc::clone(&storage) as Arc<dyn SnapshotStorage>,
+        Arc::clone(&storage) as Arc<dyn MessageStorage>,
+        llm_storage,
         chronicler_engine::model::settings::AppSettings::default(),
     );
+
     let req = Request::builder()
-        .uri("/checkpoint/cp1/delete")
+        .uri(format!("/games/{other_id}/switch"))
+        .method(http::Method::POST)
+        .body(Body::empty())
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response.headers().get("HX-Refresh").unwrap(),
+        "true",
+        "Should return HX-Refresh header"
+    );
+    assert_eq!(SnapshotStorage::current_game_id(&*storage), other_id);
+}
+
+#[tokio::test]
+async fn test_switch_game_handler_not_found() {
+    let app = create_app_for_testing(create_test_state());
+
+    let req = Request::builder()
+        .uri("/games/9999/switch")
         .method(http::Method::POST)
         .body(Body::empty())
         .unwrap();
@@ -899,29 +636,251 @@ async fn test_delete_checkpoint_error() {
 }
 
 #[tokio::test]
-async fn test_list_checkpoints_error() {
+async fn test_switch_game_handler_wrong_world() {
     let state = create_test_state();
-    let inner = Arc::new(chronicler_engine::test_support::InMemoryGameStorage::new());
-    let storage = Arc::new(FailingStorage {
-        inner: Arc::clone(&inner) as Arc<dyn SnapshotStorage>,
-        message_inner: Arc::clone(&inner) as Arc<dyn MessageStorage>,
-        fail_load_latest: false,
-        fail_save_checkpoint: false,
-        fail_load_checkpoint: false,
-        fail_load_by_id: false,
-        fail_save: false,
-        fail_delete_checkpoint: false,
-        fail_list_checkpoints: true,
-    });
+    let storage = Arc::new(chronicler_engine::test_support::InMemoryGameStorage::new());
+    let snapshot =
+        chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
+    let _ = storage.save(&snapshot);
+    for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
+        let _ = storage.insert_message(&mut msg);
+    }
+
+    let other_id = storage.create_game("Other World", "Other World_1").unwrap();
+
+    let llm_storage =
+        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
+            as Arc<dyn chronicler_engine::storage::llm_message_storage::LlmMessageStorage>;
+
     let app = chronicler_engine::server::create_app_with_storage(
         state,
-        storage,
-        Arc::clone(&inner) as Arc<dyn MessageStorage>,
-        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new()),
+        Arc::clone(&storage) as Arc<dyn SnapshotStorage>,
+        Arc::clone(&storage) as Arc<dyn MessageStorage>,
+        llm_storage,
         chronicler_engine::model::settings::AppSettings::default(),
     );
+
     let req = Request::builder()
-        .uri("/fragment/checkpoints")
+        .uri(format!("/games/{other_id}/switch"))
+        .method(http::Method::POST)
+        .body(Body::empty())
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn test_delete_game_handler_success() {
+    let state = create_test_state();
+    let storage = Arc::new(chronicler_engine::test_support::InMemoryGameStorage::new());
+    let snapshot =
+        chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
+    let _ = storage.save(&snapshot);
+    for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
+        let _ = storage.insert_message(&mut msg);
+    }
+
+    let other_id = storage
+        .create_game("Test World", "Test World_2026-01-01_1")
+        .unwrap();
+    assert_ne!(other_id, SnapshotStorage::current_game_id(&*storage));
+
+    let llm_storage =
+        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
+            as Arc<dyn chronicler_engine::storage::llm_message_storage::LlmMessageStorage>;
+
+    let app = chronicler_engine::server::create_app_with_storage(
+        state,
+        Arc::clone(&storage) as Arc<dyn SnapshotStorage>,
+        Arc::clone(&storage) as Arc<dyn MessageStorage>,
+        llm_storage,
+        chronicler_engine::model::settings::AppSettings::default(),
+    );
+
+    let req = Request::builder()
+        .uri(format!("/games/{other_id}/delete"))
+        .method(http::Method::POST)
+        .body(Body::empty())
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(storage.get_game(other_id).unwrap().is_none());
+}
+
+#[tokio::test]
+async fn test_delete_game_handler_active_game() {
+    let app = create_app_for_testing(create_test_state());
+
+    // create_app_for_testing initializes storage with game_id = 1
+    let active_id = 1u64;
+
+    let req = Request::builder()
+        .uri(format!("/games/{active_id}/delete"))
+        .method(http::Method::POST)
+        .body(Body::empty())
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn test_delete_game_handler_generating() {
+    let app = create_app_for_testing(create_test_state());
+
+    // Trigger generation so is_generating becomes true
+    let req = Request::builder()
+        .uri("/action")
+        .method(http::Method::POST)
+        .header(
+            http::header::CONTENT_TYPE,
+            "application/x-www-form-urlencoded",
+        )
+        .body(Body::from("command=go north"))
+        .unwrap();
+    let _response = app.clone().oneshot(req).await.unwrap();
+
+    // Deletion should be rejected while generation is in progress
+    let req = Request::builder()
+        .uri("/games/9999/delete")
+        .method(http::Method::POST)
+        .body(Body::empty())
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+}
+
+#[tokio::test]
+async fn test_list_games_fragment_storage_error() {
+    struct FailingListGamesStorage {
+        inner: Arc<dyn SnapshotStorage>,
+        message_inner: Arc<dyn MessageStorage>,
+    }
+
+    impl SnapshotStorage for FailingListGamesStorage {
+        fn set_game_id(&self, game_id: u64) {
+            self.inner.set_game_id(game_id);
+        }
+
+        fn current_game_id(&self) -> u64 {
+            self.inner.current_game_id()
+        }
+
+        fn save(
+            &self,
+            snapshot: &chronicler_engine::model::state_snapshot::GameStateSnapshot,
+        ) -> Result<u64, chronicler_engine::error::EngineError> {
+            self.inner.save(snapshot)
+        }
+
+        fn load_latest(
+            &self,
+        ) -> Result<
+            Option<chronicler_engine::model::state_snapshot::GameStateSnapshot>,
+            chronicler_engine::error::EngineError,
+        > {
+            self.inner.load_latest()
+        }
+
+        fn load_by_id(
+            &self,
+            id: u64,
+        ) -> Result<
+            Option<chronicler_engine::model::state_snapshot::GameStateSnapshot>,
+            chronicler_engine::error::EngineError,
+        > {
+            self.inner.load_by_id(id)
+        }
+
+        fn list_games(
+            &self,
+        ) -> Result<Vec<chronicler_engine::model::game::Game>, chronicler_engine::error::EngineError>
+        {
+            Err(chronicler_engine::error::EngineError::Config(
+                "list_games failed".to_string(),
+            ))
+        }
+
+        fn create_game(
+            &self,
+            world_name: &str,
+            name: &str,
+        ) -> Result<u64, chronicler_engine::error::EngineError> {
+            self.inner.create_game(world_name, name)
+        }
+
+        fn delete_game(&self, id: u64) -> Result<(), chronicler_engine::error::EngineError> {
+            self.inner.delete_game(id)
+        }
+
+        fn get_game(
+            &self,
+            id: u64,
+        ) -> Result<
+            Option<chronicler_engine::model::game::Game>,
+            chronicler_engine::error::EngineError,
+        > {
+            self.inner.get_game(id)
+        }
+    }
+
+    impl MessageStorage for FailingListGamesStorage {
+        fn set_game_id(&self, game_id: u64) {
+            self.message_inner.set_game_id(game_id);
+        }
+
+        fn current_game_id(&self) -> u64 {
+            self.message_inner.current_game_id()
+        }
+
+        fn insert_message(
+            &self,
+            msg: &mut chronicler_engine::model::message::Message,
+        ) -> Result<(), chronicler_engine::error::EngineError> {
+            self.message_inner.insert_message(msg)
+        }
+
+        fn update_message(
+            &self,
+            id: u64,
+            text: &str,
+        ) -> Result<(), chronicler_engine::error::EngineError> {
+            self.message_inner.update_message(id, text)
+        }
+
+        fn delete_message(&self, id: u64) -> Result<(), chronicler_engine::error::EngineError> {
+            self.message_inner.delete_message(id)
+        }
+
+        fn load_messages(
+            &self,
+        ) -> Result<
+            Vec<chronicler_engine::model::message::Message>,
+            chronicler_engine::error::EngineError,
+        > {
+            self.message_inner.load_messages()
+        }
+    }
+
+    let inner = Arc::new(chronicler_engine::test_support::InMemoryGameStorage::new());
+    let storage = Arc::new(FailingListGamesStorage {
+        inner: Arc::clone(&inner) as Arc<dyn SnapshotStorage>,
+        message_inner: Arc::clone(&inner) as Arc<dyn MessageStorage>,
+    });
+
+    let llm_storage =
+        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
+            as Arc<dyn chronicler_engine::storage::llm_message_storage::LlmMessageStorage>;
+
+    let app = chronicler_engine::server::create_app_with_storage(
+        create_test_state(),
+        storage,
+        Arc::clone(&inner) as Arc<dyn MessageStorage>,
+        llm_storage,
+        chronicler_engine::model::settings::AppSettings::default(),
+    );
+
+    let req = Request::builder()
+        .uri("/fragment/games")
         .method(http::Method::GET)
         .body(Body::empty())
         .unwrap();

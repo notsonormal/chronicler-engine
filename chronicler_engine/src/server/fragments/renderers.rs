@@ -17,21 +17,22 @@ pub fn render_error(message: &str) -> String {
     )
 }
 
-fn render_header_unlocked(state: &GameState) -> Result<String> {
-    let room = state
-        .current_room()
-        .ok_or_else(|| EngineError::RoomNotFound("current room not found".to_string()))?;
-    let template = HeaderTemplate {
-        room_name: room.name.clone(),
-    };
+fn render_header_unlocked(game_name: String) -> Result<String> {
+    let template = HeaderTemplate { game_name };
     template
         .render()
         .map_err(|e| crate::error::EngineError::Template(e.to_string()))
 }
 
 pub fn render_header(state: &AppState) -> Result<String> {
-    let state_guard = state.load_state()?;
-    render_header_unlocked(&state_guard)
+    let game_name = match state
+        .snapshot_storage
+        .get_game(state.snapshot_storage.current_game_id())
+    {
+        Ok(Some(g)) => g.name,
+        _ => "Unknown".to_string(),
+    };
+    render_header_unlocked(game_name)
 }
 
 pub fn render_story_log(state: &AppState) -> Result<String> {

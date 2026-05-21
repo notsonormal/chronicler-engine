@@ -116,7 +116,7 @@ chronicler_engine/
 │   ├── storage/
 │   │   ├── mod.rs                        # [x] NEW: DB abstraction
 │   │   ├── db.rs                         # [x] NEW: rusqlite connection + migrations
-│   │   └── snapshot_storage.rs           # [x] NEW: Snapshot CRUD (plus messages + checkpoints)
+│   │   └── snapshot_storage.rs           # [x] NEW: Snapshot CRUD (plus messages + game CRUD)
 │   └── server/
 │       └── ... (existing + reset endpoint) [x]
 ├── data/
@@ -333,7 +333,7 @@ Note: `agent_results` is added in Phase 3 when the pipeline dispatcher is introd
       fn load_by_id(&self, id: u64) -> Result<Option<GameStateSnapshot>, EngineError>; // Added for retry
       fn commit(&self, snapshot_id: u64) -> Result<(), EngineError>;                    // Superseded: u64 ID
       fn reset(&self) -> Result<(), EngineError>;
-      // Expanded scope: checkpoint and message storage also included
+      // Expanded scope: game CRUD and message storage also included
   }
   ```
 - [x] SQLite implementation using `rusqlite`
@@ -365,7 +365,7 @@ Note: `agent_results` is added in Phase 3 when the pipeline dispatcher is introd
   - [ ] ~~Swiping back restores original snapshot state~~ — Superseded: retry restores by snapshot ID; no swipe UI yet
 
 ### Task 1.6: Reset Game Endpoint
-- [x] `POST /reset` → calls `snapshot_storage.reset()` + reloads initial world
+- [x] `POST /reset` → deletes current game, creates new game, reloads initial world
 - [x] HTMX fragment refreshes story log and sidebar
 - [x] Cancel any pending generation
 - **Files:** `src/server/fragments.rs`, `src/server/mod.rs`, `src/ui/dashboard.rs`

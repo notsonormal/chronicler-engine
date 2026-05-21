@@ -263,8 +263,9 @@ async fn test_pipeline_cancels_after_main_narration() {
     state.narrative.history.clear();
     state.narrative.input_buffer.status = GenerationStatus::Generating;
     let ctx = make_test_context(state);
+    let mock_narrator = Arc::new(MockBackend::with_delay(50));
     let backend = Arc::new(DefaultGameService::with_mock_quantifier(
-        Arc::new(MockBackend::with_delay(50)),
+        mock_narrator.clone(),
         Arc::new(MockBackend::default()),
     ));
     let token = ctx.cancel_token.clone();
@@ -280,8 +281,13 @@ async fn test_pipeline_cancels_after_main_narration() {
         );
     });
 
-    // Let the blocking task begin before cancelling.
-    tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+    // Wait for the narration call to start before cancelling.
+    while !mock_narrator
+        .narration_started
+        .load(std::sync::atomic::Ordering::SeqCst)
+    {
+        tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;
+    }
     token.cancel();
 
     handle.await.unwrap();
@@ -312,8 +318,9 @@ async fn test_pipeline_cancels_during_trigger_continuation() {
         encounter.times_met = 0;
     }
     let ctx = make_test_context(state);
+    let mock_narrator = Arc::new(MockBackend::with_trigger_delay(50));
     let backend = Arc::new(DefaultGameService::with_mock_quantifier(
-        Arc::new(MockBackend::with_trigger_delay(50)),
+        mock_narrator.clone(),
         Arc::new(MockBackend {
             per_call_prompt_responses: vec![r#"{"npcs_in_room": ["shopkeeper"]}"#.to_string()],
             ..Default::default()
@@ -332,8 +339,13 @@ async fn test_pipeline_cancels_during_trigger_continuation() {
         );
     });
 
-    // Let the blocking task begin before cancelling.
-    tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+    // Wait for the trigger narration to start before cancelling.
+    while !mock_narrator
+        .trigger_started
+        .load(std::sync::atomic::Ordering::SeqCst)
+    {
+        tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;
+    }
     token.cancel();
 
     handle.await.unwrap();

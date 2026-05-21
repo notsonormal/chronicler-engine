@@ -43,6 +43,7 @@ fn run_migrations(conn: &Connection) -> Result<(), crate::error::EngineError> {
             "CREATE TABLE games (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 world_name TEXT NOT NULL DEFAULT 'default',
+                name TEXT NOT NULL DEFAULT 'Unnamed',
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             )",
@@ -66,23 +67,6 @@ fn run_migrations(conn: &Connection) -> Result<(), crate::error::EngineError> {
 
         conn.execute(
             "CREATE INDEX idx_snapshots_game_latest ON game_state_snapshots(game_id, created_at DESC)",
-            [],
-        )
-        .map_err(|e| crate::error::EngineError::Config(format!("Migration failed: {e}")))?;
-
-        conn.execute(
-            "CREATE TABLE checkpoints (
-                id TEXT PRIMARY KEY,
-                snapshot_id INTEGER NOT NULL,
-                name TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            )",
-            [],
-        )
-        .map_err(|e| crate::error::EngineError::Config(format!("Migration failed: {e}")))?;
-
-        conn.execute(
-            "CREATE INDEX idx_checkpoints_snapshot ON checkpoints(snapshot_id)",
             [],
         )
         .map_err(|e| crate::error::EngineError::Config(format!("Migration failed: {e}")))?;
@@ -112,7 +96,7 @@ fn run_migrations(conn: &Connection) -> Result<(), crate::error::EngineError> {
         // Insert default game row so storage impls have something to reference
         let now = Utc::now().to_rfc3339();
         conn.execute(
-            "INSERT INTO games (id, world_name, created_at, updated_at) VALUES (1, 'default', ?1, ?1)",
+            "INSERT INTO games (id, world_name, name, created_at, updated_at) VALUES (1, 'default', 'default', ?1, ?1)",
             rusqlite::params![&now],
         )
         .map_err(|e| crate::error::EngineError::Config(format!("Migration failed: {e}")))?;
@@ -188,6 +172,18 @@ fn run_migrations(conn: &Connection) -> Result<(), crate::error::EngineError> {
     if version < 4 {
         let _ = conn.execute("ALTER TABLE game_state_snapshots DROP COLUMN committed", []);
         conn.pragma_update(None, "user_version", 4).map_err(|e| {
+            crate::error::EngineError::Config(format!("Failed to set user_version: {e}"))
+        })?;
+    }
+
+    if version < 5 {
+        let _ = conn.execute(
+            "ALTER TABLE games ADD COLUMN name TEXT NOT NULL DEFAULT 'Unnamed'",
+            [],
+        );
+        let _ = conn.execute("DROP TABLE IF EXISTS checkpoints", []);
+        let _ = conn.execute("DROP INDEX IF EXISTS idx_checkpoints_snapshot", []);
+        conn.pragma_update(None, "user_version", 5).map_err(|e| {
             crate::error::EngineError::Config(format!("Failed to set user_version: {e}"))
         })?;
     }

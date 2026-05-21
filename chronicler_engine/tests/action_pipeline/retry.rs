@@ -98,8 +98,7 @@ fn test_retry_after_llm_failure_succeeds() {
 
 #[test]
 fn test_retry_no_snapshot() {
-    let ctx = make_test_context(create_test_state());
-    ctx.snapshot_storage.reset().unwrap();
+    let ctx = make_test_context_without_snapshot(create_test_state());
 
     let backend = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::default()),

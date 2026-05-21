@@ -1,7 +1,9 @@
 mod test_data;
 
+use chronicler_engine::model::message::Message;
 use chronicler_engine::model::state_snapshot::GameStateSnapshot;
 use chronicler_engine::storage::db::DbPool;
+use chronicler_engine::storage::message_storage::MessageStorage;
 use chronicler_engine::storage::snapshot_storage::{SnapshotStorage, SqliteGameStorage};
 
 use test_data::create_test_state;
@@ -144,75 +146,227 @@ fn test_row_to_snapshot_bad_date() {
     assert!(result.is_err(), "loading bad date should return an error");
 }
 
+// ─── Game CRUD ──────────────────────────────────────────────────────────────
+
 #[test]
-fn test_checkpoint_crud() {
-    use chronicler_engine::model::checkpoint::Checkpoint;
+fn test_create_and_get_game() {
     let storage = create_storage();
 
-    let cp = Checkpoint {
-        id: "cp1".to_string(),
-        snapshot_id: 42,
-        name: "Test Checkpoint".to_string(),
-        created_at: chrono::Utc::now(),
+    let game_id = storage.create_game("test_world", "My Game").unwrap();
+    assert!(game_id > 0, "create_game should return a positive id");
+
+    let game = storage.get_game(game_id).unwrap();
+    assert!(game.is_some(), "get_game should find the created game");
+    let game = game.unwrap();
+    assert_eq!(game.world_name, "test_world");
+    assert_eq!(game.name, "My Game");
+}
+
+#[test]
+fn test_get_game_not_found() {
+    let storage = create_storage();
+
+    let game = storage.get_game(9999).unwrap();
+    assert!(game.is_none(), "get_game should return None for missing id");
+}
+
+#[test]
+fn test_list_games() {
+    let storage = create_storage();
+    let initial = storage.list_games().unwrap().len();
+
+    let id_a = storage.create_game("world_a", "Game A").unwrap();
+    let id_b = storage.create_game("world_b", "Game B").unwrap();
+
+    let games = storage.list_games().unwrap();
+    assert_eq!(
+        games.len(),
+        initial + 2,
+        "list_games should return both new games"
+    );
+
+    // Most recently updated first
+    assert_eq!(games[0].id, id_b);
+    assert_eq!(games[1].id, id_a);
+}
+
+#[test]
+fn test_delete_game_cascades() {
+    let storage = create_storage();
+    let game_id = storage.create_game("test_world", "To Delete").unwrap();
+
+    // Switch to the new game before saving data
+    SnapshotStorage::set_game_id(&storage, game_id);
+
+    // Save a snapshot and message for this game
+    storage.save(&create_snapshot()).unwrap();
+    let mut msg = Message {
+        id: 0,
+        sender: Some("Player".to_string()),
+        text: "hello".to_string(),
+        log_type: chronicler_engine::model::state::LogType::Input,
+        timestamp: chrono::Utc::now(),
+        location_header: None,
+        event_header: None,
+        snapshot_id: None,
+    };
+    storage.insert_message(&mut msg).unwrap();
+
+    storage.delete_game(game_id).expect("delete should succeed");
+
+    assert!(
+        storage.get_game(game_id).unwrap().is_none(),
+        "game should be deleted"
+    );
+    assert!(
+        storage.load_latest().unwrap().is_none(),
+        "snapshots should be cascaded"
+    );
+    assert!(
+        storage.load_messages().unwrap().is_empty(),
+        "messages should be cascaded"
+    );
+}
+
+// ─── Game ID Switching ──────────────────────────────────────────────────────
+
+#[test]
+fn test_set_game_id_isolates_snapshots() {
+    let storage = create_storage();
+
+    let game_a = storage.create_game("world_a", "Game A").unwrap();
+    let game_b = storage.create_game("world_b", "Game B").unwrap();
+
+    // Save snapshot for game_a (current default game_id is 1, not game_a)
+    SnapshotStorage::set_game_id(&storage, game_a);
+    let id_a = storage.save(&create_snapshot()).unwrap();
+
+    // Save snapshot for game_b
+    SnapshotStorage::set_game_id(&storage, game_b);
+    let id_b = storage.save(&create_snapshot()).unwrap();
+
+    // Load latest for game_b
+    let latest_b = storage.load_latest().unwrap().unwrap();
+    assert_eq!(latest_b.db_id, Some(id_b));
+
+    // Switch back to game_a
+    SnapshotStorage::set_game_id(&storage, game_a);
+    let latest_a = storage.load_latest().unwrap().unwrap();
+    assert_eq!(latest_a.db_id, Some(id_a));
+
+    // game_id 1 (default) should have no snapshots
+    SnapshotStorage::set_game_id(&storage, 1);
+    assert!(
+        storage.load_latest().unwrap().is_none(),
+        "default game_id should have no snapshots"
+    );
+}
+
+#[test]
+fn test_current_game_id() {
+    let storage = create_storage();
+    assert_eq!(SnapshotStorage::current_game_id(&storage), 1);
+
+    SnapshotStorage::set_game_id(&storage, 42);
+    assert_eq!(SnapshotStorage::current_game_id(&storage), 42);
+}
+
+// ─── Message Storage ────────────────────────────────────────────────────────
+
+#[test]
+fn test_insert_and_load_messages() {
+    let storage = create_storage();
+
+    let mut msg = Message {
+        id: 0,
+        sender: Some("Player".to_string()),
+        text: "look around".to_string(),
+        log_type: chronicler_engine::model::state::LogType::Input,
+        timestamp: chrono::Utc::now(),
+        location_header: None,
+        event_header: None,
+        snapshot_id: None,
     };
 
-    storage.save_checkpoint(&cp).expect("save should succeed");
+    storage.insert_message(&mut msg).unwrap();
+    assert!(msg.id > 0, "insert_message should set the message id");
 
-    let loaded = storage
-        .load_checkpoint("cp1")
-        .expect("load should succeed")
-        .expect("checkpoint should exist");
-    assert_eq!(loaded.id, "cp1");
-    assert_eq!(loaded.snapshot_id, 42);
-    assert_eq!(loaded.name, "Test Checkpoint");
+    let loaded = storage.load_messages().unwrap();
+    assert_eq!(loaded.len(), 1);
+    assert_eq!(loaded[0].text, "look around");
+}
 
-    let list = storage.list_checkpoints().expect("list should succeed");
-    assert_eq!(list.len(), 1);
-    assert_eq!(list[0].id, "cp1");
+#[test]
+fn test_update_message() {
+    let storage = create_storage();
 
+    let mut msg = Message {
+        id: 0,
+        sender: Some("Player".to_string()),
+        text: "original".to_string(),
+        log_type: chronicler_engine::model::state::LogType::Input,
+        timestamp: chrono::Utc::now(),
+        location_header: None,
+        event_header: None,
+        snapshot_id: None,
+    };
+    storage.insert_message(&mut msg).unwrap();
+
+    storage.update_message(msg.id, "edited").unwrap();
+
+    let loaded = storage.load_messages().unwrap();
+    assert_eq!(loaded[0].text, "edited");
+}
+
+#[test]
+fn test_delete_message() {
+    let storage = create_storage();
+
+    let mut msg = Message {
+        id: 0,
+        sender: Some("Player".to_string()),
+        text: "to delete".to_string(),
+        log_type: chronicler_engine::model::state::LogType::Input,
+        timestamp: chrono::Utc::now(),
+        location_header: None,
+        event_header: None,
+        snapshot_id: None,
+    };
+    storage.insert_message(&mut msg).unwrap();
+    storage.delete_message(msg.id).unwrap();
+
+    let loaded = storage.load_messages().unwrap();
+    assert!(loaded.is_empty(), "message should be deleted");
+}
+
+#[test]
+fn test_load_messages_empty() {
+    let storage = create_storage();
+    let loaded = storage.load_messages().unwrap();
+    assert!(
+        loaded.is_empty(),
+        "load_messages should return empty vec when no messages"
+    );
+}
+
+// ─── Edge Cases ─────────────────────────────────────────────────────────────
+
+#[test]
+fn test_reset_empty_storage() {
+    let storage = create_storage();
+    // Resetting an empty storage should not error
     storage
-        .delete_checkpoint("cp1")
-        .expect("delete should succeed");
-    let after_delete = storage.load_checkpoint("cp1").expect("load should succeed");
-    assert!(after_delete.is_none(), "checkpoint should be deleted");
+        .reset()
+        .expect("reset on empty storage should succeed");
+    assert!(storage.load_latest().unwrap().is_none());
 }
 
 #[test]
-fn test_checkpoint_upsert() {
-    use chronicler_engine::model::checkpoint::Checkpoint;
+fn test_load_latest_no_snapshots() {
     let storage = create_storage();
-
-    let mut cp = Checkpoint {
-        id: "cp1".to_string(),
-        snapshot_id: 1,
-        name: "Original".to_string(),
-        created_at: chrono::Utc::now(),
-    };
-    storage.save_checkpoint(&cp).unwrap();
-
-    cp.snapshot_id = 3;
-    cp.name = "Updated".to_string();
-    storage.save_checkpoint(&cp).unwrap();
-
-    let loaded = storage.load_checkpoint("cp1").unwrap().unwrap();
-    assert_eq!(loaded.snapshot_id, 3);
-    assert_eq!(loaded.name, "Updated");
-}
-
-#[test]
-fn test_reset_clears_checkpoints() {
-    use chronicler_engine::model::checkpoint::Checkpoint;
-    let storage = create_storage();
-
-    let cp = Checkpoint {
-        id: "cp1".to_string(),
-        snapshot_id: 1,
-        name: "Test".to_string(),
-        created_at: chrono::Utc::now(),
-    };
-    storage.save_checkpoint(&cp).unwrap();
-    storage.reset().expect("reset should succeed");
-
-    let list = storage.list_checkpoints().expect("list should succeed");
-    assert!(list.is_empty(), "checkpoints should be cleared after reset");
+    let latest = storage.load_latest().unwrap();
+    assert!(
+        latest.is_none(),
+        "load_latest should return None when no snapshots exist"
+    );
 }

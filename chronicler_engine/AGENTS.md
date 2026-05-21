@@ -22,7 +22,7 @@ chronicler_engine/
 │   │   ├── trigger_eval.rs, state_diagnostics.rs
 │   │   └── game_service/  # Game flow orchestration (actions, context, helpers, retry, service)
 │   ├── model/             # Data structures
-│   │   ├── agent.rs, character.rs, checkpoint.rs, llm_backend.rs, llm_message.rs
+│   │   ├── agent.rs, character.rs, game.rs, llm_backend.rs, llm_message.rs
 │   │   ├── map.rs, message.rs, scenario.rs, settings.rs, state.rs, state_snapshot.rs
 │   │   ├── trigger.rs, world.rs
 │   ├── narrative/         # LLM integration

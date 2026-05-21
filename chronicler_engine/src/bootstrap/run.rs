@@ -2,6 +2,7 @@ use std::sync::{Arc, RwLock};
 
 use crate::cli::{Args, list_available_worlds, resolve_engine_data_path};
 use crate::model::character::NpcCard;
+use crate::model::game::generate_game_name;
 use crate::model::settings::AppSettings;
 use crate::model::state::GameState;
 use crate::narrative::prompt::PromptContext;
@@ -61,9 +62,30 @@ pub fn run(args: Args) -> crate::error::Result<()> {
         log::warn!("Failed to seed prompt presets: {e}");
     }
 
+    let active_game_id = match find_latest_game_for_world(&db_pool, &manifest.name)? {
+        Some((id, name)) => {
+            log::info!("Loaded existing game '{name}' (id={id})");
+            id
+        }
+        None => {
+            let existing_names = list_game_names_for_world(&db_pool, &manifest.name)?;
+            let name = generate_game_name(&manifest.name, &existing_names);
+            let conn = db_pool.conn();
+            let now = chrono::Utc::now().to_rfc3339();
+            conn.execute(
+                "INSERT INTO games (world_name, name, created_at, updated_at) VALUES (?1, ?2, ?3, ?3)",
+                rusqlite::params![&manifest.name, &name, &now],
+            )
+            .map_err(|e| crate::error::EngineError::Config(format!("Failed to create game: {e}")))?;
+            let id = conn.last_insert_rowid() as u64;
+            log::info!("Created new game '{name}' (id={id})");
+            id
+        }
+    };
+
     let storage = Arc::new(crate::storage::snapshot_storage::SqliteGameStorage::new(
         db_pool.clone(),
-        1,
+        active_game_id,
     ));
     let snapshot_storage: Arc<dyn crate::storage::snapshot_storage::SnapshotStorage> =
         storage.clone();
@@ -208,6 +230,56 @@ pub fn run(args: Args) -> crate::error::Result<()> {
     runtime.block_on(crate::server::run_server_with_config(resources, config))?;
 
     Ok(())
+}
+
+pub(crate) fn find_latest_game_for_world(
+    db_pool: &crate::storage::db::DbPool,
+    world_name: &str,
+) -> Result<Option<(u64, String)>, crate::error::EngineError> {
+    let conn = db_pool.conn();
+    let mut stmt = conn
+        .prepare(
+            "SELECT g.id, g.name
+             FROM games g
+             LEFT JOIN (
+                 SELECT game_id, MAX(timestamp) as last_message
+                 FROM messages
+                 GROUP BY game_id
+             ) m ON g.id = m.game_id
+             WHERE g.world_name = ?1
+             ORDER BY COALESCE(m.last_message, g.updated_at) DESC
+             LIMIT 1",
+        )
+        .map_err(|e| crate::error::EngineError::Config(format!("Failed to prepare query: {e}")))?;
+
+    let result = stmt.query_row(rusqlite::params![world_name], |row| {
+        Ok((row.get::<_, i64>(0)? as u64, row.get::<_, String>(1)?))
+    });
+
+    match result {
+        Ok(pair) => Ok(Some(pair)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(crate::error::EngineError::Config(format!(
+            "Failed to query games: {e}"
+        ))),
+    }
+}
+
+pub(crate) fn list_game_names_for_world(
+    db_pool: &crate::storage::db::DbPool,
+    world_name: &str,
+) -> Result<Vec<String>, crate::error::EngineError> {
+    let conn = db_pool.conn();
+    let mut stmt = conn
+        .prepare("SELECT name FROM games WHERE world_name = ?1")
+        .map_err(|e| crate::error::EngineError::Config(format!("Failed to prepare query: {e}")))?;
+
+    let rows = stmt
+        .query_map(rusqlite::params![world_name], |row| row.get::<_, String>(0))
+        .map_err(|e| crate::error::EngineError::Config(format!("Failed to query games: {e}")))?;
+
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| crate::error::EngineError::Config(format!("Failed to read game names: {e}")))
 }
 
 fn ensure_defaults(

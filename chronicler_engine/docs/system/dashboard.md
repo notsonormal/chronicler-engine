@@ -9,8 +9,9 @@ The Chronicler Engine presents a web-based HTMX dashboard for player interaction
 
 ### 1. Header Bar (48px height)
 Displays system-level context.
-- **Content**: Game title (left), reset button (center-right), connection status (right)
-- **Reset Button**: "Reset Game" button styled with danger/red tokens, uses `hx-post="/reset"` with `hx-confirm` dialog
+- **Content**: Game title (left), game selector (center-left), reset button (center-right), connection status (right)
+- **Game Selector**: "Games" button opens dropdown with list of games, create new game button, switch and delete per-game buttons
+- **Reset Button**: "Reset Game" button styled with danger/red tokens, uses `hx-post="/reset"` with `hx-confirm` dialog. Deletes current game and creates a new one with an auto-generated name.
 - **Note**: Location is displayed in the story log, not the header
 
 ### 2. Tab Bar
@@ -170,12 +171,13 @@ HTML template renders with `data-raw-text` attribute for inline editing:
    - Re-enable the submit button
    - Change button text back to "▶ Send"
 
-## Checkpoints
-Bookmark system for saving/restoring specific snapshots:
-- **Save checkpoint**: Button triggers `POST /checkpoint` at current snapshot
-- **Checkpoint list**: `GET /fragment/checkpoints` renders saved checkpoints with restore/delete buttons
-- **Restore**: `POST /checkpoint/:id/restore` loads the snapshot
-- **Delete**: `POST /checkpoint/:id/delete` removes the bookmark
+## Game Management
+Multiple independent games per world, each with isolated snapshots and messages:
+- **List games**: `GET /fragment/games` renders dropdown with all games for the current world
+- **Create game**: `POST /games` creates a new game with auto-generated name (`{WorldName}_{Date}_N`)
+- **Switch game**: `POST /games/:id/switch` loads the selected game and refreshes the page
+- **Delete game**: `POST /games/:id/delete` removes the game and all its data, then refreshes
+- **Reset**: `POST /reset` deletes the current game and creates a new one with a fresh auto-generated name
 
 ## CSS Classes
 - `.location-header` - Room name in location entry, inline, green bold (#4ade80)

@@ -183,10 +183,10 @@
 - Font size: 12px
 - Color: #888
 
-### Checkpoint Button
-- Same styling as send button but smaller (cyan gradient)
-- Triggers `POST /checkpoint` to save current snapshot
-- Displays "Checkpoint saved" confirmation on success
+### Game Selector Button
+- Styled as a small button next to the game name in the header
+- Triggers `GET /fragment/games` to load the game dropdown
+- Dropdown is rendered into `#games-dropdown` below the button
 
 ### Status Display
 - Font size: 12px
@@ -273,14 +273,15 @@
 - `htmx.process()` called to force HTMX to re-read the trigger attribute
 - Polling resumes on save or cancel
 
-### Checkpoint List
-- Container: flex column, gap 8px, max-height 200px, overflow-y: auto
-- **Checkpoint item**: flex row, align-items center, gap 12px, padding 8px 12px
+### Game Dropdown
+- Container: absolute positioned below the Games button, flex column, gap 8px, max-height 300px, overflow-y: auto
+- **Game item**: flex row, align-items center, gap 12px, padding 8px 12px
   - Background: #111, border: 1px solid #333, border-radius: 4px
   - **Name**: primary text, flex 1
-  - **Meta**: muted text, "Checkpoint {id}"
-  - **Restore button**: cyan border, cyan text, `hx-post="/checkpoint/{id}/restore"`, `hx-swap="none"`
-  - **Delete button**: "×" text, red on hover, `hx-post="/checkpoint/{id}/delete"`, `hx-target="closest .checkpoint-item"`, `hx-swap="outerHTML"`
+  - **Meta**: muted text, "Game {id}"
+  - **Switch button**: cyan border, cyan text, `hx-post="/games/{id}/switch"`, `hx-swap="none"`, triggers full page refresh
+  - **Delete button**: "×" text, red on hover, `hx-post="/games/{id}/delete"`, `hx-target="closest .game-item"`, `hx-swap="outerHTML"`
+- **Create new game button**: at the bottom of the dropdown, `POST /games`, triggers full page refresh
 
 ### Settings Panel
 - Padding: 16px

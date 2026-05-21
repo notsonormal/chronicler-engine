@@ -4,7 +4,7 @@
 
 The Chronicler Engine uses SQLite for persistence. The database is created automatically on first access and is scoped to a single file per server instance (e.g. `chronicler_3000.db`).
 
-All game state data is scoped to a **game** record. There is currently one default game per database; multi-game support is planned.
+All game state data is scoped to a **game** record. Multiple games can exist in the same database and are switched at runtime via `set_game_id`.
 
 ## Tables
 
@@ -16,10 +16,11 @@ Top-level game session record. Every snapshot and message belongs to a game.
 |-------------|---------|-------------------------------------------|
 | `id`        | INTEGER | PRIMARY KEY AUTOINCREMENT                 |
 | `world_name`| TEXT    | Name of the loaded world                  |
+| `name`      | TEXT    | Display name (e.g. `Redmist_2026-05-21_1`)|
 | `created_at`| TEXT    | ISO 8601 timestamp (RFC 3339)             |
 | `updated_at`| TEXT    | ISO 8601 timestamp (RFC 3339)             |
 
-**Current behaviour:** A default row (`id=1, world_name='default'`) is inserted automatically by `DbPool::new` during migration. All storage operations filter by this `game_id`.
+**Current behaviour:** On first startup for a world, a new game row is auto-created with a generated name. The active game can be switched via the UI or `SnapshotStorage::set_game_id`.
 
 ---
 
@@ -28,7 +29,6 @@ Top-level game session record. Every snapshot and message belongs to a game.
 Frozen point-in-time captures of the mutable game state. Used for:
 - Loading the latest state on server startup
 - Retry (loading snapshots via message `snapshot_id`)
-- Checkpoints (named restore points)
 
 | Column             | Type    | Notes                                         |
 |--------------------|---------|----------------------------------------------|
@@ -69,20 +69,7 @@ Chronological narrative history. Each row is one log entry (player input, narrat
 
 ---
 
-### `checkpoints`
 
-Named bookmarks that reference a specific snapshot. Users can create and restore checkpoints via the UI.
-
-| Column       | Type    | Notes                                         |
-|--------------|---------|----------------------------------------------|
-| `id`         | TEXT    | PRIMARY KEY (user-defined or UUID)           |
-| `snapshot_id`| INTEGER | REFERENCES `game_state_snapshots(id)`        |
-| `name`       | TEXT    | User-visible label                           |
-| `created_at` | TEXT    | ISO 8601 timestamp                           |
-
-**Index:** `idx_checkpoints_snapshot(snapshot_id)`
-
----
 
 ### `llm_messages`
 
@@ -109,7 +96,6 @@ Forensics log of LLM API calls. Independent of game state — used for debugging
 ```
 games (1)
   ├── game_state_snapshots (*)
-  │     ├── checkpoints (*)  [via snapshot_id]
   │     └── messages (?)     [via snapshot_id — optional, not FK]
   └── messages (*)
 
@@ -120,11 +106,11 @@ llm_messages (*)  [independent]
 
 The Rust code maps to the database as follows:
 
-- **`src/storage/models/`** — One DB model struct per table (`DbGame`, `DbGameStateSnapshot`, `DbCheckpoint`, `DbMessage`, `DbLlmMessage`). These use raw SQLite types (`String` for JSON and timestamps, `i64` for IDs).
+- **`src/storage/models/`** — One DB model struct per table (`DbGame`, `DbGameStateSnapshot`, `DbMessage`, `DbLlmMessage`). These use raw SQLite types (`String` for JSON and timestamps, `i64` for IDs).
 - **`src/storage/mappers/`** — Conversion logic between DB models and domain models. Mappers handle JSON serialization, RFC 3339 parsing, and integer↔unsigned mapping.
-- **`src/storage/snapshot_storage.rs`** — `SqliteGameStorage` uses `DbGameStateSnapshot`/`DbCheckpoint`/`DbMessage` internally and maps to/from domain models at the trait boundary.
+- **`src/storage/snapshot_storage.rs`** — `SqliteGameStorage` uses `DbGameStateSnapshot`/`DbMessage` internally and maps to/from domain models at the trait boundary. Includes game CRUD (`list_games`, `create_game`, `delete_game`, `get_game`) and `set_game_id` for runtime switching. `delete_game` is transactional: all cascading deletes execute inside a SQLite `Transaction`.
 - **`src/storage/llm_message_storage.rs`** — `SqliteLlmMessageStorage` uses `DbLlmMessage` internally.
-- **`src/model/`** — Domain models (`Message`, `Checkpoint`, `LlmMessage`, `GameStateSnapshot`, `NarrativeSnapshot`) have no knowledge of `rusqlite`, JSON strategy, or timestamp formatting.
+- **`src/model/`** — Domain models (`Message`, `Game`, `LlmMessage`, `GameStateSnapshot`, `NarrativeSnapshot`) have no knowledge of `rusqlite`, JSON strategy, or timestamp formatting.
 
 ## Migration Policy
 
@@ -132,6 +118,5 @@ Schema migrations are **breaking** — old save data is discarded on schema chan
 
 ## Future Work
 
-- **Multi-game support:** Allow creating multiple `games` rows and switching between them.
 - **Message versioning:** Not implemented; retry creates new messages via snapshot rollback.
 - **Snapshot pruning:** Delete old snapshots to limit database growth. With immediate persistence every message has exactly one snapshot, so the table grows linearly with turns.

@@ -157,12 +157,11 @@ Unified error type shared across all tiers.
 ### 7. The Storage Tier (`crate::storage`)
 SQLite-based persistence for game state and LLM call forensics.
 - **`db`**: Database connection and schema management. Schema includes:
-  - `games` — top-level game session record (`id`, `world_name`, `created_at`, `updated_at`)
+  - `games` — top-level game session record (`id`, `name`, `world_name`, `created_at`, `updated_at`)
   - `game_state_snapshots` — serialized game state metadata, scoped to `game_id`
   - `messages` — narrative history, scoped to `game_id`
-  - `checkpoints` — named save points referencing snapshots
   - `llm_messages` — LLM API call logging (not game-scoped)
-- **`models`**: Database row structs (`DbGame`, `DbGameStateSnapshot`, `DbCheckpoint`, `DbMessage`, `DbLlmMessage`) — one per table, using raw SQLite types.
+- **`models`**: Database row structs (`DbGame`, `DbGameStateSnapshot`, `DbMessage`, `DbLlmMessage`) — one per table, using raw SQLite types.
 - **`mappers`**: Conversion logic between DB models and domain models (`TryFrom`/`From` impls and free functions for context-dependent mapping).
 - **`snapshot_storage`**: `SnapshotStorage` trait and SQLite implementation (`SqliteGameStorage`). Uses `Db*` models internally and maps at the boundary. All operations filter by `game_id`.
 - **`llm_message_storage`**: `LlmMessageStorage` trait + `SqliteLlmMessageStorage` (auto-pruning to 50 rows) + `InMemoryLlmMessageStorage` (tests). Uses `DbLlmMessage` internally.

@@ -23,7 +23,7 @@ We use a flat `Vec<Message>` encapsulated in `MessageHistory` where each `Messag
 3. **`Message.id`** = a monotonically increasing `u64`. Used for log entry identification and edit targeting.
 4. **`Message.snapshot_id`** = references the `GameStateSnapshot` saved after this message was created. Used by retry to restore state.
 5. **`NarrativeState.history()`** = derived `Vec<LogEntry>` view for templates and prompts.
-6. **`Checkpoint`** = a bookmark referencing `snapshot_id` stored in a dedicated SQLite table.
+6. **`Game`** = a top-level playthrough session. Each game has its own isolated snapshots and messages. Named automatically on creation (`{WorldName}_{Date}_N`).
 
 ### Retry Behavior
 
