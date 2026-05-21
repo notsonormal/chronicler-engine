@@ -76,8 +76,8 @@ pub fn run(args: Args) -> crate::error::Result<()> {
     // [DOC: docs/system/startup.md]
     let initial_snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
     let snapshot_id = snapshot_storage.save(&initial_snapshot)?;
-    for msg in state.narrative.history.iter_mut() {
-        if msg.id == crate::model::message::UNPERSISTED_ID {
+    if let Some(msg) = state.narrative.history.last_mut() {
+        if msg.id == 0 {
             msg.snapshot_id = Some(snapshot_id);
             message_storage.insert_message(msg)?;
         }

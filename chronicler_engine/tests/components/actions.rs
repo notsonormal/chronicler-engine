@@ -92,9 +92,7 @@ async fn test_action_handler_load_state_failure() {
         > {
             self.inner.load_by_id(id)
         }
-        fn commit(&self, snapshot_id: u64) -> Result<(), chronicler_engine::error::EngineError> {
-            self.inner.commit(snapshot_id)
-        }
+
         fn reset(&self) -> Result<(), chronicler_engine::error::EngineError> {
             self.inner.reset()
         }
@@ -192,9 +190,7 @@ async fn test_action_handler_snapshot_save_failure() {
         > {
             self.inner.load_by_id(id)
         }
-        fn commit(&self, snapshot_id: u64) -> Result<(), chronicler_engine::error::EngineError> {
-            self.inner.commit(snapshot_id)
-        }
+
         fn reset(&self) -> Result<(), chronicler_engine::error::EngineError> {
             self.inner.reset()
         }
@@ -292,9 +288,7 @@ async fn test_action_confirm_handler_render_error_fallback() {
         > {
             self.inner.load_by_id(id)
         }
-        fn commit(&self, snapshot_id: u64) -> Result<(), chronicler_engine::error::EngineError> {
-            self.inner.commit(snapshot_id)
-        }
+
         fn reset(&self) -> Result<(), chronicler_engine::error::EngineError> {
             self.inner.reset()
         }

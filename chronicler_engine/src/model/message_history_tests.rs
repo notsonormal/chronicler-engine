@@ -3,7 +3,9 @@ use crate::model::message_history::MessageHistory;
 use crate::model::state::LogType;
 
 fn make_message(id: u64, text: &str, log_type: LogType) -> Message {
-    Message::new(id, Some("Player".to_string()), text, log_type, None, None)
+    let mut msg = Message::new(Some("Player".to_string()), text, log_type, None, None);
+    msg.id = id;
+    msg
 }
 
 #[test]

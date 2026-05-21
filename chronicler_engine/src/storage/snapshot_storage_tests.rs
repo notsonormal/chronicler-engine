@@ -22,7 +22,6 @@ fn empty_snapshot() -> GameStateSnapshot {
             ..Default::default()
         },
         npc_encounter_log: NpcEncounterLog::default(),
-        committed: false,
         created_at: Utc::now(),
     }
 }
@@ -101,20 +100,6 @@ fn test_sqlite_reset_clears_only_current_game() {
 
     assert!(storage_a.load_latest().unwrap().is_none());
     assert!(storage_b.load_latest().unwrap().is_some());
-}
-
-#[test]
-fn test_sqlite_commit() {
-    let pool = DbPool::new(":memory:").unwrap();
-    let storage = SqliteGameStorage::new(pool, 1);
-
-    let snap = empty_snapshot();
-    let id = storage.save(&snap).unwrap();
-
-    storage.commit(id).unwrap();
-
-    let loaded = storage.load_by_id(id).unwrap().unwrap();
-    assert!(loaded.committed);
 }
 
 #[test]

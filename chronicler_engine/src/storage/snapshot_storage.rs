@@ -12,7 +12,6 @@ pub trait SnapshotStorage: Send + Sync {
     fn save(&self, snapshot: &GameStateSnapshot) -> Result<u64, EngineError>;
     fn load_latest(&self) -> Result<Option<GameStateSnapshot>, EngineError>;
     fn load_by_id(&self, id: u64) -> Result<Option<GameStateSnapshot>, EngineError>;
-    fn commit(&self, snapshot_id: u64) -> Result<(), EngineError>;
     fn reset(&self) -> Result<(), EngineError>;
 
     fn save_checkpoint(&self, checkpoint: &Checkpoint) -> Result<(), EngineError>;
@@ -40,15 +39,14 @@ impl SnapshotStorage for SqliteGameStorage {
 
         conn.execute(
             "INSERT INTO game_state_snapshots
-             (game_id, movement, narrative, scene, npc_encounter_log, committed, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+             (game_id, movement, narrative, scene, npc_encounter_log, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             rusqlite::params![
                 db_snap.game_id,
                 db_snap.movement_json,
                 db_snap.narrative_json,
                 db_snap.scene_json,
                 db_snap.npc_encounter_log_json,
-                db_snap.committed,
                 db_snap.created_at,
             ],
         )
@@ -61,7 +59,7 @@ impl SnapshotStorage for SqliteGameStorage {
         let conn = self.pool.conn();
         let mut stmt = conn
             .prepare(
-                "SELECT id, movement, narrative, scene, npc_encounter_log, committed, created_at
+                "SELECT id, movement, narrative, scene, npc_encounter_log, created_at
                  FROM game_state_snapshots
                  WHERE game_id = ?1
                  ORDER BY created_at DESC, id DESC
@@ -77,8 +75,7 @@ impl SnapshotStorage for SqliteGameStorage {
                 narrative_json: row.get(2)?,
                 scene_json: row.get(3)?,
                 npc_encounter_log_json: row.get(4)?,
-                committed: row.get(5)?,
-                created_at: row.get(6)?,
+                created_at: row.get(5)?,
             })
         });
 
@@ -95,7 +92,7 @@ impl SnapshotStorage for SqliteGameStorage {
         let conn = self.pool.conn();
         let mut stmt = conn
             .prepare(
-                "SELECT id, movement, narrative, scene, npc_encounter_log, committed, created_at
+                "SELECT id, movement, narrative, scene, npc_encounter_log, created_at
                  FROM game_state_snapshots
                  WHERE id = ?1 AND game_id = ?2
                  ORDER BY id DESC
@@ -111,8 +108,7 @@ impl SnapshotStorage for SqliteGameStorage {
                 narrative_json: row.get(2)?,
                 scene_json: row.get(3)?,
                 npc_encounter_log_json: row.get(4)?,
-                committed: row.get(5)?,
-                created_at: row.get(6)?,
+                created_at: row.get(5)?,
             })
         });
 
@@ -123,16 +119,6 @@ impl SnapshotStorage for SqliteGameStorage {
                 "Failed to load snapshot by id: {e}"
             ))),
         }
-    }
-
-    fn commit(&self, snapshot_id: u64) -> Result<(), EngineError> {
-        let conn = self.pool.conn();
-        conn.execute(
-            "UPDATE game_state_snapshots SET committed = 1 WHERE id = ?1 AND game_id = ?2",
-            rusqlite::params![snapshot_id, self.game_id as i64],
-        )
-        .map_err(|e| EngineError::Config(format!("Failed to commit snapshot: {e}")))?;
-        Ok(())
     }
 
     fn reset(&self) -> Result<(), EngineError> {

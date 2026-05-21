@@ -90,7 +90,7 @@ The dashboard uses HTMX polling for live updates:
 
 ## Frontend Implementation
 - **HTMX**: Handles partial page updates via `hx-post` and `hx-target`
-- **HTMX Polling**: `hx-trigger="load, every 5s"` for real-time updates
+- **HTMX Polling**: `hx-trigger="load, every 1s"` for story-log; `every 2s` for status; `every 4-5s` for sidebar and LLM messages
 - **Styling**: Modern chat-app aesthetic with chat bubbles, fade animations
 - **Templates**: Uses `askama` for compile-time validated HTML fragments (pilot)
 

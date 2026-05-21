@@ -94,46 +94,35 @@ pub fn load_messages_into_state(ctx: &GameServiceContext, state: &mut GameState)
 }
 
 /// [DOC: docs/architecture/system.md]
-pub fn save_state(ctx: &GameServiceContext, state: &mut GameState) -> Result<u64, EngineError> {
+pub fn save_state(ctx: &GameServiceContext, state: &GameState) -> Result<u64, EngineError> {
     let snapshot = GameStateSnapshot::from_game_state(state);
-    save_snapshot(ctx, state, snapshot)
-}
-
-/// [DOC: docs/architecture/system.md]
-pub fn save_committed_state(
-    ctx: &GameServiceContext,
-    state: &mut GameState,
-) -> Result<u64, EngineError> {
-    let mut snapshot = GameStateSnapshot::from_game_state(state);
-    snapshot.committed = true;
-    save_snapshot(ctx, state, snapshot)
+    save_snapshot(ctx, snapshot)
 }
 
 fn save_snapshot(
     ctx: &GameServiceContext,
-    state: &mut GameState,
     snapshot: GameStateSnapshot,
 ) -> Result<u64, EngineError> {
-    let snapshot_id = ctx.snapshot_storage.save(&snapshot)?;
-    persist_new_messages(ctx, state, snapshot_id)?;
-    Ok(snapshot_id)
+    ctx.snapshot_storage.save(&snapshot)
 }
 
-/// Persist any messages with `id == 0` (newly added) to storage, assigning
-/// them real DB IDs and `snapshot_id`.
-pub fn persist_new_messages(
+/// Save a snapshot and persist the most recent unpersisted message.
+/// Because messages are persisted immediately, there is typically
+/// only one unpersisted message at a time.
+/// [DOC: docs/architecture/system.md]
+pub fn save_message_and_snapshot(
     ctx: &GameServiceContext,
     state: &mut GameState,
-    snapshot_id: u64,
-) -> Result<(), EngineError> {
-    // [DOC: docs/architecture/system.md]
-    for msg in state.narrative.history.iter_mut() {
-        if msg.id == crate::model::message::UNPERSISTED_ID {
+) -> Result<u64, EngineError> {
+    let snapshot = GameStateSnapshot::from_game_state(state);
+    let snapshot_id = save_snapshot(ctx, snapshot)?;
+    if let Some(msg) = state.narrative.history.last_mut() {
+        if msg.id == 0 {
             msg.snapshot_id = Some(snapshot_id);
             ctx.message_storage.insert_message(msg)?;
         }
     }
-    Ok(())
+    Ok(snapshot_id)
 }
 
 pub fn delete_and_remove_message(

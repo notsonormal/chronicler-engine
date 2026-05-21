@@ -326,14 +326,7 @@ impl GameState {
     fn push_message(&mut self, text: String, sender: Option<String>, log_type: LogType) {
         let location_header = self.narrative.pending_location.take();
         let event_header = self.narrative.pending_event.take();
-        let message = Message::new(
-            crate::model::message::UNPERSISTED_ID,
-            sender,
-            text,
-            log_type,
-            location_header,
-            event_header,
-        );
+        let message = Message::new(sender, text, log_type, location_header, event_header);
         self.narrative.history.append(message);
     }
 

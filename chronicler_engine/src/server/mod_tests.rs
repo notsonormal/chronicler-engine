@@ -182,9 +182,6 @@ fn test_app_state_lock_state_poisoned() {
         fn load_by_id(&self, _id: u64) -> Result<Option<GameStateSnapshot>, EngineError> {
             Err(EngineError::Config("test error".to_string()))
         }
-        fn commit(&self, _snapshot_id: u64) -> Result<(), EngineError> {
-            Ok(())
-        }
         fn reset(&self) -> Result<(), EngineError> {
             Ok(())
         }

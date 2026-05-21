@@ -44,7 +44,6 @@ fn test_game_state_snapshot_apply_to() {
             ..Default::default()
         },
         npc_encounter_log: NpcEncounterLog::default(),
-        committed: true,
         created_at: chrono::Utc::now(),
     };
 
@@ -66,7 +65,6 @@ fn test_from_game_state_sets_defaults() {
 
     let snapshot = GameStateSnapshot::from_game_state(&state);
     assert!(snapshot.db_id.is_none());
-    assert!(!snapshot.committed, "New snapshot should not be committed");
     assert!(
         snapshot.created_at <= chrono::Utc::now(),
         "created_at should be in the past"

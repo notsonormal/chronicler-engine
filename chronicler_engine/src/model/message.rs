@@ -3,9 +3,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::model::state::LogType;
 
-/// Sentinel value for a message that has not yet been persisted to storage.
-pub const UNPERSISTED_ID: u64 = 0;
-
 /// A single message in the narrative history.
 ///
 /// Messages are stored in chronological order. Only the **last** message may
@@ -25,7 +22,6 @@ pub struct Message {
 
 impl Message {
     pub fn new(
-        id: u64,
         sender: Option<String>,
         text: impl Into<String>,
         log_type: LogType,
@@ -33,7 +29,7 @@ impl Message {
         event_header: Option<String>,
     ) -> Self {
         Self {
-            id,
+            id: 0,
             sender,
             text: text.into(),
             log_type,

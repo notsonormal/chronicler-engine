@@ -21,7 +21,6 @@ fn test_snapshot_roundtrip() {
             ..Default::default()
         },
         npc_encounter_log: NpcEncounterLog::default(),
-        committed: true,
         created_at: Utc::now(),
     };
     let db = snapshot_to_db(&original, 1).unwrap();
@@ -32,13 +31,12 @@ fn test_snapshot_roundtrip() {
         original.movement.current_room_id,
         back.movement.current_room_id
     );
-    assert_eq!(original.committed, back.committed);
     assert_eq!(original.created_at, back.created_at);
     assert_eq!(db.game_id, 1);
 }
 
 #[test]
-fn test_snapshot_uncommitted_no_db_id() {
+fn test_snapshot_no_db_id_maps_correctly() {
     let original = GameStateSnapshot {
         db_id: None,
         movement: MovementState {
@@ -51,13 +49,11 @@ fn test_snapshot_uncommitted_no_db_id() {
             ..Default::default()
         },
         npc_encounter_log: NpcEncounterLog::default(),
-        committed: false,
         created_at: Utc::now(),
     };
     let db = snapshot_to_db(&original, 2).unwrap();
 
     assert_eq!(db.id, 0);
-    assert_eq!(db.committed, 0);
     assert_eq!(db.game_id, 2);
 }
 
@@ -75,7 +71,6 @@ fn test_snapshot_json_columns() {
             ..Default::default()
         },
         npc_encounter_log: NpcEncounterLog::default(),
-        committed: false,
         created_at: Utc::now(),
     };
     let db = snapshot_to_db(&original, 1).unwrap();

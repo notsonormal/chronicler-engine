@@ -74,10 +74,6 @@ impl SnapshotStorage for FailingSnapshotStorage {
         self.fallback.load_by_id(id)
     }
 
-    fn commit(&self, snapshot_id: u64) -> Result<(), EngineError> {
-        self.fallback.commit(snapshot_id)
-    }
-
     fn reset(&self) -> Result<(), EngineError> {
         self.fallback.reset()
     }

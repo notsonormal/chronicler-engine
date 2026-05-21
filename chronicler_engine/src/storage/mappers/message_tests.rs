@@ -1,6 +1,6 @@
 use chrono::Utc;
 
-use crate::model::message::{Message, UNPERSISTED_ID};
+use crate::model::message::Message;
 use crate::model::state::LogType;
 use crate::storage::mappers::message::message_to_db;
 
@@ -33,7 +33,7 @@ fn test_message_roundtrip() {
 #[test]
 fn test_message_unpersisted_roundtrip() {
     let original = Message {
-        id: UNPERSISTED_ID,
+        id: 0,
         sender: None,
         text: "Input text".to_string(),
         log_type: LogType::Input,
@@ -45,7 +45,7 @@ fn test_message_unpersisted_roundtrip() {
     let db = message_to_db(&original, 2).unwrap();
     let back = Message::try_from(&db).unwrap();
 
-    assert_eq!(back.id, UNPERSISTED_ID);
+    assert_eq!(back.id, 0);
     assert!(back.sender.is_none());
     assert_eq!(back.log_type, LogType::Input);
     assert_eq!(db.game_id, 2);

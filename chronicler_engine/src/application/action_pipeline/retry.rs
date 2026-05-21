@@ -100,7 +100,7 @@ pub fn retry_last_response_impl<B: ActionPipelineBackend>(backend: &B, ctx: Game
 pub(crate) fn save_retry_error(ctx: &GameServiceContext, message: impl Into<String>) {
     let mut state = load_state(ctx);
     state.narrative.input_buffer.status = GenerationStatus::Error(message.into());
-    if let Err(e) = save_state(ctx, &mut state) {
+    if let Err(e) = save_state(ctx, &state) {
         log::error!("Critical: failed to persist retry error state: {e}");
     }
 }
@@ -122,7 +122,9 @@ pub(crate) fn retry_event_continuation<B: ActionPipelineBackend>(
     };
 
     let pipeline = ActionPipeline::new(backend, ctx);
-    match pipeline.run_trigger_continuation(state, trigger, &input_text) {
+    let outcome = pipeline.run_trigger_continuation(state, trigger, &input_text);
+
+    match outcome {
         ActionOutcome::Completed => {}
         ActionOutcome::Error { message } => {
             save_retry_error(ctx, message);

@@ -23,7 +23,6 @@ fn empty_snapshot() -> GameStateSnapshot {
             ..Default::default()
         },
         npc_encounter_log: NpcEncounterLog::default(),
-        committed: false,
         created_at: Utc::now(),
     }
 }
@@ -59,15 +58,6 @@ fn test_load_by_id() {
     let id = s.save(&empty_snapshot()).unwrap();
     assert!(s.load_by_id(id).unwrap().is_some());
     assert!(s.load_by_id(999).unwrap().is_none());
-}
-
-#[test]
-fn test_commit() {
-    let s = InMemoryGameStorage::new();
-    let id = s.save(&empty_snapshot()).unwrap();
-    s.commit(id).unwrap();
-    let loaded = s.load_by_id(id).unwrap().unwrap();
-    assert!(loaded.committed);
 }
 
 #[test]

@@ -242,7 +242,7 @@ async fn test_retry_handler_sets_generating_status() {
 }
 
 #[tokio::test]
-async fn test_retry_handler_creates_uncommitted_snapshot() {
+async fn test_retry_handler_creates_snapshot() {
     // Setup: create app with InMemoryGameStorage so we can inspect it
     let mut state = create_test_state();
     state.add_log(
@@ -281,14 +281,14 @@ async fn test_retry_handler_creates_uncommitted_snapshot() {
 
     assert_eq!(response.status(), StatusCode::OK);
 
-    // The handler should save a new generating snapshot as uncommitted.
+    // The handler should save a new generating snapshot.
     let latest = storage
         .load_latest()
         .unwrap()
         .expect("Should have snapshot");
     assert!(
-        !latest.committed,
-        "Retry handler should create an uncommitted snapshot"
+        latest.db_id.is_some(),
+        "Retry handler should create a snapshot"
     );
 }
 
@@ -479,6 +479,114 @@ async fn test_reset_preserves_scenario_npcs() {
 }
 
 #[tokio::test]
+async fn test_reset_preserves_scenario_text() {
+    use chronicler_engine::model::character::{CharacterSheet, PlayerCard};
+    use chronicler_engine::model::map::{MapDef, Overworld, Region, Room};
+    use chronicler_engine::model::scenario::StartingScenario;
+    use chronicler_engine::model::world::WorldCard;
+    use std::collections::HashMap;
+
+    let world = Arc::new(WorldCard {
+        name: "Test World".into(),
+        description: "A test world".into(),
+        global_rules: vec![],
+        starting_room_id: "room_1".into(),
+        scenarios: vec![StartingScenario {
+            id: "test".into(),
+            name: "Test".into(),
+            description: "Test scenario".into(),
+            starting_room_id: "room_1".into(),
+            text: "Welcome to the adventure, {{user}}!".into(),
+            npcs: vec![],
+        }],
+        default_room_image: None,
+    });
+
+    let test_room = Room {
+        id: "room_1".into(),
+        name: "Test Room".into(),
+        description: "A test room for component tests.".into(),
+        image_path: None,
+        exits: HashMap::new(),
+        items: vec![],
+        navigation_description: None,
+    };
+
+    let map = Arc::new(MapDef {
+        overworld: Overworld {
+            id: "test_overworld".into(),
+            name: "Test Overworld".into(),
+            regions: vec![Region {
+                id: "region_1".into(),
+                name: "Test Region".into(),
+                rooms: vec![test_room],
+            }],
+        },
+    });
+
+    let player = Arc::new(PlayerCard {
+        sheet: CharacterSheet {
+            name: "Test Player".into(),
+            description: "A test player".into(),
+            personality: "Brave".into(),
+            scenario: "Test scenario".into(),
+            example_dialogue: "Hello!".into(),
+            summary: None,
+            profile_image: None,
+            headshot_image: None,
+        },
+        inventory: vec![],
+    });
+
+    let state = chronicler_engine::model::state::GameState::new(
+        world.clone(),
+        map,
+        player,
+        vec![],
+        world.starting_room_id.clone(),
+    );
+
+    let storage = Arc::new(chronicler_engine::test_support::InMemoryGameStorage::new());
+    let snapshot =
+        chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
+    storage.save(&snapshot).unwrap();
+
+    let app = chronicler_engine::server::create_app_with_storage(
+        state,
+        Arc::clone(&storage)
+            as Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage>,
+        Arc::clone(&storage)
+            as Arc<dyn chronicler_engine::storage::message_storage::MessageStorage>,
+        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new()),
+        chronicler_engine::model::settings::AppSettings::default(),
+    );
+
+    // Reset the game
+    let req = Request::builder()
+        .uri("/reset")
+        .method(http::Method::POST)
+        .body(Body::empty())
+        .unwrap();
+    let response = app.clone().oneshot(req).await.unwrap();
+    assert!(response.status().is_success());
+
+    // Verify the scenario text appears in the story log
+    let req = Request::builder()
+        .uri("/fragment/story-log")
+        .body(Body::empty())
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+    let body = axum::body::to_bytes(response.into_body(), 4096)
+        .await
+        .unwrap();
+    let body_str = String::from_utf8_lossy(&body);
+    assert!(
+        body_str.contains("Welcome to the adventure, Test Player!"),
+        "Reset should preserve scenario text in story log: {body_str}"
+    );
+}
+
+#[tokio::test]
 async fn test_reset_allows_subsequent_actions() {
     let state = create_test_state();
     let app = chronicler_engine::create_app_for_testing(state);
@@ -551,9 +659,6 @@ async fn test_retry_handler_load_state_failure() {
             chronicler_engine::error::EngineError,
         > {
             self.inner.load_by_id(id)
-        }
-        fn commit(&self, snapshot_id: u64) -> Result<(), chronicler_engine::error::EngineError> {
-            self.inner.commit(snapshot_id)
         }
         fn reset(&self) -> Result<(), chronicler_engine::error::EngineError> {
             self.inner.reset()
@@ -662,9 +767,6 @@ async fn test_retry_handler_snapshot_save_failure() {
         > {
             self.inner.load_by_id(id)
         }
-        fn commit(&self, snapshot_id: u64) -> Result<(), chronicler_engine::error::EngineError> {
-            self.inner.commit(snapshot_id)
-        }
         fn reset(&self) -> Result<(), chronicler_engine::error::EngineError> {
             self.inner.reset()
         }
@@ -760,9 +862,6 @@ async fn test_reset_handler_snapshot_save_failure() {
             chronicler_engine::error::EngineError,
         > {
             self.inner.load_by_id(id)
-        }
-        fn commit(&self, snapshot_id: u64) -> Result<(), chronicler_engine::error::EngineError> {
-            self.inner.commit(snapshot_id)
         }
         fn reset(&self) -> Result<(), chronicler_engine::error::EngineError> {
             self.inner.reset()

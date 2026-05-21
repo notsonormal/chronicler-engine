@@ -33,8 +33,8 @@ Contains the mechanics that drive the simulation. It translates user intent and 
 Orchestration layer that coordinates game flow, persistence, and LLM generation. Sits between the HTTP server and the pure simulation engine.
 - **`context`**: Shared infrastructure for game service operations.
   - `GameServiceContext`: Snapshot storage, message storage, world/map/player/npc references, cancellation token, and settings.
-  - `helpers.rs` (moved to `context.rs`): Shared persistence helpers (`load_state`, `save_state`, `save_committed_state`, `map_llm_error`, `persist_new_messages`).
-  - `save_committed_state()`: Saves snapshots with `committed = true` for pre-generation anchoring.
+  - `context.rs`: Shared persistence helpers (`load_state`, `save_state`, `save_message_and_snapshot`, `map_llm_error`).
+  - `save_message_and_snapshot()`: Saves a snapshot and immediately persists the newest unpersisted message with the snapshot ID. Messages are persisted as they are created; there is no batching or `committed` flag.
 - **`action_pipeline`**: Action-processing workflows and the `ActionPipeline` orchestration struct.
   - `pipeline.rs`: `ActionPipelineBackend` trait (narrow seam: `narrate_action`, `complete`, `run_post_generation_agents`) and `ActionPipeline<B>` generic over the trait. Encapsulates the full FreeAction pipeline (narrate → quantify → triggers → event continuation) with explicit phase methods. Used by both normal action handling (`run_from_input`) and retry logic (`run_trigger_continuation`). Checks `CancellationToken::is_cancelled()` at stage boundaries and aborts gracefully via `handle_cancellation()` to avoid wasted LLM calls on stale requests.
   - `actions.rs`: Thin dispatch layer — `execute_action_impl` creates `ActionPipeline` and delegates to `run_from_input`.

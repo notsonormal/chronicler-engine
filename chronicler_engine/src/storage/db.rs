@@ -58,7 +58,6 @@ fn run_migrations(conn: &Connection) -> Result<(), crate::error::EngineError> {
                 narrative TEXT NOT NULL,
                 scene TEXT NOT NULL,
                 npc_encounter_log TEXT NOT NULL,
-                committed INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL
             )",
             [],
@@ -182,6 +181,13 @@ fn run_migrations(conn: &Connection) -> Result<(), crate::error::EngineError> {
         .map_err(|e| crate::error::EngineError::Config(format!("Migration failed: {e}")))?;
 
         conn.pragma_update(None, "user_version", 3).map_err(|e| {
+            crate::error::EngineError::Config(format!("Failed to set user_version: {e}"))
+        })?;
+    }
+
+    if version < 4 {
+        let _ = conn.execute("ALTER TABLE game_state_snapshots DROP COLUMN committed", []);
+        conn.pragma_update(None, "user_version", 4).map_err(|e| {
             crate::error::EngineError::Config(format!("Failed to set user_version: {e}"))
         })?;
     }

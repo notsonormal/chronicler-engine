@@ -81,14 +81,6 @@ impl SnapshotStorage for InMemoryGameStorage {
         Ok(result)
     }
 
-    fn commit(&self, snapshot_id: u64) -> Result<(), crate::error::EngineError> {
-        let mut snaps = lock(&self.snapshots);
-        if let Some(snap) = snaps.iter_mut().find(|s| s.db_id == Some(snapshot_id)) {
-            snap.committed = true;
-        }
-        Ok(())
-    }
-
     fn reset(&self) -> Result<(), crate::error::EngineError> {
         lock(&self.snapshots).clear();
         lock(&self.checkpoints).clear();

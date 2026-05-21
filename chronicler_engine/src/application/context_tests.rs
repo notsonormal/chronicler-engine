@@ -1,5 +1,5 @@
 use crate::application::context::{
-    GameServiceContext, load_state, map_llm_error, save_committed_state, save_state,
+    GameServiceContext, load_state, map_llm_error, save_message_and_snapshot, save_state,
 };
 use crate::error::{EngineError, LlmFailure, NarrativeFailure};
 use crate::model::message::Message;
@@ -166,20 +166,21 @@ fn test_load_state_fallback_when_empty() {
 }
 
 #[test]
-fn test_save_and_save_committed_state() {
+fn test_save_and_save_message_and_snapshot() {
     let ctx = minimal_ctx();
     let mut state = minimal_state();
     state.movement.current_room_id = "room2".to_string();
-    let id = save_state(&ctx, &mut state).unwrap();
+    state.add_log(
+        "Test message".to_string(),
+        None,
+        crate::model::state::LogType::Narration,
+    );
+    let id = save_state(&ctx, &state).unwrap();
     assert!(id > 0);
 
-    let committed_id = save_committed_state(&ctx, &mut state).unwrap();
-    assert!(committed_id > id);
+    let msg_id = save_message_and_snapshot(&ctx, &mut state).unwrap();
+    assert!(msg_id > id);
 
-    let loaded = ctx
-        .snapshot_storage
-        .load_by_id(committed_id)
-        .unwrap()
-        .unwrap();
-    assert!(loaded.committed);
+    let loaded = ctx.snapshot_storage.load_by_id(msg_id).unwrap().unwrap();
+    assert!(loaded.db_id.is_some());
 }

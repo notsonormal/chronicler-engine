@@ -17,25 +17,14 @@ fn create_snapshot() -> GameStateSnapshot {
 }
 
 #[test]
-fn test_commit_sets_committed_flag() {
+fn test_save_creates_snapshot() {
     let storage = create_storage();
     let snap = create_snapshot();
 
     let snap_id = storage.save(&snap).expect("save should succeed");
 
-    let loaded_before = storage.load_latest().expect("load should succeed").unwrap();
-    assert!(
-        !loaded_before.committed,
-        "new snapshot should not be committed"
-    );
-
-    storage.commit(snap_id).expect("commit should succeed");
-
-    let loaded_after = storage.load_latest().expect("load should succeed").unwrap();
-    assert!(
-        loaded_after.committed,
-        "committed should be true after commit"
-    );
+    let loaded = storage.load_latest().expect("load should succeed").unwrap();
+    assert_eq!(loaded.db_id, Some(snap_id), "save should create a snapshot");
 }
 
 #[test]
@@ -95,17 +84,17 @@ fn test_save_creates_new_snapshot() {
     let snap = create_snapshot();
     let id1 = storage.save(&snap).unwrap();
 
-    let mut snap2 = create_snapshot();
-    snap2.committed = true;
+    let snap2 = create_snapshot();
     let id2 = storage.save(&snap2).unwrap();
 
     let loaded = storage
         .load_by_id(id2)
         .expect("load should succeed")
         .unwrap();
-    assert!(
-        loaded.committed,
-        "second save should create new committed snapshot"
+    assert_eq!(
+        loaded.db_id,
+        Some(id2),
+        "second save should create new snapshot"
     );
     assert_ne!(id1, id2, "each save should get a unique id");
 }
@@ -118,14 +107,13 @@ fn test_row_to_snapshot_bad_json() {
         // Insert a row with invalid JSON in the movement column
         conn.execute(
             "INSERT INTO game_state_snapshots
-             (movement, narrative, scene, npc_encounter_log, committed, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+             (movement, narrative, scene, npc_encounter_log, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
             rusqlite::params![
                 "not valid json",
                 "{}",
                 "{}",
                 "{}",
-                0,
                 chrono::Utc::now().to_rfc3339(),
             ],
         )
@@ -144,9 +132,9 @@ fn test_row_to_snapshot_bad_date() {
         let conn = pool.conn();
         conn.execute(
             "INSERT INTO game_state_snapshots
-             (movement, narrative, scene, npc_encounter_log, committed, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            rusqlite::params!["{}", "{}", "{}", "{}", 0, "not-a-date",],
+             (movement, narrative, scene, npc_encounter_log, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params!["{}", "{}", "{}", "{}", "not-a-date",],
         )
         .expect("raw insert should succeed");
     }

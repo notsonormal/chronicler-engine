@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::application::context::{
-    GameServiceContext, load_state, map_llm_error, save_committed_state, save_state,
+    GameServiceContext, load_state, map_llm_error, save_message_and_snapshot, save_state,
 };
 use crate::engine::action_processing::{
     FreeActionContext, TriggerContinuationRequest, TriggerMatch, apply_npc_events,
@@ -83,6 +83,12 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
         state.narrative.last_model_name = Some(model_name);
 
         let quantifier_result = self.phase_post_generation(&mut state, &input, &narration_text);
+        if let Err(e) = save_message_and_snapshot(self.ctx, &mut state) {
+            log::error!("Failed to save post-quantifier snapshot: {e}");
+            return ActionOutcome::Error {
+                message: format!("Failed to save post-quantifier snapshot: {e}"),
+            };
+        }
 
         let turn_result = match self.phase_engine_commit(state, &narration_text, &quantifier_result)
         {
@@ -91,43 +97,58 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
         };
         let mut next_state = turn_result.next_state;
 
-        if let Some(trigger_match) = turn_result.trigger_match {
-            let (response_length, max_context_tokens, max_tokens) = self.ctx.prompt_build_params();
-            let system_prompt_override = {
-                let settings = self.ctx.settings.read().unwrap_or_else(|e| e.into_inner());
-                settings.active_system_prompt.clone()
+        // Pre-build trigger request so last_trigger is included in the post-engine snapshot.
+        // This ensures event retry can restore a state with trigger context available.
+        let trigger_request = turn_result
+            .trigger_match
+            .as_ref()
+            .and_then(|trigger_match| {
+                let (response_length, max_context_tokens, max_tokens) =
+                    self.ctx.prompt_build_params();
+                let system_prompt_override = {
+                    let settings = self.ctx.settings.read().unwrap_or_else(|e| e.into_inner());
+                    settings.active_system_prompt.clone()
+                };
+                build_trigger_request(
+                    &next_state,
+                    &narration_text,
+                    &world,
+                    &player,
+                    &all_npcs,
+                    &response_length,
+                    max_context_tokens,
+                    max_tokens,
+                    trigger_match,
+                    system_prompt_override,
+                )
+            });
+
+        if let Some(ref request) = trigger_request {
+            next_state.narrative.last_trigger = Some(request.stored.clone());
+        }
+
+        if let Err(e) = save_message_and_snapshot(self.ctx, &mut next_state) {
+            log::error!("Failed to save post-engine snapshot: {e}");
+            return ActionOutcome::Error {
+                message: format!("Failed to save post-engine snapshot: {e}"),
             };
-            let trigger_request = build_trigger_request(
-                &next_state,
-                &narration_text,
-                &world,
-                &player,
-                &all_npcs,
-                &response_length,
-                max_context_tokens,
-                max_tokens,
-                &trigger_match,
-                system_prompt_override,
-            );
+        }
 
-            if let Some(request) = trigger_request {
-                let (updated_state, continuation_text) =
-                    match self.phase_trigger_continuation(next_state, &request) {
-                        Ok(pair) => pair,
-                        Err(outcome) => return outcome,
-                    };
-                next_state = updated_state;
+        if let Some(request) = trigger_request {
+            let (updated_state, continuation_text) =
+                match self.phase_trigger_continuation(next_state, &request) {
+                    Ok(pair) => pair,
+                    Err(outcome) => return outcome,
+                };
+            next_state = updated_state;
 
-                if !continuation_text.is_empty() {
-                    next_state = match self.phase_post_trigger_reconcile(
-                        next_state,
-                        &input,
-                        &continuation_text,
-                    ) {
+            if !continuation_text.is_empty() {
+                next_state =
+                    match self.phase_post_trigger_reconcile(next_state, &input, &continuation_text)
+                    {
                         Ok(updated) => updated,
                         Err(outcome) => return outcome,
                     };
-                }
             }
         }
 
@@ -138,7 +159,7 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
     fn phase_pre_main_snapshot(&self, mut state: GameState) -> PipelineResult<GameState> {
         state.narrative.input_buffer.status = GenerationStatus::Generating;
         state.narrative.input_buffer.phase = GenerationPhase::Narrating;
-        if let Err(e) = save_committed_state(self.ctx, &mut state) {
+        if let Err(e) = save_message_and_snapshot(self.ctx, &mut state) {
             log::error!("Failed to save pre-main snapshot: {e}");
             return Err(ActionOutcome::Error {
                 message: format!("Failed to save pre-main snapshot: {e}"),
@@ -253,7 +274,7 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
             return Err(self.handle_cancellation());
         }
 
-        if let Err(e) = save_committed_state(self.ctx, &mut state) {
+        if let Err(e) = save_message_and_snapshot(self.ctx, &mut state) {
             log::error!("Failed to save pre-event snapshot: {e}");
             return Err(ActionOutcome::Error {
                 message: format!("Failed to save pre-event snapshot: {e}"),
@@ -276,7 +297,7 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
                 );
                 state.narrative.input_buffer.status =
                     GenerationStatus::Error(format!("Error: {e}"));
-                if let Err(e) = save_state(self.ctx, &mut state) {
+                if let Err(e) = save_message_and_snapshot(self.ctx, &mut state) {
                     log::error!("Critical: failed to persist trigger error state: {e}");
                 }
                 return Err(ActionOutcome::Error {
@@ -293,7 +314,7 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
         if continuation_text.trim().is_empty() {
             state.narrative.input_buffer.status =
                 GenerationStatus::Error("LLM Error: empty response".to_string());
-            if let Err(e) = save_state(self.ctx, &mut state) {
+            if let Err(e) = save_message_and_snapshot(self.ctx, &mut state) {
                 log::error!("Critical: failed to persist empty trigger state: {e}");
             }
             return Err(ActionOutcome::Error {
@@ -307,7 +328,7 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
                 log::error!("Trigger commit failed: {e}");
                 state.narrative.input_buffer.status =
                     GenerationStatus::Error(format!("Trigger error: {e}"));
-                if let Err(e) = save_state(self.ctx, &mut state) {
+                if let Err(e) = save_message_and_snapshot(self.ctx, &mut state) {
                     log::error!("Critical: failed to persist trigger commit error state: {e}");
                 }
                 return Err(ActionOutcome::Error {
@@ -315,6 +336,13 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
                 });
             }
         };
+
+        if let Err(e) = save_message_and_snapshot(self.ctx, &mut state) {
+            log::error!("Failed to save post-trigger snapshot: {e}");
+            return Err(ActionOutcome::Error {
+                message: format!("Failed to save post-trigger snapshot: {e}"),
+            });
+        }
 
         Ok((state, continuation_text))
     }
@@ -331,7 +359,7 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
                 log::error!("Failed to apply post-trigger NPC events: {e}");
                 state.narrative.input_buffer.status =
                     GenerationStatus::Error(format!("NPC event error: {e}"));
-                if let Err(e) = save_state(self.ctx, &mut state) {
+                if let Err(e) = save_state(self.ctx, &state) {
                     log::error!("Critical: failed to persist NPC error state: {e}");
                 }
                 Err(ActionOutcome::Error {
@@ -360,7 +388,7 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
             log::warn!("Retry event continuation cancelled — aborting");
             state.narrative.input_buffer.status = GenerationStatus::Idle;
             state.narrative.input_buffer.phase = GenerationPhase::default();
-            if let Err(e) = save_state(self.ctx, &mut state) {
+            if let Err(e) = save_state(self.ctx, &state) {
                 log::error!("Failed to persist cancelled retry state: {e}");
             }
             return ActionOutcome::Cancelled;
@@ -380,7 +408,7 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
                 log::error!("Trigger narration retry failed: {e}");
                 state.narrative.input_buffer.status =
                     GenerationStatus::Error(format!("Trigger narration failed: {e}"));
-                if let Err(e) = save_state(self.ctx, &mut state) {
+                if let Err(e) = save_state(self.ctx, &state) {
                     log::error!("Critical: failed to persist trigger retry error state: {e}");
                 }
                 return ActionOutcome::Error {
@@ -393,7 +421,7 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
         if continuation_text.trim().is_empty() {
             state.narrative.input_buffer.status =
                 GenerationStatus::Error("LLM Error: empty response".to_string());
-            if let Err(e) = save_state(self.ctx, &mut state) {
+            if let Err(e) = save_state(self.ctx, &state) {
                 log::error!("Critical: failed to persist empty trigger retry state: {e}");
             }
             return ActionOutcome::Error {
@@ -410,7 +438,7 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
                     log::error!("Trigger commit failed on retry: {e}");
                     state.narrative.input_buffer.status =
                         GenerationStatus::Error(format!("Trigger error: {e}"));
-                    if let Err(e) = save_state(self.ctx, &mut state) {
+                    if let Err(e) = save_message_and_snapshot(self.ctx, &mut state) {
                         log::error!("Critical: failed to persist trigger commit error state: {e}");
                     }
                     return ActionOutcome::Error {
@@ -418,6 +446,13 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
                     };
                 }
             };
+
+        if let Err(e) = save_message_and_snapshot(self.ctx, &mut committed_state) {
+            log::error!("Failed to save post-trigger retry snapshot: {e}");
+            return ActionOutcome::Error {
+                message: format!("Failed to save post-trigger retry snapshot: {e}"),
+            };
+        }
 
         match self.reconcile_post_trigger_npcs(
             committed_state.clone(),
@@ -429,7 +464,7 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
                 log::error!("Failed to apply post-trigger NPC events on retry: {e}");
                 committed_state.narrative.input_buffer.status =
                     GenerationStatus::Error(format!("NPC event error: {e}"));
-                if let Err(e) = save_state(self.ctx, &mut committed_state) {
+                if let Err(e) = save_state(self.ctx, &committed_state) {
                     log::error!("Critical: failed to persist retry NPC error state: {e}");
                 }
                 return ActionOutcome::Error {
@@ -440,7 +475,7 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
 
         committed_state.narrative.input_buffer.status = GenerationStatus::Idle;
         committed_state.narrative.input_buffer.phase = GenerationPhase::default();
-        if let Err(e) = save_state(self.ctx, &mut committed_state) {
+        if let Err(e) = save_state(self.ctx, &committed_state) {
             log::error!("Failed to persist finished retry action: {e}");
         }
 
@@ -490,7 +525,7 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
         let mut state = load_state(self.ctx);
         let message = error.into();
         state.narrative.input_buffer.status = GenerationStatus::Error(message.clone());
-        if let Err(e) = save_state(self.ctx, &mut state) {
+        if let Err(e) = save_state(self.ctx, &state) {
             log::error!("Critical: failed to persist error state: {e}");
         }
         ActionOutcome::Error { message }
@@ -501,7 +536,7 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
         let mut state = load_state(self.ctx);
         state.narrative.input_buffer.status = GenerationStatus::Idle;
         state.narrative.input_buffer.phase = GenerationPhase::default();
-        if let Err(e) = save_state(self.ctx, &mut state) {
+        if let Err(e) = save_state(self.ctx, &state) {
             log::error!("Critical: failed to persist cancelled state: {e}");
         }
         ActionOutcome::Cancelled

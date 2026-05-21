@@ -81,3 +81,4 @@ An `AtomicBool` in `AppState` acts as a domain-level generation gate:
 
 - **2026-05-09**: Phase 1 implementation — SQLite snapshots + reset endpoint
 - **2026-05-10**: Generation gate added to fix race condition introduced by mutex removal
+- **2026-05-20**: Immediate message persistence — removed `committed` flag, `commit()` method, and batch persistence. Each message is now persisted immediately alongside its snapshot via `save_message_and_snapshot`.

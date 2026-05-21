@@ -15,6 +15,15 @@ use crate::server::templates::TextCheckPreviewTemplate;
 
 use super::renderers::render_error;
 
+#[allow(clippy::expect_used)]
+fn internal_error_response(message: impl Into<String>) -> axum::response::Response<Body> {
+    let msg = message.into();
+    axum::response::Response::builder()
+        .status(StatusCode::INTERNAL_SERVER_ERROR)
+        .body(Body::from(render_error(&msg)))
+        .expect("static response body is valid")
+}
+
 /// [DOC: docs/system/text_check.md]
 #[allow(clippy::expect_used)]
 pub async fn check_text_handler(
@@ -134,10 +143,7 @@ pub async fn reset_handler(State(state): State<AppState>) -> axum::response::Res
 
     if let Err(e) = state.snapshot_storage.reset() {
         log::error!("Reset failed: {e}");
-        return axum::response::Response::builder()
-            .status(StatusCode::INTERNAL_SERVER_ERROR)
-            .body(Body::from(render_error(&e.to_string())))
-            .expect("static response body is valid");
+        return internal_error_response(e.to_string());
     }
 
     let mut initial_state = GameState::new(
@@ -168,12 +174,22 @@ pub async fn reset_handler(State(state): State<AppState>) -> axum::response::Res
     }
 
     let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&initial_state);
-    if let Err(e) = state.snapshot_storage.save(&snapshot) {
-        log::error!("Reset failed: failed to save initial snapshot: {e}");
-        return axum::response::Response::builder()
-            .status(StatusCode::INTERNAL_SERVER_ERROR)
-            .body(Body::from(render_error(&e.to_string())))
-            .expect("static response body is valid");
+    let snapshot_id = match state.snapshot_storage.save(&snapshot) {
+        Ok(id) => id,
+        Err(e) => {
+            log::error!("Reset failed: failed to save initial snapshot: {e}");
+            return internal_error_response(e.to_string());
+        }
+    };
+
+    if let Some(msg) = initial_state.narrative.history.last_mut() {
+        if msg.id == 0 {
+            msg.snapshot_id = Some(snapshot_id);
+            if let Err(e) = state.message_storage.insert_message(msg) {
+                log::error!("Reset failed: failed to persist message: {e}");
+                return internal_error_response(e.to_string());
+            }
+        }
     }
 
     // Reset generation flags so subsequent actions work after reset.

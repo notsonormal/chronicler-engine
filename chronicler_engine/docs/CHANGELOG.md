@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-05-20
+
+### Changed
+- **Immediate message persistence — removed `committed` flag and batch persistence**
+  - Each message is now persisted immediately alongside a snapshot via `save_message_and_snapshot`
+  - Deleted `committed: bool` from `GameStateSnapshot` and `committed` column from DB
+  - Removed `SnapshotStorage::commit()`, `save_committed_state()`, and `persist_new_messages()`
+  - `save_message_and_snapshot` saves snapshot then persists the last message if `id == 0`
+  - Pipeline updated: messages persisted at pre-main, post-generation, post-engine, and post-event phases
+  - Event retry fixed: pre-build trigger request before post-engine snapshot so `last_trigger` is included in the restore point
+  - All 868 tests pass; clippy clean
+
+### Fixed
+- **Reduced UI delay between LLM response and game story-log display**
+  - Story-log HTMX poll interval reduced from `every 2s` to `every 1s`
+  - Status-display HTMX poll interval reduced from `every 5s` to `every 2s`
+  - Added immediate story-log refresh via `htmx.trigger('#story-log', 'htmx:refresh')` when status poll detects `idle`
+  - This cuts the worst-case gap between pipeline completion and story-log update from ~4s to ~1s
+  - All 870 tests pass; clippy clean
+
 ## 2026-05-19
 
 ### Fixed

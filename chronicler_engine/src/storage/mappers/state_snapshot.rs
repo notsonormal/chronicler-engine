@@ -27,7 +27,6 @@ impl TryFrom<&DbGameStateSnapshot> for GameStateSnapshot {
             narrative,
             scene,
             npc_encounter_log,
-            committed: db.committed != 0,
             created_at,
         })
     }
@@ -53,7 +52,6 @@ pub fn snapshot_to_db(
         narrative_json,
         scene_json,
         npc_encounter_log_json,
-        committed: if snapshot.committed { 1 } else { 0 },
         created_at: snapshot.created_at.to_rfc3339(),
     })
 }

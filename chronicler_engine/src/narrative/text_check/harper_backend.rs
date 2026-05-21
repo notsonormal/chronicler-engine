@@ -42,6 +42,7 @@ impl HarperBackend {
 
         let document = Document::new_plain_english(text, self.dictionary.as_ref());
         let mut linter = LintGroup::new_curated(self.dictionary.clone());
+        linter.config.set_rule_enabled("AvoidCurses", false);
 
         match mode {
             TextCheckMode::Spell => {

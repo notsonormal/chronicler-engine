@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-20 21:07 UTC*
+*Index last generated: 2026-05-21 16:39 UTC*
 
 ### Root files
 
@@ -55,6 +55,11 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Plan: Observability & Automated Forensics](./plans/observability-and-forensics-plan.md)
 - [Plan: State Patch Reducer for Post-Generation Agent Composition](./plans/state-patch-reducer-plan.md)
 - [AI Steering & Guided Generation](./plans/steering-and-guided-generation.md)
+
+### `docs/plans/archived/`
+
+- [Plan: Fix Game UI Delay for LLM Responses](./plans/archived/jericho-vixen-lockjaw.md)
+- [Plan: Immediate Message Persistence — Direct Implementation](./plans/archived/storm-x-23-domino.md)
 
 ### `docs/reference/`
 

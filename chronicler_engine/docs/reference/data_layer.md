@@ -38,7 +38,7 @@ Frozen point-in-time captures of the mutable game state. Used for:
 | `narrative`        | TEXT    | JSON: `NarrativeSnapshot` (no messages)      |
 | `scene`            | TEXT    | JSON: `SceneState`                           |
 | `npc_encounter_log`  | TEXT    | JSON: `NpcEncounterLog`                       |
-| `committed`        | INTEGER | 0 or 1 — marks pre-generation snapshots      |
+
 | `created_at`       | TEXT    | ISO 8601 timestamp                           |
 
 **Key invariant:** Messages are **not** stored in the snapshot JSON. They live in the `messages` table and are hydrated after snapshot load.
@@ -134,4 +134,4 @@ Schema migrations are **breaking** — old save data is discarded on schema chan
 
 - **Multi-game support:** Allow creating multiple `games` rows and switching between them.
 - **Message versioning:** Not implemented; retry creates new messages via snapshot rollback.
-- **Snapshot pruning:** Delete old uncommitted snapshots to limit database growth.
+- **Snapshot pruning:** Delete old snapshots to limit database growth. With immediate persistence every message has exactly one snapshot, so the table grows linearly with turns.

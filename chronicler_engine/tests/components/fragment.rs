@@ -635,10 +635,6 @@ impl SnapshotStorage for FailingStorage {
         self.inner.load_by_id(id)
     }
 
-    fn commit(&self, snapshot_id: u64) -> Result<(), EngineError> {
-        self.inner.commit(snapshot_id)
-    }
-
     fn reset(&self) -> Result<(), EngineError> {
         self.inner.reset()
     }

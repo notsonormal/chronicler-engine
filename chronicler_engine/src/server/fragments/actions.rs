@@ -63,25 +63,10 @@ async fn process_action(state: &AppState, command: String) -> Response<Body> {
 
     game_state.narrative.input_buffer.status = crate::model::state::GenerationStatus::Generating;
     game_state.narrative.input_buffer.phase = crate::model::state::GenerationPhase::Narrating;
-    let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&game_state);
-    let snapshot_id = match state.snapshot_storage.save(&snapshot) {
-        Ok(id) => id,
-        Err(e) => {
-            log::error!("Failed to save snapshot: {e}");
-            state.is_generating.store(false, Ordering::SeqCst);
-            return Response::builder()
-                .status(StatusCode::INTERNAL_SERVER_ERROR)
-                .body(Body::from(render_error(&format!(
-                    "Failed to save state: {e}"
-                ))))
-                .expect("static response body is valid");
-        }
-    };
     let ctx_for_persist = state.as_game_service_context();
-    if let Err(e) = crate::application::game_service::persist_new_messages(
+    if let Err(e) = crate::application::game_service::save_message_and_snapshot(
         &ctx_for_persist,
         &mut game_state,
-        snapshot_id,
     ) {
         log::error!("Failed to persist input message: {e}");
         state.is_generating.store(false, Ordering::SeqCst);

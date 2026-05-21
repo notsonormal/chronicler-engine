@@ -45,7 +45,6 @@ pub struct GameStateSnapshot {
     pub scene: SceneState,
     #[serde(rename = "character_state")]
     pub npc_encounter_log: NpcEncounterLog,
-    pub committed: bool,
     pub created_at: DateTime<Utc>,
 }
 
@@ -57,7 +56,6 @@ impl GameStateSnapshot {
             narrative: NarrativeSnapshot::from_narrative(&state.narrative),
             scene: state.scene.clone(),
             npc_encounter_log: state.npc_encounter_log.clone(),
-            committed: false,
             created_at: Utc::now(),
         }
     }

@@ -15,6 +15,20 @@
       "single_user_message": false
     },
     {
+      "id": "openrouter-hanami",
+      "name": "openrouter-hanami",
+      "provider": "OpenRouter",
+      "model": "sao10k/l3.1-70b-hanami-x1",
+      "single_user_message": false
+    },
+    {
+      "id": "mistral-nemo",
+      "name": "mistral-nemo",
+      "provider": "OpenRouter",
+      "model": "mistralai/mistral-nemo",
+      "single_user_message": false
+    },
+    {
       "id": "ollama-gemma-4-26B",
       "name": "ollama-gemma-4-26B",
       "provider": "Ollama",
@@ -33,7 +47,7 @@
       "max_tokens": 2048
     }
   ],
-  "narration_connection_id": "openrouter-gpt-4o-mini",
+  "narration_connection_id": "mistral-nemo",
   "quantifier_connection_id": "ollama-gemma-4-e2b",
   "response_length": "flexible, based on the current scene. During a conversation, keep it concise (under 150 words) to allow back-and-forth. For scene transitions, travel, or plot developments, build content (above 150 words), but allow the player to react.",
   "text_check": {
@@ -52,5 +66,7 @@
       },
       "phase": "post_generation"
     }
-  ]
+  ],
+  "active_system_prompt_preset_id": "preset-1779380759584",
+  "active_quantifier_prompt_preset_id": "quantifier_default"
 }
