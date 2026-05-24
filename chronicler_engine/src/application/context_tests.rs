@@ -117,16 +117,14 @@ fn minimal_ctx() -> GameServiceContext {
 #[test]
 fn test_load_state_hydrates_messages() {
     let ctx = minimal_ctx();
-    let msg = Message {
-        id: 1,
-        sender: Some("System".to_string()),
-        text: "Hello".to_string(),
-        log_type: crate::model::state::LogType::System,
-        timestamp: chrono::Utc::now(),
-        location_header: None,
-        event_header: None,
-        snapshot_id: None,
-    };
+    let mut msg = Message::new(
+        Some("System".to_string()),
+        "Hello",
+        crate::model::state::LogType::System,
+        None,
+        None,
+    );
+    msg.id = 1;
     ctx.message_storage
         .insert_message(&mut msg.clone())
         .unwrap();

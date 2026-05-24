@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-05-24
+
+### Added
+- **Message swipes — non-destructive retry with state-consistent swipe navigation**
+  - New `Swipe` struct: each swipe stores `text`, `snapshot_id: Option<u64>`, `location_header`, and `event_header`
+  - `Message` now has `swipes: Vec<Swipe>`, `active_swipe_index: usize`, and `is_deleted: bool`
+  - `LogEntry` carries `swipe_count` and `active_swipe_index` for template rendering
+  - New `message_swipes` SQLite table with `ON DELETE CASCADE`; v6 migration recreates `messages` table and migrates existing data
+  - `MessageStorage` trait expanded: `soft_delete_message`, `restore_soft_deleted`, `purge_soft_deleted`, `insert_swipe`, `update_active_swipe`, `shift_swipe_indices`
+  - Retry changed from destructive delete to **soft-delete + swipe preservation**: old text is saved as a swipe before regeneration; on failure, soft-deleted messages are restored; on success, they are purged
+  - `post_retry_swipe_migration` shifts old swipes to the new message and sets active index to the latest swipe
+  - **Swipe navigation endpoint**: `POST /message/:id/swipe/:index` updates active swipe, restores swipe's snapshot, re-renders story log. Only allowed on the last message (returns 400 otherwise)
+  - **Retrigger endpoint**: `POST /retrigger` runs `pipeline.run_trigger_continuation` from the current state when `last_trigger` exists and the last message is a narration (not an event continuation)
+  - **UI**: Right arrow on latest swipe triggers new generation (`submitNewSwipe()` → `POST /swipe/new`); left/right arrows navigate between swipes; counter shows `active+1 / swipe_count`; "Retrigger Event" button (♻) appears on narration swipes when trigger context is available
+  - Removed separate retry button from template — swipe right arrow replaces it
+  - `snapshot_id` made properly nullable (`Option<u64>` in model, `INTEGER` nullable in DB) instead of sentinel `0`
+  - New ADR-017 documenting the swipe architecture; ADR-013 updated to show it was superseded
+  - All 871 tests pass; clippy clean
+
 ## 2026-05-21
 
 ### Changed

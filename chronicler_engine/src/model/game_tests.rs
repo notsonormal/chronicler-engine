@@ -9,17 +9,16 @@ fn test_generate_game_name_first() {
 
 #[test]
 fn test_generate_game_name_increments() {
-    let existing = vec!["Redmist_2026-05-21_1".to_string()];
+    let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+    let existing = vec![format!("Redmist_{today}_1")];
     let name = generate_game_name("Redmist", &existing);
-    assert_eq!(name, "Redmist_2026-05-21_2");
+    assert_eq!(name, format!("Redmist_{today}_2"));
 }
 
 #[test]
 fn test_generate_game_name_max_plus_one() {
-    let existing = vec![
-        "Redmist_2026-05-21_1".to_string(),
-        "Redmist_2026-05-21_3".to_string(),
-    ];
+    let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+    let existing = vec![format!("Redmist_{today}_1"), format!("Redmist_{today}_3")];
     let name = generate_game_name("Redmist", &existing);
-    assert_eq!(name, "Redmist_2026-05-21_4");
+    assert_eq!(name, format!("Redmist_{today}_4"));
 }

@@ -300,39 +300,18 @@ async fn test_delete_removes_message() {
 }
 
 #[tokio::test]
-async fn test_retry_button_on_last_ai_message() {
+async fn test_no_retry_button_on_last_ai_message() {
     with_test_page(CONFIG_PATH, TEST_WORLD, |page, _port| async move {
-        // Send an action to create input + narration so retry appears on last AI message
         let initial_entries = element_count(&page, "#story-log .log-entry").await;
         send_action(&page, "look").await;
         wait_for_status_ready(&page).await;
         wait_for_element_children(&page, "#story-log .log-entry", initial_entries as u32 + 2).await;
 
+        // Retry button removed — swipe right arrow handles new swipe generation
         let retry_count = element_count(&page, ".retry-btn").await;
         assert_eq!(
-            retry_count, 1,
-            "Should have exactly one retry button on last AI message"
-        );
-
-        let earlier_entries_have_retry: i32 = page
-            .evaluate::<(), i32>(
-                r#"(() => {
-                    const entries = document.querySelectorAll('.log-entry');
-                    if (entries.length <= 1) return 0;
-                    let count = 0;
-                    for (let i = 0; i < entries.length - 1; i++) {
-                        if (entries[i].querySelector('.retry-btn')) count++;
-                    }
-                    return count;
-                })()"#,
-                None,
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(
-            earlier_entries_have_retry, 0,
-            "Earlier entries should not have retry buttons"
+            retry_count, 0,
+            "Should not have retry button — swipe controls replace it"
         );
     })
     .await;

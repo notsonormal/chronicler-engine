@@ -6,9 +6,11 @@ use crate::application::action_pipeline::pipeline::{
 use crate::application::context::GameServiceContext;
 use crate::error::EngineError;
 use crate::model::quantifier::{QuantifierConfidence, QuantifierParseResult, QuantifierResult};
+use crate::model::state::StoredTriggerContext;
 use crate::model::state::{GameState, GenerationPhase, GenerationStatus, LogType};
 use crate::narrative::llm::backend::LlmCallResult;
 use crate::narrative::prompt::PromptContext;
+use crate::storage::snapshot_storage::SnapshotStorage;
 use crate::test_support::fixtures::{TestMap, TestNpc, TestPlayer, TestWorld};
 use crate::test_support::make_test_context;
 
@@ -237,5 +239,127 @@ fn test_pipeline_with_custom_quantifier_result() {
         final_state.scene.npcs_in_area.len(),
         1,
         "Custom quantifier should place npc1 in area"
+    );
+}
+
+struct FailingSaveStorage {
+    inner: Arc<dyn SnapshotStorage>,
+}
+
+impl SnapshotStorage for FailingSaveStorage {
+    fn set_game_id(&self, game_id: u64) {
+        self.inner.set_game_id(game_id);
+    }
+    fn current_game_id(&self) -> u64 {
+        self.inner.current_game_id()
+    }
+    fn save(
+        &self,
+        _snapshot: &crate::model::state_snapshot::GameStateSnapshot,
+    ) -> Result<u64, crate::error::EngineError> {
+        Err(crate::error::EngineError::Internal(
+            crate::error::internal_error("simulated save failure"),
+        ))
+    }
+    fn load_latest(
+        &self,
+    ) -> Result<Option<crate::model::state_snapshot::GameStateSnapshot>, crate::error::EngineError>
+    {
+        self.inner.load_latest()
+    }
+    fn load_by_id(
+        &self,
+        id: u64,
+    ) -> Result<Option<crate::model::state_snapshot::GameStateSnapshot>, crate::error::EngineError>
+    {
+        self.inner.load_by_id(id)
+    }
+    fn list_games(&self) -> Result<Vec<crate::model::game::Game>, crate::error::EngineError> {
+        self.inner.list_games()
+    }
+    fn create_game(&self, world_name: &str, name: &str) -> Result<u64, crate::error::EngineError> {
+        self.inner.create_game(world_name, name)
+    }
+    fn delete_game(&self, id: u64) -> Result<(), crate::error::EngineError> {
+        self.inner.delete_game(id)
+    }
+    fn get_game(
+        &self,
+        id: u64,
+    ) -> Result<Option<crate::model::game::Game>, crate::error::EngineError> {
+        self.inner.get_game(id)
+    }
+}
+
+#[test]
+fn test_run_trigger_continuation_cancels_at_start() {
+    let state = make_test_state();
+    let ctx = make_ctx(state.clone());
+    ctx.cancel_token.cancel();
+
+    let backend = MockPipelineBackend::default();
+    let pipeline = ActionPipeline::new(&backend, &ctx);
+
+    let trigger = StoredTriggerContext {
+        npc_id: "npc1".to_string(),
+        trigger_idx: 0,
+        trigger_name: "Test".to_string(),
+        trigger_repeat: false,
+        trigger_narration_prompt: "Hello".to_string(),
+        system_prompt: "sys".to_string(),
+        user_prompt: "user".to_string(),
+        max_tokens: None,
+    };
+
+    let outcome = pipeline.run_trigger_continuation(state, trigger, "look");
+
+    assert!(
+        matches!(outcome, ActionOutcome::Cancelled),
+        "Expected cancellation at start of trigger continuation, got {outcome:?}"
+    );
+    let final_state = ctx.load_state();
+    assert_eq!(
+        final_state.narrative.input_buffer.status,
+        GenerationStatus::Idle
+    );
+    assert_eq!(
+        final_state.narrative.input_buffer.phase,
+        GenerationPhase::default()
+    );
+}
+
+#[test]
+fn test_trigger_continuation_save_post_trigger_error() {
+    let state = make_test_state();
+    let base_ctx = make_ctx(state.clone());
+
+    let failing = Arc::new(FailingSaveStorage {
+        inner: Arc::clone(&base_ctx.snapshot_storage),
+    });
+
+    let ctx = GameServiceContext {
+        snapshot_storage: failing,
+        ..base_ctx.clone()
+    };
+
+    let backend = MockPipelineBackend::default();
+    let pipeline = ActionPipeline::new(&backend, &ctx);
+
+    let trigger = StoredTriggerContext {
+        npc_id: "npc1".to_string(),
+        trigger_idx: 0,
+        trigger_name: "Test".to_string(),
+        trigger_repeat: false,
+        trigger_narration_prompt: "Hello".to_string(),
+        system_prompt: "sys".to_string(),
+        user_prompt: "user".to_string(),
+        max_tokens: None,
+    };
+
+    let outcome = pipeline.run_trigger_continuation(state, trigger, "look");
+
+    assert!(
+        matches!(outcome, ActionOutcome::Error { ref message } if message.contains("Failed to save post-trigger retry snapshot")),
+        "Expected save error for post-trigger snapshot, got {outcome:?}"
     );
 }

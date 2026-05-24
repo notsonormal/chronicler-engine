@@ -119,6 +119,9 @@ pub fn save_message_and_snapshot(
     if let Some(msg) = state.narrative.history.last_mut() {
         if msg.id == 0 {
             msg.snapshot_id = Some(snapshot_id);
+            if let Some(swipe) = msg.swipes.first_mut() {
+                swipe.snapshot_id = Some(snapshot_id);
+            }
             ctx.message_storage.insert_message(msg)?;
         }
     }

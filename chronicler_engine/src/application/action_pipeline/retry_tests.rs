@@ -11,7 +11,7 @@ use crate::application::context::GameServiceContext;
 use crate::application::game_service::DefaultGameService;
 use crate::error::{EngineError, internal_error};
 use crate::model::message::Message;
-use crate::model::state::{GameState, GenerationStatus, LogType};
+use crate::model::state::{GameState, GenerationPhase, GenerationStatus, LogType};
 use crate::model::state_snapshot::GameStateSnapshot;
 use crate::narrative::llm::MockBackend;
 use crate::narrative::llm::backend::LlmCallResult;
@@ -102,6 +102,7 @@ struct FailingMessageStorage {
     fallback: Arc<dyn MessageStorage>,
     fail_load_messages: std::sync::atomic::AtomicBool,
     fail_delete_message: std::sync::atomic::AtomicBool,
+    fail_soft_delete_message: std::sync::atomic::AtomicBool,
 }
 
 impl FailingMessageStorage {
@@ -110,6 +111,7 @@ impl FailingMessageStorage {
             fallback,
             fail_load_messages: std::sync::atomic::AtomicBool::new(false),
             fail_delete_message: std::sync::atomic::AtomicBool::new(false),
+            fail_soft_delete_message: std::sync::atomic::AtomicBool::new(false),
         }
     }
 }
@@ -153,6 +155,54 @@ impl MessageStorage for FailingMessageStorage {
             )));
         }
         self.fallback.load_messages()
+    }
+
+    fn soft_delete_message(&self, id: u64) -> Result<(), EngineError> {
+        if self
+            .fail_soft_delete_message
+            .load(std::sync::atomic::Ordering::SeqCst)
+        {
+            return Err(EngineError::Internal(internal_error(
+                "simulated soft_delete_message failure",
+            )));
+        }
+        self.fallback.soft_delete_message(id)
+    }
+
+    fn restore_soft_deleted(&self, ids: &[u64]) -> Result<(), EngineError> {
+        self.fallback.restore_soft_deleted(ids)
+    }
+
+    fn purge_soft_deleted(&self, ids: &[u64]) -> Result<(), EngineError> {
+        self.fallback.purge_soft_deleted(ids)
+    }
+
+    fn insert_swipe(
+        &self,
+        message_id: u64,
+        swipe: &crate::model::message::Swipe,
+        index: usize,
+    ) -> Result<(), EngineError> {
+        self.fallback.insert_swipe(message_id, swipe, index)
+    }
+
+    fn update_active_swipe(&self, message_id: u64, index: usize) -> Result<(), EngineError> {
+        self.fallback.update_active_swipe(message_id, index)
+    }
+
+    fn shift_swipe_indices(&self, message_id: u64, offset: usize) -> Result<(), EngineError> {
+        self.fallback.shift_swipe_indices(message_id, offset)
+    }
+
+    fn migrate_swipes(
+        &self,
+        message_id: u64,
+        pending_swipes: &[crate::model::message::Swipe],
+        new_active_index: usize,
+        to_delete: &[u64],
+    ) -> Result<(), EngineError> {
+        self.fallback
+            .migrate_swipes(message_id, pending_swipes, new_active_index, to_delete)
     }
 }
 
@@ -327,7 +377,7 @@ fn test_retry_event_storage_error_on_pre_event() {
     let service = make_service();
     let latest = ctx.load_state();
 
-    retry_event_continuation(&service, &ctx, latest);
+    let _ = retry_event_continuation(&service, &ctx, latest);
 
     let state = base_ctx.load_state();
     assert!(
@@ -389,10 +439,9 @@ fn test_retry_event_continuation_cancels_before_llm() {
         let _ = ctx.message_storage.insert_message(last);
     }
 
-    // Cancel the token before retry runs
     ctx.cancel_token.cancel();
 
-    retry_event_continuation(&service, &ctx, pre_event_state);
+    let _ = retry_event_continuation(&service, &ctx, pre_event_state);
 
     let state = ctx.load_state();
     assert!(
@@ -607,7 +656,7 @@ fn test_retry_main_narration_happy_path() {
 
     let service = make_service();
     let state = ctx.load_state();
-    retry_main_narration(&service, &ctx, state, "test input".to_string());
+    let _ = retry_main_narration(&service, &ctx, state, "test input".to_string());
 }
 
 #[test]
@@ -857,7 +906,7 @@ fn test_retry_aborts_when_message_delete_fails() {
         &base_ctx.message_storage,
     )));
     failing_msg_storage
-        .fail_delete_message
+        .fail_soft_delete_message
         .store(true, std::sync::atomic::Ordering::SeqCst);
 
     let ctx = GameServiceContext {
@@ -873,9 +922,9 @@ fn test_retry_aborts_when_message_delete_fails() {
     assert!(
         matches!(
             state.narrative.input_buffer.status,
-            GenerationStatus::Error(ref msg) if msg.contains("could not delete message")
+            GenerationStatus::Error(ref msg) if msg.contains("could not soft-delete message")
         ),
-        "Should set error status when message deletion fails, got {:?}",
+        "Should set error status when message soft-deletion fails, got {:?}",
         state.narrative.input_buffer.status
     );
 
@@ -885,5 +934,110 @@ fn test_retry_aborts_when_message_delete_fails() {
         msgs.len(),
         2,
         "Messages should not be truncated when deletion fails"
+    );
+}
+
+#[test]
+fn test_retry_migrates_pending_swipes() {
+    let state = make_test_state();
+    let ctx = make_test_context_with_sqlite(state).unwrap();
+    let service = make_service();
+
+    let _input_id = add_input_and_save(&ctx, "test input");
+    let _pre_main_id = save_pre_main(&ctx);
+    let _narration_id = add_narration_and_save(&ctx, "Narration text");
+
+    // Add extra swipes to the narration so they become "pending swipes"
+    let msgs = ctx.message_storage.load_messages().unwrap();
+    let narration_msg = msgs
+        .iter()
+        .find(|m| m.log_type == LogType::Narration)
+        .unwrap();
+    let extra_swipe = crate::model::message::Swipe {
+        text: "Alt narration".to_string(),
+        snapshot_id: Some(_pre_main_id),
+        location_header: None,
+        event_header: None,
+    };
+    ctx.message_storage
+        .insert_swipe(narration_msg.id, &extra_swipe, 1)
+        .unwrap();
+
+    retry_last_response_impl(&service, ctx.clone());
+
+    // After retry, the new narration should have the old swipes migrated
+    let msgs = ctx.message_storage.load_messages().unwrap();
+    let new_narration = msgs
+        .iter()
+        .find(|m| m.log_type == LogType::Narration)
+        .expect("Should have a narration after retry");
+    assert!(
+        new_narration.swipes.len() >= 2,
+        "Retry should migrate pending swipes to new narration, got {} swipes",
+        new_narration.swipes.len()
+    );
+}
+
+#[test]
+fn test_retrigger_event_impl_cancels_cleanly() {
+    let state = make_test_state();
+    let ctx = make_test_context_with_sqlite(state).unwrap();
+    let service = make_service();
+
+    let _input_id = add_input_and_save(&ctx, "test input");
+    let _pre_main_id = save_pre_main(&ctx);
+
+    // Set up pre-event snapshot with trigger context
+    let mut pre_event_state = ctx.load_state();
+    pre_event_state.narrative.last_trigger = Some(crate::model::state::StoredTriggerContext {
+        npc_id: "npc1".to_string(),
+        trigger_idx: 0,
+        trigger_name: "Test".to_string(),
+        trigger_repeat: false,
+        trigger_narration_prompt: "Test prompt".to_string(),
+        system_prompt: "sys".to_string(),
+        user_prompt: "user".to_string(),
+        max_tokens: None,
+    });
+    pre_event_state.add_log("Main narration".to_string(), None, LogType::Narration);
+    let snapshot =
+        crate::model::state_snapshot::GameStateSnapshot::from_game_state(&pre_event_state);
+    let pre_event_id = ctx.snapshot_storage.save(&snapshot).unwrap();
+    if let Some(last) = pre_event_state.narrative.history.last_mut() {
+        last.snapshot_id = Some(pre_event_id);
+        let _ = ctx.message_storage.insert_message(last);
+    }
+
+    let mut final_state = pre_event_state;
+    final_state.add_log("Event narration".to_string(), None, LogType::Narration);
+    final_state
+        .narrative
+        .history
+        .last_mut()
+        .unwrap()
+        .event_header = Some("Event".to_string());
+    let final_snapshot =
+        crate::model::state_snapshot::GameStateSnapshot::from_game_state(&final_state);
+    let _ = ctx.snapshot_storage.save(&final_snapshot);
+    if let Some(last) = final_state.narrative.history.last_mut() {
+        let _ = ctx.message_storage.insert_message(last);
+    }
+
+    ctx.cancel_token.cancel();
+
+    // Directly call retrigger_event_impl to hit the Cancelled branch
+    crate::application::action_pipeline::retrigger_event_impl(&service, &ctx);
+
+    let state = ctx.load_state();
+    assert_eq!(
+        state.narrative.input_buffer.status,
+        GenerationStatus::Idle,
+        "Cancelled retrigger should reset status to Idle, got {:?}",
+        state.narrative.input_buffer.status
+    );
+    assert_eq!(
+        state.narrative.input_buffer.phase,
+        GenerationPhase::default(),
+        "Cancelled retrigger should reset phase to default"
     );
 }

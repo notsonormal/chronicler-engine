@@ -1,6 +1,6 @@
 # Specification: Game Flow
 
-> **Related Decisions**: [ADR-006](../adr/adr-006-quantifier-systems.md), [ADR-008](../adr/adr-008-sqlite-snapshot-persistence.md), [ADR-010](../adr/adr-010-concurrency-generation-gate.md), [ADR-013](../adr/adr-013-message-domain-model.md)
+> **Related Decisions**: [ADR-006](../adr/adr-006-quantifier-systems.md), [ADR-008](../adr/adr-008-sqlite-snapshot-persistence.md), [ADR-010](../adr/adr-010-concurrency-generation-gate.md), [ADR-013](../adr/adr-013-message-domain-model.md), [ADR-017](../adr/adr-017-message-swipes.md)
 
 ## Overview
 
@@ -138,21 +138,24 @@ During LLM processing, the UI displays granular status phases instead of a singl
 
 ### Retry Flow
 
-Retrying a response (via the UI retry button) branches based on whether the last AI-generated content was a **main narration** or a **trigger event continuation**:
+Retrying a response (via the right swipe arrow on the last message) branches based on whether the last AI-generated content was a **main narration** or a **trigger event continuation**:
 
 ```mermaid
 flowchart TD
-    Start(["User clicks Retry"])
+    Start(["User clicks right arrow (latest swipe)"])
     Check{Last response was event?}
     Main["**Main Narration Retry**"]
     Event["**Event Continuation Retry**"]
     FindMain["Find last Input message<br>load its `snapshot_id`"]
     FindEvent["Find last non-event message<br>load its `snapshot_id`"]
-    Pop["Delete messages after anchor"]
+    SoftDelete["Soft-delete messages after anchor"]
+    Preserve["Preserve old target as a swipe"]
     Apply["Apply snapshot to structural state"]
     ReGenMain["Re-run Phase 4→5→5.5<br>(new quantifier + triggers)"]
     ReGenEvent["Re-run Phase 5 only"]
     Phase55["**PHASE 5.5: POST-EVENT QUANTIFIER**<br>*(Phase: Quantifying)*<br>1. Post-continuation Quantifier analyzes<br>2. Detect NPCs introduced by retried text<br>3. Update scene.npcs_in_area"]
+    Migrate["Migrate old swipes to new message"]
+    Purge["Purge soft-deleted messages"]
     Save["Save final state"]
 
     Start --> Check
@@ -160,20 +163,24 @@ flowchart TD
     Check -->|Yes| Event
     Main --> FindMain
     Event --> FindEvent
-    FindMain --> Pop
-    FindEvent --> Pop
-    Pop --> Apply
+    FindMain --> SoftDelete
+    FindEvent --> SoftDelete
+    SoftDelete --> Preserve
+    Preserve --> Apply
     Apply --> ReGenMain
     Apply --> ReGenEvent
-    ReGenMain --> Save
-    ReGenEvent --> Phase55
-    Phase55 --> Save
+    ReGenMain --> Migrate
+    ReGenEvent --> Migrate
+    Migrate --> Purge
+    Purge --> Save
 ```
 
 **Key behaviors** (enforced by `tests/flow_mock/`):
-- **Main retry** finds the last `Input` message, loads the snapshot stored in its `snapshot_id`, deletes all messages after that input, and re-runs the full pipeline: quantifier, movement, triggers, and post-event quantifier (`test_retry_main_narration_applies_new_quantifier_result`, `test_main_retry_reevaluates_triggers`).
-- **Event retry** finds the last non-event message (the anchor before any event messages), loads its `snapshot_id` snapshot, deletes event messages, and regenerates only the continuation text using stored trigger prompts (`StoredTriggerContext`) (`test_retry_event_continuation_preserves_quantifier_result`).
-- Snapshots are standalone — no `base_snapshot_id` chain. Each message carries the `snapshot_id` of the state captured after it was created.
+- **Main retry** finds the last `Input` message, loads the snapshot stored in its `snapshot_id`, soft-deletes all messages after that input, preserves the old narration as a swipe, and re-runs the full pipeline: quantifier, movement, triggers, and post-event quantifier. On success, old swipes migrate to the new message and soft-deleted messages are purged. On failure, soft-deleted messages are restored (`test_retry_main_narration_applies_new_quantifier_result`, `test_main_retry_reevaluates_triggers`).
+- **Event retry** finds the last non-event message (the anchor before any event messages), loads its `snapshot_id` snapshot, soft-deletes event messages, preserves the old event as a swipe, and regenerates only the continuation text using stored trigger prompts (`StoredTriggerContext`) (`test_retry_event_continuation_preserves_quantifier_result`).
+- **Swipe navigation** (left/right arrows on the last message) switches between swipes. Restoring a swipe loads its `snapshot_id` and rewinds world state to that point. Only the last message is swipeable (`test_switch_swipe_changes_active_swipe`).
+- **Retrigger Event** appears on a narration swipe when its restored snapshot contains `last_trigger` and there are no event messages after it. Clicking it runs `run_trigger_continuation()` from that snapshot state without rerunning the main narration.
+- Snapshots are standalone — no `base_snapshot_id` chain. Each message carries the `snapshot_id` of the state captured after it was created. Each `Swipe` also stores its own `snapshot_id` so switching swipes restores the exact state that produced that text.
 - If the anchor message has no `snapshot_id` or the snapshot is missing, retry fails gracefully (`test_retry_no_pre_main_snapshot`).
 
 ### Polling-based Updates

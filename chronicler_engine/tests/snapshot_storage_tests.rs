@@ -200,16 +200,13 @@ fn test_delete_game_cascades() {
 
     // Save a snapshot and message for this game
     storage.save(&create_snapshot()).unwrap();
-    let mut msg = Message {
-        id: 0,
-        sender: Some("Player".to_string()),
-        text: "hello".to_string(),
-        log_type: chronicler_engine::model::state::LogType::Input,
-        timestamp: chrono::Utc::now(),
-        location_header: None,
-        event_header: None,
-        snapshot_id: None,
-    };
+    let mut msg = Message::new(
+        Some("Player".to_string()),
+        "hello",
+        chronicler_engine::model::state::LogType::Input,
+        None,
+        None,
+    );
     storage.insert_message(&mut msg).unwrap();
 
     storage.delete_game(game_id).expect("delete should succeed");
@@ -277,16 +274,13 @@ fn test_current_game_id() {
 fn test_insert_and_load_messages() {
     let storage = create_storage();
 
-    let mut msg = Message {
-        id: 0,
-        sender: Some("Player".to_string()),
-        text: "look around".to_string(),
-        log_type: chronicler_engine::model::state::LogType::Input,
-        timestamp: chrono::Utc::now(),
-        location_header: None,
-        event_header: None,
-        snapshot_id: None,
-    };
+    let mut msg = Message::new(
+        Some("Player".to_string()),
+        "look around",
+        chronicler_engine::model::state::LogType::Input,
+        None,
+        None,
+    );
 
     storage.insert_message(&mut msg).unwrap();
     assert!(msg.id > 0, "insert_message should set the message id");
@@ -300,16 +294,13 @@ fn test_insert_and_load_messages() {
 fn test_update_message() {
     let storage = create_storage();
 
-    let mut msg = Message {
-        id: 0,
-        sender: Some("Player".to_string()),
-        text: "original".to_string(),
-        log_type: chronicler_engine::model::state::LogType::Input,
-        timestamp: chrono::Utc::now(),
-        location_header: None,
-        event_header: None,
-        snapshot_id: None,
-    };
+    let mut msg = Message::new(
+        Some("Player".to_string()),
+        "original",
+        chronicler_engine::model::state::LogType::Input,
+        None,
+        None,
+    );
     storage.insert_message(&mut msg).unwrap();
 
     storage.update_message(msg.id, "edited").unwrap();
@@ -322,16 +313,13 @@ fn test_update_message() {
 fn test_delete_message() {
     let storage = create_storage();
 
-    let mut msg = Message {
-        id: 0,
-        sender: Some("Player".to_string()),
-        text: "to delete".to_string(),
-        log_type: chronicler_engine::model::state::LogType::Input,
-        timestamp: chrono::Utc::now(),
-        location_header: None,
-        event_header: None,
-        snapshot_id: None,
-    };
+    let mut msg = Message::new(
+        Some("Player".to_string()),
+        "to delete",
+        chronicler_engine::model::state::LogType::Input,
+        None,
+        None,
+    );
     storage.insert_message(&mut msg).unwrap();
     storage.delete_message(msg.id).unwrap();
 

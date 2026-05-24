@@ -227,6 +227,40 @@ fn test_app_state_lock_state_poisoned() {
         fn load_messages(&self) -> Result<Vec<crate::model::message::Message>, EngineError> {
             Ok(vec![])
         }
+
+        fn soft_delete_message(&self, _id: u64) -> Result<(), EngineError> {
+            Ok(())
+        }
+        fn restore_soft_deleted(&self, _ids: &[u64]) -> Result<(), EngineError> {
+            Ok(())
+        }
+        fn purge_soft_deleted(&self, _ids: &[u64]) -> Result<(), EngineError> {
+            Ok(())
+        }
+        fn insert_swipe(
+            &self,
+            _message_id: u64,
+            _swipe: &crate::model::message::Swipe,
+            _index: usize,
+        ) -> Result<(), EngineError> {
+            Ok(())
+        }
+        fn update_active_swipe(&self, _message_id: u64, _index: usize) -> Result<(), EngineError> {
+            Ok(())
+        }
+        fn shift_swipe_indices(&self, _message_id: u64, _offset: usize) -> Result<(), EngineError> {
+            Ok(())
+        }
+
+        fn migrate_swipes(
+            &self,
+            _message_id: u64,
+            _pending_swipes: &[crate::model::message::Swipe],
+            _new_active_index: usize,
+            _to_delete: &[u64],
+        ) -> Result<(), EngineError> {
+            Ok(())
+        }
     }
 
     let manifest = WorldManifest {

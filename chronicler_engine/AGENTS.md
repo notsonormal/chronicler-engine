@@ -106,6 +106,18 @@ This project relies on a comprehensive suite of integration tests as the ultimat
 - **No Regression**: Every change must pass `python build.py` before commit.  
   *During development*, iterate with the specific tool (e.g. `cargo clippy` for lint fixes, `cargo nextest run <pattern>` for test fixes). Run `build.py` only for final verification.
 
+## PLANNING REQUIREMENTS
+
+When creating or updating a plan for chronicler_engine work (via any planning skill), the plan **must** include these steps explicitly:
+
+1. **Architecture doc update** — Update `docs/architecture/system.md` (and relevant `docs/system/*.md`) **before** writing code. The code must reflect the spec, not the other way around.
+2. **Test-first** — Write a failing test or update existing tests **before** implementing the fix/feature. Every task must have a verification step that includes running tests.
+3. **Guardrail compliance** — Verify the change won't violate existing guardrails (clippy lints, arch-lint rules, max file size limits). Run `cargo clippy` and `cargo nextest run <relevant_test>` during development, not just at the end.
+4. **Build validation** — Final validation with `python build.py` must pass before the task is considered complete.
+5. **Plan archive** — Move completed plans to `docs/plans/archived/` and update `CHANGELOG.md`.
+
+**Why:** Plans that skip these steps result in rework — architecture docs out of sync, missing tests, clippy failures discovered late, and undocumented changes.
+
 ### Example: Semantic vs. Traditional
 **❌ BAD (Traditional)**
 ```rust

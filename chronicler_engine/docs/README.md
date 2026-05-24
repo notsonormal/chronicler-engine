@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-21 22:30 UTC*
+*Index last generated: 2026-05-24 19:07 UTC*
 
 ### Root files
 
@@ -30,6 +30,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [ADR-014: Action Pipeline Architecture](./adr/adr-014-action-pipeline.md)
 - [ADR-015: Prompt Presets System](./adr/adr-015-prompt-presets.md)
 - [ADR-016: Multi-Game Support](./adr/adr-016-multi-game-support.md)
+- [ADR-017: Message Swipes](./adr/adr-017-message-swipes.md)
 
 ### `docs/architecture/`
 
@@ -62,6 +63,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Plan: Multi-Game Support for Chronicler Engine](./plans/archived/big-barda-nightwing-star-lord.md)
 - [Implementation Plan: Multi-Game Support Review Fixes](./plans/archived/crystal-nightwing-maria-hill.md)
 - [Plan: Fix Game UI Delay for LLM Responses](./plans/archived/jericho-vixen-lockjaw.md)
+- [Plan: Message Swipes for Chronicler Engine](./plans/archived/starfire-tempest-orphan.md)
 - [Plan: Immediate Message Persistence — Direct Implementation](./plans/archived/storm-x-23-domino.md)
 
 ### `docs/reference/`

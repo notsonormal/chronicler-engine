@@ -40,7 +40,11 @@ Horizontal split into story context and visual context:
       - Edit button (✎) on all entries
       - Delete button (🗑) on last entry only (hidden when only one entry exists)
       - Check button (✓) on input entries (spellcheck)
-      - Retry button (↻) on last AI message only (hidden when only one entry exists)
+      - Retrigger button (♻) on last narration when trigger context is available
+    - Swipe controls on the last message when swipe count > 1:
+      - Left arrow (◀) — previous swipe (hidden on first swipe)
+      - Counter — `active + 1 / swipe_count` (e.g., "2 / 3")
+      - Right arrow (▶) — next swipe if not on latest; triggers new generation if on latest swipe
 - **Visual Sidebar (20%)**:
   - Location Image (top): Full-width location image, max-height 200px, object-fit contain
   - NPC Portraits (bottom): Horizontal scrollable row, 80×80px square images, object-fit cover
@@ -102,9 +106,13 @@ The dashboard uses HTMX polling for live updates:
 pub struct LogEntry {
     pub id: u64,                           // Unique auto-incrementing ID
     pub sender: Option<String>,
-    pub text: String,                       // Raw text (markdown source)
+    pub text: String,                       // Active swipe text (markdown source)
     pub log_type: LogType,
     pub timestamp: chrono::DateTime<chrono::Utc>,
+    pub swipe_count: usize,                 // Number of swipes for this message
+    pub active_swipe_index: usize,          // Currently displayed swipe index
+    pub location_header: Option<String>,    // Active swipe location header
+    pub event_header: Option<String>,       // Active swipe event header
 }
 ```
 
@@ -115,8 +123,11 @@ pub struct LogEntryView {
     pub text: SafeHtml,                     // Rendered HTML (markdown converted)
     pub raw_text: String,                   // Original markdown (for editing)
     pub log_type: String,
-    pub is_location: bool,
-    pub is_event: bool,
+    pub swipe_count: usize,
+    pub active_swipe_index: usize,
+    pub prev_swipe_index: Option<usize>,
+    pub next_swipe_index: Option<usize>,
+    pub show_retrigger: bool,
 }
 ```
 
@@ -135,12 +146,19 @@ HTML template renders with `data-raw-text` attribute for inline editing:
             {% if input_entry %}
             <button class="action-btn check-btn" title="Check">✓</button>
             {% endif %}
-            {% if last_ai_message %}
-            <button class="action-btn retry-btn" title="Retry">↻</button>
+            {% if show_retrigger %}
+            <button class="action-btn retrigger-btn" title="Retrigger Event">♻</button>
             {% endif %}
         </div>
     </div>
     <span class="text">{{ entry.text }}</span>
+    {% if loop.last && swipe_count > 1 %}
+    <div class="swipe-controls">
+        <button class="action-btn swipe-btn" disabled>◀</button>
+        <span class="swipe-counter">1 / 3</span>
+        <button class="action-btn swipe-btn" onclick="submitNewSwipe()">▶</button>
+    </div>
+    {% endif %}
 </div>
 ```
 
@@ -193,7 +211,10 @@ Multiple independent games per world, each with isolated snapshots and messages:
 - `.log-entry .sender` - Bold name above message content
 - `.log-entry .text` - Message content
 - `.log-entry .edit-btn` - Edit pencil icon, always visible (opacity: 1)
-- `.log-entry .retry-btn` - Retry refresh icon, last AI message only
+- `.log-entry .retrigger-btn` - Retrigger event icon, last narration when trigger available
+- `.swipe-controls` - Container for swipe navigation arrows and counter
+- `.swipe-btn` - Swipe arrow buttons (left/right)
+- `.swipe-counter` - Swipe index counter (e.g., "1 / 3")
 - `.log-entry .delete-btn` - Delete trash icon, always visible
 - `.log-entry .check-btn` - Check icon, input entries only
 - `.message-header` - Flex container for message info + actions

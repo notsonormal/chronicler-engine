@@ -31,7 +31,11 @@ impl MessageHistory {
 
     pub fn edit(&mut self, id: u64, new_text: String) -> crate::error::Result<()> {
         if let Some(msg) = self.messages.iter_mut().find(|m| m.id == id) {
-            msg.text = new_text;
+            msg.text = new_text.clone();
+            let idx = msg.active_swipe_index;
+            if let Some(swipe) = msg.swipes.get_mut(idx) {
+                swipe.text = new_text;
+            }
             Ok(())
         } else {
             Err(crate::error::EngineError::Internal(
@@ -61,6 +65,10 @@ impl MessageHistory {
 
     pub fn last_mut(&mut self) -> Option<&mut Message> {
         self.messages.last_mut()
+    }
+
+    pub fn is_last(&self, id: u64) -> bool {
+        self.messages.last().map(|m| m.id == id).unwrap_or(false)
     }
 
     pub fn is_empty(&self) -> bool {
@@ -136,6 +144,8 @@ impl MessageHistory {
                 timestamp: msg.timestamp,
                 location_header: msg.location_header.clone(),
                 event_header: msg.event_header.clone(),
+                swipe_count: msg.swipe_count(),
+                active_swipe_index: msg.active_swipe_index,
             })
             .collect()
     }

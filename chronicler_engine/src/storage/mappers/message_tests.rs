@@ -2,7 +2,9 @@ use chrono::Utc;
 
 use crate::model::message::Message;
 use crate::model::state::LogType;
-use crate::storage::mappers::message::message_to_db;
+use crate::storage::mappers::message::{
+    db_message_to_model, model_message_to_db, model_swipes_to_db,
+};
 
 #[test]
 fn test_message_roundtrip() {
@@ -15,9 +17,18 @@ fn test_message_roundtrip() {
         location_header: Some("Room A".to_string()),
         event_header: None,
         snapshot_id: Some(3),
+        active_swipe_index: 0,
+        swipes: vec![crate::model::message::Swipe {
+            text: "Hello world".to_string(),
+            snapshot_id: Some(3),
+            location_header: Some("Room A".to_string()),
+            event_header: None,
+        }],
+        is_deleted: false,
     };
-    let db = message_to_db(&original, 1).unwrap();
-    let back = Message::try_from(&db).unwrap();
+    let db = model_message_to_db(&original, 1).unwrap();
+    let swipes = model_swipes_to_db(&original);
+    let back = db_message_to_model(&db, &swipes).unwrap();
 
     assert_eq!(original.id, back.id);
     assert_eq!(original.sender, back.sender);
@@ -41,9 +52,18 @@ fn test_message_unpersisted_roundtrip() {
         location_header: None,
         event_header: Some("Event".to_string()),
         snapshot_id: None,
+        active_swipe_index: 0,
+        swipes: vec![crate::model::message::Swipe {
+            text: "Input text".to_string(),
+            snapshot_id: None,
+            location_header: None,
+            event_header: Some("Event".to_string()),
+        }],
+        is_deleted: false,
     };
-    let db = message_to_db(&original, 2).unwrap();
-    let back = Message::try_from(&db).unwrap();
+    let db = model_message_to_db(&original, 2).unwrap();
+    let swipes = model_swipes_to_db(&original);
+    let back = db_message_to_model(&db, &swipes).unwrap();
 
     assert_eq!(back.id, 0);
     assert!(back.sender.is_none());
@@ -62,8 +82,17 @@ fn test_message_log_type_json_serialization() {
         location_header: None,
         event_header: None,
         snapshot_id: None,
+        active_swipe_index: 0,
+        swipes: vec![crate::model::message::Swipe {
+            text: "test".to_string(),
+            snapshot_id: None,
+            location_header: None,
+            event_header: None,
+        }],
+        is_deleted: false,
     };
-    let db = message_to_db(&msg, 1).unwrap();
+    let db = model_message_to_db(&msg, 1).unwrap();
+    let _swipes = model_swipes_to_db(&msg);
 
     assert_eq!(db.log_type_json, "\"Dialogue\"");
 }

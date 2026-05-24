@@ -30,6 +30,10 @@ pub struct LogEntry {
     pub location_header: Option<String>,
     #[serde(default)]
     pub event_header: Option<String>,
+    #[serde(default)]
+    pub swipe_count: usize,
+    #[serde(default)]
+    pub active_swipe_index: usize,
 }
 
 impl Default for LogEntry {
@@ -42,6 +46,8 @@ impl Default for LogEntry {
             timestamp: Utc::now(),
             location_header: None,
             event_header: None,
+            swipe_count: 1,
+            active_swipe_index: 0,
         }
     }
 }

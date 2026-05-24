@@ -16,6 +16,8 @@ pub trait GameService: Send + Sync {
     fn execute_action(&self, ctx: GameServiceContext, input: String, player_name: String);
 
     fn retry_last_response(&self, ctx: GameServiceContext);
+
+    fn retrigger_event(&self, ctx: GameServiceContext);
 }
 
 pub struct DefaultGameService {
@@ -148,5 +150,9 @@ impl GameService for DefaultGameService {
 
     fn retry_last_response(&self, ctx: GameServiceContext) {
         crate::application::action_pipeline::retry_last_response_impl(self, ctx);
+    }
+
+    fn retrigger_event(&self, ctx: GameServiceContext) {
+        crate::application::action_pipeline::retrigger_event_impl(self, &ctx);
     }
 }

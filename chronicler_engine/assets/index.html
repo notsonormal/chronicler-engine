@@ -226,13 +226,42 @@
             originalText = null;
         }
         
-        function submitRetry() {
+        function submitNewSwipe() {
             updateToThinking();
-            fetch('/retry', { method: 'POST' })
+            fetch('/swipe/new', { method: 'POST' })
                 .then(response => response.text())
                 .then(() => {
                     // Refresh story log
                     htmx.trigger('#story-log', 'htmx:refresh');
+                });
+        }
+        
+        function submitRetrigger() {
+            updateToThinking();
+            fetch('/retrigger', { method: 'POST' })
+                .then(response => response.text())
+                .then(() => {
+                    htmx.trigger('#story-log', 'htmx:refresh');
+                });
+        }
+        
+        function switchSwipe(messageId, index) {
+            fetch(`/message/${messageId}/swipe/${index}`, { method: 'POST' })
+                .then(response => {
+                    if (response.ok) {
+                        return response.text();
+                    }
+                    throw new Error('Swipe switch failed');
+                })
+                .then(html => {
+                    document.getElementById('story-log').innerHTML = html;
+                    // Refresh visual sidebar and header to reflect restored state
+                    htmx.trigger('#visual-sidebar', 'htmx:refresh');
+                    htmx.trigger('#header', 'htmx:refresh');
+                })
+                .catch(err => {
+                    console.error('Swipe switch failed:', err);
+                    showError('Failed to switch swipe');
                 });
         }
         

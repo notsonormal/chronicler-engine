@@ -31,8 +31,14 @@ fn test_find_latest_game_for_world_uses_message_timestamp() {
     {
         let conn = db_pool.conn();
         conn.execute(
-            "INSERT INTO messages (game_id, sender, text, log_type, timestamp, location_header, event_header, snapshot_id) VALUES (?1, 'Player', 'hello', 'input', ?2, NULL, NULL, NULL)",
+            "INSERT INTO messages (game_id, sender, log_type, timestamp, active_swipe_index, is_deleted) VALUES (?1, 'Player', 'input', ?2, 0, 0)",
             rusqlite::params![game_a_id as i64, &newer],
+        )
+        .unwrap();
+        let msg_id = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO message_swipes (message_id, swipe_index, text, snapshot_id, location_header, event_header) VALUES (?1, 0, 'hello', 0, NULL, NULL)",
+            rusqlite::params![msg_id],
         )
         .unwrap();
     }

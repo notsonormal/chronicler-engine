@@ -727,7 +727,6 @@ async fn test_delete_game_handler_active_game() {
 async fn test_delete_game_handler_generating() {
     let app = create_app_for_testing(create_test_state());
 
-    // Trigger generation so is_generating becomes true
     let req = Request::builder()
         .uri("/action")
         .method(http::Method::POST)
@@ -858,6 +857,67 @@ async fn test_list_games_fragment_storage_error() {
             chronicler_engine::error::EngineError,
         > {
             self.message_inner.load_messages()
+        }
+
+        fn soft_delete_message(
+            &self,
+            id: u64,
+        ) -> Result<(), chronicler_engine::error::EngineError> {
+            self.message_inner.soft_delete_message(id)
+        }
+
+        fn restore_soft_deleted(
+            &self,
+            ids: &[u64],
+        ) -> Result<(), chronicler_engine::error::EngineError> {
+            self.message_inner.restore_soft_deleted(ids)
+        }
+
+        fn purge_soft_deleted(
+            &self,
+            ids: &[u64],
+        ) -> Result<(), chronicler_engine::error::EngineError> {
+            self.message_inner.purge_soft_deleted(ids)
+        }
+
+        fn insert_swipe(
+            &self,
+            message_id: u64,
+            swipe: &chronicler_engine::model::message::Swipe,
+            index: usize,
+        ) -> Result<(), chronicler_engine::error::EngineError> {
+            self.message_inner.insert_swipe(message_id, swipe, index)
+        }
+
+        fn update_active_swipe(
+            &self,
+            message_id: u64,
+            index: usize,
+        ) -> Result<(), chronicler_engine::error::EngineError> {
+            self.message_inner.update_active_swipe(message_id, index)
+        }
+
+        fn shift_swipe_indices(
+            &self,
+            message_id: u64,
+            offset: usize,
+        ) -> Result<(), chronicler_engine::error::EngineError> {
+            self.message_inner.shift_swipe_indices(message_id, offset)
+        }
+
+        fn migrate_swipes(
+            &self,
+            message_id: u64,
+            pending_swipes: &[chronicler_engine::model::message::Swipe],
+            new_active_index: usize,
+            to_delete: &[u64],
+        ) -> Result<(), chronicler_engine::error::EngineError> {
+            self.message_inner.migrate_swipes(
+                message_id,
+                pending_swipes,
+                new_active_index,
+                to_delete,
+            )
         }
     }
 

@@ -188,5 +188,60 @@ fn run_migrations(conn: &Connection) -> Result<(), crate::error::EngineError> {
         })?;
     }
 
+    if version < 6 {
+        conn.execute(
+            "CREATE TABLE messages_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                game_id INTEGER NOT NULL DEFAULT 1,
+                sender TEXT,
+                log_type TEXT NOT NULL,
+                timestamp TEXT NOT NULL,
+                active_swipe_index INTEGER NOT NULL DEFAULT 0,
+                is_deleted INTEGER NOT NULL DEFAULT 0
+            )",
+            [],
+        )
+        .map_err(|e| crate::error::EngineError::Config(format!("Migration v6 failed: {e}")))?;
+
+        conn.execute(
+            "INSERT INTO messages_new (id, game_id, sender, log_type, timestamp, active_swipe_index, is_deleted)
+             SELECT id, game_id, sender, log_type, timestamp, 0, 0 FROM messages",
+            [],
+        )
+        .map_err(|e| crate::error::EngineError::Config(format!("Migration v6 failed: {e}")))?;
+
+        conn.execute(
+            "CREATE TABLE message_swipes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+                swipe_index INTEGER NOT NULL,
+                text TEXT NOT NULL,
+                snapshot_id INTEGER,
+                location_header TEXT,
+                event_header TEXT,
+                UNIQUE(message_id, swipe_index)
+            )",
+            [],
+        )
+        .map_err(|e| crate::error::EngineError::Config(format!("Migration v6 failed: {e}")))?;
+
+        // Migrate old message text into message_swipes BEFORE dropping the old messages table.
+        conn.execute(
+            "INSERT INTO message_swipes (message_id, swipe_index, text, snapshot_id, location_header, event_header)
+             SELECT id, 0, text, snapshot_id, location_header, event_header FROM messages",
+            [],
+        )
+        .map_err(|e| crate::error::EngineError::Config(format!("Migration v6 failed: {e}")))?;
+
+        conn.execute("DROP TABLE messages", [])
+            .map_err(|e| crate::error::EngineError::Config(format!("Migration v6 failed: {e}")))?;
+        conn.execute("ALTER TABLE messages_new RENAME TO messages", [])
+            .map_err(|e| crate::error::EngineError::Config(format!("Migration v6 failed: {e}")))?;
+
+        conn.pragma_update(None, "user_version", 6).map_err(|e| {
+            crate::error::EngineError::Config(format!("Failed to set user_version: {e}"))
+        })?;
+    }
+
     Ok(())
 }

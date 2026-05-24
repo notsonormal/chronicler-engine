@@ -4,9 +4,11 @@
 
 **Accepted** — Implemented 2026-05-15  
 **Simplified** — Per-message swipes removed 2026-05-15  
-**Further simplified** — Message-aligned snapshots, 2026-05-16
+**Further simplified** — Message-aligned snapshots, 2026-05-16  
+**Superseded** — Per-message swipes reintroduced with dedicated table, see ADR-017, 2026-05-24
 
-**Supersedes**: ADR-012 (Turn + Swipe Domain Model, deleted)
+**Supersedes**: ADR-012 (Turn + Swipe Domain Model, deleted)  
+**Superseded by**: ADR-017 (Message Swipes)
 
 ## Context
 

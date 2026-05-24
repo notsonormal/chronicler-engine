@@ -11,4 +11,5 @@ mod retry_tests;
 
 pub use actions::execute_action_impl;
 pub use pipeline::{ActionOutcome, ActionPipeline, ActionPipelineBackend};
+pub use retry::retrigger_event_impl;
 pub use retry::retry_last_response_impl;

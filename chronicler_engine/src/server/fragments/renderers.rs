@@ -45,7 +45,8 @@ pub fn render_story_log(state: &AppState) -> Result<String> {
         .take(MAX_LOG_DISPLAY)
         .cloned()
         .collect();
-    let template = StoryLogTemplate::new(&entries);
+    let has_last_trigger = state_guard.narrative.last_trigger.is_some();
+    let template = StoryLogTemplate::new(&entries, has_last_trigger);
     template
         .render()
         .map_err(|e| crate::error::EngineError::Template(e.to_string()))

@@ -54,11 +54,18 @@ pub struct LogEntryView {
     pub log_type: String,
     pub location_header: Option<String>,
     pub event_header: Option<String>,
+    pub swipe_count: usize,
+    pub active_swipe_index: usize,
+    pub prev_swipe_index: Option<usize>,
+    pub next_swipe_index: Option<usize>,
+    pub show_retrigger: bool,
 }
 
 impl From<&LogEntry> for LogEntryView {
     fn from(entry: &LogEntry) -> Self {
         let parsed_text = markdown_to_html(&entry.text);
+        let active = entry.active_swipe_index;
+        let count = entry.swipe_count;
         Self {
             id: entry.id,
             timestamp: entry.timestamp.format("%H:%M").to_string(),
@@ -73,13 +80,22 @@ impl From<&LogEntry> for LogEntryView {
             },
             location_header: entry.location_header.clone(),
             event_header: entry.event_header.clone(),
+            swipe_count: count,
+            active_swipe_index: active,
+            prev_swipe_index: if active > 0 { Some(active - 1) } else { None },
+            next_swipe_index: if active + 1 < count {
+                Some(active + 1)
+            } else {
+                None
+            },
+            show_retrigger: false,
         }
     }
 }
 
 #[derive(Template)]
 #[template(
-    source = r#"<div class="story-log" id="story-log">{% for entry in entries %}<div class="log-entry {{ entry.log_type }}{% if entry.location_header.is_some() %} location{% endif %}" data-id="{{ entry.id }}" data-raw-text="{{ entry.raw_text | escape }}"><div class="message-header"><div class="message-info">{% if entry.location_header.is_some() %}<span class="location-header">{{ entry.location_header.as_ref().unwrap() }}</span><span class="location-timestamp">- {{ entry.timestamp }}</span>{% elif entry.event_header.is_some() %}<span class="event-header">{{ entry.event_header.as_ref().unwrap() }}</span><span class="event-timestamp">- {{ entry.timestamp }}</span>{% else %}<span class="timestamp">{{ entry.timestamp }}</span>{% if entry.sender != "" %}<span class="sender">{{ entry.sender }}:</span>{% endif %}{% endif %}</div><div class="message-actions"><button class="action-btn edit-btn" onclick="showEditForm({{ entry.id }})" title="Edit">&#9998;</button>{% if loop.last && entries.len() > 1 %}<button class="action-btn delete-btn" onclick="deleteMessage()" title="Delete">&#128465;</button>{% endif %}{% if entry.log_type == "input" %}<button class="action-btn check-btn" onclick="checkLogText(this.closest('.log-entry').dataset.rawText)" title="Check spelling & grammar">&#x2713;</button>{% endif %}{% if loop.last && entries.len() > 1 %}{% if entry.log_type == "narration" || entry.log_type == "dialogue" %}<button class="action-btn retry-btn" onclick="submitRetry()" title="Retry">&#8635;</button>{% endif %}{% endif %}</div></div><span class="text">{{ entry.text }}</span></div>{% endfor %}</div>"#,
+    source = r#"<div class="story-log" id="story-log">{% for entry in entries %}<div class="log-entry {{ entry.log_type }}{% if entry.location_header.is_some() %} location{% endif %}" data-id="{{ entry.id }}" data-raw-text="{{ entry.raw_text | escape }}"><div class="message-header"><div class="message-info">{% if entry.location_header.is_some() %}<span class="location-header">{{ entry.location_header.as_ref().unwrap() }}</span><span class="location-timestamp">- {{ entry.timestamp }}</span>{% elif entry.event_header.is_some() %}<span class="event-header">{{ entry.event_header.as_ref().unwrap() }}</span><span class="event-timestamp">- {{ entry.timestamp }}</span>{% else %}<span class="timestamp">{{ entry.timestamp }}</span>{% if entry.sender != "" %}<span class="sender">{{ entry.sender }}:</span>{% endif %}{% endif %}</div><div class="message-actions"><button class="action-btn edit-btn" onclick="showEditForm({{ entry.id }})" title="Edit">&#9998;</button>{% if loop.last && entries.len() > 1 %}<button class="action-btn delete-btn" onclick="deleteMessage()" title="Delete">&#128465;</button>{% endif %}{% if entry.log_type == "input" %}<button class="action-btn check-btn" onclick="checkLogText(this.closest('.log-entry').dataset.rawText)" title="Check spelling & grammar">&#x2713;</button>{% endif %}{% if loop.last && entry.show_retrigger %}<button class="action-btn retrigger-btn" onclick="submitRetrigger()" title="Retrigger Event">&#9851;</button>{% endif %}</div></div><span class="text">{{ entry.text }}</span>{% if loop.last && entry.swipe_count > 1 %}<div class="swipe-controls"><button class="action-btn swipe-btn" {% if entry.prev_swipe_index.is_none() %}disabled{% else %}onclick="switchSwipe({{ entry.id }}, {{ entry.prev_swipe_index.unwrap() }})"{% endif %} title="Previous swipe">&#9664;</button><span class="swipe-counter">{{ entry.active_swipe_index + 1 }} / {{ entry.swipe_count }}</span><button class="action-btn swipe-btn" {% if entry.next_swipe_index.is_some() %}onclick="switchSwipe({{ entry.id }}, {{ entry.next_swipe_index.unwrap() }})"{% else %}onclick="submitNewSwipe()"{% endif %} title="Next swipe">&#9654;</button></div>{% endif %}</div>{% endfor %}</div>"#,
     ext = "html"
 )]
 pub struct StoryLogTemplate {
@@ -87,10 +103,14 @@ pub struct StoryLogTemplate {
 }
 
 impl StoryLogTemplate {
-    pub fn new(entries: &[LogEntry]) -> Self {
-        Self {
-            entries: entries.iter().map(LogEntryView::from).collect(),
+    pub fn new(entries: &[LogEntry], has_last_trigger: bool) -> Self {
+        let mut views: Vec<LogEntryView> = entries.iter().map(LogEntryView::from).collect();
+        if let Some(last) = views.last_mut() {
+            let is_narration = last.log_type == "narration" || last.log_type == "dialogue";
+            let is_event_continuation = last.event_header.is_some();
+            last.show_retrigger = has_last_trigger && is_narration && !is_event_continuation;
         }
+        Self { entries: views }
     }
 }
 

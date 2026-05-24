@@ -40,7 +40,7 @@ fn test_header_template_connection_status() {
 
 #[test]
 fn test_story_log_template_empty() {
-    let template = StoryLogTemplate::new(&[]);
+    let template = StoryLogTemplate::new(&[], false);
     let rendered = template.render().unwrap();
     assert!(rendered.contains(r#"id="story-log""#));
 }
@@ -55,7 +55,7 @@ fn test_story_log_template_with_entries() {
         timestamp: Utc::now(),
         ..Default::default()
     }];
-    let template = StoryLogTemplate::new(&entries);
+    let template = StoryLogTemplate::new(&entries, false);
     let rendered = template.render().unwrap();
     assert!(rendered.contains("Welcome to the adventure!"));
     assert!(rendered.contains("Game Master"));
@@ -72,7 +72,7 @@ fn test_story_log_template_escapes_html() {
         timestamp: Utc::now(),
         ..Default::default()
     }];
-    let template = StoryLogTemplate::new(&entries);
+    let template = StoryLogTemplate::new(&entries, false);
     let rendered = template.render().unwrap();
     assert!(!rendered.contains("<script>"));
 }
@@ -97,7 +97,7 @@ fn test_story_log_template_has_message_actions() {
             ..Default::default()
         },
     ];
-    let template = StoryLogTemplate::new(&entries);
+    let template = StoryLogTemplate::new(&entries, false);
     let rendered = template.render().unwrap();
     assert!(rendered.contains("message-header"));
     assert!(rendered.contains("message-actions"));
@@ -125,7 +125,7 @@ fn test_story_log_template_input_has_check_button() {
             ..Default::default()
         },
     ];
-    let template = StoryLogTemplate::new(&entries);
+    let template = StoryLogTemplate::new(&entries, false);
     let rendered = template.render().unwrap();
     assert!(rendered.contains("check-btn"));
     assert!(rendered.contains("delete-btn"));
@@ -152,7 +152,7 @@ fn test_story_log_template_renders_event_header() {
             ..Default::default()
         },
     ];
-    let template = StoryLogTemplate::new(&entries);
+    let template = StoryLogTemplate::new(&entries, false);
     let rendered = template.render().unwrap();
     assert!(rendered.contains("event-header"));
     assert!(rendered.contains("Gabriella Introduction"));
@@ -160,8 +160,8 @@ fn test_story_log_template_renders_event_header() {
     assert!(rendered.contains("edit-btn"));
     assert!(rendered.contains("delete-btn"));
     assert!(!rendered.contains("check-btn"));
-    // Retry button should appear on last narration
-    assert!(rendered.contains("retry-btn"));
+    // Retry button removed — swipe right arrow handles new swipe generation
+    assert!(!rendered.contains("retry-btn"));
 }
 
 #[test]
@@ -185,13 +185,81 @@ fn test_story_log_template_renders_location_header() {
             ..Default::default()
         },
     ];
-    let template = StoryLogTemplate::new(&entries);
+    let template = StoryLogTemplate::new(&entries, false);
     let rendered = template.render().unwrap();
     assert!(rendered.contains("location-header"));
     assert!(rendered.contains("Entrance Hall"));
     assert!(rendered.contains("location-timestamp"));
     assert!(rendered.contains("edit-btn"));
     assert!(rendered.contains("delete-btn"));
+}
+
+#[test]
+fn test_story_log_template_retrigger_button_shown_when_last_trigger_present() {
+    let entries = vec![
+        LogEntry {
+            id: 1,
+            sender: Some("Player".to_string()),
+            text: "look around".to_string(),
+            log_type: LogType::Input,
+            timestamp: Utc::now(),
+            ..Default::default()
+        },
+        LogEntry {
+            id: 2,
+            sender: None,
+            text: "You look around.".to_string(),
+            log_type: LogType::Narration,
+            timestamp: Utc::now(),
+            ..Default::default()
+        },
+    ];
+    let template = StoryLogTemplate::new(&entries, true);
+    let rendered = template.render().unwrap();
+    assert!(rendered.contains("retrigger-btn"));
+    assert!(rendered.contains("submitRetrigger"));
+}
+
+#[test]
+fn test_story_log_template_retrigger_button_hidden_on_event_continuation() {
+    let entries = vec![
+        LogEntry {
+            id: 1,
+            sender: None,
+            text: "You look around.".to_string(),
+            log_type: LogType::Narration,
+            timestamp: Utc::now(),
+            ..Default::default()
+        },
+        LogEntry {
+            id: 2,
+            sender: None,
+            text: "An NPC appears.".to_string(),
+            log_type: LogType::Narration,
+            timestamp: Utc::now(),
+            event_header: Some("NPC Event".to_string()),
+            ..Default::default()
+        },
+    ];
+    let template = StoryLogTemplate::new(&entries, true);
+    let rendered = template.render().unwrap();
+    // Last entry is an event continuation, so retrigger should NOT appear
+    assert!(!rendered.contains("retrigger-btn"));
+}
+
+#[test]
+fn test_story_log_template_retrigger_button_hidden_without_last_trigger() {
+    let entries = vec![LogEntry {
+        id: 1,
+        sender: None,
+        text: "You look around.".to_string(),
+        log_type: LogType::Narration,
+        timestamp: Utc::now(),
+        ..Default::default()
+    }];
+    let template = StoryLogTemplate::new(&entries, false);
+    let rendered = template.render().unwrap();
+    assert!(!rendered.contains("retrigger-btn"));
 }
 
 #[test]

@@ -49,7 +49,12 @@ fn build_router(app_state: AppState) -> Router {
         // History edit, delete & retry endpoints
         .route("/history/:id", post(fragments::edit_history_handler))
         .route("/history/delete", post(fragments::delete_history_handler))
-        .route("/retry", post(fragments::retry_handler))
+        .route("/swipe/new", post(fragments::retry_handler))
+        .route(
+            "/message/:id/swipe/:index",
+            post(fragments::switch_swipe_handler),
+        )
+        .route("/retrigger", post(fragments::retrigger_handler))
         .route("/reset", post(fragments::reset_handler))
         .route("/games", post(fragments::create_game_handler))
         .route("/games/:id/switch", post(fragments::switch_game_handler))

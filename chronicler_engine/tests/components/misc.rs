@@ -152,7 +152,7 @@ async fn test_retry_no_input() {
     let app = chronicler_engine::create_app_for_testing(create_test_state());
 
     let req = Request::builder()
-        .uri("/retry")
+        .uri("/swipe/new")
         .method(http::Method::POST)
         .body(Body::empty())
         .unwrap();
@@ -174,7 +174,7 @@ async fn test_retry_success() {
     let app = chronicler_engine::create_app_for_testing(state_with_input());
 
     let req = Request::builder()
-        .uri("/retry")
+        .uri("/swipe/new")
         .method(http::Method::POST)
         .body(Body::empty())
         .unwrap();
@@ -222,7 +222,7 @@ async fn test_retry_handler_sets_generating_status() {
     );
 
     let req = Request::builder()
-        .uri("/retry")
+        .uri("/swipe/new")
         .method(http::Method::POST)
         .body(Body::empty())
         .unwrap();
@@ -273,7 +273,7 @@ async fn test_retry_handler_creates_snapshot() {
     );
 
     let req = Request::builder()
-        .uri("/retry")
+        .uri("/swipe/new")
         .method(http::Method::POST)
         .body(Body::empty())
         .unwrap();
@@ -716,13 +716,375 @@ async fn test_retry_handler_load_state_failure() {
     );
 
     let req = Request::builder()
-        .uri("/retry")
+        .uri("/swipe/new")
         .method(http::Method::POST)
         .body(Body::empty())
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
 
     assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+}
+
+#[tokio::test]
+async fn test_retrigger_no_trigger() {
+    let app = chronicler_engine::create_app_for_testing(create_test_state());
+
+    let req = Request::builder()
+        .uri("/retrigger")
+        .method(http::Method::POST)
+        .body(Body::empty())
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body = axum::body::to_bytes(response.into_body(), 1024)
+        .await
+        .unwrap();
+    let body_str = String::from_utf8_lossy(&body);
+    assert!(
+        body_str.contains("No trigger context available"),
+        "Expected no trigger error: {body_str}"
+    );
+}
+
+#[tokio::test]
+async fn test_retrigger_no_messages() {
+    let mut state = create_test_state();
+    state.narrative.last_trigger = Some(chronicler_engine::model::state::StoredTriggerContext {
+        npc_id: "test_npc".to_string(),
+        trigger_idx: 0,
+        trigger_name: "Greeting".to_string(),
+        trigger_repeat: false,
+        trigger_narration_prompt: "Hello".to_string(),
+        system_prompt: "sys".to_string(),
+        user_prompt: "user".to_string(),
+        max_tokens: None,
+    });
+
+    let storage = Arc::new(chronicler_engine::test_support::InMemoryGameStorage::new());
+    let snapshot =
+        chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
+    storage.save(&snapshot).unwrap();
+    // Intentionally do NOT insert any messages
+
+    let llm_storage =
+        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
+            as Arc<dyn chronicler_engine::storage::llm_message_storage::LlmMessageStorage>;
+
+    let app = chronicler_engine::server::create_app_with_storage(
+        state,
+        Arc::clone(&storage) as Arc<dyn SnapshotStorage>,
+        Arc::clone(&storage) as Arc<dyn MessageStorage>,
+        llm_storage,
+        AppSettings::default(),
+    );
+
+    let req = Request::builder()
+        .uri("/retrigger")
+        .method(http::Method::POST)
+        .body(Body::empty())
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body = axum::body::to_bytes(response.into_body(), 1024)
+        .await
+        .unwrap();
+    let body_str = String::from_utf8_lossy(&body);
+    assert!(
+        body_str.contains("No messages to retrigger"),
+        "Expected no messages error: {body_str}"
+    );
+}
+
+#[tokio::test]
+async fn test_retrigger_last_message_not_narration() {
+    let mut state = create_test_state();
+    state.narrative.last_trigger = Some(chronicler_engine::model::state::StoredTriggerContext {
+        npc_id: "test_npc".to_string(),
+        trigger_idx: 0,
+        trigger_name: "Greeting".to_string(),
+        trigger_repeat: false,
+        trigger_narration_prompt: "Hello".to_string(),
+        system_prompt: "sys".to_string(),
+        user_prompt: "user".to_string(),
+        max_tokens: None,
+    });
+    state.add_log(
+        "look around".to_string(),
+        Some("Test Player".to_string()),
+        LogType::Input,
+    );
+
+    let storage = Arc::new(chronicler_engine::test_support::InMemoryGameStorage::new());
+    let snapshot =
+        chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
+    storage.save(&snapshot).unwrap();
+    for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
+        let _ = storage.insert_message(&mut msg);
+    }
+
+    let llm_storage =
+        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
+            as Arc<dyn chronicler_engine::storage::llm_message_storage::LlmMessageStorage>;
+
+    let app = chronicler_engine::server::create_app_with_storage(
+        state,
+        Arc::clone(&storage) as Arc<dyn SnapshotStorage>,
+        Arc::clone(&storage) as Arc<dyn MessageStorage>,
+        llm_storage,
+        AppSettings::default(),
+    );
+
+    let req = Request::builder()
+        .uri("/retrigger")
+        .method(http::Method::POST)
+        .body(Body::empty())
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body = axum::body::to_bytes(response.into_body(), 1024)
+        .await
+        .unwrap();
+    let body_str = String::from_utf8_lossy(&body);
+    assert!(
+        body_str.contains("Last message must be a narration to retrigger"),
+        "Expected not narration error: {body_str}"
+    );
+}
+
+#[tokio::test]
+async fn test_switch_swipe_generation_in_progress() {
+    let app = chronicler_engine::create_app_for_testing(create_test_state());
+
+    let req = Request::builder()
+        .uri("/action")
+        .method(http::Method::POST)
+        .header(
+            http::header::CONTENT_TYPE,
+            "application/x-www-form-urlencoded",
+        )
+        .body(Body::from("command=go north"))
+        .unwrap();
+    let _response = app.clone().oneshot(req).await.unwrap();
+
+    let req = Request::builder()
+        .uri("/message/1/swipe/0")
+        .method(http::Method::POST)
+        .body(Body::empty())
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+}
+
+#[tokio::test]
+async fn test_switch_swipe_not_last_message() {
+    let mut state = create_test_state();
+    state.add_log(
+        "look around".to_string(),
+        Some("Test Player".to_string()),
+        LogType::Input,
+    );
+
+    let storage = Arc::new(chronicler_engine::test_support::InMemoryGameStorage::new());
+    let snapshot =
+        chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
+    storage.save(&snapshot).unwrap();
+
+    // Insert two messages so the first is NOT the last
+    let mut msg1 = chronicler_engine::model::message::Message::new(
+        None,
+        "First narration",
+        LogType::Narration,
+        None,
+        None,
+    );
+    storage.insert_message(&mut msg1).unwrap();
+
+    let mut msg2 = chronicler_engine::model::message::Message::new(
+        None,
+        "Second narration",
+        LogType::Narration,
+        None,
+        None,
+    );
+    storage.insert_message(&mut msg2).unwrap();
+
+    let llm_storage =
+        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
+            as Arc<dyn chronicler_engine::storage::llm_message_storage::LlmMessageStorage>;
+
+    let app = chronicler_engine::server::create_app_with_storage(
+        state,
+        Arc::clone(&storage) as Arc<dyn SnapshotStorage>,
+        Arc::clone(&storage) as Arc<dyn MessageStorage>,
+        llm_storage,
+        AppSettings::default(),
+    );
+
+    // Try to swipe the first message (not the last)
+    let req = Request::builder()
+        .uri(format!("/message/{}/swipe/0", msg1.id))
+        .method(http::Method::POST)
+        .body(Body::empty())
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body = axum::body::to_bytes(response.into_body(), 1024)
+        .await
+        .unwrap();
+    let body_str = String::from_utf8_lossy(&body);
+    assert!(
+        body_str.contains("Only the last message can be swiped"),
+        "Expected not last message error: {body_str}"
+    );
+}
+
+#[tokio::test]
+async fn test_switch_swipe_missing_snapshot() {
+    use chronicler_engine::model::message::{Message, Swipe};
+
+    let mut state = create_test_state();
+    state.add_log(
+        "look around".to_string(),
+        Some("Test Player".to_string()),
+        LogType::Input,
+    );
+
+    let storage = Arc::new(chronicler_engine::test_support::InMemoryGameStorage::new());
+    let snapshot =
+        chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
+    storage.save(&snapshot).unwrap();
+
+    // Insert a narration with a swipe that has NO snapshot_id
+    let mut msg = Message::new(None, "Narration", LogType::Narration, None, None);
+    msg.swipes.push(Swipe {
+        text: "Second swipe".to_string(),
+        snapshot_id: None, // Deliberately missing
+        location_header: None,
+        event_header: None,
+    });
+    storage.insert_message(&mut msg).unwrap();
+
+    let llm_storage =
+        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
+            as Arc<dyn chronicler_engine::storage::llm_message_storage::LlmMessageStorage>;
+
+    let app = chronicler_engine::server::create_app_with_storage(
+        state,
+        Arc::clone(&storage) as Arc<dyn SnapshotStorage>,
+        Arc::clone(&storage) as Arc<dyn MessageStorage>,
+        llm_storage,
+        AppSettings::default(),
+    );
+
+    let req = Request::builder()
+        .uri(format!("/message/{}/swipe/1", msg.id))
+        .method(http::Method::POST)
+        .body(Body::empty())
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    let body = axum::body::to_bytes(response.into_body(), 1024)
+        .await
+        .unwrap();
+    let body_str = String::from_utf8_lossy(&body);
+    assert!(
+        body_str.contains("Swipe has no associated snapshot"),
+        "Expected missing snapshot error: {body_str}"
+    );
+}
+
+#[tokio::test]
+async fn test_switch_swipe_changes_active_swipe() {
+    use chronicler_engine::model::message::{Message, Swipe};
+    use chronicler_engine::model::state::LogType;
+    use chronicler_engine::model::state_snapshot::GameStateSnapshot;
+    use chronicler_engine::storage::message_storage::MessageStorage;
+    use chronicler_engine::storage::snapshot_storage::SnapshotStorage;
+
+    let mut state = create_test_state();
+    state.add_log(
+        "look around".to_string(),
+        Some("Test Player".to_string()),
+        LogType::Input,
+    );
+
+    let mut narration = Message::new(None, "First narration", LogType::Narration, None, None);
+
+    // Build state that includes the narration so snapshot covers it.
+    state.narrative.history.append(narration.clone());
+
+    let storage = Arc::new(chronicler_engine::test_support::InMemoryGameStorage::new());
+
+    let snapshot = GameStateSnapshot::from_game_state(&state);
+    let snapshot_id = storage.save(&snapshot).unwrap();
+    narration.snapshot_id = Some(snapshot_id);
+    narration.swipes[0].snapshot_id = Some(snapshot_id);
+
+    for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
+        if msg.log_type == LogType::Narration {
+            msg.snapshot_id = Some(snapshot_id);
+            if let Some(swipe) = msg.swipes.first_mut() {
+                swipe.snapshot_id = Some(snapshot_id);
+            }
+        }
+        storage.insert_message(&mut msg).unwrap();
+    }
+
+    let narration_id = storage
+        .load_messages()
+        .unwrap()
+        .into_iter()
+        .find(|m| m.log_type == LogType::Narration)
+        .map(|m| m.id)
+        .expect("narration message should exist");
+
+    let swipe1 = Swipe {
+        text: "Second narration".to_string(),
+        snapshot_id: Some(snapshot_id),
+        location_header: None,
+        event_header: None,
+    };
+    storage.insert_swipe(narration_id, &swipe1, 1).unwrap();
+    storage.update_active_swipe(narration_id, 1).unwrap();
+
+    let llm_storage =
+        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
+            as Arc<dyn chronicler_engine::storage::llm_message_storage::LlmMessageStorage>;
+
+    let app = chronicler_engine::server::create_app_with_storage(
+        state,
+        Arc::clone(&storage) as Arc<dyn SnapshotStorage>,
+        Arc::clone(&storage) as Arc<dyn MessageStorage>,
+        llm_storage,
+        AppSettings::default(),
+    );
+
+    let req = Request::builder()
+        .uri(format!("/message/{narration_id}/swipe/0"))
+        .method(http::Method::POST)
+        .body(Body::empty())
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+
+    assert!(response.status().is_success());
+    let body = axum::body::to_bytes(response.into_body(), 4096)
+        .await
+        .unwrap();
+    let body_str = String::from_utf8_lossy(&body);
+    assert!(
+        body_str.contains("First narration"),
+        "Should show first swipe: {body_str}"
+    );
+    assert!(
+        !body_str.contains("Second narration"),
+        "Should not show second swipe: {body_str}"
+    );
 }
 
 #[tokio::test]
@@ -827,7 +1189,7 @@ async fn test_retry_handler_snapshot_save_failure() {
     );
 
     let req = Request::builder()
-        .uri("/retry")
+        .uri("/swipe/new")
         .method(http::Method::POST)
         .body(Body::empty())
         .unwrap();

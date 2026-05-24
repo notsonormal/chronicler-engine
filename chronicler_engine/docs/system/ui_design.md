@@ -231,7 +231,7 @@
 #### Input
 - Color: #888888
 
-### Edit & Retry Controls
+### Edit, Retrigger, and Swipe Controls
 
 #### Edit Button (✏️)
 - Always visible (opacity: 1)
@@ -242,10 +242,19 @@
 - Margin-left: 8px
 - Transition: opacity 0.2s, color 0.2s
 
-#### Retry Button (↻)
+#### Retrigger Button (♻)
 - Same styling as edit button
-- Only appears on the last AI message (narration or dialogue)
-- Not shown on location entries or user input
+- Only appears on the last narration message when `last_trigger` is present in state
+- Not shown on event continuations or user input
+- Calls `submitRetrigger()` → `POST /retrigger`
+
+#### Swipe Controls
+- Container: flex row, gap 8px, centered below message text
+- Only appears on the last message when `swipe_count > 1`
+- **Left arrow (◀)**: switches to previous swipe. Disabled on first swipe.
+- **Counter**: `active_index + 1 / swipe_count` (e.g., "2 / 3")
+- **Right arrow (▶)**: if not on latest swipe, switches to next swipe. If on latest swipe, triggers new generation (`submitNewSwipe()` → `POST /swipe/new`).
+- Swipe buttons share `.swipe-btn` styling with muted color, cyan on hover
 
 #### Inline Edit Textarea
 - Width: 100%, box-sizing: border-box

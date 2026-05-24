@@ -17,5 +17,7 @@ pub use games::{
 };
 pub use generation_guard::GenerationGuard;
 pub use history::{EditHistoryForm, delete_history_handler, edit_history_handler};
-pub use misc::{check_text_handler, reset_handler, retry_handler};
+pub use misc::{
+    check_text_handler, reset_handler, retrigger_handler, retry_handler, switch_swipe_handler,
+};
 pub use renderers::{html_escape, render_error, render_llm_messages};

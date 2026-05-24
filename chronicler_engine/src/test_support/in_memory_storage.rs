@@ -189,6 +189,9 @@ impl MessageStorage for InMemoryGameStorage {
         if let Some(vec) = msgs.get_mut(&gid) {
             if let Some(m) = vec.iter_mut().find(|m| m.id == id) {
                 m.text = text.to_string();
+                if let Some(swipe) = m.swipes.get_mut(m.active_swipe_index) {
+                    swipe.text = text.to_string();
+                }
             }
         }
         Ok(())
@@ -206,6 +209,110 @@ impl MessageStorage for InMemoryGameStorage {
     fn load_messages(&self) -> Result<Vec<Message>, crate::error::EngineError> {
         let msgs = lock(&self.messages);
         let gid = self.do_current_game_id();
-        Ok(msgs.get(&gid).cloned().unwrap_or_default())
+        Ok(msgs
+            .get(&gid)
+            .map(|vec| vec.iter().filter(|m| !m.is_deleted).cloned().collect())
+            .unwrap_or_default())
+    }
+
+    fn soft_delete_message(&self, id: u64) -> Result<(), crate::error::EngineError> {
+        let mut msgs = lock(&self.messages);
+        let gid = self.do_current_game_id();
+        if let Some(vec) = msgs.get_mut(&gid) {
+            if let Some(m) = vec.iter_mut().find(|m| m.id == id) {
+                m.is_deleted = true;
+            }
+        }
+        Ok(())
+    }
+
+    fn restore_soft_deleted(&self, ids: &[u64]) -> Result<(), crate::error::EngineError> {
+        let mut msgs = lock(&self.messages);
+        let gid = self.do_current_game_id();
+        if let Some(vec) = msgs.get_mut(&gid) {
+            for m in vec.iter_mut().filter(|m| ids.contains(&m.id)) {
+                m.is_deleted = false;
+            }
+        }
+        Ok(())
+    }
+
+    fn purge_soft_deleted(&self, ids: &[u64]) -> Result<(), crate::error::EngineError> {
+        let mut msgs = lock(&self.messages);
+        let gid = self.do_current_game_id();
+        if let Some(vec) = msgs.get_mut(&gid) {
+            vec.retain(|m| !ids.contains(&m.id));
+        }
+        Ok(())
+    }
+
+    fn insert_swipe(
+        &self,
+        message_id: u64,
+        swipe: &crate::model::message::Swipe,
+        index: usize,
+    ) -> Result<(), crate::error::EngineError> {
+        let mut msgs = lock(&self.messages);
+        let gid = self.do_current_game_id();
+        if let Some(vec) = msgs.get_mut(&gid) {
+            if let Some(m) = vec.iter_mut().find(|m| m.id == message_id) {
+                if index < m.swipes.len() {
+                    m.swipes.insert(index, swipe.clone());
+                } else {
+                    m.swipes.push(swipe.clone());
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn update_active_swipe(
+        &self,
+        message_id: u64,
+        index: usize,
+    ) -> Result<(), crate::error::EngineError> {
+        let mut msgs = lock(&self.messages);
+        let gid = self.do_current_game_id();
+        if let Some(vec) = msgs.get_mut(&gid) {
+            if let Some(m) = vec.iter_mut().find(|m| m.id == message_id) {
+                m.set_active_swipe(index);
+            }
+        }
+        Ok(())
+    }
+
+    fn shift_swipe_indices(
+        &self,
+        _message_id: u64,
+        _offset: usize,
+    ) -> Result<(), crate::error::EngineError> {
+        // No-op for in-memory: insert_swipe handles index insertion directly.
+        Ok(())
+    }
+
+    fn migrate_swipes(
+        &self,
+        message_id: u64,
+        pending_swipes: &[crate::model::message::Swipe],
+        new_active_index: usize,
+        to_delete: &[u64],
+    ) -> Result<(), crate::error::EngineError> {
+        let mut msgs = lock(&self.messages);
+        let gid = self.do_current_game_id();
+
+        if let Some(vec) = msgs.get_mut(&gid) {
+            if let Some(m) = vec.iter_mut().find(|m| m.id == message_id) {
+                for (idx, swipe) in pending_swipes.iter().enumerate().rev() {
+                    if idx < m.swipes.len() {
+                        m.swipes.insert(idx, swipe.clone());
+                    } else {
+                        m.swipes.push(swipe.clone());
+                    }
+                }
+                m.set_active_swipe(new_active_index);
+            }
+            vec.retain(|m| !to_delete.contains(&m.id));
+        }
+        Ok(())
     }
 }

@@ -70,16 +70,14 @@ fn test_reset() {
 #[test]
 fn test_messages_roundtrip() {
     let s = InMemoryGameStorage::new();
-    let mut msg = crate::model::message::Message {
-        id: 1,
-        sender: Some("A".to_string()),
-        text: "hello".to_string(),
-        log_type: crate::model::state::LogType::Input,
-        timestamp: Utc::now(),
-        location_header: None,
-        event_header: None,
-        snapshot_id: None,
-    };
+    let mut msg = crate::model::message::Message::new(
+        Some("A".to_string()),
+        "hello",
+        crate::model::state::LogType::Input,
+        None,
+        None,
+    );
+    msg.id = 1;
     s.insert_message(&mut msg).unwrap();
     let loaded = s.load_messages().unwrap();
     assert_eq!(loaded.len(), 1);

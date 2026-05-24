@@ -181,6 +181,63 @@ Collection of NPC movement events with confidence level. Returned by `compute_np
 - `events`: Array of `NpcEvent` objects
 - `confidence`: Confidence level (`High`, `Medium`, `Low`). Medium when events detected, Low when no events.
 
+## Swipe Schema (NEW)
+A single alternative generation for a message. Stored in the `message_swipes` table.
+
+```json
+{
+  "text": "string",
+  "snapshot_id": 42,
+  "location_header": "string (optional)",
+  "event_header": "string (optional)"
+}
+```
+
+### Fields
+- `text`: The generated narrative text for this swipe
+- `snapshot_id`: Reference to the `GameStateSnapshot` that produced this text. Nullable for the initial swipe (no snapshot yet).
+- `location_header`: Location header associated with this swipe (if any)
+- `event_header`: Event header associated with this swipe (if any)
+
+## Message Schema (Updated)
+Core narrative unit with swipe support.
+
+```json
+{
+  "id": 1,
+  "sender": "Game Master",
+  "text": "You enter the hall.",
+  "log_type": "Narration",
+  "timestamp": "2026-05-24T12:00:00Z",
+  "location_header": "Entrance Hall",
+  "event_header": null,
+  "snapshot_id": 42,
+  "active_swipe_index": 0,
+  "is_deleted": false,
+  "swipes": [
+    {
+      "text": "You enter the hall.",
+      "snapshot_id": 42,
+      "location_header": "Entrance Hall",
+      "event_header": null
+    }
+  ]
+}
+```
+
+### Fields
+- `id`: Auto-incrementing message ID
+- `sender`: Optional sender name (None for narration, "Player" for input)
+- `text`: Active swipe text (hydrated from `swipes[active_swipe_index]`)
+- `log_type`: `Narration`, `Dialogue`, `System`, or `Input`
+- `timestamp`: UTC timestamp
+- `location_header`: Active location header (from active swipe)
+- `event_header`: Active event header (from active swipe)
+- `snapshot_id`: Active snapshot ID (from active swipe)
+- `active_swipe_index`: Index of the currently displayed swipe
+- `is_deleted`: Soft-delete flag (true for messages temporarily hidden during retry)
+- `swipes`: Array of all swipes for this message
+
 ## WorldCard Schema (NEW)
 Top-level world definition loaded from `data/worlds/*/world.json`.
 

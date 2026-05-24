@@ -10,7 +10,7 @@ Contains pure data structures, serialization schemas, and the "Single Source of 
 - **`world`**: Setting lore, global rules, and starting scenarios.
 - **`map`**: Room/Region hierarchy and cardinal direction definitions.
 - **`character`**: NPC attributes (name, description, personality, scenario, image_path, **profile_image**, **headshot_image**) and Player inventory.
-- **`state`**: The `GameState` aggregation, narration history logs, and TUI state. `NarrativeState` holds a `MessageHistory` which encapsulates `Vec<Message>` where each `Message` is an independent narrative unit (input, narration, dialogue, or system). `LogEntry` remains the atomic rendering unit for templates and prompts. `StoredTriggerContext` enables replaying trigger continuations on retry. `LogEntry` carries optional `location_header` and `event_header` metadata for visual rendering; `NarrativeState` tracks `pending_location` and `pending_event` for consumption by the next `add_log` call. `GameState::current_room()` resolves the player's active room from the map or dynamic rooms.
+- **`state`**: The `GameState` aggregation, narration history logs, and TUI state. `NarrativeState` holds a `MessageHistory` which encapsulates `Vec<Message>` where each `Message` is an independent narrative unit (input, narration, dialogue, or system). Each `Message` carries a `swipes: Vec<Swipe>` set — alternate generations preserved during retry, with `active_swipe_index` selecting the currently displayed version. `LogEntry` remains the atomic rendering unit for templates and prompts, now carrying `swipe_count` and `active_swipe_index` for swipe control rendering. `StoredTriggerContext` enables replaying trigger continuations on retry or retrigger. `LogEntry` carries optional `location_header` and `event_header` metadata for visual rendering; `NarrativeState` tracks `pending_location` and `pending_event` for consumption by the next `add_log` call. `GameState::current_room()` resolves the player's active room from the map or dynamic rooms.
 - **`scenario`**: Starting scenario definitions for narrative introductions.
 - **`trigger`**: Trigger definitions, conditions, and NPC encounter tracking (`Trigger`, `TriggerCondition`, `TriggerEffect`, `NpcEncounterState`, `NpcEncounterLog`).
 - **`settings`**: `AppSettings`, `Connection`, and agent configuration data models.
@@ -159,7 +159,8 @@ SQLite-based persistence for game state and LLM call forensics.
 - **`db`**: Database connection and schema management. Schema includes:
   - `games` — top-level game session record (`id`, `name`, `world_name`, `created_at`, `updated_at`)
   - `game_state_snapshots` — serialized game state metadata, scoped to `game_id`
-  - `messages` — narrative history, scoped to `game_id`
+  - `messages` — narrative history, scoped to `game_id` (`id`, `game_id`, `sender`, `log_type`, `timestamp`, `active_swipe_index`, `is_deleted`)
+  - `message_swipes` — per-message swipe versions (`id`, `message_id`, `swipe_index`, `text`, `snapshot_id`, `location_header`, `event_header`), cascades on message delete
   - `llm_messages` — LLM API call logging (not game-scoped)
 - **`models`**: Database row structs (`DbGame`, `DbGameStateSnapshot`, `DbMessage`, `DbLlmMessage`) — one per table, using raw SQLite types.
 - **`mappers`**: Conversion logic between DB models and domain models (`TryFrom`/`From` impls and free functions for context-dependent mapping).

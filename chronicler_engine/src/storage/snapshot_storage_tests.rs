@@ -53,26 +53,22 @@ fn test_sqlite_messages_respect_game_id() {
     let storage_a = SqliteGameStorage::new(pool.clone(), 1);
     let storage_b = SqliteGameStorage::new(pool.clone(), 2);
 
-    let mut msg_a = crate::model::message::Message {
-        id: 1,
-        sender: Some("A".to_string()),
-        text: "hello".to_string(),
-        log_type: crate::model::state::LogType::Input,
-        timestamp: Utc::now(),
-        location_header: None,
-        event_header: None,
-        snapshot_id: None,
-    };
-    let mut msg_b = crate::model::message::Message {
-        id: 2,
-        sender: Some("B".to_string()),
-        text: "world".to_string(),
-        log_type: crate::model::state::LogType::Input,
-        timestamp: Utc::now(),
-        location_header: None,
-        event_header: None,
-        snapshot_id: None,
-    };
+    let mut msg_a = crate::model::message::Message::new(
+        Some("A".to_string()),
+        "hello",
+        crate::model::state::LogType::Input,
+        None,
+        None,
+    );
+    msg_a.id = 1;
+    let mut msg_b = crate::model::message::Message::new(
+        Some("B".to_string()),
+        "world",
+        crate::model::state::LogType::Input,
+        None,
+        None,
+    );
+    msg_b.id = 2;
 
     storage_a.insert_message(&mut msg_a).unwrap();
     storage_b.insert_message(&mut msg_b).unwrap();
