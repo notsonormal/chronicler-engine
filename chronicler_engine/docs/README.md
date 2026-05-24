@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-24 20:40 UTC*
+*Index last generated: 2026-05-24 22:25 UTC*
 
 ### Root files
 
@@ -67,6 +67,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Plan: Fix Game UI Delay for LLM Responses](./plans/archived/jericho-vixen-lockjaw.md)
 - [Plan: Message Swipes for Chronicler Engine](./plans/archived/starfire-tempest-orphan.md)
 - [Plan: Immediate Message Persistence — Direct Implementation](./plans/archived/storm-x-23-domino.md)
+- [Plan: MessageStorage Mutates Message Directly (Swipe Blast Radius)](./plans/archived/wildcat-red-tornado-colossus.md)
 
 ### `docs/reference/`
 

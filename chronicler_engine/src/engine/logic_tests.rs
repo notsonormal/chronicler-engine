@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::engine::logic::{attempt_semantic_walk, find_room_in_world_map};
+use crate::engine::logic::{attempt_semantic_walk, create_dynamic_room, find_room_in_world_map};
 use crate::model::character::{CharacterSheet, PlayerCard};
 use crate::model::map::{Direction, MapDef, Overworld, Region, Room};
 use crate::model::state::GameState;
@@ -202,4 +202,27 @@ fn test_attempt_semantic_walk_empty() {
     let mut state = setup_test_state();
     let result = attempt_semantic_walk(&mut state, "");
     assert!(result.is_err(), "Empty room id should return error");
+}
+
+#[test]
+fn test_attempt_semantic_walk_dynamic_room() {
+    let mut state = setup_test_state();
+    let dynamic = create_dynamic_room("Secret Cave", "Dark and damp.");
+    let dynamic_id = dynamic.id.clone();
+    state.movement.dynamic_rooms.insert(dynamic_id.clone(), dynamic);
+
+    let result = attempt_semantic_walk(&mut state, &dynamic_id);
+    assert!(result.is_ok());
+    assert!(result.unwrap().contains("Secret Cave"));
+    assert_eq!(state.movement.current_room_id, dynamic_id);
+}
+
+#[test]
+fn test_create_dynamic_room() {
+    let room = create_dynamic_room("Test Room", "A test room.");
+    assert_eq!(room.name, "Test Room");
+    assert_eq!(room.description, "A test room.");
+    assert!(room.id.starts_with("dynamic_"));
+    assert!(room.exits.is_empty());
+    assert!(room.items.is_empty());
 }

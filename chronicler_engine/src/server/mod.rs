@@ -146,17 +146,19 @@ pub fn create_app_for_testing(state: GameState) -> Router {
 pub fn create_app_for_testing_with_settings(state: GameState, settings: AppSettings) -> Router {
     // [DOC: docs/architecture/system.md]
     let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
-    let storage = Arc::new(crate::test_support::InMemoryGameStorage::new());
     let snapshot_storage: Arc<dyn crate::storage::snapshot_storage::SnapshotStorage> =
-        storage.clone();
-    let message_storage: Arc<dyn crate::storage::message_storage::MessageStorage> = storage.clone();
+        Arc::new(crate::test_support::in_memory_storage::InMemorySnapshotRepository::new());
+    let message_storage: Arc<dyn crate::storage::message_storage::MessageStorage> =
+        Arc::new(crate::test_support::in_memory_storage::InMemoryMessageRepository::new());
     let llm_storage =
         Arc::new(crate::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
             as Arc<dyn crate::storage::llm_message_storage::LlmMessageStorage>;
-    let _ = crate::storage::snapshot_storage::SnapshotStorage::save(&*storage, &snapshot);
-    for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
-        let _ =
-            crate::storage::message_storage::MessageStorage::insert_message(&*storage, &mut msg);
+    let _ = crate::storage::snapshot_storage::SnapshotStorage::save(&*snapshot_storage, &snapshot);
+    for msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
+        let _ = crate::storage::message_storage::MessageStorage::insert_message(
+            &*message_storage,
+            &msg,
+        );
     }
     create_app_with_storage(
         state,

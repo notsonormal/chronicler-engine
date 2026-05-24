@@ -135,7 +135,8 @@ pub fn save_message_and_snapshot(
             if let Some(swipe) = msg.swipes.first_mut() {
                 swipe.snapshot_id = Some(snapshot_id);
             }
-            ctx.message_storage.insert_message(msg)?;
+            let id = ctx.message_storage.insert_message(&*msg)?;
+            msg.id = id;
         }
     }
     Ok(snapshot_id)

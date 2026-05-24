@@ -188,3 +188,30 @@ fn test_resolve_engine_data_path_from_exe_dir() {
 
     let _ = std::fs::remove_dir(&data_dir);
 }
+
+#[test]
+fn test_list_worlds_empty_directory() {
+    let temp_dir =
+        std::env::temp_dir().join(format!("chronicler_list_empty_{}", std::process::id()));
+    std::fs::create_dir_all(temp_dir.join("worlds")).unwrap();
+
+    let result = scan_worlds(&temp_dir);
+    let _ = std::fs::remove_dir_all(&temp_dir);
+
+    assert!(result.is_ok());
+    assert!(result.unwrap().is_empty());
+}
+
+#[test]
+fn test_scan_worlds_read_dir_error() {
+    let temp_dir =
+        std::env::temp_dir().join(format!("chronicler_readdir_err_{}", std::process::id()));
+    std::fs::create_dir_all(&temp_dir).unwrap();
+    // Create a file named "worlds" so read_dir fails (not a directory)
+    std::fs::write(temp_dir.join("worlds"), "not a dir").unwrap();
+
+    let result = scan_worlds(&temp_dir);
+    let _ = std::fs::remove_dir_all(&temp_dir);
+
+    assert!(result.is_err());
+}

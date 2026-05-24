@@ -18,7 +18,9 @@ use crate::narrative::llm::backend::LlmCallResult;
 use crate::storage::message_storage::MessageStorage;
 use crate::storage::snapshot_storage::SnapshotStorage;
 use crate::test_support::fixtures::{TestMap, TestNpc, TestPlayer, TestWorld};
-use crate::test_support::in_memory_storage::InMemoryGameStorage;
+use crate::test_support::in_memory_storage::{
+    InMemoryMessageRepository, InMemorySnapshotRepository,
+};
 use crate::test_support::make_test_context_with_sqlite;
 
 struct FailingSnapshotStorage {
@@ -125,7 +127,7 @@ impl MessageStorage for FailingMessageStorage {
         self.fallback.current_game_id()
     }
 
-    fn insert_message(&self, msg: &mut Message) -> Result<(), EngineError> {
+    fn insert_message(&self, msg: &Message) -> Result<u64, EngineError> {
         self.fallback.insert_message(msg)
     }
 
@@ -215,10 +217,8 @@ fn make_test_state() -> GameState {
 }
 
 fn make_empty_context(state: GameState) -> GameServiceContext {
-    let storage = Arc::new(InMemoryGameStorage::new());
-    let snapshot_storage: Arc<dyn SnapshotStorage> =
-        Arc::clone(&storage) as Arc<dyn SnapshotStorage>;
-    let message_storage: Arc<dyn MessageStorage> = Arc::clone(&storage) as Arc<dyn MessageStorage>;
+    let snapshot_storage: Arc<dyn SnapshotStorage> = Arc::new(InMemorySnapshotRepository::new());
+    let message_storage: Arc<dyn MessageStorage> = Arc::new(InMemoryMessageRepository::new());
     GameServiceContext {
         snapshot_storage,
         message_storage,

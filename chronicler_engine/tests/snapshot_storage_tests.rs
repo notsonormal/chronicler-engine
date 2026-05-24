@@ -3,14 +3,14 @@ mod test_data;
 use chronicler_engine::model::message::Message;
 use chronicler_engine::model::state_snapshot::GameStateSnapshot;
 use chronicler_engine::storage::db::DbPool;
-use chronicler_engine::storage::message_storage::MessageStorage;
-use chronicler_engine::storage::snapshot_storage::{SnapshotStorage, SqliteGameStorage};
+use chronicler_engine::storage::message_storage::{MessageStorage, SqliteMessageRepository};
+use chronicler_engine::storage::snapshot_storage::{SnapshotStorage, SqliteSnapshotRepository};
 
 use test_data::create_test_state;
 
-fn create_storage() -> SqliteGameStorage {
+fn create_storage() -> SqliteSnapshotRepository {
     let pool = DbPool::new(":memory:").expect("in-memory db should open");
-    SqliteGameStorage::new(pool, 1)
+    SqliteSnapshotRepository::new(pool, 1)
 }
 
 fn create_snapshot() -> GameStateSnapshot {
@@ -27,21 +27,6 @@ fn test_save_creates_snapshot() {
 
     let loaded = storage.load_latest().expect("load should succeed").unwrap();
     assert_eq!(loaded.db_id, Some(snap_id), "save should create a snapshot");
-}
-
-#[test]
-fn test_reset_deletes_all_snapshots() {
-    let storage = create_storage();
-    storage.save(&create_snapshot()).unwrap();
-    storage.save(&create_snapshot()).unwrap();
-
-    storage.reset().expect("reset should succeed");
-
-    let loaded = storage.load_latest().expect("load should succeed");
-    assert!(
-        loaded.is_none(),
-        "load_latest should return None after reset"
-    );
 }
 
 #[test]
@@ -122,7 +107,7 @@ fn test_row_to_snapshot_bad_json() {
         .expect("raw insert should succeed");
     }
 
-    let storage = SqliteGameStorage::new(pool, 1);
+    let storage = SqliteSnapshotRepository::new(pool, 1);
     let result = storage.load_latest();
     assert!(result.is_err(), "loading bad JSON should return an error");
 }
@@ -141,7 +126,7 @@ fn test_row_to_snapshot_bad_date() {
         .expect("raw insert should succeed");
     }
 
-    let storage = SqliteGameStorage::new(pool, 1);
+    let storage = SqliteSnapshotRepository::new(pool, 1);
     let result = storage.load_latest();
     assert!(result.is_err(), "loading bad date should return an error");
 }
@@ -192,22 +177,26 @@ fn test_list_games() {
 
 #[test]
 fn test_delete_game_cascades() {
-    let storage = create_storage();
+    let pool = DbPool::new(":memory:").expect("in-memory db should open");
+    let storage = SqliteSnapshotRepository::new(pool.clone(), 1);
+    let msg_repo = SqliteMessageRepository::new(pool, 1);
+
     let game_id = storage.create_game("test_world", "To Delete").unwrap();
 
     // Switch to the new game before saving data
     SnapshotStorage::set_game_id(&storage, game_id);
+    MessageStorage::set_game_id(&msg_repo, game_id);
 
     // Save a snapshot and message for this game
     storage.save(&create_snapshot()).unwrap();
-    let mut msg = Message::new(
+    let msg = Message::new(
         Some("Player".to_string()),
         "hello",
         chronicler_engine::model::state::LogType::Input,
         None,
         None,
     );
-    storage.insert_message(&mut msg).unwrap();
+    msg_repo.insert_message(&msg).unwrap();
 
     storage.delete_game(game_id).expect("delete should succeed");
 
@@ -220,7 +209,7 @@ fn test_delete_game_cascades() {
         "snapshots should be cascaded"
     );
     assert!(
-        storage.load_messages().unwrap().is_empty(),
+        msg_repo.load_messages().unwrap().is_empty(),
         "messages should be cascaded"
     );
 }
@@ -272,9 +261,10 @@ fn test_current_game_id() {
 
 #[test]
 fn test_insert_and_load_messages() {
-    let storage = create_storage();
+    let pool = DbPool::new(":memory:").expect("in-memory db should open");
+    let msg_repo = SqliteMessageRepository::new(pool, 1);
 
-    let mut msg = Message::new(
+    let msg = Message::new(
         Some("Player".to_string()),
         "look around",
         chronicler_engine::model::state::LogType::Input,
@@ -282,55 +272,58 @@ fn test_insert_and_load_messages() {
         None,
     );
 
-    storage.insert_message(&mut msg).unwrap();
-    assert!(msg.id > 0, "insert_message should set the message id");
+    let id = msg_repo.insert_message(&msg).unwrap();
+    assert!(id > 0, "insert_message should return a message id");
 
-    let loaded = storage.load_messages().unwrap();
+    let loaded = msg_repo.load_messages().unwrap();
     assert_eq!(loaded.len(), 1);
     assert_eq!(loaded[0].text, "look around");
 }
 
 #[test]
 fn test_update_message() {
-    let storage = create_storage();
+    let pool = DbPool::new(":memory:").expect("in-memory db should open");
+    let msg_repo = SqliteMessageRepository::new(pool, 1);
 
-    let mut msg = Message::new(
+    let msg = Message::new(
         Some("Player".to_string()),
         "original",
         chronicler_engine::model::state::LogType::Input,
         None,
         None,
     );
-    storage.insert_message(&mut msg).unwrap();
+    let id = msg_repo.insert_message(&msg).unwrap();
 
-    storage.update_message(msg.id, "edited").unwrap();
+    msg_repo.update_message(id, "edited").unwrap();
 
-    let loaded = storage.load_messages().unwrap();
+    let loaded = msg_repo.load_messages().unwrap();
     assert_eq!(loaded[0].text, "edited");
 }
 
 #[test]
 fn test_delete_message() {
-    let storage = create_storage();
+    let pool = DbPool::new(":memory:").expect("in-memory db should open");
+    let msg_repo = SqliteMessageRepository::new(pool, 1);
 
-    let mut msg = Message::new(
+    let msg = Message::new(
         Some("Player".to_string()),
         "to delete",
         chronicler_engine::model::state::LogType::Input,
         None,
         None,
     );
-    storage.insert_message(&mut msg).unwrap();
-    storage.delete_message(msg.id).unwrap();
+    let id = msg_repo.insert_message(&msg).unwrap();
+    msg_repo.delete_message(id).unwrap();
 
-    let loaded = storage.load_messages().unwrap();
+    let loaded = msg_repo.load_messages().unwrap();
     assert!(loaded.is_empty(), "message should be deleted");
 }
 
 #[test]
 fn test_load_messages_empty() {
-    let storage = create_storage();
-    let loaded = storage.load_messages().unwrap();
+    let pool = DbPool::new(":memory:").expect("in-memory db should open");
+    let msg_repo = SqliteMessageRepository::new(pool, 1);
+    let loaded = msg_repo.load_messages().unwrap();
     assert!(
         loaded.is_empty(),
         "load_messages should return empty vec when no messages"
@@ -338,16 +331,6 @@ fn test_load_messages_empty() {
 }
 
 // ─── Edge Cases ─────────────────────────────────────────────────────────────
-
-#[test]
-fn test_reset_empty_storage() {
-    let storage = create_storage();
-    // Resetting an empty storage should not error
-    storage
-        .reset()
-        .expect("reset on empty storage should succeed");
-    assert!(storage.load_latest().unwrap().is_none());
-}
 
 #[test]
 fn test_load_latest_no_snapshots() {

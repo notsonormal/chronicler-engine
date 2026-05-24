@@ -29,7 +29,7 @@ Auto-generated names follow `{WorldName}_{Date}_N` where `N` is `max(existing N)
 
 ### Storage Traits
 
-`SnapshotStorage` and `MessageStorage` gain `set_game_id(&self, game_id: u64)` so the active game can be switched without recreating `AppState`. The `SqliteGameStorage` struct wraps `game_id` in `AtomicU64` for interior mutability.
+`SnapshotStorage` and `MessageStorage` gain `set_game_id(&self, game_id: u64)` so the active game can be switched without recreating `AppState`. The `SqliteSnapshotRepository` and `SqliteMessageRepository` structs wrap `game_id` in `AtomicU64` for interior mutability.
 
 ### Schema Changes
 

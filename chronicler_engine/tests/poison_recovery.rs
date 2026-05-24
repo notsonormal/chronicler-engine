@@ -8,7 +8,7 @@ use chronicler_engine::model::world::WorldCard;
 use chronicler_engine::server::AppState;
 use chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage;
 use chronicler_engine::storage::prompt_preset_storage::InMemoryPromptPresetStorage;
-use chronicler_engine::test_support::InMemoryGameStorage;
+use chronicler_engine::test_support::{InMemoryMessageRepository, InMemorySnapshotRepository};
 use tokio_util::sync::CancellationToken;
 
 #[test]
@@ -30,8 +30,8 @@ fn test_settings_recover_from_poisoned_rwlock() {
         Arc::new(std::sync::RwLock::new(AppSettings::default())),
     ));
     let app_state = AppState {
-        snapshot_storage: Arc::new(InMemoryGameStorage::new()),
-        message_storage: Arc::new(InMemoryGameStorage::new()),
+        snapshot_storage: Arc::new(InMemorySnapshotRepository::new()),
+        message_storage: Arc::new(InMemoryMessageRepository::new()),
         llm_message_storage: Arc::new(InMemoryLlmMessageStorage::new()),
         prompt_preset_storage: Arc::new(InMemoryPromptPresetStorage::new()),
         world: Arc::new(WorldCard::default()),
@@ -91,8 +91,8 @@ fn test_cancel_token_recover_from_poisoned_rwlock() {
         Arc::new(std::sync::RwLock::new(AppSettings::default())),
     ));
     let app_state = AppState {
-        snapshot_storage: Arc::new(InMemoryGameStorage::new()),
-        message_storage: Arc::new(InMemoryGameStorage::new()),
+        snapshot_storage: Arc::new(InMemorySnapshotRepository::new()),
+        message_storage: Arc::new(InMemoryMessageRepository::new()),
         llm_message_storage: Arc::new(InMemoryLlmMessageStorage::new()),
         prompt_preset_storage: Arc::new(InMemoryPromptPresetStorage::new()),
         world: Arc::new(WorldCard::default()),

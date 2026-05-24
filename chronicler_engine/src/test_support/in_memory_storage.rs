@@ -12,22 +12,22 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<T> {
     mutex.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-pub struct InMemoryGameStorage {
+// ─── Snapshot Repository ───────────────────────────────────────────────────
+
+pub struct InMemorySnapshotRepository {
     game_id: AtomicU64,
     snapshots: Mutex<HashMap<u64, Vec<GameStateSnapshot>>>,
-    messages: Mutex<HashMap<u64, Vec<Message>>>,
     games: Mutex<Vec<Game>>,
     next_id: Mutex<u64>,
-    next_message_id: Mutex<u64>,
 }
 
-impl Default for InMemoryGameStorage {
+impl Default for InMemorySnapshotRepository {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl InMemoryGameStorage {
+impl InMemorySnapshotRepository {
     pub fn new() -> Self {
         Self::with_game_id(1)
     }
@@ -36,10 +36,8 @@ impl InMemoryGameStorage {
         Self {
             game_id: AtomicU64::new(game_id),
             snapshots: Mutex::new(HashMap::new()),
-            messages: Mutex::new(HashMap::new()),
             games: Mutex::new(Vec::new()),
             next_id: Mutex::new(1),
-            next_message_id: Mutex::new(0),
         }
     }
 
@@ -58,15 +56,6 @@ impl InMemoryGameStorage {
         self.game_id.load(Ordering::SeqCst)
     }
 
-    pub fn reset(&self) -> Result<(), crate::error::EngineError> {
-        let mut snaps = lock(&self.snapshots);
-        let mut msgs = lock(&self.messages);
-        let gid = self.do_current_game_id();
-        snaps.remove(&gid);
-        msgs.remove(&gid);
-        Ok(())
-    }
-
     pub fn len(&self) -> usize {
         let gid = self.do_current_game_id();
         lock(&self.snapshots)
@@ -80,7 +69,7 @@ impl InMemoryGameStorage {
     }
 }
 
-impl SnapshotStorage for InMemoryGameStorage {
+impl SnapshotStorage for InMemorySnapshotRepository {
     fn set_game_id(&self, game_id: u64) {
         self.do_set_game_id(game_id);
     }
@@ -149,10 +138,8 @@ impl SnapshotStorage for InMemoryGameStorage {
     fn delete_game(&self, id: u64) -> Result<(), crate::error::EngineError> {
         let mut games = lock(&self.games);
         let mut snaps = lock(&self.snapshots);
-        let mut msgs = lock(&self.messages);
         games.retain(|g| g.id != id);
         snaps.remove(&id);
-        msgs.remove(&id);
         Ok(())
     }
 
@@ -162,7 +149,43 @@ impl SnapshotStorage for InMemoryGameStorage {
     }
 }
 
-impl MessageStorage for InMemoryGameStorage {
+// ─── Message Repository ────────────────────────────────────────────────────
+
+pub struct InMemoryMessageRepository {
+    game_id: AtomicU64,
+    messages: Mutex<HashMap<u64, Vec<Message>>>,
+    next_message_id: Mutex<u64>,
+}
+
+impl Default for InMemoryMessageRepository {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl InMemoryMessageRepository {
+    pub fn new() -> Self {
+        Self::with_game_id(1)
+    }
+
+    pub fn with_game_id(game_id: u64) -> Self {
+        Self {
+            game_id: AtomicU64::new(game_id),
+            messages: Mutex::new(HashMap::new()),
+            next_message_id: Mutex::new(0),
+        }
+    }
+
+    fn do_set_game_id(&self, game_id: u64) {
+        self.game_id.store(game_id, Ordering::SeqCst);
+    }
+
+    fn do_current_game_id(&self) -> u64 {
+        self.game_id.load(Ordering::SeqCst)
+    }
+}
+
+impl MessageStorage for InMemoryMessageRepository {
     fn set_game_id(&self, game_id: u64) {
         self.do_set_game_id(game_id);
     }
@@ -171,16 +194,17 @@ impl MessageStorage for InMemoryGameStorage {
         self.do_current_game_id()
     }
 
-    fn insert_message(&self, msg: &mut Message) -> Result<(), crate::error::EngineError> {
+    fn insert_message(&self, msg: &Message) -> Result<u64, crate::error::EngineError> {
         let mut next_id = lock(&self.next_message_id);
         *next_id += 1;
-        msg.id = *next_id;
+        let id = *next_id;
         let gid = self.do_current_game_id();
-        lock(&self.messages)
-            .entry(gid)
-            .or_default()
-            .push(msg.clone());
-        Ok(())
+        let mut msgs = lock(&self.messages);
+        let entry = msgs.entry(gid).or_default();
+        let mut msg = msg.clone();
+        msg.id = id;
+        entry.push(msg);
+        Ok(id)
     }
 
     fn update_message(&self, id: u64, text: &str) -> Result<(), crate::error::EngineError> {

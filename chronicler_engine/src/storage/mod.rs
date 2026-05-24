@@ -11,6 +11,8 @@ mod db_tests;
 #[cfg(test)]
 mod llm_message_storage_tests;
 #[cfg(test)]
+mod message_storage_tests;
+#[cfg(test)]
 mod prompt_preset_storage_tests;
 #[cfg(test)]
 mod snapshot_storage_tests;

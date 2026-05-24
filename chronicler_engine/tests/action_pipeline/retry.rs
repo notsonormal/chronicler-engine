@@ -145,7 +145,7 @@ fn test_retry_room_not_found() {
         if msg.log_type == LogType::Input {
             msg.snapshot_id = Some(pre_main_id);
         }
-        let _ = ctx.message_storage.insert_message(&mut msg);
+        let _ = ctx.message_storage.insert_message(&msg);
     }
 
     let main = GameStateSnapshot::from_game_state(&state);
@@ -186,7 +186,7 @@ fn test_retry_llm_error() {
         if msg.log_type == LogType::Input {
             msg.snapshot_id = Some(pre_main_id);
         }
-        let _ = ctx.message_storage.insert_message(&mut msg);
+        let _ = ctx.message_storage.insert_message(&msg);
     }
 
     let main = GameStateSnapshot::from_game_state(&state);
@@ -227,7 +227,7 @@ fn test_retry_empty_narration() {
         if msg.log_type == LogType::Input {
             msg.snapshot_id = Some(pre_main_id);
         }
-        let _ = ctx.message_storage.insert_message(&mut msg);
+        let _ = ctx.message_storage.insert_message(&msg);
     }
 
     let main = GameStateSnapshot::from_game_state(&state);
@@ -269,7 +269,7 @@ fn test_retry_main_narration_uses_pre_main_snapshot() {
         if msg.log_type == LogType::Input {
             msg.snapshot_id = Some(pre_main_id);
         }
-        let _ = ctx.message_storage.insert_message(&mut msg);
+        let _ = ctx.message_storage.insert_message(&msg);
     }
 
     let main = GameStateSnapshot::from_game_state(&state);
@@ -342,7 +342,7 @@ fn test_retry_event_continuation_uses_pre_event_snapshot() {
         if msg.log_type == LogType::Narration && msg.event_header.is_none() {
             msg.snapshot_id = Some(pre_event_id);
         }
-        let _ = ctx.message_storage.insert_message(&mut msg);
+        let _ = ctx.message_storage.insert_message(&msg);
     }
 
     let backend = DefaultGameService::with_mock_quantifier(

@@ -224,15 +224,18 @@ async fn test_edit_history_handler_success() {
         chronicler_engine::model::state::LogType::Narration,
     );
 
-    let storage = Arc::new(chronicler_engine::test_support::InMemoryGameStorage::new());
+    let snapshot_storage: Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage> =
+        Arc::new(chronicler_engine::test_support::InMemorySnapshotRepository::new());
+    let message_storage: Arc<dyn chronicler_engine::storage::message_storage::MessageStorage> =
+        Arc::new(chronicler_engine::test_support::InMemoryMessageRepository::new());
     let snapshot =
         chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
-    let _ = storage.save(&snapshot);
-    for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
-        let _ = storage.insert_message(&mut msg);
+    let _ = snapshot_storage.save(&snapshot);
+    for msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
+        let _ = message_storage.insert_message(&msg);
     }
 
-    let entry_id = storage.load_messages().unwrap().last().unwrap().id;
+    let entry_id = message_storage.load_messages().unwrap().last().unwrap().id;
 
     let llm_storage =
         Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
@@ -240,10 +243,8 @@ async fn test_edit_history_handler_success() {
 
     let app = chronicler_engine::server::create_app_with_storage(
         state,
-        Arc::clone(&storage)
-            as Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage>,
-        Arc::clone(&storage)
-            as Arc<dyn chronicler_engine::storage::message_storage::MessageStorage>,
+        Arc::clone(&snapshot_storage),
+        Arc::clone(&message_storage),
         llm_storage,
         chronicler_engine::model::settings::AppSettings::default(),
     );
@@ -486,15 +487,18 @@ async fn test_list_games_fragment_populated() {
 #[tokio::test]
 async fn test_list_games_fragment_escapes_html() {
     let state = create_test_state();
-    let storage = Arc::new(chronicler_engine::test_support::InMemoryGameStorage::new());
+    let snapshot_storage: Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage> =
+        Arc::new(chronicler_engine::test_support::InMemorySnapshotRepository::new());
+    let message_storage: Arc<dyn chronicler_engine::storage::message_storage::MessageStorage> =
+        Arc::new(chronicler_engine::test_support::InMemoryMessageRepository::new());
     let snapshot =
         chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
-    let _ = storage.save(&snapshot);
-    for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
-        let _ = storage.insert_message(&mut msg);
+    let _ = snapshot_storage.save(&snapshot);
+    for msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
+        let _ = message_storage.insert_message(&msg);
     }
 
-    let _ = storage
+    let _ = snapshot_storage
         .create_game("Test World", "<script>alert('xss')</script>")
         .unwrap();
 
@@ -504,8 +508,8 @@ async fn test_list_games_fragment_escapes_html() {
 
     let app = chronicler_engine::server::create_app_with_storage(
         state,
-        Arc::clone(&storage) as Arc<dyn SnapshotStorage>,
-        Arc::clone(&storage) as Arc<dyn MessageStorage>,
+        Arc::clone(&snapshot_storage),
+        Arc::clone(&message_storage),
         llm_storage,
         chronicler_engine::model::settings::AppSettings::default(),
     );
@@ -533,12 +537,15 @@ async fn test_list_games_fragment_escapes_html() {
 #[tokio::test]
 async fn test_create_game_handler() {
     let state = create_test_state();
-    let storage = Arc::new(chronicler_engine::test_support::InMemoryGameStorage::new());
+    let snapshot_storage: Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage> =
+        Arc::new(chronicler_engine::test_support::InMemorySnapshotRepository::new());
+    let message_storage: Arc<dyn chronicler_engine::storage::message_storage::MessageStorage> =
+        Arc::new(chronicler_engine::test_support::InMemoryMessageRepository::new());
     let snapshot =
         chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
-    let _ = storage.save(&snapshot);
-    for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
-        let _ = storage.insert_message(&mut msg);
+    let _ = snapshot_storage.save(&snapshot);
+    for msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
+        let _ = message_storage.insert_message(&msg);
     }
 
     let llm_storage =
@@ -547,13 +554,13 @@ async fn test_create_game_handler() {
 
     let app = chronicler_engine::server::create_app_with_storage(
         state,
-        Arc::clone(&storage) as Arc<dyn SnapshotStorage>,
-        Arc::clone(&storage) as Arc<dyn MessageStorage>,
+        Arc::clone(&snapshot_storage),
+        Arc::clone(&message_storage),
         llm_storage,
         chronicler_engine::model::settings::AppSettings::default(),
     );
 
-    let old_id = SnapshotStorage::current_game_id(&*storage);
+    let old_id = SnapshotStorage::current_game_id(&*snapshot_storage);
 
     let req = Request::builder()
         .uri("/games")
@@ -569,10 +576,10 @@ async fn test_create_game_handler() {
     );
 
     // Verify the new game was created, switched to, and initialized.
-    let new_id = SnapshotStorage::current_game_id(&*storage);
+    let new_id = SnapshotStorage::current_game_id(&*snapshot_storage);
     assert_ne!(new_id, old_id, "Should have switched to the new game");
 
-    let latest = storage.load_latest().unwrap();
+    let latest = snapshot_storage.load_latest().unwrap();
     assert!(latest.is_some(), "New game should have an initial snapshot");
 
     // The test world has no scenario, so messages may be empty.
@@ -582,18 +589,24 @@ async fn test_create_game_handler() {
 #[tokio::test]
 async fn test_switch_game_handler_success() {
     let state = create_test_state();
-    let storage = Arc::new(chronicler_engine::test_support::InMemoryGameStorage::new());
+    let snapshot_storage: Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage> =
+        Arc::new(chronicler_engine::test_support::InMemorySnapshotRepository::new());
+    let message_storage: Arc<dyn chronicler_engine::storage::message_storage::MessageStorage> =
+        Arc::new(chronicler_engine::test_support::InMemoryMessageRepository::new());
     let snapshot =
         chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
-    let _ = storage.save(&snapshot);
-    for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
-        let _ = storage.insert_message(&mut msg);
+    let _ = snapshot_storage.save(&snapshot);
+    for msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
+        let _ = message_storage.insert_message(&msg);
     }
 
-    let other_id = storage
+    let other_id = snapshot_storage
         .create_game("Test World", "Test World_2026-01-01_1")
         .unwrap();
-    assert_ne!(other_id, SnapshotStorage::current_game_id(&*storage));
+    assert_ne!(
+        other_id,
+        SnapshotStorage::current_game_id(&*snapshot_storage)
+    );
 
     let llm_storage =
         Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
@@ -601,8 +614,8 @@ async fn test_switch_game_handler_success() {
 
     let app = chronicler_engine::server::create_app_with_storage(
         state,
-        Arc::clone(&storage) as Arc<dyn SnapshotStorage>,
-        Arc::clone(&storage) as Arc<dyn MessageStorage>,
+        Arc::clone(&snapshot_storage),
+        Arc::clone(&message_storage),
         llm_storage,
         chronicler_engine::model::settings::AppSettings::default(),
     );
@@ -619,7 +632,10 @@ async fn test_switch_game_handler_success() {
         "true",
         "Should return HX-Refresh header"
     );
-    assert_eq!(SnapshotStorage::current_game_id(&*storage), other_id);
+    assert_eq!(
+        SnapshotStorage::current_game_id(&*snapshot_storage),
+        other_id
+    );
 }
 
 #[tokio::test]
@@ -638,15 +654,20 @@ async fn test_switch_game_handler_not_found() {
 #[tokio::test]
 async fn test_switch_game_handler_wrong_world() {
     let state = create_test_state();
-    let storage = Arc::new(chronicler_engine::test_support::InMemoryGameStorage::new());
+    let snapshot_storage: Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage> =
+        Arc::new(chronicler_engine::test_support::InMemorySnapshotRepository::new());
+    let message_storage: Arc<dyn chronicler_engine::storage::message_storage::MessageStorage> =
+        Arc::new(chronicler_engine::test_support::InMemoryMessageRepository::new());
     let snapshot =
         chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
-    let _ = storage.save(&snapshot);
-    for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
-        let _ = storage.insert_message(&mut msg);
+    let _ = snapshot_storage.save(&snapshot);
+    for msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
+        let _ = message_storage.insert_message(&msg);
     }
 
-    let other_id = storage.create_game("Other World", "Other World_1").unwrap();
+    let other_id = snapshot_storage
+        .create_game("Other World", "Other World_1")
+        .unwrap();
 
     let llm_storage =
         Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
@@ -654,8 +675,8 @@ async fn test_switch_game_handler_wrong_world() {
 
     let app = chronicler_engine::server::create_app_with_storage(
         state,
-        Arc::clone(&storage) as Arc<dyn SnapshotStorage>,
-        Arc::clone(&storage) as Arc<dyn MessageStorage>,
+        Arc::clone(&snapshot_storage),
+        Arc::clone(&message_storage),
         llm_storage,
         chronicler_engine::model::settings::AppSettings::default(),
     );
@@ -672,18 +693,24 @@ async fn test_switch_game_handler_wrong_world() {
 #[tokio::test]
 async fn test_delete_game_handler_success() {
     let state = create_test_state();
-    let storage = Arc::new(chronicler_engine::test_support::InMemoryGameStorage::new());
+    let snapshot_storage: Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage> =
+        Arc::new(chronicler_engine::test_support::InMemorySnapshotRepository::new());
+    let message_storage: Arc<dyn chronicler_engine::storage::message_storage::MessageStorage> =
+        Arc::new(chronicler_engine::test_support::InMemoryMessageRepository::new());
     let snapshot =
         chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
-    let _ = storage.save(&snapshot);
-    for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
-        let _ = storage.insert_message(&mut msg);
+    let _ = snapshot_storage.save(&snapshot);
+    for msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
+        let _ = message_storage.insert_message(&msg);
     }
 
-    let other_id = storage
+    let other_id = snapshot_storage
         .create_game("Test World", "Test World_2026-01-01_1")
         .unwrap();
-    assert_ne!(other_id, SnapshotStorage::current_game_id(&*storage));
+    assert_ne!(
+        other_id,
+        SnapshotStorage::current_game_id(&*snapshot_storage)
+    );
 
     let llm_storage =
         Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
@@ -691,8 +718,8 @@ async fn test_delete_game_handler_success() {
 
     let app = chronicler_engine::server::create_app_with_storage(
         state,
-        Arc::clone(&storage) as Arc<dyn SnapshotStorage>,
-        Arc::clone(&storage) as Arc<dyn MessageStorage>,
+        Arc::clone(&snapshot_storage),
+        Arc::clone(&message_storage),
         llm_storage,
         chronicler_engine::model::settings::AppSettings::default(),
     );
@@ -704,7 +731,7 @@ async fn test_delete_game_handler_success() {
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    assert!(storage.get_game(other_id).unwrap().is_none());
+    assert!(snapshot_storage.get_game(other_id).unwrap().is_none());
 }
 
 #[tokio::test]
@@ -833,8 +860,8 @@ async fn test_list_games_fragment_storage_error() {
 
         fn insert_message(
             &self,
-            msg: &mut chronicler_engine::model::message::Message,
-        ) -> Result<(), chronicler_engine::error::EngineError> {
+            msg: &chronicler_engine::model::message::Message,
+        ) -> Result<u64, chronicler_engine::error::EngineError> {
             self.message_inner.insert_message(msg)
         }
 
@@ -921,10 +948,12 @@ async fn test_list_games_fragment_storage_error() {
         }
     }
 
-    let inner = Arc::new(chronicler_engine::test_support::InMemoryGameStorage::new());
+    let inner_snapshot =
+        Arc::new(chronicler_engine::test_support::InMemorySnapshotRepository::new());
+    let inner_message = Arc::new(chronicler_engine::test_support::InMemoryMessageRepository::new());
     let storage = Arc::new(FailingListGamesStorage {
-        inner: Arc::clone(&inner) as Arc<dyn SnapshotStorage>,
-        message_inner: Arc::clone(&inner) as Arc<dyn MessageStorage>,
+        inner: Arc::clone(&inner_snapshot) as Arc<dyn SnapshotStorage>,
+        message_inner: Arc::clone(&inner_message) as Arc<dyn MessageStorage>,
     });
 
     let llm_storage =
@@ -934,7 +963,7 @@ async fn test_list_games_fragment_storage_error() {
     let app = chronicler_engine::server::create_app_with_storage(
         create_test_state(),
         storage,
-        Arc::clone(&inner) as Arc<dyn MessageStorage>,
+        Arc::clone(&inner_message) as Arc<dyn MessageStorage>,
         llm_storage,
         chronicler_engine::model::settings::AppSettings::default(),
     );

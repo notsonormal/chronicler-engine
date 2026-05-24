@@ -7,6 +7,7 @@ use crate::application::context::GameServiceContext;
 use crate::error::EngineError;
 use crate::model::quantifier::{QuantifierConfidence, QuantifierParseResult, QuantifierResult};
 use crate::model::state::StoredTriggerContext;
+use crate::model::character::NpcCard;
 use crate::model::state::{GameState, GenerationPhase, GenerationStatus, LogType};
 use crate::narrative::llm::backend::LlmCallResult;
 use crate::narrative::prompt::PromptContext;
@@ -361,5 +362,165 @@ fn test_trigger_continuation_save_post_trigger_error() {
     assert!(
         matches!(outcome, ActionOutcome::Error { ref message } if message.contains("Failed to save post-trigger retry snapshot")),
         "Expected save error for post-trigger snapshot, got {outcome:?}"
+    );
+}
+
+#[test]
+fn test_pipeline_trigger_happy_path() {
+    use crate::model::trigger::{ComparisonOperator, Trigger, TriggerCondition, TriggerEffect};
+
+    let npc = NpcCard {
+        id: "npc1".to_string(),
+        sheet: crate::test_support::fixtures::TestPlayer::standard().sheet,
+        inventory: vec![],
+        triggers: vec![Trigger {
+            condition: TriggerCondition::TimesMet(ComparisonOperator::Eq, 0),
+            effect: TriggerEffect {
+                name: "Greeting".to_string(),
+                narration_prompt: "The NPC greets you warmly.".to_string(),
+            },
+            repeat: false,
+            room_id: None,
+        }],
+        relationships: vec![],
+    };
+
+    let world = Arc::new(crate::test_support::fixtures::TestWorld::minimal());
+    let map = Arc::new(crate::test_support::fixtures::TestMap::single_room("start"));
+    let player = Arc::new(crate::test_support::fixtures::TestPlayer::standard());
+    let state = GameState::new(world, map, player, vec![npc], "start".to_string());
+
+    let ctx = make_ctx(state.clone());
+    let _backend = MockPipelineBackend::default();
+    // Quantifier must return npc1 so trigger condition (times_met == 0) is evaluated
+    let custom_quantifier = QuantifierResult {
+        npcs: crate::model::quantifier::QuantifierParseResult {
+            npc_ids: vec!["npc1".to_string()],
+            confidence: QuantifierConfidence::High,
+        },
+        movement: crate::model::quantifier::MovementParseResult {
+            destination: None,
+            movement_type: None,
+            confidence: crate::model::quantifier::QuantifierConfidence::Low,
+        },
+    };
+    let backend = MockPipelineBackend {
+        quantifier_result: custom_quantifier,
+        ..Default::default()
+    };
+    let pipeline = ActionPipeline::new(&backend, &ctx);
+
+    let outcome = pipeline.run_from_input(state, "look".to_string());
+
+    assert!(matches!(outcome, ActionOutcome::Completed), "Expected Completed, got {outcome:?}");
+    let final_state = ctx.load_state();
+    assert!(
+        final_state.narrative.history().iter().any(|e| e.text.contains("glows brighter") || e.text.contains("greets")),
+        "Trigger continuation text should appear in history"
+    );
+    assert!(final_state.narrative.last_trigger.is_some(), "last_trigger should be set");
+}
+
+#[test]
+fn test_pipeline_trigger_empty_continuation() {
+    use crate::model::trigger::{ComparisonOperator, Trigger, TriggerCondition, TriggerEffect};
+
+    let npc = NpcCard {
+        id: "npc1".to_string(),
+        sheet: crate::test_support::fixtures::TestPlayer::standard().sheet,
+        inventory: vec![],
+        triggers: vec![Trigger {
+            condition: TriggerCondition::TimesMet(ComparisonOperator::Eq, 0),
+            effect: TriggerEffect {
+                name: "Greeting".to_string(),
+                narration_prompt: "The NPC greets you.".to_string(),
+            },
+            repeat: false,
+            room_id: None,
+        }],
+        relationships: vec![],
+    };
+
+    let world = Arc::new(crate::test_support::fixtures::TestWorld::minimal());
+    let map = Arc::new(crate::test_support::fixtures::TestMap::single_room("start"));
+    let player = Arc::new(crate::test_support::fixtures::TestPlayer::standard());
+    let state = GameState::new(world, map, player, vec![npc], "start".to_string());
+
+    let ctx = make_ctx(state.clone());
+    let custom_quantifier = QuantifierResult {
+        npcs: crate::model::quantifier::QuantifierParseResult {
+            npc_ids: vec!["npc1".to_string()],
+            confidence: QuantifierConfidence::High,
+        },
+        movement: crate::model::quantifier::MovementParseResult {
+            destination: None,
+            movement_type: None,
+            confidence: crate::model::quantifier::QuantifierConfidence::Low,
+        },
+    };
+    let backend = MockPipelineBackend {
+        quantifier_result: custom_quantifier,
+        complete_result: Ok("".to_string()),
+        ..Default::default()
+    };
+    let pipeline = ActionPipeline::new(&backend, &ctx);
+
+    let outcome = pipeline.run_from_input(state, "look".to_string());
+
+    assert!(
+        matches!(outcome, ActionOutcome::Error { ref message } if message.contains("empty response")),
+        "Expected empty response error for trigger, got {outcome:?}"
+    );
+}
+
+#[test]
+fn test_pipeline_trigger_complete_failure() {
+    use crate::model::trigger::{ComparisonOperator, Trigger, TriggerCondition, TriggerEffect};
+
+    let npc = NpcCard {
+        id: "npc1".to_string(),
+        sheet: crate::test_support::fixtures::TestPlayer::standard().sheet,
+        inventory: vec![],
+        triggers: vec![Trigger {
+            condition: TriggerCondition::TimesMet(ComparisonOperator::Eq, 0),
+            effect: TriggerEffect {
+                name: "Greeting".to_string(),
+                narration_prompt: "The NPC greets you.".to_string(),
+            },
+            repeat: false,
+            room_id: None,
+        }],
+        relationships: vec![],
+    };
+
+    let world = Arc::new(crate::test_support::fixtures::TestWorld::minimal());
+    let map = Arc::new(crate::test_support::fixtures::TestMap::single_room("start"));
+    let player = Arc::new(crate::test_support::fixtures::TestPlayer::standard());
+    let state = GameState::new(world, map, player, vec![npc], "start".to_string());
+
+    let ctx = make_ctx(state.clone());
+    let custom_quantifier = QuantifierResult {
+        npcs: crate::model::quantifier::QuantifierParseResult {
+            npc_ids: vec!["npc1".to_string()],
+            confidence: QuantifierConfidence::High,
+        },
+        movement: crate::model::quantifier::MovementParseResult {
+            destination: None,
+            movement_type: None,
+            confidence: crate::model::quantifier::QuantifierConfidence::Low,
+        },
+    };
+    let backend = MockPipelineBackend {
+        quantifier_result: custom_quantifier,
+        complete_result: Err(EngineError::Llm(crate::error::LlmFailure::EmptyResponse)),
+        ..Default::default()
+    };
+    let pipeline = ActionPipeline::new(&backend, &ctx);
+
+    let outcome = pipeline.run_from_input(state, "look".to_string());
+
+    assert!(
+        matches!(outcome, ActionOutcome::Error { ref message } if message.contains("Trigger narration failed")),
+        "Expected trigger narration failure, got {outcome:?}"
     );
 }

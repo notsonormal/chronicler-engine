@@ -60,7 +60,9 @@ async fn test_action_check_handler_disabled_mode() {
 #[tokio::test]
 async fn test_action_handler_load_state_failure() {
     let state = create_test_state();
-    let storage = Arc::new(chronicler_engine::test_support::InMemoryGameStorage::new());
+    let snapshot_storage_inner: Arc<
+        dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage,
+    > = Arc::new(chronicler_engine::test_support::InMemorySnapshotRepository::new());
 
     struct FailingLoadStorage {
         inner: Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage>,
@@ -128,14 +130,12 @@ async fn test_action_handler_load_state_failure() {
         }
     }
 
-    let storage_dyn: Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage> =
-        Arc::clone(&storage)
-            as Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage>;
     let snapshot_storage: Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage> =
-        Arc::new(FailingLoadStorage { inner: storage_dyn });
+        Arc::new(FailingLoadStorage {
+            inner: snapshot_storage_inner,
+        });
     let message_storage: Arc<dyn chronicler_engine::storage::message_storage::MessageStorage> =
-        Arc::clone(&storage)
-            as Arc<dyn chronicler_engine::storage::message_storage::MessageStorage>;
+        Arc::new(chronicler_engine::test_support::InMemoryMessageRepository::new());
     let llm_storage =
         Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
             as Arc<dyn chronicler_engine::storage::llm_message_storage::LlmMessageStorage>;
@@ -162,7 +162,9 @@ async fn test_action_handler_load_state_failure() {
 #[tokio::test]
 async fn test_action_handler_snapshot_save_failure() {
     let state = create_test_state();
-    let storage = Arc::new(chronicler_engine::test_support::InMemoryGameStorage::new());
+    let snapshot_storage_inner: Arc<
+        dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage,
+    > = Arc::new(chronicler_engine::test_support::InMemorySnapshotRepository::new());
 
     struct FailingSaveStorage {
         inner: Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage>,
@@ -230,14 +232,12 @@ async fn test_action_handler_snapshot_save_failure() {
         }
     }
 
-    let storage_dyn: Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage> =
-        Arc::clone(&storage)
-            as Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage>;
     let snapshot_storage: Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage> =
-        Arc::new(FailingSaveStorage { inner: storage_dyn });
+        Arc::new(FailingSaveStorage {
+            inner: snapshot_storage_inner,
+        });
     let message_storage: Arc<dyn chronicler_engine::storage::message_storage::MessageStorage> =
-        Arc::clone(&storage)
-            as Arc<dyn chronicler_engine::storage::message_storage::MessageStorage>;
+        Arc::new(chronicler_engine::test_support::InMemoryMessageRepository::new());
     let llm_storage =
         Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
             as Arc<dyn chronicler_engine::storage::llm_message_storage::LlmMessageStorage>;
@@ -264,7 +264,9 @@ async fn test_action_handler_snapshot_save_failure() {
 #[tokio::test]
 async fn test_action_confirm_handler_render_error_fallback() {
     let state = create_test_state();
-    let storage = Arc::new(chronicler_engine::test_support::InMemoryGameStorage::new());
+    let snapshot_storage_inner: Arc<
+        dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage,
+    > = Arc::new(chronicler_engine::test_support::InMemorySnapshotRepository::new());
 
     struct FailingLoadStorage {
         inner: Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage>,
@@ -332,14 +334,12 @@ async fn test_action_confirm_handler_render_error_fallback() {
         }
     }
 
-    let storage_dyn: Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage> =
-        Arc::clone(&storage)
-            as Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage>;
     let snapshot_storage: Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage> =
-        Arc::new(FailingLoadStorage { inner: storage_dyn });
+        Arc::new(FailingLoadStorage {
+            inner: snapshot_storage_inner,
+        });
     let message_storage: Arc<dyn chronicler_engine::storage::message_storage::MessageStorage> =
-        Arc::clone(&storage)
-            as Arc<dyn chronicler_engine::storage::message_storage::MessageStorage>;
+        Arc::new(chronicler_engine::test_support::InMemoryMessageRepository::new());
     let llm_storage =
         Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
             as Arc<dyn chronicler_engine::storage::llm_message_storage::LlmMessageStorage>;

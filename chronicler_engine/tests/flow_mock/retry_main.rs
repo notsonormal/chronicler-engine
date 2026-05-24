@@ -421,8 +421,17 @@ fn test_retry_no_pre_main_snapshot() {
     state.narrative.history.clear();
 
     let db_pool = chronicler_engine::storage::db::DbPool::new(":memory:").unwrap();
-    let storage = Arc::new(
-        chronicler_engine::storage::snapshot_storage::SqliteGameStorage::new(db_pool.clone(), 1),
+    let snapshot_storage = Arc::new(
+        chronicler_engine::storage::snapshot_storage::SqliteSnapshotRepository::new(
+            db_pool.clone(),
+            1,
+        ),
+    );
+    let message_storage = Arc::new(
+        chronicler_engine::storage::message_storage::SqliteMessageRepository::new(
+            db_pool.clone(),
+            1,
+        ),
     );
     let llm_storage: Arc<dyn chronicler_engine::storage::llm_message_storage::LlmMessageStorage> =
         Arc::new(
@@ -431,14 +440,14 @@ fn test_retry_no_pre_main_snapshot() {
 
     let snapshot =
         chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
-    let _ = storage.save(&snapshot);
-    for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
-        let _ = storage.insert_message(&mut msg);
+    let _ = snapshot_storage.save(&snapshot);
+    for msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
+        let _ = message_storage.insert_message(&msg);
     }
 
     let ctx = chronicler_engine::application::game_service::GameServiceContext {
-        snapshot_storage: storage.clone(),
-        message_storage: storage.clone(),
+        snapshot_storage: snapshot_storage.clone(),
+        message_storage: message_storage.clone(),
         llm_message_storage: llm_storage,
         world: state.world.clone(),
         map: state.map.clone(),
@@ -476,7 +485,7 @@ fn test_retry_no_pre_main_snapshot() {
     );
 
     // Clear all snapshots (simulating missing pre-main)
-    let _ = storage.reset();
+    let _ = snapshot_storage.delete_game(1);
     // Re-save current state as latest so retry has something to load
     {
         save_state(&ctx, &state_before_reset);

@@ -169,7 +169,7 @@ SQLite-based persistence for game state and LLM call forensics.
   - `llm_messages` — LLM API call logging (not game-scoped)
 - **`models`**: Database row structs (`DbGame`, `DbGameStateSnapshot`, `DbMessage`, `DbLlmMessage`) — one per table, using raw SQLite types.
 - **`mappers`**: Conversion logic between DB models and domain models (`TryFrom`/`From` impls and free functions for context-dependent mapping).
-- **`snapshot_storage`**: `SnapshotStorage` trait and SQLite implementation (`SqliteGameStorage`). Uses `Db*` models internally and maps at the boundary. All operations filter by `game_id`.
+- **`snapshot_storage`**: `SnapshotStorage` trait and SQLite implementation (`SqliteSnapshotRepository`). Uses `Db*` models internally and maps at the boundary. All operations filter by `game_id`.
 - **`llm_message_storage`**: `LlmMessageStorage` trait + `SqliteLlmMessageStorage` (auto-pruning to 50 rows) + `InMemoryLlmMessageStorage` (tests). Uses `DbLlmMessage` internally.
 - **`GameStateSnapshot`**: Serializable subset of `GameState` for persistence (messages excluded; hydrated separately). Lives in `crate::model::state_snapshot`.
 

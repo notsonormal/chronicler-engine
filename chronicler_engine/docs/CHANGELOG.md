@@ -17,6 +17,14 @@
   - `templates.rs` now focuses purely on HTML; all domain-to-view mapping lives in `view_models.rs`
 
 ### Changed
+- **Storage repository split — eliminated swipe blast radius**
+  - Split `SqliteGameStorage` into `SqliteSnapshotRepository` + `SqliteMessageRepository`
+  - Split `InMemoryGameStorage` into `InMemorySnapshotRepository` + `InMemoryMessageRepository`
+  - `MessageStorage::insert_message` signature changed from `(&self, &mut Message) -> Result<(), _>` to `(&self, &Message) -> Result<u64, _>` — returns generated ID instead of mutating input
+  - Removed `reset()` from concrete storage types (test-only convenience; tests use fresh repos per test)
+  - All call sites updated to capture returned ID explicitly
+  - Snapshot changes no longer force message code recompilation, and vice versa
+
 - **Arch-lint guardrail**: Added `deny-scope-dep` rule banning `server -> storage` imports; server layer must access storage through `ApplicationService`
 - **Removed `AppState::load_state()`**: All loading goes through `ApplicationService::load_state()`
 - **Removed dead UI fields from `InputBuffer`**: Deleted `cursor_position`, `scroll_offset`, and methods `push_char`, `pop_char`, `clear_input`
@@ -47,7 +55,7 @@
   - Migration v5: added `name TEXT` to `games` table, dropped `checkpoints` table and index
   - New `Game` domain model with auto-generated names (`{WorldName}_{Date}_N`)
   - `SnapshotStorage` and `MessageStorage` traits gained `set_game_id` / `current_game_id` for runtime switching
-  - `SqliteGameStorage` and `InMemoryGameStorage` filter all queries by active `game_id`
+  - `SqliteSnapshotRepository`/`SqliteMessageRepository` and `InMemorySnapshotRepository`/`InMemoryMessageRepository` filter all queries by active `game_id`
   - Game CRUD: `list_games`, `create_game`, `delete_game`, `get_game`
   - Bootstrap startup: auto-creates game if none exist for world; loads most recent if games exist
   - Server endpoints: `GET /fragment/games`, `POST /games`, `POST /games/:id/switch`, `POST /games/:id/delete`
@@ -58,7 +66,7 @@
 
 ### Fixed
 - **Latest-game heuristic**: `find_latest_game_for_world` now orders by most recent message timestamp (with `updated_at` fallback) instead of `updated_at` alone. This ensures the actually-played game is loaded on restart.
-- **`delete_game` transaction**: `SqliteGameStorage::delete_game` now wraps its three cascading `DELETE`s in a SQLite transaction so partial failures cannot leave orphaned data.
+- **`delete_game` transaction**: `SqliteSnapshotRepository::delete_game` now wraps its three cascading `DELETE`s in a SQLite transaction so partial failures cannot leave orphaned data.
 - **Game naming**: `generate_game_name` simplified from gap-filling loop to `max(N) + 1` algorithm.
 - **Code hygiene**: Extracted `game_id()` helper to replace ~25 inline `AtomicU64::load` calls across storage implementations.
 

@@ -168,7 +168,7 @@ pub fn save_state(
         if msg.snapshot_id.is_none() {
             msg.snapshot_id = Some(snapshot_id);
         }
-        let _ = ctx.message_storage.insert_message(&mut msg);
+        let _ = ctx.message_storage.insert_message(&msg);
     }
 }
 

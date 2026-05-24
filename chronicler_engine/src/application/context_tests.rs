@@ -6,7 +6,9 @@ use crate::model::message::Message;
 use crate::model::state::GameState;
 use crate::storage::snapshot_storage::SnapshotStorage;
 use crate::test_support::fixtures::{TestMap, TestPlayer, TestWorld};
-use crate::test_support::in_memory_storage::InMemoryGameStorage;
+use crate::test_support::in_memory_storage::{
+    InMemoryMessageRepository, InMemorySnapshotRepository,
+};
 use std::sync::Arc;
 
 #[test]
@@ -89,11 +91,10 @@ fn minimal_state() -> GameState {
 
 fn minimal_ctx() -> GameServiceContext {
     let state = minimal_state();
-    let storage = Arc::new(InMemoryGameStorage::new());
-    let snapshot_storage: Arc<dyn SnapshotStorage> =
-        Arc::clone(&storage) as Arc<dyn SnapshotStorage>;
-    let message_storage: Arc<dyn crate::storage::message_storage::MessageStorage> =
-        Arc::clone(&storage) as Arc<dyn crate::storage::message_storage::MessageStorage>;
+    let snapshot_repo = Arc::new(InMemorySnapshotRepository::new());
+    let message_repo = Arc::new(InMemoryMessageRepository::new());
+    let snapshot_storage: Arc<dyn SnapshotStorage> = snapshot_repo;
+    let message_storage: Arc<dyn crate::storage::message_storage::MessageStorage> = message_repo;
     let _ = snapshot_storage
         .save(&crate::model::state_snapshot::GameStateSnapshot::from_game_state(&state));
     GameServiceContext {
@@ -117,17 +118,14 @@ fn minimal_ctx() -> GameServiceContext {
 #[test]
 fn test_load_state_hydrates_messages() {
     let ctx = minimal_ctx();
-    let mut msg = Message::new(
+    let msg = Message::new(
         Some("System".to_string()),
         "Hello",
         crate::model::state::LogType::System,
         None,
         None,
     );
-    msg.id = 1;
-    ctx.message_storage
-        .insert_message(&mut msg.clone())
-        .unwrap();
+    ctx.message_storage.insert_message(&msg).unwrap();
 
     let state = load_state(&ctx);
     assert_eq!(state.narrative.history.len(), 1);
@@ -138,11 +136,10 @@ fn test_load_state_hydrates_messages() {
 fn test_load_state_fallback_when_empty() {
     let mut state = minimal_state();
     state.movement.current_room_id = "other".to_string();
-    let storage = Arc::new(InMemoryGameStorage::new());
-    let snapshot_storage: Arc<dyn SnapshotStorage> =
-        Arc::clone(&storage) as Arc<dyn SnapshotStorage>;
-    let message_storage: Arc<dyn crate::storage::message_storage::MessageStorage> =
-        Arc::clone(&storage) as Arc<dyn crate::storage::message_storage::MessageStorage>;
+    let snapshot_repo = Arc::new(InMemorySnapshotRepository::new());
+    let message_repo = Arc::new(InMemoryMessageRepository::new());
+    let snapshot_storage: Arc<dyn SnapshotStorage> = snapshot_repo;
+    let message_storage: Arc<dyn crate::storage::message_storage::MessageStorage> = message_repo;
     let ctx = GameServiceContext {
         snapshot_storage,
         message_storage,

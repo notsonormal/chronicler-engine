@@ -83,13 +83,18 @@ pub fn run(args: Args) -> crate::error::Result<()> {
         }
     };
 
-    let storage = Arc::new(crate::storage::snapshot_storage::SqliteGameStorage::new(
-        db_pool.clone(),
-        active_game_id,
-    ));
-    let snapshot_storage: Arc<dyn crate::storage::snapshot_storage::SnapshotStorage> =
-        storage.clone();
-    let message_storage: Arc<dyn crate::storage::message_storage::MessageStorage> = storage.clone();
+    let snapshot_storage: Arc<dyn crate::storage::snapshot_storage::SnapshotStorage> = Arc::new(
+        crate::storage::snapshot_storage::SqliteSnapshotRepository::new(
+            db_pool.clone(),
+            active_game_id,
+        ),
+    );
+    let message_storage: Arc<dyn crate::storage::message_storage::MessageStorage> = Arc::new(
+        crate::storage::message_storage::SqliteMessageRepository::new(
+            db_pool.clone(),
+            active_game_id,
+        ),
+    );
     let llm_message_storage: Arc<dyn crate::storage::llm_message_storage::LlmMessageStorage> =
         Arc::new(
             crate::storage::llm_message_storage::SqliteLlmMessageStorage::new(db_pool.clone()),
@@ -101,7 +106,8 @@ pub fn run(args: Args) -> crate::error::Result<()> {
     if let Some(msg) = state.narrative.history.last_mut() {
         if msg.id == 0 {
             msg.snapshot_id = Some(snapshot_id);
-            message_storage.insert_message(msg)?;
+            let id = message_storage.insert_message(&*msg)?;
+            msg.id = id;
         }
     }
 

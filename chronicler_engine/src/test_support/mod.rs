@@ -11,4 +11,4 @@ pub use context::{
     make_test_context, make_test_context_with_sqlite, make_test_context_without_snapshot,
 };
 pub use fixtures::*;
-pub use in_memory_storage::InMemoryGameStorage;
+pub use in_memory_storage::{InMemoryMessageRepository, InMemorySnapshotRepository};

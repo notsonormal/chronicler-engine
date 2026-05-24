@@ -80,3 +80,63 @@ fn test_snapshot_json_columns() {
     assert!(db.scene_json.contains("npcs_in_area"));
     assert!(db.npc_encounter_log_json.contains("npcs"));
 }
+
+#[test]
+fn test_try_from_bad_narrative_json() {
+    let db = crate::storage::models::game_state_snapshot::DbGameStateSnapshot {
+        id: 1,
+        game_id: 1,
+        movement_json: "{}".to_string(),
+        narrative_json: "not json".to_string(),
+        scene_json: "{}".to_string(),
+        npc_encounter_log_json: "{}".to_string(),
+        created_at: "2024-01-01T00:00:00Z".to_string(),
+    };
+    let result = GameStateSnapshot::try_from(&db);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_try_from_bad_scene_json() {
+    let db = crate::storage::models::game_state_snapshot::DbGameStateSnapshot {
+        id: 1,
+        game_id: 1,
+        movement_json: "{}".to_string(),
+        narrative_json: "{}".to_string(),
+        scene_json: "not json".to_string(),
+        npc_encounter_log_json: "{}".to_string(),
+        created_at: "2024-01-01T00:00:00Z".to_string(),
+    };
+    let result = GameStateSnapshot::try_from(&db);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_try_from_bad_npc_encounter_log_json() {
+    let db = crate::storage::models::game_state_snapshot::DbGameStateSnapshot {
+        id: 1,
+        game_id: 1,
+        movement_json: "{}".to_string(),
+        narrative_json: "{}".to_string(),
+        scene_json: "{}".to_string(),
+        npc_encounter_log_json: "not json".to_string(),
+        created_at: "2024-01-01T00:00:00Z".to_string(),
+    };
+    let result = GameStateSnapshot::try_from(&db);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_try_from_bad_created_at() {
+    let db = crate::storage::models::game_state_snapshot::DbGameStateSnapshot {
+        id: 1,
+        game_id: 1,
+        movement_json: "{}".to_string(),
+        narrative_json: "{}".to_string(),
+        scene_json: "{}".to_string(),
+        npc_encounter_log_json: "{}".to_string(),
+        created_at: "not-a-date".to_string(),
+    };
+    let result = GameStateSnapshot::try_from(&db);
+    assert!(result.is_err());
+}

@@ -284,7 +284,8 @@ impl ApplicationService for DefaultApplicationService {
         if let Some(msg) = initial_state.narrative.history.last_mut() {
             if msg.id == 0 {
                 msg.snapshot_id = Some(snapshot_id);
-                ctx.message_storage.insert_message(msg)?;
+                let id = ctx.message_storage.insert_message(&*msg)?;
+                msg.id = id;
             }
         }
 
@@ -398,8 +399,9 @@ impl ApplicationService for DefaultApplicationService {
         if let Some(msg) = initial_state.narrative.history.last_mut() {
             if msg.id == 0 {
                 msg.snapshot_id = Some(snapshot_id);
-                if let Err(e) = ctx.message_storage.insert_message(msg) {
-                    log::error!("Create game failed: could not persist message: {e}");
+                match ctx.message_storage.insert_message(&*msg) {
+                    Ok(id) => msg.id = id,
+                    Err(e) => log::error!("Create game failed: could not persist message: {e}"),
                 }
             }
         }

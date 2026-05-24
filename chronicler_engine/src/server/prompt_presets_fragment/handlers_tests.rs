@@ -87,8 +87,8 @@ fn make_test_app_state_with_storage(
         ),
     );
     crate::server::AppState {
-        snapshot_storage: Arc::new(crate::test_support::InMemoryGameStorage::new()),
-        message_storage: Arc::new(crate::test_support::InMemoryGameStorage::new()),
+        snapshot_storage: Arc::new(crate::test_support::InMemorySnapshotRepository::new()),
+        message_storage: Arc::new(crate::test_support::InMemoryMessageRepository::new()),
         llm_message_storage: Arc::new(
             crate::storage::llm_message_storage::InMemoryLlmMessageStorage::new(),
         ),
@@ -302,8 +302,8 @@ fn make_test_app_state_with_failing_storage(
         ),
     );
     crate::server::AppState {
-        snapshot_storage: Arc::new(crate::test_support::InMemoryGameStorage::new()),
-        message_storage: Arc::new(crate::test_support::InMemoryGameStorage::new()),
+        snapshot_storage: Arc::new(crate::test_support::InMemorySnapshotRepository::new()),
+        message_storage: Arc::new(crate::test_support::InMemoryMessageRepository::new()),
         llm_message_storage: Arc::new(
             crate::storage::llm_message_storage::InMemoryLlmMessageStorage::new(),
         ),
