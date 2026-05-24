@@ -3,6 +3,27 @@
 ## 2026-05-24
 
 ### Added
+- **ApplicationService — logic firewall between HTTP handlers and domain**
+  - New `ApplicationService` trait in `src/application/application_service.rs` with `DefaultApplicationService` implementation
+  - Orchestrates all state mutations, persistence, and game-service calls
+  - Methods: `process_action`, `retry`, `retrigger`, `switch_swipe`, `edit_history`, `delete_last`, `reset`, `create_game`, `switch_game`, `delete_game`, `list_games`, `get_generating_status`, `reset_generating_status`, `load_state`, `get_current_game_name`, `list_latest_llm_messages`
+  - All Axum handlers now reduced to request parsing + `ApplicationService` delegation + HTTP response mapping
+  - No handler directly touches `snapshot_storage.save()`, `message_storage.load_messages()`, or `GameStateSnapshot::from_game_state()`
+
+- **View model layer — decoupled templates from domain types**
+  - New `src/server/view_models.rs` extracting `SafeHtml`, `LogEntryView`, `PreviewIssueView`, `LlmMessageView` from `templates.rs`
+  - New `ActionAreaViewModel` decouples `ActionAreaTemplate` from `GenerationStatus`/`GenerationPhase`
+  - New `VisualSidebarViewModel` and `NpcPortraitView` replace raw `(String, String)` tuples in `VisualSidebarTemplate` and `CharacterHeadshotsTemplate`
+  - `templates.rs` now focuses purely on HTML; all domain-to-view mapping lives in `view_models.rs`
+
+### Changed
+- **Arch-lint guardrail**: Added `deny-scope-dep` rule banning `server -> storage` imports; server layer must access storage through `ApplicationService`
+- **Removed `AppState::load_state()`**: All loading goes through `ApplicationService::load_state()`
+- **Removed dead UI fields from `InputBuffer`**: Deleted `cursor_position`, `scroll_offset`, and methods `push_char`, `pop_char`, `clear_input`
+
+## 2026-05-24
+
+### Added
 - **Message swipes — non-destructive retry with state-consistent swipe navigation**
   - New `Swipe` struct: each swipe stores `text`, `snapshot_id: Option<u64>`, `location_header`, and `event_header`
   - `Message` now has `swipes: Vec<Swipe>`, `active_swipe_index: usize`, and `is_deleted: bool`

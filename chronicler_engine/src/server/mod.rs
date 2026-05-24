@@ -3,6 +3,7 @@ pub mod fragments;
 pub mod prompt_presets_fragment;
 pub mod settings_fragment;
 pub mod templates;
+pub mod view_models;
 
 #[cfg(test)]
 mod fragments_tests;
@@ -152,9 +153,10 @@ pub fn create_app_for_testing_with_settings(state: GameState, settings: AppSetti
     let llm_storage =
         Arc::new(crate::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
             as Arc<dyn crate::storage::llm_message_storage::LlmMessageStorage>;
-    let _ = storage.save(&snapshot);
+    let _ = crate::storage::snapshot_storage::SnapshotStorage::save(&*storage, &snapshot);
     for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
-        let _ = storage.insert_message(&mut msg);
+        let _ =
+            crate::storage::message_storage::MessageStorage::insert_message(&*storage, &mut msg);
     }
     create_app_with_storage(
         state,
@@ -185,10 +187,14 @@ pub fn create_app_with_storage(
         npcs: Arc::new(state.npcs.clone()),
         game_service: Arc::new(
             crate::application::game_service::DefaultGameService::with_storage(
-                Some(llm_storage),
+                Some(Arc::clone(&llm_storage)),
                 Arc::clone(&settings_arc),
             ),
         ) as Arc<dyn crate::application::game_service::GameService>,
+        application_service: Arc::new(DefaultApplicationService::new(Arc::new(
+            DefaultGameService::with_storage(Some(llm_storage), Arc::clone(&settings_arc)),
+        )
+            as Arc<dyn GameService>)) as Arc<dyn ApplicationService>,
         prompt_preset_storage,
         settings: settings_arc,
         cancel_token: Arc::new(std::sync::RwLock::new(CancellationToken::new())),
@@ -209,6 +215,7 @@ use std::sync::atomic::AtomicBool;
 use tokio_util::sync::CancellationToken;
 use tower_http::services::ServeDir;
 
+use crate::application::application_service::{ApplicationService, DefaultApplicationService};
 use crate::application::game_service::{DefaultGameService, GameService};
 use crate::error::{EngineError, Result};
 use crate::model::character::NpcCard;
@@ -216,9 +223,6 @@ use crate::model::map::MapDef;
 use crate::model::settings::AppSettings;
 use crate::model::state::GameState;
 use crate::model::world::WorldCard;
-use crate::storage::llm_message_storage::LlmMessageStorage;
-use crate::storage::message_storage::MessageStorage;
-use crate::storage::snapshot_storage::SnapshotStorage;
 
 #[derive(Clone, Debug)]
 pub struct ServerConfig {
@@ -237,23 +241,24 @@ pub struct ServerResources {
     pub map: Arc<MapDef>,
     pub player: Arc<crate::model::character::PlayerCard>,
     pub npcs: Arc<HashMap<String, NpcCard>>,
-    pub snapshot_storage: Arc<dyn SnapshotStorage>,
+    pub snapshot_storage: Arc<dyn crate::storage::snapshot_storage::SnapshotStorage>,
     pub message_storage: Arc<dyn crate::storage::message_storage::MessageStorage>,
-    pub llm_message_storage: Arc<dyn LlmMessageStorage>,
+    pub llm_message_storage: Arc<dyn crate::storage::llm_message_storage::LlmMessageStorage>,
     pub prompt_preset_storage: Arc<dyn crate::storage::prompt_preset_storage::PromptPresetStorage>,
     pub settings: Arc<RwLock<AppSettings>>,
 }
 
 #[derive(Clone)]
 pub struct AppState {
-    pub snapshot_storage: Arc<dyn SnapshotStorage>,
+    pub snapshot_storage: Arc<dyn crate::storage::snapshot_storage::SnapshotStorage>,
     pub message_storage: Arc<dyn crate::storage::message_storage::MessageStorage>,
-    pub llm_message_storage: Arc<dyn LlmMessageStorage>,
+    pub llm_message_storage: Arc<dyn crate::storage::llm_message_storage::LlmMessageStorage>,
     pub world: Arc<WorldCard>,
     pub map: Arc<MapDef>,
     pub player: Arc<crate::model::character::PlayerCard>,
     pub npcs: Arc<HashMap<String, NpcCard>>,
     pub game_service: Arc<dyn GameService>,
+    pub application_service: Arc<dyn ApplicationService>,
     pub prompt_preset_storage: Arc<dyn crate::storage::prompt_preset_storage::PromptPresetStorage>,
     pub settings: Arc<RwLock<AppSettings>>,
     pub cancel_token: Arc<std::sync::RwLock<CancellationToken>>,
@@ -261,32 +266,6 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn load_state(&self) -> crate::error::Result<GameState> {
-        let snapshot = self.snapshot_storage.load_latest()?;
-        let mut game_state = match snapshot {
-            Some(snap) => GameState::from_snapshot(
-                &snap,
-                Arc::clone(&self.world),
-                Arc::clone(&self.map),
-                Arc::clone(&self.player),
-                (*self.npcs).clone(),
-            ),
-            None => GameState::new(
-                Arc::clone(&self.world),
-                Arc::clone(&self.map),
-                Arc::clone(&self.player),
-                (*self.npcs).values().cloned().collect(),
-                self.world.starting_room_id.clone(),
-            ),
-        };
-        if let Ok(messages) = self.message_storage.load_messages() {
-            if !messages.is_empty() {
-                game_state.narrative.history.replace(messages);
-            }
-        }
-        Ok(game_state)
-    }
-
     pub fn as_game_service_context(&self) -> crate::application::game_service::GameServiceContext {
         crate::application::game_service::GameServiceContext {
             snapshot_storage: Arc::clone(&self.snapshot_storage),
@@ -348,9 +327,16 @@ pub async fn run_server_with_config(
         prompt_preset_storage: resources.prompt_preset_storage,
         settings: Arc::clone(&resources.settings),
         game_service: Arc::new(DefaultGameService::with_storage(
-            Some(resources.llm_message_storage),
+            Some(Arc::clone(&resources.llm_message_storage)),
             Arc::clone(&resources.settings),
         )) as Arc<dyn GameService>,
+        application_service: Arc::new(DefaultApplicationService::new(Arc::new(
+            DefaultGameService::with_storage(
+                Some(resources.llm_message_storage),
+                Arc::clone(&resources.settings),
+            ),
+        )
+            as Arc<dyn GameService>)) as Arc<dyn ApplicationService>,
         cancel_token: Arc::new(std::sync::RwLock::new(CancellationToken::new())),
     };
     let cancel_token_arc = Arc::clone(&app_state.cancel_token);

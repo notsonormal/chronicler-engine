@@ -13,6 +13,7 @@ root = "./src"
 exclude = [
     "**/target/**",
     "**/tests/**",
+    "**/*_tests.rs",
 ]
 
 # ── Built-in rule overrides ──
@@ -129,3 +130,9 @@ message = "Bootstrap layer must not depend on storage DB models/mappers."
 from = "test-support"
 to = ["storage-models"]
 message = "Test support must not depend on storage DB models/mappers."
+
+# Server layer must not depend on storage directly; all storage access goes through ApplicationService.
+[[deny-scope-dep]]
+from = "server"
+to = ["storage"]
+message = "Server layer must not import from storage directly; use ApplicationService instead."

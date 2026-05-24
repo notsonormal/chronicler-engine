@@ -64,12 +64,12 @@ pub async fn status_ready_handler(State(_state): State<AppState>) -> Html<String
 
 /// [DOC: docs/system/game_flow.md]
 pub async fn generating_status_handler(State(state): State<AppState>) -> Html<String> {
-    let (status, phase) = match state.load_state() {
-        Ok(guard) => (
-            guard.narrative.input_buffer.status.clone(),
-            guard.narrative.input_buffer.phase.clone(),
-        ),
-        _ => Default::default(),
+    let (status, phase) = match state
+        .application_service
+        .get_generating_status(state.as_game_service_context())
+    {
+        Ok((s, p)) => (s, p),
+        Err(_) => Default::default(),
     };
 
     if let Some(err) = status.error_message() {
@@ -83,18 +83,11 @@ pub async fn generating_status_handler(State(state): State<AppState>) -> Html<St
 
 /// [DOC: docs/system/game_flow.md]
 pub async fn reset_generating_handler(State(state): State<AppState>) -> Html<String> {
-    let result = match state.load_state() {
-        Ok(mut guard) => {
-            guard.narrative.input_buffer.status = crate::model::state::GenerationStatus::Idle;
-            let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&guard);
-            state.snapshot_storage.save(&snapshot).is_ok()
-        }
-        Err(_) => false,
-    };
-
-    if result {
-        Html("reset".to_string())
-    } else {
-        Html("failed".to_string())
+    match state
+        .application_service
+        .reset_generating_status(state.as_game_service_context())
+    {
+        Ok(()) => Html("reset".to_string()),
+        Err(_) => Html("failed".to_string()),
     }
 }

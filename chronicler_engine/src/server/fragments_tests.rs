@@ -17,6 +17,12 @@ fn make_test_app_state(
     };
     let game_service_storage = Arc::clone(&llm_storage);
     let storage = Arc::new(InMemoryGameStorage::new());
+    let game_service: Arc<dyn crate::application::game_service::GameService> = Arc::new(
+        crate::application::game_service::DefaultGameService::with_storage(
+            Some(game_service_storage),
+            Arc::new(RwLock::new(AppSettings::default())),
+        ),
+    );
     crate::server::AppState {
         snapshot_storage: storage.clone(),
         message_storage: storage,
@@ -25,12 +31,10 @@ fn make_test_app_state(
         map: Arc::new(TestMap::single_room("start")),
         player: Arc::new(TestPlayer::standard()),
         npcs: Arc::new(std::collections::HashMap::new()),
-        game_service: Arc::new(
-            crate::application::game_service::DefaultGameService::with_storage(
-                Some(game_service_storage),
-                Arc::new(RwLock::new(AppSettings::default())),
-            ),
-        ) as Arc<dyn crate::application::game_service::GameService>,
+        game_service: Arc::clone(&game_service),
+        application_service: Arc::new(
+            crate::application::application_service::DefaultApplicationService::new(game_service),
+        ),
         prompt_preset_storage: Arc::new(
             crate::storage::prompt_preset_storage::InMemoryPromptPresetStorage::new(),
         ),

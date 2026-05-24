@@ -29,7 +29,10 @@ pub struct DebugStateResponse {
 pub async fn debug_state_handler(
     State(state): State<AppState>,
 ) -> Result<Json<DebugStateResponse>, StatusCode> {
-    let guard = match state.load_state() {
+    let guard = match state
+        .application_service
+        .load_state(state.as_game_service_context())
+    {
         Ok(g) => g,
         Err(_) => {
             log::error!("State load failed during /debug/state request");

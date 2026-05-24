@@ -1,5 +1,6 @@
 use axum::{extract::Form, extract::State, http::StatusCode};
 
+use crate::application::application_service::ApplicationError;
 use crate::server::AppState;
 
 use super::renderers::render_error;
@@ -15,19 +16,10 @@ pub async fn edit_history_handler(
     axum::extract::Path(id): axum::extract::Path<u64>,
     Form(form): Form<EditHistoryForm>,
 ) -> (StatusCode, String) {
-    let result: Result<(), crate::error::EngineError> = (|| {
-        let latest = state.snapshot_storage.load_latest()?;
-        let mut guard = state.load_state()?;
-        guard.narrative.history.edit(id, form.text.clone())?;
-        if latest.is_some() {
-            let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&guard);
-            state.snapshot_storage.save(&snapshot)?;
-            state.message_storage.update_message(id, &form.text)?;
-        }
-        Ok(())
-    })();
-
-    match result {
+    match state
+        .application_service
+        .edit_history(state.as_game_service_context(), id, form.text)
+    {
         Ok(()) => (
             StatusCode::OK,
             "<span class=\"status ready\">Edited</span>".to_string(),
@@ -38,27 +30,12 @@ pub async fn edit_history_handler(
 
 /// [DOC: docs/system/game_flow.md]
 pub async fn delete_history_handler(State(state): State<AppState>) -> (StatusCode, String) {
-    let result: Result<(), crate::error::EngineError> = (|| {
-        let mut guard = state.load_state()?;
-        let last_id = guard
-            .narrative
-            .history
-            .last()
-            .map(|m| m.id)
-            .ok_or_else(|| {
-                crate::error::EngineError::Internal(crate::error::internal_error(
-                    "History is empty".to_string(),
-                ))
-            })?;
-        guard.narrative.history.delete_last()?;
-        let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&guard);
-        state.snapshot_storage.save(&snapshot)?;
-        state.message_storage.delete_message(last_id)?;
-        Ok(())
-    })();
-
-    match result {
+    match state
+        .application_service
+        .delete_last(state.as_game_service_context())
+    {
         Ok(()) => (StatusCode::OK, String::new()),
+        Err(ApplicationError::Validation(msg)) => (StatusCode::BAD_REQUEST, render_error(&msg)),
         Err(e) => (StatusCode::BAD_REQUEST, render_error(&e.to_string())),
     }
 }

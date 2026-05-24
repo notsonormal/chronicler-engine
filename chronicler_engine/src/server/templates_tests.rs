@@ -5,6 +5,7 @@ use crate::model::state::{LogEntry, LogType};
 use crate::server::templates::{
     ActionAreaTemplate, HeaderTemplate, StoryLogTemplate, VisualSidebarTemplate,
 };
+use crate::server::view_models::{ActionAreaViewModel, NpcPortraitView, VisualSidebarViewModel};
 
 #[test]
 fn test_header_template_renders_game_name() {
@@ -264,11 +265,11 @@ fn test_story_log_template_retrigger_button_hidden_without_last_trigger() {
 
 #[test]
 fn test_visual_sidebar_with_image() {
-    let template = VisualSidebarTemplate::new(
+    let template = VisualSidebarTemplate::new(VisualSidebarViewModel::new(
         Some("/images/room.png".to_string()),
         "Test Room".to_string(),
         vec![],
-    );
+    ));
     let rendered = template.render().unwrap();
     assert!(rendered.contains(r#"id="visual-sidebar""#));
     assert!(rendered.contains("/images/room.png"));
@@ -277,7 +278,11 @@ fn test_visual_sidebar_with_image() {
 
 #[test]
 fn test_visual_sidebar_no_image() {
-    let template = VisualSidebarTemplate::new(None, "Test Room".to_string(), vec![]);
+    let template = VisualSidebarTemplate::new(VisualSidebarViewModel::new(
+        None,
+        "Test Room".to_string(),
+        vec![],
+    ));
     let rendered = template.render().unwrap();
     assert!(rendered.contains("no-image"));
     assert!(rendered.contains("No Location Image"));
@@ -285,14 +290,20 @@ fn test_visual_sidebar_no_image() {
 
 #[test]
 fn test_visual_sidebar_with_npcs() {
-    let template = VisualSidebarTemplate::new(
+    let template = VisualSidebarTemplate::new(VisualSidebarViewModel::new(
         Some("/images/room.png".to_string()),
         "Test Room".to_string(),
         vec![
-            ("/images/npc1.png".to_string(), "Alice".to_string()),
-            ("/images/npc2.png".to_string(), "Bob".to_string()),
+            NpcPortraitView {
+                image_path: "/images/npc1.png".to_string(),
+                name: "Alice".to_string(),
+            },
+            NpcPortraitView {
+                image_path: "/images/npc2.png".to_string(),
+                name: "Bob".to_string(),
+            },
         ],
-    );
+    ));
     let rendered = template.render().unwrap();
     assert!(rendered.contains("npc-portrait"));
     assert!(rendered.contains("Alice"));
@@ -301,11 +312,11 @@ fn test_visual_sidebar_with_npcs() {
 
 #[test]
 fn test_action_area_ready() {
-    let template = ActionAreaTemplate::new(
+    let template = ActionAreaTemplate::new(ActionAreaViewModel::new(
         &crate::model::state::GenerationStatus::Idle,
         &crate::model::state::GenerationPhase::default(),
         &["north".to_string(), "east".to_string()],
-    );
+    ));
     let rendered = template.render().unwrap();
     assert!(rendered.contains("id=\"action-area\""));
     assert!(rendered.contains("Ready"));
@@ -313,11 +324,11 @@ fn test_action_area_ready() {
 
 #[test]
 fn test_action_area_thinking() {
-    let template = ActionAreaTemplate::new(
+    let template = ActionAreaTemplate::new(ActionAreaViewModel::new(
         &crate::model::state::GenerationStatus::Generating,
         &crate::model::state::GenerationPhase::Narrating,
         &[],
-    );
+    ));
     let rendered = template.render().unwrap();
     assert!(rendered.contains("Generating narration..."));
     assert!(rendered.contains("disabled"));
@@ -325,11 +336,11 @@ fn test_action_area_thinking() {
 
 #[test]
 fn test_action_area_quantifying() {
-    let template = ActionAreaTemplate::new(
+    let template = ActionAreaTemplate::new(ActionAreaViewModel::new(
         &crate::model::state::GenerationStatus::Generating,
         &crate::model::state::GenerationPhase::Quantifying,
         &[],
-    );
+    ));
     let rendered = template.render().unwrap();
     assert!(rendered.contains("Quantifying scene..."));
     assert!(rendered.contains("disabled"));
@@ -337,11 +348,11 @@ fn test_action_area_quantifying() {
 
 #[test]
 fn test_action_area_generating_event() {
-    let template = ActionAreaTemplate::new(
+    let template = ActionAreaTemplate::new(ActionAreaViewModel::new(
         &crate::model::state::GenerationStatus::Generating,
         &crate::model::state::GenerationPhase::GeneratingEvent,
         &[],
-    );
+    ));
     let rendered = template.render().unwrap();
     assert!(rendered.contains("Generating event..."));
     assert!(rendered.contains("disabled"));
@@ -349,11 +360,11 @@ fn test_action_area_generating_event() {
 
 #[test]
 fn test_action_area_no_exits() {
-    let template = ActionAreaTemplate::new(
+    let template = ActionAreaTemplate::new(ActionAreaViewModel::new(
         &crate::model::state::GenerationStatus::Idle,
         &crate::model::state::GenerationPhase::default(),
         &[],
-    );
+    ));
     let rendered = template.render().unwrap();
     assert!(rendered.contains("command-form"));
 }
@@ -361,14 +372,14 @@ fn test_action_area_no_exits() {
 #[test]
 fn test_markdown_to_html_basic_quote() {
     let input = "\"Hello\"";
-    let output = crate::server::templates::markdown_to_html(input);
+    let output = crate::server::view_models::markdown_to_html(input);
     assert!(output.contains("<q>Hello</q>"));
 }
 
 #[test]
 fn test_markdown_to_html_multiple_quotes() {
     let input = "\"Well, well,\" Gabriella remarks, \"Welcome back\"";
-    let output = crate::server::templates::markdown_to_html(input);
+    let output = crate::server::view_models::markdown_to_html(input);
     assert!(output.contains("<q>Well, well,</q>"));
     assert!(output.contains("<q>Welcome back</q>"));
 }
@@ -376,7 +387,7 @@ fn test_markdown_to_html_multiple_quotes() {
 #[test]
 fn test_markdown_to_html_mixed_content() {
     let input = "She said \"Hello there\" and walked away.";
-    let output = crate::server::templates::markdown_to_html(input);
+    let output = crate::server::view_models::markdown_to_html(input);
     assert!(output.contains("<q>Hello there</q>"));
     assert!(output.contains("She said"));
     assert!(output.contains("and walked away"));
@@ -385,28 +396,28 @@ fn test_markdown_to_html_mixed_content() {
 #[test]
 fn test_markdown_to_html_italic() {
     let input = "This is *italic* text.";
-    let output = crate::server::templates::markdown_to_html(input);
+    let output = crate::server::view_models::markdown_to_html(input);
     assert!(output.contains("<em>italic</em>"));
 }
 
 #[test]
 fn test_markdown_to_html_bold() {
     let input = "This is **bold** text.";
-    let output = crate::server::templates::markdown_to_html(input);
+    let output = crate::server::view_models::markdown_to_html(input);
     assert!(output.contains("<strong>bold</strong>"));
 }
 
 #[test]
 fn test_markdown_to_html_blockquote() {
     let input = "> This is a quote";
-    let output = crate::server::templates::markdown_to_html(input);
+    let output = crate::server::view_models::markdown_to_html(input);
     assert!(output.contains("<blockquote>"));
 }
 
 #[test]
 fn test_markdown_to_html_mixed_markdown() {
     let input = "**Bold** and *italic* and \"quoted\" text.";
-    let output = crate::server::templates::markdown_to_html(input);
+    let output = crate::server::view_models::markdown_to_html(input);
     assert!(output.contains("<strong>Bold</strong>"));
     assert!(output.contains("<em>italic</em>"));
     assert!(output.contains("<q>quoted</q>"));
@@ -415,14 +426,14 @@ fn test_markdown_to_html_mixed_markdown() {
 #[test]
 fn test_markdown_to_html_no_quotes() {
     let input = "Plain text without quotes.";
-    let output = crate::server::templates::markdown_to_html(input);
+    let output = crate::server::view_models::markdown_to_html(input);
     assert_eq!(output, "<p>Plain text without quotes.</p>\n");
 }
 
 #[test]
 fn test_markdown_to_html_xss_prevention() {
     let input = "<script>alert('xss')</script>";
-    let output = crate::server::templates::markdown_to_html(input);
+    let output = crate::server::view_models::markdown_to_html(input);
     assert!(output.contains("&lt;script&gt;"));
     assert!(!output.contains("<script>"));
 }

@@ -46,6 +46,7 @@ Declarative architecture rules in `arch-lint.toml`.
 | `model` | `server`, `narrative`, `engine`, `application` |
 | `engine` | `server`, `application`, `narrative` |
 | `application` | `server` |
+| `server` | `storage` |
 
 ### Rules
 

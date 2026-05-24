@@ -12,27 +12,6 @@ fn test_game_state_initialization() {
 }
 
 #[test]
-fn test_generation_state_input_edge_cases() {
-    let mut tui = InputBuffer::default();
-
-    tui.push_char('A');
-    assert_eq!(tui.input, "A");
-    assert_eq!(tui.cursor_position, 1);
-
-    tui.pop_char();
-    assert_eq!(tui.input, "");
-    assert_eq!(tui.cursor_position, 0);
-
-    tui.pop_char();
-    assert_eq!(tui.cursor_position, 0);
-
-    tui.push_char('h');
-    tui.clear_input();
-    assert_eq!(tui.input, "");
-    assert_eq!(tui.cursor_position, 0);
-}
-
-#[test]
 fn test_generation_state_status() {
     let mut tui = InputBuffer::default();
 

@@ -1,21 +1,20 @@
+use askama::Template;
 use axum::{
     body::Body,
     extract::{Form, State},
-    http::StatusCode,
     response::Response,
 };
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-use std::sync::atomic::Ordering;
 
+use crate::application::application_service::ProcessActionResult;
 use crate::model::settings::TextCheckMode;
-use crate::model::state::LogType;
 use crate::narrative::text_check::check_player_input;
 use crate::server::AppState;
 use crate::server::templates::TextCheckPreviewTemplate;
-use askama::Template;
 
-use super::renderers::{render_action_area, render_error};
+use super::renderers::{
+    bad_request, internal_error, ok, render_action_area, render_error, service_unavailable,
+};
 
 #[derive(Deserialize, Serialize)]
 pub struct ActionForm {
@@ -23,107 +22,29 @@ pub struct ActionForm {
 }
 
 /// [DOC: docs/system/game_flow.md]
-#[allow(clippy::expect_used)]
 async fn process_action(state: &AppState, command: String) -> Response<Body> {
     if command.is_empty() {
-        return Response::builder()
-            .status(StatusCode::BAD_REQUEST)
-            .body(Body::from(
-                "<span class=\"status error\">Enter a command</span>",
-            ))
-            .expect("static response body is valid");
+        return bad_request("<span class=\"status error\">Enter a command</span>");
     }
 
-    let mut game_state = match state.load_state() {
-        Ok(s) => s,
-        Err(_) => {
-            return Response::builder()
-                .status(StatusCode::INTERNAL_SERVER_ERROR)
-                .body(Body::new(String::new()))
-                .expect("static response body is valid");
-        }
-    };
-
-    let player_name = game_state.player.sheet.name.clone();
-    game_state.add_log(command.clone(), Some(player_name.clone()), LogType::Input);
-
-    // Reject concurrent actions while generation is in flight.
-    if state
-        .is_generating
-        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-        .is_err()
+    match state
+        .application_service
+        .process_action(state.as_game_service_context(), command)
     {
-        return Response::builder()
-            .status(StatusCode::OK)
-            .body(Body::from(
-                "<span class=\"status wait\">Still thinking...</span>",
-            ))
-            .expect("static response body is valid");
-    }
-
-    game_state.narrative.input_buffer.status = crate::model::state::GenerationStatus::Generating;
-    game_state.narrative.input_buffer.phase = crate::model::state::GenerationPhase::Narrating;
-    let ctx_for_persist = state.as_game_service_context();
-    if let Err(e) = crate::application::game_service::save_message_and_snapshot(
-        &ctx_for_persist,
-        &mut game_state,
-    ) {
-        log::error!("Failed to persist input message: {e}");
-        state.is_generating.store(false, Ordering::SeqCst);
-        return Response::builder()
-            .status(StatusCode::INTERNAL_SERVER_ERROR)
-            .body(Body::from(render_error(&format!(
-                "Failed to persist message: {e}"
-            ))))
-            .expect("static response body is valid");
-    }
-
-    let ctx = state.as_game_service_context();
-    let cmd = command;
-    let pname = player_name;
-    let game_service = state.game_service.clone();
-    let token = state.current_cancel_token();
-
-    if token.is_cancelled() {
-        let mut gs = match state.load_state() {
-            Ok(s) => s,
-            Err(_) => {
-                return Response::builder()
-                    .status(StatusCode::SERVICE_UNAVAILABLE)
-                    .body(Body::from(render_error("Server is shutting down")))
-                    .expect("static response body is valid");
-            }
-        };
-        gs.narrative.input_buffer.status = crate::model::state::GenerationStatus::Idle;
-        let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&gs);
-        if let Err(e) = state.snapshot_storage.save(&snapshot) {
-            log::error!("Failed to save shutdown snapshot: {e}");
+        Ok(ProcessActionResult::Started) => {
+            ok("<span class=\"status thinking\">Thinking...</span>")
         }
-        return Response::builder()
-            .status(StatusCode::SERVICE_UNAVAILABLE)
-            .body(Body::from(render_error("Server is shutting down")))
-            .expect("static response body is valid");
-    }
-
-    // [DOC: docs/architecture/invariants.md#INV-004]
-    tokio::task::spawn_blocking(move || {
-        let _guard = crate::server::fragments::GenerationGuard(Arc::clone(&ctx.is_generating));
-        if token.is_cancelled() {
-            return;
+        Ok(ProcessActionResult::ConcurrentGeneration) => {
+            ok("<span class=\"status wait\">Still thinking...</span>")
         }
-        game_service.execute_action(ctx, cmd, pname);
-    });
-
-    Response::builder()
-        .status(StatusCode::OK)
-        .body(Body::from(
-            "<span class=\"status thinking\">Thinking...</span>",
-        ))
-        .expect("static response body is valid")
+        Ok(ProcessActionResult::ShuttingDown) => {
+            service_unavailable(render_error("Server is shutting down"))
+        }
+        Err(e) => internal_error(render_error(&format!("Failed to process action: {e}"))),
+    }
 }
 
 /// [DOC: docs/system/game_flow.md]
-#[allow(clippy::expect_used)]
 pub async fn action_handler(
     State(state): State<AppState>,
     Form(form): Form<ActionForm>,
@@ -140,12 +61,7 @@ pub async fn action_confirm_handler(
 ) -> Response<Body> {
     let command = form.command.trim().to_string();
     if command.is_empty() {
-        return Response::builder()
-            .status(StatusCode::BAD_REQUEST)
-            .body(Body::from(
-                "<span class=\"status error\">Enter a command</span>",
-            ))
-            .expect("static response body is valid");
+        return bad_request("<span class=\"status error\">Enter a command</span>");
     }
 
     let action_response = process_action(&state, command).await;
@@ -166,19 +82,13 @@ pub async fn action_confirm_handler(
 }
 
 /// [DOC: docs/system/text_check.md]
-#[allow(clippy::expect_used)]
 pub async fn action_check_handler(
     State(state): State<AppState>,
     Form(form): Form<ActionForm>,
 ) -> Response<Body> {
     let command = form.command.trim().to_string();
     if command.is_empty() {
-        return Response::builder()
-            .status(StatusCode::BAD_REQUEST)
-            .body(Body::from(
-                "<span class=\"status error\">Enter a command</span>",
-            ))
-            .expect("static response body is valid");
+        return bad_request("<span class=\"status error\">Enter a command</span>");
     }
 
     let settings = state.settings();
@@ -208,14 +118,8 @@ pub async fn action_check_handler(
         Some(check_result) => {
             let template = TextCheckPreviewTemplate::from_check_result(&check_result);
             match template.render() {
-                Ok(html) => Response::builder()
-                    .status(StatusCode::OK)
-                    .body(Body::from(html))
-                    .expect("static response body is valid"),
-                Err(e) => Response::builder()
-                    .status(StatusCode::INTERNAL_SERVER_ERROR)
-                    .body(Body::from(render_error(&format!("Template error: {e}"))))
-                    .expect("static response body is valid"),
+                Ok(html) => ok(html),
+                Err(e) => internal_error(render_error(&format!("Template error: {e}"))),
             }
         }
         None => {

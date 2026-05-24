@@ -78,6 +78,14 @@ fn make_test_app_state_with_storage(
     let _ = storage.save(&preset);
 
     let settings = Arc::new(RwLock::new(crate::model::settings::AppSettings::default()));
+    let game_service: Arc<dyn crate::application::game_service::GameService> = Arc::new(
+        crate::application::game_service::DefaultGameService::with_storage(
+            Some(Arc::new(
+                crate::storage::llm_message_storage::InMemoryLlmMessageStorage::new(),
+            )),
+            Arc::clone(&settings),
+        ),
+    );
     crate::server::AppState {
         snapshot_storage: Arc::new(crate::test_support::InMemoryGameStorage::new()),
         message_storage: Arc::new(crate::test_support::InMemoryGameStorage::new()),
@@ -88,14 +96,10 @@ fn make_test_app_state_with_storage(
         map: Arc::new(crate::test_support::TestMap::single_room("start")),
         player: Arc::new(crate::test_support::TestPlayer::standard()),
         npcs: Arc::new(std::collections::HashMap::new()),
-        game_service: Arc::new(
-            crate::application::game_service::DefaultGameService::with_storage(
-                Some(Arc::new(
-                    crate::storage::llm_message_storage::InMemoryLlmMessageStorage::new(),
-                )),
-                Arc::clone(&settings),
-            ),
-        ) as Arc<dyn crate::application::game_service::GameService>,
+        game_service: Arc::clone(&game_service),
+        application_service: Arc::new(
+            crate::application::application_service::DefaultApplicationService::new(game_service),
+        ),
         prompt_preset_storage: storage,
         settings,
         cancel_token: Arc::new(RwLock::new(tokio_util::sync::CancellationToken::new())),
@@ -289,6 +293,14 @@ fn make_test_app_state_with_failing_storage(
     fail_after_setup(&mut storage);
 
     let settings = Arc::new(RwLock::new(crate::model::settings::AppSettings::default()));
+    let game_service: Arc<dyn crate::application::game_service::GameService> = Arc::new(
+        crate::application::game_service::DefaultGameService::with_storage(
+            Some(Arc::new(
+                crate::storage::llm_message_storage::InMemoryLlmMessageStorage::new(),
+            )),
+            Arc::clone(&settings),
+        ),
+    );
     crate::server::AppState {
         snapshot_storage: Arc::new(crate::test_support::InMemoryGameStorage::new()),
         message_storage: Arc::new(crate::test_support::InMemoryGameStorage::new()),
@@ -299,14 +311,10 @@ fn make_test_app_state_with_failing_storage(
         map: Arc::new(crate::test_support::TestMap::single_room("start")),
         player: Arc::new(crate::test_support::TestPlayer::standard()),
         npcs: Arc::new(std::collections::HashMap::new()),
-        game_service: Arc::new(
-            crate::application::game_service::DefaultGameService::with_storage(
-                Some(Arc::new(
-                    crate::storage::llm_message_storage::InMemoryLlmMessageStorage::new(),
-                )),
-                Arc::clone(&settings),
-            ),
-        ) as Arc<dyn crate::application::game_service::GameService>,
+        game_service: Arc::clone(&game_service),
+        application_service: Arc::new(
+            crate::application::application_service::DefaultApplicationService::new(game_service),
+        ),
         prompt_preset_storage: Arc::new(storage),
         settings,
         cancel_token: Arc::new(RwLock::new(tokio_util::sync::CancellationToken::new())),

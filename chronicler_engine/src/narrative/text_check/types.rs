@@ -34,3 +34,16 @@ pub enum IssueKind {
     Formatting,
     Other,
 }
+
+impl std::fmt::Display for IssueKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Spelling => write!(f, "spell"),
+            Self::Grammar => write!(f, "grammar"),
+            Self::Capitalization => write!(f, "capitalization"),
+            Self::Style => write!(f, "style"),
+            Self::Formatting => write!(f, "formatting"),
+            Self::Other => write!(f, "other"),
+        }
+    }
+}

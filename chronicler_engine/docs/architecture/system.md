@@ -41,6 +41,8 @@ Orchestration layer that coordinates game flow, persistence, and LLM generation.
   - `retry.rs`: Retry-specific setup (anchor finding, message deletion, snapshot loading) delegates continuation regeneration to `ActionPipeline::run_trigger_continuation()` and main narration retry to `ActionPipeline::run_from_input()`.
 - **`game_service`**: Service boundary — `GameService` trait and `DefaultGameService`.
   - `service.rs`: `GameService` trait (`execute_action`, `retry_last_response`), `DefaultGameService` struct (owns `llm_backend` and `agent_registry`), and `impl ActionPipelineBackend for DefaultGameService` — the adapter that wires internal backends to the pipeline trait.
+- **`application_service`**: Logic firewall between HTTP handlers and the domain. `ApplicationService` trait and `DefaultApplicationService`.
+  - `application_service.rs`: Orchestrates state mutations, persistence, and game-service calls. All Axum handlers delegate through this layer. Returns raw data / `Result` (not rendered HTML) to keep presentation out of the service.
 
 ### 3. The Narrative Tier (`crate::narrative::*`)
 The interface between the synchronous engine and stochastic LLM generation.
@@ -88,6 +90,9 @@ The HTTP layer for the HTMX web dashboard with polling-based real-time updates.
   - **`renderers`**: HTML rendering helpers, markdown→HTML via `pulldown-cmark`
 - **`settings_fragment`**: Settings panel fragment handlers and template rendering.
 - **`prompt_presets_fragment`**: Prompt Presets panel with two independent collections (System, Quantifier). Supports CRUD operations, active selection, and protected default presets.
+- **`view_models`**: View model structs that decouple templates from domain types.
+  - `view_models.rs`: `LogEntryView`, `LlmMessageView`, `PreviewIssueView`, `ActionAreaViewModel`, `VisualSidebarViewModel`, `NpcPortraitView`, and `SafeHtml` / `markdown_to_html`.
+  - Domain-to-view mapping lives here; `templates.rs` focuses purely on HTML.
 - **`templates`**: Askama template definitions with type-safe rendering.
   - Templates declare required data shapes at compile time.
   - Missing fields = compiler error (not runtime failure).

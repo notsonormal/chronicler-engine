@@ -25,6 +25,10 @@ fn test_settings_recover_from_poisoned_rwlock() {
     })
     .join();
 
+    let game_service: Arc<dyn GameService> = Arc::new(DefaultGameService::with_storage(
+        None,
+        Arc::new(std::sync::RwLock::new(AppSettings::default())),
+    ));
     let app_state = AppState {
         snapshot_storage: Arc::new(InMemoryGameStorage::new()),
         message_storage: Arc::new(InMemoryGameStorage::new()),
@@ -52,10 +56,12 @@ fn test_settings_recover_from_poisoned_rwlock() {
             inventory: vec![],
         }),
         npcs: Arc::new(std::collections::HashMap::new()),
-        game_service: Arc::new(DefaultGameService::with_storage(
-            None,
-            Arc::new(std::sync::RwLock::new(AppSettings::default())),
-        )) as Arc<dyn GameService>,
+        game_service: Arc::clone(&game_service),
+        application_service: Arc::new(
+            chronicler_engine::application::application_service::DefaultApplicationService::new(
+                game_service,
+            ),
+        ),
         settings,
         cancel_token: Arc::new(std::sync::RwLock::new(CancellationToken::new())),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -80,6 +86,10 @@ fn test_cancel_token_recover_from_poisoned_rwlock() {
     })
     .join();
 
+    let game_service: Arc<dyn GameService> = Arc::new(DefaultGameService::with_storage(
+        None,
+        Arc::new(std::sync::RwLock::new(AppSettings::default())),
+    ));
     let app_state = AppState {
         snapshot_storage: Arc::new(InMemoryGameStorage::new()),
         message_storage: Arc::new(InMemoryGameStorage::new()),
@@ -107,10 +117,12 @@ fn test_cancel_token_recover_from_poisoned_rwlock() {
             inventory: vec![],
         }),
         npcs: Arc::new(std::collections::HashMap::new()),
-        game_service: Arc::new(DefaultGameService::with_storage(
-            None,
-            Arc::new(std::sync::RwLock::new(AppSettings::default())),
-        )) as Arc<dyn GameService>,
+        game_service: Arc::clone(&game_service),
+        application_service: Arc::new(
+            chronicler_engine::application::application_service::DefaultApplicationService::new(
+                game_service,
+            ),
+        ),
         settings: Arc::new(std::sync::RwLock::new(AppSettings::default())),
         cancel_token,
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),

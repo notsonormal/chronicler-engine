@@ -102,29 +102,8 @@ impl GenerationPhase {
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub struct InputBuffer {
     pub input: String,
-    pub cursor_position: usize,
-    pub scroll_offset: u16,
     pub status: GenerationStatus,
     pub phase: GenerationPhase,
-}
-
-impl InputBuffer {
-    pub fn push_char(&mut self, c: char) {
-        self.input.push(c);
-        self.cursor_position += 1;
-    }
-
-    pub fn pop_char(&mut self) {
-        if !self.input.is_empty() {
-            self.input.pop();
-            self.cursor_position = self.cursor_position.saturating_sub(1);
-        }
-    }
-
-    pub fn clear_input(&mut self) {
-        self.input.clear();
-        self.cursor_position = 0;
-    }
 }
 
 // ─── Sub-state structs ────────────────────────────────────────────────────────

@@ -63,20 +63,33 @@ impl GameServiceContext {
 }
 
 /// [DOC: docs/architecture/system.md]
+pub fn try_load_state(ctx: &GameServiceContext) -> Result<GameState, EngineError> {
+    let snapshot = ctx.snapshot_storage.load_latest()?;
+    let mut state = match snapshot {
+        Some(snap) => GameState::from_snapshot(
+            &snap,
+            Arc::clone(&ctx.world),
+            Arc::clone(&ctx.map),
+            Arc::clone(&ctx.player),
+            (*ctx.npcs).clone(),
+        ),
+        None => GameState::new(
+            Arc::clone(&ctx.world),
+            Arc::clone(&ctx.map),
+            Arc::clone(&ctx.player),
+            (*ctx.npcs).values().cloned().collect(),
+            ctx.world.starting_room_id.clone(),
+        ),
+    };
+    load_messages_into_state(ctx, &mut state);
+    Ok(state)
+}
+
+/// [DOC: docs/architecture/system.md]
 pub fn load_state(ctx: &GameServiceContext) -> GameState {
-    match ctx.snapshot_storage.load_latest() {
-        Ok(Some(snapshot)) => {
-            let mut state = GameState::from_snapshot(
-                &snapshot,
-                Arc::clone(&ctx.world),
-                Arc::clone(&ctx.map),
-                Arc::clone(&ctx.player),
-                (*ctx.npcs).clone(),
-            );
-            load_messages_into_state(ctx, &mut state);
-            state
-        }
-        _ => GameState::new(
+    match try_load_state(ctx) {
+        Ok(state) => state,
+        Err(_) => GameState::new(
             Arc::clone(&ctx.world),
             Arc::clone(&ctx.map),
             Arc::clone(&ctx.player),
