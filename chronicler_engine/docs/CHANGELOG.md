@@ -2,6 +2,32 @@
 
 ## 2026-05-25
 
+### Changed
+- **`PromptContext` requires assembled system prompt — `Option<String>` removed**
+  - `PromptContext.system_prompt` and `PromptBuilder.system_prompt` are now `String` (was `assembled_system_prompt: Option<String>`)
+  - `make_prompt_context()` takes `String` instead of `Option<String>`
+  - `PromptBuilder::render_system_layer()` returns `self.system_prompt.clone()` — no silent empty-string fallback
+  - `pipeline.rs`: `phase_narrate()` errors explicitly if `active_system_prompt()` returns `None`
+  - `bootstrap/run.rs`: arrival narration assembles the active preset before building `PromptContext`
+  - `openrouter.rs` + `ollama.rs`: derivative contexts (dialogue, arrival) propagate parent `system_prompt`
+  - Test helpers updated: `make_test_context()` and `make_test_context_with_npc()` include a default test system prompt; `build_test_context()` and `make_test_context_with_sqlite()` seed `InMemoryPromptPresetStorage` with a default preset
+  - Documentation updated: `reference/system_prompt.md`
+
+## 2026-05-25
+
+### Added
+- **Sectioned XML-wrapped prompt presets — `prompt_text` split into four fields**
+  - `PromptPreset` domain model: new `role`, `instructions`, `writing_style`, `output_format` fields (`Option<String>`)
+  - `PromptPreset::assemble_prompt_text()` assembles sections into XML-wrapped tags with fixed order: `<role>` → `<instructions>` → `<writing_style>` → `<global_rules>` → `<output_format>`
+  - Global rules from `world.json` injected dynamically before `<output_format>`
+  - Response length from `AppSettings` appended inside `<output_format>` content
+  - DB migrations v7 (add section columns) and v8 (drop `prompt_text` column)
+  - `DbPromptPreset` and `SqlitePromptPresetStorage` updated for new schema
+  - Seed files restructured: `data/prompt_presets/system/default.json` and `quantifier/default.json`
+  - UI updated with four textarea fields per preset (Role, Instructions, Writing Style, Output Format)
+  - Startup/activation caching calls `assemble_prompt_text()` with `world.global_rules` and `response_length`
+  - Documentation updated: `adr-004` (v4 section), `adr-005` (sectioned refactor), `adr-015` (preset structure table), `reference/system_prompt.md`, `reference/quantifier_prompt.md`, `system/prompt_system.md`, `system/game_flow.md`, `system/llm_processing.md`
+
 ### Added
 - **`TestAppBuilder` — test infrastructure without `GameState` exposure**
   - New `src/test_support/test_app_builder.rs` with fluent builder API

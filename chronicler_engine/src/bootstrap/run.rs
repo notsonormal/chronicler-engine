@@ -118,17 +118,7 @@ pub fn run(args: Args) -> crate::error::Result<()> {
     let npcs_arc = Arc::new(npcs_map);
 
     // [DOC: docs/architecture/system.md]
-    let mut settings = crate::settings::load_settings().unwrap_or_else(|_| AppSettings::default());
-
-    let preset_storage =
-        crate::storage::prompt_preset_storage::SqlitePromptPresetStorage::new(db_pool.clone());
-    if let Ok(Some(preset)) = preset_storage.get(&settings.active_system_prompt_preset_id) {
-        settings.active_system_prompt = Some(preset.prompt_text);
-    }
-    if let Ok(Some(preset)) = preset_storage.get(&settings.active_quantifier_prompt_preset_id) {
-        settings.active_quantifier_prompt = Some(preset.prompt_text);
-    }
-
+    let settings = crate::settings::load_settings().unwrap_or_else(|_| AppSettings::default());
     let settings = Arc::new(RwLock::new(settings));
     let config = ServerConfig { port: args.port };
     let runtime = tokio::runtime::Runtime::new().map_err(|e| {
@@ -140,6 +130,25 @@ pub fn run(args: Args) -> crate::error::Result<()> {
         .default_scenario()
         .is_some_and(|s| !s.text.is_empty());
     if !has_scenario {
+        let arrival_system_prompt = {
+            let preset_storage =
+                crate::storage::prompt_preset_storage::SqlitePromptPresetStorage::new(
+                    db_pool.clone(),
+                );
+            let settings_guard = settings.read().unwrap_or_else(|e| e.into_inner());
+            let preset_id = &settings_guard.active_system_prompt_preset_id;
+            preset_storage
+                .get(preset_id)
+                .ok()
+                .flatten()
+                .map(|p| {
+                    p.assemble_prompt_text(
+                        &world_arc.global_rules,
+                        Some(settings_guard.response_length.as_str()),
+                    )
+                })
+                .unwrap_or_default()
+        };
         let snapshot_storage_for_task = Arc::clone(&snapshot_storage);
         let message_storage_for_task = Arc::clone(&message_storage);
         let llm_storage_for_task = Arc::clone(&llm_message_storage);
@@ -184,7 +193,6 @@ pub fn run(args: Args) -> crate::error::Result<()> {
                 let backend = crate::narrative::llm::get_llm_backend_for(
                     &settings_guard.narration_connection(),
                     Some(Arc::clone(&llm_storage_for_task)),
-                    Some(Arc::clone(&settings_for_task)),
                 );
                 drop(settings_guard);
                 let context = PromptContext {
@@ -195,7 +203,7 @@ pub fn run(args: Args) -> crate::error::Result<()> {
                     player: &player_for_task,
                     user_message: "",
                     history: &history,
-                    system_prompt_override: None,
+                    system_prompt: arrival_system_prompt.clone(),
                 };
                 let narration = backend
                     .narrate_arrival(crate::narrative::llm::backend::AGENT_NARRATOR, &context);
@@ -334,7 +342,10 @@ fn ensure_defaults(
             let preset = PromptPreset {
                 id: id.clone(),
                 name: seed["name"].as_str().unwrap_or("Default").to_string(),
-                prompt_text: seed["prompt_text"].as_str().unwrap_or("").to_string(),
+                role: seed["role"].as_str().map(|s| s.to_string()),
+                instructions: seed["instructions"].as_str().map(|s| s.to_string()),
+                writing_style: seed["writing_style"].as_str().map(|s| s.to_string()),
+                output_format: seed["output_format"].as_str().map(|s| s.to_string()),
                 is_default: true,
                 preset_type,
             };

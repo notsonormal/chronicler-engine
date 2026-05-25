@@ -42,7 +42,7 @@ Each trigger is checked against the current `NpcEncounterLog`:
 - If non-repeatable: Trigger is marked as "fired" and won't re-fire
 
 ### 9. Narration
-Trigger actions now use the unified 8-layer prompt with continuation context in the user message.
+Trigger actions now use the unified 7-layer prompt with continuation context in the user message.
 
 ### 10. Inline Event Header
 When a trigger fires, the engine stores the event name in `NarrativeState.pending_event`. The next `add_log` call (which adds the trigger continuation narration) absorbs this pending metadata into `LogEntry.event_header`. The frontend renders the event header inside the same div as the continuation narration. There is no standalone `LogType::Event` entry.

@@ -17,7 +17,7 @@ The engine supports flexible model selection via connection profiles in `data/se
 - **Narration Connection**: The connection used for Game Master narration and NPC dialogue
 - **Quantifier Connection**: The connection used for scene quantification (can differ from narration)
 - **Authentication**: Per-connection `api_key`, with provider-specific env var fallback (`OPENROUTER_API_KEY`)
-- **Settings Lifecycle**: Settings are loaded once at startup (`bootstrap/run.rs`) and passed down as `Arc<RwLock<AppSettings>>`. Backends store a clone of the `Arc` and read `response_length` dynamically per-call. No business logic reloads settings from disk.
+- **Settings Lifecycle**: Settings are loaded once at startup (`bootstrap/run.rs`) and passed down as `Arc<RwLock<AppSettings>>`. No business logic reloads settings from disk.
 
 ### 3. Backend Selection
 Backend is selected per-connection via `Connection.provider`:
@@ -40,24 +40,23 @@ Some models (particularly certain local/quantized models) ignore or poorly handl
 - This is a per-connection setting, so different backends can use different strategies
 
 ### 5. Prompt Construction (Layered Prompts)
-The engine uses a layered prompt system inspired by SillyTavern's Prompt Manager, refined with a **plain-text instructions + XML-wrapped data** pattern for reasoning-model compatibility:
+The engine uses a layered prompt system inspired by SillyTavern's Prompt Manager, refined with an **XML-sectioned instructions + XML-wrapped data** pattern for reasoning-model compatibility:
 
 | Layer | Name | Content | Role |
 |-------|------|---------|------|
-| 0 | System | Plain-text game rules, role instructions, narrative style | System |
+| 0 | System | XML-wrapped sections: role, instructions, writing_style, global_rules, output_format | System |
 | 1 | Game State | `<GameState>` — Current room, present NPCs | User (data) |
 | 2 | NPC Cards | `<KnownNpcs>` roster (all NPCs, condensed) + `<NpcsInRoom>` full cards (present NPCs only) | User (data) |
 | 3 | Player | `<PlayerCharacter>` — Player persona and description | User (data) |
 | 4 | World Info | `<WorldLore>` — World lore triggered by keywords | User (data) |
 | 5 | History | `<ConversationHistory>` — Full narrative history (flattened messages) | User (data) |
 | 6 | User Input | `<PlayerInput>` — Current player message | User (data) |
-| 7 | Output Format | Writing style and output format behavioral guidance | User (instruction) |
 
 **`build_split()` separation**:
-- **System half**: Plain-text instructions only (Layer 0)
-- **User half**: XML-wrapped data (Layers 1–6) + plain-text output format (Layer 7)
+- **System half**: XML-sectioned instructions (Layer 0)
+- **User half**: XML-wrapped data (Layers 1–6)
 
-This separation reduces the chance of reasoning models (e.g., Gemma 4) entering meta-analysis mode. However, the Gemma 4 26B model (particularly abliterated quants) can still get stuck in an infinite `<|channel>thought` loop even with plain-text instructions. An additional prompt-level fix is applied for Gemma 4 models (see section 8).
+This separation reduces the chance of reasoning models (e.g., Gemma 4) entering meta-analysis mode. However, the Gemma 4 26B model (particularly abliterated quants) can still get stuck in an infinite `<|channel>thought` loop even with XML-sectioned instructions. An additional prompt-level fix is applied for Gemma 4 models (see section 8).
 
 ### 6. Token Budget Management
 - **MAX_CONTEXT_TOKENS**: 32768 (fallback default; configurable per connection via `max_context_tokens`)

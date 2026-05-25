@@ -6,9 +6,10 @@ fn test_preset_card_html_default_preset() {
     let preset = PromptPreset {
         id: "default".into(),
         name: "Default".into(),
-        prompt_text: "System prompt.".into(),
+        instructions: Some("System prompt.".into()),
         is_default: true,
         preset_type: PresetType::System,
+        ..Default::default()
     };
     let html = preset_card_html(&preset, false);
     assert!(html.contains("Default"));
@@ -22,9 +23,8 @@ fn test_preset_card_html_non_default_preset() {
     let preset = PromptPreset {
         id: "custom-1".into(),
         name: "Custom".into(),
-        prompt_text: "Custom prompt.".into(),
-        is_default: false,
-        preset_type: PresetType::System,
+        instructions: Some("Custom prompt.".into()),
+        ..Default::default()
     };
     let html = preset_card_html(&preset, false);
     assert!(html.contains("Custom"));
@@ -38,9 +38,8 @@ fn test_preset_card_html_active_preset() {
     let preset = PromptPreset {
         id: "active-1".into(),
         name: "Active".into(),
-        prompt_text: "Active prompt.".into(),
-        is_default: false,
-        preset_type: PresetType::System,
+        instructions: Some("Active prompt.".into()),
+        ..Default::default()
     };
     let html = preset_card_html(&preset, true);
     assert!(html.contains(r#"badge primary">Active</span>"#));
@@ -52,9 +51,8 @@ fn test_preset_card_html_inactive_preset() {
     let preset = PromptPreset {
         id: "inactive-1".into(),
         name: "Inactive".into(),
-        prompt_text: "Inactive prompt.".into(),
-        is_default: false,
-        preset_type: PresetType::System,
+        instructions: Some("Inactive prompt.".into()),
+        ..Default::default()
     };
     let html = preset_card_html(&preset, false);
     assert!(!html.contains("Active</span>"));
@@ -67,9 +65,8 @@ fn test_preset_card_html_preview_truncates() {
     let preset = PromptPreset {
         id: "test".into(),
         name: "Test".into(),
-        prompt_text: long_text.clone(),
-        is_default: false,
-        preset_type: PresetType::System,
+        instructions: Some(long_text.clone()),
+        ..Default::default()
     };
     let html = preset_card_html(&preset, false);
     assert!(html.contains(&"a".repeat(120)));
@@ -81,9 +78,8 @@ fn test_preset_card_html_escapes_special_chars() {
     let preset = PromptPreset {
         id: "<script>".into(),
         name: "<b>Name</b>".into(),
-        prompt_text: r#"Say "hello" & goodbye."#.into(),
-        is_default: false,
-        preset_type: PresetType::System,
+        instructions: Some(r#"Say "hello" & goodbye."#.into()),
+        ..Default::default()
     };
     let html = preset_card_html(&preset, false);
     assert!(!html.contains("<b>Name</b>"));
@@ -97,9 +93,8 @@ fn test_preset_edit_form_html_renders() {
     let preset = PromptPreset {
         id: "edit-1".into(),
         name: "Editable".into(),
-        prompt_text: "Edit me.".into(),
-        is_default: false,
-        preset_type: PresetType::System,
+        instructions: Some("Edit me.".into()),
+        ..Default::default()
     };
     let html = preset_edit_form_html(&preset, "system", false);
     assert!(html.contains("edit-form"));
@@ -114,9 +109,9 @@ fn test_preset_edit_form_html_escapes_special_chars() {
     let preset = PromptPreset {
         id: "<id>".into(),
         name: "<Name>".into(),
-        prompt_text: "\"Text\"".into(),
-        is_default: false,
+        instructions: Some("\"Text\"".into()),
         preset_type: PresetType::Quantifier,
+        ..Default::default()
     };
     let html = preset_edit_form_html(&preset, "quantifier", true);
     assert!(!html.contains("<Name>"));

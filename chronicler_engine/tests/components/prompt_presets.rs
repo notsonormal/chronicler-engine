@@ -41,7 +41,7 @@ async fn test_add_system_preset() {
             "application/x-www-form-urlencoded",
         )
         .body(Body::from(
-            "name=My+System+Prompt&prompt_text=You+are+a+test+narrator.&preset_type=system",
+            "name=My+System+Prompt&instructions=You+are+a+test+narrator.&preset_type=system",
         ))
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
@@ -54,6 +54,10 @@ async fn test_add_system_preset() {
     assert!(
         body_str.contains("My System Prompt"),
         "Expected preset name in response: {body_str}"
+    );
+    assert!(
+        body_str.contains("You are a test narrator."),
+        "Expected preset content in response preview: {body_str}"
     );
 }
 
@@ -70,7 +74,7 @@ async fn test_add_quantifier_preset() {
             "application/x-www-form-urlencoded",
         )
         .body(Body::from(
-            "name=My+Quantifier+Prompt&prompt_text=Quantify+this+scene.&preset_type=quantifier",
+            "name=My+Quantifier+Prompt&instructions=Quantify+this+scene.&preset_type=quantifier",
         ))
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
@@ -83,6 +87,10 @@ async fn test_add_quantifier_preset() {
     assert!(
         body_str.contains("My Quantifier Prompt"),
         "Expected preset name in response: {body_str}"
+    );
+    assert!(
+        body_str.contains("Quantify this scene."),
+        "Expected preset content in response preview: {body_str}"
     );
 }
 
@@ -99,7 +107,7 @@ async fn test_activate_preset_updates_settings() {
             "application/x-www-form-urlencoded",
         )
         .body(Body::from(
-            "name=Activate+Test&prompt_text=Test+prompt.&preset_type=system",
+            "name=Activate+Test&instructions=Test+prompt.&preset_type=system",
         ))
         .unwrap();
     let response = app.clone().oneshot(req).await.unwrap();
@@ -153,7 +161,7 @@ async fn test_delete_preset() {
             "application/x-www-form-urlencoded",
         )
         .body(Body::from(
-            "name=Delete+Test&prompt_text=Delete+me.&preset_type=system",
+            "name=Delete+Test&instructions=Delete+me.&preset_type=system",
         ))
         .unwrap();
     let response = app.clone().oneshot(req).await.unwrap();
@@ -207,7 +215,7 @@ async fn test_save_preset_invalid_type() {
             "application/x-www-form-urlencoded",
         )
         .body(Body::from(
-            "name=Bad+Type&prompt_text=Test.&preset_type=invalid",
+            "name=Bad+Type&instructions=Test.&preset_type=invalid",
         ))
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
@@ -283,7 +291,7 @@ async fn test_update_preset_invalid_type() {
             "application/x-www-form-urlencoded",
         )
         .body(Body::from(
-            "name=Update+Test&prompt_text=Update+me.&preset_type=system",
+            "name=Update+Test&instructions=Update+me.&preset_type=system",
         ))
         .unwrap();
     let response = app.clone().oneshot(req).await.unwrap();
@@ -315,7 +323,7 @@ async fn test_update_preset_invalid_type() {
             "application/x-www-form-urlencoded",
         )
         .body(Body::from(
-            "name=Updated&prompt_text=Updated.&preset_type=invalid",
+            "name=Updated&instructions=Updated.&preset_type=invalid",
         ))
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
@@ -344,7 +352,7 @@ async fn test_update_preset_success() {
             "application/x-www-form-urlencoded",
         )
         .body(Body::from(
-            "name=Update+Test&prompt_text=Original+text.&preset_type=system",
+            "name=Update+Test&instructions=Original+text.&preset_type=system",
         ))
         .unwrap();
     let response = app.clone().oneshot(req).await.unwrap();
@@ -375,7 +383,7 @@ async fn test_update_preset_success() {
             "application/x-www-form-urlencoded",
         )
         .body(Body::from(
-            "name=Updated+Name&prompt_text=Updated+text.&preset_type=system",
+            "name=Updated+Name&instructions=Updated+text.&preset_type=system",
         ))
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
@@ -404,7 +412,7 @@ async fn test_update_nonexistent_preset() {
             "application/x-www-form-urlencoded",
         )
         .body(Body::from(
-            "name=Updated&prompt_text=Updated.&preset_type=system",
+            "name=Updated&instructions=Updated.&preset_type=system",
         ))
         .unwrap();
     let response = app.oneshot(req).await.unwrap();

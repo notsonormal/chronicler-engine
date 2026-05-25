@@ -1,9 +1,9 @@
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use crate::error::EngineError;
 use crate::model::character::NpcCard;
 use crate::model::llm_message::LlmMessage;
-use crate::model::settings::{AppSettings, Connection};
+use crate::model::settings::Connection;
 use crate::narrative::llm_client::ChatCompletionResult;
 use crate::narrative::prompt::PromptContext;
 use crate::storage::llm_message_storage::LlmMessageStorage;
@@ -117,18 +117,17 @@ pub use crate::model::llm_backend::LlmBackendType;
 pub fn get_llm_backend_for(
     connection: &Connection,
     storage: Option<Arc<dyn LlmMessageStorage>>,
-    settings: Option<Arc<RwLock<AppSettings>>>,
 ) -> Box<dyn LlmBackend> {
     match connection.provider {
         LlmBackendType::Mock => Box::new(super::mock::MockBackend::new(storage)),
         LlmBackendType::DeepSeek => Box::new(super::deepseek::DeepSeekBackend::from_connection(
-            connection, storage, settings,
+            connection, storage,
         )),
         LlmBackendType::OpenRouter => Box::new(
-            super::openrouter::OpenRouterBackend::from_connection(connection, storage, settings),
+            super::openrouter::OpenRouterBackend::from_connection(connection, storage),
         ),
         LlmBackendType::Ollama => Box::new(super::ollama::OllamaBackend::from_connection(
-            connection, storage, settings,
+            connection, storage,
         )),
     }
 }

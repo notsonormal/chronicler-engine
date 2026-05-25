@@ -1,42 +1,80 @@
 use crate::model::prompt_preset::PromptPreset;
 use crate::server::fragments::html_escape;
 
+fn textarea_field(id: &str, label: &str, name: &str, value: Option<&str>, rows: usize) -> String {
+    let value = value.unwrap_or("");
+    format!(
+        r#"<div class="form-group">
+    <label for="{id}">{label}</label>
+    <textarea id="{id}" name="{name}" rows="{rows}">{value}</textarea>
+</div>"#,
+        id = html_escape(id),
+        label = html_escape(label),
+        name = html_escape(name),
+        rows = rows,
+        value = html_escape(value),
+    )
+}
+
 pub(crate) fn preset_edit_form_html(
     preset: &PromptPreset,
     preset_type: &str,
     _is_active: bool,
 ) -> String {
+    let id = html_escape(&preset.id);
+    let name = html_escape(&preset.name);
+    let preset_type_escaped = html_escape(preset_type);
+
+    let role_field = textarea_field(
+        &format!("edit-role-{}", preset.id),
+        "Role",
+        "role",
+        preset.role.as_deref(),
+        4,
+    );
+    let instructions_field = textarea_field(
+        &format!("edit-instructions-{}", preset.id),
+        "Instructions",
+        "instructions",
+        preset.instructions.as_deref(),
+        10,
+    );
+    let writing_style_field = textarea_field(
+        &format!("edit-style-{}", preset.id),
+        "Writing Style",
+        "writing_style",
+        preset.writing_style.as_deref(),
+        4,
+    );
+    let output_format_field = textarea_field(
+        &format!("edit-output-{}", preset.id),
+        "Output Format",
+        "output_format",
+        preset.output_format.as_deref(),
+        6,
+    );
+
     format!(
         r#"<div class="preset-card edit-form">
     <div class="card-header">
-        <span class="card-title">Edit {}</span>
+        <span class="card-title">Edit {name}</span>
     </div>
-    <form hx-post="/prompt-presets/{}" hx-target="closest .preset-card" hx-swap="outerHTML">
-        <input type="hidden" name="preset_type" value="{}" />
+    <form hx-post="/prompt-presets/{id}" hx-target="closest .preset-card" hx-swap="outerHTML">
+        <input type="hidden" name="preset_type" value="{preset_type_escaped}" />
         <div class="form-group">
-            <label for="edit-name-{}">Name</label>
-            <input type="text" id="edit-name-{}" name="name" value="{}" required />
+            <label for="edit-name-{id}">Name</label>
+            <input type="text" id="edit-name-{id}" name="name" value="{name}" required />
         </div>
-        <div class="form-group">
-            <label for="edit-text-{}">Prompt Text</label>
-            <textarea id="edit-text-{}" name="prompt_text" rows="10" required>{}</textarea>
-        </div>
+        {role_field}
+        {instructions_field}
+        {writing_style_field}
+        {output_format_field}
         <div class="form-actions">
             <button type="submit" class="primary">Save</button>
-            <button type="button" hx-get="/fragment/prompt-presets/{}" hx-target="closest .preset-card" hx-swap="outerHTML">Cancel</button>
+            <button type="button" hx-get="/fragment/prompt-presets/{id}" hx-target="closest .preset-card" hx-swap="outerHTML">Cancel</button>
         </div>
     </form>
 </div>"#,
-        html_escape(&preset.name),
-        html_escape(&preset.id),
-        html_escape(preset_type),
-        html_escape(&preset.id),
-        html_escape(&preset.id),
-        html_escape(&preset.name),
-        html_escape(&preset.id),
-        html_escape(&preset.id),
-        html_escape(&preset.prompt_text),
-        html_escape(&preset.id),
     )
 }
 
@@ -68,7 +106,7 @@ pub(crate) fn preset_card_html(preset: &PromptPreset, is_active: bool) -> String
     }
 
     let preview: String = preset
-        .prompt_text
+        .preview_text()
         .chars()
         .take(120)
         .collect::<String>()

@@ -34,6 +34,19 @@ Two independent preset collections — `System` and `Quantifier` — each with:
 - **Protected defaults** — seed-derived presets are marked `is_default = true` and cannot be edited or deleted through the UI
 - **Active selection** — `AppSettings` tracks `active_system_prompt_preset_id` and `active_quantifier_prompt_preset_id` independently
 
+### Preset structure
+
+Each preset is split into four sections that are assembled into XML-wrapped tags at runtime:
+
+| Field | XML Tag | Content |
+|-------|---------|---------|
+| `role` | `<role>` | Identity and agency description |
+| `instructions` | `<instructions>` | Behavioral rules (validation, tracking, narrative, dialogue, general) |
+| `writing_style` | `<writing_style>` | Prose constraints (perspective, tense, tone) |
+| `output_format` | `<output_format>` | Output constraints (anti-recap, GPTisms ban, response length) |
+
+Assembly order: `role` → `instructions` → `writing_style` → `<global_rules>` (from `world.json`) → `output_format`. The assembled text is cached in `AppSettings.active_system_prompt` / `active_quantifier_prompt` at startup and on activation.
+
 ### Why two separate collections
 
 System and quantifier prompts serve fundamentally different purposes and are sent to different LLM backends. Coupling them into a single list would create confusion and accidental misuse.
@@ -43,7 +56,7 @@ System and quantifier prompts serve fundamentally different purposes and are sen
 - **Seeding**: Guarantees factory defaults exist on first run without requiring manual DB setup
 - **DB runtime**: Enables CRUD operations, persistence across restarts, and future multi-world isolation
 - **Migration path**: Seed files are read once at bootstrap; subsequent edits flow through the DB
-- **Startup caching**: The active preset's prompt text is loaded from the DB at startup and cached in `AppSettings.active_system_prompt` / `active_quantifier_prompt` (transient `#[serde(skip)]` fields). This closes the gap between DB-stored presets and the prompt builder, which previously relied on a hardcoded fallback template.
+- **Startup caching**: The active preset's sections are loaded from the DB at startup, assembled via `PromptPreset::assemble_prompt_text()` with `world.global_rules` and `response_length`, and cached in `AppSettings.active_system_prompt` / `active_quantifier_prompt` (transient `#[serde(skip)]` fields). This closes the gap between DB-stored presets and the prompt builder, which previously relied on a hardcoded fallback template.
 
 ### Why protected defaults
 
@@ -94,3 +107,4 @@ Default prompts are carefully tuned. Allowing destructive edits would make it ea
 
 - **2026-05-19**: Initial implementation — DB table, storage trait, seeding, HTMX UI
 - **2026-05-19**: Architectural refinements — `preset_type` added to `PromptPreset` domain model; `PromptPresetStorage::save()` simplified to take only `&PromptPreset`; `PresetType::from(&str)` replaced with `TryFrom<&str>` for explicit error handling; cache invalidation added to `update_preset_handler` so editing an active preset updates the cached prompt text immediately
+- **2026-05-25**: Sectioned preset refactor — monolithic `prompt_text` replaced with `role`, `instructions`, `writing_style`, `output_format` fields; `assemble_prompt_text()` added for XML assembly; DB migration v7 added section columns; migration v8 dropped `prompt_text` column; UI updated with four textarea fields per preset

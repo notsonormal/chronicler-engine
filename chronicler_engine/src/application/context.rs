@@ -11,6 +11,7 @@ use crate::model::state_snapshot::GameStateSnapshot;
 use crate::model::world::WorldCard;
 use crate::storage::llm_message_storage::LlmMessageStorage;
 use crate::storage::message_storage::MessageStorage;
+use crate::storage::prompt_preset_storage::PromptPresetStorage;
 use crate::storage::snapshot_storage::SnapshotStorage;
 
 #[derive(Clone)]
@@ -27,19 +28,64 @@ pub struct GameServiceContext {
     pub is_generating: Arc<AtomicBool>,
     /// Runtime settings (shared with AppState).
     pub settings: Arc<RwLock<AppSettings>>,
+    pub preset_storage: Arc<dyn PromptPresetStorage>,
 }
 
 impl GameServiceContext {
-    /// Returns `(response_length, max_context_tokens, max_tokens)`.
-    pub fn prompt_build_params(&self) -> (String, u32, Option<u32>) {
+    /// Returns `(max_context_tokens, max_tokens)`.
+    pub fn prompt_build_params(&self) -> (u32, Option<u32>) {
         let guard = self.settings.read().unwrap_or_else(|e| e.into_inner());
         let conn = guard.get_narration_connection();
-        let response_length = guard.response_length.clone();
         let max_context_tokens = conn
             .map(|c| c.resolve_max_context_tokens())
             .unwrap_or(crate::narrative::prompt::budget::MAX_CONTEXT_TOKENS);
         let max_tokens = conn.and_then(|c| c.max_tokens);
-        (response_length, max_context_tokens, max_tokens)
+        (max_context_tokens, max_tokens)
+    }
+
+    /// This avoids stale caches when settings change.
+    pub fn active_system_prompt(&self) -> String {
+        let (preset_id, response_length) = {
+            let settings = self.settings.read().unwrap_or_else(|e| e.into_inner());
+            (
+                settings.active_system_prompt_preset_id.clone(),
+                settings.response_length.clone(),
+            )
+        };
+        match self.preset_storage.get(&preset_id) {
+            Ok(Some(preset)) => {
+                preset.assemble_prompt_text(&self.world.global_rules, Some(&response_length))
+            }
+            Ok(None) => {
+                log::error!("active system preset '{preset_id}' not found — defaults not seeded?");
+                String::new()
+            }
+            Err(e) => {
+                log::error!("preset storage inaccessible: {e}");
+                String::new()
+            }
+        }
+    }
+
+    /// Quantifier presets do not include global rules or response length.
+    pub fn active_quantifier_prompt(&self) -> String {
+        let preset_id = {
+            let settings = self.settings.read().unwrap_or_else(|e| e.into_inner());
+            settings.active_quantifier_prompt_preset_id.clone()
+        };
+        match self.preset_storage.get(&preset_id) {
+            Ok(Some(preset)) => preset.assemble_prompt_text(&[], None),
+            Ok(None) => {
+                log::error!(
+                    "active quantifier preset '{preset_id}' not found — defaults not seeded?"
+                );
+                String::new()
+            }
+            Err(e) => {
+                log::error!("preset storage inaccessible: {e}");
+                String::new()
+            }
+        }
     }
 
     /// Panics if no snapshot exists — use only in tests where a snapshot was pre-seeded.

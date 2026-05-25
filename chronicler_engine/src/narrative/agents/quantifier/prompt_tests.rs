@@ -166,7 +166,7 @@ fn test_quantifier_prompt_builder_empty_npcs() {
     let builder = QuantifierPromptBuilder::new(context);
     let (system, user) = builder.build();
 
-    assert!(system.contains("AvailableNpcIds"));
+    assert!(system.contains("available_npc_ids"));
     assert!(user.contains("Hero"));
 }
 
@@ -199,7 +199,7 @@ fn test_quantifier_prompt_builder_all_rooms() {
     let builder = QuantifierPromptBuilder::new(context);
     let (system, _) = builder.build();
 
-    assert!(system.contains("AvailableRooms"));
+    assert!(system.contains("available_rooms"));
     assert!(system.contains("Entrance"));
     assert!(system.contains("Library"));
 }

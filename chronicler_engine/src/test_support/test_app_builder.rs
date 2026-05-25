@@ -274,6 +274,10 @@ impl TestAppBuilder {
             Arc::new(crate::storage::prompt_preset_storage::InMemoryPromptPresetStorage::new());
         let game_service: Arc<dyn GameService> = Arc::new(DefaultGameService::with_storage(
             Some(Arc::clone(&llm_storage)),
+            Some(Arc::clone(&prompt_preset_storage)
+                as Arc<
+                    dyn crate::storage::prompt_preset_storage::PromptPresetStorage,
+                >),
             Arc::clone(&settings_arc),
         ));
         let app_state = AppState {

@@ -26,7 +26,7 @@ fn test_openrouter_from_connection() {
         max_context_tokens: Some(32768),
     };
 
-    let backend = OpenRouterBackend::from_connection(&conn, None, None);
+    let backend = OpenRouterBackend::from_connection(&conn, None);
     assert_eq!(backend.model(), "gpt-4o");
     assert_eq!(backend.name(), "OpenRouter");
 }
@@ -45,7 +45,7 @@ fn test_openrouter_model() {
         max_context_tokens: None,
     };
 
-    let backend = OpenRouterBackend::from_connection(&conn, None, None);
+    let backend = OpenRouterBackend::from_connection(&conn, None);
     assert_eq!(backend.model(), "claude-3-opus");
 }
 
@@ -66,7 +66,6 @@ fn test_openrouter_save_message_with_storage() {
     let backend = OpenRouterBackend::from_connection(
         &conn,
         Some(Arc::clone(&storage) as Arc<dyn LlmMessageStorage>),
-        None,
     );
 
     let msg = crate::model::llm_message::LlmMessageBuilder::new()

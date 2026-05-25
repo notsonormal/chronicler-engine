@@ -5,14 +5,6 @@ use crate::narrative::prompt::context::fit_messages_to_context;
 use crate::narrative::prompt::sanitize::sanitize_for_prompt;
 use crate::narrative::prompt::types::{PromptBuilder, PromptContext};
 
-const OUTPUT_FORMAT_TEMPLATE: &str = r#"Writing style:
-- Third-person limited perspective, focused on the player character.
-- Past tense narrative prose.
-
-The player's next action is provided above. Your only job is to narrate what happens now.
-
-Do not re-narrate events that already occurred in the history above. Move the scene forward from where it left off."#;
-
 impl<'a> PromptBuilder<'a> {
     pub fn from_context(context: &PromptContext<'a>) -> Self {
         Self {
@@ -25,8 +17,7 @@ impl<'a> PromptBuilder<'a> {
             history: context.history,
             max_context_tokens: None,
             requested_max_tokens: None,
-            response_length: None,
-            system_prompt_override: context.system_prompt_override.clone(),
+            system_prompt: context.system_prompt.clone(),
         }
     }
 
@@ -37,11 +28,6 @@ impl<'a> PromptBuilder<'a> {
 
     pub fn with_max_tokens(mut self, max: u32) -> Self {
         self.requested_max_tokens = Some(max);
-        self
-    }
-
-    pub fn with_response_length(mut self, length: &'a str) -> Self {
-        self.response_length = Some(length);
         self
     }
 
@@ -67,7 +53,7 @@ impl<'a> PromptBuilder<'a> {
         user.push_str("\n\n");
         user.push_str(&self.render_user_layer());
         user.push_str("\n\n");
-        user.push_str(&self.render_output_format_layer());
+        // Layer 7 (output format) removed — now part of system prompt via preset
 
         if let Some(max_context) = self.max_context_tokens {
             let (fitted_system, fitted_user, actual_max_tokens) =
@@ -108,24 +94,13 @@ impl<'a> PromptBuilder<'a> {
         user.push_str("\n\n");
         user.push_str(&self.render_user_layer());
         user.push_str("\n\n");
-        user.push_str(&self.render_output_format_layer());
+        // Layer 7 (output format) removed — now part of system prompt via preset
         user
     }
 
-    /// Layer 0: System prompt - global game rules and AI role
+    /// Layer 0: System prompt - assembled XML from preset (includes global rules and response length)
     fn render_system_layer(&self) -> String {
-        let mut output = self.system_prompt_override.clone().unwrap_or_default();
-        for rule in &self.world.global_rules {
-            output.push_str("- ");
-            output.push_str(rule);
-            output.push('\n');
-        }
-        if let Some(length) = self.response_length {
-            output.push_str("\nResponse Length:\n");
-            output.push_str(length);
-            output.push('\n');
-        }
-        output
+        self.system_prompt.clone()
     }
 
     /// Layer 1: Game state - room name, description, player inventory
@@ -302,10 +277,5 @@ impl<'a> PromptBuilder<'a> {
         output.push_str("\n</PlayerInput>\n");
 
         output
-    }
-
-    /// Layer 7: Output format - writing style and behavioral instructions
-    fn render_output_format_layer(&self) -> String {
-        String::from(OUTPUT_FORMAT_TEMPLATE)
     }
 }

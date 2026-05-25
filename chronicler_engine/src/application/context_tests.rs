@@ -112,6 +112,9 @@ fn minimal_ctx() -> GameServiceContext {
         settings: Arc::new(std::sync::RwLock::new(
             crate::model::settings::AppSettings::default(),
         )),
+        preset_storage: Arc::new(
+            crate::storage::prompt_preset_storage::InMemoryPromptPresetStorage::new(),
+        ),
     }
 }
 
@@ -155,6 +158,9 @@ fn test_load_state_fallback_when_empty() {
         settings: Arc::new(std::sync::RwLock::new(
             crate::model::settings::AppSettings::default(),
         )),
+        preset_storage: Arc::new(
+            crate::storage::prompt_preset_storage::InMemoryPromptPresetStorage::new(),
+        ),
     };
     let loaded = load_state(&ctx);
     assert_eq!(loaded.movement.current_room_id, "start");

@@ -102,7 +102,14 @@ fn test_make_prompt_context() {
     let history = vec![];
 
     let context: PromptContext = make_prompt_context(
-        &world, &room, &npcs, &npcs, &player, "hello", &history, None,
+        &world,
+        &room,
+        &npcs,
+        &npcs,
+        &player,
+        "hello",
+        &history,
+        String::new(),
     );
 
     assert_eq!(context.world.name, "Test World");

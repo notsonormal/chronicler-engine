@@ -1,14 +1,14 @@
 # Reference: Quantifier Prompt
 
-> **Context**: The quantifier prompt is a **separate secondary prompt** used for post-narration scene analysis. It is **not** part of the 8-layer narrative prompt system. For the main narrative prompt architecture, see [`system/prompt_system.md`](../system/prompt_system.md).
+> **Context**: The quantifier prompt is a **separate secondary prompt** used for post-narration scene analysis. It is **not** part of the 7-layer narrative prompt system. For the main narrative prompt architecture, see [`system/prompt_system.md`](../system/prompt_system.md).
 
 The quantifier prompt is rendered by `QuantifierPromptBuilder` in `src/narrative/agents/quantifier/prompt.rs`. It uses a separate LLM model connection to determine which NPCs are present in the current room and whether the player is moving.
 
 ## Prompt Architecture
 
-The quantifier follows the same **plain-text instructions + XML-wrapped data** pattern as the main narrative prompt:
-- **Instructions are plain text** — No XML tags wrapping the task description or rules.
-- **Data is XML-wrapped** — `<AvailableNpcIds>`, `<AvailableRooms>`, `<CurrentRoom>`, etc. are external context, not instructions.
+The quantifier follows the same **XML-sectioned instructions + XML-wrapped data** pattern as the main narrative prompt:
+- **Instructions are XML-sectioned** — The quantifier preset is split into `role`, `instructions`, and `output_format` fields, assembled into XML-wrapped sections by `assemble_prompt_text()`.
+- **Data is XML-wrapped** — `<available_npc_ids>`, `<available_rooms>`, `<CurrentRoom>`, etc. are external context, not instructions.
 
 This design avoids triggering meta-analysis mode in reasoning models (e.g., Gemma 4).
 
@@ -35,7 +35,7 @@ Note: The prompt mentions "in" as a possible type, but the parser only recognize
 Rules:
 - Only include NPCs that would logically be in the room based on context.
 - NPCs from the previous room may have followed the player.
-- Use the exact NPC IDs provided in the AvailableNpcIds list.
+- Use the exact NPC IDs provided in the <available_npc_ids> list.
 - If the player is blocked, stopped, prevented, or fails to move in <LatestNarration>, they have NOT moved.
 - An NPC interposing, blocking a path, or saying "you can't go" means the player remains.
 - If no NPCs are present, return an empty array: {"npcs_in_room": []}
@@ -48,13 +48,13 @@ Examples:
 - Narration: "The foyer felt claustrophobic. Carla stood in the doorway." (CurrentRoom was Front Gates) → {"movement": {"type": "entering", "destination": "entrance_hall"}}
 - Narration: "You examine the ancient vase carefully." (CurrentRoom was library) → {"movement": {"type": null}}
 
-<AvailableNpcIds>
+<available_npc_ids>
   <Npc id="npc_id" name="NPC Name"/>
-</AvailableNpcIds>
+</available_npc_ids>
 
-<AvailableRooms>
+<available_rooms>
   <Room id="room_id" name="Room Name"/>
-</AvailableRooms>
+</available_rooms>
 ```
 
 ## User Prompt
@@ -132,7 +132,7 @@ The quantifier prompt can be customized at runtime via the **Prompt Presets** ta
 2. Create a new Quantifier Prompt preset (or edit an existing non-default one)
 3. Click **Set Active** to apply it
 
-The active preset is stored in `AppSettings.active_quantifier_prompt_preset_id` and its text is cached in `AppSettings.active_quantifier_prompt`. When an active preset is set, its text is injected into `QuantifierPromptContext.quantifier_prompt_override` and used by `QuantifierPromptBuilder::build_system_prompt()` instead of the hardcoded quantifier instructions.
+The active preset is stored in `AppSettings.active_quantifier_prompt_preset_id`. Its text is assembled via `assemble_prompt_text()` (no global rules or response length for quantifier) and cached in `AppSettings.active_quantifier_prompt`. When an active preset is set, the assembled XML is injected into `QuantifierPromptContext.quantifier_prompt_override` and used by `QuantifierPromptBuilder::build_system_prompt()`. The builder then appends `<available_npc_ids>` and `<available_rooms>` after the assembled preset.
 
 Default presets (shipped as `data/prompt_presets/quantifier/default.json`) are protected and cannot be edited or deleted. To modify a default, create a copy and activate it.
 

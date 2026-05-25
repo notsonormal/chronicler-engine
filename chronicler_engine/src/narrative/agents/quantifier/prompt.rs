@@ -21,14 +21,17 @@ impl<'a> QuantifierPromptBuilder<'a> {
             .clone()
             .unwrap_or_default();
 
+        if !prompt.is_empty() {
+            prompt.push_str("\n\n");
+        }
+        prompt.push_str("<available_npc_ids>\n");
         for npc in self.context.all_known_npcs {
             prompt.push_str(&format!(
                 "  <Npc id=\"{}\" name=\"{}\"/>\n",
                 npc.id, npc.sheet.name
             ));
         }
-
-        prompt.push_str("</AvailableNpcIds>\n\n<AvailableRooms>\n");
+        prompt.push_str("</available_npc_ids>\n\n<available_rooms>\n");
 
         for room in self.context.all_rooms {
             prompt.push_str(&format!(
@@ -37,7 +40,7 @@ impl<'a> QuantifierPromptBuilder<'a> {
             ));
         }
 
-        prompt.push_str("</AvailableRooms>\n");
+        prompt.push_str("</available_rooms>\n");
 
         prompt
     }

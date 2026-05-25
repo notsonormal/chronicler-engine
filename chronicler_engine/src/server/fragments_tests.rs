@@ -23,6 +23,7 @@ fn make_test_app_state(
     let game_service: Arc<dyn crate::application::game_service::GameService> = Arc::new(
         crate::application::game_service::DefaultGameService::with_storage(
             Some(game_service_storage),
+            None,
             Arc::new(RwLock::new(AppSettings::default())),
         ),
     );

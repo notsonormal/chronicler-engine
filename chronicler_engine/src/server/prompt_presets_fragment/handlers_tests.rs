@@ -3,8 +3,8 @@ use std::sync::{Arc, RwLock};
 use crate::error::EngineError;
 use crate::model::prompt_preset::{PresetType, PromptPreset};
 use crate::server::prompt_presets_fragment::handlers::{
-    PresetForm, PresetUpdateForm, activate_preset_handler, delete_preset_handler,
-    edit_preset_form_handler, panel_handler, save_preset_handler, update_preset_handler,
+    PresetForm, activate_preset_handler, delete_preset_handler, edit_preset_form_handler,
+    panel_handler, save_preset_handler, update_preset_handler,
 };
 use crate::storage::prompt_preset_storage::{InMemoryPromptPresetStorage, PromptPresetStorage};
 
@@ -83,6 +83,7 @@ fn make_test_app_state_with_storage(
             Some(Arc::new(
                 crate::storage::llm_message_storage::InMemoryLlmMessageStorage::new(),
             )),
+            None,
             Arc::clone(&settings),
         ),
     );
@@ -112,9 +113,10 @@ async fn test_edit_default_preset_returns_error() {
     let preset = PromptPreset {
         id: "default".into(),
         name: "Default".into(),
-        prompt_text: "System prompt.".into(),
+        instructions: Some("System prompt.".into()),
         is_default: true,
         preset_type: PresetType::System,
+        ..Default::default()
     };
     let app_state = make_test_app_state_with_preset(preset.clone());
     let response = edit_preset_form_handler(
@@ -130,18 +132,20 @@ async fn test_update_default_preset_returns_error() {
     let preset = PromptPreset {
         id: "default".into(),
         name: "Default".into(),
-        prompt_text: "System prompt.".into(),
+        instructions: Some("System prompt.".into()),
         is_default: true,
         preset_type: PresetType::System,
+        ..Default::default()
     };
     let app_state = make_test_app_state_with_preset(preset.clone());
     let response = update_preset_handler(
         axum::extract::State(app_state),
         axum::extract::Path("default".to_string()),
-        axum::extract::Form(PresetUpdateForm {
+        axum::extract::Form(PresetForm {
             name: "Updated".into(),
-            prompt_text: "Updated.".into(),
+            instructions: Some("Updated.".into()),
             preset_type: "system".into(),
+            ..Default::default()
         }),
     )
     .await;
@@ -153,9 +157,10 @@ async fn test_delete_default_preset_returns_error() {
     let preset = PromptPreset {
         id: "default".into(),
         name: "Default".into(),
-        prompt_text: "System prompt.".into(),
+        instructions: Some("System prompt.".into()),
         is_default: true,
         preset_type: PresetType::System,
+        ..Default::default()
     };
     let app_state = make_test_app_state_with_preset(preset.clone());
     let response = delete_preset_handler(
@@ -171,16 +176,16 @@ async fn test_save_preset_invalid_type_returns_error() {
     let app_state = make_test_app_state_with_preset(PromptPreset {
         id: "x".into(),
         name: "X".into(),
-        prompt_text: "X.".into(),
-        is_default: false,
-        preset_type: PresetType::System,
+        instructions: Some("X.".into()),
+        ..Default::default()
     });
     let response = save_preset_handler(
         axum::extract::State(app_state),
         axum::extract::Form(PresetForm {
             name: "Test".into(),
-            prompt_text: "Test.".into(),
+            instructions: Some("Test.".into()),
             preset_type: "invalid".into(),
+            ..Default::default()
         }),
     )
     .await;
@@ -192,18 +197,18 @@ async fn test_update_preset_invalid_type_returns_error() {
     let preset = PromptPreset {
         id: "custom".into(),
         name: "Custom".into(),
-        prompt_text: "Custom.".into(),
-        is_default: false,
-        preset_type: PresetType::System,
+        instructions: Some("Custom.".into()),
+        ..Default::default()
     };
     let app_state = make_test_app_state_with_preset(preset.clone());
     let response = update_preset_handler(
         axum::extract::State(app_state),
         axum::extract::Path("custom".to_string()),
-        axum::extract::Form(PresetUpdateForm {
+        axum::extract::Form(PresetForm {
             name: "Updated".into(),
-            prompt_text: "Updated.".into(),
+            instructions: Some("Updated.".into()),
             preset_type: "invalid".into(),
+            ..Default::default()
         }),
     )
     .await;
@@ -215,9 +220,8 @@ async fn test_activate_nonexistent_preset_returns_error() {
     let app_state = make_test_app_state_with_preset(PromptPreset {
         id: "x".into(),
         name: "X".into(),
-        prompt_text: "X.".into(),
-        is_default: false,
-        preset_type: PresetType::System,
+        instructions: Some("X.".into()),
+        ..Default::default()
     });
     let response = activate_preset_handler(
         axum::extract::State(app_state),
@@ -240,9 +244,8 @@ async fn test_activate_preset_settings_save_error_returns_error() {
     let app_state = make_test_app_state_with_preset(PromptPreset {
         id: "active-test".into(),
         name: "Active Test".into(),
-        prompt_text: "Active prompt.".into(),
-        is_default: false,
-        preset_type: PresetType::System,
+        instructions: Some("Active prompt.".into()),
+        ..Default::default()
     });
     let response = activate_preset_handler(
         axum::extract::State(app_state),
@@ -261,9 +264,8 @@ async fn test_panel_handler_with_poisoned_settings_lock() {
     let app_state = make_test_app_state_with_preset(PromptPreset {
         id: "x".into(),
         name: "X".into(),
-        prompt_text: "X.".into(),
-        is_default: false,
-        preset_type: PresetType::System,
+        instructions: Some("X.".into()),
+        ..Default::default()
     });
 
     // Poison the settings lock by panicking while holding a write guard.
@@ -298,6 +300,7 @@ fn make_test_app_state_with_failing_storage(
             Some(Arc::new(
                 crate::storage::llm_message_storage::InMemoryLlmMessageStorage::new(),
             )),
+            None,
             Arc::clone(&settings),
         ),
     );
@@ -329,9 +332,8 @@ async fn test_save_preset_storage_error_returns_error() {
         PromptPreset {
             id: "x".into(),
             name: "X".into(),
-            prompt_text: "X.".into(),
-            is_default: false,
-            preset_type: PresetType::System,
+            instructions: Some("X.".into()),
+            ..Default::default()
         },
         |s| s.set_fail_save(),
     );
@@ -339,8 +341,9 @@ async fn test_save_preset_storage_error_returns_error() {
         axum::extract::State(app_state),
         axum::extract::Form(PresetForm {
             name: "Test".into(),
-            prompt_text: "Test.".into(),
+            instructions: Some("Test.".into()),
             preset_type: "system".into(),
+            ..Default::default()
         }),
     )
     .await;
@@ -354,9 +357,8 @@ async fn test_edit_preset_storage_error_returns_error() {
         PromptPreset {
             id: "custom".into(),
             name: "Custom".into(),
-            prompt_text: "Custom.".into(),
-            is_default: false,
-            preset_type: PresetType::System,
+            instructions: Some("Custom.".into()),
+            ..Default::default()
         },
         |s| s.set_fail_get(),
     );
@@ -375,19 +377,19 @@ async fn test_update_preset_storage_error_returns_error() {
         PromptPreset {
             id: "custom".into(),
             name: "Custom".into(),
-            prompt_text: "Custom.".into(),
-            is_default: false,
-            preset_type: PresetType::System,
+            instructions: Some("Custom.".into()),
+            ..Default::default()
         },
         |s| s.set_fail_save(),
     );
     let response = update_preset_handler(
         axum::extract::State(app_state),
         axum::extract::Path("custom".to_string()),
-        axum::extract::Form(PresetUpdateForm {
+        axum::extract::Form(PresetForm {
             name: "Updated".into(),
-            prompt_text: "Updated.".into(),
+            instructions: Some("Updated.".into()),
             preset_type: "system".into(),
+            ..Default::default()
         }),
     )
     .await;
@@ -401,9 +403,8 @@ async fn test_delete_preset_get_storage_error_returns_error() {
         PromptPreset {
             id: "custom".into(),
             name: "Custom".into(),
-            prompt_text: "Custom.".into(),
-            is_default: false,
-            preset_type: PresetType::System,
+            instructions: Some("Custom.".into()),
+            ..Default::default()
         },
         |s| s.set_fail_get(),
     );
@@ -422,9 +423,8 @@ async fn test_delete_preset_delete_storage_error_returns_error() {
         PromptPreset {
             id: "custom".into(),
             name: "Custom".into(),
-            prompt_text: "Custom.".into(),
-            is_default: false,
-            preset_type: PresetType::System,
+            instructions: Some("Custom.".into()),
+            ..Default::default()
         },
         |s| s.set_fail_delete(),
     );

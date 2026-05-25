@@ -47,14 +47,27 @@ The team wanted SillyTavern-style comprehensive prompting for better narrative q
 - **OutputFormat becomes generic** — The inline `OUTPUT_FORMAT_TEMPLATE` in `builder.rs` contains only structural rules: perspective/tense reminders (generic, not stylistic), the "narrate what happens now" instruction, and an anti-recap rule ("Do not re-narrate events that already occurred in the history above").
 - **Startup gap closed** — On bootstrap, the active system preset is loaded from the DB and cached into `AppSettings.active_system_prompt` (a `#[serde(skip)]` transient field). This guarantees the system prompt is populated even though the cached text is not persisted to `settings.json`.
 
+## Sectioned Preset Refactor (2026-05-25)
+
+**Problem**: The monolithic `prompt_text` field made fine-grained customization impossible. Users had to rewrite the entire prompt to change one aspect (e.g., writing style or output format).
+
+**Decision**:
+- **Split `prompt_text` into four fields** — `role`, `instructions`, `writing_style`, `output_format`
+- **Add `assemble_prompt_text()`** — Assembles sections into XML-wrapped tags with fixed order: `role` → `instructions` → `writing_style` → `global_rules` → `output_format`
+- **Move OutputFormat into the preset** — The hardcoded `OUTPUT_FORMAT_TEMPLATE` in `builder.rs` is deleted. Its content (anti-recap, GPTisms ban, writing style guidance) now lives in the preset fields. Output format moves from the user message (Layer 7) to the system prompt (`<output_format>` section).
+- **Inject global rules and response length at assembly time** — `world.json` `global_rules` and `settings.json` `response_length` are appended dynamically by `assemble_prompt_text()`, not by the builder.
+
 ### Why this separation matters
 
-| Layer | Purpose | Customizable |
-|-------|---------|-------------|
-| **System Prompt** | World rules, identity, writing style, tone | Yes (via Prompt Presets) |
-| **Output Format** | Structural rules: anti-recap, perspective, tense, narration scope | No (generic template) |
+| Layer | Purpose | Customizable | XML Tag |
+|-------|---------|-------------|---------|
+| **Role** | Identity and agency | Yes (via Prompt Presets) | `<role>` |
+| **Instructions** | Behavioral rules | Yes (via Prompt Presets) | `<instructions>` |
+| **Writing Style** | Prose constraints | Yes (via Prompt Presets) | `<writing_style>` |
+| **Global Rules** | World-specific rules | Yes (via `world.json`) | `<global_rules>` |
+| **Output Format** | Structural constraints | Yes (via Prompt Presets) | `<output_format>` |
 
-This aligns with the Marinara architecture pattern: system prompt sets the "who and how," output format sets the "what structure."
+This aligns with the Marinara architecture pattern: system prompt sets the "who, how, and what structure," while all external context stays in the user role.
 
 ---
 
@@ -93,3 +106,4 @@ This aligns with the Marinara architecture pattern: system prompt sets the "who 
 - **2026-05-03**: `PhiMode::Continuation` removed; PHI unified to a single universal template
 - **2026-05-03**: System prompt and PHI converted to plain-text instructions (Marinara pattern); XML retained only for external data layers. Fixes Gemma 4 reasoning-loop bug. See ADR-004 v3 for full context.
 - **2026-05-19**: PHI renamed to OutputFormat; hardcoded `SYSTEM_PROMPT_TEMPLATE` removed; writing style moved to customizable system prompt preset; generic anti-recap rule added to OutputFormat; startup loading of active preset into `AppSettings` closes the cached-prompt gap
+- **2026-05-25**: `prompt_text` split into `role`/`instructions`/`writing_style`/`output_format`; `assemble_prompt_text()` added; `OUTPUT_FORMAT_TEMPLATE` deleted; output format moves from user message to system prompt; DB migrations v7 (add columns) and v8 (drop `prompt_text`)

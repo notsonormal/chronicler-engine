@@ -10,16 +10,16 @@ fn test_prompt_presets_template_renders_system_presets() {
             PromptPreset {
                 id: "default".into(),
                 name: "Default".into(),
-                prompt_text: "You are a narrator.".into(),
+                instructions: Some("You are a narrator.".into()),
                 is_default: true,
                 preset_type: PresetType::System,
+                ..Default::default()
             },
             PromptPreset {
                 id: "custom-1".into(),
                 name: "Custom".into(),
-                prompt_text: "You are a custom narrator.".into(),
-                is_default: false,
-                preset_type: PresetType::System,
+                instructions: Some("You are a custom narrator.".into()),
+                ..Default::default()
             },
         ],
         quantifier_presets: vec![],
@@ -40,9 +40,8 @@ fn test_prompt_presets_template_shows_active_badge() {
         system_presets: vec![PromptPreset {
             id: "custom-1".into(),
             name: "Custom".into(),
-            prompt_text: "Custom prompt.".into(),
-            is_default: false,
-            preset_type: PresetType::System,
+            instructions: Some("Custom prompt.".into()),
+            ..Default::default()
         }],
         quantifier_presets: vec![],
         active_system_id: "custom-1".into(),
@@ -60,9 +59,10 @@ fn test_prompt_presets_template_shows_default_badge() {
         system_presets: vec![PromptPreset {
             id: "default".into(),
             name: "Default".into(),
-            prompt_text: "Default prompt.".into(),
+            instructions: Some("Default prompt.".into()),
             is_default: true,
             preset_type: PresetType::System,
+            ..Default::default()
         }],
         quantifier_presets: vec![],
         active_system_id: "other".into(),
@@ -96,9 +96,8 @@ fn test_prompt_presets_template_shows_full_preview() {
         system_presets: vec![PromptPreset {
             id: "test".into(),
             name: "Test".into(),
-            prompt_text: long_text.clone(),
-            is_default: false,
-            preset_type: PresetType::System,
+            instructions: Some(long_text.clone()),
+            ..Default::default()
         }],
         quantifier_presets: vec![],
         active_system_id: "default".into(),

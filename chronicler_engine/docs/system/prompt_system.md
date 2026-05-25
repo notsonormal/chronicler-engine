@@ -8,47 +8,69 @@ The Chronicler Engine uses a layered prompt construction system inspired by Sill
 
 For background on SillyTavern's original system, see [`reference/sillytavern_prompt_system.md`](../reference/sillytavern_prompt_system.md).
 
-## Prompt Architecture: Plain-Text Instructions + XML Data
+## Prompt Architecture: XML-Sectioned Instructions + XML Data
 
-The engine follows a **Marinara-Engine-inspired pattern** designed for compatibility with reasoning models:
+The engine follows a **Marinara-Engine-inspired pattern**:
 
-- **Instructions are plain text** — No XML tags wrapping the system prompt or output format layer. Imperative voice only ("You are...", "Your job is...", "Never...").
+- **Instructions are XML-sectioned** — The system prompt is split into four labeled sections (`<role>`, `<instructions>`, `<writing_style>`, `<output_format>`) assembled from the active preset. Two dynamic sections (`<global_rules>`, response length) are injected at assembly time.
 - **Data is XML-wrapped** — External context (`<GameState>`, `<KnownNpcs>`, `<ConversationHistory>`, etc.) uses XML tags because it is *data*, not instructions.
-- **Why?** Self-referential XML (`<SystemPrompt>`, `<Role>`, `<AuxiliaryInstructions>`) can trigger reasoning models (e.g., Gemma 4) to enter meta-analysis mode, consuming all tokens in `reasoning` fields and producing empty `content`. Plain-text instructions avoid this trap.
+- **Why sections?** Labeled content containers let users edit individual prompt aspects (role, rules, style, format) without rewriting the entire prompt. The imperative text inside each section remains plain.
+- **Why not self-referential tags?** Tags like `<SystemPrompt>` or `<Role>` can trigger reasoning models (e.g., Gemma 4) to enter meta-analysis mode. The section tags (`<role>`, `<instructions>`) are content labels, not objects of analysis. See ADR-004 v4 for the full evolution.
 
 ## Source
 
 - **SillyTavern Docs**: https://docs.sillytavern.app/usage/prompts/prompt-manager/
 - **SillyTavern GitHub**: https://github.com/SillyTavern/SillyTavern
 
-## The 8-Layer Prompt System
+## The 7-Layer Prompt System
 
-The Chronicler Engine implements an 8-layer prompt structure mapped from SillyTavern's Prompt Manager:
+The Chronicler Engine implements a 7-layer prompt structure mapped from SillyTavern's Prompt Manager:
 
 | Layer | Name | SillyTavern Equivalent | Purpose |
 |-------|------|----------------------|---------|
-| 0 | System | Main Prompt | Game rules, role instructions, narrative style |
+| 0 | System | Main Prompt | XML-wrapped sections: role, instructions, writing_style, global_rules, output_format |
 | 1 | Game State | Context | Current room, present NPCs |
 | 2 | NPC Cards | Character Description | In-room NPC character sheets |
 | 3 | Player | Persona Description | Player persona and description |
 | 4 | World Info | World Info / Lorebook | World lore triggered by keywords |
 | 5 | History | Chat History | Full conversation history |
 | 6 | User Input | User Message | Current player input |
-| 7 | Output Format | Output Format Instructions | Writing style and behavioral guidance after history |
 
 ## Detailed Layer Descriptions
 
 ### Layer 0: System Prompt (Main Prompt)
 - **Role**: System
 - **Position**: Absolute (top)
-- **Content**: Global game rules, narrator persona, narrative style guidelines
+- **Content**: Assembled XML sections from the active preset — role, instructions, writing_style, global_rules (from `world.json`), output_format (with response length appended)
 - **Renders**: `PromptBuilder::render_system_layer()`
-- **Format**: Plain text (no XML wrapper)
+- **Format**: XML-wrapped sections (see example below)
 - **Example**:
+  ```xml
+  <role>
+      You are an interactive fiction author...
+  </role>
+
+  <instructions>
+      Input validation rules:
+      - ...
+  </instructions>
+
+  <writing_style>
+      Third-person limited perspective...
+  </writing_style>
+
+  <global_rules>
+      - Rule 1: Be descriptive
+  </global_rules>
+
+  <output_format>
+      The player's next action is provided above...
+
+      Response Length:
+      Keep it concise...
+  </output_format>
   ```
-  You are an interactive fiction author with your own free will, intellect, and emotional intelligence...
-  ```
-- **See also**: [`reference/system_prompt.md`](../reference/system_prompt.md) for the full prompt text
+- **See also**: [`reference/system_prompt.md`](../reference/system_prompt.md) for the full prompt text and section definitions
 
 ### Layer 1: Game State
 - **Role**: User (data)
@@ -95,29 +117,20 @@ The Chronicler Engine implements an 8-layer prompt structure mapped from SillyTa
 - **Content**: The player's current message/action
 - **Format**: XML-wrapped (`<PlayerInput>... </PlayerInput>`)
 
-### Layer 7: Output Format
-- **Role**: User (instruction appended to user message)
-- **Position**: After history, before response
-- **Content**: Writing style instructions and final behavioral guidance
-- **Format**: Plain text (no XML wrapper)
-- **Split behavior**: In `build_split()`, the output format is appended to the **user message** (not the system prompt) so it sits closest to the generation point, matching the ordering in `build()` where `PlayerInput` precedes the output format instructions.
-- **Example**:
-  ```
-  Writing style:
-  - Third-person limited perspective, focused on the player character.
-  - Past tense narrative prose.
+### Layer 7: Output Format (Moved to System Prompt)
 
-  The player's next action is provided above. Your only job is to narrate what happens now.
-
-  Do not re-narrate events that already occurred in the history above. Move the scene forward from where it left off.
-  ```
+> **Removed as a separate layer.** Output format instructions are now part of Layer 0 (System Prompt) inside the `<output_format>` section.
+>
+> Previously, output format was appended to the user message as Layer 7. It has been moved to the system prompt because output format constraints are system-level instructions, not user input data. This aligns with the Marinara architecture pattern: system prompt sets the "who, how, and what structure."
+>
+> The `OUTPUT_FORMAT_TEMPLATE` constant in `builder.rs` has been deleted. Its content (anti-recap, GPTisms ban, writing style guidance) now lives in the preset's `output_format` and `writing_style` fields where users can edit it.
 
 ## `build_split()` Separation
 
 `build_split()` separates instructions from data to maximize compatibility with OpenAI-compatible APIs:
 
-- **System half**: Plain-text instructions only (Layer 0)
-- **User half**: XML-wrapped data (Layers 1–6) + plain-text output format (Layer 7)
+- **System half**: XML-wrapped instruction sections (Layer 0)
+- **User half**: XML-wrapped data (Layers 1–6)
 
 This separation ensures that reasoning models receive clear imperative instructions in the system role, while all external context stays in the user role.
 
@@ -134,7 +147,7 @@ This separation ensures that reasoning models receive clear imperative instructi
 
 ## Response Length Control
 
-The `PromptBuilder` supports an optional `response_length` field (set via `.with_response_length()`) that appends scene-adaptive length guidance to the system prompt:
+Response length guidance is appended inside the `<output_format>` section by `assemble_prompt_text()` at preset activation time:
 
 ```
 Response Length:
@@ -145,7 +158,7 @@ plot developments, build content (above 150 words), but allow the player to reac
 
 - **Source**: `AppSettings.response_length` (persisted in `settings.json`)
 - **Default**: Flexible scene-adaptive guidance
-- **Injection point**: Appended after `Global Rules` in `render_system_layer()`
+- **Injection point**: Appended inside `<output_format>` section content by `assemble_prompt_text()`
 
 ## Context Templates
 
@@ -179,17 +192,17 @@ Uses the same structure as SillyTavern character cards (Jailbreak format):
 
 ### Quantifier Prompt (Separate)
 
-The engine also uses a **quantifier prompt** — a separate secondary LLM call that runs *after* narration to analyze the scene. It determines which NPCs are present and whether the player moved. This is **not** part of the 8-layer narrative prompt stack.
+The engine also uses a **quantifier prompt** — a separate secondary LLM call that runs *after* narration to analyze the scene. It determines which NPCs are present and whether the player moved. This is **not** part of the 7-layer narrative prompt stack.
 
 - See [`reference/quantifier_prompt.md`](../reference/quantifier_prompt.md) for the full prompt text
 - Rendered by: `QuantifierPromptBuilder` in `src/narrative/agents/quantifier/prompt.rs`
 - Uses a separate model connection from the main narration LLM
-- The quantifier also follows the plain-text instructions + XML-wrapped data pattern
+- The quantifier also follows the XML-sectioned instructions + XML-wrapped data pattern
 
 ## Implementation
 
 ### Key Files
-- `src/narrative/prompt/builder.rs` — `PromptBuilder` with 8-layer construction, context fitting, and budget management
+- `src/narrative/prompt/builder.rs` — `PromptBuilder` with 7-layer construction, context fitting, and budget management
 - `src/narrative/llm/mod.rs` — LLM backend module that configures `PromptBuilder` with connection-specific context windows
 - `src/model/state.rs` — `GameState` provides context data
 - `src/model/character.rs` — `NpcCard`, `PlayerCard` structures
@@ -199,7 +212,6 @@ The engine also uses a **quantifier prompt** — a separate secondary LLM call t
 let (system, user, max_tokens) = PromptBuilder::from_context(&ctx)
     .with_max_context_tokens(8192)
     .with_max_tokens(2048)
-    .with_response_length(&settings.response_length)
     .build_split()?;
 ```
 
@@ -212,7 +224,7 @@ let (system, user, max_tokens) = PromptBuilder::from_context(&ctx)
 | History | Full chat | narrative history (messages) |
 | Memory | Vector RAG | Keyword triggers only |
 | UI | Web GUI | None (server) |
-| Prompt style | XML-wrapped instructions | Plain-text instructions + XML data |
+| Prompt style | XML-wrapped instructions | XML-sectioned instructions + XML data |
 | Context fitting | Manual | Automatic per connection |
 
 ## References

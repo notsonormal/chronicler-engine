@@ -8,6 +8,7 @@ use chronicler_engine::model::trigger::{
 };
 use chronicler_engine::narrative::llm::MockBackend;
 use chronicler_engine::storage::message_storage::MessageStorage;
+use chronicler_engine::storage::prompt_preset_storage::PromptPresetStorage;
 use chronicler_engine::storage::snapshot_storage::SnapshotStorage;
 use chronicler_engine::test_support::make_test_context_with_sqlite;
 
@@ -458,6 +459,32 @@ fn test_retry_no_pre_main_snapshot() {
         settings: Arc::new(std::sync::RwLock::new(
             chronicler_engine::model::settings::AppSettings::default(),
         )),
+        preset_storage: {
+            let storage =
+                chronicler_engine::storage::prompt_preset_storage::InMemoryPromptPresetStorage::new(
+                );
+            let _ = storage.save(&chronicler_engine::model::prompt_preset::PromptPreset {
+                id: "system_default".to_string(),
+                name: "Default System".to_string(),
+                role: Some("You are a narrator.".to_string()),
+                instructions: None,
+                writing_style: None,
+                output_format: None,
+                is_default: true,
+                preset_type: chronicler_engine::model::prompt_preset::PresetType::System,
+            });
+            let _ = storage.save(&chronicler_engine::model::prompt_preset::PromptPreset {
+                id: "quantifier_default".to_string(),
+                name: "Default Quantifier".to_string(),
+                role: Some("You are a quantifier.".to_string()),
+                instructions: None,
+                writing_style: None,
+                output_format: None,
+                is_default: true,
+                preset_type: chronicler_engine::model::prompt_preset::PresetType::Quantifier,
+            });
+            Arc::new(storage)
+        },
     };
 
     add_input_and_save(&ctx, "examine room");

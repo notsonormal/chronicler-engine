@@ -124,7 +124,7 @@ pub fn make_prompt_context<'a>(
     player: &'a PlayerCard,
     user_message: &'a str,
     history: &'a [LogEntry],
-    system_prompt_override: Option<String>,
+    system_prompt: String,
 ) -> PromptContext<'a> {
     PromptContext {
         world,
@@ -134,6 +134,6 @@ pub fn make_prompt_context<'a>(
         player,
         user_message,
         history,
-        system_prompt_override,
+        system_prompt,
     }
 }

@@ -243,5 +243,95 @@ fn run_migrations(conn: &Connection) -> Result<(), crate::error::EngineError> {
         })?;
     }
 
+    fn merr(v: i32, e: impl std::fmt::Display) -> crate::error::EngineError {
+        crate::error::EngineError::Config(format!("Migration v{v} failed: {e}"))
+    }
+
+    fn recreate_prompt_presets_table(
+        conn: &Connection,
+        keep_prompt_text: bool,
+    ) -> Result<(), rusqlite::Error> {
+        if keep_prompt_text {
+            conn.execute(
+                "CREATE TABLE prompt_presets_new (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    preset_type TEXT NOT NULL,
+                    role TEXT,
+                    instructions TEXT,
+                    writing_style TEXT,
+                    output_format TEXT,
+                    prompt_text TEXT,
+                    is_default INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )",
+                [],
+            )?;
+            conn.execute(
+                "INSERT INTO prompt_presets_new (id, name, preset_type, role, instructions, writing_style, output_format, prompt_text, is_default, created_at, updated_at)
+                 SELECT id, name, preset_type, role, instructions, writing_style, output_format, prompt_text, is_default, created_at, updated_at FROM prompt_presets",
+                [],
+            )?;
+        } else {
+            conn.execute(
+                "CREATE TABLE prompt_presets_new (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    preset_type TEXT NOT NULL,
+                    role TEXT,
+                    instructions TEXT,
+                    writing_style TEXT,
+                    output_format TEXT,
+                    is_default INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )",
+                [],
+            )?;
+            conn.execute(
+                "INSERT INTO prompt_presets_new (id, name, preset_type, role, instructions, writing_style, output_format, is_default, created_at, updated_at)
+                 SELECT id, name, preset_type, role, instructions, writing_style, output_format, is_default, created_at, updated_at FROM prompt_presets",
+                [],
+            )?;
+        }
+        conn.execute("DROP TABLE prompt_presets", [])?;
+        conn.execute(
+            "ALTER TABLE prompt_presets_new RENAME TO prompt_presets",
+            [],
+        )?;
+        Ok(())
+    }
+
+    if version < 7 {
+        conn.execute("BEGIN", []).map_err(|e| merr(7, e))?;
+        // Idempotent: these columns may already exist if a partial migration ran.
+        let _ = conn.execute("ALTER TABLE prompt_presets ADD COLUMN role TEXT", []);
+        let _ = conn.execute(
+            "ALTER TABLE prompt_presets ADD COLUMN instructions TEXT",
+            [],
+        );
+        let _ = conn.execute(
+            "ALTER TABLE prompt_presets ADD COLUMN writing_style TEXT",
+            [],
+        );
+        let _ = conn.execute(
+            "ALTER TABLE prompt_presets ADD COLUMN output_format TEXT",
+            [],
+        );
+        recreate_prompt_presets_table(conn, true).map_err(|e| merr(7, e))?;
+        conn.pragma_update(None, "user_version", 7)
+            .map_err(|e| merr(7, e))?;
+        conn.execute("COMMIT", []).map_err(|e| merr(7, e))?;
+    }
+
+    if version < 8 {
+        conn.execute("BEGIN", []).map_err(|e| merr(8, e))?;
+        recreate_prompt_presets_table(conn, false).map_err(|e| merr(8, e))?;
+        conn.pragma_update(None, "user_version", 8)
+            .map_err(|e| merr(8, e))?;
+        conn.execute("COMMIT", []).map_err(|e| merr(8, e))?;
+    }
+
     Ok(())
 }

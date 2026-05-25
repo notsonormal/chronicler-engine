@@ -100,15 +100,39 @@ The quantifier prompt (for NPC detection, movement) was also updated to XML:
 
 ---
 
+## v4 Update: Sectioned XML-Wrapped Presets (2026-05-25)
+
+**Problem discovered**: v3's plain-text system prompt worked for reasoning-model compatibility, but it merged all instructions into a single undifferentiated block. Users could not easily edit or experiment with individual aspects (role, rules, writing style, output format) without rewriting the entire prompt. The monolithic `prompt_text` field in the preset system made fine-grained customization impossible.
+
+**New decision**: Split the system prompt into four hardcoded sections, each wrapped in XML tags:
+- **`<role>`** — Identity and agency ("You are an interactive fiction author...")
+- **`<instructions>`** — Behavioral rules (input validation, state tracking, narrative rules, etc.)
+- **`<writing_style>`** — Prose constraints (perspective, tense, tone)
+- **`<output_format>`** — Output constraints (anti-recap, GPTisms ban, response length)
+
+These sections are assembled by `PromptPreset::assemble_prompt_text()` into a single XML-wrapped system message. Two builder-generated sections are inserted dynamically:
+- **`<global_rules>`** — Injected from `world.json`, placed before `<output_format>`
+- **Response length** — Appended inside `<output_format>` content from settings
+
+**Why this reverses v3 for instruction containers**: v3 kept instructions plain-text to avoid meta-analysis. v4 wraps instruction *sections* in XML because the sections are no longer self-referential instruction tags (`<SystemPrompt>`, `<Role>`). They are content containers (`<role>`, `<instructions>`) that the LLM treats as labeled content blocks, not objects of analysis. The actual imperative text inside remains plain.
+
+**Consequences of v4**:
+- **Positive**: Users can edit individual prompt aspects via the Prompt Presets UI
+- **Positive**: Section order is predictable and consistent across all presets
+- **Positive**: Global rules and response length are injected automatically — no manual copy-paste
+- **Negative**: Token overhead from 4–5 XML tag pairs (~150 chars, negligible)
+- **Trade-off**: Instruction containers are XML-wrapped again, but with non-self-referential tags
+
 ## History
 
 - **2025-04-13**: Initial XML refactor (prompt-xml-refactor plan)
 - **Later**: v2 - Silly Tavern integration + quantifier XML (prompt-xml-refactor-v2 plan)
 - **2026-05-03**: v3 - Plain-text instructions for reasoning-model compatibility (hercules-she-hulk-doctor-fate plan)
 - **2026-05-19**: OutputFormat rename — PHI layer renamed to OutputFormat; anti-recap rule added to generic output format template; tone/style instructions moved to system prompt preset (see ADR-005)
+- **2026-05-25**: v4 - Sectioned XML-wrapped presets (carnage-jessica-jones-magik plan)
 
 ---
 
 ## Historical Note
 
-Initial prompt format used `=== SECTION ===` delimiters. This was later enhanced with Silly Tavern behavioral rules in v2, then refined to plain-text instructions in v3 to address reasoning-model compatibility.
+Initial prompt format used `=== SECTION ===` delimiters. This was later enhanced with Silly Tavern behavioral rules in v2, then refined to plain-text instructions in v3 to address reasoning-model compatibility. v4 reintroduces XML containers for instruction sections as non-self-referential content labels, splitting the monolithic prompt into editable role/instructions/writing_style/output_format fields.

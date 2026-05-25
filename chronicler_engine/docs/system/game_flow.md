@@ -41,14 +41,14 @@ flowchart TD
 
 ## The LLM Context Pipeline
 
-When the engine needs LLM narration (during Phase 4), it builds a comprehensive prompt using the **8-layer system** (see [`prompt_system.md`](prompt_system.md)):
+When the engine needs LLM narration (during Phase 4), it builds a comprehensive prompt using the **7-layer system** (see [`prompt_system.md`](prompt_system.md)):
 
 ```mermaid
 flowchart TD
     Start(["**PHASE 4: LLM GENERATION**<br>*(If narrative action)*"])
     
-    Step1["**1. Build 8-layer prompt (SillyTavern-style)**"]
-    Sub1["Layer 0: System prompt (game rules, narrator persona)<br>Layer 1: Game state (room, NPCs)<br>Layer 2: NPC cards (in-room NPCs only)<br>Layer 3: Player persona<br>Layer 4: World info (keyword-triggered lore)<br>Layer 5: Full narration history (up to 1000 entries)<br>Layer 6: User input (current action)<br>Layer 7: Output Format"]
+    Step1["**1. Build 7-layer prompt (SillyTavern-style)**"]
+    Sub1["Layer 0: System prompt (XML-wrapped sections: role, instructions, writing_style, global_rules, output_format)<br>Layer 1: Game state (room, NPCs)<br>Layer 2: NPC cards (in-room NPCs only)<br>Layer 3: Player persona<br>Layer 4: World info (keyword-triggered lore)<br>Layer 5: Full narration history (up to 1000 entries)<br>Layer 6: User input (current action)"]
     
     Step2["**2. Token budget check**<br>*(8192 max, truncate if overflow)*"]
     Step3["**3. Send to LLM**<br>*(OpenRouter/DeepSeek)*"]
@@ -195,6 +195,6 @@ flowchart TD
 - **Server**: `src/server/fragments/actions.rs` - `action_handler`, `process_action`
 - **HTMX Polling**: `assets/index.html` - story-log `hx-trigger="load, every 2s"`; status-display `hx-trigger="load, every 5s"`; visual-sidebar & action-hints `hx-trigger="load, every 5s"`
 - **LLM**: `src/narrative/llm/backend.rs` - `LlmBackend` trait (`narrate_action`, `narrate_arrival`)
-- **Prompt Builder**: `src/narrative/prompt/builder.rs` - 8-layer prompt construction
+- **Prompt Builder**: `src/narrative/prompt/builder.rs` - 7-layer prompt construction
 - **Mock Flow Tests**: `tests/flow_mock/` - Sequential service-level flow tests with mock backends (retry, state consistency, quantifier movement)
 - **LLM Tests**: `tests/flow_llm_tests.rs` - Real LLM smoke tests (requires `OPENROUTER_API_KEY`)

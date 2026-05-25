@@ -27,11 +27,12 @@ pub struct DefaultGameService {
 
 impl DefaultGameService {
     pub fn new() -> Self {
-        Self::with_storage(None, Arc::new(RwLock::new(AppSettings::default())))
+        Self::with_storage(None, None, Arc::new(RwLock::new(AppSettings::default())))
     }
 
     pub fn with_storage(
         storage: Option<Arc<dyn LlmMessageStorage>>,
+        preset_storage: Option<Arc<dyn crate::storage::prompt_preset_storage::PromptPresetStorage>>,
         settings: Arc<RwLock<AppSettings>>,
     ) -> Self {
         let (registry, connection) = {
@@ -39,7 +40,8 @@ impl DefaultGameService {
             let registry = AgentRegistry::from_configs_with_storage(
                 &settings_guard.agents,
                 storage.clone(),
-                &settings_guard,
+                preset_storage,
+                Arc::clone(&settings),
             )
             .unwrap_or_default();
             (registry, settings_guard.narration_connection())
@@ -47,7 +49,6 @@ impl DefaultGameService {
         let llm_backend = Arc::from(crate::narrative::llm::get_llm_backend_for(
             &connection,
             storage,
-            Some(Arc::clone(&settings)),
         ));
         Self {
             llm_backend,

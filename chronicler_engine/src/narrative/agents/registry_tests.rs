@@ -1,3 +1,5 @@
+use std::sync::{Arc, RwLock};
+
 use crate::model::agent::{
     AgentConfig, AgentContext, AgentResult, BackendSelector, ExecutionPhase,
 };
@@ -60,14 +62,24 @@ fn test_registry_from_configs_rejects_unknown_type() {
         backend: BackendSelector::UseMain,
         phase: ExecutionPhase::PostGeneration,
     }];
-    let result = AgentRegistry::from_configs_with_storage(&configs, None, &AppSettings::default());
+    let result = AgentRegistry::from_configs_with_storage(
+        &configs,
+        None,
+        None,
+        Arc::new(RwLock::new(AppSettings::default())),
+    );
     assert!(result.is_err());
 }
 
 #[test]
 fn test_registry_from_configs_empty_uses_defaults() {
-    let registry =
-        AgentRegistry::from_configs_with_storage(&[], None, &AppSettings::default()).unwrap();
+    let registry = AgentRegistry::from_configs_with_storage(
+        &[],
+        None,
+        None,
+        Arc::new(RwLock::new(AppSettings::default())),
+    )
+    .unwrap();
     // Should contain the default quantifier agent
     let post: Vec<_> = registry
         .agents_for_phase(ExecutionPhase::PostGeneration)
@@ -126,8 +138,13 @@ fn test_registry_from_configs_disabled_skipped() {
         backend: BackendSelector::UseMain,
         phase: ExecutionPhase::PostGeneration,
     }];
-    let registry =
-        AgentRegistry::from_configs_with_storage(&configs, None, &AppSettings::default()).unwrap();
+    let registry = AgentRegistry::from_configs_with_storage(
+        &configs,
+        None,
+        None,
+        Arc::new(RwLock::new(AppSettings::default())),
+    )
+    .unwrap();
     assert!(registry.is_empty());
 }
 
@@ -140,8 +157,13 @@ fn test_registry_from_configs_narrator_agent() {
         backend: BackendSelector::UseMain,
         phase: ExecutionPhase::PreGeneration,
     }];
-    let registry =
-        AgentRegistry::from_configs_with_storage(&configs, None, &AppSettings::default()).unwrap();
+    let registry = AgentRegistry::from_configs_with_storage(
+        &configs,
+        None,
+        None,
+        Arc::new(RwLock::new(AppSettings::default())),
+    )
+    .unwrap();
     let pre: Vec<_> = registry
         .agents_for_phase(ExecutionPhase::PreGeneration)
         .collect();

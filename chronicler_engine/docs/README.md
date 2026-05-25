@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-25 00:16 UTC*
+*Index last generated: 2026-05-25 22:06 UTC*
 
 ### Root files
 
@@ -61,8 +61,10 @@ This folder contains all documentation for the Chronicler Engine project.
 
 ### `docs/plans/archived/`
 
+- [Plan: Make PromptContext Require an Assembled System Prompt](./plans/archived/beast-boy-damage-colossus.md)
 - [Plan: Multi-Game Support for Chronicler Engine](./plans/archived/big-barda-nightwing-star-lord.md)
 - [Plan: Fix Swipe Code Review Issues](./plans/archived/bobbi-morse-superboy-nightwing.md)
+- [Plan: Restructure Prompt Presets into XML Sections](./plans/archived/carnage-jessica-jones-magik.md)
 - [Implementation Plan: Multi-Game Support Review Fixes](./plans/archived/crystal-nightwing-maria-hill.md)
 - [Plan: Reduce GameState Blast Radius](./plans/archived/doctor-mid-nite-elongated-man-devil-dinosaur.md)
 - [Chronicler Engine: Leaky Presentation Layer Cleanup](./plans/archived/hellcat-martian-manhunter-liberty-belle.md)
@@ -80,7 +82,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Specification: Engine Data Schemas](./reference/data_schemas.md)
 - [Specification: Player Persona System](./reference/persona_system.md)
 - [Reference: Quantifier Prompt](./reference/quantifier_prompt.md)
-- [Reference: Normal System Prompt](./reference/system_prompt.md)
+- [Reference: System Prompt](./reference/system_prompt.md)
 - [Specification: Testing Strategy and Architecture](./reference/testing.md)
 
 ### `docs/reviews/archived/`

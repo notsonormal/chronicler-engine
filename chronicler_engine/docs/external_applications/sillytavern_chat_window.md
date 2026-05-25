@@ -355,7 +355,7 @@ The `updateMessageElement()` function (`script.js:2611-2700`) performs these ope
 
 ## Cross-Reference with Prompt System
 
-See [`system/prompt_system.md`](../system/prompt_system.md) for the 8-layer prompt construction system. The chat window HTML is the **presentation layer** — it displays the conversation history (Layer 5: Chat History) and user input (Layer 6: User Input). The prompt assembly happens server-side via API calls; the HTML reflects the rendered conversation state.
+See [`system/prompt_system.md`](../system/prompt_system.md) for the 7-layer prompt construction system. The chat window HTML is the **presentation layer** — it displays the conversation history (Layer 5: Chat History) and user input (Layer 6: User Input). The prompt assembly happens server-side via API calls; the HTML reflects the rendered conversation state.
 
 Key connections:
 - `.mes_text` content → becomes part of chat history sent to LLM

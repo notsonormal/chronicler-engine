@@ -10,16 +10,20 @@ fn create_sqlite_storage() -> SqlitePromptPresetStorage {
     SqlitePromptPresetStorage::new(pool)
 }
 
+fn preset(id: &str, name: &str, instructions: &str, preset_type: PresetType) -> PromptPreset {
+    PromptPreset {
+        id: id.into(),
+        name: name.into(),
+        instructions: Some(instructions.into()),
+        preset_type,
+        ..Default::default()
+    }
+}
+
 #[test]
 fn test_sqlite_save_and_get() {
     let storage = create_sqlite_storage();
-    let preset = PromptPreset {
-        id: "test-1".into(),
-        name: "Test".into(),
-        prompt_text: "Hello.".into(),
-        is_default: false,
-        preset_type: PresetType::System,
-    };
+    let preset = preset("test-1", "Test", "Hello.", PresetType::System);
 
     storage.save(&preset).unwrap();
     let result = storage.get("test-1").unwrap();
@@ -28,7 +32,7 @@ fn test_sqlite_save_and_get() {
     let fetched = result.unwrap();
     assert_eq!(fetched.id, "test-1");
     assert_eq!(fetched.name, "Test");
-    assert_eq!(fetched.prompt_text, "Hello.");
+    assert_eq!(fetched.instructions, Some("Hello.".into()));
     assert!(!fetched.is_default);
 }
 
@@ -42,20 +46,8 @@ fn test_sqlite_get_nonexistent() {
 #[test]
 fn test_sqlite_list_filters_by_type() {
     let storage = create_sqlite_storage();
-    let system = PromptPreset {
-        id: "sys-1".into(),
-        name: "System".into(),
-        prompt_text: "Sys.".into(),
-        is_default: false,
-        preset_type: PresetType::System,
-    };
-    let quantifier = PromptPreset {
-        id: "quant-1".into(),
-        name: "Quantifier".into(),
-        prompt_text: "Quant.".into(),
-        is_default: false,
-        preset_type: PresetType::Quantifier,
-    };
+    let system = preset("sys-1", "System", "Sys.", PresetType::System);
+    let quantifier = preset("quant-1", "Quantifier", "Quant.", PresetType::Quantifier);
 
     storage.save(&system).unwrap();
     storage.save(&quantifier).unwrap();
@@ -72,27 +64,21 @@ fn test_sqlite_list_filters_by_type() {
 #[test]
 fn test_sqlite_save_updates_existing() {
     let storage = create_sqlite_storage();
-    let preset = PromptPreset {
-        id: "update-1".into(),
-        name: "Original".into(),
-        prompt_text: "Original text.".into(),
-        is_default: false,
-        preset_type: PresetType::System,
-    };
-    storage.save(&preset).unwrap();
+    let original = preset("update-1", "Original", "Original text.", PresetType::System);
+    storage.save(&original).unwrap();
 
-    let updated = PromptPreset {
-        id: "update-1".into(),
-        name: "Updated".into(),
-        prompt_text: "Updated text.".into(),
-        is_default: true,
-        preset_type: PresetType::Quantifier,
-    };
+    let mut updated = preset(
+        "update-1",
+        "Updated",
+        "Updated text.",
+        PresetType::Quantifier,
+    );
+    updated.is_default = true;
     storage.save(&updated).unwrap();
 
     let result = storage.get("update-1").unwrap().unwrap();
     assert_eq!(result.name, "Updated");
-    assert_eq!(result.prompt_text, "Updated text.");
+    assert_eq!(result.instructions, Some("Updated text.".into()));
     assert!(result.is_default);
 
     // Type should also have changed
@@ -105,13 +91,7 @@ fn test_sqlite_save_updates_existing() {
 #[test]
 fn test_sqlite_delete() {
     let storage = create_sqlite_storage();
-    let preset = PromptPreset {
-        id: "del-1".into(),
-        name: "To Delete".into(),
-        prompt_text: "Bye.".into(),
-        is_default: false,
-        preset_type: PresetType::System,
-    };
+    let preset = preset("del-1", "To Delete", "Bye.", PresetType::System);
     storage.save(&preset).unwrap();
     assert!(storage.get("del-1").unwrap().is_some());
 
@@ -125,7 +105,10 @@ fn test_from_db_maps_is_default() {
         id: "d".into(),
         name: "D".into(),
         preset_type: "system".into(),
-        prompt_text: "T".into(),
+        role: None,
+        instructions: Some("T".into()),
+        writing_style: None,
+        output_format: None,
         is_default: 1,
         created_at: "2024-01-01T00:00:00Z".into(),
         updated_at: "2024-01-01T00:00:00Z".into(),
@@ -137,7 +120,10 @@ fn test_from_db_maps_is_default() {
         id: "nd".into(),
         name: "ND".into(),
         preset_type: "quantifier".into(),
-        prompt_text: "T".into(),
+        role: None,
+        instructions: Some("T".into()),
+        writing_style: None,
+        output_format: None,
         is_default: 0,
         created_at: "2024-01-01T00:00:00Z".into(),
         updated_at: "2024-01-01T00:00:00Z".into(),

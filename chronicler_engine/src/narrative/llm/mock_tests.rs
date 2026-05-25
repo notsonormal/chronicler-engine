@@ -378,7 +378,7 @@ fn test_mock_narrate_arrival_different_rooms() {
         player: Box::leak(Box::new(player.clone())),
         user_message: Box::leak(Box::new("".to_string())),
         history: &[],
-        system_prompt_override: None,
+        system_prompt: String::new(),
     };
     let result1 = backend.narrate_arrival("test", &context1);
     assert!(result1.is_ok());
@@ -394,7 +394,7 @@ fn test_mock_narrate_arrival_different_rooms() {
         player: Box::leak(Box::new(player)),
         user_message: Box::leak(Box::new("".to_string())),
         history: &[],
-        system_prompt_override: None,
+        system_prompt: String::new(),
     };
     let result2 = backend.narrate_arrival("test", &context2);
     assert!(result2.is_ok());
@@ -465,7 +465,7 @@ fn test_context_with_empty_world_description() {
         player: Box::leak(Box::new(player)),
         user_message: Box::leak(Box::new("test".to_string())),
         history: &[],
-        system_prompt_override: None,
+        system_prompt: String::new(),
     };
 
     let result = backend.narrate_action("test", &context);
@@ -498,7 +498,7 @@ fn test_context_with_many_global_rules() {
         player: Box::leak(Box::new(player)),
         user_message: Box::leak(Box::new("test".to_string())),
         history: &[],
-        system_prompt_override: None,
+        system_prompt: String::new(),
     };
 
     let result = backend.narrate_action("test", &context);
@@ -609,7 +609,7 @@ fn test_player_with_empty_inventory() {
         player: Box::leak(Box::new(player)),
         user_message: Box::leak(Box::new("test".to_string())),
         history: &[],
-        system_prompt_override: None,
+        system_prompt: String::new(),
     };
 
     let result = backend.narrate_action("test", &context);
@@ -687,7 +687,7 @@ fn test_player_with_items_in_inventory() {
         player: Box::leak(Box::new(player)),
         user_message: Box::leak(Box::new("test".to_string())),
         history: &[],
-        system_prompt_override: None,
+        system_prompt: String::new(),
     };
 
     let result = backend.narrate_action("test", &context);
@@ -721,7 +721,7 @@ fn test_room_with_items() {
         player: Box::leak(Box::new(player)),
         user_message: Box::leak(Box::new("look".to_string())),
         history: &[],
-        system_prompt_override: None,
+        system_prompt: String::new(),
     };
 
     let result = backend.narrate_action("test", &context);
@@ -757,7 +757,7 @@ fn test_room_with_exits() {
         player: Box::leak(Box::new(player)),
         user_message: Box::leak(Box::new("exits".to_string())),
         history: &[],
-        system_prompt_override: None,
+        system_prompt: String::new(),
     };
 
     let result = backend.narrate_action("test", &context);
@@ -786,7 +786,7 @@ fn test_world_with_default_room_image() {
         player: Box::leak(Box::new(player)),
         user_message: Box::leak(Box::new("test".to_string())),
         history: &[],
-        system_prompt_override: None,
+        system_prompt: String::new(),
     };
 
     let result = backend.narrate_action("test", &context);
@@ -870,7 +870,7 @@ fn test_context_with_npcs_in_area() {
         player: Box::leak(Box::new(player)),
         user_message: Box::leak(Box::new("look".to_string())),
         history: &[],
-        system_prompt_override: None,
+        system_prompt: String::new(),
     };
 
     let result = backend.narrate_action("test", &context);

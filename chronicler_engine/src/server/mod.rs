@@ -217,6 +217,7 @@ impl AppState {
             cancel_token: self.current_cancel_token(),
             is_generating: Arc::clone(&self.is_generating),
             settings: Arc::clone(&self.settings),
+            preset_storage: Arc::clone(&self.prompt_preset_storage),
         }
     }
 
@@ -254,6 +255,7 @@ pub async fn run_server_with_config(
     resources: ServerResources,
     config: ServerConfig,
 ) -> Result<()> {
+    let preset_storage = Arc::clone(&resources.prompt_preset_storage);
     let app_state = AppState {
         snapshot_storage: resources.snapshot_storage,
         message_storage: resources.message_storage,
@@ -267,11 +269,13 @@ pub async fn run_server_with_config(
         settings: Arc::clone(&resources.settings),
         game_service: Arc::new(DefaultGameService::with_storage(
             Some(Arc::clone(&resources.llm_message_storage)),
+            Some(Arc::clone(&preset_storage)),
             Arc::clone(&resources.settings),
         )) as Arc<dyn GameService>,
         application_service: Arc::new(DefaultApplicationService::new(Arc::new(
             DefaultGameService::with_storage(
                 Some(resources.llm_message_storage),
+                Some(preset_storage),
                 Arc::clone(&resources.settings),
             ),
         )

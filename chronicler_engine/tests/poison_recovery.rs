@@ -27,6 +27,7 @@ fn test_settings_recover_from_poisoned_rwlock() {
 
     let game_service: Arc<dyn GameService> = Arc::new(DefaultGameService::with_storage(
         None,
+        None,
         Arc::new(std::sync::RwLock::new(AppSettings::default())),
     ));
     let app_state = AppState {
@@ -87,6 +88,7 @@ fn test_cancel_token_recover_from_poisoned_rwlock() {
     .join();
 
     let game_service: Arc<dyn GameService> = Arc::new(DefaultGameService::with_storage(
+        None,
         None,
         Arc::new(std::sync::RwLock::new(AppSettings::default())),
     ));

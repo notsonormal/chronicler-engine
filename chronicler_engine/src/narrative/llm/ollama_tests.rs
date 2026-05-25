@@ -26,7 +26,7 @@ fn test_ollama_from_connection() {
         max_context_tokens: Some(4096),
     };
 
-    let backend = OllamaBackend::from_connection(&conn, None, None);
+    let backend = OllamaBackend::from_connection(&conn, None);
     assert_eq!(backend.model(), "llama3");
     assert_eq!(backend.name(), "Ollama");
 }
@@ -45,7 +45,7 @@ fn test_ollama_model() {
         max_context_tokens: None,
     };
 
-    let backend = OllamaBackend::from_connection(&conn, None, None);
+    let backend = OllamaBackend::from_connection(&conn, None);
     assert_eq!(backend.model(), "mistral");
 }
 
@@ -66,7 +66,6 @@ fn test_ollama_save_message_with_storage() {
     let backend = OllamaBackend::from_connection(
         &conn,
         Some(Arc::clone(&storage) as Arc<dyn LlmMessageStorage>),
-        None,
     );
 
     let msg = crate::model::llm_message::LlmMessageBuilder::new()

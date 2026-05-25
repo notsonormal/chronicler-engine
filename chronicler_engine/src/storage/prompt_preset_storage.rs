@@ -28,7 +28,7 @@ impl PromptPresetStorage for SqlitePromptPresetStorage {
         let conn = self.pool.conn();
         let mut stmt = conn
             .prepare(
-                "SELECT id, name, preset_type, prompt_text, is_default, created_at, updated_at
+                "SELECT id, name, preset_type, role, instructions, writing_style, output_format, is_default, created_at, updated_at
                  FROM prompt_presets
                  WHERE preset_type = ?1
                  ORDER BY updated_at DESC",
@@ -36,17 +36,7 @@ impl PromptPresetStorage for SqlitePromptPresetStorage {
             .map_err(|e| EngineError::Config(format!("Failed to prepare query: {e}")))?;
 
         let rows = stmt
-            .query_map([preset_type.as_str()], |row| {
-                Ok(DbPromptPreset {
-                    id: row.get(0)?,
-                    name: row.get(1)?,
-                    preset_type: row.get(2)?,
-                    prompt_text: row.get(3)?,
-                    is_default: row.get(4)?,
-                    created_at: row.get(5)?,
-                    updated_at: row.get(6)?,
-                })
-            })
+            .query_map([preset_type.as_str()], db_row_to_preset)
             .map_err(|e| EngineError::Config(format!("Failed to query presets: {e}")))?;
 
         let mut presets = Vec::new();
@@ -62,24 +52,14 @@ impl PromptPresetStorage for SqlitePromptPresetStorage {
         let conn = self.pool.conn();
         let mut stmt = conn
             .prepare(
-                "SELECT id, name, preset_type, prompt_text, is_default, created_at, updated_at
+                "SELECT id, name, preset_type, role, instructions, writing_style, output_format, is_default, created_at, updated_at
                  FROM prompt_presets
                  WHERE id = ?1",
             )
             .map_err(|e| EngineError::Config(format!("Failed to prepare query: {e}")))?;
 
         let mut rows = stmt
-            .query_map([id], |row| {
-                Ok(DbPromptPreset {
-                    id: row.get(0)?,
-                    name: row.get(1)?,
-                    preset_type: row.get(2)?,
-                    prompt_text: row.get(3)?,
-                    is_default: row.get(4)?,
-                    created_at: row.get(5)?,
-                    updated_at: row.get(6)?,
-                })
-            })
+            .query_map([id], db_row_to_preset)
             .map_err(|e| EngineError::Config(format!("Failed to query preset: {e}")))?;
 
         match rows.next() {
@@ -98,19 +78,25 @@ impl PromptPresetStorage for SqlitePromptPresetStorage {
         let is_default = if preset.is_default { 1 } else { 0 };
 
         conn.execute(
-            "INSERT INTO prompt_presets (id, name, preset_type, prompt_text, is_default, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+            "INSERT INTO prompt_presets (id, name, preset_type, role, instructions, writing_style, output_format, is_default, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
              ON CONFLICT(id) DO UPDATE SET
                  name = excluded.name,
                  preset_type = excluded.preset_type,
-                 prompt_text = excluded.prompt_text,
+                 role = excluded.role,
+                 instructions = excluded.instructions,
+                 writing_style = excluded.writing_style,
+                 output_format = excluded.output_format,
                  is_default = excluded.is_default,
                  updated_at = excluded.updated_at",
             rusqlite::params![
                 preset.id,
                 preset.name,
                 preset.preset_type.as_str(),
-                preset.prompt_text,
+                preset.role,
+                preset.instructions,
+                preset.writing_style,
+                preset.output_format,
                 is_default,
                 now,
                 now,
@@ -191,6 +177,21 @@ impl PromptPresetStorage for InMemoryPromptPresetStorage {
     }
 }
 
+fn db_row_to_preset(row: &rusqlite::Row) -> rusqlite::Result<DbPromptPreset> {
+    Ok(DbPromptPreset {
+        id: row.get(0)?,
+        name: row.get(1)?,
+        preset_type: row.get(2)?,
+        role: row.get(3)?,
+        instructions: row.get(4)?,
+        writing_style: row.get(5)?,
+        output_format: row.get(6)?,
+        is_default: row.get(7)?,
+        created_at: row.get(8)?,
+        updated_at: row.get(9)?,
+    })
+}
+
 pub(crate) fn from_db(db: DbPromptPreset) -> PromptPreset {
     use crate::model::prompt_preset::PresetType;
     let preset_type = match db.preset_type.as_str() {
@@ -200,7 +201,10 @@ pub(crate) fn from_db(db: DbPromptPreset) -> PromptPreset {
     PromptPreset {
         id: db.id,
         name: db.name,
-        prompt_text: db.prompt_text,
+        role: db.role,
+        instructions: db.instructions,
+        writing_style: db.writing_style,
+        output_format: db.output_format,
         is_default: db.is_default != 0,
         preset_type,
     }

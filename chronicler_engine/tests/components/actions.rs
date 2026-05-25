@@ -6,49 +6,6 @@ use std::sync::Arc;
 use tower::ServiceExt;
 
 use chronicler_engine::TestAppBuilder;
-use chronicler_engine::model::settings::{AppSettings, TextCheckMode, TextCheckSettings};
-use chronicler_engine::model::state::LogType;
-
-#[tokio::test]
-async fn test_action_check_handler_empty_command() {
-    let app = TestAppBuilder::default_app();
-
-    let req = Request::builder()
-        .uri("/action/check")
-        .method(Method::POST)
-        .header("Content-Type", "application/x-www-form-urlencoded")
-        .body(Body::from("command="))
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-}
-
-#[tokio::test]
-async fn test_action_check_handler_disabled_mode() {
-    let app = TestAppBuilder::default_test()
-        .log("look", Some("Player"), LogType::Input)
-        .settings(AppSettings {
-            text_check: TextCheckSettings {
-                mode: TextCheckMode::Disabled,
-                enable_auto_check: true,
-                ignored_words: vec![],
-            },
-            ..AppSettings::default()
-        })
-        .build();
-
-    let req = Request::builder()
-        .uri("/action/check")
-        .method(Method::POST)
-        .header("Content-Type", "application/x-www-form-urlencoded")
-        .body(Body::from("command=walk+north"))
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-
-    // When disabled, it falls through to process_action
-    assert_eq!(response.status(), StatusCode::OK);
-}
 
 #[tokio::test]
 async fn test_action_handler_load_state_failure() {

@@ -103,23 +103,18 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
             .trigger_match
             .as_ref()
             .and_then(|trigger_match| {
-                let (response_length, max_context_tokens, max_tokens) =
-                    self.ctx.prompt_build_params();
-                let system_prompt_override = {
-                    let settings = self.ctx.settings.read().unwrap_or_else(|e| e.into_inner());
-                    settings.active_system_prompt.clone()
-                };
+                let (max_context_tokens, max_tokens) = self.ctx.prompt_build_params();
+                let system_prompt = self.ctx.active_system_prompt();
                 build_trigger_request(
                     &next_state,
                     &narration_text,
                     &world,
                     &player,
                     &all_npcs,
-                    &response_length,
                     max_context_tokens,
                     max_tokens,
                     trigger_match,
-                    system_prompt_override,
+                    system_prompt,
                 )
             });
 
@@ -181,10 +176,7 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
             return Err(self.save_early_error("Room not found"));
         };
         let history = state.narrative.history();
-        let system_prompt_override = {
-            let settings = self.ctx.settings.read().unwrap_or_else(|e| e.into_inner());
-            settings.active_system_prompt.clone()
-        };
+        let system_prompt = self.ctx.active_system_prompt();
         let context = make_prompt_context(
             world,
             room,
@@ -193,7 +185,7 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
             player,
             input,
             &history,
-            system_prompt_override,
+            system_prompt,
         );
 
         let narration_result = match self.service.narrate_action(&context) {
@@ -560,11 +552,10 @@ fn build_trigger_request(
     world: &WorldCard,
     player: &PlayerCard,
     all_npcs: &[NpcCard],
-    response_length: &str,
     max_context_tokens: u32,
     max_tokens: Option<u32>,
     trigger_match: &TriggerMatch,
-    system_prompt_override: Option<String>,
+    system_prompt: String,
 ) -> Option<TriggerContinuationRequest> {
     let continuation_user_msg = format!(
         "Previous narration:\n{}\n\nTrigger event: {}\n\n\
@@ -583,13 +574,12 @@ fn build_trigger_request(
         player,
         &continuation_user_msg,
         &history,
-        system_prompt_override,
+        system_prompt,
     );
 
     let mut pb = PromptBuilder::from_context(&trigger_ctx);
     pb.max_context_tokens = Some(max_context_tokens);
     pb.requested_max_tokens = max_tokens;
-    pb.response_length = Some(response_length);
 
     let (system_prompt, user_prompt, fitted_max_tokens) = pb.build_split().ok()?;
 

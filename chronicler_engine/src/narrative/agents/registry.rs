@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use crate::error::EngineError;
 use crate::model::agent::{AgentConfig, AgentResult, BackendSelector, ExecutionPhase};
@@ -14,13 +14,19 @@ pub struct AgentRegistry {
 
 impl AgentRegistry {
     pub fn from_configs(configs: &[AgentConfig]) -> Result<Self, EngineError> {
-        Self::from_configs_with_storage(configs, None, &AppSettings::default())
+        Self::from_configs_with_storage(
+            configs,
+            None,
+            None,
+            Arc::new(RwLock::new(AppSettings::default())),
+        )
     }
 
     pub fn from_configs_with_storage(
         configs: &[AgentConfig],
         storage: Option<Arc<dyn LlmMessageStorage>>,
-        settings: &AppSettings,
+        preset_storage: Option<Arc<dyn crate::storage::prompt_preset_storage::PromptPresetStorage>>,
+        settings: Arc<RwLock<AppSettings>>,
     ) -> Result<Self, EngineError> {
         let mut registry = Self::default();
 
@@ -42,7 +48,8 @@ impl AgentRegistry {
                 "quantifier" => Box::new(QuantifierAgent::from_config_with_storage(
                     config,
                     storage.clone(),
-                    settings,
+                    preset_storage.clone(),
+                    Arc::clone(&settings),
                 )?),
                 "narrator" => Box::new(NarratorAgent::new(config.name.clone())),
                 other => {

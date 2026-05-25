@@ -1,18 +1,21 @@
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use crate::error::EngineError;
 use crate::model::agent::{
     AgentConfig, AgentContext, AgentResult, BackendSelector, Confidence, ExecutionPhase, StatePatch,
 };
+use crate::model::settings::AppSettings;
 
 use crate::narrative::agents::Agent;
+use crate::storage::prompt_preset_storage::PromptPresetStorage;
 
 use super::determine_npcs_in_room;
 
 pub struct QuantifierAgent {
     name: String,
     backend: Arc<dyn crate::narrative::llm::LlmBackend>,
-    quantifier_prompt_override: Option<String>,
+    preset_storage: Option<Arc<dyn PromptPresetStorage>>,
+    settings: Arc<RwLock<AppSettings>>,
 }
 
 impl std::fmt::Debug for QuantifierAgent {
@@ -28,24 +31,27 @@ impl QuantifierAgent {
         Self::from_config_with_storage(
             _config,
             None,
-            &crate::model::settings::AppSettings::default(),
+            None,
+            Arc::new(RwLock::new(AppSettings::default())),
         )
     }
 
     pub fn from_config_with_storage(
         _config: &AgentConfig,
         storage: Option<Arc<dyn crate::storage::llm_message_storage::LlmMessageStorage>>,
-        settings: &crate::model::settings::AppSettings,
+        preset_storage: Option<Arc<dyn PromptPresetStorage>>,
+        settings: Arc<RwLock<AppSettings>>,
     ) -> Result<Self, EngineError> {
+        let settings_guard = settings.read().unwrap_or_else(|e| e.into_inner());
         let backend = Arc::from(crate::narrative::llm::get_llm_backend_for(
-            &settings.quantifier_connection(),
+            &settings_guard.quantifier_connection(),
             storage,
-            None,
         ));
         Ok(Self {
             name: "quantifier".to_string(),
             backend,
-            quantifier_prompt_override: settings.active_quantifier_prompt.clone(),
+            preset_storage,
+            settings: Arc::clone(&settings),
         })
     }
 
@@ -53,7 +59,8 @@ impl QuantifierAgent {
         Self {
             name,
             backend,
-            quantifier_prompt_override: None,
+            preset_storage: None,
+            settings: Arc::new(RwLock::new(AppSettings::default())),
         }
     }
 }
@@ -83,6 +90,18 @@ impl Agent for QuantifierAgent {
             .current_room
             .ok_or_else(|| EngineError::RoomNotFound("current room not found".to_string()))?;
 
+        let quantifier_prompt_override = {
+            let settings = self.settings.read().unwrap_or_else(|e| e.into_inner());
+            self.preset_storage
+                .as_ref()
+                .and_then(|s| {
+                    s.get(&settings.active_quantifier_prompt_preset_id)
+                        .ok()
+                        .flatten()
+                })
+                .map(|preset| preset.assemble_prompt_text(&[], None))
+        };
+
         let result = determine_npcs_in_room(
             state,
             current_room,
@@ -90,7 +109,7 @@ impl Agent for QuantifierAgent {
             &previous_room_npcs,
             main_response,
             self.backend.as_ref(),
-            self.quantifier_prompt_override.clone(),
+            quantifier_prompt_override,
         );
 
         let confidence = Confidence::from(result.npcs.confidence);

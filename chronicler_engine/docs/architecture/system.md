@@ -50,7 +50,7 @@ The interface between the synchronous engine and stochastic LLM generation.
   - **`get_llm_backend_for(connection, storage, settings)`**: Create a backend for a specific `Connection` profile. Settings are passed in — no file I/O inside the backend.
   - **`DefaultGameService::with_storage(storage, settings)`**: Production constructor that receives pre-loaded settings.
   - **`DefaultGameService::with_backends(llm, registry)`**: Constructor for dependency-injecting mock backends and agent registry in tests. No globals, no file I/O, fully isolated.
-- **`prompt`**: Directory module for layered prompt construction with token budget management. Uses plain-text instructions + XML-wrapped data for reasoning-model compatibility. Includes `fit_messages_to_context()` for dynamic context-window fitting.
+- **`prompt`**: Directory module for layered prompt construction with token budget management. Uses XML-sectioned instructions + XML-wrapped data for reasoning-model compatibility. Includes `fit_messages_to_context()` for dynamic context-window fitting.
 - **`agents`**: Directory module for the agent trait, registry, and agent implementations.
   - **`Agent` trait**: Core abstraction for pre-generation and post-generation agents
   - **`AgentRegistry`**: Loads agents from config and iterates by execution phase
@@ -128,9 +128,9 @@ flowchart TD
     G --> H["QuantifierAgent::from_config_with_storage(config, storage, &settings)"]
 ```
 
-- Backends store `Option<Arc<RwLock<AppSettings>>>` and read `response_length` dynamically per-call.
+- Backends store `Option<Arc<RwLock<AppSettings>>>` for settings access.
 - Connection changes still require a server restart (Approach A).
-- Only `response_length` and `max_context_tokens` are read dynamically at runtime.
+- Only `max_context_tokens` is read dynamically at runtime.
 
 #### Configuration Options
 

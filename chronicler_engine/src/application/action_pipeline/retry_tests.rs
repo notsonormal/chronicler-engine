@@ -234,6 +234,9 @@ fn make_empty_context(state: GameState) -> GameServiceContext {
         settings: Arc::new(std::sync::RwLock::new(
             crate::model::settings::AppSettings::default(),
         )),
+        preset_storage: Arc::new(
+            crate::storage::prompt_preset_storage::InMemoryPromptPresetStorage::new(),
+        ),
     }
 }
 

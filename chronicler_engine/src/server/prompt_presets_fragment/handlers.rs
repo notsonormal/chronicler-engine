@@ -23,11 +23,7 @@ fn render_template<T: askama::Template>(template: T) -> Html<String> {
 }
 
 fn parse_preset_type(value: &str) -> Option<PresetType> {
-    match value {
-        "system" => Some(PresetType::System),
-        "quantifier" => Some(PresetType::Quantifier),
-        _ => None,
-    }
+    PresetType::try_from(value).ok()
 }
 
 fn generate_preset_id() -> String {
@@ -61,11 +57,29 @@ pub async fn panel_handler(State(app_state): State<AppState>) -> Html<String> {
     })
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, Default, serde::Deserialize)]
 pub struct PresetForm {
     pub name: String,
-    pub prompt_text: String,
+    pub role: Option<String>,
+    pub instructions: Option<String>,
+    pub writing_style: Option<String>,
+    pub output_format: Option<String>,
     pub preset_type: String,
+}
+
+impl PresetForm {
+    fn into_preset(self, id: String, preset_type: PresetType) -> PromptPreset {
+        PromptPreset {
+            id,
+            name: self.name,
+            role: self.role,
+            instructions: self.instructions,
+            writing_style: self.writing_style,
+            output_format: self.output_format,
+            is_default: false,
+            preset_type,
+        }
+    }
 }
 
 /// [DOC: docs/architecture/system.md]
@@ -80,14 +94,7 @@ pub async fn save_preset_handler(
         }
     };
 
-    let id = generate_preset_id();
-    let preset = PromptPreset {
-        id,
-        name: form.name,
-        prompt_text: form.prompt_text,
-        is_default: false,
-        preset_type,
-    };
+    let preset = form.into_preset(generate_preset_id(), preset_type);
 
     if let Err(e) = app_state.prompt_preset_storage.save(&preset) {
         return Html(format!("<span class='error'>Save failed: {e}</span>"));
@@ -124,18 +131,11 @@ pub async fn edit_preset_form_handler(
     ))
 }
 
-#[derive(Debug, serde::Deserialize)]
-pub struct PresetUpdateForm {
-    pub name: String,
-    pub prompt_text: String,
-    pub preset_type: String,
-}
-
 /// [DOC: docs/architecture/system.md]
 pub async fn update_preset_handler(
     State(app_state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<String>,
-    Form(form): Form<PresetUpdateForm>,
+    Form(form): Form<PresetForm>,
 ) -> Html<String> {
     let existing = match app_state.prompt_preset_storage.get(&id) {
         Ok(Some(p)) => p,
@@ -154,38 +154,17 @@ pub async fn update_preset_handler(
         }
     };
 
-    let updated = PromptPreset {
-        id,
-        name: form.name,
-        prompt_text: form.prompt_text,
-        is_default: false,
-        preset_type,
-    };
+    let updated = form.into_preset(id, preset_type);
 
     if let Err(e) = app_state.prompt_preset_storage.save(&updated) {
         return Html(format!("<span class='error'>Update failed: {e}</span>"));
     }
 
-    let mut settings = try_lock!(app_state.settings.write());
+    let settings = try_lock!(app_state.settings.write());
     let is_active = match preset_type {
-        PresetType::System => {
-            let active = settings.active_system_prompt_preset_id == updated.id;
-            if active {
-                settings.active_system_prompt = Some(updated.prompt_text.clone());
-                let _ = settings.save();
-            }
-            active
-        }
-        PresetType::Quantifier => {
-            let active = settings.active_quantifier_prompt_preset_id == updated.id;
-            if active {
-                settings.active_quantifier_prompt = Some(updated.prompt_text.clone());
-                let _ = settings.save();
-            }
-            active
-        }
+        PresetType::System => settings.active_system_prompt_preset_id == updated.id,
+        PresetType::Quantifier => settings.active_quantifier_prompt_preset_id == updated.id,
     };
-
     Html(preset_card_html(&updated, is_active))
 }
 
@@ -227,14 +206,11 @@ pub async fn activate_preset_handler(
     match preset.preset_type {
         PresetType::System => {
             settings.active_system_prompt_preset_id = id.clone();
-            settings.active_system_prompt = Some(preset.prompt_text);
         }
         PresetType::Quantifier => {
             settings.active_quantifier_prompt_preset_id = id.clone();
-            settings.active_quantifier_prompt = Some(preset.prompt_text);
         }
     }
-
     if let Err(e) = settings.save() {
         return Html(format!("<span class='error'>Save failed: {e}</span>"));
     }

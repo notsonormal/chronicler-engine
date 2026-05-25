@@ -1,9 +1,8 @@
-#![allow(dead_code, unused_imports)]
+#![allow(dead_code)]
 
 use std::sync::Arc;
 
 use chronicler_engine::model::character::{CharacterSheet, NpcCard, PlayerCard};
-use chronicler_engine::model::map::{MapDef, Room};
 use chronicler_engine::model::state::{GameState, LogType};
 use chronicler_engine::model::trigger::{
     ComparisonOperator, Trigger, TriggerCondition, TriggerEffect,

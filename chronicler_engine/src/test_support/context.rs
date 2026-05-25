@@ -1,10 +1,12 @@
 use std::sync::{Arc, RwLock};
 
 use crate::application::game_service::GameServiceContext;
+use crate::model::prompt_preset::{PresetType, PromptPreset};
 use crate::model::settings::AppSettings;
 use crate::model::state::GameState;
 use crate::model::state_snapshot::GameStateSnapshot;
 use crate::storage::message_storage::MessageStorage;
+use crate::storage::prompt_preset_storage::{InMemoryPromptPresetStorage, PromptPresetStorage};
 use crate::storage::snapshot_storage::SnapshotStorage;
 use crate::test_support::in_memory_storage::{
     InMemoryMessageRepository, InMemorySnapshotRepository,
@@ -34,6 +36,21 @@ pub fn make_test_context_without_snapshot(state: GameState) -> GameServiceContex
     build_test_context(state, snapshot_repo, message_repo)
 }
 
+fn default_test_preset_storage() -> Arc<InMemoryPromptPresetStorage> {
+    let storage = InMemoryPromptPresetStorage::new();
+    let _ = storage.save(&PromptPreset {
+        id: "system_default".to_string(),
+        name: "Default Test System".to_string(),
+        role: Some("You are a test narrator.".to_string()),
+        instructions: None,
+        writing_style: None,
+        output_format: None,
+        is_default: true,
+        preset_type: PresetType::System,
+    });
+    Arc::new(storage)
+}
+
 fn build_test_context(
     state: GameState,
     snapshot_storage: Arc<dyn SnapshotStorage>,
@@ -52,6 +69,7 @@ fn build_test_context(
         cancel_token: tokio_util::sync::CancellationToken::new(),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         settings: Arc::new(RwLock::new(AppSettings::default())),
+        preset_storage: default_test_preset_storage(),
     }
 }
 
@@ -82,5 +100,6 @@ pub fn make_test_context_with_sqlite(state: GameState) -> crate::error::Result<G
         cancel_token: tokio_util::sync::CancellationToken::new(),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         settings: Arc::new(RwLock::new(AppSettings::default())),
+        preset_storage: default_test_preset_storage(),
     })
 }

@@ -18,7 +18,7 @@ use crate::model::prompt_preset::PromptPreset;
                     {% if preset.id == active_system_id %}<span class="badge primary">Active</span>{% endif %}
                 </div>
             </div>
-            <div class="card-details preset-preview">{{ preset.prompt_text | escape }}</div>
+            <div class="card-details preset-preview">{{ preset.preview_text() | escape }}</div>
             <div class="card-actions">
                 {% if preset.id != active_system_id %}
                 <button hx-post="/prompt-presets/{{ preset.id }}/activate" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="primary">Set Active</button>
@@ -39,8 +39,20 @@ use crate::model::prompt_preset::PromptPreset;
                 <input type="text" id="system-preset-name" name="name" placeholder="My Custom System Prompt" required />
             </div>
             <div class="form-group">
-                <label for="system-preset-text">Prompt Text</label>
-                <textarea id="system-preset-text" name="prompt_text" rows="8" placeholder="Enter system prompt..." required></textarea>
+                <label for="system-preset-role">Role</label>
+                <textarea id="system-preset-role" name="role" rows="4" placeholder="Enter role description..."></textarea>
+            </div>
+            <div class="form-group">
+                <label for="system-preset-instructions">Instructions</label>
+                <textarea id="system-preset-instructions" name="instructions" rows="8" placeholder="Enter instructions..."></textarea>
+            </div>
+            <div class="form-group">
+                <label for="system-preset-style">Writing Style</label>
+                <textarea id="system-preset-style" name="writing_style" rows="4" placeholder="Enter writing style..."></textarea>
+            </div>
+            <div class="form-group">
+                <label for="system-preset-output">Output Format</label>
+                <textarea id="system-preset-output" name="output_format" rows="6" placeholder="Enter output format..."></textarea>
             </div>
             <button type="submit" class="primary">Add Preset</button>
         </form>
@@ -58,7 +70,7 @@ use crate::model::prompt_preset::PromptPreset;
                     {% if preset.id == active_quantifier_id %}<span class="badge primary">Active</span>{% endif %}
                 </div>
             </div>
-            <div class="card-details preset-preview">{{ preset.prompt_text | escape }}</div>
+            <div class="card-details preset-preview">{{ preset.preview_text() | escape }}</div>
             <div class="card-actions">
                 {% if preset.id != active_quantifier_id %}
                 <button hx-post="/prompt-presets/{{ preset.id }}/activate" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="primary">Set Active</button>
@@ -79,8 +91,16 @@ use crate::model::prompt_preset::PromptPreset;
                 <input type="text" id="quantifier-preset-name" name="name" placeholder="My Custom Quantifier Prompt" required />
             </div>
             <div class="form-group">
-                <label for="quantifier-preset-text">Prompt Text</label>
-                <textarea id="quantifier-preset-text" name="prompt_text" rows="8" placeholder="Enter quantifier prompt..." required></textarea>
+                <label for="quantifier-preset-role">Role</label>
+                <textarea id="quantifier-preset-role" name="role" rows="4" placeholder="Enter role description..."></textarea>
+            </div>
+            <div class="form-group">
+                <label for="quantifier-preset-instructions">Instructions</label>
+                <textarea id="quantifier-preset-instructions" name="instructions" rows="8" placeholder="Enter instructions..."></textarea>
+            </div>
+            <div class="form-group">
+                <label for="quantifier-preset-output">Output Format</label>
+                <textarea id="quantifier-preset-output" name="output_format" rows="6" placeholder="Enter output format..."></textarea>
             </div>
             <button type="submit" class="primary">Add Preset</button>
         </form>

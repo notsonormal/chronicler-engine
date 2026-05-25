@@ -29,7 +29,7 @@ Settings are loaded **once** during bootstrap:
 1. **`bootstrap/run.rs`** calls `load_settings()` and wraps the result in `Arc<RwLock<AppSettings>>`
 2. The `Arc<RwLock<AppSettings>>` is passed to `run_server_with_config()`
 3. `AppState` stores it; `GameServiceContext` carries it; `DefaultGameService` receives it at construction time
-4. Backends (`OpenRouterBackend`, `OllamaBackend`) store a clone of the `Arc` and read `response_length` dynamically per-call
+4. Backends (`OpenRouterBackend`, `OllamaBackend`) store a clone of the `Arc` for settings access
 
 No business logic layer reloads settings from disk. Connection changes still require a server restart.
 

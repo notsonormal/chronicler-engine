@@ -1,8 +1,8 @@
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use crate::error::{EngineError, LlmFailure};
 use crate::model::character::NpcCard;
-use crate::model::settings::{AppSettings, Connection};
+use crate::model::settings::Connection;
 use crate::narrative::llm_client::call_ollama;
 use crate::narrative::prompt::{PromptBuilder, PromptContext};
 use crate::storage::llm_message_storage::LlmMessageStorage;
@@ -17,14 +17,12 @@ pub struct OllamaBackend {
     max_tokens: Option<u32>,
     max_context_tokens: u32,
     storage: Option<Arc<dyn LlmMessageStorage>>,
-    settings: Option<Arc<RwLock<AppSettings>>>,
 }
 
 impl OllamaBackend {
     pub fn from_connection(
         connection: &Connection,
         storage: Option<Arc<dyn LlmMessageStorage>>,
-        settings: Option<Arc<RwLock<AppSettings>>>,
     ) -> Self {
         Self {
             base_url: connection.resolve_base_url(),
@@ -33,7 +31,6 @@ impl OllamaBackend {
             max_tokens: connection.max_tokens,
             max_context_tokens: connection.resolve_max_context_tokens(),
             storage,
-            settings,
         }
     }
 
@@ -56,33 +53,18 @@ impl OllamaBackend {
         Ok(result)
     }
 
-    fn response_length(&self) -> String {
-        let Some(settings) = self.settings.as_ref() else {
-            return String::new();
-        };
-        settings
-            .read()
-            .map(|g| g.response_length.clone())
-            .unwrap_or_else(|p| {
-                log::warn!("Poisoned settings read lock recovered in response_length");
-                p.into_inner().response_length.clone()
-            })
-    }
-
     /// Build a prompt from context using this backend's token limits, then call the LLM.
     fn narrate_from_context(
         &self,
         agent_name: &str,
         context: &PromptContext,
     ) -> Result<LlmCallResult, EngineError> {
-        let response_length = self.response_length();
         let builder = PromptBuilder::from_context(context)
             .with_max_context_tokens(self.max_context_tokens)
             .with_max_tokens(
                 self.max_tokens
                     .unwrap_or(crate::narrative::prompt::budget::MAX_RESPONSE_TOKENS),
-            )
-            .with_response_length(&response_length);
+            );
         let (system_prompt, user_text, max_tokens) = builder.build_split()?;
         self.complete(agent_name, &system_prompt, &user_text, Some(max_tokens))
     }
@@ -114,7 +96,7 @@ impl LlmBackend for OllamaBackend {
             player: context.player,
             user_message: &user_msg,
             history: context.history,
-            system_prompt_override: None,
+            system_prompt: context.system_prompt.clone(),
         };
 
         self.narrate_from_context(agent_name, &npc_context)
@@ -156,7 +138,7 @@ impl LlmBackend for OllamaBackend {
             player: context.player,
             user_message: &user_msg,
             history: context.history,
-            system_prompt_override: None,
+            system_prompt: context.system_prompt.clone(),
         };
 
         self.narrate_from_context(agent_name, &arrival_context)
