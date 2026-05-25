@@ -28,7 +28,7 @@ Only mutable sub-state is persisted. Immutable world data (`WorldCard`, `MapDef`
 ```rust
 pub struct GameStateSnapshot {
     pub movement: MovementState,
-    pub narrative: NarrativeState,
+    pub narrative: NarrativeSnapshot,
     pub scene: SceneState,
     pub npc_encounter_log: NpcEncounterLog,
 }

@@ -55,21 +55,33 @@ Chronological narrative history. Each row is one log entry (player input, narrat
 |------------------|---------|----------------------------------------------|
 | `id`             | INTEGER | PRIMARY KEY AUTOINCREMENT                    |
 | `game_id`        | INTEGER | NOT NULL DEFAULT 1 — foreign key to `games`  |
-| `sender`         | TEXT    | Player name, NPC name, or NULL for narrator  |
-| `text`           | TEXT    | Message content                              |
-| `log_type`       | TEXT    | JSON: `LogType` enum                         |
-| `timestamp`      | TEXT    | ISO 8601 timestamp                           |
-| `location_header`| TEXT    | Optional room header prefix                  |
-| `event_header`   | TEXT    | Optional event header prefix                 |
-| `snapshot_id`    | INTEGER | REFERENCES `game_state_snapshots(id)` — snapshot saved after this message was created |
+| `sender`            | TEXT    | Player name, NPC name, or NULL for narrator  |
+| `log_type`          | TEXT    | JSON: `LogType` enum                         |
+| `timestamp`         | TEXT    | ISO 8601 timestamp                           |
+| `active_swipe_index`| INTEGER | Index of currently active swipe version      |
+| `is_deleted`        | INTEGER | 0 or 1 — soft delete flag                    |
 
-**Storage contract:** Messages are persisted incrementally. New messages are inserted individually and tagged with the `snapshot_id` of the state captured after their creation. There is only ever one message history per game.
+**Storage contract:** Messages are persisted incrementally. New messages are inserted individually. The active swipe text and snapshot are stored in the `message_swipes` table. There is only ever one message history per game.
 
 **Index:** `idx_messages_game_id(game_id, id)`
 
 ---
 
+### `message_swipes`
 
+Per-message swipe versions. Each row is one alternative generation for a message. Cascades on message delete.
+
+| Column           | Type    | Notes                                         |
+|------------------|---------|----------------------------------------------|
+| `id`             | INTEGER | PRIMARY KEY AUTOINCREMENT                    |
+| `message_id`     | INTEGER | FOREIGN KEY -> messages(id) ON DELETE CASCADE|
+| `swipe_index`    | INTEGER | Version index (0, 1, 2...)                   |
+| `text`           | TEXT    | Message content for this swipe               |
+| `snapshot_id`    | INTEGER | REFERENCES game_state_snapshots(id)          |
+| `location_header`| TEXT    | Optional room header prefix                  |
+| `event_header`   | TEXT    | Optional event header prefix                 |
+
+---
 
 ### `llm_messages`
 
@@ -96,8 +108,9 @@ Forensics log of LLM API calls. Independent of game state — used for debugging
 ```
 games (1)
   ├── game_state_snapshots (*)
-  │     └── messages (?)     [via snapshot_id — optional, not FK]
+  │     └── messages (?)     [via message_swipes.snapshot_id — optional, not FK]
   └── messages (*)
+      └── message_swipes (*) [cascades on message delete]
 
 llm_messages (*)  [independent]
 ```
@@ -106,7 +119,7 @@ llm_messages (*)  [independent]
 
 The Rust code maps to the database as follows:
 
-- **`src/storage/models/`** — One DB model struct per table (`DbGame`, `DbGameStateSnapshot`, `DbMessage`, `DbLlmMessage`). These use raw SQLite types (`String` for JSON and timestamps, `i64` for IDs).
+- **`src/storage/models/`** — One DB model struct per table (`DbGame`, `DbGameStateSnapshot`, `DbMessage`, `DbSwipe`, `DbLlmMessage`). These use raw SQLite types (`String` for JSON and timestamps, `i64` for IDs).
 - **`src/storage/mappers/`** — Conversion logic between DB models and domain models. Mappers handle JSON serialization, RFC 3339 parsing, and integer↔unsigned mapping.
 - **`src/storage/snapshot_storage.rs`** — `SqliteSnapshotRepository` uses `DbGameStateSnapshot` internally and maps to/from domain models at the trait boundary. Includes game CRUD (`list_games`, `create_game`, `delete_game`, `get_game`) and `set_game_id` for runtime switching. `delete_game` is transactional: all cascading deletes execute inside a SQLite `Transaction`.
 - **`src/storage/message_storage.rs`** — `SqliteMessageRepository` handles message persistence and swipe management. Uses `DbMessage`/`DbSwipe` internally and maps at the trait boundary.
@@ -115,7 +128,7 @@ The Rust code maps to the database as follows:
 
 ## Migration Policy
 
-Schema migrations are **breaking** — old save data is discarded on schema change. The `run_migrations` function drops and recreates tables. This is acceptable because Chronicler is currently pre-release and has no backward-compatibility guarantee for save files.
+Migration v1 is **breaking** — it drops and recreates tables. Subsequent migrations (v2+) are **incremental** and preserve data where possible (e.g., v6 migrates old `messages.text` into `message_swipes` before dropping the column). This is acceptable because Chronicler is pre-release, but we no longer discard all data on every schema change.
 
 ## Future Work
 

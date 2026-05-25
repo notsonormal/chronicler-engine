@@ -167,7 +167,7 @@ Critical tests that must not be removed:
 
 | Test | Why |
 |------|-----|
-| `test_header_template_escapes_html` | XSS security — only test |
+| `test_list_games_fragment_escapes_html` | XSS security — template escaping |
 | `test_action_handler_empty_command` | Validation — rejects blank input |
 | `test_story_log_scrollable` | Functional — can't scroll history |
 | `test_no_horizontal_overflow` | Regression — breaks page layout |
@@ -192,7 +192,7 @@ Dynamic port allocation avoids conflicts:
 ```json
 // tests/test_config.json
 {
-  "port_range": {"min": 3010, "max": 3030},
+  "port_range": {"min": 3010, "max": 3050},
   "default_backend": "mock"
 }
 ```

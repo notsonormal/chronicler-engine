@@ -20,7 +20,7 @@ Reviews identified that the pipeline shape was deeply coupled: while the backend
 ### Agent Trait
 
 ```rust
-pub trait Agent: Send + Sync {
+pub trait Agent: Send + Sync + std::fmt::Debug {
     fn name(&self) -> &str;
     fn phase(&self) -> ExecutionPhase;
     fn backend_selector(&self) -> BackendSelector;
@@ -39,7 +39,7 @@ pub trait Agent: Send + Sync {
 
 ```rust
 pub enum AgentResult {
-    PromptDirective { /* injection into next phase */ },
+    PromptDirective(String),
     StatePatch(StatePatch),
     NoOp,
 }

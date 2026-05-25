@@ -1,20 +1,16 @@
-use std::collections::HashMap;
-
 use axum::{Json, extract::State, http::StatusCode};
 use serde::Serialize;
 
-use crate::model::state::{GenerationPhase, GenerationStatus, LogEntry};
-use crate::model::trigger::NpcEncounterState;
 use crate::server::AppState;
 
 #[derive(Serialize)]
 pub struct DebugStateResponse {
     pub current_room_id: String,
     pub npcs_in_area: Vec<String>,
-    pub generation_status: GenerationStatus,
-    pub generation_phase: GenerationPhase,
-    pub npc_encounter_log: HashMap<String, NpcEncounterState>,
-    pub narration_history_tail: Vec<LogEntry>,
+    pub generation_status: String,
+    pub generation_phase: String,
+    pub npc_encounter_log: std::collections::HashMap<String, serde_json::Value>,
+    pub narration_history_tail: Vec<serde_json::Value>,
     pub narration_history_length: usize,
     pub dynamic_rooms: Vec<String>,
     pub dynamic_room_count: usize,
@@ -29,56 +25,39 @@ pub struct DebugStateResponse {
 pub async fn debug_state_handler(
     State(state): State<AppState>,
 ) -> Result<Json<DebugStateResponse>, StatusCode> {
-    let guard = match state
+    let view = match state
         .application_service
-        .load_state(state.as_game_service_context())
+        .get_debug_state(state.as_game_service_context())
     {
-        Ok(g) => g,
+        Ok(v) => v,
         Err(_) => {
             log::error!("State load failed during /debug/state request");
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     };
 
-    // Only take the last 5 entries to keep the response scannable
-    let history_tail: Vec<LogEntry> = guard
-        .narrative
-        .history()
-        .iter()
-        .rev()
-        .take(5)
-        .rev()
-        .cloned()
-        .collect();
-
-    let npcs_in_area: Vec<String> = guard
-        .scene
-        .npcs_in_area
-        .iter()
-        .map(|npc| npc.id.clone())
-        .collect();
-
-    let dynamic_rooms: Vec<String> = guard.movement.dynamic_rooms.keys().cloned().collect();
-
-    let last_error = match &guard.narrative.input_buffer.status {
-        GenerationStatus::Error(msg) => Some(msg.clone()),
-        _ => None,
-    };
-
     let response = DebugStateResponse {
-        current_room_id: guard.movement.current_room_id.clone(),
-        npcs_in_area,
-        generation_status: guard.narrative.input_buffer.status.clone(),
-        generation_phase: guard.narrative.input_buffer.phase.clone(),
-        npc_encounter_log: guard.npc_encounter_log.npcs.clone(),
-        narration_history_tail: history_tail,
-        narration_history_length: guard.narrative.history().len(),
-        dynamic_rooms,
-        dynamic_room_count: guard.movement.dynamic_rooms.len(),
-        last_error,
-        quantifier_confidence: guard.scene.quantifier_confidence.clone(),
-        backend_name: guard.narrative.last_backend_name.clone(),
-        model_name: guard.narrative.last_model_name.clone(),
+        current_room_id: view.current_room_id,
+        npcs_in_area: view.npcs_in_area,
+        generation_status: format!("{:?}", view.generation_status),
+        generation_phase: format!("{:?}", view.generation_phase),
+        npc_encounter_log: view
+            .npc_encounter_log
+            .into_iter()
+            .map(|(k, v)| (k, serde_json::to_value(v).unwrap_or_default()))
+            .collect(),
+        narration_history_tail: view
+            .narration_history_tail
+            .into_iter()
+            .map(|e| serde_json::to_value(e).unwrap_or_default())
+            .collect(),
+        narration_history_length: view.narration_history_length,
+        dynamic_rooms: view.dynamic_rooms,
+        dynamic_room_count: view.dynamic_room_count,
+        last_error: view.last_error,
+        quantifier_confidence: view.quantifier_confidence,
+        backend_name: view.backend_name,
+        model_name: view.model_name,
     };
 
     Ok(Json(response))

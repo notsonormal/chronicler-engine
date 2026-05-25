@@ -64,7 +64,6 @@ General rules:
 - Consequences persist. Actions have permanent effects.
 - Never break the fourth wall or provide meta-commentary.
 
-Global Rules:
 - (dynamic rules from world.json global_rules)
 
 Response Length:

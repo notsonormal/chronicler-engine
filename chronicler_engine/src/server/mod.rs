@@ -16,7 +16,7 @@ mod settings_fragment_tests;
 #[cfg(test)]
 mod templates_tests;
 
-fn build_router(app_state: AppState) -> Router {
+pub(crate) fn build_router(app_state: AppState) -> Router {
     Router::new()
         .route("/", get(index_handler))
         .route("/fragment/header", get(fragments::header_fragment))
@@ -139,69 +139,7 @@ fn build_router(app_state: AppState) -> Router {
         .with_state(app_state)
 }
 
-pub fn create_app_for_testing(state: GameState) -> Router {
-    create_app_for_testing_with_settings(state, AppSettings::default())
-}
-
-pub fn create_app_for_testing_with_settings(state: GameState, settings: AppSettings) -> Router {
-    // [DOC: docs/architecture/system.md]
-    let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
-    let snapshot_storage: Arc<dyn crate::storage::snapshot_storage::SnapshotStorage> =
-        Arc::new(crate::test_support::in_memory_storage::InMemorySnapshotRepository::new());
-    let message_storage: Arc<dyn crate::storage::message_storage::MessageStorage> =
-        Arc::new(crate::test_support::in_memory_storage::InMemoryMessageRepository::new());
-    let llm_storage =
-        Arc::new(crate::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
-            as Arc<dyn crate::storage::llm_message_storage::LlmMessageStorage>;
-    let _ = crate::storage::snapshot_storage::SnapshotStorage::save(&*snapshot_storage, &snapshot);
-    for msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
-        let _ = crate::storage::message_storage::MessageStorage::insert_message(
-            &*message_storage,
-            &msg,
-        );
-    }
-    create_app_with_storage(
-        state,
-        snapshot_storage,
-        message_storage,
-        llm_storage,
-        settings,
-    )
-}
-
-pub fn create_app_with_storage(
-    state: GameState,
-    snapshot_storage: Arc<dyn crate::storage::snapshot_storage::SnapshotStorage>,
-    message_storage: Arc<dyn crate::storage::message_storage::MessageStorage>,
-    llm_storage: Arc<dyn crate::storage::llm_message_storage::LlmMessageStorage>,
-    settings: AppSettings,
-) -> Router {
-    let settings_arc = Arc::new(RwLock::new(settings));
-    let prompt_preset_storage: Arc<dyn crate::storage::prompt_preset_storage::PromptPresetStorage> =
-        Arc::new(crate::storage::prompt_preset_storage::InMemoryPromptPresetStorage::new());
-    let app_state = AppState {
-        snapshot_storage,
-        message_storage,
-        llm_message_storage: Arc::clone(&llm_storage),
-        world: state.world.clone(),
-        map: state.map.clone(),
-        player: state.player.clone(),
-        npcs: Arc::new(state.npcs.clone()),
-        game_service: Arc::new(
-            crate::application::game_service::DefaultGameService::with_storage(
-                Some(Arc::clone(&llm_storage)),
-                Arc::clone(&settings_arc),
-            ),
-        ) as Arc<dyn crate::application::game_service::GameService>,
-        application_service: Arc::new(DefaultApplicationService::new(Arc::new(
-            DefaultGameService::with_storage(Some(llm_storage), Arc::clone(&settings_arc)),
-        )
-            as Arc<dyn GameService>)) as Arc<dyn ApplicationService>,
-        prompt_preset_storage,
-        settings: settings_arc,
-        cancel_token: Arc::new(std::sync::RwLock::new(CancellationToken::new())),
-        is_generating: Arc::new(AtomicBool::new(false)),
-    };
+pub fn create_app_with_state(app_state: AppState) -> Router {
     build_router(app_state)
 }
 
@@ -223,7 +161,6 @@ use crate::error::{EngineError, Result};
 use crate::model::character::NpcCard;
 use crate::model::map::MapDef;
 use crate::model::settings::AppSettings;
-use crate::model::state::GameState;
 use crate::model::world::WorldCard;
 
 #[derive(Clone, Debug)]

@@ -20,7 +20,7 @@ Your task is to determine which NPCs are present in the current room
 and whether the player actually moved to a new location.
 
 Respond ONLY with a JSON object in this exact format:
-{"npcs_in_room": ["id1", "id2"], "movement": {"type": "entering|in|leaving", "destination": "room_id"}}
+{"npcs_in_room": ["id1", "id2"], "movement": {"type": "entering|leaving", "destination": "room_id"}}
 
 How to determine movement:
 1. Read <CurrentRoom> — this is where the player is right now.
@@ -29,6 +29,8 @@ How to determine movement:
    - If YES → movement occurred. Set type to "entering" and destination to the new room.
    - If NO → no movement. Set type to null.
    - If unclear → assume no movement. Set type to null.
+
+Note: The prompt mentions "in" as a possible type, but the parser only recognizes "entering" and "leaving". "in" is treated as no movement.
 
 Rules:
 - Only include NPCs that would logically be in the room based on context.

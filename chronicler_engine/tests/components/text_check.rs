@@ -6,11 +6,8 @@ use axum::{
 };
 use tower::util::ServiceExt;
 
-use chronicler_engine::create_app_for_testing_with_settings;
+use chronicler_engine::TestAppBuilder;
 use chronicler_engine::model::settings::{AppSettings, TextCheckMode, TextCheckSettings};
-use chronicler_engine::storage::snapshot_storage::SnapshotStorage;
-
-use crate::create_test_state;
 
 fn text_check_settings(mode: TextCheckMode) -> AppSettings {
     AppSettings {
@@ -25,9 +22,9 @@ fn text_check_settings(mode: TextCheckMode) -> AppSettings {
 
 #[tokio::test]
 async fn test_action_check_disabled_forwards_to_action() {
-    let state = create_test_state();
-    let app =
-        create_app_for_testing_with_settings(state, text_check_settings(TextCheckMode::Disabled));
+    let app = TestAppBuilder::default_test()
+        .settings(text_check_settings(TextCheckMode::Disabled))
+        .build();
 
     let req = Request::builder()
         .uri("/action/check")
@@ -53,8 +50,7 @@ async fn test_action_check_disabled_forwards_to_action() {
 
 #[tokio::test]
 async fn test_action_check_empty_command() {
-    let state = create_test_state();
-    let app = chronicler_engine::create_app_for_testing(state);
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/action/check")
@@ -72,8 +68,7 @@ async fn test_action_check_empty_command() {
 
 #[tokio::test]
 async fn test_action_confirm_returns_full_action_area() {
-    let state = create_test_state();
-    let app = chronicler_engine::create_app_for_testing(state);
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/action/confirm")
@@ -107,10 +102,8 @@ async fn test_action_confirm_returns_full_action_area() {
 
 #[tokio::test]
 async fn test_async_action_saves_input_to_story_log_with_sqlite() {
-    use chronicler_engine::model::state_snapshot::GameStateSnapshot;
     use chronicler_engine::storage::db::DbPool;
     use chronicler_engine::storage::snapshot_storage::SqliteSnapshotRepository;
-    let state = create_test_state();
     let tmp_dir =
         std::env::temp_dir().join(format!("chronicler_component_test_{}", std::process::id()));
     let _ = std::fs::create_dir_all(&tmp_dir);
@@ -121,16 +114,15 @@ async fn test_async_action_saves_input_to_story_log_with_sqlite() {
         chronicler_engine::storage::message_storage::SqliteMessageRepository::new(db_pool, 1),
     );
 
-    let snapshot = GameStateSnapshot::from_game_state(&state);
-    snapshot_storage.save(&snapshot).unwrap();
-
-    let app = chronicler_engine::server::create_app_with_storage(
-        state,
-        snapshot_storage as Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage>,
-        message_storage as Arc<dyn chronicler_engine::storage::message_storage::MessageStorage>,
-        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new()),
-        chronicler_engine::model::settings::AppSettings::default(),
-    );
+    let app = TestAppBuilder::default_test()
+        .snapshot_storage(
+            snapshot_storage
+                as Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage>,
+        )
+        .message_storage(
+            message_storage as Arc<dyn chronicler_engine::storage::message_storage::MessageStorage>,
+        )
+        .build();
 
     // Submit an async (free-action) command
     let req = Request::builder()
@@ -173,18 +165,16 @@ async fn test_async_action_saves_input_to_story_log_with_sqlite() {
 
 #[tokio::test]
 async fn test_action_check_auto_check_disabled() {
-    let state = create_test_state();
-    let app = create_app_for_testing_with_settings(
-        state,
-        AppSettings {
+    let app = TestAppBuilder::default_test()
+        .settings(AppSettings {
             text_check: TextCheckSettings {
                 mode: TextCheckMode::Spell,
                 enable_auto_check: false,
                 ignored_words: vec![],
             },
             ..Default::default()
-        },
-    );
+        })
+        .build();
 
     let req = Request::builder()
         .uri("/action/check")
@@ -208,9 +198,9 @@ async fn test_action_check_auto_check_disabled() {
 
 #[tokio::test]
 async fn test_action_check_finds_issues() {
-    let state = create_test_state();
-    let app =
-        create_app_for_testing_with_settings(state, text_check_settings(TextCheckMode::Spell));
+    let app = TestAppBuilder::default_test()
+        .settings(text_check_settings(TextCheckMode::Spell))
+        .build();
 
     let req = Request::builder()
         .uri("/action/check")
@@ -236,11 +226,9 @@ async fn test_action_check_finds_issues() {
 
 #[tokio::test]
 async fn test_action_check_no_issues() {
-    let state = create_test_state();
-    let app = create_app_for_testing_with_settings(
-        state,
-        text_check_settings(TextCheckMode::SpellGrammar),
-    );
+    let app = TestAppBuilder::default_test()
+        .settings(text_check_settings(TextCheckMode::SpellGrammar))
+        .build();
 
     let req = Request::builder()
         .uri("/action/check")

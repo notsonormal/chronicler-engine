@@ -1,4 +1,4 @@
-# ADR-002: Server-Sent Events for Real-Time Updates
+# ADR-002: HTTP Polling for Real-Time Updates
 
 **Date:** 2026-04-19
 
@@ -21,26 +21,34 @@ Issues identified:
 
 ## Decision
 
-**Replace WebSocket with Server-Sent Events (SSE).**
+**Replace WebSocket with HTTP polling.**
 
 ```
 Client ──HTTP POST──> Server (/action endpoint)
-Client <────SSE──── Server (/sse endpoint)
+Client ──HTTP GET──> Server (/fragment/* endpoints, polled every 2-5s)
 ```
 
-### Why SSE Over WebSocket
+### Why Polling Over WebSocket/SSE
 
-| Factor | WebSocket | SSE |
-|--------|----------|-----|
-| HTMX support | Requires `hx-ext="ws"` (flaky) | Native `hx-ext="sse"` |
-| Direction | Bidirectional | Server→client only (our use case) |
-| Reconnection | Manual | Automatic |
-| Protocol | Binary/frame | Plain HTTP |
-| Firewall-friendly | No | Yes |
+| Factor | WebSocket | SSE | HTTP Polling |
+|--------|----------|-----|--------------|
+| HTMX support | Requires `hx-ext="ws"` (flaky) | Native `hx-ext="sse"` | Native `hx-trigger` |
+| Direction | Bidirectional | Server→client only | Request→response |
+| Reconnection | Manual | Automatic | Automatic (each request) |
+| Protocol | Binary/frame | Plain HTTP | Plain HTTP |
+| Firewall-friendly | No | Yes | Yes |
+| Implementation | Complex endpoint | Requires SSE infrastructure | Simple fragment endpoints |
 
 ### Architecture
 
-The server exposes a dedicated SSE endpoint that the client connects to via HTMX's SSE extension. A keep-alive heartbeat prevents connection timeouts. The frontend subscribes to event streams that correspond to server-side broadcast channels.
+The frontend polls dedicated fragment endpoints at staggered intervals:
+- `/fragment/story-log` — every 2 seconds
+- `/status/generating` — every 5 seconds
+- `/fragment/visual-sidebar` — every 5 seconds
+- `/fragment/llm-messages` — every 4 seconds
+- `/hints` — every 5 seconds
+
+No persistent connection is maintained. Each poll is an independent HTTP request.
 
 ---
 
@@ -49,18 +57,18 @@ The server exposes a dedicated SSE endpoint that the client connects to via HTMX
 ### Positive
 - More reliable than WebSocket with HTMX
 - No custom JavaScript (`ws.js` removed)
-- Native HTMX support
-- Automatic reconnection
-- Simpler protocol (HTTP)
+- Native HTMX support via `hx-trigger`
+- Simpler protocol (plain HTTP)
+- No SSE infrastructure or broadcast channels needed
 
 ### Negative
-- Unidirectional only (but sufficient for our use case)
-- SSE has max 6 connections limit per browser (not hit in practice)
-- No binary data support (not needed)
+- Slightly higher latency than push (max 2-5s depending on endpoint)
+- More frequent HTTP requests than SSE
+- No true "push" capability
 
 ### Trade-offs
-- Chose SSE reliability over WebSocket bidirectionality
-- We don't need client→server WebSocket (HTTP POST handles commands)
+- Chose polling reliability over WebSocket/SSE push semantics
+- We don't need sub-second updates; 2-5s latency is acceptable for narrative text
 
 ---
 
@@ -73,10 +81,10 @@ The server exposes a dedicated SSE endpoint that the client connects to via HTMX
 ## History
 
 - **2025-04-12**: WebSocket implemented in HTMX migration
-- **2026-04-19**: Replaced WebSocket with SSE
+- **2026-04-19**: Replaced WebSocket with HTTP polling
 
 ---
 
 ## Historical Note
 
-This decision was made after experiencing WebSocket reliability issues with HTMX in production. SSE provided a more stable solution.
+This decision was made after experiencing WebSocket reliability issues with HTMX in production. HTTP polling provided a simpler, more stable solution that requires no persistent connections or broadcast infrastructure.

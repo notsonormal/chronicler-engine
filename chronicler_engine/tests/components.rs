@@ -1,12 +1,7 @@
 //! [DOC: docs/reference/testing.md]
 
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard};
-
-use chronicler_engine::model::character::{CharacterSheet, NpcCard, PlayerCard};
-use chronicler_engine::model::map::MapDef;
-use chronicler_engine::model::state::GameState;
-use chronicler_engine::model::world::WorldCard;
+use std::sync::{Mutex, MutexGuard};
 
 #[path = "components/actions.rs"]
 mod actions;
@@ -28,74 +23,6 @@ mod settings;
 mod text_check;
 #[path = "components/world.rs"]
 mod world;
-
-pub fn create_test_state() -> GameState {
-    use chronicler_engine::model::map::Room;
-
-    let world = Arc::new(WorldCard {
-        name: "Test World".into(),
-        description: "A test world".into(),
-        global_rules: vec![],
-        starting_room_id: "room_1".into(),
-        scenarios: vec![],
-        default_room_image: None,
-    });
-
-    let test_room = Room {
-        id: "room_1".into(),
-        name: "Test Room".into(),
-        description: "A test room for component tests.".into(),
-        image_path: Some("data/images/test_room.png".into()),
-        exits: std::collections::HashMap::new(),
-        items: vec![],
-        navigation_description: None,
-    };
-
-    let map = Arc::new(MapDef {
-        overworld: chronicler_engine::model::map::Overworld {
-            id: "test_overworld".into(),
-            name: "Test Overworld".into(),
-            regions: vec![chronicler_engine::model::map::Region {
-                id: "region_1".into(),
-                name: "Test Region".into(),
-                rooms: vec![test_room],
-            }],
-        },
-    });
-
-    let player = Arc::new(PlayerCard {
-        sheet: CharacterSheet {
-            name: "Test Player".into(),
-            description: "A test player".into(),
-            personality: "Brave".into(),
-            scenario: "Test scenario".into(),
-            example_dialogue: "Hello!".into(),
-            summary: None,
-            profile_image: None,
-            headshot_image: None,
-        },
-        inventory: vec![],
-    });
-
-    let npcs = vec![NpcCard {
-        id: "npc_1".into(),
-        sheet: CharacterSheet {
-            name: "Test NPC".into(),
-            description: "A test NPC".into(),
-            personality: "Friendly".into(),
-            scenario: "Test scenario".into(),
-            example_dialogue: "Hello there!".into(),
-            summary: None,
-            profile_image: Some("data/images/npc.png".into()),
-            headshot_image: Some("data/images/npc_headshot.png".into()),
-        },
-        inventory: vec![],
-        triggers: vec![],
-        relationships: vec![],
-    }];
-
-    GameState::new(world, map, player, npcs, "room_1".to_string())
-}
 
 static SETTINGS_TEST_LOCK: Mutex<()> = Mutex::new(());
 static SETTINGS_TEST_COUNTER: AtomicU64 = AtomicU64::new(0);

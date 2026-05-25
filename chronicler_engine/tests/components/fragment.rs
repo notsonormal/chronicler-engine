@@ -7,11 +7,10 @@ use axum::{
 };
 use tower::util::ServiceExt;
 
-use chronicler_engine::create_app_for_testing;
+use chronicler_engine::TestAppBuilder;
+use chronicler_engine::model::state::{GenerationPhase, GenerationStatus, LogType};
 use chronicler_engine::storage::message_storage::MessageStorage;
 use chronicler_engine::storage::snapshot_storage::SnapshotStorage;
-
-use crate::create_test_state;
 
 async fn fetch_body(app: Router, uri: &str) -> String {
     let req = Request::builder().uri(uri).body(Body::empty()).unwrap();
@@ -25,42 +24,26 @@ async fn fetch_body(app: Router, uri: &str) -> String {
 
 #[tokio::test]
 async fn test_header_fragment_returns_html() {
-    let body = fetch_body(
-        create_app_for_testing(create_test_state()),
-        "/fragment/header",
-    )
-    .await;
+    let body = fetch_body(TestAppBuilder::default_app(), "/fragment/header").await;
     assert!(body.contains("class=\"header\""));
     assert!(body.contains("Chronicler Engine"));
 }
 
 #[tokio::test]
 async fn test_story_log_fragment_returns_html() {
-    let body = fetch_body(
-        create_app_for_testing(create_test_state()),
-        "/fragment/story-log",
-    )
-    .await;
+    let body = fetch_body(TestAppBuilder::default_app(), "/fragment/story-log").await;
     assert!(body.contains("id=\"story-log\""));
 }
 
 #[tokio::test]
 async fn test_visual_sidebar_fragment_returns_html() {
-    let body = fetch_body(
-        create_app_for_testing(create_test_state()),
-        "/fragment/visual-sidebar",
-    )
-    .await;
+    let body = fetch_body(TestAppBuilder::default_app(), "/fragment/visual-sidebar").await;
     assert!(body.contains("id=\"visual-sidebar\""));
 }
 
 #[tokio::test]
 async fn test_visual_sidebar_renders_room_image() {
-    let body = fetch_body(
-        create_app_for_testing(create_test_state()),
-        "/fragment/visual-sidebar",
-    )
-    .await;
+    let body = fetch_body(TestAppBuilder::default_app(), "/fragment/visual-sidebar").await;
     // Should contain the image, not "No Location Image"
     assert!(
         body.contains("data/images/test_room.png"),
@@ -74,11 +57,7 @@ async fn test_visual_sidebar_renders_room_image() {
 
 #[tokio::test]
 async fn test_action_area_fragment_returns_html() {
-    let body = fetch_body(
-        create_app_for_testing(create_test_state()),
-        "/fragment/action-area",
-    )
-    .await;
+    let body = fetch_body(TestAppBuilder::default_app(), "/fragment/action-area").await;
     assert!(
         body.contains("id=\"action-area\""),
         "Expected action-area id: {body}"
@@ -87,7 +66,7 @@ async fn test_action_area_fragment_returns_html() {
 
 #[tokio::test]
 async fn test_action_handler_accepts_command() {
-    let app = create_app_for_testing(create_test_state());
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/action")
@@ -110,7 +89,7 @@ async fn test_action_handler_accepts_command() {
 
 #[tokio::test]
 async fn test_action_handler_empty_command() {
-    let app = create_app_for_testing(create_test_state());
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/action")
@@ -135,20 +114,20 @@ async fn test_action_handler_empty_command() {
 
 #[tokio::test]
 async fn test_hints_handler() {
-    let body = fetch_body(create_app_for_testing(create_test_state()), "/hints").await;
+    let body = fetch_body(TestAppBuilder::default_app(), "/hints").await;
     assert!(body.is_empty(), "Expected empty hints but got: {body}");
 }
 
 #[tokio::test]
 async fn test_status_ready_handler() {
-    let body = fetch_body(create_app_for_testing(create_test_state()), "/status/ready").await;
+    let body = fetch_body(TestAppBuilder::default_app(), "/status/ready").await;
     assert!(body.contains("Ready"));
 }
 
 #[tokio::test]
 async fn test_character_headshots_fragment() {
     let body = fetch_body(
-        create_app_for_testing(create_test_state()),
+        TestAppBuilder::default_app(),
         "/fragment/character-headshots",
     )
     .await;
@@ -161,42 +140,38 @@ async fn test_character_headshots_fragment() {
 
 #[tokio::test]
 async fn test_generating_status_handler_idle() {
-    let body = fetch_body(
-        create_app_for_testing(create_test_state()),
-        "/status/generating",
-    )
-    .await;
+    let body = fetch_body(TestAppBuilder::default_app(), "/status/generating").await;
     // Should return "idle" when not generating
     assert!(body.contains("idle"));
 }
 
 #[tokio::test]
 async fn test_generating_status_handler_narrating() {
-    let mut state = create_test_state();
-    state.narrative.input_buffer.status =
-        chronicler_engine::model::state::GenerationStatus::Generating;
-    state.narrative.input_buffer.phase =
-        chronicler_engine::model::state::GenerationPhase::Narrating;
-
-    let body = fetch_body(create_app_for_testing(state), "/status/generating").await;
+    let body = fetch_body(
+        TestAppBuilder::default_test()
+            .generation_status(GenerationStatus::Generating, GenerationPhase::Narrating)
+            .build(),
+        "/status/generating",
+    )
+    .await;
     assert!(body.contains("narrating"));
 }
 
 #[tokio::test]
 async fn test_generating_status_handler_quantifying() {
-    let mut state = create_test_state();
-    state.narrative.input_buffer.status =
-        chronicler_engine::model::state::GenerationStatus::Generating;
-    state.narrative.input_buffer.phase =
-        chronicler_engine::model::state::GenerationPhase::Quantifying;
-
-    let body = fetch_body(create_app_for_testing(state), "/status/generating").await;
+    let body = fetch_body(
+        TestAppBuilder::default_test()
+            .generation_status(GenerationStatus::Generating, GenerationPhase::Quantifying)
+            .build(),
+        "/status/generating",
+    )
+    .await;
     assert!(body.contains("quantifying"));
 }
 
 #[tokio::test]
 async fn test_reset_generating_handler() {
-    let app = create_app_for_testing(create_test_state());
+    let app = TestAppBuilder::default_app();
 
     // reset-generating is POST, not GET
     let req = Request::builder()
@@ -217,37 +192,18 @@ async fn test_reset_generating_handler() {
 
 #[tokio::test]
 async fn test_edit_history_handler_success() {
-    let mut state = create_test_state();
-    state.add_log(
-        "Original text".to_string(),
-        Some("Test".to_string()),
-        chronicler_engine::model::state::LogType::Narration,
-    );
-
     let snapshot_storage: Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage> =
         Arc::new(chronicler_engine::test_support::InMemorySnapshotRepository::new());
     let message_storage: Arc<dyn chronicler_engine::storage::message_storage::MessageStorage> =
         Arc::new(chronicler_engine::test_support::InMemoryMessageRepository::new());
-    let snapshot =
-        chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
-    let _ = snapshot_storage.save(&snapshot);
-    for msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
-        let _ = message_storage.insert_message(&msg);
-    }
+
+    let app = TestAppBuilder::default_test()
+        .log("Original text", Some("Test"), LogType::Narration)
+        .snapshot_storage(Arc::clone(&snapshot_storage))
+        .message_storage(Arc::clone(&message_storage))
+        .build();
 
     let entry_id = message_storage.load_messages().unwrap().last().unwrap().id;
-
-    let llm_storage =
-        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
-            as Arc<dyn chronicler_engine::storage::llm_message_storage::LlmMessageStorage>;
-
-    let app = chronicler_engine::server::create_app_with_storage(
-        state,
-        Arc::clone(&snapshot_storage),
-        Arc::clone(&message_storage),
-        llm_storage,
-        chronicler_engine::model::settings::AppSettings::default(),
-    );
 
     let req = Request::builder()
         .uri(format!("/history/{entry_id}"))
@@ -273,7 +229,7 @@ async fn test_edit_history_handler_success() {
 
 #[tokio::test]
 async fn test_edit_history_handler_not_found() {
-    let app = create_app_for_testing(create_test_state());
+    let app = TestAppBuilder::default_app();
 
     // Try to edit a non-existent log entry (ID 9999) - correct path is /history/:id
     let req = Request::builder()
@@ -293,16 +249,9 @@ async fn test_edit_history_handler_not_found() {
 
 #[tokio::test]
 async fn test_delete_history_handler_success() {
-    let mut state = create_test_state();
-
-    // Add a log entry first
-    state.add_log(
-        "Test message".to_string(),
-        Some("Test".to_string()),
-        chronicler_engine::model::state::LogType::Narration,
-    );
-
-    let app = create_app_for_testing(state.clone());
+    let app = TestAppBuilder::default_test()
+        .log("Test message", Some("Test"), LogType::Narration)
+        .build();
 
     let req = Request::builder()
         .uri("/history/delete")
@@ -323,7 +272,7 @@ async fn test_delete_history_handler_success() {
 
 #[tokio::test]
 async fn test_delete_history_handler_empty() {
-    let app = create_app_for_testing(create_test_state());
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/history/delete")
@@ -337,7 +286,7 @@ async fn test_delete_history_handler_empty() {
 
 #[tokio::test]
 async fn test_action_confirm_empty_command() {
-    let app = create_app_for_testing(create_test_state());
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/action/confirm")
@@ -363,7 +312,7 @@ async fn test_action_confirm_empty_command() {
 
 #[tokio::test]
 async fn test_action_concurrent_rejection() {
-    let app = create_app_for_testing(create_test_state());
+    let app = TestAppBuilder::default_app();
 
     // First async action sets is_generating = true
     let req1 = Request::builder()
@@ -402,7 +351,7 @@ async fn test_action_concurrent_rejection() {
 
 #[tokio::test]
 async fn test_action_async_inventory() {
-    let app = create_app_for_testing(create_test_state());
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/action")
@@ -423,7 +372,7 @@ async fn test_action_async_inventory() {
 
 #[tokio::test]
 async fn test_list_games_fragment_empty() {
-    let app = create_app_for_testing(create_test_state());
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/fragment/games")
@@ -444,7 +393,7 @@ async fn test_list_games_fragment_empty() {
 
 #[tokio::test]
 async fn test_list_games_fragment_populated() {
-    let app = create_app_for_testing(create_test_state());
+    let app = TestAppBuilder::default_app();
 
     // Create two games — the first will be active after the second is created
     // (since create_game_handler switches to the new game).
@@ -486,33 +435,19 @@ async fn test_list_games_fragment_populated() {
 
 #[tokio::test]
 async fn test_list_games_fragment_escapes_html() {
-    let state = create_test_state();
     let snapshot_storage: Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage> =
         Arc::new(chronicler_engine::test_support::InMemorySnapshotRepository::new());
     let message_storage: Arc<dyn chronicler_engine::storage::message_storage::MessageStorage> =
         Arc::new(chronicler_engine::test_support::InMemoryMessageRepository::new());
-    let snapshot =
-        chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
-    let _ = snapshot_storage.save(&snapshot);
-    for msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
-        let _ = message_storage.insert_message(&msg);
-    }
 
     let _ = snapshot_storage
         .create_game("Test World", "<script>alert('xss')</script>")
         .unwrap();
 
-    let llm_storage =
-        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
-            as Arc<dyn chronicler_engine::storage::llm_message_storage::LlmMessageStorage>;
-
-    let app = chronicler_engine::server::create_app_with_storage(
-        state,
-        Arc::clone(&snapshot_storage),
-        Arc::clone(&message_storage),
-        llm_storage,
-        chronicler_engine::model::settings::AppSettings::default(),
-    );
+    let app = TestAppBuilder::default_test()
+        .snapshot_storage(Arc::clone(&snapshot_storage))
+        .message_storage(Arc::clone(&message_storage))
+        .build();
 
     let req = Request::builder()
         .uri("/fragment/games")
@@ -536,29 +471,15 @@ async fn test_list_games_fragment_escapes_html() {
 
 #[tokio::test]
 async fn test_create_game_handler() {
-    let state = create_test_state();
     let snapshot_storage: Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage> =
         Arc::new(chronicler_engine::test_support::InMemorySnapshotRepository::new());
     let message_storage: Arc<dyn chronicler_engine::storage::message_storage::MessageStorage> =
         Arc::new(chronicler_engine::test_support::InMemoryMessageRepository::new());
-    let snapshot =
-        chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
-    let _ = snapshot_storage.save(&snapshot);
-    for msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
-        let _ = message_storage.insert_message(&msg);
-    }
 
-    let llm_storage =
-        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
-            as Arc<dyn chronicler_engine::storage::llm_message_storage::LlmMessageStorage>;
-
-    let app = chronicler_engine::server::create_app_with_storage(
-        state,
-        Arc::clone(&snapshot_storage),
-        Arc::clone(&message_storage),
-        llm_storage,
-        chronicler_engine::model::settings::AppSettings::default(),
-    );
+    let app = TestAppBuilder::default_test()
+        .snapshot_storage(Arc::clone(&snapshot_storage))
+        .message_storage(Arc::clone(&message_storage))
+        .build();
 
     let old_id = SnapshotStorage::current_game_id(&*snapshot_storage);
 
@@ -588,17 +509,15 @@ async fn test_create_game_handler() {
 
 #[tokio::test]
 async fn test_switch_game_handler_success() {
-    let state = create_test_state();
     let snapshot_storage: Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage> =
         Arc::new(chronicler_engine::test_support::InMemorySnapshotRepository::new());
     let message_storage: Arc<dyn chronicler_engine::storage::message_storage::MessageStorage> =
         Arc::new(chronicler_engine::test_support::InMemoryMessageRepository::new());
-    let snapshot =
-        chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
-    let _ = snapshot_storage.save(&snapshot);
-    for msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
-        let _ = message_storage.insert_message(&msg);
-    }
+
+    let app = TestAppBuilder::default_test()
+        .snapshot_storage(Arc::clone(&snapshot_storage))
+        .message_storage(Arc::clone(&message_storage))
+        .build();
 
     let other_id = snapshot_storage
         .create_game("Test World", "Test World_2026-01-01_1")
@@ -606,18 +525,6 @@ async fn test_switch_game_handler_success() {
     assert_ne!(
         other_id,
         SnapshotStorage::current_game_id(&*snapshot_storage)
-    );
-
-    let llm_storage =
-        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
-            as Arc<dyn chronicler_engine::storage::llm_message_storage::LlmMessageStorage>;
-
-    let app = chronicler_engine::server::create_app_with_storage(
-        state,
-        Arc::clone(&snapshot_storage),
-        Arc::clone(&message_storage),
-        llm_storage,
-        chronicler_engine::model::settings::AppSettings::default(),
     );
 
     let req = Request::builder()
@@ -640,7 +547,7 @@ async fn test_switch_game_handler_success() {
 
 #[tokio::test]
 async fn test_switch_game_handler_not_found() {
-    let app = create_app_for_testing(create_test_state());
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/games/9999/switch")
@@ -653,33 +560,19 @@ async fn test_switch_game_handler_not_found() {
 
 #[tokio::test]
 async fn test_switch_game_handler_wrong_world() {
-    let state = create_test_state();
     let snapshot_storage: Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage> =
         Arc::new(chronicler_engine::test_support::InMemorySnapshotRepository::new());
     let message_storage: Arc<dyn chronicler_engine::storage::message_storage::MessageStorage> =
         Arc::new(chronicler_engine::test_support::InMemoryMessageRepository::new());
-    let snapshot =
-        chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
-    let _ = snapshot_storage.save(&snapshot);
-    for msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
-        let _ = message_storage.insert_message(&msg);
-    }
 
     let other_id = snapshot_storage
         .create_game("Other World", "Other World_1")
         .unwrap();
 
-    let llm_storage =
-        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
-            as Arc<dyn chronicler_engine::storage::llm_message_storage::LlmMessageStorage>;
-
-    let app = chronicler_engine::server::create_app_with_storage(
-        state,
-        Arc::clone(&snapshot_storage),
-        Arc::clone(&message_storage),
-        llm_storage,
-        chronicler_engine::model::settings::AppSettings::default(),
-    );
+    let app = TestAppBuilder::default_test()
+        .snapshot_storage(Arc::clone(&snapshot_storage))
+        .message_storage(Arc::clone(&message_storage))
+        .build();
 
     let req = Request::builder()
         .uri(format!("/games/{other_id}/switch"))
@@ -692,17 +585,15 @@ async fn test_switch_game_handler_wrong_world() {
 
 #[tokio::test]
 async fn test_delete_game_handler_success() {
-    let state = create_test_state();
     let snapshot_storage: Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage> =
         Arc::new(chronicler_engine::test_support::InMemorySnapshotRepository::new());
     let message_storage: Arc<dyn chronicler_engine::storage::message_storage::MessageStorage> =
         Arc::new(chronicler_engine::test_support::InMemoryMessageRepository::new());
-    let snapshot =
-        chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
-    let _ = snapshot_storage.save(&snapshot);
-    for msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
-        let _ = message_storage.insert_message(&msg);
-    }
+
+    let app = TestAppBuilder::default_test()
+        .snapshot_storage(Arc::clone(&snapshot_storage))
+        .message_storage(Arc::clone(&message_storage))
+        .build();
 
     let other_id = snapshot_storage
         .create_game("Test World", "Test World_2026-01-01_1")
@@ -710,18 +601,6 @@ async fn test_delete_game_handler_success() {
     assert_ne!(
         other_id,
         SnapshotStorage::current_game_id(&*snapshot_storage)
-    );
-
-    let llm_storage =
-        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
-            as Arc<dyn chronicler_engine::storage::llm_message_storage::LlmMessageStorage>;
-
-    let app = chronicler_engine::server::create_app_with_storage(
-        state,
-        Arc::clone(&snapshot_storage),
-        Arc::clone(&message_storage),
-        llm_storage,
-        chronicler_engine::model::settings::AppSettings::default(),
     );
 
     let req = Request::builder()
@@ -736,7 +615,7 @@ async fn test_delete_game_handler_success() {
 
 #[tokio::test]
 async fn test_delete_game_handler_active_game() {
-    let app = create_app_for_testing(create_test_state());
+    let app = TestAppBuilder::default_app();
 
     // create_app_for_testing initializes storage with game_id = 1
     let active_id = 1u64;
@@ -752,7 +631,7 @@ async fn test_delete_game_handler_active_game() {
 
 #[tokio::test]
 async fn test_delete_game_handler_generating() {
-    let app = create_app_for_testing(create_test_state());
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/action")
@@ -956,17 +835,10 @@ async fn test_list_games_fragment_storage_error() {
         message_inner: Arc::clone(&inner_message) as Arc<dyn MessageStorage>,
     });
 
-    let llm_storage =
-        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
-            as Arc<dyn chronicler_engine::storage::llm_message_storage::LlmMessageStorage>;
-
-    let app = chronicler_engine::server::create_app_with_storage(
-        create_test_state(),
-        storage,
-        Arc::clone(&inner_message) as Arc<dyn MessageStorage>,
-        llm_storage,
-        chronicler_engine::model::settings::AppSettings::default(),
-    );
+    let app = TestAppBuilder::default_test()
+        .snapshot_storage(storage)
+        .message_storage(Arc::clone(&inner_message) as Arc<dyn MessageStorage>)
+        .build();
 
     let req = Request::builder()
         .uri("/fragment/games")

@@ -38,7 +38,7 @@ pub use error::{EngineError, Result};
 
 pub use model::settings::AppSettings;
 pub use server::AppState;
-pub use server::{create_app_for_testing, create_app_for_testing_with_settings};
+pub use test_support::test_app_builder::TestAppBuilder;
 
 pub mod test_support;
 

@@ -1,15 +1,14 @@
 use axum::{body::Body, http::Request};
 use tower::util::ServiceExt;
 
-use chronicler_engine::create_app_for_testing;
+use chronicler_engine::TestAppBuilder;
 
-use crate::{TempSettingsGuard, create_test_state};
+use crate::TempSettingsGuard;
 
 #[tokio::test]
 async fn test_add_connection_openrouter() {
     let _guard = TempSettingsGuard::new();
-    let state = create_test_state();
-    let app = create_app_for_testing(state);
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/connections/add")
@@ -38,8 +37,7 @@ async fn test_add_connection_openrouter() {
 #[tokio::test]
 async fn test_add_connection_deepseek() {
     let _guard = TempSettingsGuard::new();
-    let state = create_test_state();
-    let app = create_app_for_testing(state);
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/connections/add")
@@ -68,8 +66,7 @@ async fn test_add_connection_deepseek() {
 #[tokio::test]
 async fn test_set_narrator() {
     let _guard = TempSettingsGuard::new();
-    let state = create_test_state();
-    let app = create_app_for_testing(state);
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/connections/openrouter-euryale/set-narrator")
@@ -92,8 +89,7 @@ async fn test_set_narrator() {
 #[tokio::test]
 async fn test_set_quantifier() {
     let _guard = TempSettingsGuard::new();
-    let state = create_test_state();
-    let app = create_app_for_testing(state);
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/connections/ollama-gemma-4-26B/set-quantifier")
@@ -116,8 +112,7 @@ async fn test_set_quantifier() {
 #[tokio::test]
 async fn test_set_narrator_not_found() {
     let _guard = TempSettingsGuard::new();
-    let state = create_test_state();
-    let app = create_app_for_testing(state);
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/connections/nonexistent/set-narrator")
@@ -140,8 +135,7 @@ async fn test_set_narrator_not_found() {
 #[tokio::test]
 async fn test_delete_connection() {
     let _guard = TempSettingsGuard::new();
-    let state = create_test_state();
-    let app = create_app_for_testing(state);
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/connections/ollama-gemma-4-26B/delete")
@@ -164,8 +158,7 @@ async fn test_delete_connection() {
 #[tokio::test]
 async fn test_delete_connection_not_found() {
     let _guard = TempSettingsGuard::new();
-    let state = create_test_state();
-    let app = create_app_for_testing(state);
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/connections/nonexistent/delete")
@@ -188,8 +181,7 @@ async fn test_delete_connection_not_found() {
 #[tokio::test]
 async fn test_edit_connection() {
     let _guard = TempSettingsGuard::new();
-    let state = create_test_state();
-    let app = create_app_for_testing(state);
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/connections/openrouter-gpt-4o-mini/edit")
@@ -218,8 +210,7 @@ async fn test_edit_connection() {
 #[tokio::test]
 async fn test_edit_connection_not_found() {
     let _guard = TempSettingsGuard::new();
-    let state = create_test_state();
-    let app = create_app_for_testing(state);
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/connections/nonexistent/edit")
@@ -247,8 +238,7 @@ async fn test_edit_connection_not_found() {
 
 #[tokio::test]
 async fn test_connection_card_fragment() {
-    let state = create_test_state();
-    let app = create_app_for_testing(state);
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/fragment/connections/openrouter-gpt-4o-mini")
@@ -269,8 +259,7 @@ async fn test_connection_card_fragment() {
 
 #[tokio::test]
 async fn test_connection_card_fragment_not_found() {
-    let state = create_test_state();
-    let app = create_app_for_testing(state);
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/fragment/connections/nonexistent")
@@ -291,8 +280,7 @@ async fn test_connection_card_fragment_not_found() {
 
 #[tokio::test]
 async fn test_edit_connection_form() {
-    let state = create_test_state();
-    let app = create_app_for_testing(state);
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/fragment/connections/openrouter-gpt-4o-mini/edit")
@@ -317,8 +305,7 @@ async fn test_edit_connection_form() {
 
 #[tokio::test]
 async fn test_edit_connection_form_not_found() {
-    let state = create_test_state();
-    let app = create_app_for_testing(state);
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/fragment/connections/nonexistent/edit")
@@ -340,8 +327,7 @@ async fn test_edit_connection_form_not_found() {
 #[tokio::test]
 async fn test_add_connection_with_single_user_message() {
     let _guard = TempSettingsGuard::new();
-    let state = create_test_state();
-    let app = create_app_for_testing(state);
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/connections/add")
@@ -370,8 +356,7 @@ async fn test_add_connection_with_single_user_message() {
 #[tokio::test]
 async fn test_edit_connection_preserves_single_user_message() {
     let _guard = TempSettingsGuard::new();
-    let state = create_test_state();
-    let app = create_app_for_testing(state);
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/connections/openrouter-gpt-4o-mini/edit")
@@ -399,8 +384,7 @@ async fn test_edit_connection_preserves_single_user_message() {
 
 #[tokio::test]
 async fn test_edit_connection_form_has_single_user_message_checkbox() {
-    let state = create_test_state();
-    let app = create_app_for_testing(state);
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/fragment/connections/openrouter-gpt-4o-mini/edit")

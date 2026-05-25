@@ -9,14 +9,12 @@ The Chronicler Engine presents a web-based HTMX dashboard for player interaction
 
 ### 1. Header Bar (48px height)
 Displays system-level context.
-- **Content**: Game title (left), game selector (center-left), reset button (center-right), connection status (right)
-- **Game Selector**: "Games" button opens dropdown with list of games, create new game button, switch and delete per-game buttons
-- **Reset Button**: "Reset Game" button styled with danger/red tokens, uses `hx-post="/reset"` with `hx-confirm` dialog. Deletes current game and creates a new one with an auto-generated name.
-- **Note**: Location is displayed in the story log, not the header
+- **Content**: Game title (left), current game name (center-left), connection status (right)
+- **Note**: Location is displayed in the story log, not the header. Game management (create, switch, delete, reset) lives in the "Save / Load" tab.
 
 ### 2. Tab Bar
 Navigation between Game, LLM Messages, and Settings views.
-- **Tabs**: Game | LLM Messages | Settings
+- **Tabs**: Game | Settings | Prompt Presets | Save / Load | LLM Messages
 - **Active tab**: Green text with green bottom border
 - **Inactive tab**: Muted gray text
 
@@ -61,7 +59,7 @@ Interactive zone for player input.
 - **Text Check Preview**: When spell/grammar issues are detected, the action area temporarily shows:
   - Original vs corrected text comparison
   - Issue tags (spell = orange, grammar = pink)
-  - **Send Corrected** — submits corrected text to `/action`
+  - **Send** — submits corrected text to `/action`
   - **Send Original** — submits original text to `/action`
   - **Cancel** — restores normal action area
 
@@ -75,9 +73,6 @@ Configuration panel for LLM connections.
   - Name, Provider (OpenRouter/DeepSeek/Ollama), Model
   - API Key (optional), Base URL (optional)
   - Single User Message checkbox (for models that ignore system prompts)
-- **Text Check Card**:
-  - Mode dropdown (Disabled / Spell / Grammar / Spell + Grammar)
-  - "Check before sending to LLM" checkbox
 - **Text Check Card**:
   - Mode dropdown (Disabled / Spell / Grammar / Spell + Grammar)
   - "Check before sending to LLM" checkbox
@@ -95,7 +90,7 @@ The dashboard uses HTMX polling for live updates:
 
 ## Frontend Implementation
 - **HTMX**: Handles partial page updates via `hx-post` and `hx-target`
-- **HTMX Polling**: `hx-trigger="load, every 1s"` for story-log; `every 2s` for status; `every 4-5s` for sidebar and LLM messages
+- **HTMX Polling**: `hx-trigger="load, every 2s"` for story-log; `every 5s` for status; `every 4-5s` for sidebar and LLM messages
 - **Styling**: Modern chat-app aesthetic with chat bubbles, fade animations
 - **Templates**: Uses `askama` for compile-time validated HTML fragments (pilot)
 

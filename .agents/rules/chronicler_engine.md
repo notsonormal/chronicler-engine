@@ -22,6 +22,15 @@ When you (the AI) are tasked with building, debugging, or extending the `chronic
 4. **Validate** - Run tests, format, clippy
 5. **Archive** - Move completed plans to `plans/archived/`
 
+## Layer Boundary
+
+The server tier (`src/server/`) must never touch `GameState` directly.
+
+- **Reads:** Use `ApplicationService` narrow read methods (`get_story_log_entries`, `get_input_status`, `get_current_room_view`, `get_npc_headshots`, `get_debug_state_view`).
+- **Writes:** Use `ApplicationService` command methods (`process_action`, `retry`, `reset`, etc.).
+- **Tests:** Use `TestAppBuilder` in `test_support/` — never construct `GameState` in `tests/components/`.
+- **Guardrails:** `tests/guardrails/layers.rs` enforces these boundaries at test time.
+
 ## Rust Idioms and Best Practices
 - Ensure `cargo fmt`, `cargo clippy`, and `cargo nextest run` pass successfully.
 - Prefer explicit error handling logic. Use `Result` heavily for parsing strings/data.

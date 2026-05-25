@@ -1,14 +1,13 @@
 use axum::{body::Body, http::Request};
 use tower::util::ServiceExt;
 
-use chronicler_engine::create_app_for_testing;
+use chronicler_engine::TestAppBuilder;
 
-use crate::{TempSettingsGuard, create_test_state};
+use crate::TempSettingsGuard;
 
 #[tokio::test]
 async fn test_settings_panel_returns_html() {
-    let state = create_test_state();
-    let app = create_app_for_testing(state);
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/fragment/settings")
@@ -29,8 +28,7 @@ async fn test_settings_panel_returns_html() {
 
 #[tokio::test]
 async fn test_settings_panel_has_provider_select() {
-    let state = create_test_state();
-    let app = create_app_for_testing(state);
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/fragment/settings")
@@ -59,8 +57,7 @@ async fn test_settings_panel_has_provider_select() {
 
 #[tokio::test]
 async fn test_settings_panel_has_model_input() {
-    let state = create_test_state();
-    let app = create_app_for_testing(state);
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/fragment/settings")
@@ -82,8 +79,7 @@ async fn test_settings_panel_has_model_input() {
 #[tokio::test]
 async fn test_save_settings_switch_narrator() {
     let _guard = TempSettingsGuard::new();
-    let state = create_test_state();
-    let app = create_app_for_testing(state);
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/settings")
@@ -112,8 +108,7 @@ async fn test_save_settings_switch_narrator() {
 #[tokio::test]
 async fn test_save_settings_switch_quantifier() {
     let _guard = TempSettingsGuard::new();
-    let state = create_test_state();
-    let app = create_app_for_testing(state);
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/settings")
@@ -142,8 +137,7 @@ async fn test_save_settings_switch_quantifier() {
 #[tokio::test]
 async fn test_save_settings_switch_both() {
     let _guard = TempSettingsGuard::new();
-    let state = create_test_state();
-    let app = create_app_for_testing(state);
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/settings")
@@ -171,8 +165,7 @@ async fn test_save_settings_switch_both() {
 
 #[tokio::test]
 async fn test_settings_panel_has_single_user_message_checkbox() {
-    let state = create_test_state();
-    let app = create_app_for_testing(state);
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/fragment/settings")

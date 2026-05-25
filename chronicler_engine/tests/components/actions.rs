@@ -5,14 +5,13 @@ use axum::{
 use std::sync::Arc;
 use tower::ServiceExt;
 
+use chronicler_engine::TestAppBuilder;
 use chronicler_engine::model::settings::{AppSettings, TextCheckMode, TextCheckSettings};
 use chronicler_engine::model::state::LogType;
 
-use crate::create_test_state;
-
 #[tokio::test]
 async fn test_action_check_handler_empty_command() {
-    let app = chronicler_engine::create_app_for_testing(create_test_state());
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/action/check")
@@ -27,23 +26,17 @@ async fn test_action_check_handler_empty_command() {
 
 #[tokio::test]
 async fn test_action_check_handler_disabled_mode() {
-    let mut state = create_test_state();
-    state.add_log(
-        "look".to_string(),
-        Some("Player".to_string()),
-        LogType::Input,
-    );
-    let app = chronicler_engine::create_app_for_testing_with_settings(
-        state,
-        AppSettings {
+    let app = TestAppBuilder::default_test()
+        .log("look", Some("Player"), LogType::Input)
+        .settings(AppSettings {
             text_check: TextCheckSettings {
                 mode: TextCheckMode::Disabled,
                 enable_auto_check: true,
                 ignored_words: vec![],
             },
             ..AppSettings::default()
-        },
-    );
+        })
+        .build();
 
     let req = Request::builder()
         .uri("/action/check")
@@ -59,7 +52,6 @@ async fn test_action_check_handler_disabled_mode() {
 
 #[tokio::test]
 async fn test_action_handler_load_state_failure() {
-    let state = create_test_state();
     let snapshot_storage_inner: Arc<
         dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage,
     > = Arc::new(chronicler_engine::test_support::InMemorySnapshotRepository::new());
@@ -136,17 +128,11 @@ async fn test_action_handler_load_state_failure() {
         });
     let message_storage: Arc<dyn chronicler_engine::storage::message_storage::MessageStorage> =
         Arc::new(chronicler_engine::test_support::InMemoryMessageRepository::new());
-    let llm_storage =
-        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
-            as Arc<dyn chronicler_engine::storage::llm_message_storage::LlmMessageStorage>;
 
-    let app = chronicler_engine::server::create_app_with_storage(
-        state,
-        snapshot_storage,
-        message_storage,
-        llm_storage,
-        AppSettings::default(),
-    );
+    let app = TestAppBuilder::default_test()
+        .snapshot_storage(snapshot_storage)
+        .message_storage(message_storage)
+        .build();
 
     let req = Request::builder()
         .uri("/action")
@@ -161,7 +147,6 @@ async fn test_action_handler_load_state_failure() {
 
 #[tokio::test]
 async fn test_action_handler_snapshot_save_failure() {
-    let state = create_test_state();
     let snapshot_storage_inner: Arc<
         dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage,
     > = Arc::new(chronicler_engine::test_support::InMemorySnapshotRepository::new());
@@ -238,17 +223,11 @@ async fn test_action_handler_snapshot_save_failure() {
         });
     let message_storage: Arc<dyn chronicler_engine::storage::message_storage::MessageStorage> =
         Arc::new(chronicler_engine::test_support::InMemoryMessageRepository::new());
-    let llm_storage =
-        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
-            as Arc<dyn chronicler_engine::storage::llm_message_storage::LlmMessageStorage>;
 
-    let app = chronicler_engine::server::create_app_with_storage(
-        state,
-        snapshot_storage,
-        message_storage,
-        llm_storage,
-        AppSettings::default(),
-    );
+    let app = TestAppBuilder::default_test()
+        .snapshot_storage(snapshot_storage)
+        .message_storage(message_storage)
+        .build();
 
     let req = Request::builder()
         .uri("/action")
@@ -263,7 +242,6 @@ async fn test_action_handler_snapshot_save_failure() {
 
 #[tokio::test]
 async fn test_action_confirm_handler_render_error_fallback() {
-    let state = create_test_state();
     let snapshot_storage_inner: Arc<
         dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage,
     > = Arc::new(chronicler_engine::test_support::InMemorySnapshotRepository::new());
@@ -340,17 +318,11 @@ async fn test_action_confirm_handler_render_error_fallback() {
         });
     let message_storage: Arc<dyn chronicler_engine::storage::message_storage::MessageStorage> =
         Arc::new(chronicler_engine::test_support::InMemoryMessageRepository::new());
-    let llm_storage =
-        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
-            as Arc<dyn chronicler_engine::storage::llm_message_storage::LlmMessageStorage>;
 
-    let app = chronicler_engine::server::create_app_with_storage(
-        state,
-        snapshot_storage,
-        message_storage,
-        llm_storage,
-        AppSettings::default(),
-    );
+    let app = TestAppBuilder::default_test()
+        .snapshot_storage(snapshot_storage)
+        .message_storage(message_storage)
+        .build();
 
     let req = Request::builder()
         .uri("/action/confirm")

@@ -2,12 +2,11 @@ use askama::Template;
 use axum::{body::Body, http::StatusCode, response::Response};
 
 use crate::application::application_service::ApplicationError;
-use crate::error::{EngineError, Result};
-use crate::model::state::GameState;
+use crate::error::Result;
 use crate::server::AppState;
 use crate::server::templates::{
-    ActionAreaTemplate, CharacterHeadshotsTemplate, HeaderTemplate, LlmMessagesTemplate,
-    StoryLogTemplate, VisualSidebarTemplate,
+    ActionAreaTemplate, HeaderTemplate, LlmMessagesTemplate, StoryLogTemplate,
+    VisualSidebarTemplate,
 };
 use crate::server::view_models::{ActionAreaViewModel, NpcPortraitView, VisualSidebarViewModel};
 
@@ -36,71 +35,43 @@ pub fn render_header(state: &AppState) -> Result<String> {
 }
 
 pub fn render_story_log(state: &AppState) -> Result<String> {
-    let state_guard = state
+    let (entries, has_last_trigger) = state
         .application_service
-        .load_state(state.as_game_service_context())?;
+        .get_story_log_entries(state.as_game_service_context())?;
 
-    let entries: Vec<_> = state_guard
-        .narrative
-        .history()
-        .iter()
-        .take(MAX_LOG_DISPLAY)
-        .cloned()
-        .collect();
-    let has_last_trigger = state_guard.narrative.last_trigger.is_some();
+    let entries: Vec<_> = entries.into_iter().take(MAX_LOG_DISPLAY).collect();
     let template = StoryLogTemplate::new(&entries, has_last_trigger);
     template
         .render()
         .map_err(|e| crate::error::EngineError::Template(e.to_string()))
 }
 
-fn render_visual_sidebar_unlocked(state: &GameState) -> Result<String> {
-    let room = state
-        .current_room()
-        .ok_or_else(|| EngineError::RoomNotFound("current room not found".to_string()))?;
+/// [DOC: docs/system/game_flow.md]
+pub fn render_visual_sidebar(state: &AppState) -> Result<String> {
+    let (room_name, image_path) = state
+        .application_service
+        .get_current_room_view(state.as_game_service_context())?;
+    let npc_data = state
+        .application_service
+        .get_npc_headshots(state.as_game_service_context(), true)?;
 
-    let image_path = room
-        .image_path
-        .clone()
-        .or_else(|| state.world.default_room_image.clone());
-
-    let resolve_headshot = |npc_id: &str| {
-        let npc = state.npcs.get(npc_id)?;
-        let image_path = npc.sheet.preferred_image()?.to_string();
-        let name = npc.sheet.name.clone();
-        Some(NpcPortraitView { image_path, name })
-    };
-
-    let npc_data: Vec<NpcPortraitView> = state
-        .scene
-        .npcs_in_area
-        .iter()
-        .filter_map(|npc| resolve_headshot(&npc.id))
+    let npc_portraits: Vec<NpcPortraitView> = npc_data
+        .into_iter()
+        .map(|(image_path, name)| NpcPortraitView { image_path, name })
         .collect();
 
-    let vm = VisualSidebarViewModel::new(image_path, room.name.clone(), npc_data);
+    let vm = VisualSidebarViewModel::new(image_path, room_name, npc_portraits);
     let template = VisualSidebarTemplate::new(vm);
     template
         .render()
         .map_err(|e| crate::error::EngineError::Template(e.to_string()))
 }
 
-pub fn render_visual_sidebar(state: &AppState) -> Result<String> {
-    let state_guard = state
-        .application_service
-        .load_state(state.as_game_service_context())?;
-    render_visual_sidebar_unlocked(&state_guard)
-}
-
 /// [DOC: docs/system/game_flow.md]
 pub fn render_action_area(state: &AppState) -> Result<String> {
-    let state_guard = state
+    let (status, phase) = state
         .application_service
-        .load_state(state.as_game_service_context())?;
-
-    let status = state_guard.narrative.input_buffer.status.clone();
-    let phase = state_guard.narrative.input_buffer.phase.clone();
-    drop(state_guard);
+        .get_input_status(state.as_game_service_context())?;
 
     let vm = ActionAreaViewModel::new(&status, &phase, &[]);
     let template = ActionAreaTemplate::new(vm);
@@ -111,24 +82,19 @@ pub fn render_action_area(state: &AppState) -> Result<String> {
 
 /// [DOC: docs/system/game_flow.md]
 pub fn render_character_headshots(state: &AppState) -> Result<String> {
-    let state_guard = state
-        .application_service
-        .load_state(state.as_game_service_context())?;
+    use crate::server::templates::CharacterHeadshotsTemplate;
+    use askama::Template;
 
-    let npc_data: Vec<NpcPortraitView> = state_guard
-        .npcs
-        .iter()
-        .filter_map(|(_npc_id, npc)| {
-            let image = npc.sheet.preferred_image()?;
-            let name = npc.sheet.name.clone();
-            Some(NpcPortraitView {
-                image_path: image.to_string(),
-                name,
-            })
-        })
+    let npc_data = state
+        .application_service
+        .get_npc_headshots(state.as_game_service_context(), false)?;
+
+    let npc_portraits: Vec<NpcPortraitView> = npc_data
+        .into_iter()
+        .map(|(image_path, name)| NpcPortraitView { image_path, name })
         .collect();
 
-    let template = CharacterHeadshotsTemplate::new(npc_data);
+    let template = CharacterHeadshotsTemplate::new(npc_portraits);
     template
         .render()
         .map_err(|e| crate::error::EngineError::Template(e.to_string()))

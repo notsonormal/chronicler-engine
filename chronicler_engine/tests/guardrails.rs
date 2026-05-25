@@ -1,10 +1,13 @@
 //! [DOC: docs/architecture/guardrails.md]
 
+#[path = "guardrails/layers.rs"]
+pub mod layers;
 #[path = "guardrails/structure.rs"]
 pub mod structure;
 #[path = "guardrails/style.rs"]
 pub mod style;
 
+pub use layers::*;
 pub use structure::*;
 pub use style::*;
 
@@ -168,4 +171,14 @@ fn guardrails_file_length_src() {
 #[test]
 fn guardrails_file_length_tests() {
     check_tests_files("file length (tests)", check_file_length);
+}
+
+#[test]
+fn guardrails_server_layer_boundaries() {
+    check_src_files("server layer boundary", check_server_layer_boundaries);
+}
+
+#[test]
+fn guardrails_test_layer_boundaries() {
+    check_tests_files("test layer boundary", check_test_layer_boundaries);
 }

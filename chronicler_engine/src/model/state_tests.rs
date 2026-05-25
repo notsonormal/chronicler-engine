@@ -188,3 +188,66 @@ proptest! {
         }
     }
 }
+
+#[test]
+fn test_npcs_in_area_initialization() {
+    let state = TestGameState::in_room("room_1");
+
+    assert!(
+        state.scene.npcs_in_area.is_empty(),
+        "npcs_in_area should be empty on initialization"
+    );
+}
+
+#[test]
+fn test_npcs_in_area_can_be_populated() {
+    let mut state = TestGameState::with_npc("room_1", TestNpc::named("npc_1", "N"));
+
+    let npc = state.npcs.get("npc_1").cloned().expect("Should have npc_1");
+    state.scene.npcs_in_area.push(npc);
+
+    assert_eq!(
+        state.scene.npcs_in_area.len(),
+        1,
+        "npcs_in_area should have 1 NPC after population"
+    );
+    assert_eq!(state.scene.npcs_in_area[0].id, "npc_1", "Should be npc_1");
+}
+
+#[test]
+fn test_npcs_in_area_can_be_cleared() {
+    let mut state = TestGameState::with_npc("room_1", TestNpc::named("npc_1", "N"));
+
+    let npc = state.npcs.get("npc_1").cloned().expect("Should have npc_1");
+    state.scene.npcs_in_area.push(npc);
+
+    assert!(
+        !state.scene.npcs_in_area.is_empty(),
+        "npcs_in_area should be populated"
+    );
+
+    state.scene.npcs_in_area.clear();
+
+    assert!(
+        state.scene.npcs_in_area.is_empty(),
+        "npcs_in_area should be empty after clear"
+    );
+}
+
+#[test]
+fn test_npcs_in_area_can_be_replaced() {
+    let mut state = TestGameState::with_npc("room_1", TestNpc::named("npc_1", "N"));
+
+    let npc1 = state.npcs.get("npc_1").cloned().expect("Should have npc_1");
+    state.scene.npcs_in_area.push(npc1);
+
+    assert_eq!(state.scene.npcs_in_area.len(), 1, "Should have 1 NPC");
+
+    let new_npcs = vec![];
+    state.scene.npcs_in_area = new_npcs;
+
+    assert!(
+        state.scene.npcs_in_area.is_empty(),
+        "npcs_in_area should be empty after replacement"
+    );
+}

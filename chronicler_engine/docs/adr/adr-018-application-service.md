@@ -45,8 +45,18 @@ pub trait ApplicationService: Send + Sync {
     fn switch_game(&self, ctx: GameServiceContext, id: u64) -> Result<(), ApplicationError>;
     fn delete_game(&self, ctx: GameServiceContext, id: u64) -> Result<(), ApplicationError>;
     fn list_games(&self, ctx: GameServiceContext) -> Result<Vec<Game>, ApplicationError>;
-    fn load_state(&self, ctx: GameServiceContext) -> Result<GameState, ApplicationError>;
+    fn current_game_id(&self, ctx: GameServiceContext) -> Result<u64, ApplicationError>;
     fn get_current_game_name(&self, ctx: GameServiceContext) -> Result<String, ApplicationError>;
+    fn get_story_log_entries(&self, ctx: GameServiceContext)
+        -> Result<Vec<LogEntry>, ApplicationError>;
+    fn get_input_status(&self, ctx: GameServiceContext)
+        -> Result<(GenerationStatus, GenerationPhase), ApplicationError>;
+    fn get_current_room_view(&self, ctx: GameServiceContext)
+        -> Result<CurrentRoomView, ApplicationError>;
+    fn get_npc_headshots(&self, ctx: GameServiceContext)
+        -> Result<Vec<NpcPortraitView>, ApplicationError>;
+    fn get_debug_state(&self, ctx: GameServiceContext)
+        -> Result<GameStateDebugView, ApplicationError>;
     fn list_latest_llm_messages(&self, ctx: GameServiceContext, limit: usize)
         -> Result<Vec<LlmMessage>, ApplicationError>;
     fn get_generating_status(&self, ctx: GameServiceContext)

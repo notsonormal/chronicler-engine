@@ -1,15 +1,14 @@
 use axum::{body::Body, http::Request};
 use tower::util::ServiceExt;
 
-use chronicler_engine::create_app_for_testing;
+use chronicler_engine::TestAppBuilder;
 
-use crate::{TempSettingsGuard, create_test_state};
+use crate::TempSettingsGuard;
 
 #[tokio::test]
 async fn test_prompt_presets_panel_renders() {
     let _guard = TempSettingsGuard::new();
-    let state = create_test_state();
-    let app = create_app_for_testing(state);
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/fragment/prompt-presets")
@@ -32,8 +31,7 @@ async fn test_prompt_presets_panel_renders() {
 #[tokio::test]
 async fn test_add_system_preset() {
     let _guard = TempSettingsGuard::new();
-    let state = create_test_state();
-    let app = create_app_for_testing(state);
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/prompt-presets")
@@ -62,8 +60,7 @@ async fn test_add_system_preset() {
 #[tokio::test]
 async fn test_add_quantifier_preset() {
     let _guard = TempSettingsGuard::new();
-    let state = create_test_state();
-    let app = create_app_for_testing(state);
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/prompt-presets")
@@ -92,8 +89,7 @@ async fn test_add_quantifier_preset() {
 #[tokio::test]
 async fn test_activate_preset_updates_settings() {
     let _guard = TempSettingsGuard::new();
-    let state = create_test_state();
-    let app = create_app_for_testing(state);
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/prompt-presets")
@@ -147,8 +143,7 @@ async fn test_activate_preset_updates_settings() {
 #[tokio::test]
 async fn test_delete_preset() {
     let _guard = TempSettingsGuard::new();
-    let state = create_test_state();
-    let app = create_app_for_testing(state);
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/prompt-presets")
@@ -202,8 +197,7 @@ async fn test_delete_preset() {
 #[tokio::test]
 async fn test_save_preset_invalid_type() {
     let _guard = TempSettingsGuard::new();
-    let state = create_test_state();
-    let app = create_app_for_testing(state);
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/prompt-presets")
@@ -232,8 +226,7 @@ async fn test_save_preset_invalid_type() {
 #[tokio::test]
 async fn test_edit_nonexistent_preset() {
     let _guard = TempSettingsGuard::new();
-    let state = create_test_state();
-    let app = create_app_for_testing(state);
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/fragment/prompt-presets/does-not-exist/edit")
@@ -256,8 +249,7 @@ async fn test_edit_nonexistent_preset() {
 #[tokio::test]
 async fn test_delete_nonexistent_preset() {
     let _guard = TempSettingsGuard::new();
-    let state = create_test_state();
-    let app = create_app_for_testing(state);
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/prompt-presets/does-not-exist/delete")
@@ -280,8 +272,7 @@ async fn test_delete_nonexistent_preset() {
 #[tokio::test]
 async fn test_update_preset_invalid_type() {
     let _guard = TempSettingsGuard::new();
-    let state = create_test_state();
-    let app = create_app_for_testing(state);
+    let app = TestAppBuilder::default_app();
 
     // First create a preset
     let req = Request::builder()
@@ -343,8 +334,7 @@ async fn test_update_preset_invalid_type() {
 #[tokio::test]
 async fn test_update_preset_success() {
     let _guard = TempSettingsGuard::new();
-    let state = create_test_state();
-    let app = create_app_for_testing(state);
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/prompt-presets")
@@ -404,8 +394,7 @@ async fn test_update_preset_success() {
 #[tokio::test]
 async fn test_update_nonexistent_preset() {
     let _guard = TempSettingsGuard::new();
-    let state = create_test_state();
-    let app = create_app_for_testing(state);
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/prompt-presets/does-not-exist")

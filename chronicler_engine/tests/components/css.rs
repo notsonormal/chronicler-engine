@@ -1,14 +1,11 @@
 use axum::{body::Body, http::Request};
 use tower::util::ServiceExt;
 
-use chronicler_engine::create_app_for_testing;
-
-use crate::create_test_state;
+use chronicler_engine::TestAppBuilder;
 
 #[tokio::test]
 async fn test_css_valid() {
-    let state = create_test_state();
-    let app = create_app_for_testing(state);
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/assets/styles.css")
@@ -38,8 +35,7 @@ async fn test_css_valid() {
 
 #[tokio::test]
 async fn test_scrollbar_styled() {
-    let state = create_test_state();
-    let app = create_app_for_testing(state);
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/assets/styles.css")

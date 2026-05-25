@@ -209,7 +209,10 @@ fn test_attempt_semantic_walk_dynamic_room() {
     let mut state = setup_test_state();
     let dynamic = create_dynamic_room("Secret Cave", "Dark and damp.");
     let dynamic_id = dynamic.id.clone();
-    state.movement.dynamic_rooms.insert(dynamic_id.clone(), dynamic);
+    state
+        .movement
+        .dynamic_rooms
+        .insert(dynamic_id.clone(), dynamic);
 
     let result = attempt_semantic_walk(&mut state, &dynamic_id);
     assert!(result.is_ok());

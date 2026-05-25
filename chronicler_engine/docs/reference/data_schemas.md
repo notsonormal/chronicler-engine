@@ -32,8 +32,7 @@ A unified structure for both `PlayerCard` and `NpcCard` narrative fields:
   "personality": "string (e.g., 'Arrogant, brave, tech-savvy')",
   "scenario": "string (background or current motivation)",
   "example_dialogue": "string (optional example for LLM context)",
-  "inventory": ["item_id_1", "item_id_2"],
-  "image_path": "string (optional, legacy field - full body image)",
+  "inventory": ["item_id_1", "item_id_2"],  // Only on PlayerCard/NpcCard, NOT CharacterSheet
   "profile_image": "string (optional, preferred profile image)",
   "summary": "string (optional, brief character summary)",
   "headshot_image": "string (optional, headshot/portrait for sidebar grid)"
@@ -41,10 +40,9 @@ A unified structure for both `PlayerCard` and `NpcCard` narrative fields:
 ```
 
 ### Image Field Usage
-- `image_path`: Legacy field, full body image
 - `profile_image`: Preferred for character profile display
 - `headshot_image`: Used for visual sidebar NPC portraits (2-column grid)
-  - Falls back to `image_path` if not set
+  - Falls back to `profile_image` if not set
 
 This schema allows the LLM Game Master to treat player and NPCs with equal granular detail.
 
@@ -56,25 +54,12 @@ Rooms in map.json have the following structure:
   "id": "string",
   "name": "string",
   "description": "string",
-  "exits": { "north": "room_id", "east": "room_id" },  // Legacy cardinal directions
-  "semantic_exits": [  // NEW: Semantic triggers for natural language
-    {
-      "trigger": "front gate",
-      "destination": "entrance_hall",
-      "keywords": ["enter", "go through", "pass through"]
-    }
-  ],
+  "exits": { "north": "room_id", "east": "room_id" },  // Cardinal direction exits
   "items": ["item_id_1"],
   "navigation_description": "string (optional, custom movement narration)",
   "image_path": "string"
 }
 ```
-
-### Semantic Exits
-The `semantic_exits` array enables quantifier-driven movement:
-- `trigger`: The text that activates this exit (e.g., "front gate")
-- `destination`: The room ID to navigate to
-- `keywords`: Additional matching patterns for flexible input (e.g., "go through", "enter")
 
 ## NpcCard Schema (Current)
 ```json
@@ -123,13 +108,15 @@ Tracks character state for a specific NPC. Stored in `GameState.npc_encounter_lo
 ```json
 {
   "times_met": 0,
-  "trigger_fired": {}
+  "trigger_fired": {},
+  "currently_meeting": false
 }
 ```
 
 ### Fields
 - `times_met`: How many times the player has encountered this NPC
 - `trigger_fired`: Map of trigger index (usize) to boolean (whether that trigger has fired)
+- `currently_meeting`: Whether the player is currently in the same room/session as this NPC
 
 ## NpcEncounterLog Schema (NEW)
 Contains all NPC encounter state. Top-level field in `GameState`.

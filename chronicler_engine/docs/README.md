@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-24 22:25 UTC*
+*Index last generated: 2026-05-25 00:16 UTC*
 
 ### Root files
 
@@ -15,7 +15,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ### `docs/adr/`
 
 - [ADR-001: HTMX Web Dashboard Architecture](./adr/adr-001-htmx-web-dashboard.md)
-- [ADR-002: Server-Sent Events for Real-Time Updates](./adr/adr-002-sse-realtime-updates.md)
+- [ADR-002: HTTP Polling for Real-Time Updates](./adr/adr-002-sse-realtime-updates.md)
 - [ADR-003: Askama Template Engine for HTML Rendering](./adr/adr-003-askama-templates.md)
 - [ADR-004: XML-Structured LLM Prompts](./adr/adr-004-xml-prompt-format.md)
 - [ADR-005: SillyTavern-Style Layered Prompt System](./adr/adr-005-layered-prompts.md)
@@ -62,11 +62,16 @@ This folder contains all documentation for the Chronicler Engine project.
 ### `docs/plans/archived/`
 
 - [Plan: Multi-Game Support for Chronicler Engine](./plans/archived/big-barda-nightwing-star-lord.md)
+- [Plan: Fix Swipe Code Review Issues](./plans/archived/bobbi-morse-superboy-nightwing.md)
 - [Implementation Plan: Multi-Game Support Review Fixes](./plans/archived/crystal-nightwing-maria-hill.md)
+- [Plan: Reduce GameState Blast Radius](./plans/archived/doctor-mid-nite-elongated-man-devil-dinosaur.md)
 - [Chronicler Engine: Leaky Presentation Layer Cleanup](./plans/archived/hellcat-martian-manhunter-liberty-belle.md)
 - [Plan: Fix Game UI Delay for LLM Responses](./plans/archived/jericho-vixen-lockjaw.md)
+- [Plan: Complete GameState Decoupling from Server + Tests](./plans/archived/orion-vixen-shatterstar.md)
+- [Plan: Fix Test Coverage Gaps (Test-Police Follow-up)](./plans/archived/scarlet-witch-wildcat-maxima.md)
 - [Plan: Message Swipes for Chronicler Engine](./plans/archived/starfire-tempest-orphan.md)
 - [Plan: Immediate Message Persistence — Direct Implementation](./plans/archived/storm-x-23-domino.md)
+- [Plan: Phase 3 UI — Swipe Navigation & Retrigger](./plans/archived/superboy-doctor-strange-daredevil.md)
 - [Plan: MessageStorage Mutates Message Directly (Swipe Blast Radius)](./plans/archived/wildcat-red-tornado-colossus.md)
 
 ### `docs/reference/`

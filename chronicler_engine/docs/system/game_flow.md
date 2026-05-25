@@ -12,7 +12,7 @@ This document defines the core game loop - the play-by-play experience from star
 flowchart TD
     Start(["**START GAME**<br>*(Server starts, loads world)*"])
     
-    Phase1["**PHASE 1: INITIALIZE**<br>1. Load world data<br>2. Set player in starting room<br>3. Render initial UI (Header, Story Log, Sidebar)<br>4. Establish HTMX polling (story-log every 1s, status every 2s, others every 5s)"]
+    Phase1["**PHASE 1: INITIALIZE**<br>1. Load world data<br>2. Set player in starting room<br>3. Render initial UI (Header, Story Log, Sidebar)<br>4. Establish HTMX polling (story-log every 2s, status every 5s, others every 5s)"]
     
     Phase2["**PHASE 2: AWAIT INPUT**<br>*(Status: 'Ready')*<br>User types command → submits form"]
     
@@ -20,13 +20,13 @@ flowchart TD
     
     Phase4["**PHASE 4: MAIN LLM NARRATION**<br>*(Phase: Narrating)*<br>1. Build prompt via PromptBuilder<br>2. Send to LLM (see Context Pipeline below)<br>3. Add to history as 'Narration'<br>4. **Cancellation checkpoint** — aborts if token cancelled"]
     
-    Phase45["**PHASE 4.5: QUANTIFIER & MOVEMENT**<br>*(Phase: Quantifying)*<br>1. Post-narration Quantifier analyzes<br>2. Process movement intent<br>3. If moved: trigger `narrate_arrival` LLM call<br>4. Determine NPC Enter/Leave events"]
+    Phase45["**PHASE 4.5: QUANTIFIER & MOVEMENT**<br>*(Phase: Quantifying)*<br>1. Post-narration Quantifier analyzes<br>2. Process movement intent<br>3. If moved: update room state (no additional LLM call — arrival is part of main narration)<br>4. Determine NPC Enter/Leave events"]
     
     Phase5["**PHASE 5: TRIGGER EVALUATION**<br>*(Phase: GeneratingEvent — only if trigger fires)*<br>1. `evaluate_triggers(state)` — first match only (inside lock)<br>2. Build prompt with continuation context<br>3. **Cancellation checkpoint** — aborts before second LLM call if token cancelled<br>4. Call LLM (frontend can poll main narration)<br>5. **Cancellation checkpoint** — aborts before commit if token cancelled<br>6. Re-acquire lock → add event header + trigger narration<br>7. Mark trigger as fired"]
 
     Phase55["**PHASE 5.5: POST-EVENT QUANTIFIER**<br>*(Phase: Quantifying)*<br>1. Post-continuation Quantifier analyzes<br>2. Detect NPCs introduced by event text<br>3. Determine NPC Enter/Leave events<br>4. Update scene.npcs_in_area"]
     
-    Phase6["**PHASE 6: POLLING UPDATE**<br>1. Client polls /fragment/story-log (1s)<br>2. Client polls /status/generating (2s)<br>3. When status becomes idle, JS immediately triggers story-log refresh<br>4. Server returns updated HTML<br>5. HTMX swaps content"]
+    Phase6["**PHASE 6: POLLING UPDATE**<br>1. Client polls /fragment/story-log (2s)<br>2. Client polls /status/generating (5s)<br>3. When status becomes idle, JS immediately triggers story-log refresh<br>4. Server returns updated HTML<br>5. HTMX swaps content"]
 
     Start --> Phase1
     Phase1 --> Phase2
@@ -184,8 +184,8 @@ flowchart TD
 - If the anchor message has no `snapshot_id` or the snapshot is missing, retry fails gracefully (`test_retry_no_pre_main_snapshot`).
 
 ### Polling-based Updates
-- HTMX polls story-log every 1 second for rapid update visibility
-- Status-display polls `/status/generating` every 2 seconds for responsive button state
+- HTMX polls story-log every 2 seconds for update visibility
+- Status-display polls `/status/generating` every 5 seconds for responsive button state
 - When `/status/generating` returns `idle`, JavaScript immediately triggers a story-log refresh via `htmx.trigger('#story-log', 'htmx:refresh')` — no waiting for the next story-log poll
 - `/status/generating` returns phase endpoint values (`idle`, `narrating`, `quantifying`, `generating-event`)
 - No manual reconnection needed
@@ -193,7 +193,7 @@ flowchart TD
 ## Reference Implementation
 
 - **Server**: `src/server/fragments/actions.rs` - `action_handler`, `process_action`
-- **HTMX Polling**: `assets/index.html` - story-log `hx-trigger="load, every 1s"`; status-display `hx-trigger="load, every 2s"`; visual-sidebar & action-hints `hx-trigger="load, every 5s"`
+- **HTMX Polling**: `assets/index.html` - story-log `hx-trigger="load, every 2s"`; status-display `hx-trigger="load, every 5s"`; visual-sidebar & action-hints `hx-trigger="load, every 5s"`
 - **LLM**: `src/narrative/llm/backend.rs` - `LlmBackend` trait (`narrate_action`, `narrate_arrival`)
 - **Prompt Builder**: `src/narrative/prompt/builder.rs` - 8-layer prompt construction
 - **Mock Flow Tests**: `tests/flow_mock/` - Sequential service-level flow tests with mock backends (retry, state consistency, quantifier movement)

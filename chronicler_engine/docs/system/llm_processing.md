@@ -22,7 +22,7 @@ The engine supports flexible model selection via connection profiles in `data/se
 ### 3. Backend Selection
 Backend is selected per-connection via `Connection.provider`:
 - `openrouter` → Uses OpenRouter API with the connection's model and API key
-- `deepseek` → Uses DeepSeek API with the connection's model and API key
+- `deepseek` → **Stub — not yet implemented.** Returns error on all calls.
 - `ollama` → Uses local Ollama instance with the connection's base URL and model
 - `mock` → Uses MockBackend for testing (no API key needed)
 

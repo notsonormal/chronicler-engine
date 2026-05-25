@@ -5,9 +5,9 @@ use crate::application::action_pipeline::pipeline::{
 };
 use crate::application::context::GameServiceContext;
 use crate::error::EngineError;
+use crate::model::character::NpcCard;
 use crate::model::quantifier::{QuantifierConfidence, QuantifierParseResult, QuantifierResult};
 use crate::model::state::StoredTriggerContext;
-use crate::model::character::NpcCard;
 use crate::model::state::{GameState, GenerationPhase, GenerationStatus, LogType};
 use crate::narrative::llm::backend::LlmCallResult;
 use crate::narrative::prompt::PromptContext;
@@ -412,13 +412,23 @@ fn test_pipeline_trigger_happy_path() {
 
     let outcome = pipeline.run_from_input(state, "look".to_string());
 
-    assert!(matches!(outcome, ActionOutcome::Completed), "Expected Completed, got {outcome:?}");
+    assert!(
+        matches!(outcome, ActionOutcome::Completed),
+        "Expected Completed, got {outcome:?}"
+    );
     let final_state = ctx.load_state();
     assert!(
-        final_state.narrative.history().iter().any(|e| e.text.contains("glows brighter") || e.text.contains("greets")),
+        final_state
+            .narrative
+            .history()
+            .iter()
+            .any(|e| e.text.contains("glows brighter") || e.text.contains("greets")),
         "Trigger continuation text should appear in history"
     );
-    assert!(final_state.narrative.last_trigger.is_some(), "last_trigger should be set");
+    assert!(
+        final_state.narrative.last_trigger.is_some(),
+        "last_trigger should be set"
+    );
 }
 
 #[test]

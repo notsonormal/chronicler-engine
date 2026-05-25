@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-05-25
+
+### Added
+- **`TestAppBuilder` — test infrastructure without `GameState` exposure**
+  - New `src/test_support/test_app_builder.rs` with fluent builder API
+  - `default_test()` mirrors old `tests/components.rs::create_test_state()` defaults
+  - `new(world, player)` for fully custom setups; `map()`, `npcs()`, `room_npc()`, `log()`, `generation_status()`, `settings()`, `snapshot_storage()`, `message_storage()`, `llm_storage()`
+  - Internally constructs `GameState` and `AppState`; callers never touch `GameState` directly
+  - Replaces `create_app_for_testing`, `create_app_for_testing_with_settings`, `create_app_with_storage` (all removed from `src/test_support/server_helpers.rs`)
+
+- **Layer boundary guardrails** (`tests/guardrails/layers.rs`)
+  - `guardrails_server_layer_boundaries`: bans `GameState` references and `.load_state()` calls in `src/server/` (except `mod.rs` and `debug.rs`)
+  - `guardrails_test_layer_boundaries`: bans `GameState::new()` construction and `GameState` imports in `tests/components/`
+
+### Changed
+- **Eliminated `GameState` from all integration test signatures**
+  - Migrated ~114 call sites across 10 `tests/components/*.rs` files to `TestAppBuilder`
+  - Moved 4 `npcs_in_area` unit tests from `tests/components/world.rs` to `src/model/state_tests.rs`
+  - Removed `create_test_state()` from `tests/components.rs`
+  - `src/server/` now has zero `GameState` references
+  - `tests/components/` now has zero `GameState` imports/construction
+- **Updated agent rules** (`.agents/rules/chronicler_engine.md`) and **architecture docs** (`docs/architecture/system.md`) with layer boundary guidance
+
 ## 2026-05-24
 
 ### Added

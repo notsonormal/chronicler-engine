@@ -1,14 +1,11 @@
 use axum::{body::Body, http::Request};
 use tower::util::ServiceExt;
 
-use chronicler_engine::create_app_for_testing;
-
-use crate::create_test_state;
+use chronicler_engine::TestAppBuilder;
 
 #[tokio::test]
 async fn test_debug_state_endpoint_returns_json() {
-    let state = create_test_state();
-    let app = create_app_for_testing(state);
+    let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
         .uri("/debug/state")

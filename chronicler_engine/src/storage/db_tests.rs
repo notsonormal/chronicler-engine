@@ -79,7 +79,8 @@ fn test_db_prompt_presets_table_exists() {
 
 #[test]
 fn test_db_reopen_idempotent() {
-    let temp_file = std::env::temp_dir().join(format!("chronicler_reopen_{}.db", std::process::id()));
+    let temp_file =
+        std::env::temp_dir().join(format!("chronicler_reopen_{}.db", std::process::id()));
     {
         let _pool = DbPool::new(temp_file.to_str().unwrap()).unwrap();
     }
@@ -89,7 +90,10 @@ fn test_db_reopen_idempotent() {
     let count: i64 = conn
         .query_row("SELECT COUNT(*) FROM games", [], |row| row.get(0))
         .unwrap();
-    assert_eq!(count, 1, "Re-opening should not create duplicate default game");
+    assert_eq!(
+        count, 1,
+        "Re-opening should not create duplicate default game"
+    );
     let _ = std::fs::remove_file(&temp_file);
 }
 

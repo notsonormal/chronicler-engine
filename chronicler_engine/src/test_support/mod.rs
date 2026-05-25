@@ -1,6 +1,7 @@
 pub mod context;
 pub mod fixtures;
 pub mod in_memory_storage;
+pub mod test_app_builder;
 
 #[cfg(test)]
 mod context_tests;
@@ -12,3 +13,4 @@ pub use context::{
 };
 pub use fixtures::*;
 pub use in_memory_storage::{InMemoryMessageRepository, InMemorySnapshotRepository};
+pub use test_app_builder::TestAppBuilder;

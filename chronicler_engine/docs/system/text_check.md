@@ -149,7 +149,7 @@ A "Text Check" card appears in the Settings tab below Connections:
 
 ## Testing
 
-- **Unit tests**: `tests/text_check_tests.rs` — misspelling detection, clean text, disabled mode, ignored words
+- **Integration tests**: `tests/components/text_check.rs` — misspelling detection, clean text, disabled mode, ignored words
 - **Integration tests**: Preview endpoint returns fragment when issues exist; forwards when disabled
 
 ## Boundaries

@@ -151,7 +151,7 @@ Event headers:
 
 1. **Room-Aware Evaluation**: Triggers are checked for ALL loaded NPCs, but filtered by `room_id`. Global triggers (no `room_id`) fire anywhere. Room-scoped triggers only fire in their designated room. This prevents introduction triggers from firing in the wrong location while still supporting dynamic appearances.
 
-2. **Quantifier Runs Once (Post-Narration)**: Single quantifier call AFTER narration generation detects both NPCs and movement intent from the generated text. This replaces the previous two-stage approach.
+2. **Quantifier Runs After Narration and After Triggers**: The quantifier runs once after main narration generation (detects NPCs and movement), and again after trigger continuation if a trigger fired (detects NPCs introduced by event text).
 
 3. **Times Met vs Trigger Fire**: `times_met` is incremented based on movement/room entry, NOT when triggers fire. This prevents the bug where trigger fires would increment the counter for the next evaluation.
 
@@ -161,7 +161,7 @@ Event headers:
 
 ## Mutation Order Invariant
 
-`execute_freeaction_impl` in `src/engine/action_processing.rs` mutates state in a strict, load-bearing order:
+The action pipeline and `execute_freeaction_impl` in `src/engine/action_processing.rs` mutate state in a strict, load-bearing order. Steps 4b and 4c happen in the application pipeline (`ActionPipeline`), not inside the engine function:
 
 | Step | Operation | Why it must come here |
 | :--- | :--- | :--- |
@@ -169,8 +169,8 @@ Event headers:
 | 2 | Resolve current NPCs from quantifier result | Uses updated `movement.current_room_id` from step 1 |
 | 3 | `state.add_log(narration_text)` | Narration must be in history before triggers read it |
 | 4a | `evaluate_triggers()` + build prompt | Reads `state.narrative.history()` (step 3) to build the trigger continuation prompt |
-| 4b | Trigger LLM call | Runs **outside** the state lock so the frontend can poll the main narration |
-| 4c | `commit_trigger_narration()` | Re-acquires lock to add trigger logs and mark trigger fired |
+| 4b | Trigger LLM call | Runs in `ActionPipeline::phase_trigger_continuation`, outside the state lock |
+| 4c | `commit_trigger_narration()` | Runs in `ActionPipeline`, re-acquires lock to add trigger logs and mark trigger fired |
 | 5 | `apply_npc_events()` — mutates `npc_encounter_log` | `times_met` increments AFTER trigger evaluation (see Timing section above) |
 
 **What breaks if you change the order:**
