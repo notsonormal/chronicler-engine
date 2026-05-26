@@ -23,10 +23,13 @@ use crate::model::prompt_preset::PromptPreset;
                 {% if preset.id != active_system_id %}
                 <button hx-post="/prompt-presets/{{ preset.id }}/activate" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="primary">Set Active</button>
                 {% endif %}
-                {% if !preset.is_default %}
+                {% if preset.is_default %}
+                <button hx-get="/fragment/prompt-presets/{{ preset.id }}/view" hx-target="closest .preset-card" hx-swap="outerHTML">View</button>
+                {% else %}
                 <button hx-get="/fragment/prompt-presets/{{ preset.id }}/edit" hx-target="closest .preset-card" hx-swap="outerHTML">Edit</button>
                 <button hx-post="/prompt-presets/{{ preset.id }}/delete" hx-confirm="Delete this preset?" hx-target="closest .preset-card" hx-swap="outerHTML swap:0.3s" class="danger">Delete</button>
                 {% endif %}
+                <button hx-post="/prompt-presets/{{ preset.id }}/duplicate" hx-target=".prompt-presets-panel" hx-swap="outerHTML">Duplicate</button>
             </div>
         </div>
         {% endfor %}
@@ -75,10 +78,13 @@ use crate::model::prompt_preset::PromptPreset;
                 {% if preset.id != active_quantifier_id %}
                 <button hx-post="/prompt-presets/{{ preset.id }}/activate" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="primary">Set Active</button>
                 {% endif %}
-                {% if !preset.is_default %}
+                {% if preset.is_default %}
+                <button hx-get="/fragment/prompt-presets/{{ preset.id }}/view" hx-target="closest .preset-card" hx-swap="outerHTML">View</button>
+                {% else %}
                 <button hx-get="/fragment/prompt-presets/{{ preset.id }}/edit" hx-target="closest .preset-card" hx-swap="outerHTML">Edit</button>
                 <button hx-post="/prompt-presets/{{ preset.id }}/delete" hx-confirm="Delete this preset?" hx-target="closest .preset-card" hx-swap="outerHTML swap:0.3s" class="danger">Delete</button>
                 {% endif %}
+                <button hx-post="/prompt-presets/{{ preset.id }}/duplicate" hx-target=".prompt-presets-panel" hx-swap="outerHTML">Duplicate</button>
             </div>
         </div>
         {% endfor %}

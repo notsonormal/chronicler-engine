@@ -16,6 +16,51 @@ fn textarea_field(id: &str, label: &str, name: &str, value: Option<&str>, rows: 
     )
 }
 
+fn textarea_field_readonly(label: &str, value: Option<&str>, rows: usize) -> String {
+    let value = value.unwrap_or("");
+    format!(
+        r#"<div class="form-group">
+    <label>{label}</label>
+    <textarea rows="{rows}" disabled>{value}</textarea>
+</div>"#,
+        label = html_escape(label),
+        rows = rows,
+        value = html_escape(value),
+    )
+}
+
+pub(crate) fn preset_view_form_html(preset: &PromptPreset) -> String {
+    let id = html_escape(&preset.id);
+    let name = html_escape(&preset.name);
+
+    let role_field = textarea_field_readonly("Role", preset.role.as_deref(), 4);
+    let instructions_field =
+        textarea_field_readonly("Instructions", preset.instructions.as_deref(), 10);
+    let writing_style_field =
+        textarea_field_readonly("Writing Style", preset.writing_style.as_deref(), 4);
+    let output_format_field =
+        textarea_field_readonly("Output Format", preset.output_format.as_deref(), 6);
+
+    format!(
+        r#"<div class="preset-card view-form">
+    <div class="card-header">
+        <span class="card-title">View {name}</span>
+    </div>
+    <div class="form-group">
+        <label>Name</label>
+        <input type="text" value="{name}" readonly />
+    </div>
+    {role_field}
+    {instructions_field}
+    {writing_style_field}
+    {output_format_field}
+    <div class="form-actions">
+        <button type="button" hx-get="/fragment/prompt-presets/{id}" hx-target="closest .preset-card" hx-swap="outerHTML">Close</button>
+    </div>
+</div>"#,
+    )
+}
+
 pub(crate) fn preset_edit_form_html(
     preset: &PromptPreset,
     preset_type: &str,
@@ -94,7 +139,12 @@ pub(crate) fn preset_card_html(preset: &PromptPreset, is_active: bool) -> String
             html_escape(&preset.id)
         ));
     }
-    if !preset.is_default {
+    if preset.is_default {
+        actions.push_str(&format!(
+            r#"<button hx-get="/fragment/prompt-presets/{}/view" hx-target="closest .preset-card" hx-swap="outerHTML">View</button>"#,
+            html_escape(&preset.id)
+        ));
+    } else {
         actions.push_str(&format!(
             r#"<button hx-get="/fragment/prompt-presets/{}/edit" hx-target="closest .preset-card" hx-swap="outerHTML">Edit</button>"#,
             html_escape(&preset.id)
@@ -104,6 +154,10 @@ pub(crate) fn preset_card_html(preset: &PromptPreset, is_active: bool) -> String
             html_escape(&preset.id)
         ));
     }
+    actions.push_str(&format!(
+        r#"<button hx-post="/prompt-presets/{}/duplicate" hx-target=".prompt-presets-panel" hx-swap="outerHTML">Duplicate</button>"#,
+        html_escape(&preset.id)
+    ));
 
     let preview: String = preset
         .preview_text()

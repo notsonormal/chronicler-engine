@@ -116,8 +116,16 @@ pub(crate) fn build_router(app_state: AppState) -> Router {
             post(crate::server::prompt_presets_fragment::save_preset_handler),
         )
         .route(
+            "/fragment/prompt-presets/:id",
+            get(crate::server::prompt_presets_fragment::preset_card_handler),
+        )
+        .route(
             "/fragment/prompt-presets/:id/edit",
             get(crate::server::prompt_presets_fragment::edit_preset_form_handler),
+        )
+        .route(
+            "/fragment/prompt-presets/:id/view",
+            get(crate::server::prompt_presets_fragment::view_preset_form_handler),
         )
         .route(
             "/prompt-presets/:id",
@@ -126,6 +134,10 @@ pub(crate) fn build_router(app_state: AppState) -> Router {
         .route(
             "/prompt-presets/:id/delete",
             post(crate::server::prompt_presets_fragment::delete_preset_handler),
+        )
+        .route(
+            "/prompt-presets/:id/duplicate",
+            post(crate::server::prompt_presets_fragment::duplicate_preset_handler),
         )
         .route(
             "/prompt-presets/:id/activate",

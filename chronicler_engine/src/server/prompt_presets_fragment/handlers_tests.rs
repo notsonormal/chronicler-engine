@@ -3,8 +3,9 @@ use std::sync::{Arc, RwLock};
 use crate::error::EngineError;
 use crate::model::prompt_preset::{PresetType, PromptPreset};
 use crate::server::prompt_presets_fragment::handlers::{
-    PresetForm, activate_preset_handler, delete_preset_handler, edit_preset_form_handler,
-    panel_handler, save_preset_handler, update_preset_handler,
+    PresetForm, activate_preset_handler, delete_preset_handler, duplicate_preset_handler,
+    edit_preset_form_handler, panel_handler, preset_card_handler, save_preset_handler,
+    update_preset_handler, view_preset_form_handler,
 };
 use crate::storage::prompt_preset_storage::{InMemoryPromptPresetStorage, PromptPresetStorage};
 
@@ -106,6 +107,134 @@ fn make_test_app_state_with_storage(
         cancel_token: Arc::new(RwLock::new(tokio_util::sync::CancellationToken::new())),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
     }
+}
+
+#[tokio::test]
+async fn test_preset_card_handler_returns_card() {
+    let preset = PromptPreset {
+        id: "card-test".into(),
+        name: "Card Test".into(),
+        instructions: Some("Test.".into()),
+        preset_type: PresetType::System,
+        ..Default::default()
+    };
+    let app_state = make_test_app_state_with_preset(preset.clone());
+    let response = preset_card_handler(
+        axum::extract::State(app_state),
+        axum::extract::Path("card-test".to_string()),
+    )
+    .await;
+    assert!(response.0.contains("Card Test"));
+    assert!(response.0.contains("Set Active</button>"));
+}
+
+#[tokio::test]
+async fn test_preset_card_handler_not_found() {
+    let app_state = make_test_app_state_with_preset(PromptPreset {
+        id: "x".into(),
+        name: "X".into(),
+        instructions: Some("X.".into()),
+        ..Default::default()
+    });
+    let response = preset_card_handler(
+        axum::extract::State(app_state),
+        axum::extract::Path("missing".to_string()),
+    )
+    .await;
+    assert!(response.0.contains("Preset not found"));
+}
+
+#[tokio::test]
+async fn test_view_preset_form_handler_default_preset() {
+    let preset = PromptPreset {
+        id: "default".into(),
+        name: "Default".into(),
+        instructions: Some("System prompt.".into()),
+        is_default: true,
+        preset_type: PresetType::System,
+        ..Default::default()
+    };
+    let app_state = make_test_app_state_with_preset(preset.clone());
+    let response = view_preset_form_handler(
+        axum::extract::State(app_state),
+        axum::extract::Path("default".to_string()),
+    )
+    .await;
+    assert!(response.0.contains("View Default"));
+    assert!(response.0.contains("System prompt."));
+    assert!(response.0.contains("disabled"));
+}
+
+#[tokio::test]
+async fn test_view_preset_form_handler_not_found() {
+    let app_state = make_test_app_state_with_preset(PromptPreset {
+        id: "x".into(),
+        name: "X".into(),
+        instructions: Some("X.".into()),
+        ..Default::default()
+    });
+    let response = view_preset_form_handler(
+        axum::extract::State(app_state),
+        axum::extract::Path("missing".to_string()),
+    )
+    .await;
+    assert!(response.0.contains("Preset not found"));
+}
+
+#[tokio::test]
+async fn test_duplicate_preset_handler() {
+    let preset = PromptPreset {
+        id: "orig".into(),
+        name: "Original".into(),
+        instructions: Some("Original prompt.".into()),
+        preset_type: PresetType::System,
+        ..Default::default()
+    };
+    let app_state = make_test_app_state_with_preset(preset.clone());
+    let response = duplicate_preset_handler(
+        axum::extract::State(app_state),
+        axum::extract::Path("orig".to_string()),
+    )
+    .await;
+    assert!(response.0.contains("Original (Copy)"));
+    assert!(response.0.contains("System Prompts"));
+}
+
+#[tokio::test]
+async fn test_duplicate_preset_handler_not_found() {
+    let app_state = make_test_app_state_with_preset(PromptPreset {
+        id: "x".into(),
+        name: "X".into(),
+        instructions: Some("X.".into()),
+        ..Default::default()
+    });
+    let response = duplicate_preset_handler(
+        axum::extract::State(app_state),
+        axum::extract::Path("missing".to_string()),
+    )
+    .await;
+    assert!(response.0.contains("Preset not found"));
+}
+
+#[tokio::test]
+async fn test_duplicate_preset_storage_error_returns_error() {
+    let app_state = make_test_app_state_with_failing_storage(
+        FailingPromptPresetStorage::new(),
+        PromptPreset {
+            id: "orig".into(),
+            name: "Original".into(),
+            instructions: Some("Original prompt.".into()),
+            preset_type: PresetType::System,
+            ..Default::default()
+        },
+        |s| s.set_fail_save(),
+    );
+    let response = duplicate_preset_handler(
+        axum::extract::State(app_state),
+        axum::extract::Path("orig".to_string()),
+    )
+    .await;
+    assert!(response.0.contains("Duplicate failed"));
 }
 
 #[tokio::test]

@@ -3,7 +3,7 @@ use axum::{Form, extract::State, response::Html};
 use crate::model::prompt_preset::{PresetType, PromptPreset};
 use crate::server::AppState;
 
-use super::fragments::{preset_card_html, preset_edit_form_html};
+use super::fragments::{preset_card_html, preset_edit_form_html, preset_view_form_html};
 use super::template::PromptPresetsTemplate;
 
 macro_rules! try_lock {
@@ -12,6 +12,16 @@ macro_rules! try_lock {
             log::warn!("Poisoned settings lock recovered in handler");
             p.into_inner()
         })
+    };
+}
+
+macro_rules! require_preset {
+    ($storage:expr, $id:expr) => {
+        match $storage.get($id) {
+            Ok(Some(p)) => p,
+            Ok(None) => return Html("<span class='error'>Preset not found</span>".to_string()),
+            Err(e) => return Html(format!("<span class='error'>Load failed: {e}</span>")),
+        }
     };
 }
 
@@ -34,6 +44,32 @@ fn generate_preset_id() -> String {
             .unwrap_or_default()
             .as_millis()
     )
+}
+
+/// [DOC: docs/architecture/system.md]
+pub async fn preset_card_handler(
+    State(app_state): State<AppState>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Html<String> {
+    let preset = require_preset!(app_state.prompt_preset_storage, &id);
+
+    let settings = try_lock!(app_state.settings.read());
+    let is_active = match preset.preset_type {
+        PresetType::System => settings.active_system_prompt_preset_id == id,
+        PresetType::Quantifier => settings.active_quantifier_prompt_preset_id == id,
+    };
+
+    Html(preset_card_html(&preset, is_active))
+}
+
+/// [DOC: docs/architecture/system.md]
+pub async fn view_preset_form_handler(
+    State(app_state): State<AppState>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Html<String> {
+    let preset = require_preset!(app_state.prompt_preset_storage, &id);
+
+    Html(preset_view_form_html(&preset))
 }
 
 /// [DOC: docs/architecture/system.md]
@@ -108,11 +144,7 @@ pub async fn edit_preset_form_handler(
     State(app_state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<String>,
 ) -> Html<String> {
-    let preset = match app_state.prompt_preset_storage.get(&id) {
-        Ok(Some(p)) => p,
-        Ok(None) => return Html("<span class='error'>Preset not found</span>".to_string()),
-        Err(e) => return Html(format!("<span class='error'>Load failed: {e}</span>")),
-    };
+    let preset = require_preset!(app_state.prompt_preset_storage, &id);
 
     if preset.is_default {
         return Html("<span class='error'>Cannot edit default presets</span>".to_string());
@@ -137,11 +169,7 @@ pub async fn update_preset_handler(
     axum::extract::Path(id): axum::extract::Path<String>,
     Form(form): Form<PresetForm>,
 ) -> Html<String> {
-    let existing = match app_state.prompt_preset_storage.get(&id) {
-        Ok(Some(p)) => p,
-        Ok(None) => return Html("<span class='error'>Preset not found</span>".to_string()),
-        Err(e) => return Html(format!("<span class='error'>Load failed: {e}</span>")),
-    };
+    let existing = require_preset!(app_state.prompt_preset_storage, &id);
 
     if existing.is_default {
         return Html("<span class='error'>Cannot edit default presets</span>".to_string());
@@ -173,11 +201,7 @@ pub async fn delete_preset_handler(
     State(app_state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<String>,
 ) -> Html<String> {
-    let preset = match app_state.prompt_preset_storage.get(&id) {
-        Ok(Some(p)) => p,
-        Ok(None) => return Html("<span class='error'>Preset not found</span>".to_string()),
-        Err(e) => return Html(format!("<span class='error'>Load failed: {e}</span>")),
-    };
+    let preset = require_preset!(app_state.prompt_preset_storage, &id);
 
     if preset.is_default {
         return Html("<span class='error'>Cannot delete default presets</span>".to_string());
@@ -191,15 +215,30 @@ pub async fn delete_preset_handler(
 }
 
 /// [DOC: docs/architecture/system.md]
+pub async fn duplicate_preset_handler(
+    State(app_state): State<AppState>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Html<String> {
+    let preset = require_preset!(app_state.prompt_preset_storage, &id);
+
+    let mut copy = preset.clone();
+    copy.id = generate_preset_id();
+    copy.name = format!("{} (Copy)", copy.name);
+    copy.is_default = false;
+
+    if let Err(e) = app_state.prompt_preset_storage.save(&copy) {
+        return Html(format!("<span class='error'>Duplicate failed: {e}</span>"));
+    }
+
+    panel_handler(State(app_state)).await
+}
+
+/// [DOC: docs/architecture/system.md]
 pub async fn activate_preset_handler(
     State(app_state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<String>,
 ) -> Html<String> {
-    let preset = match app_state.prompt_preset_storage.get(&id) {
-        Ok(Some(p)) => p,
-        Ok(None) => return Html("<span class='error'>Preset not found</span>".to_string()),
-        Err(e) => return Html(format!("<span class='error'>Load failed: {e}</span>")),
-    };
+    let preset = require_preset!(app_state.prompt_preset_storage, &id);
 
     let mut settings = try_lock!(app_state.settings.write());
 

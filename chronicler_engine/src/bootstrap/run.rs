@@ -27,29 +27,11 @@ pub fn run(args: Args) -> crate::error::Result<()> {
         std::process::exit(1);
     }
 
-    let mut state = GameState::new(
-        Arc::new(manifest.clone().into()),
-        Arc::new(map),
-        Arc::new(player.clone()),
-        npcs,
-        manifest.starting_room_id.clone(),
-    );
-
-    inject_scenario_logs(&mut state, &manifest, &player);
-
-    // Initialise npc_encounter_log and npcs_in_area from scenario NPCs
-    if let Some(scenario) = manifest.default_scenario() {
-        state.init_scenario_npcs(scenario);
-    }
-
-    let nearby_npcs = state.scene.npcs_in_area.clone();
-    let all_npcs: Vec<NpcCard> = state.npcs.values().cloned().collect();
-
-    let _world = state.world.clone();
-    let map = state.map.clone();
-    let player = state.player.clone();
-    let room_id = state.movement.current_room_id.clone();
-    let history: Vec<crate::model::state::LogEntry> = Vec::new();
+    let world_arc = Arc::new(manifest.clone().into());
+    let map_arc = Arc::new(map);
+    let player_arc = Arc::new(player.clone());
+    let npcs_map: std::collections::HashMap<_, _> =
+        npcs.into_iter().map(|n| (n.id.clone(), n)).collect();
 
     let db_dir = std::env::current_exe()
         .ok()
@@ -100,22 +82,55 @@ pub fn run(args: Args) -> crate::error::Result<()> {
             crate::storage::llm_message_storage::SqliteLlmMessageStorage::new(db_pool.clone()),
         );
 
-    // [DOC: docs/system/startup.md]
-    let initial_snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
-    let snapshot_id = snapshot_storage.save(&initial_snapshot)?;
-    if let Some(msg) = state.narrative.history.last_mut() {
-        if msg.id == 0 {
-            msg.snapshot_id = Some(snapshot_id);
-            let id = message_storage.insert_message(&*msg)?;
-            msg.id = id;
+    let state = match snapshot_storage.load_latest() {
+        Ok(Some(snap)) => {
+            let mut new_state = GameState::from_snapshot(
+                &snap,
+                Arc::clone(&world_arc),
+                Arc::clone(&map_arc),
+                Arc::clone(&player_arc),
+                npcs_map.clone(),
+            );
+            if let Ok(msgs) = message_storage.load_messages() {
+                new_state.narrative.history.replace(msgs);
+            }
+            new_state
         }
-    }
+        _ => {
+            let mut new_state = GameState::new(
+                Arc::clone(&world_arc),
+                Arc::clone(&map_arc),
+                Arc::clone(&player_arc),
+                npcs_map.values().cloned().collect(),
+                world_arc.starting_room_id.clone(),
+            );
+            inject_scenario_logs(&mut new_state, &manifest, &player);
+            // Initialise npc_encounter_log and npcs_in_area from scenario NPCs
+            if let Some(scenario) = manifest.default_scenario() {
+                new_state.init_scenario_npcs(scenario);
+            }
 
-    let world_arc: Arc<crate::model::world::WorldCard> = Arc::new(manifest.clone().into());
-    let map_arc: Arc<crate::model::map::MapDef> = map;
-    let player_arc: Arc<crate::model::character::PlayerCard> = player;
-    let npcs_map: std::collections::HashMap<String, NpcCard> = state.npcs.clone();
-    let npcs_arc = Arc::new(npcs_map);
+            // [DOC: docs/system/startup.md]
+            let initial_snapshot =
+                crate::model::state_snapshot::GameStateSnapshot::from_game_state(&new_state);
+            let snapshot_id = snapshot_storage.save(&initial_snapshot)?;
+            if let Some(msg) = new_state.narrative.history.last_mut() {
+                if msg.id == 0 {
+                    msg.snapshot_id = Some(snapshot_id);
+                    let id = message_storage.insert_message(&*msg)?;
+                    msg.id = id;
+                }
+            }
+            new_state
+        }
+    };
+
+    let nearby_npcs = state.scene.npcs_in_area.clone();
+    let all_npcs: Vec<NpcCard> = state.npcs.values().cloned().collect();
+    let room_id = state.movement.current_room_id.clone();
+    let history: Vec<crate::model::state::LogEntry> = Vec::new();
+
+    let npcs_arc = Arc::new(state.npcs.clone());
 
     // [DOC: docs/architecture/system.md]
     let settings = crate::settings::load_settings().unwrap_or_else(|_| AppSettings::default());
@@ -335,9 +350,6 @@ fn ensure_defaults(
             })?;
 
             let id = seed["id"].as_str().unwrap_or("default").to_string();
-            if existing_ids.contains(&id) {
-                continue;
-            }
 
             let preset = PromptPreset {
                 id: id.clone(),
@@ -349,6 +361,23 @@ fn ensure_defaults(
                 is_default: true,
                 preset_type,
             };
+
+            if existing_ids.contains(&id) {
+                // Re-seed default presets if their individual fields are empty
+                // (can happen after schema migrations that add new columns).
+                if let Ok(Some(existing)) = storage.get(&id) {
+                    let has_content = existing.role.is_some()
+                        || existing.instructions.is_some()
+                        || existing.writing_style.is_some()
+                        || existing.output_format.is_some();
+                    if !has_content {
+                        storage.save(&preset)?;
+                        log::info!("Updated {} prompt preset: {}", preset_type.as_str(), id);
+                    }
+                }
+                continue;
+            }
+
             storage.save(&preset)?;
             log::info!("Seeded {} prompt preset: {}", preset_type.as_str(), id);
         }
