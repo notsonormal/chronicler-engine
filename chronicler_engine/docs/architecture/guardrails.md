@@ -116,6 +116,16 @@ Exemptions: getters/setters, `From`/`Into` impls, test functions.
 **Scope**: `src/` and `tests/`  
 **Exemptions**: None
 
+### 3.7 One Table Per Storage Module (`guardrails_one_table_per_storage`)
+
+**Standard**: Each `src/storage/*_storage.rs` module may reference exactly one physical SQLite table. No storage module may touch more than one table.
+
+**Severity**: error  
+**Scope**: `src/storage/*_storage.rs`  
+**Exemptions**: Temporary migration tables (`*_new` suffix), `sqlite_*` internal tables
+
+See ADR-019 for the rationale.
+
 ---
 
 ## Running Guardrails

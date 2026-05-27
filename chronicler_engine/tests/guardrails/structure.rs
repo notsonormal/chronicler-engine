@@ -268,3 +268,162 @@ pub fn check_file_length(path: &str, content: &str) -> Vec<Violation> {
 
     violations
 }
+
+// ── One Table Per Storage Module (ADR-019) ──
+
+pub fn check_one_table_per_storage(path: &str, content: &str) -> Vec<Violation> {
+    // Only check actual storage modules in src/storage/
+    let normalized = path.replace('\\', "/");
+    if !normalized.starts_with("storage/") || !normalized.ends_with("_storage.rs") {
+        return Vec::new();
+    }
+
+    let lines: Vec<&str> = content.lines().collect();
+    let mut tables = std::collections::HashSet::new();
+
+    for (i, line) in lines.iter().enumerate() {
+        let trimmed = line.trim();
+
+        // Skip comments
+        if trimmed.starts_with("//") {
+            continue;
+        }
+
+        // INSERT ... INTO tablename
+        if trimmed.contains("INSERT ") && trimmed.contains(" INTO ") {
+            if let Some(after) = trimmed.split(" INTO ").nth(1) {
+                if let Some(word) = after.split_whitespace().next() {
+                    let table = sanitize_table_name(word);
+                    if !table.is_empty() && !is_sql_keyword(&table) {
+                        tables.insert(table);
+                    }
+                }
+            }
+        }
+
+        // UPDATE [OR ...] tablename SET
+        if trimmed.contains("UPDATE ") && trimmed.contains(" SET") {
+            if let Some(after) = trimmed.split("UPDATE ").nth(1) {
+                if let Some(word) = after.split_whitespace().next() {
+                    let table = sanitize_table_name(word);
+                    if !table.is_empty() && !is_sql_keyword(&table) {
+                        tables.insert(table);
+                    }
+                }
+            }
+        }
+
+        // DELETE FROM tablename
+        if let Some(table) = extract_sql_table(trimmed, "DELETE FROM ") {
+            tables.insert(table);
+        }
+
+        // CREATE TABLE [IF NOT EXISTS] tablename
+        if trimmed.contains("CREATE TABLE ") {
+            let after = trimmed.split("CREATE TABLE ").nth(1).unwrap_or("");
+            let after = after.strip_prefix("IF NOT EXISTS ").unwrap_or(after);
+            if let Some(word) = after.split_whitespace().next() {
+                let table = sanitize_table_name(word);
+                if !table.is_empty() && !is_sql_keyword(&table) {
+                    tables.insert(table);
+                }
+            }
+        }
+
+        // DROP TABLE [IF EXISTS] tablename
+        if trimmed.contains("DROP TABLE ") {
+            let after = trimmed.split("DROP TABLE ").nth(1).unwrap_or("");
+            let after = after.strip_prefix("IF EXISTS ").unwrap_or(after);
+            if let Some(word) = after.split_whitespace().next() {
+                let table = sanitize_table_name(word);
+                if !table.is_empty() && !is_sql_keyword(&table) {
+                    tables.insert(table);
+                }
+            }
+        }
+
+        // ALTER TABLE tablename
+        if let Some(table) = extract_sql_table(trimmed, "ALTER TABLE ") {
+            tables.insert(table);
+        }
+
+        // JOIN tablename
+        if let Some(table) = extract_sql_table(trimmed, "JOIN ") {
+            if !is_sql_keyword(&table) {
+                tables.insert(table);
+            }
+        }
+
+        // FROM tablename (only in SELECT context)
+        if trimmed.contains("FROM ") {
+            let in_select = (i.saturating_sub(5)..=i).any(|j| {
+                lines.get(j).map_or(false, |l| l.contains("SELECT"))
+            });
+            if in_select {
+                if let Some(table) = extract_sql_table(trimmed, "FROM ") {
+                    if !table.starts_with("sqlite_") && !is_sql_keyword(&table) {
+                        tables.insert(table);
+                    }
+                }
+            }
+        }
+    }
+
+    // Filter out temporary migration tables
+    let mut permanent_tables: Vec<String> = tables
+        .into_iter()
+        .filter(|t| !t.ends_with("_new"))
+        .collect();
+
+    let mut violations = Vec::new();
+    if permanent_tables.len() > 1 {
+        permanent_tables.sort();
+        violations.push(Violation::error(
+            path,
+            1,
+            format!(
+                "Storage module references multiple tables: {}. \
+                 ADR-019 requires exactly one table per storage module.",
+                permanent_tables.join(", ")
+            ),
+        ));
+    }
+
+    violations
+}
+
+fn extract_sql_table(line: &str, keyword: &str) -> Option<String> {
+    if !line.contains(keyword) {
+        return None;
+    }
+    let after = line.split(keyword).nth(1)?;
+    let word = after.split_whitespace().next()?;
+    let table = sanitize_table_name(word);
+    if table.is_empty() || is_sql_keyword(&table) {
+        return None;
+    }
+    Some(table)
+}
+
+fn sanitize_table_name(raw: &str) -> String {
+    raw.trim_matches(|c: char| c == '(' || c == ',' || c == ')' || c == '"' || c == ';' || c == '`')
+        .to_lowercase()
+}
+
+fn is_sql_keyword(word: &str) -> bool {
+    const KEYWORDS: &[&str] = &[
+        "set", "where", "or", "and", "not", "null", "default", "primary", "key",
+        "foreign", "references", "unique", "check", "autoincrement", "collate",
+        "asc", "desc", "limit", "offset", "union", "intersect", "except",
+        "all", "distinct", "as", "on", "using", "indexed", "notindexed",
+        "inner", "outer", "left", "right", "full", "cross", "natural",
+        "group", "order", "by", "having", "values", "select", "insert",
+        "delete", "update", "create", "drop", "alter", "begin", "commit",
+        "rollback", "savepoint", "release", "pragma", "vacuum", "analyze",
+        "explain", "with", "recursive", "case", "when", "then", "else", "end",
+        "cast", "exists", "in", "between", "like", "glob", "regexp", "match",
+        "escape", "is", "isnull", "notnull", "each", "row", "of", "to",
+        "do", "nothing", "conflict", "abort", "fail", "ignore", "replace",
+    ];
+    KEYWORDS.contains(&word)
+}

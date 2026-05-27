@@ -23,6 +23,8 @@ This coupling encourages shortcuts: when two tables live in the same repository,
 
 **Every physical SQLite table gets its own `xxx_storage.rs` module containing exactly one trait and one SQLite repository.** No storage module may touch more than one table.
 
+> **Enforcement**: Guardrail `guardrails_one_table_per_storage` in `tests/guardrails.rs` fails the build if any `src/storage/*_storage.rs` file references more than one table.
+
 ### Specific Splits
 
 | Table | New / Updated Module | Trait |
