@@ -198,6 +198,72 @@ fn test_save_and_save_message_and_snapshot() {
     assert!(loaded.db_id.is_some());
 }
 
+#[test]
+fn test_save_message_and_snapshot_persists_retry_swipe() {
+    let ctx = minimal_ctx();
+    let mut state = minimal_state();
+
+    // Set up a retry target with an existing swipe (as if loaded from DB)
+    let mut target = Message::new(
+        None,
+        "Original narration",
+        crate::model::state::LogType::Narration,
+        None,
+        None,
+    );
+    target.id = 42; // Simulate DB-assigned ID
+    target.swipes[0].snapshot_id = Some(1);
+
+    // Add a new swipe (as if push_message appended it during retry)
+    target.swipes.push(crate::model::message::Swipe {
+        text: "Retried narration".to_string(),
+        snapshot_id: None,
+        location_header: None,
+        event_header: None,
+    });
+    target.active_swipe_index = 1;
+    target.text = "Retried narration".to_string();
+
+    state.narrative.retry_target = Some(target);
+
+    let snapshot_id = save_message_and_snapshot(&ctx, &mut state).unwrap();
+
+    // Verify the new swipe was persisted
+    let target = state.narrative.retry_target.unwrap();
+    assert_eq!(target.swipes[1].snapshot_id, Some(snapshot_id));
+}
+
+#[test]
+fn test_save_message_and_snapshot_skips_persisted_retry_swipe() {
+    let ctx = minimal_ctx();
+    let mut state = minimal_state();
+
+    // Set up a retry target where the last swipe ALREADY has a snapshot_id
+    let mut target = Message::new(
+        None,
+        "Original narration",
+        crate::model::state::LogType::Narration,
+        None,
+        None,
+    );
+    target.id = 42;
+    target.swipes[0].snapshot_id = Some(1);
+    target.swipes.push(crate::model::message::Swipe {
+        text: "Retried narration".to_string(),
+        snapshot_id: Some(99), // Already persisted
+        location_header: None,
+        event_header: None,
+    });
+    target.active_swipe_index = 1;
+
+    state.narrative.retry_target = Some(target);
+
+    let _snapshot_id = save_message_and_snapshot(&ctx, &mut state).unwrap();
+
+    // The last swipe should keep its original snapshot_id, not be overwritten
+    let target = state.narrative.retry_target.unwrap();
+    assert_eq!(target.swipes[1].snapshot_id, Some(99));
+}
 
 // ── Mock storage that always fails ──────────────────────────────────────────
 
@@ -205,14 +271,30 @@ struct FailingSnapshotStorage;
 
 impl SnapshotStorage for FailingSnapshotStorage {
     fn set_game_id(&self, _game_id: u64) {}
-    fn current_game_id(&self) -> u64 { 1 }
-    fn save(&self, _snapshot: &crate::model::state_snapshot::GameStateSnapshot) -> Result<u64, crate::error::EngineError> {
-        Err(crate::error::EngineError::Config("test snap error".to_string()))
+    fn current_game_id(&self) -> u64 {
+        1
     }
-    fn load_latest(&self) -> Result<Option<crate::model::state_snapshot::GameStateSnapshot>, crate::error::EngineError> {
-        Err(crate::error::EngineError::Config("test snap error".to_string()))
+    fn save(
+        &self,
+        _snapshot: &crate::model::state_snapshot::GameStateSnapshot,
+    ) -> Result<u64, crate::error::EngineError> {
+        Err(crate::error::EngineError::Config(
+            "test snap error".to_string(),
+        ))
     }
-    fn load_by_id(&self, _id: u64) -> Result<Option<crate::model::state_snapshot::GameStateSnapshot>, crate::error::EngineError> {
+    fn load_latest(
+        &self,
+    ) -> Result<Option<crate::model::state_snapshot::GameStateSnapshot>, crate::error::EngineError>
+    {
+        Err(crate::error::EngineError::Config(
+            "test snap error".to_string(),
+        ))
+    }
+    fn load_by_id(
+        &self,
+        _id: u64,
+    ) -> Result<Option<crate::model::state_snapshot::GameStateSnapshot>, crate::error::EngineError>
+    {
         Ok(None)
     }
 }
@@ -250,7 +332,10 @@ fn test_active_quantifier_prompt_missing_preset_returns_empty() {
     let ctx = minimal_ctx();
     // Ensure no quantifier preset is seeded
     let result = ctx.active_quantifier_prompt();
-    assert_eq!(result, "", "Should return empty string when preset not found");
+    assert_eq!(
+        result, "",
+        "Should return empty string when preset not found"
+    );
 }
 
 #[test]
@@ -259,7 +344,10 @@ fn test_active_quantifier_prompt_storage_error_returns_empty() {
 
     struct FailingPresetStorage;
     impl PromptPresetStorage for FailingPresetStorage {
-        fn list(&self, _preset_type: PresetType) -> Result<Vec<PromptPreset>, crate::error::EngineError> {
+        fn list(
+            &self,
+            _preset_type: PresetType,
+        ) -> Result<Vec<PromptPreset>, crate::error::EngineError> {
             Err(crate::error::EngineError::Config("fail".to_string()))
         }
         fn get(&self, _id: &str) -> Result<Option<PromptPreset>, crate::error::EngineError> {
@@ -345,7 +433,11 @@ fn test_load_state_fallback_on_snapshot_error() {
 fn test_save_message_and_snapshot_propagates_snapshot_error() {
     let state = minimal_state();
     let mut state_copy = state.clone();
-    state_copy.add_log("Test".to_string(), None, crate::model::state::LogType::Narration);
+    state_copy.add_log(
+        "Test".to_string(),
+        None,
+        crate::model::state::LogType::Narration,
+    );
 
     let game_repo = Arc::new(crate::test_support::in_memory_storage::InMemoryGameRepository::new());
     let snapshot_storage: Arc<dyn SnapshotStorage> = Arc::new(FailingSnapshotStorage);

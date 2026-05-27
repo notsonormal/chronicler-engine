@@ -95,6 +95,83 @@ fn test_add_log_absorbs_pending_event() {
     assert!(state.narrative.pending_event.is_none());
 }
 
+#[test]
+fn test_push_message_appends_swipe_on_retry_target() {
+    let mut state = TestGameState::in_room("room1");
+
+    // Set up a retry target (simulating a message loaded from DB)
+    let target = crate::model::message::Message::new(
+        None,
+        "Original narration",
+        LogType::Narration,
+        None,
+        None,
+    );
+    state.narrative.retry_target = Some(target);
+
+    state.add_log("Retried narration".into(), None, LogType::Narration);
+
+    // History should NOT have grown — swipe went to retry_target
+    assert_eq!(state.narrative.history.len(), 0);
+
+    let target = state.narrative.retry_target.unwrap();
+    assert_eq!(target.swipes.len(), 2);
+    assert_eq!(target.active_swipe_index, 1);
+    assert_eq!(target.text, "Retried narration");
+    assert_eq!(target.swipes[0].text, "Original narration");
+    assert_eq!(target.swipes[1].text, "Retried narration");
+    assert!(target.swipes[1].snapshot_id.is_none());
+}
+
+#[test]
+fn test_push_message_creates_new_message_when_event_header_mismatches() {
+    let mut state = TestGameState::in_room("room1");
+
+    // Retry target is a main narration (no event_header)
+    let target = crate::model::message::Message::new(
+        None,
+        "Original narration",
+        LogType::Narration,
+        None,
+        None,
+    );
+    state.narrative.retry_target = Some(target);
+
+    // But now we add an event narration (has event_header)
+    state.narrative.pending_event = Some("Trigger Event".to_string());
+    state.add_log("Event narration".into(), None, LogType::Narration);
+
+    // Should create a NEW message in history, not append to retry_target
+    assert_eq!(state.narrative.history.len(), 1);
+    assert_eq!(
+        state.narrative.history.last().unwrap().text,
+        "Event narration"
+    );
+    assert_eq!(
+        state.narrative.history.last().unwrap().event_header,
+        Some("Trigger Event".to_string())
+    );
+
+    // Retry target should be unchanged
+    let target = state.narrative.retry_target.unwrap();
+    assert_eq!(target.swipes.len(), 1);
+    assert_eq!(target.text, "Original narration");
+}
+
+#[test]
+fn test_push_message_creates_new_message_when_no_retry_target() {
+    let mut state = TestGameState::in_room("room1");
+
+    state.add_log("Normal narration".into(), None, LogType::Narration);
+
+    assert_eq!(state.narrative.history.len(), 1);
+    assert_eq!(
+        state.narrative.history.last().unwrap().text,
+        "Normal narration"
+    );
+    assert!(state.narrative.retry_target.is_none());
+}
+
 // ─── Property-based tests ──────────────────────────────────────────────────────
 
 use proptest::prelude::*;

@@ -824,51 +824,7 @@ fn test_retry_event_empty_continuation_triggers_error() {
 }
 
 #[test]
-fn test_retry_aborts_when_message_delete_fails() {
-    let state = make_test_state();
-    let base_ctx = make_test_context_with_sqlite(state).unwrap();
-
-    let _input_id = add_input_and_save(&base_ctx, "test input");
-    let _pre_main_id = save_pre_main(&base_ctx);
-    let _narration_id = add_narration_and_save(&base_ctx, "Narration text");
-
-    let failing_msg_storage = Arc::new(FailingMessageStorage::new(Arc::clone(
-        &base_ctx.message_storage,
-    )));
-    failing_msg_storage
-        .fail_soft_delete_message
-        .store(true, std::sync::atomic::Ordering::SeqCst);
-
-    let ctx = GameServiceContext {
-        message_storage: failing_msg_storage,
-        ..base_ctx.clone()
-    };
-
-    let service = make_service();
-    retry_last_response_impl(&service, ctx.clone());
-
-    // The error state should be saved
-    let state = base_ctx.load_state();
-    assert!(
-        matches!(
-            state.narrative.input_buffer.status,
-            GenerationStatus::Error(ref msg) if msg.contains("could not soft-delete message")
-        ),
-        "Should set error status when message soft-deletion fails, got {:?}",
-        state.narrative.input_buffer.status
-    );
-
-    // Messages should NOT have been truncated — both input and narration remain
-    let msgs = ctx.load_messages().unwrap();
-    assert_eq!(
-        msgs.len(),
-        2,
-        "Messages should not be truncated when deletion fails"
-    );
-}
-
-#[test]
-fn test_retry_migrates_pending_swipes() {
+fn test_retry_appends_swipe_to_same_message() {
     let state = make_test_state();
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let service = make_service();
@@ -877,12 +833,13 @@ fn test_retry_migrates_pending_swipes() {
     let _pre_main_id = save_pre_main(&ctx);
     let _narration_id = add_narration_and_save(&ctx, "Narration text");
 
-    // Add extra swipes to the narration so they become "pending swipes"
+    // Add an extra swipe to the narration
     let msgs = ctx.load_messages().unwrap();
     let narration_msg = msgs
         .iter()
         .find(|m| m.log_type == LogType::Narration)
         .unwrap();
+    let original_id = narration_msg.id;
     let extra_swipe = crate::model::message::Swipe {
         text: "Alt narration".to_string(),
         snapshot_id: Some(_pre_main_id),
@@ -895,16 +852,25 @@ fn test_retry_migrates_pending_swipes() {
 
     retry_last_response_impl(&service, ctx.clone());
 
-    // After retry, the new narration should have the old swipes migrated
+    // After retry, the SAME message should have gained a new swipe
     let msgs = ctx.load_messages().unwrap();
-    let new_narration = msgs
+    let narration = msgs
         .iter()
         .find(|m| m.log_type == LogType::Narration)
         .expect("Should have a narration after retry");
-    assert!(
-        new_narration.swipes.len() >= 2,
-        "Retry should migrate pending swipes to new narration, got {} swipes",
-        new_narration.swipes.len()
+    assert_eq!(
+        narration.id, original_id,
+        "Retry should keep the same message ID"
+    );
+    assert_eq!(
+        narration.swipes.len(),
+        3,
+        "Retry should append a new swipe to the existing message, got {} swipes",
+        narration.swipes.len()
+    );
+    assert_eq!(
+        narration.active_swipe_index, 2,
+        "Active swipe should be the newly appended one"
     );
 }
 

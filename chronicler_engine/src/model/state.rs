@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::model::character::{NpcCard, PlayerCard};
 use crate::model::map::{MapDef, Room};
-use crate::model::message::Message;
+use crate::model::message::{Message, Swipe};
 use crate::model::message_history::MessageHistory;
 use crate::model::trigger::NpcEncounterLog;
 use crate::model::world::WorldCard;
@@ -141,6 +141,10 @@ pub struct NarrativeState {
     /// Name of the model used for the last narration call.
     #[serde(default)]
     pub last_model_name: Option<String>,
+    /// Message being retried, stored outside history so the pipeline can append a swipe to it.
+    /// Not persisted in snapshots — transient for the current pipeline run only.
+    #[serde(skip)]
+    pub retry_target: Option<Message>,
 }
 
 impl NarrativeState {
@@ -157,6 +161,7 @@ impl NarrativeState {
             pending_event: snapshot.pending_event.clone(),
             last_backend_name: snapshot.last_backend_name.clone(),
             last_model_name: snapshot.last_model_name.clone(),
+            retry_target: None,
         }
     }
 }
@@ -311,6 +316,29 @@ impl GameState {
     fn push_message(&mut self, text: String, sender: Option<String>, log_type: LogType) {
         let location_header = self.narrative.pending_location.take();
         let event_header = self.narrative.pending_event.take();
+
+        // Retry interception: append swipe instead of creating new message
+        if log_type == LogType::Narration || log_type == LogType::Dialogue {
+            if let Some(ref mut target) = self.narrative.retry_target {
+                let target_is_event = target.event_header.is_some();
+                let new_is_event = event_header.is_some();
+                if target_is_event == new_is_event {
+                    let swipe = Swipe {
+                        text: text.clone(),
+                        snapshot_id: None,
+                        location_header: location_header.clone(),
+                        event_header: event_header.clone(),
+                    };
+                    target.swipes.push(swipe);
+                    target.active_swipe_index = target.swipes.len() - 1;
+                    target.text = text;
+                    target.location_header = location_header;
+                    target.event_header = event_header;
+                    return;
+                }
+            }
+        }
+
         let message = Message::new(sender, text, log_type, location_header, event_header);
         self.narrative.history.append(message);
     }

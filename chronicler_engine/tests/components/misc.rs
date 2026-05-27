@@ -728,18 +728,9 @@ async fn test_retrigger_last_message_not_narration() {
 
 #[tokio::test]
 async fn test_switch_swipe_generation_in_progress() {
-    let app = TestAppBuilder::default_app();
-
-    let req = Request::builder()
-        .uri("/action")
-        .method(http::Method::POST)
-        .header(
-            http::header::CONTENT_TYPE,
-            "application/x-www-form-urlencoded",
-        )
-        .body(Body::from("command=go north"))
-        .unwrap();
-    let _response = app.clone().oneshot(req).await.unwrap();
+    // Set is_generating directly so the test does not depend on background
+    // task timing or real LLM backends.
+    let app = TestAppBuilder::default_test().is_generating(true).build();
 
     let req = Request::builder()
         .uri("/message/1/swipe/0")

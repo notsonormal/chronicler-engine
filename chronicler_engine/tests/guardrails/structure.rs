@@ -284,7 +284,6 @@ pub fn check_one_table_per_storage(path: &str, content: &str) -> Vec<Violation> 
     for (i, line) in lines.iter().enumerate() {
         let trimmed = line.trim();
 
-        // Skip comments
         if trimmed.starts_with("//") {
             continue;
         }
@@ -354,11 +353,9 @@ pub fn check_one_table_per_storage(path: &str, content: &str) -> Vec<Violation> 
             }
         }
 
-        // FROM tablename (only in SELECT context)
         if trimmed.contains("FROM ") {
-            let in_select = (i.saturating_sub(5)..=i).any(|j| {
-                lines.get(j).map_or(false, |l| l.contains("SELECT"))
-            });
+            let in_select = (i.saturating_sub(5)..=i)
+                .any(|j| lines.get(j).is_some_and(|l| l.contains("SELECT")));
             if in_select {
                 if let Some(table) = extract_sql_table(trimmed, "FROM ") {
                     if !table.starts_with("sqlite_") && !is_sql_keyword(&table) {
@@ -369,7 +366,6 @@ pub fn check_one_table_per_storage(path: &str, content: &str) -> Vec<Violation> 
         }
     }
 
-    // Filter out temporary migration tables
     let mut permanent_tables: Vec<String> = tables
         .into_iter()
         .filter(|t| !t.ends_with("_new"))
@@ -412,18 +408,93 @@ fn sanitize_table_name(raw: &str) -> String {
 
 fn is_sql_keyword(word: &str) -> bool {
     const KEYWORDS: &[&str] = &[
-        "set", "where", "or", "and", "not", "null", "default", "primary", "key",
-        "foreign", "references", "unique", "check", "autoincrement", "collate",
-        "asc", "desc", "limit", "offset", "union", "intersect", "except",
-        "all", "distinct", "as", "on", "using", "indexed", "notindexed",
-        "inner", "outer", "left", "right", "full", "cross", "natural",
-        "group", "order", "by", "having", "values", "select", "insert",
-        "delete", "update", "create", "drop", "alter", "begin", "commit",
-        "rollback", "savepoint", "release", "pragma", "vacuum", "analyze",
-        "explain", "with", "recursive", "case", "when", "then", "else", "end",
-        "cast", "exists", "in", "between", "like", "glob", "regexp", "match",
-        "escape", "is", "isnull", "notnull", "each", "row", "of", "to",
-        "do", "nothing", "conflict", "abort", "fail", "ignore", "replace",
+        "set",
+        "where",
+        "or",
+        "and",
+        "not",
+        "null",
+        "default",
+        "primary",
+        "key",
+        "foreign",
+        "references",
+        "unique",
+        "check",
+        "autoincrement",
+        "collate",
+        "asc",
+        "desc",
+        "limit",
+        "offset",
+        "union",
+        "intersect",
+        "except",
+        "all",
+        "distinct",
+        "as",
+        "on",
+        "using",
+        "indexed",
+        "notindexed",
+        "inner",
+        "outer",
+        "left",
+        "right",
+        "full",
+        "cross",
+        "natural",
+        "group",
+        "order",
+        "by",
+        "having",
+        "values",
+        "select",
+        "insert",
+        "delete",
+        "update",
+        "create",
+        "drop",
+        "alter",
+        "begin",
+        "commit",
+        "rollback",
+        "savepoint",
+        "release",
+        "pragma",
+        "vacuum",
+        "analyze",
+        "explain",
+        "with",
+        "recursive",
+        "case",
+        "when",
+        "then",
+        "else",
+        "end",
+        "cast",
+        "exists",
+        "in",
+        "between",
+        "like",
+        "glob",
+        "regexp",
+        "match",
+        "escape",
+        "is",
+        "isnull",
+        "notnull",
+        "each",
+        "row",
+        "of",
+        "to",
+        "do",
+        "nothing",
+        "conflict",
+        "abort",
+        "fail",
+        "ignore",
+        "replace",
     ];
     KEYWORDS.contains(&word)
 }

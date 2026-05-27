@@ -21,7 +21,6 @@ use crate::storage::message_swipe_storage::MessageSwipeStorage;
 use crate::storage::snapshot_storage::SnapshotStorage;
 
 // [DOC: docs/reference/testing.md]
-/// Builder for constructing a test Axum app without exposing `GameState` to callers.
 pub struct TestAppBuilder {
     world: WorldCard,
     player: PlayerCard,
@@ -39,10 +38,10 @@ pub struct TestAppBuilder {
     message_swipe_storage: Option<Arc<dyn MessageSwipeStorage>>,
     llm_storage: Option<Arc<dyn LlmMessageStorage>>,
     game_service: Option<Arc<dyn GameService>>,
+    is_generating: bool,
 }
 
 impl TestAppBuilder {
-    /// Default test configuration matching the legacy `tests/components.rs::create_test_state`.
     pub fn default_test() -> Self {
         let world = WorldCard {
             name: "Test World".to_string(),
@@ -111,7 +110,6 @@ impl TestAppBuilder {
             .room_npc("npc_1")
     }
 
-    /// Start from explicit world and player.
     pub fn new(world: WorldCard, player: PlayerCard) -> Self {
         let map = MapDef {
             overworld: Overworld {
@@ -136,7 +134,6 @@ impl TestAppBuilder {
         Self::with_world_map(world, player, map)
     }
 
-    /// Shorthand: `default_test().build()`.
     pub fn default_app() -> Router {
         Self::default_test().build()
     }
@@ -159,6 +156,7 @@ impl TestAppBuilder {
             message_swipe_storage: None,
             llm_storage: None,
             game_service: None,
+            is_generating: false,
         }
     }
 
@@ -231,6 +229,11 @@ impl TestAppBuilder {
 
     pub fn game_service(mut self, service: Arc<dyn GameService>) -> Self {
         self.game_service = Some(service);
+        self
+    }
+
+    pub fn is_generating(mut self, value: bool) -> Self {
+        self.is_generating = value;
         self
     }
 
@@ -328,7 +331,7 @@ impl TestAppBuilder {
             prompt_preset_storage,
             settings: settings_arc,
             cancel_token: Arc::new(RwLock::new(CancellationToken::new())),
-            is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            is_generating: Arc::new(std::sync::atomic::AtomicBool::new(self.is_generating)),
         };
         build_router(app_state)
     }

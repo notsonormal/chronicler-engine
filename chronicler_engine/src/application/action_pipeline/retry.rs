@@ -4,7 +4,6 @@ use crate::application::action_pipeline::pipeline::{
     ActionOutcome, ActionPipeline, ActionPipelineBackend,
 };
 use crate::application::context::{GameServiceContext, load_state, save_state};
-use crate::model::message::Swipe;
 use crate::model::state::{GameState, GenerationPhase, GenerationStatus, LogType};
 
 /// [DOC: docs/architecture/system.md]
@@ -27,12 +26,9 @@ pub fn retry_last_response_impl<B: ActionPipelineBackend>(backend: &B, ctx: Game
         .map(|m| m.event_header.is_some())
         .unwrap_or(false);
 
-    // Find the anchor message: the message whose snapshot_id we'll restore to.
     let anchor_idx = if is_event {
-        // For event retry: find the last message before any event messages.
         messages.iter().rposition(|m| m.event_header.is_none())
     } else {
-        // For main narration retry: find the last input message.
         messages.iter().rposition(|m| m.log_type == LogType::Input)
     };
 
@@ -49,33 +45,23 @@ pub fn retry_last_response_impl<B: ActionPipelineBackend>(backend: &B, ctx: Game
         return;
     };
 
-    // Extract swipes from the message being retried before soft-deleting.
-    let old_target = match messages.last() {
-        Some(m) => m,
-        None => {
-            log::error!("No messages to extract swipes from");
-            return;
-        }
-    };
-    let pending_swipes: Vec<Swipe> = old_target.swipes.clone();
-    let to_delete: Vec<u64> = messages.iter().skip(anchor_idx + 1).map(|m| m.id).collect();
-
-    for id in &to_delete {
-        if let Err(e) = ctx.message_storage.soft_delete_message(*id) {
-            log::error!("Failed to soft-delete message {id} during retry: {e}");
-            save_retry_error(
-                &ctx,
-                format!("Retry failed: could not soft-delete message {id}"),
-            );
-            return;
-        }
-    }
+    let old_target = messages
+        .iter()
+        .rev()
+        .find(|m| {
+            if is_event {
+                m.event_header.is_some()
+            } else {
+                matches!(m.log_type, LogType::Narration | LogType::Dialogue)
+                    && m.event_header.is_none()
+            }
+        })
+        .cloned();
 
     let snapshot = match ctx.snapshot_storage.load_by_id(snapshot_id) {
         Ok(Some(s)) => s,
         Ok(None) => {
             log::error!("No snapshot found for id {snapshot_id}");
-            let _ = ctx.message_storage.restore_soft_deleted(&to_delete);
             save_retry_error(
                 &ctx,
                 format!("Retry failed: no snapshot found for id {snapshot_id}"),
@@ -84,7 +70,6 @@ pub fn retry_last_response_impl<B: ActionPipelineBackend>(backend: &B, ctx: Game
         }
         Err(e) => {
             log::error!("Failed to load snapshot: {e}");
-            let _ = ctx.message_storage.restore_soft_deleted(&to_delete);
             save_retry_error(&ctx, format!("Retry failed: {e}"));
             return;
         }
@@ -100,12 +85,12 @@ pub fn retry_last_response_impl<B: ActionPipelineBackend>(backend: &B, ctx: Game
     let mut truncated = messages;
     truncated.truncate(anchor_idx + 1);
     state.narrative.history.replace(truncated);
+    state.narrative.retry_target = old_target;
 
     let input_text = match state.narrative.history.last_input_text() {
         Some((_sender, text)) => text,
         None => {
             log::error!("No input to retry");
-            let _ = ctx.message_storage.restore_soft_deleted(&to_delete);
             return;
         }
     };
@@ -117,48 +102,12 @@ pub fn retry_last_response_impl<B: ActionPipelineBackend>(backend: &B, ctx: Game
     };
 
     match outcome {
-        ActionOutcome::Completed => {
-            if let Err(e) = post_retry_swipe_migration(&ctx, &to_delete, &pending_swipes, is_event)
-            {
-                log::error!("Failed to migrate swipes after retry: {e}");
-                let _ = ctx.message_storage.restore_soft_deleted(&to_delete);
-                save_retry_error(&ctx, format!("Retry failed: swipe migration error: {e}"));
-            }
-        }
+        ActionOutcome::Completed => {}
         ActionOutcome::Error { message } => {
-            let _ = ctx.message_storage.restore_soft_deleted(&to_delete);
             save_retry_error(&ctx, message);
         }
-        ActionOutcome::Cancelled => {
-            let _ = ctx.message_storage.restore_soft_deleted(&to_delete);
-        }
+        ActionOutcome::Cancelled => {}
     }
-}
-
-fn post_retry_swipe_migration(
-    ctx: &GameServiceContext,
-    to_delete: &[u64],
-    pending_swipes: &[Swipe],
-    is_event: bool,
-) -> Result<(), crate::error::EngineError> {
-    let new_messages = ctx.load_messages()?;
-    let new_target = if is_event {
-        new_messages.iter().rev().find(|m| m.event_header.is_some())
-    } else {
-        new_messages.iter().rev().find(|m| {
-            (m.log_type == LogType::Narration || m.log_type == LogType::Dialogue)
-                && m.event_header.is_none()
-        })
-    };
-
-    if let Some(target) = new_target {
-        let offset = pending_swipes.len();
-        ctx.migrate_swipes(target.id, pending_swipes, offset, to_delete)?;
-    } else {
-        ctx.message_storage.purge_soft_deleted(to_delete)?;
-    }
-
-    Ok(())
 }
 
 pub(crate) fn save_retry_error(ctx: &GameServiceContext, message: impl Into<String>) {

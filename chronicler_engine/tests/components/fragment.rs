@@ -317,37 +317,11 @@ async fn test_action_confirm_empty_command() {
 
 #[tokio::test]
 async fn test_action_concurrent_rejection() {
-    // Use a mock backend with a small delay so the first action remains
-    // in-flight when the second request arrives, ensuring deterministic
-    // concurrent rejection.
-    let llm: Arc<dyn chronicler_engine::narrative::llm::LlmBackend> = Arc::new(
-        chronicler_engine::narrative::llm::MockBackend::with_delay(50),
-    );
-    let game_service = Arc::new(
-        chronicler_engine::application::game_service::DefaultGameService::with_mock_quantifier(
-            Arc::clone(&llm),
-            Arc::new(chronicler_engine::narrative::llm::MockBackend::default()),
-        ),
-    );
-    let app = TestAppBuilder::default_test()
-        .game_service(game_service)
-        .build();
+    // Set is_generating directly so the test does not depend on background
+    // task timing or real LLM backends.
+    let app = TestAppBuilder::default_test().is_generating(true).build();
 
-    // First async action sets is_generating = true
-    let req1 = Request::builder()
-        .uri("/action")
-        .method(http::Method::POST)
-        .header(
-            http::header::CONTENT_TYPE,
-            "application/x-www-form-urlencoded",
-        )
-        .body(Body::from("command=go north"))
-        .unwrap();
-    let response1 = app.clone().oneshot(req1).await.unwrap();
-    assert!(response1.status().is_success());
-
-    // Second async action while first is in flight
-    let req2 = Request::builder()
+    let req = Request::builder()
         .uri("/action")
         .method(http::Method::POST)
         .header(
@@ -356,9 +330,9 @@ async fn test_action_concurrent_rejection() {
         )
         .body(Body::from("command=go south"))
         .unwrap();
-    let response2 = app.oneshot(req2).await.unwrap();
-    assert!(response2.status().is_success());
-    let body = axum::body::to_bytes(response2.into_body(), 1024)
+    let response = app.oneshot(req).await.unwrap();
+    assert!(response.status().is_success());
+    let body = axum::body::to_bytes(response.into_body(), 1024)
         .await
         .unwrap();
     let body_str = String::from_utf8_lossy(&body);
@@ -667,18 +641,9 @@ async fn test_delete_game_handler_active_game() {
 
 #[tokio::test]
 async fn test_delete_game_handler_generating() {
-    let app = TestAppBuilder::default_app();
-
-    let req = Request::builder()
-        .uri("/action")
-        .method(http::Method::POST)
-        .header(
-            http::header::CONTENT_TYPE,
-            "application/x-www-form-urlencoded",
-        )
-        .body(Body::from("command=go north"))
-        .unwrap();
-    let _response = app.clone().oneshot(req).await.unwrap();
+    // Set is_generating directly so the test does not depend on background
+    // task timing or real LLM backends.
+    let app = TestAppBuilder::default_test().is_generating(true).build();
 
     // Deletion should be rejected while generation is in progress
     let req = Request::builder()

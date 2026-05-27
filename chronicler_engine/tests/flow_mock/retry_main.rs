@@ -604,8 +604,8 @@ fn test_movement_with_arrival_narration_retry() {
 }
 
 #[test]
-fn test_delete_narration_then_retry_regenerates() {
-    // Flow: Execute → delete narration → Retry → verify new narration generated
+fn test_retry_appends_swipe_to_existing_narration() {
+    // Flow: Execute → Retry → verify swipe appended to same message
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
@@ -630,40 +630,39 @@ fn test_delete_narration_then_retry_regenerates() {
     );
     assert!(wait_for_generation_complete(&ctx, 1000));
 
-    let guard = latest_state(&ctx);
-    let narration_id = guard
-        .narrative
-        .history()
-        .into_iter()
-        .find(|e| e.log_type == LogType::Narration)
-        .map(|e| e.id)
+    let msgs = ctx.load_messages().unwrap();
+    let narration = msgs
+        .iter()
+        .find(|m| m.log_type == LogType::Narration)
         .expect("Should have narration");
+    let original_id = narration.id;
+    assert_eq!(narration.swipes.len(), 1);
 
-    // Delete narration (overwrite latest snapshot)
-    {
-        let mut state = latest_state(&ctx);
-        state.narrative.history.retain(|m| m.id != narration_id);
-        save_state(&ctx, &state);
-    }
-
-    // Retry should regenerate narration
+    // Retry should append a swipe to the same message
     service.retry_last_response(ctx.clone());
     assert!(wait_for_generation_complete(&ctx, 1000));
 
-    let guard = latest_state(&ctx);
-    let narrations: Vec<_> = guard
-        .narrative
-        .history()
-        .into_iter()
-        .filter(|e| e.log_type == LogType::Narration)
+    let msgs = ctx.load_messages().unwrap();
+    let narrations: Vec<_> = msgs
+        .iter()
+        .filter(|m| m.log_type == LogType::Narration)
         .collect();
     assert_eq!(
         narrations.len(),
         1,
-        "Retry should regenerate exactly one narration"
+        "Retry should keep exactly one narration message"
+    );
+    assert_eq!(
+        narrations[0].id, original_id,
+        "Retry should keep the same message ID"
+    );
+    assert_eq!(
+        narrations[0].swipes.len(),
+        2,
+        "Retry should append a new swipe"
     );
     assert_eq!(
         narrations[0].text, "Second narration text.",
-        "Retry should use next per-call narration"
+        "Retry should use next per-call narration as the active swipe"
     );
 }

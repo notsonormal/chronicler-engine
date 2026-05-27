@@ -95,8 +95,6 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
         };
         let mut next_state = turn_result.next_state;
 
-        // Pre-build trigger request so last_trigger is included in the post-engine snapshot.
-        // This ensures event retry can restore a state with trigger context available.
         let trigger_request = turn_result
             .trigger_match
             .as_ref()
@@ -120,6 +118,10 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
             return ActionOutcome::Error {
                 message: format!("Failed to save post-engine snapshot: {e}"),
             };
+        }
+
+        if let Some(target) = next_state.narrative.retry_target.take() {
+            next_state.narrative.history.append(target);
         }
 
         if let Some(request) = trigger_request {
@@ -472,6 +474,10 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
                     message: format!("NPC event error: {e}"),
                 };
             }
+        }
+
+        if let Some(target) = committed_state.narrative.retry_target.take() {
+            committed_state.narrative.history.append(target);
         }
 
         committed_state.narrative.input_buffer.status = GenerationStatus::Idle;

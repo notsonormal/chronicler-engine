@@ -42,7 +42,7 @@ This coupling encourages shortcuts: when two tables live in the same repository,
 - **`insert_message`** no longer accepts a `&Message` with swipes. It persists only message metadata (sender, log_type, timestamp, active_swipe_index, is_deleted). Callers must separately call `MessageSwipeStorage::insert_swipe` for every swipe, including the first.
 - **`update_message` removed.** There is no `text` column on `messages`; updating message text means updating the active swipe. A `GameServiceContext::update_message_text()` helper coordinates the two storage calls.
 - **`load_messages` removed.** Loading full `Message` objects requires joining swipes. A `GameServiceContext::load_messages()` helper loads from both storages and assembles.
-- **`migrate_swipes` removed.** This cross-table transaction is temporarily provided as a `GameServiceContext` helper until the retry pipeline is refactored to use `insert_swipe` + `update_active_swipe` instead of message recreation.
+- **`migrate_swipes` removed.** The retry pipeline now appends swipes directly via `insert_swipe` + `update_active_swipe` instead of recreating messages. No cross-table migration helper is needed.
 - **`insert_swipe` and `shift_swipe_indices` moved** to `MessageSwipeStorage`.
 
 #### `SnapshotStorage`
@@ -85,7 +85,7 @@ Because `DbPool` is a single `Arc<Mutex<Connection>>`, callers cannot acquire a 
 3. **Helpers**: Add `GameServiceContext` convenience methods that delegate to old trait methods.
 4. **Caller migration**: Move all callers to helpers.
 5. **Trait refactor**: Break `MessageStorage` and `SnapshotStorage` traits, update implementations.
-6. **Pipeline refactor**: Rewrite retry logic to use `insert_swipe` + `update_active_swipe`, remove `migrate_swipes` helper.
+6. ✅ **Pipeline refactor**: Retry logic rewritten to append swipes instead of recreating messages. `migrate_swipes` helper removed.
 
 ## References
 
