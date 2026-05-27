@@ -9,7 +9,7 @@ use crate::model::state::{GameState, GenerationPhase, GenerationStatus, LogType}
 
 /// [DOC: docs/architecture/system.md]
 pub fn retry_last_response_impl<B: ActionPipelineBackend>(backend: &B, ctx: GameServiceContext) {
-    let messages = match ctx.message_storage.load_messages() {
+    let messages = match ctx.load_messages() {
         Ok(msgs) => msgs,
         Err(e) => {
             log::error!("Failed to load messages: {e}");
@@ -141,7 +141,7 @@ fn post_retry_swipe_migration(
     pending_swipes: &[Swipe],
     is_event: bool,
 ) -> Result<(), crate::error::EngineError> {
-    let new_messages = ctx.message_storage.load_messages()?;
+    let new_messages = ctx.load_messages()?;
     let new_target = if is_event {
         new_messages.iter().rev().find(|m| m.event_header.is_some())
     } else {
@@ -153,8 +153,7 @@ fn post_retry_swipe_migration(
 
     if let Some(target) = new_target {
         let offset = pending_swipes.len();
-        ctx.message_storage
-            .migrate_swipes(target.id, pending_swipes, offset, to_delete)?;
+        ctx.migrate_swipes(target.id, pending_swipes, offset, to_delete)?;
     } else {
         ctx.message_storage.purge_soft_deleted(to_delete)?;
     }

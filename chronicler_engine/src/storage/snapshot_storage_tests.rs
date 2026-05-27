@@ -29,6 +29,15 @@ fn empty_snapshot() -> GameStateSnapshot {
 #[test]
 fn test_sqlite_save_load_respects_game_id() {
     let pool = DbPool::new(":memory:").unwrap();
+    // game_id=1 is created by migrations; create game_id=2
+    {
+        let conn = pool.conn();
+        conn.execute(
+            "INSERT INTO games (world_name, name, created_at, updated_at) VALUES ('test', 'Game B', '1', '1')",
+            [],
+        )
+        .unwrap();
+    }
     let storage_a = SqliteSnapshotRepository::new(pool.clone(), 1);
     let storage_b = SqliteSnapshotRepository::new(pool.clone(), 2);
 
@@ -50,6 +59,15 @@ fn test_sqlite_save_load_respects_game_id() {
 #[test]
 fn test_sqlite_messages_respect_game_id() {
     let pool = DbPool::new(":memory:").unwrap();
+    // game_id=1 is created by migrations; create game_id=2
+    {
+        let conn = pool.conn();
+        conn.execute(
+            "INSERT INTO games (world_name, name, created_at, updated_at) VALUES ('test', 'Game B', '1', '1')",
+            [],
+        )
+        .unwrap();
+    }
     let storage_a = crate::storage::message_storage::SqliteMessageRepository::new(pool.clone(), 1);
     let storage_b = crate::storage::message_storage::SqliteMessageRepository::new(pool.clone(), 2);
 
@@ -71,13 +89,13 @@ fn test_sqlite_messages_respect_game_id() {
     storage_a.insert_message(&msg_a).unwrap();
     storage_b.insert_message(&msg_b).unwrap();
 
-    let loaded_a = storage_a.load_messages().unwrap();
+    let loaded_a = storage_a.load_message_rows().unwrap();
     assert_eq!(loaded_a.len(), 1);
-    assert_eq!(loaded_a[0].text, "hello");
+    assert_eq!(loaded_a[0].sender, Some("A".to_string()));
 
-    let loaded_b = storage_b.load_messages().unwrap();
+    let loaded_b = storage_b.load_message_rows().unwrap();
     assert_eq!(loaded_b.len(), 1);
-    assert_eq!(loaded_b[0].text, "world");
+    assert_eq!(loaded_b[0].sender, Some("B".to_string()));
 }
 
 #[test]

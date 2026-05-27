@@ -28,8 +28,12 @@ fn make_test_app_state(
         ),
     );
     crate::server::AppState {
+        game_storage: Arc::new(crate::test_support::InMemoryGameRepository::new()),
         snapshot_storage,
         message_storage,
+        message_swipe_storage: Arc::new(
+            crate::test_support::in_memory_storage::InMemoryMessageSwipeStorage::new(),
+        ),
         llm_message_storage: llm_storage,
         world: Arc::new(TestWorld::minimal()),
         map: Arc::new(TestMap::single_room("start")),

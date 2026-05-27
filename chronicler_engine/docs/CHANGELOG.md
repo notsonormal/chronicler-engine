@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-05-27
+
+### Changed
+- **Storage tier split — one table per storage module (ADR-019)**
+  - New `GameStorage` trait (`src/storage/game_storage.rs`) with `SqliteGameRepository` and `InMemoryGameRepository`
+  - New `MessageSwipeStorage` trait (`src/storage/message_swipe_storage.rs`) with `SqliteMessageSwipeRepository` and `InMemoryMessageSwipeStorage`
+  - `SnapshotStorage` stripped of game CRUD; now owns `game_state_snapshots` only
+  - `MessageStorage` stripped of swipe methods; `insert_message` is metadata-only (swipes stored separately)
+  - `GameServiceContext` gains `game_storage` and `message_swipe_storage`; adds cross-storage helpers (`load_messages`, `update_message_text`, `migrate_swipes`)
+  - All callers migrated from monolithic `snapshot_storage` to `game_storage` for game CRUD
+  - Schema v9: `ON DELETE CASCADE` on `game_state_snapshots` and `messages` referencing `games`; restored `DEFAULT 1` on `game_id`
+  - `arch-lint` enforces no direct `storage` imports in `server` layer
+  - Unit tests added: `game_storage_tests.rs`, `message_swipe_storage_tests.rs`
+
 ## 2026-05-26
 
 ### Changed

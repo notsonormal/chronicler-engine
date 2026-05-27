@@ -225,7 +225,12 @@ impl<'a> LayerRenderer<'a> {
                     .clone()
                     .filter(|s| !s.is_empty())
                     .unwrap_or_else(|| {
-                        npc.sheet.description.lines().take(3).collect::<Vec<_>>().join("\n")
+                        npc.sheet
+                            .description
+                            .lines()
+                            .take(3)
+                            .collect::<Vec<_>>()
+                            .join("\n")
                     });
 
                 // Indent each line of the summary

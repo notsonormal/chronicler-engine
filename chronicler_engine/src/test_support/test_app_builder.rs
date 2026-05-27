@@ -14,8 +14,10 @@ use crate::model::state::{
 use crate::model::state_snapshot::GameStateSnapshot;
 use crate::model::world::WorldCard;
 use crate::server::{AppState, build_router};
+use crate::storage::game_storage::GameStorage;
 use crate::storage::llm_message_storage::LlmMessageStorage;
 use crate::storage::message_storage::MessageStorage;
+use crate::storage::message_swipe_storage::MessageSwipeStorage;
 use crate::storage::snapshot_storage::SnapshotStorage;
 
 // [DOC: docs/reference/testing.md]
@@ -31,8 +33,10 @@ pub struct TestAppBuilder {
     generation_status: Option<GenerationStatus>,
     generation_phase: Option<GenerationPhase>,
     settings: AppSettings,
+    game_storage: Option<Arc<dyn GameStorage>>,
     snapshot_storage: Option<Arc<dyn SnapshotStorage>>,
     message_storage: Option<Arc<dyn MessageStorage>>,
+    message_swipe_storage: Option<Arc<dyn MessageSwipeStorage>>,
     llm_storage: Option<Arc<dyn LlmMessageStorage>>,
     game_service: Option<Arc<dyn GameService>>,
 }
@@ -149,8 +153,10 @@ impl TestAppBuilder {
             generation_status: None,
             generation_phase: None,
             settings: AppSettings::default(),
+            game_storage: None,
             snapshot_storage: None,
             message_storage: None,
+            message_swipe_storage: None,
             llm_storage: None,
             game_service: None,
         }
@@ -198,6 +204,11 @@ impl TestAppBuilder {
         self
     }
 
+    pub fn game_storage(mut self, storage: Arc<dyn GameStorage>) -> Self {
+        self.game_storage = Some(storage);
+        self
+    }
+
     pub fn snapshot_storage(mut self, storage: Arc<dyn SnapshotStorage>) -> Self {
         self.snapshot_storage = Some(storage);
         self
@@ -205,6 +216,11 @@ impl TestAppBuilder {
 
     pub fn message_storage(mut self, storage: Arc<dyn MessageStorage>) -> Self {
         self.message_storage = Some(storage);
+        self
+    }
+
+    pub fn message_swipe_storage(mut self, storage: Arc<dyn MessageSwipeStorage>) -> Self {
+        self.message_swipe_storage = Some(storage);
         self
     }
 
@@ -259,6 +275,9 @@ impl TestAppBuilder {
             state.add_log(text, sender, log_type);
         }
 
+        let game_storage = self
+            .game_storage
+            .unwrap_or_else(|| Arc::new(super::in_memory_storage::InMemoryGameRepository::new()));
         let snapshot_storage = self.snapshot_storage.unwrap_or_else(|| {
             Arc::new(super::in_memory_storage::InMemorySnapshotRepository::new())
         });
@@ -268,6 +287,10 @@ impl TestAppBuilder {
         let llm_storage = self.llm_storage.unwrap_or_else(|| {
             Arc::new(crate::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
                 as Arc<dyn LlmMessageStorage>
+        });
+        let message_swipe_storage = self.message_swipe_storage.unwrap_or_else(|| {
+            Arc::new(crate::test_support::in_memory_storage::InMemoryMessageSwipeStorage::new())
+                as Arc<dyn MessageSwipeStorage>
         });
 
         let snapshot = GameStateSnapshot::from_game_state(&state);
@@ -290,8 +313,10 @@ impl TestAppBuilder {
             ))
         });
         let app_state = AppState {
+            game_storage,
             snapshot_storage,
             message_storage,
+            message_swipe_storage,
             llm_message_storage: Arc::clone(&llm_storage),
             world,
             map,

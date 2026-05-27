@@ -72,7 +72,7 @@ fn test_messages_roundtrip() {
         None,
     );
     s.insert_message(&msg).unwrap();
-    let loaded = s.load_messages().unwrap();
+    let loaded = s.load_message_rows().unwrap();
     assert_eq!(loaded.len(), 1);
     assert_eq!(loaded[0].text, "hello");
 }

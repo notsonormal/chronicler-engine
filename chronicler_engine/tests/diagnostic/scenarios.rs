@@ -294,7 +294,7 @@ fn benchmark_quantifier_complete_failure() {
     );
 
     let snapshot = ctx.snapshot_storage.load_latest().unwrap().unwrap();
-    let messages = ctx.message_storage.load_messages().unwrap();
+    let messages = ctx.load_messages().unwrap();
     let npc_count = snapshot.scene.npcs_in_area.len();
     let has_system_log = messages
         .iter()
@@ -348,7 +348,7 @@ fn benchmark_quantifier_low_confidence() {
     );
 
     let snapshot = ctx.snapshot_storage.load_latest().unwrap().unwrap();
-    let messages = ctx.message_storage.load_messages().unwrap();
+    let messages = ctx.load_messages().unwrap();
     let npc_count = snapshot.scene.npcs_in_area.len();
     let has_narration = messages.iter().any(|m| m.log_type == LogType::Narration);
     let has_system_log = messages
@@ -399,7 +399,7 @@ fn benchmark_dynamic_room_creation() {
     );
 
     let snapshot = ctx.snapshot_storage.load_latest().unwrap().unwrap();
-    let messages = ctx.message_storage.load_messages().unwrap();
+    let messages = ctx.load_messages().unwrap();
     let current_room = snapshot.movement.current_room_id.clone();
     let is_dynamic = current_room.starts_with("dynamic_");
     let dynamic_room_count = snapshot.movement.dynamic_rooms.len();
@@ -539,7 +539,7 @@ fn benchmark_trigger_wrong_room_id() {
     );
 
     let snapshot = ctx.snapshot_storage.load_latest().unwrap().unwrap();
-    let messages = ctx.message_storage.load_messages().unwrap();
+    let messages = ctx.load_messages().unwrap();
     let trigger_fired = messages.iter().any(|m| m.text.contains("stranger nods"));
     let error_msg = match &snapshot.narrative.input_buffer.status {
         GenerationStatus::Error(msg) => msg.clone(),

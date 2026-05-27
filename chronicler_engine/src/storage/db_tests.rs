@@ -107,3 +107,104 @@ fn test_db_message_swipes_table_exists() {
     let exists: Result<String, _> = stmt.query_row([], |row| row.get(0));
     assert!(exists.is_ok(), "message_swipes table should exist");
 }
+
+#[test]
+fn test_db_cascade_delete_game() {
+    let pool = DbPool::new(":memory:").unwrap();
+    let conn = pool.conn();
+
+    // Insert a game (id 1 is already present from migration v1)
+    conn.execute(
+        "INSERT INTO games (world_name, name, created_at, updated_at) VALUES ('w', 'n', '1', '1')",
+        [],
+    )
+    .unwrap();
+    let game_id: i64 = conn.last_insert_rowid();
+
+    // Insert a snapshot for that game
+    conn.execute(
+        "INSERT INTO game_state_snapshots (game_id, movement, narrative, scene, npc_encounter_log, created_at)
+         VALUES (?1, '{}', '{}', '{}', '{}', '1')",
+        rusqlite::params![game_id],
+    )
+    .unwrap();
+
+    // Insert a message for that game
+    conn.execute(
+        "INSERT INTO messages (game_id, sender, log_type, timestamp, active_swipe_index, is_deleted)
+         VALUES (?1, NULL, 'Narration', '1', 0, 0)",
+        rusqlite::params![game_id],
+    )
+    .unwrap();
+    let message_id: i64 = conn.last_insert_rowid();
+
+    // Insert a swipe for that message
+    conn.execute(
+        "INSERT INTO message_swipes (message_id, swipe_index, text, snapshot_id, location_header, event_header)
+         VALUES (?1, 0, 'hello', NULL, NULL, NULL)",
+        rusqlite::params![message_id],
+    )
+    .unwrap();
+
+    // Verify rows exist
+    let snap_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM game_state_snapshots WHERE game_id = ?1",
+            rusqlite::params![game_id],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(snap_count, 1, "snapshot should exist before delete");
+
+    let msg_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM messages WHERE game_id = ?1",
+            rusqlite::params![game_id],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(msg_count, 1, "message should exist before delete");
+
+    let swipe_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM message_swipes WHERE message_id = ?1",
+            rusqlite::params![message_id],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(swipe_count, 1, "swipe should exist before delete");
+
+    // Delete the game — CASCADE should clean up everything
+    conn.execute(
+        "DELETE FROM games WHERE id = ?1",
+        rusqlite::params![game_id],
+    )
+    .unwrap();
+
+    let snap_count_after: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM game_state_snapshots WHERE game_id = ?1",
+            rusqlite::params![game_id],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(snap_count_after, 0, "snapshot should be cascaded-deleted");
+
+    let msg_count_after: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM messages WHERE game_id = ?1",
+            rusqlite::params![game_id],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(msg_count_after, 0, "message should be cascaded-deleted");
+
+    let swipe_count_after: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM message_swipes WHERE message_id = ?1",
+            rusqlite::params![message_id],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(swipe_count_after, 0, "swipe should be cascaded-deleted");
+}

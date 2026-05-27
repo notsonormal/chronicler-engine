@@ -192,8 +192,10 @@ pub struct ServerResources {
     pub map: Arc<MapDef>,
     pub player: Arc<crate::model::character::PlayerCard>,
     pub npcs: Arc<HashMap<String, NpcCard>>,
+    pub game_storage: Arc<dyn crate::storage::game_storage::GameStorage>,
     pub snapshot_storage: Arc<dyn crate::storage::snapshot_storage::SnapshotStorage>,
     pub message_storage: Arc<dyn crate::storage::message_storage::MessageStorage>,
+    pub message_swipe_storage: Arc<dyn crate::storage::message_swipe_storage::MessageSwipeStorage>,
     pub llm_message_storage: Arc<dyn crate::storage::llm_message_storage::LlmMessageStorage>,
     pub prompt_preset_storage: Arc<dyn crate::storage::prompt_preset_storage::PromptPresetStorage>,
     pub settings: Arc<RwLock<AppSettings>>,
@@ -201,8 +203,10 @@ pub struct ServerResources {
 
 #[derive(Clone)]
 pub struct AppState {
+    pub game_storage: Arc<dyn crate::storage::game_storage::GameStorage>,
     pub snapshot_storage: Arc<dyn crate::storage::snapshot_storage::SnapshotStorage>,
     pub message_storage: Arc<dyn crate::storage::message_storage::MessageStorage>,
+    pub message_swipe_storage: Arc<dyn crate::storage::message_swipe_storage::MessageSwipeStorage>,
     pub llm_message_storage: Arc<dyn crate::storage::llm_message_storage::LlmMessageStorage>,
     pub world: Arc<WorldCard>,
     pub map: Arc<MapDef>,
@@ -219,8 +223,10 @@ pub struct AppState {
 impl AppState {
     pub fn as_game_service_context(&self) -> crate::application::game_service::GameServiceContext {
         crate::application::game_service::GameServiceContext {
+            game_storage: Arc::clone(&self.game_storage),
             snapshot_storage: Arc::clone(&self.snapshot_storage),
             message_storage: Arc::clone(&self.message_storage),
+            message_swipe_storage: Arc::clone(&self.message_swipe_storage),
             llm_message_storage: Arc::clone(&self.llm_message_storage),
             world: Arc::clone(&self.world),
             map: Arc::clone(&self.map),
@@ -269,8 +275,10 @@ pub async fn run_server_with_config(
 ) -> Result<()> {
     let preset_storage = Arc::clone(&resources.prompt_preset_storage);
     let app_state = AppState {
+        game_storage: resources.game_storage,
         snapshot_storage: resources.snapshot_storage,
         message_storage: resources.message_storage,
+        message_swipe_storage: resources.message_swipe_storage,
         llm_message_storage: Arc::clone(&resources.llm_message_storage),
         world: resources.world,
         map: resources.map,

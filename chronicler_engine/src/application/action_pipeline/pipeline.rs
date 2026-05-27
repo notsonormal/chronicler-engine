@@ -10,13 +10,13 @@ use crate::engine::action_processing::{
 use crate::error::EngineError;
 use crate::model::character::{NpcCard, PlayerCard};
 use crate::model::map::MapDef;
+use crate::model::prompt_preset::PromptPreset;
 use crate::model::quantifier::{
     MovementParseResult, QuantifierConfidence, QuantifierParseResult, QuantifierResult,
     compute_npc_events,
 };
 use crate::model::state::StoredTriggerContext;
 use crate::model::state::{GameState, GenerationPhase, GenerationStatus, LogType};
-use crate::model::prompt_preset::PromptPreset;
 use crate::model::world::WorldCard;
 use crate::narrative::llm::backend::LlmCallResult;
 use crate::narrative::prompt::{PromptAssembler, make_prompt_context};

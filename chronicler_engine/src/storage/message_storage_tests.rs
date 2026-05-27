@@ -47,28 +47,9 @@ fn test_insert_and_load_roundtrip() {
     );
     let id = repo.insert_message(&msg).unwrap();
 
-    let loaded = repo.load_messages().unwrap();
+    let loaded = repo.load_message_rows().unwrap();
     assert_eq!(loaded.len(), 1);
     assert_eq!(loaded[0].id, id);
-    assert_eq!(loaded[0].text, "hello");
-}
-
-#[test]
-fn test_update_message() {
-    let repo = create_repo();
-    let msg = Message::new(
-        Some("Player".to_string()),
-        "original",
-        LogType::Input,
-        None,
-        None,
-    );
-    let id = repo.insert_message(&msg).unwrap();
-
-    repo.update_message(id, "updated").unwrap();
-
-    let loaded = repo.load_messages().unwrap();
-    assert_eq!(loaded[0].text, "updated");
 }
 
 #[test]
@@ -82,10 +63,10 @@ fn test_delete_message() {
         None,
     );
     let id = repo.insert_message(&msg).unwrap();
-    assert_eq!(repo.load_messages().unwrap().len(), 1);
+    assert_eq!(repo.load_message_rows().unwrap().len(), 1);
 
     repo.delete_message(id).unwrap();
-    assert!(repo.load_messages().unwrap().is_empty());
+    assert!(repo.load_message_rows().unwrap().is_empty());
 }
 
 #[test]
@@ -101,10 +82,10 @@ fn test_soft_delete_and_restore() {
     let id = repo.insert_message(&msg).unwrap();
 
     repo.soft_delete_message(id).unwrap();
-    assert!(repo.load_messages().unwrap().is_empty());
+    assert!(repo.load_message_rows().unwrap().is_empty());
 
     repo.restore_soft_deleted(&[id]).unwrap();
-    assert_eq!(repo.load_messages().unwrap().len(), 1);
+    assert_eq!(repo.load_message_rows().unwrap().len(), 1);
 }
 
 #[test]
@@ -121,11 +102,11 @@ fn test_purge_soft_deleted() {
 
     repo.soft_delete_message(id).unwrap();
     repo.purge_soft_deleted(&[id]).unwrap();
-    assert!(repo.load_messages().unwrap().is_empty());
+    assert!(repo.load_message_rows().unwrap().is_empty());
 }
 
 #[test]
-fn test_insert_swipe_and_update_active() {
+fn test_get_and_update_active_swipe_index() {
     let repo = create_repo();
     let msg = Message::new(
         Some("Player".to_string()),
@@ -136,23 +117,15 @@ fn test_insert_swipe_and_update_active() {
     );
     let id = repo.insert_message(&msg).unwrap();
 
-    let swipe = crate::model::message::Swipe {
-        text: "swipe 1".to_string(),
-        snapshot_id: None,
-        location_header: None,
-        event_header: None,
-    };
-    repo.insert_swipe(id, &swipe, 1).unwrap();
-    repo.update_active_swipe(id, 1).unwrap();
+    assert_eq!(repo.get_active_swipe_index(id).unwrap(), 0);
 
-    let loaded = repo.load_messages().unwrap();
-    assert_eq!(loaded[0].active_swipe_index, 1);
-    assert_eq!(loaded[0].swipes.len(), 2);
+    repo.update_active_swipe(id, 2).unwrap();
+    assert_eq!(repo.get_active_swipe_index(id).unwrap(), 2);
 }
 
 #[test]
-fn test_load_messages_empty() {
+fn test_load_message_rows_empty() {
     let repo = create_repo();
-    let loaded = repo.load_messages().unwrap();
+    let loaded = repo.load_message_rows().unwrap();
     assert!(loaded.is_empty());
 }

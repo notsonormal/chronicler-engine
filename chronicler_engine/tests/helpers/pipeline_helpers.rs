@@ -144,7 +144,7 @@ pub fn latest_state(
         ctx.player.clone(),
         (*ctx.npcs).clone(),
     );
-    if let Ok(msgs) = ctx.message_storage.load_messages() {
+    if let Ok(msgs) = ctx.load_messages() {
         if !msgs.is_empty() {
             state.narrative.history.replace(msgs);
         }
@@ -159,7 +159,7 @@ pub fn save_state(
     let snapshot =
         chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(state);
     let snapshot_id = ctx.snapshot_storage.save(&snapshot).unwrap();
-    let existing = ctx.message_storage.load_messages().unwrap_or_default();
+    let existing = ctx.load_messages().unwrap_or_default();
     for msg in existing {
         let _ = ctx.message_storage.delete_message(msg.id);
     }
@@ -167,7 +167,13 @@ pub fn save_state(
         if msg.snapshot_id.is_none() {
             msg.snapshot_id = Some(snapshot_id);
         }
-        let _ = ctx.message_storage.insert_message(&msg);
+        if let Some(swipe) = msg.swipes.first_mut() {
+            swipe.snapshot_id = Some(snapshot_id);
+        }
+        let id = ctx.message_storage.insert_message(&msg).unwrap();
+        for (idx, swipe) in msg.swipes.iter().enumerate() {
+            let _ = ctx.message_swipe_storage.insert_swipe(id, swipe, idx);
+        }
     }
 }
 

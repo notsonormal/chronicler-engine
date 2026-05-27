@@ -5,6 +5,7 @@ use std::sync::{Mutex, MutexGuard};
 use crate::model::game::Game;
 use crate::model::message::Message;
 use crate::model::state_snapshot::GameStateSnapshot;
+use crate::storage::game_storage::GameStorage;
 use crate::storage::message_storage::MessageStorage;
 use crate::storage::snapshot_storage::SnapshotStorage;
 
@@ -17,7 +18,6 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<T> {
 pub struct InMemorySnapshotRepository {
     game_id: AtomicU64,
     snapshots: Mutex<HashMap<u64, Vec<GameStateSnapshot>>>,
-    games: Mutex<Vec<Game>>,
     next_id: Mutex<u64>,
 }
 
@@ -36,19 +36,7 @@ impl InMemorySnapshotRepository {
         Self {
             game_id: AtomicU64::new(game_id),
             snapshots: Mutex::new(HashMap::new()),
-            games: Mutex::new(Vec::new()),
             next_id: Mutex::new(1),
-        }
-    }
-
-    fn do_set_game_id(&self, game_id: u64) {
-        let current = self.do_current_game_id();
-        if current != game_id {
-            let mut games = lock(&self.games);
-            if let Some(game) = games.iter_mut().find(|g| g.id == game_id) {
-                game.updated_at = chrono::Utc::now();
-            }
-            self.game_id.store(game_id, Ordering::SeqCst);
         }
     }
 
@@ -71,7 +59,7 @@ impl InMemorySnapshotRepository {
 
 impl SnapshotStorage for InMemorySnapshotRepository {
     fn set_game_id(&self, game_id: u64) {
-        self.do_set_game_id(game_id);
+        self.game_id.store(game_id, Ordering::SeqCst);
     }
 
     fn current_game_id(&self) -> u64 {
@@ -113,10 +101,67 @@ impl SnapshotStorage for InMemorySnapshotRepository {
             .and_then(|vec| vec.iter().find(|s| s.db_id == Some(id)).cloned());
         Ok(result)
     }
+}
+
+// ─── Game Repository ───────────────────────────────────────────────────────
+
+pub struct InMemoryGameRepository {
+    game_id: AtomicU64,
+    games: Mutex<Vec<Game>>,
+    next_id: Mutex<u64>,
+}
+
+impl Default for InMemoryGameRepository {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl InMemoryGameRepository {
+    pub fn new() -> Self {
+        Self::with_game_id(1)
+    }
+
+    pub fn with_game_id(game_id: u64) -> Self {
+        let now = chrono::Utc::now();
+        Self {
+            game_id: AtomicU64::new(game_id),
+            games: Mutex::new(vec![Game {
+                id: game_id,
+                world_name: "default".to_string(),
+                name: "default".to_string(),
+                created_at: now,
+                updated_at: now,
+            }]),
+            next_id: Mutex::new(game_id + 1),
+        }
+    }
+
+    fn do_current_game_id(&self) -> u64 {
+        self.game_id.load(Ordering::SeqCst)
+    }
+}
+
+impl GameStorage for InMemoryGameRepository {
+    fn set_game_id(&self, game_id: u64) {
+        let current = self.do_current_game_id();
+        if current != game_id {
+            let mut games = lock(&self.games);
+            if let Some(game) = games.iter_mut().find(|g| g.id == game_id) {
+                game.updated_at = chrono::Utc::now();
+            }
+            self.game_id.store(game_id, Ordering::SeqCst);
+        }
+    }
+
+    fn current_game_id(&self) -> u64 {
+        self.do_current_game_id()
+    }
 
     fn list_games(&self) -> Result<Vec<Game>, crate::error::EngineError> {
-        let games = lock(&self.games);
-        Ok(games.clone())
+        let mut games = lock(&self.games).clone();
+        games.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+        Ok(games)
     }
 
     fn create_game(&self, world_name: &str, name: &str) -> Result<u64, crate::error::EngineError> {
@@ -137,15 +182,92 @@ impl SnapshotStorage for InMemorySnapshotRepository {
 
     fn delete_game(&self, id: u64) -> Result<(), crate::error::EngineError> {
         let mut games = lock(&self.games);
-        let mut snaps = lock(&self.snapshots);
         games.retain(|g| g.id != id);
-        snaps.remove(&id);
         Ok(())
     }
 
     fn get_game(&self, id: u64) -> Result<Option<Game>, crate::error::EngineError> {
         let games = lock(&self.games);
         Ok(games.iter().find(|g| g.id == id).cloned())
+    }
+}
+
+// ─── Message Swipe Repository ──────────────────────────────────────────────
+
+pub struct InMemoryMessageSwipeStorage {
+    swipes: Mutex<HashMap<u64, Vec<crate::model::message::Swipe>>>,
+}
+
+impl Default for InMemoryMessageSwipeStorage {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl InMemoryMessageSwipeStorage {
+    pub fn new() -> Self {
+        Self {
+            swipes: Mutex::new(HashMap::new()),
+        }
+    }
+}
+
+impl crate::storage::message_swipe_storage::MessageSwipeStorage for InMemoryMessageSwipeStorage {
+    fn insert_swipe(
+        &self,
+        message_id: u64,
+        swipe: &crate::model::message::Swipe,
+        index: usize,
+    ) -> Result<(), crate::error::EngineError> {
+        let mut map = lock(&self.swipes);
+        let entry = map.entry(message_id).or_default();
+        if index < entry.len() {
+            entry.insert(index, swipe.clone());
+        } else {
+            entry.push(swipe.clone());
+        }
+        Ok(())
+    }
+
+    fn update_swipe_text(
+        &self,
+        message_id: u64,
+        swipe_index: usize,
+        text: &str,
+    ) -> Result<(), crate::error::EngineError> {
+        let mut map = lock(&self.swipes);
+        if let Some(swipes) = map.get_mut(&message_id) {
+            if let Some(swipe) = swipes.get_mut(swipe_index) {
+                swipe.text = text.to_string();
+            }
+        }
+        Ok(())
+    }
+
+    fn shift_swipe_indices(
+        &self,
+        _message_id: u64,
+        _offset: usize,
+    ) -> Result<(), crate::error::EngineError> {
+        // No-op for in-memory: insert_swipe handles index insertion directly.
+        Ok(())
+    }
+
+    fn load_swipes_for_messages(
+        &self,
+        message_ids: &[u64],
+    ) -> Result<
+        std::collections::HashMap<u64, Vec<crate::model::message::Swipe>>,
+        crate::error::EngineError,
+    > {
+        let map = lock(&self.swipes);
+        let mut result = std::collections::HashMap::new();
+        for &id in message_ids {
+            if let Some(swipes) = map.get(&id) {
+                result.insert(id, swipes.clone());
+            }
+        }
+        Ok(result)
     }
 }
 
@@ -203,22 +325,9 @@ impl MessageStorage for InMemoryMessageRepository {
         let entry = msgs.entry(gid).or_default();
         let mut msg = msg.clone();
         msg.id = id;
+        msg.swipes.clear();
         entry.push(msg);
         Ok(id)
-    }
-
-    fn update_message(&self, id: u64, text: &str) -> Result<(), crate::error::EngineError> {
-        let mut msgs = lock(&self.messages);
-        let gid = self.do_current_game_id();
-        if let Some(vec) = msgs.get_mut(&gid) {
-            if let Some(m) = vec.iter_mut().find(|m| m.id == id) {
-                m.text = text.to_string();
-                if let Some(swipe) = m.swipes.get_mut(m.active_swipe_index) {
-                    swipe.text = text.to_string();
-                }
-            }
-        }
-        Ok(())
     }
 
     fn delete_message(&self, id: u64) -> Result<(), crate::error::EngineError> {
@@ -230,13 +339,41 @@ impl MessageStorage for InMemoryMessageRepository {
         Ok(())
     }
 
-    fn load_messages(&self) -> Result<Vec<Message>, crate::error::EngineError> {
+    fn load_message_rows(&self) -> Result<Vec<Message>, crate::error::EngineError> {
         let msgs = lock(&self.messages);
         let gid = self.do_current_game_id();
         Ok(msgs
             .get(&gid)
             .map(|vec| vec.iter().filter(|m| !m.is_deleted).cloned().collect())
             .unwrap_or_default())
+    }
+
+    fn get_active_swipe_index(&self, id: u64) -> Result<usize, crate::error::EngineError> {
+        let msgs = lock(&self.messages);
+        let gid = self.do_current_game_id();
+        if let Some(vec) = msgs.get(&gid) {
+            if let Some(m) = vec.iter().find(|m| m.id == id) {
+                return Ok(m.active_swipe_index);
+            }
+        }
+        Err(crate::error::EngineError::Config(format!(
+            "Message {id} not found"
+        )))
+    }
+
+    fn update_active_swipe(
+        &self,
+        message_id: u64,
+        index: usize,
+    ) -> Result<(), crate::error::EngineError> {
+        let mut msgs = lock(&self.messages);
+        let gid = self.do_current_game_id();
+        if let Some(vec) = msgs.get_mut(&gid) {
+            if let Some(m) = vec.iter_mut().find(|m| m.id == message_id) {
+                m.active_swipe_index = index;
+            }
+        }
+        Ok(())
     }
 
     fn soft_delete_message(&self, id: u64) -> Result<(), crate::error::EngineError> {
@@ -266,76 +403,6 @@ impl MessageStorage for InMemoryMessageRepository {
         let gid = self.do_current_game_id();
         if let Some(vec) = msgs.get_mut(&gid) {
             vec.retain(|m| !ids.contains(&m.id));
-        }
-        Ok(())
-    }
-
-    fn insert_swipe(
-        &self,
-        message_id: u64,
-        swipe: &crate::model::message::Swipe,
-        index: usize,
-    ) -> Result<(), crate::error::EngineError> {
-        let mut msgs = lock(&self.messages);
-        let gid = self.do_current_game_id();
-        if let Some(vec) = msgs.get_mut(&gid) {
-            if let Some(m) = vec.iter_mut().find(|m| m.id == message_id) {
-                if index < m.swipes.len() {
-                    m.swipes.insert(index, swipe.clone());
-                } else {
-                    m.swipes.push(swipe.clone());
-                }
-            }
-        }
-        Ok(())
-    }
-
-    fn update_active_swipe(
-        &self,
-        message_id: u64,
-        index: usize,
-    ) -> Result<(), crate::error::EngineError> {
-        let mut msgs = lock(&self.messages);
-        let gid = self.do_current_game_id();
-        if let Some(vec) = msgs.get_mut(&gid) {
-            if let Some(m) = vec.iter_mut().find(|m| m.id == message_id) {
-                m.set_active_swipe(index);
-            }
-        }
-        Ok(())
-    }
-
-    fn shift_swipe_indices(
-        &self,
-        _message_id: u64,
-        _offset: usize,
-    ) -> Result<(), crate::error::EngineError> {
-        // No-op for in-memory: insert_swipe handles index insertion directly.
-        Ok(())
-    }
-
-    fn migrate_swipes(
-        &self,
-        message_id: u64,
-        pending_swipes: &[crate::model::message::Swipe],
-        new_active_index: usize,
-        to_delete: &[u64],
-    ) -> Result<(), crate::error::EngineError> {
-        let mut msgs = lock(&self.messages);
-        let gid = self.do_current_game_id();
-
-        if let Some(vec) = msgs.get_mut(&gid) {
-            if let Some(m) = vec.iter_mut().find(|m| m.id == message_id) {
-                for (idx, swipe) in pending_swipes.iter().enumerate().rev() {
-                    if idx < m.swipes.len() {
-                        m.swipes.insert(idx, swipe.clone());
-                    } else {
-                        m.swipes.push(swipe.clone());
-                    }
-                }
-                m.set_active_swipe(new_active_index);
-            }
-            vec.retain(|m| !to_delete.contains(&m.id));
         }
         Ok(())
     }

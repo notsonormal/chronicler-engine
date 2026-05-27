@@ -9,15 +9,19 @@ use crate::model::settings::AppSettings;
 use crate::model::state::GameState;
 use crate::model::state_snapshot::GameStateSnapshot;
 use crate::model::world::WorldCard;
+use crate::storage::game_storage::GameStorage;
 use crate::storage::llm_message_storage::LlmMessageStorage;
 use crate::storage::message_storage::MessageStorage;
+use crate::storage::message_swipe_storage::MessageSwipeStorage;
 use crate::storage::prompt_preset_storage::PromptPresetStorage;
 use crate::storage::snapshot_storage::SnapshotStorage;
 
 #[derive(Clone)]
 pub struct GameServiceContext {
+    pub game_storage: Arc<dyn GameStorage>,
     pub snapshot_storage: Arc<dyn SnapshotStorage>,
     pub message_storage: Arc<dyn MessageStorage>,
+    pub message_swipe_storage: Arc<dyn MessageSwipeStorage>,
     pub llm_message_storage: Arc<dyn LlmMessageStorage>,
     pub world: Arc<WorldCard>,
     pub map: Arc<crate::model::map::MapDef>,
@@ -32,6 +36,48 @@ pub struct GameServiceContext {
 }
 
 impl GameServiceContext {
+    /// Set the active game id on all storage modules.
+    pub fn set_game_id(&self, game_id: u64) {
+        self.game_storage.set_game_id(game_id);
+        self.snapshot_storage.set_game_id(game_id);
+        self.message_storage.set_game_id(game_id);
+    }
+
+    /// Load all messages (with swipes) for the current game.
+    pub fn load_messages(&self) -> Result<Vec<crate::model::message::Message>, EngineError> {
+        load_messages_with_swipes(&*self.message_storage, &*self.message_swipe_storage)
+    }
+
+    /// Update the active swipe's text for the given message.
+    pub fn update_message_text(&self, id: u64, text: &str) -> Result<(), EngineError> {
+        let index = self.message_storage.get_active_swipe_index(id)?;
+        self.message_swipe_storage
+            .update_swipe_text(id, index, text)
+    }
+
+    /// Migrate pending swipes to a new message after retry.
+    pub fn migrate_swipes(
+        &self,
+        message_id: u64,
+        pending_swipes: &[crate::model::message::Swipe],
+        new_active_index: usize,
+        to_delete: &[u64],
+    ) -> Result<(), EngineError> {
+        let offset = pending_swipes.len();
+        self.message_swipe_storage
+            .shift_swipe_indices(message_id, offset)?;
+        for (idx, swipe) in pending_swipes.iter().enumerate() {
+            self.message_swipe_storage
+                .insert_swipe(message_id, swipe, idx)?;
+        }
+        self.message_storage
+            .update_active_swipe(message_id, new_active_index)?;
+        for id in to_delete {
+            self.message_storage.purge_soft_deleted(&[*id])?;
+        }
+        Ok(())
+    }
+
     /// Quantifier presets do not include global rules or response length.
     pub fn active_quantifier_prompt(&self) -> String {
         let preset_id = {
@@ -73,6 +119,33 @@ impl GameServiceContext {
     }
 }
 
+/// Load message rows and attach swipe data.
+/// [DOC: docs/architecture/system.md]
+pub fn load_messages_with_swipes(
+    message_storage: &dyn MessageStorage,
+    message_swipe_storage: &dyn MessageSwipeStorage,
+) -> Result<Vec<crate::model::message::Message>, EngineError> {
+    let mut messages = message_storage.load_message_rows()?;
+    let ids: Vec<u64> = messages.iter().map(|m| m.id).collect();
+    let swipes_map = message_swipe_storage.load_swipes_for_messages(&ids)?;
+    for msg in &mut messages {
+        if let Some(swipes) = swipes_map.get(&msg.id) {
+            msg.swipes = swipes.clone();
+            if let Some(swipe) = msg
+                .swipes
+                .get(msg.active_swipe_index)
+                .or(msg.swipes.first())
+            {
+                msg.text = swipe.text.clone();
+                msg.location_header = swipe.location_header.clone();
+                msg.event_header = swipe.event_header.clone();
+                msg.snapshot_id = swipe.snapshot_id;
+            }
+        }
+    }
+    Ok(messages)
+}
+
 /// [DOC: docs/architecture/system.md]
 pub fn try_load_state(ctx: &GameServiceContext) -> Result<GameState, EngineError> {
     let snapshot = ctx.snapshot_storage.load_latest()?;
@@ -112,7 +185,7 @@ pub fn load_state(ctx: &GameServiceContext) -> GameState {
 
 pub fn load_messages_into_state(ctx: &GameServiceContext, state: &mut GameState) {
     // [DOC: docs/architecture/system.md]
-    if let Ok(msgs) = ctx.message_storage.load_messages() {
+    if let Ok(msgs) = ctx.load_messages() {
         state.narrative.history.replace(msgs);
     }
 }
@@ -120,13 +193,6 @@ pub fn load_messages_into_state(ctx: &GameServiceContext, state: &mut GameState)
 /// [DOC: docs/architecture/system.md]
 pub fn save_state(ctx: &GameServiceContext, state: &GameState) -> Result<u64, EngineError> {
     let snapshot = GameStateSnapshot::from_game_state(state);
-    save_snapshot(ctx, snapshot)
-}
-
-fn save_snapshot(
-    ctx: &GameServiceContext,
-    snapshot: GameStateSnapshot,
-) -> Result<u64, EngineError> {
     ctx.snapshot_storage.save(&snapshot)
 }
 
@@ -139,7 +205,7 @@ pub fn save_message_and_snapshot(
     state: &mut GameState,
 ) -> Result<u64, EngineError> {
     let snapshot = GameStateSnapshot::from_game_state(state);
-    let snapshot_id = save_snapshot(ctx, snapshot)?;
+    let snapshot_id = ctx.snapshot_storage.save(&snapshot)?;
     if let Some(msg) = state.narrative.history.last_mut() {
         if msg.id == 0 {
             msg.snapshot_id = Some(snapshot_id);
@@ -147,6 +213,9 @@ pub fn save_message_and_snapshot(
                 swipe.snapshot_id = Some(snapshot_id);
             }
             let id = ctx.message_storage.insert_message(&*msg)?;
+            for (idx, swipe) in msg.swipes.iter().enumerate() {
+                ctx.message_swipe_storage.insert_swipe(id, swipe, idx)?;
+            }
             msg.id = id;
         }
     }

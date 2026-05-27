@@ -65,6 +65,9 @@ pub fn run(args: Args) -> crate::error::Result<()> {
         }
     };
 
+    let game_storage: Arc<dyn crate::storage::game_storage::GameStorage> = Arc::new(
+        crate::storage::game_storage::SqliteGameRepository::new(db_pool.clone(), active_game_id),
+    );
     let snapshot_storage: Arc<dyn crate::storage::snapshot_storage::SnapshotStorage> = Arc::new(
         crate::storage::snapshot_storage::SqliteSnapshotRepository::new(
             db_pool.clone(),
@@ -77,6 +80,12 @@ pub fn run(args: Args) -> crate::error::Result<()> {
             active_game_id,
         ),
     );
+    let message_swipe_storage: Arc<dyn crate::storage::message_swipe_storage::MessageSwipeStorage> =
+        Arc::new(
+            crate::storage::message_swipe_storage::SqliteMessageSwipeRepository::new(
+                db_pool.clone(),
+            ),
+        );
     let llm_message_storage: Arc<dyn crate::storage::llm_message_storage::LlmMessageStorage> =
         Arc::new(
             crate::storage::llm_message_storage::SqliteLlmMessageStorage::new(db_pool.clone()),
@@ -91,7 +100,10 @@ pub fn run(args: Args) -> crate::error::Result<()> {
                 Arc::clone(&player_arc),
                 npcs_map.clone(),
             );
-            if let Ok(msgs) = message_storage.load_messages() {
+            if let Ok(msgs) = crate::application::context::load_messages_with_swipes(
+                &*message_storage,
+                &*message_swipe_storage,
+            ) {
                 new_state.narrative.history.replace(msgs);
             }
             new_state
@@ -116,7 +128,13 @@ pub fn run(args: Args) -> crate::error::Result<()> {
             if let Some(msg) = new_state.narrative.history.last_mut() {
                 if msg.id == 0 {
                     msg.snapshot_id = Some(snapshot_id);
+                    if let Some(swipe) = msg.swipes.first_mut() {
+                        swipe.snapshot_id = Some(snapshot_id);
+                    }
                     let id = message_storage.insert_message(&*msg)?;
+                    if let Some(swipe) = msg.swipes.first() {
+                        message_swipe_storage.insert_swipe(id, swipe, 0)?;
+                    }
                     msg.id = id;
                 }
             }
@@ -160,6 +178,7 @@ pub fn run(args: Args) -> crate::error::Result<()> {
         };
         let snapshot_storage_for_task = Arc::clone(&snapshot_storage);
         let message_storage_for_task = Arc::clone(&message_storage);
+        let message_swipe_storage_for_task = Arc::clone(&message_swipe_storage);
         let llm_storage_for_task = Arc::clone(&llm_message_storage);
         let world_for_task = Arc::clone(&world_arc);
         let map_for_task = Arc::clone(&map_arc);
@@ -184,7 +203,10 @@ pub fn run(args: Args) -> crate::error::Result<()> {
                     world_for_task.starting_room_id.clone(),
                 ),
             };
-            if let Ok(msgs) = message_storage_for_task.load_messages() {
+            if let Ok(msgs) = crate::application::context::load_messages_with_swipes(
+                &*message_storage_for_task,
+                &*message_swipe_storage_for_task,
+            ) {
                 state.narrative.history.replace(msgs);
             }
 
@@ -267,8 +289,10 @@ pub fn run(args: Args) -> crate::error::Result<()> {
         map: map_arc,
         player: player_arc,
         npcs: npcs_arc,
+        game_storage,
         snapshot_storage,
         message_storage,
+        message_swipe_storage,
         llm_message_storage,
         prompt_preset_storage,
         settings,

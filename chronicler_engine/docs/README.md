@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-27 00:17 UTC*
+*Index last generated: 2026-05-27 21:06 UTC*
 
 ### Root files
 
@@ -32,6 +32,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [ADR-016: Multi-Game Support](./adr/adr-016-multi-game-support.md)
 - [ADR-017: Message Swipes](./adr/adr-017-message-swipes.md)
 - [ADR-018: Application Service Layer](./adr/adr-018-application-service.md)
+- [ADR-019: One Table Per Storage Module](./adr/adr-019-one-table-per-storage-module.md)
 
 ### `docs/architecture/`
 
@@ -61,6 +62,7 @@ This folder contains all documentation for the Chronicler Engine project.
 
 ### `docs/plans/archived/`
 
+- [Implementation Plan: One Table Per Storage Module](./plans/archived/adr-019-storage-split-plan.md)
 - [Plan: Make PromptContext Require an Assembled System Prompt](./plans/archived/beast-boy-damage-colossus.md)
 - [Plan: Multi-Game Support for Chronicler Engine](./plans/archived/big-barda-nightwing-star-lord.md)
 - [Plan: Fix Swipe Code Review Issues](./plans/archived/bobbi-morse-superboy-nightwing.md)

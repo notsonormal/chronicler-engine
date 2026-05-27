@@ -274,6 +274,9 @@ fn test_retry_after_edited_input_uses_new_text() {
             .find(|m| m.log_type == LogType::Input)
         {
             msg.text = "sprint forward".to_string();
+            if let Some(swipe) = msg.swipes.first_mut() {
+                swipe.text = "sprint forward".to_string();
+            }
         }
         save_state(&ctx, &state);
     }
@@ -436,19 +439,29 @@ fn test_retry_no_pre_main_snapshot() {
     );
     let llm_storage: Arc<dyn chronicler_engine::storage::llm_message_storage::LlmMessageStorage> =
         Arc::new(
-            chronicler_engine::storage::llm_message_storage::SqliteLlmMessageStorage::new(db_pool),
+            chronicler_engine::storage::llm_message_storage::SqliteLlmMessageStorage::new(
+                db_pool.clone(),
+            ),
         );
 
     let snapshot =
         chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
     let _ = snapshot_storage.save(&snapshot);
+    let message_swipe_storage: Arc<
+        dyn chronicler_engine::storage::message_swipe_storage::MessageSwipeStorage,
+    > = Arc::new(chronicler_engine::test_support::InMemoryMessageSwipeStorage::new());
     for msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
-        let _ = message_storage.insert_message(&msg);
+        let id = message_storage.insert_message(&msg).unwrap();
+        if let Some(swipe) = msg.swipes.first() {
+            let _ = message_swipe_storage.insert_swipe(id, swipe, 0);
+        }
     }
 
     let ctx = chronicler_engine::application::game_service::GameServiceContext {
+        game_storage: Arc::new(chronicler_engine::test_support::InMemoryGameRepository::new()),
         snapshot_storage: snapshot_storage.clone(),
         message_storage: message_storage.clone(),
+        message_swipe_storage: message_swipe_storage.clone(),
         llm_message_storage: llm_storage,
         world: state.world.clone(),
         map: state.map.clone(),
@@ -512,7 +525,10 @@ fn test_retry_no_pre_main_snapshot() {
     );
 
     // Clear all snapshots (simulating missing pre-main)
-    let _ = snapshot_storage.delete_game(1);
+    {
+        let conn = db_pool.conn();
+        let _ = conn.execute("DELETE FROM game_state_snapshots WHERE game_id = 1", []);
+    }
     // Re-save current state as latest so retry has something to load
     {
         save_state(&ctx, &state_before_reset);

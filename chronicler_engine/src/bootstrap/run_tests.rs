@@ -177,7 +177,7 @@ fn test_restart_with_existing_game_does_not_duplicate_scenario() {
     }
 
     // Verify first startup created exactly one message
-    let initial_messages = message_repo.load_messages().unwrap();
+    let initial_messages = message_repo.load_message_rows().unwrap();
     assert_eq!(initial_messages.len(), 1);
 
     // 3. Simulate restart logic: find game, load snapshot
@@ -194,7 +194,7 @@ fn test_restart_with_existing_game_does_not_duplicate_scenario() {
 
     // If a snapshot exists, the fixed startup code loads it and skips scenario injection.
     // Verify no duplicate was inserted.
-    let msgs_after_restart = message_repo.load_messages().unwrap();
+    let msgs_after_restart = message_repo.load_message_rows().unwrap();
     assert_eq!(
         msgs_after_restart.len(),
         1,

@@ -1,7 +1,3 @@
-//! Application service orchestrates game state mutations, persistence, and
-//! game-service calls. It acts as the logic firewall between HTTP handlers
-//! and the domain.
-//!
 //! [DOC: docs/architecture/system.md]
 
 use std::collections::HashMap;
@@ -263,7 +259,7 @@ impl ApplicationService for DefaultApplicationService {
             return Err(ApplicationError::validation("No trigger context available"));
         }
 
-        let messages = ctx.message_storage.load_messages()?;
+        let messages = ctx.load_messages()?;
         let Some(last_msg) = messages.last() else {
             return Err(ApplicationError::validation("No messages to retrigger"));
         };
@@ -299,13 +295,13 @@ impl ApplicationService for DefaultApplicationService {
     }
 
     fn reset(&self, ctx: GameServiceContext) -> Result<(), ApplicationError> {
-        let current_id = ctx.snapshot_storage.current_game_id();
+        let current_id = ctx.game_storage.current_game_id();
         let world_name = ctx.world.name.clone();
 
-        ctx.snapshot_storage.delete_game(current_id)?;
+        ctx.game_storage.delete_game(current_id)?;
 
         let existing_names: Vec<String> = ctx
-            .snapshot_storage
+            .game_storage
             .list_games()?
             .into_iter()
             .filter(|g| g.world_name == world_name)
@@ -313,10 +309,9 @@ impl ApplicationService for DefaultApplicationService {
             .collect();
 
         let new_name = generate_game_name(&world_name, &existing_names);
-        let new_id = ctx.snapshot_storage.create_game(&world_name, &new_name)?;
+        let new_id = ctx.game_storage.create_game(&world_name, &new_name)?;
 
-        ctx.snapshot_storage.set_game_id(new_id);
-        ctx.message_storage.set_game_id(new_id);
+        ctx.set_game_id(new_id);
 
         let mut initial_state = build_fresh_initial_state(&ctx);
         let snapshot = GameStateSnapshot::from_game_state(&initial_state);
@@ -343,7 +338,7 @@ impl ApplicationService for DefaultApplicationService {
             return Err(ApplicationError::ConcurrentGeneration);
         }
 
-        let messages = ctx.message_storage.load_messages()?;
+        let messages = ctx.load_messages()?;
         let is_last = messages.last().map(|m| m.id == message_id).unwrap_or(false);
         if !is_last {
             return Err(ApplicationError::validation(
@@ -389,7 +384,7 @@ impl ApplicationService for DefaultApplicationService {
         if latest.is_some() {
             let snapshot = GameStateSnapshot::from_game_state(&guard);
             ctx.snapshot_storage.save(&snapshot)?;
-            ctx.message_storage.update_message(id, &text)?;
+            ctx.update_message_text(id, &text)?;
         }
         Ok(())
     }
@@ -417,22 +412,20 @@ impl ApplicationService for DefaultApplicationService {
         }
 
         let world_name = ctx.world.name.clone();
-        let games = ctx.snapshot_storage.list_games()?;
+        let games = ctx.game_storage.list_games()?;
         let existing_names: Vec<String> = games.iter().map(|g| g.name.clone()).collect();
         let name = generate_game_name(&world_name, &existing_names);
-        let new_id = ctx.snapshot_storage.create_game(&world_name, &name)?;
+        let new_id = ctx.game_storage.create_game(&world_name, &name)?;
 
-        let old_id = ctx.snapshot_storage.current_game_id();
-        ctx.snapshot_storage.set_game_id(new_id);
-        ctx.message_storage.set_game_id(new_id);
+        let old_id = ctx.game_storage.current_game_id();
+        ctx.set_game_id(new_id);
 
         let mut initial_state = build_fresh_initial_state(&ctx);
         let snapshot = GameStateSnapshot::from_game_state(&initial_state);
         let snapshot_id = match ctx.snapshot_storage.save(&snapshot) {
             Ok(id) => id,
             Err(e) => {
-                ctx.snapshot_storage.set_game_id(old_id);
-                ctx.message_storage.set_game_id(old_id);
+                ctx.set_game_id(old_id);
                 return Err(e.into());
             }
         };
@@ -455,7 +448,7 @@ impl ApplicationService for DefaultApplicationService {
             return Err(ApplicationError::ConcurrentGeneration);
         }
 
-        match ctx.snapshot_storage.get_game(id)? {
+        match ctx.game_storage.get_game(id)? {
             Some(game) => {
                 if game.world_name != ctx.world.name {
                     return Err(ApplicationError::validation(
@@ -466,8 +459,7 @@ impl ApplicationService for DefaultApplicationService {
             None => return Err(ApplicationError::validation("Game not found")),
         }
 
-        ctx.snapshot_storage.set_game_id(id);
-        ctx.message_storage.set_game_id(id);
+        ctx.set_game_id(id);
 
         Ok(())
     }
@@ -477,22 +469,22 @@ impl ApplicationService for DefaultApplicationService {
             return Err(ApplicationError::ConcurrentGeneration);
         }
 
-        if id == ctx.snapshot_storage.current_game_id() {
+        if id == ctx.game_storage.current_game_id() {
             return Err(ApplicationError::validation(
                 "Cannot delete the active game",
             ));
         }
 
-        ctx.snapshot_storage.delete_game(id)?;
+        ctx.game_storage.delete_game(id)?;
         Ok(())
     }
 
     fn list_games(&self, ctx: GameServiceContext) -> Result<Vec<Game>, ApplicationError> {
-        ctx.snapshot_storage.list_games().map_err(Into::into)
+        ctx.game_storage.list_games().map_err(Into::into)
     }
 
     fn current_game_id(&self, ctx: GameServiceContext) -> u64 {
-        ctx.snapshot_storage.current_game_id()
+        ctx.game_storage.current_game_id()
     }
 
     fn get_generating_status(
@@ -516,8 +508,8 @@ impl ApplicationService for DefaultApplicationService {
 
     fn get_current_game_name(&self, ctx: GameServiceContext) -> Result<String, ApplicationError> {
         match ctx
-            .snapshot_storage
-            .get_game(ctx.snapshot_storage.current_game_id())?
+            .game_storage
+            .get_game(ctx.game_storage.current_game_id())?
         {
             Some(g) => Ok(g.name),
             None => Ok("Unknown".to_string()),

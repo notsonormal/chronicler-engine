@@ -98,6 +98,7 @@ This project follows a **Spec-Driven Implementation** (SDI) strategy.
 2. **Doc Anchors**: Complex logic blocks are marked with `// [DOC: docs/path/to/file.md]`.
 3. **Lean Code**: Remove all "What" comments. If the code isn't clear, rename the symbols.
 4. **The "Why" Exception**: Comments are reserved ONLY for technical constraints (e.g., `// Workaround for Axum timeout issue`).
+5. **Be consise**: Be extremely concise. Sacrifice grammar for the sake of concision. 
 
 ### THE TEST-FIRST PHILOSOPHY
 This project relies on a comprehensive suite of integration tests as the ultimate source of truth for behavior.

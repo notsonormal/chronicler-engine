@@ -82,22 +82,6 @@ impl SnapshotStorage for FailingSnapshotStorage {
         }
         self.fallback.load_by_id(id)
     }
-
-    fn list_games(&self) -> Result<Vec<crate::model::game::Game>, EngineError> {
-        self.fallback.list_games()
-    }
-
-    fn create_game(&self, world_name: &str, name: &str) -> Result<u64, EngineError> {
-        self.fallback.create_game(world_name, name)
-    }
-
-    fn delete_game(&self, id: u64) -> Result<(), EngineError> {
-        self.fallback.delete_game(id)
-    }
-
-    fn get_game(&self, id: u64) -> Result<Option<crate::model::game::Game>, EngineError> {
-        self.fallback.get_game(id)
-    }
 }
 
 struct FailingMessageStorage {
@@ -131,10 +115,6 @@ impl MessageStorage for FailingMessageStorage {
         self.fallback.insert_message(msg)
     }
 
-    fn update_message(&self, id: u64, text: &str) -> Result<(), EngineError> {
-        self.fallback.update_message(id, text)
-    }
-
     fn delete_message(&self, id: u64) -> Result<(), EngineError> {
         if self
             .fail_delete_message
@@ -147,16 +127,20 @@ impl MessageStorage for FailingMessageStorage {
         self.fallback.delete_message(id)
     }
 
-    fn load_messages(&self) -> Result<Vec<Message>, EngineError> {
+    fn load_message_rows(&self) -> Result<Vec<Message>, EngineError> {
         if self
             .fail_load_messages
             .load(std::sync::atomic::Ordering::SeqCst)
         {
             return Err(EngineError::Internal(internal_error(
-                "simulated load_messages failure",
+                "simulated load_message_rows failure",
             )));
         }
-        self.fallback.load_messages()
+        self.fallback.load_message_rows()
+    }
+
+    fn get_active_swipe_index(&self, id: u64) -> Result<usize, EngineError> {
+        self.fallback.get_active_swipe_index(id)
     }
 
     fn soft_delete_message(&self, id: u64) -> Result<(), EngineError> {
@@ -179,32 +163,8 @@ impl MessageStorage for FailingMessageStorage {
         self.fallback.purge_soft_deleted(ids)
     }
 
-    fn insert_swipe(
-        &self,
-        message_id: u64,
-        swipe: &crate::model::message::Swipe,
-        index: usize,
-    ) -> Result<(), EngineError> {
-        self.fallback.insert_swipe(message_id, swipe, index)
-    }
-
     fn update_active_swipe(&self, message_id: u64, index: usize) -> Result<(), EngineError> {
         self.fallback.update_active_swipe(message_id, index)
-    }
-
-    fn shift_swipe_indices(&self, message_id: u64, offset: usize) -> Result<(), EngineError> {
-        self.fallback.shift_swipe_indices(message_id, offset)
-    }
-
-    fn migrate_swipes(
-        &self,
-        message_id: u64,
-        pending_swipes: &[crate::model::message::Swipe],
-        new_active_index: usize,
-        to_delete: &[u64],
-    ) -> Result<(), EngineError> {
-        self.fallback
-            .migrate_swipes(message_id, pending_swipes, new_active_index, to_delete)
     }
 }
 
@@ -217,11 +177,17 @@ fn make_test_state() -> GameState {
 }
 
 fn make_empty_context(state: GameState) -> GameServiceContext {
+    let game_storage =
+        Arc::new(crate::test_support::in_memory_storage::InMemoryGameRepository::new());
     let snapshot_storage: Arc<dyn SnapshotStorage> = Arc::new(InMemorySnapshotRepository::new());
     let message_storage: Arc<dyn MessageStorage> = Arc::new(InMemoryMessageRepository::new());
     GameServiceContext {
+        game_storage,
         snapshot_storage,
         message_storage,
+        message_swipe_storage: Arc::new(
+            crate::test_support::in_memory_storage::InMemoryMessageSwipeStorage::new(),
+        ),
         llm_message_storage: Arc::new(
             crate::storage::llm_message_storage::InMemoryLlmMessageStorage::new(),
         ),
@@ -247,6 +213,18 @@ fn make_service() -> DefaultGameService {
     )
 }
 
+fn insert_message_with_swipe(ctx: &GameServiceContext, msg: &crate::model::message::Message) {
+    let id = ctx.message_storage.insert_message(msg).unwrap();
+    if let Some(swipe) = msg.swipes.first() {
+        let mut swipe = swipe.clone();
+        swipe.text = msg.text.clone();
+        swipe.snapshot_id = msg.snapshot_id;
+        swipe.location_header = msg.location_header.clone();
+        swipe.event_header = msg.event_header.clone();
+        let _ = ctx.message_swipe_storage.insert_swipe(id, &swipe, 0);
+    }
+}
+
 fn add_input_and_save(ctx: &GameServiceContext, text: &str) -> u64 {
     let mut state = ctx.load_state();
     let player_name = state.player.sheet.name.clone();
@@ -255,7 +233,7 @@ fn add_input_and_save(ctx: &GameServiceContext, text: &str) -> u64 {
     let id = ctx.snapshot_storage.save(&snapshot).unwrap();
     if let Some(last) = state.narrative.history.last_mut() {
         last.snapshot_id = Some(id);
-        let _ = ctx.message_storage.insert_message(last);
+        insert_message_with_swipe(ctx, last);
     }
     id
 }
@@ -267,7 +245,7 @@ fn add_narration_and_save(ctx: &GameServiceContext, text: &str) -> u64 {
     let id = ctx.snapshot_storage.save(&snapshot).unwrap();
     if let Some(last) = state.narrative.history.last_mut() {
         last.snapshot_id = Some(id);
-        let _ = ctx.message_storage.insert_message(last);
+        insert_message_with_swipe(ctx, last);
     }
     id
 }
@@ -439,7 +417,7 @@ fn test_retry_event_continuation_cancels_before_llm() {
     let pre_event_id = ctx.snapshot_storage.save(&snapshot).unwrap();
     if let Some(last) = pre_event_state.narrative.history.last_mut() {
         last.snapshot_id = Some(pre_event_id);
-        let _ = ctx.message_storage.insert_message(last);
+        insert_message_with_swipe(&ctx, last);
     }
 
     ctx.cancel_token.cancel();
@@ -496,7 +474,7 @@ fn test_retry_event_trigger_narration_fails() {
         crate::model::state_snapshot::GameStateSnapshot::from_game_state(&final_state);
     let _ = ctx.snapshot_storage.save(&final_snapshot);
     if let Some(last) = final_state.narrative.history.last_mut() {
-        let _ = ctx.message_storage.insert_message(last);
+        insert_message_with_swipe(&ctx, last);
     }
 
     retry_last_response_impl(&service, ctx.clone());
@@ -508,7 +486,8 @@ fn test_retry_event_trigger_narration_fails() {
             state.narrative.input_buffer.status,
             GenerationStatus::Error(_)
         ),
-        "Should set error status when trigger narration fails"
+        "Should set error status when trigger narration fails, got {:?}",
+        state.narrative.input_buffer.status
     );
 }
 
@@ -569,7 +548,7 @@ fn test_retry_main_no_pre_main_snapshot() {
     let player_name = state.player.sheet.name.clone();
     state.add_log("test input".to_string(), Some(player_name), LogType::Input);
     if let Some(last) = state.narrative.history.last_mut() {
-        let _ = ctx.message_storage.insert_message(last);
+        insert_message_with_swipe(&ctx, last);
     }
 
     let mut state = ctx.load_state();
@@ -577,7 +556,7 @@ fn test_retry_main_no_pre_main_snapshot() {
     let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
     let _ = ctx.snapshot_storage.save(&snapshot);
     if let Some(last) = state.narrative.history.last_mut() {
-        let _ = ctx.message_storage.insert_message(last);
+        insert_message_with_swipe(&ctx, last);
     }
 
     retry_last_response_impl(&service, ctx.clone());
@@ -619,7 +598,7 @@ fn test_retry_event_continuation_happy_path() {
     let pre_event_id = ctx.snapshot_storage.save(&snapshot).unwrap();
     if let Some(last) = pre_event_state.narrative.history.last_mut() {
         last.snapshot_id = Some(pre_event_id);
-        let _ = ctx.message_storage.insert_message(last);
+        insert_message_with_swipe(&ctx, last);
     }
 
     let mut final_state = pre_event_state;
@@ -635,7 +614,7 @@ fn test_retry_event_continuation_happy_path() {
     let _ = ctx.snapshot_storage.save(&final_snapshot);
     if let Some(last) = final_state.narrative.history.last_mut() {
         last.snapshot_id = Some(final_snapshot.db_id.unwrap_or(0));
-        let _ = ctx.message_storage.insert_message(last);
+        insert_message_with_swipe(&ctx, last);
     }
 
     retry_last_response_impl(&service, ctx.clone());
@@ -816,7 +795,7 @@ fn test_retry_event_empty_continuation_triggers_error() {
     let pre_event_id = ctx.snapshot_storage.save(&snapshot).unwrap();
     if let Some(last) = pre_event_state.narrative.history.last_mut() {
         last.snapshot_id = Some(pre_event_id);
-        let _ = ctx.message_storage.insert_message(last);
+        insert_message_with_swipe(&ctx, last);
     }
 
     let mut final_state = pre_event_state;
@@ -831,7 +810,7 @@ fn test_retry_event_empty_continuation_triggers_error() {
         crate::model::state_snapshot::GameStateSnapshot::from_game_state(&final_state);
     let _ = ctx.snapshot_storage.save(&final_snapshot);
     if let Some(last) = final_state.narrative.history.last_mut() {
-        let _ = ctx.message_storage.insert_message(last);
+        insert_message_with_swipe(&ctx, last);
     }
 
     retry_last_response_impl(&service, ctx.clone());
@@ -880,7 +859,7 @@ fn test_retry_aborts_when_message_delete_fails() {
     );
 
     // Messages should NOT have been truncated — both input and narration remain
-    let msgs = ctx.message_storage.load_messages().unwrap();
+    let msgs = ctx.load_messages().unwrap();
     assert_eq!(
         msgs.len(),
         2,
@@ -899,7 +878,7 @@ fn test_retry_migrates_pending_swipes() {
     let _narration_id = add_narration_and_save(&ctx, "Narration text");
 
     // Add extra swipes to the narration so they become "pending swipes"
-    let msgs = ctx.message_storage.load_messages().unwrap();
+    let msgs = ctx.load_messages().unwrap();
     let narration_msg = msgs
         .iter()
         .find(|m| m.log_type == LogType::Narration)
@@ -910,14 +889,14 @@ fn test_retry_migrates_pending_swipes() {
         location_header: None,
         event_header: None,
     };
-    ctx.message_storage
+    ctx.message_swipe_storage
         .insert_swipe(narration_msg.id, &extra_swipe, 1)
         .unwrap();
 
     retry_last_response_impl(&service, ctx.clone());
 
     // After retry, the new narration should have the old swipes migrated
-    let msgs = ctx.message_storage.load_messages().unwrap();
+    let msgs = ctx.load_messages().unwrap();
     let new_narration = msgs
         .iter()
         .find(|m| m.log_type == LogType::Narration)
@@ -956,7 +935,7 @@ fn test_retrigger_event_impl_cancels_cleanly() {
     let pre_event_id = ctx.snapshot_storage.save(&snapshot).unwrap();
     if let Some(last) = pre_event_state.narrative.history.last_mut() {
         last.snapshot_id = Some(pre_event_id);
-        let _ = ctx.message_storage.insert_message(last);
+        insert_message_with_swipe(&ctx, last);
     }
 
     let mut final_state = pre_event_state;
@@ -971,7 +950,7 @@ fn test_retrigger_event_impl_cancels_cleanly() {
         crate::model::state_snapshot::GameStateSnapshot::from_game_state(&final_state);
     let _ = ctx.snapshot_storage.save(&final_snapshot);
     if let Some(last) = final_state.narrative.history.last_mut() {
-        let _ = ctx.message_storage.insert_message(last);
+        insert_message_with_swipe(&ctx, last);
     }
 
     ctx.cancel_token.cancel();

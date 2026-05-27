@@ -271,21 +271,6 @@ impl SnapshotStorage for FailingSaveStorage {
     {
         self.inner.load_by_id(id)
     }
-    fn list_games(&self) -> Result<Vec<crate::model::game::Game>, crate::error::EngineError> {
-        self.inner.list_games()
-    }
-    fn create_game(&self, world_name: &str, name: &str) -> Result<u64, crate::error::EngineError> {
-        self.inner.create_game(world_name, name)
-    }
-    fn delete_game(&self, id: u64) -> Result<(), crate::error::EngineError> {
-        self.inner.delete_game(id)
-    }
-    fn get_game(
-        &self,
-        id: u64,
-    ) -> Result<Option<crate::model::game::Game>, crate::error::EngineError> {
-        self.inner.get_game(id)
-    }
 }
 
 #[test]

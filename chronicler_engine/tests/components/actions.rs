@@ -51,32 +51,6 @@ async fn test_action_handler_load_state_failure() {
         fn current_game_id(&self) -> u64 {
             self.inner.current_game_id()
         }
-
-        fn list_games(
-            &self,
-        ) -> Result<Vec<chronicler_engine::model::game::Game>, chronicler_engine::error::EngineError>
-        {
-            self.inner.list_games()
-        }
-        fn create_game(
-            &self,
-            world_name: &str,
-            name: &str,
-        ) -> Result<u64, chronicler_engine::error::EngineError> {
-            self.inner.create_game(world_name, name)
-        }
-        fn delete_game(&self, id: u64) -> Result<(), chronicler_engine::error::EngineError> {
-            self.inner.delete_game(id)
-        }
-        fn get_game(
-            &self,
-            id: u64,
-        ) -> Result<
-            Option<chronicler_engine::model::game::Game>,
-            chronicler_engine::error::EngineError,
-        > {
-            self.inner.get_game(id)
-        }
     }
 
     let snapshot_storage: Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage> =
@@ -146,32 +120,6 @@ async fn test_action_handler_snapshot_save_failure() {
         fn current_game_id(&self) -> u64 {
             self.inner.current_game_id()
         }
-
-        fn list_games(
-            &self,
-        ) -> Result<Vec<chronicler_engine::model::game::Game>, chronicler_engine::error::EngineError>
-        {
-            self.inner.list_games()
-        }
-        fn create_game(
-            &self,
-            world_name: &str,
-            name: &str,
-        ) -> Result<u64, chronicler_engine::error::EngineError> {
-            self.inner.create_game(world_name, name)
-        }
-        fn delete_game(&self, id: u64) -> Result<(), chronicler_engine::error::EngineError> {
-            self.inner.delete_game(id)
-        }
-        fn get_game(
-            &self,
-            id: u64,
-        ) -> Result<
-            Option<chronicler_engine::model::game::Game>,
-            chronicler_engine::error::EngineError,
-        > {
-            self.inner.get_game(id)
-        }
     }
 
     let snapshot_storage: Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage> =
@@ -240,32 +188,6 @@ async fn test_action_confirm_handler_render_error_fallback() {
 
         fn current_game_id(&self) -> u64 {
             self.inner.current_game_id()
-        }
-
-        fn list_games(
-            &self,
-        ) -> Result<Vec<chronicler_engine::model::game::Game>, chronicler_engine::error::EngineError>
-        {
-            self.inner.list_games()
-        }
-        fn create_game(
-            &self,
-            world_name: &str,
-            name: &str,
-        ) -> Result<u64, chronicler_engine::error::EngineError> {
-            self.inner.create_game(world_name, name)
-        }
-        fn delete_game(&self, id: u64) -> Result<(), chronicler_engine::error::EngineError> {
-            self.inner.delete_game(id)
-        }
-        fn get_game(
-            &self,
-            id: u64,
-        ) -> Result<
-            Option<chronicler_engine::model::game::Game>,
-            chronicler_engine::error::EngineError,
-        > {
-            self.inner.get_game(id)
         }
     }
 

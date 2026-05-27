@@ -589,32 +589,6 @@ async fn test_retry_handler_load_state_failure() {
         fn current_game_id(&self) -> u64 {
             self.inner.current_game_id()
         }
-
-        fn list_games(
-            &self,
-        ) -> Result<Vec<chronicler_engine::model::game::Game>, chronicler_engine::error::EngineError>
-        {
-            self.inner.list_games()
-        }
-        fn create_game(
-            &self,
-            world_name: &str,
-            name: &str,
-        ) -> Result<u64, chronicler_engine::error::EngineError> {
-            self.inner.create_game(world_name, name)
-        }
-        fn delete_game(&self, id: u64) -> Result<(), chronicler_engine::error::EngineError> {
-            self.inner.delete_game(id)
-        }
-        fn get_game(
-            &self,
-            id: u64,
-        ) -> Result<
-            Option<chronicler_engine::model::game::Game>,
-            chronicler_engine::error::EngineError,
-        > {
-            self.inner.get_game(id)
-        }
     }
 
     let storage_dyn = Arc::clone(&snapshot_storage_inner);
@@ -837,21 +811,29 @@ async fn test_switch_swipe_missing_snapshot() {
     let message_storage: Arc<dyn chronicler_engine::storage::message_storage::MessageStorage> =
         Arc::new(chronicler_engine::test_support::InMemoryMessageRepository::new());
 
+    let message_swipe_storage: Arc<
+        dyn chronicler_engine::storage::message_swipe_storage::MessageSwipeStorage,
+    > = Arc::new(chronicler_engine::test_support::InMemoryMessageSwipeStorage::new());
+
     let app = TestAppBuilder::default_test()
         .log("look around", Some("Test Player"), LogType::Input)
         .snapshot_storage(Arc::clone(&snapshot_storage))
         .message_storage(Arc::clone(&message_storage))
+        .message_swipe_storage(Arc::clone(&message_swipe_storage))
         .build();
 
     // Insert a narration with a swipe that has NO snapshot_id
-    let mut msg = Message::new(None, "Narration", LogType::Narration, None, None);
-    msg.swipes.push(Swipe {
+    let msg = Message::new(None, "Narration", LogType::Narration, None, None);
+    let id = message_storage.insert_message(&msg).unwrap();
+    let swipe0 = msg.swipes.first().unwrap().clone();
+    message_swipe_storage.insert_swipe(id, &swipe0, 0).unwrap();
+    let swipe1 = Swipe {
         text: "Second swipe".to_string(),
         snapshot_id: None, // Deliberately missing
         location_header: None,
         event_header: None,
-    });
-    let id = message_storage.insert_message(&msg).unwrap();
+    };
+    message_swipe_storage.insert_swipe(id, &swipe1, 1).unwrap();
 
     let req = Request::builder()
         .uri(format!("/message/{id}/swipe/1"))
@@ -880,11 +862,16 @@ async fn test_switch_swipe_changes_active_swipe() {
     let message_storage: Arc<dyn chronicler_engine::storage::message_storage::MessageStorage> =
         Arc::new(chronicler_engine::test_support::InMemoryMessageRepository::new());
 
+    let message_swipe_storage: Arc<
+        dyn chronicler_engine::storage::message_swipe_storage::MessageSwipeStorage,
+    > = Arc::new(chronicler_engine::test_support::InMemoryMessageSwipeStorage::new());
+
     let app = TestAppBuilder::default_test()
         .log("look around", Some("Test Player"), LogType::Input)
         .log("First narration", None, LogType::Narration)
         .snapshot_storage(Arc::clone(&snapshot_storage))
         .message_storage(Arc::clone(&message_storage))
+        .message_swipe_storage(Arc::clone(&message_swipe_storage))
         .build();
 
     // After build, fix up narration message with snapshot_id
@@ -894,7 +881,7 @@ async fn test_switch_swipe_changes_active_swipe() {
         .expect("Should have snapshot");
     let snapshot_id = latest.db_id.expect("Should have snapshot id");
 
-    let msgs = message_storage.load_messages().unwrap();
+    let msgs = message_storage.load_message_rows().unwrap();
     let narration = msgs
         .into_iter()
         .find(|m| m.log_type == LogType::Narration)
@@ -904,22 +891,25 @@ async fn test_switch_swipe_changes_active_swipe() {
 
     let mut updated = narration.clone();
     updated.snapshot_id = Some(snapshot_id);
-    if let Some(swipe) = updated.swipes.first_mut() {
-        swipe.snapshot_id = Some(snapshot_id);
-    }
     let narration_id = message_storage.insert_message(&updated).unwrap();
 
+    let swipe0 = Swipe {
+        text: "First narration".to_string(),
+        snapshot_id: Some(snapshot_id),
+        location_header: None,
+        event_header: None,
+    };
+    message_swipe_storage
+        .insert_swipe(narration_id, &swipe0, 0)
+        .unwrap();
     let swipe1 = Swipe {
         text: "Second narration".to_string(),
         snapshot_id: Some(snapshot_id),
         location_header: None,
         event_header: None,
     };
-    message_storage
+    message_swipe_storage
         .insert_swipe(narration_id, &swipe1, 1)
-        .unwrap();
-    message_storage
-        .update_active_swipe(narration_id, 1)
         .unwrap();
 
     let req = Request::builder()
@@ -988,32 +978,6 @@ async fn test_retry_handler_snapshot_save_failure() {
 
         fn current_game_id(&self) -> u64 {
             self.inner.current_game_id()
-        }
-
-        fn list_games(
-            &self,
-        ) -> Result<Vec<chronicler_engine::model::game::Game>, chronicler_engine::error::EngineError>
-        {
-            self.inner.list_games()
-        }
-        fn create_game(
-            &self,
-            world_name: &str,
-            name: &str,
-        ) -> Result<u64, chronicler_engine::error::EngineError> {
-            self.inner.create_game(world_name, name)
-        }
-        fn delete_game(&self, id: u64) -> Result<(), chronicler_engine::error::EngineError> {
-            self.inner.delete_game(id)
-        }
-        fn get_game(
-            &self,
-            id: u64,
-        ) -> Result<
-            Option<chronicler_engine::model::game::Game>,
-            chronicler_engine::error::EngineError,
-        > {
-            self.inner.get_game(id)
         }
     }
 
@@ -1085,32 +1049,6 @@ async fn test_reset_handler_snapshot_save_failure() {
 
         fn current_game_id(&self) -> u64 {
             self.inner.current_game_id()
-        }
-
-        fn list_games(
-            &self,
-        ) -> Result<Vec<chronicler_engine::model::game::Game>, chronicler_engine::error::EngineError>
-        {
-            self.inner.list_games()
-        }
-        fn create_game(
-            &self,
-            world_name: &str,
-            name: &str,
-        ) -> Result<u64, chronicler_engine::error::EngineError> {
-            self.inner.create_game(world_name, name)
-        }
-        fn delete_game(&self, id: u64) -> Result<(), chronicler_engine::error::EngineError> {
-            self.inner.delete_game(id)
-        }
-        fn get_game(
-            &self,
-            id: u64,
-        ) -> Result<
-            Option<chronicler_engine::model::game::Game>,
-            chronicler_engine::error::EngineError,
-        > {
-            self.inner.get_game(id)
         }
     }
 

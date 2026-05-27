@@ -13,6 +13,10 @@ impl DbPool {
         let conn = Connection::open(path)
             .map_err(|e| crate::error::EngineError::Config(format!("Failed to open DB: {e}")))?;
         run_migrations(&conn)?;
+        conn.pragma_update(None, "foreign_keys", true)
+            .map_err(|e| {
+                crate::error::EngineError::Config(format!("Failed to enable foreign keys: {e}"))
+            })?;
         Ok(Self {
             conn: Arc::new(Mutex::new(conn)),
         })
@@ -331,6 +335,115 @@ fn run_migrations(conn: &Connection) -> Result<(), crate::error::EngineError> {
         conn.pragma_update(None, "user_version", 8)
             .map_err(|e| merr(8, e))?;
         conn.execute("COMMIT", []).map_err(|e| merr(8, e))?;
+    }
+
+    if version < 9 {
+        // Add ON DELETE CASCADE foreign keys so GameStorage::delete_game
+        // can delete a single games row and let SQLite clean up children.
+        // Tables must be recreated because SQLite cannot add FK constraints
+        // to existing columns via ALTER TABLE.
+        conn.execute("BEGIN", []).map_err(|e| merr(9, e))?;
+
+        // Recreate game_state_snapshots with FK to games
+        conn.execute(
+            "CREATE TABLE game_state_snapshots_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                game_id INTEGER NOT NULL DEFAULT 1 REFERENCES games(id) ON DELETE CASCADE,
+                movement TEXT NOT NULL,
+                narrative TEXT NOT NULL,
+                scene TEXT NOT NULL,
+                npc_encounter_log TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )",
+            [],
+        )
+        .map_err(|e| merr(9, e))?;
+        conn.execute(
+            "INSERT INTO game_state_snapshots_new
+             SELECT id, game_id, movement, narrative, scene, npc_encounter_log, created_at
+             FROM game_state_snapshots",
+            [],
+        )
+        .map_err(|e| merr(9, e))?;
+        conn.execute("DROP TABLE game_state_snapshots", [])
+            .map_err(|e| merr(9, e))?;
+        conn.execute(
+            "ALTER TABLE game_state_snapshots_new RENAME TO game_state_snapshots",
+            [],
+        )
+        .map_err(|e| merr(9, e))?;
+
+        // Recreate messages with FK to games
+        conn.execute(
+            "CREATE TABLE messages_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                game_id INTEGER NOT NULL DEFAULT 1 REFERENCES games(id) ON DELETE CASCADE,
+                sender TEXT,
+                log_type TEXT NOT NULL,
+                timestamp TEXT NOT NULL,
+                active_swipe_index INTEGER NOT NULL DEFAULT 0,
+                is_deleted INTEGER NOT NULL DEFAULT 0
+            )",
+            [],
+        )
+        .map_err(|e| merr(9, e))?;
+        conn.execute(
+            "INSERT INTO messages_new
+             SELECT id, game_id, sender, log_type, timestamp, active_swipe_index, is_deleted
+             FROM messages",
+            [],
+        )
+        .map_err(|e| merr(9, e))?;
+        conn.execute("DROP TABLE messages", [])
+            .map_err(|e| merr(9, e))?;
+        conn.execute("ALTER TABLE messages_new RENAME TO messages", [])
+            .map_err(|e| merr(9, e))?;
+
+        // Recreate message_swipes (its FK to messages was dropped when messages was dropped)
+        conn.execute(
+            "CREATE TABLE message_swipes_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+                swipe_index INTEGER NOT NULL,
+                text TEXT NOT NULL,
+                snapshot_id INTEGER,
+                location_header TEXT,
+                event_header TEXT,
+                UNIQUE(message_id, swipe_index)
+            )",
+            [],
+        )
+        .map_err(|e| merr(9, e))?;
+        conn.execute(
+            "INSERT INTO message_swipes_new
+             SELECT id, message_id, swipe_index, text, snapshot_id, location_header, event_header
+             FROM message_swipes",
+            [],
+        )
+        .map_err(|e| merr(9, e))?;
+        conn.execute("DROP TABLE message_swipes", [])
+            .map_err(|e| merr(9, e))?;
+        conn.execute(
+            "ALTER TABLE message_swipes_new RENAME TO message_swipes",
+            [],
+        )
+        .map_err(|e| merr(9, e))?;
+
+        // Recreate indexes lost during table drops
+        conn.execute(
+            "CREATE INDEX idx_messages_game_id ON messages(game_id, id)",
+            [],
+        )
+        .map_err(|e| merr(9, e))?;
+        conn.execute(
+            "CREATE INDEX idx_snapshots_game_latest ON game_state_snapshots(game_id, created_at DESC)",
+            [],
+        )
+        .map_err(|e| merr(9, e))?;
+
+        conn.pragma_update(None, "user_version", 9)
+            .map_err(|e| merr(9, e))?;
+        conn.execute("COMMIT", []).map_err(|e| merr(9, e))?;
     }
 
     Ok(())
