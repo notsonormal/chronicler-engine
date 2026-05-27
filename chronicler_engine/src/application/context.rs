@@ -32,41 +32,6 @@ pub struct GameServiceContext {
 }
 
 impl GameServiceContext {
-    /// Returns `(max_context_tokens, max_tokens)`.
-    pub fn prompt_build_params(&self) -> (u32, Option<u32>) {
-        let guard = self.settings.read().unwrap_or_else(|e| e.into_inner());
-        let conn = guard.get_narration_connection();
-        let max_context_tokens = conn
-            .map(|c| c.resolve_max_context_tokens())
-            .unwrap_or(crate::narrative::prompt::budget::MAX_CONTEXT_TOKENS);
-        let max_tokens = conn.and_then(|c| c.max_tokens);
-        (max_context_tokens, max_tokens)
-    }
-
-    /// This avoids stale caches when settings change.
-    pub fn active_system_prompt(&self) -> String {
-        let (preset_id, response_length) = {
-            let settings = self.settings.read().unwrap_or_else(|e| e.into_inner());
-            (
-                settings.active_system_prompt_preset_id.clone(),
-                settings.response_length.clone(),
-            )
-        };
-        match self.preset_storage.get(&preset_id) {
-            Ok(Some(preset)) => {
-                preset.assemble_prompt_text(&self.world.global_rules, Some(&response_length))
-            }
-            Ok(None) => {
-                log::error!("active system preset '{preset_id}' not found — defaults not seeded?");
-                String::new()
-            }
-            Err(e) => {
-                log::error!("preset storage inaccessible: {e}");
-                String::new()
-            }
-        }
-    }
-
     /// Quantifier presets do not include global rules or response length.
     pub fn active_quantifier_prompt(&self) -> String {
         let preset_id = {

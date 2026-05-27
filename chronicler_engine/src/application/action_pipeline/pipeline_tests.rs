@@ -9,8 +9,8 @@ use crate::model::character::NpcCard;
 use crate::model::quantifier::{QuantifierConfidence, QuantifierParseResult, QuantifierResult};
 use crate::model::state::StoredTriggerContext;
 use crate::model::state::{GameState, GenerationPhase, GenerationStatus, LogType};
-use crate::narrative::llm::backend::LlmCallResult;
-use crate::narrative::prompt::PromptContext;
+use crate::narrative::llm::backend::{AGENT_NARRATOR, LlmCallResult};
+use crate::narrative::prompt::{LayeredPromptAssembler, PromptAssembler};
 use crate::storage::snapshot_storage::SnapshotStorage;
 use crate::test_support::fixtures::{TestMap, TestNpc, TestPlayer, TestWorld};
 use crate::test_support::make_test_context;
@@ -32,30 +32,26 @@ impl Default for MockPipelineBackend {
 }
 
 impl ActionPipelineBackend for MockPipelineBackend {
-    fn narrate_action(&self, _ctx: &PromptContext) -> Result<LlmCallResult, EngineError> {
-        match &self.narrate_result {
-            Ok(text) => Ok(LlmCallResult {
-                text: text.clone(),
-                system_prompt: String::new(),
-                user_prompt: String::new(),
-                raw_request_json: String::new(),
-                raw_response_json: String::new(),
-                backend_name: "mock".to_string(),
-                model_name: "mock".to_string(),
-                agent_name: "narrator".to_string(),
-            }),
-            Err(_e) => Err(EngineError::Llm(crate::error::LlmFailure::EmptyResponse)),
-        }
+    fn assembler(&self) -> &dyn PromptAssembler {
+        static ASSEMBLER: std::sync::OnceLock<LayeredPromptAssembler> = std::sync::OnceLock::new();
+        ASSEMBLER.get_or_init(|| {
+            LayeredPromptAssembler::new(crate::narrative::prompt::budget::MAX_CONTEXT_TOKENS)
+        })
     }
 
     fn complete(
         &self,
-        _agent_name: &str,
+        agent_name: &str,
         _system_prompt: &str,
         _user_prompt: &str,
         _max_tokens: Option<u32>,
     ) -> Result<LlmCallResult, EngineError> {
-        match &self.complete_result {
+        let result = if agent_name == AGENT_NARRATOR {
+            &self.narrate_result
+        } else {
+            &self.complete_result
+        };
+        match result {
             Ok(text) => Ok(LlmCallResult {
                 text: text.clone(),
                 system_prompt: String::new(),
@@ -64,7 +60,7 @@ impl ActionPipelineBackend for MockPipelineBackend {
                 raw_response_json: String::new(),
                 backend_name: "mock".to_string(),
                 model_name: "mock".to_string(),
-                agent_name: "trigger".to_string(),
+                agent_name: agent_name.to_string(),
             }),
             Err(_e) => Err(EngineError::Llm(crate::error::LlmFailure::EmptyResponse)),
         }

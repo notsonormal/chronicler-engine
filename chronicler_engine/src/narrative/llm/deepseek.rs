@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use crate::error::EngineError;
-use crate::model::character::NpcCard;
 use crate::model::settings::Connection;
 use crate::storage::llm_message_storage::LlmMessageStorage;
 
@@ -12,7 +11,6 @@ use super::backend::{LlmBackend, LlmCallResult};
 pub struct DeepSeekBackend {
     api_key: String,
     model: String,
-    max_context_tokens: u32,
     storage: Option<Arc<dyn LlmMessageStorage>>,
 }
 
@@ -25,7 +23,6 @@ impl DeepSeekBackend {
         Self {
             api_key,
             model: connection.model.clone(),
-            max_context_tokens: connection.resolve_max_context_tokens(),
             storage,
         }
     }
@@ -51,31 +48,6 @@ impl LlmBackend for DeepSeekBackend {
         if let Some(storage) = &self.storage {
             let _ = storage.save(message);
         }
-    }
-
-    fn generate_dialogue(
-        &self,
-        _agent_name: &str,
-        _context: &crate::narrative::prompt::PromptContext,
-        _npc: &NpcCard,
-    ) -> Result<LlmCallResult, EngineError> {
-        Self::not_implemented()
-    }
-
-    fn narrate_action(
-        &self,
-        _agent_name: &str,
-        _context: &crate::narrative::prompt::PromptContext,
-    ) -> Result<LlmCallResult, EngineError> {
-        Self::not_implemented()
-    }
-
-    fn narrate_arrival(
-        &self,
-        _agent_name: &str,
-        _context: &crate::narrative::prompt::PromptContext,
-    ) -> Result<LlmCallResult, EngineError> {
-        Self::not_implemented()
     }
 
     fn narrate_continuation(

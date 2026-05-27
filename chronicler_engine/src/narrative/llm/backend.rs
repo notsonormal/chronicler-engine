@@ -1,11 +1,9 @@
 use std::sync::Arc;
 
 use crate::error::EngineError;
-use crate::model::character::NpcCard;
 use crate::model::llm_message::LlmMessage;
 use crate::model::settings::Connection;
 use crate::narrative::llm_client::ChatCompletionResult;
-use crate::narrative::prompt::PromptContext;
 use crate::storage::llm_message_storage::LlmMessageStorage;
 
 pub const AGENT_NARRATOR: &str = "narrator";
@@ -73,25 +71,6 @@ pub trait LlmBackend: Send + Sync {
         result
     }
 
-    fn generate_dialogue(
-        &self,
-        agent_name: &str,
-        context: &PromptContext,
-        npc: &NpcCard,
-    ) -> Result<LlmCallResult, EngineError>;
-
-    fn narrate_action(
-        &self,
-        agent_name: &str,
-        context: &PromptContext,
-    ) -> Result<LlmCallResult, EngineError>;
-
-    fn narrate_arrival(
-        &self,
-        agent_name: &str,
-        context: &PromptContext,
-    ) -> Result<LlmCallResult, EngineError>;
-
     fn narrate_continuation(
         &self,
         agent_name: &str,
@@ -132,7 +111,6 @@ pub fn get_llm_backend_for(
     }
 }
 
-/// Merge system and user prompts into a single user message.
 /// Used for models that ignore the system role.
 pub fn merge_single_user_message(system_prompt: &str, user_text: &str) -> String {
     format!("[SYSTEM]\n{system_prompt}\n\n{user_text}")

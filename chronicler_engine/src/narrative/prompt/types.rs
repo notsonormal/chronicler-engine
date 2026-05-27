@@ -32,19 +32,4 @@ pub struct PromptContext<'a> {
     pub player: &'a PlayerCard,
     pub user_message: &'a str,
     pub history: &'a [LogEntry],
-    pub system_prompt: String,
-}
-
-#[derive(Debug, Clone)]
-pub struct PromptBuilder<'a> {
-    pub world: &'a WorldCard,
-    pub room: &'a Room,
-    pub all_npcs: &'a [NpcCard],
-    pub npcs_in_area: &'a [NpcCard],
-    pub player: &'a PlayerCard,
-    pub user_message: &'a str,
-    pub history: &'a [LogEntry],
-    pub max_context_tokens: Option<u32>,
-    pub requested_max_tokens: Option<u32>,
-    pub system_prompt: String,
 }

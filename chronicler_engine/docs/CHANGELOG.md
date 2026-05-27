@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-05-26
+
+### Changed
+- **`PromptAssembler` replaces `PromptBuilder` — transport/assembly decoupling**
+  - New `PromptAssembler` trait in `src/narrative/prompt/assembler.rs` with `assemble(context, preset, global_rules, response_length) -> Result<AssembledPrompt, EngineError>`
+  - `LayeredPromptAssembler`: default implementation that renders 7 XML layers and applies token budgets directly from `PromptPreset` sections
+  - `AssembledPrompt` struct holds `{ system_prompt, user_prompt, max_tokens }`
+  - `DefaultGameService` owns `Arc<dyn PromptAssembler>`; constructed from connection settings in `with_storage()`
+  - `ActionPipelineBackend` trait: `assembler() -> &dyn PromptAssembler` replaces `narrate_action(&PromptContext)`
+  - `ActionPipeline::phase_narrate()`: loads preset → `make_prompt_context` → `assembler().assemble()` → `service.complete()`
+  - `LlmBackend` trait slimmed to pure transport: `complete` and `narrate_continuation` only
+  - Removed from `LlmBackend`: `narrate_action`, `narrate_arrival`, `generate_dialogue`
+  - Deleted `narrate_from_context` from `OpenRouterBackend` and `OllamaBackend`
+  - Deleted `builder.rs` and `builder_tests.rs`
+  - Removed `system_prompt` field from `PromptContext`
+  - Removed `POST_HISTORY_DELIMITER` and `assemble_split_text()` from `PromptPreset`
+  - Removed `active_system_prompt()` from `GameServiceContext`
+  - `make_prompt_context` no longer takes `system_prompt` parameter
+  - Bootstrap arrival narration uses assembler + `complete()` instead of `narrate_arrival()`
+  - `MockBackend` and `DeepSeekBackend` cleaned of narrative methods
+  - Documentation updated: `system/prompt_system.md`, `architecture/system.md`, `reference/testing.md`, `reference/system_prompt.md`, `system/llm_processing.md`, `system/narration_engine.md`, `adr-005`
+
 ## 2026-05-25
 
 ### Changed

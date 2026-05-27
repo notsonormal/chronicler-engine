@@ -9,7 +9,7 @@ Transform the engine from a strict command parser into a hybrid free-text narrat
 All player input is treated as a **Free Action** and sent to the LLM for narration. The quantifier then detects if movement occurred. The engine must never respond with an error message for non-empty free-text input.
 
 ## Game Master Role
-The LLM operates as a Game Master / Narrator for the text adventure. Its context window is constructed using the **PromptBuilder** (see `llm_processing.md`) from the current game state:
+The LLM operates as a Game Master / Narrator for the text adventure. Its context window is constructed using the **LayeredPromptAssembler** (see `llm_processing.md`) from the current game state:
 
 - **World Lore**: The `WorldCard.global_rules` provide persistent setting and lore context, injected into the **system prompt** (Layer 0) alongside the base rules. They no longer appear in the `<WorldLore>` user data layer.
 - **Room Context**: The current `Room.name` and `Room.description` ground the scene.
@@ -27,7 +27,7 @@ The Game Master responds to three primary events:
 1. **State Transition**: The engine validates the move and updates `state.movement.current_room_id` (optional—may not change if player stays in room).
 2. **Scene Setup**: The engine prints the standard room dashboard *before* narration to provide system context.
 3. **Action Narration**:
-   - The engine calls `llm_backend.narrate_action` with the player's action text.
+   - The engine loads the active preset, calls `assembler.assemble()` to build the prompt, then calls `llm_backend.complete()` with the assembled system and user prompts.
    - The LLM generates a narrative paragraph describing the outcome.
 4. **Post-Narration Quantification**:
    - After narration is generated, the `QuantifierAgent` calls `LlmBackend::complete()` to detect:
@@ -46,7 +46,7 @@ After the player moves to a new room and the first narration is generated, the e
 1. Player movement is detected via quantifier → `attempt_semantic_walk` updates `state.movement.current_room_id`
 2. `evaluate_triggers(state, new_room_id)` is called to find matching triggers
 3. For the first matching trigger only:
-   a. Uses unified `PromptBuilder` with continuation context in user message:
+   a. Uses unified `LayeredPromptAssembler` with continuation context in user message:
       - Full 7-layer SillyTavern prompt structure
       - Trigger text as Layer 6 (User Input)
       - History included for continuity

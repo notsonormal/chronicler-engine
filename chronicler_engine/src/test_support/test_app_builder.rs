@@ -34,6 +34,7 @@ pub struct TestAppBuilder {
     snapshot_storage: Option<Arc<dyn SnapshotStorage>>,
     message_storage: Option<Arc<dyn MessageStorage>>,
     llm_storage: Option<Arc<dyn LlmMessageStorage>>,
+    game_service: Option<Arc<dyn GameService>>,
 }
 
 impl TestAppBuilder {
@@ -151,6 +152,7 @@ impl TestAppBuilder {
             snapshot_storage: None,
             message_storage: None,
             llm_storage: None,
+            game_service: None,
         }
     }
 
@@ -208,6 +210,11 @@ impl TestAppBuilder {
 
     pub fn llm_storage(mut self, storage: Arc<dyn LlmMessageStorage>) -> Self {
         self.llm_storage = Some(storage);
+        self
+    }
+
+    pub fn game_service(mut self, service: Arc<dyn GameService>) -> Self {
+        self.game_service = Some(service);
         self
     }
 
@@ -272,14 +279,16 @@ impl TestAppBuilder {
         let settings_arc = Arc::new(RwLock::new(self.settings));
         let prompt_preset_storage =
             Arc::new(crate::storage::prompt_preset_storage::InMemoryPromptPresetStorage::new());
-        let game_service: Arc<dyn GameService> = Arc::new(DefaultGameService::with_storage(
-            Some(Arc::clone(&llm_storage)),
-            Some(Arc::clone(&prompt_preset_storage)
-                as Arc<
-                    dyn crate::storage::prompt_preset_storage::PromptPresetStorage,
-                >),
-            Arc::clone(&settings_arc),
-        ));
+        let game_service: Arc<dyn GameService> = self.game_service.unwrap_or_else(|| {
+            Arc::new(DefaultGameService::with_storage(
+                Some(Arc::clone(&llm_storage)),
+                Some(Arc::clone(&prompt_preset_storage)
+                    as Arc<
+                        dyn crate::storage::prompt_preset_storage::PromptPresetStorage,
+                    >),
+                Arc::clone(&settings_arc),
+            ))
+        });
         let app_state = AppState {
             snapshot_storage,
             message_storage,

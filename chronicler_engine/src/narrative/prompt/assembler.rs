@@ -1,13 +1,64 @@
 use crate::error::EngineError;
+use crate::model::character::NpcCard;
+use crate::model::map::Room;
+use crate::model::prompt_preset::PromptPreset;
+use crate::model::state::LogEntry;
+use crate::model::world::WorldCard;
 use crate::narrative::prompt::budget;
-use crate::narrative::prompt::budget::{estimate_tokens, truncate_to_budget};
+use crate::narrative::prompt::budget::truncate_to_budget;
 use crate::narrative::prompt::context::fit_messages_to_context;
 use crate::narrative::prompt::sanitize::sanitize_for_prompt;
-use crate::narrative::prompt::types::{PromptBuilder, PromptContext};
+use crate::narrative::prompt::types::PromptContext;
 
-impl<'a> PromptBuilder<'a> {
-    pub fn from_context(context: &PromptContext<'a>) -> Self {
+#[derive(Debug, Clone, PartialEq)]
+pub struct AssembledPrompt {
+    pub system_prompt: String,
+    pub user_prompt: String,
+    pub max_tokens: u32,
+}
+
+/// Decouples prompt construction from LLM transport.
+pub trait PromptAssembler: Send + Sync {
+    fn assemble(
+        &self,
+        context: &PromptContext,
+        preset: &PromptPreset,
+        global_rules: &[String],
+        response_length: Option<&str>,
+    ) -> Result<AssembledPrompt, EngineError>;
+}
+
+pub struct LayeredPromptAssembler {
+    max_context_tokens: u32,
+    max_tokens: Option<u32>,
+}
+
+impl LayeredPromptAssembler {
+    pub fn new(max_context_tokens: u32) -> Self {
         Self {
+            max_context_tokens,
+            max_tokens: None,
+        }
+    }
+
+    pub fn with_max_tokens(mut self, max: u32) -> Self {
+        self.max_tokens = Some(max);
+        self
+    }
+}
+
+impl PromptAssembler for LayeredPromptAssembler {
+    fn assemble(
+        &self,
+        context: &PromptContext,
+        preset: &PromptPreset,
+        global_rules: &[String],
+        response_length: Option<&str>,
+    ) -> Result<AssembledPrompt, EngineError> {
+        let system_prompt = build_system_prompt(preset, global_rules);
+        let post_history_prompt = build_post_history_prompt(preset, response_length);
+
+        let renderer = LayerRenderer {
             world: context.world,
             room: context.room,
             all_npcs: context.all_npcs,
@@ -15,95 +66,130 @@ impl<'a> PromptBuilder<'a> {
             player: context.player,
             user_message: context.user_message,
             history: context.history,
-            max_context_tokens: None,
-            requested_max_tokens: None,
-            system_prompt: context.system_prompt.clone(),
+            system_prompt,
+            post_history_prompt,
+        };
+
+        let (system, user, max_tokens) =
+            renderer.render_and_fit(self.max_context_tokens, self.max_tokens)?;
+
+        Ok(AssembledPrompt {
+            system_prompt: system,
+            user_prompt: user,
+            max_tokens,
+        })
+    }
+}
+
+// ---------------------------------------------------------------------------
+// System / post-history prompt builders (direct from preset — no delimiter)
+// ---------------------------------------------------------------------------
+
+fn build_system_prompt(preset: &PromptPreset, global_rules: &[String]) -> String {
+    let mut parts: Vec<String> = Vec::new();
+
+    push_section(&mut parts, preset.role.as_deref(), "role");
+    push_section(&mut parts, preset.instructions.as_deref(), "instructions");
+
+    if !global_rules.is_empty() {
+        let rules_text = global_rules
+            .iter()
+            .map(|r| format!("- {r}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        parts.push(wrap_xml(&rules_text, "global_rules"));
+    }
+
+    parts.join("\n\n")
+}
+
+fn build_post_history_prompt(preset: &PromptPreset, response_length: Option<&str>) -> String {
+    let mut parts: Vec<String> = Vec::new();
+
+    push_section(&mut parts, preset.writing_style.as_deref(), "writing_style");
+
+    if let Some(output_format) = &preset.output_format {
+        let mut output_text = output_format.clone();
+        if let Some(length) = response_length {
+            output_text.push_str("\n\nResponse Length:\n");
+            output_text.push_str(length);
         }
+        parts.push(wrap_xml(&output_text, "output_format"));
     }
 
-    pub fn with_max_context_tokens(mut self, max: u32) -> Self {
-        self.max_context_tokens = Some(max);
-        self
-    }
+    parts.join("\n\n")
+}
 
-    pub fn with_max_tokens(mut self, max: u32) -> Self {
-        self.requested_max_tokens = Some(max);
-        self
+fn push_section(parts: &mut Vec<String>, content: Option<&str>, tag: &str) {
+    if let Some(content) = content {
+        parts.push(wrap_xml(content, tag));
     }
+}
 
-    pub fn build(&self) -> std::result::Result<(String, u32), EngineError> {
-        let (system, user, max_tokens) = self.build_split()?;
-        let prompt = format!("{system}\n\n---\n\n{user}");
-        Ok((prompt, max_tokens))
-    }
+fn wrap_xml(content: &str, tag: &str) -> String {
+    let indented = content
+        .lines()
+        .map(|line| {
+            if line.is_empty() {
+                line.to_string()
+            } else {
+                format!("    {line}")
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!("<{tag}>\n{indented}\n</{tag}>")
+}
 
-    pub fn build_split(&self) -> std::result::Result<(String, String, u32), EngineError> {
+// ---------------------------------------------------------------------------
+// Layer rendering (migrated from PromptBuilder)
+// ---------------------------------------------------------------------------
+
+struct LayerRenderer<'a> {
+    world: &'a WorldCard,
+    room: &'a Room,
+    all_npcs: &'a [NpcCard],
+    npcs_in_area: &'a [NpcCard],
+    player: &'a crate::model::character::PlayerCard,
+    user_message: &'a str,
+    history: &'a [LogEntry],
+    system_prompt: String,
+    post_history_prompt: String,
+}
+
+impl<'a> LayerRenderer<'a> {
+    fn render_and_fit(
+        &self,
+        max_context_tokens: u32,
+        requested_max_tokens: Option<u32>,
+    ) -> Result<(String, String, u32), EngineError> {
         let system = self.render_system_layer();
 
-        let mut user = String::new();
-        user.push_str(&self.render_game_state_layer());
-        user.push_str("\n\n");
-        user.push_str(&self.render_npc_cards_layer());
-        user.push_str("\n\n");
-        user.push_str(&self.render_player_layer());
-        user.push_str("\n\n");
-        user.push_str(&self.render_world_info_layer());
-        user.push_str("\n\n");
-        user.push_str(&self.render_history_layer());
-        user.push_str("\n\n");
-        user.push_str(&self.render_user_layer());
-        user.push_str("\n\n");
-        // Layer 7 (output format) removed — now part of system prompt via preset
+        let user = [
+            self.render_game_state_layer(),
+            self.render_npc_cards_layer(),
+            self.render_player_layer(),
+            self.render_world_info_layer(),
+            self.render_history_layer(),
+            self.post_history_prompt.clone(),
+            self.render_user_layer(),
+        ]
+        .into_iter()
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n\n");
+        let user = format!("{user}\n\n");
 
-        if let Some(max_context) = self.max_context_tokens {
-            let (fitted_system, fitted_user, actual_max_tokens) =
-                fit_messages_to_context(&system, &user, max_context, self.requested_max_tokens)?;
-            return Ok((fitted_system, fitted_user, actual_max_tokens));
-        }
+        let (fitted_system, fitted_user, actual_max_tokens) =
+            fit_messages_to_context(&system, &user, max_context_tokens, requested_max_tokens)?;
 
-        // Fallback: verify against default budget
-        let total_tokens = estimate_tokens(&system) + estimate_tokens(&user);
-        if total_tokens > budget::MAX_CONTEXT_TOKENS as usize {
-            return Err(EngineError::ContextOverflow {
-                requested: total_tokens,
-                max: budget::MAX_CONTEXT_TOKENS as usize,
-            });
-        }
-
-        let max_tokens = self
-            .requested_max_tokens
-            .unwrap_or(budget::MAX_RESPONSE_TOKENS);
-        Ok((system, user, max_tokens))
+        Ok((fitted_system, fitted_user, actual_max_tokens))
     }
 
-    pub fn build_system_only(&self) -> String {
-        self.render_system_layer()
-    }
-
-    pub fn build_user_only(&self) -> String {
-        let mut user = String::new();
-        user.push_str(&self.render_game_state_layer());
-        user.push_str("\n\n");
-        user.push_str(&self.render_npc_cards_layer());
-        user.push_str("\n\n");
-        user.push_str(&self.render_player_layer());
-        user.push_str("\n\n");
-        user.push_str(&self.render_world_info_layer());
-        user.push_str("\n\n");
-        user.push_str(&self.render_history_layer());
-        user.push_str("\n\n");
-        user.push_str(&self.render_user_layer());
-        user.push_str("\n\n");
-        // Layer 7 (output format) removed — now part of system prompt via preset
-        user
-    }
-
-    /// Layer 0: System prompt - assembled XML from preset (includes global rules and response length)
     fn render_system_layer(&self) -> String {
         self.system_prompt.clone()
     }
 
-    /// Layer 1: Game state - room name, description, player inventory
     fn render_game_state_layer(&self) -> String {
         let mut output = String::from("<GameState>\n");
         output.push_str("Current Location: ");
@@ -111,23 +197,20 @@ impl<'a> PromptBuilder<'a> {
         output.push_str("\n\n");
         output.push_str(&self.room.description);
         output.push_str("\n\n");
-
         output.push_str("</GameState>\n");
         output
     }
 
-    /// Layer 2: NPC cards - known NPCs roster + in-room NPCs with full detail
     fn render_npc_cards_layer(&self) -> String {
         let mut output = String::new();
+        let in_area_ids: std::collections::HashSet<_> =
+            self.npcs_in_area.iter().map(|n| n.id.as_str()).collect();
 
         // Section 1: All known NPCs with condensed cards
         output.push_str("<KnownNpcs>\n");
         if self.all_npcs.is_empty() {
             output.push_str("No characters in this world.\n");
         } else {
-            let in_area_ids: std::collections::HashSet<_> =
-                self.npcs_in_area.iter().map(|n| n.id.as_str()).collect();
-
             for npc in self.all_npcs {
                 let presence = if in_area_ids.contains(npc.id.as_str()) {
                     "(in room)"
@@ -136,20 +219,13 @@ impl<'a> PromptBuilder<'a> {
                 };
                 output.push_str(&format!("- {} {}\n", npc.sheet.name, presence));
 
-                // Use explicit summary if available, otherwise first 3 lines of description
                 let summary_text = npc
                     .sheet
                     .summary
-                    .as_deref()
+                    .clone()
                     .filter(|s| !s.is_empty())
-                    .map(|s| s.to_string())
                     .unwrap_or_else(|| {
-                        npc.sheet
-                            .description
-                            .lines()
-                            .take(3)
-                            .collect::<Vec<_>>()
-                            .join("\n")
+                        npc.sheet.description.lines().take(3).collect::<Vec<_>>().join("\n")
                     });
 
                 // Indent each line of the summary
@@ -166,9 +242,6 @@ impl<'a> PromptBuilder<'a> {
         if self.npcs_in_area.is_empty() {
             output.push_str("No NPCs are present in this location.\n");
         } else {
-            let in_area_ids: std::collections::HashSet<_> =
-                self.npcs_in_area.iter().map(|n| n.id.as_str()).collect();
-
             for npc in self.npcs_in_area {
                 output.push_str("--- ");
                 output.push_str(&npc.sheet.name);
@@ -213,7 +286,6 @@ impl<'a> PromptBuilder<'a> {
         output
     }
 
-    /// Layer 3: Player persona - from player card
     fn render_player_layer(&self) -> String {
         let mut output = String::from("<PlayerCharacter>\n");
         output.push_str("Name: ");
@@ -233,7 +305,6 @@ impl<'a> PromptBuilder<'a> {
         output
     }
 
-    /// Layer 4: World info - global rules as lorebook
     fn render_world_info_layer(&self) -> String {
         let mut output = String::from("<WorldLore>\n");
         output.push_str("World: ");
@@ -246,7 +317,6 @@ impl<'a> PromptBuilder<'a> {
         output
     }
 
-    /// Layer 5: Full history - conversation log with truncation
     fn render_history_layer(&self) -> String {
         let mut output = String::from("<ConversationHistory>\n");
 
@@ -270,7 +340,6 @@ impl<'a> PromptBuilder<'a> {
         output
     }
 
-    /// Layer 6: User message - current input
     fn render_user_layer(&self) -> String {
         let mut output = String::from("<PlayerInput>\n");
         output.push_str(&sanitize_for_prompt(self.user_message));

@@ -7,10 +7,6 @@ use crate::narrative::prompt::budget;
 use crate::narrative::prompt::budget::estimate_tokens;
 use crate::narrative::prompt::types::PromptContext;
 
-/// Reserves a safety margin and minimum input budget, caps `max_tokens` to what
-/// actually fits, and drops oldest history entries first if the user text is too long.
-///
-/// Returns `(fitted_system, fitted_user, actual_max_tokens)`.
 /// [DOC: docs/system/prompt_system.md]
 pub fn fit_messages_to_context(
     system: &str,
@@ -57,8 +53,6 @@ pub fn fit_messages_to_context(
     Ok((system.to_string(), fitted_user, actual_max_tokens))
 }
 
-/// Trim the `<ConversationHistory>` section within `user` by dropping oldest entries
-/// first until the total token count is within `target_user_tokens`.
 pub(crate) fn trim_history_to_budget(user: &str, target_user_tokens: usize) -> String {
     const HISTORY_OPEN: &str = "<ConversationHistory>\n";
     const HISTORY_CLOSE: &str = "\n</ConversationHistory>";
@@ -124,7 +118,6 @@ pub fn make_prompt_context<'a>(
     player: &'a PlayerCard,
     user_message: &'a str,
     history: &'a [LogEntry],
-    system_prompt: String,
 ) -> PromptContext<'a> {
     PromptContext {
         world,
@@ -134,6 +127,5 @@ pub fn make_prompt_context<'a>(
         player,
         user_message,
         history,
-        system_prompt,
     }
 }

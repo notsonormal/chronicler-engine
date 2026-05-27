@@ -1,10 +1,8 @@
 use std::sync::Arc;
 
 use crate::error::{EngineError, LlmFailure};
-use crate::model::character::NpcCard;
 use crate::model::settings::Connection;
 use crate::narrative::llm_client::call_ollama;
-use crate::narrative::prompt::{PromptBuilder, PromptContext};
 use crate::storage::llm_message_storage::LlmMessageStorage;
 
 use super::backend::{LlmBackend, LlmCallResult, merge_single_user_message};
@@ -14,8 +12,6 @@ pub struct OllamaBackend {
     base_url: String,
     model: String,
     single_user_message: bool,
-    max_tokens: Option<u32>,
-    max_context_tokens: u32,
     storage: Option<Arc<dyn LlmMessageStorage>>,
 }
 
@@ -28,8 +24,6 @@ impl OllamaBackend {
             base_url: connection.resolve_base_url(),
             model: connection.model.clone(),
             single_user_message: connection.single_user_message,
-            max_tokens: connection.max_tokens,
-            max_context_tokens: connection.resolve_max_context_tokens(),
             storage,
         }
     }
@@ -45,103 +39,17 @@ impl OllamaBackend {
         } else {
             (system_prompt, user_text.to_string())
         };
-        let max_tokens = max_tokens.or(self.max_tokens);
         let result = call_ollama(&self.base_url, &self.model, system, &user, max_tokens)?;
         if result.text.trim().is_empty() {
             return Err(EngineError::Llm(LlmFailure::EmptyResponse));
         }
         Ok(result)
     }
-
-    /// Build a prompt from context using this backend's token limits, then call the LLM.
-    fn narrate_from_context(
-        &self,
-        agent_name: &str,
-        context: &PromptContext,
-    ) -> Result<LlmCallResult, EngineError> {
-        let builder = PromptBuilder::from_context(context)
-            .with_max_context_tokens(self.max_context_tokens)
-            .with_max_tokens(
-                self.max_tokens
-                    .unwrap_or(crate::narrative::prompt::budget::MAX_RESPONSE_TOKENS),
-            );
-        let (system_prompt, user_text, max_tokens) = builder.build_split()?;
-        self.complete(agent_name, &system_prompt, &user_text, Some(max_tokens))
-    }
 }
 
 impl LlmBackend for OllamaBackend {
     fn model(&self) -> &str {
         &self.model
-    }
-
-    fn generate_dialogue(
-        &self,
-        agent_name: &str,
-        context: &PromptContext,
-        npc: &NpcCard,
-    ) -> Result<LlmCallResult, EngineError> {
-        log::info!("[LLM] Generating dialogue for NPC: {}", npc.sheet.name);
-
-        let user_msg = format!(
-            "The player says to {}: \"{}\"",
-            npc.sheet.name, context.user_message
-        );
-
-        let npc_context = PromptContext {
-            world: context.world,
-            room: context.room,
-            all_npcs: &[npc.clone()],
-            npcs_in_area: &[npc.clone()],
-            player: context.player,
-            user_message: &user_msg,
-            history: context.history,
-            system_prompt: context.system_prompt.clone(),
-        };
-
-        self.narrate_from_context(agent_name, &npc_context)
-    }
-
-    fn narrate_action(
-        &self,
-        agent_name: &str,
-        context: &PromptContext,
-    ) -> Result<LlmCallResult, EngineError> {
-        log::info!(
-            "[LLM] Generating action narration for: {}",
-            context.user_message
-        );
-
-        self.narrate_from_context(agent_name, context)
-    }
-
-    fn narrate_arrival(
-        &self,
-        agent_name: &str,
-        context: &PromptContext,
-    ) -> Result<LlmCallResult, EngineError> {
-        log::info!(
-            "[LLM] Generating arrival narration for room: {}",
-            context.room.name
-        );
-
-        let user_msg = format!(
-            "{} enters the {}.",
-            context.player.sheet.name, context.room.name
-        );
-
-        let arrival_context = PromptContext {
-            world: context.world,
-            room: context.room,
-            all_npcs: context.all_npcs,
-            npcs_in_area: context.npcs_in_area,
-            player: context.player,
-            user_message: &user_msg,
-            history: context.history,
-            system_prompt: context.system_prompt.clone(),
-        };
-
-        self.narrate_from_context(agent_name, &arrival_context)
     }
 
     fn narrate_continuation(

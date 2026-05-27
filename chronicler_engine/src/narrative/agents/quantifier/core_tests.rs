@@ -258,28 +258,7 @@ impl LlmBackend for HighConfidenceBackend {
             r#"{{"npcs_in_room": {npcs_json}, "movement": {{"type": "entering", "destination": "kitchen"}}}}"#
         )))
     }
-    fn generate_dialogue(
-        &self,
-        _agent_name: &str,
-        _context: &crate::narrative::prompt::PromptContext,
-        _npc: &NpcCard,
-    ) -> Result<LlmCallResult, EngineError> {
-        unreachable!()
-    }
-    fn narrate_action(
-        &self,
-        _agent_name: &str,
-        _context: &crate::narrative::prompt::PromptContext,
-    ) -> Result<LlmCallResult, EngineError> {
-        unreachable!()
-    }
-    fn narrate_arrival(
-        &self,
-        _agent_name: &str,
-        _context: &crate::narrative::prompt::PromptContext,
-    ) -> Result<LlmCallResult, EngineError> {
-        unreachable!()
-    }
+
     fn narrate_continuation(
         &self,
         _agent_name: &str,
@@ -308,28 +287,7 @@ impl LlmBackend for MediumConfidenceBackend {
     ) -> Result<LlmCallResult, EngineError> {
         Ok(make_test_llm_result("Carla is standing in the room."))
     }
-    fn generate_dialogue(
-        &self,
-        _agent_name: &str,
-        _context: &crate::narrative::prompt::PromptContext,
-        _npc: &NpcCard,
-    ) -> Result<LlmCallResult, EngineError> {
-        unreachable!()
-    }
-    fn narrate_action(
-        &self,
-        _agent_name: &str,
-        _context: &crate::narrative::prompt::PromptContext,
-    ) -> Result<LlmCallResult, EngineError> {
-        unreachable!()
-    }
-    fn narrate_arrival(
-        &self,
-        _agent_name: &str,
-        _context: &crate::narrative::prompt::PromptContext,
-    ) -> Result<LlmCallResult, EngineError> {
-        unreachable!()
-    }
+
     fn narrate_continuation(
         &self,
         _agent_name: &str,
@@ -358,28 +316,7 @@ impl LlmBackend for LowConfidenceBackend {
     ) -> Result<LlmCallResult, EngineError> {
         Ok(make_test_llm_result(""))
     }
-    fn generate_dialogue(
-        &self,
-        _agent_name: &str,
-        _context: &crate::narrative::prompt::PromptContext,
-        _npc: &NpcCard,
-    ) -> Result<LlmCallResult, EngineError> {
-        unreachable!()
-    }
-    fn narrate_action(
-        &self,
-        _agent_name: &str,
-        _context: &crate::narrative::prompt::PromptContext,
-    ) -> Result<LlmCallResult, EngineError> {
-        unreachable!()
-    }
-    fn narrate_arrival(
-        &self,
-        _agent_name: &str,
-        _context: &crate::narrative::prompt::PromptContext,
-    ) -> Result<LlmCallResult, EngineError> {
-        unreachable!()
-    }
+
     fn narrate_continuation(
         &self,
         _agent_name: &str,
@@ -411,28 +348,7 @@ impl LlmBackend for ErrBackend {
             detail: "mock failure".to_string(),
         }))
     }
-    fn generate_dialogue(
-        &self,
-        _agent_name: &str,
-        _context: &crate::narrative::prompt::PromptContext,
-        _npc: &NpcCard,
-    ) -> Result<LlmCallResult, EngineError> {
-        unreachable!()
-    }
-    fn narrate_action(
-        &self,
-        _agent_name: &str,
-        _context: &crate::narrative::prompt::PromptContext,
-    ) -> Result<LlmCallResult, EngineError> {
-        unreachable!()
-    }
-    fn narrate_arrival(
-        &self,
-        _agent_name: &str,
-        _context: &crate::narrative::prompt::PromptContext,
-    ) -> Result<LlmCallResult, EngineError> {
-        unreachable!()
-    }
+
     fn narrate_continuation(
         &self,
         _agent_name: &str,
@@ -585,28 +501,6 @@ fn test_quantifier_retry_on_llm_error() {
             let mut responses = self.responses.lock().unwrap();
             let text = responses.remove(0)?;
             Ok(make_test_llm_result(&text))
-        }
-        fn generate_dialogue(
-            &self,
-            _agent_name: &str,
-            _context: &crate::narrative::prompt::PromptContext,
-            _npc: &NpcCard,
-        ) -> Result<LlmCallResult, EngineError> {
-            unreachable!()
-        }
-        fn narrate_action(
-            &self,
-            _agent_name: &str,
-            _context: &crate::narrative::prompt::PromptContext,
-        ) -> Result<LlmCallResult, EngineError> {
-            unreachable!()
-        }
-        fn narrate_arrival(
-            &self,
-            _agent_name: &str,
-            _context: &crate::narrative::prompt::PromptContext,
-        ) -> Result<LlmCallResult, EngineError> {
-            unreachable!()
         }
         fn narrate_continuation(
             &self,

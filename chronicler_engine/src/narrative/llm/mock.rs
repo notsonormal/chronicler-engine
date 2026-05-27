@@ -2,32 +2,33 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 
 use crate::error::{EngineError, NarrativeFailure};
-use crate::model::character::NpcCard;
 use crate::storage::llm_message_storage::LlmMessageStorage;
 
 use super::backend::{LlmBackend, LlmCallResult};
 
+fn extract_player_input(user_prompt: &str) -> Option<String> {
+    const OPEN: &str = "<PlayerInput>\n";
+    const CLOSE: &str = "\n</PlayerInput>";
+    let start = user_prompt.find(OPEN)?;
+    let content_start = start + OPEN.len();
+    let end = user_prompt[content_start..].find(CLOSE)?;
+    Some(user_prompt[content_start..content_start + end].to_string())
+}
+
 #[derive(Default)]
 pub struct MockBackend {
-    /// If true, all narration methods return `Err(EngineError::Narrative(NarrativeFailure::Generation { stage: "mock", reason: "configured_failure" }))`.
     pub should_fail: AtomicBool,
-    /// If true, `narrate_action` returns `Ok("")` - simulates an empty LLM response.
     pub should_return_empty: AtomicBool,
-    /// If true, `complete` (trigger narration) returns `Err`.
     pub trigger_narration_should_fail: AtomicBool,
-    /// Milliseconds to sleep in `narrate_action` to simulate a slow LLM.
     pub delay_ms: AtomicU64,
-    /// Milliseconds to sleep in `complete` to simulate a slow trigger LLM.
     pub trigger_delay_ms: AtomicU64,
-    /// Return different narration text per call (rotates).
     pub per_call_narrations: Vec<String>,
-    /// Return different prompt responses per call (rotates). Used for quantifier/testing.
     pub per_call_prompt_responses: Vec<String>,
     pub call_index: AtomicUsize,
     pub storage: Option<Arc<dyn LlmMessageStorage>>,
-    /// Set to `true` when `narrate_action` is entered (useful for tests to detect pipeline start).
+    /// Set to `true` when `complete` is entered (useful for tests to detect pipeline start).
     pub narration_started: AtomicBool,
-    /// Set to `true` when `complete` is entered (useful for tests to detect trigger start).
+    /// Set to `true` when `complete` is entered with trigger agent (useful for tests to detect trigger start).
     pub trigger_started: AtomicBool,
 }
 
@@ -110,63 +111,6 @@ impl LlmBackend for MockBackend {
         "mock"
     }
 
-    fn generate_dialogue(
-        &self,
-        agent_name: &str,
-        context: &crate::narrative::prompt::PromptContext,
-        _npc: &NpcCard,
-    ) -> Result<LlmCallResult, EngineError> {
-        self.guard()?;
-        let user_input = context.user_message;
-        if user_input.is_empty() {
-            Ok(self.make_result(agent_name, "[MockGenerated] Standard greeting."))
-        } else {
-            Ok(self.make_result(
-                agent_name,
-                format!("[MockGenerated] Replying to: {user_input}"),
-            ))
-        }
-    }
-
-    fn narrate_action(
-        &self,
-        agent_name: &str,
-        context: &crate::narrative::prompt::PromptContext,
-    ) -> Result<LlmCallResult, EngineError> {
-        self.narration_started.store(true, Ordering::SeqCst);
-        let delay = self.delay_ms.load(Ordering::SeqCst);
-        if delay > 0 {
-            std::thread::sleep(std::time::Duration::from_millis(delay));
-        }
-        self.guard()?;
-        if self.should_return_empty.load(Ordering::SeqCst) {
-            return Ok(self.make_result(agent_name, String::new()));
-        }
-        if !self.per_call_narrations.is_empty() {
-            let idx = self.call_index.fetch_add(1, Ordering::SeqCst);
-            return Ok(self.make_result(
-                agent_name,
-                self.per_call_narrations[idx % self.per_call_narrations.len()].clone(),
-            ));
-        }
-        Ok(self.make_result(
-            agent_name,
-            format!("[MockNarration] {}", context.user_message),
-        ))
-    }
-
-    fn narrate_arrival(
-        &self,
-        agent_name: &str,
-        context: &crate::narrative::prompt::PromptContext,
-    ) -> Result<LlmCallResult, EngineError> {
-        self.guard()?;
-        Ok(self.make_result(
-            agent_name,
-            format!("[MockArrival] You enter the {}.", context.room.name),
-        ))
-    }
-
     fn narrate_continuation(
         &self,
         agent_name: &str,
@@ -186,33 +130,59 @@ impl LlmBackend for MockBackend {
         user_prompt: &str,
         _max_tokens: Option<u32>,
     ) -> Result<LlmCallResult, EngineError> {
-        self.trigger_started.store(true, Ordering::SeqCst);
-        let delay = self.trigger_delay_ms.load(Ordering::SeqCst);
-        if delay > 0 {
-            std::thread::sleep(std::time::Duration::from_millis(delay));
-        }
-        if self.should_fail.load(Ordering::SeqCst)
-            || self.trigger_narration_should_fail.load(Ordering::SeqCst)
-        {
-            return Err(EngineError::Narrative(NarrativeFailure::Generation {
-                stage: "mock_trigger",
-                reason: "configured_failure",
-            }));
-        }
-        if !self.per_call_prompt_responses.is_empty() {
-            let idx = self.call_index.fetch_add(1, Ordering::SeqCst);
-            return Ok(self.make_result(
+        let is_narration = agent_name == super::backend::AGENT_NARRATOR
+            || agent_name == super::backend::AGENT_DIALOGUE;
+
+        if is_narration {
+            self.narration_started.store(true, Ordering::SeqCst);
+            let delay = self.delay_ms.load(Ordering::SeqCst);
+            if delay > 0 {
+                std::thread::sleep(std::time::Duration::from_millis(delay));
+            }
+            self.guard()?;
+            if self.should_return_empty.load(Ordering::SeqCst) {
+                return Ok(self.make_result(agent_name, String::new()));
+            }
+            if !self.per_call_narrations.is_empty() {
+                let idx = self.call_index.fetch_add(1, Ordering::SeqCst);
+                return Ok(self.make_result(
+                    agent_name,
+                    self.per_call_narrations[idx % self.per_call_narrations.len()].clone(),
+                ));
+            }
+            let input = extract_player_input(user_prompt)
+                .unwrap_or_else(|| user_prompt.lines().next().unwrap_or("...").to_string());
+            Ok(self.make_result(agent_name, format!("[MockNarration] {input}")))
+        } else {
+            self.trigger_started.store(true, Ordering::SeqCst);
+            let delay = self.trigger_delay_ms.load(Ordering::SeqCst);
+            if delay > 0 {
+                std::thread::sleep(std::time::Duration::from_millis(delay));
+            }
+            if self.should_fail.load(Ordering::SeqCst)
+                || self.trigger_narration_should_fail.load(Ordering::SeqCst)
+            {
+                return Err(EngineError::Narrative(NarrativeFailure::Generation {
+                    stage: "mock_trigger",
+                    reason: "configured_failure",
+                }));
+            }
+            if !self.per_call_prompt_responses.is_empty() {
+                let idx = self.call_index.fetch_add(1, Ordering::SeqCst);
+                return Ok(self.make_result(
+                    agent_name,
+                    self.per_call_prompt_responses[idx % self.per_call_prompt_responses.len()]
+                        .clone(),
+                ));
+            }
+            Ok(self.make_result(
                 agent_name,
-                self.per_call_prompt_responses[idx % self.per_call_prompt_responses.len()].clone(),
-            ));
+                format!(
+                    "[Continuation: {}]",
+                    user_prompt.lines().next().unwrap_or("...")
+                ),
+            ))
         }
-        Ok(self.make_result(
-            agent_name,
-            format!(
-                "[Continuation: {}]",
-                user_prompt.lines().next().unwrap_or("...")
-            ),
-        ))
     }
 
     fn name(&self) -> &str {

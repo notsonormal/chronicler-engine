@@ -16,15 +16,13 @@ use crate::model::quantifier::{
 };
 use crate::model::state::StoredTriggerContext;
 use crate::model::state::{GameState, GenerationPhase, GenerationStatus, LogType};
+use crate::model::prompt_preset::PromptPreset;
 use crate::model::world::WorldCard;
 use crate::narrative::llm::backend::LlmCallResult;
-use crate::narrative::prompt::{PromptBuilder, make_prompt_context};
+use crate::narrative::prompt::{PromptAssembler, make_prompt_context};
 
 pub trait ActionPipelineBackend: Send + Sync {
-    fn narrate_action(
-        &self,
-        context: &crate::narrative::prompt::PromptContext,
-    ) -> Result<LlmCallResult, EngineError>;
+    fn assembler(&self) -> &dyn PromptAssembler;
 
     fn complete(
         &self,
@@ -103,18 +101,13 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
             .trigger_match
             .as_ref()
             .and_then(|trigger_match| {
-                let (max_context_tokens, max_tokens) = self.ctx.prompt_build_params();
-                let system_prompt = self.ctx.active_system_prompt();
-                build_trigger_request(
+                self.build_trigger_request(
                     &next_state,
                     &narration_text,
                     &world,
                     &player,
                     &all_npcs,
-                    max_context_tokens,
-                    max_tokens,
                     trigger_match,
-                    system_prompt,
                 )
             });
 
@@ -176,7 +169,9 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
             return Err(self.save_early_error("Room not found"));
         };
         let history = state.narrative.history();
-        let system_prompt = self.ctx.active_system_prompt();
+
+        let (preset, response_length) = self.load_preset_and_response_length()?;
+
         let context = make_prompt_context(
             world,
             room,
@@ -185,10 +180,24 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
             player,
             input,
             &history,
-            system_prompt,
         );
 
-        let narration_result = match self.service.narrate_action(&context) {
+        let assembled = match self.service.assembler().assemble(
+            &context,
+            &preset,
+            &self.ctx.world.global_rules,
+            Some(&response_length),
+        ) {
+            Ok(a) => a,
+            Err(e) => return Err(self.save_early_error(map_llm_error(&e))),
+        };
+
+        let narration_result = match self.service.complete(
+            crate::narrative::llm::backend::AGENT_NARRATOR,
+            &assembled.system_prompt,
+            &assembled.user_prompt,
+            Some(assembled.max_tokens),
+        ) {
             Ok(result) => result,
             Err(e) => return Err(self.save_early_error(map_llm_error(&e))),
         };
@@ -533,6 +542,79 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
         }
         ActionOutcome::Cancelled
     }
+
+    fn load_preset_and_response_length(&self) -> Result<(PromptPreset, String), ActionOutcome> {
+        let settings = self.ctx.settings.read().unwrap_or_else(|e| e.into_inner());
+        let preset_id = settings.active_system_prompt_preset_id.clone();
+        let response_length = settings.response_length.clone();
+        match self.ctx.preset_storage.get(&preset_id) {
+            Ok(Some(p)) => Ok((p, response_length)),
+            Ok(None) => {
+                log::error!("active system preset '{preset_id}' not found — defaults not seeded?");
+                Err(self.save_early_error("Active system preset not found"))
+            }
+            Err(e) => {
+                log::error!("preset storage inaccessible: {e}");
+                Err(self.save_early_error("Preset storage inaccessible"))
+            }
+        }
+    }
+
+    fn build_trigger_request(
+        &self,
+        state: &GameState,
+        narration_text: &str,
+        world: &WorldCard,
+        player: &PlayerCard,
+        all_npcs: &[NpcCard],
+        trigger_match: &TriggerMatch,
+    ) -> Option<TriggerContinuationRequest> {
+        let continuation_user_msg = format!(
+            "Previous narration:\n{}\n\nTrigger event: {}\n\n\
+             Continue the scene naturally, incorporating the trigger event into the narrative. \
+             Do NOT repeat or contradict what was already described. Build naturally on the existing scene.",
+            narration_text, trigger_match.trigger_narration_prompt
+        );
+
+        let room_data = state.current_room()?;
+        let history = state.narrative.history();
+
+        let (preset, response_length) = self.load_preset_and_response_length().ok()?;
+
+        let trigger_ctx = make_prompt_context(
+            world,
+            room_data,
+            all_npcs,
+            &state.scene.npcs_in_area,
+            player,
+            &continuation_user_msg,
+            &history,
+        );
+
+        let assembled = self
+            .service
+            .assembler()
+            .assemble(
+                &trigger_ctx,
+                &preset,
+                &self.ctx.world.global_rules,
+                Some(&response_length),
+            )
+            .ok()?;
+
+        Some(TriggerContinuationRequest {
+            stored: StoredTriggerContext {
+                npc_id: trigger_match.npc_id.clone(),
+                trigger_idx: trigger_match.trigger_idx,
+                trigger_name: trigger_match.trigger_name.clone(),
+                trigger_repeat: trigger_match.trigger_repeat,
+                trigger_narration_prompt: trigger_match.trigger_narration_prompt.clone(),
+                system_prompt: assembled.system_prompt,
+                user_prompt: assembled.user_prompt,
+                max_tokens: Some(assembled.max_tokens),
+            },
+        })
+    }
 }
 
 pub(crate) fn default_quantifier_result(fallback_npc_ids: &[String]) -> QuantifierResult {
@@ -543,56 +625,4 @@ pub(crate) fn default_quantifier_result(fallback_npc_ids: &[String]) -> Quantifi
         },
         movement: MovementParseResult::default(),
     }
-}
-
-#[allow(clippy::too_many_arguments)]
-fn build_trigger_request(
-    state: &GameState,
-    narration_text: &str,
-    world: &WorldCard,
-    player: &PlayerCard,
-    all_npcs: &[NpcCard],
-    max_context_tokens: u32,
-    max_tokens: Option<u32>,
-    trigger_match: &TriggerMatch,
-    system_prompt: String,
-) -> Option<TriggerContinuationRequest> {
-    let continuation_user_msg = format!(
-        "Previous narration:\n{}\n\nTrigger event: {}\n\n\
-         Continue the scene naturally, incorporating the trigger event into the narrative. \
-         Do NOT repeat or contradict what was already described. Build naturally on the existing scene.",
-        narration_text, trigger_match.trigger_narration_prompt
-    );
-
-    let room_data = state.current_room()?;
-    let history = state.narrative.history();
-    let trigger_ctx = make_prompt_context(
-        world,
-        room_data,
-        all_npcs,
-        &state.scene.npcs_in_area,
-        player,
-        &continuation_user_msg,
-        &history,
-        system_prompt,
-    );
-
-    let mut pb = PromptBuilder::from_context(&trigger_ctx);
-    pb.max_context_tokens = Some(max_context_tokens);
-    pb.requested_max_tokens = max_tokens;
-
-    let (system_prompt, user_prompt, fitted_max_tokens) = pb.build_split().ok()?;
-
-    Some(TriggerContinuationRequest {
-        stored: StoredTriggerContext {
-            npc_id: trigger_match.npc_id.clone(),
-            trigger_idx: trigger_match.trigger_idx,
-            trigger_name: trigger_match.trigger_name.clone(),
-            trigger_repeat: trigger_match.trigger_repeat,
-            trigger_narration_prompt: trigger_match.trigger_narration_prompt.clone(),
-            system_prompt,
-            user_prompt,
-            max_tokens: Some(fitted_max_tokens),
-        },
-    })
 }

@@ -18,7 +18,7 @@ flowchart TD
     
     Phase3["**PHASE 3: PROCESS ACTION**<br>1. Generation gate: reject if action already in flight<br>2. Parse command & execute game logic<br>3. Log command as 'Input'<br>4. Set status to 'Generating' + phase 'Narrating'<br>5. Offload to `tokio::task::spawn_blocking` for LLM work"]
     
-    Phase4["**PHASE 4: MAIN LLM NARRATION**<br>*(Phase: Narrating)*<br>1. Build prompt via PromptBuilder<br>2. Send to LLM (see Context Pipeline below)<br>3. Add to history as 'Narration'<br>4. **Cancellation checkpoint** — aborts if token cancelled"]
+    Phase4["**PHASE 4: MAIN LLM NARRATION**<br>*(Phase: Narrating)*<br>1. Build prompt via LayeredPromptAssembler<br>2. Send to LLM (see Context Pipeline below)<br>3. Add to history as 'Narration'<br>4. **Cancellation checkpoint** — aborts if token cancelled"]
     
     Phase45["**PHASE 4.5: QUANTIFIER & MOVEMENT**<br>*(Phase: Quantifying)*<br>1. Post-narration Quantifier analyzes<br>2. Process movement intent<br>3. If moved: update room state (no additional LLM call — arrival is part of main narration)<br>4. Determine NPC Enter/Leave events"]
     
@@ -195,6 +195,6 @@ flowchart TD
 - **Server**: `src/server/fragments/actions.rs` - `action_handler`, `process_action`
 - **HTMX Polling**: `assets/index.html` - story-log `hx-trigger="load, every 2s"`; status-display `hx-trigger="load, every 5s"`; visual-sidebar & action-hints `hx-trigger="load, every 5s"`
 - **LLM**: `src/narrative/llm/backend.rs` - `LlmBackend` trait (`narrate_action`, `narrate_arrival`)
-- **Prompt Builder**: `src/narrative/prompt/builder.rs` - 7-layer prompt construction
+- **Prompt Assembler**: `src/narrative/prompt/assembler.rs` - 7-layer prompt construction
 - **Mock Flow Tests**: `tests/flow_mock/` - Sequential service-level flow tests with mock backends (retry, state consistency, quantifier movement)
 - **LLM Tests**: `tests/flow_llm_tests.rs` - Real LLM smoke tests (requires `OPENROUTER_API_KEY`)

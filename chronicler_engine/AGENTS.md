@@ -277,6 +277,15 @@ python build.py --cleanup --target-dir target/test_police
 
 Tests are already concurrency-safe: they allocate ports dynamically from the range 3010-3050 using file-based locking (`get_available_port` in `tests/test_utils.rs`).
 
+## CODE QUALITY
+
+- Keep answers short and concise
+- Do not preserve backward compatibility unless the user asks for it.
+- Read files in full before wide-ranging changes, before editing files you have not fully inspected, and when asked to investigate or audit. Do not rely on search snippets for broad changes.
+- Technical prose only, be direct
+- When the user asks a question, answer it first before making edits or running implementation commands.
+- When responding to user feedback or an analysis, explicitly say whether you agree or disagree before saying what you changed.
+
 ## AGENT SKILLS
 
 This project benefits from the **caveman** skill suite for token-efficient agent communication. Use these during long sessions, deep debugging, or when delegating to subagents.

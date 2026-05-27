@@ -5,7 +5,7 @@ use crate::model::character::NpcCard;
 use crate::model::game::generate_game_name;
 use crate::model::settings::AppSettings;
 use crate::model::state::GameState;
-use crate::narrative::prompt::PromptContext;
+use crate::narrative::prompt::{PromptAssembler, PromptContext};
 use crate::server::ServerConfig;
 use crate::storage::prompt_preset_storage::PromptPresetStorage;
 
@@ -105,7 +105,6 @@ pub fn run(args: Args) -> crate::error::Result<()> {
                 world_arc.starting_room_id.clone(),
             );
             inject_scenario_logs(&mut new_state, &manifest, &player);
-            // Initialise npc_encounter_log and npcs_in_area from scenario NPCs
             if let Some(scenario) = manifest.default_scenario() {
                 new_state.init_scenario_npcs(scenario);
             }
@@ -145,24 +144,19 @@ pub fn run(args: Args) -> crate::error::Result<()> {
         .default_scenario()
         .is_some_and(|s| !s.text.is_empty());
     if !has_scenario {
-        let arrival_system_prompt = {
+        let (arrival_preset, response_length, max_context_tokens, max_tokens) = {
             let preset_storage =
                 crate::storage::prompt_preset_storage::SqlitePromptPresetStorage::new(
                     db_pool.clone(),
                 );
             let settings_guard = settings.read().unwrap_or_else(|e| e.into_inner());
             let preset_id = &settings_guard.active_system_prompt_preset_id;
-            preset_storage
-                .get(preset_id)
-                .ok()
-                .flatten()
-                .map(|p| {
-                    p.assemble_prompt_text(
-                        &world_arc.global_rules,
-                        Some(settings_guard.response_length.as_str()),
-                    )
-                })
-                .unwrap_or_default()
+            let preset = preset_storage.get(preset_id).ok().flatten();
+            let conn = settings_guard.narration_connection();
+            let max_context_tokens = conn.resolve_max_context_tokens();
+            let max_tokens = conn.max_tokens;
+            let response_length = settings_guard.response_length.clone();
+            (preset, response_length, max_context_tokens, max_tokens)
         };
         let snapshot_storage_for_task = Arc::clone(&snapshot_storage);
         let message_storage_for_task = Arc::clone(&message_storage);
@@ -218,10 +212,33 @@ pub fn run(args: Args) -> crate::error::Result<()> {
                     player: &player_for_task,
                     user_message: "",
                     history: &history,
-                    system_prompt: arrival_system_prompt.clone(),
                 };
-                let narration = backend
-                    .narrate_arrival(crate::narrative::llm::backend::AGENT_NARRATOR, &context);
+
+                let narration = if let Some(ref preset) = arrival_preset {
+                    let mut assembler =
+                        crate::narrative::prompt::LayeredPromptAssembler::new(max_context_tokens);
+                    if let Some(max) = max_tokens {
+                        assembler = assembler.with_max_tokens(max);
+                    }
+                    match assembler.assemble(
+                        &context,
+                        preset,
+                        &world_for_task.global_rules,
+                        Some(&response_length),
+                    ) {
+                        Ok(assembled) => backend.complete(
+                            crate::narrative::llm::backend::AGENT_NARRATOR,
+                            &assembled.system_prompt,
+                            &assembled.user_prompt,
+                            Some(assembled.max_tokens),
+                        ),
+                        Err(e) => Err(e),
+                    }
+                } else {
+                    Err(crate::error::EngineError::Config(
+                        "No active preset found for arrival narration".into(),
+                    ))
+                };
                 match narration {
                     Ok(result) => {
                         state.add_log(result.text, None, crate::model::state::LogType::Narration);

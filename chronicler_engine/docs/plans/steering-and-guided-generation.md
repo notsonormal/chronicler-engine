@@ -29,12 +29,12 @@ Users often need to correct AI behavior or introduce specific plot points withou
 Add support for one-off instructions that are not saved to history but are included in the prompt for the next generation.
 
 #### [MODIFY] [types.rs](file:///e:/John/Github/mrn-general/chronicler_engine/src/narrative/prompt/types.rs)
-- Add `generation_guide: Option<&'a str>` to `PromptContext` and `PromptBuilder`.
+- Add `generation_guide: Option<&'a str>` to `PromptContext` and `PromptAssembler`.
 
-#### [MODIFY] [builder.rs](file:///e:/John/Github/mrn-general/chronicler_engine/src/narrative/prompt/builder.rs)
+#### [MODIFY] [assembler.rs](file:///e:/John/Github/mrn-general/chronicler_engine/src/narrative/prompt/assembler.rs)
 - Implement `render_guided_generation_layer()` which wraps the guide in a `<Consideration>` block.
-- Update `build_split()` to include this layer at the absolute end of the user prompt (after the Output Format layer or just before it) to leverage recency bias.
-- Add `with_generation_guide(mut self, guide: &'a str)` to `PromptBuilder`.
+- Update `assemble()` to include this layer at the absolute end of the user prompt (after the Output Format layer or just before it) to leverage recency bias.
+- Add `with_generation_guide(mut self, guide: &'a str)` to `LayeredPromptAssembler`.
 
 **Example Block:**
 ```xml
@@ -53,7 +53,7 @@ Support permanent narrative instructions in the conversation history.
 - Ensure `LogType` has a suitable variant (using `System` or adding `Narrator`).
 - `Narrator` instructions should be rendered distinctly in the history.
 
-#### [MODIFY] [builder.rs](file:///e:/John/Github/mrn-general/chronicler_engine/src/narrative/prompt/builder.rs)
+#### [MODIFY] [assembler.rs](file:///e:/John/Github/mrn-general/chronicler_engine/src/narrative/prompt/assembler.rs)
 - Update `render_history_layer()` to handle `Narrator` (or `System`) logs by wrapping them in an instruction block like `[Narrator: ...]`.
 
 ---
@@ -63,9 +63,9 @@ Support permanent narrative instructions in the conversation history.
 Allow the user to force the AI to write as a specific character.
 
 #### [MODIFY] [types.rs](file:///e:/John/Github/mrn-general/chronicler_engine/src/narrative/prompt/types.rs)
-- Add `impersonate_persona: Option<&'a str>` to `PromptContext` and `PromptBuilder`.
+- Add `impersonate_persona: Option<&'a str>` to `PromptContext` and `PromptAssembler`.
 
-#### [MODIFY] [builder.rs](file:///e:/John/Github/mrn-general/chronicler_engine/src/narrative/prompt/builder.rs)
+#### [MODIFY] [assembler.rs](file:///e:/John/Github/mrn-general/chronicler_engine/src/narrative/prompt/assembler.rs)
 - Implement `render_impersonate_layer()`.
 - If `impersonate_persona` is set, append a strict instruction: `[Write the next response as {{persona}}.]`.
 - This should ideally replace or modify the standard `OUTPUT_FORMAT_TEMPLATE` to ensure the AI doesn't revert to standard narrator mode.
@@ -89,7 +89,7 @@ Expose the new steering features via the HTMX-based web interface.
 ## Verification Plan
 
 ### Automated Tests
-- **Prompt Construction Tests**: Update `builder_tests.rs` to verify that `generation_guide` appears at the absolute end of the prompt for recency bias.
+- **Prompt Construction Tests**: Update `assembler_tests.rs` to verify that `generation_guide` appears at the absolute end of the prompt for recency bias.
 - **History Rendering Tests**: Verify `LogType::Narrator` entries are rendered as `[Narrator: ...]` in the history layer.
 - **Command Parsing Tests**: Add unit tests for the new slash command handlers in `process_action`.
 

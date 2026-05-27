@@ -9,7 +9,8 @@ use crate::model::settings::AppSettings;
 use crate::model::state::GameState;
 use crate::narrative::agents::quantifier::QuantifierAgent;
 use crate::narrative::agents::registry::AgentRegistry;
-use crate::narrative::llm::backend::{AGENT_NARRATOR, LlmCallResult};
+use crate::narrative::llm::backend::LlmCallResult;
+use crate::narrative::prompt::{LayeredPromptAssembler, PromptAssembler};
 use crate::storage::llm_message_storage::LlmMessageStorage;
 
 pub trait GameService: Send + Sync {
@@ -22,6 +23,7 @@ pub trait GameService: Send + Sync {
 
 pub struct DefaultGameService {
     pub(crate) llm_backend: Arc<dyn crate::narrative::llm::LlmBackend>,
+    pub(crate) prompt_assembler: Arc<dyn PromptAssembler>,
     pub(crate) agent_registry: AgentRegistry,
 }
 
@@ -35,7 +37,7 @@ impl DefaultGameService {
         preset_storage: Option<Arc<dyn crate::storage::prompt_preset_storage::PromptPresetStorage>>,
         settings: Arc<RwLock<AppSettings>>,
     ) -> Self {
-        let (registry, connection) = {
+        let (registry, connection, max_context_tokens, max_tokens) = {
             let settings_guard = settings.read().unwrap_or_else(|e| e.into_inner());
             let registry = AgentRegistry::from_configs_with_storage(
                 &settings_guard.agents,
@@ -44,14 +46,22 @@ impl DefaultGameService {
                 Arc::clone(&settings),
             )
             .unwrap_or_default();
-            (registry, settings_guard.narration_connection())
+            let conn = settings_guard.narration_connection();
+            let max_context_tokens = conn.resolve_max_context_tokens();
+            let max_tokens = conn.max_tokens;
+            (registry, conn, max_context_tokens, max_tokens)
         };
         let llm_backend = Arc::from(crate::narrative::llm::get_llm_backend_for(
             &connection,
             storage,
         ));
+        let mut assembler = LayeredPromptAssembler::new(max_context_tokens);
+        if let Some(max) = max_tokens {
+            assembler = assembler.with_max_tokens(max);
+        }
         Self {
             llm_backend,
+            prompt_assembler: Arc::new(assembler),
             agent_registry: registry,
         }
     }
@@ -62,6 +72,9 @@ impl DefaultGameService {
     ) -> Self {
         Self {
             llm_backend,
+            prompt_assembler: Arc::new(LayeredPromptAssembler::new(
+                crate::narrative::prompt::budget::MAX_CONTEXT_TOKENS,
+            )),
             agent_registry,
         }
     }
@@ -74,6 +87,9 @@ impl DefaultGameService {
         let registry = AgentRegistry::with_agent(Box::new(agent));
         Self {
             llm_backend,
+            prompt_assembler: Arc::new(LayeredPromptAssembler::new(
+                crate::narrative::prompt::budget::MAX_CONTEXT_TOKENS,
+            )),
             agent_registry: registry,
         }
     }
@@ -86,11 +102,8 @@ impl Default for DefaultGameService {
 }
 
 impl ActionPipelineBackend for DefaultGameService {
-    fn narrate_action(
-        &self,
-        context: &crate::narrative::prompt::PromptContext,
-    ) -> Result<LlmCallResult, EngineError> {
-        self.llm_backend.narrate_action(AGENT_NARRATOR, context)
+    fn assembler(&self) -> &dyn PromptAssembler {
+        &*self.prompt_assembler
     }
 
     fn complete(

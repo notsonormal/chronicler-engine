@@ -741,58 +741,6 @@ impl crate::narrative::llm::LlmBackend for EmptyTriggerBackend {
         "mock"
     }
 
-    fn generate_dialogue(
-        &self,
-        agent_name: &str,
-        context: &crate::narrative::prompt::PromptContext,
-        _npc: &crate::model::character::NpcCard,
-    ) -> Result<LlmCallResult, EngineError> {
-        Ok(LlmCallResult {
-            text: format!("[MockGenerated] {}", context.user_message),
-            system_prompt: String::new(),
-            user_prompt: String::new(),
-            raw_request_json: String::new(),
-            raw_response_json: String::new(),
-            backend_name: "EmptyTrigger".to_string(),
-            model_name: "mock".to_string(),
-            agent_name: agent_name.to_string(),
-        })
-    }
-
-    fn narrate_action(
-        &self,
-        agent_name: &str,
-        context: &crate::narrative::prompt::PromptContext,
-    ) -> Result<LlmCallResult, EngineError> {
-        Ok(LlmCallResult {
-            text: format!("[MockNarration] {}", context.user_message),
-            system_prompt: String::new(),
-            user_prompt: String::new(),
-            raw_request_json: String::new(),
-            raw_response_json: String::new(),
-            backend_name: "EmptyTrigger".to_string(),
-            model_name: "mock".to_string(),
-            agent_name: agent_name.to_string(),
-        })
-    }
-
-    fn narrate_arrival(
-        &self,
-        agent_name: &str,
-        context: &crate::narrative::prompt::PromptContext,
-    ) -> Result<LlmCallResult, EngineError> {
-        Ok(LlmCallResult {
-            text: format!("[MockArrival] {}", context.room.name),
-            system_prompt: String::new(),
-            user_prompt: String::new(),
-            raw_request_json: String::new(),
-            raw_response_json: String::new(),
-            backend_name: "EmptyTrigger".to_string(),
-            model_name: "mock".to_string(),
-            agent_name: agent_name.to_string(),
-        })
-    }
-
     fn narrate_continuation(
         &self,
         agent_name: &str,

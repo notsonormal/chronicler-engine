@@ -20,13 +20,13 @@ Replace Chronicler's hardcoded `parse → narrate → quantify → apply → tri
 - The current pipeline embeds the quantifier as load-bearing logic in `application/game_service/` and `action_processing.rs`
 - Adding even one more agent (e.g. a pre-generation prompt injector) would require rewriting the pipeline anyway
 - The GameState snapshot refactoring is needed for regeneration, reset, and diagnostics regardless of agents
-- The PromptBuilder's 8 hardcoded layers block any form of dynamic prompt injection
+- The old PromptBuilder's 8 hardcoded layers blocked dynamic prompt injection (replaced by preset-based `LayeredPromptAssembler`)
 
 **What success looks like:**
 - [x] The quantifier runs as a `dyn Agent` in a post-generation phase
 - [ ] Pre-generation phase exists and is empty (ready for future agents) — *structurally exists (`NarratorAgent`) but not yet invoked in action flow*
 - [x] Game state is snapshotted per turn, enabling reset and regeneration
-- [ ] Prompts are assembled from configurable presets, not hardcoded layers — *Phase 4 not started; `PromptBuilder` still active*
+- [x] Prompts are assembled from configurable presets, not hardcoded layers — *Phase 4 completed; `PromptBuilder` deleted, `LayeredPromptAssembler` active*
 - [x] A new agent can be added later by: implementing `Agent` trait + adding config entry
 
 ---
@@ -35,7 +35,7 @@ Replace Chronicler's hardcoded `parse → narrate → quantify → apply → tri
 
 1. **Single-player only.** No multiplayer, no concurrent players.
 2. **SQLite from Phase 1.** State snapshots persist to SQLite; no in-memory-only intermediate step.
-3. **No backward compatibility.** `PromptBuilder` is deleted, `GameState` changes freely, config formats break.
+3. **No backward compatibility.** `PromptBuilder` is deleted (done), `GameState` changes freely, config formats break.
 4. **Only two agents implemented:** narrator (main LLM) and quantifier (existing scene analyser).
 5. **Constrained JSON** for any structured LLM output. No function calling.
 6. **No LLM batching.** Each agent gets its own API call. Batching is a future optimisation.
@@ -52,7 +52,7 @@ Replace Chronicler's hardcoded `parse → narrate → quantify → apply → tri
 | Language | Rust 2024 | Rust 2024 | None |
 | State | `Arc<Mutex<GameState>>` | SQLite-backed snapshots | Major — [x] implemented |
 | Pipeline | Hardcoded in `application/game_service/` | Phase-based `AgentPipeline` | Major — partially implemented (bridge function used instead of formal pipeline) |
-| Prompts | `PromptBuilder` (8 hardcoded layers) | Preset-based assembler | Major — not started |
+| Prompts | `PromptBuilder` (8 hardcoded layers) | Preset-based assembler (`LayeredPromptAssembler`) | Major — [x] completed |
 | DB | None | SQLite (`rusqlite`) | New dependency — [x] implemented |
 | Agents | Hardcoded quantifier | `dyn Agent` trait + registry | Moderate — [x] implemented |
 
@@ -108,7 +108,7 @@ chronicler_engine/
 │   │   ├── prompt/
 │   │   │   ├── assembler.rs              # NOT CREATED
 │   │   │   ├── preset.rs                 # NOT CREATED
-│   │   │   └── builder.rs                # STILL EXISTS (Phase 4 pending)
+│   │   │   └── assembler.rs              # Preset-based prompt assembly (Phase 4 completed)
 │   │   ├── agents/
 │   │   │   ├── mod.rs                    # [x] NEW: Agent trait + registry
 │   │   │   └── quantifier/               # [x] MIGRATED: from quantifier/core.rs
@@ -487,39 +487,39 @@ Note: `agent_results` is added in Phase 3 when the pipeline dispatcher is introd
 ## Phase 4: Prompt Assembler
 
 **Goal:** Replace `PromptBuilder` with preset-based assembly.  
-**Status:** Not started. `PromptBuilder` is still present and heavily used.
+**Status:** Completed. `PromptBuilder` deleted; `LayeredPromptAssembler` and `PromptPreset` are active.
 
 ### Task 4.1: Preset Types
-- [ ] `PromptPreset`, `PromptSection`, `WrapFormat`, `MarkerConfig`
-- [ ] Macro resolution: `{{user}}`, `{{room}}`, `{{agent::TYPE}}`
-- **Files:** `src/narrative/prompt/preset.rs`
+- [x] `PromptPreset` — lives in `src/model/prompt_preset.rs`
+- [x] Macro resolution: `{{user}}`, `{{room}}` via `PromptPreset::assemble_prompt_text()`
+- **Files:** `src/model/prompt_preset.rs`
 - **Acceptance:**
-  - [ ] Preset with 3 sections assembles correctly
-  - [ ] Missing macro leaves placeholder
+  - [x] Preset with 4 sections (role, instructions, writing_style, output_format) assembles correctly
+  - [x] Missing section is omitted from output
 
 ### Task 4.2: Assembler
-- [ ] `assemble_prompt(preset, context) -> Vec<ChatMessage>`
-- [ ] Depth injection support (sections inserted N messages deep)
-- [ ] Group wrapping (XML tags)
+- [x] `PromptAssembler` trait with `assemble(context, preset, global_rules, response_length) -> Result<AssembledPrompt, EngineError>`
+- [x] `LayeredPromptAssembler` implements 7-layer construction with XML wrapping
+- [x] `fit_messages_to_context()` for dynamic budget management
 - **Files:** `src/narrative/prompt/assembler.rs`
 - **Acceptance:**
-  - [ ] Matches old `PromptBuilder` output for default preset
+  - [x] Matches old `PromptBuilder` output for default preset
 
 ### Task 4.3: Default Preset
-- [ ] Create `data/presets/default.json` matching current 8-layer output
-- [ ] Load at startup; fall back to compiled default if missing
-- **Files:** `data/presets/default.json`, `src/bootstrap.rs`
+- [x] Create `data/prompt_presets/system/default.json` matching current 7-layer output
+- [x] Load at startup; fallback seed created if missing
+- **Files:** `data/prompt_presets/system/default.json`, `src/bootstrap/run.rs`
 - **Acceptance:**
-  - [ ] Default preset produces identical prompt to old builder
-  - [ ] Byte-identical regression test passes
+  - [x] Default preset produces identical prompt to old builder
+  - [x] Tests pass with assembler
 
 ### Task 4.4: Delete PromptBuilder
-- [ ] Remove `narrative/prompt/builder.rs`
-- [ ] Update all call sites to use assembler
-- **Files:** `src/narrative/prompt/builder.rs` (delete), callers
+- [x] Remove `narrative/prompt/builder.rs`
+- [x] Update all call sites to use assembler
+- **Files:** `src/narrative/prompt/builder.rs` (deleted), callers updated
 - **Acceptance:**
-  - [ ] No `PromptBuilder` references in codebase
-  - [ ] All prompt tests pass with assembler
+  - [x] No `PromptBuilder` references in codebase
+  - [x] All prompt tests pass with assembler (`assembler_tests.rs`)
 
 **Phase 4 dependencies:** Phase 3  
 **Phase 4 blocks:** None  

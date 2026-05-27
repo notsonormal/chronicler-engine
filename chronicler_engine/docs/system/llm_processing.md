@@ -121,7 +121,7 @@ The LLM Messages tab (`/fragment/llm-messages`) renders the last 50 calls as an 
 
 ### Module Location
 - **Crate path**: `crate::narrative::llm` — directory module (`mod.rs`, `backend.rs`, `openrouter.rs`, `deepseek.rs`, `ollama.rs`, `mock.rs`)
-- **Crate path**: `crate::narrative::prompt` — directory module (`mod.rs`, `builder.rs`, `budget.rs`, `context.rs`, `sanitize.rs`, `types.rs`, plus sibling `*_tests.rs` files)
+- **Crate path**: `crate::narrative::prompt` — directory module (`mod.rs`, `assembler.rs`, `budget.rs`, `context.rs`, `sanitize.rs`, `types.rs`, plus sibling `*_tests.rs` files)
 - **Crate path**: `crate::narrative::llm_client` — HTTP client helpers (`src/narrative/llm_client.rs`)
 - **Crate path**: `crate::storage::llm_message_storage` — trait + SQLite + in-memory implementations
 - **Crate path**: `crate::model::llm_message` — `LlmMessage` data model
@@ -129,5 +129,5 @@ The LLM Messages tab (`/fragment/llm-messages`) renders the last 50 calls as an 
 ## Implementation Standards
 - Use the `LlmBackend` trait for all implementations
 - Maintain a `MockBackend` for test environments
-- Use `PromptBuilder` for all LLM calls
+- Use `PromptAssembler` for all prompt construction; `LlmBackend::complete()` for all LLM transport
 - Configure `max_context_tokens` per connection to match the model's actual context window

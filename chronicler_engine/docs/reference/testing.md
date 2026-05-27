@@ -77,12 +77,14 @@ For tests that only need to verify pipeline behavior (narration → quantificati
 
 ```rust
 use chronicler_engine::application::action_pipeline::ActionPipelineBackend;
+use chronicler_engine::narrative::prompt::PromptAssembler;
 
 struct NarrowMock;
 
 impl ActionPipelineBackend for NarrowMock {
-    fn narrate_action(&self, _ctx: &PromptContext) -> Result<LlmCallResult, EngineError> {
-        Ok(LlmCallResult { /* ... */ })
+    fn assembler(&self) -> &dyn PromptAssembler {
+        // Return a test assembler (e.g., a mock or LayeredPromptAssembler)
+        &TEST_ASSEMBLER
     }
 
     fn complete(&self, _agent: &str, _sys: &str, _usr: &str, _max: Option<u32>) -> Result<LlmCallResult, EngineError> {

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::collections::HashMap;
 
 use crate::model::character::{CharacterSheet, PlayerCard};
@@ -60,7 +62,6 @@ pub fn make_test_context(user_message: &str) -> PromptContext<'static> {
         player: Box::leak(Box::new(player)),
         user_message: Box::leak(Box::new(user_msg)),
         history: &[],
-        system_prompt: "You are a test narrator.".to_string(),
     }
 }
 
@@ -83,6 +84,5 @@ pub fn make_test_context_with_npc(
         player: Box::leak(Box::new(player)),
         user_message: Box::leak(Box::new(user_msg)),
         history: &[],
-        system_prompt: "You are a test narrator.".to_string(),
     }
 }

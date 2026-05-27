@@ -312,7 +312,18 @@ async fn test_action_confirm_empty_command() {
 
 #[tokio::test]
 async fn test_action_concurrent_rejection() {
-    let app = TestAppBuilder::default_app();
+    // Use a mock backend with a small delay so the first action remains
+    // in-flight when the second request arrives, ensuring deterministic
+    // concurrent rejection.
+    let llm: Arc<dyn chronicler_engine::narrative::llm::LlmBackend> =
+        Arc::new(chronicler_engine::narrative::llm::MockBackend::with_delay(50));
+    let game_service = Arc::new(chronicler_engine::application::game_service::DefaultGameService::with_mock_quantifier(
+        Arc::clone(&llm),
+        Arc::new(chronicler_engine::narrative::llm::MockBackend::default()),
+    ));
+    let app = TestAppBuilder::default_test()
+        .game_service(game_service)
+        .build();
 
     // First async action sets is_generating = true
     let req1 = Request::builder()
