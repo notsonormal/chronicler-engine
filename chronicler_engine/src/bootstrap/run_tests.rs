@@ -1,6 +1,5 @@
 use crate::bootstrap::run::find_latest_game_for_world;
-use crate::storage::message_storage::MessageStorage;
-use crate::storage::snapshot_storage::SnapshotStorage;
+use crate::storage::Storage;
 
 #[test]
 fn test_find_latest_game_for_world_uses_message_timestamp() {
@@ -113,10 +112,7 @@ fn test_restart_with_existing_game_does_not_duplicate_scenario() {
     };
 
     // 2. Simulate first startup: create state, inject scenario, save snapshot + message
-    let snapshot_repo =
-        crate::storage::snapshot_storage::SqliteSnapshotRepository::new(db_pool.clone(), game_id);
-    let message_repo =
-        crate::storage::message_storage::SqliteMessageRepository::new(db_pool.clone(), game_id);
+    let storage = Storage::new_sqlite(db_pool.clone(), game_id);
 
     let manifest = crate::model::world::WorldManifest {
         id: "test".to_string(),
@@ -169,15 +165,15 @@ fn test_restart_with_existing_game_does_not_duplicate_scenario() {
     crate::bootstrap::inject_scenario_logs(&mut state, &manifest, &player);
 
     let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
-    let snapshot_id = snapshot_repo.save(&snapshot).unwrap();
+    let snapshot_id = storage.save_snapshot(&snapshot).unwrap();
     if let Some(msg) = state.narrative.history.last_mut() {
         msg.snapshot_id = Some(snapshot_id);
-        let id = message_repo.insert_message(&*msg).unwrap();
+        let id = storage.insert_message(&*msg).unwrap();
         msg.id = id;
     }
 
     // Verify first startup created exactly one message
-    let initial_messages = message_repo.load_message_rows().unwrap();
+    let initial_messages = storage.load_message_rows().unwrap();
     assert_eq!(initial_messages.len(), 1);
 
     // 3. Simulate restart logic: find game, load snapshot
@@ -186,7 +182,7 @@ fn test_restart_with_existing_game_does_not_duplicate_scenario() {
     let (found_id, _) = found.unwrap();
     assert_eq!(found_id, game_id);
 
-    let loaded = snapshot_repo.load_latest().unwrap();
+    let loaded = storage.load_latest_snapshot().unwrap();
     assert!(
         loaded.is_some(),
         "Existing snapshot should be found on restart"
@@ -194,7 +190,7 @@ fn test_restart_with_existing_game_does_not_duplicate_scenario() {
 
     // If a snapshot exists, the fixed startup code loads it and skips scenario injection.
     // Verify no duplicate was inserted.
-    let msgs_after_restart = message_repo.load_message_rows().unwrap();
+    let msgs_after_restart = storage.load_message_rows().unwrap();
     assert_eq!(
         msgs_after_restart.len(),
         1,

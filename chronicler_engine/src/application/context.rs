@@ -9,20 +9,11 @@ use crate::model::settings::AppSettings;
 use crate::model::state::GameState;
 use crate::model::state_snapshot::GameStateSnapshot;
 use crate::model::world::WorldCard;
-use crate::storage::game_storage::GameStorage;
-use crate::storage::llm_message_storage::LlmMessageStorage;
-use crate::storage::message_storage::MessageStorage;
-use crate::storage::message_swipe_storage::MessageSwipeStorage;
-use crate::storage::prompt_preset_storage::PromptPresetStorage;
-use crate::storage::snapshot_storage::SnapshotStorage;
+use crate::storage::Storage;
 
 #[derive(Clone)]
 pub struct GameServiceContext {
-    pub game_storage: Arc<dyn GameStorage>,
-    pub snapshot_storage: Arc<dyn SnapshotStorage>,
-    pub message_storage: Arc<dyn MessageStorage>,
-    pub message_swipe_storage: Arc<dyn MessageSwipeStorage>,
-    pub llm_message_storage: Arc<dyn LlmMessageStorage>,
+    pub storage: Arc<Storage>,
     pub world: Arc<WorldCard>,
     pub map: Arc<crate::model::map::MapDef>,
     pub player: Arc<crate::model::character::PlayerCard>,
@@ -32,24 +23,21 @@ pub struct GameServiceContext {
     pub is_generating: Arc<AtomicBool>,
     /// Runtime settings (shared with AppState).
     pub settings: Arc<RwLock<AppSettings>>,
-    pub preset_storage: Arc<dyn PromptPresetStorage>,
+    pub preset_storage: Arc<Storage>,
 }
 
 impl GameServiceContext {
     pub fn set_game_id(&self, game_id: u64) {
-        self.game_storage.set_game_id(game_id);
-        self.snapshot_storage.set_game_id(game_id);
-        self.message_storage.set_game_id(game_id);
+        self.storage.set_game_id(game_id);
     }
 
     pub fn load_messages(&self) -> Result<Vec<crate::model::message::Message>, EngineError> {
-        load_messages_with_swipes(&*self.message_storage, &*self.message_swipe_storage)
+        load_messages_with_swipes(&self.storage)
     }
 
     pub fn update_message_text(&self, id: u64, text: &str) -> Result<(), EngineError> {
-        let index = self.message_storage.get_active_swipe_index(id)?;
-        self.message_swipe_storage
-            .update_swipe_text(id, index, text)
+        let index = self.storage.get_active_swipe_index(id)?;
+        self.storage.update_swipe_text(id, index, text)
     }
 
     /// Quantifier presets do not include global rules or response length.
@@ -58,7 +46,7 @@ impl GameServiceContext {
             let settings = self.settings.read().unwrap_or_else(|e| e.into_inner());
             settings.active_quantifier_prompt_preset_id.clone()
         };
-        match self.preset_storage.get(&preset_id) {
+        match self.preset_storage.get_preset(&preset_id) {
             Ok(Some(preset)) => preset.assemble_prompt_text(&[], None),
             Ok(None) => {
                 log::error!(
@@ -76,7 +64,7 @@ impl GameServiceContext {
     /// Panics if no snapshot exists — use only in tests where a snapshot was pre-seeded.
     #[cfg(test)]
     pub fn load_state(&self) -> GameState {
-        let snapshot = match self.snapshot_storage.load_latest() {
+        let snapshot = match self.storage.load_latest_snapshot() {
             Ok(Some(s)) => s,
             Ok(None) => panic!("no snapshots found"),
             Err(e) => panic!("failed to load snapshot: {e}"),
@@ -95,12 +83,11 @@ impl GameServiceContext {
 
 /// [DOC: docs/architecture/system.md]
 pub fn load_messages_with_swipes(
-    message_storage: &dyn MessageStorage,
-    message_swipe_storage: &dyn MessageSwipeStorage,
+    storage: &Storage,
 ) -> Result<Vec<crate::model::message::Message>, EngineError> {
-    let mut messages = message_storage.load_message_rows()?;
+    let mut messages = storage.load_message_rows()?;
     let ids: Vec<u64> = messages.iter().map(|m| m.id).collect();
-    let swipes_map = message_swipe_storage.load_swipes_for_messages(&ids)?;
+    let swipes_map = storage.load_swipes_for_messages(&ids)?;
     for msg in &mut messages {
         if let Some(swipes) = swipes_map.get(&msg.id) {
             msg.swipes = swipes.clone();
@@ -121,7 +108,7 @@ pub fn load_messages_with_swipes(
 
 /// [DOC: docs/architecture/system.md]
 pub fn try_load_state(ctx: &GameServiceContext) -> Result<GameState, EngineError> {
-    let snapshot = ctx.snapshot_storage.load_latest()?;
+    let snapshot = ctx.storage.load_latest_snapshot()?;
     let mut state = match snapshot {
         Some(snap) => GameState::from_snapshot(
             &snap,
@@ -166,7 +153,7 @@ pub fn load_messages_into_state(ctx: &GameServiceContext, state: &mut GameState)
 /// [DOC: docs/architecture/system.md]
 pub fn save_state(ctx: &GameServiceContext, state: &GameState) -> Result<u64, EngineError> {
     let snapshot = GameStateSnapshot::from_game_state(state);
-    ctx.snapshot_storage.save(&snapshot)
+    ctx.storage.save_snapshot(&snapshot)
 }
 
 /// Save a snapshot and persist the most recent unpersisted message.
@@ -178,7 +165,7 @@ pub fn save_message_and_snapshot(
     state: &mut GameState,
 ) -> Result<u64, EngineError> {
     let snapshot = GameStateSnapshot::from_game_state(state);
-    let snapshot_id = ctx.snapshot_storage.save(&snapshot)?;
+    let snapshot_id = ctx.storage.save_snapshot(&snapshot)?;
 
     // Persist new swipe on retry target
     if let Some(ref mut target) = state.narrative.retry_target {
@@ -186,9 +173,8 @@ pub fn save_message_and_snapshot(
         if let Some(last_swipe) = target.swipes.last_mut() {
             if last_swipe.snapshot_id.is_none() {
                 last_swipe.snapshot_id = Some(snapshot_id);
-                ctx.message_swipe_storage
-                    .insert_swipe(target.id, last_swipe, idx)?;
-                ctx.message_storage.update_active_swipe(target.id, idx)?;
+                ctx.storage.insert_swipe(target.id, last_swipe, idx)?;
+                ctx.storage.update_active_swipe(target.id, idx)?;
             }
         }
     }
@@ -199,9 +185,9 @@ pub fn save_message_and_snapshot(
             if let Some(swipe) = msg.swipes.first_mut() {
                 swipe.snapshot_id = Some(snapshot_id);
             }
-            let id = ctx.message_storage.insert_message(&*msg)?;
+            let id = ctx.storage.insert_message(&*msg)?;
             for (idx, swipe) in msg.swipes.iter().enumerate() {
-                ctx.message_swipe_storage.insert_swipe(id, swipe, idx)?;
+                ctx.storage.insert_swipe(id, swipe, idx)?;
             }
             msg.id = id;
         }
@@ -215,7 +201,7 @@ pub fn delete_and_remove_message(
     id: u64,
 ) -> Result<(), EngineError> {
     // [DOC: docs/architecture/system.md]
-    ctx.message_storage.delete_message(id)?;
+    ctx.storage.delete_message(id)?;
     state.narrative.history.retain(|m| m.id != id);
     Ok(())
 }

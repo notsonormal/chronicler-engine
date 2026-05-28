@@ -102,27 +102,16 @@ async fn test_action_confirm_returns_full_action_area() {
 
 #[tokio::test]
 async fn test_async_action_saves_input_to_story_log_with_sqlite() {
+    use chronicler_engine::storage::Storage;
     use chronicler_engine::storage::db::DbPool;
-    use chronicler_engine::storage::snapshot_storage::SqliteSnapshotRepository;
     let tmp_dir =
         std::env::temp_dir().join(format!("chronicler_component_test_{}", std::process::id()));
     let _ = std::fs::create_dir_all(&tmp_dir);
     let db_path = tmp_dir.join("test.db");
     let db_pool = DbPool::new(db_path.to_str().unwrap()).unwrap();
-    let snapshot_storage = Arc::new(SqliteSnapshotRepository::new(db_pool.clone(), 1));
-    let message_storage = Arc::new(
-        chronicler_engine::storage::message_storage::SqliteMessageRepository::new(db_pool, 1),
-    );
+    let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
 
-    let app = TestAppBuilder::default_test()
-        .snapshot_storage(
-            snapshot_storage
-                as Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage>,
-        )
-        .message_storage(
-            message_storage as Arc<dyn chronicler_engine::storage::message_storage::MessageStorage>,
-        )
-        .build();
+    let app = TestAppBuilder::default_test().storage(storage).build();
 
     // Submit an async (free-action) command
     let req = Request::builder()

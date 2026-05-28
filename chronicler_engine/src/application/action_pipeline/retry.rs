@@ -58,7 +58,7 @@ pub fn retry_last_response_impl<B: ActionPipelineBackend>(backend: &B, ctx: Game
         })
         .cloned();
 
-    let snapshot = match ctx.snapshot_storage.load_by_id(snapshot_id) {
+    let snapshot = match ctx.storage.load_snapshot_by_id(snapshot_id) {
         Ok(Some(s)) => s,
         Ok(None) => {
             log::error!("No snapshot found for id {snapshot_id}");

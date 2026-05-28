@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-05-28
+
+### Changed
+- **Unified `Storage` struct replaces 6 traits + 12 repository structs**
+  - New `Storage` struct (`src/storage/backend.rs`) with `Backend` enum (`Sqlite`, `InMemory`, `Test`)
+  - All `Arc<dyn Trait>` injection points collapsed to `Arc<Storage>`
+  - `GameServiceContext` reduced from 5 storage fields to single `storage: Arc<Storage>` + `preset_storage: Arc<Storage>`
+  - `Backend::Test` supports dynamic failure injection via `Operation` enum + `TestOverride` + `TestFailureHandle`
+  - Deleted: `game_storage.rs`, `snapshot_storage.rs`, `message_storage.rs`, `message_swipe_storage.rs`, `prompt_preset_storage.rs`, `llm_message_storage.rs`, `in_memory_storage.rs`, and all associated `*_storage_tests.rs`
+  - ADR-019 guardrail (`guardrails_one_table_per_storage`) removed — no longer applicable with unified struct
+  - ADR-019 marked as superseded; new ADR-020 documents the consolidation decision
+  - All 859 tests pass; clippy clean; `build.py` clean
+
 ## 2026-05-27
 
 ### Changed

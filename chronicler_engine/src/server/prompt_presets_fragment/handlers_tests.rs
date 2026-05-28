@@ -1,103 +1,34 @@
 use std::sync::{Arc, RwLock};
 
-use crate::error::EngineError;
 use crate::model::prompt_preset::{PresetType, PromptPreset};
 use crate::server::prompt_presets_fragment::handlers::{
     PresetForm, activate_preset_handler, delete_preset_handler, duplicate_preset_handler,
     edit_preset_form_handler, panel_handler, preset_card_handler, save_preset_handler,
     update_preset_handler, view_preset_form_handler,
 };
-use crate::storage::prompt_preset_storage::{InMemoryPromptPresetStorage, PromptPresetStorage};
-
-/// Wrapper that delegates to an inner storage but can be configured to fail
-/// on specific operations, enabling error-branch coverage.
-struct FailingPromptPresetStorage {
-    inner: InMemoryPromptPresetStorage,
-    fail_save: bool,
-    fail_get: bool,
-    fail_delete: bool,
-}
-
-impl FailingPromptPresetStorage {
-    fn new() -> Self {
-        Self {
-            inner: InMemoryPromptPresetStorage::new(),
-            fail_save: false,
-            fail_get: false,
-            fail_delete: false,
-        }
-    }
-
-    fn set_fail_save(&mut self) {
-        self.fail_save = true;
-    }
-
-    fn set_fail_get(&mut self) {
-        self.fail_get = true;
-    }
-
-    fn set_fail_delete(&mut self) {
-        self.fail_delete = true;
-    }
-}
-
-impl PromptPresetStorage for FailingPromptPresetStorage {
-    fn list(&self, preset_type: PresetType) -> Result<Vec<PromptPreset>, EngineError> {
-        self.inner.list(preset_type)
-    }
-
-    fn get(&self, id: &str) -> Result<Option<PromptPreset>, EngineError> {
-        if self.fail_get {
-            return Err(EngineError::Config("injected get failure".into()));
-        }
-        self.inner.get(id)
-    }
-
-    fn save(&self, preset: &PromptPreset) -> Result<(), EngineError> {
-        if self.fail_save {
-            return Err(EngineError::Config("injected save failure".into()));
-        }
-        self.inner.save(preset)
-    }
-
-    fn delete(&self, id: &str) -> Result<(), EngineError> {
-        if self.fail_delete {
-            return Err(EngineError::Config("injected delete failure".into()));
-        }
-        self.inner.delete(id)
-    }
-}
+use crate::storage::{Operation, Storage, TestOverride};
 
 fn make_test_app_state_with_preset(preset: PromptPreset) -> crate::server::AppState {
-    make_test_app_state_with_storage(Arc::new(InMemoryPromptPresetStorage::new()), preset)
+    make_test_app_state_with_storage(Arc::new(Storage::new_in_memory()), preset)
 }
 
 fn make_test_app_state_with_storage(
-    storage: Arc<dyn PromptPresetStorage>,
+    storage: Arc<Storage>,
     preset: PromptPreset,
 ) -> crate::server::AppState {
-    let _ = storage.save(&preset);
+    let _ = storage.save_preset(&preset);
 
     let settings = Arc::new(RwLock::new(crate::model::settings::AppSettings::default()));
     let game_service: Arc<dyn crate::application::game_service::GameService> = Arc::new(
         crate::application::game_service::DefaultGameService::with_storage(
-            Some(Arc::new(
-                crate::storage::llm_message_storage::InMemoryLlmMessageStorage::new(),
-            )),
+            Some(Arc::new(Storage::new_in_memory())),
             None,
             Arc::clone(&settings),
         ),
     );
     crate::server::AppState {
-        game_storage: Arc::new(crate::test_support::InMemoryGameRepository::new()),
-        snapshot_storage: Arc::new(crate::test_support::InMemorySnapshotRepository::new()),
-        message_storage: Arc::new(crate::test_support::InMemoryMessageRepository::new()),
-        message_swipe_storage: Arc::new(
-            crate::test_support::in_memory_storage::InMemoryMessageSwipeStorage::new(),
-        ),
-        llm_message_storage: Arc::new(
-            crate::storage::llm_message_storage::InMemoryLlmMessageStorage::new(),
-        ),
+        storage: Arc::new(Storage::new_in_memory()),
+        preset_storage: storage,
         world: Arc::new(crate::test_support::TestWorld::minimal()),
         map: Arc::new(crate::test_support::TestMap::single_room("start")),
         player: Arc::new(crate::test_support::TestPlayer::standard()),
@@ -106,7 +37,6 @@ fn make_test_app_state_with_storage(
         application_service: Arc::new(
             crate::application::application_service::DefaultApplicationService::new(game_service),
         ),
-        prompt_preset_storage: storage,
         settings,
         cancel_token: Arc::new(RwLock::new(tokio_util::sync::CancellationToken::new())),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -223,7 +153,6 @@ async fn test_duplicate_preset_handler_not_found() {
 #[tokio::test]
 async fn test_duplicate_preset_storage_error_returns_error() {
     let app_state = make_test_app_state_with_failing_storage(
-        FailingPromptPresetStorage::new(),
         PromptPreset {
             id: "orig".into(),
             name: "Original".into(),
@@ -231,7 +160,12 @@ async fn test_duplicate_preset_storage_error_returns_error() {
             preset_type: PresetType::System,
             ..Default::default()
         },
-        |s| s.set_fail_save(),
+        |h| {
+            h.set(
+                Operation::SavePreset,
+                TestOverride::config("injected save failure"),
+            )
+        },
     );
     let response = duplicate_preset_handler(
         axum::extract::State(app_state),
@@ -420,33 +354,24 @@ async fn test_panel_handler_with_poisoned_settings_lock() {
 }
 
 fn make_test_app_state_with_failing_storage(
-    mut storage: FailingPromptPresetStorage,
     preset: PromptPreset,
-    fail_after_setup: impl FnOnce(&mut FailingPromptPresetStorage),
+    fail_after_setup: impl FnOnce(&crate::storage::TestFailureHandle),
 ) -> crate::server::AppState {
-    let _ = storage.save(&preset);
-    fail_after_setup(&mut storage);
+    let (storage, handle) = Storage::new_in_memory().with_test_failures();
+    let _ = storage.save_preset(&preset);
+    fail_after_setup(&handle);
 
     let settings = Arc::new(RwLock::new(crate::model::settings::AppSettings::default()));
     let game_service: Arc<dyn crate::application::game_service::GameService> = Arc::new(
         crate::application::game_service::DefaultGameService::with_storage(
-            Some(Arc::new(
-                crate::storage::llm_message_storage::InMemoryLlmMessageStorage::new(),
-            )),
+            Some(Arc::new(Storage::new_in_memory())),
             None,
             Arc::clone(&settings),
         ),
     );
     crate::server::AppState {
-        game_storage: Arc::new(crate::test_support::InMemoryGameRepository::new()),
-        snapshot_storage: Arc::new(crate::test_support::InMemorySnapshotRepository::new()),
-        message_storage: Arc::new(crate::test_support::InMemoryMessageRepository::new()),
-        message_swipe_storage: Arc::new(
-            crate::test_support::in_memory_storage::InMemoryMessageSwipeStorage::new(),
-        ),
-        llm_message_storage: Arc::new(
-            crate::storage::llm_message_storage::InMemoryLlmMessageStorage::new(),
-        ),
+        storage: Arc::new(Storage::new_in_memory()),
+        preset_storage: Arc::new(storage),
         world: Arc::new(crate::test_support::TestWorld::minimal()),
         map: Arc::new(crate::test_support::TestMap::single_room("start")),
         player: Arc::new(crate::test_support::TestPlayer::standard()),
@@ -455,7 +380,6 @@ fn make_test_app_state_with_failing_storage(
         application_service: Arc::new(
             crate::application::application_service::DefaultApplicationService::new(game_service),
         ),
-        prompt_preset_storage: Arc::new(storage),
         settings,
         cancel_token: Arc::new(RwLock::new(tokio_util::sync::CancellationToken::new())),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -465,14 +389,18 @@ fn make_test_app_state_with_failing_storage(
 #[tokio::test]
 async fn test_save_preset_storage_error_returns_error() {
     let app_state = make_test_app_state_with_failing_storage(
-        FailingPromptPresetStorage::new(),
         PromptPreset {
             id: "x".into(),
             name: "X".into(),
             instructions: Some("X.".into()),
             ..Default::default()
         },
-        |s| s.set_fail_save(),
+        |h| {
+            h.set(
+                Operation::SavePreset,
+                TestOverride::config("injected save failure"),
+            )
+        },
     );
     let response = save_preset_handler(
         axum::extract::State(app_state),
@@ -490,14 +418,18 @@ async fn test_save_preset_storage_error_returns_error() {
 #[tokio::test]
 async fn test_edit_preset_storage_error_returns_error() {
     let app_state = make_test_app_state_with_failing_storage(
-        FailingPromptPresetStorage::new(),
         PromptPreset {
             id: "custom".into(),
             name: "Custom".into(),
             instructions: Some("Custom.".into()),
             ..Default::default()
         },
-        |s| s.set_fail_get(),
+        |h| {
+            h.set(
+                Operation::GetPreset,
+                TestOverride::config("injected get failure"),
+            )
+        },
     );
     let response = edit_preset_form_handler(
         axum::extract::State(app_state),
@@ -510,14 +442,18 @@ async fn test_edit_preset_storage_error_returns_error() {
 #[tokio::test]
 async fn test_update_preset_storage_error_returns_error() {
     let app_state = make_test_app_state_with_failing_storage(
-        FailingPromptPresetStorage::new(),
         PromptPreset {
             id: "custom".into(),
             name: "Custom".into(),
             instructions: Some("Custom.".into()),
             ..Default::default()
         },
-        |s| s.set_fail_save(),
+        |h| {
+            h.set(
+                Operation::SavePreset,
+                TestOverride::config("injected save failure"),
+            )
+        },
     );
     let response = update_preset_handler(
         axum::extract::State(app_state),
@@ -536,14 +472,18 @@ async fn test_update_preset_storage_error_returns_error() {
 #[tokio::test]
 async fn test_delete_preset_get_storage_error_returns_error() {
     let app_state = make_test_app_state_with_failing_storage(
-        FailingPromptPresetStorage::new(),
         PromptPreset {
             id: "custom".into(),
             name: "Custom".into(),
             instructions: Some("Custom.".into()),
             ..Default::default()
         },
-        |s| s.set_fail_get(),
+        |h| {
+            h.set(
+                Operation::GetPreset,
+                TestOverride::config("injected get failure"),
+            )
+        },
     );
     let response = delete_preset_handler(
         axum::extract::State(app_state),
@@ -556,14 +496,18 @@ async fn test_delete_preset_get_storage_error_returns_error() {
 #[tokio::test]
 async fn test_delete_preset_delete_storage_error_returns_error() {
     let app_state = make_test_app_state_with_failing_storage(
-        FailingPromptPresetStorage::new(),
         PromptPreset {
             id: "custom".into(),
             name: "Custom".into(),
             instructions: Some("Custom.".into()),
             ..Default::default()
         },
-        |s| s.set_fail_delete(),
+        |h| {
+            h.set(
+                Operation::DeletePreset,
+                TestOverride::config("injected delete failure"),
+            )
+        },
     );
     let response = delete_preset_handler(
         axum::extract::State(app_state),

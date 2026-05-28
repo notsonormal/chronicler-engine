@@ -140,16 +140,16 @@ fn test_retry_room_not_found() {
 
     let ctx = make_test_context(state.clone());
     let pre_main = GameStateSnapshot::from_game_state(&state);
-    let pre_main_id = ctx.snapshot_storage.save(&pre_main).unwrap();
+    let pre_main_id = ctx.storage.save_snapshot(&pre_main).unwrap();
     for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
         if msg.log_type == LogType::Input {
             msg.snapshot_id = Some(pre_main_id);
         }
-        let _ = ctx.message_storage.insert_message(&msg);
+        let _ = ctx.storage.insert_message(&msg);
     }
 
     let main = GameStateSnapshot::from_game_state(&state);
-    let _ = ctx.snapshot_storage.save(&main);
+    let _ = ctx.storage.save_snapshot(&main);
 
     let backend = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::default()),
@@ -181,16 +181,16 @@ fn test_retry_llm_error() {
 
     let ctx = make_test_context(state.clone());
     let pre_main = GameStateSnapshot::from_game_state(&state);
-    let pre_main_id = ctx.snapshot_storage.save(&pre_main).unwrap();
+    let pre_main_id = ctx.storage.save_snapshot(&pre_main).unwrap();
     for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
         if msg.log_type == LogType::Input {
             msg.snapshot_id = Some(pre_main_id);
         }
-        let _ = ctx.message_storage.insert_message(&msg);
+        let _ = ctx.storage.insert_message(&msg);
     }
 
     let main = GameStateSnapshot::from_game_state(&state);
-    let _ = ctx.snapshot_storage.save(&main);
+    let _ = ctx.storage.save_snapshot(&main);
 
     let backend = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::failing()),
@@ -222,16 +222,16 @@ fn test_retry_empty_narration() {
 
     let ctx = make_test_context(state.clone());
     let pre_main = GameStateSnapshot::from_game_state(&state);
-    let pre_main_id = ctx.snapshot_storage.save(&pre_main).unwrap();
+    let pre_main_id = ctx.storage.save_snapshot(&pre_main).unwrap();
     for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
         if msg.log_type == LogType::Input {
             msg.snapshot_id = Some(pre_main_id);
         }
-        let _ = ctx.message_storage.insert_message(&msg);
+        let _ = ctx.storage.insert_message(&msg);
     }
 
     let main = GameStateSnapshot::from_game_state(&state);
-    let _ = ctx.snapshot_storage.save(&main);
+    let _ = ctx.storage.save_snapshot(&main);
 
     let backend = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::with_empty_response()),
@@ -264,16 +264,16 @@ fn test_retry_main_narration_uses_pre_main_snapshot() {
 
     let ctx = make_test_context(state.clone());
     let pre_main = GameStateSnapshot::from_game_state(&state);
-    let pre_main_id = ctx.snapshot_storage.save(&pre_main).unwrap();
+    let pre_main_id = ctx.storage.save_snapshot(&pre_main).unwrap();
     for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
         if msg.log_type == LogType::Input {
             msg.snapshot_id = Some(pre_main_id);
         }
-        let _ = ctx.message_storage.insert_message(&msg);
+        let _ = ctx.storage.insert_message(&msg);
     }
 
     let main = GameStateSnapshot::from_game_state(&state);
-    let _ = ctx.snapshot_storage.save(&main);
+    let _ = ctx.storage.save_snapshot(&main);
 
     let backend = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::default()),
@@ -329,20 +329,20 @@ fn test_retry_event_continuation_uses_pre_event_snapshot() {
 
     let ctx = make_test_context(state.clone());
     let pre_event = GameStateSnapshot::from_game_state(&state);
-    let pre_event_id = ctx.snapshot_storage.save(&pre_event).unwrap();
+    let pre_event_id = ctx.storage.save_snapshot(&pre_event).unwrap();
 
     if let Some(last) = state.narrative.history.last_mut() {
         last.event_header = Some("Greeting".to_string());
     }
 
     let final_snap = GameStateSnapshot::from_game_state(&state);
-    let _ = ctx.snapshot_storage.save(&final_snap);
+    let _ = ctx.storage.save_snapshot(&final_snap);
 
     for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
         if msg.log_type == LogType::Narration && msg.event_header.is_none() {
             msg.snapshot_id = Some(pre_event_id);
         }
-        let _ = ctx.message_storage.insert_message(&msg);
+        let _ = ctx.storage.insert_message(&msg);
     }
 
     let backend = DefaultGameService::with_mock_quantifier(

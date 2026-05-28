@@ -11,7 +11,7 @@ use crate::model::state::StoredTriggerContext;
 use crate::model::state::{GameState, GenerationPhase, GenerationStatus, LogType};
 use crate::narrative::llm::backend::{AGENT_NARRATOR, LlmCallResult};
 use crate::narrative::prompt::{LayeredPromptAssembler, PromptAssembler};
-use crate::storage::snapshot_storage::SnapshotStorage;
+use crate::storage::{Operation, Storage, TestOverride};
 use crate::test_support::fixtures::{TestMap, TestNpc, TestPlayer, TestWorld};
 use crate::test_support::make_test_context;
 
@@ -239,40 +239,6 @@ fn test_pipeline_with_custom_quantifier_result() {
     );
 }
 
-struct FailingSaveStorage {
-    inner: Arc<dyn SnapshotStorage>,
-}
-
-impl SnapshotStorage for FailingSaveStorage {
-    fn set_game_id(&self, game_id: u64) {
-        self.inner.set_game_id(game_id);
-    }
-    fn current_game_id(&self) -> u64 {
-        self.inner.current_game_id()
-    }
-    fn save(
-        &self,
-        _snapshot: &crate::model::state_snapshot::GameStateSnapshot,
-    ) -> Result<u64, crate::error::EngineError> {
-        Err(crate::error::EngineError::Internal(
-            crate::error::internal_error("simulated save failure"),
-        ))
-    }
-    fn load_latest(
-        &self,
-    ) -> Result<Option<crate::model::state_snapshot::GameStateSnapshot>, crate::error::EngineError>
-    {
-        self.inner.load_latest()
-    }
-    fn load_by_id(
-        &self,
-        id: u64,
-    ) -> Result<Option<crate::model::state_snapshot::GameStateSnapshot>, crate::error::EngineError>
-    {
-        self.inner.load_by_id(id)
-    }
-}
-
 #[test]
 fn test_run_trigger_continuation_cancels_at_start() {
     let state = make_test_state();
@@ -315,12 +281,15 @@ fn test_trigger_continuation_save_post_trigger_error() {
     let state = make_test_state();
     let base_ctx = make_ctx(state.clone());
 
-    let failing = Arc::new(FailingSaveStorage {
-        inner: Arc::clone(&base_ctx.snapshot_storage),
-    });
+    let (failing_storage, handle) = Storage::new_in_memory().with_test_failures();
+    let failing = Arc::new(failing_storage);
+    handle.set(
+        Operation::SaveSnapshot,
+        TestOverride::internal("simulated save failure"),
+    );
 
     let ctx = GameServiceContext {
-        snapshot_storage: failing,
+        storage: failing,
         ..base_ctx.clone()
     };
 

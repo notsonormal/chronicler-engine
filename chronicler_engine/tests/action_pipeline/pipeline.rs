@@ -395,7 +395,7 @@ fn test_pre_main_snapshot_saved_before_narration() {
     let completed = wait_for_generation_complete(&ctx, 1000);
     assert!(completed, "FreeAction should complete within timeout");
 
-    let latest = ctx.snapshot_storage.load_latest().unwrap().unwrap();
+    let latest = ctx.storage.load_latest_snapshot().unwrap().unwrap();
     assert!(latest.db_id.is_some(), "snapshot should exist");
 }
 
@@ -432,7 +432,7 @@ fn test_pre_event_snapshot_saved_before_continuation() {
         "FreeAction with trigger should complete within timeout"
     );
 
-    let latest = ctx.snapshot_storage.load_latest().unwrap().unwrap();
+    let latest = ctx.storage.load_latest_snapshot().unwrap().unwrap();
     assert!(latest.db_id.is_some(), "snapshot should exist");
 }
 

@@ -18,7 +18,7 @@ fn minimal_state() -> GameState {
 fn test_make_test_context_roundtrip() {
     let state = minimal_state();
     let ctx = make_test_context(state);
-    assert!(ctx.snapshot_storage.load_latest().unwrap().is_some());
+    assert!(ctx.storage.load_latest_snapshot().unwrap().is_some());
     assert_eq!(ctx.world.name, "Test World");
 }
 
@@ -26,6 +26,6 @@ fn test_make_test_context_roundtrip() {
 fn test_make_test_context_with_sqlite_roundtrip() {
     let state = minimal_state();
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    assert!(ctx.snapshot_storage.load_latest().unwrap().is_some());
+    assert!(ctx.storage.load_latest_snapshot().unwrap().is_some());
     assert_eq!(ctx.world.name, "Test World");
 }

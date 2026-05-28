@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::error::{EngineError, LlmFailure};
 use crate::model::settings::Connection;
 use crate::narrative::llm_client::call_ollama;
-use crate::storage::llm_message_storage::LlmMessageStorage;
+use crate::storage::Storage;
 
 use super::backend::{LlmBackend, LlmCallResult, merge_single_user_message};
 
@@ -12,14 +12,11 @@ pub struct OllamaBackend {
     base_url: String,
     model: String,
     single_user_message: bool,
-    storage: Option<Arc<dyn LlmMessageStorage>>,
+    storage: Option<Arc<Storage>>,
 }
 
 impl OllamaBackend {
-    pub fn from_connection(
-        connection: &Connection,
-        storage: Option<Arc<dyn LlmMessageStorage>>,
-    ) -> Self {
+    pub fn from_connection(connection: &Connection, storage: Option<Arc<Storage>>) -> Self {
         Self {
             base_url: connection.resolve_base_url(),
             model: connection.model.clone(),
@@ -87,7 +84,7 @@ impl LlmBackend for OllamaBackend {
 
     fn save_message(&self, message: &crate::model::llm_message::LlmMessage) {
         if let Some(storage) = &self.storage {
-            let _ = storage.save(message);
+            let _ = storage.save_llm_message(message);
         }
     }
 }

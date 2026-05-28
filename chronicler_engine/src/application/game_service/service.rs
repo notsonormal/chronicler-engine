@@ -11,7 +11,7 @@ use crate::narrative::agents::quantifier::QuantifierAgent;
 use crate::narrative::agents::registry::AgentRegistry;
 use crate::narrative::llm::backend::LlmCallResult;
 use crate::narrative::prompt::{LayeredPromptAssembler, PromptAssembler};
-use crate::storage::llm_message_storage::LlmMessageStorage;
+use crate::storage::Storage;
 
 pub trait GameService: Send + Sync {
     fn execute_action(&self, ctx: GameServiceContext, input: String, player_name: String);
@@ -33,8 +33,8 @@ impl DefaultGameService {
     }
 
     pub fn with_storage(
-        storage: Option<Arc<dyn LlmMessageStorage>>,
-        preset_storage: Option<Arc<dyn crate::storage::prompt_preset_storage::PromptPresetStorage>>,
+        storage: Option<Arc<Storage>>,
+        preset_storage: Option<Arc<Storage>>,
         settings: Arc<RwLock<AppSettings>>,
     ) -> Self {
         let (registry, connection, max_context_tokens, max_tokens) = {

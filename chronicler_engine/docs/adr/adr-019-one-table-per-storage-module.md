@@ -2,95 +2,55 @@
 
 ## Status
 
-**Accepted**
+**Superseded** by unified `Storage` enum (booster-gold-damage-domino).
 
 ## Context
 
-Chronicler Engine's storage layer has accumulated multi-table repositories that bundle logically-related but physically-separate SQLite tables into single Rust modules. Two cases are active today:
+Chronicler Engine's storage layer originally accumulated multi-table repositories that bundled logically-related but physically-separate SQLite tables into single Rust modules. Two cases were active:
 
-1. **`message_storage.rs`** manages both `messages` and `message_swipes`. The `MessageStorage::insert_message` method accepts a `&Message` (which contains `Vec<Swipe>`) and inserts into both tables. This bundling made it "easiest" for domain logic to create an entirely new `Message` row whenever a new swipe was needed, then migrate old swipes into it, rather than simply adding a new swipe to the existing message.
+1. **`message_storage.rs`** managed both `messages` and `message_swipes`.
+2. **`snapshot_storage.rs`** managed both `games` and `game_state_snapshots`.
 
-2. **`snapshot_storage.rs`** manages both `games` and `game_state_snapshots`. It also performs cross-table cleanup in `delete_game()`, manually deleting from snapshots and messages before deleting the game row.
+This coupling encouraged shortcuts: when two tables lived in the same repository, developers naturally treated them as a single unit. The result was domain logic that recreated aggregates instead of updating them, and storage methods that grew into cross-table transactions.
 
-This coupling encourages shortcuts: when two tables live in the same repository, developers naturally treat them as a single unit. The result is domain logic that recreates aggregates instead of updating them, and storage methods that grow into cross-table transactions that are hard to test and reason about.
-
-### Related Decisions
-
-- **ADR-008**: Introduced SQLite snapshot persistence with bundled `SnapshotStorage` trait.
-- **ADR-017**: Introduced `message_swipes` as a separate table, but kept it inside `MessageStorage` for convenience.
-
-## Decision
+## Decision (Historical)
 
 **Every physical SQLite table gets its own `xxx_storage.rs` module containing exactly one trait and one SQLite repository.** No storage module may touch more than one table.
 
-> **Enforcement**: Guardrail `guardrails_one_table_per_storage` in `tests/guardrails.rs` fails the build if any `src/storage/*_storage.rs` file references more than one table.
+A guardrail (`guardrails_one_table_per_storage` in `tests/guardrails.rs`) enforced this by failing the build if any `src/storage/*_storage.rs` file referenced more than one table.
 
 ### Specific Splits
 
-| Table | New / Updated Module | Trait |
-|-------|----------------------|-------|
-| `messages` | `message_storage.rs` (refactored) | `MessageStorage` |
-| `message_swipes` | `message_swipe_storage.rs` (new) | `MessageSwipeStorage` |
-| `games` | `game_storage.rs` (new) | `GameStorage` |
-| `game_state_snapshots` | `snapshot_storage.rs` (refactored) | `SnapshotStorage` |
-| `llm_messages` | `llm_message_storage.rs` (unchanged) | `LlmMessageStorage` |
-| `prompt_presets` | `prompt_preset_storage.rs` (unchanged) | `PromptPresetStorage` |
+| Table | Module | Trait |
+|-------|--------|-------|
+| `messages` | `message_storage.rs` | `MessageStorage` |
+| `message_swipes` | `message_swipe_storage.rs` | `MessageSwipeStorage` |
+| `games` | `game_storage.rs` | `GameStorage` |
+| `game_state_snapshots` | `snapshot_storage.rs` | `SnapshotStorage` |
+| `llm_messages` | `llm_message_storage.rs` | `LlmMessageStorage` |
+| `prompt_presets` | `prompt_preset_storage.rs` | `PromptPresetStorage` |
 
-### Trait API Changes
+## Supersession
 
-#### `MessageStorage`
-- **`insert_message`** no longer accepts a `&Message` with swipes. It persists only message metadata (sender, log_type, timestamp, active_swipe_index, is_deleted). Callers must separately call `MessageSwipeStorage::insert_swipe` for every swipe, including the first.
-- **`update_message` removed.** There is no `text` column on `messages`; updating message text means updating the active swipe. A `GameServiceContext::update_message_text()` helper coordinates the two storage calls.
-- **`load_messages` removed.** Loading full `Message` objects requires joining swipes. A `GameServiceContext::load_messages()` helper loads from both storages and assembles.
-- **`migrate_swipes` removed.** The retry pipeline now appends swipes directly via `insert_swipe` + `update_active_swipe` instead of recreating messages. No cross-table migration helper is needed.
-- **`insert_swipe` and `shift_swipe_indices` moved** to `MessageSwipeStorage`.
+The six individual traits and their implementations were consolidated into a single `Storage` struct with a `Backend` enum (`Sqlite`, `InMemory`, `Test`). The guardrail was removed because there are no longer any `*_storage.rs` files to enforce it on.
 
-#### `SnapshotStorage`
-- **`list_games`, `create_game`, `delete_game`, `get_game` moved** to `GameStorage`.
-- **`set_game_id` moved** to `GameStorage`. Updating `games.updated_at` when switching games is a game-metadata concern, not a snapshot concern.
-- **`delete_game` simplified.** Schema migration adds `ON DELETE CASCADE` FKs from `game_state_snapshots` and `messages` to `games`, so deleting a game row automatically cleans up children.
-
-### Cross-Table Coordination
-
-Because `DbPool` is a single `Arc<Mutex<Connection>>`, callers cannot acquire a connection, start a `BEGIN`, and pass the connection into storage methods — Rust's `std::sync::Mutex` is not recursive and would deadlock. Therefore:
-
-- **No caller-level SQLite transactions.** Each storage method is individually atomic (each is a single statement or an internal `BEGIN...COMMIT` block).
-- **Cross-table operations are explicit.** `GameServiceContext` provides convenience methods (`load_messages`, `update_message_text`, `migrate_swipes`) that call multiple storage modules in sequence. The small gap between calls is accepted; it matches the existing behavior of `save_message_and_snapshot`, which has always been non-atomic across snapshot and message storage.
+The **underlying principle** — that each storage operation should be table-scoped, with cross-table coordination living in `GameServiceContext` helpers — remains valid. The `Storage` enum preserves this: every method on `Storage` touches exactly one table, and callers compose operations explicitly via `GameServiceContext::save_message_and_snapshot`, `load_messages_with_swipes`, etc.
 
 ## Consequences
 
 ### Positive
 
-- **Prevents bundling shortcuts.** Separating `message_swipes` into its own storage module makes it impossible to "accidentally" create a new message just to get a new swipe. The pipeline must explicitly call `insert_swipe`.
-- **Single responsibility.** Each storage file maps 1:1 to a database table. Reasoning about what a method modifies is trivial.
-- **Testability.** In-memory test implementations mirror the same 1:1 split, making mocks smaller and more focused.
-- **Schema cleanup.** `ON DELETE CASCADE` removes the need for manual multi-table `DELETE` transactions in `delete_game`.
+- **Prevents bundling shortcuts.** Separating concerns at the method level makes it impossible to "accidentally" create a new message just to get a new swipe.
+- **Testability.** The unified `Storage` struct supports dynamic failure injection via `TestOverride`, eliminating the need for custom mock structs per trait.
+- **Simpler dependency graph.** Callers pass a single `Arc<Storage>` instead of five separate `Arc<dyn Trait>` fields.
 
-### Negative
+### Negative (Historical)
 
-- **More modules.** Six tables → six storage modules (four existing, two new).
+- **More modules.** Six tables → six storage modules (mitigated by unification into one struct).
 - **Non-atomic cross-storage operations.** A crash between `insert_message` and `insert_swipe` could leave a message with no swipes. The window is tiny (two sequential SQLite statements), but it exists.
-- **`GameServiceContext` grows.** It accumulates convenience methods for cross-storage assembly and coordination, blurring the line between "context" and "service." A dedicated thin service layer may be warranted in the future.
-
-## Alternatives Considered
-
-1. **Keep multi-table repositories, add internal sub-modules.** Rejected because it doesn't solve the psychological bundling problem. Developers still see `insert_message` taking a `Message` with swipes and treat them as a unit.
-2. **Introduce a UnitOfWork / TransactionManager.** Rejected for now because `DbPool`'s single `Mutex<Connection>` makes transaction-passing architecturally difficult without significant refactor. Revisit if cross-storage atomicity becomes a concrete bug.
-3. **Use `rusqlite` savepoints or nested transactions.** Rejected because `Connection::transaction()` requires a mutable reference held across storage calls, which conflicts with the `Arc<dyn Trait>` pattern used throughout the codebase.
-
-## Migration Path
-
-1. **Schema**: Add `ON DELETE CASCADE` FKs (migration v9).
-2. **New traits**: Create `MessageSwipeStorage` and `GameStorage` without breaking existing code.
-3. **Helpers**: Add `GameServiceContext` convenience methods that delegate to old trait methods.
-4. **Caller migration**: Move all callers to helpers.
-5. **Trait refactor**: Break `MessageStorage` and `SnapshotStorage` traits, update implementations.
-6. ✅ **Pipeline refactor**: Retry logic rewritten to append swipes instead of recreating messages. `migrate_swipes` helper removed.
 
 ## References
 
-- `src/storage/message_storage.rs` — Original bundled message + swipe repository
-- `src/storage/snapshot_storage.rs` — Original bundled game + snapshot repository
+- `src/storage/storage.rs` — Unified `Storage` enum
 - `src/application/context.rs` — `GameServiceContext` and cross-storage helpers
-- `src/application/action_pipeline/retry.rs` — Retry logic that recreates messages instead of adding swipes
 - ADR-008, ADR-017 — Previous storage architecture decisions

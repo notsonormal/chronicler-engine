@@ -1,5 +1,6 @@
 use std::sync::{Arc, RwLock};
 
+use super::{initialize_world_from_manifest, inject_scenario_logs, validate_loaded_data};
 use crate::cli::{Args, list_available_worlds, resolve_engine_data_path};
 use crate::model::character::NpcCard;
 use crate::model::game::generate_game_name;
@@ -7,9 +8,6 @@ use crate::model::settings::AppSettings;
 use crate::model::state::GameState;
 use crate::narrative::prompt::{PromptAssembler, PromptContext};
 use crate::server::ServerConfig;
-use crate::storage::prompt_preset_storage::PromptPresetStorage;
-
-use super::{initialize_world_from_manifest, inject_scenario_logs, validate_loaded_data};
 
 /// [DOC: docs/architecture/system.md]
 pub fn run(args: Args) -> crate::error::Result<()> {
@@ -65,33 +63,12 @@ pub fn run(args: Args) -> crate::error::Result<()> {
         }
     };
 
-    let game_storage: Arc<dyn crate::storage::game_storage::GameStorage> = Arc::new(
-        crate::storage::game_storage::SqliteGameRepository::new(db_pool.clone(), active_game_id),
-    );
-    let snapshot_storage: Arc<dyn crate::storage::snapshot_storage::SnapshotStorage> = Arc::new(
-        crate::storage::snapshot_storage::SqliteSnapshotRepository::new(
-            db_pool.clone(),
-            active_game_id,
-        ),
-    );
-    let message_storage: Arc<dyn crate::storage::message_storage::MessageStorage> = Arc::new(
-        crate::storage::message_storage::SqliteMessageRepository::new(
-            db_pool.clone(),
-            active_game_id,
-        ),
-    );
-    let message_swipe_storage: Arc<dyn crate::storage::message_swipe_storage::MessageSwipeStorage> =
-        Arc::new(
-            crate::storage::message_swipe_storage::SqliteMessageSwipeRepository::new(
-                db_pool.clone(),
-            ),
-        );
-    let llm_message_storage: Arc<dyn crate::storage::llm_message_storage::LlmMessageStorage> =
-        Arc::new(
-            crate::storage::llm_message_storage::SqliteLlmMessageStorage::new(db_pool.clone()),
-        );
+    let storage = Arc::new(crate::storage::Storage::new_sqlite(
+        db_pool.clone(),
+        active_game_id,
+    ));
 
-    let state = match snapshot_storage.load_latest() {
+    let state = match storage.load_latest_snapshot() {
         Ok(Some(snap)) => {
             let mut new_state = GameState::from_snapshot(
                 &snap,
@@ -100,10 +77,7 @@ pub fn run(args: Args) -> crate::error::Result<()> {
                 Arc::clone(&player_arc),
                 npcs_map.clone(),
             );
-            if let Ok(msgs) = crate::application::context::load_messages_with_swipes(
-                &*message_storage,
-                &*message_swipe_storage,
-            ) {
+            if let Ok(msgs) = crate::application::context::load_messages_with_swipes(&storage) {
                 new_state.narrative.history.replace(msgs);
             }
             new_state
@@ -124,16 +98,16 @@ pub fn run(args: Args) -> crate::error::Result<()> {
             // [DOC: docs/system/startup.md]
             let initial_snapshot =
                 crate::model::state_snapshot::GameStateSnapshot::from_game_state(&new_state);
-            let snapshot_id = snapshot_storage.save(&initial_snapshot)?;
+            let snapshot_id = storage.save_snapshot(&initial_snapshot)?;
             if let Some(msg) = new_state.narrative.history.last_mut() {
                 if msg.id == 0 {
                     msg.snapshot_id = Some(snapshot_id);
                     if let Some(swipe) = msg.swipes.first_mut() {
                         swipe.snapshot_id = Some(snapshot_id);
                     }
-                    let id = message_storage.insert_message(&*msg)?;
+                    let id = storage.insert_message(&*msg)?;
                     if let Some(swipe) = msg.swipes.first() {
-                        message_swipe_storage.insert_swipe(id, swipe, 0)?;
+                        storage.insert_swipe(id, swipe, 0)?;
                     }
                     msg.id = id;
                 }
@@ -163,23 +137,17 @@ pub fn run(args: Args) -> crate::error::Result<()> {
         .is_some_and(|s| !s.text.is_empty());
     if !has_scenario {
         let (arrival_preset, response_length, max_context_tokens, max_tokens) = {
-            let preset_storage =
-                crate::storage::prompt_preset_storage::SqlitePromptPresetStorage::new(
-                    db_pool.clone(),
-                );
+            let preset_storage = crate::storage::Storage::new_sqlite(db_pool.clone(), 1);
             let settings_guard = settings.read().unwrap_or_else(|e| e.into_inner());
             let preset_id = &settings_guard.active_system_prompt_preset_id;
-            let preset = preset_storage.get(preset_id).ok().flatten();
+            let preset = preset_storage.get_preset(preset_id).ok().flatten();
             let conn = settings_guard.narration_connection();
             let max_context_tokens = conn.resolve_max_context_tokens();
             let max_tokens = conn.max_tokens;
             let response_length = settings_guard.response_length.clone();
             (preset, response_length, max_context_tokens, max_tokens)
         };
-        let snapshot_storage_for_task = Arc::clone(&snapshot_storage);
-        let message_storage_for_task = Arc::clone(&message_storage);
-        let message_swipe_storage_for_task = Arc::clone(&message_swipe_storage);
-        let llm_storage_for_task = Arc::clone(&llm_message_storage);
+        let storage_for_task = Arc::clone(&storage);
         let world_for_task = Arc::clone(&world_arc);
         let map_for_task = Arc::clone(&map_arc);
         let player_for_task = Arc::clone(&player_arc);
@@ -187,7 +155,7 @@ pub fn run(args: Args) -> crate::error::Result<()> {
         let settings_for_task = Arc::clone(&settings);
         // [DOC: docs/architecture/invariants.md#INV-004]
         let _handle = runtime.spawn_blocking(move || {
-            let mut state = match snapshot_storage_for_task.load_latest() {
+            let mut state = match storage_for_task.load_latest_snapshot() {
                 Ok(Some(snap)) => GameState::from_snapshot(
                     &snap,
                     Arc::clone(&world_for_task),
@@ -203,10 +171,9 @@ pub fn run(args: Args) -> crate::error::Result<()> {
                     world_for_task.starting_room_id.clone(),
                 ),
             };
-            if let Ok(msgs) = crate::application::context::load_messages_with_swipes(
-                &*message_storage_for_task,
-                &*message_swipe_storage_for_task,
-            ) {
+            if let Ok(msgs) =
+                crate::application::context::load_messages_with_swipes(&storage_for_task)
+            {
                 state.narrative.history.replace(msgs);
             }
 
@@ -223,7 +190,7 @@ pub fn run(args: Args) -> crate::error::Result<()> {
                 let settings_guard = settings_for_task.read().unwrap_or_else(|e| e.into_inner());
                 let backend = crate::narrative::llm::get_llm_backend_for(
                     &settings_guard.narration_connection(),
-                    Some(Arc::clone(&llm_storage_for_task)),
+                    Some(Arc::clone(&storage_for_task)),
                 );
                 drop(settings_guard);
                 let context = PromptContext {
@@ -274,27 +241,22 @@ pub fn run(args: Args) -> crate::error::Result<()> {
                 }
                 let snapshot =
                     crate::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
-                if let Err(e) = snapshot_storage_for_task.save(&snapshot) {
+                if let Err(e) = storage_for_task.save_snapshot(&snapshot) {
                     log::error!("Failed to save arrival snapshot: {e}");
                 }
             }
         });
     } // end if !has_scenario
 
-    let prompt_preset_storage: Arc<dyn crate::storage::prompt_preset_storage::PromptPresetStorage> =
-        Arc::new(crate::storage::prompt_preset_storage::SqlitePromptPresetStorage::new(db_pool));
+    let preset_storage = crate::storage::Storage::new_sqlite(db_pool, 1);
 
     let resources = crate::server::ServerResources {
         world: world_arc,
         map: map_arc,
         player: player_arc,
         npcs: npcs_arc,
-        game_storage,
-        snapshot_storage,
-        message_storage,
-        message_swipe_storage,
-        llm_message_storage,
-        prompt_preset_storage,
+        storage,
+        preset_storage: Arc::new(preset_storage),
         settings,
     };
     runtime.block_on(crate::server::run_server_with_config(resources, config))?;
@@ -357,10 +319,8 @@ fn ensure_defaults(
     data_dir: &std::path::Path,
 ) -> crate::error::Result<()> {
     use crate::model::prompt_preset::{PresetType, PromptPreset};
-    use crate::storage::prompt_preset_storage::PromptPresetStorage;
 
-    let storage =
-        crate::storage::prompt_preset_storage::SqlitePromptPresetStorage::new(db_pool.clone());
+    let storage = crate::storage::Storage::new_sqlite(db_pool.clone(), 1);
 
     for preset_type in [PresetType::System, PresetType::Quantifier] {
         let dir = data_dir.join("prompt_presets").join(preset_type.as_str());
@@ -370,7 +330,7 @@ fn ensure_defaults(
         }
 
         let existing_ids: std::collections::HashSet<String> = storage
-            .list(preset_type)?
+            .list_presets(preset_type)?
             .into_iter()
             .map(|p| p.id)
             .collect();
@@ -406,20 +366,20 @@ fn ensure_defaults(
             if existing_ids.contains(&id) {
                 // Re-seed default presets if their individual fields are empty
                 // (can happen after schema migrations that add new columns).
-                if let Ok(Some(existing)) = storage.get(&id) {
+                if let Ok(Some(existing)) = storage.get_preset(&id) {
                     let has_content = existing.role.is_some()
                         || existing.instructions.is_some()
                         || existing.writing_style.is_some()
                         || existing.output_format.is_some();
                     if !has_content {
-                        storage.save(&preset)?;
+                        storage.save_preset(&preset)?;
                         log::info!("Updated {} prompt preset: {}", preset_type.as_str(), id);
                     }
                 }
                 continue;
             }
 
-            storage.save(&preset)?;
+            storage.save_preset(&preset)?;
             log::info!("Seeded {} prompt preset: {}", preset_type.as_str(), id);
         }
     }

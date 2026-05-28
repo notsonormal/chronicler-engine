@@ -1,10 +1,10 @@
 use chronicler_engine::model::llm_message::LlmMessageBuilder;
+use chronicler_engine::storage::Storage;
 use chronicler_engine::storage::db::DbPool;
-use chronicler_engine::storage::llm_message_storage::{LlmMessageStorage, SqliteLlmMessageStorage};
 
-fn create_storage() -> SqliteLlmMessageStorage {
+fn create_storage() -> Storage {
     let pool = DbPool::new(":memory:").expect("in-memory db should open");
-    SqliteLlmMessageStorage::new(pool)
+    Storage::new_sqlite(pool, 1)
 }
 
 #[test]
@@ -21,9 +21,9 @@ fn test_sqlite_save_and_list() {
         .parsed_response("hello")
         .error_message(None::<String>)
         .build();
-    storage.save(&msg).unwrap();
+    storage.save_llm_message(&msg).unwrap();
 
-    let list = storage.list_latest(50).unwrap();
+    let list = storage.list_latest_llm_messages(50).unwrap();
     assert_eq!(list.len(), 1);
     assert_eq!(list[0].agent_name, "narrator");
     assert_eq!(list[0].backend_name, "OpenRouter");
@@ -50,9 +50,9 @@ fn test_sqlite_error_message_preserved() {
         .parsed_response("")
         .error_message(Some("HTTP 500"))
         .build();
-    storage.save(&msg).unwrap();
+    storage.save_llm_message(&msg).unwrap();
 
-    let list = storage.list_latest(50).unwrap();
+    let list = storage.list_latest_llm_messages(50).unwrap();
     assert_eq!(list.len(), 1);
     assert_eq!(list[0].error_message, Some("HTTP 500".to_string()));
 }
@@ -72,10 +72,10 @@ fn test_sqlite_global_cap_prunes_oldest() {
             .parsed_response("parsed")
             .error_message(None::<String>)
             .build();
-        storage.save(&msg).unwrap();
+        storage.save_llm_message(&msg).unwrap();
     }
 
-    let list = storage.list_latest(50).unwrap();
+    let list = storage.list_latest_llm_messages(50).unwrap();
     assert_eq!(list.len(), 50);
     // Should be ordered oldest-first (newest-last) due to reverse() in list_latest
     assert_eq!(list[0].model_name, "model-5");
@@ -97,10 +97,10 @@ fn test_sqlite_list_latest_limit() {
             .parsed_response("parsed")
             .error_message(None::<String>)
             .build();
-        storage.save(&msg).unwrap();
+        storage.save_llm_message(&msg).unwrap();
     }
 
-    let list = storage.list_latest(3).unwrap();
+    let list = storage.list_latest_llm_messages(3).unwrap();
     assert_eq!(list.len(), 3);
     assert_eq!(list[0].model_name, "model-7");
     assert_eq!(list[1].model_name, "model-8");
@@ -110,6 +110,6 @@ fn test_sqlite_list_latest_limit() {
 #[test]
 fn test_sqlite_empty_list() {
     let storage = create_storage();
-    let list = storage.list_latest(50).unwrap();
+    let list = storage.list_latest_llm_messages(50).unwrap();
     assert!(list.is_empty());
 }

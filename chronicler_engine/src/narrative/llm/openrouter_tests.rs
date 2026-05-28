@@ -4,7 +4,7 @@ use crate::model::llm_backend::LlmBackendType;
 use crate::model::settings::Connection;
 use crate::narrative::llm::backend::LlmBackend;
 use crate::narrative::llm::openrouter::OpenRouterBackend;
-use crate::storage::llm_message_storage::{InMemoryLlmMessageStorage, LlmMessageStorage};
+use crate::storage::Storage;
 
 #[test]
 fn test_openrouter_backend_name() {
@@ -51,7 +51,7 @@ fn test_openrouter_model() {
 
 #[test]
 fn test_openrouter_save_message_with_storage() {
-    let storage = Arc::new(InMemoryLlmMessageStorage::new());
+    let storage = Arc::new(Storage::new_in_memory());
     let conn = Connection {
         id: "test".into(),
         name: "Test".into(),
@@ -63,10 +63,7 @@ fn test_openrouter_save_message_with_storage() {
         max_tokens: None,
         max_context_tokens: None,
     };
-    let backend = OpenRouterBackend::from_connection(
-        &conn,
-        Some(Arc::clone(&storage) as Arc<dyn LlmMessageStorage>),
-    );
+    let backend = OpenRouterBackend::from_connection(&conn, Some(Arc::clone(&storage)));
 
     let msg = crate::model::llm_message::LlmMessageBuilder::new()
         .agent_name("test")
@@ -82,7 +79,7 @@ fn test_openrouter_save_message_with_storage() {
 
     backend.save_message(&msg);
 
-    let messages = storage.list_latest(10).unwrap();
+    let messages = storage.list_latest_llm_messages(10).unwrap();
     assert_eq!(messages.len(), 1);
     assert_eq!(messages[0].agent_name, "test");
 }

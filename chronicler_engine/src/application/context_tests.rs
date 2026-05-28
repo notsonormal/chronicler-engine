@@ -6,11 +6,8 @@ use crate::error::{EngineError, LlmFailure, NarrativeFailure};
 use crate::model::message::Message;
 use crate::model::prompt_preset::{PresetType, PromptPreset};
 use crate::model::state::GameState;
-use crate::storage::snapshot_storage::SnapshotStorage;
+use crate::storage::{Operation, Storage, TestOverride};
 use crate::test_support::fixtures::{TestMap, TestPlayer, TestWorld};
-use crate::test_support::in_memory_storage::{
-    InMemoryMessageRepository, InMemorySnapshotRepository,
-};
 use std::sync::Arc;
 
 #[test]
@@ -93,23 +90,11 @@ fn minimal_state() -> GameState {
 
 fn minimal_ctx() -> GameServiceContext {
     let state = minimal_state();
-    let snapshot_repo = Arc::new(InMemorySnapshotRepository::new());
-    let game_repo = Arc::new(crate::test_support::in_memory_storage::InMemoryGameRepository::new());
-    let message_repo = Arc::new(InMemoryMessageRepository::new());
-    let snapshot_storage: Arc<dyn SnapshotStorage> = snapshot_repo;
-    let message_storage: Arc<dyn crate::storage::message_storage::MessageStorage> = message_repo;
-    let _ = snapshot_storage
-        .save(&crate::model::state_snapshot::GameStateSnapshot::from_game_state(&state));
+    let storage = Arc::new(Storage::new_in_memory());
+    let _ = storage
+        .save_snapshot(&crate::model::state_snapshot::GameStateSnapshot::from_game_state(&state));
     GameServiceContext {
-        game_storage: game_repo,
-        snapshot_storage,
-        message_storage,
-        message_swipe_storage: Arc::new(
-            crate::test_support::in_memory_storage::InMemoryMessageSwipeStorage::new(),
-        ),
-        llm_message_storage: Arc::new(
-            crate::storage::llm_message_storage::InMemoryLlmMessageStorage::new(),
-        ),
+        storage,
         world: state.world.clone(),
         map: state.map.clone(),
         player: state.player.clone(),
@@ -119,9 +104,7 @@ fn minimal_ctx() -> GameServiceContext {
         settings: Arc::new(std::sync::RwLock::new(
             crate::model::settings::AppSettings::default(),
         )),
-        preset_storage: Arc::new(
-            crate::storage::prompt_preset_storage::InMemoryPromptPresetStorage::new(),
-        ),
+        preset_storage: Arc::new(Storage::new_in_memory()),
     }
 }
 
@@ -135,7 +118,7 @@ fn test_load_state_hydrates_messages() {
         None,
         None,
     );
-    ctx.message_storage.insert_message(&msg).unwrap();
+    ctx.storage.insert_message(&msg).unwrap();
 
     let state = load_state(&ctx);
     assert_eq!(state.narrative.history.len(), 1);
@@ -146,21 +129,9 @@ fn test_load_state_hydrates_messages() {
 fn test_load_state_fallback_when_empty() {
     let mut state = minimal_state();
     state.movement.current_room_id = "other".to_string();
-    let game_repo = Arc::new(crate::test_support::in_memory_storage::InMemoryGameRepository::new());
-    let snapshot_repo = Arc::new(InMemorySnapshotRepository::new());
-    let message_repo = Arc::new(InMemoryMessageRepository::new());
-    let snapshot_storage: Arc<dyn SnapshotStorage> = snapshot_repo;
-    let message_storage: Arc<dyn crate::storage::message_storage::MessageStorage> = message_repo;
+    let storage = Arc::new(Storage::new_in_memory());
     let ctx = GameServiceContext {
-        game_storage: game_repo,
-        snapshot_storage,
-        message_storage,
-        message_swipe_storage: Arc::new(
-            crate::test_support::in_memory_storage::InMemoryMessageSwipeStorage::new(),
-        ),
-        llm_message_storage: Arc::new(
-            crate::storage::llm_message_storage::InMemoryLlmMessageStorage::new(),
-        ),
+        storage,
         world: state.world.clone(),
         map: state.map.clone(),
         player: state.player.clone(),
@@ -170,9 +141,7 @@ fn test_load_state_fallback_when_empty() {
         settings: Arc::new(std::sync::RwLock::new(
             crate::model::settings::AppSettings::default(),
         )),
-        preset_storage: Arc::new(
-            crate::storage::prompt_preset_storage::InMemoryPromptPresetStorage::new(),
-        ),
+        preset_storage: Arc::new(Storage::new_in_memory()),
     };
     let loaded = load_state(&ctx);
     assert_eq!(loaded.movement.current_room_id, "start");
@@ -194,7 +163,7 @@ fn test_save_and_save_message_and_snapshot() {
     let msg_id = save_message_and_snapshot(&ctx, &mut state).unwrap();
     assert!(msg_id > id);
 
-    let loaded = ctx.snapshot_storage.load_by_id(msg_id).unwrap().unwrap();
+    let loaded = ctx.storage.load_snapshot_by_id(msg_id).unwrap().unwrap();
     assert!(loaded.db_id.is_some());
 }
 
@@ -265,40 +234,6 @@ fn test_save_message_and_snapshot_skips_persisted_retry_swipe() {
     assert_eq!(target.swipes[1].snapshot_id, Some(99));
 }
 
-// ── Mock storage that always fails ──────────────────────────────────────────
-
-struct FailingSnapshotStorage;
-
-impl SnapshotStorage for FailingSnapshotStorage {
-    fn set_game_id(&self, _game_id: u64) {}
-    fn current_game_id(&self) -> u64 {
-        1
-    }
-    fn save(
-        &self,
-        _snapshot: &crate::model::state_snapshot::GameStateSnapshot,
-    ) -> Result<u64, crate::error::EngineError> {
-        Err(crate::error::EngineError::Config(
-            "test snap error".to_string(),
-        ))
-    }
-    fn load_latest(
-        &self,
-    ) -> Result<Option<crate::model::state_snapshot::GameStateSnapshot>, crate::error::EngineError>
-    {
-        Err(crate::error::EngineError::Config(
-            "test snap error".to_string(),
-        ))
-    }
-    fn load_by_id(
-        &self,
-        _id: u64,
-    ) -> Result<Option<crate::model::state_snapshot::GameStateSnapshot>, crate::error::EngineError>
-    {
-        Ok(None)
-    }
-}
-
 // ── active_quantifier_prompt tests ──────────────────────────────────────────
 
 #[test]
@@ -314,7 +249,7 @@ fn test_active_quantifier_prompt_returns_assembled_text() {
         is_default: true,
         preset_type: PresetType::Quantifier,
     };
-    ctx.preset_storage.save(&preset).unwrap();
+    ctx.preset_storage.save_preset(&preset).unwrap();
 
     // Point settings at our test preset
     {
@@ -340,29 +275,10 @@ fn test_active_quantifier_prompt_missing_preset_returns_empty() {
 
 #[test]
 fn test_active_quantifier_prompt_storage_error_returns_empty() {
-    use crate::storage::prompt_preset_storage::PromptPresetStorage;
-
-    struct FailingPresetStorage;
-    impl PromptPresetStorage for FailingPresetStorage {
-        fn list(
-            &self,
-            _preset_type: PresetType,
-        ) -> Result<Vec<PromptPreset>, crate::error::EngineError> {
-            Err(crate::error::EngineError::Config("fail".to_string()))
-        }
-        fn get(&self, _id: &str) -> Result<Option<PromptPreset>, crate::error::EngineError> {
-            Err(crate::error::EngineError::Config("fail".to_string()))
-        }
-        fn save(&self, _preset: &PromptPreset) -> Result<(), crate::error::EngineError> {
-            Ok(())
-        }
-        fn delete(&self, _id: &str) -> Result<(), crate::error::EngineError> {
-            Ok(())
-        }
-    }
-
     let mut ctx = minimal_ctx();
-    ctx.preset_storage = Arc::new(FailingPresetStorage);
+    let (failing_preset_storage, handle) = Storage::new_in_memory().with_test_failures();
+    ctx.preset_storage = Arc::new(failing_preset_storage);
+    handle.set(Operation::ListPresets, TestOverride::config("fail"));
     let result = ctx.active_quantifier_prompt();
     assert_eq!(result, "", "Should return empty string on storage error");
 }
@@ -380,7 +296,7 @@ fn test_delete_and_remove_message_removes_from_storage_and_state() {
         None,
         None,
     );
-    let id = ctx.message_storage.insert_message(&msg).unwrap();
+    let id = ctx.storage.insert_message(&msg).unwrap();
     let mut msg_with_id = msg;
     msg_with_id.id = id;
     state.narrative.history.append(msg_with_id);
@@ -388,7 +304,7 @@ fn test_delete_and_remove_message_removes_from_storage_and_state() {
     delete_and_remove_message(&ctx, &mut state, id).unwrap();
 
     assert_eq!(state.narrative.history.len(), 0);
-    assert!(ctx.message_storage.load_message_rows().unwrap().is_empty());
+    assert!(ctx.storage.load_message_rows().unwrap().is_empty());
 }
 
 // ── load_state error fallback test ──────────────────────────────────────────
@@ -396,19 +312,14 @@ fn test_delete_and_remove_message_removes_from_storage_and_state() {
 #[test]
 fn test_load_state_fallback_on_snapshot_error() {
     let state = minimal_state();
-    let game_repo = Arc::new(crate::test_support::in_memory_storage::InMemoryGameRepository::new());
-    let snapshot_storage: Arc<dyn SnapshotStorage> = Arc::new(FailingSnapshotStorage);
-    let message_repo = Arc::new(InMemoryMessageRepository::new());
+    let (failing_storage, handle) = Storage::new_in_memory().with_test_failures();
+    let storage = Arc::new(failing_storage);
+    handle.set(
+        Operation::LoadLatestSnapshot,
+        TestOverride::config("test snap error"),
+    );
     let ctx = GameServiceContext {
-        game_storage: game_repo,
-        snapshot_storage,
-        message_storage: message_repo,
-        message_swipe_storage: Arc::new(
-            crate::test_support::in_memory_storage::InMemoryMessageSwipeStorage::new(),
-        ),
-        llm_message_storage: Arc::new(
-            crate::storage::llm_message_storage::InMemoryLlmMessageStorage::new(),
-        ),
+        storage,
         world: state.world.clone(),
         map: state.map.clone(),
         player: state.player.clone(),
@@ -418,9 +329,7 @@ fn test_load_state_fallback_on_snapshot_error() {
         settings: Arc::new(std::sync::RwLock::new(
             crate::model::settings::AppSettings::default(),
         )),
-        preset_storage: Arc::new(
-            crate::storage::prompt_preset_storage::InMemoryPromptPresetStorage::new(),
-        ),
+        preset_storage: Arc::new(Storage::new_in_memory()),
     };
 
     let loaded = load_state(&ctx);
@@ -439,19 +348,14 @@ fn test_save_message_and_snapshot_propagates_snapshot_error() {
         crate::model::state::LogType::Narration,
     );
 
-    let game_repo = Arc::new(crate::test_support::in_memory_storage::InMemoryGameRepository::new());
-    let snapshot_storage: Arc<dyn SnapshotStorage> = Arc::new(FailingSnapshotStorage);
-    let message_repo = Arc::new(InMemoryMessageRepository::new());
+    let (failing_storage, handle) = Storage::new_in_memory().with_test_failures();
+    let storage = Arc::new(failing_storage);
+    handle.set(
+        Operation::SaveSnapshot,
+        TestOverride::config("test snap error"),
+    );
     let ctx = GameServiceContext {
-        game_storage: game_repo,
-        snapshot_storage,
-        message_storage: message_repo,
-        message_swipe_storage: Arc::new(
-            crate::test_support::in_memory_storage::InMemoryMessageSwipeStorage::new(),
-        ),
-        llm_message_storage: Arc::new(
-            crate::storage::llm_message_storage::InMemoryLlmMessageStorage::new(),
-        ),
+        storage,
         world: state.world.clone(),
         map: state.map.clone(),
         player: state.player.clone(),
@@ -461,9 +365,7 @@ fn test_save_message_and_snapshot_propagates_snapshot_error() {
         settings: Arc::new(std::sync::RwLock::new(
             crate::model::settings::AppSettings::default(),
         )),
-        preset_storage: Arc::new(
-            crate::storage::prompt_preset_storage::InMemoryPromptPresetStorage::new(),
-        ),
+        preset_storage: Arc::new(Storage::new_in_memory()),
     };
 
     let result = save_message_and_snapshot(&ctx, &mut state_copy);

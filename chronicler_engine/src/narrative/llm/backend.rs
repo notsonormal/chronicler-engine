@@ -4,7 +4,7 @@ use crate::error::EngineError;
 use crate::model::llm_message::LlmMessage;
 use crate::model::settings::Connection;
 use crate::narrative::llm_client::ChatCompletionResult;
-use crate::storage::llm_message_storage::LlmMessageStorage;
+use crate::storage::Storage;
 
 pub const AGENT_NARRATOR: &str = "narrator";
 pub const AGENT_QUANTIFIER: &str = "quantifier";
@@ -95,7 +95,7 @@ pub use crate::model::llm_backend::LlmBackendType;
 /// [DOC: docs/system/llm_processing.md]
 pub fn get_llm_backend_for(
     connection: &Connection,
-    storage: Option<Arc<dyn LlmMessageStorage>>,
+    storage: Option<Arc<Storage>>,
 ) -> Box<dyn LlmBackend> {
     match connection.provider {
         LlmBackendType::Mock => Box::new(super::mock::MockBackend::new(storage)),

@@ -67,7 +67,7 @@ pub fn run_scenario(
         "Test Player".to_string(),
     );
 
-    let snapshot = ctx.snapshot_storage.load_latest().unwrap().unwrap();
+    let snapshot = ctx.storage.load_latest_snapshot().unwrap().unwrap();
     let error_message = match &snapshot.narrative.input_buffer.status {
         GenerationStatus::Error(msg) => msg.clone(),
         GenerationStatus::Idle => "(no error, idle)".to_string(),

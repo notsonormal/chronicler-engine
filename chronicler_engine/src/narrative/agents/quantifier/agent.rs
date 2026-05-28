@@ -7,14 +7,14 @@ use crate::model::agent::{
 use crate::model::settings::AppSettings;
 
 use crate::narrative::agents::Agent;
-use crate::storage::prompt_preset_storage::PromptPresetStorage;
+use crate::storage::Storage;
 
 use super::determine_npcs_in_room;
 
 pub struct QuantifierAgent {
     name: String,
     backend: Arc<dyn crate::narrative::llm::LlmBackend>,
-    preset_storage: Option<Arc<dyn PromptPresetStorage>>,
+    preset_storage: Option<Arc<Storage>>,
     settings: Arc<RwLock<AppSettings>>,
 }
 
@@ -38,8 +38,8 @@ impl QuantifierAgent {
 
     pub fn from_config_with_storage(
         _config: &AgentConfig,
-        storage: Option<Arc<dyn crate::storage::llm_message_storage::LlmMessageStorage>>,
-        preset_storage: Option<Arc<dyn PromptPresetStorage>>,
+        storage: Option<Arc<Storage>>,
+        preset_storage: Option<Arc<Storage>>,
         settings: Arc<RwLock<AppSettings>>,
     ) -> Result<Self, EngineError> {
         let settings_guard = settings.read().unwrap_or_else(|e| e.into_inner());
@@ -95,7 +95,7 @@ impl Agent for QuantifierAgent {
             self.preset_storage
                 .as_ref()
                 .and_then(|s| {
-                    s.get(&settings.active_quantifier_prompt_preset_id)
+                    s.get_preset(&settings.active_quantifier_prompt_preset_id)
                         .ok()
                         .flatten()
                 })

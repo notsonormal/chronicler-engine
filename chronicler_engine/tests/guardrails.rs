@@ -182,8 +182,3 @@ fn guardrails_server_layer_boundaries() {
 fn guardrails_test_layer_boundaries() {
     check_tests_files("test layer boundary", check_test_layer_boundaries);
 }
-
-#[test]
-fn guardrails_one_table_per_storage() {
-    check_src_files("one table per storage module", check_one_table_per_storage);
-}

@@ -24,7 +24,7 @@ fn benchmark_llm_http_401() {
         "HTTP 401 Unauthorized from LLM provider",
     );
 
-    let snapshot = ctx.snapshot_storage.load_latest().unwrap().unwrap();
+    let snapshot = ctx.storage.load_latest_snapshot().unwrap().unwrap();
     let _has_dynamic_room = !snapshot.movement.dynamic_rooms.is_empty();
     let _current_room = snapshot.movement.current_room_id.clone();
 
@@ -293,7 +293,7 @@ fn benchmark_quantifier_complete_failure() {
         "Quantifier LLM call fails completely (connection refused)",
     );
 
-    let snapshot = ctx.snapshot_storage.load_latest().unwrap().unwrap();
+    let snapshot = ctx.storage.load_latest_snapshot().unwrap().unwrap();
     let messages = ctx.load_messages().unwrap();
     let npc_count = snapshot.scene.npcs_in_area.len();
     let has_system_log = messages
@@ -347,7 +347,7 @@ fn benchmark_quantifier_low_confidence() {
         "Quantifier returns Low confidence NPC detection",
     );
 
-    let snapshot = ctx.snapshot_storage.load_latest().unwrap().unwrap();
+    let snapshot = ctx.storage.load_latest_snapshot().unwrap().unwrap();
     let messages = ctx.load_messages().unwrap();
     let npc_count = snapshot.scene.npcs_in_area.len();
     let has_narration = messages.iter().any(|m| m.log_type == LogType::Narration);
@@ -398,7 +398,7 @@ fn benchmark_dynamic_room_creation() {
         "Quantifier returns movement to non-existent room 'nonexistent_room'",
     );
 
-    let snapshot = ctx.snapshot_storage.load_latest().unwrap().unwrap();
+    let snapshot = ctx.storage.load_latest_snapshot().unwrap().unwrap();
     let messages = ctx.load_messages().unwrap();
     let current_room = snapshot.movement.current_room_id.clone();
     let is_dynamic = current_room.starts_with("dynamic_");
@@ -538,7 +538,7 @@ fn benchmark_trigger_wrong_room_id() {
         "Test Player".to_string(),
     );
 
-    let snapshot = ctx.snapshot_storage.load_latest().unwrap().unwrap();
+    let snapshot = ctx.storage.load_latest_snapshot().unwrap().unwrap();
     let messages = ctx.load_messages().unwrap();
     let trigger_fired = messages.iter().any(|m| m.text.contains("stranger nods"));
     let error_msg = match &snapshot.narrative.input_buffer.status {
@@ -638,7 +638,7 @@ fn benchmark_state_stuck_generating() {
         "Test Player".to_string(),
     );
 
-    let snapshot = ctx.snapshot_storage.load_latest().unwrap().unwrap();
+    let snapshot = ctx.storage.load_latest_snapshot().unwrap().unwrap();
     let is_generating = snapshot.narrative.input_buffer.status.is_generating();
     let is_idle = matches!(
         snapshot.narrative.input_buffer.status,

@@ -35,7 +35,7 @@ fn test_event_retry_does_not_create_extra_swipe_on_narration() {
     });
 
     let service = DefaultGameService::with_mock_quantifier(
-        Arc::new(MockBackend::new(Some(Arc::clone(&ctx.llm_message_storage)))),
+        Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         quantifier,
     );
 
@@ -92,7 +92,7 @@ fn test_retry_event_continuation_preserves_quantifier_result() {
     });
 
     let service = DefaultGameService::with_mock_quantifier(
-        Arc::new(MockBackend::new(Some(Arc::clone(&ctx.llm_message_storage)))),
+        Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         quantifier,
     );
 
@@ -131,7 +131,7 @@ fn test_retry_event_continuation_preserves_quantifier_result() {
     );
 
     // Verify LLM calls were logged to SQLite storage
-    let messages = ctx.llm_message_storage.list_latest(50).unwrap();
+    let messages = ctx.storage.list_latest_llm_messages(50).unwrap();
     assert!(
         !messages.is_empty(),
         "LLM messages should be logged during gameplay"

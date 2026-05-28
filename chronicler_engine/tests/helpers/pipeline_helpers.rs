@@ -116,7 +116,7 @@ pub fn wait_for_generation_complete(
     let start = std::time::Instant::now();
     let timeout = std::time::Duration::from_millis(timeout_ms);
     while start.elapsed() < timeout {
-        if let Ok(Some(snap)) = ctx.snapshot_storage.load_latest() {
+        if let Ok(Some(snap)) = ctx.storage.load_latest_snapshot() {
             let guard = GameState::from_snapshot(
                 &snap,
                 ctx.world.clone(),
@@ -136,7 +136,7 @@ pub fn wait_for_generation_complete(
 pub fn latest_state(
     ctx: &chronicler_engine::application::game_service::GameServiceContext,
 ) -> GameState {
-    let snap = ctx.snapshot_storage.load_latest().unwrap().unwrap();
+    let snap = ctx.storage.load_latest_snapshot().unwrap().unwrap();
     let mut state = GameState::from_snapshot(
         &snap,
         ctx.world.clone(),
@@ -158,10 +158,10 @@ pub fn save_state(
 ) {
     let snapshot =
         chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(state);
-    let snapshot_id = ctx.snapshot_storage.save(&snapshot).unwrap();
+    let snapshot_id = ctx.storage.save_snapshot(&snapshot).unwrap();
     let existing = ctx.load_messages().unwrap_or_default();
     for msg in existing {
-        let _ = ctx.message_storage.delete_message(msg.id);
+        let _ = ctx.storage.delete_message(msg.id);
     }
     for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
         if msg.snapshot_id.is_none() {
@@ -170,9 +170,9 @@ pub fn save_state(
         if let Some(swipe) = msg.swipes.first_mut() {
             swipe.snapshot_id = Some(snapshot_id);
         }
-        let id = ctx.message_storage.insert_message(&msg).unwrap();
+        let id = ctx.storage.insert_message(&msg).unwrap();
         for (idx, swipe) in msg.swipes.iter().enumerate() {
-            let _ = ctx.message_swipe_storage.insert_swipe(id, swipe, idx);
+            let _ = ctx.storage.insert_swipe(id, swipe, idx);
         }
     }
 }
@@ -190,5 +190,5 @@ pub fn add_input_and_save(
 pub fn latest_snapshot(
     ctx: &chronicler_engine::application::game_service::GameServiceContext,
 ) -> Option<chronicler_engine::model::state_snapshot::GameStateSnapshot> {
-    ctx.snapshot_storage.load_latest().unwrap_or(None)
+    ctx.storage.load_latest_snapshot().unwrap_or(None)
 }

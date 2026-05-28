@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 
 use crate::error::{EngineError, NarrativeFailure};
-use crate::storage::llm_message_storage::LlmMessageStorage;
+use crate::storage::Storage;
 
 use super::backend::{LlmBackend, LlmCallResult};
 
@@ -25,7 +25,7 @@ pub struct MockBackend {
     pub per_call_narrations: Vec<String>,
     pub per_call_prompt_responses: Vec<String>,
     pub call_index: AtomicUsize,
-    pub storage: Option<Arc<dyn LlmMessageStorage>>,
+    pub storage: Option<Arc<Storage>>,
     /// Set to `true` when `complete` is entered (useful for tests to detect pipeline start).
     pub narration_started: AtomicBool,
     /// Set to `true` when `complete` is entered with trigger agent (useful for tests to detect trigger start).
@@ -33,7 +33,7 @@ pub struct MockBackend {
 }
 
 impl MockBackend {
-    pub fn new(storage: Option<Arc<dyn LlmMessageStorage>>) -> Self {
+    pub fn new(storage: Option<Arc<Storage>>) -> Self {
         Self {
             storage,
             ..Default::default()
@@ -191,7 +191,7 @@ impl LlmBackend for MockBackend {
 
     fn save_message(&self, message: &crate::model::llm_message::LlmMessage) {
         if let Some(storage) = &self.storage {
-            let _ = storage.save(message);
+            let _ = storage.save_llm_message(message);
         }
     }
 }

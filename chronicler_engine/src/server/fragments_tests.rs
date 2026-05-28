@@ -4,22 +4,15 @@ use tokio_util::sync::CancellationToken;
 use crate::model::llm_message::LlmMessageBuilder;
 use crate::model::settings::AppSettings;
 use crate::server::fragments::{ActionForm, html_escape, render_error};
-use crate::storage::llm_message_storage::{InMemoryLlmMessageStorage, LlmMessageStorage};
-use crate::test_support::{InMemoryMessageRepository, InMemorySnapshotRepository};
+use crate::storage::Storage;
 use crate::test_support::{TestMap, TestPlayer, TestWorld};
 
-fn make_test_app_state(
-    llm_storage: Option<Arc<InMemoryLlmMessageStorage>>,
-) -> crate::server::AppState {
-    let llm_storage: Arc<dyn LlmMessageStorage> = match llm_storage {
+fn make_test_app_state(llm_storage: Option<Arc<Storage>>) -> crate::server::AppState {
+    let storage = match llm_storage {
         Some(s) => s,
-        None => Arc::new(InMemoryLlmMessageStorage::new()),
+        None => Arc::new(Storage::new_in_memory()),
     };
-    let game_service_storage = Arc::clone(&llm_storage);
-    let snapshot_storage: Arc<dyn crate::storage::snapshot_storage::SnapshotStorage> =
-        Arc::new(InMemorySnapshotRepository::new());
-    let message_storage: Arc<dyn crate::storage::message_storage::MessageStorage> =
-        Arc::new(InMemoryMessageRepository::new());
+    let game_service_storage = Arc::clone(&storage);
     let game_service: Arc<dyn crate::application::game_service::GameService> = Arc::new(
         crate::application::game_service::DefaultGameService::with_storage(
             Some(game_service_storage),
@@ -28,13 +21,8 @@ fn make_test_app_state(
         ),
     );
     crate::server::AppState {
-        game_storage: Arc::new(crate::test_support::InMemoryGameRepository::new()),
-        snapshot_storage,
-        message_storage,
-        message_swipe_storage: Arc::new(
-            crate::test_support::in_memory_storage::InMemoryMessageSwipeStorage::new(),
-        ),
-        llm_message_storage: llm_storage,
+        storage,
+        preset_storage: Arc::new(Storage::new_in_memory()),
         world: Arc::new(TestWorld::minimal()),
         map: Arc::new(TestMap::single_room("start")),
         player: Arc::new(TestPlayer::standard()),
@@ -42,9 +30,6 @@ fn make_test_app_state(
         game_service: Arc::clone(&game_service),
         application_service: Arc::new(
             crate::application::application_service::DefaultApplicationService::new(game_service),
-        ),
-        prompt_preset_storage: Arc::new(
-            crate::storage::prompt_preset_storage::InMemoryPromptPresetStorage::new(),
         ),
         settings: Arc::new(RwLock::new(AppSettings::default())),
         cancel_token: Arc::new(RwLock::new(CancellationToken::new())),
@@ -244,7 +229,7 @@ fn test_render_llm_messages_empty() {
 
 #[test]
 fn test_render_llm_messages_with_data() {
-    let llm_storage = Arc::new(InMemoryLlmMessageStorage::new());
+    let llm_storage = Arc::new(Storage::new_in_memory());
     let msg = LlmMessageBuilder::new()
         .agent_name("narrator")
         .backend_name("OpenRouter")
@@ -256,7 +241,7 @@ fn test_render_llm_messages_with_data() {
         .parsed_response("hello")
         .error_message(None::<String>)
         .build();
-    llm_storage.save(&msg).unwrap();
+    llm_storage.save_llm_message(&msg).unwrap();
 
     let app_state = make_test_app_state(Some(llm_storage));
     let html = crate::server::fragments::render_llm_messages(&app_state).unwrap();

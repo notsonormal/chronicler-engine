@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::error::EngineError;
 use crate::model::settings::Connection;
-use crate::storage::llm_message_storage::LlmMessageStorage;
+use crate::storage::Storage;
 
 use super::backend::{LlmBackend, LlmCallResult};
 
@@ -11,14 +11,11 @@ use super::backend::{LlmBackend, LlmCallResult};
 pub struct DeepSeekBackend {
     api_key: String,
     model: String,
-    storage: Option<Arc<dyn LlmMessageStorage>>,
+    storage: Option<Arc<Storage>>,
 }
 
 impl DeepSeekBackend {
-    pub fn from_connection(
-        connection: &Connection,
-        storage: Option<Arc<dyn LlmMessageStorage>>,
-    ) -> Self {
+    pub fn from_connection(connection: &Connection, storage: Option<Arc<Storage>>) -> Self {
         let api_key = connection.resolve_api_key().unwrap_or_default();
         Self {
             api_key,
@@ -46,7 +43,7 @@ impl LlmBackend for DeepSeekBackend {
 
     fn save_message(&self, message: &crate::model::llm_message::LlmMessage) {
         if let Some(storage) = &self.storage {
-            let _ = storage.save(message);
+            let _ = storage.save_llm_message(message);
         }
     }
 

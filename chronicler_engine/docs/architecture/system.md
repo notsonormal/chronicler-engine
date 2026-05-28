@@ -32,7 +32,7 @@ Contains the mechanics that drive the simulation. It translates user intent and 
 ### 2.5. The Application Tier (`crate::application::*`)
 Orchestration layer that coordinates game flow, persistence, and LLM generation. Sits between the HTTP server and the pure simulation engine.
 - **`context`**: Shared infrastructure for game service operations.
-  - `GameServiceContext`: Game storage, snapshot storage, message storage, message swipe storage, LLM message storage, world/map/player/npc references, cancellation token, settings, and prompt preset storage.
+  - `GameServiceContext`: Storage (unified SQLite/in-memory/test backend), preset storage, world/map/player/npc references, cancellation token, settings.
   - `context.rs`: Shared persistence helpers (`load_state`, `save_state`, `save_message_and_snapshot`, `map_llm_error`). Cross-storage coordination helpers (`load_messages`, `update_message_text`, `migrate_swipes`).
   - `save_message_and_snapshot()`: Saves a snapshot and immediately persists the newest unpersisted message with the snapshot ID. Messages are persisted as they are created; there is no batching or `committed` flag.
 - **`action_pipeline`**: Action-processing workflows and the `ActionPipeline` orchestration struct.
@@ -180,11 +180,7 @@ SQLite-based persistence for game state and LLM call forensics.
   - `llm_messages` — LLM API call logging (not game-scoped)
 - **`models`**: Database row structs (`DbGame`, `DbGameStateSnapshot`, `DbMessage`, `DbSwipe`, `DbLlmMessage`) — one per table, using raw SQLite types.
 - **`mappers`**: Conversion logic between DB models and domain models (`TryFrom`/`From` impls and free functions for context-dependent mapping).
-- **`game_storage`**: `GameStorage` trait and SQLite implementation (`SqliteGameRepository`). Owns the `games` table — CRUD for game sessions. `InMemoryGameRepository` for tests.
-- **`snapshot_storage`**: `SnapshotStorage` trait and SQLite implementation (`SqliteSnapshotRepository`). Owns `game_state_snapshots`. All operations filter by `game_id`.
-- **`message_storage`**: `MessageStorage` trait and SQLite implementation (`SqliteMessageRepository`). Owns the `messages` table — metadata-only (sender, log_type, timestamp, active_swipe_index, is_deleted). Swipes are stored separately.
-- **`message_swipe_storage`**: `MessageSwipeStorage` trait and SQLite implementation (`SqliteMessageSwipeRepository`). Owns the `message_swipes` table. Cross-table coordination (load full messages, update swipe text, migrate swipes) lives in `GameServiceContext` helpers.
-- **`llm_message_storage`**: `LlmMessageStorage` trait + `SqliteLlmMessageStorage` (auto-pruning to 50 rows) + `InMemoryLlmMessageStorage` (tests). Uses `DbLlmMessage` internally.
+- **`backend`**: Unified `Storage` struct with `Backend` enum (`Sqlite`, `InMemory`, `Test`). All table-scoped methods live on `Storage` — no traits, no per-table repository structs. `Backend::Test` supports dynamic failure injection via `Operation` enum + `TestOverride`. Cross-table coordination (load full messages, update swipe text, save message + snapshot atomically) lives in `GameServiceContext` helpers.
 - **`GameStateSnapshot`**: Serializable subset of `GameState` for persistence (messages excluded; hydrated separately). Lives in `crate::model::state_snapshot`.
 
 ### 8. The Bootstrap Tier (`crate::bootstrap`)
@@ -203,7 +199,7 @@ Command-line argument parsing via `clap`.
 Shared test fixtures and utilities.
 - **`fixtures`**: `TestGameState`, `TestNpc`, `TestMap`, etc.
 - **`context`**: Test context helpers
-- **`in_memory_storage`**: In-memory `GameStorage`, `SnapshotStorage`, `MessageStorage`, `MessageSwipeStorage`, and `LlmMessageStorage` implementations for tests
+- **`test_app_builder`**: Fluent test app builder API
 - **`server_helpers`**: `create_app_for_testing`, `create_app_for_testing_with_settings`
 - **`test_app_builder`**: Fluent test app builder API
 

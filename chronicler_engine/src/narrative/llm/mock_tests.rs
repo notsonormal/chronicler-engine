@@ -139,18 +139,18 @@ fn test_mock_with_failing_trigger_narration() {
 
 #[test]
 fn test_mock_backend_logs_to_storage() {
-    use crate::storage::llm_message_storage::{InMemoryLlmMessageStorage, LlmMessageStorage};
+    use crate::storage::Storage;
     use std::sync::Arc;
-    let storage = Arc::new(InMemoryLlmMessageStorage::new());
+    let storage = Arc::new(Storage::new_in_memory());
     let backend = MockBackend {
-        storage: Some(Arc::clone(&storage) as Arc<dyn LlmMessageStorage>),
+        storage: Some(Arc::clone(&storage)),
         ..Default::default()
     };
 
     let result = backend.complete("narrator", "sys", "user action", None);
     assert!(result.is_ok());
 
-    let messages = storage.list_latest(50).unwrap();
+    let messages = storage.list_latest_llm_messages(50).unwrap();
     assert_eq!(messages.len(), 1);
     assert_eq!(messages[0].agent_name, "narrator");
     assert_eq!(messages[0].backend_name, "Mock");
@@ -159,11 +159,11 @@ fn test_mock_backend_logs_to_storage() {
 
 #[test]
 fn test_mock_backend_logs_multiple_calls() {
-    use crate::storage::llm_message_storage::{InMemoryLlmMessageStorage, LlmMessageStorage};
+    use crate::storage::Storage;
     use std::sync::Arc;
-    let storage = Arc::new(InMemoryLlmMessageStorage::new());
+    let storage = Arc::new(Storage::new_in_memory());
     let backend = MockBackend {
-        storage: Some(Arc::clone(&storage) as Arc<dyn LlmMessageStorage>),
+        storage: Some(Arc::clone(&storage)),
         ..Default::default()
     };
 
@@ -171,7 +171,7 @@ fn test_mock_backend_logs_multiple_calls() {
     let _ = backend.complete("trigger", "sys", "second", None);
     let _ = backend.complete("narrator", "sys", "third", None);
 
-    let messages = storage.list_latest(50).unwrap();
+    let messages = storage.list_latest_llm_messages(50).unwrap();
     assert_eq!(messages.len(), 3);
     assert_eq!(messages[0].agent_name, "narrator");
     assert_eq!(messages[1].agent_name, "trigger");

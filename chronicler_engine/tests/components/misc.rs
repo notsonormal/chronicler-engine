@@ -8,6 +8,7 @@ use tower::util::ServiceExt;
 use chronicler_engine::TestAppBuilder;
 use chronicler_engine::model::settings::{AppSettings, TextCheckMode, TextCheckSettings};
 use chronicler_engine::model::state::LogType;
+use chronicler_engine::storage::{Operation, Storage, TestOverride};
 
 fn text_check_settings(mode: TextCheckMode) -> AppSettings {
     AppSettings {
@@ -178,15 +179,11 @@ async fn test_retry_success() {
 
 #[tokio::test]
 async fn test_retry_handler_sets_generating_status() {
-    let snapshot_storage: Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage> =
-        Arc::new(chronicler_engine::test_support::InMemorySnapshotRepository::new());
-    let message_storage: Arc<dyn chronicler_engine::storage::message_storage::MessageStorage> =
-        Arc::new(chronicler_engine::test_support::InMemoryMessageRepository::new());
+    let storage = Arc::new(Storage::new_in_memory());
 
     let app = TestAppBuilder::default_test()
         .log("look around", Some("Test Player"), LogType::Input)
-        .snapshot_storage(Arc::clone(&snapshot_storage))
-        .message_storage(Arc::clone(&message_storage))
+        .storage(Arc::clone(&storage))
         .build();
 
     let req = Request::builder()
@@ -198,8 +195,8 @@ async fn test_retry_handler_sets_generating_status() {
 
     assert_eq!(response.status(), StatusCode::OK);
 
-    let latest = snapshot_storage
-        .load_latest()
+    let latest = storage
+        .load_latest_snapshot()
         .unwrap()
         .expect("Should have snapshot");
     assert!(
@@ -212,15 +209,11 @@ async fn test_retry_handler_sets_generating_status() {
 #[tokio::test]
 async fn test_retry_handler_creates_snapshot() {
     // Setup: create app with split repositories so we can inspect it
-    let snapshot_storage: Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage> =
-        Arc::new(chronicler_engine::test_support::InMemorySnapshotRepository::new());
-    let message_storage: Arc<dyn chronicler_engine::storage::message_storage::MessageStorage> =
-        Arc::new(chronicler_engine::test_support::InMemoryMessageRepository::new());
+    let storage = Arc::new(Storage::new_in_memory());
 
     let app = TestAppBuilder::default_test()
         .log("look around", Some("Test Player"), LogType::Input)
-        .snapshot_storage(Arc::clone(&snapshot_storage))
-        .message_storage(Arc::clone(&message_storage))
+        .storage(Arc::clone(&storage))
         .build();
 
     let req = Request::builder()
@@ -233,8 +226,8 @@ async fn test_retry_handler_creates_snapshot() {
     assert_eq!(response.status(), StatusCode::OK);
 
     // The handler should save a new generating snapshot.
-    let latest = snapshot_storage
-        .load_latest()
+    let latest = storage
+        .load_latest_snapshot()
         .unwrap()
         .expect("Should have snapshot");
     assert!(
@@ -373,16 +366,12 @@ async fn test_reset_preserves_scenario_npcs() {
         relationships: vec![],
     }];
 
-    let snapshot_storage: Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage> =
-        Arc::new(chronicler_engine::test_support::InMemorySnapshotRepository::new());
-    let message_storage: Arc<dyn chronicler_engine::storage::message_storage::MessageStorage> =
-        Arc::new(chronicler_engine::test_support::InMemoryMessageRepository::new());
+    let storage = Arc::new(Storage::new_in_memory());
 
     let app = TestAppBuilder::new((*world).clone(), (*player).clone())
         .map((*map).clone())
         .npcs(npcs)
-        .snapshot_storage(Arc::clone(&snapshot_storage))
-        .message_storage(Arc::clone(&message_storage))
+        .storage(Arc::clone(&storage))
         .build();
 
     // Reset the game
@@ -470,15 +459,11 @@ async fn test_reset_preserves_scenario_text() {
         inventory: vec![],
     });
 
-    let snapshot_storage: Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage> =
-        Arc::new(chronicler_engine::test_support::InMemorySnapshotRepository::new());
-    let message_storage: Arc<dyn chronicler_engine::storage::message_storage::MessageStorage> =
-        Arc::new(chronicler_engine::test_support::InMemoryMessageRepository::new());
+    let storage = Arc::new(Storage::new_in_memory());
 
     let app = TestAppBuilder::new((*world).clone(), (*player).clone())
         .map((*map).clone())
-        .snapshot_storage(Arc::clone(&snapshot_storage))
-        .message_storage(Arc::clone(&message_storage))
+        .storage(Arc::clone(&storage))
         .build();
 
     // Reset the game
@@ -546,63 +531,14 @@ async fn test_reset_allows_subsequent_actions() {
 
 #[tokio::test]
 async fn test_retry_handler_load_state_failure() {
-    let snapshot_storage_inner: Arc<
-        dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage,
-    > = Arc::new(chronicler_engine::test_support::InMemorySnapshotRepository::new());
-    let message_storage: Arc<dyn chronicler_engine::storage::message_storage::MessageStorage> =
-        Arc::new(chronicler_engine::test_support::InMemoryMessageRepository::new());
-
-    struct FailingLoadStorage {
-        inner: Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage>,
-    }
-
-    impl chronicler_engine::storage::snapshot_storage::SnapshotStorage for FailingLoadStorage {
-        fn save(
-            &self,
-            snapshot: &chronicler_engine::model::state_snapshot::GameStateSnapshot,
-        ) -> Result<u64, chronicler_engine::error::EngineError> {
-            self.inner.save(snapshot)
-        }
-        fn load_latest(
-            &self,
-        ) -> Result<
-            Option<chronicler_engine::model::state_snapshot::GameStateSnapshot>,
-            chronicler_engine::error::EngineError,
-        > {
-            Err(chronicler_engine::error::EngineError::Internal(
-                chronicler_engine::error::internal_error("simulated load failure"),
-            ))
-        }
-        fn load_by_id(
-            &self,
-            id: u64,
-        ) -> Result<
-            Option<chronicler_engine::model::state_snapshot::GameStateSnapshot>,
-            chronicler_engine::error::EngineError,
-        > {
-            self.inner.load_by_id(id)
-        }
-        fn set_game_id(&self, game_id: u64) {
-            self.inner.set_game_id(game_id);
-        }
-
-        fn current_game_id(&self) -> u64 {
-            self.inner.current_game_id()
-        }
-    }
-
-    let storage_dyn = Arc::clone(&snapshot_storage_inner);
-    let snapshot_storage: Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage> =
-        Arc::new(FailingLoadStorage { inner: storage_dyn });
-    let llm_storage =
-        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
-            as Arc<dyn chronicler_engine::storage::llm_message_storage::LlmMessageStorage>;
+    let storage = Arc::new(Storage::new_in_memory().with_failure(
+        Operation::LoadLatestSnapshot,
+        TestOverride::internal("simulated load failure"),
+    ));
 
     let app = TestAppBuilder::default_test()
         .log("look around", Some("Test Player"), LogType::Input)
-        .snapshot_storage(snapshot_storage)
-        .message_storage(message_storage)
-        .llm_storage(llm_storage)
+        .storage(storage)
         .build();
 
     let req = Request::builder()
@@ -639,13 +575,7 @@ async fn test_retrigger_no_trigger() {
 
 #[tokio::test]
 async fn test_retrigger_no_messages() {
-    let snapshot_storage: Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage> =
-        Arc::new(chronicler_engine::test_support::InMemorySnapshotRepository::new());
-    let message_storage: Arc<dyn chronicler_engine::storage::message_storage::MessageStorage> =
-        Arc::new(chronicler_engine::test_support::InMemoryMessageRepository::new());
-    let llm_storage =
-        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
-            as Arc<dyn chronicler_engine::storage::llm_message_storage::LlmMessageStorage>;
+    let storage = Arc::new(Storage::new_in_memory());
 
     let app = TestAppBuilder::default_test()
         .last_trigger(chronicler_engine::model::state::StoredTriggerContext {
@@ -658,9 +588,7 @@ async fn test_retrigger_no_messages() {
             user_prompt: "user".to_string(),
             max_tokens: None,
         })
-        .snapshot_storage(Arc::clone(&snapshot_storage))
-        .message_storage(Arc::clone(&message_storage))
-        .llm_storage(llm_storage)
+        .storage(Arc::clone(&storage))
         .build();
 
     let req = Request::builder()
@@ -683,13 +611,7 @@ async fn test_retrigger_no_messages() {
 
 #[tokio::test]
 async fn test_retrigger_last_message_not_narration() {
-    let snapshot_storage: Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage> =
-        Arc::new(chronicler_engine::test_support::InMemorySnapshotRepository::new());
-    let message_storage: Arc<dyn chronicler_engine::storage::message_storage::MessageStorage> =
-        Arc::new(chronicler_engine::test_support::InMemoryMessageRepository::new());
-    let llm_storage =
-        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
-            as Arc<dyn chronicler_engine::storage::llm_message_storage::LlmMessageStorage>;
+    let storage = Arc::new(Storage::new_in_memory());
 
     let app = TestAppBuilder::default_test()
         .last_trigger(chronicler_engine::model::state::StoredTriggerContext {
@@ -703,9 +625,7 @@ async fn test_retrigger_last_message_not_narration() {
             max_tokens: None,
         })
         .log("look around", Some("Test Player"), LogType::Input)
-        .snapshot_storage(Arc::clone(&snapshot_storage))
-        .message_storage(Arc::clone(&message_storage))
-        .llm_storage(llm_storage)
+        .storage(Arc::clone(&storage))
         .build();
 
     let req = Request::builder()
@@ -744,15 +664,11 @@ async fn test_switch_swipe_generation_in_progress() {
 
 #[tokio::test]
 async fn test_switch_swipe_not_last_message() {
-    let snapshot_storage: Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage> =
-        Arc::new(chronicler_engine::test_support::InMemorySnapshotRepository::new());
-    let message_storage: Arc<dyn chronicler_engine::storage::message_storage::MessageStorage> =
-        Arc::new(chronicler_engine::test_support::InMemoryMessageRepository::new());
+    let storage = Arc::new(Storage::new_in_memory());
 
     let app = TestAppBuilder::default_test()
         .log("look around", Some("Test Player"), LogType::Input)
-        .snapshot_storage(Arc::clone(&snapshot_storage))
-        .message_storage(Arc::clone(&message_storage))
+        .storage(Arc::clone(&storage))
         .build();
 
     // Insert two messages so the first is NOT the last
@@ -763,7 +679,7 @@ async fn test_switch_swipe_not_last_message() {
         None,
         None,
     );
-    message_storage.insert_message(&msg1).unwrap();
+    storage.insert_message(&msg1).unwrap();
 
     let msg2 = chronicler_engine::model::message::Message::new(
         None,
@@ -772,7 +688,7 @@ async fn test_switch_swipe_not_last_message() {
         None,
         None,
     );
-    message_storage.insert_message(&msg2).unwrap();
+    storage.insert_message(&msg2).unwrap();
 
     // Try to swipe the first message (not the last)
     let req = Request::builder()
@@ -797,34 +713,25 @@ async fn test_switch_swipe_not_last_message() {
 async fn test_switch_swipe_missing_snapshot() {
     use chronicler_engine::model::message::{Message, Swipe};
 
-    let snapshot_storage: Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage> =
-        Arc::new(chronicler_engine::test_support::InMemorySnapshotRepository::new());
-    let message_storage: Arc<dyn chronicler_engine::storage::message_storage::MessageStorage> =
-        Arc::new(chronicler_engine::test_support::InMemoryMessageRepository::new());
-
-    let message_swipe_storage: Arc<
-        dyn chronicler_engine::storage::message_swipe_storage::MessageSwipeStorage,
-    > = Arc::new(chronicler_engine::test_support::InMemoryMessageSwipeStorage::new());
+    let storage = Arc::new(Storage::new_in_memory());
 
     let app = TestAppBuilder::default_test()
         .log("look around", Some("Test Player"), LogType::Input)
-        .snapshot_storage(Arc::clone(&snapshot_storage))
-        .message_storage(Arc::clone(&message_storage))
-        .message_swipe_storage(Arc::clone(&message_swipe_storage))
+        .storage(Arc::clone(&storage))
         .build();
 
     // Insert a narration with a swipe that has NO snapshot_id
     let msg = Message::new(None, "Narration", LogType::Narration, None, None);
-    let id = message_storage.insert_message(&msg).unwrap();
+    let id = storage.insert_message(&msg).unwrap();
     let swipe0 = msg.swipes.first().unwrap().clone();
-    message_swipe_storage.insert_swipe(id, &swipe0, 0).unwrap();
+    storage.insert_swipe(id, &swipe0, 0).unwrap();
     let swipe1 = Swipe {
         text: "Second swipe".to_string(),
         snapshot_id: None, // Deliberately missing
         location_header: None,
         event_header: None,
     };
-    message_swipe_storage.insert_swipe(id, &swipe1, 1).unwrap();
+    storage.insert_swipe(id, &swipe1, 1).unwrap();
 
     let req = Request::builder()
         .uri(format!("/message/{id}/swipe/1"))
@@ -848,41 +755,32 @@ async fn test_switch_swipe_missing_snapshot() {
 async fn test_switch_swipe_changes_active_swipe() {
     use chronicler_engine::model::message::Swipe;
 
-    let snapshot_storage: Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage> =
-        Arc::new(chronicler_engine::test_support::InMemorySnapshotRepository::new());
-    let message_storage: Arc<dyn chronicler_engine::storage::message_storage::MessageStorage> =
-        Arc::new(chronicler_engine::test_support::InMemoryMessageRepository::new());
-
-    let message_swipe_storage: Arc<
-        dyn chronicler_engine::storage::message_swipe_storage::MessageSwipeStorage,
-    > = Arc::new(chronicler_engine::test_support::InMemoryMessageSwipeStorage::new());
+    let storage = Arc::new(Storage::new_in_memory());
 
     let app = TestAppBuilder::default_test()
         .log("look around", Some("Test Player"), LogType::Input)
         .log("First narration", None, LogType::Narration)
-        .snapshot_storage(Arc::clone(&snapshot_storage))
-        .message_storage(Arc::clone(&message_storage))
-        .message_swipe_storage(Arc::clone(&message_swipe_storage))
+        .storage(Arc::clone(&storage))
         .build();
 
     // After build, fix up narration message with snapshot_id
-    let latest = snapshot_storage
-        .load_latest()
+    let latest = storage
+        .load_latest_snapshot()
         .unwrap()
         .expect("Should have snapshot");
     let snapshot_id = latest.db_id.expect("Should have snapshot id");
 
-    let msgs = message_storage.load_message_rows().unwrap();
+    let msgs = storage.load_message_rows().unwrap();
     let narration = msgs
         .into_iter()
         .find(|m| m.log_type == LogType::Narration)
         .expect("narration message should exist");
     let old_id = narration.id;
-    message_storage.delete_message(old_id).unwrap();
+    storage.delete_message(old_id).unwrap();
 
     let mut updated = narration.clone();
     updated.snapshot_id = Some(snapshot_id);
-    let narration_id = message_storage.insert_message(&updated).unwrap();
+    let narration_id = storage.insert_message(&updated).unwrap();
 
     let swipe0 = Swipe {
         text: "First narration".to_string(),
@@ -890,18 +788,14 @@ async fn test_switch_swipe_changes_active_swipe() {
         location_header: None,
         event_header: None,
     };
-    message_swipe_storage
-        .insert_swipe(narration_id, &swipe0, 0)
-        .unwrap();
+    storage.insert_swipe(narration_id, &swipe0, 0).unwrap();
     let swipe1 = Swipe {
         text: "Second narration".to_string(),
         snapshot_id: Some(snapshot_id),
         location_header: None,
         event_header: None,
     };
-    message_swipe_storage
-        .insert_swipe(narration_id, &swipe1, 1)
-        .unwrap();
+    storage.insert_swipe(narration_id, &swipe1, 1).unwrap();
 
     let req = Request::builder()
         .uri(format!("/message/{narration_id}/swipe/0"))
@@ -927,63 +821,14 @@ async fn test_switch_swipe_changes_active_swipe() {
 
 #[tokio::test]
 async fn test_retry_handler_snapshot_save_failure() {
-    let snapshot_storage_inner: Arc<
-        dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage,
-    > = Arc::new(chronicler_engine::test_support::InMemorySnapshotRepository::new());
-    let message_storage: Arc<dyn chronicler_engine::storage::message_storage::MessageStorage> =
-        Arc::new(chronicler_engine::test_support::InMemoryMessageRepository::new());
-
-    struct FailingSaveStorage {
-        inner: Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage>,
-    }
-
-    impl chronicler_engine::storage::snapshot_storage::SnapshotStorage for FailingSaveStorage {
-        fn save(
-            &self,
-            _snapshot: &chronicler_engine::model::state_snapshot::GameStateSnapshot,
-        ) -> Result<u64, chronicler_engine::error::EngineError> {
-            Err(chronicler_engine::error::EngineError::Internal(
-                chronicler_engine::error::internal_error("simulated save failure"),
-            ))
-        }
-        fn load_latest(
-            &self,
-        ) -> Result<
-            Option<chronicler_engine::model::state_snapshot::GameStateSnapshot>,
-            chronicler_engine::error::EngineError,
-        > {
-            self.inner.load_latest()
-        }
-        fn load_by_id(
-            &self,
-            id: u64,
-        ) -> Result<
-            Option<chronicler_engine::model::state_snapshot::GameStateSnapshot>,
-            chronicler_engine::error::EngineError,
-        > {
-            self.inner.load_by_id(id)
-        }
-        fn set_game_id(&self, game_id: u64) {
-            self.inner.set_game_id(game_id);
-        }
-
-        fn current_game_id(&self) -> u64 {
-            self.inner.current_game_id()
-        }
-    }
-
-    let storage_dyn = Arc::clone(&snapshot_storage_inner);
-    let snapshot_storage: Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage> =
-        Arc::new(FailingSaveStorage { inner: storage_dyn });
-    let llm_storage =
-        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
-            as Arc<dyn chronicler_engine::storage::llm_message_storage::LlmMessageStorage>;
+    let storage = Arc::new(Storage::new_in_memory().with_failure(
+        Operation::SaveSnapshot,
+        TestOverride::internal("simulated save failure"),
+    ));
 
     let app = TestAppBuilder::default_test()
         .log("look around", Some("Test Player"), LogType::Input)
-        .snapshot_storage(snapshot_storage)
-        .message_storage(message_storage)
-        .llm_storage(llm_storage)
+        .storage(storage)
         .build();
 
     let req = Request::builder()
@@ -998,63 +843,12 @@ async fn test_retry_handler_snapshot_save_failure() {
 
 #[tokio::test]
 async fn test_reset_handler_snapshot_save_failure() {
-    let snapshot_storage_inner: Arc<
-        dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage,
-    > = Arc::new(chronicler_engine::test_support::InMemorySnapshotRepository::new());
-    let message_storage: Arc<dyn chronicler_engine::storage::message_storage::MessageStorage> =
-        Arc::new(chronicler_engine::test_support::InMemoryMessageRepository::new());
+    let storage = Arc::new(Storage::new_in_memory().with_failure(
+        Operation::SaveSnapshot,
+        TestOverride::internal("simulated save failure"),
+    ));
 
-    struct FailingSaveStorage {
-        inner: Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage>,
-    }
-
-    impl chronicler_engine::storage::snapshot_storage::SnapshotStorage for FailingSaveStorage {
-        fn save(
-            &self,
-            _snapshot: &chronicler_engine::model::state_snapshot::GameStateSnapshot,
-        ) -> Result<u64, chronicler_engine::error::EngineError> {
-            Err(chronicler_engine::error::EngineError::Internal(
-                chronicler_engine::error::internal_error("simulated save failure"),
-            ))
-        }
-        fn load_latest(
-            &self,
-        ) -> Result<
-            Option<chronicler_engine::model::state_snapshot::GameStateSnapshot>,
-            chronicler_engine::error::EngineError,
-        > {
-            self.inner.load_latest()
-        }
-        fn load_by_id(
-            &self,
-            id: u64,
-        ) -> Result<
-            Option<chronicler_engine::model::state_snapshot::GameStateSnapshot>,
-            chronicler_engine::error::EngineError,
-        > {
-            self.inner.load_by_id(id)
-        }
-        fn set_game_id(&self, game_id: u64) {
-            self.inner.set_game_id(game_id);
-        }
-
-        fn current_game_id(&self) -> u64 {
-            self.inner.current_game_id()
-        }
-    }
-
-    let storage_dyn = Arc::clone(&snapshot_storage_inner);
-    let snapshot_storage: Arc<dyn chronicler_engine::storage::snapshot_storage::SnapshotStorage> =
-        Arc::new(FailingSaveStorage { inner: storage_dyn });
-    let llm_storage =
-        Arc::new(chronicler_engine::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
-            as Arc<dyn chronicler_engine::storage::llm_message_storage::LlmMessageStorage>;
-
-    let app = TestAppBuilder::default_test()
-        .snapshot_storage(snapshot_storage)
-        .message_storage(message_storage)
-        .llm_storage(llm_storage)
-        .build();
+    let app = TestAppBuilder::default_test().storage(storage).build();
 
     let req = Request::builder()
         .uri("/reset")

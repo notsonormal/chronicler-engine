@@ -5,7 +5,7 @@ use crate::model::agent::{AgentConfig, AgentResult, BackendSelector, ExecutionPh
 use crate::model::settings::AppSettings;
 use crate::narrative::agents::Agent;
 use crate::narrative::agents::quantifier::QuantifierAgent;
-use crate::storage::llm_message_storage::LlmMessageStorage;
+use crate::storage::Storage;
 
 #[derive(Debug, Default)]
 pub struct AgentRegistry {
@@ -24,8 +24,8 @@ impl AgentRegistry {
 
     pub fn from_configs_with_storage(
         configs: &[AgentConfig],
-        storage: Option<Arc<dyn LlmMessageStorage>>,
-        preset_storage: Option<Arc<dyn crate::storage::prompt_preset_storage::PromptPresetStorage>>,
+        storage: Option<Arc<Storage>>,
+        preset_storage: Option<Arc<Storage>>,
         settings: Arc<RwLock<AppSettings>>,
     ) -> Result<Self, EngineError> {
         let mut registry = Self::default();

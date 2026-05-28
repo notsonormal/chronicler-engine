@@ -7,9 +7,6 @@ use chronicler_engine::model::trigger::{
     ComparisonOperator, Trigger, TriggerCondition, TriggerEffect,
 };
 use chronicler_engine::narrative::llm::MockBackend;
-use chronicler_engine::storage::message_storage::MessageStorage;
-use chronicler_engine::storage::prompt_preset_storage::PromptPresetStorage;
-use chronicler_engine::storage::snapshot_storage::SnapshotStorage;
 use chronicler_engine::test_support::make_test_context_with_sqlite;
 
 use crate::pipeline_helpers::{
@@ -38,7 +35,7 @@ fn test_retry_main_narration_applies_new_quantifier_result() {
     });
 
     let service = DefaultGameService::with_mock_quantifier(
-        Arc::new(MockBackend::new(Some(Arc::clone(&ctx.llm_message_storage)))),
+        Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         quantifier,
     );
 
@@ -67,7 +64,7 @@ fn test_retry_main_narration_applies_new_quantifier_result() {
     );
 
     // Verify LLM calls were logged to SQLite storage
-    let messages = ctx.llm_message_storage.list_latest(50).unwrap();
+    let messages = ctx.storage.list_latest_llm_messages(50).unwrap();
     assert!(
         !messages.is_empty(),
         "LLM messages should be logged during gameplay"
@@ -163,7 +160,7 @@ fn test_double_retry_increments_swipe_and_reruns_quantifier() {
     });
 
     let service = DefaultGameService::with_mock_quantifier(
-        Arc::new(MockBackend::new(Some(Arc::clone(&ctx.llm_message_storage)))),
+        Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         quantifier,
     );
 
@@ -204,7 +201,7 @@ fn test_retry_preserves_input_and_does_not_create_extra_swipe() {
     add_input_and_save(&ctx, "walk around");
 
     let service = DefaultGameService::with_mock_quantifier(
-        Arc::new(MockBackend::new(Some(Arc::clone(&ctx.llm_message_storage)))),
+        Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         Arc::new(MockBackend::default()),
     );
 
@@ -244,7 +241,7 @@ fn test_retry_after_edited_input_uses_new_text() {
     add_input_and_save(&ctx, "walk around");
 
     let service = DefaultGameService::with_mock_quantifier(
-        Arc::new(MockBackend::new(Some(Arc::clone(&ctx.llm_message_storage)))),
+        Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         Arc::new(MockBackend::default()),
     );
 
@@ -347,7 +344,7 @@ fn test_main_retry_reevaluates_triggers() {
     });
 
     let service = DefaultGameService::with_mock_quantifier(
-        Arc::new(MockBackend::new(Some(Arc::clone(&ctx.llm_message_storage)))),
+        Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         quantifier,
     );
 
@@ -400,7 +397,7 @@ fn test_retry_completes_when_quantifier_returns_none() {
     });
 
     let service = DefaultGameService::with_mock_quantifier(
-        Arc::new(MockBackend::new(Some(Arc::clone(&ctx.llm_message_storage)))),
+        Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         quantifier,
     );
 
@@ -425,44 +422,48 @@ fn test_retry_no_pre_main_snapshot() {
     state.narrative.history.clear();
 
     let db_pool = chronicler_engine::storage::db::DbPool::new(":memory:").unwrap();
-    let snapshot_storage = Arc::new(
-        chronicler_engine::storage::snapshot_storage::SqliteSnapshotRepository::new(
-            db_pool.clone(),
-            1,
-        ),
-    );
-    let message_storage = Arc::new(
-        chronicler_engine::storage::message_storage::SqliteMessageRepository::new(
-            db_pool.clone(),
-            1,
-        ),
-    );
-    let llm_storage: Arc<dyn chronicler_engine::storage::llm_message_storage::LlmMessageStorage> =
-        Arc::new(
-            chronicler_engine::storage::llm_message_storage::SqliteLlmMessageStorage::new(
-                db_pool.clone(),
-            ),
-        );
+    let storage = Arc::new(chronicler_engine::storage::Storage::new_sqlite(
+        db_pool.clone(),
+        1,
+    ));
 
     let snapshot =
         chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
-    let _ = snapshot_storage.save(&snapshot);
-    let message_swipe_storage: Arc<
-        dyn chronicler_engine::storage::message_swipe_storage::MessageSwipeStorage,
-    > = Arc::new(chronicler_engine::test_support::InMemoryMessageSwipeStorage::new());
+    let _ = storage.save_snapshot(&snapshot);
     for msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
-        let id = message_storage.insert_message(&msg).unwrap();
+        let id = storage.insert_message(&msg).unwrap();
         if let Some(swipe) = msg.swipes.first() {
-            let _ = message_swipe_storage.insert_swipe(id, swipe, 0);
+            let _ = storage.insert_swipe(id, swipe, 0);
         }
     }
 
+    let preset_storage = {
+        let ps = chronicler_engine::storage::Storage::new_in_memory();
+        let _ = ps.save_preset(&chronicler_engine::model::prompt_preset::PromptPreset {
+            id: "system_default".to_string(),
+            name: "Default System".to_string(),
+            role: Some("You are a narrator.".to_string()),
+            instructions: None,
+            writing_style: None,
+            output_format: None,
+            is_default: true,
+            preset_type: chronicler_engine::model::prompt_preset::PresetType::System,
+        });
+        let _ = ps.save_preset(&chronicler_engine::model::prompt_preset::PromptPreset {
+            id: "quantifier_default".to_string(),
+            name: "Default Quantifier".to_string(),
+            role: Some("You are a quantifier.".to_string()),
+            instructions: None,
+            writing_style: None,
+            output_format: None,
+            is_default: true,
+            preset_type: chronicler_engine::model::prompt_preset::PresetType::Quantifier,
+        });
+        Arc::new(ps)
+    };
+
     let ctx = chronicler_engine::application::game_service::GameServiceContext {
-        game_storage: Arc::new(chronicler_engine::test_support::InMemoryGameRepository::new()),
-        snapshot_storage: snapshot_storage.clone(),
-        message_storage: message_storage.clone(),
-        message_swipe_storage: message_swipe_storage.clone(),
-        llm_message_storage: llm_storage,
+        storage,
         world: state.world.clone(),
         map: state.map.clone(),
         player: state.player.clone(),
@@ -472,38 +473,13 @@ fn test_retry_no_pre_main_snapshot() {
         settings: Arc::new(std::sync::RwLock::new(
             chronicler_engine::model::settings::AppSettings::default(),
         )),
-        preset_storage: {
-            let storage =
-                chronicler_engine::storage::prompt_preset_storage::InMemoryPromptPresetStorage::new(
-                );
-            let _ = storage.save(&chronicler_engine::model::prompt_preset::PromptPreset {
-                id: "system_default".to_string(),
-                name: "Default System".to_string(),
-                role: Some("You are a narrator.".to_string()),
-                instructions: None,
-                writing_style: None,
-                output_format: None,
-                is_default: true,
-                preset_type: chronicler_engine::model::prompt_preset::PresetType::System,
-            });
-            let _ = storage.save(&chronicler_engine::model::prompt_preset::PromptPreset {
-                id: "quantifier_default".to_string(),
-                name: "Default Quantifier".to_string(),
-                role: Some("You are a quantifier.".to_string()),
-                instructions: None,
-                writing_style: None,
-                output_format: None,
-                is_default: true,
-                preset_type: chronicler_engine::model::prompt_preset::PresetType::Quantifier,
-            });
-            Arc::new(storage)
-        },
+        preset_storage,
     };
 
     add_input_and_save(&ctx, "examine room");
 
     let service = DefaultGameService::with_mock_quantifier(
-        Arc::new(MockBackend::new(Some(Arc::clone(&ctx.llm_message_storage)))),
+        Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         Arc::new(MockBackend::default()),
     );
 
@@ -564,7 +540,7 @@ fn test_movement_with_arrival_narration_retry() {
     });
 
     let service = DefaultGameService::with_mock_quantifier(
-        Arc::new(MockBackend::new(Some(Arc::clone(&ctx.llm_message_storage)))),
+        Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         quantifier,
     );
 

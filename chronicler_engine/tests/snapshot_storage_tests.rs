@@ -2,21 +2,19 @@ mod test_data;
 
 use chronicler_engine::model::message::Message;
 use chronicler_engine::model::state_snapshot::GameStateSnapshot;
+use chronicler_engine::storage::Storage;
 use chronicler_engine::storage::db::DbPool;
-use chronicler_engine::storage::game_storage::{GameStorage, SqliteGameRepository};
-use chronicler_engine::storage::message_storage::{MessageStorage, SqliteMessageRepository};
-use chronicler_engine::storage::snapshot_storage::{SnapshotStorage, SqliteSnapshotRepository};
 
 use test_data::create_test_state;
 
-fn create_storage() -> SqliteSnapshotRepository {
+fn create_storage() -> Storage {
     let pool = DbPool::new(":memory:").expect("in-memory db should open");
-    SqliteSnapshotRepository::new(pool, 1)
+    Storage::new_sqlite(pool, 1)
 }
 
-fn create_game_storage() -> SqliteGameRepository {
+fn create_game_storage() -> Storage {
     let pool = DbPool::new(":memory:").expect("in-memory db should open");
-    SqliteGameRepository::new(pool, 1)
+    Storage::new_sqlite(pool, 1)
 }
 
 fn create_snapshot() -> GameStateSnapshot {
@@ -29,9 +27,12 @@ fn test_save_creates_snapshot() {
     let storage = create_storage();
     let snap = create_snapshot();
 
-    let snap_id = storage.save(&snap).expect("save should succeed");
+    let snap_id = storage.save_snapshot(&snap).expect("save should succeed");
 
-    let loaded = storage.load_latest().expect("load should succeed").unwrap();
+    let loaded = storage
+        .load_latest_snapshot()
+        .expect("load should succeed")
+        .unwrap();
     assert_eq!(loaded.db_id, Some(snap_id), "save should create a snapshot");
 }
 
@@ -39,9 +40,11 @@ fn test_save_creates_snapshot() {
 fn test_load_by_id_found() {
     let storage = create_storage();
     let snap = create_snapshot();
-    let id = storage.save(&snap).unwrap();
+    let id = storage.save_snapshot(&snap).unwrap();
 
-    let loaded = storage.load_by_id(id).expect("load should succeed");
+    let loaded = storage
+        .load_snapshot_by_id(id)
+        .expect("load should succeed");
     assert!(loaded.is_some(), "should find snapshot by id");
     assert_eq!(loaded.unwrap().db_id, Some(id));
 }
@@ -49,9 +52,11 @@ fn test_load_by_id_found() {
 #[test]
 fn test_load_by_id_not_found() {
     let storage = create_storage();
-    storage.save(&create_snapshot()).unwrap();
+    storage.save_snapshot(&create_snapshot()).unwrap();
 
-    let loaded = storage.load_by_id(9999).expect("load should succeed");
+    let loaded = storage
+        .load_snapshot_by_id(9999)
+        .expect("load should succeed");
     assert!(loaded.is_none(), "should return None for missing id");
 }
 
@@ -60,10 +65,10 @@ fn test_load_latest_returns_most_recent() {
     let storage = create_storage();
     let snap_a = create_snapshot();
     let snap_b = create_snapshot();
-    storage.save(&snap_a).unwrap();
-    let id_b = storage.save(&snap_b).unwrap();
+    storage.save_snapshot(&snap_a).unwrap();
+    let id_b = storage.save_snapshot(&snap_b).unwrap();
 
-    let loaded = storage.load_latest().expect("load should succeed");
+    let loaded = storage.load_latest_snapshot().expect("load should succeed");
     assert_eq!(
         loaded.unwrap().db_id,
         Some(id_b),
@@ -75,13 +80,13 @@ fn test_load_latest_returns_most_recent() {
 fn test_save_creates_new_snapshot() {
     let storage = create_storage();
     let snap = create_snapshot();
-    let id1 = storage.save(&snap).unwrap();
+    let id1 = storage.save_snapshot(&snap).unwrap();
 
     let snap2 = create_snapshot();
-    let id2 = storage.save(&snap2).unwrap();
+    let id2 = storage.save_snapshot(&snap2).unwrap();
 
     let loaded = storage
-        .load_by_id(id2)
+        .load_snapshot_by_id(id2)
         .expect("load should succeed")
         .unwrap();
     assert_eq!(
@@ -100,9 +105,10 @@ fn test_row_to_snapshot_bad_json() {
         // Insert a row with invalid JSON in the movement column
         conn.execute(
             "INSERT INTO game_state_snapshots
-             (movement, narrative, scene, npc_encounter_log, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
+             (game_id, movement, narrative, scene, npc_encounter_log, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             rusqlite::params![
+                1i64,
                 "not valid json",
                 "{}",
                 "{}",
@@ -113,8 +119,8 @@ fn test_row_to_snapshot_bad_json() {
         .expect("raw insert should succeed");
     }
 
-    let storage = SqliteSnapshotRepository::new(pool, 1);
-    let result = storage.load_latest();
+    let storage = Storage::new_sqlite(pool, 1);
+    let result = storage.load_latest_snapshot();
     assert!(result.is_err(), "loading bad JSON should return an error");
 }
 
@@ -125,19 +131,19 @@ fn test_row_to_snapshot_bad_date() {
         let conn = pool.conn();
         conn.execute(
             "INSERT INTO game_state_snapshots
-             (movement, narrative, scene, npc_encounter_log, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
-            rusqlite::params!["{}", "{}", "{}", "{}", "not-a-date",],
+             (game_id, movement, narrative, scene, npc_encounter_log, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            rusqlite::params![1i64, "{}", "{}", "{}", "{}", "not-a-date",],
         )
         .expect("raw insert should succeed");
     }
 
-    let storage = SqliteSnapshotRepository::new(pool, 1);
-    let result = storage.load_latest();
+    let storage = Storage::new_sqlite(pool, 1);
+    let result = storage.load_latest_snapshot();
     assert!(result.is_err(), "loading bad date should return an error");
 }
 
-// ─── Game CRUD ──────────────────────────────────────────────────────────────
+// �"?�"?�"? Game CRUD �"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?
 
 #[test]
 fn test_create_and_get_game() {
@@ -184,19 +190,17 @@ fn test_list_games() {
 #[test]
 fn test_delete_game_cascades() {
     let pool = DbPool::new(":memory:").expect("in-memory db should open");
-    let game_storage = SqliteGameRepository::new(pool.clone(), 1);
-    let storage = SqliteSnapshotRepository::new(pool.clone(), 1);
-    let msg_repo = SqliteMessageRepository::new(pool, 1);
+    let storage = Storage::new_sqlite(pool.clone(), 1);
+    let msg_storage = Storage::new_sqlite(pool, 1);
 
-    let game_id = game_storage.create_game("test_world", "To Delete").unwrap();
+    let game_id = storage.create_game("test_world", "To Delete").unwrap();
 
     // Switch to the new game before saving data
-    GameStorage::set_game_id(&game_storage, game_id);
     storage.set_game_id(game_id);
-    MessageStorage::set_game_id(&msg_repo, game_id);
+    msg_storage.set_game_id(game_id);
 
     // Save a snapshot and message for this game
-    storage.save(&create_snapshot()).unwrap();
+    storage.save_snapshot(&create_snapshot()).unwrap();
     let msg = Message::new(
         Some("Player".to_string()),
         "hello",
@@ -204,58 +208,56 @@ fn test_delete_game_cascades() {
         None,
         None,
     );
-    msg_repo.insert_message(&msg).unwrap();
+    msg_storage.insert_message(&msg).unwrap();
 
-    game_storage
-        .delete_game(game_id)
-        .expect("delete should succeed");
+    storage.delete_game(game_id).expect("delete should succeed");
 
     assert!(
-        game_storage.get_game(game_id).unwrap().is_none(),
+        storage.get_game(game_id).unwrap().is_none(),
         "game should be deleted"
     );
     assert!(
-        storage.load_latest().unwrap().is_none(),
+        storage.load_latest_snapshot().unwrap().is_none(),
         "snapshots should be cascaded"
     );
     assert!(
-        msg_repo.load_message_rows().unwrap().is_empty(),
+        msg_storage.load_message_rows().unwrap().is_empty(),
         "messages should be cascaded"
     );
 }
 
-// ─── Game ID Switching ──────────────────────────────────────────────────────
+// �"?�"?�"? Game ID Switching �"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?
 
 #[test]
 fn test_set_game_id_isolates_snapshots() {
     let pool = DbPool::new(":memory:").expect("in-memory db should open");
-    let game_storage = SqliteGameRepository::new(pool.clone(), 1);
-    let storage = SqliteSnapshotRepository::new(pool, 1);
+    let game_storage = Storage::new_sqlite(pool.clone(), 1);
+    let storage = Storage::new_sqlite(pool, 1);
 
     let game_a = game_storage.create_game("world_a", "Game A").unwrap();
     let game_b = game_storage.create_game("world_b", "Game B").unwrap();
 
     // Save snapshot for game_a (current default game_id is 1, not game_a)
     storage.set_game_id(game_a);
-    let id_a = storage.save(&create_snapshot()).unwrap();
+    let id_a = storage.save_snapshot(&create_snapshot()).unwrap();
 
     // Save snapshot for game_b
     storage.set_game_id(game_b);
-    let id_b = storage.save(&create_snapshot()).unwrap();
+    let id_b = storage.save_snapshot(&create_snapshot()).unwrap();
 
     // Load latest for game_b
-    let latest_b = storage.load_latest().unwrap().unwrap();
+    let latest_b = storage.load_latest_snapshot().unwrap().unwrap();
     assert_eq!(latest_b.db_id, Some(id_b));
 
     // Switch back to game_a
     storage.set_game_id(game_a);
-    let latest_a = storage.load_latest().unwrap().unwrap();
+    let latest_a = storage.load_latest_snapshot().unwrap().unwrap();
     assert_eq!(latest_a.db_id, Some(id_a));
 
     // game_id 1 (default) should have no snapshots
     storage.set_game_id(1);
     assert!(
-        storage.load_latest().unwrap().is_none(),
+        storage.load_latest_snapshot().unwrap().is_none(),
         "default game_id should have no snapshots"
     );
 }
@@ -269,12 +271,12 @@ fn test_current_game_id() {
     assert_eq!(storage.current_game_id(), 42);
 }
 
-// ─── Message Storage ────────────────────────────────────────────────────────
+// �"?�"?�"? Message Storage �"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?
 
 #[test]
 fn test_insert_and_load_messages() {
     let pool = DbPool::new(":memory:").expect("in-memory db should open");
-    let msg_repo = SqliteMessageRepository::new(pool, 1);
+    let msg_repo = Storage::new_sqlite(pool, 1);
 
     let msg = Message::new(
         Some("Player".to_string()),
@@ -294,7 +296,7 @@ fn test_insert_and_load_messages() {
 #[test]
 fn test_get_and_update_active_swipe_index() {
     let pool = DbPool::new(":memory:").expect("in-memory db should open");
-    let msg_repo = SqliteMessageRepository::new(pool, 1);
+    let msg_repo = Storage::new_sqlite(pool, 1);
 
     let msg = Message::new(
         Some("Player".to_string()),
@@ -313,7 +315,7 @@ fn test_get_and_update_active_swipe_index() {
 #[test]
 fn test_delete_message() {
     let pool = DbPool::new(":memory:").expect("in-memory db should open");
-    let msg_repo = SqliteMessageRepository::new(pool, 1);
+    let msg_repo = Storage::new_sqlite(pool, 1);
 
     let msg = Message::new(
         Some("Player".to_string()),
@@ -332,7 +334,7 @@ fn test_delete_message() {
 #[test]
 fn test_load_messages_empty() {
     let pool = DbPool::new(":memory:").expect("in-memory db should open");
-    let msg_repo = SqliteMessageRepository::new(pool, 1);
+    let msg_repo = Storage::new_sqlite(pool, 1);
     let loaded = msg_repo.load_message_rows().unwrap();
     assert!(
         loaded.is_empty(),
@@ -340,12 +342,12 @@ fn test_load_messages_empty() {
     );
 }
 
-// ─── Edge Cases ─────────────────────────────────────────────────────────────
+// �"?�"?�"? Edge Cases �"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?
 
 #[test]
 fn test_load_latest_no_snapshots() {
     let storage = create_storage();
-    let latest = storage.load_latest().unwrap();
+    let latest = storage.load_latest_snapshot().unwrap();
     assert!(
         latest.is_none(),
         "load_latest should return None when no snapshots exist"

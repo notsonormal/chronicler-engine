@@ -205,7 +205,7 @@ impl ApplicationService for DefaultApplicationService {
             let mut gs = self.load_state(&ctx)?;
             gs.narrative.input_buffer.status = GenerationStatus::Idle;
             let snapshot = GameStateSnapshot::from_game_state(&gs);
-            if let Err(e) = ctx.snapshot_storage.save(&snapshot) {
+            if let Err(e) = ctx.storage.save_snapshot(&snapshot) {
                 log::error!("Failed to save shutdown snapshot: {e}");
             }
             return Ok(ProcessActionResult::ShuttingDown);
@@ -234,7 +234,7 @@ impl ApplicationService for DefaultApplicationService {
         game_state.narrative.input_buffer.status = GenerationStatus::Generating;
         game_state.narrative.input_buffer.phase = GenerationPhase::Narrating;
         let snapshot = GameStateSnapshot::from_game_state(&game_state);
-        ctx.snapshot_storage.save(&snapshot)?;
+        ctx.storage.save_snapshot(&snapshot)?;
 
         if ctx.cancel_token.is_cancelled() {
             return Err(ApplicationError::ShuttingDown);
@@ -275,7 +275,7 @@ impl ApplicationService for DefaultApplicationService {
         game_state.narrative.input_buffer.status = GenerationStatus::Generating;
         game_state.narrative.input_buffer.phase = GenerationPhase::Narrating;
         let snapshot = GameStateSnapshot::from_game_state(&game_state);
-        ctx.snapshot_storage.save(&snapshot)?;
+        ctx.storage.save_snapshot(&snapshot)?;
 
         if ctx.cancel_token.is_cancelled() {
             return Err(ApplicationError::ShuttingDown);
@@ -295,13 +295,13 @@ impl ApplicationService for DefaultApplicationService {
     }
 
     fn reset(&self, ctx: GameServiceContext) -> Result<(), ApplicationError> {
-        let current_id = ctx.game_storage.current_game_id();
+        let current_id = ctx.storage.current_game_id();
         let world_name = ctx.world.name.clone();
 
-        ctx.game_storage.delete_game(current_id)?;
+        ctx.storage.delete_game(current_id)?;
 
         let existing_names: Vec<String> = ctx
-            .game_storage
+            .storage
             .list_games()?
             .into_iter()
             .filter(|g| g.world_name == world_name)
@@ -309,18 +309,18 @@ impl ApplicationService for DefaultApplicationService {
             .collect();
 
         let new_name = generate_game_name(&world_name, &existing_names);
-        let new_id = ctx.game_storage.create_game(&world_name, &new_name)?;
+        let new_id = ctx.storage.create_game(&world_name, &new_name)?;
 
         ctx.set_game_id(new_id);
 
         let mut initial_state = build_fresh_initial_state(&ctx);
         let snapshot = GameStateSnapshot::from_game_state(&initial_state);
-        let snapshot_id = ctx.snapshot_storage.save(&snapshot)?;
+        let snapshot_id = ctx.storage.save_snapshot(&snapshot)?;
 
         if let Some(msg) = initial_state.narrative.history.last_mut() {
             if msg.id == 0 {
                 msg.snapshot_id = Some(snapshot_id);
-                let id = ctx.message_storage.insert_message(&*msg)?;
+                let id = ctx.storage.insert_message(&*msg)?;
                 msg.id = id;
             }
         }
@@ -346,8 +346,7 @@ impl ApplicationService for DefaultApplicationService {
             ));
         }
 
-        ctx.message_storage
-            .update_active_swipe(message_id, swipe_index)?;
+        ctx.storage.update_active_swipe(message_id, swipe_index)?;
 
         let target_msg = messages
             .iter()
@@ -362,12 +361,12 @@ impl ApplicationService for DefaultApplicationService {
             .ok_or_else(|| app_err_internal("Swipe has no associated snapshot"))?;
 
         let mut snapshot = ctx
-            .snapshot_storage
-            .load_by_id(snapshot_id)?
+            .storage
+            .load_snapshot_by_id(snapshot_id)?
             .ok_or_else(|| app_err_internal("Snapshot not found"))?;
 
         snapshot.created_at = Utc::now();
-        ctx.snapshot_storage.save(&snapshot)?;
+        ctx.storage.save_snapshot(&snapshot)?;
 
         Ok(())
     }
@@ -378,12 +377,12 @@ impl ApplicationService for DefaultApplicationService {
         id: u64,
         text: String,
     ) -> Result<(), ApplicationError> {
-        let latest = ctx.snapshot_storage.load_latest()?;
+        let latest = ctx.storage.load_latest_snapshot()?;
         let mut guard = self.load_state(&ctx)?;
         guard.narrative.history.edit(id, text.clone())?;
         if latest.is_some() {
             let snapshot = GameStateSnapshot::from_game_state(&guard);
-            ctx.snapshot_storage.save(&snapshot)?;
+            ctx.storage.save_snapshot(&snapshot)?;
             ctx.update_message_text(id, &text)?;
         }
         Ok(())
@@ -401,8 +400,8 @@ impl ApplicationService for DefaultApplicationService {
             })?;
         guard.narrative.history.delete_last()?;
         let snapshot = GameStateSnapshot::from_game_state(&guard);
-        ctx.snapshot_storage.save(&snapshot)?;
-        ctx.message_storage.delete_message(last_id)?;
+        ctx.storage.save_snapshot(&snapshot)?;
+        ctx.storage.delete_message(last_id)?;
         Ok(())
     }
 
@@ -412,17 +411,17 @@ impl ApplicationService for DefaultApplicationService {
         }
 
         let world_name = ctx.world.name.clone();
-        let games = ctx.game_storage.list_games()?;
+        let games = ctx.storage.list_games()?;
         let existing_names: Vec<String> = games.iter().map(|g| g.name.clone()).collect();
         let name = generate_game_name(&world_name, &existing_names);
-        let new_id = ctx.game_storage.create_game(&world_name, &name)?;
+        let new_id = ctx.storage.create_game(&world_name, &name)?;
 
-        let old_id = ctx.game_storage.current_game_id();
+        let old_id = ctx.storage.current_game_id();
         ctx.set_game_id(new_id);
 
         let mut initial_state = build_fresh_initial_state(&ctx);
         let snapshot = GameStateSnapshot::from_game_state(&initial_state);
-        let snapshot_id = match ctx.snapshot_storage.save(&snapshot) {
+        let snapshot_id = match ctx.storage.save_snapshot(&snapshot) {
             Ok(id) => id,
             Err(e) => {
                 ctx.set_game_id(old_id);
@@ -433,7 +432,7 @@ impl ApplicationService for DefaultApplicationService {
         if let Some(msg) = initial_state.narrative.history.last_mut() {
             if msg.id == 0 {
                 msg.snapshot_id = Some(snapshot_id);
-                match ctx.message_storage.insert_message(&*msg) {
+                match ctx.storage.insert_message(&*msg) {
                     Ok(id) => msg.id = id,
                     Err(e) => log::error!("Create game failed: could not persist message: {e}"),
                 }
@@ -448,7 +447,7 @@ impl ApplicationService for DefaultApplicationService {
             return Err(ApplicationError::ConcurrentGeneration);
         }
 
-        match ctx.game_storage.get_game(id)? {
+        match ctx.storage.get_game(id)? {
             Some(game) => {
                 if game.world_name != ctx.world.name {
                     return Err(ApplicationError::validation(
@@ -469,22 +468,22 @@ impl ApplicationService for DefaultApplicationService {
             return Err(ApplicationError::ConcurrentGeneration);
         }
 
-        if id == ctx.game_storage.current_game_id() {
+        if id == ctx.storage.current_game_id() {
             return Err(ApplicationError::validation(
                 "Cannot delete the active game",
             ));
         }
 
-        ctx.game_storage.delete_game(id)?;
+        ctx.storage.delete_game(id)?;
         Ok(())
     }
 
     fn list_games(&self, ctx: GameServiceContext) -> Result<Vec<Game>, ApplicationError> {
-        ctx.game_storage.list_games().map_err(Into::into)
+        ctx.storage.list_games().map_err(Into::into)
     }
 
     fn current_game_id(&self, ctx: GameServiceContext) -> u64 {
-        ctx.game_storage.current_game_id()
+        ctx.storage.current_game_id()
     }
 
     fn get_generating_status(
@@ -502,15 +501,12 @@ impl ApplicationService for DefaultApplicationService {
         let mut game_state = self.load_state(&ctx)?;
         game_state.narrative.input_buffer.status = GenerationStatus::Idle;
         let snapshot = GameStateSnapshot::from_game_state(&game_state);
-        ctx.snapshot_storage.save(&snapshot)?;
+        ctx.storage.save_snapshot(&snapshot)?;
         Ok(())
     }
 
     fn get_current_game_name(&self, ctx: GameServiceContext) -> Result<String, ApplicationError> {
-        match ctx
-            .game_storage
-            .get_game(ctx.game_storage.current_game_id())?
-        {
+        match ctx.storage.get_game(ctx.storage.current_game_id())? {
             Some(g) => Ok(g.name),
             None => Ok("Unknown".to_string()),
         }
@@ -521,8 +517,8 @@ impl ApplicationService for DefaultApplicationService {
         ctx: GameServiceContext,
         limit: usize,
     ) -> Result<Vec<LlmMessage>, ApplicationError> {
-        ctx.llm_message_storage
-            .list_latest(limit)
+        ctx.storage
+            .list_latest_llm_messages(limit)
             .map_err(Into::into)
     }
 

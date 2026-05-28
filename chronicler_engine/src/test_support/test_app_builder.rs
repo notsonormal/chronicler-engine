@@ -14,11 +14,7 @@ use crate::model::state::{
 use crate::model::state_snapshot::GameStateSnapshot;
 use crate::model::world::WorldCard;
 use crate::server::{AppState, build_router};
-use crate::storage::game_storage::GameStorage;
-use crate::storage::llm_message_storage::LlmMessageStorage;
-use crate::storage::message_storage::MessageStorage;
-use crate::storage::message_swipe_storage::MessageSwipeStorage;
-use crate::storage::snapshot_storage::SnapshotStorage;
+use crate::storage::Storage;
 
 // [DOC: docs/reference/testing.md]
 pub struct TestAppBuilder {
@@ -32,11 +28,7 @@ pub struct TestAppBuilder {
     generation_status: Option<GenerationStatus>,
     generation_phase: Option<GenerationPhase>,
     settings: AppSettings,
-    game_storage: Option<Arc<dyn GameStorage>>,
-    snapshot_storage: Option<Arc<dyn SnapshotStorage>>,
-    message_storage: Option<Arc<dyn MessageStorage>>,
-    message_swipe_storage: Option<Arc<dyn MessageSwipeStorage>>,
-    llm_storage: Option<Arc<dyn LlmMessageStorage>>,
+    storage: Option<Arc<Storage>>,
     game_service: Option<Arc<dyn GameService>>,
     is_generating: bool,
 }
@@ -150,11 +142,7 @@ impl TestAppBuilder {
             generation_status: None,
             generation_phase: None,
             settings: AppSettings::default(),
-            game_storage: None,
-            snapshot_storage: None,
-            message_storage: None,
-            message_swipe_storage: None,
-            llm_storage: None,
+            storage: None,
             game_service: None,
             is_generating: false,
         }
@@ -202,28 +190,8 @@ impl TestAppBuilder {
         self
     }
 
-    pub fn game_storage(mut self, storage: Arc<dyn GameStorage>) -> Self {
-        self.game_storage = Some(storage);
-        self
-    }
-
-    pub fn snapshot_storage(mut self, storage: Arc<dyn SnapshotStorage>) -> Self {
-        self.snapshot_storage = Some(storage);
-        self
-    }
-
-    pub fn message_storage(mut self, storage: Arc<dyn MessageStorage>) -> Self {
-        self.message_storage = Some(storage);
-        self
-    }
-
-    pub fn message_swipe_storage(mut self, storage: Arc<dyn MessageSwipeStorage>) -> Self {
-        self.message_swipe_storage = Some(storage);
-        self
-    }
-
-    pub fn llm_storage(mut self, storage: Arc<dyn LlmMessageStorage>) -> Self {
-        self.llm_storage = Some(storage);
+    pub fn storage(mut self, storage: Arc<Storage>) -> Self {
+        self.storage = Some(storage);
         self
     }
 
@@ -278,49 +246,28 @@ impl TestAppBuilder {
             state.add_log(text, sender, log_type);
         }
 
-        let game_storage = self
-            .game_storage
-            .unwrap_or_else(|| Arc::new(super::in_memory_storage::InMemoryGameRepository::new()));
-        let snapshot_storage = self.snapshot_storage.unwrap_or_else(|| {
-            Arc::new(super::in_memory_storage::InMemorySnapshotRepository::new())
-        });
-        let message_storage = self.message_storage.unwrap_or_else(|| {
-            Arc::new(super::in_memory_storage::InMemoryMessageRepository::new())
-        });
-        let llm_storage = self.llm_storage.unwrap_or_else(|| {
-            Arc::new(crate::storage::llm_message_storage::InMemoryLlmMessageStorage::new())
-                as Arc<dyn LlmMessageStorage>
-        });
-        let message_swipe_storage = self.message_swipe_storage.unwrap_or_else(|| {
-            Arc::new(crate::test_support::in_memory_storage::InMemoryMessageSwipeStorage::new())
-                as Arc<dyn MessageSwipeStorage>
-        });
+        let storage = self
+            .storage
+            .unwrap_or_else(|| Arc::new(Storage::new_in_memory()));
 
         let snapshot = GameStateSnapshot::from_game_state(&state);
-        let _ = snapshot_storage.save(&snapshot);
+        let _ = storage.save_snapshot(&snapshot);
         for msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
-            let _ = message_storage.insert_message(&msg);
+            let _ = storage.insert_message(&msg);
         }
 
         let settings_arc = Arc::new(RwLock::new(self.settings));
-        let prompt_preset_storage =
-            Arc::new(crate::storage::prompt_preset_storage::InMemoryPromptPresetStorage::new());
+        let preset_storage = Arc::new(Storage::new_in_memory());
         let game_service: Arc<dyn GameService> = self.game_service.unwrap_or_else(|| {
             Arc::new(DefaultGameService::with_storage(
-                Some(Arc::clone(&llm_storage)),
-                Some(Arc::clone(&prompt_preset_storage)
-                    as Arc<
-                        dyn crate::storage::prompt_preset_storage::PromptPresetStorage,
-                    >),
+                Some(Arc::clone(&storage)),
+                Some(Arc::clone(&preset_storage)),
                 Arc::clone(&settings_arc),
             ))
         });
         let app_state = AppState {
-            game_storage,
-            snapshot_storage,
-            message_storage,
-            message_swipe_storage,
-            llm_message_storage: Arc::clone(&llm_storage),
+            storage,
+            preset_storage,
             world,
             map,
             player,
@@ -328,7 +275,6 @@ impl TestAppBuilder {
             game_service: Arc::clone(&game_service),
             application_service: Arc::new(DefaultApplicationService::new(game_service))
                 as Arc<dyn ApplicationService>,
-            prompt_preset_storage,
             settings: settings_arc,
             cancel_token: Arc::new(RwLock::new(CancellationToken::new())),
             is_generating: Arc::new(std::sync::atomic::AtomicBool::new(self.is_generating)),

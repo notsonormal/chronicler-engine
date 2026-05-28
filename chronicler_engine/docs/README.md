@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-28 18:11 UTC*
+*Index last generated: 2026-05-28 20:34 UTC*
 
 ### Root files
 
@@ -33,6 +33,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [ADR-017: Message Swipes](./adr/adr-017-message-swipes.md)
 - [ADR-018: Application Service Layer](./adr/adr-018-application-service.md)
 - [ADR-019: One Table Per Storage Module](./adr/adr-019-one-table-per-storage-module.md)
+- [ADR-020: Unified Storage Struct](./adr/adr-020-storage-consolidation.md)
 
 ### `docs/architecture/`
 
@@ -66,6 +67,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Plan: Make PromptContext Require an Assembled System Prompt](./plans/archived/beast-boy-damage-colossus.md)
 - [Plan: Multi-Game Support for Chronicler Engine](./plans/archived/big-barda-nightwing-star-lord.md)
 - [Plan: Fix Swipe Code Review Issues](./plans/archived/bobbi-morse-superboy-nightwing.md)
+- [Revised Plan: Consolidate Storage Trait System](./plans/archived/booster-gold-damage-domino.md)
 - [Plan: Restructure Prompt Presets into XML Sections](./plans/archived/carnage-jessica-jones-magik.md)
 - [Implementation Plan: Multi-Game Support Review Fixes](./plans/archived/crystal-nightwing-maria-hill.md)
 - [Plan: Reduce GameState Blast Radius](./plans/archived/doctor-mid-nite-elongated-man-devil-dinosaur.md)

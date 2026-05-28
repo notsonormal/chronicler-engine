@@ -338,7 +338,7 @@ fn run_migrations(conn: &Connection) -> Result<(), crate::error::EngineError> {
     }
 
     if version < 9 {
-        // Add ON DELETE CASCADE foreign keys so GameStorage::delete_game
+        // Add ON DELETE CASCADE foreign keys so Storage::delete_game
         // can delete a single games row and let SQLite clean up children.
         // Tables must be recreated because SQLite cannot add FK constraints
         // to existing columns via ALTER TABLE.

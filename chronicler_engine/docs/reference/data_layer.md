@@ -121,9 +121,7 @@ The Rust code maps to the database as follows:
 
 - **`src/storage/models/`** — One DB model struct per table (`DbGame`, `DbGameStateSnapshot`, `DbMessage`, `DbSwipe`, `DbLlmMessage`). These use raw SQLite types (`String` for JSON and timestamps, `i64` for IDs).
 - **`src/storage/mappers/`** — Conversion logic between DB models and domain models. Mappers handle JSON serialization, RFC 3339 parsing, and integer↔unsigned mapping.
-- **`src/storage/snapshot_storage.rs`** — `SqliteSnapshotRepository` uses `DbGameStateSnapshot` internally and maps to/from domain models at the trait boundary. Includes game CRUD (`list_games`, `create_game`, `delete_game`, `get_game`) and `set_game_id` for runtime switching. `delete_game` is transactional: all cascading deletes execute inside a SQLite `Transaction`.
-- **`src/storage/message_storage.rs`** — `SqliteMessageRepository` handles message persistence and swipe management. Uses `DbMessage`/`DbSwipe` internally and maps at the trait boundary.
-- **`src/storage/llm_message_storage.rs`** — `SqliteLlmMessageStorage` uses `DbLlmMessage` internally.
+- **`src/storage/backend.rs`** — Unified `Storage` struct with `Backend` enum (`Sqlite`, `InMemory`, `Test`). All table-scoped methods live on `Storage`: game CRUD, snapshot save/load, message insert/delete/load, swipe management, preset CRUD, and LLM message logging. `delete_game` relies on `ON DELETE CASCADE` FKs; no manual multi-table transactions. Cross-table coordination (e.g. loading full messages with swipes) lives in `GameServiceContext` helpers.
 - **`src/model/`** — Domain models (`Message`, `Game`, `LlmMessage`, `GameStateSnapshot`, `NarrativeSnapshot`) have no knowledge of `rusqlite`, JSON strategy, or timestamp formatting.
 
 ## Migration Policy
