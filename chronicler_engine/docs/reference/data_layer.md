@@ -121,12 +121,12 @@ The Rust code maps to the database as follows:
 
 - **`src/storage/models/`** — One DB model struct per table (`DbGame`, `DbGameStateSnapshot`, `DbMessage`, `DbSwipe`, `DbLlmMessage`). These use raw SQLite types (`String` for JSON and timestamps, `i64` for IDs).
 - **`src/storage/mappers/`** — Conversion logic between DB models and domain models. Mappers handle JSON serialization, RFC 3339 parsing, and integer↔unsigned mapping.
-- **`src/storage/backend.rs`** — Unified `Storage` struct with `Backend` enum (`Sqlite`, `InMemory`, `Test`). All table-scoped methods live on `Storage`: game CRUD, snapshot save/load, message insert/delete/load, swipe management, preset CRUD, and LLM message logging. `delete_game` relies on `ON DELETE CASCADE` FKs; no manual multi-table transactions. Cross-table coordination (e.g. loading full messages with swipes) lives in `GameServiceContext` helpers.
+- **`src/storage/backend/`** — Directory module. `mod.rs` holds the `Storage` struct and `Backend` enum (`Sqlite`, `InMemory`, `Test`). Table-scoped methods are split into submodule files (`games.rs`, `snapshots.rs`, `messages.rs`, `swipes.rs`, `presets.rs`, `llm_messages.rs`). `delete_game` relies on `ON DELETE CASCADE` FKs; no manual multi-table transactions. Cross-table coordination (e.g. loading full messages with swipes) lives in `GameServiceContext` helpers.
 - **`src/model/`** — Domain models (`Message`, `Game`, `LlmMessage`, `GameStateSnapshot`, `NarrativeSnapshot`) have no knowledge of `rusqlite`, JSON strategy, or timestamp formatting.
 
 ## Migration Policy
 
-Migration v1 is **breaking** — it drops and recreates tables. Subsequent migrations (v2+) are **incremental** and preserve data where possible (e.g., v6 migrates old `messages.text` into `message_swipes` before dropping the column). This is acceptable because Chronicler is pre-release, but we no longer discard all data on every schema change.
+All databases are created fresh with the final v9 schema directly; incremental upgrade paths from v1-v8 have been removed. The `run_migrations` function still checks `PRAGMA user_version` and gates schema creation behind `if version < 9`, so future migrations (v10+) follow the same pattern. This is acceptable because `build.py --cleanup` ensures no stale databases exist between builds.
 
 ## Future Work
 

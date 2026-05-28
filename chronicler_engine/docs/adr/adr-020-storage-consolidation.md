@@ -71,7 +71,7 @@ All previous trait methods become inherent methods on `Storage`. Callers pass `A
 
 ## References
 
-- `src/storage/backend.rs` — Unified `Storage` struct
+- `src/storage/backend/mod.rs` — Unified `Storage` struct
 - `src/application/context.rs` — `GameServiceContext` and cross-storage helpers
 - ADR-019 — Previous "one table per storage module" decision (now superseded)
 - `booster-gold-damage-domino.md` — Implementation plan

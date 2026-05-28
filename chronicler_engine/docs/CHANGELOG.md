@@ -4,7 +4,7 @@
 
 ### Changed
 - **Unified `Storage` struct replaces 6 traits + 12 repository structs**
-  - New `Storage` struct (`src/storage/backend.rs`) with `Backend` enum (`Sqlite`, `InMemory`, `Test`)
+  - New `Storage` struct (`src/storage/backend/mod.rs`) with `Backend` enum (`Sqlite`, `InMemory`, `Test`)
   - All `Arc<dyn Trait>` injection points collapsed to `Arc<Storage>`
   - `GameServiceContext` reduced from 5 storage fields to single `storage: Arc<Storage>` + `preset_storage: Arc<Storage>`
   - `Backend::Test` supports dynamic failure injection via `Operation` enum + `TestOverride` + `TestFailureHandle`
@@ -12,6 +12,20 @@
   - ADR-019 guardrail (`guardrails_one_table_per_storage`) removed — no longer applicable with unified struct
   - ADR-019 marked as superseded; new ADR-020 documents the consolidation decision
   - All 859 tests pass; clippy clean; `build.py` clean
+- **Split `backend.rs` into directory module by table domain**
+  - Converted `src/storage/backend.rs` (1,248 lines) → `src/storage/backend/` directory module
+  - `mod.rs` holds `Storage` struct, `Backend` enum, constructors, and shared helpers
+  - Table-scoped methods moved to `games.rs`, `snapshots.rs`, `messages.rs`, `swipes.rs`, `presets.rs`, `llm_messages.rs`
+  - Renamed `from_db` → `db_preset_to_preset` for naming consistency
+  - Replaced `Mutex<Backend>` with `Mutex<Option<Backend>>` to eliminate dummy `InMemoryData` allocation in `add_failure`
+  - Zero logic changes; all 894 tests pass; clippy clean; `build.py` clean
+- **Removed obsolete DB migrations v1-v8 from `src/storage/db.rs`**
+  - Replaced ~270 lines of incremental migration logic with a single idempotent `if version < 9` block
+  - Fresh databases now get the final v9 schema directly via `CREATE TABLE IF NOT EXISTS`
+  - Kept `run_migrations` function, `PRAGMA user_version` check, and migration pattern template for future schema changes
+  - Deleted helper functions: `merr`, `recreate_prompt_presets_table`
+  - Updated `docs/reference/data_layer.md` migration policy
+  - All 894 tests pass; clippy clean; `build.py` clean
 
 ## 2026-05-27
 

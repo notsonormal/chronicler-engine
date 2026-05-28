@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-28 20:34 UTC*
+*Index last generated: 2026-05-28 21:32 UTC*
 
 ### Root files
 
@@ -71,10 +71,12 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Plan: Restructure Prompt Presets into XML Sections](./plans/archived/carnage-jessica-jones-magik.md)
 - [Implementation Plan: Multi-Game Support Review Fixes](./plans/archived/crystal-nightwing-maria-hill.md)
 - [Plan: Reduce GameState Blast Radius](./plans/archived/doctor-mid-nite-elongated-man-devil-dinosaur.md)
+- [Plan: Split `src/storage/backend.rs` by Table Domain](./plans/archived/donna-troy-miss-martian-cable.md)
 - [Chronicler Engine: Leaky Presentation Layer Cleanup](./plans/archived/hellcat-martian-manhunter-liberty-belle.md)
 - [Plan: Fix Game UI Delay for LLM Responses](./plans/archived/jericho-vixen-lockjaw.md)
 - [PromptAssembler Architecture Design Plan](./plans/archived/moon-knight-mantis-spectre.md)
 - [Plan: Complete GameState Decoupling from Server + Tests](./plans/archived/orion-vixen-shatterstar.md)
+- [Plan: Remove Old Migrations from `src/storage/db.rs`](./plans/archived/remove-old-migrations.md)
 - [Plan: Fix Test Coverage Gaps (Test-Police Follow-up)](./plans/archived/scarlet-witch-wildcat-maxima.md)
 - [Plan: Message Swipes for Chronicler Engine](./plans/archived/starfire-tempest-orphan.md)
 - [Plan: Immediate Message Persistence — Direct Implementation](./plans/archived/storm-x-23-domino.md)
