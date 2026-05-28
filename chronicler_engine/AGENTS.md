@@ -117,6 +117,8 @@ When creating or updating a plan for chronicler_engine work (via any planning sk
 4. **Build validation** — Final validation with `python build.py` must pass before the task is considered complete.
 5. **Plan archive** — Move completed plans to `docs/plans/archived/` and update `CHANGELOG.md`.
 
+**Plan Adherence:** Do not change the plan partway through implementation without explicit user permission. If you encounter a problem not addressed in the current plan, stop and ask before proceeding.
+
 **Why:** Plans that skip these steps result in rework — architecture docs out of sync, missing tests, clippy failures discovered late, and undocumented changes.
 
 ### Example: Semantic vs. Traditional
@@ -168,6 +170,8 @@ let residents = find_npcs_in_current_location(all_npcs, current_room);
 
 ## ANTI-PATTERNS
 - **Never** skip architecture/spec update before implementing engine changes.
+- **Never** continue previous reasoning after user says stop, wait, nevermind, or asks a direct question. Halt immediately and answer directly.
+- **Never** defend existing architecture as a reason to keep complicated code. If a simpler approach exists, propose it.
 
 ## GUARDRAILS (PROGRAMMATIC ENFORCEMENT)
 
@@ -251,6 +255,8 @@ When fixing a known failure (e.g. clippy warning, single test):
 ❌ Inefficient: `build.py` → fix one line → `build.py` → fix one line → `build.py`  
 ✅ Efficient: `cargo clippy` → fix all warnings → `python build.py` (once)
 
+For UI bugs or single test failures, use `cargo nextest run <pattern>` or `cargo check` repeatedly. Run `python build.py` only for final validation.
+
 ## CONCURRENT BUILDS
 Multiple KimiCode agents building simultaneously can conflict because:
 - `cargo fmt` rewrites source files in-place
@@ -286,6 +292,7 @@ Tests are already concurrency-safe: they allocate ports dynamically from the ran
 - Technical prose only, be direct
 - When the user asks a question, answer it first before making edits or running implementation commands.
 - When responding to user feedback or an analysis, explicitly say whether you agree or disagree before saying what you changed.
+- For UI changes, verify in the browser with a screenshot before claiming completion.
 
 ## AGENT SKILLS
 
