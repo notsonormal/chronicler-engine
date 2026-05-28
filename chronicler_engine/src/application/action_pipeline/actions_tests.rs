@@ -7,9 +7,7 @@ use crate::application::action_pipeline::pipeline::{
 use crate::application::context::GameServiceContext;
 use crate::error::EngineError;
 use crate::model::quantifier::QuantifierResult;
-use crate::model::state::{
-    GameState, GenerationPhase, GenerationStatus, LogType, StoredTriggerContext,
-};
+use crate::model::state::{GameState, GenerationPhase, GenerationStatus, LogType};
 use crate::narrative::llm::backend::{AGENT_NARRATOR, LlmCallResult};
 use crate::narrative::prompt::{LayeredPromptAssembler, PromptAssembler};
 use crate::test_support::fixtures::{TestMap, TestNpc, TestPlayer, TestWorld};
@@ -125,16 +123,10 @@ fn test_execute_action_impl_completes_and_persists_state() {
 #[test]
 fn test_execute_action_impl_clears_last_trigger() {
     let mut state = make_test_state();
-    state.narrative.last_trigger = Some(StoredTriggerContext {
-        trigger_name: "Old Trigger".to_string(),
-        npc_id: "npc1".to_string(),
-        trigger_idx: 0,
-        trigger_repeat: false,
-        trigger_narration_prompt: "The old trigger fires.".to_string(),
-        system_prompt: "sys".to_string(),
-        user_prompt: "user".to_string(),
-        max_tokens: None,
-    });
+    state.narrative.last_trigger = Some(crate::test_support::TestStoredTriggerContext::named(
+        "Old Trigger",
+        "npc1",
+    ));
     let ctx = make_ctx(state);
     let backend = MockBackend::default();
 

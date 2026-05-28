@@ -64,12 +64,8 @@ async fn test_preset_card_handler_returns_card() {
 
 #[tokio::test]
 async fn test_preset_card_handler_not_found() {
-    let app_state = make_test_app_state_with_preset(PromptPreset {
-        id: "x".into(),
-        name: "X".into(),
-        instructions: Some("X.".into()),
-        ..Default::default()
-    });
+    let app_state =
+        make_test_app_state_with_preset(crate::test_support::TestPromptPreset::system("x", "X"));
     let response = preset_card_handler(
         axum::extract::State(app_state),
         axum::extract::Path("missing".to_string()),
@@ -101,12 +97,8 @@ async fn test_view_preset_form_handler_default_preset() {
 
 #[tokio::test]
 async fn test_view_preset_form_handler_not_found() {
-    let app_state = make_test_app_state_with_preset(PromptPreset {
-        id: "x".into(),
-        name: "X".into(),
-        instructions: Some("X.".into()),
-        ..Default::default()
-    });
+    let app_state =
+        make_test_app_state_with_preset(crate::test_support::TestPromptPreset::system("x", "X"));
     let response = view_preset_form_handler(
         axum::extract::State(app_state),
         axum::extract::Path("missing".to_string()),
@@ -136,12 +128,8 @@ async fn test_duplicate_preset_handler() {
 
 #[tokio::test]
 async fn test_duplicate_preset_handler_not_found() {
-    let app_state = make_test_app_state_with_preset(PromptPreset {
-        id: "x".into(),
-        name: "X".into(),
-        instructions: Some("X.".into()),
-        ..Default::default()
-    });
+    let app_state =
+        make_test_app_state_with_preset(crate::test_support::TestPromptPreset::system("x", "X"));
     let response = duplicate_preset_handler(
         axum::extract::State(app_state),
         axum::extract::Path("missing".to_string()),
@@ -240,12 +228,8 @@ async fn test_delete_default_preset_returns_error() {
 
 #[tokio::test]
 async fn test_save_preset_invalid_type_returns_error() {
-    let app_state = make_test_app_state_with_preset(PromptPreset {
-        id: "x".into(),
-        name: "X".into(),
-        instructions: Some("X.".into()),
-        ..Default::default()
-    });
+    let app_state =
+        make_test_app_state_with_preset(crate::test_support::TestPromptPreset::system("x", "X"));
     let response = save_preset_handler(
         axum::extract::State(app_state),
         axum::extract::Form(PresetForm {
@@ -261,12 +245,7 @@ async fn test_save_preset_invalid_type_returns_error() {
 
 #[tokio::test]
 async fn test_update_preset_invalid_type_returns_error() {
-    let preset = PromptPreset {
-        id: "custom".into(),
-        name: "Custom".into(),
-        instructions: Some("Custom.".into()),
-        ..Default::default()
-    };
+    let preset = crate::test_support::TestPromptPreset::system("custom", "Custom");
     let app_state = make_test_app_state_with_preset(preset.clone());
     let response = update_preset_handler(
         axum::extract::State(app_state),
@@ -284,12 +263,8 @@ async fn test_update_preset_invalid_type_returns_error() {
 
 #[tokio::test]
 async fn test_activate_nonexistent_preset_returns_error() {
-    let app_state = make_test_app_state_with_preset(PromptPreset {
-        id: "x".into(),
-        name: "X".into(),
-        instructions: Some("X.".into()),
-        ..Default::default()
-    });
+    let app_state =
+        make_test_app_state_with_preset(crate::test_support::TestPromptPreset::system("x", "X"));
     let response = activate_preset_handler(
         axum::extract::State(app_state),
         axum::extract::Path("missing".to_string()),
@@ -328,12 +303,8 @@ async fn test_activate_preset_settings_save_error_returns_error() {
 
 #[tokio::test]
 async fn test_panel_handler_with_poisoned_settings_lock() {
-    let app_state = make_test_app_state_with_preset(PromptPreset {
-        id: "x".into(),
-        name: "X".into(),
-        instructions: Some("X.".into()),
-        ..Default::default()
-    });
+    let app_state =
+        make_test_app_state_with_preset(crate::test_support::TestPromptPreset::system("x", "X"));
 
     // Poison the settings lock by panicking while holding a write guard.
     // [DOC: docs/reference/testing.md#poisoned-lock-testing]
@@ -389,12 +360,7 @@ fn make_test_app_state_with_failing_storage(
 #[tokio::test]
 async fn test_save_preset_storage_error_returns_error() {
     let app_state = make_test_app_state_with_failing_storage(
-        PromptPreset {
-            id: "x".into(),
-            name: "X".into(),
-            instructions: Some("X.".into()),
-            ..Default::default()
-        },
+        crate::test_support::TestPromptPreset::system("x", "X"),
         |h| {
             h.set(
                 Operation::SavePreset,

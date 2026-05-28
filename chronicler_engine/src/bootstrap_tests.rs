@@ -2,8 +2,8 @@ use crate::bootstrap::{
     initialize_world_from_manifest, inject_scenario_logs, load_world_manifest, validate_loaded_data,
 };
 use crate::cli::resolve_engine_data_path;
-use crate::model::character::{CharacterSheet, NpcCard, PlayerCard};
-use crate::model::map::{MapDef, Overworld, Region, Room};
+use crate::model::character::{CharacterSheet, NpcCard};
+use crate::model::map::{MapDef, Overworld};
 use crate::model::scenario::StartingScenario;
 use crate::model::trigger::Trigger;
 use crate::model::world::WorldManifest;
@@ -133,74 +133,13 @@ fn test_world_manifest_contains_required_fields() {
 
 #[test]
 fn test_validate_loaded_data_success() {
-    let manifest = WorldManifest {
-        id: "test".to_string(),
-        name: "Test".to_string(),
-        starting_room_id: "room_a".to_string(),
-        description: "A test world".to_string(),
-        global_rules: vec![],
-        map_file: "map.json".to_string(),
-        player_file: "player.json".to_string(),
-        characters_dir: "".to_string(),
-        scenarios: vec![],
-        default_scenario_id: None,
-        default_room_image: None,
-    };
+    let manifest = crate::test_support::TestWorldManifest::minimal();
 
-    let room_a = Room {
-        id: "room_a".to_string(),
-        name: "Room A".to_string(),
-        description: "A room".to_string(),
-        exits: std::collections::HashMap::new(),
-        items: vec![],
-        image_path: None,
-        navigation_description: None,
-    };
+    let map = crate::test_support::TestMap::single_room("room_a");
 
-    let region = Region {
-        id: "region".to_string(),
-        name: "Test Region".to_string(),
-        rooms: vec![room_a],
-    };
+    let player = crate::test_support::TestPlayer::standard();
 
-    let map = MapDef {
-        overworld: Overworld {
-            id: "overworld".to_string(),
-            name: "Overworld".to_string(),
-            regions: vec![region],
-        },
-    };
-
-    let player = PlayerCard {
-        sheet: CharacterSheet {
-            name: "Hero".to_string(),
-            description: "A hero".to_string(),
-            personality: "Brave".to_string(),
-            scenario: "Default".to_string(),
-            example_dialogue: "".to_string(),
-            summary: None,
-            profile_image: None,
-            headshot_image: None,
-        },
-        inventory: vec![],
-    };
-
-    let npc = NpcCard {
-        id: "npc1".to_string(),
-        sheet: CharacterSheet {
-            name: "NPC".to_string(),
-            description: "An NPC".to_string(),
-            personality: "Friendly".to_string(),
-            scenario: "Default".to_string(),
-            example_dialogue: "".to_string(),
-            summary: None,
-            profile_image: None,
-            headshot_image: None,
-        },
-        inventory: vec![],
-        triggers: vec![],
-        relationships: vec![],
-    };
+    let npc = crate::test_support::TestNpc::named("npc1", "NPC");
 
     let result = validate_loaded_data(&manifest, &map, &player, &[npc]);
     assert!(result.is_ok(), "Expected validation to pass: {result:?}");
@@ -222,43 +161,9 @@ fn test_validate_loaded_data_missing_starting_room() {
         default_room_image: None,
     };
 
-    let room_a = Room {
-        id: "room_a".to_string(),
-        name: "Room A".to_string(),
-        description: "A room".to_string(),
-        exits: std::collections::HashMap::new(),
-        items: vec![],
-        image_path: None,
-        navigation_description: None,
-    };
+    let map = crate::test_support::TestMap::single_room("room_a");
 
-    let region = Region {
-        id: "region".to_string(),
-        name: "Test Region".to_string(),
-        rooms: vec![room_a],
-    };
-
-    let map = MapDef {
-        overworld: Overworld {
-            id: "overworld".to_string(),
-            name: "Overworld".to_string(),
-            regions: vec![region],
-        },
-    };
-
-    let player = PlayerCard {
-        sheet: CharacterSheet {
-            name: "Hero".to_string(),
-            description: "A hero".to_string(),
-            personality: "Brave".to_string(),
-            scenario: "Default".to_string(),
-            example_dialogue: "".to_string(),
-            summary: None,
-            profile_image: None,
-            headshot_image: None,
-        },
-        inventory: vec![],
-    };
+    let player = crate::test_support::TestPlayer::standard();
 
     let result = validate_loaded_data(&manifest, &map, &player, &[]);
     assert!(
@@ -274,57 +179,11 @@ fn test_validate_loaded_data_missing_starting_room() {
 
 #[test]
 fn test_validate_loaded_data_basic_manifest_succeeds() {
-    let manifest = WorldManifest {
-        id: "test".to_string(),
-        name: "Test".to_string(),
-        starting_room_id: "room_a".to_string(),
-        description: "A test world".to_string(),
-        global_rules: vec![],
-        map_file: "map.json".to_string(),
-        player_file: "player.json".to_string(),
-        characters_dir: "".to_string(),
-        scenarios: vec![],
-        default_scenario_id: None,
-        default_room_image: None,
-    };
+    let manifest = crate::test_support::TestWorldManifest::minimal();
 
-    let room_a = Room {
-        id: "room_a".to_string(),
-        name: "Room A".to_string(),
-        description: "A room".to_string(),
-        exits: std::collections::HashMap::new(),
-        items: vec![],
-        image_path: None,
-        navigation_description: None,
-    };
+    let map = crate::test_support::TestMap::single_room("room_a");
 
-    let region = Region {
-        id: "region".to_string(),
-        name: "Test Region".to_string(),
-        rooms: vec![room_a],
-    };
-
-    let map = MapDef {
-        overworld: Overworld {
-            id: "overworld".to_string(),
-            name: "Overworld".to_string(),
-            regions: vec![region],
-        },
-    };
-
-    let player = PlayerCard {
-        sheet: CharacterSheet {
-            name: "Hero".to_string(),
-            description: "A hero".to_string(),
-            personality: "Brave".to_string(),
-            scenario: "Default".to_string(),
-            example_dialogue: "".to_string(),
-            summary: None,
-            profile_image: None,
-            headshot_image: None,
-        },
-        inventory: vec![],
-    };
+    let player = crate::test_support::TestPlayer::standard();
 
     let result = validate_loaded_data(&manifest, &map, &player, &[]);
     assert!(
@@ -335,57 +194,11 @@ fn test_validate_loaded_data_basic_manifest_succeeds() {
 
 #[test]
 fn test_validate_loaded_data_invalid_trigger_room() {
-    let manifest = WorldManifest {
-        id: "test".to_string(),
-        name: "Test".to_string(),
-        starting_room_id: "room_a".to_string(),
-        description: "A test world".to_string(),
-        global_rules: vec![],
-        map_file: "map.json".to_string(),
-        player_file: "player.json".to_string(),
-        characters_dir: "".to_string(),
-        scenarios: vec![],
-        default_scenario_id: None,
-        default_room_image: None,
-    };
+    let manifest = crate::test_support::TestWorldManifest::minimal();
 
-    let room_a = Room {
-        id: "room_a".to_string(),
-        name: "Room A".to_string(),
-        description: "A room".to_string(),
-        exits: std::collections::HashMap::new(),
-        items: vec![],
-        image_path: None,
-        navigation_description: None,
-    };
+    let map = crate::test_support::TestMap::single_room("room_a");
 
-    let region = Region {
-        id: "region".to_string(),
-        name: "Test Region".to_string(),
-        rooms: vec![room_a],
-    };
-
-    let map = MapDef {
-        overworld: Overworld {
-            id: "overworld".to_string(),
-            name: "Overworld".to_string(),
-            regions: vec![region],
-        },
-    };
-
-    let player = PlayerCard {
-        sheet: CharacterSheet {
-            name: "Hero".to_string(),
-            description: "A hero".to_string(),
-            personality: "Brave".to_string(),
-            scenario: "Default".to_string(),
-            example_dialogue: "".to_string(),
-            summary: None,
-            profile_image: None,
-            headshot_image: None,
-        },
-        inventory: vec![],
-    };
+    let player = crate::test_support::TestPlayer::standard();
 
     let npc = NpcCard {
         id: "npc1".to_string(),
@@ -469,26 +282,7 @@ fn test_initialize_world_with_characters_dir() {
     )
     .unwrap();
 
-    let room_a = Room {
-        id: "room_a".to_string(),
-        name: "Room A".to_string(),
-        description: "A room".to_string(),
-        exits: std::collections::HashMap::new(),
-        items: vec![],
-        image_path: None,
-        navigation_description: None,
-    };
-    let map = MapDef {
-        overworld: Overworld {
-            id: "overworld".to_string(),
-            name: "Overworld".to_string(),
-            regions: vec![Region {
-                id: "region".to_string(),
-                name: "Region".to_string(),
-                rooms: vec![room_a],
-            }],
-        },
-    };
+    let map = crate::test_support::TestMap::single_room("room_a");
     std::fs::write(
         world_dir.join("map.json"),
         serde_json::to_string_pretty(&map).unwrap(),
@@ -496,19 +290,7 @@ fn test_initialize_world_with_characters_dir() {
     .unwrap();
 
     // Player
-    let player = PlayerCard {
-        sheet: CharacterSheet {
-            name: "Hero".to_string(),
-            description: "A hero".to_string(),
-            personality: "Brave".to_string(),
-            scenario: "Default".to_string(),
-            example_dialogue: "".to_string(),
-            summary: None,
-            profile_image: None,
-            headshot_image: None,
-        },
-        inventory: vec![],
-    };
+    let player = crate::test_support::TestPlayer::standard();
     let personas_dir = temp_dir.join("personas");
     std::fs::create_dir_all(&personas_dir).unwrap();
     std::fs::write(
@@ -520,22 +302,7 @@ fn test_initialize_world_with_characters_dir() {
     // Custom NPCs
     let chars_dir = temp_dir.join("characters").join("custom_chars");
     std::fs::create_dir_all(&chars_dir).unwrap();
-    let npc = NpcCard {
-        id: "custom_npc".to_string(),
-        sheet: CharacterSheet {
-            name: "Custom".to_string(),
-            description: "A custom NPC".to_string(),
-            personality: "Friendly".to_string(),
-            scenario: "Default".to_string(),
-            example_dialogue: "".to_string(),
-            summary: None,
-            profile_image: None,
-            headshot_image: None,
-        },
-        inventory: vec![],
-        triggers: vec![],
-        relationships: vec![],
-    };
+    let npc = crate::test_support::TestNpc::named("custom_npc", "Custom");
     std::fs::write(
         chars_dir.join("npc.json"),
         serde_json::to_string_pretty(&npc).unwrap(),
@@ -575,19 +342,7 @@ fn test_validate_loaded_data_multiple_errors() {
         },
     };
 
-    let player = PlayerCard {
-        sheet: CharacterSheet {
-            name: "Hero".to_string(),
-            description: "A hero".to_string(),
-            personality: "Brave".to_string(),
-            scenario: "Default".to_string(),
-            example_dialogue: "".to_string(),
-            summary: None,
-            profile_image: None,
-            headshot_image: None,
-        },
-        inventory: vec![],
-    };
+    let player = crate::test_support::TestPlayer::standard();
 
     let result = validate_loaded_data(&manifest, &map, &player, &[]);
     assert!(result.is_err());

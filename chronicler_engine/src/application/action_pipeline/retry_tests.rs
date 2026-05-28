@@ -25,24 +25,6 @@ fn make_test_state() -> GameState {
     GameState::new(world, map, player, npcs, "start".to_string())
 }
 
-fn make_empty_context(state: GameState) -> GameServiceContext {
-    let storage = Arc::new(Storage::new_in_memory());
-    let preset_storage = Arc::new(Storage::new_in_memory());
-    GameServiceContext {
-        storage,
-        world: state.world.clone(),
-        map: state.map.clone(),
-        player: state.player.clone(),
-        npcs: Arc::new(state.npcs.clone()),
-        cancel_token: tokio_util::sync::CancellationToken::new(),
-        is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
-        settings: Arc::new(std::sync::RwLock::new(
-            crate::model::settings::AppSettings::default(),
-        )),
-        preset_storage,
-    }
-}
-
 fn make_service() -> DefaultGameService {
     DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::new(None)),
@@ -104,7 +86,7 @@ fn save_pre_event(ctx: &GameServiceContext) -> u64 {
 #[test]
 fn test_retry_no_snapshot() {
     let state = make_test_state();
-    let ctx = make_empty_context(state);
+    let ctx = crate::test_support::make_test_context_without_snapshot(state);
     let service = make_service();
     retry_last_response_impl(&service, ctx);
 }
@@ -256,16 +238,8 @@ fn test_retry_event_continuation_cancels_before_llm() {
 
     // Set up a pre-event snapshot with last_trigger so retry_event_continuation is reached
     let mut pre_event_state = ctx.load_state();
-    pre_event_state.narrative.last_trigger = Some(crate::model::state::StoredTriggerContext {
-        npc_id: "npc1".to_string(),
-        trigger_idx: 0,
-        trigger_name: "Test".to_string(),
-        trigger_repeat: false,
-        trigger_narration_prompt: "Test prompt".to_string(),
-        system_prompt: "sys".to_string(),
-        user_prompt: "user".to_string(),
-        max_tokens: None,
-    });
+    pre_event_state.narrative.last_trigger =
+        Some(crate::test_support::TestStoredTriggerContext::standard());
     pre_event_state.add_log("Main narration".to_string(), None, LogType::Narration);
     let snapshot =
         crate::model::state_snapshot::GameStateSnapshot::from_game_state(&pre_event_state);
@@ -303,16 +277,7 @@ fn test_retry_event_trigger_narration_fails() {
 
     // Set up trigger context in pre-event snapshot
     let mut state = ctx.load_state();
-    state.narrative.last_trigger = Some(crate::model::state::StoredTriggerContext {
-        npc_id: "npc1".to_string(),
-        trigger_idx: 0,
-        trigger_name: "Test".to_string(),
-        trigger_repeat: false,
-        trigger_narration_prompt: "Test prompt".to_string(),
-        system_prompt: "sys".to_string(),
-        user_prompt: "user".to_string(),
-        max_tokens: None,
-    });
+    state.narrative.last_trigger = Some(crate::test_support::TestStoredTriggerContext::standard());
     let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
     let _pre_event_with_trigger_id = ctx.storage.save_snapshot(&snapshot).unwrap();
 
@@ -363,16 +328,7 @@ fn test_retry_event_empty_continuation_text() {
     let _pre_event_id = save_pre_event(&ctx);
 
     let mut state = ctx.load_state();
-    state.narrative.last_trigger = Some(crate::model::state::StoredTriggerContext {
-        npc_id: "npc1".to_string(),
-        trigger_idx: 0,
-        trigger_name: "Test".to_string(),
-        trigger_repeat: false,
-        trigger_narration_prompt: "Test prompt".to_string(),
-        system_prompt: "sys".to_string(),
-        user_prompt: "user".to_string(),
-        max_tokens: None,
-    });
+    state.narrative.last_trigger = Some(crate::test_support::TestStoredTriggerContext::standard());
     let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
     let _pre_event_with_trigger_id = ctx.storage.save_snapshot(&snapshot).unwrap();
 
@@ -437,16 +393,8 @@ fn test_retry_event_continuation_happy_path() {
     let _pre_main_id = save_pre_main(&ctx);
 
     let mut pre_event_state = ctx.load_state();
-    pre_event_state.narrative.last_trigger = Some(crate::model::state::StoredTriggerContext {
-        npc_id: "npc1".to_string(),
-        trigger_idx: 0,
-        trigger_name: "Test".to_string(),
-        trigger_repeat: false,
-        trigger_narration_prompt: "Test prompt".to_string(),
-        system_prompt: "sys".to_string(),
-        user_prompt: "user".to_string(),
-        max_tokens: None,
-    });
+    pre_event_state.narrative.last_trigger =
+        Some(crate::test_support::TestStoredTriggerContext::standard());
     pre_event_state.add_log("Main narration".to_string(), None, LogType::Narration);
     let snapshot =
         crate::model::state_snapshot::GameStateSnapshot::from_game_state(&pre_event_state);
@@ -652,16 +600,8 @@ fn test_retry_event_empty_continuation_triggers_error() {
     let _pre_main_id = save_pre_main(&ctx);
 
     let mut pre_event_state = ctx.load_state();
-    pre_event_state.narrative.last_trigger = Some(crate::model::state::StoredTriggerContext {
-        npc_id: "npc1".to_string(),
-        trigger_idx: 0,
-        trigger_name: "Test".to_string(),
-        trigger_repeat: false,
-        trigger_narration_prompt: "Test prompt".to_string(),
-        system_prompt: "sys".to_string(),
-        user_prompt: "user".to_string(),
-        max_tokens: None,
-    });
+    pre_event_state.narrative.last_trigger =
+        Some(crate::test_support::TestStoredTriggerContext::standard());
     pre_event_state.add_log("Main narration".to_string(), None, LogType::Narration);
     let snapshot =
         crate::model::state_snapshot::GameStateSnapshot::from_game_state(&pre_event_state);
@@ -758,16 +698,8 @@ fn test_retrigger_event_impl_cancels_cleanly() {
 
     // Set up pre-event snapshot with trigger context
     let mut pre_event_state = ctx.load_state();
-    pre_event_state.narrative.last_trigger = Some(crate::model::state::StoredTriggerContext {
-        npc_id: "npc1".to_string(),
-        trigger_idx: 0,
-        trigger_name: "Test".to_string(),
-        trigger_repeat: false,
-        trigger_narration_prompt: "Test prompt".to_string(),
-        system_prompt: "sys".to_string(),
-        user_prompt: "user".to_string(),
-        max_tokens: None,
-    });
+    pre_event_state.narrative.last_trigger =
+        Some(crate::test_support::TestStoredTriggerContext::standard());
     pre_event_state.add_log("Main narration".to_string(), None, LogType::Narration);
     let snapshot =
         crate::model::state_snapshot::GameStateSnapshot::from_game_state(&pre_event_state);

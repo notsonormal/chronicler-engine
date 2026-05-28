@@ -286,16 +286,11 @@ fn test_trigger_split_architecture_produces_event_header() {
     .unwrap();
 
     let request = TriggerContinuationRequest {
-        stored: crate::model::state::StoredTriggerContext {
-            npc_id: "carla".to_string(),
-            trigger_idx: 0,
-            trigger_name: "Carla Introduction".to_string(),
-            trigger_repeat: false,
-            trigger_narration_prompt: "Carla appears".to_string(),
-            system_prompt: "sys".to_string(),
-            user_prompt: "user".to_string(),
-            max_tokens: None,
-        },
+        stored: crate::test_support::TestStoredTriggerContext::for_npc(
+            "carla",
+            "Carla Introduction",
+            "Carla appears",
+        ),
     };
 
     let state = commit_trigger_narration(
@@ -327,16 +322,11 @@ fn test_commit_trigger_narration_adds_event_header_and_narration() {
     let state = make_test_state();
 
     let request = TriggerContinuationRequest {
-        stored: crate::model::state::StoredTriggerContext {
-            npc_id: "carla".to_string(),
-            trigger_idx: 0,
-            trigger_name: "Carla Introduction".to_string(),
-            trigger_repeat: false,
-            trigger_narration_prompt: "Carla appears".to_string(),
-            system_prompt: "sys".to_string(),
-            user_prompt: "user".to_string(),
-            max_tokens: None,
-        },
+        stored: crate::test_support::TestStoredTriggerContext::for_npc(
+            "carla",
+            "Carla Introduction",
+            "Carla appears",
+        ),
     };
 
     let state =
@@ -358,16 +348,11 @@ fn test_commit_trigger_narration_marks_non_repeat_trigger_fired() {
     let state = make_test_state();
 
     let request = TriggerContinuationRequest {
-        stored: crate::model::state::StoredTriggerContext {
-            npc_id: "carla".to_string(),
-            trigger_idx: 0,
-            trigger_name: "Carla Introduction".to_string(),
-            trigger_repeat: false,
-            trigger_narration_prompt: "Carla appears".to_string(),
-            system_prompt: "sys".to_string(),
-            user_prompt: "user".to_string(),
-            max_tokens: None,
-        },
+        stored: crate::test_support::TestStoredTriggerContext::for_npc(
+            "carla",
+            "Carla Introduction",
+            "Carla appears",
+        ),
     };
 
     let state = commit_trigger_narration(state, &request, "Some text.").unwrap();
@@ -382,18 +367,13 @@ fn test_commit_trigger_narration_marks_non_repeat_trigger_fired() {
 fn test_commit_trigger_narration_does_not_mark_repeat_trigger_fired() {
     let state = make_test_state();
 
-    let request = TriggerContinuationRequest {
-        stored: crate::model::state::StoredTriggerContext {
-            npc_id: "carla".to_string(),
-            trigger_idx: 0,
-            trigger_name: "Carla Greeting".to_string(),
-            trigger_repeat: true,
-            trigger_narration_prompt: "Carla greets".to_string(),
-            system_prompt: "sys".to_string(),
-            user_prompt: "user".to_string(),
-            max_tokens: None,
-        },
-    };
+    let mut stored = crate::test_support::TestStoredTriggerContext::for_npc(
+        "carla",
+        "Carla Greeting",
+        "Carla greets",
+    );
+    stored.trigger_repeat = true;
+    let request = TriggerContinuationRequest { stored };
 
     let state = commit_trigger_narration(state, &request, "Some text.").unwrap();
 
@@ -408,16 +388,11 @@ fn test_commit_trigger_narration_empty_text_is_noop() {
     let state = make_test_state();
 
     let request = TriggerContinuationRequest {
-        stored: crate::model::state::StoredTriggerContext {
-            npc_id: "carla".to_string(),
-            trigger_idx: 0,
-            trigger_name: "Carla Introduction".to_string(),
-            trigger_repeat: false,
-            trigger_narration_prompt: "Carla appears".to_string(),
-            system_prompt: "sys".to_string(),
-            user_prompt: "user".to_string(),
-            max_tokens: None,
-        },
+        stored: crate::test_support::TestStoredTriggerContext::for_npc(
+            "carla",
+            "Carla Introduction",
+            "Carla appears",
+        ),
     };
 
     let state = commit_trigger_narration(state, &request, "").unwrap();
@@ -432,16 +407,12 @@ fn test_commit_trigger_narration_stores_trigger_context() {
     let state = make_test_state();
 
     let request = TriggerContinuationRequest {
-        stored: crate::model::state::StoredTriggerContext {
-            npc_id: "carla".to_string(),
-            trigger_idx: 0,
-            trigger_name: "Carla Introduction".to_string(),
-            trigger_repeat: false,
-            trigger_narration_prompt: "Carla appears from shadows".to_string(),
-            system_prompt: "system prompt text".to_string(),
-            user_prompt: "user prompt text".to_string(),
-            max_tokens: Some(512),
-        },
+        stored: crate::test_support::TestStoredTriggerContext::with_max_tokens(
+            "carla",
+            "Carla Introduction",
+            "Carla appears from shadows",
+            512,
+        ),
     };
 
     let state = commit_trigger_narration(state, &request, "Carla emerges.").unwrap();

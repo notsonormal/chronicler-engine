@@ -163,6 +163,35 @@ cargo llvm-cov test --json --output-path coverage.json
 
 See `docs/adr/` for detailed rationale behind testing patterns.
 
+## Test Fixtures
+
+The `test_support::fixtures` module provides reusable test data builders. Prefer these over inline struct construction:
+
+| Fixture | Methods | Use For |
+|---------|---------|---------|
+| `TestWorld` | `minimal()`, `with_rule(rule)` | `WorldCard` instances |
+| `TestPlayer` | `standard()`, `named(name)` | `PlayerCard` instances |
+| `TestNpc` | `named(id, name)`, `with_times_met_trigger(...)`, `with_room_scoped_trigger(...)` | `NpcCard` instances |
+| `TestMap` | `room(id)`, `room_named(id, name)`, `single_room(id)`, `two_rooms(a, b)` | `Room` and `MapDef` instances |
+| `TestGameState` | `in_room(id)`, `with_npc(...)`, `with_npcs(...)` | `GameState` instances |
+| `TestStoredTriggerContext` | `standard()`, `for_npc(...)`, `named(...)`, `with_max_tokens(...)` | `StoredTriggerContext` instances |
+| `TestPromptPreset` | `system(id, name)`, `system_default(id, name)` | `PromptPreset` instances |
+| `TestWorldManifest` | `minimal()` | `WorldManifest` instances |
+| `TestCharacterSheet` | `hero()` | `CharacterSheet` instances |
+
+### Example
+
+```rust
+use crate::test_support::{
+    TestCharacterSheet, TestMap, TestNpc, TestPlayer,
+    TestPromptPreset, TestStoredTriggerContext, TestWorldManifest,
+};
+
+let preset = TestPromptPreset::system("my_preset", "My Preset");
+let trigger = TestStoredTriggerContext::standard();
+let manifest = TestWorldManifest::minimal();
+```
+
 ## What We Keep
 
 Critical tests that must not be removed:

@@ -7,7 +7,7 @@ use crate::application::context::GameServiceContext;
 use crate::error::EngineError;
 use crate::model::character::NpcCard;
 use crate::model::quantifier::{QuantifierConfidence, QuantifierParseResult, QuantifierResult};
-use crate::model::state::StoredTriggerContext;
+
 use crate::model::state::{GameState, GenerationPhase, GenerationStatus, LogType};
 use crate::narrative::llm::backend::{AGENT_NARRATOR, LlmCallResult};
 use crate::narrative::prompt::{LayeredPromptAssembler, PromptAssembler};
@@ -248,16 +248,7 @@ fn test_run_trigger_continuation_cancels_at_start() {
     let backend = MockPipelineBackend::default();
     let pipeline = ActionPipeline::new(&backend, &ctx);
 
-    let trigger = StoredTriggerContext {
-        npc_id: "npc1".to_string(),
-        trigger_idx: 0,
-        trigger_name: "Test".to_string(),
-        trigger_repeat: false,
-        trigger_narration_prompt: "Hello".to_string(),
-        system_prompt: "sys".to_string(),
-        user_prompt: "user".to_string(),
-        max_tokens: None,
-    };
+    let trigger = crate::test_support::TestStoredTriggerContext::for_npc("npc1", "Test", "Hello");
 
     let outcome = pipeline.run_trigger_continuation(state, trigger, "look");
 
@@ -296,16 +287,7 @@ fn test_trigger_continuation_save_post_trigger_error() {
     let backend = MockPipelineBackend::default();
     let pipeline = ActionPipeline::new(&backend, &ctx);
 
-    let trigger = StoredTriggerContext {
-        npc_id: "npc1".to_string(),
-        trigger_idx: 0,
-        trigger_name: "Test".to_string(),
-        trigger_repeat: false,
-        trigger_narration_prompt: "Hello".to_string(),
-        system_prompt: "sys".to_string(),
-        user_prompt: "user".to_string(),
-        max_tokens: None,
-    };
+    let trigger = crate::test_support::TestStoredTriggerContext::for_npc("npc1", "Test", "Hello");
 
     let outcome = pipeline.run_trigger_continuation(state, trigger, "look");
 

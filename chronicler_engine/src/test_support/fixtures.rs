@@ -3,9 +3,10 @@ use std::sync::Arc;
 
 use crate::model::character::{CharacterSheet, NpcCard, PlayerCard};
 use crate::model::map::{MapDef, Overworld, Region, Room};
-use crate::model::state::GameState;
+use crate::model::prompt_preset::{PresetType, PromptPreset};
+use crate::model::state::{GameState, StoredTriggerContext};
 use crate::model::trigger::{ComparisonOperator, Trigger, TriggerCondition, TriggerEffect};
-use crate::model::world::WorldCard;
+use crate::model::world::{WorldCard, WorldManifest};
 
 // ─── World ───────────────────────────────────────────────────────────────────
 
@@ -288,5 +289,153 @@ impl TestGameState {
         )
         .with_npcs(vec![npc])
         .build()
+    }
+}
+
+// ─── StoredTriggerContext ────────────────────────────────────────────────────
+
+pub struct TestStoredTriggerContext;
+
+impl TestStoredTriggerContext {
+    /// Standard test trigger context used across pipeline and retry tests.
+    pub fn standard() -> StoredTriggerContext {
+        StoredTriggerContext {
+            npc_id: "npc1".to_string(),
+            trigger_idx: 0,
+            trigger_name: "Test".to_string(),
+            trigger_repeat: false,
+            trigger_narration_prompt: "Test prompt".to_string(),
+            system_prompt: "sys".to_string(),
+            user_prompt: "user".to_string(),
+            max_tokens: None,
+        }
+    }
+
+    /// A trigger context for a specific NPC with custom narration prompt.
+    pub fn for_npc(
+        npc_id: &str,
+        trigger_name: &str,
+        narration_prompt: &str,
+    ) -> StoredTriggerContext {
+        StoredTriggerContext {
+            npc_id: npc_id.to_string(),
+            trigger_idx: 0,
+            trigger_name: trigger_name.to_string(),
+            trigger_repeat: false,
+            trigger_narration_prompt: narration_prompt.to_string(),
+            system_prompt: "sys".to_string(),
+            user_prompt: "user".to_string(),
+            max_tokens: None,
+        }
+    }
+
+    /// A trigger context with a specific name and NPC ID.
+    pub fn named(trigger_name: &str, npc_id: &str) -> StoredTriggerContext {
+        StoredTriggerContext {
+            npc_id: npc_id.to_string(),
+            trigger_idx: 0,
+            trigger_name: trigger_name.to_string(),
+            trigger_repeat: false,
+            trigger_narration_prompt: format!("{trigger_name} fires."),
+            system_prompt: "sys".to_string(),
+            user_prompt: "user".to_string(),
+            max_tokens: None,
+        }
+    }
+
+    /// A trigger context with max_tokens set.
+    pub fn with_max_tokens(
+        npc_id: &str,
+        trigger_name: &str,
+        narration_prompt: &str,
+        max_tokens: u32,
+    ) -> StoredTriggerContext {
+        StoredTriggerContext {
+            npc_id: npc_id.to_string(),
+            trigger_idx: 0,
+            trigger_name: trigger_name.to_string(),
+            trigger_repeat: false,
+            trigger_narration_prompt: narration_prompt.to_string(),
+            system_prompt: "system prompt text".to_string(),
+            user_prompt: "user prompt text".to_string(),
+            max_tokens: Some(max_tokens),
+        }
+    }
+}
+
+// ─── PromptPreset ────────────────────────────────────────────────────────────
+
+pub struct TestPromptPreset;
+
+impl TestPromptPreset {
+    /// A system preset with the given id and name.
+    pub fn system(id: &str, name: &str) -> PromptPreset {
+        PromptPreset {
+            id: id.to_string(),
+            name: name.to_string(),
+            role: None,
+            instructions: Some(format!("{name}.")),
+            writing_style: None,
+            output_format: None,
+            is_default: false,
+            preset_type: PresetType::System,
+        }
+    }
+
+    /// A system preset marked as default.
+    pub fn system_default(id: &str, name: &str) -> PromptPreset {
+        PromptPreset {
+            id: id.to_string(),
+            name: name.to_string(),
+            role: None,
+            instructions: Some(format!("{name}.")),
+            writing_style: None,
+            output_format: None,
+            is_default: true,
+            preset_type: PresetType::System,
+        }
+    }
+}
+
+// ─── WorldManifest ───────────────────────────────────────────────────────────
+
+pub struct TestWorldManifest;
+
+impl TestWorldManifest {
+    /// A minimal world manifest for bootstrap validation tests.
+    pub fn minimal() -> WorldManifest {
+        WorldManifest {
+            id: "test".to_string(),
+            name: "Test".to_string(),
+            description: "A test world".to_string(),
+            global_rules: vec![],
+            starting_room_id: "room_a".to_string(),
+            map_file: "map.json".to_string(),
+            player_file: "player.json".to_string(),
+            characters_dir: "".to_string(),
+            scenarios: vec![],
+            default_scenario_id: None,
+            default_room_image: None,
+        }
+    }
+}
+
+// ─── CharacterSheet ──────────────────────────────────────────────────────────
+
+pub struct TestCharacterSheet;
+
+impl TestCharacterSheet {
+    /// A standard hero character sheet used in bootstrap tests.
+    pub fn hero() -> CharacterSheet {
+        CharacterSheet {
+            name: "Hero".to_string(),
+            description: "A hero".to_string(),
+            personality: "Brave".to_string(),
+            scenario: "Default".to_string(),
+            example_dialogue: "".to_string(),
+            summary: None,
+            profile_image: None,
+            headshot_image: None,
+        }
     }
 }

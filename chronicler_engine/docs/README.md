@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-28 21:32 UTC*
+*Index last generated: 2026-05-28 22:48 UTC*
 
 ### Root files
 
@@ -78,9 +78,12 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Plan: Complete GameState Decoupling from Server + Tests](./plans/archived/orion-vixen-shatterstar.md)
 - [Plan: Remove Old Migrations from `src/storage/db.rs`](./plans/archived/remove-old-migrations.md)
 - [Plan: Fix Test Coverage Gaps (Test-Police Follow-up)](./plans/archived/scarlet-witch-wildcat-maxima.md)
+- [Implementation Plan: Eliminate Test Duplication (Moderate Approach)](./plans/archived/silk-power-girl-x-23.md)
+- [Plan: Eliminate Test Duplication in chronicler_engine](./plans/archived/silk-static-carnage.md)
 - [Plan: Message Swipes for Chronicler Engine](./plans/archived/starfire-tempest-orphan.md)
 - [Plan: Immediate Message Persistence — Direct Implementation](./plans/archived/storm-x-23-domino.md)
 - [Plan: Phase 3 UI — Swipe Navigation & Retrigger](./plans/archived/superboy-doctor-strange-daredevil.md)
+- [Implementation Plan: Eliminate Test Duplication (Revised)](./plans/archived/wally-west-nebula-deadpool.md)
 - [Plan: MessageStorage Mutates Message Directly (Swipe Blast Radius)](./plans/archived/wildcat-red-tornado-colossus.md)
 
 ### `docs/reference/`
