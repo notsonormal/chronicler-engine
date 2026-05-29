@@ -3,8 +3,8 @@ use std::sync::{Arc, RwLock};
 use axum::Router;
 use tokio_util::sync::CancellationToken;
 
-use crate::application::application_service::{ApplicationService, DefaultApplicationService};
-use crate::application::game_service::{DefaultGameService, GameService};
+use crate::application::application_service::DefaultApplicationService;
+use crate::application::game_service::DefaultGameService;
 use crate::model::character::{NpcCard, PlayerCard};
 use crate::model::map::{MapDef, Overworld, Region, Room};
 use crate::model::settings::AppSettings;
@@ -29,7 +29,7 @@ pub struct TestAppBuilder {
     generation_phase: Option<GenerationPhase>,
     settings: AppSettings,
     storage: Option<Arc<Storage>>,
-    game_service: Option<Arc<dyn GameService>>,
+    game_service: Option<Arc<DefaultGameService>>,
     is_generating: bool,
 }
 
@@ -195,7 +195,7 @@ impl TestAppBuilder {
         self
     }
 
-    pub fn game_service(mut self, service: Arc<dyn GameService>) -> Self {
+    pub fn game_service(mut self, service: Arc<DefaultGameService>) -> Self {
         self.game_service = Some(service);
         self
     }
@@ -258,7 +258,7 @@ impl TestAppBuilder {
 
         let settings_arc = Arc::new(RwLock::new(self.settings));
         let preset_storage = Arc::new(Storage::new_in_memory());
-        let game_service: Arc<dyn GameService> = self.game_service.unwrap_or_else(|| {
+        let game_service: Arc<DefaultGameService> = self.game_service.unwrap_or_else(|| {
             Arc::new(DefaultGameService::with_storage(
                 Some(Arc::clone(&storage)),
                 Some(Arc::clone(&preset_storage)),
@@ -273,8 +273,7 @@ impl TestAppBuilder {
             player,
             npcs: Arc::new(state.npcs.clone()),
             game_service: Arc::clone(&game_service),
-            application_service: Arc::new(DefaultApplicationService::new(game_service))
-                as Arc<dyn ApplicationService>,
+            application_service: Arc::new(DefaultApplicationService::new(game_service)),
             settings: settings_arc,
             cancel_token: Arc::new(RwLock::new(CancellationToken::new())),
             is_generating: Arc::new(std::sync::atomic::AtomicBool::new(self.is_generating)),

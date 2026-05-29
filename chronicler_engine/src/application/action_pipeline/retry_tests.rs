@@ -625,9 +625,7 @@ fn test_retry_event_empty_continuation_triggers_error() {
     if let Some(last) = final_state.narrative.history.last_mut() {
         insert_message_with_swipe(&ctx, last);
     }
-
     retry_last_response_impl(&service, ctx.clone());
-
     let state = ctx.load_state();
     assert!(
         matches!(state.narrative.input_buffer.status, GenerationStatus::Error(ref msg) if msg.contains("empty response")),

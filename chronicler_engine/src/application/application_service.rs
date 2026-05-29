@@ -1,25 +1,21 @@
-//! [DOC: docs/architecture/system.md]
-
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use chrono::Utc;
 use serde::Serialize;
 
-use crate::application::context::GameServiceContext;
-use crate::application::game_service::GameService;
-use crate::error::{EngineError, internal_error};
-use crate::model::game::{Game, generate_game_name};
+use crate::application::context::{GameServiceContext, load_state};
+use crate::application::game_lifecycle::GameLifecycleService;
+use crate::application::game_service::DefaultGameService;
+use crate::application::message_editing::MessageEditingService;
+use crate::application::query_handlers::QueryHandlers;
+use crate::error::EngineError;
+use crate::model::game::Game;
 use crate::model::llm_message::LlmMessage;
 use crate::model::state::{GameState, GenerationPhase, GenerationStatus, LogEntry};
 use crate::model::state_snapshot::GameStateSnapshot;
 use crate::model::trigger::NpcEncounterState;
 
-/// Unified error type for the application service layer.
-/// Distinguishes validation failures (400), system errors (500),
-/// and known runtime states like shutdown (503).
-#[derive(Debug)]
 pub enum ApplicationError {
     Validation(String),
     Engine(EngineError),
@@ -41,6 +37,12 @@ impl std::fmt::Display for ApplicationError {
             Self::ShuttingDown => write!(f, "Server is shutting down"),
             Self::ConcurrentGeneration => write!(f, "Generation in progress"),
         }
+    }
+}
+
+impl std::fmt::Debug for ApplicationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self, f)
     }
 }
 
@@ -74,14 +76,13 @@ impl From<ApplicationError> for EngineError {
     }
 }
 
-#[derive(Debug, Clone)]
 pub enum ProcessActionResult {
     Started,
     ConcurrentGeneration,
     ShuttingDown,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 pub struct DebugStateView {
     pub current_room_id: String,
     pub npcs_in_area: Vec<String>,
@@ -98,86 +99,34 @@ pub struct DebugStateView {
     pub model_name: Option<String>,
 }
 
-pub trait ApplicationService: Send + Sync {
-    fn process_action(
-        &self,
-        ctx: GameServiceContext,
-        input: String,
-    ) -> Result<ProcessActionResult, EngineError>;
-    fn retry(&self, ctx: GameServiceContext) -> Result<(), ApplicationError>;
-    fn retrigger(&self, ctx: GameServiceContext) -> Result<(), ApplicationError>;
-    fn reset(&self, ctx: GameServiceContext) -> Result<(), ApplicationError>;
-    fn switch_swipe(
-        &self,
-        ctx: GameServiceContext,
-        message_id: u64,
-        swipe_index: usize,
-    ) -> Result<(), ApplicationError>;
-    fn edit_history(
-        &self,
-        ctx: GameServiceContext,
-        id: u64,
-        text: String,
-    ) -> Result<(), ApplicationError>;
-    fn delete_last(&self, ctx: GameServiceContext) -> Result<(), ApplicationError>;
-    fn create_game(&self, ctx: GameServiceContext) -> Result<u64, ApplicationError>;
-    fn switch_game(&self, ctx: GameServiceContext, id: u64) -> Result<(), ApplicationError>;
-    fn delete_game(&self, ctx: GameServiceContext, id: u64) -> Result<(), ApplicationError>;
-    fn list_games(&self, ctx: GameServiceContext) -> Result<Vec<Game>, ApplicationError>;
-    fn current_game_id(&self, ctx: GameServiceContext) -> u64;
-    fn get_generating_status(
-        &self,
-        ctx: GameServiceContext,
-    ) -> Result<(GenerationStatus, GenerationPhase), ApplicationError>;
-    fn reset_generating_status(&self, ctx: GameServiceContext) -> Result<(), ApplicationError>;
-    fn get_current_game_name(&self, ctx: GameServiceContext) -> Result<String, ApplicationError>;
-    fn list_latest_llm_messages(
-        &self,
-        ctx: GameServiceContext,
-        limit: usize,
-    ) -> Result<Vec<LlmMessage>, ApplicationError>;
-    fn get_story_log_entries(
-        &self,
-        ctx: GameServiceContext,
-    ) -> Result<(Vec<crate::model::state::LogEntry>, bool), ApplicationError>;
-    fn get_input_status(
-        &self,
-        ctx: GameServiceContext,
-    ) -> Result<(GenerationStatus, GenerationPhase), ApplicationError>;
-    fn get_current_room_view(
-        &self,
-        ctx: GameServiceContext,
-    ) -> Result<(String, Option<String>), ApplicationError>;
-    fn get_npc_headshots(
-        &self,
-        ctx: GameServiceContext,
-        scene_only: bool,
-    ) -> Result<Vec<(String, String)>, ApplicationError>;
-    fn get_debug_state(&self, ctx: GameServiceContext) -> Result<DebugStateView, ApplicationError>;
-}
-
 pub struct DefaultApplicationService {
-    game_service: Arc<dyn GameService>,
+    game_service: Arc<DefaultGameService>,
+    lifecycle: GameLifecycleService,
+    editing: MessageEditingService,
+    queries: QueryHandlers,
 }
 
 impl DefaultApplicationService {
-    pub fn new(game_service: Arc<dyn GameService>) -> Self {
-        Self { game_service }
+    pub fn new(game_service: Arc<DefaultGameService>) -> Self {
+        Self {
+            lifecycle: GameLifecycleService::new(Arc::clone(&game_service)),
+            editing: MessageEditingService::new(Arc::clone(&game_service)),
+            queries: QueryHandlers::new(),
+            game_service,
+        }
     }
 
-    fn load_state(&self, ctx: &GameServiceContext) -> Result<GameState, ApplicationError> {
-        crate::application::context::try_load_state(ctx).map_err(Into::into)
+    pub fn game_service(&self) -> &Arc<DefaultGameService> {
+        &self.game_service
     }
-}
-
-impl ApplicationService for DefaultApplicationService {
-    fn process_action(
+    pub fn process_action(
         &self,
         ctx: GameServiceContext,
         input: String,
     ) -> Result<ProcessActionResult, EngineError> {
         let mut game_state = self.load_state(&ctx)?;
         let player_name = game_state.player.sheet.name.clone();
+
         game_state.add_log(
             input.clone(),
             Some(player_name.clone()),
@@ -194,6 +143,7 @@ impl ApplicationService for DefaultApplicationService {
 
         game_state.narrative.input_buffer.status = GenerationStatus::Generating;
         game_state.narrative.input_buffer.phase = GenerationPhase::Narrating;
+
         if let Err(e) =
             crate::application::game_service::save_message_and_snapshot(&ctx, &mut game_state)
         {
@@ -211,9 +161,10 @@ impl ApplicationService for DefaultApplicationService {
             return Ok(ProcessActionResult::ShuttingDown);
         }
 
-        // [DOC: docs/architecture/invariants.md#INV-004]
         let game_service = Arc::clone(&self.game_service);
         let ctx_clone = ctx.clone();
+
+        // [DOC: docs/architecture/invariants.md#INV-004]
         tokio::task::spawn_blocking(move || {
             let _guard = GenerationGuard(Arc::clone(&ctx_clone.is_generating));
             if ctx_clone.cancel_token.is_cancelled() {
@@ -225,452 +176,133 @@ impl ApplicationService for DefaultApplicationService {
         Ok(ProcessActionResult::Started)
     }
 
-    fn retry(&self, ctx: GameServiceContext) -> Result<(), ApplicationError> {
-        let mut game_state = self.load_state(&ctx)?;
-        if game_state.narrative.history.last_input_text().is_none() {
-            return Err(ApplicationError::validation("No input to retry"));
-        }
+    // --- Game lifecycle delegation ---
 
-        game_state.narrative.input_buffer.status = GenerationStatus::Generating;
-        game_state.narrative.input_buffer.phase = GenerationPhase::Narrating;
-        let snapshot = GameStateSnapshot::from_game_state(&game_state);
-        ctx.storage.save_snapshot(&snapshot)?;
-
-        if ctx.cancel_token.is_cancelled() {
-            return Err(ApplicationError::ShuttingDown);
-        }
-
-        // [DOC: docs/architecture/invariants.md#INV-004]
-        let game_service = Arc::clone(&self.game_service);
-        let ctx_clone = ctx.clone();
-        tokio::task::spawn_blocking(move || {
-            if ctx_clone.cancel_token.is_cancelled() {
-                return;
-            }
-            game_service.retry_last_response(ctx_clone);
-        });
-
-        Ok(())
+    pub fn create_game(&self, ctx: GameServiceContext) -> Result<u64, ApplicationError> {
+        self.lifecycle.create_game(ctx)
     }
 
-    fn retrigger(&self, ctx: GameServiceContext) -> Result<(), ApplicationError> {
-        let game_state = self.load_state(&ctx)?;
-        if game_state.narrative.last_trigger.is_none() {
-            return Err(ApplicationError::validation("No trigger context available"));
-        }
-
-        let messages = ctx.load_messages()?;
-        let Some(last_msg) = messages.last() else {
-            return Err(ApplicationError::validation("No messages to retrigger"));
-        };
-        let is_narration = last_msg.log_type == crate::model::state::LogType::Narration
-            || last_msg.log_type == crate::model::state::LogType::Dialogue;
-        if !is_narration || last_msg.event_header.is_some() {
-            return Err(ApplicationError::validation(
-                "Last message must be a narration to retrigger",
-            ));
-        }
-
-        let mut game_state = game_state;
-        game_state.narrative.input_buffer.status = GenerationStatus::Generating;
-        game_state.narrative.input_buffer.phase = GenerationPhase::Narrating;
-        let snapshot = GameStateSnapshot::from_game_state(&game_state);
-        ctx.storage.save_snapshot(&snapshot)?;
-
-        if ctx.cancel_token.is_cancelled() {
-            return Err(ApplicationError::ShuttingDown);
-        }
-
-        // [DOC: docs/architecture/invariants.md#INV-004]
-        let game_service = Arc::clone(&self.game_service);
-        let ctx_clone = ctx.clone();
-        tokio::task::spawn_blocking(move || {
-            if ctx_clone.cancel_token.is_cancelled() {
-                return;
-            }
-            game_service.retrigger_event(ctx_clone);
-        });
-
-        Ok(())
+    pub fn switch_game(&self, ctx: GameServiceContext, id: u64) -> Result<(), ApplicationError> {
+        self.lifecycle.switch_game(ctx, id)
     }
 
-    fn reset(&self, ctx: GameServiceContext) -> Result<(), ApplicationError> {
-        let current_id = ctx.storage.current_game_id();
-        let world_name = ctx.world.name.clone();
-
-        ctx.storage.delete_game(current_id)?;
-
-        let existing_names: Vec<String> = ctx
-            .storage
-            .list_games()?
-            .into_iter()
-            .filter(|g| g.world_name == world_name)
-            .map(|g| g.name)
-            .collect();
-
-        let new_name = generate_game_name(&world_name, &existing_names);
-        let new_id = ctx.storage.create_game(&world_name, &new_name)?;
-
-        ctx.set_game_id(new_id);
-
-        let mut initial_state = build_fresh_initial_state(&ctx);
-        let snapshot = GameStateSnapshot::from_game_state(&initial_state);
-        let snapshot_id = ctx.storage.save_snapshot(&snapshot)?;
-
-        if let Some(msg) = initial_state.narrative.history.last_mut() {
-            if msg.id == 0 {
-                msg.snapshot_id = Some(snapshot_id);
-                let id = ctx.storage.insert_message(&*msg)?;
-                msg.id = id;
-            }
-        }
-
-        Ok(())
+    pub fn delete_game(&self, ctx: GameServiceContext, id: u64) -> Result<(), ApplicationError> {
+        self.lifecycle.delete_game(ctx, id)
     }
 
-    fn switch_swipe(
+    pub fn list_games(&self, ctx: GameServiceContext) -> Result<Vec<Game>, ApplicationError> {
+        self.lifecycle.list_games(ctx)
+    }
+
+    pub fn current_game_id(&self, ctx: GameServiceContext) -> u64 {
+        self.lifecycle.current_game_id(ctx)
+    }
+
+    pub fn reset(&self, ctx: GameServiceContext) -> Result<(), ApplicationError> {
+        self.lifecycle.reset(ctx)
+    }
+
+    // --- Message editing delegation ---
+
+    pub fn retry(&self, ctx: GameServiceContext) -> Result<(), ApplicationError> {
+        self.editing.retry(ctx)
+    }
+
+    pub fn retrigger(&self, ctx: GameServiceContext) -> Result<(), ApplicationError> {
+        self.editing.retrigger(ctx)
+    }
+
+    pub fn switch_swipe(
         &self,
         ctx: GameServiceContext,
         message_id: u64,
         swipe_index: usize,
     ) -> Result<(), ApplicationError> {
-        if ctx.is_generating.load(Ordering::SeqCst) {
-            return Err(ApplicationError::ConcurrentGeneration);
-        }
-
-        let messages = ctx.load_messages()?;
-        let is_last = messages.last().map(|m| m.id == message_id).unwrap_or(false);
-        if !is_last {
-            return Err(ApplicationError::validation(
-                "Only the last message can be swiped",
-            ));
-        }
-
-        ctx.storage.update_active_swipe(message_id, swipe_index)?;
-
-        let target_msg = messages
-            .iter()
-            .find(|m| m.id == message_id)
-            .ok_or_else(|| app_err_internal("Message not found"))?;
-        let target_swipe = target_msg
-            .swipes
-            .get(swipe_index)
-            .ok_or_else(|| app_err_internal("Swipe index out of bounds"))?;
-        let snapshot_id = target_swipe
-            .snapshot_id
-            .ok_or_else(|| app_err_internal("Swipe has no associated snapshot"))?;
-
-        let mut snapshot = ctx
-            .storage
-            .load_snapshot_by_id(snapshot_id)?
-            .ok_or_else(|| app_err_internal("Snapshot not found"))?;
-
-        snapshot.created_at = Utc::now();
-        ctx.storage.save_snapshot(&snapshot)?;
-
-        Ok(())
+        self.editing.switch_swipe(ctx, message_id, swipe_index)
     }
 
-    fn edit_history(
+    pub fn edit_history(
         &self,
         ctx: GameServiceContext,
         id: u64,
         text: String,
     ) -> Result<(), ApplicationError> {
-        let latest = ctx.storage.load_latest_snapshot()?;
-        let mut guard = self.load_state(&ctx)?;
-        guard.narrative.history.edit(id, text.clone())?;
-        if latest.is_some() {
-            let snapshot = GameStateSnapshot::from_game_state(&guard);
-            ctx.storage.save_snapshot(&snapshot)?;
-            ctx.update_message_text(id, &text)?;
-        }
-        Ok(())
+        self.editing.edit_history(ctx, id, text)
     }
 
-    fn delete_last(&self, ctx: GameServiceContext) -> Result<(), ApplicationError> {
-        let mut guard = self.load_state(&ctx)?;
-        let last_id = guard
-            .narrative
-            .history
-            .last()
-            .map(|m| m.id)
-            .ok_or_else(|| {
-                ApplicationError::Engine(EngineError::Internal(internal_error("History is empty")))
-            })?;
-        guard.narrative.history.delete_last()?;
-        let snapshot = GameStateSnapshot::from_game_state(&guard);
-        ctx.storage.save_snapshot(&snapshot)?;
-        ctx.storage.delete_message(last_id)?;
-        Ok(())
+    pub fn delete_last(&self, ctx: GameServiceContext) -> Result<(), ApplicationError> {
+        self.editing.delete_last(ctx)
     }
 
-    fn create_game(&self, ctx: GameServiceContext) -> Result<u64, ApplicationError> {
-        if ctx.is_generating.load(Ordering::SeqCst) {
-            return Err(ApplicationError::ConcurrentGeneration);
-        }
+    // --- Query handler delegation ---
 
-        let world_name = ctx.world.name.clone();
-        let games = ctx.storage.list_games()?;
-        let existing_names: Vec<String> = games.iter().map(|g| g.name.clone()).collect();
-        let name = generate_game_name(&world_name, &existing_names);
-        let new_id = ctx.storage.create_game(&world_name, &name)?;
-
-        let old_id = ctx.storage.current_game_id();
-        ctx.set_game_id(new_id);
-
-        let mut initial_state = build_fresh_initial_state(&ctx);
-        let snapshot = GameStateSnapshot::from_game_state(&initial_state);
-        let snapshot_id = match ctx.storage.save_snapshot(&snapshot) {
-            Ok(id) => id,
-            Err(e) => {
-                ctx.set_game_id(old_id);
-                return Err(e.into());
-            }
-        };
-
-        if let Some(msg) = initial_state.narrative.history.last_mut() {
-            if msg.id == 0 {
-                msg.snapshot_id = Some(snapshot_id);
-                match ctx.storage.insert_message(&*msg) {
-                    Ok(id) => msg.id = id,
-                    Err(e) => log::error!("Create game failed: could not persist message: {e}"),
-                }
-            }
-        }
-
-        Ok(new_id)
-    }
-
-    fn switch_game(&self, ctx: GameServiceContext, id: u64) -> Result<(), ApplicationError> {
-        if ctx.is_generating.load(Ordering::SeqCst) {
-            return Err(ApplicationError::ConcurrentGeneration);
-        }
-
-        match ctx.storage.get_game(id)? {
-            Some(game) => {
-                if game.world_name != ctx.world.name {
-                    return Err(ApplicationError::validation(
-                        "Game belongs to a different world",
-                    ));
-                }
-            }
-            None => return Err(ApplicationError::validation("Game not found")),
-        }
-
-        ctx.set_game_id(id);
-
-        Ok(())
-    }
-
-    fn delete_game(&self, ctx: GameServiceContext, id: u64) -> Result<(), ApplicationError> {
-        if ctx.is_generating.load(Ordering::SeqCst) {
-            return Err(ApplicationError::ConcurrentGeneration);
-        }
-
-        if id == ctx.storage.current_game_id() {
-            return Err(ApplicationError::validation(
-                "Cannot delete the active game",
-            ));
-        }
-
-        ctx.storage.delete_game(id)?;
-        Ok(())
-    }
-
-    fn list_games(&self, ctx: GameServiceContext) -> Result<Vec<Game>, ApplicationError> {
-        ctx.storage.list_games().map_err(Into::into)
-    }
-
-    fn current_game_id(&self, ctx: GameServiceContext) -> u64 {
-        ctx.storage.current_game_id()
-    }
-
-    fn get_generating_status(
+    pub fn get_generating_status(
         &self,
         ctx: GameServiceContext,
     ) -> Result<(GenerationStatus, GenerationPhase), ApplicationError> {
-        let game_state = self.load_state(&ctx)?;
-        Ok((
-            game_state.narrative.input_buffer.status.clone(),
-            game_state.narrative.input_buffer.phase.clone(),
-        ))
+        self.queries.get_generating_status(ctx)
     }
 
-    fn reset_generating_status(&self, ctx: GameServiceContext) -> Result<(), ApplicationError> {
-        let mut game_state = self.load_state(&ctx)?;
-        game_state.narrative.input_buffer.status = GenerationStatus::Idle;
-        let snapshot = GameStateSnapshot::from_game_state(&game_state);
-        ctx.storage.save_snapshot(&snapshot)?;
-        Ok(())
+    pub fn reset_generating_status(&self, ctx: GameServiceContext) -> Result<(), ApplicationError> {
+        self.queries.reset_generating_status(ctx)
     }
 
-    fn get_current_game_name(&self, ctx: GameServiceContext) -> Result<String, ApplicationError> {
-        match ctx.storage.get_game(ctx.storage.current_game_id())? {
-            Some(g) => Ok(g.name),
-            None => Ok("Unknown".to_string()),
-        }
+    pub fn get_current_game_name(
+        &self,
+        ctx: GameServiceContext,
+    ) -> Result<String, ApplicationError> {
+        self.queries.get_current_game_name(ctx)
     }
 
-    fn list_latest_llm_messages(
+    pub fn list_latest_llm_messages(
         &self,
         ctx: GameServiceContext,
         limit: usize,
     ) -> Result<Vec<LlmMessage>, ApplicationError> {
-        ctx.storage
-            .list_latest_llm_messages(limit)
-            .map_err(Into::into)
+        self.queries.list_latest_llm_messages(ctx, limit)
     }
 
-    fn get_story_log_entries(
+    pub fn get_story_log_entries(
         &self,
         ctx: GameServiceContext,
-    ) -> Result<(Vec<crate::model::state::LogEntry>, bool), ApplicationError> {
-        let game_state = self.load_state(&ctx)?;
-        let entries: Vec<_> = game_state.narrative.history().to_vec();
-        let has_last_trigger = game_state.narrative.last_trigger.is_some();
-        Ok((entries, has_last_trigger))
+    ) -> Result<(Vec<LogEntry>, bool), ApplicationError> {
+        self.queries.get_story_log_entries(ctx)
     }
 
-    fn get_input_status(
+    pub fn get_input_status(
         &self,
         ctx: GameServiceContext,
     ) -> Result<(GenerationStatus, GenerationPhase), ApplicationError> {
-        let game_state = self.load_state(&ctx)?;
-        Ok((
-            game_state.narrative.input_buffer.status.clone(),
-            game_state.narrative.input_buffer.phase.clone(),
-        ))
+        self.queries.get_input_status(ctx)
     }
 
-    fn get_current_room_view(
+    pub fn get_current_room_view(
         &self,
         ctx: GameServiceContext,
     ) -> Result<(String, Option<String>), ApplicationError> {
-        let game_state = self.load_state(&ctx)?;
-        let room = game_state
-            .current_room()
-            .ok_or_else(|| EngineError::RoomNotFound("current room not found".to_string()))?;
-        let image_path = room
-            .image_path
-            .clone()
-            .or_else(|| game_state.world.default_room_image.clone());
-        Ok((room.name.clone(), image_path))
+        self.queries.get_current_room_view(ctx)
     }
 
-    fn get_npc_headshots(
+    pub fn get_npc_headshots(
         &self,
         ctx: GameServiceContext,
         scene_only: bool,
     ) -> Result<Vec<(String, String)>, ApplicationError> {
-        let game_state = self.load_state(&ctx)?;
-        let npc_ids: Vec<String> = if scene_only {
-            game_state
-                .scene
-                .npcs_in_area
-                .iter()
-                .map(|npc| npc.id.clone())
-                .collect()
-        } else {
-            game_state.npcs.keys().cloned().collect()
-        };
-        let npc_data: Vec<(String, String)> = npc_ids
-            .iter()
-            .filter_map(|id| {
-                let npc = game_state.npcs.get(id)?;
-                let image_path = npc.sheet.preferred_image()?.to_string();
-                let name = npc.sheet.name.clone();
-                Some((image_path, name))
-            })
-            .collect();
-        Ok(npc_data)
+        self.queries.get_npc_headshots(ctx, scene_only)
     }
 
-    fn get_debug_state(&self, ctx: GameServiceContext) -> Result<DebugStateView, ApplicationError> {
-        let game_state = self.load_state(&ctx)?;
-
-        let history_tail: Vec<LogEntry> = game_state
-            .narrative
-            .history()
-            .iter()
-            .rev()
-            .take(5)
-            .rev()
-            .cloned()
-            .collect();
-
-        let npcs_in_area: Vec<String> = game_state
-            .scene
-            .npcs_in_area
-            .iter()
-            .map(|npc| npc.id.clone())
-            .collect();
-
-        let dynamic_rooms: Vec<String> =
-            game_state.movement.dynamic_rooms.keys().cloned().collect();
-
-        let last_error = match &game_state.narrative.input_buffer.status {
-            GenerationStatus::Error(msg) => Some(msg.clone()),
-            _ => None,
-        };
-
-        Ok(DebugStateView {
-            current_room_id: game_state.movement.current_room_id.clone(),
-            npcs_in_area,
-            generation_status: game_state.narrative.input_buffer.status.clone(),
-            generation_phase: game_state.narrative.input_buffer.phase.clone(),
-            npc_encounter_log: game_state.npc_encounter_log.npcs.clone(),
-            narration_history_tail: history_tail,
-            narration_history_length: game_state.narrative.history().len(),
-            dynamic_rooms,
-            dynamic_room_count: game_state.movement.dynamic_rooms.len(),
-            last_error,
-            quantifier_confidence: game_state.scene.quantifier_confidence.clone(),
-            backend_name: game_state.narrative.last_backend_name.clone(),
-            model_name: game_state.narrative.last_model_name.clone(),
-        })
+    pub fn get_debug_state(
+        &self,
+        ctx: GameServiceContext,
+    ) -> Result<DebugStateView, ApplicationError> {
+        self.queries.get_debug_state(ctx)
     }
 }
 
-// [DOC: docs/architecture/invariants.md#INV-004]
-/// RAII guard that clears the `is_generating` flag on drop.
 struct GenerationGuard(Arc<AtomicBool>);
 
 impl Drop for GenerationGuard {
     fn drop(&mut self) {
         self.0.store(false, Ordering::SeqCst);
     }
-}
-
-fn app_err_internal(msg: impl Into<String>) -> ApplicationError {
-    ApplicationError::Engine(EngineError::Internal(internal_error(msg)))
-}
-
-fn build_fresh_initial_state(ctx: &GameServiceContext) -> GameState {
-    let mut initial_state = GameState::new(
-        Arc::clone(&ctx.world),
-        Arc::clone(&ctx.map),
-        Arc::clone(&ctx.player),
-        (*ctx.npcs).values().cloned().collect(),
-        ctx.world.starting_room_id.clone(),
-    );
-
-    if let Some(scenario) = ctx.world.default_scenario() {
-        let room_name = crate::engine::logic::find_room_in_world_map(
-            &initial_state,
-            &ctx.world.starting_room_id,
-        )
-        .map(|r| r.name.clone())
-        .unwrap_or_else(|| ctx.world.starting_room_id.clone());
-
-        initial_state.narrative.pending_location = Some(room_name);
-        let text = scenario.text.replace("{{user}}", &ctx.player.sheet.name);
-        if !text.is_empty() {
-            initial_state.add_log(text, None, crate::model::state::LogType::Narration);
-        }
-
-        initial_state.init_scenario_npcs(scenario);
-    }
-
-    initial_state
 }

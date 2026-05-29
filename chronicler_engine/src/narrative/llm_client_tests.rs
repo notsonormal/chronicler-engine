@@ -1,6 +1,6 @@
 use crate::narrative::llm_client::{
-    apply_gemma4_thinking_suffix, call_chat_completions, call_ollama, call_openrouter_with_model,
-    extract_content_from_response, parse_chat_response, sanitize_llm_output,
+    call_chat_completions, call_ollama, call_openrouter_with_model, extract_content_from_response,
+    parse_chat_response,
 };
 
 // --- extract_content_from_response tests ---
@@ -225,105 +225,6 @@ fn test_call_ollama_empty_system_prompt() {
     // call_ollama with empty system prompt should not panic
     let result = call_ollama("http://localhost:59999", "model", "", "user message", None);
     assert!(result.is_err());
-}
-
-// --- sanitize_llm_output tests ---
-
-#[test]
-fn test_sanitize_leading_channel_close() {
-    let input = "<channel|>The heavy iron gates...";
-    let result = sanitize_llm_output(input);
-    assert_eq!(result, "The heavy iron gates...");
-}
-
-#[test]
-fn test_sanitize_thought_block() {
-    let input = "<thought>The user wants to continue...</thought>The gates creaked.";
-    let result = sanitize_llm_output(input);
-    assert_eq!(result, "The gates creaked.");
-}
-
-#[test]
-fn test_sanitize_channel_thought_block() {
-    let input = "<|channel>thought\nSome reasoning here\n<channel|>Narrative text.";
-    let result = sanitize_llm_output(input);
-    assert_eq!(result, "Narrative text.");
-}
-
-#[test]
-fn test_sanitize_orphan_turn_markers() {
-    let input = "<|turn>modelStart of text<turn|>more text<|turn>end.";
-    let result = sanitize_llm_output(input);
-    assert_eq!(result, "Start of textmore textend.");
-}
-
-#[test]
-fn test_sanitize_combined_artifacts() {
-    let input = "<channel|><thought>reasoning</thought><|turn>modelThe real content.";
-    let result = sanitize_llm_output(input);
-    assert_eq!(result, "The real content.");
-}
-
-#[test]
-fn test_sanitize_clean_text_unchanged() {
-    let input = "The heavy iron gates offered no resistance.";
-    let result = sanitize_llm_output(input);
-    assert_eq!(result, input);
-}
-
-#[test]
-fn test_sanitize_empty_string() {
-    assert_eq!(sanitize_llm_output(""), "");
-}
-
-#[test]
-fn test_sanitize_whitespace_only() {
-    assert_eq!(sanitize_llm_output("   "), "");
-}
-
-#[test]
-fn test_sanitize_multiple_thought_blocks() {
-    let input = "<thought>first</thought>A<thought>second</thought>B";
-    let result = sanitize_llm_output(input);
-    assert_eq!(result, "AB");
-}
-
-#[test]
-fn test_sanitize_paragraph_indentation() {
-    // Models often emit indented paragraphs that pulldown-cmark
-    // treats as code blocks (<pre><code>), causing bubble overflow.
-    let input = "  First paragraph.\n\n        Second paragraph.\n\n        Third paragraph.";
-    let result = sanitize_llm_output(input);
-    assert_eq!(
-        result,
-        "First paragraph.\n\nSecond paragraph.\n\nThird paragraph."
-    );
-}
-
-// --- apply_gemma4_thinking_suffix tests ---
-
-#[test]
-fn test_gemma4_suffix_applied_for_gemma4_name() {
-    let input = "User prompt";
-    let result = apply_gemma4_thinking_suffix(input, "gemma4:latest");
-    assert!(result.contains("<|turn>model"));
-    assert!(result.contains("<|channel>thought"));
-    assert!(result.contains("<channel|>"));
-    assert!(!result.contains("\n<turn|>\n")); // old malformed format
-}
-
-#[test]
-fn test_gemma4_suffix_applied_for_gemma_dash() {
-    let input = "User prompt";
-    let result = apply_gemma4_thinking_suffix(input, "mradermacher/gemma-4-26b");
-    assert!(result.contains("<|turn>model"));
-}
-
-#[test]
-fn test_gemma4_suffix_not_applied_for_other_models() {
-    let input = "User prompt";
-    let result = apply_gemma4_thinking_suffix(input, "llama3:8b");
-    assert_eq!(result, input);
 }
 
 // --- Mock HTTP server tests for call_chat_completions ---

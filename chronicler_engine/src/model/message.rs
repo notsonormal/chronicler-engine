@@ -69,6 +69,10 @@ impl Message {
         }
     }
 
+    pub fn is_unpersisted(&self) -> bool {
+        self.id == 0
+    }
+
     pub fn swipe_count(&self) -> usize {
         self.swipes.len()
     }

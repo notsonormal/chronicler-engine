@@ -78,7 +78,7 @@ User input is sanitized to prevent prompt injection:
 
 Gemma 4 models on Ollama use a `{{ .Prompt }}` passthrough template — Ollama does not apply a native chat template. The 26B variant (especially abliterated quants) can enter an infinite reasoning loop, burning all `max_tokens` in `<|channel>thought` and returning empty `content`.
 
-**Fix**: `llm_client.rs::apply_gemma4_thinking_suffix()` detects models with `"gemma-4"` or `"gemma4"` in their name and appends the closure marker to the user message **only for Ollama backends**:
+**Fix**: `OllamaBackend::preprocess_user_text()` detects models with `"gemma-4"` or `"gemma4"` in their name and appends the closure marker to the user message **only for Ollama backends**:
 
 ```
 <|turn>model
@@ -92,7 +92,7 @@ This matches SillyTavern's `last_output_sequence` preset for Gemma 4. It pre-fil
 - **OpenRouter / chat-template backends**: Suffix is NOT applied — the backend's native chat template handles turn structure
 - **Non-Gemma models**: Completely unaffected
 - **Validation**: Reduced completion tokens from 2048 (all reasoning) to ~211 (actual content) on `mradermacher/gemma-4-26b-a4b-it-abliterated:iq2xs`
-- **Safety net**: `sanitize_llm_output()` strips any leaked `<channel|>`, `<thought>`, or `<|channel>thought` artifacts from all responses regardless of model
+- **Safety net**: `narrative::llm::sanitize::sanitize_llm_output()` strips any leaked `<channel|>`, `<thought>`, or `<|channel>thought` artifacts from all responses regardless of model via `LlmBackend::postprocess_response_text`
 - **Ref**: [SillyTavern Reddit discussion](https://old.reddit.com/r/SillyTavernAI/comments/1sbjwke/)
 
 ### 9. LLM Call Logging & Forensics

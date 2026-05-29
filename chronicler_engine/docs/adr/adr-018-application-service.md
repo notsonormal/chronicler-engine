@@ -2,94 +2,49 @@
 
 ## Status
 
-Accepted
+Partially Supplemented (2026-05-29)
 
 ## Context
 
-The server layer (`crate::server`) was leaking business logic directly into Axum handlers. Handlers were:
-- Loading state from `snapshot_storage`
-- Saving snapshots via `snapshot_storage.save()`
-- Loading messages from `message_storage`
-- Constructing `GameStateSnapshot` from `GameState`
-- Spawning LLM generation tasks
+Originally, the server layer (`crate::server`) was leaking business logic directly into Axum handlers. The `ApplicationService` trait was created to act as a **logic firewall** between HTTP handlers and the domain.
 
-This made handlers difficult to test, tightly coupled to storage internals, and prone to duplication. The `GameService` trait existed but was focused on LLM backend orchestration, not HTTP-request-level orchestration.
+## Changes (2026-05-29)
 
-## Decision
+The application service layer has been refactored:
 
-Create a dedicated `ApplicationService` trait and `DefaultApplicationService` implementation in `crate::application` that acts as a **logic firewall** between HTTP handlers and the domain.
+1. **Split into verb-based submodules**:
+   - `game_lifecycle.rs`: Game lifecycle - `create_game`, `switch_game`, `delete_game`, `list_games`, `current_game_id`, `reset`
+   - `message_editing.rs`: Message editing - `switch_swipe`, `edit_history`, `delete_last`, `retry`, `retrigger`
+   - `query_handlers.rs`: Read-only queries - `get_generating_status`, `get_current_game_name`, `list_latest_llm_messages`, `get_story_log_entries`, `get_input_status`, `get_current_room_view`, `get_npc_headshots`, `get_debug_state`
 
-### Responsibilities
+2. **Trait deleted**: `ApplicationService` trait was removed (single implementation). Uses concrete `DefaultApplicationService` struct.
 
-- Load/save state and messages
-- Validate preconditions (e.g., "generation already in progress")
-- Set/clear `is_generating` flag
-- Spawn `GameService` calls
-- Return raw data / `Result` (never rendered HTML)
+3. **Layer violation fixed**: `build_fresh_initial_state` moved from application tier to `bootstrap/state.rs`.
 
-### Trait Design
+### Current Architecture
 
 ```rust
-pub trait ApplicationService: Send + Sync {
-    fn process_action(&self, ctx: GameServiceContext, input: String)
-        -> Result<ProcessActionResult, EngineError>;
-    fn retry(&self, ctx: GameServiceContext) -> Result<(), ApplicationError>;
-    fn retrigger(&self, ctx: GameServiceContext) -> Result<(), ApplicationError>;
-    fn reset(&self, ctx: GameServiceContext) -> Result<(), ApplicationError>;
-    fn switch_swipe(&self, ctx: GameServiceContext, message_id: u64, swipe_index: usize)
-        -> Result<(), ApplicationError>;
-    fn edit_history(&self, ctx: GameServiceContext, id: u64, text: String)
-        -> Result<(), ApplicationError>;
-    fn delete_last(&self, ctx: GameServiceContext) -> Result<(), ApplicationError>;
-    fn create_game(&self, ctx: GameServiceContext) -> Result<u64, ApplicationError>;
-    fn switch_game(&self, ctx: GameServiceContext, id: u64) -> Result<(), ApplicationError>;
-    fn delete_game(&self, ctx: GameServiceContext, id: u64) -> Result<(), ApplicationError>;
-    fn list_games(&self, ctx: GameServiceContext) -> Result<Vec<Game>, ApplicationError>;
-    fn current_game_id(&self, ctx: GameServiceContext) -> Result<u64, ApplicationError>;
-    fn get_current_game_name(&self, ctx: GameServiceContext) -> Result<String, ApplicationError>;
-    fn get_story_log_entries(&self, ctx: GameServiceContext)
-        -> Result<Vec<LogEntry>, ApplicationError>;
-    fn get_input_status(&self, ctx: GameServiceContext)
-        -> Result<(GenerationStatus, GenerationPhase), ApplicationError>;
-    fn get_current_room_view(&self, ctx: GameServiceContext)
-        -> Result<CurrentRoomView, ApplicationError>;
-    fn get_npc_headshots(&self, ctx: GameServiceContext)
-        -> Result<Vec<NpcPortraitView>, ApplicationError>;
-    fn get_debug_state(&self, ctx: GameServiceContext)
-        -> Result<GameStateDebugView, ApplicationError>;
-    fn list_latest_llm_messages(&self, ctx: GameServiceContext, limit: usize)
-        -> Result<Vec<LlmMessage>, ApplicationError>;
-    fn get_generating_status(&self, ctx: GameServiceContext)
-        -> Result<(GenerationStatus, GenerationPhase), ApplicationError>;
-    fn reset_generating_status(&self, ctx: GameServiceContext) -> Result<(), ApplicationError>;
+// Thin orchestrator - delegates to submodules
+pub struct DefaultApplicationService {
+    game_service: Arc<DefaultGameService>,
+    lifecycle: GameLifecycleService,
+    editing: MessageEditingService,
+    queries: QueryHandlers,
 }
 ```
 
-### Error Type
-
-`ApplicationError` distinguishes:
-- `Validation(String)` → 400 Bad Request
-- `Engine(EngineError)` → 500 Internal Server Error
-- `ShuttingDown` → 503 Service Unavailable
-- `ConcurrentGeneration` → 503 Service Unavailable
-
 ### Wire-Up
 
-`AppState` holds `application_service: Arc<dyn ApplicationService>`. All test constructors create both `game_service` and `application_service`.
+`AppState` holds `application_service: Arc<DefaultApplicationService>`. All test constructors create both `game_service` and `application_service` with concrete types.
 
-## Consequences
+## Original Decision (Preserved)
 
-### Positive
-
-- Handlers are reduced to request parsing + delegation + HTTP response mapping
-- No handler directly touches storage traits
-- `ApplicationService` methods are unit-testable without an HTTP stack
-- Storage imports can be banned from the server layer via arch-lint
-
-### Negative
-
-- One more layer of indirection
-- `AppState` construction in tests requires both `game_service` and `application_service`
+The responsibilities remain unchanged:
+- Load/save state and messages
+- Validate preconditions (e.g., "generation already in progress")
+- Set/clear `is_generating` flag
+- Spawn game service calls
+- Return raw data / `Result` (never rendered HTML)
 
 ## Related
 

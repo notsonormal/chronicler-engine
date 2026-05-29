@@ -12,10 +12,14 @@ pub enum LlmBackendType {
 impl From<&str> for LlmBackendType {
     fn from(s: &str) -> Self {
         match s {
+            "openrouter" => LlmBackendType::OpenRouter,
             "deepseek" => LlmBackendType::DeepSeek,
             "mock" => LlmBackendType::Mock,
             "ollama" => LlmBackendType::Ollama,
-            _ => LlmBackendType::OpenRouter,
+            _ => {
+                log::warn!("Unknown LLM backend '{s}', defaulting to Mock");
+                LlmBackendType::Mock
+            }
         }
     }
 }

@@ -172,9 +172,6 @@ fn test_quantifier_retry_on_low_confidence() {
 
     let result = quantify_room_with_llm_call(&context, &["carla".to_string()], &backend);
 
-    assert!(result.is_ok());
-    let result = result.unwrap();
-
     assert_eq!(result.npcs.npc_ids, vec!["carla".to_string()]);
     assert_eq!(result.npcs.confidence, QuantifierConfidence::High);
     assert_eq!(result.movement.movement_type, None);
@@ -207,9 +204,6 @@ fn test_quantifier_no_retry_when_high_confidence() {
     };
 
     let result = quantify_room_with_llm_call(&context, &["carla".to_string()], &backend);
-
-    assert!(result.is_ok());
-    let result = result.unwrap();
 
     assert_eq!(result.npcs.confidence, QuantifierConfidence::High);
 }
@@ -526,8 +520,7 @@ fn test_quantifier_retry_on_llm_error() {
 
     let result = quantify_room_with_llm_call(&context, &["carla".to_string()], &backend);
 
-    assert!(result.is_ok());
-    assert_eq!(result.unwrap().npcs.npc_ids, vec!["carla"]);
+    assert_eq!(result.npcs.npc_ids, vec!["carla"]);
 }
 
 #[test]
@@ -555,8 +548,6 @@ fn test_quantifier_all_attempts_fail_fallback() {
 
     let result = quantify_room_with_llm_call(&context, &["carla".to_string()], &backend);
 
-    assert!(result.is_ok());
-    let result = result.unwrap();
     assert_eq!(result.npcs.npc_ids, vec!["carla"]);
     assert_eq!(result.npcs.confidence, QuantifierConfidence::Low);
     assert_eq!(result.movement.movement_type, None);
@@ -588,8 +579,6 @@ fn test_quantifier_low_confidence_then_error_fallback() {
 
     let result = quantify_room_with_llm_call(&context, &["carla".to_string()], &backend);
 
-    assert!(result.is_ok());
-    let result = result.unwrap();
     assert_eq!(result.npcs.npc_ids, vec!["carla".to_string()]);
     assert_eq!(result.npcs.confidence, QuantifierConfidence::Low);
 }

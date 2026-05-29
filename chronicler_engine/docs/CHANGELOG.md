@@ -1,5 +1,39 @@
 # Changelog
 
+
+## 2026-05-29
+
+### Changed
+- **Refactored application service: split god service, fixed layer violation, deleted unnecessary traits**
+  - Split `application_service.rs` (676 lines) into verb-based submodules:
+    - `game_lifecycle.rs`: `create_game`, `switch_game`, `delete_game`, `list_games`, `current_game_id`, `reset`
+    - `message_editing.rs`: `switch_swipe`, `edit_history`, `delete_last`, `retry`, `retrigger`
+    - `query_handlers.rs`: `get_generating_status`, `get_current_game_name`, `list_latest_llm_messages`, `get_story_log_entries`, `get_input_status`, `get_current_room_view`, `get_npc_headshots`, `get_debug_state`
+    - `application_service.rs`: thin orchestrator delegating to submodules
+  - Fixed layer violation: `build_fresh_initial_state` moved from application tier to `bootstrap/state.rs`
+  - Deleted `ApplicationService` trait (single implementation) - use concrete `DefaultApplicationService`
+  - Deleted `GameService` trait (single implementation) - use concrete `DefaultGameService`
+  - Kept `PromptAssembler`, `ActionPipelineBackend`, `Agent`, `LlmBackend` traits for testability
+  - Updated 20+ call sites across lib and integration tests
+  - All fmt, clippy, guardrails pass; application tests pass
+
+## 2026-05-28
+
+### Changed
+- **Eliminate silent fallbacks and magic values across engine**
+  - `load_state` now logs `error!` before falling back to a fresh state (data corruption is visible)
+  - `active_swipe_index` out of bounds now falls back to first swipe with `warn!` log
+  - Unknown `LlmBackendType` strings default to `Mock` (free) with a `warn!` log instead of silently defaulting to `OpenRouter` (paid)
+  - Replaced magic `msg.id == 0` sentinel with `Message::is_unpersisted()` across 4 call sites
+  - Moved env-var resolution (`OPENROUTER_API_KEY`, `OLLAMA_BASE_URL`) out of `model/settings.rs` into `settings.rs::load_settings()`; `Connection` is now pure data
+  - Moved model-specific LLM hacks from `llm_client.rs` into backend modules:
+    - Added `preprocess_user_text` / `postprocess_response_text` hooks to `LlmBackend` trait
+    - Gemma 4 thinking suffix lives in `OllamaBackend::preprocess_user_text`
+    - Response sanitization lives in `narrative::llm::sanitize` and is applied via `LlmBackend::postprocess_response_text`
+  - `quantify_room_with_llm_call` returns `QuantifierResult` directly (never `Err`); removed dead `Err` branch from `determine_npcs_in_room`
+  - Deduplicated quantifier parser cascade: extracted shared `extract_npcs()` helper
+  - All 895 tests pass; clippy clean; `build.py` clean
+
 ## 2026-05-28
 
 ### Changed

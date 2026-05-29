@@ -103,3 +103,66 @@ fn test_ollama_save_message_without_storage() {
     // Should not panic when storage is None
     backend.save_message(&msg);
 }
+
+#[test]
+fn test_ollama_preprocess_gemma4_suffix() {
+    let backend = OllamaBackend::from_connection(
+        &Connection {
+            id: "ollama-gemma".into(),
+            name: "Gemma".into(),
+            provider: crate::model::llm_backend::LlmBackendType::Ollama,
+            model: "gemma4:latest".into(),
+            api_key: None,
+            base_url: None,
+            single_user_message: false,
+            max_tokens: None,
+            max_context_tokens: None,
+        },
+        None,
+    );
+    let result = backend.preprocess_user_text("User prompt");
+    assert!(result.contains("<|turn>model"));
+    assert!(result.contains("<|channel>thought"));
+    assert!(result.contains("<channel|>"));
+}
+
+#[test]
+fn test_ollama_preprocess_gemma_dash_suffix() {
+    let backend = OllamaBackend::from_connection(
+        &Connection {
+            id: "ollama-gemma".into(),
+            name: "Gemma".into(),
+            provider: crate::model::llm_backend::LlmBackendType::Ollama,
+            model: "mradermacher/gemma-4-26b".into(),
+            api_key: None,
+            base_url: None,
+            single_user_message: false,
+            max_tokens: None,
+            max_context_tokens: None,
+        },
+        None,
+    );
+    let result = backend.preprocess_user_text("User prompt");
+    assert!(result.contains("<|turn>model"));
+}
+
+#[test]
+fn test_ollama_preprocess_no_suffix_for_other_models() {
+    let backend = OllamaBackend::from_connection(
+        &Connection {
+            id: "ollama-llama".into(),
+            name: "Llama".into(),
+            provider: crate::model::llm_backend::LlmBackendType::Ollama,
+            model: "llama3:8b".into(),
+            api_key: None,
+            base_url: None,
+            single_user_message: false,
+            max_tokens: None,
+            max_context_tokens: None,
+        },
+        None,
+    );
+    let input = "User prompt";
+    let result = backend.preprocess_user_text(input);
+    assert_eq!(result, input);
+}

@@ -3,6 +3,7 @@ pub mod deepseek;
 pub mod mock;
 pub mod ollama;
 pub mod openrouter;
+pub mod sanitize;
 
 #[cfg(test)]
 mod backend_tests;
@@ -14,6 +15,8 @@ mod mock_tests;
 mod ollama_tests;
 #[cfg(test)]
 mod openrouter_tests;
+#[cfg(test)]
+mod sanitize_tests;
 
 pub use backend::{LlmBackend, LlmBackendType, get_llm_backend_for, merge_single_user_message};
 pub use deepseek::DeepSeekBackend;

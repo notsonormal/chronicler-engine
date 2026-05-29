@@ -21,12 +21,8 @@ pub(crate) struct MovementJson {
     destination: Option<String>,
 }
 
-/// [DOC: docs/reference/quantifier_prompt.md]
-pub fn parse_quantifier_response(
-    response: &str,
-    known_npc_ids: &[String],
-) -> QuantifierParseResult {
-    // Normalize: trim whitespace and extract JSON if embedded in markdown
+/// Extract NPC IDs from a quantifier response using JSON-first then text fallback.
+fn extract_npcs(response: &str, known_npc_ids: &[String]) -> QuantifierParseResult {
     let trimmed = response.trim();
 
     // Strategy 1: Try JSON parse
@@ -62,6 +58,14 @@ pub fn parse_quantifier_response(
 }
 
 /// [DOC: docs/reference/quantifier_prompt.md]
+pub fn parse_quantifier_response(
+    response: &str,
+    known_npc_ids: &[String],
+) -> QuantifierParseResult {
+    extract_npcs(response, known_npc_ids)
+}
+
+/// [DOC: docs/reference/quantifier_prompt.md]
 pub fn parse_quantifier_response_with_movement(
     response: &str,
     known_npc_ids: &[String],
@@ -69,7 +73,7 @@ pub fn parse_quantifier_response_with_movement(
 ) -> QuantifierResult {
     let trimmed = response.trim();
 
-    // Try JSON parse first
+    // Try JSON parse first for both NPCs and movement
     if let Ok((npc_ids, movement_json)) = try_parse_json_full(trimmed) {
         let valid_ids: Vec<String> = npc_ids
             .into_iter()
@@ -102,21 +106,8 @@ pub fn parse_quantifier_response_with_movement(
         };
     }
 
-    // Text fallback for NPCs
-    let text_ids = extract_npc_ids_from_text(trimmed, known_npc_ids);
-    let npcs = if !text_ids.is_empty() {
-        QuantifierParseResult {
-            npc_ids: text_ids,
-            confidence: QuantifierConfidence::Medium,
-        }
-    } else {
-        QuantifierParseResult {
-            npc_ids: Vec::new(),
-            confidence: QuantifierConfidence::Low,
-        }
-    };
-
-    // Movement is only detected via JSON - no text fallback
+    // Fallback: extract NPCs via text, movement only available via JSON
+    let npcs = extract_npcs(response, known_npc_ids);
     let movement = MovementParseResult {
         movement_type: None,
         destination: None,

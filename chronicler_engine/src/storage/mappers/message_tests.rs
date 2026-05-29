@@ -96,3 +96,44 @@ fn test_message_log_type_json_serialization() {
 
     assert_eq!(db.log_type_json, "\"Dialogue\"");
 }
+
+#[test]
+fn test_active_swipe_index_out_of_bounds_fallback() {
+    let original = Message {
+        id: 5,
+        sender: Some("Narrator".to_string()),
+        text: "First swipe".to_string(),
+        log_type: LogType::Narration,
+        timestamp: Utc::now(),
+        location_header: Some("Room A".to_string()),
+        event_header: None,
+        snapshot_id: Some(1),
+        active_swipe_index: 0,
+        swipes: vec![
+            crate::model::message::Swipe {
+                text: "First swipe".to_string(),
+                snapshot_id: Some(1),
+                location_header: Some("Room A".to_string()),
+                event_header: None,
+            },
+            crate::model::message::Swipe {
+                text: "Second swipe".to_string(),
+                snapshot_id: Some(2),
+                location_header: Some("Room B".to_string()),
+                event_header: Some("Event B".to_string()),
+            },
+        ],
+        is_deleted: false,
+    };
+    let db = model_message_to_db(&original, 1).unwrap();
+    let swipes = model_swipes_to_db(&original);
+
+    // Simulate stale active_swipe_index by mutating the db row
+    let mut db_stale = db;
+    db_stale.active_swipe_index = 99;
+
+    let back = db_message_to_model(&db_stale, &swipes).unwrap();
+    assert_eq!(back.text, "First swipe");
+    assert_eq!(back.location_header, Some("Room A".to_string()));
+    assert_eq!(back.snapshot_id, Some(1));
+}

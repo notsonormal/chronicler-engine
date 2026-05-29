@@ -19,7 +19,7 @@ fn make_test_app_state_with_storage(
     let _ = storage.save_preset(&preset);
 
     let settings = Arc::new(RwLock::new(crate::model::settings::AppSettings::default()));
-    let game_service: Arc<dyn crate::application::game_service::GameService> = Arc::new(
+    let game_service = Arc::new(
         crate::application::game_service::DefaultGameService::with_storage(
             Some(Arc::new(Storage::new_in_memory())),
             None,
@@ -35,7 +35,9 @@ fn make_test_app_state_with_storage(
         npcs: Arc::new(std::collections::HashMap::new()),
         game_service: Arc::clone(&game_service),
         application_service: Arc::new(
-            crate::application::application_service::DefaultApplicationService::new(game_service),
+            crate::application::application_service::DefaultApplicationService::new(Arc::clone(
+                &game_service,
+            )),
         ),
         settings,
         cancel_token: Arc::new(RwLock::new(tokio_util::sync::CancellationToken::new())),
@@ -333,7 +335,7 @@ fn make_test_app_state_with_failing_storage(
     fail_after_setup(&handle);
 
     let settings = Arc::new(RwLock::new(crate::model::settings::AppSettings::default()));
-    let game_service: Arc<dyn crate::application::game_service::GameService> = Arc::new(
+    let game_service = Arc::new(
         crate::application::game_service::DefaultGameService::with_storage(
             Some(Arc::new(Storage::new_in_memory())),
             None,
@@ -349,7 +351,9 @@ fn make_test_app_state_with_failing_storage(
         npcs: Arc::new(std::collections::HashMap::new()),
         game_service: Arc::clone(&game_service),
         application_service: Arc::new(
-            crate::application::application_service::DefaultApplicationService::new(game_service),
+            crate::application::application_service::DefaultApplicationService::new(Arc::clone(
+                &game_service,
+            )),
         ),
         settings,
         cancel_token: Arc::new(RwLock::new(tokio_util::sync::CancellationToken::new())),

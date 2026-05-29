@@ -1,4 +1,3 @@
-use crate::error::EngineError;
 use crate::narrative::llm::backend::LlmBackend;
 
 use super::parser::parse_quantifier_response_with_movement;
@@ -12,7 +11,7 @@ pub(crate) fn quantify_room_with_llm_call(
     context: &QuantifierPromptContext,
     fallback_npc_ids: &[String],
     backend: &dyn LlmBackend,
-) -> Result<QuantifierResult, EngineError> {
+) -> QuantifierResult {
     let builder = QuantifierPromptBuilder::new(QuantifierPromptContext {
         room: context.room,
         previous_room_npcs: context.previous_room_npcs,
@@ -84,7 +83,7 @@ pub(crate) fn quantify_room_with_llm_call(
                     continue;
                 }
 
-                return Ok(result);
+                return result;
             }
             Err(e) => {
                 log::warn!("[Quantifier] LLM call failed on attempt {attempt}: {e}");
@@ -100,7 +99,7 @@ pub(crate) fn quantify_room_with_llm_call(
         "[Quantifier] All attempts failed, using fallback NPC IDs. Last error: {}",
         last_error.as_deref().unwrap_or("unknown")
     );
-    Ok(QuantifierResult {
+    QuantifierResult {
         npcs: QuantifierParseResult {
             npc_ids: fallback_npc_ids.to_vec(),
             confidence: QuantifierConfidence::Low,
@@ -110,7 +109,7 @@ pub(crate) fn quantify_room_with_llm_call(
             destination: None,
             confidence: QuantifierConfidence::Low,
         },
-    })
+    }
 }
 pub(crate) fn static_npc_result(
     state: &crate::model::state::GameState,
@@ -212,32 +211,27 @@ pub fn determine_npcs_in_room(
         quantifier_prompt_override,
     };
 
-    match quantify_room_with_llm_call(&context, room_npc_ids, backend) {
-        Ok(result) => match result.npcs.confidence {
-            QuantifierConfidence::High | QuantifierConfidence::Medium => {
-                log::info!("[Quantifier] Using dynamic NPCs: {:?}", result.npcs.npc_ids);
-                let npc_cards: Vec<crate::model::character::NpcCard> = result
-                    .npcs
-                    .npc_ids
-                    .iter()
-                    .filter_map(|id| state.npcs.get(id).cloned())
-                    .collect();
-                QuantifierResult {
-                    npcs: QuantifierParseResult {
-                        npc_ids: npc_cards.iter().map(|n| n.id.clone()).collect(),
-                        confidence: result.npcs.confidence,
-                    },
-                    movement: result.movement,
-                }
+    let result = quantify_room_with_llm_call(&context, room_npc_ids, backend);
+    match result.npcs.confidence {
+        QuantifierConfidence::High | QuantifierConfidence::Medium => {
+            log::info!("[Quantifier] Using dynamic NPCs: {:?}", result.npcs.npc_ids);
+            let npc_cards: Vec<crate::model::character::NpcCard> = result
+                .npcs
+                .npc_ids
+                .iter()
+                .filter_map(|id| state.npcs.get(id).cloned())
+                .collect();
+            QuantifierResult {
+                npcs: QuantifierParseResult {
+                    npc_ids: npc_cards.iter().map(|n| n.id.clone()).collect(),
+                    confidence: result.npcs.confidence,
+                },
+                movement: result.movement,
             }
-            QuantifierConfidence::Low => {
-                log::info!("[Quantifier] Low confidence, using static NPCs");
-                static_npc_result(state, room_npc_ids, result.movement)
-            }
-        },
-        Err(e) => {
-            log::warn!("[Quantifier] Failed: {e}, using static NPCs");
-            static_npc_result(state, room_npc_ids, MovementParseResult::default())
+        }
+        QuantifierConfidence::Low => {
+            log::info!("[Quantifier] Low confidence, using static NPCs");
+            static_npc_result(state, room_npc_ids, result.movement)
         }
     }
 }

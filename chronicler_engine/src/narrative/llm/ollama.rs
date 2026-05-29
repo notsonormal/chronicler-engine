@@ -31,12 +31,19 @@ impl OllamaBackend {
         user_text: &str,
         max_tokens: Option<u32>,
     ) -> Result<crate::narrative::llm_client::ChatCompletionResult, EngineError> {
-        let (system, user) = if self.single_user_message {
-            ("", merge_single_user_message(system_prompt, user_text))
+        let user = if self.single_user_message {
+            merge_single_user_message(system_prompt, user_text)
         } else {
-            (system_prompt, user_text.to_string())
+            user_text.to_string()
         };
-        let result = call_ollama(&self.base_url, &self.model, system, &user, max_tokens)?;
+        let user = self.preprocess_user_text(&user);
+        let result = call_ollama(
+            &self.base_url,
+            &self.model,
+            system_prompt,
+            &user,
+            max_tokens,
+        )?;
         if result.text.trim().is_empty() {
             return Err(EngineError::Llm(LlmFailure::EmptyResponse));
         }
@@ -47,6 +54,15 @@ impl OllamaBackend {
 impl LlmBackend for OllamaBackend {
     fn model(&self) -> &str {
         &self.model
+    }
+
+    fn preprocess_user_text(&self, text: &str) -> String {
+        let m = self.model.to_lowercase();
+        if m.contains("gemma-4") || m.contains("gemma4") {
+            format!("{text}\n<|turn>model\n<|channel>thought\n<channel|>")
+        } else {
+            text.to_string()
+        }
     }
 
     fn narrate_continuation(

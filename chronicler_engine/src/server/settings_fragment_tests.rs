@@ -23,12 +23,12 @@ fn test_openrouter_returns_openrouter() {
 }
 
 #[test]
-fn test_unknown_returns_openrouter_default() {
+fn test_unknown_returns_mock_default() {
     assert_eq!(
         LlmBackendType::from("unknown_backend"),
-        LlmBackendType::OpenRouter
+        LlmBackendType::Mock
     );
-    assert_eq!(LlmBackendType::from(""), LlmBackendType::OpenRouter);
+    assert_eq!(LlmBackendType::from(""), LlmBackendType::Mock);
 }
 
 #[test]

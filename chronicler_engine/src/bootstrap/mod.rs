@@ -5,12 +5,14 @@ mod load;
 mod logging;
 mod run;
 mod scenario;
+mod state;
 mod validate;
 
 pub use load::{initialize_world_from_manifest, load_world_manifest};
 pub use logging::init_logging;
 pub use run::run;
 pub use scenario::inject_scenario_logs;
+pub use state::build_fresh_initial_state;
 pub use validate::validate_loaded_data;
 
 #[cfg(test)]

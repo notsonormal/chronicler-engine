@@ -35,18 +35,19 @@ Orchestration layer that coordinates game flow, persistence, and LLM generation.
   - `GameServiceContext`: Storage (unified SQLite/in-memory/test backend), preset storage, world/map/player/npc references, cancellation token, settings.
   - `context.rs`: Shared persistence helpers (`load_state`, `save_state`, `save_message_and_snapshot`, `map_llm_error`). Cross-storage coordination helpers (`load_messages`, `update_message_text`, `migrate_swipes`).
   - `save_message_and_snapshot()`: Saves a snapshot and immediately persists the newest unpersisted message with the snapshot ID. Messages are persisted as they are created; there is no batching or `committed` flag.
+- **`game_lifecycle.rs`**: Game lifecycle operations - `create_game`, `switch_game`, `delete_game`, `list_games`, `current_game_id`, `reset`.
+- **`message_editing.rs`**: Message editing operations - `switch_swipe`, `edit_history`, `delete_last`, `retry`, `retrigger`.
+- **`query_handlers.rs`**: Read-only query operations - `get_generating_status`, `get_current_game_name`, `list_latest_llm_messages`, `get_story_log_entries`, `get_input_status`, `get_current_room_view`, `get_npc_headshots`, `get_debug_state`.
 - **`action_pipeline`**: Action-processing workflows and the `ActionPipeline` orchestration struct.
   - `pipeline.rs`: `ActionPipelineBackend` trait (narrow seam: `assembler()`, `complete`, `run_post_generation_agents`) and `ActionPipeline<'a, B>` generic over the trait. Encapsulates the full FreeAction pipeline (narrate → quantify → triggers → event continuation) with explicit phase methods. Used by both normal action handling (`run_from_input`) and retry logic (`run_trigger_continuation`). Checks `CancellationToken::is_cancelled()` at stage boundaries and aborts gracefully via `handle_cancellation()` to avoid wasted LLM calls on stale requests.
   - `actions.rs`: Thin dispatch layer — `execute_action_impl` creates `ActionPipeline` and delegates to `run_from_input`.
   - `retry.rs`: Retry-specific setup (anchor finding, message deletion, snapshot loading) delegates continuation regeneration to `ActionPipeline::run_trigger_continuation()` and main narration retry to `ActionPipeline::run_from_input()`.
-- **`game_service`**: Service boundary — `GameService` trait and `DefaultGameService`.
-  - `service.rs`: `GameService` trait (`execute_action`, `retry_last_response`), `DefaultGameService` struct (owns `llm_backend` and `agent_registry`), and `impl ActionPipelineBackend for DefaultGameService` — the adapter that wires internal backends to the pipeline trait.
-- **`application_service`**: Logic firewall between HTTP handlers and the domain. `ApplicationService` trait and `DefaultApplicationService`.
-  - `application_service.rs`: Orchestrates state mutations, persistence, and game-service calls. All Axum handlers delegate through this layer. Returns raw data / `Result` (not rendered HTML) to keep presentation out of the service.
+- **`game_service`**: Service boundary — `DefaultGameService` struct with inherent methods (`execute_action`, `retry_last_response`, `retrigger_event`). Implements `ActionPipelineBackend` trait to wire internal backends to the pipeline seam.
+- **`application_service`**: Thin orchestrator struct (`DefaultApplicationService`) delegating to submodules. Contains `process_action` entry point and `GenerationGuard` RAII helper.
 
 ### 3. The Narrative Tier (`crate::narrative::*`)
 The interface between the synchronous engine and stochastic LLM generation.
-- **`llm`**: Directory module with traits (`LlmBackend`) and per-provider implementations (OpenRouter, DeepSeek stub, Ollama, Mock) for Game Master narration. The `LlmBackend` trait exposes pure transport primitives: `model()`, `name()`, `save_message()`, `wrap_and_save()`, `narrate_continuation()`, `complete()`.
+- **`llm`**: Directory module with traits (`LlmBackend`) and per-provider implementations (OpenRouter, DeepSeek stub, Ollama, Mock) for Game Master narration. The `LlmBackend` trait exposes transport primitives: `model()`, `name()`, `save_message()`, `wrap_and_save()`, `narrate_continuation()`, `complete()`. Backend-specific preprocessing (`preprocess_user_text`) and postprocessing (`postprocess_response_text`) hooks allow model-specific hacks (e.g., Gemma 4 thinking suffix, response sanitization) to live in the provider modules instead of the generic HTTP client.
   - **`get_llm_backend_for(connection, storage, settings)`**: Create a backend for a specific `Connection` profile. Settings are passed in — no file I/O inside the backend.
   - **`DefaultGameService::with_storage(storage, settings)`**: Production constructor that receives pre-loaded settings.
   - **`DefaultGameService::with_backends(llm, registry)`**: Constructor for dependency-injecting mock backends and agent registry in tests. No globals, no file I/O, fully isolated.
@@ -190,6 +191,7 @@ World loading, validation, and server initialization.
 - **`scenario`**: Starting scenario selection
 - **`logging`**: Structured logging setup
 - **`run`**: Server initialization and startup
+- **`state.rs`**: Fresh game state initialization (`build_fresh_initial_state`)
 
 ### 9. The CLI Tier (`crate::cli`)
 Command-line argument parsing via `clap`.

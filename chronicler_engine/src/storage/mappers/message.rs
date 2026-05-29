@@ -35,7 +35,20 @@ pub fn db_message_to_model(db: &DbMessage, swipes: &[DbSwipe]) -> Result<Message
         });
     }
 
-    if let Some(swipe) = message.swipes.get(message.active_swipe_index) {
+    let fallback_to_first = message.active_swipe_index >= message.swipes.len();
+    if fallback_to_first {
+        log::warn!(
+            "active_swipe_index {} out of bounds for message {}, falling back to first swipe",
+            message.active_swipe_index,
+            message.id
+        );
+    }
+    let idx = if fallback_to_first {
+        0
+    } else {
+        message.active_swipe_index
+    };
+    if let Some(swipe) = message.swipes.get(idx) {
         message.text = swipe.text.clone();
         message.location_header = swipe.location_header.clone();
         message.event_header = swipe.event_header.clone();

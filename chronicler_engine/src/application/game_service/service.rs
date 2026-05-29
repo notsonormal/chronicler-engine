@@ -13,14 +13,6 @@ use crate::narrative::llm::backend::LlmCallResult;
 use crate::narrative::prompt::{LayeredPromptAssembler, PromptAssembler};
 use crate::storage::Storage;
 
-pub trait GameService: Send + Sync {
-    fn execute_action(&self, ctx: GameServiceContext, input: String, player_name: String);
-
-    fn retry_last_response(&self, ctx: GameServiceContext);
-
-    fn retrigger_event(&self, ctx: GameServiceContext);
-}
-
 pub struct DefaultGameService {
     pub(crate) llm_backend: Arc<dyn crate::narrative::llm::LlmBackend>,
     pub(crate) prompt_assembler: Arc<dyn PromptAssembler>,
@@ -30,6 +22,18 @@ pub struct DefaultGameService {
 impl DefaultGameService {
     pub fn new() -> Self {
         Self::with_storage(None, None, Arc::new(RwLock::new(AppSettings::default())))
+    }
+
+    pub fn execute_action(&self, ctx: GameServiceContext, input: String, player_name: String) {
+        crate::application::action_pipeline::execute_action_impl(self, ctx, input, player_name);
+    }
+
+    pub fn retry_last_response(&self, ctx: GameServiceContext) {
+        crate::application::action_pipeline::retry_last_response_impl(self, ctx);
+    }
+
+    pub fn retrigger_event(&self, ctx: GameServiceContext) {
+        crate::application::action_pipeline::retrigger_event_impl(self, &ctx);
     }
 
     pub fn with_storage(
@@ -154,19 +158,5 @@ impl ActionPipelineBackend for DefaultGameService {
                 }
             }
         }
-    }
-}
-
-impl GameService for DefaultGameService {
-    fn execute_action(&self, ctx: GameServiceContext, input: String, player_name: String) {
-        crate::application::action_pipeline::execute_action_impl(self, ctx, input, player_name);
-    }
-
-    fn retry_last_response(&self, ctx: GameServiceContext) {
-        crate::application::action_pipeline::retry_last_response_impl(self, ctx);
-    }
-
-    fn retrigger_event(&self, ctx: GameServiceContext) {
-        crate::application::action_pipeline::retrigger_event_impl(self, &ctx);
     }
 }

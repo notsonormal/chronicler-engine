@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use chronicler_engine::application::game_service::{DefaultGameService, GameService};
+use chronicler_engine::application::game_service::DefaultGameService;
 use chronicler_engine::model::character::{CharacterSheet, PlayerCard};
 use chronicler_engine::model::map::{MapDef, Overworld};
 use chronicler_engine::model::settings::AppSettings;
@@ -23,7 +23,7 @@ fn test_settings_recover_from_poisoned_rwlock() {
     })
     .join();
 
-    let game_service: Arc<dyn GameService> = Arc::new(DefaultGameService::with_storage(
+    let game_service = Arc::new(DefaultGameService::with_storage(
         None,
         None,
         Arc::new(std::sync::RwLock::new(AppSettings::default())),
@@ -56,7 +56,7 @@ fn test_settings_recover_from_poisoned_rwlock() {
         game_service: Arc::clone(&game_service),
         application_service: Arc::new(
             chronicler_engine::application::application_service::DefaultApplicationService::new(
-                game_service,
+                Arc::clone(&game_service),
             ),
         ),
         settings,
@@ -83,7 +83,7 @@ fn test_cancel_token_recover_from_poisoned_rwlock() {
     })
     .join();
 
-    let game_service: Arc<dyn GameService> = Arc::new(DefaultGameService::with_storage(
+    let game_service = Arc::new(DefaultGameService::with_storage(
         None,
         None,
         Arc::new(std::sync::RwLock::new(AppSettings::default())),
@@ -116,7 +116,7 @@ fn test_cancel_token_recover_from_poisoned_rwlock() {
         game_service: Arc::clone(&game_service),
         application_service: Arc::new(
             chronicler_engine::application::application_service::DefaultApplicationService::new(
-                game_service,
+                Arc::clone(&game_service),
             ),
         ),
         settings: Arc::new(std::sync::RwLock::new(AppSettings::default())),

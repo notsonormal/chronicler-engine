@@ -167,8 +167,8 @@ use std::sync::atomic::AtomicBool;
 use tokio_util::sync::CancellationToken;
 use tower_http::services::ServeDir;
 
-use crate::application::application_service::{ApplicationService, DefaultApplicationService};
-use crate::application::game_service::{DefaultGameService, GameService};
+use crate::application::application_service::DefaultApplicationService;
+use crate::application::game_service::DefaultGameService;
 use crate::error::{EngineError, Result};
 use crate::model::character::NpcCard;
 use crate::model::map::MapDef;
@@ -205,8 +205,8 @@ pub struct AppState {
     pub map: Arc<MapDef>,
     pub player: Arc<crate::model::character::PlayerCard>,
     pub npcs: Arc<HashMap<String, NpcCard>>,
-    pub game_service: Arc<dyn GameService>,
-    pub application_service: Arc<dyn ApplicationService>,
+    pub game_service: Arc<DefaultGameService>,
+    pub application_service: Arc<DefaultApplicationService>,
     pub settings: Arc<RwLock<AppSettings>>,
     pub cancel_token: Arc<std::sync::RwLock<CancellationToken>>,
     pub is_generating: Arc<AtomicBool>,
@@ -274,15 +274,14 @@ pub async fn run_server_with_config(
             Some(Arc::clone(&resources.storage)),
             Some(Arc::clone(&resources.preset_storage)),
             Arc::clone(&resources.settings),
-        )) as Arc<dyn GameService>,
+        )),
         application_service: Arc::new(DefaultApplicationService::new(Arc::new(
             DefaultGameService::with_storage(
                 Some(resources.storage),
                 Some(resources.preset_storage),
                 Arc::clone(&resources.settings),
             ),
-        )
-            as Arc<dyn GameService>)) as Arc<dyn ApplicationService>,
+        ))),
         cancel_token: Arc::new(std::sync::RwLock::new(CancellationToken::new())),
     };
     let cancel_token_arc = Arc::clone(&app_state.cancel_token);

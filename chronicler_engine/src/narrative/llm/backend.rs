@@ -65,7 +65,16 @@ pub trait LlmBackend: Send + Sync {
 
     fn save_message(&self, _message: &LlmMessage) {}
 
-    fn wrap_and_save(&self, agent_name: &str, chat: ChatCompletionResult) -> LlmCallResult {
+    fn preprocess_user_text(&self, text: &str) -> String {
+        text.to_string()
+    }
+
+    fn postprocess_response_text(&self, text: &str) -> String {
+        super::sanitize::sanitize_llm_output(text)
+    }
+
+    fn wrap_and_save(&self, agent_name: &str, mut chat: ChatCompletionResult) -> LlmCallResult {
+        chat.text = self.postprocess_response_text(&chat.text);
         let result = LlmCallResult::from_chat_result(agent_name, self.name(), self.model(), chat);
         self.save_message(&result.to_message());
         result

@@ -76,15 +76,7 @@ impl Connection {
 
     /// Resolve the API key for this connection.
     pub fn resolve_api_key(&self) -> Option<String> {
-        if self.api_key.is_some() {
-            return self.api_key.clone();
-        }
-        match self.provider {
-            LlmBackendType::OpenRouter | LlmBackendType::DeepSeek => {
-                std::env::var("OPENROUTER_API_KEY").ok()
-            }
-            LlmBackendType::Ollama | LlmBackendType::Mock => None,
-        }
+        self.api_key.clone()
     }
 
     /// Resolve the base URL for this connection.
@@ -93,9 +85,7 @@ impl Connection {
             return url.clone();
         }
         match self.provider {
-            LlmBackendType::Ollama => {
-                std::env::var("OLLAMA_BASE_URL").unwrap_or_else(|_| default_ollama_base_url())
-            }
+            LlmBackendType::Ollama => default_ollama_base_url(),
             LlmBackendType::OpenRouter | LlmBackendType::DeepSeek => {
                 "https://openrouter.ai/api/v1".into()
             }

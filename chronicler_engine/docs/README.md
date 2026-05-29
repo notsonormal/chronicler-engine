@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-28 22:48 UTC*
+*Index last generated: 2026-05-29 22:04 UTC*
 
 ### Root files
 
@@ -72,10 +72,12 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Implementation Plan: Multi-Game Support Review Fixes](./plans/archived/crystal-nightwing-maria-hill.md)
 - [Plan: Reduce GameState Blast Radius](./plans/archived/doctor-mid-nite-elongated-man-devil-dinosaur.md)
 - [Plan: Split `src/storage/backend.rs` by Table Domain](./plans/archived/donna-troy-miss-martian-cable.md)
+- [Plan: Fix Silent Fallbacks & Magic Values](./plans/archived/drax-beast-boy-drax.md)
 - [Chronicler Engine: Leaky Presentation Layer Cleanup](./plans/archived/hellcat-martian-manhunter-liberty-belle.md)
 - [Plan: Fix Game UI Delay for LLM Responses](./plans/archived/jericho-vixen-lockjaw.md)
 - [PromptAssembler Architecture Design Plan](./plans/archived/moon-knight-mantis-spectre.md)
 - [Plan: Complete GameState Decoupling from Server + Tests](./plans/archived/orion-vixen-shatterstar.md)
+- [Plan: Refactor `application_service.rs` God Service and De-trait Application Layer](./plans/archived/refactor-application-service-2026-05-29.md)
 - [Plan: Remove Old Migrations from `src/storage/db.rs`](./plans/archived/remove-old-migrations.md)
 - [Plan: Fix Test Coverage Gaps (Test-Police Follow-up)](./plans/archived/scarlet-witch-wildcat-maxima.md)
 - [Implementation Plan: Eliminate Test Duplication (Moderate Approach)](./plans/archived/silk-power-girl-x-23.md)

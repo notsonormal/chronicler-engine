@@ -2,8 +2,6 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use once_cell::sync::Lazy;
-use regex::Regex;
 use serde_json::json;
 
 use crate::error::{EngineError, LlmFailure};
@@ -52,46 +50,6 @@ pub(crate) fn extract_content_from_response(
     None
 }
 
-/// Appends the Gemma 4 thinking-channel closure marker to bypass infinite thought loops.
-// [DOC: docs/system/llm_processing.md section 8]
-pub(crate) fn apply_gemma4_thinking_suffix(user_text: &str, model: &str) -> String {
-    let m = model.to_lowercase();
-    if m.contains("gemma-4") || m.contains("gemma4") {
-        format!("{user_text}\n<|turn>model\n<|channel>thought\n<channel|>")
-    } else {
-        user_text.to_string()
-    }
-}
-
-/// Strip leaked thinking/reasoning artifacts from LLM output.
-/// Applies to all models as a defensive safety net.
-#[allow(clippy::expect_used)]
-pub(crate) fn sanitize_llm_output(text: &str) -> String {
-    static RE_LEADING_CHANNEL: Lazy<Regex> =
-        Lazy::new(|| Regex::new(r"^\s*<channel\|>").expect("valid regex"));
-    static RE_THOUGHT_BLOCK: Lazy<Regex> =
-        Lazy::new(|| Regex::new(r"(?s)<thought>.*?</thought>").expect("valid regex"));
-    static RE_CHANNEL_THOUGHT: Lazy<Regex> =
-        Lazy::new(|| Regex::new(r"(?s)<\|channel>thought.*?<channel\|>").expect("valid regex"));
-    static RE_TURN_MARKERS: Lazy<Regex> =
-        Lazy::new(|| Regex::new(r"<\|turn>model|<turn\|>|<\|turn>").expect("valid regex"));
-
-    let result = RE_LEADING_CHANNEL.replace(text, "");
-    let result = RE_THOUGHT_BLOCK.replace_all(&result, "");
-    let result = RE_CHANNEL_THOUGHT.replace_all(&result, "");
-    let result = RE_TURN_MARKERS.replace_all(&result, "");
-
-    // Normalize paragraph indentation.
-    // [DOC: docs/system/llm_processing.md section 9]
-    result
-        .lines()
-        .map(|line| line.trim_start())
-        .collect::<Vec<_>>()
-        .join("\n")
-        .trim()
-        .to_string()
-}
-
 /// Parse a raw HTTP response body from an LLM chat completions endpoint.
 pub(crate) fn parse_chat_response(raw_response: &str, req_id: u64) -> crate::error::Result<String> {
     match serde_json::from_str::<serde_json::Value>(raw_response.trim_start()) {
@@ -111,12 +69,11 @@ pub(crate) fn parse_chat_response(raw_response: &str, req_id: u64) -> crate::err
             }
 
             if let Some((content, source)) = extract_content_from_response(&json_response) {
-                let sanitized = sanitize_llm_output(&content);
                 log::info!(
                     "[LLM][req:{req_id}] Extracted content via: {source} ({} chars)",
-                    sanitized.len()
+                    content.len()
                 );
-                return Ok(sanitized);
+                return Ok(content);
             }
 
             // If we got here, the response structure was unexpected
@@ -348,13 +305,12 @@ pub fn call_ollama(
     user_text: &str,
     max_tokens: Option<u32>,
 ) -> crate::error::Result<ChatCompletionResult> {
-    let user_text = apply_gemma4_thinking_suffix(user_text, model);
     call_chat_completions(
         base_url,
         None,
         model,
         system_prompt,
-        &user_text,
+        user_text,
         None,
         max_tokens,
     )

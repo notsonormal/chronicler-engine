@@ -133,13 +133,18 @@ pub fn try_load_state(ctx: &GameServiceContext) -> Result<GameState, EngineError
 pub fn load_state(ctx: &GameServiceContext) -> GameState {
     match try_load_state(ctx) {
         Ok(state) => state,
-        Err(_) => GameState::new(
-            Arc::clone(&ctx.world),
-            Arc::clone(&ctx.map),
-            Arc::clone(&ctx.player),
-            (*ctx.npcs).values().cloned().collect(),
-            ctx.world.starting_room_id.clone(),
-        ),
+        Err(e) => {
+            log::error!(
+                "Failed to load game state ({e}), falling back to fresh state. This may indicate data corruption."
+            );
+            GameState::new(
+                Arc::clone(&ctx.world),
+                Arc::clone(&ctx.map),
+                Arc::clone(&ctx.player),
+                (*ctx.npcs).values().cloned().collect(),
+                ctx.world.starting_room_id.clone(),
+            )
+        }
     }
 }
 
@@ -180,7 +185,7 @@ pub fn save_message_and_snapshot(
     }
 
     if let Some(msg) = state.narrative.history.last_mut() {
-        if msg.id == 0 {
+        if msg.is_unpersisted() {
             msg.snapshot_id = Some(snapshot_id);
             if let Some(swipe) = msg.swipes.first_mut() {
                 swipe.snapshot_id = Some(snapshot_id);

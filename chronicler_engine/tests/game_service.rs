@@ -7,7 +7,7 @@ mod pipeline_helpers;
 
 use std::sync::Arc;
 
-use chronicler_engine::application::game_service::{DefaultGameService, GameService};
+use chronicler_engine::application::game_service::DefaultGameService;
 use chronicler_engine::narrative::agents::registry::AgentRegistry;
 use chronicler_engine::narrative::llm::MockBackend;
 

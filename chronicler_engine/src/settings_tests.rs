@@ -181,11 +181,8 @@ fn test_connection_resolve_api_key() {
         api_key: None,
         ..conn
     };
-    // When api_key is None, falls back to OPENROUTER_API_KEY env var
-    assert_eq!(
-        conn_no_key.resolve_api_key(),
-        std::env::var("OPENROUTER_API_KEY").ok()
-    );
+    // When api_key is None, returns None (env resolution moved to bootstrap)
+    assert_eq!(conn_no_key.resolve_api_key(), None);
 }
 
 #[test]
@@ -207,6 +204,7 @@ fn test_connection_resolve_base_url() {
         base_url: None,
         ..conn
     };
+    // When base_url is None, returns hardcoded default (env resolution moved to bootstrap)
     assert_eq!(conn_default.resolve_base_url(), "http://localhost:11434/v1");
 }
 

@@ -13,7 +13,7 @@ fn make_test_app_state(llm_storage: Option<Arc<Storage>>) -> crate::server::AppS
         None => Arc::new(Storage::new_in_memory()),
     };
     let game_service_storage = Arc::clone(&storage);
-    let game_service: Arc<dyn crate::application::game_service::GameService> = Arc::new(
+    let game_service = Arc::new(
         crate::application::game_service::DefaultGameService::with_storage(
             Some(game_service_storage),
             None,
@@ -29,7 +29,9 @@ fn make_test_app_state(llm_storage: Option<Arc<Storage>>) -> crate::server::AppS
         npcs: Arc::new(std::collections::HashMap::new()),
         game_service: Arc::clone(&game_service),
         application_service: Arc::new(
-            crate::application::application_service::DefaultApplicationService::new(game_service),
+            crate::application::application_service::DefaultApplicationService::new(Arc::clone(
+                &game_service,
+            )),
         ),
         settings: Arc::new(RwLock::new(AppSettings::default())),
         cancel_token: Arc::new(RwLock::new(CancellationToken::new())),

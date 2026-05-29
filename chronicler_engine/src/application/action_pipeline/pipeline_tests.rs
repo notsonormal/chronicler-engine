@@ -266,31 +266,24 @@ fn test_run_trigger_continuation_cancels_at_start() {
         GenerationPhase::default()
     );
 }
-
 #[test]
 fn test_trigger_continuation_save_post_trigger_error() {
     let state = make_test_state();
     let base_ctx = make_ctx(state.clone());
-
     let (failing_storage, handle) = Storage::new_in_memory().with_test_failures();
     let failing = Arc::new(failing_storage);
     handle.set(
         Operation::SaveSnapshot,
         TestOverride::internal("simulated save failure"),
     );
-
     let ctx = GameServiceContext {
         storage: failing,
         ..base_ctx.clone()
     };
-
     let backend = MockPipelineBackend::default();
     let pipeline = ActionPipeline::new(&backend, &ctx);
-
     let trigger = crate::test_support::TestStoredTriggerContext::for_npc("npc1", "Test", "Hello");
-
     let outcome = pipeline.run_trigger_continuation(state, trigger, "look");
-
     assert!(
         matches!(outcome, ActionOutcome::Error { ref message } if message.contains("Failed to save post-trigger retry snapshot")),
         "Expected save error for post-trigger snapshot, got {outcome:?}"

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::application::game_service::{DefaultGameService, GameService};
+use crate::application::game_service::DefaultGameService;
 use crate::model::settings::AppSettings;
 use crate::server::ServerConfig;
 
@@ -53,7 +53,7 @@ fn test_server_config_max_port() {
 #[test]
 fn test_app_state_struct_fields() {
     // Verify AppState struct has expected fields
-    let game_service: Arc<dyn GameService> = Arc::new(DefaultGameService::new());
+    let game_service: Arc<DefaultGameService> = Arc::new(DefaultGameService::new());
     let settings = Arc::new(std::sync::RwLock::new(AppSettings::default()));
 
     // Verify we can construct AppState-like struct with required fields

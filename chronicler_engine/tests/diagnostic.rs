@@ -16,9 +16,7 @@ mod test_data;
 
 use std::sync::Arc;
 
-use chronicler_engine::application::game_service::{
-    DefaultGameService, GameService, GameServiceContext,
-};
+use chronicler_engine::application::game_service::{DefaultGameService, GameServiceContext};
 
 use chronicler_engine::model::state::GenerationStatus;
 use chronicler_engine::narrative::llm::backend::LlmBackend;
