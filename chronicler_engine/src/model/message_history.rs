@@ -31,11 +31,7 @@ impl MessageHistory {
 
     pub fn edit(&mut self, id: u64, new_text: String) -> crate::error::Result<()> {
         if let Some(msg) = self.messages.iter_mut().find(|m| m.id == id) {
-            msg.text = new_text.clone();
-            let idx = msg.active_swipe_index;
-            if let Some(swipe) = msg.swipes.get_mut(idx) {
-                swipe.text = new_text;
-            }
+            msg.update_active_swipe_text(new_text);
             Ok(())
         } else {
             Err(crate::error::EngineError::Internal(
@@ -122,7 +118,7 @@ impl MessageHistory {
             .rev()
             .find(|m| m.message_type == MessageType::Input)?;
         let sender = input.sender.clone().unwrap_or_default();
-        Some((sender, input.text.clone()))
+        Some((sender, input.text().to_string()))
     }
 
     pub fn is_last_ai_response_event_continuation(&self) -> bool {
@@ -132,7 +128,7 @@ impl MessageHistory {
             .find(|m| {
                 m.message_type == MessageType::Narration || m.message_type == MessageType::Dialogue
             })
-            .is_some_and(|m| m.event_header.is_some())
+            .is_some_and(|m| m.event_header().is_some())
     }
 
     pub fn to_message_entries(&self) -> Vec<MessageEntry> {
@@ -141,11 +137,11 @@ impl MessageHistory {
             .map(|msg| MessageEntry {
                 id: msg.id,
                 sender: msg.sender.clone(),
-                text: msg.text.clone(),
+                text: msg.text().to_string(),
                 message_type: msg.message_type.clone(),
                 timestamp: msg.timestamp,
-                location_header: msg.location_header.clone(),
-                event_header: msg.event_header.clone(),
+                location_header: msg.location_header().map(|s| s.to_string()),
+                event_header: msg.event_header().map(|s| s.to_string()),
                 swipe_count: msg.swipe_count(),
                 active_swipe_index: msg.active_swipe_index,
             })

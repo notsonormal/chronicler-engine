@@ -74,17 +74,17 @@ impl GameServiceContext {
         }
         let is_event = messages
             .last()
-            .and_then(|m| m.event_header.as_ref())
-            .is_some();
+            .map(|m| m.event_header().is_some())
+            .unwrap_or(false);
         let anchor_idx = if is_event {
-            messages.iter().rposition(|m| m.event_header.is_none())?
+            messages.iter().rposition(|m| m.event_header().is_none())?
         } else {
             messages
                 .iter()
                 .rposition(|m| m.message_type == crate::model::state::MessageType::Input)?
         };
         let anchor_msg = &messages[anchor_idx];
-        let snapshot_id = *anchor_msg.snapshot_id.as_ref()?;
+        let snapshot_id = *anchor_msg.snapshot_id().as_ref()?;
         Some((anchor_idx, anchor_msg, snapshot_id))
     }
 
@@ -118,15 +118,12 @@ pub fn load_messages_with_swipes(
     for msg in &mut messages {
         if let Some(swipes) = swipes_map.get(&msg.id) {
             msg.swipes = swipes.clone();
-            if let Some(swipe) = msg
+            if let Some(_swipe) = msg
                 .swipes
                 .get(msg.active_swipe_index)
                 .or(msg.swipes.first())
             {
-                msg.text = swipe.text.clone();
-                msg.location_header = swipe.location_header.clone();
-                msg.event_header = swipe.event_header.clone();
-                msg.snapshot_id = swipe.snapshot_id;
+                msg.set_active_swipe(msg.active_swipe_index);
             }
         }
     }
@@ -213,7 +210,7 @@ pub fn save_message_and_snapshot(
 
     if let Some(msg) = state.narrative.history.last_mut() {
         if msg.is_unpersisted() {
-            msg.snapshot_id = Some(snapshot_id);
+            msg.set_snapshot_id(Some(snapshot_id));
             if let Some(swipe) = msg.swipes.first_mut() {
                 swipe.snapshot_id = Some(snapshot_id);
             }

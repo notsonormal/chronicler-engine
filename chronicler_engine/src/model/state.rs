@@ -318,7 +318,7 @@ impl GameState {
         // Retry interception: append swipe instead of creating new message
         if message_type == MessageType::Narration || message_type == MessageType::Dialogue {
             if let Some(ref mut target) = self.narrative.retry_target {
-                let target_is_event = target.event_header.is_some();
+                let target_is_event = target.event_header().is_some();
                 let new_is_event = event_header.is_some();
                 if target_is_event == new_is_event {
                     let swipe = Swipe {
@@ -328,10 +328,7 @@ impl GameState {
                         event_header: event_header.clone(),
                     };
                     target.swipes.push(swipe);
-                    target.active_swipe_index = target.swipes.len() - 1;
-                    target.text = text;
-                    target.location_header = location_header;
-                    target.event_header = event_header;
+                    target.set_active_swipe(target.swipes.len() - 1);
                     return;
                 }
             }

@@ -106,7 +106,7 @@ fn test_inv002_state_mutation_order() {
     let history = &result.next_state.narrative.history;
     let narration_idx = history
         .iter()
-        .position(|e| e.message_type == MessageType::Narration && e.text.contains("look around"))
+        .position(|e| e.message_type == MessageType::Narration && e.text().contains("look around"))
         .expect("narration should be in history");
     assert!(
         narration_idx < history.len(),
@@ -287,9 +287,7 @@ fn test_inv003_snapshot_restores_state_fields() {
 }
 #[test]
 fn test_inv005_handle_movement_runs_before_narration() {
-    use chronicler_engine::engine::action_processing::{
-        FreeActionContext, execute_freeaction_impl,
-    };
+    use chronicler_engine::engine::action_processing::{FreeActionContext, execute_freeaction_impl};
     use chronicler_engine::model::quantifier::{
         QuantifierConfidence, QuantifierParseResult, QuantifierResult,
     };

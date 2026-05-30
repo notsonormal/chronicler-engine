@@ -143,7 +143,7 @@ fn test_retry_room_not_found() {
     let pre_main_id = ctx.storage.save_snapshot(&pre_main).unwrap();
     for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
         if msg.message_type == MessageType::Input {
-            msg.snapshot_id = Some(pre_main_id);
+            msg.set_snapshot_id(Some(pre_main_id));
         }
         let _ = ctx.storage.insert_message(&msg);
     }
@@ -184,7 +184,7 @@ fn test_retry_llm_error() {
     let pre_main_id = ctx.storage.save_snapshot(&pre_main).unwrap();
     for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
         if msg.message_type == MessageType::Input {
-            msg.snapshot_id = Some(pre_main_id);
+            msg.set_snapshot_id(Some(pre_main_id));
         }
         let _ = ctx.storage.insert_message(&msg);
     }
@@ -225,7 +225,7 @@ fn test_retry_empty_narration() {
     let pre_main_id = ctx.storage.save_snapshot(&pre_main).unwrap();
     for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
         if msg.message_type == MessageType::Input {
-            msg.snapshot_id = Some(pre_main_id);
+            msg.set_snapshot_id(Some(pre_main_id));
         }
         let _ = ctx.storage.insert_message(&msg);
     }
@@ -267,7 +267,7 @@ fn test_retry_main_narration_uses_pre_main_snapshot() {
     let pre_main_id = ctx.storage.save_snapshot(&pre_main).unwrap();
     for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
         if msg.message_type == MessageType::Input {
-            msg.snapshot_id = Some(pre_main_id);
+            msg.set_snapshot_id(Some(pre_main_id));
         }
         let _ = ctx.storage.insert_message(&msg);
     }
@@ -332,15 +332,15 @@ fn test_retry_event_continuation_uses_pre_event_snapshot() {
     let pre_event_id = ctx.storage.save_snapshot(&pre_event).unwrap();
 
     if let Some(last) = state.narrative.history.last_mut() {
-        last.event_header = Some("Greeting".to_string());
+        last.set_event_header(Some("Greeting".to_string()));
     }
 
     let final_snap = GameStateSnapshot::from_game_state(&state);
     let _ = ctx.storage.save_snapshot(&final_snap);
 
     for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
-        if msg.message_type == MessageType::Narration && msg.event_header.is_none() {
-            msg.snapshot_id = Some(pre_event_id);
+        if msg.message_type == MessageType::Narration && msg.event_header().is_none() {
+            msg.set_snapshot_id(Some(pre_event_id));
         }
         let _ = ctx.storage.insert_message(&msg);
     }

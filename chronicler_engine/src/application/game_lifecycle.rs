@@ -45,7 +45,7 @@ impl GameLifecycleService {
 
         if let Some(msg) = initial_state.narrative.history.last_mut() {
             if msg.is_unpersisted() {
-                msg.snapshot_id = Some(snapshot_id);
+                msg.set_snapshot_id(Some(snapshot_id));
                 match ctx.storage.insert_message(&*msg) {
                     Ok(id) => msg.id = id,
                     Err(e) => {
@@ -124,7 +124,7 @@ impl GameLifecycleService {
 
         if let Some(msg) = initial_state.narrative.history.last_mut() {
             if msg.is_unpersisted() {
-                msg.snapshot_id = Some(snapshot_id);
+                msg.set_snapshot_id(Some(snapshot_id));
                 let id = ctx.storage.insert_message(&*msg)?;
                 msg.id = id;
             }

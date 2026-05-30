@@ -164,7 +164,7 @@ impl MessageEditingService {
         let is_narration = last_msg.message_type == crate::model::state::MessageType::Narration
             || last_msg.message_type == crate::model::state::MessageType::Dialogue;
 
-        if !is_narration || last_msg.event_header.is_some() {
+        if !is_narration || last_msg.event_header().is_some() {
             return Err(ApplicationError::validation(
                 "Last message must be a narration to retrigger",
             ));

@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-30 22:06 UTC*
+*Index last generated: 2026-05-30 23:16 UTC*
 
 ### Root files
 
@@ -80,6 +80,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Chronicler Engine: Leaky Presentation Layer Cleanup](./plans/archived/hellcat-martian-manhunter-liberty-belle.md)
 - [Plan: Fix Game UI Delay for LLM Responses](./plans/archived/jericho-vixen-lockjaw.md)
 - [Plan: Rename `try_load_state` / `load_state` to Clearer Names](./plans/archived/load-state-rename-2026-05-30.md)
+- [Plan: Enforced Message Consistency via Private Fields](./plans/archived/message-enforced-consistency-2026-05-30.md)
 - [PromptAssembler Architecture Design Plan](./plans/archived/moon-knight-mantis-spectre.md)
 - [Plan: Complete GameState Decoupling from Server + Tests](./plans/archived/orion-vixen-shatterstar.md)
 - [Plan: Refactor `application_service.rs` God Service and De-trait Application Layer](./plans/archived/refactor-application-service-2026-05-29.md)

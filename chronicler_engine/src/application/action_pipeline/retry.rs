@@ -23,7 +23,7 @@ pub fn retry_last_response_impl<B: ActionPipelineBackend>(backend: &B, ctx: Game
 
     let is_event = messages
         .last()
-        .map(|m| m.event_header.is_some())
+        .map(|m| m.event_header().is_some())
         .unwrap_or(false);
 
     let old_target = messages
@@ -31,12 +31,12 @@ pub fn retry_last_response_impl<B: ActionPipelineBackend>(backend: &B, ctx: Game
         .rev()
         .find(|m| {
             if is_event {
-                m.event_header.is_some()
+                m.event_header().is_some()
             } else {
                 matches!(
                     m.message_type,
                     MessageType::Narration | MessageType::Dialogue
-                ) && m.event_header.is_none()
+                ) && m.event_header().is_none()
             }
         })
         .cloned();

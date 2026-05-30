@@ -167,7 +167,7 @@ fn test_restart_with_existing_game_does_not_duplicate_scenario() {
     let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
     let snapshot_id = storage.save_snapshot(&snapshot).unwrap();
     if let Some(msg) = state.narrative.history.last_mut() {
-        msg.snapshot_id = Some(snapshot_id);
+        msg.set_snapshot_id(Some(snapshot_id));
         let id = storage.insert_message(&*msg).unwrap();
         msg.id = id;
     }

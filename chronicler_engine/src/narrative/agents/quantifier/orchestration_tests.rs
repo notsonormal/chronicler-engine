@@ -4,13 +4,9 @@ use crate::model::state::MessageEntry;
 use crate::narrative::llm::backend::{LlmBackend, LlmCallResult};
 use crate::test_support::fixtures::{TestGameState, TestNpc};
 
-use super::orchestration::{
-    determine_npcs_in_room, quantify_room_with_llm_call, static_npc_result,
-};
+use super::orchestration::{determine_npcs_in_room, quantify_room_with_llm_call, static_npc_result};
 use super::test_support::{make_npc, make_room};
-use super::types::{
-    MovementParseResult, MovementType, QuantifierConfidence, QuantifierPromptContext,
-};
+use super::types::{MovementParseResult, MovementType, QuantifierConfidence, QuantifierPromptContext};
 
 #[test]
 fn test_quantifier_retry_on_low_confidence() {

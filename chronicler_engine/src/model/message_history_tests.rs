@@ -27,7 +27,7 @@ fn test_append_adds_message() {
     let mut history = MessageHistory::new();
     history.append(make_message(1, "hello", MessageType::Input));
     assert_eq!(history.len(), 1);
-    assert_eq!(history.last().unwrap().text, "hello");
+    assert_eq!(history.last().unwrap().text(), "hello");
 }
 
 #[test]
@@ -51,7 +51,7 @@ fn test_edit_success() {
     let mut history = MessageHistory::new();
     history.append(make_message(42, "old", MessageType::Narration));
     history.edit(42, "new".to_string()).unwrap();
-    assert_eq!(history.get(42).unwrap().text, "new");
+    assert_eq!(history.get(42).unwrap().text(), "new");
 }
 
 #[test]
@@ -68,7 +68,7 @@ fn test_delete_last_success() {
     history.append(make_message(2, "b", MessageType::Narration));
     history.delete_last().unwrap();
     assert_eq!(history.len(), 1);
-    assert_eq!(history.last().unwrap().text, "a");
+    assert_eq!(history.last().unwrap().text(), "a");
 }
 
 #[test]
@@ -81,8 +81,8 @@ fn test_delete_last_empty_fails() {
 fn test_get_and_last() {
     let mut history = MessageHistory::new();
     history.append(make_message(7, "seven", MessageType::Input));
-    assert_eq!(history.get(7).unwrap().text, "seven");
-    assert_eq!(history.last().unwrap().text, "seven");
+    assert_eq!(history.get(7).unwrap().text(), "seven");
+    assert_eq!(history.last().unwrap().text(), "seven");
     assert!(history.get(99).is_none());
 }
 
@@ -90,8 +90,11 @@ fn test_get_and_last() {
 fn test_last_mut() {
     let mut history = MessageHistory::new();
     history.append(make_message(1, "x", MessageType::Narration));
-    history.last_mut().unwrap().text = "y".to_string();
-    assert_eq!(history.last().unwrap().text, "y");
+    history
+        .last_mut()
+        .unwrap()
+        .update_active_swipe_text("y".to_string());
+    assert_eq!(history.last().unwrap().text(), "y");
 }
 
 #[test]
@@ -100,20 +103,21 @@ fn test_iter_and_iter_mut() {
     history.append(make_message(1, "a", MessageType::Narration));
     history.append(make_message(2, "b", MessageType::Input));
 
-    let texts: Vec<_> = history.iter().map(|m| m.text.clone()).collect();
+    let texts: Vec<_> = history.iter().map(|m| m.text().to_string()).collect();
     assert_eq!(texts, vec!["a", "b"]);
 
     for m in history.iter_mut() {
-        m.text.push('!');
+        let current = m.text().to_string();
+        m.update_active_swipe_text(current + "!");
     }
-    assert_eq!(history.last().unwrap().text, "b!");
+    assert_eq!(history.last().unwrap().text(), "b!");
 }
 
 #[test]
 fn test_as_slice() {
     let mut history = MessageHistory::new();
     history.append(make_message(1, "a", MessageType::Narration));
-    assert_eq!(history.as_slice()[0].text, "a");
+    assert_eq!(history.as_slice()[0].text(), "a");
 }
 
 #[test]
@@ -122,7 +126,7 @@ fn test_replace() {
     history.append(make_message(1, "old", MessageType::Narration));
     history.replace(vec![make_message(2, "new", MessageType::Input)]);
     assert_eq!(history.len(), 1);
-    assert_eq!(history.last().unwrap().text, "new");
+    assert_eq!(history.last().unwrap().text(), "new");
 }
 
 #[test]
@@ -180,7 +184,7 @@ fn test_is_last_ai_response_event_continuation() {
     assert!(!history.is_last_ai_response_event_continuation());
 
     let mut msg = make_message(3, "event", MessageType::Narration);
-    msg.event_header = Some("Event".to_string());
+    msg.set_event_header(Some("Event".to_string()));
     history.append(msg);
     assert!(history.is_last_ai_response_event_continuation());
 }

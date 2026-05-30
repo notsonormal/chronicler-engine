@@ -18,8 +18,6 @@ use crate::test_data::create_test_map;
 
 #[test]
 fn test_event_retry_does_not_create_extra_swipe_on_narration() {
-    // Bug regression: retry was creating unnecessary extra swipes on the main
-    // narration message when retrying an event continuation.
     let mut state = create_test_state_with_trigger_npc();
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
@@ -58,25 +56,19 @@ fn test_event_retry_does_not_create_extra_swipe_on_narration() {
         .iter()
         .filter(|m| m.message_type == chronicler_engine::model::state::MessageType::Narration)
         .collect();
-    // After event retry there should be 2 Narration messages:
-    // 1) main narration, 2) event continuation
     assert_eq!(
         narration_msgs.len(),
         2,
         "Should have exactly 2 Narration messages"
     );
     assert!(
-        !narration_msgs[0].text.is_empty(),
+        !narration_msgs[0].text().is_empty(),
         "Main narration must have text after event retry"
     );
 }
 
 #[test]
 fn test_retry_event_continuation_preserves_quantifier_result() {
-    // Setup: Action fires trigger → event continuation.
-    // Mock quantifier returns movement on first (and only) call.
-    // Flow: Execute → player moves → event added
-    //       → Retry event → player STILL in same room (quantifier NOT rerun)
     let mut state = create_test_state_with_trigger_npc();
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
@@ -140,11 +132,6 @@ fn test_retry_event_continuation_preserves_quantifier_result() {
 
 #[test]
 fn test_trigger_continuation_runs_quantifier_and_detects_new_npc() {
-    // Setup: Shopkeeper has trigger (times_met == 0). Gabriella is present in the world
-    // but NOT detected by first quantifier.
-    // Flow: Execute → first quantifier returns empty → trigger fires
-    //       → trigger continuation mentions Gabriella → second quantifier detects her
-    //       → Gabriella appears in scene.npcs_in_area and times_met increments.
     let world = Arc::new(WorldCard {
         name: "Test World".into(),
         description: "A test world".into(),
@@ -219,7 +206,6 @@ fn test_trigger_continuation_runs_quantifier_and_detects_new_npc() {
 
     add_input_and_save(&ctx, "enter shop");
 
-    // Mock LLM: first call = main narration, second call = trigger continuation mentioning Gabriella
     let llm_backend = Arc::new(MockBackend {
         per_call_narrations: vec![
             "You step into the shop.".to_string(),
@@ -228,7 +214,6 @@ fn test_trigger_continuation_runs_quantifier_and_detects_new_npc() {
         ..Default::default()
     });
 
-    // Mock quantifier: first call = no NPCs, second call = Gabriella detected
     let quantifier = Arc::new(MockBackend {
         per_call_prompt_responses: vec![
             r#"{"npcs_in_room": []}"#.to_string(),
@@ -247,7 +232,6 @@ fn test_trigger_continuation_runs_quantifier_and_detects_new_npc() {
 
     let guard = latest_state(&ctx);
 
-    // Verify trigger fired
     let event_count = guard
         .narrative
         .history()
@@ -259,7 +243,6 @@ fn test_trigger_continuation_runs_quantifier_and_detects_new_npc() {
         "Trigger should have fired and added an Event"
     );
 
-    // Verify Gabriella was detected and added to scene.npcs_in_area
     let npc_ids_in_area: Vec<String> = guard
         .scene
         .npcs_in_area
@@ -271,7 +254,6 @@ fn test_trigger_continuation_runs_quantifier_and_detects_new_npc() {
         "Gabriella should appear in scene.npcs_in_area after post-trigger quantifier. Got: {npc_ids_in_area:?}"
     );
 
-    // Verify times_met was incremented for Gabriella via Entered event
     let gabriella_state = guard
         .npc_encounter_log
         .npcs

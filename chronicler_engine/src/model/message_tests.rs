@@ -13,10 +13,10 @@ fn test_message_new_sets_fields() {
 
     assert_eq!(msg.id, 0);
     assert_eq!(msg.sender, Some("Player".to_string()));
-    assert_eq!(msg.text, "Hello world");
+    assert_eq!(msg.text(), "Hello world");
     assert_eq!(msg.message_type, MessageType::Input);
-    assert_eq!(msg.location_header, Some("Location".to_string()));
-    assert_eq!(msg.event_header, Some("Event".to_string()));
+    assert_eq!(msg.location_header(), Some(&"Location".to_string()));
+    assert_eq!(msg.event_header(), Some(&"Event".to_string()));
 }
 
 #[test]
@@ -28,8 +28,8 @@ fn test_message_text_roundtrip() {
         None,
         None,
     );
-    msg.text = "Updated".to_string();
-    assert_eq!(msg.text, "Updated");
+    msg.update_active_swipe_text("Updated".to_string());
+    assert_eq!(msg.text(), "Updated");
 }
 
 #[test]

@@ -12,19 +12,14 @@ pub fn db_message_to_model(db: &DbMessage, swipes: &[DbSwipe]) -> Result<Message
         .map_err(|e| EngineError::Config(format!("Failed to parse message timestamp: {e}")))?
         .with_timezone(&Utc);
 
-    let mut message = Message {
-        id: db.id as u64,
-        sender: db.sender.clone(),
-        text: String::new(),
+    let mut message = Message::from_db(
+        db.id as u64,
+        db.sender.clone(),
         message_type,
         timestamp,
-        location_header: None,
-        event_header: None,
-        snapshot_id: None,
-        active_swipe_index: db.active_swipe_index as usize,
-        swipes: Vec::new(),
-        is_deleted: db.is_deleted != 0,
-    };
+        db.active_swipe_index as usize,
+        db.is_deleted != 0,
+    );
 
     for db_swipe in swipes {
         message.swipes.push(Swipe {
@@ -48,11 +43,8 @@ pub fn db_message_to_model(db: &DbMessage, swipes: &[DbSwipe]) -> Result<Message
     } else {
         message.active_swipe_index
     };
-    if let Some(swipe) = message.swipes.get(idx) {
-        message.text = swipe.text.clone();
-        message.location_header = swipe.location_header.clone();
-        message.event_header = swipe.event_header.clone();
-        message.snapshot_id = swipe.snapshot_id;
+    if let Some(_swipe) = message.swipes.get(idx) {
+        message.set_active_swipe(idx);
     }
 
     Ok(message)

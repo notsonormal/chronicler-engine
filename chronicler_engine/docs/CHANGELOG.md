@@ -3,6 +3,14 @@
 ## 2026-05-30
 
 ### Changed
+- **Enforced message-swipe consistency via private fields**
+  - Made Message text/location_header/event_header/snapshot_id private  
+  - Added getters for all four fields  
+  - Added set_active_swipe, update_active_swipe_text, set_event_header, set_snapshot_id  
+  - Added Message::from_db for DB deserialization  
+  - Added PartialEq derive to Message and Swipe  
+  - Updated 14 source files; fixed 8 test files  
+  - All 937 tests pass; clippy clean; build.py passes  
 - **Extracted `find_retry_anchor` helper to `GameServiceContext`**
   - Added `fn find_retry_anchor<'a>(&self, messages: &'a [Message]) -> Option<(usize, &'a Message, u64)>` method
   - Consolidates anchor-finding logic (last input or last non-event for events) previously inlined in `retry.rs`
@@ -16,11 +24,12 @@
   - Spawn logic intentionally left in each method since `retry_last_response` vs `retrigger_event` require different game_service calls
   - All 19 retry/retrigger tests pass; cargo check clean
 
-- **Dedup load_state: 4 identical methods replaced with single context::load_state call**
-  - Removed `fn load_state` from `application_service.rs`, `game_lifecycle.rs`, `message_editing.rs`, `query_handlers.rs`
-  - Updated 12 call sites: `self.load_state(&ctx)?` → `load_state(&ctx)` (drops `?` since `context::load_state` returns `GameState` directly)
-  - Added `use crate::application::context::load_state` to all consuming files
-  - `context.rs` remains the single canonical source
+ - **Renamed context loading functions for clarity**
+ - `try_load_state` → `load_expecting_valid_state`: returns `Result<GameState, EngineError>`. Callers decide recovery (log+fresh state or propagate error). Used when corruption must be detected explicitly.
+ - `load_state` → `load_or_fresh`: returns `GameState` directly. Logs warning on load failure, falls back to fresh state. Safe default for production.
+ - `ctx.load_state()` → `ctx.load_state_for_test()`: test-only method on `GameServiceContext`. Name change only, behavior unchanged (panics if no snapshot).
+ - Updated 17+ call sites across `bootstrap/run.rs`, `endpoints.rs`, `actions.rs`, `pipeline.rs`, `retry.rs`, `application_service.rs`, `message_editing.rs`, `query_handlers.rs`, and test files.
+ - All 939 tests pass; clippy clean; `build.py` clean.
 
 ### Changed
 - **Refactored application service: split god service, fixed layer violation, deleted unnecessary traits**
@@ -40,7 +49,7 @@
 
 ### Changed
 - **Eliminate silent fallbacks and magic values across engine**
-  - `load_state` now logs `error!` before falling back to a fresh state (data corruption is visible)
+  - `load_or_fresh` now logs `error!` before falling back to a fresh state (data corruption is visible)
   - `active_swipe_index` out of bounds now falls back to first swipe with `warn!` log
   - Unknown `LlmBackendType` strings default to `Mock` (free) with a `warn!` log instead of silently defaulting to `OpenRouter` (paid)
   - Replaced magic `msg.id == 0` sentinel with `Message::is_unpersisted()` across 4 call sites
@@ -153,7 +162,7 @@
   - Replaces `create_app_for_testing`, `create_app_for_testing_with_settings`, `create_app_with_storage` (all removed from `src/test_support/server_helpers.rs`)
 
 - **Layer boundary guardrails** (`tests/guardrails/layers.rs`)
-  - `guardrails_server_layer_boundaries`: bans `GameState` references and `.load_state()` calls in `src/server/` (except `mod.rs` and `debug.rs`)
+  - `guardrails_server_layer_boundaries`: bans `GameState` references and `.load_` calls in `src/server/` (except `mod.rs` and `debug.rs`)
   - `guardrails_test_layer_boundaries`: bans `GameState::new()` construction and `GameState` imports in `tests/components/`
 
 ### Changed
@@ -171,7 +180,7 @@
 - **ApplicationService — logic firewall between HTTP handlers and domain**
   - New `ApplicationService` trait in `src/application/application_service.rs` with `DefaultApplicationService` implementation
   - Orchestrates all state mutations, persistence, and game-service calls
-  - Methods: `process_action`, `retry`, `retrigger`, `switch_swipe`, `edit_history`, `delete_last`, `reset`, `create_game`, `switch_game`, `delete_game`, `list_games`, `get_generating_status`, `reset_generating_status`, `load_state`, `get_current_game_name`, `list_latest_llm_messages`
+  - Methods: `process_action`, `retry`, `retrigger`, `switch_swipe`, `edit_history`, `delete_last`, `reset`, `create_game`, `switch_game`, `delete_game`, `list_games`, `get_generating_status`, `reset_generating_status`, `load_or_fresh`, `load_expecting_valid_state`, `get_current_game_name`, `list_latest_llm_messages`
   - All Axum handlers now reduced to request parsing + `ApplicationService` delegation + HTTP response mapping
   - No handler directly touches `snapshot_storage.save()`, `message_storage.load_messages()`, or `GameStateSnapshot::from_game_state()`
 
@@ -191,7 +200,7 @@
   - Snapshot changes no longer force message code recompilation, and vice versa
 
 - **Arch-lint guardrail**: Added `deny-scope-dep` rule banning `server -> storage` imports; server layer must access storage through `ApplicationService`
-- **Removed `AppState::load_state()`**: All loading goes through `ApplicationService::load_state()`
+ - **Removed `AppState::load_state()`**: All loading goes through `ApplicationService::load_or_fresh()`
 - **Removed dead UI fields from `InputBuffer`**: Deleted `cursor_position`, `scroll_offset`, and methods `push_char`, `pop_char`, `clear_input`
 
 ## 2026-05-24

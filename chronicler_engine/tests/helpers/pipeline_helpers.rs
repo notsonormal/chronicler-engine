@@ -164,8 +164,8 @@ pub fn save_state(
         let _ = ctx.storage.delete_message(msg.id);
     }
     for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
-        if msg.snapshot_id.is_none() {
-            msg.snapshot_id = Some(snapshot_id);
+        if msg.snapshot_id().is_none() {
+            msg.set_snapshot_id(Some(snapshot_id));
         }
         if let Some(swipe) = msg.swipes.first_mut() {
             swipe.snapshot_id = Some(snapshot_id);

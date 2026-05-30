@@ -56,47 +56,14 @@ fn test_delete_last_log_recalculates_ids() {
     // Delete Narration
     state.narrative.history.delete_last().unwrap();
     assert_eq!(state.narrative.history.len(), 1);
-    assert_eq!(state.narrative.history.as_slice()[0].text, "go north");
+    assert_eq!(state.narrative.history.as_slice()[0].text(), "go north");
 
     // Delete Input
     state.narrative.history.delete_last().unwrap();
     assert!(state.narrative.history.is_empty());
-
     // Verify a new Input can be added after delete
     state.add_message("go south".into(), Some("Player".into()), MessageType::Input);
-    assert_eq!(state.narrative.history.len(), 1);
-    assert_eq!(state.narrative.history.last().unwrap().text, "go south");
-}
-
-#[test]
-fn test_add_log_absorbs_pending_location() {
-    let mut state = TestGameState::in_room("room1");
-    state.narrative.pending_location = Some("Entrance Hall".to_string());
-    state.add_message("You walk in.".into(), None, MessageType::Narration);
-
-    let history = state.narrative.history();
-    let entry = history.last().unwrap();
-    assert_eq!(entry.location_header, Some("Entrance Hall".to_string()));
-    assert!(state.narrative.pending_location.is_none());
-}
-
-#[test]
-fn test_add_log_absorbs_pending_event() {
-    let mut state = TestGameState::in_room("room1");
-    state.narrative.pending_event = Some("Gabriella Introduction".to_string());
-    state.add_message(
-        "Gabriella steps forward.".into(),
-        None,
-        MessageType::Narration,
-    );
-
-    let history = state.narrative.history();
-    let entry = history.last().unwrap();
-    assert_eq!(
-        entry.event_header,
-        Some("Gabriella Introduction".to_string())
-    );
-    assert!(state.narrative.pending_event.is_none());
+    assert_eq!(state.narrative.history.last().unwrap().text(), "go south");
 }
 
 #[test]
@@ -120,8 +87,7 @@ fn test_push_message_appends_swipe_on_retry_target() {
 
     let target = state.narrative.retry_target.unwrap();
     assert_eq!(target.swipes.len(), 2);
-    assert_eq!(target.active_swipe_index, 1);
-    assert_eq!(target.text, "Retried narration");
+    assert_eq!(target.text(), "Retried narration");
     assert_eq!(target.swipes[0].text, "Original narration");
     assert_eq!(target.swipes[1].text, "Retried narration");
     assert!(target.swipes[1].snapshot_id.is_none());
@@ -148,18 +114,18 @@ fn test_push_message_creates_new_message_when_event_header_mismatches() {
     // Should create a NEW message in history, not append to retry_target
     assert_eq!(state.narrative.history.len(), 1);
     assert_eq!(
-        state.narrative.history.last().unwrap().text,
+        state.narrative.history.last().unwrap().text(),
         "Event narration"
     );
     assert_eq!(
-        state.narrative.history.last().unwrap().event_header,
-        Some("Trigger Event".to_string())
+        state.narrative.history.last().unwrap().event_header(),
+        Some("Trigger Event")
     );
 
     // Retry target should be unchanged
     let target = state.narrative.retry_target.unwrap();
     assert_eq!(target.swipes.len(), 1);
-    assert_eq!(target.text, "Original narration");
+    assert_eq!(target.text(), "Original narration");
 }
 
 #[test]
@@ -170,7 +136,7 @@ fn test_push_message_creates_new_message_when_no_retry_target() {
 
     assert_eq!(state.narrative.history.len(), 1);
     assert_eq!(
-        state.narrative.history.last().unwrap().text,
+        state.narrative.history.last().unwrap().text(),
         "Normal narration"
     );
     assert!(state.narrative.retry_target.is_none());

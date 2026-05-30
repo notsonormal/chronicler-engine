@@ -16,9 +16,6 @@ use crate::pipeline_helpers::{
 
 #[test]
 fn test_retry_main_narration_applies_new_quantifier_result() {
-    // Setup: quantifier returns NO movement on first call, movement on second.
-    // Flow: Input → Execute → player stays in room1
-    //       → Retry → player moves to room2
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
@@ -39,7 +36,6 @@ fn test_retry_main_narration_applies_new_quantifier_result() {
         quantifier,
     );
 
-    // First execution: no movement
     service.execute_action(ctx.clone(), "walk around".to_string(), "Player".to_string());
     assert!(
         wait_for_generation_complete(&ctx, 1000),
@@ -51,7 +47,6 @@ fn test_retry_main_narration_applies_new_quantifier_result() {
         "First execution: player should stay in room1"
     );
 
-    // Retry: quantifier returns movement → player should move
     service.retry_last_response(ctx.clone());
     assert!(
         wait_for_generation_complete(&ctx, 1000),
@@ -63,7 +58,6 @@ fn test_retry_main_narration_applies_new_quantifier_result() {
         "Retry should apply NEW quantifier result and move player to room2"
     );
 
-    // Verify LLM calls were logged to SQLite storage
     let messages = ctx.storage.list_latest_llm_messages(50).unwrap();
     assert!(
         !messages.is_empty(),
@@ -73,10 +67,6 @@ fn test_retry_main_narration_applies_new_quantifier_result() {
 
 #[test]
 fn test_retry_with_different_narration_text_reruns_quantifier() {
-    // Setup: MockBackend returns different narration text on each call.
-    // MockQuantifier auto-detects NPCs from the narration text.
-    // Flow: Execute → first narration → quantifier detects no NPCs
-    //       → Retry → second narration → quantifier detects NPC from text
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
@@ -91,11 +81,9 @@ fn test_retry_with_different_narration_text_reruns_quantifier() {
         ..Default::default()
     });
 
-    // Use default MockBackend which does word-boundary detection
     let service =
         DefaultGameService::with_mock_quantifier(llm_backend, Arc::new(MockBackend::default()));
 
-    // First execution: narration has no NPC name → quantifier finds no NPCs
     service.execute_action(
         ctx.clone(),
         "approach the innkeeper".to_string(),
@@ -141,8 +129,6 @@ fn test_retry_with_different_narration_text_reruns_quantifier() {
 
 #[test]
 fn test_double_retry_increments_swipe_and_reruns_quantifier() {
-    // Flow: Execute → Retry → Retry again
-    // Verify quantifier runs 3 times total and swipe_index increments.
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
@@ -164,24 +150,20 @@ fn test_double_retry_increments_swipe_and_reruns_quantifier() {
         quantifier,
     );
 
-    // First execution
     service.execute_action(ctx.clone(), "walk around".to_string(), "Player".to_string());
     assert!(wait_for_generation_complete(&ctx, 1000));
     let _snap = latest_snapshot(&ctx).expect("Should have snapshot");
 
-    // First retry
     service.retry_last_response(ctx.clone());
     assert!(wait_for_generation_complete(&ctx, 1000));
     let _snap = latest_snapshot(&ctx).expect("Should have snapshot");
     let guard = latest_state(&ctx);
     assert_eq!(guard.movement.current_room_id, "room2");
 
-    // Second retry
     service.retry_last_response(ctx.clone());
     assert!(wait_for_generation_complete(&ctx, 1000));
     let _snap = latest_snapshot(&ctx).expect("Should have snapshot");
 
-    // Verify narration entries are not lost on second retry
     let guard = latest_state(&ctx);
     let history = guard.narrative.history();
     assert!(
@@ -192,8 +174,6 @@ fn test_double_retry_increments_swipe_and_reruns_quantifier() {
 
 #[test]
 fn test_retry_preserves_input_and_does_not_create_extra_swipe() {
-    // Bug regression: clicking Retry on Narration was clearing the input message text.
-    // The input message should never gain extra swipes.
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
@@ -225,7 +205,8 @@ fn test_retry_preserves_input_and_does_not_create_extra_swipe() {
         .find(|m| m.message_type == MessageType::Input)
         .expect("Input message must exist");
     assert_eq!(
-        input_msg.text, "walk around",
+        input_msg.text(),
+        "walk around",
         "Input message text must be preserved after retry"
     );
 }
@@ -261,7 +242,6 @@ fn test_retry_after_edited_input_uses_new_text() {
         "First narration should contain original input: {first_narration}"
     );
 
-    // Edit the input text in-place (overwrite latest snapshot so retry sees it)
     {
         let mut state = latest_state(&ctx);
         if let Some(msg) = state
@@ -270,7 +250,7 @@ fn test_retry_after_edited_input_uses_new_text() {
             .iter_mut()
             .find(|m| m.message_type == MessageType::Input)
         {
-            msg.text = "sprint forward".to_string();
+            msg.update_active_swipe_text("sprint forward".to_string());
             if let Some(swipe) = msg.swipes.first_mut() {
                 swipe.text = "sprint forward".to_string();
             }
@@ -278,7 +258,6 @@ fn test_retry_after_edited_input_uses_new_text() {
         save_state(&ctx, &state);
     }
 
-    // Retry should use the edited text
     service.retry_last_response(ctx.clone());
     assert!(wait_for_generation_complete(&ctx, 1000));
     let guard = latest_state(&ctx);
@@ -298,10 +277,6 @@ fn test_retry_after_edited_input_uses_new_text() {
 
 #[test]
 fn test_main_retry_reevaluates_triggers() {
-    // Setup: trigger is room-scoped to room2. Quantifier returns no movement first,
-    // then movement to room2 on retry.
-    // Flow: Execute → no movement → trigger doesn't fire (wrong room)
-    //       → Retry → movement to room2 → trigger fires
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
     // Remove default NPCs, add a shopkeeper with a room2-scoped trigger
@@ -381,7 +356,6 @@ fn test_main_retry_reevaluates_triggers() {
 #[test]
 fn test_retry_completes_when_quantifier_returns_none() {
     // Setup: quantifier returns a result on first call, None on second.
-    // Flow: Execute → success → Retry → quantifier returns None → still completes
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
@@ -404,7 +378,6 @@ fn test_retry_completes_when_quantifier_returns_none() {
     service.execute_action(ctx.clone(), "walk around".to_string(), "Player".to_string());
     assert!(wait_for_generation_complete(&ctx, 1000));
 
-    // Retry should still complete even when quantifier returns None on second call
     service.retry_last_response(ctx.clone());
     assert!(wait_for_generation_complete(&ctx, 1000));
     let guard = latest_state(&ctx);
@@ -416,8 +389,6 @@ fn test_retry_completes_when_quantifier_returns_none() {
 
 #[test]
 fn test_retry_no_pre_main_snapshot() {
-    // Flow: Execute → clear pre-main snapshot → Retry
-    // Retry should fail gracefully when pre-main snapshot is missing.
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
 
@@ -523,8 +494,6 @@ fn test_retry_no_pre_main_snapshot() {
 
 #[test]
 fn test_movement_with_arrival_narration_retry() {
-    // Flow: Movement action → Retry
-    // Verify arrival narration is also regenerated on retry.
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
@@ -559,7 +528,6 @@ fn test_movement_with_arrival_narration_retry() {
         .filter(|e| e.text.contains("MockArrival") || e.text.contains("enter"))
         .count();
 
-    // Retry should regenerate both main narration and arrival
     service.retry_last_response(ctx.clone());
     assert!(wait_for_generation_complete(&ctx, 1000));
 
@@ -569,7 +537,6 @@ fn test_movement_with_arrival_narration_retry() {
         "Retry should still end in room2"
     );
 
-    // The main narration should have been replaced (only one narration from this turn)
     let narrations: Vec<_> = guard
         .narrative
         .history()
@@ -581,7 +548,6 @@ fn test_movement_with_arrival_narration_retry() {
 
 #[test]
 fn test_retry_appends_swipe_to_existing_narration() {
-    // Flow: Execute → Retry → verify swipe appended to same message
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
@@ -614,7 +580,6 @@ fn test_retry_appends_swipe_to_existing_narration() {
     let original_id = narration.id;
     assert_eq!(narration.swipes.len(), 1);
 
-    // Retry should append a swipe to the same message
     service.retry_last_response(ctx.clone());
     assert!(wait_for_generation_complete(&ctx, 1000));
 
@@ -638,7 +603,8 @@ fn test_retry_appends_swipe_to_existing_narration() {
         "Retry should append a new swipe"
     );
     assert_eq!(
-        narrations[0].text, "Second narration text.",
+        narrations[0].text(),
+        "Second narration text.",
         "Retry should use next per-call narration as the active swipe"
     );
 }

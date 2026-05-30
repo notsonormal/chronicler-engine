@@ -292,9 +292,7 @@ fn test_trigger_continuation_save_post_trigger_error() {
 
 #[test]
 fn test_pipeline_trigger_happy_path() {
-    use crate::model::trigger::{
-        ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement,
-    };
+    use crate::model::trigger::{ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement};
 
     let npc = NpcCard {
         id: "npc1".to_string(),
@@ -360,9 +358,7 @@ fn test_pipeline_trigger_happy_path() {
 
 #[test]
 fn test_pipeline_trigger_empty_continuation() {
-    use crate::model::trigger::{
-        ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement,
-    };
+    use crate::model::trigger::{ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement};
 
     let npc = NpcCard {
         id: "npc1".to_string(),
@@ -414,9 +410,7 @@ fn test_pipeline_trigger_empty_continuation() {
 
 #[test]
 fn test_pipeline_trigger_complete_failure() {
-    use crate::model::trigger::{
-        ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement,
-    };
+    use crate::model::trigger::{ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement};
 
     let npc = NpcCard {
         id: "npc1".to_string(),

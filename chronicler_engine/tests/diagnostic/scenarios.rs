@@ -282,7 +282,7 @@ fn benchmark_quantifier_complete_failure() {
     let messages = ctx.load_messages().unwrap();
     let npc_count = snapshot.scene.npcs_in_area.len();
     let has_system_log = messages.iter().any(|m| {
-        m.message_type == MessageType::System && m.text.contains("NPC detection uncertain")
+        m.message_type == MessageType::System && m.text().contains("NPC detection uncertain")
     });
 
     let result = BenchmarkResult {
@@ -337,7 +337,7 @@ fn benchmark_quantifier_low_confidence() {
         .iter()
         .any(|m| m.message_type == MessageType::Narration);
     let has_system_log = messages.iter().any(|m| {
-        m.message_type == MessageType::System && m.text.contains("NPC detection uncertain")
+        m.message_type == MessageType::System && m.text().contains("NPC detection uncertain")
     });
 
     let result = BenchmarkResult {
@@ -387,7 +387,7 @@ fn benchmark_dynamic_room_creation() {
     let is_dynamic = current_room.starts_with("dynamic_");
     let dynamic_room_count = snapshot.movement.dynamic_rooms.len();
     let has_system_log = messages.iter().any(|m| {
-        m.message_type == MessageType::System && m.text.contains("Entered unknown location")
+        m.message_type == MessageType::System && m.text().contains("Entered unknown location")
     });
 
     let result = BenchmarkResult {
@@ -515,7 +515,7 @@ fn benchmark_trigger_wrong_room_id() {
 
     let snapshot = ctx.storage.load_latest_snapshot().unwrap().unwrap();
     let messages = ctx.load_messages().unwrap();
-    let trigger_fired = messages.iter().any(|m| m.text.contains("stranger nods"));
+    let trigger_fired = messages.iter().any(|m| m.text().contains("stranger nods"));
     let error_msg = match &snapshot.narrative.input_buffer.status {
         GenerationStatus::Error(msg) => msg.clone(),
         _ => "(no error)".to_string(),

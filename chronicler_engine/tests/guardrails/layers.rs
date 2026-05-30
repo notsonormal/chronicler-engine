@@ -34,7 +34,6 @@ pub fn check_server_layer_boundaries(file_path: &str, content: &str) -> Vec<Viol
                  Server must use ApplicationService methods, not direct GameState access.",
             ));
         }
-
     }
 
     violations

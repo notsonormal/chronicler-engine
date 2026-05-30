@@ -1,66 +1,53 @@
-use chrono::Utc;
-
 use crate::model::message::Message;
 use crate::model::state::MessageType;
-use crate::storage::mappers::message::{
-    db_message_to_model, model_message_to_db, model_swipes_to_db,
-};
+use crate::storage::mappers::message::{db_message_to_model, model_message_to_db, model_swipes_to_db};
 
 #[test]
 fn test_message_roundtrip() {
-    let original = Message {
-        id: 7,
-        sender: Some("System".to_string()),
+    let mut original = Message::new(
+        Some("System".to_string()),
+        "Hello world",
+        MessageType::System,
+        Some("Room A".to_string()),
+        None,
+    );
+    original.set_snapshot_id(Some(3));
+    original.swipes = vec![crate::model::message::Swipe {
         text: "Hello world".to_string(),
-        message_type: MessageType::System,
-        timestamp: Utc::now(),
+        snapshot_id: Some(3),
         location_header: Some("Room A".to_string()),
         event_header: None,
-        snapshot_id: Some(3),
-        active_swipe_index: 0,
-        swipes: vec![crate::model::message::Swipe {
-            text: "Hello world".to_string(),
-            snapshot_id: Some(3),
-            location_header: Some("Room A".to_string()),
-            event_header: None,
-        }],
-        is_deleted: false,
-    };
+    }];
     let db = model_message_to_db(&original, 1).unwrap();
     let swipes = model_swipes_to_db(&original);
     let back = db_message_to_model(&db, &swipes).unwrap();
 
     assert_eq!(original.id, back.id);
     assert_eq!(original.sender, back.sender);
-    assert_eq!(original.text, back.text);
+    assert_eq!(original.text(), back.text());
     assert_eq!(original.message_type, back.message_type);
     assert_eq!(original.timestamp, back.timestamp);
-    assert_eq!(original.location_header, back.location_header);
-    assert_eq!(original.event_header, back.event_header);
-    assert_eq!(original.snapshot_id, back.snapshot_id);
+    assert_eq!(original.location_header(), back.location_header());
+    assert_eq!(original.event_header(), back.event_header());
+    assert_eq!(original.snapshot_id(), back.snapshot_id());
     assert_eq!(db.game_id, 1);
 }
 
 #[test]
 fn test_message_unpersisted_roundtrip() {
-    let original = Message {
-        id: 0,
-        sender: None,
+    let mut original = Message::new(
+        None,
+        "Input text",
+        MessageType::Input,
+        None,
+        Some("Event".to_string()),
+    );
+    original.swipes = vec![crate::model::message::Swipe {
         text: "Input text".to_string(),
-        message_type: MessageType::Input,
-        timestamp: Utc::now(),
+        snapshot_id: None,
         location_header: None,
         event_header: Some("Event".to_string()),
-        snapshot_id: None,
-        active_swipe_index: 0,
-        swipes: vec![crate::model::message::Swipe {
-            text: "Input text".to_string(),
-            snapshot_id: None,
-            location_header: None,
-            event_header: Some("Event".to_string()),
-        }],
-        is_deleted: false,
-    };
+    }];
     let db = model_message_to_db(&original, 2).unwrap();
     let swipes = model_swipes_to_db(&original);
     let back = db_message_to_model(&db, &swipes).unwrap();
@@ -73,24 +60,13 @@ fn test_message_unpersisted_roundtrip() {
 
 #[test]
 fn test_message_log_type_json_serialization() {
-    let msg = Message {
-        id: 1,
-        sender: None,
+    let mut msg = Message::new(None, "test", MessageType::Dialogue, None, None);
+    msg.swipes = vec![crate::model::message::Swipe {
         text: "test".to_string(),
-        message_type: MessageType::Dialogue,
-        timestamp: Utc::now(),
+        snapshot_id: None,
         location_header: None,
         event_header: None,
-        snapshot_id: None,
-        active_swipe_index: 0,
-        swipes: vec![crate::model::message::Swipe {
-            text: "test".to_string(),
-            snapshot_id: None,
-            location_header: None,
-            event_header: None,
-        }],
-        is_deleted: false,
-    };
+    }];
     let db = model_message_to_db(&msg, 1).unwrap();
     let _swipes = model_swipes_to_db(&msg);
 
@@ -99,32 +75,28 @@ fn test_message_log_type_json_serialization() {
 
 #[test]
 fn test_active_swipe_index_out_of_bounds_fallback() {
-    let original = Message {
-        id: 5,
-        sender: Some("Narrator".to_string()),
-        text: "First swipe".to_string(),
-        message_type: MessageType::Narration,
-        timestamp: Utc::now(),
-        location_header: Some("Room A".to_string()),
-        event_header: None,
-        snapshot_id: Some(1),
-        active_swipe_index: 0,
-        swipes: vec![
-            crate::model::message::Swipe {
-                text: "First swipe".to_string(),
-                snapshot_id: Some(1),
-                location_header: Some("Room A".to_string()),
-                event_header: None,
-            },
-            crate::model::message::Swipe {
-                text: "Second swipe".to_string(),
-                snapshot_id: Some(2),
-                location_header: Some("Room B".to_string()),
-                event_header: Some("Event B".to_string()),
-            },
-        ],
-        is_deleted: false,
-    };
+    let mut original = Message::new(
+        Some("Narrator".to_string()),
+        "First swipe",
+        MessageType::Narration,
+        Some("Room A".to_string()),
+        None,
+    );
+    original.set_snapshot_id(Some(1));
+    original.swipes = vec![
+        crate::model::message::Swipe {
+            text: "First swipe".to_string(),
+            snapshot_id: Some(1),
+            location_header: Some("Room A".to_string()),
+            event_header: None,
+        },
+        crate::model::message::Swipe {
+            text: "Second swipe".to_string(),
+            snapshot_id: Some(2),
+            location_header: Some("Room B".to_string()),
+            event_header: Some("Event B".to_string()),
+        },
+    ];
     let db = model_message_to_db(&original, 1).unwrap();
     let swipes = model_swipes_to_db(&original);
 
@@ -133,7 +105,7 @@ fn test_active_swipe_index_out_of_bounds_fallback() {
     db_stale.active_swipe_index = 99;
 
     let back = db_message_to_model(&db_stale, &swipes).unwrap();
-    assert_eq!(back.text, "First swipe");
-    assert_eq!(back.location_header, Some("Room A".to_string()));
-    assert_eq!(back.snapshot_id, Some(1));
+    assert_eq!(back.text(), "First swipe");
+    assert_eq!(back.location_header(), Some("Room A"));
+    assert_eq!(back.snapshot_id(), Some(1));
 }

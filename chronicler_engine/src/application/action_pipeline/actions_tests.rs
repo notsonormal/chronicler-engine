@@ -1,9 +1,7 @@
 use std::sync::Arc;
 
 use crate::application::action_pipeline::execute_action_impl;
-use crate::application::action_pipeline::pipeline::{
-    ActionPipelineBackend, default_quantifier_result,
-};
+use crate::application::action_pipeline::pipeline::{ActionPipelineBackend, default_quantifier_result};
 use crate::application::context::GameServiceContext;
 use crate::error::EngineError;
 use crate::model::quantifier::QuantifierResult;

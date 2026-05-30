@@ -246,7 +246,7 @@ pub fn run(args: Args) -> crate::error::Result<()> {
             let snapshot_id = storage.save_snapshot(&initial_snapshot)?;
             if let Some(msg) = new_state.narrative.history.last_mut() {
                 if msg.is_unpersisted() {
-                    msg.snapshot_id = Some(snapshot_id);
+                    msg.set_snapshot_id(Some(snapshot_id));
                     if let Some(swipe) = msg.swipes.first_mut() {
                         swipe.snapshot_id = Some(snapshot_id);
                     }

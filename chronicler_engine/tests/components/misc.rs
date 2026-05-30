@@ -780,7 +780,7 @@ async fn test_switch_swipe_changes_active_swipe() {
     storage.delete_message(old_id).unwrap();
 
     let mut updated = narration.clone();
-    updated.snapshot_id = Some(snapshot_id);
+    updated.set_snapshot_id(Some(snapshot_id));
     let narration_id = storage.insert_message(&updated).unwrap();
 
     let swipe0 = Swipe {

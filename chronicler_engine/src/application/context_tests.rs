@@ -122,7 +122,7 @@ fn test_load_or_fresh_hydrates_messages() {
 
     let state = load_or_fresh(&ctx);
     assert_eq!(state.narrative.history.len(), 1);
-    assert_eq!(state.narrative.history.as_slice()[0].text, "Hello");
+    assert_eq!(state.narrative.history.as_slice()[0].text(), "Hello");
 }
 
 #[test]
@@ -191,7 +191,7 @@ fn test_save_message_and_snapshot_persists_retry_swipe() {
         event_header: None,
     });
     target.active_swipe_index = 1;
-    target.text = "Retried narration".to_string();
+    target.update_active_swipe_text("Retried narration".to_string());
 
     state.narrative.retry_target = Some(target);
 
