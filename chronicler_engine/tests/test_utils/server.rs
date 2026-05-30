@@ -52,10 +52,12 @@ pub fn start_server_with_env(
 
     let mut cmd = if std::path::Path::new(&binary_path).exists() {
         let mut c = Command::new(&binary_path);
+        c.env("RUST_LOG", "chronicler_engine=debug");
         c.args(["--world", world, "--port", &port.to_string()]);
         c
     } else {
         let mut c = Command::new("cargo");
+        c.env("RUST_LOG", "chronicler_engine=debug");
         c.args(["run", "--", "--world", world, "--port", &port.to_string()]);
         c
     };
@@ -303,11 +305,14 @@ impl TestServer {
         if port_in_use(port) {
             kill_existing_server(port);
         }
-        let (child, temp_dir, db_path) = start_server_with_env(port, world, use_mock);
-
-        // Remove stale database from previous runs so tests don't inherit old state.
+        // Infer where the server will place its SQLite DB.
+        let target_dir = std::env::var("CARGO_TARGET_DIR").unwrap_or_else(|_| "target".to_string());
+        let db_path = std::path::PathBuf::from(&target_dir)
+            .join("debug")
+            .join(format!("chronicler_{port}.db"));
+        // Remove stale database BEFORE starting server so we don't inherit old state.
         Self::cleanup_stale_db(port, &db_path);
-
+        let (child, temp_dir, _db_path) = start_server_with_env(port, world, use_mock);
         // Increased wait time for server to be fully ready
         let started = wait_for_server(port, 100).await; // 100 * 100ms = 10s total
         assert!(started, "Server failed to start on port {port}");

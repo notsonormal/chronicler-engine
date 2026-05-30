@@ -64,19 +64,43 @@ pub async fn status_ready_handler(State(_state): State<AppState>) -> Html<String
 
 /// [DOC: docs/system/game_flow.md]
 pub async fn generating_status_handler(State(state): State<AppState>) -> Html<String> {
-    let (status, phase) = match state
-        .application_service
-        .get_generating_status(state.as_game_service_context())
-    {
-        Ok((s, p)) => (s, p),
-        Err(_) => Default::default(),
+    log::debug!("generating_status_handler: called");
+    let ctx = state.as_game_service_context();
+    // Load state fresh from storage
+    let game_state = crate::application::context::try_load_state(&ctx);
+    let (status, phase) = match game_state {
+        Ok(gs) => {
+            log::debug!(
+                "generating_status_handler: loaded status={:?}, phase={:?}",
+                gs.narrative.input_buffer.status,
+                gs.narrative.input_buffer.phase
+            );
+            (
+                gs.narrative.input_buffer.status.clone(),
+                gs.narrative.input_buffer.phase.clone(),
+            )
+        }
+        Err(e) => {
+            log::error!("generating_status_handler: failed to load state: {e}");
+            Default::default()
+        }
     };
-
+    let is_gen = status.is_generating();
+    log::debug!(
+        "generating_status_handler: is_generating={is_gen}, status={status:?}, phase={phase:?}",
+    );
+    log::info!("SERVER TRACE: status.is_generating()={is_gen}, status={status:?}, phase={phase:?}",);
     if let Some(err) = status.error_message() {
+        log::info!("SERVER TRACE: returning error span");
         Html(format!("<span class=\"status error\">Error: {err}</span>"))
-    } else if status.is_generating() {
+    } else if is_gen {
+        log::info!(
+            "SERVER TRACE: returning phase str: {}",
+            phase.as_endpoint_str()
+        );
         Html(phase.as_endpoint_str().to_string())
     } else {
+        log::info!("SERVER TRACE: returning idle");
         Html("idle".to_string())
     }
 }

@@ -81,7 +81,7 @@ async fn test_second_encounter_does_not_refire() {
             .expect("shopkeeper.json should exist");
         let shopkeeper: serde_json::Value =
             serde_json::from_str(&shopkeeper_json).expect("shopkeeper.json should parse");
-        let shopkeeper_trigger_text = shopkeeper["triggers"][0]["action"]["narration_prompt"]
+        let shopkeeper_trigger_text = shopkeeper["triggers"][0]["narration"]["narration_prompt"]
             .as_str()
             .expect("shopkeeper should have a trigger narration_prompt");
         let story_log = page

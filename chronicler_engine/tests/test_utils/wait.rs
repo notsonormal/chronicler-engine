@@ -219,13 +219,56 @@ pub async fn wait_for_element_not_exists(
 
 pub async fn wait_for_status_ready(page: &playwright_rs::Page) {
     let locator = page.locator("#status-display").await;
-    if let Err(e) = playwright_rs::expect(locator)
-        .to_contain_text("Ready")
-        .await
-    {
-        capture_failure_state(page, "wait_for_status_ready").await;
-        panic!("Status did not become Ready: {e}");
+    let start = std::time::Instant::now();
+    let timeout = std::time::Duration::from_secs(5);
+    while start.elapsed() < timeout {
+        // Debug: get current URL and check server state
+        let url = page.url();
+        // Extract port from URL like http://127.0.0.1:3000/...
+        if let Some(port_str) = url.split("://").nth(1) {
+            if let Some(port_part) = port_str.split('/').next() {
+                if let Some(port) = port_part.split(':').nth(1) {
+                    if let Ok(port_num) = port.parse::<u16>() {
+                        let client = reqwest::Client::new();
+                        // Check is_generating flag
+                        if let Ok(resp) = client
+                            .get(format!("http://127.0.0.1:{port_num}/debug/is_generating"))
+                            .send()
+                            .await
+                        {
+                            if let Ok(text) = resp.text().await {
+                                eprintln!("DEBUG: is_generating={text}");
+                            }
+                        }
+                        // Check /status/generating response directly
+                        if let Ok(resp) = client
+                            .get(format!("http://127.0.0.1:{port_num}/status/generating"))
+                            .send()
+                            .await
+                        {
+                            let status_code = resp.status();
+                            if let Ok(text) = resp.text().await {
+                                eprintln!("DEBUG: /status/generating[{status_code}]='{text}'");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        match locator.inner_text().await {
+            Ok(text) if text.contains("Ready") => return,
+            _ => sleep(Duration::from_millis(200)).await,
+        }
     }
+    // One final check - the locator may have just updated
+    if let Ok(text) = locator.inner_text().await {
+        if text.contains("Ready") {
+            return;
+        }
+        eprintln!("DEBUG: Final status-display='{text}'");
+    }
+    capture_failure_state(page, "wait_for_status_ready").await;
+    panic!("Status did not become Ready");
 }
 
 pub async fn wait_for_status_ready_or_error(page: &playwright_rs::Page) -> String {

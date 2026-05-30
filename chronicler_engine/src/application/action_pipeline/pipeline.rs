@@ -62,19 +62,37 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
 
     /// [DOC: docs/architecture/system.md]
     pub fn run_from_input(&self, state: GameState, input: String) -> ActionOutcome {
+        log::info!(
+            "[DEBUG] run_from_input: entered, status={:?}",
+            state.narrative.input_buffer.status
+        );
+        log::debug!("run_from_input: called");
         let world = Arc::clone(&state.world);
         let map = Arc::clone(&state.map);
         let player = Arc::clone(&state.player);
         let all_npcs: Vec<NpcCard> = state.npcs.values().cloned().collect();
 
         let mut state = match self.phase_pre_main_snapshot(state) {
-            Ok(s) => s,
+            Ok(s) => {
+                log::info!(
+                    "[DEBUG] phase_pre_main_snapshot: done, status={:?}",
+                    s.narrative.input_buffer.status
+                );
+                s
+            }
             Err(outcome) => return outcome,
         };
 
         let (narration_text, backend_name, model_name) =
             match self.phase_narrate(&state, &input, &world, &map, &player, &all_npcs) {
-                Ok((text, backend, model)) => (text, backend, model),
+                Ok((text, backend, model)) => {
+                    log::info!(
+                        "[DEBUG] phase_narrate: done, text_len={}, status={:?}",
+                        text.len(),
+                        state.narrative.input_buffer.status
+                    );
+                    (text, backend, model)
+                }
                 Err(outcome) => return outcome,
             };
         state.narrative.last_backend_name = Some(backend_name);
@@ -142,7 +160,16 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
             }
         }
 
+        log::info!(
+            "[DEBUG] before phase_finalize: next_state status={:?}",
+            next_state.narrative.input_buffer.status
+        );
         self.phase_finalize(&mut next_state);
+        log::info!(
+            "[DEBUG] after phase_finalize: status={:?}",
+            next_state.narrative.input_buffer.status
+        );
+        log::debug!("run_from_input: done");
         ActionOutcome::Completed
     }
 

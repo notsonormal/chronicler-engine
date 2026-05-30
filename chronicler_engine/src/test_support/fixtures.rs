@@ -5,7 +5,7 @@ use crate::model::character::{CharacterSheet, NpcCard, PlayerCard};
 use crate::model::map::{MapDef, Overworld, Region, Room};
 use crate::model::prompt_preset::{PresetType, PromptPreset};
 use crate::model::state::{GameState, StoredTriggerContext};
-use crate::model::trigger::{ComparisonOperator, Trigger, TriggerCondition, TriggerEffect};
+use crate::model::trigger::{ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement};
 use crate::model::world::{WorldCard, WorldManifest};
 
 // ─── World ───────────────────────────────────────────────────────────────────
@@ -98,8 +98,8 @@ impl TestNpc {
             sheet: Self::sheet(name),
             inventory: vec![],
             triggers: vec![Trigger {
-                condition: TriggerCondition::TimesMet(op, n),
-                effect: TriggerEffect {
+                requirement: TriggerRequirement::TimesMet(op, n),
+                narration: TriggerNarration {
                     name: format!("{name} Introduction"),
                     narration_prompt: format!("{name} introduces themselves."),
                 },
@@ -123,8 +123,8 @@ impl TestNpc {
             sheet: Self::sheet(name),
             inventory: vec![],
             triggers: vec![Trigger {
-                condition: TriggerCondition::TimesMet(op, n),
-                effect: TriggerEffect {
+                requirement: TriggerRequirement::TimesMet(op, n),
+                narration: TriggerNarration {
                     name: format!("{name} Encounter in {room_id}"),
                     narration_prompt: format!("{name} acknowledges you in this specific room."),
                 },

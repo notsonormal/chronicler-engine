@@ -10,21 +10,20 @@ pub enum ComparisonOperator {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum TriggerCondition {
+pub enum TriggerRequirement {
     TimesMet(ComparisonOperator, u32),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct TriggerEffect {
+pub struct TriggerNarration {
     pub name: String,
     pub narration_prompt: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Trigger {
-    pub condition: TriggerCondition,
-    #[serde(rename = "action")]
-    pub effect: TriggerEffect,
+    pub requirement: TriggerRequirement,
+    pub narration: TriggerNarration,
     pub repeat: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub room_id: Option<String>,

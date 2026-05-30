@@ -1,6 +1,6 @@
 use crate::model::character::NpcCard;
 use crate::model::state::GameState;
-use crate::model::trigger::{ComparisonOperator, NpcEncounterLog, Trigger, TriggerCondition};
+use crate::model::trigger::{ComparisonOperator, NpcEncounterLog, Trigger, TriggerRequirement};
 
 /// [DOC: docs/system/triggers.md]
 pub fn evaluate_triggers(state: &GameState) -> Vec<(NpcCard, Trigger, usize)> {
@@ -14,7 +14,7 @@ pub fn evaluate_triggers(state: &GameState) -> Vec<(NpcCard, Trigger, usize)> {
                 if room_id != current_room_id {
                     log::debug!(
                         "[Trigger] '{}' skipped: room_id mismatch (expected '{}', current '{}')",
-                        trigger.effect.name,
+                        trigger.narration.name,
                         room_id,
                         current_room_id
                     );
@@ -22,11 +22,11 @@ pub fn evaluate_triggers(state: &GameState) -> Vec<(NpcCard, Trigger, usize)> {
                 }
             }
 
-            if check_condition(&state.npc_encounter_log, &npc.id, &trigger.condition) {
+            if check_condition(&state.npc_encounter_log, &npc.id, &trigger.requirement) {
                 if !trigger.repeat && is_trigger_fired(&state.npc_encounter_log, &npc.id, index) {
                     log::debug!(
                         "[Trigger] '{}' skipped: already fired (non-repeatable)",
-                        trigger.effect.name
+                        trigger.narration.name
                     );
                     continue;
                 }
@@ -34,7 +34,7 @@ pub fn evaluate_triggers(state: &GameState) -> Vec<(NpcCard, Trigger, usize)> {
             } else {
                 log::debug!(
                     "[Trigger] '{}' skipped: condition not met for NPC '{}'",
-                    trigger.effect.name,
+                    trigger.narration.name,
                     npc.id
                 );
             }
@@ -48,10 +48,10 @@ pub fn evaluate_triggers(state: &GameState) -> Vec<(NpcCard, Trigger, usize)> {
 pub fn check_condition(
     npc_encounter_log: &crate::model::trigger::NpcEncounterLog,
     npc_id: &str,
-    condition: &TriggerCondition,
+    condition: &TriggerRequirement,
 ) -> bool {
     match condition {
-        TriggerCondition::TimesMet(op, threshold) => {
+        TriggerRequirement::TimesMet(op, threshold) => {
             let times_met = get_times_met(npc_encounter_log, npc_id);
             match op {
                 ComparisonOperator::Eq => times_met == *threshold,

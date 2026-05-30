@@ -9,13 +9,13 @@
     "profile_image": "data/images/test_headshot_2.png",
     "triggers": [
         {
-            "condition": {
+            "requirement": {
                 "TimesMet": [
                     "Eq",
                     0
                 ]
             },
-            "action": {
+            "narration": {
                 "name": "Shopkeeper Greeting",
                 "narration_prompt": "The shopkeeper looks up from behind the counter with a warm smile."
             },

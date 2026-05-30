@@ -12,7 +12,6 @@ use crate::model::trigger::{
     ComparisonOperator, NpcEncounterLog, Trigger, TriggerNarration, TriggerRequirement,
 };
 use crate::model::world::WorldCard;
-
 fn make_npc(id: &str, triggers: Vec<Trigger>) -> NpcCard {
     NpcCard {
         id: id.to_string(),

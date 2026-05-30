@@ -292,15 +292,17 @@ fn test_trigger_continuation_save_post_trigger_error() {
 
 #[test]
 fn test_pipeline_trigger_happy_path() {
-    use crate::model::trigger::{ComparisonOperator, Trigger, TriggerCondition, TriggerEffect};
+    use crate::model::trigger::{
+        ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement,
+    };
 
     let npc = NpcCard {
         id: "npc1".to_string(),
         sheet: crate::test_support::fixtures::TestPlayer::standard().sheet,
         inventory: vec![],
         triggers: vec![Trigger {
-            condition: TriggerCondition::TimesMet(ComparisonOperator::Eq, 0),
-            effect: TriggerEffect {
+            requirement: TriggerRequirement::TimesMet(ComparisonOperator::Eq, 0),
+            narration: TriggerNarration {
                 name: "Greeting".to_string(),
                 narration_prompt: "The NPC greets you warmly.".to_string(),
             },
@@ -358,15 +360,17 @@ fn test_pipeline_trigger_happy_path() {
 
 #[test]
 fn test_pipeline_trigger_empty_continuation() {
-    use crate::model::trigger::{ComparisonOperator, Trigger, TriggerCondition, TriggerEffect};
+    use crate::model::trigger::{
+        ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement,
+    };
 
     let npc = NpcCard {
         id: "npc1".to_string(),
         sheet: crate::test_support::fixtures::TestPlayer::standard().sheet,
         inventory: vec![],
         triggers: vec![Trigger {
-            condition: TriggerCondition::TimesMet(ComparisonOperator::Eq, 0),
-            effect: TriggerEffect {
+            requirement: TriggerRequirement::TimesMet(ComparisonOperator::Eq, 0),
+            narration: TriggerNarration {
                 name: "Greeting".to_string(),
                 narration_prompt: "The NPC greets you.".to_string(),
             },
@@ -410,15 +414,17 @@ fn test_pipeline_trigger_empty_continuation() {
 
 #[test]
 fn test_pipeline_trigger_complete_failure() {
-    use crate::model::trigger::{ComparisonOperator, Trigger, TriggerCondition, TriggerEffect};
+    use crate::model::trigger::{
+        ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement,
+    };
 
     let npc = NpcCard {
         id: "npc1".to_string(),
         sheet: crate::test_support::fixtures::TestPlayer::standard().sheet,
         inventory: vec![],
         triggers: vec![Trigger {
-            condition: TriggerCondition::TimesMet(ComparisonOperator::Eq, 0),
-            effect: TriggerEffect {
+            requirement: TriggerRequirement::TimesMet(ComparisonOperator::Eq, 0),
+            narration: TriggerNarration {
                 name: "Greeting".to_string(),
                 narration_prompt: "The NPC greets you.".to_string(),
             },

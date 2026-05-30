@@ -163,9 +163,9 @@ pub fn execute_freeaction_impl(
             .map(|(npc, trigger, idx)| TriggerMatch {
                 npc_id: npc.id,
                 trigger_idx: idx,
-                trigger_name: trigger.effect.name,
+                trigger_name: trigger.narration.name,
                 trigger_repeat: trigger.repeat,
-                trigger_narration_prompt: trigger.effect.narration_prompt,
+                trigger_narration_prompt: trigger.narration.narration_prompt,
             });
 
     let events = compute_npc_events(&previous_npc_ids, &current_npc_ids);
