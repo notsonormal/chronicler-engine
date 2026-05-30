@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-30 21:21 UTC*
+*Index last generated: 2026-05-30 22:06 UTC*
 
 ### Root files
 
@@ -57,10 +57,12 @@ This folder contains all documentation for the Chronicler Engine project.
 
 - [Plan: Diagnostic Decision Tree as Agent Infrastructure](./plans/diagnostic-decision-tree-plan.md)
 - [LLM Infrastructure Improvements](./plans/llm-infrastructure-improvements.md)
+- [Plan: Enforced Message Consistency via Private Fields](./plans/message-enforced-consistency.md)
 - [Spec: Agent-Ready Pipeline Restructure for Chronicler Engine](./plans/multi-agent-architecture-overarching-spec.md)
 - [Plan: Observability & Automated Forensics](./plans/observability-and-forensics-plan.md)
 - [Plan: State Patch Reducer for Post-Generation Agent Composition](./plans/state-patch-reducer-plan.md)
 - [AI Steering & Guided Generation](./plans/steering-and-guided-generation.md)
+- [Plan: Trigger Identity: Index → UUID](./plans/trigger-identity-uuid-plan.md)
 
 ### `docs/plans/archived/`
 
@@ -77,6 +79,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Plan: Fix Silent Fallbacks & Magic Values](./plans/archived/drax-beast-boy-drax.md)
 - [Chronicler Engine: Leaky Presentation Layer Cleanup](./plans/archived/hellcat-martian-manhunter-liberty-belle.md)
 - [Plan: Fix Game UI Delay for LLM Responses](./plans/archived/jericho-vixen-lockjaw.md)
+- [Plan: Rename `try_load_state` / `load_state` to Clearer Names](./plans/archived/load-state-rename-2026-05-30.md)
 - [PromptAssembler Architecture Design Plan](./plans/archived/moon-knight-mantis-spectre.md)
 - [Plan: Complete GameState Decoupling from Server + Tests](./plans/archived/orion-vixen-shatterstar.md)
 - [Plan: Refactor `application_service.rs` God Service and De-trait Application Layer](./plans/archived/refactor-application-service-2026-05-29.md)

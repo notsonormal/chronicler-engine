@@ -100,7 +100,7 @@ fn test_execute_action_impl_completes_and_persists_state() {
         "Player".to_string(),
     );
 
-    let final_state = ctx.load_state();
+    let final_state = ctx.load_state_for_test();
     assert_eq!(
         final_state.narrative.input_buffer.status,
         GenerationStatus::Idle
@@ -137,7 +137,7 @@ fn test_execute_action_impl_clears_last_trigger() {
         "Player".to_string(),
     );
 
-    let final_state = ctx.load_state();
+    let final_state = ctx.load_state_for_test();
     assert!(
         final_state.narrative.last_trigger.is_none(),
         "last_trigger should be cleared before pipeline runs"
@@ -160,7 +160,7 @@ fn test_execute_action_impl_handles_narration_error() {
         "Player".to_string(),
     );
 
-    let final_state = ctx.load_state();
+    let final_state = ctx.load_state_for_test();
     assert!(
         matches!(
             final_state.narrative.input_buffer.status,
@@ -184,7 +184,7 @@ fn test_execute_action_impl_handles_cancellation() {
         "Player".to_string(),
     );
 
-    let final_state = ctx.load_state();
+    let final_state = ctx.load_state_for_test();
     assert_eq!(
         final_state.narrative.input_buffer.status,
         GenerationStatus::Idle,
@@ -210,7 +210,7 @@ fn test_execute_action_impl_preserves_existing_input_log() {
         "Player".to_string(),
     );
 
-    let final_state = ctx.load_state();
+    let final_state = ctx.load_state_for_test();
     let entries: Vec<_> = final_state.narrative.history().into_iter().collect();
     let input_idx = entries
         .iter()

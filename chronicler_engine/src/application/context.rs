@@ -90,7 +90,7 @@ impl GameServiceContext {
 
     /// Panics if no snapshot exists — use only in tests where a snapshot was pre-seeded.
     #[cfg(test)]
-    pub fn load_state(&self) -> GameState {
+    pub fn load_state_for_test(&self) -> GameState {
         let snapshot = match self.storage.load_latest_snapshot() {
             Ok(Some(s)) => s,
             Ok(None) => panic!("no snapshots found"),
@@ -134,7 +134,7 @@ pub fn load_messages_with_swipes(
 }
 
 /// [DOC: docs/architecture/system.md]
-pub fn try_load_state(ctx: &GameServiceContext) -> Result<GameState, EngineError> {
+pub fn load_expecting_valid_state(ctx: &GameServiceContext) -> Result<GameState, EngineError> {
     let snapshot = ctx.storage.load_latest_snapshot()?;
     let mut state = match snapshot {
         Some(snap) => GameState::from_snapshot(
@@ -157,8 +157,8 @@ pub fn try_load_state(ctx: &GameServiceContext) -> Result<GameState, EngineError
 }
 
 /// [DOC: docs/architecture/system.md]
-pub fn load_state(ctx: &GameServiceContext) -> GameState {
-    match try_load_state(ctx) {
+pub fn load_or_fresh(ctx: &GameServiceContext) -> GameState {
+    match load_expecting_valid_state(ctx) {
         Ok(state) => state,
         Err(e) => {
             log::error!(

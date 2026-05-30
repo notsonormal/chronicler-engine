@@ -1,7 +1,7 @@
 use crate::application::action_pipeline::pipeline::{
     ActionOutcome, ActionPipeline, ActionPipelineBackend,
 };
-use crate::application::context::{GameServiceContext, load_state, save_state};
+use crate::application::context::{GameServiceContext, load_or_fresh, save_state};
 use crate::model::state::{GameState, GenerationPhase, GenerationStatus, MessageType};
 use std::sync::Arc;
 
@@ -95,7 +95,7 @@ pub fn retry_last_response_impl<B: ActionPipelineBackend>(backend: &B, ctx: Game
 }
 
 pub(crate) fn save_retry_error(ctx: &GameServiceContext, message: impl Into<String>) {
-    let mut state = load_state(ctx);
+    let mut state = load_or_fresh(ctx);
     state.narrative.input_buffer.status = GenerationStatus::Error(message.into());
     if let Err(e) = save_state(ctx, &state) {
         log::error!("Critical: failed to persist retry error state: {e}");
@@ -134,7 +134,7 @@ pub(crate) fn retry_main_narration<B: ActionPipelineBackend>(
 
 /// [DOC: docs/architecture/system.md]
 pub fn retrigger_event_impl<B: ActionPipelineBackend>(backend: &B, ctx: &GameServiceContext) {
-    let state = load_state(ctx);
+    let state = load_or_fresh(ctx);
     let outcome = retry_event_continuation(backend, ctx, state);
     match outcome {
         ActionOutcome::Completed => {}
@@ -142,7 +142,7 @@ pub fn retrigger_event_impl<B: ActionPipelineBackend>(backend: &B, ctx: &GameSer
             save_retry_error(ctx, message);
         }
         ActionOutcome::Cancelled => {
-            let mut state = load_state(ctx);
+            let mut state = load_or_fresh(ctx);
             state.narrative.input_buffer.status = GenerationStatus::Idle;
             state.narrative.input_buffer.phase = GenerationPhase::default();
             let _ = save_state(ctx, &state);

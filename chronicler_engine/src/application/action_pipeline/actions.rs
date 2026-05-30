@@ -1,7 +1,7 @@
 use crate::application::action_pipeline::pipeline::{
     ActionOutcome, ActionPipeline, ActionPipelineBackend,
 };
-use crate::application::context::{GameServiceContext, load_state};
+use crate::application::context::{GameServiceContext, load_or_fresh};
 
 /// [DOC: docs/architecture/system.md]
 pub fn execute_action_impl<B: ActionPipelineBackend>(
@@ -10,7 +10,7 @@ pub fn execute_action_impl<B: ActionPipelineBackend>(
     input: String,
     _player_name: String,
 ) {
-    let mut state = load_state(&ctx);
+    let mut state = load_or_fresh(&ctx);
     state.narrative.last_trigger = None;
     let pipeline = ActionPipeline::new(backend, &ctx);
     match pipeline.run_from_input(state, input) {

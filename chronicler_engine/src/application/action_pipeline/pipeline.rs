@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::application::context::{
-    GameServiceContext, load_state, map_llm_error, save_message_and_snapshot, save_state,
+    GameServiceContext, load_or_fresh, map_llm_error, save_message_and_snapshot, save_state,
 };
 use crate::engine::action_processing::{
     FreeActionContext, TriggerContinuationRequest, TriggerMatch, apply_npc_events,
@@ -556,7 +556,7 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
     }
 
     fn save_early_error(&self, error: impl Into<String>) -> ActionOutcome {
-        let mut state = load_state(self.ctx);
+        let mut state = load_or_fresh(self.ctx);
         let message = error.into();
         state.narrative.input_buffer.status = GenerationStatus::Error(message.clone());
         if let Err(e) = save_state(self.ctx, &state) {
@@ -567,7 +567,7 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
 
     fn handle_cancellation(&self) -> ActionOutcome {
         log::warn!("Pipeline cancelled — aborting remaining stages");
-        let mut state = load_state(self.ctx);
+        let mut state = load_or_fresh(self.ctx);
         state.narrative.input_buffer.status = GenerationStatus::Idle;
         state.narrative.input_buffer.phase = GenerationPhase::default();
         if let Err(e) = save_state(self.ctx, &state) {

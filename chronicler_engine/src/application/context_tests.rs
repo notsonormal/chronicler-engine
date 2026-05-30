@@ -1,5 +1,5 @@
 use crate::application::context::{
-    GameServiceContext, delete_and_remove_message, load_state, map_llm_error,
+    GameServiceContext, delete_and_remove_message, load_or_fresh, map_llm_error,
     save_message_and_snapshot, save_state,
 };
 use crate::error::{EngineError, LlmFailure, NarrativeFailure};
@@ -109,7 +109,7 @@ fn minimal_ctx() -> GameServiceContext {
 }
 
 #[test]
-fn test_load_state_hydrates_messages() {
+fn test_load_or_fresh_hydrates_messages() {
     let ctx = minimal_ctx();
     let msg = Message::new(
         Some("System".to_string()),
@@ -120,13 +120,13 @@ fn test_load_state_hydrates_messages() {
     );
     ctx.storage.insert_message(&msg).unwrap();
 
-    let state = load_state(&ctx);
+    let state = load_or_fresh(&ctx);
     assert_eq!(state.narrative.history.len(), 1);
     assert_eq!(state.narrative.history.as_slice()[0].text, "Hello");
 }
 
 #[test]
-fn test_load_state_fallback_when_empty() {
+fn test_load_or_fresh_fallback_when_empty() {
     let mut state = minimal_state();
     state.movement.current_room_id = "other".to_string();
     let storage = Arc::new(Storage::new_in_memory());
@@ -143,7 +143,7 @@ fn test_load_state_fallback_when_empty() {
         )),
         preset_storage: Arc::new(Storage::new_in_memory()),
     };
-    let loaded = load_state(&ctx);
+    let loaded = load_or_fresh(&ctx);
     assert_eq!(loaded.movement.current_room_id, "start");
 }
 
@@ -307,10 +307,10 @@ fn test_delete_and_remove_message_removes_from_storage_and_state() {
     assert!(ctx.storage.load_message_rows().unwrap().is_empty());
 }
 
-// ── load_state error fallback test ──────────────────────────────────────────
+// ── load_or_fresh error fallback test ──────────────────────────────────────────
 
 #[test]
-fn test_load_state_fallback_on_snapshot_error() {
+fn test_load_or_fresh_fallback_on_snapshot_error() {
     let state = minimal_state();
     let (failing_storage, handle) = Storage::new_in_memory().with_test_failures();
     let storage = Arc::new(failing_storage);
@@ -332,7 +332,7 @@ fn test_load_state_fallback_on_snapshot_error() {
         preset_storage: Arc::new(Storage::new_in_memory()),
     };
 
-    let loaded = load_state(&ctx);
+    let loaded = load_or_fresh(&ctx);
     assert_eq!(loaded.movement.current_room_id, "start");
 }
 

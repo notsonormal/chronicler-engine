@@ -51,7 +51,7 @@ impl ArrivalTaskContext {
             PRESET_STORAGE_GAME_ID,
         ));
 
-        let mut state = match context::try_load_state(&GameServiceContext {
+        let mut state = match context::load_expecting_valid_state(&GameServiceContext {
             storage: Arc::clone(&self.storage),
             world: Arc::clone(&self.world),
             map: Arc::clone(&self.map),

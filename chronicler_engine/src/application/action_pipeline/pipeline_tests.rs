@@ -99,7 +99,7 @@ fn test_pipeline_runs_to_completion() {
     let outcome = pipeline.run_from_input(state, "look".to_string());
 
     assert!(matches!(outcome, ActionOutcome::Completed));
-    let final_state = ctx.load_state();
+    let final_state = ctx.load_state_for_test();
     assert_eq!(
         final_state.narrative.input_buffer.status,
         GenerationStatus::Idle
@@ -119,7 +119,7 @@ fn test_pipeline_saves_narration_to_history() {
 
     let _outcome = pipeline.run_from_input(state, "look".to_string());
 
-    let final_state = ctx.load_state();
+    let final_state = ctx.load_state_for_test();
     let has_narration = final_state
         .narrative
         .history()
@@ -144,7 +144,7 @@ fn test_pipeline_returns_error_on_narration_failure() {
         matches!(outcome, ActionOutcome::Error { ref message } if message.contains("empty response")),
         "Expected error for empty narration response, got {outcome:?}"
     );
-    let final_state = ctx.load_state();
+    let final_state = ctx.load_state_for_test();
     assert!(
         matches!(
             final_state.narrative.input_buffer.status,
@@ -186,7 +186,7 @@ fn test_pipeline_cancels_mid_run() {
         matches!(outcome, ActionOutcome::Cancelled),
         "Expected cancellation when token is cancelled, got {outcome:?}"
     );
-    let final_state = ctx.load_state();
+    let final_state = ctx.load_state_for_test();
     assert_eq!(
         final_state.narrative.input_buffer.status,
         GenerationStatus::Idle
@@ -231,7 +231,7 @@ fn test_pipeline_with_custom_quantifier_result() {
     let outcome = pipeline.run_from_input(state, "look".to_string());
 
     assert!(matches!(outcome, ActionOutcome::Completed));
-    let final_state = ctx.load_state();
+    let final_state = ctx.load_state_for_test();
     assert_eq!(
         final_state.scene.npcs_in_area.len(),
         1,
@@ -256,7 +256,7 @@ fn test_run_trigger_continuation_cancels_at_start() {
         matches!(outcome, ActionOutcome::Cancelled),
         "Expected cancellation at start of trigger continuation, got {outcome:?}"
     );
-    let final_state = ctx.load_state();
+    let final_state = ctx.load_state_for_test();
     assert_eq!(
         final_state.narrative.input_buffer.status,
         GenerationStatus::Idle
@@ -343,7 +343,7 @@ fn test_pipeline_trigger_happy_path() {
         matches!(outcome, ActionOutcome::Completed),
         "Expected Completed, got {outcome:?}"
     );
-    let final_state = ctx.load_state();
+    let final_state = ctx.load_state_for_test();
     assert!(
         final_state
             .narrative

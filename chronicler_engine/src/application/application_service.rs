@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::Serialize;
 
-use crate::application::context::{GameServiceContext, load_state};
+use crate::application::context::{GameServiceContext, load_or_fresh};
 use crate::application::game_lifecycle::GameLifecycleService;
 use crate::application::game_service::DefaultGameService;
 use crate::application::message_editing::MessageEditingService;
@@ -109,7 +109,7 @@ impl DefaultApplicationService {
         ctx: GameServiceContext,
         input: String,
     ) -> Result<ProcessActionResult, EngineError> {
-        let mut game_state = load_state(&ctx);
+        let mut game_state = load_or_fresh(&ctx);
         let player_name = game_state.player.sheet.name.clone();
 
         game_state.add_message(
@@ -147,7 +147,7 @@ impl DefaultApplicationService {
         log::debug!("process_action: state saved, spawning blocking task");
 
         if ctx.cancel_token.is_cancelled() {
-            let mut gs = load_state(&ctx);
+            let mut gs = load_or_fresh(&ctx);
             gs.narrative.input_buffer.status = GenerationStatus::Idle;
             let snapshot = GameStateSnapshot::from_game_state(&gs);
             if let Err(e) = ctx.storage.save_snapshot(&snapshot) {

@@ -67,7 +67,7 @@ pub async fn generating_status_handler(State(state): State<AppState>) -> Html<St
     log::debug!("generating_status_handler: called");
     let ctx = state.as_game_service_context();
     // Load state fresh from storage
-    let game_state = crate::application::context::try_load_state(&ctx);
+    let game_state = crate::application::context::load_expecting_valid_state(&ctx);
     let (status, phase) = match game_state {
         Ok(gs) => {
             log::debug!(

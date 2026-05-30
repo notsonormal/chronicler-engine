@@ -1,6 +1,6 @@
 use crate::application::ApplicationError;
 use crate::application::DebugStateView;
-use crate::application::context::{GameServiceContext, load_state};
+use crate::application::context::{GameServiceContext, load_or_fresh};
 use crate::error::EngineError;
 use crate::model::llm_message::LlmMessage;
 use crate::model::state::MessageEntry;
@@ -28,7 +28,7 @@ impl QueryHandlers {
         ),
         ApplicationError,
     > {
-        let game_state = load_state(&ctx);
+        let game_state = load_or_fresh(&ctx);
         Ok((
             game_state.narrative.input_buffer.status.clone(),
             game_state.narrative.input_buffer.phase.clone(),
@@ -36,7 +36,7 @@ impl QueryHandlers {
     }
 
     pub fn reset_generating_status(&self, ctx: GameServiceContext) -> Result<(), ApplicationError> {
-        let mut game_state = load_state(&ctx);
+        let mut game_state = load_or_fresh(&ctx);
         game_state.narrative.input_buffer.status = crate::model::state::GenerationStatus::Idle;
         let snapshot =
             crate::model::state_snapshot::GameStateSnapshot::from_game_state(&game_state);
@@ -68,7 +68,7 @@ impl QueryHandlers {
         &self,
         ctx: GameServiceContext,
     ) -> Result<(Vec<MessageEntry>, bool), ApplicationError> {
-        let game_state = load_state(&ctx);
+        let game_state = load_or_fresh(&ctx);
         let entries: Vec<_> = game_state.narrative.history().to_vec();
         let has_last_trigger = game_state.narrative.last_trigger.is_some();
         Ok((entries, has_last_trigger))
@@ -91,7 +91,7 @@ impl QueryHandlers {
         &self,
         ctx: GameServiceContext,
     ) -> Result<(String, Option<String>), ApplicationError> {
-        let game_state = load_state(&ctx);
+        let game_state = load_or_fresh(&ctx);
         let room = game_state
             .current_room()
             .ok_or_else(|| EngineError::RoomNotFound("current room not found".to_string()))?;
@@ -109,7 +109,7 @@ impl QueryHandlers {
         ctx: GameServiceContext,
         scene_only: bool,
     ) -> Result<Vec<(String, String)>, ApplicationError> {
-        let game_state = load_state(&ctx);
+        let game_state = load_or_fresh(&ctx);
 
         let npc_ids: Vec<String> = if scene_only {
             game_state
@@ -139,7 +139,7 @@ impl QueryHandlers {
         &self,
         ctx: GameServiceContext,
     ) -> Result<DebugStateView, ApplicationError> {
-        let game_state = load_state(&ctx);
+        let game_state = load_or_fresh(&ctx);
 
         let history_tail: Vec<MessageEntry> = game_state
             .narrative

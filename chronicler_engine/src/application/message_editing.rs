@@ -3,7 +3,7 @@ use std::sync::Arc;
 use chrono::Utc;
 
 use crate::application::ApplicationError;
-use crate::application::context::{GameServiceContext, load_state};
+use crate::application::context::{GameServiceContext, load_or_fresh};
 use crate::application::game_service::DefaultGameService;
 use crate::error::{EngineError, internal_error};
 use crate::model::state_snapshot::GameStateSnapshot;
@@ -87,7 +87,7 @@ impl MessageEditingService {
         text: String,
     ) -> Result<(), ApplicationError> {
         let latest = ctx.storage.load_latest_snapshot()?;
-        let mut guard = load_state(&ctx);
+        let mut guard = load_or_fresh(&ctx);
         guard.narrative.history.edit(id, text.clone())?;
 
         if latest.is_some() {
@@ -100,7 +100,7 @@ impl MessageEditingService {
     }
 
     pub fn delete_last(&self, ctx: GameServiceContext) -> Result<(), ApplicationError> {
-        let mut guard = load_state(&ctx);
+        let mut guard = load_or_fresh(&ctx);
         let last_id = guard
             .narrative
             .history
@@ -119,7 +119,7 @@ impl MessageEditingService {
     }
 
     pub fn retry(&self, ctx: GameServiceContext) -> Result<(), ApplicationError> {
-        let game_state = load_state(&ctx);
+        let game_state = load_or_fresh(&ctx);
 
         if game_state.narrative.history.last_input_text().is_none() {
             return Err(ApplicationError::validation("No input to retry"));
@@ -150,7 +150,7 @@ impl MessageEditingService {
     }
 
     pub fn retrigger(&self, ctx: GameServiceContext) -> Result<(), ApplicationError> {
-        let game_state = load_state(&ctx);
+        let game_state = load_or_fresh(&ctx);
 
         if game_state.narrative.last_trigger.is_none() {
             return Err(ApplicationError::validation("No trigger context available"));

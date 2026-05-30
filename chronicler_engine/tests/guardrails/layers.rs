@@ -35,15 +35,6 @@ pub fn check_server_layer_boundaries(file_path: &str, content: &str) -> Vec<Viol
             ));
         }
 
-        // Ban .load_state() calls
-        if trimmed.contains(".load_state()") {
-            violations.push(Violation::error(
-                file_path,
-                line_num,
-                "Server layer file calls `.load_state()`. \
-                 Server must use narrow ApplicationService read methods.",
-            ));
-        }
     }
 
     violations
