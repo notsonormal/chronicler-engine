@@ -1,15 +1,156 @@
+use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
+use tokio_util::sync::CancellationToken;
 
-use super::{initialize_world_from_manifest, inject_scenario_logs, validate_loaded_data};
+use crate::application::context::{self, GameServiceContext};
 use crate::cli::{Args, list_available_worlds, resolve_engine_data_path};
-use crate::model::character::NpcCard;
+use crate::model::character::{NpcCard, PlayerCard};
 use crate::model::game::generate_game_name;
+use crate::model::map::MapDef;
+use crate::model::prompt_preset::PromptPreset;
 use crate::model::settings::AppSettings;
 use crate::model::state::GameState;
+use crate::model::world::WorldCard;
 use crate::narrative::prompt::{PromptAssembler, PromptContext};
 use crate::server::ServerConfig;
 
-/// [DOC: docs/architecture/system.md]
+use super::{initialize_world_from_manifest, inject_scenario_logs, validate_loaded_data};
+
+/// Game ID used for preset storage (separate from active game).
+const PRESET_STORAGE_GAME_ID: u64 = 1;
+
+/// Reads from settings guard safely, handling poisoning.
+fn with_settings<T>(settings: &Arc<RwLock<AppSettings>>, f: impl FnOnce(&AppSettings) -> T) -> T {
+    let guard = settings.read().unwrap_or_else(|e| e.into_inner());
+    f(&guard)
+}
+
+// [DOC: docs/architecture/invariants.md#INV-004]
+/// Context passed to the spawn_blocking task for arrival narration.
+struct ArrivalTaskContext {
+    storage: Arc<crate::storage::Storage>,
+    world: Arc<WorldCard>,
+    map: Arc<MapDef>,
+    player: Arc<PlayerCard>,
+    npcs: Arc<HashMap<String, NpcCard>>,
+    room_id: String,
+    arrival_preset: Option<PromptPreset>,
+    response_length: String,
+    max_context_tokens: u32,
+    max_tokens: Option<u32>,
+    nearby_npcs: Vec<NpcCard>,
+    all_npcs: Vec<NpcCard>,
+    db_pool: crate::storage::db::DbPool,
+}
+
+impl ArrivalTaskContext {
+    /// Runs arrival narration in a blocking context.
+    fn run(self) {
+        let preset_storage = Arc::new(crate::storage::Storage::new_sqlite(
+            self.db_pool.clone(),
+            PRESET_STORAGE_GAME_ID,
+        ));
+
+        let mut state = match context::try_load_state(&GameServiceContext {
+            storage: Arc::clone(&self.storage),
+            world: Arc::clone(&self.world),
+            map: Arc::clone(&self.map),
+            player: Arc::clone(&self.player),
+            npcs: Arc::clone(&self.npcs),
+            cancel_token: CancellationToken::new(),
+            is_generating: std::sync::atomic::AtomicBool::new(false).into(),
+            settings: Arc::new(RwLock::new(AppSettings::default())),
+            preset_storage,
+        }) {
+            Ok(s) => s,
+            Err(e) => {
+                log::warn!("Failed to load snapshot in spawn ({e}), starting fresh");
+                GameState::new(
+                    Arc::clone(&self.world),
+                    Arc::clone(&self.map),
+                    Arc::clone(&self.player),
+                    (*self.npcs).values().cloned().collect(),
+                    self.world.starting_room_id.clone(),
+                )
+            }
+        };
+
+        if let Ok(msgs) = context::load_messages_with_swipes(&self.storage) {
+            state.narrative.history.replace(msgs);
+        }
+        state.narrative.input_buffer.status = crate::model::state::GenerationStatus::Generating;
+
+        let room = self
+            .map
+            .overworld
+            .regions
+            .iter()
+            .flat_map(|r| r.rooms.iter())
+            .find(|r| r.id == self.room_id);
+
+        if let Some(room) = room {
+            let backend = crate::narrative::llm::get_llm_backend_for(
+                &AppSettings::default().narration_connection(),
+                Some(Arc::clone(&self.storage)),
+            );
+
+            let context = PromptContext {
+                world: &self.world,
+                room,
+                all_npcs: &self.all_npcs,
+                npcs_in_area: &self.nearby_npcs,
+                player: &self.player,
+                user_message: "",
+                history: &Vec::new(),
+            };
+
+            let narration = if let Some(ref preset) = self.arrival_preset {
+                let mut assembler =
+                    crate::narrative::prompt::LayeredPromptAssembler::new(self.max_context_tokens);
+                if let Some(max) = self.max_tokens {
+                    assembler = assembler.with_max_tokens(max);
+                }
+                match assembler.assemble(
+                    &context,
+                    preset,
+                    &self.world.global_rules,
+                    Some(&self.response_length),
+                ) {
+                    Ok(assembled) => backend.complete(
+                        crate::narrative::llm::backend::AGENT_NARRATOR,
+                        &assembled.system_prompt,
+                        &assembled.user_prompt,
+                        Some(assembled.max_tokens),
+                    ),
+                    Err(e) => Err(e),
+                }
+            } else {
+                Err(crate::error::EngineError::Config(
+                    "No active preset found for arrival narration".into(),
+                ))
+            };
+
+            match narration {
+                Ok(result) => {
+                    state.add_log(result.text, None, crate::model::state::LogType::Narration);
+                    state.narrative.input_buffer.status =
+                        crate::model::state::GenerationStatus::Idle;
+                }
+                Err(e) => {
+                    state.narrative.input_buffer.status =
+                        crate::model::state::GenerationStatus::Error(format!("LLM Error: {e}"));
+                }
+            }
+
+            if let Err(e) = self.storage.save_snapshot(&crate::model::state_snapshot::GameStateSnapshot::from_game_state(&state)) {
+                log::error!("Failed to save arrival snapshot: {e}");
+            }
+        }
+    }
+}
+
+/// Entry point for the Chronicler Engine server.
+// [DOC: docs/architecture/system.md]
 pub fn run(args: Args) -> crate::error::Result<()> {
     if args.list_worlds {
         list_available_worlds()?;
@@ -28,14 +169,14 @@ pub fn run(args: Args) -> crate::error::Result<()> {
     let world_arc = Arc::new(manifest.clone().into());
     let map_arc = Arc::new(map);
     let player_arc = Arc::new(player.clone());
-    let npcs_map: std::collections::HashMap<_, _> =
-        npcs.into_iter().map(|n| (n.id.clone(), n)).collect();
+    let npcs_map: HashMap<_, _> = npcs.into_iter().map(|n| (n.id.clone(), n)).collect();
 
     let db_dir = std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(std::path::PathBuf::from))
         .unwrap_or_else(|| data_dir.clone());
     let db_path = db_dir.join(format!("chronicler_{}.db", args.port));
+
     let db_pool = crate::storage::db::DbPool::new(db_path.to_str().unwrap_or("chronicler.db"))?;
 
     if let Err(e) = ensure_defaults(&db_pool, &data_dir) {
@@ -77,7 +218,7 @@ pub fn run(args: Args) -> crate::error::Result<()> {
                 Arc::clone(&player_arc),
                 npcs_map.clone(),
             );
-            if let Ok(msgs) = crate::application::context::load_messages_with_swipes(&storage) {
+            if let Ok(msgs) = context::load_messages_with_swipes(&storage) {
                 new_state.narrative.history.replace(msgs);
             }
             new_state
@@ -94,8 +235,6 @@ pub fn run(args: Args) -> crate::error::Result<()> {
             if let Some(scenario) = manifest.default_scenario() {
                 new_state.init_scenario_npcs(scenario);
             }
-
-            // [DOC: docs/system/startup.md]
             let initial_snapshot =
                 crate::model::state_snapshot::GameStateSnapshot::from_game_state(&new_state);
             let snapshot_id = storage.save_snapshot(&initial_snapshot)?;
@@ -116,139 +255,59 @@ pub fn run(args: Args) -> crate::error::Result<()> {
         }
     };
 
-    let nearby_npcs = state.scene.npcs_in_area.clone();
+    let nearby_npcs: Vec<NpcCard> = state.scene.npcs_in_area.clone();
     let all_npcs: Vec<NpcCard> = state.npcs.values().cloned().collect();
     let room_id = state.movement.current_room_id.clone();
-    let history: Vec<crate::model::state::LogEntry> = Vec::new();
-
     let npcs_arc = Arc::new(state.npcs.clone());
 
-    // [DOC: docs/architecture/system.md]
     let settings = crate::settings::load_settings().unwrap_or_else(|_| AppSettings::default());
     let settings = Arc::new(RwLock::new(settings));
+
     let config = ServerConfig { port: args.port };
+
     let runtime = tokio::runtime::Runtime::new().map_err(|e| {
         crate::error::EngineError::Io(format!("runtime_new {}: {e}", "tokio_runtime"))
     })?;
 
-    // [DOC: docs/system/narration_engine.md]
     let has_scenario = world_arc
         .default_scenario()
         .is_some_and(|s| !s.text.is_empty());
+
     if !has_scenario {
-        let (arrival_preset, response_length, max_context_tokens, max_tokens) = {
-            let preset_storage = crate::storage::Storage::new_sqlite(db_pool.clone(), 1);
-            let settings_guard = settings.read().unwrap_or_else(|e| e.into_inner());
-            let preset_id = &settings_guard.active_system_prompt_preset_id;
+        let preset_storage = crate::storage::Storage::new_sqlite(db_pool.clone(), PRESET_STORAGE_GAME_ID);
+        let (arrival_preset, response_length, max_context_tokens, max_tokens) = with_settings(&settings, |guard| {
+            let preset_id = &guard.active_system_prompt_preset_id;
             let preset = preset_storage.get_preset(preset_id).ok().flatten();
-            let conn = settings_guard.narration_connection();
+            let conn = guard.narration_connection();
             let max_context_tokens = conn.resolve_max_context_tokens();
             let max_tokens = conn.max_tokens;
-            let response_length = settings_guard.response_length.clone();
+            let response_length = guard.response_length.clone();
             (preset, response_length, max_context_tokens, max_tokens)
-        };
-        let storage_for_task = Arc::clone(&storage);
-        let world_for_task = Arc::clone(&world_arc);
-        let map_for_task = Arc::clone(&map_arc);
-        let player_for_task = Arc::clone(&player_arc);
-        let npcs_for_task = Arc::clone(&npcs_arc);
-        let settings_for_task = Arc::clone(&settings);
-        // [DOC: docs/architecture/invariants.md#INV-004]
-        let _handle = runtime.spawn_blocking(move || {
-            let mut state = match storage_for_task.load_latest_snapshot() {
-                Ok(Some(snap)) => GameState::from_snapshot(
-                    &snap,
-                    Arc::clone(&world_for_task),
-                    Arc::clone(&map_for_task),
-                    Arc::clone(&player_for_task),
-                    (*npcs_for_task).clone(),
-                ),
-                _ => GameState::new(
-                    Arc::clone(&world_for_task),
-                    Arc::clone(&map_for_task),
-                    Arc::clone(&player_for_task),
-                    (*npcs_for_task).values().cloned().collect(),
-                    world_for_task.starting_room_id.clone(),
-                ),
-            };
-            if let Ok(msgs) =
-                crate::application::context::load_messages_with_swipes(&storage_for_task)
-            {
-                state.narrative.history.replace(msgs);
-            }
-
-            state.narrative.input_buffer.status = crate::model::state::GenerationStatus::Generating;
-
-            let room = map_for_task
-                .overworld
-                .regions
-                .iter()
-                .flat_map(|r| r.rooms.iter())
-                .find(|r| r.id == room_id);
-
-            if let Some(room) = room {
-                let settings_guard = settings_for_task.read().unwrap_or_else(|e| e.into_inner());
-                let backend = crate::narrative::llm::get_llm_backend_for(
-                    &settings_guard.narration_connection(),
-                    Some(Arc::clone(&storage_for_task)),
-                );
-                drop(settings_guard);
-                let context = PromptContext {
-                    world: &world_for_task,
-                    room,
-                    all_npcs: &all_npcs,
-                    npcs_in_area: &nearby_npcs,
-                    player: &player_for_task,
-                    user_message: "",
-                    history: &history,
-                };
-
-                let narration = if let Some(ref preset) = arrival_preset {
-                    let mut assembler =
-                        crate::narrative::prompt::LayeredPromptAssembler::new(max_context_tokens);
-                    if let Some(max) = max_tokens {
-                        assembler = assembler.with_max_tokens(max);
-                    }
-                    match assembler.assemble(
-                        &context,
-                        preset,
-                        &world_for_task.global_rules,
-                        Some(&response_length),
-                    ) {
-                        Ok(assembled) => backend.complete(
-                            crate::narrative::llm::backend::AGENT_NARRATOR,
-                            &assembled.system_prompt,
-                            &assembled.user_prompt,
-                            Some(assembled.max_tokens),
-                        ),
-                        Err(e) => Err(e),
-                    }
-                } else {
-                    Err(crate::error::EngineError::Config(
-                        "No active preset found for arrival narration".into(),
-                    ))
-                };
-                match narration {
-                    Ok(result) => {
-                        state.add_log(result.text, None, crate::model::state::LogType::Narration);
-                        state.narrative.input_buffer.status =
-                            crate::model::state::GenerationStatus::Idle;
-                    }
-                    Err(e) => {
-                        state.narrative.input_buffer.status =
-                            crate::model::state::GenerationStatus::Error(format!("LLM Error: {e}"));
-                    }
-                }
-                let snapshot =
-                    crate::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
-                if let Err(e) = storage_for_task.save_snapshot(&snapshot) {
-                    log::error!("Failed to save arrival snapshot: {e}");
-                }
-            }
         });
-    } // end if !has_scenario
 
-    let preset_storage = crate::storage::Storage::new_sqlite(db_pool, 1);
+        let task_ctx = ArrivalTaskContext {
+            storage: Arc::clone(&storage),
+            world: Arc::clone(&world_arc),
+            map: Arc::clone(&map_arc),
+            player: Arc::clone(&player_arc),
+            npcs: Arc::clone(&npcs_arc),
+            room_id,
+            arrival_preset,
+            response_length,
+            max_context_tokens,
+            max_tokens,
+            nearby_npcs,
+            all_npcs,
+            db_pool: db_pool.clone(),
+        };
+
+        // [DOC: docs/architecture/invariants.md#INV-004]
+        runtime.spawn_blocking(move || {
+            task_ctx.run();
+        });
+    }
+
+    let preset_storage = crate::storage::Storage::new_sqlite(db_pool, PRESET_STORAGE_GAME_ID);
 
     let resources = crate::server::ServerResources {
         world: world_arc,
@@ -259,6 +318,7 @@ pub fn run(args: Args) -> crate::error::Result<()> {
         preset_storage: Arc::new(preset_storage),
         settings,
     };
+
     runtime.block_on(crate::server::run_server_with_config(resources, config))?;
 
     Ok(())
@@ -283,11 +343,9 @@ pub(crate) fn find_latest_game_for_world(
              LIMIT 1",
         )
         .map_err(|e| crate::error::EngineError::Config(format!("Failed to prepare query: {e}")))?;
-
     let result = stmt.query_row(rusqlite::params![world_name], |row| {
         Ok((row.get::<_, i64>(0)? as u64, row.get::<_, String>(1)?))
     });
-
     match result {
         Ok(pair) => Ok(Some(pair)),
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
@@ -305,11 +363,9 @@ pub(crate) fn list_game_names_for_world(
     let mut stmt = conn
         .prepare("SELECT name FROM games WHERE world_name = ?1")
         .map_err(|e| crate::error::EngineError::Config(format!("Failed to prepare query: {e}")))?;
-
     let rows = stmt
         .query_map(rusqlite::params![world_name], |row| row.get::<_, String>(0))
         .map_err(|e| crate::error::EngineError::Config(format!("Failed to query games: {e}")))?;
-
     rows.collect::<Result<Vec<_>, _>>()
         .map_err(|e| crate::error::EngineError::Config(format!("Failed to read game names: {e}")))
 }
@@ -320,7 +376,7 @@ fn ensure_defaults(
 ) -> crate::error::Result<()> {
     use crate::model::prompt_preset::{PresetType, PromptPreset};
 
-    let storage = crate::storage::Storage::new_sqlite(db_pool.clone(), 1);
+    let storage = crate::storage::Storage::new_sqlite(db_pool.clone(), PRESET_STORAGE_GAME_ID);
 
     for preset_type in [PresetType::System, PresetType::Quantifier] {
         let dir = data_dir.join("prompt_presets").join(preset_type.as_str());
@@ -341,7 +397,6 @@ fn ensure_defaults(
             if path.extension().and_then(|s| s.to_str()) != Some("json") {
                 continue;
             }
-
             let content = std::fs::read_to_string(&path)?;
             let seed: serde_json::Value = serde_json::from_str(&content).map_err(|e| {
                 crate::error::EngineError::Parse(format!(
@@ -351,7 +406,6 @@ fn ensure_defaults(
             })?;
 
             let id = seed["id"].as_str().unwrap_or("default").to_string();
-
             let preset = PromptPreset {
                 id: id.clone(),
                 name: seed["name"].as_str().unwrap_or("Default").to_string(),
@@ -364,8 +418,6 @@ fn ensure_defaults(
             };
 
             if existing_ids.contains(&id) {
-                // Re-seed default presets if their individual fields are empty
-                // (can happen after schema migrations that add new columns).
                 if let Ok(Some(existing)) = storage.get_preset(&id) {
                     let has_content = existing.role.is_some()
                         || existing.instructions.is_some()
@@ -378,7 +430,6 @@ fn ensure_defaults(
                 }
                 continue;
             }
-
             storage.save_preset(&preset)?;
             log::info!("Seeded {} prompt preset: {}", preset_type.as_str(), id);
         }

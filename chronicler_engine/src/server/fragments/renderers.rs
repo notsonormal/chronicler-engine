@@ -2,7 +2,7 @@ use askama::Template;
 use axum::{body::Body, http::StatusCode, response::Response};
 
 use crate::application::application_service::ApplicationError;
-use crate::error::Result;
+use crate::error::{EngineError, Result};
 use crate::server::AppState;
 use crate::server::templates::{
     ActionAreaTemplate, HeaderTemplate, LlmMessagesTemplate, StoryLogTemplate,
@@ -23,7 +23,7 @@ fn render_header_unlocked(game_name: String) -> Result<String> {
     let template = HeaderTemplate { game_name };
     template
         .render()
-        .map_err(|e| crate::error::EngineError::Template(e.to_string()))
+        .map_err(|e| EngineError::Template(e.to_string()))
 }
 
 pub fn render_header(state: &AppState) -> Result<String> {
@@ -37,23 +37,27 @@ pub fn render_header(state: &AppState) -> Result<String> {
 pub fn render_story_log(state: &AppState) -> Result<String> {
     let (entries, has_last_trigger) = state
         .application_service
-        .get_story_log_entries(state.as_game_service_context())?;
+        .get_story_log_entries(state.as_game_service_context())
+        .map_err(|e| EngineError::Config(e.to_string()))?;
 
     let entries: Vec<_> = entries.into_iter().take(MAX_LOG_DISPLAY).collect();
     let template = StoryLogTemplate::new(&entries, has_last_trigger);
     template
         .render()
-        .map_err(|e| crate::error::EngineError::Template(e.to_string()))
+        .map_err(|e| EngineError::Template(e.to_string()))
 }
 
 /// [DOC: docs/system/game_flow.md]
 pub fn render_visual_sidebar(state: &AppState) -> Result<String> {
     let (room_name, image_path) = state
         .application_service
-        .get_current_room_view(state.as_game_service_context())?;
+        .get_current_room_view(state.as_game_service_context())
+        .map_err(|e| EngineError::Config(e.to_string()))?;
+
     let npc_data = state
         .application_service
-        .get_npc_headshots(state.as_game_service_context(), true)?;
+        .get_npc_headshots(state.as_game_service_context(), true)
+        .map_err(|e| EngineError::Config(e.to_string()))?;
 
     let npc_portraits: Vec<NpcPortraitView> = npc_data
         .into_iter()
@@ -64,20 +68,21 @@ pub fn render_visual_sidebar(state: &AppState) -> Result<String> {
     let template = VisualSidebarTemplate::new(vm);
     template
         .render()
-        .map_err(|e| crate::error::EngineError::Template(e.to_string()))
+        .map_err(|e| EngineError::Template(e.to_string()))
 }
 
 /// [DOC: docs/system/game_flow.md]
 pub fn render_action_area(state: &AppState) -> Result<String> {
     let (status, phase) = state
         .application_service
-        .get_input_status(state.as_game_service_context())?;
+        .get_input_status(state.as_game_service_context())
+        .map_err(|e| EngineError::Config(e.to_string()))?;
 
     let vm = ActionAreaViewModel::new(&status, &phase, &[]);
     let template = ActionAreaTemplate::new(vm);
     template
         .render()
-        .map_err(|e| crate::error::EngineError::Template(e.to_string()))
+        .map_err(|e| EngineError::Template(e.to_string()))
 }
 
 /// [DOC: docs/system/game_flow.md]
@@ -87,7 +92,8 @@ pub fn render_character_headshots(state: &AppState) -> Result<String> {
 
     let npc_data = state
         .application_service
-        .get_npc_headshots(state.as_game_service_context(), false)?;
+        .get_npc_headshots(state.as_game_service_context(), false)
+        .map_err(|e| EngineError::Config(e.to_string()))?;
 
     let npc_portraits: Vec<NpcPortraitView> = npc_data
         .into_iter()
@@ -97,7 +103,7 @@ pub fn render_character_headshots(state: &AppState) -> Result<String> {
     let template = CharacterHeadshotsTemplate::new(npc_portraits);
     template
         .render()
-        .map_err(|e| crate::error::EngineError::Template(e.to_string()))
+        .map_err(|e| EngineError::Template(e.to_string()))
 }
 
 pub fn render_action_hints(_state: &AppState) -> Result<String> {
@@ -108,18 +114,14 @@ pub fn render_llm_messages(state: &AppState) -> Result<String> {
     let messages = state
         .application_service
         .list_latest_llm_messages(state.as_game_service_context(), 50)
-        .map_err(|e| {
-            crate::error::EngineError::Template(format!("Failed to load LLM messages: {e}"))
-        })?;
+        .map_err(|e| EngineError::Config(e.to_string()))?;
+
     let template = LlmMessagesTemplate::new(&messages);
     template
         .render()
-        .map_err(|e| crate::error::EngineError::Template(e.to_string()))
+        .map_err(|e| EngineError::Template(e.to_string()))
 }
 
-// ---------------------------------------------------------------------------
-// Response builders
-// ---------------------------------------------------------------------------
 
 #[allow(clippy::expect_used)]
 pub fn ok(body: impl Into<String>) -> Response<Body> {
@@ -166,8 +168,6 @@ pub fn service_unavailable_generating() -> Response<Body> {
     service_unavailable("<span class=\"status wait\">Generation in progress, please wait...</span>")
 }
 
-/// Maps the common `ApplicationError` variants to HTTP responses.
-/// Handlers that need non-standard mappings should match manually.
 /// [DOC: docs/architecture/system.md]
 pub fn app_err_to_response(err: ApplicationError) -> Response<Body> {
     match err {
@@ -180,7 +180,6 @@ pub fn app_err_to_response(err: ApplicationError) -> Response<Body> {
     }
 }
 
-/// Maps the common `ApplicationError` variants to `(StatusCode, String)` tuples.
 /// [DOC: docs/architecture/system.md]
 pub fn app_err_to_tuple(err: ApplicationError) -> (StatusCode, String) {
     match err {

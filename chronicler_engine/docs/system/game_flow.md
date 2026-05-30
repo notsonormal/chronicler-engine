@@ -67,7 +67,7 @@ flowchart TD
 
 ## Test Scenarios
 
-These Gherkin scenarios are covered by **browser/integration tests** (`tests/trigger_tests.rs`, `tests/browser/structure.rs`). The `flow_mock/` test suite covers sequential service-level retry and state consistency flows rather than end-to-end browser scenarios.
+These Gherkin scenarios are covered by **browser/integration tests** (`tests/browser/trigger.rs`, `tests/browser/structure.rs`). The `flow_mock/` test suite covers sequential service-level retry and state consistency flows rather than end-to-end browser scenarios.
 
 ### Scenario 1: Initial Load
 ```gherkin
@@ -88,7 +88,7 @@ Then the status shows "Generating narration..."
 And after LLM generates response, the story-log shows the LLM description
 And the status shows "Ready"
 ```
-- **Covered by**: `tests/trigger_tests.rs` — `test_look_command_adds_narration_entries`, `test_freeaction_without_movement_works`
+- **Covered by**: `tests/browser/trigger.rs` — `test_look_command_adds_narration_entries`, `test_freeaction_without_movement_works`
 
 ### Scenario 3: Quantifier-Driven Movement
 ```gherkin
@@ -101,7 +101,7 @@ And the story-log shows the LLM narration for arrival with an inline location he
 And the visual-sidebar shows the new room's image and NPCs
 And the status shows "Ready"
 ```
-- **Covered by**: `tests/trigger_tests.rs` — `test_freeaction_with_movement_no_triggers`
+- **Covered by**: `tests/browser/trigger.rs` — `test_freeaction_with_movement_no_triggers`
 
 ### Scenario 4: Free Action (LLM Narration)
 ```gherkin
@@ -111,7 +111,7 @@ Then the status shows "Generating narration..."
 And after LLM generates response, the story-log shows the LLM's description of the orb
 And the status shows "Ready"
 ```
-- **Covered by**: `tests/trigger_tests.rs` — `test_freeaction_without_movement_works`
+- **Covered by**: `tests/browser/trigger.rs` — `test_freeaction_without_movement_works`
 
 ## Error Handling
 

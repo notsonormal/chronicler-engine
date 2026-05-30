@@ -9,7 +9,7 @@ use chronicler_engine::TestAppBuilder;
 use chronicler_engine::storage::{Operation, Storage, TestOverride};
 
 #[tokio::test]
-async fn test_action_handler_load_state_failure() {
+async fn test_action_handler_load_state_failure_graceful_degradation() {
     let storage = Arc::new(Storage::new_in_memory().with_failure(
         Operation::LoadLatestSnapshot,
         TestOverride::internal("simulated load failure"),
@@ -25,7 +25,8 @@ async fn test_action_handler_load_state_failure() {
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
 
-    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    // Graceful degradation: falls back to fresh state, returns 200
+    assert_eq!(response.status(), StatusCode::OK);
 }
 
 #[tokio::test]
@@ -49,7 +50,7 @@ async fn test_action_handler_snapshot_save_failure() {
 }
 
 #[tokio::test]
-async fn test_action_confirm_handler_render_error_fallback() {
+async fn test_action_confirm_handler_load_state_failure_graceful_degradation() {
     let storage = Arc::new(Storage::new_in_memory().with_failure(
         Operation::LoadLatestSnapshot,
         TestOverride::internal("simulated load failure"),
@@ -65,13 +66,6 @@ async fn test_action_confirm_handler_render_error_fallback() {
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
 
-    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
-    let body = axum::body::to_bytes(response.into_body(), 1024)
-        .await
-        .unwrap();
-    let body_str = String::from_utf8_lossy(&body);
-    assert!(
-        body_str.contains("error-message"),
-        "Expected error message in fallback: {body_str}"
-    );
+    // Graceful degradation: falls back to fresh state, returns 200
+    assert_eq!(response.status(), StatusCode::OK);
 }

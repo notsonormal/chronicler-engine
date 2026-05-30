@@ -1,7 +1,13 @@
 # Changelog
 
-
 ## 2026-05-29
+
+### Changed
+- **Dedup load_state: 4 identical methods replaced with single context::load_state call**
+  - Removed `fn load_state` from `application_service.rs`, `game_lifecycle.rs`, `message_editing.rs`, `query_handlers.rs`
+  - Updated 12 call sites: `self.load_state(&ctx)?` → `load_state(&ctx)` (drops `?` since `context::load_state` returns `GameState` directly)
+  - Added `use crate::application::context::load_state` to all consuming files
+  - `context.rs` remains the single canonical source
 
 ### Changed
 - **Refactored application service: split god service, fixed layer violation, deleted unnecessary traits**

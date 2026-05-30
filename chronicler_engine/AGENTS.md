@@ -49,7 +49,7 @@ chronicler_engine/
 │   ├── logic_tests.rs     # Game logic unit tests
 │   ├── test_data.rs       # Test data validation
 │   ├── text_check_tests.rs# Text-check integration tests
-│   ├── trigger_tests.rs   # Trigger evaluation tests
+│   ├── browser/          # Browser integration tests (editing, interaction, structure, trigger)
 │   └── test_utils/        # Shared test utilities (browser, server, wait)
 ├── docs/                  # Extensive documentation (75+ .md files, auto-indexed)
 │   ├── architecture/      # System specs (system.md, guardrails.md, invariants.md)

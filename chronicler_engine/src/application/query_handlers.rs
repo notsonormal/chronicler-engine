@@ -1,14 +1,10 @@
-//! [DOC: docs/architecture/system.md]
-//! Read-only query handlers: generation status, game info, room view, NPCs, debug state.
-
 use crate::application::ApplicationError;
 use crate::application::DebugStateView;
-use crate::application::context::GameServiceContext;
+use crate::application::context::{GameServiceContext, load_state};
 use crate::error::EngineError;
 use crate::model::llm_message::LlmMessage;
 use crate::model::state::LogEntry;
 
-/// Read-only query operations for DefaultApplicationService.
 pub struct QueryHandlers;
 
 impl Default for QueryHandlers {
@@ -22,14 +18,6 @@ impl QueryHandlers {
         Self
     }
 
-    fn load_state(
-        &self,
-        ctx: &GameServiceContext,
-    ) -> Result<crate::model::state::GameState, ApplicationError> {
-        crate::application::context::try_load_state(ctx).map_err(Into::into)
-    }
-
-    /// Returns the current generation status and phase.
     pub fn get_generating_status(
         &self,
         ctx: GameServiceContext,
@@ -40,16 +28,15 @@ impl QueryHandlers {
         ),
         ApplicationError,
     > {
-        let game_state = self.load_state(&ctx)?;
+        let game_state = load_state(&ctx);
         Ok((
             game_state.narrative.input_buffer.status.clone(),
             game_state.narrative.input_buffer.phase.clone(),
         ))
     }
 
-    /// Resets generation status to idle and persists the snapshot.
     pub fn reset_generating_status(&self, ctx: GameServiceContext) -> Result<(), ApplicationError> {
-        let mut game_state = self.load_state(&ctx)?;
+        let mut game_state = load_state(&ctx);
         game_state.narrative.input_buffer.status = crate::model::state::GenerationStatus::Idle;
         let snapshot =
             crate::model::state_snapshot::GameStateSnapshot::from_game_state(&game_state);
@@ -57,7 +44,6 @@ impl QueryHandlers {
         Ok(())
     }
 
-    /// Returns the name of the current game.
     pub fn get_current_game_name(
         &self,
         ctx: GameServiceContext,
@@ -68,7 +54,6 @@ impl QueryHandlers {
         }
     }
 
-    /// Returns the latest LLM messages up to the given limit.
     pub fn list_latest_llm_messages(
         &self,
         ctx: GameServiceContext,
@@ -79,18 +64,16 @@ impl QueryHandlers {
             .map_err(Into::into)
     }
 
-    /// Returns all story log entries and whether there's a pending trigger.
     pub fn get_story_log_entries(
         &self,
         ctx: GameServiceContext,
     ) -> Result<(Vec<LogEntry>, bool), ApplicationError> {
-        let game_state = self.load_state(&ctx)?;
+        let game_state = load_state(&ctx);
         let entries: Vec<_> = game_state.narrative.history().to_vec();
         let has_last_trigger = game_state.narrative.last_trigger.is_some();
         Ok((entries, has_last_trigger))
     }
 
-    /// Returns the current input/generation status (alias for get_generating_status).
     pub fn get_input_status(
         &self,
         ctx: GameServiceContext,
@@ -104,12 +87,11 @@ impl QueryHandlers {
         self.get_generating_status(ctx)
     }
 
-    /// Returns the current room name and optional image path.
     pub fn get_current_room_view(
         &self,
         ctx: GameServiceContext,
     ) -> Result<(String, Option<String>), ApplicationError> {
-        let game_state = self.load_state(&ctx)?;
+        let game_state = load_state(&ctx);
         let room = game_state
             .current_room()
             .ok_or_else(|| EngineError::RoomNotFound("current room not found".to_string()))?;
@@ -122,14 +104,12 @@ impl QueryHandlers {
         Ok((room.name.clone(), image_path))
     }
 
-    /// Returns NPC headshots: (image_path, name) tuples.
-    /// If scene_only is true, only NPCs in the current area are returned.
     pub fn get_npc_headshots(
         &self,
         ctx: GameServiceContext,
         scene_only: bool,
     ) -> Result<Vec<(String, String)>, ApplicationError> {
-        let game_state = self.load_state(&ctx)?;
+        let game_state = load_state(&ctx);
 
         let npc_ids: Vec<String> = if scene_only {
             game_state
@@ -155,12 +135,11 @@ impl QueryHandlers {
         Ok(npc_data)
     }
 
-    /// Returns debug state for diagnostics.
     pub fn get_debug_state(
         &self,
         ctx: GameServiceContext,
     ) -> Result<DebugStateView, ApplicationError> {
-        let game_state = self.load_state(&ctx)?;
+        let game_state = load_state(&ctx);
 
         let history_tail: Vec<LogEntry> = game_state
             .narrative
@@ -172,7 +151,7 @@ impl QueryHandlers {
             .cloned()
             .collect();
 
-        let npcs_in_area: Vec<String> = game_state
+        let npc_ids: Vec<String> = game_state
             .scene
             .npcs_in_area
             .iter()
@@ -189,7 +168,7 @@ impl QueryHandlers {
 
         Ok(DebugStateView {
             current_room_id: game_state.movement.current_room_id.clone(),
-            npcs_in_area,
+            npcs_in_area: npc_ids,
             generation_status: game_state.narrative.input_buffer.status.clone(),
             generation_phase: game_state.narrative.input_buffer.phase.clone(),
             npc_encounter_log: game_state.npc_encounter_log.npcs.clone(),

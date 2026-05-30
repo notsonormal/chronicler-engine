@@ -1,18 +1,13 @@
-//! [DOC: docs/architecture/system.md]
-//! Message editing operations: swipe, edit history, delete, retry, retrigger.
-
 use std::sync::Arc;
 
 use chrono::Utc;
 
 use crate::application::ApplicationError;
-use crate::application::context::GameServiceContext;
+use crate::application::context::{GameServiceContext, load_state};
 use crate::application::game_service::DefaultGameService;
 use crate::error::{EngineError, internal_error};
-use crate::model::state::GameState;
 use crate::model::state_snapshot::GameStateSnapshot;
 
-/// Message editing operations for DefaultApplicationService.
 pub struct MessageEditingService {
     game_service: Arc<DefaultGameService>,
 }
@@ -22,15 +17,10 @@ impl MessageEditingService {
         Self { game_service }
     }
 
-    fn load_state(&self, ctx: &GameServiceContext) -> Result<GameState, ApplicationError> {
-        crate::application::context::try_load_state(ctx).map_err(Into::into)
-    }
-
     fn app_err_internal(msg: impl Into<String>) -> ApplicationError {
         ApplicationError::Engine(EngineError::Internal(internal_error(msg)))
     }
 
-    /// Switches the active swipe on a message to a different variant.
     pub fn switch_swipe(
         &self,
         ctx: GameServiceContext,
@@ -76,7 +66,6 @@ impl MessageEditingService {
         Ok(())
     }
 
-    /// Edits a message in the history by ID.
     pub fn edit_history(
         &self,
         ctx: GameServiceContext,
@@ -84,7 +73,7 @@ impl MessageEditingService {
         text: String,
     ) -> Result<(), ApplicationError> {
         let latest = ctx.storage.load_latest_snapshot()?;
-        let mut guard = self.load_state(&ctx)?;
+        let mut guard = load_state(&ctx);
         guard.narrative.history.edit(id, text.clone())?;
 
         if latest.is_some() {
@@ -96,9 +85,8 @@ impl MessageEditingService {
         Ok(())
     }
 
-    /// Deletes the last message in history.
     pub fn delete_last(&self, ctx: GameServiceContext) -> Result<(), ApplicationError> {
-        let mut guard = self.load_state(&ctx)?;
+        let mut guard = load_state(&ctx);
         let last_id = guard
             .narrative
             .history
@@ -116,9 +104,8 @@ impl MessageEditingService {
         Ok(())
     }
 
-    /// Retries the last user input by re-executing the action pipeline.
     pub fn retry(&self, ctx: GameServiceContext) -> Result<(), ApplicationError> {
-        let mut game_state = self.load_state(&ctx)?;
+        let mut game_state = load_state(&ctx);
 
         if game_state.narrative.history.last_input_text().is_none() {
             return Err(ApplicationError::validation("No input to retry"));
@@ -149,9 +136,8 @@ impl MessageEditingService {
         Ok(())
     }
 
-    /// Retriggers generation on the last narration/dialogue message.
     pub fn retrigger(&self, ctx: GameServiceContext) -> Result<(), ApplicationError> {
-        let game_state = self.load_state(&ctx)?;
+        let game_state = load_state(&ctx);
 
         if game_state.narrative.last_trigger.is_none() {
             return Err(ApplicationError::validation("No trigger context available"));

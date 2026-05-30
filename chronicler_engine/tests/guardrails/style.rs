@@ -108,6 +108,10 @@ fn is_countable_comment(line: &str) -> bool {
     if line.starts_with("// [DOC:") {
         return false;
     }
+    // Exclude separator comments // === ... ===
+    if line.starts_with("// ===") || line.starts_with("//===") {
+        return false;
+    }
     // Exclude empty comments
     let after_slashes = if line.starts_with("///") || line.starts_with("//!") {
         &line[3..]
@@ -213,6 +217,20 @@ fn get_local_ident(local: &Local) -> Option<syn::Ident> {
     }
 }
 
+pub fn check_separator_comments(path: &str, content: &str) -> Vec<Violation> {
+    let mut violations = Vec::new();
+    for (line_num, line) in content.lines().enumerate() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("// ===") || trimmed.starts_with("//===") {
+            violations.push(Violation::warn(
+                path,
+                line_num + 1,
+                "Separator comment // === ... === has no semantic value. Organize code with named functions and types instead.",
+            ));
+        }
+    }
+    violations
+}
 pub fn check_single_letter_vars(path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
     let ast = syn::parse_file(content).unwrap();

@@ -1,7 +1,5 @@
 use super::*;
 
-const TEST_WORLD: &str = "test";
-const CONFIG_PATH: &str = "tests/test_config.json";
 
 #[tokio::test]
 async fn test_edit_button_exists_on_entries() {

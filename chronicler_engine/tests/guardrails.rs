@@ -134,6 +134,10 @@ fn guardrails_single_letter_vars() {
 }
 
 #[test]
+fn guardrails_separator_comments() {
+    check_src_files("separator comment", check_separator_comments);
+}
+#[test]
 fn guardrails_long_comment_runs() {
     check_src_files("long comment run", check_long_comment_runs);
 }

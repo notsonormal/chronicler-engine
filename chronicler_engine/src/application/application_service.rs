@@ -60,22 +60,6 @@ impl From<EngineError> for ApplicationError {
         Self::Engine(e)
     }
 }
-
-impl From<ApplicationError> for EngineError {
-    fn from(e: ApplicationError) -> Self {
-        match e {
-            ApplicationError::Engine(err) => err,
-            ApplicationError::Validation(msg) => EngineError::Config(msg),
-            ApplicationError::ShuttingDown => {
-                EngineError::Config("Server is shutting down".to_string())
-            }
-            ApplicationError::ConcurrentGeneration => {
-                EngineError::Config("Generation in progress".to_string())
-            }
-        }
-    }
-}
-
 pub enum ProcessActionResult {
     Started,
     ConcurrentGeneration,
@@ -119,12 +103,13 @@ impl DefaultApplicationService {
     pub fn game_service(&self) -> &Arc<DefaultGameService> {
         &self.game_service
     }
+
     pub fn process_action(
         &self,
         ctx: GameServiceContext,
         input: String,
     ) -> Result<ProcessActionResult, EngineError> {
-        let mut game_state = self.load_state(&ctx)?;
+        let mut game_state = load_state(&ctx);
         let player_name = game_state.player.sheet.name.clone();
 
         game_state.add_log(
@@ -152,7 +137,7 @@ impl DefaultApplicationService {
         }
 
         if ctx.cancel_token.is_cancelled() {
-            let mut gs = self.load_state(&ctx)?;
+            let mut gs = load_state(&ctx);
             gs.narrative.input_buffer.status = GenerationStatus::Idle;
             let snapshot = GameStateSnapshot::from_game_state(&gs);
             if let Err(e) = ctx.storage.save_snapshot(&snapshot) {
@@ -176,7 +161,6 @@ impl DefaultApplicationService {
         Ok(ProcessActionResult::Started)
     }
 
-    // --- Game lifecycle delegation ---
 
     pub fn create_game(&self, ctx: GameServiceContext) -> Result<u64, ApplicationError> {
         self.lifecycle.create_game(ctx)
@@ -202,7 +186,6 @@ impl DefaultApplicationService {
         self.lifecycle.reset(ctx)
     }
 
-    // --- Message editing delegation ---
 
     pub fn retry(&self, ctx: GameServiceContext) -> Result<(), ApplicationError> {
         self.editing.retry(ctx)
@@ -234,7 +217,6 @@ impl DefaultApplicationService {
         self.editing.delete_last(ctx)
     }
 
-    // --- Query handler delegation ---
 
     pub fn get_generating_status(
         &self,

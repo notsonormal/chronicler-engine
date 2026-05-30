@@ -9,3 +9,5 @@ mod editing;
 mod interaction;
 #[path = "browser/structure.rs"]
 mod structure;
+#[path = "browser/trigger.rs"]
+mod trigger;

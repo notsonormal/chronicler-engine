@@ -55,7 +55,7 @@ Cross-module and browser-based tests live in the top-level `tests/` directory:
 | `poison_recovery.rs` | Lock poison recovery for `Mutex`/`RwLock` | In-process | ~1s |
 | `cli_tests.rs` | CLI argument parsing | In-process | ~1s |
 | `invariant_contract_tests.rs` | Runtime invariant regression tests | In-process | ~0.1s |
-| `trigger_tests.rs` | Trigger evaluation and firing | Browser + Mock LLM | ~30s |
+| `browser/trigger.rs` | Trigger evaluation and firing | Browser + Mock LLM | ~30s |
 | `diagnostic/` | Backend diagnostics, scenario validation | In-process | ~2s |
 
 ## Backend Selection
