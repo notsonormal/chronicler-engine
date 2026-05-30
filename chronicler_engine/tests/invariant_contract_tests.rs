@@ -11,8 +11,8 @@ use chronicler_engine::engine::action_processing::{
 };
 use chronicler_engine::engine::trigger_eval::get_times_met;
 use chronicler_engine::model::quantifier::{
-    MovementParseResult, MovementType, NpcEvent, NpcTransitionType, QuantifierConfidence, QuantifierParseResult,
-    QuantifierResult,
+    MovementParseResult, MovementType, NpcEvent, NpcTransitionType, QuantifierConfidence,
+    QuantifierParseResult, QuantifierResult,
 };
 use chronicler_engine::model::state::MessageType;
 use chronicler_engine::narrative::agents::registry::AgentRegistry;
@@ -250,14 +250,18 @@ fn test_inv003_snapshot_restores_state_fields() {
         "INV-003: snapshot should capture modified current_room_id"
     );
     assert_eq!(
-        snapshot.scene.npcs_in_area.len(), 0,
+        snapshot.scene.npcs_in_area.len(),
+        0,
         "INV-003: snapshot should capture empty npcs_in_area"
     );
 
     // Create fresh state and apply snapshot
     let mut fresh_state = create_test_state();
     fresh_state.movement.current_room_id = "room1".to_string();
-    fresh_state.scene.npcs_in_area.push(fresh_state.npcs.values().next().unwrap().clone());
+    fresh_state
+        .scene
+        .npcs_in_area
+        .push(fresh_state.npcs.values().next().unwrap().clone());
 
     // Apply snapshot restores the original state
     snapshot.apply_to(&mut fresh_state);
@@ -276,14 +280,19 @@ fn test_inv003_snapshot_restores_state_fields() {
 
     // INV-003: Verify npcs_in_area is restored (should be empty)
     assert_eq!(
-        fresh_state.scene.npcs_in_area.len(), 0,
+        fresh_state.scene.npcs_in_area.len(),
+        0,
         "INV-003: apply_to should restore npcs_in_area"
     );
 }
 #[test]
 fn test_inv005_handle_movement_runs_before_narration() {
-    use chronicler_engine::engine::action_processing::{execute_freeaction_impl, FreeActionContext};
-    use chronicler_engine::model::quantifier::{QuantifierConfidence, QuantifierParseResult, QuantifierResult};
+    use chronicler_engine::engine::action_processing::{
+        FreeActionContext, execute_freeaction_impl,
+    };
+    use chronicler_engine::model::quantifier::{
+        QuantifierConfidence, QuantifierParseResult, QuantifierResult,
+    };
     use std::sync::Arc;
 
     // Use the full test map which has room1, room2, room3
@@ -292,7 +301,11 @@ fn test_inv005_handle_movement_runs_before_narration() {
     let player = Arc::new(test_data::create_test_player());
     let npcs = vec![];
     let state = chronicler_engine::model::state::GameState::new(
-        world, map, player, npcs, "room1".to_string()
+        world,
+        map,
+        player,
+        npcs,
+        "room1".to_string(),
     );
     let original_room = state.movement.current_room_id.clone();
     let target_room = "room2";
@@ -315,7 +328,8 @@ fn test_inv005_handle_movement_runs_before_narration() {
             narration_text: "I walk north.",
             quantifier_result: &quantifier,
         },
-    ).expect("execute_freeaction_impl should succeed");
+    )
+    .expect("execute_freeaction_impl should succeed");
 
     // INV-005: handle_movement should have updated current_room_id BEFORE narration
     assert_eq!(
@@ -338,7 +352,12 @@ fn test_inv007_dynamic_room_creation_on_invalid_destination() {
 
     // Verify precondition: this room does NOT exist
     assert!(
-        !state.map.overworld.regions.iter().flat_map(|r| r.rooms.iter())
+        !state
+            .map
+            .overworld
+            .regions
+            .iter()
+            .flat_map(|r| r.rooms.iter())
             .any(|r| r.id == invalid_destination),
         "precondition: invalid_destination should not exist in map"
     );
@@ -368,7 +387,9 @@ fn test_inv007_dynamic_room_creation_on_invalid_destination() {
         "INV-007: system message should be logged for dynamic room creation"
     );
     assert!(
-        system_messages.iter().any(|m| m.text.contains("Entered unknown location")),
+        system_messages
+            .iter()
+            .any(|m| m.text.contains("Entered unknown location")),
         "INV-007: system message should mention 'Entered unknown location'"
     );
 }

@@ -150,7 +150,13 @@ fn test_load_latest_no_snapshots() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 fn dummy_message(text: &str) -> Message {
-    Message::new(Some("Player".to_string()), text, MessageType::Input, None, None)
+    Message::new(
+        Some("Player".to_string()),
+        text,
+        MessageType::Input,
+        None,
+        None,
+    )
 }
 
 #[test]

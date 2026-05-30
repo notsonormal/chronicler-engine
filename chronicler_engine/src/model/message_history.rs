@@ -104,9 +104,9 @@ impl MessageHistory {
     }
 
     pub fn last_ai_response_index(&self) -> Option<usize> {
-        self.messages
-            .iter()
-            .rposition(|m| m.message_type == MessageType::Narration || m.message_type == MessageType::Dialogue)
+        self.messages.iter().rposition(|m| {
+            m.message_type == MessageType::Narration || m.message_type == MessageType::Dialogue
+        })
     }
 
     pub fn last_input_index(&self) -> Option<usize> {
@@ -129,7 +129,9 @@ impl MessageHistory {
         self.messages
             .iter()
             .rev()
-            .find(|m| m.message_type == MessageType::Narration || m.message_type == MessageType::Dialogue)
+            .find(|m| {
+                m.message_type == MessageType::Narration || m.message_type == MessageType::Dialogue
+            })
             .is_some_and(|m| m.event_header.is_some())
     }
 

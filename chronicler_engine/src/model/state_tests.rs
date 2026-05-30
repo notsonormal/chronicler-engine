@@ -84,7 +84,11 @@ fn test_add_log_absorbs_pending_location() {
 fn test_add_log_absorbs_pending_event() {
     let mut state = TestGameState::in_room("room1");
     state.narrative.pending_event = Some("Gabriella Introduction".to_string());
-    state.add_message("Gabriella steps forward.".into(), None, MessageType::Narration);
+    state.add_message(
+        "Gabriella steps forward.".into(),
+        None,
+        MessageType::Narration,
+    );
 
     let history = state.narrative.history();
     let entry = history.last().unwrap();

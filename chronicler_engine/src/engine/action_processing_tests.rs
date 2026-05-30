@@ -3,7 +3,10 @@ use crate::engine::action_processing::{
     execute_freeaction_impl,
 };
 use crate::engine::trigger_eval::{get_times_met, is_currently_meeting, set_currently_meeting};
-use crate::model::quantifier::{MovementParseResult, MovementType, NpcEvent, NpcTransitionType, QuantifierConfidence, QuantifierParseResult, QuantifierResult};
+use crate::model::quantifier::{
+    MovementParseResult, MovementType, NpcEvent, NpcTransitionType, QuantifierConfidence,
+    QuantifierParseResult, QuantifierResult,
+};
 use crate::model::state::MessageType;
 use crate::test_support::{TestGameState, TestNpc};
 

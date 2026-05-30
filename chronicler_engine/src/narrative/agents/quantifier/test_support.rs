@@ -57,4 +57,3 @@ pub fn make_history() -> Vec<MessageEntry> {
         },
     ]
 }
-

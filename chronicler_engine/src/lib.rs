@@ -46,6 +46,7 @@ pub mod test_support;
 mod bootstrap_tests;
 #[cfg(test)]
 mod cli_tests;
+#[cfg(test)]
 mod error_tests;
 #[cfg(test)]
 mod settings_tests;

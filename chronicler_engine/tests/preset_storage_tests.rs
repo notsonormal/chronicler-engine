@@ -46,9 +46,15 @@ fn test_list_presets_empty() {
 #[test]
 fn test_list_presets_system_only() {
     let storage = create_storage();
-    storage.save_preset(&make_system_preset("sys1", "System One")).unwrap();
-    storage.save_preset(&make_system_preset("sys2", "System Two")).unwrap();
-    storage.save_preset(&make_quantifier_preset("quant1", "Quantifier One")).unwrap();
+    storage
+        .save_preset(&make_system_preset("sys1", "System One"))
+        .unwrap();
+    storage
+        .save_preset(&make_system_preset("sys2", "System Two"))
+        .unwrap();
+    storage
+        .save_preset(&make_quantifier_preset("quant1", "Quantifier One"))
+        .unwrap();
 
     let system = storage.list_presets(PresetType::System).unwrap();
     let quantifier = storage.list_presets(PresetType::Quantifier).unwrap();
@@ -60,8 +66,12 @@ fn test_list_presets_system_only() {
 #[test]
 fn test_list_presets_quantifier_only() {
     let storage = create_storage();
-    storage.save_preset(&make_quantifier_preset("quant1", "Quantifier One")).unwrap();
-    storage.save_preset(&make_quantifier_preset("quant2", "Quantifier Two")).unwrap();
+    storage
+        .save_preset(&make_quantifier_preset("quant1", "Quantifier One"))
+        .unwrap();
+    storage
+        .save_preset(&make_quantifier_preset("quant2", "Quantifier Two"))
+        .unwrap();
 
     let quantifier = storage.list_presets(PresetType::Quantifier).unwrap();
 
@@ -90,13 +100,20 @@ fn test_list_presets_ordered_by_updated_at_desc() {
 #[test]
 fn test_list_presets_does_not_return_other_type() {
     let storage = create_storage();
-    storage.save_preset(&make_system_preset("sys1", "System One")).unwrap();
-    storage.save_preset(&make_quantifier_preset("quant1", "Quantifier One")).unwrap();
+    storage
+        .save_preset(&make_system_preset("sys1", "System One"))
+        .unwrap();
+    storage
+        .save_preset(&make_quantifier_preset("quant1", "Quantifier One"))
+        .unwrap();
 
     let system = storage.list_presets(PresetType::System).unwrap();
     let ids: Vec<_> = system.iter().map(|p| p.id.as_str()).collect();
 
-    assert!(!ids.contains(&"quant1"), "System list should not contain quantifier preset");
+    assert!(
+        !ids.contains(&"quant1"),
+        "System list should not contain quantifier preset"
+    );
 }
 
 #[test]
@@ -243,7 +260,10 @@ fn test_save_preset_update_preserves_id() {
     storage.save_preset(&updated).unwrap();
 
     let found = storage.get_preset("preserved_id").unwrap().unwrap();
-    assert_eq!(found.id, "preserved_id", "ID should be preserved after update");
+    assert_eq!(
+        found.id, "preserved_id",
+        "ID should be preserved after update"
+    );
 }
 
 #[test]
@@ -277,7 +297,9 @@ fn test_save_preset_update_toggles_default() {
 #[test]
 fn test_delete_preset_existing() {
     let storage = create_storage();
-    storage.save_preset(&make_system_preset("to_delete", "To Delete")).unwrap();
+    storage
+        .save_preset(&make_system_preset("to_delete", "To Delete"))
+        .unwrap();
 
     let result = storage.delete_preset("to_delete");
 
@@ -292,15 +314,24 @@ fn test_delete_preset_nonexistent() {
 
     let result = storage.delete_preset("nonexistent");
 
-    assert!(result.is_ok(), "Should not error on deleting nonexistent preset");
+    assert!(
+        result.is_ok(),
+        "Should not error on deleting nonexistent preset"
+    );
 }
 
 #[test]
 fn test_delete_preset_only_deletes_target() {
     let storage = create_storage();
-    storage.save_preset(&make_system_preset("keep1", "Keep One")).unwrap();
-    storage.save_preset(&make_system_preset("keep2", "Keep Two")).unwrap();
-    storage.save_preset(&make_system_preset("delete_me", "Delete Me")).unwrap();
+    storage
+        .save_preset(&make_system_preset("keep1", "Keep One"))
+        .unwrap();
+    storage
+        .save_preset(&make_system_preset("keep2", "Keep Two"))
+        .unwrap();
+    storage
+        .save_preset(&make_system_preset("delete_me", "Delete Me"))
+        .unwrap();
 
     storage.delete_preset("delete_me").unwrap();
 
@@ -316,7 +347,9 @@ fn test_delete_preset_only_deletes_target() {
 #[test]
 fn test_delete_preset_clears_from_list() {
     let storage = create_storage();
-    storage.save_preset(&make_system_preset("list_test", "List Test")).unwrap();
+    storage
+        .save_preset(&make_system_preset("list_test", "List Test"))
+        .unwrap();
 
     let before = storage.list_presets(PresetType::System).unwrap();
     assert_eq!(before.len(), 1, "Should have 1 preset before delete");
@@ -411,7 +444,11 @@ fn test_preset_with_long_content() {
 
     let found = storage.get_preset("long").unwrap().unwrap();
     assert_eq!(found.name.len(), 10000, "Long name should be preserved");
-    assert_eq!(found.instructions.unwrap().len(), 10000, "Long instructions should be preserved");
+    assert_eq!(
+        found.instructions.unwrap().len(),
+        10000,
+        "Long instructions should be preserved"
+    );
 }
 
 #[test]
@@ -422,7 +459,7 @@ fn test_preset_upsert_multiple_times() {
     storage.save_preset(&base).unwrap();
 
     for i in 1..=5 {
-        let updated = make_system_preset("upsert_test", &format!("Update {}", i));
+        let updated = make_system_preset("upsert_test", &format!("Update {i}"));
         storage.save_preset(&updated).unwrap();
     }
 
@@ -430,17 +467,29 @@ fn test_preset_upsert_multiple_times() {
     assert_eq!(found.name, "Update 5", "Should have final update name");
 
     let list = storage.list_presets(PresetType::System).unwrap();
-    assert_eq!(list.len(), 1, "Should still have only 1 preset after multiple upserts");
+    assert_eq!(
+        list.len(),
+        1,
+        "Should still have only 1 preset after multiple upserts"
+    );
 }
 
 #[test]
 fn test_preset_list_filtered_by_type_across_operations() {
     let storage = create_storage();
 
-    storage.save_preset(&make_system_preset("sys1", "System 1")).unwrap();
-    storage.save_preset(&make_quantifier_preset("quant1", "Quantifier 1")).unwrap();
-    storage.save_preset(&make_system_preset("sys2", "System 2")).unwrap();
-    storage.save_preset(&make_quantifier_preset("quant2", "Quantifier 2")).unwrap();
+    storage
+        .save_preset(&make_system_preset("sys1", "System 1"))
+        .unwrap();
+    storage
+        .save_preset(&make_quantifier_preset("quant1", "Quantifier 1"))
+        .unwrap();
+    storage
+        .save_preset(&make_system_preset("sys2", "System 2"))
+        .unwrap();
+    storage
+        .save_preset(&make_quantifier_preset("quant2", "Quantifier 2"))
+        .unwrap();
 
     storage.delete_preset("quant1").unwrap();
 
@@ -448,11 +497,19 @@ fn test_preset_list_filtered_by_type_across_operations() {
     let quantifier = storage.list_presets(PresetType::Quantifier).unwrap();
 
     assert_eq!(system.len(), 2, "Should have 2 system presets");
-    assert_eq!(quantifier.len(), 1, "Should have 1 quantifier preset after delete");
+    assert_eq!(
+        quantifier.len(),
+        1,
+        "Should have 1 quantifier preset after delete"
+    );
 
     let updated = make_system_preset("sys1", "Updated System 1");
     storage.save_preset(&updated).unwrap();
 
     let system_after = storage.list_presets(PresetType::System).unwrap();
-    assert_eq!(system_after.len(), 2, "Should still have 2 system presets after update");
+    assert_eq!(
+        system_after.len(),
+        2,
+        "Should still have 2 system presets after update"
+    );
 }

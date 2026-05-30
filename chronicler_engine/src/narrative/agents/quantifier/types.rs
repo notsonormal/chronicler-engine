@@ -3,8 +3,8 @@ use crate::model::map::Room;
 use crate::model::state::MessageEntry;
 
 pub use crate::model::quantifier::{
-    MovementParseResult, MovementType, NpcEvent, NpcEventList, NpcTransitionType, QuantifierConfidence,
-    QuantifierParseResult, QuantifierResult,
+    MovementParseResult, MovementType, NpcEvent, NpcEventList, NpcTransitionType,
+    QuantifierConfidence, QuantifierParseResult, QuantifierResult,
 };
 
 pub struct RoomInfo {

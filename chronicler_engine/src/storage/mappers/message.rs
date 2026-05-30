@@ -59,8 +59,9 @@ pub fn db_message_to_model(db: &DbMessage, swipes: &[DbSwipe]) -> Result<Message
 }
 
 pub fn model_message_to_db(msg: &Message, game_id: i64) -> Result<DbMessage, EngineError> {
-    let message_type_json = serde_json::to_string(&msg.message_type)
-        .map_err(|e| EngineError::Config(format!("Failed to serialize message message_type: {e}")))?;
+    let message_type_json = serde_json::to_string(&msg.message_type).map_err(|e| {
+        EngineError::Config(format!("Failed to serialize message message_type: {e}"))
+    })?;
 
     Ok(DbMessage {
         id: msg.id as i64,

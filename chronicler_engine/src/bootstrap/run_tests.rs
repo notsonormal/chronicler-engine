@@ -315,7 +315,10 @@ fn test_ensure_defaults_creates_system_preset() {
     assert_eq!(presets.len(), 1);
     assert_eq!(presets[0].id, "test_system");
     assert_eq!(presets[0].name, "Test System");
-    assert_eq!(presets[0].role, Some("You are a test narrator.".to_string()));
+    assert_eq!(
+        presets[0].role,
+        Some("You are a test narrator.".to_string())
+    );
 }
 #[test]
 fn test_ensure_defaults_creates_quantifier_preset() {
@@ -434,7 +437,12 @@ fn test_ensure_defaults_handles_invalid_json() {
     std::fs::write(system_dir.join("invalid.json"), "not valid json {").unwrap();
     let result = ensure_defaults(&db_pool, temp_data.path());
     assert!(result.is_err());
-    assert!(result.unwrap_err().to_string().contains("Invalid preset seed"));
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("Invalid preset seed")
+    );
 }
 #[test]
 fn test_ensure_defaults_uses_default_id_for_missing_id() {
@@ -456,7 +464,10 @@ fn test_ensure_defaults_uses_default_id_for_missing_id() {
     let storage = Storage::new_sqlite(db_pool, 1);
     let presets = storage.list_presets(PresetType::System).unwrap();
     assert_eq!(presets.len(), 1);
-    assert_eq!(presets[0].id, "default", "Should use 'default' when id is missing");
+    assert_eq!(
+        presets[0].id, "default",
+        "Should use 'default' when id is missing"
+    );
 }
 #[test]
 fn test_ensure_defaults_all_fields_mapped() {

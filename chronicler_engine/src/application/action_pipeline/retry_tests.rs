@@ -357,7 +357,11 @@ fn test_retry_main_no_pre_main_snapshot() {
 
     let mut state = ctx.load_state();
     let player_name = state.player.sheet.name.clone();
-    state.add_message("test input".to_string(), Some(player_name), MessageType::Input);
+    state.add_message(
+        "test input".to_string(),
+        Some(player_name),
+        MessageType::Input,
+    );
     if let Some(last) = state.narrative.history.last_mut() {
         insert_message_with_swipe(&ctx, last);
     }

@@ -132,7 +132,11 @@ impl ArrivalTaskContext {
 
             match narration {
                 Ok(result) => {
-                    state.add_message(result.text, None, crate::model::state::MessageType::Narration);
+                    state.add_message(
+                        result.text,
+                        None,
+                        crate::model::state::MessageType::Narration,
+                    );
                     state.narrative.input_buffer.status =
                         crate::model::state::GenerationStatus::Idle;
                 }

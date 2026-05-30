@@ -212,7 +212,9 @@ fn test_execute_action_impl_preserves_existing_input_log() {
 
     let final_state = ctx.load_state();
     let entries: Vec<_> = final_state.narrative.history().into_iter().collect();
-    let input_idx = entries.iter().position(|e| e.message_type == MessageType::Input);
+    let input_idx = entries
+        .iter()
+        .position(|e| e.message_type == MessageType::Input);
     let narration_idx = entries
         .iter()
         .position(|e| e.message_type == MessageType::Narration);

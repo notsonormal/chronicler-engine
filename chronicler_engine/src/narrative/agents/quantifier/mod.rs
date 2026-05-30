@@ -14,14 +14,14 @@ pub use agent::QuantifierAgent;
 pub use orchestration::determine_npcs_in_room;
 // compute_npc_events now lives in model::quantifier; re-export for convenience.
 pub use crate::model::quantifier::compute_npc_events;
+pub use crate::model::quantifier::{
+    MovementParseResult, MovementType, NpcEvent, NpcEventList, NpcTransitionType,
+    QuantifierConfidence, QuantifierParseResult, QuantifierResult,
+};
 pub use parser::{
     extract_movement_from_text, parse_quantifier_response, parse_quantifier_response_with_movement,
 };
 pub use prompt::QuantifierPromptBuilder;
-pub use crate::model::quantifier::{
-    MovementParseResult, MovementType, NpcEvent, NpcEventList, NpcTransitionType, QuantifierConfidence,
-    QuantifierParseResult, QuantifierResult,
-};
 pub use types::{QuantifierPromptContext, RoomInfo};
 
 #[cfg(test)]

@@ -33,8 +33,10 @@ pub fn retry_last_response_impl<B: ActionPipelineBackend>(backend: &B, ctx: Game
             if is_event {
                 m.event_header.is_some()
             } else {
-                matches!(m.message_type, MessageType::Narration | MessageType::Dialogue)
-                    && m.event_header.is_none()
+                matches!(
+                    m.message_type,
+                    MessageType::Narration | MessageType::Dialogue
+                ) && m.event_header.is_none()
             }
         })
         .cloned();
