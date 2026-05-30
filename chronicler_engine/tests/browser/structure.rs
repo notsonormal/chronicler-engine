@@ -1,6 +1,5 @@
 use super::*;
 
-
 #[tokio::test]
 async fn test_page_loads() {
     with_test_page(CONFIG_PATH, TEST_WORLD, |page, _port| async move {

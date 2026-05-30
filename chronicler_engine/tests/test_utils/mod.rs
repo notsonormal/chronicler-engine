@@ -7,6 +7,7 @@ pub mod server;
 pub mod wait;
 
 pub use browser::*;
+#[allow(unused_imports)]
 pub use server::*;
 pub use wait::*;
 

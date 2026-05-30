@@ -3,8 +3,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecutionPhase {
-    PreGeneration,
     #[default]
+    PreGeneration,
     PostGeneration,
 }
 
@@ -27,15 +27,70 @@ pub struct AgentConfig {
     pub phase: ExecutionPhase,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+impl StatePatch {
+    /// Merge another StatePatch into this one.
+    ///
+    /// Merge semantics:
+    /// - `npc_ids`: union of unique IDs, preserving first-seen order
+    /// - `movement_destination`: keep first non-None, warn on conflict
+    /// - `confidence`: take minimum (most conservative)
+    pub fn merge(self, other: StatePatch) -> StatePatch {
+        match (self, other) {
+            (
+                StatePatch::Scene {
+                    npc_ids: mut ids_a,
+                    movement_destination: dest_a,
+                    confidence: conf_a,
+                },
+                StatePatch::Scene {
+                    npc_ids: ids_b,
+                    movement_destination: dest_b,
+                    confidence: conf_b,
+                },
+            ) => {
+                // Union of npc_ids, preserving first-seen order
+                let ids_b_unique: Vec<_> =
+                    ids_b.into_iter().filter(|id| !ids_a.contains(id)).collect();
+                ids_a.extend(ids_b_unique);
+
+                // Keep first non-None movement_destination
+                let destination = match dest_a {
+                    Some(ref d) => {
+                        if let Some(ref db) = dest_b {
+                            log::warn!("Movement destination conflict: {d} vs {db}, keeping first",);
+                        }
+                        Some(d.clone())
+                    }
+                    None => dest_b,
+                };
+
+                // Take minimum (most conservative) confidence
+                let confidence = match (conf_a, conf_b) {
+                    (Confidence::High, c) => c,
+                    (c, Confidence::High) => c,
+                    (Confidence::Medium, c) => c,
+                    (c, Confidence::Medium) => c,
+                    (Confidence::Low, Confidence::Low) => Confidence::Low,
+                };
+
+                StatePatch::Scene {
+                    npc_ids: ids_a,
+                    movement_destination: destination,
+                    confidence,
+                }
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Confidence {
     High,
     Medium,
     Low,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum StatePatch {
     Scene {
         npc_ids: Vec<String>,

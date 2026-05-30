@@ -437,10 +437,7 @@ fn benchmark_dynamic_room_creation() {
 
     print_benchmark_result(&result);
 
-    assert!(
-        is_dynamic,
-        "Failed room resolution creates a dynamic room"
-    );
+    assert!(is_dynamic, "Failed room resolution creates a dynamic room");
 }
 
 // =============================================================================
@@ -569,10 +566,7 @@ fn benchmark_trigger_wrong_room_id() {
 
     print_benchmark_result(&result);
 
-    assert!(
-        !trigger_fired,
-        "Trigger with wrong room_id should not fire"
-    );
+    assert!(!trigger_fired, "Trigger with wrong room_id should not fire");
 }
 
 // =============================================================================

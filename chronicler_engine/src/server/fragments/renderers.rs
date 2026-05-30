@@ -122,7 +122,6 @@ pub fn render_llm_messages(state: &AppState) -> Result<String> {
         .map_err(|e| EngineError::Template(e.to_string()))
 }
 
-
 #[allow(clippy::expect_used)]
 pub fn ok(body: impl Into<String>) -> Response<Body> {
     Response::builder()

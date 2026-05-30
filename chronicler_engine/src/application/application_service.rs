@@ -12,7 +12,7 @@ use crate::application::query_handlers::QueryHandlers;
 use crate::error::EngineError;
 use crate::model::game::Game;
 use crate::model::llm_message::LlmMessage;
-use crate::model::state::{GameState, GenerationPhase, GenerationStatus, LogEntry};
+use crate::model::state::{GenerationPhase, GenerationStatus, LogEntry};
 use crate::model::state_snapshot::GameStateSnapshot;
 use crate::model::trigger::NpcEncounterState;
 
@@ -161,7 +161,6 @@ impl DefaultApplicationService {
         Ok(ProcessActionResult::Started)
     }
 
-
     pub fn create_game(&self, ctx: GameServiceContext) -> Result<u64, ApplicationError> {
         self.lifecycle.create_game(ctx)
     }
@@ -185,7 +184,6 @@ impl DefaultApplicationService {
     pub fn reset(&self, ctx: GameServiceContext) -> Result<(), ApplicationError> {
         self.lifecycle.reset(ctx)
     }
-
 
     pub fn retry(&self, ctx: GameServiceContext) -> Result<(), ApplicationError> {
         self.editing.retry(ctx)
@@ -216,7 +214,6 @@ impl DefaultApplicationService {
     pub fn delete_last(&self, ctx: GameServiceContext) -> Result<(), ApplicationError> {
         self.editing.delete_last(ctx)
     }
-
 
     pub fn get_generating_status(
         &self,

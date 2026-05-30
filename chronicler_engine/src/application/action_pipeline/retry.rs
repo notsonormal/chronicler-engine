@@ -1,10 +1,9 @@
-use std::sync::Arc;
-
 use crate::application::action_pipeline::pipeline::{
     ActionOutcome, ActionPipeline, ActionPipelineBackend,
 };
 use crate::application::context::{GameServiceContext, load_state, save_state};
 use crate::model::state::{GameState, GenerationPhase, GenerationStatus, LogType};
+use std::sync::Arc;
 
 /// [DOC: docs/architecture/system.md]
 pub fn retry_last_response_impl<B: ActionPipelineBackend>(backend: &B, ctx: GameServiceContext) {
@@ -16,34 +15,16 @@ pub fn retry_last_response_impl<B: ActionPipelineBackend>(backend: &B, ctx: Game
         }
     };
 
-    if messages.is_empty() {
-        log::error!("No messages to retry");
-        return;
-    }
-
-    let is_event = messages
-        .last()
-        .map(|m| m.event_header.is_some())
-        .unwrap_or(false);
-
-    let anchor_idx = if is_event {
-        messages.iter().rposition(|m| m.event_header.is_none())
-    } else {
-        messages.iter().rposition(|m| m.log_type == LogType::Input)
-    };
-
-    let Some(anchor_idx) = anchor_idx else {
+    let Some((anchor_idx, _anchor_msg, snapshot_id)) = ctx.find_retry_anchor(&messages) else {
         log::error!("No anchor message found for retry");
         save_retry_error(&ctx, "Retry failed: no anchor message");
         return;
     };
 
-    let anchor_msg = &messages[anchor_idx];
-    let Some(snapshot_id) = anchor_msg.snapshot_id else {
-        log::error!("Anchor message has no snapshot_id");
-        save_retry_error(&ctx, "Retry failed: missing snapshot_id");
-        return;
-    };
+    let is_event = messages
+        .last()
+        .map(|m| m.event_header.is_some())
+        .unwrap_or(false);
 
     let old_target = messages
         .iter()
@@ -82,6 +63,7 @@ pub fn retry_last_response_impl<B: ActionPipelineBackend>(backend: &B, ctx: Game
         Arc::clone(&ctx.player),
         (*ctx.npcs).clone(),
     );
+
     let mut truncated = messages;
     truncated.truncate(anchor_idx + 1);
     state.narrative.history.replace(truncated);
@@ -130,12 +112,10 @@ pub(crate) fn retry_event_continuation<B: ActionPipelineBackend>(
             message: "Retry failed: missing trigger context".to_string(),
         };
     };
-
     let input_text = match state.narrative.history.last_input_text() {
         Some((_sender, text)) => text,
         None => String::new(),
     };
-
     let pipeline = ActionPipeline::new(backend, ctx);
     pipeline.run_trigger_continuation(state, trigger, &input_text)
 }
@@ -150,13 +130,10 @@ pub(crate) fn retry_main_narration<B: ActionPipelineBackend>(
     pipeline.run_from_input(state, input_text)
 }
 
-/// Assumes the caller has already verified `last_trigger` exists and saved a generating snapshot.
 /// [DOC: docs/architecture/system.md]
 pub fn retrigger_event_impl<B: ActionPipelineBackend>(backend: &B, ctx: &GameServiceContext) {
     let state = load_state(ctx);
-
     let outcome = retry_event_continuation(backend, ctx, state);
-
     match outcome {
         ActionOutcome::Completed => {}
         ActionOutcome::Error { message } => {
