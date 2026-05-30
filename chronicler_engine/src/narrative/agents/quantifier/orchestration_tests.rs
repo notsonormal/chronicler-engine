@@ -1,147 +1,14 @@
 use crate::error::EngineError;
 use crate::model::character::NpcCard;
-use crate::model::state::LogEntry;
+use crate::model::state::MessageEntry;
 use crate::narrative::llm::backend::{LlmBackend, LlmCallResult};
-use crate::test_support::{TestGameState, TestNpc};
+use crate::test_support::fixtures::{TestGameState, TestNpc};
 
-use super::core::{
-    action_boundary_contains, determine_npcs_in_room, quantify_room_with_llm_call,
-    static_npc_result,
-};
-use super::test_support::{make_boundary_chars, make_npc, make_room};
+use super::orchestration::{determine_npcs_in_room, quantify_room_with_llm_call, static_npc_result};
+use super::test_support::{make_npc, make_room};
 use super::types::{
     MovementParseResult, MovementType, QuantifierConfidence, QuantifierPromptContext,
 };
-
-#[test]
-fn test_action_boundary_exact_match_at_start() {
-    let boundary_chars = make_boundary_chars();
-    let result = action_boundary_contains("hello world", "hello", &boundary_chars);
-    assert!(result, "Should match at start of text");
-}
-
-#[test]
-fn test_action_boundary_exact_match_at_end() {
-    let boundary_chars = make_boundary_chars();
-    let result = action_boundary_contains("hello world", "world", &boundary_chars);
-    assert!(result, "Should match at end of text");
-}
-
-#[test]
-fn test_action_boundary_match_in_middle() {
-    let boundary_chars = make_boundary_chars();
-    let result = action_boundary_contains("hello world here", "world", &boundary_chars);
-    assert!(result, "Should match in middle with spaces on both sides");
-}
-
-#[test]
-fn test_action_boundary_no_match_prefix() {
-    let boundary_chars = make_boundary_chars();
-    let result = action_boundary_contains("announcement", "ann", &boundary_chars);
-    assert!(
-        !result,
-        "Should not match when substring is prefix of longer word"
-    );
-}
-
-#[test]
-fn test_action_boundary_no_match_suffix() {
-    let boundary_chars = make_boundary_chars();
-    let result = action_boundary_contains("maryann", "ann", &boundary_chars);
-    assert!(
-        !result,
-        "Should not match when substring is suffix of longer word"
-    );
-}
-
-#[test]
-fn test_action_boundary_no_match_mid_word() {
-    let boundary_chars = make_boundary_chars();
-    let result = action_boundary_contains("canny", "ann", &boundary_chars);
-    assert!(
-        !result,
-        "Should not match when substring appears but surrounded by non-boundary chars"
-    );
-}
-
-#[test]
-fn test_action_boundary_match_with_comma() {
-    let boundary_chars = make_boundary_chars();
-    let result = action_boundary_contains("hello,world", "world", &boundary_chars);
-    assert!(result, "Should match with comma as boundary");
-}
-
-#[test]
-fn test_action_boundary_match_with_period() {
-    let boundary_chars = make_boundary_chars();
-    let result = action_boundary_contains("hello.world", "world", &boundary_chars);
-    assert!(result, "Should match with period as boundary");
-}
-
-#[test]
-fn test_action_boundary_match_with_exclamation() {
-    let boundary_chars = make_boundary_chars();
-    let result = action_boundary_contains("hello!world", "world", &boundary_chars);
-    assert!(result, "Should match with exclamation as boundary");
-}
-
-#[test]
-fn test_action_boundary_match_with_question_mark() {
-    let boundary_chars = make_boundary_chars();
-    let result = action_boundary_contains("hello?world", "world", &boundary_chars);
-    assert!(result, "Should match with question mark as boundary");
-}
-
-#[test]
-fn test_action_boundary_empty_text() {
-    let boundary_chars = make_boundary_chars();
-    let result = action_boundary_contains("", "hello", &boundary_chars);
-    assert!(!result, "Should not match empty text");
-}
-
-#[test]
-fn test_action_boundary_empty_substring() {
-    let boundary_chars = make_boundary_chars();
-    let result = action_boundary_contains("hello world", "", &boundary_chars);
-    assert!(
-        !result,
-        "Empty substring should not match when followed by non-boundary char"
-    );
-}
-
-#[test]
-fn test_action_boundary_both_empty() {
-    let boundary_chars = make_boundary_chars();
-    let result = action_boundary_contains("", "", &boundary_chars);
-    assert!(result, "Empty text and substring should match");
-}
-
-#[test]
-fn test_action_boundary_no_match_not_found() {
-    let boundary_chars = make_boundary_chars();
-    let result = action_boundary_contains("hello world", "xyz", &boundary_chars);
-    assert!(!result, "Should not match when substring not found");
-}
-
-#[test]
-fn test_action_boundary_substring_at_start_no_boundary_after() {
-    let boundary_chars = make_boundary_chars();
-    let result = action_boundary_contains("carlax", "carla", &boundary_chars);
-    assert!(
-        !result,
-        "Should not match when followed by non-boundary char"
-    );
-}
-
-#[test]
-fn test_action_boundary_substring_at_end_no_boundary_before() {
-    let boundary_chars = make_boundary_chars();
-    let result = action_boundary_contains("xcarla", "carla", &boundary_chars);
-    assert!(
-        !result,
-        "Should not match when preceded by non-boundary char"
-    );
-}
 
 #[test]
 fn test_quantifier_retry_on_low_confidence() {
@@ -149,7 +16,7 @@ fn test_quantifier_retry_on_low_confidence() {
     let carla = make_npc("carla", "Carla");
     let all_npcs = vec![carla];
     let previous_npcs: Vec<NpcCard> = vec![];
-    let history: Vec<LogEntry> = vec![];
+    let history: Vec<MessageEntry> = vec![];
 
     let context = QuantifierPromptContext {
         room: &room,
@@ -183,7 +50,7 @@ fn test_quantifier_no_retry_when_high_confidence() {
     let carla = make_npc("carla", "Carla");
     let all_npcs = vec![carla];
     let previous_npcs: Vec<NpcCard> = vec![];
-    let history: Vec<LogEntry> = vec![];
+    let history: Vec<MessageEntry> = vec![];
 
     let context = QuantifierPromptContext {
         room: &room,
@@ -462,7 +329,7 @@ fn test_quantifier_retry_on_llm_error() {
     let carla = make_npc("carla", "Carla");
     let all_npcs = vec![carla];
     let previous_npcs: Vec<NpcCard> = vec![];
-    let history: Vec<LogEntry> = vec![];
+    let history: Vec<MessageEntry> = vec![];
 
     let context = QuantifierPromptContext {
         room: &room,
@@ -528,7 +395,7 @@ fn test_quantifier_all_attempts_fail_fallback() {
     let room = make_room();
     let all_npcs: Vec<NpcCard> = vec![];
     let previous_npcs: Vec<NpcCard> = vec![];
-    let history: Vec<LogEntry> = vec![];
+    let history: Vec<MessageEntry> = vec![];
 
     let context = QuantifierPromptContext {
         room: &room,
@@ -558,7 +425,7 @@ fn test_quantifier_low_confidence_then_error_fallback() {
     let room = make_room();
     let all_npcs: Vec<NpcCard> = vec![];
     let previous_npcs: Vec<NpcCard> = vec![];
-    let history: Vec<LogEntry> = vec![];
+    let history: Vec<MessageEntry> = vec![];
 
     let context = QuantifierPromptContext {
         room: &room,

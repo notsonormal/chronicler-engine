@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use chronicler_engine::application::game_service::DefaultGameService;
-use chronicler_engine::model::state::LogType;
+use chronicler_engine::model::state::MessageType;
 use chronicler_engine::narrative::llm::MockBackend;
 use chronicler_engine::test_support::make_test_context_with_sqlite;
 
@@ -53,7 +53,7 @@ fn test_sequential_execute_retry_execute() {
         .narrative
         .history()
         .into_iter()
-        .filter(|e| e.log_type == LogType::Input)
+        .filter(|e| e.message_type == MessageType::Input)
         .collect();
     assert_eq!(inputs.len(), 2, "Should have exactly 2 input entries");
 
@@ -61,7 +61,7 @@ fn test_sequential_execute_retry_execute() {
         .narrative
         .history()
         .into_iter()
-        .filter(|e| e.log_type == LogType::Narration)
+        .filter(|e| e.message_type == MessageType::Narration)
         .collect();
     assert!(
         narrations.len() >= 2,
@@ -104,7 +104,7 @@ fn test_sequential_execute_delete_execute() {
         .narrative
         .history()
         .into_iter()
-        .find(|e| e.log_type == LogType::Narration)
+        .find(|e| e.message_type == MessageType::Narration)
         .map(|e| e.id)
         .expect("Should have a narration entry");
 
@@ -171,7 +171,7 @@ fn test_async_action_sequence_then_retry() {
         .narrative
         .history()
         .into_iter()
-        .filter(|e| e.log_type == LogType::Input)
+        .filter(|e| e.message_type == MessageType::Input)
         .collect();
     assert_eq!(inputs.len(), 2, "Should have 2 input entries");
 }
@@ -202,7 +202,7 @@ fn test_three_actions_in_sequence() {
         .narrative
         .history()
         .into_iter()
-        .filter(|e| e.log_type == LogType::Input)
+        .filter(|e| e.message_type == MessageType::Input)
         .collect();
     assert_eq!(inputs.len(), 3, "Should have 3 input entries");
 
@@ -210,7 +210,7 @@ fn test_three_actions_in_sequence() {
         .narrative
         .history()
         .into_iter()
-        .filter(|e| e.log_type == LogType::Narration)
+        .filter(|e| e.message_type == MessageType::Narration)
         .collect();
     assert!(
         narrations.len() >= 2,
@@ -341,7 +341,7 @@ fn test_reset_then_execute_works() {
         .narrative
         .history()
         .into_iter()
-        .filter(|e| e.log_type == LogType::Input)
+        .filter(|e| e.message_type == MessageType::Input)
         .collect();
     assert_eq!(
         inputs.len(),
@@ -382,7 +382,7 @@ fn test_delete_mid_sequence() {
         .history()
         .into_iter()
         .rev()
-        .find(|e| e.log_type == LogType::Narration)
+        .find(|e| e.message_type == MessageType::Narration)
         .map(|e| e.id)
         .expect("Should have narration B");
 
@@ -403,7 +403,7 @@ fn test_delete_mid_sequence() {
         .narrative
         .history()
         .into_iter()
-        .filter(|e| e.log_type == LogType::Input)
+        .filter(|e| e.message_type == MessageType::Input)
         .collect();
     assert_eq!(inputs.len(), 3, "Should have 3 input entries");
 

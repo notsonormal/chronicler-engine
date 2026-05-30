@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use chronicler_engine::application::game_service::DefaultGameService;
 use chronicler_engine::model::character::{CharacterSheet, NpcCard};
-use chronicler_engine::model::state::{GameState, LogType};
+use chronicler_engine::model::state::{GameState, MessageType};
 use chronicler_engine::model::trigger::{
     ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement,
 };
@@ -110,7 +110,7 @@ fn test_retry_with_different_narration_text_reruns_quantifier() {
         .narrative
         .history()
         .into_iter()
-        .find(|e| e.log_type == LogType::Narration)
+        .find(|e| e.message_type == MessageType::Narration)
         .map(|e| e.text.clone())
         .unwrap_or_default();
     assert_eq!(
@@ -130,7 +130,7 @@ fn test_retry_with_different_narration_text_reruns_quantifier() {
         .history()
         .into_iter()
         .rev()
-        .find(|e| e.log_type == LogType::Narration)
+        .find(|e| e.message_type == MessageType::Narration)
         .map(|e| e.text.clone())
         .unwrap_or_default();
     assert_eq!(
@@ -222,7 +222,7 @@ fn test_retry_preserves_input_and_does_not_create_extra_swipe() {
         .narrative
         .history
         .iter()
-        .find(|m| m.log_type == LogType::Input)
+        .find(|m| m.message_type == MessageType::Input)
         .expect("Input message must exist");
     assert_eq!(
         input_msg.text, "walk around",
@@ -253,7 +253,7 @@ fn test_retry_after_edited_input_uses_new_text() {
         .narrative
         .history()
         .into_iter()
-        .find(|e| e.log_type == LogType::Narration)
+        .find(|e| e.message_type == MessageType::Narration)
         .map(|e| e.text.clone())
         .unwrap_or_default();
     assert!(
@@ -268,7 +268,7 @@ fn test_retry_after_edited_input_uses_new_text() {
             .narrative
             .history
             .iter_mut()
-            .find(|m| m.log_type == LogType::Input)
+            .find(|m| m.message_type == MessageType::Input)
         {
             msg.text = "sprint forward".to_string();
             if let Some(swipe) = msg.swipes.first_mut() {
@@ -287,7 +287,7 @@ fn test_retry_after_edited_input_uses_new_text() {
         .history()
         .into_iter()
         .rev()
-        .find(|e| e.log_type == LogType::Narration)
+        .find(|e| e.message_type == MessageType::Narration)
         .map(|e| e.text.clone())
         .unwrap_or_default();
     assert!(
@@ -574,7 +574,7 @@ fn test_movement_with_arrival_narration_retry() {
         .narrative
         .history()
         .into_iter()
-        .filter(|e| e.log_type == LogType::Narration)
+        .filter(|e| e.message_type == MessageType::Narration)
         .collect();
     assert!(!narrations.is_empty(), "Retry should produce narrations");
 }
@@ -609,7 +609,7 @@ fn test_retry_appends_swipe_to_existing_narration() {
     let msgs = ctx.load_messages().unwrap();
     let narration = msgs
         .iter()
-        .find(|m| m.log_type == LogType::Narration)
+        .find(|m| m.message_type == MessageType::Narration)
         .expect("Should have narration");
     let original_id = narration.id;
     assert_eq!(narration.swipes.len(), 1);
@@ -621,7 +621,7 @@ fn test_retry_appends_swipe_to_existing_narration() {
     let msgs = ctx.load_messages().unwrap();
     let narrations: Vec<_> = msgs
         .iter()
-        .filter(|m| m.log_type == LogType::Narration)
+        .filter(|m| m.message_type == MessageType::Narration)
         .collect();
     assert_eq!(
         narrations.len(),

@@ -1,10 +1,9 @@
 use crate::model::character::NpcCard;
 use crate::model::map::Room;
-use crate::model::state::LogEntry;
+use crate::model::state::MessageEntry;
 
-// Re-export mechanical types that now live in `model::quantifier`.
 pub use crate::model::quantifier::{
-    MovementParseResult, MovementType, NpcEvent, NpcEventList, NpcEventType, QuantifierConfidence,
+    MovementParseResult, MovementType, NpcEvent, NpcEventList, NpcTransitionType, QuantifierConfidence,
     QuantifierParseResult, QuantifierResult,
 };
 
@@ -19,7 +18,7 @@ pub struct QuantifierPromptContext<'a> {
     pub all_known_npcs: &'a [NpcCard],
     pub all_rooms: &'a [RoomInfo],
     pub player_name: &'a str,
-    pub recent_history: &'a [LogEntry],
+    pub recent_history: &'a [MessageEntry],
     pub player_action: &'a str,
     pub quantifier_prompt_override: Option<String>,
 }

@@ -1,6 +1,6 @@
 use crate::model::character::{NpcCard, PlayerCard};
 use crate::model::map::Room;
-use crate::model::state::LogEntry;
+use crate::model::state::MessageEntry;
 use crate::model::world::WorldCard;
 
 /// [DOC: docs/system/prompt_system.md]
@@ -31,5 +31,5 @@ pub struct PromptContext<'a> {
     pub npcs_in_area: &'a [NpcCard],
     pub player: &'a PlayerCard,
     pub user_message: &'a str,
-    pub history: &'a [LogEntry],
+    pub history: &'a [MessageEntry],
 }

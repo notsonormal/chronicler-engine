@@ -2,7 +2,7 @@ use crate::application::action_pipeline::pipeline::{
     ActionOutcome, ActionPipeline, ActionPipelineBackend,
 };
 use crate::application::context::{GameServiceContext, load_state, save_state};
-use crate::model::state::{GameState, GenerationPhase, GenerationStatus, LogType};
+use crate::model::state::{GameState, GenerationPhase, GenerationStatus, MessageType};
 use std::sync::Arc;
 
 /// [DOC: docs/architecture/system.md]
@@ -33,7 +33,7 @@ pub fn retry_last_response_impl<B: ActionPipelineBackend>(backend: &B, ctx: Game
             if is_event {
                 m.event_header.is_some()
             } else {
-                matches!(m.log_type, LogType::Narration | LogType::Dialogue)
+                matches!(m.message_type, MessageType::Narration | MessageType::Dialogue)
                     && m.event_header.is_none()
             }
         })

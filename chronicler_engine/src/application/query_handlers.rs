@@ -3,7 +3,7 @@ use crate::application::DebugStateView;
 use crate::application::context::{GameServiceContext, load_state};
 use crate::error::EngineError;
 use crate::model::llm_message::LlmMessage;
-use crate::model::state::LogEntry;
+use crate::model::state::MessageEntry;
 
 pub struct QueryHandlers;
 
@@ -67,7 +67,7 @@ impl QueryHandlers {
     pub fn get_story_log_entries(
         &self,
         ctx: GameServiceContext,
-    ) -> Result<(Vec<LogEntry>, bool), ApplicationError> {
+    ) -> Result<(Vec<MessageEntry>, bool), ApplicationError> {
         let game_state = load_state(&ctx);
         let entries: Vec<_> = game_state.narrative.history().to_vec();
         let has_last_trigger = game_state.narrative.last_trigger.is_some();
@@ -141,7 +141,7 @@ impl QueryHandlers {
     ) -> Result<DebugStateView, ApplicationError> {
         let game_state = load_state(&ctx);
 
-        let history_tail: Vec<LogEntry> = game_state
+        let history_tail: Vec<MessageEntry> = game_state
             .narrative
             .history()
             .iter()

@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use chronicler_engine::model::character::{CharacterSheet, NpcCard, PlayerCard};
-use chronicler_engine::model::state::{GameState, LogType};
+use chronicler_engine::model::state::{GameState, MessageType};
 use chronicler_engine::model::trigger::{
     ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement,
 };
@@ -183,7 +183,7 @@ pub fn add_input_and_save(
 ) {
     let mut state = latest_state(ctx);
     let player_name = state.player.sheet.name.clone();
-    state.add_log(text.to_string(), Some(player_name), LogType::Input);
+    state.add_message(text.to_string(), Some(player_name), MessageType::Input);
     save_state(ctx, &state);
 }
 

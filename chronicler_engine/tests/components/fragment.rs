@@ -8,7 +8,7 @@ use axum::{
 use tower::util::ServiceExt;
 
 use chronicler_engine::TestAppBuilder;
-use chronicler_engine::model::state::{GenerationPhase, GenerationStatus, LogType};
+use chronicler_engine::model::state::{GenerationPhase, GenerationStatus, MessageType};
 use chronicler_engine::storage::{Operation, Storage, TestOverride};
 
 async fn fetch_body(app: Router, uri: &str) -> String {
@@ -194,7 +194,7 @@ async fn test_edit_history_handler_success() {
     let storage = Arc::new(Storage::new_in_memory());
 
     let app = TestAppBuilder::default_test()
-        .log("Original text", Some("Test"), LogType::Narration)
+        .log("Original text", Some("Test"), MessageType::Narration)
         .storage(Arc::clone(&storage))
         .build();
 
@@ -245,7 +245,7 @@ async fn test_edit_history_handler_not_found() {
 #[tokio::test]
 async fn test_delete_history_handler_success() {
     let app = TestAppBuilder::default_test()
-        .log("Test message", Some("Test"), LogType::Narration)
+        .log("Test message", Some("Test"), MessageType::Narration)
         .build();
 
     let req = Request::builder()

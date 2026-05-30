@@ -72,7 +72,7 @@ fn run_migrations(conn: &Connection) -> Result<(), crate::error::EngineError> {
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 game_id INTEGER NOT NULL DEFAULT 1 REFERENCES games(id) ON DELETE CASCADE,
                 sender TEXT,
-                log_type TEXT NOT NULL,
+                message_type TEXT NOT NULL,
                 timestamp TEXT NOT NULL,
                 active_swipe_index INTEGER NOT NULL DEFAULT 0,
                 is_deleted INTEGER NOT NULL DEFAULT 0

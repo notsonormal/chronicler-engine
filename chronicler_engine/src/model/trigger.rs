@@ -29,6 +29,12 @@ pub struct Trigger {
     pub room_id: Option<String>,
 }
 
+/// Per-NPC encounter tracking state.
+///
+/// Tracks encounter cycles for a single NPC: entering → exiting → re-entering.
+/// - `times_met`: Increments on first encounter (Entered from not currently_meeting)
+/// - `currently_meeting`: Set true on Entered, false on Left
+/// - `trigger_fired`: Indices of non-repeatable triggers that have fired
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct NpcEncounterState {
     pub times_met: u32,

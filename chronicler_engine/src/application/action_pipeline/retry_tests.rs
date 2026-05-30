@@ -10,7 +10,7 @@ use crate::application::context::GameServiceContext;
 // most tests exercise it indirectly via retry_last_response_impl.
 use crate::application::game_service::DefaultGameService;
 use crate::error::EngineError;
-use crate::model::state::{GameState, GenerationPhase, GenerationStatus, LogType};
+use crate::model::state::{GameState, GenerationPhase, GenerationStatus, MessageType};
 use crate::narrative::llm::MockBackend;
 use crate::narrative::llm::backend::LlmCallResult;
 use crate::storage::{Operation, Storage, TestOverride};
@@ -47,7 +47,7 @@ fn insert_message_with_swipe(ctx: &GameServiceContext, msg: &crate::model::messa
 fn add_input_and_save(ctx: &GameServiceContext, text: &str) -> u64 {
     let mut state = ctx.load_state();
     let player_name = state.player.sheet.name.clone();
-    state.add_log(text.to_string(), Some(player_name), LogType::Input);
+    state.add_message(text.to_string(), Some(player_name), MessageType::Input);
     let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
     let id = ctx.storage.save_snapshot(&snapshot).unwrap();
     if let Some(last) = state.narrative.history.last_mut() {
@@ -59,7 +59,7 @@ fn add_input_and_save(ctx: &GameServiceContext, text: &str) -> u64 {
 
 fn add_narration_and_save(ctx: &GameServiceContext, text: &str) -> u64 {
     let mut state = ctx.load_state();
-    state.add_log(text.to_string(), None, LogType::Narration);
+    state.add_message(text.to_string(), None, MessageType::Narration);
     let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
     let id = ctx.storage.save_snapshot(&snapshot).unwrap();
     if let Some(last) = state.narrative.history.last_mut() {
@@ -129,7 +129,7 @@ fn test_retry_event_with_no_pre_event_fallback_to_main() {
     let _input_id = add_input_and_save(&ctx, "test input");
 
     let mut state = ctx.load_state();
-    state.add_log("Event narration".to_string(), None, LogType::Narration);
+    state.add_message("Event narration".to_string(), None, MessageType::Narration);
     state.narrative.history.last_mut().unwrap().event_header = Some("Event".to_string());
     let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
     let _ = ctx.storage.save_snapshot(&snapshot);
@@ -144,7 +144,7 @@ fn test_retry_event_with_no_pre_event_and_no_input() {
     let service = make_service();
 
     let mut state = ctx.load_state();
-    state.add_log("Event only".to_string(), None, LogType::Narration);
+    state.add_message("Event only".to_string(), None, MessageType::Narration);
     state.narrative.history.last_mut().unwrap().event_header = Some("Event".to_string());
     let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
     let _ = ctx.storage.save_snapshot(&snapshot);
@@ -218,7 +218,7 @@ fn test_retry_event_missing_trigger_context() {
 
     // Build a final snapshot that points to the pre-event snapshot
     let mut state = ctx.load_state();
-    state.add_log("Event narration".to_string(), None, LogType::Narration);
+    state.add_message("Event narration".to_string(), None, MessageType::Narration);
     state.narrative.history.last_mut().unwrap().event_header = Some("Event".to_string());
     let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
     let _ = ctx.storage.save_snapshot(&snapshot);
@@ -240,7 +240,7 @@ fn test_retry_event_continuation_cancels_before_llm() {
     let mut pre_event_state = ctx.load_state();
     pre_event_state.narrative.last_trigger =
         Some(crate::test_support::TestStoredTriggerContext::standard());
-    pre_event_state.add_log("Main narration".to_string(), None, LogType::Narration);
+    pre_event_state.add_message("Main narration".to_string(), None, MessageType::Narration);
     let snapshot =
         crate::model::state_snapshot::GameStateSnapshot::from_game_state(&pre_event_state);
     let pre_event_id = ctx.storage.save_snapshot(&snapshot).unwrap();
@@ -283,7 +283,7 @@ fn test_retry_event_trigger_narration_fails() {
 
     // Final snapshot points to pre-event
     let mut final_state = state;
-    final_state.add_log("Event narration".to_string(), None, LogType::Narration);
+    final_state.add_message("Event narration".to_string(), None, MessageType::Narration);
     final_state
         .narrative
         .history
@@ -333,7 +333,7 @@ fn test_retry_event_empty_continuation_text() {
     let _pre_event_with_trigger_id = ctx.storage.save_snapshot(&snapshot).unwrap();
 
     let mut final_state = state;
-    final_state.add_log("Event narration".to_string(), None, LogType::Narration);
+    final_state.add_message("Event narration".to_string(), None, MessageType::Narration);
     final_state
         .narrative
         .history
@@ -357,13 +357,13 @@ fn test_retry_main_no_pre_main_snapshot() {
 
     let mut state = ctx.load_state();
     let player_name = state.player.sheet.name.clone();
-    state.add_log("test input".to_string(), Some(player_name), LogType::Input);
+    state.add_message("test input".to_string(), Some(player_name), MessageType::Input);
     if let Some(last) = state.narrative.history.last_mut() {
         insert_message_with_swipe(&ctx, last);
     }
 
     let mut state = ctx.load_state();
-    state.add_log("Narration text".to_string(), None, LogType::Narration);
+    state.add_message("Narration text".to_string(), None, MessageType::Narration);
     let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
     let _ = ctx.storage.save_snapshot(&snapshot);
     if let Some(last) = state.narrative.history.last_mut() {
@@ -395,7 +395,7 @@ fn test_retry_event_continuation_happy_path() {
     let mut pre_event_state = ctx.load_state();
     pre_event_state.narrative.last_trigger =
         Some(crate::test_support::TestStoredTriggerContext::standard());
-    pre_event_state.add_log("Main narration".to_string(), None, LogType::Narration);
+    pre_event_state.add_message("Main narration".to_string(), None, MessageType::Narration);
     let snapshot =
         crate::model::state_snapshot::GameStateSnapshot::from_game_state(&pre_event_state);
     let pre_event_id = ctx.storage.save_snapshot(&snapshot).unwrap();
@@ -405,7 +405,7 @@ fn test_retry_event_continuation_happy_path() {
     }
 
     let mut final_state = pre_event_state;
-    final_state.add_log("Event narration".to_string(), None, LogType::Narration);
+    final_state.add_message("Event narration".to_string(), None, MessageType::Narration);
     final_state
         .narrative
         .history
@@ -602,7 +602,7 @@ fn test_retry_event_empty_continuation_triggers_error() {
     let mut pre_event_state = ctx.load_state();
     pre_event_state.narrative.last_trigger =
         Some(crate::test_support::TestStoredTriggerContext::standard());
-    pre_event_state.add_log("Main narration".to_string(), None, LogType::Narration);
+    pre_event_state.add_message("Main narration".to_string(), None, MessageType::Narration);
     let snapshot =
         crate::model::state_snapshot::GameStateSnapshot::from_game_state(&pre_event_state);
     let pre_event_id = ctx.storage.save_snapshot(&snapshot).unwrap();
@@ -612,7 +612,7 @@ fn test_retry_event_empty_continuation_triggers_error() {
     }
 
     let mut final_state = pre_event_state;
-    final_state.add_log("Event narration".to_string(), None, LogType::Narration);
+    final_state.add_message("Event narration".to_string(), None, MessageType::Narration);
     final_state
         .narrative
         .history
@@ -648,7 +648,7 @@ fn test_retry_appends_swipe_to_same_message() {
     let msgs = ctx.load_messages().unwrap();
     let narration_msg = msgs
         .iter()
-        .find(|m| m.log_type == LogType::Narration)
+        .find(|m| m.message_type == MessageType::Narration)
         .unwrap();
     let original_id = narration_msg.id;
     let extra_swipe = crate::model::message::Swipe {
@@ -667,7 +667,7 @@ fn test_retry_appends_swipe_to_same_message() {
     let msgs = ctx.load_messages().unwrap();
     let narration = msgs
         .iter()
-        .find(|m| m.log_type == LogType::Narration)
+        .find(|m| m.message_type == MessageType::Narration)
         .expect("Should have a narration after retry");
     assert_eq!(
         narration.id, original_id,
@@ -698,7 +698,7 @@ fn test_retrigger_event_impl_cancels_cleanly() {
     let mut pre_event_state = ctx.load_state();
     pre_event_state.narrative.last_trigger =
         Some(crate::test_support::TestStoredTriggerContext::standard());
-    pre_event_state.add_log("Main narration".to_string(), None, LogType::Narration);
+    pre_event_state.add_message("Main narration".to_string(), None, MessageType::Narration);
     let snapshot =
         crate::model::state_snapshot::GameStateSnapshot::from_game_state(&pre_event_state);
     let pre_event_id = ctx.storage.save_snapshot(&snapshot).unwrap();
@@ -708,7 +708,7 @@ fn test_retrigger_event_impl_cancels_cleanly() {
     }
 
     let mut final_state = pre_event_state;
-    final_state.add_log("Event narration".to_string(), None, LogType::Narration);
+    final_state.add_message("Event narration".to_string(), None, MessageType::Narration);
     final_state
         .narrative
         .history

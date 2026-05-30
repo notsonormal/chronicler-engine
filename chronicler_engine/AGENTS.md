@@ -87,6 +87,15 @@ chronicler_engine/
 
 The development environment is Windows, not Linux. The Chronicler Engine is NOT being developed inside a Linux devcontainer. 
 
+## OH MY PI/c
+
+Fork of Pi by @mariozechner
+
+The most capable agent surface that ships. Continuously tuned by real-world use — complete out of the box, open all the way down.
+
+https://github.com/can1357/oh-my-pi
+D:\John\Git\oh-my-pi
+
 ## DOCUMENTATION STRATEGY: SEMANTIC MAPPING
 This project follows a **Spec-Driven Implementation** (SDI) strategy.
 
@@ -98,7 +107,7 @@ This project follows a **Spec-Driven Implementation** (SDI) strategy.
 2. **Doc Anchors**: Complex logic blocks are marked with `// [DOC: docs/path/to/file.md]`.
 3. **Lean Code**: Remove all "What" comments. If the code isn't clear, rename the symbols.
 4. **The "Why" Exception**: Comments are reserved ONLY for technical constraints (e.g., `// Workaround for Axum timeout issue`).
-5. **Be consise**: Be extremely concise. Sacrifice grammar for the sake of concision. 
+5. **Be Consise**: Be extremely concise. Sacrifice grammar for the sake of concision. 
 
 ### THE TEST-FIRST PHILOSOPHY
 This project relies on a comprehensive suite of integration tests as the ultimate source of truth for behavior.

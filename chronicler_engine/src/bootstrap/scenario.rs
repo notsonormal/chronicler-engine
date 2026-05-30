@@ -17,5 +17,5 @@ pub fn inject_scenario_logs(state: &mut GameState, manifest: &WorldManifest, pla
 
     state.narrative.pending_location = Some(room_name);
     let text = scenario.text.replace("{{user}}", &player.sheet.name);
-    state.add_log(text, None, crate::model::state::LogType::Narration);
+    state.add_message(text, None, crate::model::state::MessageType::Narration);
 }

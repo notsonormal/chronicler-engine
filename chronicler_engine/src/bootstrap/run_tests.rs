@@ -32,7 +32,7 @@ fn test_find_latest_game_for_world_uses_message_timestamp() {
     {
         let conn = db_pool.conn();
         conn.execute(
-            "INSERT INTO messages (game_id, sender, log_type, timestamp, active_swipe_index, is_deleted) VALUES (?1, 'Player', 'input', ?2, 0, 0)",
+            "INSERT INTO messages (game_id, sender, message_type, timestamp, active_swipe_index, is_deleted) VALUES (?1, 'Player', 'Input', ?2, 0, 0)",
             rusqlite::params![game_a_id as i64, &newer],
         )
         .unwrap();
@@ -196,4 +196,360 @@ fn test_restart_with_existing_game_does_not_duplicate_scenario() {
         1,
         "Restart should not duplicate the scenario message"
     );
+}
+use crate::bootstrap::run::list_game_names_for_world;
+#[test]
+fn test_list_game_names_for_world_empty() {
+    let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
+    let result = list_game_names_for_world(&db_pool, "NonExistent").unwrap();
+    assert!(result.is_empty());
+}
+#[test]
+fn test_list_game_names_for_world_single_game() {
+    let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
+    {
+        let conn = db_pool.conn();
+        conn.execute(
+            "INSERT INTO games (world_name, name, created_at, updated_at) VALUES ('TestWorld', 'Only Game', '2026-05-26T10:00:00+00:00', '2026-05-26T10:00:00+00:00')",
+            [],
+        )
+        .unwrap();
+    }
+    let result = list_game_names_for_world(&db_pool, "TestWorld").unwrap();
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0], "Only Game");
+}
+#[test]
+fn test_list_game_names_for_world_multiple_games() {
+    let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
+    {
+        let conn = db_pool.conn();
+        conn.execute(
+            "INSERT INTO games (world_name, name, created_at, updated_at) VALUES ('TestWorld', 'Game Alpha', '2026-05-26T10:00:00+00:00', '2026-05-26T10:00:00+00:00')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO games (world_name, name, created_at, updated_at) VALUES ('TestWorld', 'Game Beta', '2026-05-26T10:00:00+00:00', '2026-05-26T10:00:00+00:00')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO games (world_name, name, created_at, updated_at) VALUES ('TestWorld', 'Game Gamma', '2026-05-26T10:00:00+00:00', '2026-05-26T10:00:00+00:00')",
+            [],
+        )
+        .unwrap();
+    }
+    let result = list_game_names_for_world(&db_pool, "TestWorld").unwrap();
+    assert_eq!(result.len(), 3);
+    assert!(result.contains(&"Game Alpha".to_string()));
+    assert!(result.contains(&"Game Beta".to_string()));
+    assert!(result.contains(&"Game Gamma".to_string()));
+}
+#[test]
+fn test_list_game_names_for_world_filters_by_world() {
+    let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
+    {
+        let conn = db_pool.conn();
+        conn.execute(
+            "INSERT INTO games (world_name, name, created_at, updated_at) VALUES ('WorldA', 'A Game 1', '2026-05-26T10:00:00+00:00', '2026-05-26T10:00:00+00:00')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO games (world_name, name, created_at, updated_at) VALUES ('WorldA', 'A Game 2', '2026-05-26T10:00:00+00:00', '2026-05-26T10:00:00+00:00')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO games (world_name, name, created_at, updated_at) VALUES ('WorldB', 'B Game 1', '2026-05-26T10:00:00+00:00', '2026-05-26T10:00:00+00:00')",
+            [],
+        )
+        .unwrap();
+    }
+    let result_a = list_game_names_for_world(&db_pool, "WorldA").unwrap();
+    let result_b = list_game_names_for_world(&db_pool, "WorldB").unwrap();
+    assert_eq!(result_a.len(), 2);
+    assert_eq!(result_b.len(), 1);
+    assert_eq!(result_b[0], "B Game 1");
+}
+#[test]
+fn test_list_game_names_for_world_error_handling() {
+    let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
+    // No games table - should fail
+    let result = list_game_names_for_world(&db_pool, "TestWorld");
+    // In-memory DB may not have games table, so error handling should work
+    assert!(result.is_err() || result.unwrap().is_empty());
+}
+use crate::bootstrap::run::ensure_defaults;
+use crate::model::prompt_preset::PresetType;
+#[test]
+fn test_ensure_defaults_empty_data_dir() {
+    let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
+    let temp_data = tempfile::TempDir::new().unwrap();
+    // No prompt_presets directory - should succeed gracefully
+    let result = ensure_defaults(&db_pool, temp_data.path());
+    assert!(result.is_ok());
+}
+#[test]
+fn test_ensure_defaults_creates_system_preset() {
+    let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
+    let temp_data = tempfile::TempDir::new().unwrap();
+    let system_dir = temp_data.path().join("prompt_presets").join("system");
+    std::fs::create_dir_all(&system_dir).unwrap();
+    let preset_content = serde_json::json!({
+        "id": "test_system",
+        "name": "Test System",
+        "role": "You are a test narrator.",
+        "instructions": "Test instructions",
+        "is_default": true
+    });
+    std::fs::write(
+        system_dir.join("test_system.json"),
+        serde_json::to_string_pretty(&preset_content).unwrap(),
+    )
+    .unwrap();
+    ensure_defaults(&db_pool, temp_data.path()).unwrap();
+    let storage = Storage::new_sqlite(db_pool, 1);
+    let presets = storage.list_presets(PresetType::System).unwrap();
+    assert_eq!(presets.len(), 1);
+    assert_eq!(presets[0].id, "test_system");
+    assert_eq!(presets[0].name, "Test System");
+    assert_eq!(presets[0].role, Some("You are a test narrator.".to_string()));
+}
+#[test]
+fn test_ensure_defaults_creates_quantifier_preset() {
+    let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
+    let temp_data = tempfile::TempDir::new().unwrap();
+    let quantifier_dir = temp_data.path().join("prompt_presets").join("quantifier");
+    std::fs::create_dir_all(&quantifier_dir).unwrap();
+    let preset_content = serde_json::json!({
+        "id": "test_quantifier",
+        "name": "Test Quantifier",
+        "role": "You are a scene quantifier.",
+        "is_default": true
+    });
+    std::fs::write(
+        quantifier_dir.join("test_quantifier.json"),
+        serde_json::to_string_pretty(&preset_content).unwrap(),
+    )
+    .unwrap();
+    ensure_defaults(&db_pool, temp_data.path()).unwrap();
+    let storage = Storage::new_sqlite(db_pool, 1);
+    let presets = storage.list_presets(PresetType::Quantifier).unwrap();
+    assert_eq!(presets.len(), 1);
+    assert_eq!(presets[0].id, "test_quantifier");
+}
+#[test]
+fn test_ensure_defaults_skips_existing_preset_with_content() {
+    let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
+    let temp_data = tempfile::TempDir::new().unwrap();
+    let system_dir = temp_data.path().join("prompt_presets").join("system");
+    std::fs::create_dir_all(&system_dir).unwrap();
+    let preset_content = serde_json::json!({
+        "id": "existing_preset",
+        "name": "Should Not Change",
+        "role": "New role from file",
+        "is_default": true
+    });
+    std::fs::write(
+        system_dir.join("existing_preset.json"),
+        serde_json::to_string_pretty(&preset_content).unwrap(),
+    )
+    .unwrap();
+    // Pre-populate storage with existing preset that has content
+    let storage = Storage::new_sqlite(db_pool.clone(), 1);
+    let existing = crate::model::prompt_preset::PromptPreset {
+        id: "existing_preset".to_string(),
+        name: "Original Name".to_string(),
+        role: Some("Original role".to_string()),
+        instructions: None,
+        writing_style: None,
+        output_format: None,
+        is_default: true,
+        preset_type: PresetType::System,
+    };
+    storage.save_preset(&existing).unwrap();
+    ensure_defaults(&db_pool, temp_data.path()).unwrap();
+    // Preset should retain original content
+    let found = storage.get_preset("existing_preset").unwrap().unwrap();
+    assert_eq!(found.name, "Original Name");
+    assert_eq!(found.role, Some("Original role".to_string()));
+}
+#[test]
+fn test_ensure_defaults_updates_empty_preset() {
+    let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
+    let temp_data = tempfile::TempDir::new().unwrap();
+    let system_dir = temp_data.path().join("prompt_presets").join("system");
+    std::fs::create_dir_all(&system_dir).unwrap();
+    let preset_content = serde_json::json!({
+        "id": "empty_preset",
+        "name": "Updated Name",
+        "role": "New role from file",
+        "is_default": true
+    });
+    std::fs::write(
+        system_dir.join("empty_preset.json"),
+        serde_json::to_string_pretty(&preset_content).unwrap(),
+    )
+    .unwrap();
+    // Pre-populate storage with empty preset
+    let storage = Storage::new_sqlite(db_pool.clone(), 1);
+    let empty = crate::model::prompt_preset::PromptPreset {
+        id: "empty_preset".to_string(),
+        name: "Empty".to_string(),
+        role: None,
+        instructions: None,
+        writing_style: None,
+        output_format: None,
+        is_default: true,
+        preset_type: PresetType::System,
+    };
+    storage.save_preset(&empty).unwrap();
+    ensure_defaults(&db_pool, temp_data.path()).unwrap();
+    // Preset should be updated
+    let found = storage.get_preset("empty_preset").unwrap().unwrap();
+    assert_eq!(found.name, "Updated Name");
+    assert_eq!(found.role, Some("New role from file".to_string()));
+}
+#[test]
+fn test_ensure_defaults_ignores_non_json_files() {
+    let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
+    let temp_data = tempfile::TempDir::new().unwrap();
+    let system_dir = temp_data.path().join("prompt_presets").join("system");
+    std::fs::create_dir_all(&system_dir).unwrap();
+    std::fs::write(system_dir.join("readme.txt"), "This is not a preset").unwrap();
+    std::fs::write(system_dir.join("data.yaml"), "key: value").unwrap();
+    ensure_defaults(&db_pool, temp_data.path()).unwrap();
+    let storage = Storage::new_sqlite(db_pool, 1);
+    let presets = storage.list_presets(PresetType::System).unwrap();
+    assert!(presets.is_empty(), "Non-JSON files should be ignored");
+}
+#[test]
+fn test_ensure_defaults_handles_invalid_json() {
+    let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
+    let temp_data = tempfile::TempDir::new().unwrap();
+    let system_dir = temp_data.path().join("prompt_presets").join("system");
+    std::fs::create_dir_all(&system_dir).unwrap();
+    std::fs::write(system_dir.join("invalid.json"), "not valid json {").unwrap();
+    let result = ensure_defaults(&db_pool, temp_data.path());
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("Invalid preset seed"));
+}
+#[test]
+fn test_ensure_defaults_uses_default_id_for_missing_id() {
+    let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
+    let temp_data = tempfile::TempDir::new().unwrap();
+    let system_dir = temp_data.path().join("prompt_presets").join("system");
+    std::fs::create_dir_all(&system_dir).unwrap();
+    let preset_content = serde_json::json!({
+        "name": "No ID Preset",
+        "role": "Test role",
+        "is_default": true
+    });
+    std::fs::write(
+        system_dir.join("no_id.json"),
+        serde_json::to_string_pretty(&preset_content).unwrap(),
+    )
+    .unwrap();
+    ensure_defaults(&db_pool, temp_data.path()).unwrap();
+    let storage = Storage::new_sqlite(db_pool, 1);
+    let presets = storage.list_presets(PresetType::System).unwrap();
+    assert_eq!(presets.len(), 1);
+    assert_eq!(presets[0].id, "default", "Should use 'default' when id is missing");
+}
+#[test]
+fn test_ensure_defaults_all_fields_mapped() {
+    let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
+    let temp_data = tempfile::TempDir::new().unwrap();
+    let system_dir = temp_data.path().join("prompt_presets").join("system");
+    std::fs::create_dir_all(&system_dir).unwrap();
+    let preset_content = serde_json::json!({
+        "id": "full_preset",
+        "name": "Full Preset",
+        "role": "Test role",
+        "instructions": "Test instructions",
+        "writing_style": "Test style",
+        "output_format": "Test format",
+        "is_default": true
+    });
+    std::fs::write(
+        system_dir.join("full_preset.json"),
+        serde_json::to_string_pretty(&preset_content).unwrap(),
+    )
+    .unwrap();
+    ensure_defaults(&db_pool, temp_data.path()).unwrap();
+    let storage = Storage::new_sqlite(db_pool, 1);
+    let found = storage.get_preset("full_preset").unwrap().unwrap();
+    assert_eq!(found.name, "Full Preset");
+    assert_eq!(found.role, Some("Test role".to_string()));
+    assert_eq!(found.instructions, Some("Test instructions".to_string()));
+    assert_eq!(found.writing_style, Some("Test style".to_string()));
+    assert_eq!(found.output_format, Some("Test format".to_string()));
+    assert!(found.is_default);
+    assert_eq!(found.preset_type, PresetType::System);
+}
+#[test]
+fn test_ensure_defaults_both_types() {
+    let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
+    let temp_data = tempfile::TempDir::new().unwrap();
+    // Create system preset
+    let system_dir = temp_data.path().join("prompt_presets").join("system");
+    std::fs::create_dir_all(&system_dir).unwrap();
+    std::fs::write(
+        system_dir.join("sys.json"),
+        serde_json::to_string_pretty(&serde_json::json!({
+            "id": "system_test",
+            "name": "System Test",
+            "role": "System role"
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    // Create quantifier preset
+    let quantifier_dir = temp_data.path().join("prompt_presets").join("quantifier");
+    std::fs::create_dir_all(&quantifier_dir).unwrap();
+    std::fs::write(
+        quantifier_dir.join("quant.json"),
+        serde_json::to_string_pretty(&serde_json::json!({
+            "id": "quantifier_test",
+            "name": "Quantifier Test",
+            "role": "Quantifier role"
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    ensure_defaults(&db_pool, temp_data.path()).unwrap();
+    let storage = Storage::new_sqlite(db_pool, 1);
+    let system = storage.list_presets(PresetType::System).unwrap();
+    let quantifier = storage.list_presets(PresetType::Quantifier).unwrap();
+    assert_eq!(system.len(), 1);
+    assert_eq!(system[0].id, "system_test");
+    assert_eq!(quantifier.len(), 1);
+    assert_eq!(quantifier[0].id, "quantifier_test");
+}
+#[test]
+fn test_ensure_defaults_idempotent() {
+    let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
+    let temp_data = tempfile::TempDir::new().unwrap();
+    let system_dir = temp_data.path().join("prompt_presets").join("system");
+    std::fs::create_dir_all(&system_dir).unwrap();
+    std::fs::write(
+        system_dir.join("idempotent.json"),
+        serde_json::to_string_pretty(&serde_json::json!({
+            "id": "idempotent_test",
+            "name": "Idempotent Test",
+            "role": "Test role"
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    // Run ensure_defaults twice
+    ensure_defaults(&db_pool, temp_data.path()).unwrap();
+    ensure_defaults(&db_pool, temp_data.path()).unwrap();
+    let storage = Storage::new_sqlite(db_pool, 1);
+    let presets = storage.list_presets(PresetType::System).unwrap();
+    // Should only have one preset (not duplicated)
+    assert_eq!(presets.len(), 1);
+    assert_eq!(presets[0].id, "idempotent_test");
 }

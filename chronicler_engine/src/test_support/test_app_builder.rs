@@ -9,7 +9,7 @@ use crate::model::character::{NpcCard, PlayerCard};
 use crate::model::map::{MapDef, Overworld, Region, Room};
 use crate::model::settings::AppSettings;
 use crate::model::state::{
-    GameState, GenerationPhase, GenerationStatus, LogType, StoredTriggerContext,
+    GameState, GenerationPhase, GenerationStatus, MessageType, StoredTriggerContext,
 };
 use crate::model::state_snapshot::GameStateSnapshot;
 use crate::model::world::WorldCard;
@@ -23,7 +23,7 @@ pub struct TestAppBuilder {
     map: MapDef,
     npcs: Vec<NpcCard>,
     room_npcs: Vec<String>,
-    logs: Vec<(String, Option<String>, LogType)>,
+    logs: Vec<(String, Option<String>, MessageType)>,
     last_trigger: Option<StoredTriggerContext>,
     generation_status: Option<GenerationStatus>,
     generation_phase: Option<GenerationPhase>,
@@ -173,7 +173,7 @@ impl TestAppBuilder {
         self
     }
 
-    pub fn log(mut self, text: &str, speaker: Option<&str>, log_type: LogType) -> Self {
+    pub fn log(mut self, text: &str, speaker: Option<&str>, log_type: MessageType) -> Self {
         self.logs
             .push((text.to_string(), speaker.map(|s| s.to_string()), log_type));
         self
@@ -243,7 +243,7 @@ impl TestAppBuilder {
         }
 
         for (text, sender, log_type) in self.logs {
-            state.add_log(text, sender, log_type);
+            state.add_message(text, sender, log_type);
         }
 
         let storage = self

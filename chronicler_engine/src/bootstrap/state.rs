@@ -30,7 +30,7 @@ pub fn build_fresh_initial_state(ctx: &GameServiceContext) -> GameState {
 
         let text = scenario.text.replace("{{user}}", &ctx.player.sheet.name);
         if !text.is_empty() {
-            initial_state.add_log(text, None, crate::model::state::LogType::Narration);
+            initial_state.add_message(text, None, crate::model::state::MessageType::Narration);
         }
 
         initial_state.init_scenario_npcs(scenario);

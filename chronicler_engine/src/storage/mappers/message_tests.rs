@@ -1,7 +1,7 @@
 use chrono::Utc;
 
 use crate::model::message::Message;
-use crate::model::state::LogType;
+use crate::model::state::MessageType;
 use crate::storage::mappers::message::{
     db_message_to_model, model_message_to_db, model_swipes_to_db,
 };
@@ -12,7 +12,7 @@ fn test_message_roundtrip() {
         id: 7,
         sender: Some("System".to_string()),
         text: "Hello world".to_string(),
-        log_type: LogType::System,
+        message_type: MessageType::System,
         timestamp: Utc::now(),
         location_header: Some("Room A".to_string()),
         event_header: None,
@@ -33,7 +33,7 @@ fn test_message_roundtrip() {
     assert_eq!(original.id, back.id);
     assert_eq!(original.sender, back.sender);
     assert_eq!(original.text, back.text);
-    assert_eq!(original.log_type, back.log_type);
+    assert_eq!(original.message_type, back.message_type);
     assert_eq!(original.timestamp, back.timestamp);
     assert_eq!(original.location_header, back.location_header);
     assert_eq!(original.event_header, back.event_header);
@@ -47,7 +47,7 @@ fn test_message_unpersisted_roundtrip() {
         id: 0,
         sender: None,
         text: "Input text".to_string(),
-        log_type: LogType::Input,
+        message_type: MessageType::Input,
         timestamp: Utc::now(),
         location_header: None,
         event_header: Some("Event".to_string()),
@@ -67,7 +67,7 @@ fn test_message_unpersisted_roundtrip() {
 
     assert_eq!(back.id, 0);
     assert!(back.sender.is_none());
-    assert_eq!(back.log_type, LogType::Input);
+    assert_eq!(back.message_type, MessageType::Input);
     assert_eq!(db.game_id, 2);
 }
 
@@ -77,7 +77,7 @@ fn test_message_log_type_json_serialization() {
         id: 1,
         sender: None,
         text: "test".to_string(),
-        log_type: LogType::Dialogue,
+        message_type: MessageType::Dialogue,
         timestamp: Utc::now(),
         location_header: None,
         event_header: None,
@@ -94,7 +94,7 @@ fn test_message_log_type_json_serialization() {
     let db = model_message_to_db(&msg, 1).unwrap();
     let _swipes = model_swipes_to_db(&msg);
 
-    assert_eq!(db.log_type_json, "\"Dialogue\"");
+    assert_eq!(db.message_type_json, "\"Dialogue\"");
 }
 
 #[test]
@@ -103,7 +103,7 @@ fn test_active_swipe_index_out_of_bounds_fallback() {
         id: 5,
         sender: Some("Narrator".to_string()),
         text: "First swipe".to_string(),
-        log_type: LogType::Narration,
+        message_type: MessageType::Narration,
         timestamp: Utc::now(),
         location_header: Some("Room A".to_string()),
         event_header: None,

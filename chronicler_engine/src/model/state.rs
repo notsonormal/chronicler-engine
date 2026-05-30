@@ -12,7 +12,7 @@ use crate::model::trigger::NpcEncounterLog;
 use crate::model::world::WorldCard;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum LogType {
+pub enum MessageType {
     Narration,
     Dialogue,
     System,
@@ -20,11 +20,11 @@ pub enum LogType {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct LogEntry {
+pub struct MessageEntry {
     pub id: u64,
     pub sender: Option<String>,
     pub text: String,
-    pub log_type: LogType,
+    pub message_type: MessageType,
     pub timestamp: DateTime<Utc>,
     #[serde(default)]
     pub location_header: Option<String>,
@@ -36,13 +36,13 @@ pub struct LogEntry {
     pub active_swipe_index: usize,
 }
 
-impl Default for LogEntry {
+impl Default for MessageEntry {
     fn default() -> Self {
         Self {
             id: 0,
             sender: None,
             text: String::new(),
-            log_type: LogType::Narration,
+            message_type: MessageType::Narration,
             timestamp: Utc::now(),
             location_header: None,
             event_header: None,
@@ -146,10 +146,9 @@ pub struct NarrativeState {
     #[serde(skip)]
     pub retry_target: Option<Message>,
 }
-
 impl NarrativeState {
-    pub fn history(&self) -> Vec<LogEntry> {
-        self.history.to_log_entries()
+    pub fn history(&self) -> Vec<MessageEntry> {
+        self.history.to_message_entries()
     }
 
     pub fn from_snapshot(snapshot: &crate::model::state_snapshot::NarrativeSnapshot) -> Self {
@@ -165,7 +164,6 @@ impl NarrativeState {
         }
     }
 }
-
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SceneState {
     pub npcs_in_area: Vec<NpcCard>,
@@ -313,12 +311,12 @@ impl GameState {
         }
     }
 
-    fn push_message(&mut self, text: String, sender: Option<String>, log_type: LogType) {
+    fn push_message(&mut self, text: String, sender: Option<String>, message_type: MessageType) {
         let location_header = self.narrative.pending_location.take();
         let event_header = self.narrative.pending_event.take();
 
         // Retry interception: append swipe instead of creating new message
-        if log_type == LogType::Narration || log_type == LogType::Dialogue {
+        if message_type == MessageType::Narration || message_type == MessageType::Dialogue {
             if let Some(ref mut target) = self.narrative.retry_target {
                 let target_is_event = target.event_header.is_some();
                 let new_is_event = event_header.is_some();
@@ -339,12 +337,12 @@ impl GameState {
             }
         }
 
-        let message = Message::new(sender, text, log_type, location_header, event_header);
+        let message = Message::new(sender, text, message_type, location_header, event_header);
         self.narrative.history.append(message);
     }
 
-    pub fn add_log(&mut self, text: String, sender: Option<String>, log_type: LogType) {
-        self.push_message(text, sender, log_type);
+    pub fn add_message(&mut self, text: String, sender: Option<String>, message_type: MessageType) {
+        self.push_message(text, sender, message_type);
     }
 
     /// [DOC: docs/system/navigation.md]

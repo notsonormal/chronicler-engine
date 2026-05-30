@@ -2,7 +2,7 @@ use crate::error::EngineError;
 use crate::model::character::NpcCard;
 use crate::model::map::Room;
 use crate::model::prompt_preset::PromptPreset;
-use crate::model::state::LogEntry;
+use crate::model::state::MessageEntry;
 use crate::model::world::WorldCard;
 use crate::narrative::prompt::budget;
 use crate::narrative::prompt::budget::truncate_to_budget;
@@ -152,7 +152,7 @@ struct LayerRenderer<'a> {
     npcs_in_area: &'a [NpcCard],
     player: &'a crate::model::character::PlayerCard,
     user_message: &'a str,
-    history: &'a [LogEntry],
+    history: &'a [MessageEntry],
     system_prompt: String,
     post_history_prompt: String,
 }

@@ -8,7 +8,7 @@ use crate::error::EngineError;
 use crate::model::character::NpcCard;
 use crate::model::quantifier::{QuantifierConfidence, QuantifierParseResult, QuantifierResult};
 
-use crate::model::state::{GameState, GenerationPhase, GenerationStatus, LogType};
+use crate::model::state::{GameState, GenerationPhase, GenerationStatus, MessageType};
 use crate::narrative::llm::backend::{AGENT_NARRATOR, LlmCallResult};
 use crate::narrative::prompt::{LayeredPromptAssembler, PromptAssembler};
 use crate::storage::{Operation, Storage, TestOverride};
@@ -124,7 +124,7 @@ fn test_pipeline_saves_narration_to_history() {
         .narrative
         .history()
         .iter()
-        .any(|e| e.log_type == LogType::Narration);
+        .any(|e| e.message_type == MessageType::Narration);
     assert!(has_narration);
 }
 

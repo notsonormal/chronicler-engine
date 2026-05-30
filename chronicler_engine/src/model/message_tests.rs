@@ -1,12 +1,12 @@
 use crate::model::message::Message;
-use crate::model::state::LogType;
+use crate::model::state::MessageType;
 
 #[test]
 fn test_message_new_sets_fields() {
     let msg = Message::new(
         Some("Player".to_string()),
         "Hello world",
-        LogType::Input,
+        MessageType::Input,
         Some("Location".to_string()),
         Some("Event".to_string()),
     );
@@ -14,7 +14,7 @@ fn test_message_new_sets_fields() {
     assert_eq!(msg.id, 0);
     assert_eq!(msg.sender, Some("Player".to_string()));
     assert_eq!(msg.text, "Hello world");
-    assert_eq!(msg.log_type, LogType::Input);
+    assert_eq!(msg.message_type, MessageType::Input);
     assert_eq!(msg.location_header, Some("Location".to_string()));
     assert_eq!(msg.event_header, Some("Event".to_string()));
 }
@@ -24,7 +24,7 @@ fn test_message_text_roundtrip() {
     let mut msg = Message::new(
         None,
         "Original",
-        LogType::Narration,
+        MessageType::Narration,
         None,
         None,
     );
@@ -35,7 +35,7 @@ fn test_message_text_roundtrip() {
 #[test]
 fn test_message_new_generates_timestamp() {
     let before = chrono::Utc::now();
-    let msg = Message::new(None, "Hello", LogType::Narration, None, None);
+    let msg = Message::new(None, "Hello", MessageType::Narration, None, None);
     let after = chrono::Utc::now();
 
     assert!(msg.timestamp >= before);

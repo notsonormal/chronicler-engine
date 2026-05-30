@@ -161,8 +161,8 @@ impl MessageEditingService {
             return Err(ApplicationError::validation("No messages to retrigger"));
         };
 
-        let is_narration = last_msg.log_type == crate::model::state::LogType::Narration
-            || last_msg.log_type == crate::model::state::LogType::Dialogue;
+        let is_narration = last_msg.message_type == crate::model::state::MessageType::Narration
+            || last_msg.message_type == crate::model::state::MessageType::Dialogue;
 
         if !is_narration || last_msg.event_header.is_some() {
             return Err(ApplicationError::validation(

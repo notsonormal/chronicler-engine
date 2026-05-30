@@ -7,7 +7,7 @@ use crate::application::action_pipeline::pipeline::{
 use crate::application::context::GameServiceContext;
 use crate::error::EngineError;
 use crate::model::quantifier::QuantifierResult;
-use crate::model::state::{GameState, GenerationPhase, GenerationStatus, LogType};
+use crate::model::state::{GameState, GenerationPhase, GenerationStatus, MessageType};
 use crate::narrative::llm::backend::{AGENT_NARRATOR, LlmCallResult};
 use crate::narrative::prompt::{LayeredPromptAssembler, PromptAssembler};
 use crate::test_support::fixtures::{TestMap, TestNpc, TestPlayer, TestWorld};
@@ -113,7 +113,7 @@ fn test_execute_action_impl_completes_and_persists_state() {
         .narrative
         .history()
         .iter()
-        .any(|e| e.log_type == LogType::Narration);
+        .any(|e| e.message_type == MessageType::Narration);
     assert!(
         has_narration,
         "execute_action_impl should persist narration"
@@ -195,10 +195,10 @@ fn test_execute_action_impl_handles_cancellation() {
 #[test]
 fn test_execute_action_impl_preserves_existing_input_log() {
     let mut state = make_test_state();
-    state.add_log(
+    state.add_message(
         "examine room".to_string(),
         Some("Player".to_string()),
-        LogType::Input,
+        MessageType::Input,
     );
     let ctx = make_ctx(state);
     let backend = MockBackend::default();
@@ -212,10 +212,10 @@ fn test_execute_action_impl_preserves_existing_input_log() {
 
     let final_state = ctx.load_state();
     let entries: Vec<_> = final_state.narrative.history().into_iter().collect();
-    let input_idx = entries.iter().position(|e| e.log_type == LogType::Input);
+    let input_idx = entries.iter().position(|e| e.message_type == MessageType::Input);
     let narration_idx = entries
         .iter()
-        .position(|e| e.log_type == LogType::Narration);
+        .position(|e| e.message_type == MessageType::Narration);
     assert!(input_idx.is_some(), "Existing input should be preserved");
     assert!(narration_idx.is_some(), "Narration should be added");
     assert!(

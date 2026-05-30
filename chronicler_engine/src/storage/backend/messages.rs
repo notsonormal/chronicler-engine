@@ -11,12 +11,12 @@ impl Storage {
                 let db_msg =
                     crate::storage::mappers::message::model_message_to_db(msg, game_id as i64)?;
                 conn.execute(
-                    "INSERT INTO messages (game_id, sender, log_type, timestamp, active_swipe_index, is_deleted)
+                    "INSERT INTO messages (game_id, sender, message_type, timestamp, active_swipe_index, is_deleted)
                      VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                     rusqlite::params![
                         db_msg.game_id,
                         db_msg.sender.as_deref(),
-                        db_msg.log_type_json,
+                        db_msg.message_type_json,
                         db_msg.timestamp,
                         db_msg.active_swipe_index,
                         db_msg.is_deleted,
@@ -68,7 +68,7 @@ impl Storage {
                     let conn = pool.conn();
                     let mut stmt = conn
                         .prepare(
-                            "SELECT id, sender, log_type, timestamp, active_swipe_index
+                            "SELECT id, sender, message_type, timestamp, active_swipe_index
                          FROM messages
                          WHERE game_id = ?1 AND is_deleted = 0
                          ORDER BY id ASC",
@@ -83,7 +83,7 @@ impl Storage {
                                 id: row.get(0)?,
                                 game_id: game_id as i64,
                                 sender: row.get(1)?,
-                                log_type_json: row.get(2)?,
+                                message_type_json: row.get(2)?,
                                 timestamp: row.get(3)?,
                                 active_swipe_index: row.get(4)?,
                                 is_deleted: 0,

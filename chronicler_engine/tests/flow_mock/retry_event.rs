@@ -56,7 +56,7 @@ fn test_event_retry_does_not_create_extra_swipe_on_narration() {
         .narrative
         .history
         .iter()
-        .filter(|m| m.log_type == chronicler_engine::model::state::LogType::Narration)
+        .filter(|m| m.message_type == chronicler_engine::model::state::MessageType::Narration)
         .collect();
     // After event retry there should be 2 Narration messages:
     // 1) main narration, 2) event continuation

@@ -12,7 +12,7 @@ use crate::application::query_handlers::QueryHandlers;
 use crate::error::EngineError;
 use crate::model::game::Game;
 use crate::model::llm_message::LlmMessage;
-use crate::model::state::{GenerationPhase, GenerationStatus, LogEntry};
+use crate::model::state::{GenerationPhase, GenerationStatus, MessageEntry};
 use crate::model::state_snapshot::GameStateSnapshot;
 use crate::model::trigger::NpcEncounterState;
 
@@ -73,7 +73,7 @@ pub struct DebugStateView {
     pub generation_status: GenerationStatus,
     pub generation_phase: GenerationPhase,
     pub npc_encounter_log: HashMap<String, NpcEncounterState>,
-    pub narration_history_tail: Vec<LogEntry>,
+    pub narration_history_tail: Vec<MessageEntry>,
     pub narration_history_length: usize,
     pub dynamic_rooms: Vec<String>,
     pub dynamic_room_count: usize,
@@ -112,10 +112,10 @@ impl DefaultApplicationService {
         let mut game_state = load_state(&ctx);
         let player_name = game_state.player.sheet.name.clone();
 
-        game_state.add_log(
+        game_state.add_message(
             input.clone(),
             Some(player_name.clone()),
-            crate::model::state::LogType::Input,
+            crate::model::state::MessageType::Input,
         );
 
         log::debug!("process_action: attempting to set is_generating=true");
@@ -256,7 +256,7 @@ impl DefaultApplicationService {
     pub fn get_story_log_entries(
         &self,
         ctx: GameServiceContext,
-    ) -> Result<(Vec<LogEntry>, bool), ApplicationError> {
+    ) -> Result<(Vec<MessageEntry>, bool), ApplicationError> {
         self.queries.get_story_log_entries(ctx)
     }
 

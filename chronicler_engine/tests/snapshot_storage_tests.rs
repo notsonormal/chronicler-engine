@@ -204,7 +204,7 @@ fn test_delete_game_cascades() {
     let msg = Message::new(
         Some("Player".to_string()),
         "hello",
-        chronicler_engine::model::state::LogType::Input,
+        chronicler_engine::model::state::MessageType::Input,
         None,
         None,
     );
@@ -281,7 +281,7 @@ fn test_insert_and_load_messages() {
     let msg = Message::new(
         Some("Player".to_string()),
         "look around",
-        chronicler_engine::model::state::LogType::Input,
+        chronicler_engine::model::state::MessageType::Input,
         None,
         None,
     );
@@ -301,7 +301,7 @@ fn test_get_and_update_active_swipe_index() {
     let msg = Message::new(
         Some("Player".to_string()),
         "original",
-        chronicler_engine::model::state::LogType::Input,
+        chronicler_engine::model::state::MessageType::Input,
         None,
         None,
     );
@@ -320,7 +320,7 @@ fn test_delete_message() {
     let msg = Message::new(
         Some("Player".to_string()),
         "to delete",
-        chronicler_engine::model::state::LogType::Input,
+        chronicler_engine::model::state::MessageType::Input,
         None,
         None,
     );

@@ -81,7 +81,7 @@ impl GameServiceContext {
         } else {
             messages
                 .iter()
-                .rposition(|m| m.log_type == crate::model::state::LogType::Input)?
+                .rposition(|m| m.message_type == crate::model::state::MessageType::Input)?
         };
         let anchor_msg = &messages[anchor_idx];
         let snapshot_id = *anchor_msg.snapshot_id.as_ref()?;

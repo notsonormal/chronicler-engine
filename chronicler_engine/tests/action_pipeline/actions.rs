@@ -19,7 +19,7 @@ fn test_pipeline_executes_and_persists_narration() {
         .narrative
         .history()
         .iter()
-        .any(|e| e.log_type == LogType::Narration);
+        .any(|e| e.message_type == MessageType::Narration);
     assert!(
         has_narration,
         "Pipeline should generate and persist narration"
@@ -35,10 +35,10 @@ fn test_pipeline_persists_input_before_narration() {
     let mut state = create_test_state();
     state.narrative.history.clear();
     // Pre-seed input log (server handler responsibility)
-    state.add_log(
+    state.add_message(
         "examine the room".to_string(),
         Some("Player".to_string()),
-        LogType::Input,
+        MessageType::Input,
     );
     let ctx = make_test_context(state);
     let backend = working_backend();
@@ -54,10 +54,10 @@ fn test_pipeline_persists_input_before_narration() {
     let entries: Vec<_> = final_state.narrative.history().into_iter().collect();
     let input_idx = entries
         .iter()
-        .position(|e| e.log_type == LogType::Input && e.text == "examine the room");
+        .position(|e| e.message_type == MessageType::Input && e.text == "examine the room");
     let narration_idx = entries
         .iter()
-        .position(|e| e.log_type == LogType::Narration);
+        .position(|e| e.message_type == MessageType::Narration);
     assert!(input_idx.is_some(), "Input should be persisted");
     assert!(narration_idx.is_some(), "Narration should be persisted");
     assert!(

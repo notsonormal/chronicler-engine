@@ -38,3 +38,10 @@ After `attempt_semantic_walk` succeeds, the engine evaluates NPC triggers for th
 - First run: after main narration (detects player movement + NPC enter/leave)
 - Second run: after trigger continuation (detects NPCs introduced by event text)
 - Movement is NOT re-detected for trigger narrations
+## Dynamic Room Creation
+When `attempt_semantic_walk` fails to find a destination room in the static map, the engine creates a **dynamic (pseudo) room**:
+1. `create_dynamic_room(name, description)` generates a placeholder room with a timestamp-based ID
+2. The room is stored in `state.movement.dynamic_rooms` for the session
+3. `state.movement.current_room_id` is updated to the new room's ID
+4. The player can proceed even to invalid destinations
+Dynamic rooms are intentionally sparse (no exits, no items) — they serve as fallback containers for player exploration that doesn't map to the static world.

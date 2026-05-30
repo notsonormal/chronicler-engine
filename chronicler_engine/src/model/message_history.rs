@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
 
 use crate::model::message::Message;
-use crate::model::state::{LogEntry, LogType};
+use crate::model::state::{MessageEntry, MessageType};
 
-const MAX_LOG_ENTRIES: usize = 1000;
+const MAX_MESSAGES: usize = 1000;
 
 /// Owns `Vec<Message>` and all operations on it. Callers cannot bypass
 /// rules with direct `.push()`.
@@ -23,7 +23,7 @@ impl MessageHistory {
     }
 
     pub fn append(&mut self, message: Message) {
-        if self.messages.len() >= MAX_LOG_ENTRIES {
+        if self.messages.len() >= MAX_MESSAGES {
             self.messages.remove(0);
         }
         self.messages.push(message);
@@ -39,7 +39,7 @@ impl MessageHistory {
             Ok(())
         } else {
             Err(crate::error::EngineError::Internal(
-                crate::error::internal_error(format!("Log entry not found: {id}")),
+                crate::error::internal_error(format!("Message entry not found: {id}")),
             ))
         }
     }
@@ -106,13 +106,13 @@ impl MessageHistory {
     pub fn last_ai_response_index(&self) -> Option<usize> {
         self.messages
             .iter()
-            .rposition(|m| m.log_type == LogType::Narration || m.log_type == LogType::Dialogue)
+            .rposition(|m| m.message_type == MessageType::Narration || m.message_type == MessageType::Dialogue)
     }
 
     pub fn last_input_index(&self) -> Option<usize> {
         self.messages
             .iter()
-            .rposition(|m| m.log_type == LogType::Input)
+            .rposition(|m| m.message_type == MessageType::Input)
     }
 
     pub fn last_input_text(&self) -> Option<(String, String)> {
@@ -120,7 +120,7 @@ impl MessageHistory {
             .messages
             .iter()
             .rev()
-            .find(|m| m.log_type == LogType::Input)?;
+            .find(|m| m.message_type == MessageType::Input)?;
         let sender = input.sender.clone().unwrap_or_default();
         Some((sender, input.text.clone()))
     }
@@ -129,18 +129,18 @@ impl MessageHistory {
         self.messages
             .iter()
             .rev()
-            .find(|m| m.log_type == LogType::Narration || m.log_type == LogType::Dialogue)
+            .find(|m| m.message_type == MessageType::Narration || m.message_type == MessageType::Dialogue)
             .is_some_and(|m| m.event_header.is_some())
     }
 
-    pub fn to_log_entries(&self) -> Vec<LogEntry> {
+    pub fn to_message_entries(&self) -> Vec<MessageEntry> {
         self.messages
             .iter()
-            .map(|msg| LogEntry {
+            .map(|msg| MessageEntry {
                 id: msg.id,
                 sender: msg.sender.clone(),
                 text: msg.text.clone(),
-                log_type: msg.log_type.clone(),
+                message_type: msg.message_type.clone(),
                 timestamp: msg.timestamp,
                 location_header: msg.location_header.clone(),
                 event_header: msg.event_header.clone(),

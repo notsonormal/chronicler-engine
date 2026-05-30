@@ -131,7 +131,7 @@ fn test_db_cascade_delete_game() {
 
     // Insert a message for that game
     conn.execute(
-        "INSERT INTO messages (game_id, sender, log_type, timestamp, active_swipe_index, is_deleted)
+        "INSERT INTO messages (game_id, sender, message_type, timestamp, active_swipe_index, is_deleted)
          VALUES (?1, NULL, 'Narration', '1', 0, 0)",
         rusqlite::params![game_id],
     )

@@ -7,7 +7,7 @@ use chronicler_engine::application::action_pipeline::{
 };
 use chronicler_engine::application::game_service::DefaultGameService;
 use chronicler_engine::model::state::{
-    GenerationPhase, GenerationStatus, LogType, StoredTriggerContext,
+    GenerationPhase, GenerationStatus, MessageType, StoredTriggerContext,
 };
 use chronicler_engine::model::state_snapshot::GameStateSnapshot;
 use chronicler_engine::narrative::agents::registry::AgentRegistry;

@@ -114,7 +114,7 @@ fn test_load_state_hydrates_messages() {
     let msg = Message::new(
         Some("System".to_string()),
         "Hello",
-        crate::model::state::LogType::System,
+        crate::model::state::MessageType::System,
         None,
         None,
     );
@@ -152,10 +152,10 @@ fn test_save_and_save_message_and_snapshot() {
     let ctx = minimal_ctx();
     let mut state = minimal_state();
     state.movement.current_room_id = "room2".to_string();
-    state.add_log(
+    state.add_message(
         "Test message".to_string(),
         None,
-        crate::model::state::LogType::Narration,
+        crate::model::state::MessageType::Narration,
     );
     let id = save_state(&ctx, &state).unwrap();
     assert!(id > 0);
@@ -176,7 +176,7 @@ fn test_save_message_and_snapshot_persists_retry_swipe() {
     let mut target = Message::new(
         None,
         "Original narration",
-        crate::model::state::LogType::Narration,
+        crate::model::state::MessageType::Narration,
         None,
         None,
     );
@@ -211,7 +211,7 @@ fn test_save_message_and_snapshot_skips_persisted_retry_swipe() {
     let mut target = Message::new(
         None,
         "Original narration",
-        crate::model::state::LogType::Narration,
+        crate::model::state::MessageType::Narration,
         None,
         None,
     );
@@ -292,7 +292,7 @@ fn test_delete_and_remove_message_removes_from_storage_and_state() {
     let msg = Message::new(
         Some("System".to_string()),
         "To be deleted",
-        crate::model::state::LogType::System,
+        crate::model::state::MessageType::System,
         None,
         None,
     );
@@ -342,10 +342,10 @@ fn test_load_state_fallback_on_snapshot_error() {
 fn test_save_message_and_snapshot_propagates_snapshot_error() {
     let state = minimal_state();
     let mut state_copy = state.clone();
-    state_copy.add_log(
+    state_copy.add_message(
         "Test".to_string(),
         None,
-        crate::model::state::LogType::Narration,
+        crate::model::state::MessageType::Narration,
     );
 
     let (failing_storage, handle) = Storage::new_in_memory().with_test_failures();

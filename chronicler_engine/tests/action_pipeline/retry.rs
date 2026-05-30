@@ -6,10 +6,10 @@ use super::*;
 fn test_retry_finds_last_input_and_runs_pipeline() {
     let mut state = create_test_state();
     state.narrative.history.clear();
-    state.add_log(
+    state.add_message(
         "look around".to_string(),
         Some("Player".to_string()),
-        LogType::Input,
+        MessageType::Input,
     );
     let ctx = make_test_context(state);
     let backend = working_backend();
@@ -25,7 +25,7 @@ fn test_retry_finds_last_input_and_runs_pipeline() {
         .narrative
         .history()
         .iter()
-        .filter(|e| e.log_type == LogType::Narration)
+        .filter(|e| e.message_type == MessageType::Narration)
         .count();
     assert_eq!(first_narration_count, 1);
 
@@ -36,7 +36,7 @@ fn test_retry_finds_last_input_and_runs_pipeline() {
         .narrative
         .history()
         .iter()
-        .filter(|e| e.log_type == LogType::Narration)
+        .filter(|e| e.message_type == MessageType::Narration)
         .count();
     assert_eq!(
         retry_narration_count, 1,
@@ -61,10 +61,10 @@ fn test_retry_with_empty_history_is_noop() {
 fn test_retry_after_llm_failure_succeeds() {
     let mut state = create_test_state();
     state.narrative.history.clear();
-    state.add_log(
+    state.add_message(
         "look".to_string(),
         Some("Player".to_string()),
-        LogType::Input,
+        MessageType::Input,
     );
     let ctx = make_test_context(state);
     let failing = failing_backend();
@@ -112,8 +112,8 @@ fn test_retry_no_snapshot() {
 fn test_retry_no_input_text() {
     let mut state = create_test_state();
     state.narrative.history.clear();
-    state.add_log("System boot".to_string(), None, LogType::System);
-    state.add_log("You see a room.".to_string(), None, LogType::Narration);
+    state.add_message("System boot".to_string(), None, MessageType::System);
+    state.add_message("You see a room.".to_string(), None, MessageType::Narration);
 
     let ctx = make_test_context(state);
     let backend = DefaultGameService::with_mock_quantifier(
@@ -131,10 +131,10 @@ fn test_retry_no_input_text() {
 fn test_retry_room_not_found() {
     let mut state = create_test_state();
     state.narrative.history.clear();
-    state.add_log(
+    state.add_message(
         "look around".to_string(),
         Some("Player".to_string()),
-        LogType::Input,
+        MessageType::Input,
     );
     state.movement.current_room_id = "non_existent_room".to_string();
 
@@ -142,7 +142,7 @@ fn test_retry_room_not_found() {
     let pre_main = GameStateSnapshot::from_game_state(&state);
     let pre_main_id = ctx.storage.save_snapshot(&pre_main).unwrap();
     for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
-        if msg.log_type == LogType::Input {
+        if msg.message_type == MessageType::Input {
             msg.snapshot_id = Some(pre_main_id);
         }
         let _ = ctx.storage.insert_message(&msg);
@@ -173,17 +173,17 @@ fn test_retry_room_not_found() {
 fn test_retry_llm_error() {
     let mut state = create_test_state();
     state.narrative.history.clear();
-    state.add_log(
+    state.add_message(
         "look around".to_string(),
         Some("Player".to_string()),
-        LogType::Input,
+        MessageType::Input,
     );
 
     let ctx = make_test_context(state.clone());
     let pre_main = GameStateSnapshot::from_game_state(&state);
     let pre_main_id = ctx.storage.save_snapshot(&pre_main).unwrap();
     for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
-        if msg.log_type == LogType::Input {
+        if msg.message_type == MessageType::Input {
             msg.snapshot_id = Some(pre_main_id);
         }
         let _ = ctx.storage.insert_message(&msg);
@@ -214,17 +214,17 @@ fn test_retry_llm_error() {
 fn test_retry_empty_narration() {
     let mut state = create_test_state();
     state.narrative.history.clear();
-    state.add_log(
+    state.add_message(
         "look around".to_string(),
         Some("Player".to_string()),
-        LogType::Input,
+        MessageType::Input,
     );
 
     let ctx = make_test_context(state.clone());
     let pre_main = GameStateSnapshot::from_game_state(&state);
     let pre_main_id = ctx.storage.save_snapshot(&pre_main).unwrap();
     for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
-        if msg.log_type == LogType::Input {
+        if msg.message_type == MessageType::Input {
             msg.snapshot_id = Some(pre_main_id);
         }
         let _ = ctx.storage.insert_message(&msg);
@@ -255,10 +255,10 @@ fn test_retry_empty_narration() {
 fn test_retry_main_narration_uses_pre_main_snapshot() {
     let mut state = create_test_state();
     state.narrative.history.clear();
-    state.add_log(
+    state.add_message(
         "look around".to_string(),
         Some("Player".to_string()),
-        LogType::Input,
+        MessageType::Input,
     );
     state.narrative.input_buffer.status = GenerationStatus::Idle;
 
@@ -266,7 +266,7 @@ fn test_retry_main_narration_uses_pre_main_snapshot() {
     let pre_main = GameStateSnapshot::from_game_state(&state);
     let pre_main_id = ctx.storage.save_snapshot(&pre_main).unwrap();
     for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
-        if msg.log_type == LogType::Input {
+        if msg.message_type == MessageType::Input {
             msg.snapshot_id = Some(pre_main_id);
         }
         let _ = ctx.storage.insert_message(&msg);
@@ -290,7 +290,7 @@ fn test_retry_main_narration_uses_pre_main_snapshot() {
         .narrative
         .history()
         .into_iter()
-        .filter(|e| e.log_type == LogType::Narration)
+        .filter(|e| e.message_type == MessageType::Narration)
         .collect();
     assert!(!narrations.is_empty(), "Retry should generate narration");
 }
@@ -299,21 +299,21 @@ fn test_retry_main_narration_uses_pre_main_snapshot() {
 fn test_retry_event_continuation_uses_pre_event_snapshot() {
     let mut state = create_test_state_with_trigger_npc();
     state.narrative.history.clear();
-    state.add_log(
+    state.add_message(
         "look around".to_string(),
         Some("Player".to_string()),
-        LogType::Input,
+        MessageType::Input,
     );
-    state.add_log(
+    state.add_message(
         "You look around the shop.".to_string(),
         None,
-        LogType::Narration,
+        MessageType::Narration,
     );
     state.narrative.pending_event = Some("Greeting".to_string());
-    state.add_log(
+    state.add_message(
         "The shopkeeper looks up with a smile.".to_string(),
         None,
-        LogType::Narration,
+        MessageType::Narration,
     );
     state.narrative.input_buffer.status = GenerationStatus::Idle;
     state.narrative.last_trigger = Some(StoredTriggerContext {
@@ -339,7 +339,7 @@ fn test_retry_event_continuation_uses_pre_event_snapshot() {
     let _ = ctx.storage.save_snapshot(&final_snap);
 
     for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
-        if msg.log_type == LogType::Narration && msg.event_header.is_none() {
+        if msg.message_type == MessageType::Narration && msg.event_header.is_none() {
             msg.snapshot_id = Some(pre_event_id);
         }
         let _ = ctx.storage.insert_message(&msg);
@@ -360,7 +360,7 @@ fn test_retry_event_continuation_uses_pre_event_snapshot() {
         .narrative
         .history()
         .into_iter()
-        .filter(|e| e.log_type == LogType::Narration)
+        .filter(|e| e.message_type == MessageType::Narration)
         .collect();
     assert!(
         !main_narrations.is_empty(),

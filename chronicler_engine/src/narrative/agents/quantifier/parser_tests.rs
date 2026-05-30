@@ -3,7 +3,7 @@ use super::parser::{
 };
 use super::types::RoomInfo;
 use crate::model::quantifier::compute_npc_events;
-use crate::model::quantifier::{MovementType, NpcEventType, QuantifierConfidence};
+use crate::model::quantifier::{MovementType, NpcTransitionType, QuantifierConfidence};
 
 #[test]
 fn test_parse_json_response() {
@@ -268,7 +268,7 @@ fn test_compute_npc_events_empty_previous() {
 
     assert_eq!(result.events.len(), 1);
     assert_eq!(result.events[0].npc_id, "carla");
-    assert_eq!(result.events[0].event_type, NpcEventType::Entered);
+    assert_eq!(result.events[0].event_type, NpcTransitionType::Entered);
     assert_eq!(result.confidence, QuantifierConfidence::Medium);
 }
 
@@ -292,7 +292,7 @@ fn test_compute_npc_events_npc_left() {
 
     assert_eq!(result.events.len(), 1);
     assert_eq!(result.events[0].npc_id, "carla");
-    assert_eq!(result.events[0].event_type, NpcEventType::Left);
+    assert_eq!(result.events[0].event_type, NpcTransitionType::Left);
     assert_eq!(result.confidence, QuantifierConfidence::Medium);
 }
 
@@ -304,20 +304,18 @@ fn test_compute_npc_events_mixed() {
     let result = compute_npc_events(&previous, &current);
 
     assert_eq!(result.events.len(), 2);
-
     let entered = result
         .events
         .iter()
         .find(|e| e.npc_id == "gabriella")
         .expect("Gabriella should be in events");
-    assert_eq!(entered.event_type, NpcEventType::Entered);
-
+    assert_eq!(entered.event_type, NpcTransitionType::Entered);
     let left = result
         .events
         .iter()
         .find(|e| e.npc_id == "derek")
         .expect("Derek should be in events");
-    assert_eq!(left.event_type, NpcEventType::Left);
+    assert_eq!(left.event_type, NpcTransitionType::Left);
 
     assert!(!result.events.iter().any(|e| e.npc_id == "carla"));
 }
@@ -334,7 +332,7 @@ fn test_compute_npc_events_multiple_entered() {
         result
             .events
             .iter()
-            .all(|e| e.event_type == NpcEventType::Entered)
+            .all(|e| e.event_type == NpcTransitionType::Entered)
     );
     assert!(result.events.iter().any(|e| e.npc_id == "carla"));
     assert!(result.events.iter().any(|e| e.npc_id == "gabriella"));
@@ -363,7 +361,7 @@ fn test_compute_npc_events_all_left() {
         result
             .events
             .iter()
-            .all(|e| e.event_type == NpcEventType::Left)
+            .all(|e| e.event_type == NpcTransitionType::Left)
     );
     assert_eq!(result.confidence, QuantifierConfidence::Medium);
 }

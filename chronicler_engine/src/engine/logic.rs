@@ -30,7 +30,13 @@ pub fn attempt_semantic_walk(state: &mut GameState, room_id: &str) -> Result<Str
     Ok(format!("You go to: {room_name}."))
 }
 
-/// [DOC: docs/architecture/system.md]
+/// Creates a dynamic (pseudo) room for invalid destinations.
+///
+/// When the quantifier detects movement intent but the destination doesn't exist in the
+/// static map, the engine creates a placeholder room so the player can still proceed.
+/// Dynamic rooms are stored in `state.movement.dynamic_rooms` and persist for the session.
+///
+/// [DOC: docs/system/dynamic_rooms.md]
 pub fn create_dynamic_room(name: &str, description: &str) -> Room {
     use std::time::SystemTime;
     let timestamp = SystemTime::now()

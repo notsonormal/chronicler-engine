@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::model::state::LogType;
+use crate::model::state::MessageType;
 
 /// An inactive generation of a message, preserving both the text and the
 /// snapshot of the world state at the time it was committed.
@@ -25,7 +25,7 @@ pub struct Message {
     pub id: u64,
     pub sender: Option<String>,
     pub text: String,
-    pub log_type: LogType,
+    pub message_type: MessageType,
     pub timestamp: DateTime<Utc>,
     pub location_header: Option<String>,
     pub event_header: Option<String>,
@@ -43,7 +43,7 @@ impl Message {
     pub fn new(
         sender: Option<String>,
         text: impl Into<String>,
-        log_type: LogType,
+        message_type: MessageType,
         location_header: Option<String>,
         event_header: Option<String>,
     ) -> Self {
@@ -58,7 +58,7 @@ impl Message {
             id: 0,
             sender,
             text,
-            log_type,
+            message_type,
             timestamp: Utc::now(),
             location_header,
             event_header,

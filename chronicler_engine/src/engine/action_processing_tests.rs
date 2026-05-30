@@ -3,11 +3,8 @@ use crate::engine::action_processing::{
     execute_freeaction_impl,
 };
 use crate::engine::trigger_eval::{get_times_met, is_currently_meeting, set_currently_meeting};
-use crate::model::quantifier::{
-    MovementParseResult, MovementType, NpcEvent, NpcEventType, QuantifierConfidence,
-    QuantifierParseResult, QuantifierResult,
-};
-use crate::model::state::LogType;
+use crate::model::quantifier::{MovementParseResult, MovementType, NpcEvent, NpcTransitionType, QuantifierConfidence, QuantifierParseResult, QuantifierResult};
+use crate::model::state::MessageType;
 use crate::test_support::{TestGameState, TestNpc};
 
 fn make_quantifier_result_no_movement() -> QuantifierResult {
@@ -55,8 +52,8 @@ fn test_execute_freeaction_impl_no_movement() {
     // Narration should be logged
     assert_eq!(next_state.narrative.history().len(), 1);
     assert_eq!(
-        next_state.narrative.history()[0].log_type,
-        LogType::Narration
+        next_state.narrative.history()[0].message_type,
+        MessageType::Narration
     );
     // NPCs in area should be updated
     assert_eq!(next_state.scene.npcs_in_area.len(), 1);
@@ -157,7 +154,7 @@ fn test_apply_npc_events_entered() {
     let state = make_test_state();
     let events = vec![NpcEvent {
         npc_id: "carla".to_string(),
-        event_type: NpcEventType::Entered,
+        event_type: NpcTransitionType::Entered,
     }];
 
     let state = apply_npc_events(state, &events).unwrap();
@@ -169,10 +166,9 @@ fn test_apply_npc_events_entered() {
 fn test_apply_npc_events_left() {
     let mut state = make_test_state();
     set_currently_meeting(&mut state.npc_encounter_log, "carla", true);
-
     let events = vec![NpcEvent {
         npc_id: "carla".to_string(),
-        event_type: NpcEventType::Left,
+        event_type: NpcTransitionType::Left,
     }];
 
     let state = apply_npc_events(state, &events).unwrap();
@@ -184,10 +180,9 @@ fn test_apply_npc_events_left() {
 fn test_apply_npc_events_increments_times_met() {
     let state = make_test_state();
     let initial_times = get_times_met(&state.npc_encounter_log, "carla");
-
     let events = vec![NpcEvent {
         npc_id: "carla".to_string(),
-        event_type: NpcEventType::Entered,
+        event_type: NpcTransitionType::Entered,
     }];
 
     let state = apply_npc_events(state, &events).unwrap();
@@ -304,12 +299,12 @@ fn test_trigger_split_architecture_produces_event_header() {
     assert_eq!(state.narrative.history().len(), 2);
 
     let main_entry = &state.narrative.history()[0];
-    assert_eq!(main_entry.log_type, LogType::Narration);
+    assert_eq!(main_entry.message_type, MessageType::Narration);
     assert_eq!(main_entry.text, "You enter the room.");
     assert_eq!(main_entry.event_header, None);
 
     let trigger_entry = &state.narrative.history()[1];
-    assert_eq!(trigger_entry.log_type, LogType::Narration);
+    assert_eq!(trigger_entry.message_type, MessageType::Narration);
     assert_eq!(
         trigger_entry.event_header,
         Some("Carla Introduction".to_string())
@@ -335,7 +330,7 @@ fn test_commit_trigger_narration_adds_event_header_and_narration() {
     assert_eq!(state.narrative.history().len(), 1);
 
     let narration_entry = &state.narrative.history()[0];
-    assert_eq!(narration_entry.log_type, LogType::Narration);
+    assert_eq!(narration_entry.message_type, MessageType::Narration);
     assert_eq!(
         narration_entry.event_header,
         Some("Carla Introduction".to_string())
@@ -433,9 +428,6 @@ fn test_commit_trigger_narration_stores_trigger_context() {
     assert_eq!(trigger.user_prompt, "user prompt text");
     assert_eq!(trigger.max_tokens, Some(512));
 }
-
-// ─── Property-based tests ────────────────────────────────────────────────────
-
 use proptest::prelude::*;
 
 fn make_two_room_state() -> crate::model::state::GameState {
@@ -470,8 +462,8 @@ proptest! {
     fn prop_apply_npc_events_preserves_state_consistency(
         events in prop::collection::vec(
             ("[a-z]{1,10}", prop_oneof![
-                Just(NpcEventType::Entered),
-                Just(NpcEventType::Left),
+                Just(NpcTransitionType::Entered),
+                Just(NpcTransitionType::Left),
             ]),
             0..10
         ),

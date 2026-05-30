@@ -111,6 +111,7 @@ pub(crate) fn quantify_room_with_llm_call(
         },
     }
 }
+
 pub(crate) fn static_npc_result(
     state: &crate::model::state::GameState,
     room_npc_ids: &[String],
@@ -138,30 +139,6 @@ pub(crate) fn static_npc_result(
             confidence: QuantifierConfidence::Low,
         },
         movement,
-    }
-}
-
-#[allow(dead_code)]
-pub(crate) fn action_boundary_contains(
-    text: &str,
-    substring: &str,
-    boundary_chars: &std::collections::HashSet<char>,
-) -> bool {
-    if let Some(start) = text.find(substring) {
-        let end = start + substring.len();
-        let char_at_start_is_boundary = start == 0
-            || text[..start]
-                .chars()
-                .last()
-                .is_some_and(|c| boundary_chars.contains(&c));
-        let char_at_end_is_boundary = end >= text.len()
-            || text[end..]
-                .chars()
-                .next()
-                .is_some_and(|c| boundary_chars.contains(&c));
-        char_at_start_is_boundary && char_at_end_is_boundary
-    } else {
-        false
     }
 }
 
@@ -212,6 +189,7 @@ pub fn determine_npcs_in_room(
     };
 
     let result = quantify_room_with_llm_call(&context, room_npc_ids, backend);
+
     match result.npcs.confidence {
         QuantifierConfidence::High | QuantifierConfidence::Medium => {
             log::info!("[Quantifier] Using dynamic NPCs: {:?}", result.npcs.npc_ids);

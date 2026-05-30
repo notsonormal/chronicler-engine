@@ -108,7 +108,7 @@ fn test_quantifier_detects_npc_presence_and_fires_trigger() {
         .narrative
         .history()
         .into_iter()
-        .filter(|e| e.log_type == LogType::Narration)
+        .filter(|e| e.message_type == MessageType::Narration)
         .count();
     assert!(
         narration_count >= 2,
@@ -148,7 +148,7 @@ fn test_empty_llm_response_handled_gracefully() {
         .narrative
         .history()
         .into_iter()
-        .any(|e| e.log_type == LogType::Narration);
+        .any(|e| e.message_type == MessageType::Narration);
     assert!(
         !has_narration,
         "Empty narration should NOT be added to history"
@@ -189,17 +189,15 @@ fn test_failing_trigger_narration_does_not_crash() {
         .narrative
         .history()
         .into_iter()
-        .any(|e| e.log_type == LogType::Narration);
+        .any(|e| e.message_type == MessageType::Narration);
     assert!(
         has_narration,
         "Main narration should exist even when trigger narration failed"
     );
 
-    let has_trigger_error = guard
-        .narrative
-        .history()
-        .into_iter()
-        .any(|e| e.log_type == LogType::System && e.text.contains("Trigger narration failed"));
+    let has_trigger_error = guard.narrative.history().into_iter().any(|e| {
+        e.message_type == MessageType::System && e.text.contains("Trigger narration failed")
+    });
     assert!(
         has_trigger_error,
         "Trigger narration failure should be logged"
@@ -302,7 +300,7 @@ async fn test_pipeline_cancels_after_main_narration() {
         .narrative
         .history()
         .into_iter()
-        .any(|e| e.log_type == LogType::Narration);
+        .any(|e| e.message_type == MessageType::Narration);
     assert!(
         !has_narration,
         "Narration should be discarded when cancelled after main LLM call"
@@ -360,7 +358,7 @@ async fn test_pipeline_cancels_during_trigger_continuation() {
         .narrative
         .history()
         .into_iter()
-        .any(|e| e.log_type == LogType::Narration);
+        .any(|e| e.message_type == MessageType::Narration);
     assert!(has_narration, "Main narration should be preserved");
 
     let has_event = guard
@@ -463,6 +461,6 @@ fn test_pipeline_with_quantifier() {
         .narrative
         .history()
         .into_iter()
-        .any(|e| e.log_type == LogType::Narration);
+        .any(|e| e.message_type == MessageType::Narration);
     assert!(has_narration, "Should produce narration with quantifier");
 }

@@ -383,7 +383,7 @@ fn test_inject_scenario_logs_adds_narration() {
     assert_eq!(state.narrative.history().len(), 1);
     let entry = &state.narrative.history()[0];
     assert_eq!(entry.text, "Welcome, Alice.");
-    assert_eq!(entry.log_type, crate::model::state::LogType::Narration);
+    assert_eq!(entry.message_type, crate::model::state::MessageType::Narration);
     assert_eq!(entry.location_header, Some("Room start".to_string()));
 }
 

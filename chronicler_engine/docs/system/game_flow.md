@@ -20,7 +20,7 @@ flowchart TD
     
     Phase4["**PHASE 4: MAIN LLM NARRATION**<br>*(Phase: Narrating)*<br>1. Build prompt via LayeredPromptAssembler<br>2. Send to LLM (see Context Pipeline below)<br>3. Add to history as 'Narration'<br>4. **Cancellation checkpoint** — aborts if token cancelled"]
     
-    Phase45["**PHASE 4.5: QUANTIFIER & MOVEMENT**<br>*(Phase: Quantifying)*<br>1. Post-narration Quantifier analyzes<br>2. Process movement intent<br>3. If moved: update room state (no additional LLM call — arrival is part of main narration)<br>4. Determine NPC Enter/Leave events"]
+Phase45["**PHASE 4.5: QUANTIFIER & MOVEMENT**<br>*(Phase: Quantifying)*<br>1. Post-narration Quantifier analyzes scene<br>2. `execute_freeaction_impl` consumes quantifier result:<br>&nbsp;&nbsp;a. Process movement intent FIRST (update current_room_id)<br>&nbsp;&nbsp;b. Log narration to history SECOND<br>&nbsp;&nbsp;c. Evaluate NPC triggers THIRD (reads pre-event state)<br>&nbsp;&nbsp;d. Compute NPC Enter/Leave events via state diff<br>&nbsp;&nbsp;e. Apply NPC events LAST (after trigger evaluation)"]
     
     Phase5["**PHASE 5: TRIGGER EVALUATION**<br>*(Phase: GeneratingEvent — only if trigger fires)*<br>1. `evaluate_triggers(state)` — first match only (inside lock)<br>2. Build prompt with continuation context<br>3. **Cancellation checkpoint** — aborts before second LLM call if token cancelled<br>4. Call LLM (frontend can poll main narration)<br>5. **Cancellation checkpoint** — aborts before commit if token cancelled<br>6. Re-acquire lock → add event header + trigger narration<br>7. Mark trigger as fired"]
 
@@ -39,16 +39,13 @@ flowchart TD
     Phase6 -.->|BACK TO 2| Phase2
 ```
 
-## The LLM Context Pipeline
-
-When the engine needs LLM narration (during Phase 4), it builds a comprehensive prompt using the **7-layer system** (see [`prompt_system.md`](prompt_system.md)):
-
+When the engine needs LLM narration (during Phase 4), it builds a comprehensive prompt using the **8-layer system** (layers 0-7, with layer 6 as the Phi safety margin; see [`prompt_system.md`](prompt_system.md)):
 ```mermaid
 flowchart TD
     Start(["**PHASE 4: LLM GENERATION**<br>*(If narrative action)*"])
     
-    Step1["**1. Build 7-layer prompt (SillyTavern-style)**"]
-    Sub1["Layer 0: System prompt (XML-wrapped sections: role, instructions, writing_style, global_rules, output_format)<br>Layer 1: Game state (room, NPCs)<br>Layer 2: NPC cards (in-room NPCs only)<br>Layer 3: Player persona<br>Layer 4: World info (keyword-triggered lore)<br>Layer 5: Full narration history (up to 1000 entries)<br>Layer 6: User input (current action)"]
+    Step1["**1. Build 8-layer prompt (SillyTavern-style)**"]
+    Sub1["Layer 0: System prompt (XML-wrapped sections: role, instructions, writing_style, global_rules, output_format)<br>Layer 1: Game state (room, NPCs)<br>Layer 2: NPC cards (in-room NPCs only)<br>Layer 3: Player persona<br>Layer 4: World info (keyword-triggered lore)<br>Layer 5: Full narration history (up to 1000 entries)<br>Layer 6: User input (current action)<br>Layer 7: Phi safety margin"]
     
     Step2["**2. Token budget check**<br>*(8192 max, truncate if overflow)*"]
     Step3["**3. Send to LLM**<br>*(OpenRouter/DeepSeek)*"]

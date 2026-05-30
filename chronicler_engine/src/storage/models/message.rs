@@ -2,7 +2,7 @@ pub struct DbMessage {
     pub id: i64,
     pub game_id: i64,
     pub sender: Option<String>,
-    pub log_type_json: String,
+    pub message_type_json: String,
     pub timestamp: String,
     pub active_swipe_index: i64,
     pub is_deleted: i64,

@@ -1,7 +1,7 @@
 use crate::model::llm_message::LlmMessageBuilder;
 use crate::model::message::{Message, Swipe};
 use crate::model::prompt_preset::{PresetType, PromptPreset};
-use crate::model::state::{LogType, MovementState, SceneState};
+use crate::model::state::{MessageType, MovementState, SceneState};
 use crate::model::state_snapshot::{GameStateSnapshot, NarrativeSnapshot};
 use crate::model::trigger::NpcEncounterLog;
 use crate::storage::backend::{Operation, Storage, TestOverride};
@@ -150,7 +150,7 @@ fn test_load_latest_no_snapshots() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 fn dummy_message(text: &str) -> Message {
-    Message::new(Some("Player".to_string()), text, LogType::Input, None, None)
+    Message::new(Some("Player".to_string()), text, MessageType::Input, None, None)
 }
 
 #[test]

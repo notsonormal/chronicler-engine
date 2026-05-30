@@ -1,4 +1,4 @@
-use crate::model::state::{GenerationStatus, InputBuffer, LogType};
+use crate::model::state::{GenerationStatus, InputBuffer, MessageType};
 use crate::test_support::*;
 
 #[test]
@@ -35,8 +35,8 @@ fn test_generation_state_status() {
 fn test_log_ordering() {
     let mut state = TestGameState::in_room("room1");
 
-    state.add_log("Message 1".into(), None, LogType::Narration);
-    state.add_log("Message 2".into(), None, LogType::Narration);
+    state.add_message("Message 1".into(), None, MessageType::Narration);
+    state.add_message("Message 2".into(), None, MessageType::Narration);
 
     assert_eq!(state.narrative.history().len(), 2);
     assert_eq!(state.narrative.history()[0].text, "Message 1");
@@ -48,8 +48,8 @@ fn test_delete_last_log_recalculates_ids() {
     let mut state = TestGameState::in_room("room1");
 
     // Add Input + Narration (mimics handler flow)
-    state.add_log("go north".into(), Some("Player".into()), LogType::Input);
-    state.add_log("You walk north.".into(), None, LogType::Narration);
+    state.add_message("go north".into(), Some("Player".into()), MessageType::Input);
+    state.add_message("You walk north.".into(), None, MessageType::Narration);
 
     assert_eq!(state.narrative.history.len(), 2);
 
@@ -63,7 +63,7 @@ fn test_delete_last_log_recalculates_ids() {
     assert!(state.narrative.history.is_empty());
 
     // Verify a new Input can be added after delete
-    state.add_log("go south".into(), Some("Player".into()), LogType::Input);
+    state.add_message("go south".into(), Some("Player".into()), MessageType::Input);
     assert_eq!(state.narrative.history.len(), 1);
     assert_eq!(state.narrative.history.last().unwrap().text, "go south");
 }
@@ -72,7 +72,7 @@ fn test_delete_last_log_recalculates_ids() {
 fn test_add_log_absorbs_pending_location() {
     let mut state = TestGameState::in_room("room1");
     state.narrative.pending_location = Some("Entrance Hall".to_string());
-    state.add_log("You walk in.".into(), None, LogType::Narration);
+    state.add_message("You walk in.".into(), None, MessageType::Narration);
 
     let history = state.narrative.history();
     let entry = history.last().unwrap();
@@ -84,7 +84,7 @@ fn test_add_log_absorbs_pending_location() {
 fn test_add_log_absorbs_pending_event() {
     let mut state = TestGameState::in_room("room1");
     state.narrative.pending_event = Some("Gabriella Introduction".to_string());
-    state.add_log("Gabriella steps forward.".into(), None, LogType::Narration);
+    state.add_message("Gabriella steps forward.".into(), None, MessageType::Narration);
 
     let history = state.narrative.history();
     let entry = history.last().unwrap();
@@ -103,13 +103,13 @@ fn test_push_message_appends_swipe_on_retry_target() {
     let target = crate::model::message::Message::new(
         None,
         "Original narration",
-        LogType::Narration,
+        MessageType::Narration,
         None,
         None,
     );
     state.narrative.retry_target = Some(target);
 
-    state.add_log("Retried narration".into(), None, LogType::Narration);
+    state.add_message("Retried narration".into(), None, MessageType::Narration);
 
     // History should NOT have grown — swipe went to retry_target
     assert_eq!(state.narrative.history.len(), 0);
@@ -131,7 +131,7 @@ fn test_push_message_creates_new_message_when_event_header_mismatches() {
     let target = crate::model::message::Message::new(
         None,
         "Original narration",
-        LogType::Narration,
+        MessageType::Narration,
         None,
         None,
     );
@@ -139,7 +139,7 @@ fn test_push_message_creates_new_message_when_event_header_mismatches() {
 
     // But now we add an event narration (has event_header)
     state.narrative.pending_event = Some("Trigger Event".to_string());
-    state.add_log("Event narration".into(), None, LogType::Narration);
+    state.add_message("Event narration".into(), None, MessageType::Narration);
 
     // Should create a NEW message in history, not append to retry_target
     assert_eq!(state.narrative.history.len(), 1);
@@ -162,7 +162,7 @@ fn test_push_message_creates_new_message_when_event_header_mismatches() {
 fn test_push_message_creates_new_message_when_no_retry_target() {
     let mut state = TestGameState::in_room("room1");
 
-    state.add_log("Normal narration".into(), None, LogType::Narration);
+    state.add_message("Normal narration".into(), None, MessageType::Narration);
 
     assert_eq!(state.narrative.history.len(), 1);
     assert_eq!(
@@ -180,12 +180,12 @@ fn log_text_strategy() -> impl Strategy<Value = String> {
     "[a-zA-Z0-9 ]{1,50}"
 }
 
-fn log_type_strategy() -> impl Strategy<Value = LogType> {
+fn log_type_strategy() -> impl Strategy<Value = MessageType> {
     prop_oneof![
-        Just(LogType::Narration),
-        Just(LogType::Dialogue),
-        Just(LogType::System),
-        Just(LogType::Input),
+        Just(MessageType::Narration),
+        Just(MessageType::Dialogue),
+        Just(MessageType::System),
+        Just(MessageType::Input),
     ]
 }
 
@@ -200,14 +200,14 @@ proptest! {
     ) {
         let mut expected = Vec::new();
         for (text, log_type) in entries {
-            state.add_log(text.clone(), None, log_type.clone());
+            state.add_message(text.clone(), None, log_type.clone());
             expected.push((text, log_type));
         }
         let history = state.narrative.history();
         prop_assert_eq!(history.len(), expected.len());
         for (i, (expected_text, expected_type)) in expected.iter().enumerate() {
             prop_assert_eq!(&history[i].text, expected_text);
-            prop_assert_eq!(history[i].log_type.clone(), expected_type.clone());
+            prop_assert_eq!(history[i].message_type.clone(), expected_type.clone());
         }
     }
 
@@ -220,7 +220,7 @@ proptest! {
         )
     ) {
         for (text, log_type) in entries {
-            state.add_log(text, None, log_type);
+            state.add_message(text, None, log_type);
         }
         prop_assert!(
             state.narrative.history.len() <= 1000,

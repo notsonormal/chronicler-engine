@@ -3,16 +3,14 @@ use std::sync::Arc;
 use chronicler_engine::application::game_service::DefaultGameService;
 use chronicler_engine::model::character::{CharacterSheet, NpcCard};
 use chronicler_engine::model::state::GenerationStatus;
-use chronicler_engine::model::state::LogType;
+use chronicler_engine::model::state::MessageType;
 
 use chronicler_engine::test_support::make_test_context;
 
 use crate::backends::*;
 use crate::{BenchmarkResult, DiagnosticScores, print_benchmark_result, run_scenario};
 
-// =============================================================================
 // Scenario 1: LLM HTTP 401 Unauthorized
-// =============================================================================
 
 #[test]
 fn benchmark_llm_http_401() {
@@ -50,16 +48,13 @@ fn benchmark_llm_http_401() {
 
     print_benchmark_result(&result);
 
-    // Verify the fix: HTTP status code should now be preserved
     assert!(
         error_msg.contains("401"),
         "map_llm_error should preserve HTTP status codes"
     );
 }
 
-// =============================================================================
 // Scenario 2: LLM HTTP 429 Rate Limited
-// =============================================================================
 
 #[test]
 fn benchmark_llm_http_429() {
@@ -94,9 +89,7 @@ fn benchmark_llm_http_429() {
     print_benchmark_result(&result);
 }
 
-// =============================================================================
 // Scenario 3: LLM Network Error (Ollama down)
-// =============================================================================
 
 #[test]
 fn benchmark_llm_network_error() {
@@ -139,9 +132,7 @@ fn benchmark_llm_network_error() {
     print_benchmark_result(&result);
 }
 
-// =============================================================================
 // Scenario 4: LLM Parse Error (non-JSON response)
-// =============================================================================
 
 #[test]
 fn benchmark_llm_parse_error() {
@@ -193,9 +184,7 @@ fn benchmark_llm_parse_error() {
     print_benchmark_result(&result);
 }
 
-// =============================================================================
 // Scenario 5: LLM Timeout
-// =============================================================================
 
 #[test]
 fn benchmark_llm_timeout() {
@@ -242,9 +231,7 @@ fn benchmark_llm_timeout() {
     print_benchmark_result(&result);
 }
 
-// =============================================================================
 // Scenario 6: Empty LLM Response
-// =============================================================================
 
 #[test]
 fn benchmark_llm_empty_response() {
@@ -279,9 +266,7 @@ fn benchmark_llm_empty_response() {
     print_benchmark_result(&result);
 }
 
-// =============================================================================
 // Scenario 7: Quantifier Complete Failure
-// =============================================================================
 
 #[test]
 fn benchmark_quantifier_complete_failure() {
@@ -296,9 +281,9 @@ fn benchmark_quantifier_complete_failure() {
     let snapshot = ctx.storage.load_latest_snapshot().unwrap().unwrap();
     let messages = ctx.load_messages().unwrap();
     let npc_count = snapshot.scene.npcs_in_area.len();
-    let has_system_log = messages
-        .iter()
-        .any(|m| m.log_type == LogType::System && m.text.contains("NPC detection uncertain"));
+    let has_system_log = messages.iter().any(|m| {
+        m.message_type == MessageType::System && m.text.contains("NPC detection uncertain")
+    });
 
     let result = BenchmarkResult {
         scenario: "quantifier_complete_failure".to_string(),
@@ -333,9 +318,7 @@ fn benchmark_quantifier_complete_failure() {
     );
 }
 
-// =============================================================================
 // Scenario 8: Quantifier Low Confidence
-// =============================================================================
 
 #[test]
 fn benchmark_quantifier_low_confidence() {
@@ -350,10 +333,12 @@ fn benchmark_quantifier_low_confidence() {
     let snapshot = ctx.storage.load_latest_snapshot().unwrap().unwrap();
     let messages = ctx.load_messages().unwrap();
     let npc_count = snapshot.scene.npcs_in_area.len();
-    let has_narration = messages.iter().any(|m| m.log_type == LogType::Narration);
-    let has_system_log = messages
+    let has_narration = messages
         .iter()
-        .any(|m| m.log_type == LogType::System && m.text.contains("NPC detection uncertain"));
+        .any(|m| m.message_type == MessageType::Narration);
+    let has_system_log = messages.iter().any(|m| {
+        m.message_type == MessageType::System && m.text.contains("NPC detection uncertain")
+    });
 
     let result = BenchmarkResult {
         scenario: "quantifier_low_confidence".to_string(),
@@ -384,9 +369,7 @@ fn benchmark_quantifier_low_confidence() {
     print_benchmark_result(&result);
 }
 
-// =============================================================================
 // Scenario 9: Dynamic Room Creation (navigation bug)
-// =============================================================================
 
 #[test]
 fn benchmark_dynamic_room_creation() {
@@ -403,9 +386,9 @@ fn benchmark_dynamic_room_creation() {
     let current_room = snapshot.movement.current_room_id.clone();
     let is_dynamic = current_room.starts_with("dynamic_");
     let dynamic_room_count = snapshot.movement.dynamic_rooms.len();
-    let has_system_log = messages
-        .iter()
-        .any(|m| m.log_type == LogType::System && m.text.contains("Entered unknown location"));
+    let has_system_log = messages.iter().any(|m| {
+        m.message_type == MessageType::System && m.text.contains("Entered unknown location")
+    });
 
     let result = BenchmarkResult {
         scenario: "dynamic_room_creation".to_string(),
@@ -440,9 +423,7 @@ fn benchmark_dynamic_room_creation() {
     assert!(is_dynamic, "Failed room resolution creates a dynamic room");
 }
 
-// =============================================================================
 // Scenario 10: Narrative Generation Failure (MockBackend failing)
-// =============================================================================
 
 #[test]
 fn benchmark_narrative_generation_failure() {
@@ -480,13 +461,10 @@ fn benchmark_narrative_generation_failure() {
     print_benchmark_result(&result);
 }
 
-// =============================================================================
 // Scenario 11: Trigger Not Firing (wrong room_id)
-// =============================================================================
 
 #[test]
 fn benchmark_trigger_wrong_room_id() {
-    // Create a state with an NPC that has a trigger scoped to the wrong room
     let npc_with_trigger = NpcCard {
         id: "trigger_npc".into(),
         sheet: CharacterSheet {
@@ -510,7 +488,7 @@ fn benchmark_trigger_wrong_room_id() {
                 narration_prompt: "The stranger nods at you.".into(),
             },
             repeat: true,
-            room_id: Some("wrong_room".into()), // Wrong room!
+            room_id: Some("wrong_room".into()),
         }],
         relationships: vec![],
     };
@@ -569,15 +547,10 @@ fn benchmark_trigger_wrong_room_id() {
     assert!(!trigger_fired, "Trigger with wrong room_id should not fire");
 }
 
-// =============================================================================
 // Scenario 12: State Stuck in Generating (mid-pipeline failure)
-// =============================================================================
 
 #[test]
 fn benchmark_state_stuck_generating() {
-    // Verify resilience when the pipeline sets the generation phase but fails before
-    // resetting status. We simulate this by making narrate_action succeed but trigger
-    // narration to fail.
     let npc_with_trigger = NpcCard {
         id: "test_npc".into(),
         sheet: CharacterSheet {
@@ -611,7 +584,6 @@ fn benchmark_state_stuck_generating() {
         vec![npc_with_trigger],
     );
 
-    // Reset times_met so the trigger is eligible to fire
     if let Some(encounter) = state.npc_encounter_log.npcs.get_mut("test_npc") {
         encounter.times_met = 0;
     }

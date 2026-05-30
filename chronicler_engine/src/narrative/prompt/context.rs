@@ -1,7 +1,7 @@
 use crate::error::EngineError;
 use crate::model::character::{NpcCard, PlayerCard};
 use crate::model::map::Room;
-use crate::model::state::LogEntry;
+use crate::model::state::MessageEntry;
 use crate::model::world::WorldCard;
 use crate::narrative::prompt::budget;
 use crate::narrative::prompt::budget::estimate_tokens;
@@ -117,7 +117,7 @@ pub fn make_prompt_context<'a>(
     npcs_in_area: &'a [NpcCard],
     player: &'a PlayerCard,
     user_message: &'a str,
-    history: &'a [LogEntry],
+    history: &'a [MessageEntry],
 ) -> PromptContext<'a> {
     PromptContext {
         world,

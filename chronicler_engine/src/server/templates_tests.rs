@@ -1,7 +1,7 @@
 use askama::Template;
 use chrono::Utc;
 
-use crate::model::state::{LogEntry, LogType};
+use crate::model::state::{MessageEntry, MessageType};
 use crate::server::templates::{
     ActionAreaTemplate, HeaderTemplate, StoryLogTemplate, VisualSidebarTemplate,
 };
@@ -48,11 +48,11 @@ fn test_story_log_template_empty() {
 
 #[test]
 fn test_story_log_template_with_entries() {
-    let entries = vec![LogEntry {
+    let entries = vec![MessageEntry {
         id: 1,
         sender: Some("Game Master".to_string()),
         text: "Welcome to the adventure!".to_string(),
-        log_type: LogType::Narration,
+        message_type: MessageType::Narration,
         timestamp: Utc::now(),
         ..Default::default()
     }];
@@ -65,11 +65,11 @@ fn test_story_log_template_with_entries() {
 
 #[test]
 fn test_story_log_template_escapes_html() {
-    let entries = vec![LogEntry {
+    let entries = vec![MessageEntry {
         id: 1,
         sender: None,
         text: "<script>alert('xss')</script>".to_string(),
-        log_type: LogType::Narration,
+        message_type: MessageType::Narration,
         timestamp: Utc::now(),
         ..Default::default()
     }];
@@ -81,19 +81,19 @@ fn test_story_log_template_escapes_html() {
 #[test]
 fn test_story_log_template_has_message_actions() {
     let entries = vec![
-        LogEntry {
+        MessageEntry {
             id: 1,
             sender: Some("Game Master".to_string()),
             text: "Welcome!".to_string(),
-            log_type: LogType::Narration,
+            message_type: MessageType::Narration,
             timestamp: Utc::now(),
             ..Default::default()
         },
-        LogEntry {
+        MessageEntry {
             id: 2,
             sender: Some("Player".to_string()),
             text: "Hello".to_string(),
-            log_type: LogType::Input,
+            message_type: MessageType::Input,
             timestamp: Utc::now(),
             ..Default::default()
         },
@@ -109,19 +109,19 @@ fn test_story_log_template_has_message_actions() {
 #[test]
 fn test_story_log_template_input_has_check_button() {
     let entries = vec![
-        LogEntry {
+        MessageEntry {
             id: 1,
             sender: Some("Player".to_string()),
             text: "look around".to_string(),
-            log_type: LogType::Input,
+            message_type: MessageType::Input,
             timestamp: Utc::now(),
             ..Default::default()
         },
-        LogEntry {
+        MessageEntry {
             id: 2,
             sender: None,
             text: "You look around.".to_string(),
-            log_type: LogType::Narration,
+            message_type: MessageType::Narration,
             timestamp: Utc::now(),
             ..Default::default()
         },
@@ -135,20 +135,20 @@ fn test_story_log_template_input_has_check_button() {
 #[test]
 fn test_story_log_template_renders_event_header() {
     let entries = vec![
-        LogEntry {
+        MessageEntry {
             id: 1,
             sender: None,
             text: "Gabriella steps forward.".to_string(),
-            log_type: LogType::Narration,
+            message_type: MessageType::Narration,
             timestamp: Utc::now(),
             event_header: Some("Gabriella Introduction".to_string()),
             ..Default::default()
         },
-        LogEntry {
+        MessageEntry {
             id: 2,
             sender: None,
             text: "She smiles.".to_string(),
-            log_type: LogType::Narration,
+            message_type: MessageType::Narration,
             timestamp: Utc::now(),
             ..Default::default()
         },
@@ -168,20 +168,20 @@ fn test_story_log_template_renders_event_header() {
 #[test]
 fn test_story_log_template_renders_location_header() {
     let entries = vec![
-        LogEntry {
+        MessageEntry {
             id: 1,
             sender: None,
             text: "You walk into the hall.".to_string(),
-            log_type: LogType::Narration,
+            message_type: MessageType::Narration,
             timestamp: Utc::now(),
             location_header: Some("Entrance Hall".to_string()),
             ..Default::default()
         },
-        LogEntry {
+        MessageEntry {
             id: 2,
             sender: None,
             text: "The hall is grand.".to_string(),
-            log_type: LogType::Narration,
+            message_type: MessageType::Narration,
             timestamp: Utc::now(),
             ..Default::default()
         },
@@ -198,19 +198,19 @@ fn test_story_log_template_renders_location_header() {
 #[test]
 fn test_story_log_template_retrigger_button_shown_when_last_trigger_present() {
     let entries = vec![
-        LogEntry {
+        MessageEntry {
             id: 1,
             sender: Some("Player".to_string()),
             text: "look around".to_string(),
-            log_type: LogType::Input,
+            message_type: MessageType::Input,
             timestamp: Utc::now(),
             ..Default::default()
         },
-        LogEntry {
+        MessageEntry {
             id: 2,
             sender: None,
             text: "You look around.".to_string(),
-            log_type: LogType::Narration,
+            message_type: MessageType::Narration,
             timestamp: Utc::now(),
             ..Default::default()
         },
@@ -224,19 +224,19 @@ fn test_story_log_template_retrigger_button_shown_when_last_trigger_present() {
 #[test]
 fn test_story_log_template_retrigger_button_hidden_on_event_continuation() {
     let entries = vec![
-        LogEntry {
+        MessageEntry {
             id: 1,
             sender: None,
             text: "You look around.".to_string(),
-            log_type: LogType::Narration,
+            message_type: MessageType::Narration,
             timestamp: Utc::now(),
             ..Default::default()
         },
-        LogEntry {
+        MessageEntry {
             id: 2,
             sender: None,
             text: "An NPC appears.".to_string(),
-            log_type: LogType::Narration,
+            message_type: MessageType::Narration,
             timestamp: Utc::now(),
             event_header: Some("NPC Event".to_string()),
             ..Default::default()
@@ -250,11 +250,11 @@ fn test_story_log_template_retrigger_button_hidden_on_event_continuation() {
 
 #[test]
 fn test_story_log_template_retrigger_button_hidden_without_last_trigger() {
-    let entries = vec![LogEntry {
+    let entries = vec![MessageEntry {
         id: 1,
         sender: None,
         text: "You look around.".to_string(),
-        log_type: LogType::Narration,
+        message_type: MessageType::Narration,
         timestamp: Utc::now(),
         ..Default::default()
     }];
@@ -265,11 +265,11 @@ fn test_story_log_template_retrigger_button_hidden_without_last_trigger() {
 
 #[test]
 fn test_story_log_template_swipe_controls_on_last_narration_with_one_swipe() {
-    let entries = vec![LogEntry {
+    let entries = vec![MessageEntry {
         id: 1,
         sender: None,
         text: "You look around.".to_string(),
-        log_type: LogType::Narration,
+        message_type: MessageType::Narration,
         timestamp: Utc::now(),
         ..Default::default()
     }];
@@ -290,11 +290,11 @@ fn test_story_log_template_swipe_controls_on_last_narration_with_one_swipe() {
 
 #[test]
 fn test_story_log_template_swipe_controls_on_last_dialogue_with_one_swipe() {
-    let entries = vec![LogEntry {
+    let entries = vec![MessageEntry {
         id: 1,
         sender: Some("NPC".to_string()),
         text: "Hello there.".to_string(),
-        log_type: LogType::Dialogue,
+        message_type: MessageType::Dialogue,
         timestamp: Utc::now(),
         ..Default::default()
     }];
@@ -309,11 +309,11 @@ fn test_story_log_template_swipe_controls_on_last_dialogue_with_one_swipe() {
 
 #[test]
 fn test_story_log_template_no_swipe_controls_on_input() {
-    let entries = vec![LogEntry {
+    let entries = vec![MessageEntry {
         id: 1,
         sender: Some("Player".to_string()),
         text: "look around".to_string(),
-        log_type: LogType::Input,
+        message_type: MessageType::Input,
         timestamp: Utc::now(),
         ..Default::default()
     }];
@@ -327,11 +327,11 @@ fn test_story_log_template_no_swipe_controls_on_input() {
 
 #[test]
 fn test_story_log_template_no_swipe_controls_on_system() {
-    let entries = vec![LogEntry {
+    let entries = vec![MessageEntry {
         id: 1,
         sender: None,
         text: "System message.".to_string(),
-        log_type: LogType::System,
+        message_type: MessageType::System,
         timestamp: Utc::now(),
         ..Default::default()
     }];
@@ -346,19 +346,19 @@ fn test_story_log_template_no_swipe_controls_on_system() {
 #[test]
 fn test_story_log_template_no_swipe_controls_on_non_last_narration() {
     let entries = vec![
-        LogEntry {
+        MessageEntry {
             id: 1,
             sender: None,
             text: "First narration.".to_string(),
-            log_type: LogType::Narration,
+            message_type: MessageType::Narration,
             timestamp: Utc::now(),
             ..Default::default()
         },
-        LogEntry {
+        MessageEntry {
             id: 2,
             sender: Some("Player".to_string()),
             text: "hello".to_string(),
-            log_type: LogType::Input,
+            message_type: MessageType::Input,
             timestamp: Utc::now(),
             ..Default::default()
         },
@@ -373,11 +373,11 @@ fn test_story_log_template_no_swipe_controls_on_non_last_narration() {
 
 #[test]
 fn test_story_log_template_swipe_navigation_between_existing_swipes() {
-    let mut entry = LogEntry {
+    let mut entry = MessageEntry {
         id: 1,
         sender: None,
         text: "First swipe.".to_string(),
-        log_type: LogType::Narration,
+        message_type: MessageType::Narration,
         timestamp: Utc::now(),
         ..Default::default()
     };

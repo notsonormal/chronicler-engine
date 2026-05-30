@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-30 16:04 UTC*
+*Index last generated: 2026-05-30 20:29 UTC*
 
 ### Root files
 
@@ -100,15 +100,9 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Reference: System Prompt](./reference/system_prompt.md)
 - [Specification: Testing Strategy and Architecture](./reference/testing.md)
 
-### `docs/reviews/agent-comprehension-investigation/`
+### `docs/reviews/`
 
-- [Agent Comprehension Investigation: Final Synthesis](./reviews/agent-comprehension-investigation/INVESTIGATION_SYNTHESIS.md)
-- [Phase 1: Vocabulary & Terminology Audit](./reviews/agent-comprehension-investigation/phase-1-vocabulary-audit.md)
-- [Phase 2: State Mutation Order Invariant Analysis](./reviews/agent-comprehension-investigation/phase-2-mutation-order.md)
-- [Phase 3: Tier Boundary Confusion Analysis](./reviews/agent-comprehension-investigation/phase-3-tier-boundaries.md)
-- [Phase 4: Documentation-Code Consistency Check](./reviews/agent-comprehension-investigation/phase-4-doc-code-consistency.md)
-- [Phase 5: Module Mental Models](./reviews/agent-comprehension-investigation/phase-5-module-mental-models.md)
-- [Phase 6: Critical Path Test Coverage](./reviews/agent-comprehension-investigation/phase-6-test-coverage.md)
+- [Architectural Review: AI Agent Comprehension Challenges](./reviews/agent-comprehension-review.md)
 
 ### `docs/reviews/archived/`
 

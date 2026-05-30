@@ -74,9 +74,9 @@ pub struct QuantifierResult {
     pub movement: MovementParseResult,
 }
 
-/// Event type for NPC area transitions.
+/// Transition type for NPC area changes.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum NpcEventType {
+pub enum NpcTransitionType {
     /// NPC entered the area (was not present, now present).
     Entered,
     /// NPC left the area (was present, now not present).
@@ -84,12 +84,16 @@ pub enum NpcEventType {
 }
 
 /// A single NPC area transition event.
+///
+/// These events are **engine state** — computed from a diff between previous and current
+/// NPC presence, NOT from the quantifier LLM output directly. The quantifier detects
+/// which NPCs are in the room; the engine computes Enter/Leave transitions via set diff.
 #[derive(Debug, Clone)]
 pub struct NpcEvent {
     /// NPC ID that moved.
     pub npc_id: String,
-    /// Type of movement event.
-    pub event_type: NpcEventType,
+    /// Type of transition.
+    pub event_type: NpcTransitionType,
 }
 
 /// Collection of NPC transition events with aggregate confidence.
@@ -100,10 +104,9 @@ pub struct NpcEventList {
     /// Confidence in the event detection.
     pub confidence: QuantifierConfidence,
 }
-
-/// Compute NPC enter/leave events by diffing two sets of IDs.
-/// [DOC: docs/system/llm_processing.md]
+/// Computes NPC transition events by diffing previous and current NPC presence.
 pub fn compute_npc_events(previous_npc_ids: &[String], current_npc_ids: &[String]) -> NpcEventList {
+    // [DOC: docs/architecture/system.md]
     let previous_set: std::collections::HashSet<_> = previous_npc_ids.iter().collect();
     let current_set: std::collections::HashSet<_> = current_npc_ids.iter().collect();
 
@@ -113,16 +116,15 @@ pub fn compute_npc_events(previous_npc_ids: &[String], current_npc_ids: &[String
         if !previous_set.contains(npc_id) {
             events.push(NpcEvent {
                 npc_id: npc_id.clone(),
-                event_type: NpcEventType::Entered,
+                event_type: NpcTransitionType::Entered,
             });
         }
     }
-
     for npc_id in previous_npc_ids {
         if !current_set.contains(npc_id) {
             events.push(NpcEvent {
                 npc_id: npc_id.clone(),
-                event_type: NpcEventType::Left,
+                event_type: NpcTransitionType::Left,
             });
         }
     }

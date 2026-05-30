@@ -85,7 +85,7 @@ The HTTP layer for the HTMX web dashboard with polling-based real-time updates.
 
 **Layer Boundary:** The server tier must never access `GameState` directly. All reads go through the `ApplicationService` trait (`get_story_log_entries`, `get_input_status`, `get_current_room_view`, `get_npc_headshots`, `get_debug_state_view`, etc.). All writes go through `ApplicationService` command methods (`process_action`, `retry`, `reset`, etc.). This keeps the HTTP layer decoupled from domain state structure.
 
-- **`mod`**: Axum router, request handlers, `AppState`, `run_server_with_config`. Test constructors (`create_app_for_testing`, `create_app_for_testing_with_settings`) live in `test_support/server_helpers.rs`.
+**`mod`**: Axum router, request handlers, `AppState`, `run_server_with_config`. Test constructors (`create_app_for_testing`, `create_app_for_testing_with_settings`) live in `test_support/test_app_builder.rs`.
 - **`fragments`**: HTML fragment generators for HTMX partial updates. Split into submodules:
   - **`actions`**: Action form handlers and renderers
   - **`endpoints`**: HTMX fragment endpoints (`/fragment/story-log`, `/fragment/visual-sidebar`, etc.)
@@ -202,8 +202,6 @@ Shared test fixtures and utilities.
 - **`fixtures`**: `TestGameState`, `TestNpc`, `TestMap`, etc.
 - **`context`**: Test context helpers
 - **`test_app_builder`**: Fluent test app builder API
-- **`server_helpers`**: `create_app_for_testing`, `create_app_for_testing_with_settings`
-- **`test_app_builder`**: Fluent test app builder API
 
 > **Note:** `assets/` contains static web assets (`index.html`) served by the server. It is not a Rust module tier.
 
@@ -227,6 +225,7 @@ The following concerns are documented in dedicated `docs/system/` files. Those a
 | Narration engine and Game Master logic | [`system/narration_engine.md`](../system/narration_engine.md) |
 | LLM call logging and forensics | [`system/llm_processing.md`](../system/llm_processing.md) |
 
+| Dynamic room creation, fallback behavior | [`system/dynamic_rooms.md`](../system/dynamic_rooms.md) |
 ## Error Strategy
 
 A unified error type (`crate::error::EngineError`) is shared across all tiers for consistent error propagation — from data loading through LLM failures to HTTP responses. See `src/error.rs` for the full variant list.

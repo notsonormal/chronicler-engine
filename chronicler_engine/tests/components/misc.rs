@@ -7,7 +7,7 @@ use tower::util::ServiceExt;
 
 use chronicler_engine::TestAppBuilder;
 use chronicler_engine::model::settings::{AppSettings, TextCheckMode, TextCheckSettings};
-use chronicler_engine::model::state::LogType;
+use chronicler_engine::model::state::MessageType;
 use chronicler_engine::storage::{Operation, Storage, TestOverride};
 
 fn text_check_settings(mode: TextCheckMode) -> AppSettings {
@@ -156,7 +156,7 @@ async fn test_retry_no_input() {
 #[tokio::test]
 async fn test_retry_success() {
     let app = TestAppBuilder::default_test()
-        .log("look around", Some("Test Player"), LogType::Input)
+        .log("look around", Some("Test Player"), MessageType::Input)
         .build();
 
     let req = Request::builder()
@@ -182,7 +182,7 @@ async fn test_retry_handler_sets_generating_status() {
     let storage = Arc::new(Storage::new_in_memory());
 
     let app = TestAppBuilder::default_test()
-        .log("look around", Some("Test Player"), LogType::Input)
+        .log("look around", Some("Test Player"), MessageType::Input)
         .storage(Arc::clone(&storage))
         .build();
 
@@ -212,7 +212,7 @@ async fn test_retry_handler_creates_snapshot() {
     let storage = Arc::new(Storage::new_in_memory());
 
     let app = TestAppBuilder::default_test()
-        .log("look around", Some("Test Player"), LogType::Input)
+        .log("look around", Some("Test Player"), MessageType::Input)
         .storage(Arc::clone(&storage))
         .build();
 
@@ -533,7 +533,7 @@ async fn test_reset_allows_subsequent_actions() {
 #[tokio::test]
 async fn test_retry_handler_no_input_returns_400() {
     let app = TestAppBuilder::default_test()
-        .log("look around", Some("Test Player"), LogType::Input)
+        .log("look around", Some("Test Player"), MessageType::Input)
         .storage(Arc::new(Storage::new_in_memory().with_failure(
             Operation::LoadLatestSnapshot,
             TestOverride::internal("simulated load failure"),
@@ -625,7 +625,7 @@ async fn test_retrigger_last_message_not_narration() {
             user_prompt: "user".to_string(),
             max_tokens: None,
         })
-        .log("look around", Some("Test Player"), LogType::Input)
+        .log("look around", Some("Test Player"), MessageType::Input)
         .storage(Arc::clone(&storage))
         .build();
 
@@ -668,7 +668,7 @@ async fn test_switch_swipe_not_last_message() {
     let storage = Arc::new(Storage::new_in_memory());
 
     let app = TestAppBuilder::default_test()
-        .log("look around", Some("Test Player"), LogType::Input)
+        .log("look around", Some("Test Player"), MessageType::Input)
         .storage(Arc::clone(&storage))
         .build();
 
@@ -676,7 +676,7 @@ async fn test_switch_swipe_not_last_message() {
     let msg1 = chronicler_engine::model::message::Message::new(
         None,
         "First narration",
-        LogType::Narration,
+        MessageType::Narration,
         None,
         None,
     );
@@ -685,7 +685,7 @@ async fn test_switch_swipe_not_last_message() {
     let msg2 = chronicler_engine::model::message::Message::new(
         None,
         "Second narration",
-        LogType::Narration,
+        MessageType::Narration,
         None,
         None,
     );
@@ -717,12 +717,12 @@ async fn test_switch_swipe_missing_snapshot() {
     let storage = Arc::new(Storage::new_in_memory());
 
     let app = TestAppBuilder::default_test()
-        .log("look around", Some("Test Player"), LogType::Input)
+        .log("look around", Some("Test Player"), MessageType::Input)
         .storage(Arc::clone(&storage))
         .build();
 
     // Insert a narration with a swipe that has NO snapshot_id
-    let msg = Message::new(None, "Narration", LogType::Narration, None, None);
+    let msg = Message::new(None, "Narration", MessageType::Narration, None, None);
     let id = storage.insert_message(&msg).unwrap();
     let swipe0 = msg.swipes.first().unwrap().clone();
     storage.insert_swipe(id, &swipe0, 0).unwrap();
@@ -759,8 +759,8 @@ async fn test_switch_swipe_changes_active_swipe() {
     let storage = Arc::new(Storage::new_in_memory());
 
     let app = TestAppBuilder::default_test()
-        .log("look around", Some("Test Player"), LogType::Input)
-        .log("First narration", None, LogType::Narration)
+        .log("look around", Some("Test Player"), MessageType::Input)
+        .log("First narration", None, MessageType::Narration)
         .storage(Arc::clone(&storage))
         .build();
 
@@ -774,7 +774,7 @@ async fn test_switch_swipe_changes_active_swipe() {
     let msgs = storage.load_message_rows().unwrap();
     let narration = msgs
         .into_iter()
-        .find(|m| m.log_type == LogType::Narration)
+        .find(|m| m.message_type == MessageType::Narration)
         .expect("narration message should exist");
     let old_id = narration.id;
     storage.delete_message(old_id).unwrap();
@@ -828,7 +828,7 @@ async fn test_retry_handler_snapshot_save_failure() {
     ));
 
     let app = TestAppBuilder::default_test()
-        .log("look around", Some("Test Player"), LogType::Input)
+        .log("look around", Some("Test Player"), MessageType::Input)
         .storage(storage)
         .build();
 

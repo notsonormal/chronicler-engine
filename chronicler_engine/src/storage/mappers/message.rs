@@ -6,8 +6,8 @@ use crate::storage::models::message::{DbMessage, DbSwipe};
 
 /// [DOC: docs/architecture/system.md]
 pub fn db_message_to_model(db: &DbMessage, swipes: &[DbSwipe]) -> Result<Message, EngineError> {
-    let log_type = serde_json::from_str(&db.log_type_json)
-        .map_err(|e| EngineError::Config(format!("Failed to parse message log_type: {e}")))?;
+    let message_type = serde_json::from_str(&db.message_type_json)
+        .map_err(|e| EngineError::Config(format!("Failed to parse message message_type: {e}")))?;
     let timestamp = DateTime::parse_from_rfc3339(&db.timestamp)
         .map_err(|e| EngineError::Config(format!("Failed to parse message timestamp: {e}")))?
         .with_timezone(&Utc);
@@ -16,7 +16,7 @@ pub fn db_message_to_model(db: &DbMessage, swipes: &[DbSwipe]) -> Result<Message
         id: db.id as u64,
         sender: db.sender.clone(),
         text: String::new(),
-        log_type,
+        message_type,
         timestamp,
         location_header: None,
         event_header: None,
@@ -59,14 +59,14 @@ pub fn db_message_to_model(db: &DbMessage, swipes: &[DbSwipe]) -> Result<Message
 }
 
 pub fn model_message_to_db(msg: &Message, game_id: i64) -> Result<DbMessage, EngineError> {
-    let log_type_json = serde_json::to_string(&msg.log_type)
-        .map_err(|e| EngineError::Config(format!("Failed to serialize message log_type: {e}")))?;
+    let message_type_json = serde_json::to_string(&msg.message_type)
+        .map_err(|e| EngineError::Config(format!("Failed to serialize message message_type: {e}")))?;
 
     Ok(DbMessage {
         id: msg.id as i64,
         game_id,
         sender: msg.sender.clone(),
-        log_type_json,
+        message_type_json,
         timestamp: msg.timestamp.to_rfc3339(),
         active_swipe_index: msg.active_swipe_index as i64,
         is_deleted: if msg.is_deleted { 1 } else { 0 },

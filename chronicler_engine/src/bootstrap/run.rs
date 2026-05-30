@@ -132,7 +132,7 @@ impl ArrivalTaskContext {
 
             match narration {
                 Ok(result) => {
-                    state.add_log(result.text, None, crate::model::state::LogType::Narration);
+                    state.add_message(result.text, None, crate::model::state::MessageType::Narration);
                     state.narrative.input_buffer.status =
                         crate::model::state::GenerationStatus::Idle;
                 }
@@ -374,7 +374,7 @@ pub(crate) fn list_game_names_for_world(
         .map_err(|e| crate::error::EngineError::Config(format!("Failed to read game names: {e}")))
 }
 
-fn ensure_defaults(
+pub(crate) fn ensure_defaults(
     db_pool: &crate::storage::db::DbPool,
     data_dir: &std::path::Path,
 ) -> crate::error::Result<()> {

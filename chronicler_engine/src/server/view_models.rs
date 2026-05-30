@@ -5,7 +5,7 @@
 use std::fmt;
 
 use crate::model::llm_message::LlmMessage;
-use crate::model::state::{GenerationPhase, GenerationStatus, LogEntry, LogType};
+use crate::model::state::{GenerationPhase, GenerationStatus, MessageEntry, MessageType};
 use crate::narrative::text_check::CheckResult;
 
 /// [DOC: docs/architecture/system.md]
@@ -36,7 +36,7 @@ pub(crate) fn markdown_to_html(text: &str) -> String {
 }
 
 #[derive(Debug, Clone)]
-pub struct LogEntryView {
+pub struct MessageEntryView {
     pub id: u64,
     pub timestamp: String,
     pub sender: String,
@@ -52,8 +52,8 @@ pub struct LogEntryView {
     pub show_retrigger: bool,
 }
 
-impl From<&LogEntry> for LogEntryView {
-    fn from(entry: &LogEntry) -> Self {
+impl From<&MessageEntry> for MessageEntryView {
+    fn from(entry: &MessageEntry) -> Self {
         let parsed_text = markdown_to_html(&entry.text);
         let active = entry.active_swipe_index;
         let count = entry.swipe_count;
@@ -63,11 +63,11 @@ impl From<&LogEntry> for LogEntryView {
             sender: entry.sender.clone().unwrap_or_default(),
             text: SafeHtml(parsed_text),
             raw_text: entry.text.clone(),
-            log_type: match entry.log_type {
-                LogType::Narration => "narration".to_string(),
-                LogType::Dialogue => "dialogue".to_string(),
-                LogType::System => "system".to_string(),
-                LogType::Input => "input".to_string(),
+            log_type: match entry.message_type {
+                MessageType::Narration => "narration".to_string(),
+                MessageType::Dialogue => "dialogue".to_string(),
+                MessageType::System => "system".to_string(),
+                MessageType::Input => "input".to_string(),
             },
             location_header: entry.location_header.clone(),
             event_header: entry.event_header.clone(),

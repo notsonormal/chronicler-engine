@@ -11,10 +11,10 @@ use chronicler_engine::engine::action_processing::{
 };
 use chronicler_engine::engine::trigger_eval::get_times_met;
 use chronicler_engine::model::quantifier::{
-    MovementParseResult, NpcEvent, NpcEventType, QuantifierConfidence, QuantifierParseResult,
+    MovementParseResult, MovementType, NpcEvent, NpcTransitionType, QuantifierConfidence, QuantifierParseResult,
     QuantifierResult,
 };
-use chronicler_engine::model::state::LogType;
+use chronicler_engine::model::state::MessageType;
 use chronicler_engine::narrative::agents::registry::AgentRegistry;
 use chronicler_engine::narrative::llm::MockBackend;
 use chronicler_engine::server::fragments::GenerationGuard;
@@ -26,8 +26,6 @@ mod test_data;
 
 use pipeline_helpers::{create_test_state_with_trigger_npc, latest_state};
 use test_data::create_test_state;
-
-// ─── INV-001: Generation Status Lifecycle ───────────────────────────────────
 
 #[test]
 fn test_inv001_generation_guard_resets_on_drop() {
@@ -61,9 +59,6 @@ fn test_inv001_generation_guard_resets_on_panic() {
         "INV-001: GenerationGuard did not reset is_generating on panic"
     );
 }
-
-// ─── INV-002: State Mutation Order ──────────────────────────────────────────
-
 #[test]
 fn test_inv002_state_mutation_order() {
     let state = create_test_state_with_trigger_npc();
@@ -111,7 +106,7 @@ fn test_inv002_state_mutation_order() {
     let history = &result.next_state.narrative.history;
     let narration_idx = history
         .iter()
-        .position(|e| e.log_type == LogType::Narration && e.text.contains("look around"))
+        .position(|e| e.message_type == MessageType::Narration && e.text.contains("look around"))
         .expect("narration should be in history");
     assert!(
         narration_idx < history.len(),
@@ -134,11 +129,9 @@ fn test_inv002_violation_demo() {
         0,
         "pre-condition: times_met should be 0"
     );
-    // ─── WRONG ORDER: apply NPC events FIRST ───────────────────────────────
-    //
     let events = vec![NpcEvent {
         npc_id: npc_id.to_string(),
-        event_type: NpcEventType::Entered,
+        event_type: NpcTransitionType::Entered,
     }];
     let state_after_events =
         apply_npc_events(state.clone(), &events).expect("apply_npc_events should succeed");
@@ -150,18 +143,14 @@ fn test_inv002_violation_demo() {
         triggers_after_swap.is_empty(),
         "VIOLATION: trigger should NOT fire when apply_npc_events runs first (times_met == 1)"
     );
-    // ─── CORRECT ORDER: evaluate triggers BEFORE applying events ────────────
-    //
     // This is the correct order used in execute_freeaction_impl.
     let triggers_correct = chronicler_engine::engine::trigger_eval::evaluate_triggers(&state);
     // The trigger SHOULD fire because times_met is still 0
     assert!(
         !triggers_correct.is_empty(),
-        "CORRECT: trigger SHOULD fire when evaluate_triggers runs first (times_met == 0)"
+        "Correct order: trigger SHOULD fire (times_met == 0)"
     );
 }
-// ─── INV-004: LLM Calls Are Cancellable ─────────────────────────────────────
-
 #[test]
 fn test_inv004_cancellable_at_boundaries() {
     let mut state = create_test_state();
@@ -200,13 +189,12 @@ fn test_inv004_cancellable_at_boundaries() {
     );
 
     let final_state = latest_state(&ctx);
-    assert!(
-        !final_state.narrative.input_buffer.status.is_generating(),
+    assert_eq!(
+        final_state.narrative.input_buffer.status,
+        chronicler_engine::model::state::GenerationStatus::Idle,
         "INV-004: status should be Idle after cancellation"
     );
 }
-
-// ─── INV-004b: No Concurrent Async Actions ──────────────────────────────────
 
 #[test]
 fn test_inv004b_no_concurrent_async_actions() {
@@ -241,5 +229,146 @@ fn test_inv004b_no_concurrent_async_actions() {
     assert!(
         third.is_ok(),
         "INV-004b: third compare_exchange should succeed after guard drop"
+    );
+}
+#[test]
+fn test_inv003_snapshot_restores_state_fields() {
+    use chronicler_engine::model::state_snapshot::GameStateSnapshot;
+
+    let mut state = create_test_state();
+    state.movement.current_room_id = "room2".to_string();
+    state.scene.npcs_in_area.clear();
+    state.narrative.history.clear();
+    state.narrative.last_trigger = None;
+
+    // Create snapshot from modified state
+    let snapshot = GameStateSnapshot::from_game_state(&state);
+
+    // Verify snapshot captured the modified state
+    assert_eq!(
+        snapshot.movement.current_room_id, "room2",
+        "INV-003: snapshot should capture modified current_room_id"
+    );
+    assert_eq!(
+        snapshot.scene.npcs_in_area.len(), 0,
+        "INV-003: snapshot should capture empty npcs_in_area"
+    );
+
+    // Create fresh state and apply snapshot
+    let mut fresh_state = create_test_state();
+    fresh_state.movement.current_room_id = "room1".to_string();
+    fresh_state.scene.npcs_in_area.push(fresh_state.npcs.values().next().unwrap().clone());
+
+    // Apply snapshot restores the original state
+    snapshot.apply_to(&mut fresh_state);
+
+    // INV-003: Verify movement.current_room_id is restored
+    assert_eq!(
+        fresh_state.movement.current_room_id, "room2",
+        "INV-003: apply_to should restore current_room_id"
+    );
+
+    // INV-003: Verify narrative is restored
+    assert_eq!(
+        fresh_state.narrative.last_trigger, None,
+        "INV-003: apply_to should restore narrative.last_trigger"
+    );
+
+    // INV-003: Verify npcs_in_area is restored (should be empty)
+    assert_eq!(
+        fresh_state.scene.npcs_in_area.len(), 0,
+        "INV-003: apply_to should restore npcs_in_area"
+    );
+}
+#[test]
+fn test_inv005_handle_movement_runs_before_narration() {
+    use chronicler_engine::engine::action_processing::{execute_freeaction_impl, FreeActionContext};
+    use chronicler_engine::model::quantifier::{QuantifierConfidence, QuantifierParseResult, QuantifierResult};
+    use std::sync::Arc;
+
+    // Use the full test map which has room1, room2, room3
+    let world = Arc::new(test_data::create_test_world());
+    let map = Arc::new(test_data::create_test_map());
+    let player = Arc::new(test_data::create_test_player());
+    let npcs = vec![];
+    let state = chronicler_engine::model::state::GameState::new(
+        world, map, player, npcs, "room1".to_string()
+    );
+    let original_room = state.movement.current_room_id.clone();
+    let target_room = "room2";
+
+    let quantifier = QuantifierResult {
+        npcs: QuantifierParseResult {
+            npc_ids: vec![],
+            confidence: QuantifierConfidence::High,
+        },
+        movement: MovementParseResult {
+            movement_type: Some(MovementType::Leaving),
+            destination: Some(target_room.to_string()),
+            confidence: QuantifierConfidence::High,
+        },
+    };
+
+    let result = execute_freeaction_impl(
+        &state,
+        &FreeActionContext {
+            narration_text: "I walk north.",
+            quantifier_result: &quantifier,
+        },
+    ).expect("execute_freeaction_impl should succeed");
+
+    // INV-005: handle_movement should have updated current_room_id BEFORE narration
+    assert_eq!(
+        result.next_state.movement.current_room_id, target_room,
+        "INV-005: current_room_id should be updated by handle_movement before narration is logged"
+    );
+
+    // INV-005: Verify the room actually changed (not same room fallback)
+    assert_ne!(
+        result.next_state.movement.current_room_id, original_room,
+        "INV-005: handle_movement should have changed the room"
+    );
+}
+#[test]
+fn test_inv007_dynamic_room_creation_on_invalid_destination() {
+    use chronicler_engine::engine::action_processing::handle_movement;
+
+    let state = create_test_state();
+    let invalid_destination = "nonexistent_place_xyz";
+
+    // Verify precondition: this room does NOT exist
+    assert!(
+        !state.map.overworld.regions.iter().flat_map(|r| r.rooms.iter())
+            .any(|r| r.id == invalid_destination),
+        "precondition: invalid_destination should not exist in map"
+    );
+
+    let result = handle_movement(state, Some(invalid_destination), &[]).unwrap();
+
+    // INV-007: A dynamic room should be created
+    assert!(
+        !result.movement.dynamic_rooms.is_empty(),
+        "INV-007: dynamic room should be created for invalid destination"
+    );
+
+    // INV-007: current_room_id should be updated to a dynamic room
+    assert!(
+        result.movement.current_room_id.starts_with("dynamic_"),
+        "INV-007: current_room_id should be set to a dynamic room"
+    );
+
+    // INV-007: A system message should be logged
+    let history = result.narrative.history();
+    let system_messages: Vec<_> = history
+        .iter()
+        .filter(|m| m.message_type == MessageType::System)
+        .collect();
+    assert!(
+        !system_messages.is_empty(),
+        "INV-007: system message should be logged for dynamic room creation"
+    );
+    assert!(
+        system_messages.iter().any(|m| m.text.contains("Entered unknown location")),
+        "INV-007: system message should mention 'Entered unknown location'"
     );
 }

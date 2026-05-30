@@ -16,7 +16,7 @@ use crate::model::quantifier::{
     compute_npc_events,
 };
 use crate::model::state::StoredTriggerContext;
-use crate::model::state::{GameState, GenerationPhase, GenerationStatus, LogType};
+use crate::model::state::{GameState, GenerationPhase, GenerationStatus, MessageType};
 use crate::model::world::WorldCard;
 use crate::narrative::llm::backend::LlmCallResult;
 use crate::narrative::prompt::{PromptAssembler, make_prompt_context};
@@ -265,10 +265,10 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
             Some(format!("{:?}", quantifier_result.npcs.confidence));
 
         if quantifier_result.npcs.confidence == QuantifierConfidence::Low {
-            state.add_log(
+            state.add_message(
                 "[System] NPC detection uncertain — using room defaults".to_string(),
                 None,
-                LogType::System,
+                MessageType::System,
             );
         }
 
@@ -320,10 +320,10 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
             Ok(result) => result,
             Err(e) => {
                 log::error!("Trigger narration failed: {e}");
-                state.add_log(
+                state.add_message(
                     format!("[Trigger narration failed: {e}]"),
                     None,
-                    LogType::System,
+                    MessageType::System,
                 );
                 state.narrative.input_buffer.status =
                     GenerationStatus::Error(format!("Error: {e}"));
