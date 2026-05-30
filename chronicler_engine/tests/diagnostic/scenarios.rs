@@ -53,7 +53,7 @@ fn benchmark_llm_http_401() {
     // Verify the fix: HTTP status code should now be preserved
     assert!(
         error_msg.contains("401"),
-        "EXPECTED: map_llm_error should preserve HTTP status codes after fix."
+        "map_llm_error should preserve HTTP status codes"
     );
 }
 
@@ -329,7 +329,7 @@ fn benchmark_quantifier_complete_failure() {
 
     assert_eq!(
         error_msg, "(no error, idle)",
-        "EXPECTED: Quantifier failures are silent. If this fails, quantifier errors now surface to UI."
+        "Quantifier failures are silent"
     );
 }
 
@@ -439,7 +439,7 @@ fn benchmark_dynamic_room_creation() {
 
     assert!(
         is_dynamic,
-        "EXPECTED: Failed room resolution creates a dynamic room. If this fails, dynamic room creation behavior changed."
+        "Failed room resolution creates a dynamic room"
     );
 }
 
@@ -571,7 +571,7 @@ fn benchmark_trigger_wrong_room_id() {
 
     assert!(
         !trigger_fired,
-        "EXPECTED: Trigger with wrong room_id should not fire. If this fails, trigger scoping behavior changed."
+        "Trigger with wrong room_id should not fire"
     );
 }
 
@@ -682,6 +682,6 @@ fn benchmark_state_stuck_generating() {
 
     assert!(
         !is_generating,
-        "EXPECTED: Status should not be Generating after trigger narration failure."
+        "Status should not be Generating after trigger narration failure"
     );
 }
