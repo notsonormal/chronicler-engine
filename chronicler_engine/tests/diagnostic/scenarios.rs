@@ -437,10 +437,7 @@ fn benchmark_dynamic_room_creation() {
 
     print_benchmark_result(&result);
 
-    assert!(
-        is_dynamic,
-        "Failed room resolution creates a dynamic room"
-    );
+    assert!(is_dynamic, "Failed room resolution creates a dynamic room");
 }
 
 // =============================================================================
@@ -504,11 +501,11 @@ fn benchmark_trigger_wrong_room_id() {
         },
         inventory: vec![],
         triggers: vec![chronicler_engine::model::trigger::Trigger {
-            condition: chronicler_engine::model::trigger::TriggerCondition::TimesMet(
+            requirement: chronicler_engine::model::trigger::TriggerRequirement::TimesMet(
                 chronicler_engine::model::trigger::ComparisonOperator::Eq,
                 0,
             ),
-            effect: chronicler_engine::model::trigger::TriggerEffect {
+            narration: chronicler_engine::model::trigger::TriggerNarration {
                 name: "Greeting".into(),
                 narration_prompt: "The stranger nods at you.".into(),
             },
@@ -569,10 +566,7 @@ fn benchmark_trigger_wrong_room_id() {
 
     print_benchmark_result(&result);
 
-    assert!(
-        !trigger_fired,
-        "Trigger with wrong room_id should not fire"
-    );
+    assert!(!trigger_fired, "Trigger with wrong room_id should not fire");
 }
 
 // =============================================================================
@@ -598,11 +592,11 @@ fn benchmark_state_stuck_generating() {
         },
         inventory: vec![],
         triggers: vec![chronicler_engine::model::trigger::Trigger {
-            condition: chronicler_engine::model::trigger::TriggerCondition::TimesMet(
+            requirement: chronicler_engine::model::trigger::TriggerRequirement::TimesMet(
                 chronicler_engine::model::trigger::ComparisonOperator::Eq,
                 0,
             ),
-            effect: chronicler_engine::model::trigger::TriggerEffect {
+            narration: chronicler_engine::model::trigger::TriggerNarration {
                 name: "Greeting".into(),
                 narration_prompt: "The innkeeper waves at you.".into(),
             },

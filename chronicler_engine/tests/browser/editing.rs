@@ -1,6 +1,5 @@
 use super::*;
 
-
 #[tokio::test]
 async fn test_edit_button_exists_on_entries() {
     with_test_page(CONFIG_PATH, TEST_WORLD, |page, _port| async move {

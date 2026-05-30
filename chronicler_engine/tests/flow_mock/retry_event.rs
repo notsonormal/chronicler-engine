@@ -4,7 +4,7 @@ use chronicler_engine::application::game_service::DefaultGameService;
 use chronicler_engine::model::character::{CharacterSheet, NpcCard};
 use chronicler_engine::model::state::GameState;
 use chronicler_engine::model::trigger::{
-    ComparisonOperator, Trigger, TriggerCondition, TriggerEffect,
+    ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement,
 };
 use chronicler_engine::model::world::WorldCard;
 use chronicler_engine::narrative::llm::MockBackend;
@@ -184,8 +184,8 @@ fn test_trigger_continuation_runs_quantifier_and_detects_new_npc() {
         },
         inventory: vec![],
         triggers: vec![Trigger {
-            condition: TriggerCondition::TimesMet(ComparisonOperator::Eq, 0),
-            effect: TriggerEffect {
+            requirement: TriggerRequirement::TimesMet(ComparisonOperator::Eq, 0),
+            narration: TriggerNarration {
                 name: "Greeting".into(),
                 narration_prompt: "The shopkeeper looks up with a smile.".into(),
             },

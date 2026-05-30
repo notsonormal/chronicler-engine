@@ -21,6 +21,20 @@ impl MessageEditingService {
         ApplicationError::Engine(EngineError::Internal(internal_error(msg)))
     }
 
+    fn prepare_retry_state(
+        ctx: &GameServiceContext,
+        mut game_state: crate::model::state::GameState,
+        status: crate::model::state::GenerationStatus,
+        phase: crate::model::state::GenerationPhase,
+    ) -> Result<(crate::model::state::GameState, bool), ApplicationError> {
+        game_state.narrative.input_buffer.status = status;
+        game_state.narrative.input_buffer.phase = phase;
+        let snapshot = GameStateSnapshot::from_game_state(&game_state);
+        ctx.storage.save_snapshot(&snapshot)?;
+        let cancelled = ctx.cancel_token.is_cancelled();
+        Ok((game_state, cancelled))
+    }
+
     pub fn switch_swipe(
         &self,
         ctx: GameServiceContext,
@@ -105,20 +119,19 @@ impl MessageEditingService {
     }
 
     pub fn retry(&self, ctx: GameServiceContext) -> Result<(), ApplicationError> {
-        let mut game_state = load_state(&ctx);
+        let game_state = load_state(&ctx);
 
         if game_state.narrative.history.last_input_text().is_none() {
             return Err(ApplicationError::validation("No input to retry"));
         }
 
-        game_state.narrative.input_buffer.status =
-            crate::model::state::GenerationStatus::Generating;
-        game_state.narrative.input_buffer.phase = crate::model::state::GenerationPhase::Narrating;
-
-        let snapshot = GameStateSnapshot::from_game_state(&game_state);
-        ctx.storage.save_snapshot(&snapshot)?;
-
-        if ctx.cancel_token.is_cancelled() {
+        let (_, cancelled) = Self::prepare_retry_state(
+            &ctx,
+            game_state,
+            crate::model::state::GenerationStatus::Generating,
+            crate::model::state::GenerationPhase::Narrating,
+        )?;
+        if cancelled {
             return Err(ApplicationError::ShuttingDown);
         }
 
@@ -157,15 +170,13 @@ impl MessageEditingService {
             ));
         }
 
-        let mut game_state = game_state;
-        game_state.narrative.input_buffer.status =
-            crate::model::state::GenerationStatus::Generating;
-        game_state.narrative.input_buffer.phase = crate::model::state::GenerationPhase::Narrating;
-
-        let snapshot = GameStateSnapshot::from_game_state(&game_state);
-        ctx.storage.save_snapshot(&snapshot)?;
-
-        if ctx.cancel_token.is_cancelled() {
+        let (_, cancelled) = Self::prepare_retry_state(
+            &ctx,
+            game_state,
+            crate::model::state::GenerationStatus::Generating,
+            crate::model::state::GenerationPhase::Narrating,
+        )?;
+        if cancelled {
             return Err(ApplicationError::ShuttingDown);
         }
 

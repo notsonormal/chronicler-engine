@@ -142,7 +142,9 @@ impl ArrivalTaskContext {
                 }
             }
 
-            if let Err(e) = self.storage.save_snapshot(&crate::model::state_snapshot::GameStateSnapshot::from_game_state(&state)) {
+            if let Err(e) = self.storage.save_snapshot(
+                &crate::model::state_snapshot::GameStateSnapshot::from_game_state(&state),
+            ) {
                 log::error!("Failed to save arrival snapshot: {e}");
             }
         }
@@ -274,16 +276,18 @@ pub fn run(args: Args) -> crate::error::Result<()> {
         .is_some_and(|s| !s.text.is_empty());
 
     if !has_scenario {
-        let preset_storage = crate::storage::Storage::new_sqlite(db_pool.clone(), PRESET_STORAGE_GAME_ID);
-        let (arrival_preset, response_length, max_context_tokens, max_tokens) = with_settings(&settings, |guard| {
-            let preset_id = &guard.active_system_prompt_preset_id;
-            let preset = preset_storage.get_preset(preset_id).ok().flatten();
-            let conn = guard.narration_connection();
-            let max_context_tokens = conn.resolve_max_context_tokens();
-            let max_tokens = conn.max_tokens;
-            let response_length = guard.response_length.clone();
-            (preset, response_length, max_context_tokens, max_tokens)
-        });
+        let preset_storage =
+            crate::storage::Storage::new_sqlite(db_pool.clone(), PRESET_STORAGE_GAME_ID);
+        let (arrival_preset, response_length, max_context_tokens, max_tokens) =
+            with_settings(&settings, |guard| {
+                let preset_id = &guard.active_system_prompt_preset_id;
+                let preset = preset_storage.get_preset(preset_id).ok().flatten();
+                let conn = guard.narration_connection();
+                let max_context_tokens = conn.resolve_max_context_tokens();
+                let max_tokens = conn.max_tokens;
+                let response_length = guard.response_length.clone();
+                (preset, response_length, max_context_tokens, max_tokens)
+            });
 
         let task_ctx = ArrivalTaskContext {
             storage: Arc::clone(&storage),

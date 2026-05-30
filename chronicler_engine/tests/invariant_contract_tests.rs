@@ -6,10 +6,13 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use chronicler_engine::application::action_pipeline::{ActionOutcome, ActionPipeline};
 use chronicler_engine::application::game_service::DefaultGameService;
-use chronicler_engine::engine::action_processing::{FreeActionContext, execute_freeaction_impl};
+use chronicler_engine::engine::action_processing::{
+    FreeActionContext, apply_npc_events, execute_freeaction_impl,
+};
 use chronicler_engine::engine::trigger_eval::get_times_met;
 use chronicler_engine::model::quantifier::{
-    MovementParseResult, QuantifierConfidence, QuantifierParseResult, QuantifierResult,
+    MovementParseResult, NpcEvent, NpcEventType, QuantifierConfidence, QuantifierParseResult,
+    QuantifierResult,
 };
 use chronicler_engine::model::state::LogType;
 use chronicler_engine::narrative::agents::registry::AgentRegistry;
@@ -115,7 +118,48 @@ fn test_inv002_state_mutation_order() {
         "INV-002: narration should be logged before trigger-related entries"
     );
 }
-
+/// Demonstrates the INV-002 violation: if `apply_npc_events` runs BEFORE
+/// `evaluate_triggers`, the `TimesMet Eq 0` trigger fails to fire because
+/// `times_met` is already 1 when the condition is checked.
+///
+/// This test does NOT run through `execute_freeaction_impl` — it calls the
+/// functions directly in the WRONG order to prove the behavioral difference.
+#[test]
+fn test_inv002_violation_demo() {
+    let state = create_test_state_with_trigger_npc();
+    let npc_id = "shopkeeper";
+    // Pre-condition: times_met == 0
+    assert_eq!(
+        get_times_met(&state.npc_encounter_log, npc_id),
+        0,
+        "pre-condition: times_met should be 0"
+    );
+    // ─── WRONG ORDER: apply NPC events FIRST ───────────────────────────────
+    //
+    let events = vec![NpcEvent {
+        npc_id: npc_id.to_string(),
+        event_type: NpcEventType::Entered,
+    }];
+    let state_after_events =
+        apply_npc_events(state.clone(), &events).expect("apply_npc_events should succeed");
+    // Now evaluate triggers on the post-event state
+    let triggers_after_swap =
+        chronicler_engine::engine::trigger_eval::evaluate_triggers(&state_after_events);
+    // The trigger should NOT fire because times_met is now 1
+    assert!(
+        triggers_after_swap.is_empty(),
+        "VIOLATION: trigger should NOT fire when apply_npc_events runs first (times_met == 1)"
+    );
+    // ─── CORRECT ORDER: evaluate triggers BEFORE applying events ────────────
+    //
+    // This is the correct order used in execute_freeaction_impl.
+    let triggers_correct = chronicler_engine::engine::trigger_eval::evaluate_triggers(&state);
+    // The trigger SHOULD fire because times_met is still 0
+    assert!(
+        !triggers_correct.is_empty(),
+        "CORRECT: trigger SHOULD fire when evaluate_triggers runs first (times_met == 0)"
+    );
+}
 // ─── INV-004: LLM Calls Are Cancellable ─────────────────────────────────────
 
 #[test]

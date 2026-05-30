@@ -4,7 +4,7 @@ use chronicler_engine::application::game_service::DefaultGameService;
 use chronicler_engine::model::character::{CharacterSheet, NpcCard};
 use chronicler_engine::model::state::{GameState, LogType};
 use chronicler_engine::model::trigger::{
-    ComparisonOperator, Trigger, TriggerCondition, TriggerEffect,
+    ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement,
 };
 use chronicler_engine::narrative::llm::MockBackend;
 use chronicler_engine::test_support::make_test_context_with_sqlite;
@@ -319,8 +319,8 @@ fn test_main_retry_reevaluates_triggers() {
         },
         inventory: vec![],
         triggers: vec![Trigger {
-            condition: TriggerCondition::TimesMet(ComparisonOperator::Eq, 0),
-            effect: TriggerEffect {
+            requirement: TriggerRequirement::TimesMet(ComparisonOperator::Eq, 0),
+            narration: TriggerNarration {
                 name: "Greeting".into(),
                 narration_prompt: "The shopkeeper looks up with a smile.".into(),
             },

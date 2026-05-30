@@ -5,7 +5,7 @@
 The Auto-Trigger system allows the game world to react dynamically to the player's presence based on NPC-specific conditions.
 
 ## Overview
-When a player enters a room or performs an action, the engine evaluates a set of rules (Triggers) associated with NPCs. If conditions are met, a reactive event (Action) is fired.
+When a player enters a room or performs an action, the engine evaluates a set of rules (Triggers) associated with NPCs. If requirements are met, a reactive event (Narration) is triggered.
 
 ## Core Flow
 
@@ -32,7 +32,7 @@ For each NPC detected in the narration:
 
 This ensures NPC introduction triggers (like Gabriella in the Entrance Hall) don't fire in the wrong location.
 
-### 7. Condition Check
+### 7. Requirement Check
 Each trigger is checked against the current `NpcEncounterLog`:
 - `TimesMet Eq 0`: Fires on first encounter (times_met is 0 when evaluation happens)
 - `TimesMet Gte 1`: Fires on subsequent encounters
@@ -42,7 +42,7 @@ Each trigger is checked against the current `NpcEncounterLog`:
 - If non-repeatable: Trigger is marked as "fired" and won't re-fire
 
 ### 9. Narration
-Trigger actions now use the unified 7-layer prompt with continuation context in the user message.
+Trigger narrations use the unified 7-layer prompt with continuation context in the user message.
 
 ### 10. Inline Event Header
 When a trigger fires, the engine stores the event name in `NarrativeState.pending_event`. The next `add_log` call (which adds the trigger continuation narration) absorbs this pending metadata into `LogEntry.event_header`. The frontend renders the event header inside the same div as the continuation narration. There is no standalone `LogType::Event` entry.
@@ -66,7 +66,7 @@ If step 4 happens before step 2, the trigger would see times_met = 1 and TimesMe
 The `times_met` counter tracks **unique encounter events** with an NPC. It increments when the quantifier detects an NPC in the room/narration for the first time in that session.
 
 | Scenario | Times Met Increments? |
-| :--- | :--- |
+|:-------- |:---------------------|
 | Player enters room with NPC already there | Yes - quantifier detects NPC |
 | NPC follows player to new room | Yes - quantifier detects NPC in new room |
 | NPC appears in narration while player is in room | Yes - quantifier detects NPC in narration |
@@ -78,9 +78,9 @@ The key variable is `currently_meeting`:
 - Set to `false` when player enters a new room (different from last room)
 - `times_met` only increments when `currently_meeting` was `false`
 
-## Trigger Conditions
-| Condition | Description |
-| :--- | :--- |
+## Trigger Requirements
+| Requirement | Description |
+|:----------- |:-----------|
 | `TimesMet` | Evaluates the `times_met` counter using `Eq`, `Lt`, or `Gte`. |
 | `HasItem` | (Planned) Checks player inventory for a specific item ID. |
 
@@ -90,8 +90,8 @@ By default, triggers are **global** — they fire regardless of where the player
 
 ```json
 {
-  "condition": {"TimesMet": ["Eq", 0]},
-  "action": {"name": "Gabriella Introduction", "narration_prompt": "Gabriella emerges from the shadows..."},
+  "requirement": {"TimesMet": ["Eq", 0]},
+  "narration": {"name": "Gabriella Introduction", "narration_prompt": "Gabriella emerges from the shadows..."},
   "repeat": false,
   "room_id": "entrance_hall"
 }
@@ -99,12 +99,11 @@ By default, triggers are **global** — they fire regardless of where the player
 
 This trigger only fires when `state.movement.current_room_id == "entrance_hall"`.
 
-## Trigger Actions
-| Action | Description |
-| :--- | :--- |
-| `Narrate` | Appends a custom LLM prompt to the arrival/action narration. |
+## Trigger Narrations
+|:-------|:-----------|
+| `Narration` | Contains the prompt sent to the LLM to generate continuation narration. |
 
-### Action Fields
+### Narration Fields
 ```json
 {
     "name": "Event Name",
@@ -132,7 +131,7 @@ pub struct NpcEncounterState {
 
 ## Event Headers
 
-When a trigger fires, if its action has a `name`, the engine inserts an **event header** entry into the story log before the LLM-generated narration. Event headers are visually distinct from location headers (room names) and use a blue/cyan color (`#38bdf8`).
+When a trigger fires, if its narration has a `name`, the engine inserts an **event header** entry into the story log before the LLM-generated narration. Event headers are visually distinct from location headers (room names) and use a blue/cyan color (`#38bdf8`).
 
 Example story log output:
 ```
@@ -155,9 +154,32 @@ Event headers:
 
 3. **Times Met vs Trigger Fire**: `times_met` is incremented based on movement/room entry, NOT when triggers fire. This prevents the bug where trigger fires would increment the counter for the next evaluation.
 
-4. **Named Triggers**: Every trigger action requires a `name`. This name is used for the event header and helps players recognize important story moments at a glance.
+4. **Named Triggers**: Every trigger narration requires a `name`. This name is used for the event header and helps players recognize important story moments at a glance.
 
 ---
+
+## Mutation Order Invariant
+
+The action pipeline and `execute_freeaction_impl` in `src/engine/action_processing.rs` mutate state in a strict, load-bearing order. Steps 4b and 4c happen in the application pipeline (`ActionPipeline`), not inside the engine function:
+
+| Step | Operation | Why it must come here |
+|:-----|:----------|:---------------------|
+| 1 | `handle_movement()` — may update `movement.current_room_id` | Room must be current before NPCs are resolved |
+| 2 | Resolve current NPCs from quantifier result | Uses updated `movement.current_room_id` from step 1 |
+| 3 | `state.add_log(narration_text)` | Narration must be in history before triggers read it |
+| 4a | `evaluate_triggers()` + build prompt | Reads `state.narrative.history()` (step 3) to build the trigger continuation prompt |
+| 4b | Trigger LLM call | Runs in `ActionPipeline::phase_trigger_continuation`, outside the state lock |
+| 4c | `commit_trigger_narration()` | Runs in `ActionPipeline`, re-acquires lock to add trigger logs and mark trigger fired |
+| 5 | `apply_npc_events()` — mutates `npc_encounter_log` | `times_met` increments AFTER trigger evaluation (see Timing section above) |
+
+**What breaks if you change the order:**
+
+- Swapping steps 3 and 4a: triggers generate continuation without seeing the current narration as context — the LLM has no story thread to continue from.
+- Swapping steps 4a and 5: `times_met` increments before trigger evaluation — `TimesMet Eq 0` would never fire on first encounter.
+- Moving step 1 after step 3: the narration gets logged against the old room, then the room changes — state is inconsistent.
+- Moving step 4b inside the lock: frontend cannot poll the main narration until the trigger LLM completes — both texts appear simultaneously.
+
+This invariant is enforced by code structure, not by runtime checks. If you refactor `execute_freeaction_impl`, preserve this order explicitly.
 
 ## Mutation Order Invariant
 

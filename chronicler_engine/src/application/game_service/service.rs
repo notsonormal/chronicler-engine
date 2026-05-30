@@ -4,7 +4,6 @@ use crate::application::action_pipeline::ActionPipelineBackend;
 use crate::application::context::GameServiceContext;
 use crate::error::EngineError;
 use crate::model::agent::{AgentContext, AgentResult, ExecutionPhase, StatePatch};
-use crate::model::quantifier::QuantifierConfidence;
 use crate::model::settings::AppSettings;
 use crate::model::state::GameState;
 use crate::narrative::agents::quantifier::QuantifierAgent;
@@ -135,28 +134,33 @@ impl ActionPipelineBackend for DefaultGameService {
             current_room: state.current_room(),
         };
 
-        for agent in self
+        let patch = self
             .agent_registry
             .agents_for_phase(ExecutionPhase::PostGeneration)
-        {
-            match agent.execute(&agent_ctx) {
-                Ok(AgentResult::StatePatch(StatePatch::Scene {
-                    npc_ids,
-                    movement_destination,
-                    confidence,
-                })) => {
-                    result.npcs.npc_ids = npc_ids;
-                    result.movement.destination = movement_destination;
-                    result.npcs.confidence = QuantifierConfidence::from(confidence);
-                }
-                Ok(AgentResult::NoOp) => {}
-                Ok(AgentResult::PromptDirective(_)) => {
-                    log::warn!("Post-generation agent returned PromptDirective; ignoring");
-                }
+            .filter_map(|agent| match agent.execute(&agent_ctx) {
+                Ok(AgentResult::StatePatch(patch)) => Some(patch),
+                Ok(AgentResult::NoOp) | Ok(AgentResult::PromptDirective(_)) => None,
                 Err(e) => {
                     log::warn!("Agent {} failed: {e}", agent.name());
+                    None
                 }
-            }
-        }
+            })
+            .fold(
+                StatePatch::Scene {
+                    npc_ids: result.npcs.npc_ids.clone(),
+                    movement_destination: result.movement.destination.clone(),
+                    confidence: result.npcs.confidence.clone().into(),
+                },
+                StatePatch::merge,
+            );
+
+        let StatePatch::Scene {
+            npc_ids,
+            movement_destination,
+            confidence,
+        } = patch;
+        result.npcs.npc_ids = npc_ids;
+        result.movement.destination = movement_destination;
+        result.npcs.confidence = confidence.into();
     }
 }

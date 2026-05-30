@@ -19,6 +19,8 @@ mod misc;
 mod prompt_presets;
 #[path = "components/settings.rs"]
 mod settings;
+#[path = "components/state_patch_tests.rs"]
+mod state_patch;
 #[path = "components/text_check.rs"]
 mod text_check;
 #[path = "components/world.rs"]

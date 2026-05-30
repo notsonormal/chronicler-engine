@@ -107,6 +107,19 @@ This project relies on a comprehensive suite of integration tests as the ultimat
 - **No Regression**: Every change must pass `python build.py` before commit.  
   *During development*, iterate with the specific tool (e.g. `cargo clippy` for lint fixes, `cargo nextest run <pattern>` for test fixes). Run `build.py` only for final verification.
 
+### TEST FAILURE HANDLING
+
+When tests fail, you MUST:
+1. **Show the actual test output** - quote the failure message verbatim
+2. **Read the test code** - understand what the test is actually checking before explaining why it failed
+3. **Verify your assumptions** - if you claim "this test skips when X is missing", verify X is actually missing and the skip logic exists
+4. **Never rationalize failures away** - a test failure is a real signal that requires investigation, not dismissal
+5. **Investigate pre-existing test failures and flaky tests** - Even if a test seems unrelated to your changes, check it anyway, as often it is related. And even if it is unrelated, failing tests need to be fixed regardless. 
+
+If you're unsure why a test failed, say so and investigate - don't invent explanations.
+
+You should avoid **analysis paralysis**, that is, spending excessively large amounts of time trying to reason through a problem without ever coming to any conclusion or doing any action. You should read, run, update or write new tests if you are struggling to understand a problem. Or if that doesn't help, check the UI directly via the browser, or to add logging or other diagnostics in the production code.
+
 ## PLANNING REQUIREMENTS
 
 When creating or updating a plan for chronicler_engine work (via any planning skill), the plan **must** include these steps explicitly:

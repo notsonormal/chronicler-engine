@@ -5,6 +5,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::error::{EngineError, LlmFailure};
 use crate::model::character::NpcCard;
+use crate::model::message::Message;
 use crate::model::settings::AppSettings;
 use crate::model::state::GameState;
 use crate::model::state_snapshot::GameStateSnapshot;
@@ -59,6 +60,32 @@ impl GameServiceContext {
                 String::new()
             }
         }
+    }
+
+    /// Finds the anchor message for retry: the last input message, or for events
+    /// the last non-event message before the current event. Returns the anchor
+    /// index, the anchor message, and the associated snapshot id.
+    pub fn find_retry_anchor<'a>(
+        &self,
+        messages: &'a [Message],
+    ) -> Option<(usize, &'a Message, u64)> {
+        if messages.is_empty() {
+            return None;
+        }
+        let is_event = messages
+            .last()
+            .and_then(|m| m.event_header.as_ref())
+            .is_some();
+        let anchor_idx = if is_event {
+            messages.iter().rposition(|m| m.event_header.is_none())?
+        } else {
+            messages
+                .iter()
+                .rposition(|m| m.log_type == crate::model::state::LogType::Input)?
+        };
+        let anchor_msg = &messages[anchor_idx];
+        let snapshot_id = *anchor_msg.snapshot_id.as_ref()?;
+        Some((anchor_idx, anchor_msg, snapshot_id))
     }
 
     /// Panics if no snapshot exists — use only in tests where a snapshot was pre-seeded.

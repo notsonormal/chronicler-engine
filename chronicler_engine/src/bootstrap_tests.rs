@@ -214,11 +214,11 @@ fn test_validate_loaded_data_invalid_trigger_room() {
         },
         inventory: vec![],
         triggers: vec![Trigger {
-            condition: crate::model::trigger::TriggerCondition::TimesMet(
+            requirement: crate::model::trigger::TriggerRequirement::TimesMet(
                 crate::model::trigger::ComparisonOperator::Eq,
                 0,
             ),
-            effect: crate::model::trigger::TriggerEffect {
+            narration: crate::model::trigger::TriggerNarration {
                 name: "Test".to_string(),
                 narration_prompt: "Hello".to_string(),
             },

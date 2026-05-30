@@ -1,8 +1,21 @@
 # Changelog
 
-## 2026-05-29
+## 2026-05-30
 
 ### Changed
+- **Extracted `find_retry_anchor` helper to `GameServiceContext`**
+  - Added `fn find_retry_anchor<'a>(&self, messages: &'a [Message]) -> Option<(usize, &'a Message, u64)>` method
+  - Consolidates anchor-finding logic (last input or last non-event for events) previously inlined in `retry.rs`
+  - Used by `retry_last_response_impl` for retry orchestration
+  - Eliminates duplicated anchor selection logic across the application tier
+  - All 37 action_pipeline tests pass; clippy clean; build.py passes
+- **Extracted shared retry orchestration in `MessageEditingService`**
+  - Added `prepare_retry_state()` helper method consolidating shared setup logic between `retry()` and `retrigger()`
+  - Reduced ~7 lines of duplication from each method
+  - Helper returns `(GameState, was_cancelled)` tuple from snapshot save + cancel check
+  - Spawn logic intentionally left in each method since `retry_last_response` vs `retrigger_event` require different game_service calls
+  - All 19 retry/retrigger tests pass; cargo check clean
+
 - **Dedup load_state: 4 identical methods replaced with single context::load_state call**
   - Removed `fn load_state` from `application_service.rs`, `game_lifecycle.rs`, `message_editing.rs`, `query_handlers.rs`
   - Updated 12 call sites: `self.load_state(&ctx)?` → `load_state(&ctx)` (drops `?` since `context::load_state` returns `GameState` directly)

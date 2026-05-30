@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use crate::model::trigger::{
-    ComparisonOperator, NpcEncounterLog, NpcEncounterState, Trigger, TriggerCondition,
-    TriggerEffect,
+    ComparisonOperator, NpcEncounterLog, NpcEncounterState, Trigger, TriggerNarration,
+    TriggerRequirement,
 };
 
 #[test]
@@ -21,33 +21,39 @@ fn test_comparison_operator_serde() {
 }
 
 #[test]
-fn test_trigger_condition_serde() {
+fn test_trigger_requirement_serde() {
     let json = r#"{"TimesMet": ["Eq", 3]}"#;
-    let cond: TriggerCondition = serde_json::from_str(json).unwrap();
-    assert_eq!(cond, TriggerCondition::TimesMet(ComparisonOperator::Eq, 3));
+    let cond: TriggerRequirement = serde_json::from_str(json).unwrap();
+    assert_eq!(
+        cond,
+        TriggerRequirement::TimesMet(ComparisonOperator::Eq, 3)
+    );
 }
 
 #[test]
-fn test_trigger_action_serde() {
+fn test_trigger_narration_serde() {
     let json = r#"{"name": "Old Friend", "narration_prompt": "You meet an old friend."}"#;
-    let action: TriggerEffect = serde_json::from_str(json).unwrap();
-    assert_eq!(action.name, "Old Friend");
-    assert_eq!(action.narration_prompt, "You meet an old friend.");
+    let narration: TriggerNarration = serde_json::from_str(json).unwrap();
+    assert_eq!(narration.name, "Old Friend");
+    assert_eq!(narration.narration_prompt, "You meet an old friend.");
 }
 
 #[test]
 fn test_trigger_serde_without_room_id() {
     let json = r#"{
-        "condition": {"TimesMet": ["Gte", 2]},
-        "action": {"name": "Guard Recognition", "narration_prompt": "The guard recognizes you."},
+        "requirement": {"TimesMet": ["Gte", 2]},
+        "narration": {"name": "Guard Recognition", "narration_prompt": "The guard recognizes you."},
         "repeat": false
     }"#;
     let trigger: Trigger = serde_json::from_str(json).unwrap();
     assert_eq!(
-        trigger.condition,
-        TriggerCondition::TimesMet(ComparisonOperator::Gte, 2)
+        trigger.requirement,
+        TriggerRequirement::TimesMet(ComparisonOperator::Gte, 2)
     );
-    assert_eq!(trigger.effect.narration_prompt, "The guard recognizes you.");
+    assert_eq!(
+        trigger.narration.narration_prompt,
+        "The guard recognizes you."
+    );
     assert!(!trigger.repeat);
     assert_eq!(trigger.room_id, None);
 }
@@ -55,15 +61,15 @@ fn test_trigger_serde_without_room_id() {
 #[test]
 fn test_trigger_serde_with_room_id() {
     let json = r#"{
-        "condition": {"TimesMet": ["Eq", 0]},
-        "action": {"name": "Introduction", "narration_prompt": "They appear."},
+        "requirement": {"TimesMet": ["Eq", 0]},
+        "narration": {"name": "Introduction", "narration_prompt": "They appear."},
         "repeat": false,
         "room_id": "entrance_hall"
     }"#;
     let trigger: Trigger = serde_json::from_str(json).unwrap();
     assert_eq!(
-        trigger.condition,
-        TriggerCondition::TimesMet(ComparisonOperator::Eq, 0)
+        trigger.requirement,
+        TriggerRequirement::TimesMet(ComparisonOperator::Eq, 0)
     );
     assert_eq!(trigger.room_id, Some("entrance_hall".to_string()));
 }

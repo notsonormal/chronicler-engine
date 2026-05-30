@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-30 13:16 UTC*
+*Index last generated: 2026-05-30 15:29 UTC*
 
 ### Root files
 
@@ -34,6 +34,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [ADR-018: Application Service Layer](./adr/adr-018-application-service.md)
 - [ADR-019: One Table Per Storage Module](./adr/adr-019-one-table-per-storage-module.md)
 - [ADR-020: Unified Storage Struct](./adr/adr-020-storage-consolidation.md)
+- [ADR-021: State Patch Reducer for Post-Generation Agent Composition](./adr/adr-021-state-patch-reducer.md)
 
 ### `docs/architecture/`
 
@@ -64,6 +65,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ### `docs/plans/archived/`
 
 - [Implementation Plan: One Table Per Storage Module](./plans/archived/adr-019-storage-split-plan.md)
+- [Investigation Plan: AI Agent Comprehension Challenges in Chronicler Engine](./plans/archived/agent-comprehension-investigation-plan.md)
 - [Plan: Make PromptContext Require an Assembled System Prompt](./plans/archived/beast-boy-damage-colossus.md)
 - [Plan: Multi-Game Support for Chronicler Engine](./plans/archived/big-barda-nightwing-star-lord.md)
 - [Plan: Fix Swipe Code Review Issues](./plans/archived/bobbi-morse-superboy-nightwing.md)
@@ -78,6 +80,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [PromptAssembler Architecture Design Plan](./plans/archived/moon-knight-mantis-spectre.md)
 - [Plan: Complete GameState Decoupling from Server + Tests](./plans/archived/orion-vixen-shatterstar.md)
 - [Plan: Refactor `application_service.rs` God Service and De-trait Application Layer](./plans/archived/refactor-application-service-2026-05-29.md)
+- [Plan: Extract Shared Retry Orchestration in MessageEditingService](./plans/archived/refactor-message-editing-retry-2026-05-30.md)
 - [Plan: Remove Old Migrations from `src/storage/db.rs`](./plans/archived/remove-old-migrations.md)
 - [Plan: Fix Test Coverage Gaps (Test-Police Follow-up)](./plans/archived/scarlet-witch-wildcat-maxima.md)
 - [Implementation Plan: Eliminate Test Duplication (Moderate Approach)](./plans/archived/silk-power-girl-x-23.md)
@@ -96,6 +99,16 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Reference: Quantifier Prompt](./reference/quantifier_prompt.md)
 - [Reference: System Prompt](./reference/system_prompt.md)
 - [Specification: Testing Strategy and Architecture](./reference/testing.md)
+
+### `docs/reviews/agent-comprehension-investigation/`
+
+- [Agent Comprehension Investigation: Final Synthesis](./reviews/agent-comprehension-investigation/INVESTIGATION_SYNTHESIS.md)
+- [Phase 1: Vocabulary & Terminology Audit](./reviews/agent-comprehension-investigation/phase-1-vocabulary-audit.md)
+- [Phase 2: State Mutation Order Invariant Analysis](./reviews/agent-comprehension-investigation/phase-2-mutation-order.md)
+- [Phase 3: Tier Boundary Confusion Analysis](./reviews/agent-comprehension-investigation/phase-3-tier-boundaries.md)
+- [Phase 4: Documentation-Code Consistency Check](./reviews/agent-comprehension-investigation/phase-4-doc-code-consistency.md)
+- [Phase 5: Module Mental Models](./reviews/agent-comprehension-investigation/phase-5-module-mental-models.md)
+- [Phase 6: Critical Path Test Coverage](./reviews/agent-comprehension-investigation/phase-6-test-coverage.md)
 
 ### `docs/reviews/archived/`
 

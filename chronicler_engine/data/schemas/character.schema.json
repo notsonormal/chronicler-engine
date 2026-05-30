@@ -24,10 +24,10 @@
       "items": {
         "type": "object",
         "properties": {
-          "condition": {
+          "requirement": {
             "type": "object"
           },
-          "action": {
+          "narration": {
             "type": "object",
             "properties": {
               "name": { "type": "string" },
@@ -38,7 +38,7 @@
           "repeat": { "type": "boolean" },
           "room_id": { "type": ["string", "null"] }
         },
-        "required": ["condition", "action"]
+        "required": ["requirement", "narration"]
       }
     },
     "relationships": {

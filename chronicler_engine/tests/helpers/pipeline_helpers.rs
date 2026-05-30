@@ -5,7 +5,7 @@ use std::sync::Arc;
 use chronicler_engine::model::character::{CharacterSheet, NpcCard, PlayerCard};
 use chronicler_engine::model::state::{GameState, LogType};
 use chronicler_engine::model::trigger::{
-    ComparisonOperator, Trigger, TriggerCondition, TriggerEffect,
+    ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement,
 };
 use chronicler_engine::model::world::WorldCard;
 
@@ -95,10 +95,10 @@ pub fn create_test_state_with_trigger_npc() -> GameState {
         },
         inventory: vec![],
         triggers: vec![Trigger {
-            condition: TriggerCondition::TimesMet(ComparisonOperator::Eq, 0),
-            effect: TriggerEffect {
+            requirement: TriggerRequirement::TimesMet(ComparisonOperator::Eq, 0),
+            narration: TriggerNarration {
                 name: "Greeting".into(),
-                narration_prompt: "The shopkeeper looks up with a smile.".into(),
+                narration_prompt: "The shopkeeper greets you.".into(),
             },
             repeat: false,
             room_id: None,
