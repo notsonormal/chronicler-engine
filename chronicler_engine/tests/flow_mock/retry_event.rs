@@ -88,7 +88,6 @@ fn test_retry_event_continuation_preserves_quantifier_result() {
         quantifier,
     );
 
-    // Execute: quantifier runs, player moves, trigger fires
     service.execute_action(ctx.clone(), "enter shop".to_string(), "Player".to_string());
     assert!(
         wait_for_generation_complete(&ctx, 1000),
@@ -110,7 +109,6 @@ fn test_retry_event_continuation_preserves_quantifier_result() {
         "Trigger should have fired and added an Event"
     );
 
-    // Retry event continuation: room should stay the same because quantifier is NOT rerun
     service.retry_last_response(ctx.clone());
     assert!(
         wait_for_generation_complete(&ctx, 1000),
@@ -122,7 +120,6 @@ fn test_retry_event_continuation_preserves_quantifier_result() {
         "Event retry: room should be unchanged (quantifier not rerun)"
     );
 
-    // Verify LLM calls were logged to SQLite storage
     let messages = ctx.storage.list_latest_llm_messages(50).unwrap();
     assert!(
         !messages.is_empty(),

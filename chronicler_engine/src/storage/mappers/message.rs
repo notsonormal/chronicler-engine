@@ -32,7 +32,7 @@ pub fn db_message_to_model(db: &DbMessage, swipes: &[DbSwipe]) -> Result<Message
 
     let fallback_to_first = message.active_swipe_index >= message.swipes.len();
     if fallback_to_first {
-        log::warn!(
+        tracing::warn!(
             "active_swipe_index {} out of bounds for message {}, falling back to first swipe",
             message.active_swipe_index,
             message.id

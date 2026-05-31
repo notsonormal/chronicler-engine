@@ -25,7 +25,7 @@ pub(crate) fn quantify_room_with_llm_call(
 
     let (system_prompt, user_prompt) = builder.build();
 
-    log::info!(
+    tracing::info!(
         "[Quantifier] Calling backend: {} model: {} for room: {}",
         backend.name(),
         backend.model(),
@@ -45,14 +45,14 @@ pub(crate) fn quantify_room_with_llm_call(
         match backend.complete("quantifier", &system_prompt, &user_prompt, None) {
             Ok(llm_result) => {
                 let response = &llm_result.text;
-                log::info!("[Quantifier] Player action: {}", context.player_action);
-                log::info!(
+                tracing::info!("[Quantifier] Player action: {}", context.player_action);
+                tracing::info!(
                     "[Quantifier] Received response ({} chars) [attempt {}/{}]",
                     response.len(),
                     attempt,
                     max_attempts
                 );
-                log::debug!(
+                tracing::debug!(
                     "[Quantifier] Response: {}",
                     &response[..response.len().min(200)]
                 );
@@ -62,31 +62,31 @@ pub(crate) fn quantify_room_with_llm_call(
                     &known_ids,
                     context.all_rooms,
                 );
-                log::info!(
+                tracing::info!(
                     "[Quantifier] Detected NPCs: {:?} (confidence: {:?})",
                     result.npcs.npc_ids,
                     result.npcs.confidence
                 );
                 if let Some(mt) = &result.movement.movement_type {
-                    log::info!(
+                    tracing::info!(
                         "[Quantifier] Detected movement: {:?} destination: {:?}",
                         mt,
                         result.movement.destination
                     );
                 } else {
-                    log::info!("[Quantifier] No movement detected");
+                    tracing::info!("[Quantifier] No movement detected");
                 }
 
                 // Retry on Low confidence (unless this was the last attempt)
                 if result.npcs.confidence == QuantifierConfidence::Low && attempt < max_attempts {
-                    log::warn!("[Quantifier] Low confidence on attempt {attempt}, retrying...");
+                    tracing::warn!("[Quantifier] Low confidence on attempt {attempt}, retrying...");
                     continue;
                 }
 
                 return result;
             }
             Err(e) => {
-                log::warn!("[Quantifier] LLM call failed on attempt {attempt}: {e}");
+                tracing::warn!("[Quantifier] LLM call failed on attempt {attempt}: {e}");
                 last_error = Some(e.to_string());
                 if attempt < max_attempts {
                     continue;
@@ -95,7 +95,7 @@ pub(crate) fn quantify_room_with_llm_call(
         }
     }
 
-    log::warn!(
+    tracing::warn!(
         "[Quantifier] All attempts failed, using fallback NPC IDs. Last error: {}",
         last_error.as_deref().unwrap_or("unknown")
     );
@@ -109,6 +109,39 @@ pub(crate) fn quantify_room_with_llm_call(
             destination: None,
             confidence: QuantifierConfidence::Low,
         },
+    }
+}
+
+/// Process quantifier result with confidence-based branching.
+///
+/// High/Medium confidence: use dynamically quantified NPCs
+/// Low confidence: fall back to static NPCs
+fn process_quantifier_result(
+    result: QuantifierResult,
+    state: &crate::model::state::GameState,
+    room_npc_ids: &[String],
+) -> QuantifierResult {
+    match result.npcs.confidence {
+        QuantifierConfidence::High | QuantifierConfidence::Medium => {
+            tracing::info!("[Quantifier] Using dynamic NPCs: {:?}", result.npcs.npc_ids);
+            let npc_cards: Vec<crate::model::character::NpcCard> = result
+                .npcs
+                .npc_ids
+                .iter()
+                .filter_map(|id| state.npcs.get(id).cloned())
+                .collect();
+            QuantifierResult {
+                npcs: QuantifierParseResult {
+                    npc_ids: npc_cards.iter().map(|n| n.id.clone()).collect(),
+                    confidence: result.npcs.confidence,
+                },
+                movement: result.movement,
+            }
+        }
+        QuantifierConfidence::Low => {
+            tracing::info!("[Quantifier] Low confidence, using static NPCs");
+            static_npc_result(state, room_npc_ids, result.movement)
+        }
     }
 }
 
@@ -189,27 +222,5 @@ pub fn determine_npcs_in_room(
     };
 
     let result = quantify_room_with_llm_call(&context, room_npc_ids, backend);
-
-    match result.npcs.confidence {
-        QuantifierConfidence::High | QuantifierConfidence::Medium => {
-            log::info!("[Quantifier] Using dynamic NPCs: {:?}", result.npcs.npc_ids);
-            let npc_cards: Vec<crate::model::character::NpcCard> = result
-                .npcs
-                .npc_ids
-                .iter()
-                .filter_map(|id| state.npcs.get(id).cloned())
-                .collect();
-            QuantifierResult {
-                npcs: QuantifierParseResult {
-                    npc_ids: npc_cards.iter().map(|n| n.id.clone()).collect(),
-                    confidence: result.npcs.confidence,
-                },
-                movement: result.movement,
-            }
-        }
-        QuantifierConfidence::Low => {
-            log::info!("[Quantifier] Low confidence, using static NPCs");
-            static_npc_result(state, room_npc_ids, result.movement)
-        }
-    }
+    process_quantifier_result(result, state, room_npc_ids)
 }

@@ -48,23 +48,22 @@ impl StatePatch {
                     confidence: conf_b,
                 },
             ) => {
-                // Union of npc_ids, preserving first-seen order
                 let ids_b_unique: Vec<_> =
                     ids_b.into_iter().filter(|id| !ids_a.contains(id)).collect();
                 ids_a.extend(ids_b_unique);
 
-                // Keep first non-None movement_destination
                 let destination = match dest_a {
                     Some(ref d) => {
                         if let Some(ref db) = dest_b {
-                            log::warn!("Movement destination conflict: {d} vs {db}, keeping first",);
+                            tracing::warn!(
+                                "Movement destination conflict: {d} vs {db}, keeping first",
+                            );
                         }
                         Some(d.clone())
                     }
                     None => dest_b,
                 };
 
-                // Take minimum (most conservative) confidence
                 let confidence = match (conf_a, conf_b) {
                     (Confidence::High, c) => c,
                     (c, Confidence::High) => c,

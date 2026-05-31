@@ -62,22 +62,28 @@ Cross-module and browser-based tests live in the top-level `tests/` directory:
 
 ### Dependency Injection (Recommended)
 
-Pass mock backends directly to `DefaultGameService`:
+Pass mock backends directly to `DefaultGameService` and call the public `execute_action()` method:
 
 ```rust
 let service = DefaultGameService::with_mock_quantifier(
     Arc::new(MockBackend::new(None)),
     Arc::new(MockBackend::new(None)),
 );
+
+let ctx = GameServiceContext::new(/* ... */);
+service.execute_action(ctx, "look around".to_string(), "Player".to_string());
 ```
+
+**Note:** Do not call `execute_action_impl()` directly in tests — use the public `DefaultGameService::execute_action()` wrapper method instead. The `execute_action_impl()` function is an internal implementation detail of the action pipeline module.
 
 ### Pipeline-Only Mocking
 
-For tests that only need to verify pipeline behavior (narration → quantification → trigger continuation), implement the `ActionPipelineBackend` trait directly. This avoids constructing `DefaultGameService` and its full backend/registry graph:
+For tests that only need to verify pipeline behavior (narration → quantification → trigger continuation), implement the `ActionPipelineBackend` trait directly. This avoids constructing `DefaultGameService` and its full backend/registry graph. The narrow mock can then be used with the `execute_action_impl()` function from the action pipeline module:
 
 ```rust
-use chronicler_engine::application::action_pipeline::ActionPipelineBackend;
+use chronicler_engine::application::action_pipeline::{ActionPipelineBackend, execute_action_impl};
 use chronicler_engine::narrative::prompt::PromptAssembler;
+use chronicler_engine::application::context::GameServiceContext;
 
 struct NarrowMock;
 
@@ -95,6 +101,11 @@ impl ActionPipelineBackend for NarrowMock {
         // Directly set quantifier result without running real agents
     }
 }
+
+// Usage in test:
+let backend = NarrowMock;
+let ctx = GameServiceContext::new(/* ... */);
+execute_action_impl(&backend, ctx, "look".to_string(), "Player".to_string());
 ```
 
 ### Config File (`tests/test_config.json`)

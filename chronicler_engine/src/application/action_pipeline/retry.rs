@@ -1,3 +1,4 @@
+use tracing::instrument;
 use crate::application::action_pipeline::pipeline::{
     ActionOutcome, ActionPipeline, ActionPipelineBackend,
 };
@@ -6,17 +7,18 @@ use crate::model::state::{GameState, GenerationPhase, GenerationStatus, MessageT
 use std::sync::Arc;
 
 /// [DOC: docs/architecture/system.md]
+#[instrument(skip(backend, ctx))]
 pub fn retry_last_response_impl<B: ActionPipelineBackend>(backend: &B, ctx: GameServiceContext) {
     let messages = match ctx.load_messages() {
         Ok(msgs) => msgs,
         Err(e) => {
-            log::error!("Failed to load messages: {e}");
+            tracing::error!("Failed to load messages: {e}");
             return;
         }
     };
 
     let Some((anchor_idx, _anchor_msg, snapshot_id)) = ctx.find_retry_anchor(&messages) else {
-        log::error!("No anchor message found for retry");
+        tracing::error!("No anchor message found for retry");
         save_retry_error(&ctx, "Retry failed: no anchor message");
         return;
     };
@@ -44,7 +46,7 @@ pub fn retry_last_response_impl<B: ActionPipelineBackend>(backend: &B, ctx: Game
     let snapshot = match ctx.storage.load_snapshot_by_id(snapshot_id) {
         Ok(Some(s)) => s,
         Ok(None) => {
-            log::error!("No snapshot found for id {snapshot_id}");
+            tracing::error!("No snapshot found for id {snapshot_id}");
             save_retry_error(
                 &ctx,
                 format!("Retry failed: no snapshot found for id {snapshot_id}"),
@@ -52,7 +54,7 @@ pub fn retry_last_response_impl<B: ActionPipelineBackend>(backend: &B, ctx: Game
             return;
         }
         Err(e) => {
-            log::error!("Failed to load snapshot: {e}");
+            tracing::error!("Failed to load snapshot: {e}");
             save_retry_error(&ctx, format!("Retry failed: {e}"));
             return;
         }
@@ -74,7 +76,7 @@ pub fn retry_last_response_impl<B: ActionPipelineBackend>(backend: &B, ctx: Game
     let input_text = match state.narrative.history.last_input_text() {
         Some((_sender, text)) => text,
         None => {
-            log::error!("No input to retry");
+            tracing::error!("No input to retry");
             return;
         }
     };
@@ -98,7 +100,7 @@ pub(crate) fn save_retry_error(ctx: &GameServiceContext, message: impl Into<Stri
     let mut state = load_or_fresh(ctx);
     state.narrative.input_buffer.status = GenerationStatus::Error(message.into());
     if let Err(e) = save_state(ctx, &state) {
-        log::error!("Critical: failed to persist retry error state: {e}");
+        tracing::error!("Critical: failed to persist retry error state: {e}");
     }
 }
 
@@ -108,7 +110,7 @@ pub(crate) fn retry_event_continuation<B: ActionPipelineBackend>(
     state: GameState,
 ) -> ActionOutcome {
     let Some(trigger) = state.narrative.last_trigger.clone() else {
-        log::error!("Missing trigger context for event retry");
+        tracing::error!("Missing trigger context for event retry");
         save_retry_error(ctx, "Retry failed: missing trigger context");
         return ActionOutcome::Error {
             message: "Retry failed: missing trigger context".to_string(),
@@ -133,6 +135,7 @@ pub(crate) fn retry_main_narration<B: ActionPipelineBackend>(
 }
 
 /// [DOC: docs/architecture/system.md]
+#[instrument(skip(backend, ctx))]
 pub fn retrigger_event_impl<B: ActionPipelineBackend>(backend: &B, ctx: &GameServiceContext) {
     let state = load_or_fresh(ctx);
     let outcome = retry_event_continuation(backend, ctx, state);

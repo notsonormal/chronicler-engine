@@ -35,7 +35,6 @@ fn test_retry_main_narration_applies_new_quantifier_result() {
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         quantifier,
     );
-
     service.execute_action(ctx.clone(), "walk around".to_string(), "Player".to_string());
     assert!(
         wait_for_generation_complete(&ctx, 1000),
@@ -46,8 +45,8 @@ fn test_retry_main_narration_applies_new_quantifier_result() {
         guard.movement.current_room_id, "room1",
         "First execution: player should stay in room1"
     );
-
     service.retry_last_response(ctx.clone());
+
     assert!(
         wait_for_generation_complete(&ctx, 1000),
         "Retry should complete"
@@ -83,7 +82,6 @@ fn test_retry_with_different_narration_text_reruns_quantifier() {
 
     let service =
         DefaultGameService::with_mock_quantifier(llm_backend, Arc::new(MockBackend::default()));
-
     service.execute_action(
         ctx.clone(),
         "approach the innkeeper".to_string(),
@@ -106,7 +104,6 @@ fn test_retry_with_different_narration_text_reruns_quantifier() {
         "First narration should match per_call_narrations[0]"
     );
 
-    // Retry: new narration has "Innkeeper" → quantifier should detect the NPC
     service.retry_last_response(ctx.clone());
     assert!(
         wait_for_generation_complete(&ctx, 1000),
@@ -149,7 +146,6 @@ fn test_double_retry_increments_swipe_and_reruns_quantifier() {
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         quantifier,
     );
-
     service.execute_action(ctx.clone(), "walk around".to_string(), "Player".to_string());
     assert!(wait_for_generation_complete(&ctx, 1000));
     let _snap = latest_snapshot(&ctx).expect("Should have snapshot");
@@ -184,7 +180,6 @@ fn test_retry_preserves_input_and_does_not_create_extra_swipe() {
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         Arc::new(MockBackend::default()),
     );
-
     service.execute_action(ctx.clone(), "walk around".to_string(), "Player".to_string());
     assert!(
         wait_for_generation_complete(&ctx, 1000),
@@ -213,8 +208,6 @@ fn test_retry_preserves_input_and_does_not_create_extra_swipe() {
 
 #[test]
 fn test_retry_after_edited_input_uses_new_text() {
-    // Flow: Execute with "walk around" → edit input to "sprint forward" → Retry
-    // Verify retry narration references the edited text.
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
@@ -225,7 +218,6 @@ fn test_retry_after_edited_input_uses_new_text() {
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         Arc::new(MockBackend::default()),
     );
-
     service.execute_action(ctx.clone(), "walk around".to_string(), "Player".to_string());
     assert!(wait_for_generation_complete(&ctx, 1000));
 
@@ -279,7 +271,6 @@ fn test_retry_after_edited_input_uses_new_text() {
 fn test_main_retry_reevaluates_triggers() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
-    // Remove default NPCs, add a shopkeeper with a room2-scoped trigger
     let shopkeeper = NpcCard {
         id: "shopkeeper".into(),
         sheet: CharacterSheet {
@@ -322,7 +313,6 @@ fn test_main_retry_reevaluates_triggers() {
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         quantifier,
     );
-
     service.execute_action(ctx.clone(), "walk around".to_string(), "Player".to_string());
     assert!(wait_for_generation_complete(&ctx, 1000));
     let guard = latest_state(&ctx);
@@ -337,7 +327,6 @@ fn test_main_retry_reevaluates_triggers() {
         "First execution: no trigger (not in room2)"
     );
 
-    // Retry: movement to room2 → trigger should fire
     service.retry_last_response(ctx.clone());
     assert!(wait_for_generation_complete(&ctx, 1000));
     let guard = latest_state(&ctx);
@@ -355,7 +344,6 @@ fn test_main_retry_reevaluates_triggers() {
 
 #[test]
 fn test_retry_completes_when_quantifier_returns_none() {
-    // Setup: quantifier returns a result on first call, None on second.
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
@@ -374,7 +362,6 @@ fn test_retry_completes_when_quantifier_returns_none() {
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         quantifier,
     );
-
     service.execute_action(ctx.clone(), "walk around".to_string(), "Player".to_string());
     assert!(wait_for_generation_complete(&ctx, 1000));
 
@@ -453,7 +440,6 @@ fn test_retry_no_pre_main_snapshot() {
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         Arc::new(MockBackend::default()),
     );
-
     service.execute_action(
         ctx.clone(),
         "examine room".to_string(),
@@ -461,7 +447,6 @@ fn test_retry_no_pre_main_snapshot() {
     );
     assert!(wait_for_generation_complete(&ctx, 1000));
 
-    // Get the latest snapshot and state before clearing
     let snap = latest_snapshot(&ctx).expect("Should have snapshot");
     let state_before_reset = GameState::from_snapshot(
         &snap,
@@ -471,20 +456,16 @@ fn test_retry_no_pre_main_snapshot() {
         (*ctx.npcs).clone(),
     );
 
-    // Clear all snapshots (simulating missing pre-main)
     {
         let conn = db_pool.conn();
         let _ = conn.execute("DELETE FROM game_state_snapshots WHERE game_id = 1", []);
     }
-    // Re-save current state as latest so retry has something to load
     {
         save_state(&ctx, &state_before_reset);
     }
 
-    // Retry should not panic
     service.retry_last_response(ctx.clone());
 
-    // Verify state is stable (not stuck generating)
     let stable = wait_for_generation_complete(&ctx, 500);
     assert!(
         stable,
@@ -512,7 +493,6 @@ fn test_movement_with_arrival_narration_retry() {
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         quantifier,
     );
-
     service.execute_action(
         ctx.clone(),
         "walk to room2".to_string(),
@@ -564,7 +544,6 @@ fn test_retry_appends_swipe_to_existing_narration() {
 
     let service =
         DefaultGameService::with_mock_quantifier(llm_backend, Arc::new(MockBackend::default()));
-
     service.execute_action(
         ctx.clone(),
         "examine room".to_string(),

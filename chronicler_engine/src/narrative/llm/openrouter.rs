@@ -59,7 +59,7 @@ impl LlmBackend for OpenRouterBackend {
         _trigger_prompt: &str,
         max_tokens: Option<u32>,
     ) -> Result<LlmCallResult, EngineError> {
-        log::info!("[LLM] Generating continuation narration");
+        tracing::info!("[LLM] Generating continuation narration");
 
         Ok(self.wrap_and_save(
             agent_name,
@@ -74,7 +74,7 @@ impl LlmBackend for OpenRouterBackend {
         user_prompt: &str,
         max_tokens: Option<u32>,
     ) -> Result<LlmCallResult, EngineError> {
-        log::info!("[LLM] Generating action from prompt");
+        tracing::info!("[LLM] Generating action from prompt");
 
         Ok(self.wrap_and_save(
             agent_name,

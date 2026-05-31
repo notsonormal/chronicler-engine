@@ -554,7 +554,7 @@ pub fn load_or_fresh(ctx: &GameServiceContext) -> GameState {
     match try_load_state(ctx) {
         Ok(s) => s,
         Err(e) => {
-            log::warn!("State load failed ({e}), returning fresh state");
+            tracing::warn!("State load failed ({e}), returning fresh state");
             GameState::new(...)
         }
     }

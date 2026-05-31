@@ -26,9 +26,61 @@ pub struct TurnResult {
     pub narration: String,
     pub trigger_match: Option<TriggerMatch>,
 }
-/// Request type for trigger continuation narration.
-pub struct TriggerContinuationRequest {
-    pub stored: StoredTriggerContext,
+
+/// Attempts movement to a destination, creating a dynamic room on failure.
+///
+/// Returns Ok(state) in both success and error cases — errors result in dynamic room creation.
+pub fn attempt_movement(state: GameState, destination: &str) -> Result<GameState, EngineError> {
+    // [DOC: docs/architecture/system.md]
+    let mut state = state;
+    match attempt_semantic_walk(&mut state, destination) {
+        Ok(_) => Ok(state),
+        Err(e) => {
+            tracing::debug!("Semantic walk failed for '{destination}': {e}");
+            let dynamic_room =
+                create_dynamic_room(destination, "A place you have never seen before.");
+            state.add_message(
+                format!("[System] Entered unknown location: {}", dynamic_room.id),
+                None,
+                MessageType::System,
+            );
+            state
+                .movement
+                .dynamic_rooms
+                .insert(dynamic_room.id.clone(), dynamic_room.clone());
+            state.movement.current_room_id = dynamic_room.id.clone();
+            Ok(state)
+        }
+    }
+}
+
+/// Updates NPC encounter log if room changed.
+///
+/// Pure function — no I/O or logging.
+pub fn update_npc_encounters_on_room_change(
+    mut state: GameState,
+    previous_room_id: &str,
+    new_npc_ids: &[String],
+) -> GameState {
+    // [DOC: docs/architecture/system.md]
+    if previous_room_id != state.movement.current_room_id {
+        for npc_id in new_npc_ids {
+            set_currently_meeting(&mut state.npc_encounter_log, npc_id, true);
+        }
+    }
+    state
+}
+
+/// Updates narrative state after movement completion.
+///
+/// Pure function — sets pending location based on current room.
+pub fn log_movement_completion(state: GameState) -> GameState {
+    // [DOC: docs/architecture/system.md]
+    let mut state = state;
+    if let Some(current_room) = state.current_room() {
+        state.narrative.pending_location = Some(current_room.name.clone());
+    }
+    state
 }
 
 /// [DOC: docs/architecture/system.md]
@@ -37,37 +89,15 @@ pub fn handle_movement(
     destination: Option<&str>,
     new_npc_ids: &[String],
 ) -> Result<GameState, EngineError> {
-    let Some(trigger) = destination else {
+    let Some(destination) = destination else {
         return Ok(state);
     };
 
-    let mut state = state;
     let previous_room_id = state.movement.current_room_id.clone();
 
-    if let Err(e) = attempt_semantic_walk(&mut state, trigger) {
-        log::debug!("Semantic walk failed for '{trigger}': {e}");
-        let dynamic_room = create_dynamic_room(trigger, "A place you have never seen before.");
-        state.add_message(
-            format!("[System] Entered unknown location: {}", dynamic_room.id),
-            None,
-            MessageType::System,
-        );
-        state
-            .movement
-            .dynamic_rooms
-            .insert(dynamic_room.id.clone(), dynamic_room.clone());
-        state.movement.current_room_id = dynamic_room.id.clone();
-    }
-
-    if previous_room_id != state.movement.current_room_id {
-        for npc_id in new_npc_ids {
-            set_currently_meeting(&mut state.npc_encounter_log, npc_id, true);
-        }
-    }
-
-    if let Some(current_room) = state.current_room() {
-        state.narrative.pending_location = Some(current_room.name.clone());
-    }
+    let state = attempt_movement(state, destination)?;
+    let state = update_npc_encounters_on_room_change(state, &previous_room_id, new_npc_ids);
+    let state = log_movement_completion(state);
 
     assert_state_consistency(&state)?;
     Ok(state)
@@ -96,7 +126,7 @@ pub fn apply_npc_events(state: GameState, events: &[NpcEvent]) -> Result<GameSta
 // [DOC: docs/architecture/system.md]
 pub fn commit_trigger_narration(
     state: GameState,
-    request: &TriggerContinuationRequest,
+    trigger: &StoredTriggerContext,
     continuation_text: &str,
 ) -> Result<GameState, EngineError> {
     // [DOC: docs/architecture/system.md]
@@ -104,14 +134,14 @@ pub fn commit_trigger_narration(
         return Ok(state);
     }
     let mut state = state;
-    state.narrative.last_trigger = Some(request.stored.clone());
-    state.narrative.pending_event = Some(request.stored.trigger_name.clone());
+    state.narrative.last_trigger = Some(trigger.clone());
+    state.narrative.pending_event = Some(trigger.trigger_name.clone());
     state.add_message(continuation_text.to_string(), None, MessageType::Narration);
-    if !request.stored.trigger_repeat {
+    if !trigger.trigger_repeat {
         mark_trigger_fired(
             &mut state.npc_encounter_log,
-            &request.stored.npc_id,
-            request.stored.trigger_idx,
+            &trigger.npc_id,
+            trigger.trigger_idx,
         );
     }
 

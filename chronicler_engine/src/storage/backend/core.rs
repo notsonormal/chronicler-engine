@@ -274,7 +274,7 @@ impl Storage {
                     "UPDATE games SET updated_at = ?1 WHERE id = ?2",
                     rusqlite::params![&now, game_id as i64],
                 ) {
-                    log::error!("Failed to update games.updated_at for game {game_id}: {e}");
+                    tracing::error!("Failed to update games.updated_at for game {game_id}: {e}");
                 }
             }
             drop(backend);

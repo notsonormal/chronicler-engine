@@ -10,7 +10,7 @@ Contains pure data structures, serialization schemas, and the "Single Source of 
 - **`world`**: Setting lore, global rules, and starting scenarios.
 - **`map`**: Room/Region hierarchy and cardinal direction definitions.
 - **`character`**: NPC attributes (name, description, personality, scenario, **profile_image**, **headshot_image**) and Player inventory. `inventory` lives on `PlayerCard`/`NpcCard`, not on the shared `CharacterSheet`.
-- **`state`**: The `GameState` aggregation, narration history logs, and TUI state. `NarrativeState` holds a `MessageHistory` which encapsulates `Vec<Message>` where each `Message` is an independent narrative unit (input, narration, dialogue, or system). Each `Message` carries a `swipes: Vec<Swipe>` set — alternate generations preserved during retry, with `active_swipe_index` selecting the currently displayed version. `LogEntry` remains the atomic rendering unit for templates and prompts, now carrying `swipe_count` and `active_swipe_index` for swipe control rendering. `StoredTriggerContext` enables replaying trigger continuations on retry or retrigger. `LogEntry` carries optional `location_header` and `event_header` metadata for visual rendering; `NarrativeState` tracks `pending_location` and `pending_event` for consumption by the next `add_log` call. `GameState::current_room()` resolves the player's active room from the map or dynamic rooms.
+- **`state`**: The `GameState` aggregation, narration history logs, and TUI state. `NarrativeState` holds a `MessageHistory` which encapsulates `Vec<Message>` where each `Message` is an independent narrative unit (input, narration, dialogue, or system). Each `Message` carries a `swipes: Vec<Swipe>` set — alternate generations preserved during retry, with `active_swipe_index` selecting the currently displayed version. `LogEntry` remains the atomic rendering unit for templates and prompts, now carrying `swipe_count` and `active_swipe_index` for swipe control rendering. `StoredTriggerContext` enables replaying trigger continuations on retry or retrigger. `LogEntry` carries optional `location_header` and `event_header` metadata for visual rendering; `NarrativeState` tracks `last_trigger_id` for retrigger capability.
 - **`scenario`**: Starting scenario definitions for narrative introductions.
 - **`trigger`**: Trigger definitions, conditions, and NPC encounter tracking (`Trigger`, `TriggerCondition`, `TriggerEffect`, `NpcEncounterState`, `NpcEncounterLog`).
 - **`settings`**: `AppSettings`, `Connection`, and agent configuration data models.
@@ -26,7 +26,7 @@ Contains the mechanics that drive the simulation. It translates user intent and 
 - **`action`**: The `Action` enum defining all supported system intents.
 - **`logic`**: Rules for movement, fuzzy-matching, and room resolution.
 - **`trigger_eval`**: Pure function evaluation of NPC triggers based on character state and room location (`evaluate_triggers(state) -> Vec<(NpcCard, Trigger, usize)>`). Triggers with `room_id` only fire in that room.
-- **`action_processing`**: Extracted pure functions for server handlers (`handle_movement`, `apply_npc_events`, `commit_trigger_narration`, `execute_freeaction_impl`). `execute_freeaction_impl` evaluates triggers before applying NPC events and returns `TriggerMatch` data for the application tier to build continuation prompts. Enables unit testing of server-side logic.
+- **`action_processing`**: Pure functions for movement and narrative state updates. `attempt_movement` handles semantic walk with dynamic room creation on failure. `update_npc_encounters_on_room_change` updates NPC meeting state when room changes. `log_movement_completion` sets pending location. `handle_movement` composes these helpers linearly. `execute_freeaction_impl` evaluates triggers before applying NPC events and returns `TriggerMatch` data for the application tier to build continuation prompts. Enables unit testing of server-side logic.
 - **`state_diagnostics`**: Runtime invariant checks (`INV-ROOM`, `INV-NPC`, `INV-CHAR`, `INV-LOG`), feature-flagged via `diagnostics` feature.
 
 ### 2.5. The Application Tier (`crate::application::*`)
@@ -42,12 +42,12 @@ Orchestration layer that coordinates game flow, persistence, and LLM generation.
   - `pipeline.rs`: `ActionPipelineBackend` trait (narrow seam: `assembler()`, `complete`, `run_post_generation_agents`) and `ActionPipeline<'a, B>` generic over the trait. Encapsulates the full FreeAction pipeline (narrate → quantify → triggers → event continuation) with explicit phase methods. Used by both normal action handling (`run_from_input`) and retry logic (`run_trigger_continuation`). Checks `CancellationToken::is_cancelled()` at stage boundaries and aborts gracefully via `handle_cancellation()` to avoid wasted LLM calls on stale requests.
   - `actions.rs`: Thin dispatch layer — `execute_action_impl` creates `ActionPipeline` and delegates to `run_from_input`.
   - `retry.rs`: Retry-specific setup (anchor finding, message deletion, snapshot loading) delegates continuation regeneration to `ActionPipeline::run_trigger_continuation()` and main narration retry to `ActionPipeline::run_from_input()`.
-- **`game_service`**: Service boundary — `DefaultGameService` struct with inherent methods (`execute_action`, `retry_last_response`, `retrigger_event`). Implements `ActionPipelineBackend` trait to wire internal backends to the pipeline seam.
+- **`game_service`**: `DefaultGameService` struct implements `ActionPipelineBackend` trait and exposes public methods `execute_action(ctx, input, player_name)` and `retry_last_response(ctx)`. These wrap the internal `execute_action_impl()` and `retry_last_response_impl()` functions from the `action_pipeline` module. External callers use the `DefaultGameService` methods; only the `ActionPipeline` internals call the impl functions directly.
 - **`application_service`**: Thin orchestrator struct (`DefaultApplicationService`) delegating to submodules. Contains `process_action` entry point and `GenerationGuard` RAII helper.
 
 ### 3. The Narrative Tier (`crate::narrative::*`)
 The interface between the synchronous engine and stochastic LLM generation.
-- **`llm`**: Directory module with traits (`LlmBackend`) and per-provider implementations (OpenRouter, DeepSeek stub, Ollama, Mock) for Game Master narration. The `LlmBackend` trait exposes transport primitives: `model()`, `name()`, `save_message()`, `wrap_and_save()`, `narrate_continuation()`, `complete()`. Backend-specific preprocessing (`preprocess_user_text`) and postprocessing (`postprocess_response_text`) hooks allow model-specific hacks (e.g., Gemma 4 thinking suffix, response sanitization) to live in the provider modules instead of the generic HTTP client.
+- **`llm`**: Directory module with traits (`LlmBackend`) and per-provider implementations (OpenRouter, DeepSeek, Ollama, Mock) for Game Master narration. The `LlmBackend` trait exposes transport primitives: `model()`, `name()`, `save_message()`, `wrap_and_save()`, `narrate_continuation()`, `complete()`. Backend-specific preprocessing (`preprocess_user_text`) and postprocessing (`postprocess_response_text`) hooks allow model-specific hacks (e.g., Gemma 4 thinking suffix, response sanitization) to live in the provider modules instead of the generic HTTP client.
   - **`get_llm_backend_for(connection, storage, settings)`**: Create a backend for a specific `Connection` profile. Settings are passed in — no file I/O inside the backend.
   - **`DefaultGameService::with_storage(storage, settings)`**: Production constructor that receives pre-loaded settings.
   - **`DefaultGameService::with_backends(llm, registry)`**: Constructor for dependency-injecting mock backends and agent registry in tests. No globals, no file I/O, fully isolated.
@@ -64,7 +64,7 @@ The interface between the synchronous engine and stochastic LLM generation.
   - **`HarperBackend`**: Wraps harper-core with curated + user dictionaries
   - **`check_player_input()`**: Facade that returns `Option<CheckResult>` based on `TextCheckMode`
   - **`CheckResult`/`CheckIssue`**: Structured lint results with byte spans and suggestions
-- **`llm_client`**: HTTP client helpers for OpenRouter and Ollama.
+- **`llm_client`**: Directory module (`mod.rs`, `request.rs`, `response.rs`, `client.rs`) with composable pure functions: `build_request_payload()`, `configure_request()`, `extract_content_from_response()`, `handle_response()`, and the main `call_chat_completions()` orchestration. Backend implementations live in `narrative/llm/` directory.
 
 #### NPC Event Layer
 
@@ -179,9 +179,7 @@ SQLite-based persistence for game state and LLM call forensics.
   - `messages` — narrative history, scoped to `game_id` (`id`, `game_id`, `sender`, `log_type`, `timestamp`, `active_swipe_index`, `is_deleted`)
   - `message_swipes` — per-message swipe versions (`id`, `message_id`, `swipe_index`, `text`, `snapshot_id`, `location_header`, `event_header`), cascades on message delete
   - `llm_messages` — LLM API call logging (not game-scoped)
-- **`models`**: Database row structs (`DbGame`, `DbGameStateSnapshot`, `DbMessage`, `DbSwipe`, `DbLlmMessage`) — one per table, using raw SQLite types.
-- **`mappers`**: Conversion logic between DB models and domain models (`TryFrom`/`From` impls and free functions for context-dependent mapping).
-- **`backend`**: Unified `Storage` struct with `Backend` enum (`Sqlite`, `InMemory`, `Test`). All table-scoped methods live on `Storage` — no traits, no per-table repository structs. `Backend::Test` supports dynamic failure injection via `Operation` enum + `TestOverride`. Cross-table coordination (load full messages, update swipe text, save message + snapshot atomically) lives in `GameServiceContext` helpers.
+- **Storage structure**: Unified `Storage` struct with `Backend` enum (`Sqlite`, `InMemory`, `Test`). All table operations are methods on `Storage` — no repository structs, no separate `models` or `mappers` submodules. Database row structs defined inline in module files. Module contains: `mod.rs`, `db.rs` (schema + operations), plus test files.
 - **`GameStateSnapshot`**: Serializable subset of `GameState` for persistence (messages excluded; hydrated separately). Lives in `crate::model::state_snapshot`.
 
 ### 8. The Bootstrap Tier (`crate::bootstrap`)
@@ -199,8 +197,9 @@ Command-line argument parsing via `clap`.
 
 ### 10. The Test Support Tier (`crate::test_support`)
 Shared test fixtures and utilities.
-- **`fixtures`**: `TestGameState`, `TestNpc`, `TestMap`, etc.
-- **`context`**: Test context helpers
+- **`fixtures`**: Test GameState, Npc, Map helpers
+- **`context`**: Test context builders
+- **`forensics`**: `ForensicsCollector` for capturing tracing spans/events on test failure with automatic JSON serialization and sensitive field redaction
 - **`test_app_builder`**: Fluent test app builder API
 
 > **Note:** `assets/` contains static web assets (`index.html`) served by the server. It is not a Rust module tier.
@@ -224,7 +223,6 @@ The following concerns are documented in dedicated `docs/system/` files. Those a
 | Navigation and movement resolution | [`system/navigation.md`](../system/navigation.md) |
 | Narration engine and Game Master logic | [`system/narration_engine.md`](../system/narration_engine.md) |
 | LLM call logging and forensics | [`system/llm_processing.md`](../system/llm_processing.md) |
-
 | Dynamic room creation, fallback behavior | [`system/dynamic_rooms.md`](../system/dynamic_rooms.md) |
 ## Error Strategy
 

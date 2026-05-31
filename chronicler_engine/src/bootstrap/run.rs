@@ -64,7 +64,7 @@ impl ArrivalTaskContext {
         }) {
             Ok(s) => s,
             Err(e) => {
-                log::warn!("Failed to load snapshot in spawn ({e}), starting fresh");
+                tracing::warn!("Failed to load snapshot in spawn ({e}), starting fresh");
                 GameState::new(
                     Arc::clone(&self.world),
                     Arc::clone(&self.map),
@@ -149,7 +149,7 @@ impl ArrivalTaskContext {
             if let Err(e) = self.storage.save_snapshot(
                 &crate::model::state_snapshot::GameStateSnapshot::from_game_state(&state),
             ) {
-                log::error!("Failed to save arrival snapshot: {e}");
+                tracing::error!("Failed to save arrival snapshot: {e}");
             }
         }
     }
@@ -167,7 +167,7 @@ pub fn run(args: Args) -> crate::error::Result<()> {
     let (manifest, map, player, npcs) = initialize_world_from_manifest(&args.world, &data_dir)?;
 
     if let Err(e) = validate_loaded_data(&manifest, &map, &player, &npcs) {
-        log::error!("Data validation failed for world '{}':\n{}", args.world, e);
+        tracing::error!("Data validation failed for world '{}':\n{}", args.world, e);
         eprintln!("Data validation failed for world '{}':\n{}", args.world, e);
         std::process::exit(1);
     }
@@ -186,12 +186,12 @@ pub fn run(args: Args) -> crate::error::Result<()> {
     let db_pool = crate::storage::db::DbPool::new(db_path.to_str().unwrap_or("chronicler.db"))?;
 
     if let Err(e) = ensure_defaults(&db_pool, &data_dir) {
-        log::warn!("Failed to seed prompt presets: {e}");
+        tracing::warn!("Failed to seed prompt presets: {e}");
     }
 
     let active_game_id = match find_latest_game_for_world(&db_pool, &manifest.name)? {
         Some((id, name)) => {
-            log::info!("Loaded existing game '{name}' (id={id})");
+            tracing::info!("Loaded existing game '{name}' (id={id})");
             id
         }
         None => {
@@ -205,7 +205,7 @@ pub fn run(args: Args) -> crate::error::Result<()> {
             )
             .map_err(|e| crate::error::EngineError::Config(format!("Failed to create game: {e}")))?;
             let id = conn.last_insert_rowid() as u64;
-            log::info!("Created new game '{name}' (id={id})");
+            tracing::info!("Created new game '{name}' (id={id})");
             id
         }
     };
@@ -389,7 +389,7 @@ pub(crate) fn ensure_defaults(
     for preset_type in [PresetType::System, PresetType::Quantifier] {
         let dir = data_dir.join("prompt_presets").join(preset_type.as_str());
         if !dir.exists() {
-            log::info!("Prompt preset seed directory not found: {}", dir.display());
+            tracing::info!("Prompt preset seed directory not found: {}", dir.display());
             continue;
         }
 
@@ -433,13 +433,13 @@ pub(crate) fn ensure_defaults(
                         || existing.output_format.is_some();
                     if !has_content {
                         storage.save_preset(&preset)?;
-                        log::info!("Updated {} prompt preset: {}", preset_type.as_str(), id);
+                        tracing::info!("Updated {} prompt preset: {}", preset_type.as_str(), id);
                     }
                 }
                 continue;
             }
             storage.save_preset(&preset)?;
-            log::info!("Seeded {} prompt preset: {}", preset_type.as_str(), id);
+            tracing::info!("Seeded {} prompt preset: {}", preset_type.as_str(), id);
         }
     }
 

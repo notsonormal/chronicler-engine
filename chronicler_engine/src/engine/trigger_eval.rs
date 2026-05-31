@@ -1,7 +1,6 @@
 use crate::model::character::NpcCard;
 use crate::model::state::GameState;
 use crate::model::trigger::{ComparisonOperator, NpcEncounterLog, Trigger, TriggerRequirement};
-
 /// [DOC: docs/system/triggers.md]
 pub fn evaluate_triggers(state: &GameState) -> Vec<(NpcCard, Trigger, usize)> {
     let current_room_id = &state.movement.current_room_id;
@@ -12,32 +11,37 @@ pub fn evaluate_triggers(state: &GameState) -> Vec<(NpcCard, Trigger, usize)> {
         for (index, trigger) in npc.triggers.iter().enumerate() {
             if let Some(room_id) = &trigger.room_id {
                 if room_id != current_room_id {
-                    log::debug!(
-                        "[Trigger] '{}' skipped: room_id mismatch (expected '{}', current '{}')",
-                        trigger.narration.name,
-                        room_id,
-                        current_room_id
+                    tracing::debug!(
+                        npc_id = %npc.id,
+                        trigger = %trigger.narration.name,
+                        reason = "room_mismatch",
+                        "Trigger skipped"
                     );
                     continue;
                 }
             }
 
-            if check_condition(&state.npc_encounter_log, &npc.id, &trigger.requirement) {
-                if !trigger.repeat && is_trigger_fired(&state.npc_encounter_log, &npc.id, index) {
-                    log::debug!(
-                        "[Trigger] '{}' skipped: already fired (non-repeatable)",
-                        trigger.narration.name
-                    );
-                    continue;
-                }
-                results.push((npc.clone(), trigger.clone(), index));
-            } else {
-                log::debug!(
-                    "[Trigger] '{}' skipped: condition not met for NPC '{}'",
-                    trigger.narration.name,
-                    npc.id
+            if !check_condition(&state.npc_encounter_log, &npc.id, &trigger.requirement) {
+                tracing::debug!(
+                    npc_id = %npc.id,
+                    trigger = %trigger.narration.name,
+                    reason = "condition_not_met",
+                    "Trigger skipped"
                 );
+                continue;
             }
+
+            if !trigger.repeat && is_trigger_fired(&state.npc_encounter_log, &npc.id, index) {
+                tracing::debug!(
+                    npc_id = %npc.id,
+                    trigger = %trigger.narration.name,
+                    reason = "already_fired",
+                    "Trigger skipped"
+                );
+                continue;
+            }
+
+            results.push((npc.clone(), trigger.clone(), index));
         }
     }
 

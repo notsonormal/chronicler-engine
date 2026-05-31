@@ -10,7 +10,6 @@ use chronicler_engine::test_support::make_test_context;
 use crate::backends::*;
 use crate::{BenchmarkResult, DiagnosticScores, print_benchmark_result, run_scenario};
 
-// Scenario 1: LLM HTTP 401 Unauthorized
 
 #[test]
 fn benchmark_llm_http_401() {
@@ -54,7 +53,6 @@ fn benchmark_llm_http_401() {
     );
 }
 
-// Scenario 2: LLM HTTP 429 Rate Limited
 
 #[test]
 fn benchmark_llm_http_429() {
@@ -89,7 +87,6 @@ fn benchmark_llm_http_429() {
     print_benchmark_result(&result);
 }
 
-// Scenario 3: LLM Network Error (Ollama down)
 
 #[test]
 fn benchmark_llm_network_error() {
@@ -132,7 +129,6 @@ fn benchmark_llm_network_error() {
     print_benchmark_result(&result);
 }
 
-// Scenario 4: LLM Parse Error (non-JSON response)
 
 #[test]
 fn benchmark_llm_parse_error() {
@@ -184,7 +180,6 @@ fn benchmark_llm_parse_error() {
     print_benchmark_result(&result);
 }
 
-// Scenario 5: LLM Timeout
 
 #[test]
 fn benchmark_llm_timeout() {
@@ -231,7 +226,6 @@ fn benchmark_llm_timeout() {
     print_benchmark_result(&result);
 }
 
-// Scenario 6: Empty LLM Response
 
 #[test]
 fn benchmark_llm_empty_response() {
@@ -266,7 +260,6 @@ fn benchmark_llm_empty_response() {
     print_benchmark_result(&result);
 }
 
-// Scenario 7: Quantifier Complete Failure
 
 #[test]
 fn benchmark_quantifier_complete_failure() {
@@ -318,7 +311,6 @@ fn benchmark_quantifier_complete_failure() {
     );
 }
 
-// Scenario 8: Quantifier Low Confidence
 
 #[test]
 fn benchmark_quantifier_low_confidence() {
@@ -369,7 +361,6 @@ fn benchmark_quantifier_low_confidence() {
     print_benchmark_result(&result);
 }
 
-// Scenario 9: Dynamic Room Creation (navigation bug)
 
 #[test]
 fn benchmark_dynamic_room_creation() {
@@ -423,7 +414,6 @@ fn benchmark_dynamic_room_creation() {
     assert!(is_dynamic, "Failed room resolution creates a dynamic room");
 }
 
-// Scenario 10: Narrative Generation Failure (MockBackend failing)
 
 #[test]
 fn benchmark_narrative_generation_failure() {
@@ -461,7 +451,6 @@ fn benchmark_narrative_generation_failure() {
     print_benchmark_result(&result);
 }
 
-// Scenario 11: Trigger Not Firing (wrong room_id)
 
 #[test]
 fn benchmark_trigger_wrong_room_id() {
@@ -547,7 +536,6 @@ fn benchmark_trigger_wrong_room_id() {
     assert!(!trigger_fired, "Trigger with wrong room_id should not fire");
 }
 
-// Scenario 12: State Stuck in Generating (mid-pipeline failure)
 
 #[test]
 fn benchmark_state_stuck_generating() {

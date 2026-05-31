@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-31 10:44 UTC*
+*Index last generated: 2026-05-31 16:09 UTC*
 
 ### Root files
 
@@ -67,7 +67,10 @@ This folder contains all documentation for the Chronicler Engine project.
 
 ### `docs/plans/archived/`
 
+- [Refactor handle_movement: Split Mixed Responsibilities](./plans/archived/handle-movement-refactor-2026-05-31.md)
 - [Plan: Observability & Automated Forensics](./plans/archived/observability-and-forensics-plan-2026-05-31.md)
+- [Remove Identity Wrapper Functions from GameService](./plans/archived/remove-identity-wrapper-functions-2026-05-31.md)
+- [Remove Thin Abstraction TriggerContinuationRequest](./plans/archived/remove-trigger-continuation-request-2026-05-31.md)
 
 ### `docs/reference/`
 
@@ -78,9 +81,14 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Reference: System Prompt](./reference/system_prompt.md)
 - [Specification: Testing Strategy and Architecture](./reference/testing.md)
 
+### `docs/reports/`
+
+- [Documentation Consistency Report](./reports/docs-consistency-2026-05-31.md)
+
 ### `docs/reviews/`
 
 - [Architectural Review: AI Agent Comprehension Challenges](./reviews/agent-comprehension-review.md)
+- [Documentation Consistency Report](./reviews/docs-consistency-report.md)
 
 ### `docs/reviews/archived/`
 

@@ -1,5 +1,4 @@
-//! [DOC: docs/reference/testing.md]
-
+/// [DOC: docs/reference/testing.md]
 mod test_data;
 
 #[path = "helpers/pipeline_helpers.rs"]

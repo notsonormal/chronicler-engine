@@ -23,18 +23,6 @@ impl DefaultGameService {
         Self::with_storage(None, None, Arc::new(RwLock::new(AppSettings::default())))
     }
 
-    pub fn execute_action(&self, ctx: GameServiceContext, input: String, player_name: String) {
-        crate::application::action_pipeline::execute_action_impl(self, ctx, input, player_name);
-    }
-
-    pub fn retry_last_response(&self, ctx: GameServiceContext) {
-        crate::application::action_pipeline::retry_last_response_impl(self, ctx);
-    }
-
-    pub fn retrigger_event(&self, ctx: GameServiceContext) {
-        crate::application::action_pipeline::retrigger_event_impl(self, &ctx);
-    }
-
     pub fn with_storage(
         storage: Option<Arc<Storage>>,
         preset_storage: Option<Arc<Storage>>,
@@ -96,6 +84,16 @@ impl DefaultGameService {
             agent_registry: registry,
         }
     }
+
+    /// Execute a player action through the action pipeline.
+    pub fn execute_action(&self, ctx: GameServiceContext, input: String, player_name: String) {
+        crate::application::action_pipeline::execute_action_impl(self, ctx, input, player_name)
+    }
+
+    /// Retry the last response.
+    pub fn retry_last_response(&self, ctx: GameServiceContext) {
+        crate::application::action_pipeline::retry_last_response_impl(self, ctx)
+    }
 }
 
 impl Default for DefaultGameService {
@@ -141,7 +139,7 @@ impl ActionPipelineBackend for DefaultGameService {
                 Ok(AgentResult::StatePatch(patch)) => Some(patch),
                 Ok(AgentResult::NoOp) | Ok(AgentResult::PromptDirective(_)) => None,
                 Err(e) => {
-                    log::warn!("Agent {} failed: {e}", agent.name());
+                    tracing::warn!("Agent {} failed: {e}", agent.name());
                     None
                 }
             })

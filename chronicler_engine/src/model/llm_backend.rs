@@ -17,7 +17,7 @@ impl From<&str> for LlmBackendType {
             "mock" => LlmBackendType::Mock,
             "ollama" => LlmBackendType::Ollama,
             _ => {
-                log::warn!("Unknown LLM backend '{s}', defaulting to Mock");
+                tracing::warn!("Unknown LLM backend '{s}', defaulting to Mock");
                 LlmBackendType::Mock
             }
         }
