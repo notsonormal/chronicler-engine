@@ -1,4 +1,6 @@
 #![allow(clippy::uninlined_format_args)]
+
+
 #![allow(dead_code)]
 
 #[path = "diagnostic/backends.rs"]
