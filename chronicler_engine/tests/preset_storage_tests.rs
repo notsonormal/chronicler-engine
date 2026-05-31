@@ -83,10 +83,15 @@ fn test_list_presets_ordered_by_updated_at_desc() {
     let storage = create_storage();
     let first = make_system_preset("first", "First");
     storage.save_preset(&first).unwrap();
-    std::thread::sleep(std::time::Duration::from_millis(10));
+    // NOTE: Sleeps are intentional and unavoidable here. This test verifies
+    // that presets are ordered by updated_at DESC. SQLite stores timestamps with
+    // millisecond precision, so we need explicit delays to ensure distinct timestamps.
+    // This is a legitimate use of sleep in tests - verifying time-based ordering.
+    // Save with explicit time gaps to ensure ordering by updated_at
+    std::thread::sleep(std::time::Duration::from_millis(15));
     let second = make_system_preset("second", "Second");
     storage.save_preset(&second).unwrap();
-    std::thread::sleep(std::time::Duration::from_millis(10));
+    std::thread::sleep(std::time::Duration::from_millis(15));
     let third = make_system_preset("third", "Third");
     storage.save_preset(&third).unwrap();
 

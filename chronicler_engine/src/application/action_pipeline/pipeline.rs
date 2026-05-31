@@ -62,10 +62,7 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
 
     /// [DOC: docs/architecture/system.md]
     pub fn run_from_input(&self, state: GameState, input: String) -> ActionOutcome {
-        tracing::info!(
-            "[DEBUG] run_from_input: entered, status={:?}",
-            state.narrative.input_buffer.status
-        );
+        tracing::debug!("run_from_input: entered");
         tracing::debug!("run_from_input: called");
         let world = Arc::clone(&state.world);
         let map = Arc::clone(&state.map);
@@ -74,10 +71,7 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
 
         let mut state = match self.phase_pre_main_snapshot(state) {
             Ok(s) => {
-                tracing::info!(
-                    "[DEBUG] phase_pre_main_snapshot: done, status={:?}",
-                    s.narrative.input_buffer.status
-                );
+                tracing::debug!("phase_pre_main_snapshot: completed");
                 s
             }
             Err(outcome) => return outcome,
@@ -86,11 +80,7 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
         let (narration_text, backend_name, model_name) =
             match self.phase_narrate(&state, &input, &world, &map, &player, &all_npcs) {
                 Ok((text, backend, model)) => {
-                    tracing::info!(
-                        "[DEBUG] phase_narrate: done, text_len={}, status={:?}",
-                        text.len(),
-                        state.narrative.input_buffer.status
-                    );
+                    tracing::debug!("phase_narrate: completed");
                     (text, backend, model)
                 }
                 Err(outcome) => return outcome,
@@ -160,15 +150,7 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
             }
         }
 
-        tracing::info!(
-            "[DEBUG] before phase_finalize: next_state status={:?}",
-            next_state.narrative.input_buffer.status
-        );
         self.phase_finalize(&mut next_state);
-        tracing::info!(
-            "[DEBUG] after phase_finalize: status={:?}",
-            next_state.narrative.input_buffer.status
-        );
         tracing::debug!("run_from_input: done");
         ActionOutcome::Completed
     }

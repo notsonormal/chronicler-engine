@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use chronicler_engine::application::game_service::DefaultGameService;
-use chronicler_engine::application::action_pipeline::{execute_action_impl, retry_last_response_impl};
 use chronicler_engine::model::state::MessageType;
 use chronicler_engine::narrative::llm::MockBackend;
 use chronicler_engine::test_support::make_test_context_with_sqlite;
@@ -13,7 +12,6 @@ use crate::pipeline_helpers::{
 
 #[test]
 fn test_sequential_execute_retry_execute() {
-    // Flow: Action A → Retry A → Action B → Verify history order and state consistency
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
@@ -22,10 +20,8 @@ fn test_sequential_execute_retry_execute() {
         Arc::new(MockBackend::default()),
     );
 
-    // Step 1: Action A
     add_input_and_save(&ctx, "examine room");
-    execute_action_impl(
-        &service,
+    service.execute_action(
         ctx.clone(),
         "examine room".to_string(),
         "Player".to_string(),
@@ -35,21 +31,14 @@ fn test_sequential_execute_retry_execute() {
         "Action A should complete"
     );
 
-    // Step 2: Retry A
-    retry_last_response_impl(&service, ctx.clone());
+    service.retry_last_response(ctx.clone());
     assert!(
         wait_for_generation_complete(&ctx, 1000),
         "Retry A should complete"
     );
 
-    // Step 3: Action B
     add_input_and_save(&ctx, "look around");
-    execute_action_impl(
-        &service,
-        ctx.clone(),
-        "look around".to_string(),
-        "Player".to_string(),
-    );
+    service.execute_action(ctx.clone(), "look around".to_string(), "Player".to_string());
     assert!(
         wait_for_generation_complete(&ctx, 1000),
         "Action B should complete"
@@ -75,7 +64,6 @@ fn test_sequential_execute_retry_execute() {
         "Should have narrations from both actions"
     );
 
-    // Verify LLM calls were logged to SQLite storage
     let messages = ctx.storage.list_latest_llm_messages(50).unwrap();
     assert!(
         !messages.is_empty(),
@@ -85,7 +73,6 @@ fn test_sequential_execute_retry_execute() {
 
 #[test]
 fn test_sequential_execute_delete_execute() {
-    // Flow: Action A → Delete A's narration → Action B → Verify clean state
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
@@ -94,10 +81,8 @@ fn test_sequential_execute_delete_execute() {
         Arc::new(MockBackend::default()),
     );
 
-    // Step 1: Action A
     add_input_and_save(&ctx, "examine room");
-    execute_action_impl(
-        &service,
+    service.execute_action(
         ctx.clone(),
         "examine room".to_string(),
         "Player".to_string(),
@@ -116,21 +101,14 @@ fn test_sequential_execute_delete_execute() {
         .map(|e| e.id)
         .expect("Should have a narration entry");
 
-    // Step 2: Delete the narration
     {
         let mut state = latest_state(&ctx);
         state.narrative.history.retain(|m| m.id != narration_id);
         save_state(&ctx, &state);
     }
 
-    // Step 3: Action B
     add_input_and_save(&ctx, "look around");
-    execute_action_impl(
-        &service,
-        ctx.clone(),
-        "look around".to_string(),
-        "Player".to_string(),
-    );
+    service.execute_action(ctx.clone(), "look around".to_string(), "Player".to_string());
     assert!(
         wait_for_generation_complete(&ctx, 1000),
         "Action B should complete"
@@ -150,8 +128,6 @@ fn test_sequential_execute_delete_execute() {
 
 #[test]
 fn test_async_action_sequence_then_retry() {
-    // Flow: async action A → async action B → retry
-    // Verify sequential async actions and retry work correctly.
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
@@ -161,28 +137,19 @@ fn test_async_action_sequence_then_retry() {
         Arc::new(MockBackend::default()),
     );
 
-    // Step 1: Async action A
     add_input_and_save(&ctx, "hello");
-    execute_action_impl(
-        &service,
-        ctx.clone(),
-        "hello".to_string(),
-        "Player".to_string(),
-    );
+    service.execute_action(ctx.clone(), "hello".to_string(), "Player".to_string());
     assert!(wait_for_generation_complete(&ctx, 1000));
 
-    // Step 2: Async action B
     add_input_and_save(&ctx, "examine room");
-    execute_action_impl(
-        &service,
+    service.execute_action(
         ctx.clone(),
         "examine room".to_string(),
         "Player".to_string(),
     );
     assert!(wait_for_generation_complete(&ctx, 1000));
 
-    // Step 3: Retry
-    retry_last_response_impl(&service, ctx.clone());
+    service.retry_last_response(ctx.clone());
     assert!(wait_for_generation_complete(&ctx, 1000));
 
     let guard = latest_state(&ctx);
@@ -197,7 +164,6 @@ fn test_async_action_sequence_then_retry() {
 
 #[test]
 fn test_three_actions_in_sequence() {
-    // Flow: Action A → Action B → Action C
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
@@ -209,12 +175,7 @@ fn test_three_actions_in_sequence() {
 
     for action in ["examine room", "look around", "check inventory"] {
         add_input_and_save(&ctx, action);
-        execute_action_impl(
-            &service,
-            ctx.clone(),
-            action.to_string(),
-            "Player".to_string(),
-        );
+        service.execute_action(ctx.clone(), action.to_string(), "Player".to_string());
         assert!(
             wait_for_generation_complete(&ctx, 1000),
             "Action '{action}' should complete"
@@ -244,8 +205,6 @@ fn test_three_actions_in_sequence() {
 
 #[test]
 fn test_delete_input_then_retry_fails_gracefully() {
-    // Flow: Execute → delete input → Retry
-    // Retry should find no input and fail gracefully.
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
@@ -257,23 +216,20 @@ fn test_delete_input_then_retry_fails_gracefully() {
         Arc::new(MockBackend::default()),
     );
 
-    execute_action_impl(
-        &service,
+    service.execute_action(
         ctx.clone(),
         "examine room".to_string(),
         "Player".to_string(),
     );
     assert!(wait_for_generation_complete(&ctx, 1000));
 
-    // Delete the input entry
     {
         let mut state = latest_state(&ctx);
         state.narrative.history.clear();
         save_state(&ctx, &state);
     }
 
-    // Retry should not panic or hang
-    retry_last_response_impl(&service, ctx.clone());
+    service.retry_last_response(ctx.clone());
     let guard = latest_state(&ctx);
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
@@ -283,7 +239,6 @@ fn test_delete_input_then_retry_fails_gracefully() {
 
 #[test]
 fn test_reset_clears_history_and_state() {
-    // Flow: Execute action with movement → Reset → verify back to initial state
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
@@ -303,8 +258,7 @@ fn test_reset_clears_history_and_state() {
         quantifier,
     );
 
-    execute_action_impl(
-        &service,
+    service.execute_action(
         ctx.clone(),
         "walk to room2".to_string(),
         "Player".to_string(),
@@ -314,7 +268,6 @@ fn test_reset_clears_history_and_state() {
     assert_eq!(guard.movement.current_room_id, "room2");
     assert!(!guard.narrative.history().is_empty());
 
-    // Reset: create fresh initial state
     let fresh_state = create_test_state_with_map();
     save_state(&ctx, &fresh_state);
 
@@ -331,7 +284,6 @@ fn test_reset_clears_history_and_state() {
 
 #[test]
 fn test_reset_then_execute_works() {
-    // Flow: Execute → Reset → Execute again
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
@@ -341,28 +293,19 @@ fn test_reset_then_execute_works() {
         Arc::new(MockBackend::default()),
     );
 
-    // First action
     add_input_and_save(&ctx, "examine room");
-    execute_action_impl(
-        &service,
+    service.execute_action(
         ctx.clone(),
         "examine room".to_string(),
         "Player".to_string(),
     );
     assert!(wait_for_generation_complete(&ctx, 1000));
 
-    // Reset
     let fresh_state = create_test_state_with_map();
     save_state(&ctx, &fresh_state);
 
-    // Second action after reset
     add_input_and_save(&ctx, "look around");
-    execute_action_impl(
-        &service,
-        ctx.clone(),
-        "look around".to_string(),
-        "Player".to_string(),
-    );
+    service.execute_action(ctx.clone(), "look around".to_string(), "Player".to_string());
     assert!(
         wait_for_generation_complete(&ctx, 1000),
         "Action after reset should complete"
@@ -384,7 +327,6 @@ fn test_reset_then_execute_works() {
 
 #[test]
 fn test_delete_mid_sequence() {
-    // Flow: Action A → Action B → delete B's narration → Action C
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
@@ -394,24 +336,16 @@ fn test_delete_mid_sequence() {
         Arc::new(MockBackend::default()),
     );
 
-    // Action A
     add_input_and_save(&ctx, "examine room");
-    execute_action_impl(
-        &service,
+    service.execute_action(
         ctx.clone(),
         "examine room".to_string(),
         "Player".to_string(),
     );
     assert!(wait_for_generation_complete(&ctx, 1000));
 
-    // Action B
     add_input_and_save(&ctx, "look around");
-    execute_action_impl(
-        &service,
-        ctx.clone(),
-        "look around".to_string(),
-        "Player".to_string(),
-    );
+    service.execute_action(ctx.clone(), "look around".to_string(), "Player".to_string());
     assert!(wait_for_generation_complete(&ctx, 1000));
 
     let guard = latest_state(&ctx);
@@ -424,21 +358,14 @@ fn test_delete_mid_sequence() {
         .map(|e| e.id)
         .expect("Should have narration B");
 
-    // Delete B's narration
     {
         let mut state = latest_state(&ctx);
         state.narrative.history.retain(|m| m.id != narration_b_id);
         save_state(&ctx, &state);
     }
 
-    // Action C
     add_input_and_save(&ctx, "check door");
-    execute_action_impl(
-        &service,
-        ctx.clone(),
-        "check door".to_string(),
-        "Player".to_string(),
-    );
+    service.execute_action(ctx.clone(), "check door".to_string(), "Player".to_string());
     assert!(wait_for_generation_complete(&ctx, 1000));
 
     let guard = latest_state(&ctx);

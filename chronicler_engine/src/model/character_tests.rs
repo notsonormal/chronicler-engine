@@ -166,3 +166,33 @@ fn test_npc_card_relationships_default_empty() {
     let npc: NpcCard = serde_json::from_str(json).unwrap();
     assert!(npc.relationships.is_empty());
 }
+#[test]
+fn test_relationship_display_text_uses_dynamic_when_present() {
+    use crate::model::character::Relationship;
+    let rel = Relationship {
+        with: "NPC1".to_string(),
+        static_text: "Static description".to_string(),
+        dynamic: "Dynamic update".to_string(),
+    };
+    assert_eq!(rel.display_text(), "Dynamic update");
+}
+#[test]
+fn test_relationship_display_text_fallback_to_static() {
+    use crate::model::character::Relationship;
+    let rel = Relationship {
+        with: "NPC2".to_string(),
+        static_text: "Static description".to_string(),
+        dynamic: String::new(),
+    };
+    assert_eq!(rel.display_text(), "Static description");
+}
+#[test]
+fn test_relationship_display_text_both_empty() {
+    use crate::model::character::Relationship;
+    let rel = Relationship {
+        with: "NPC3".to_string(),
+        static_text: String::new(),
+        dynamic: String::new(),
+    };
+    assert_eq!(rel.display_text(), "");
+}

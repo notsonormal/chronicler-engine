@@ -141,10 +141,11 @@ The engine uses [`tracing`](https://tracing.rs) for structured runtime diagnosti
   - `call_chat_completions` — tracks HTTP request/response lifecycle
   - `handle_response` — tracks response parsing and error handling
   - `parse_chat_response` — tracks JSON parsing and content extraction
-**Game Service** (`src/application/action_pipeline/actions.rs`, `retry.rs`):
-- `execute_action_impl` — top-level action entry point
-- `retry_last_response_impl` — retry orchestration
-- `retrigger_event_impl` — event retriggering
+**Game Service** (`src/application/action_pipeline/actions.rs`, `retry.rs`, `pipeline.rs`):
+- `ActionPipeline::run_from_input()` — main pipeline entry from player input
+- `ActionPipeline::run_trigger_continuation()` — retry/retrigger continuation
+- `ActionPipeline::phase_*` methods — granular phase execution with debug-level tracing
+- Pipeline checks `CancellationToken::is_cancelled()` at stage boundaries and emits `tracing::debug!` events on phase transitions (not info-level, to reduce noise)
 
 #### Forensics Collector
 
