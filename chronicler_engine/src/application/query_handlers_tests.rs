@@ -18,9 +18,8 @@ fn minimal_state() -> GameState {
 fn minimal_ctx() -> GameServiceContext {
     let state = minimal_state();
     let storage = Arc::new(Storage::new_in_memory());
-    let _ = storage.save_snapshot(
-        &crate::model::state_snapshot::GameStateSnapshot::from_game_state(&state)
-    );
+    let _ = storage
+        .save_snapshot(&crate::model::state_snapshot::GameStateSnapshot::from_game_state(&state));
     GameServiceContext {
         storage,
         world: state.world.clone(),

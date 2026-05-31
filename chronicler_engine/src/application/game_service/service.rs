@@ -289,7 +289,11 @@ mod tests {
             "start".to_string(),
         ));
         let history_len_before = state.load_messages().unwrap().len();
-        service.execute_action(state.clone(), "test input".to_string(), "Player".to_string());
+        service.execute_action(
+            state.clone(),
+            "test input".to_string(),
+            "Player".to_string(),
+        );
         let history_len_after = state.load_messages().unwrap().len();
         assert!(history_len_after >= history_len_before);
     }
