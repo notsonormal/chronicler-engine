@@ -37,10 +37,7 @@ pub fn init_logging() -> tracing_appender::non_blocking::WorkerGuard {
     };
 
     let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
-    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|e| {
-        eprintln!("EnvFilter parse error: {e}, falling back to debug");
-        EnvFilter::new("debug")
-    });
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
 
     tracing_subscriber::registry()
         .with(env_filter)

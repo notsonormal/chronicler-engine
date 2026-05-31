@@ -75,8 +75,17 @@ impl Connection {
     }
 
     /// Resolve the API key for this connection.
+    /// Checks stored value first, then falls back to OPENROUTER_API_KEY env var for OpenRouter/DeepSeek.
     pub fn resolve_api_key(&self) -> Option<String> {
-        self.api_key.clone()
+        if let Some(key) = &self.api_key {
+            return Some(key.clone());
+        }
+        match self.provider {
+            LlmBackendType::OpenRouter | LlmBackendType::DeepSeek => {
+                std::env::var("OPENROUTER_API_KEY").ok()
+            }
+            LlmBackendType::Ollama | LlmBackendType::Mock => None,
+        }
     }
 
     /// Resolve the base URL for this connection.

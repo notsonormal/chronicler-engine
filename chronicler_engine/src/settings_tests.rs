@@ -181,7 +181,14 @@ fn test_connection_resolve_api_key() {
         api_key: None,
         ..conn
     };
-    // When api_key is None, returns None (env resolution moved to bootstrap)
+    // When api_key is None, checks OPENROUTER_API_KEY env var
+    unsafe {
+        std::env::set_var("OPENROUTER_API_KEY", "env-key");
+    }
+    assert_eq!(conn_no_key.resolve_api_key(), Some("env-key".into()));
+    unsafe {
+        std::env::remove_var("OPENROUTER_API_KEY");
+    }
     assert_eq!(conn_no_key.resolve_api_key(), None);
 }
 
