@@ -113,12 +113,6 @@ fn test_inv002_state_mutation_order() {
         "INV-002: narration should be logged before trigger-related entries"
     );
 }
-/// Demonstrates the INV-002 violation: if `apply_npc_events` runs BEFORE
-/// `evaluate_triggers`, the `TimesMet Eq 0` trigger fails to fire because
-/// `times_met` is already 1 when the condition is checked.
-///
-/// This test does NOT run through `execute_freeaction_impl` — it calls the
-/// functions directly in the WRONG order to prove the behavioral difference.
 #[test]
 fn test_inv002_violation_demo() {
     let state = create_test_state_with_trigger_npc();
@@ -390,4 +384,52 @@ fn test_inv007_dynamic_room_creation_on_invalid_destination() {
             .any(|m| m.text.contains("Entered unknown location")),
         "INV-007: system message should mention 'Entered unknown location'"
     );
+}
+#[test]
+fn test_inv002_mutation_order_property() {
+    use proptest::prelude::*;
+
+    proptest!(|(narration_text in "\\PC{10,100}", has_npc in any::<bool>())| {
+        // Create fresh state for each iteration
+        let state = create_test_state_with_trigger_npc();
+        let npc_id = "shopkeeper";
+
+        // NPC appears if has_npc is true
+        let npc_ids = if has_npc { vec![npc_id.to_string()] } else { vec![] };
+
+        let quantifier = QuantifierResult {
+            npcs: QuantifierParseResult {
+                npc_ids,
+                confidence: QuantifierConfidence::High,
+            },
+            movement: MovementParseResult::default(),
+        };
+
+        let result = execute_freeaction_impl(
+            &state,
+            &FreeActionContext {
+                narration_text: &narration_text,
+                quantifier_result: &quantifier,
+            },
+        ).expect("execute_freeaction_impl should succeed");
+
+        // Invariant 1: narration added to history
+        let history = &result.next_state.narrative.history;
+        let search_len = 20.min(narration_text.chars().count());
+        let search_text: String = narration_text.chars().take(search_len).collect();
+        let has_narration = history.iter().any(|e| {
+            e.message_type == MessageType::Narration && e.text().contains(&search_text)
+        });
+        prop_assert!(has_narration, "narration should be in history");
+
+        // Invariant 2: if NPC present, trigger fires on first encounter
+        if has_npc {
+            prop_assert!(result.trigger_match.is_some(), "trigger should fire when NPC appears");
+            prop_assert_eq!(
+                get_times_met(&result.next_state.npc_encounter_log, npc_id),
+                1,
+                "times_met should be 1 after apply_npc_events"
+            );
+        }
+    });
 }

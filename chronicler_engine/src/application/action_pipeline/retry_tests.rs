@@ -79,7 +79,6 @@ fn save_pre_event(ctx: &GameServiceContext) -> u64 {
     ctx.storage.save_snapshot(&snapshot).unwrap()
 }
 
-
 #[test]
 fn test_retry_no_snapshot() {
     let state = make_test_state();
@@ -158,7 +157,6 @@ fn test_retry_event_with_no_pre_event_and_no_input() {
 
     retry_last_response_impl(&service, ctx);
 }
-
 
 #[test]
 fn test_retry_event_storage_error_on_pre_event() {
@@ -349,7 +347,6 @@ fn test_retry_event_empty_continuation_text() {
 
     retry_last_response_impl(&service, ctx);
 }
-
 
 #[test]
 fn test_retry_main_no_pre_main_snapshot() {

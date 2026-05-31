@@ -9,8 +9,10 @@ Machine-checkable statements about engine runtime behavior. Violations indicate 
 - **Test:** `tests/invariant_contract_tests.rs::test_inv001_generation_status_resets_on_panic`
 
 ### INV-002: State Mutation Order
-`execute_freeaction_impl` applies mutations in order: world-state → npcs_in_area → narration → triggers → NPC events.
+`execute_freeaction_impl` applies mutations in order: handle_movement → resolve NPCs → add_log → evaluate_triggers → apply_npc_events. Violations compile but break silently.
 - **Test:** `tests/invariant_contract_tests.rs::test_inv002_state_mutation_order`
+- **Test:** `tests/invariant_contract_tests.rs::test_inv002_mutation_order_property` (proptest)
+- **Checklist:** `docs/architecture/mutation-order.md`
 
 ## Concurrency
 
