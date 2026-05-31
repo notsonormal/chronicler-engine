@@ -1,9 +1,6 @@
 #![allow(clippy::uninlined_format_args)]
 
-//! Diagnostic Signal Quality Benchmark
-//!
-//! Run via: cargo nextest run --test diagnostic --no-capture
-//! Or via: python scripts/diagnostic_benchmark.py
+//! Diagnostic signal quality benchmark.
 
 #![allow(dead_code)]
 

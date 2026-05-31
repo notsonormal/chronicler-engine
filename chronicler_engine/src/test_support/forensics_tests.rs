@@ -1,4 +1,3 @@
-//! Unit tests for the forensics collector public API.
 
 use crate::test_support::forensics::ForensicsCollector;
 

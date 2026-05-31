@@ -26,7 +26,7 @@ Contains the mechanics that drive the simulation. It translates user intent and 
 - **`action`**: The `Action` enum defining all supported system intents.
 - **`logic`**: Rules for movement, fuzzy-matching, and room resolution.
 - **`trigger_eval`**: Pure function evaluation of NPC triggers based on character state and room location (`evaluate_triggers(state) -> Vec<(NpcCard, Trigger, usize)>`). Triggers with `room_id` only fire in that room.
-- **`action_processing`**: Extracted pure functions for server handlers (`handle_movement`, `apply_npc_events`, `commit_trigger_narration`, `execute_freeaction_impl`). `execute_freeaction_impl` evaluates triggers before applying NPC events and returns `TriggerMatch` data for the application tier to build continuation prompts. Enables unit testing of server-side logic.
+- **`action_processing`**: Pure functions for movement and narrative state updates. `attempt_movement` handles semantic walk with dynamic room creation on failure. `update_npc_encounters_on_room_change` updates NPC meeting state when room changes. `log_movement_completion` sets pending location. `handle_movement` composes these helpers linearly. `execute_freeaction_impl` evaluates triggers before applying NPC events and returns `TriggerMatch` data for the application tier to build continuation prompts. Enables unit testing of server-side logic.
 - **`state_diagnostics`**: Runtime invariant checks (`INV-ROOM`, `INV-NPC`, `INV-CHAR`, `INV-LOG`), feature-flagged via `diagnostics` feature.
 
 ### 2.5. The Application Tier (`crate::application::*`)
@@ -64,7 +64,7 @@ The interface between the synchronous engine and stochastic LLM generation.
   - **`HarperBackend`**: Wraps harper-core with curated + user dictionaries
   - **`check_player_input()`**: Facade that returns `Option<CheckResult>` based on `TextCheckMode`
   - **`CheckResult`/`CheckIssue`**: Structured lint results with byte spans and suggestions
-- **`llm_client`**: HTTP client helpers for OpenRouter and Ollama.
+  - **`llm_client`**: HTTP client helpers refactored into composable pure functions: `build_request_payload()` (JSON construction), `configure_request()` (request building), `handle_response()` (response parsing), orchestrated by `call_chat_completions()` (≤30 lines of clear happy-path code).
 
 #### NPC Event Layer
 

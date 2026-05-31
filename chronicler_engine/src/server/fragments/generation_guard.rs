@@ -9,7 +9,7 @@ pub struct GenerationGuard(pub Arc<AtomicBool>);
 
 impl Drop for GenerationGuard {
     fn drop(&mut self) {
-        log::debug!("GenerationGuard: dropping, setting is_generating to false");
+        tracing::debug!("GenerationGuard: dropping, setting is_generating to false");
         self.0.store(false, Ordering::SeqCst);
     }
 }

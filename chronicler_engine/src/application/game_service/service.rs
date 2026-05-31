@@ -128,7 +128,7 @@ impl ActionPipelineBackend for DefaultGameService {
                 Ok(AgentResult::StatePatch(patch)) => Some(patch),
                 Ok(AgentResult::NoOp) | Ok(AgentResult::PromptDirective(_)) => None,
                 Err(e) => {
-                    log::warn!("Agent {} failed: {e}", agent.name());
+                    tracing::warn!("Agent {} failed: {e}", agent.name());
                     None
                 }
             })

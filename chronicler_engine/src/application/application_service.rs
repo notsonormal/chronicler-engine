@@ -119,19 +119,19 @@ impl DefaultApplicationService {
             crate::model::state::MessageType::Input,
         );
 
-        log::debug!("process_action: attempting to set is_generating=true");
+        tracing::debug!("process_action: attempting to set is_generating=true");
         let was_generating = ctx.is_generating.load(Ordering::SeqCst);
-        log::debug!("process_action: is_generating before CAS = {was_generating}",);
+        tracing::debug!("process_action: is_generating before CAS = {was_generating}",);
 
         if ctx
             .is_generating
             .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
             .is_err()
         {
-            log::debug!("process_action: CAS failed, returning ConcurrentGeneration");
+            tracing::debug!("process_action: CAS failed, returning ConcurrentGeneration");
             return Ok(ProcessActionResult::ConcurrentGeneration);
         }
-        log::debug!("process_action: CAS succeeded, is_generating now true");
+        tracing::debug!("process_action: CAS succeeded, is_generating now true");
 
         game_state.narrative.input_buffer.status = GenerationStatus::Generating;
         game_state.narrative.input_buffer.phase = GenerationPhase::Narrating;
@@ -139,37 +139,37 @@ impl DefaultApplicationService {
         if let Err(e) =
             crate::application::game_service::save_message_and_snapshot(&ctx, &mut game_state)
         {
-            log::debug!(
+            tracing::debug!(
                 "process_action: save failed, setting is_generating=false and returning error"
             );
             ctx.is_generating.store(false, Ordering::SeqCst);
             return Err(e);
         }
-        log::debug!("process_action: state saved, spawning blocking task");
+        tracing::debug!("process_action: state saved, spawning blocking task");
 
         if ctx.cancel_token.is_cancelled() {
             let mut gs = load_or_fresh(&ctx);
             gs.narrative.input_buffer.status = GenerationStatus::Idle;
             let snapshot = GameStateSnapshot::from_game_state(&gs);
             if let Err(e) = ctx.storage.save_snapshot(&snapshot) {
-                log::error!("Failed to save shutdown snapshot: {e}");
+                tracing::error!("Failed to save shutdown snapshot: {e}");
             }
             return Ok(ProcessActionResult::ShuttingDown);
         }
-        log::info!("[DEBUG] process_action: spawning blocking task");
+        tracing::info!("[DEBUG] process_action: spawning blocking task");
         let game_service = Arc::clone(&self.game_service);
         let ctx_clone = ctx.clone();
         // [DOC: docs/architecture/invariants.md#INV-004]
         tokio::task::spawn_blocking(move || {
-            log::info!("[DEBUG] spawn_blocking: task started");
+            tracing::info!("[DEBUG] spawn_blocking: task started");
             let _guard = GenerationGuard(Arc::clone(&ctx_clone.is_generating));
             if ctx_clone.cancel_token.is_cancelled() {
-                log::info!("[DEBUG] spawn_blocking: cancelled before execute_action");
+                tracing::info!("[DEBUG] spawn_blocking: cancelled before execute_action");
                 return;
             }
             // [DOC: docs/architecture/invariants.md#INV-004]
             execute_action_impl(&*game_service, ctx_clone, input, player_name);
-            log::info!("[DEBUG] spawn_blocking: execute_action completed");
+            tracing::info!("[DEBUG] spawn_blocking: execute_action completed");
         });
         Ok(ProcessActionResult::Started)
     }

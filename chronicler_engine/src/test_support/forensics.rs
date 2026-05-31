@@ -1,8 +1,4 @@
-//! Forensics collector for capturing diagnostic data on test failures.
-//!
-//! This module provides a tracing subscriber that buffers spans and events,
-//! then writes them to JSON files when a test fails. Sensitive fields are
-//! automatically redacted.
+//! Forensics collector for test failure diagnostics.
 
 use std::collections::HashMap;
 use std::fs;

@@ -41,7 +41,6 @@ impl GameServiceContext {
         self.storage.update_swipe_text(id, index, text)
     }
 
-    /// Quantifier presets do not include global rules or response length.
     pub fn active_quantifier_prompt(&self) -> String {
         let preset_id = {
             let settings = self.settings.read().unwrap_or_else(|e| e.into_inner());
@@ -50,20 +49,18 @@ impl GameServiceContext {
         match self.preset_storage.get_preset(&preset_id) {
             Ok(Some(preset)) => preset.assemble_prompt_text(&[], None),
             Ok(None) => {
-                log::error!(
+                tracing::error!(
                     "active quantifier preset '{preset_id}' not found — defaults not seeded?"
                 );
                 String::new()
             }
             Err(e) => {
-                log::error!("preset storage inaccessible: {e}");
+                tracing::error!("preset storage inaccessible: {e}");
                 String::new()
             }
         }
     }
 
-    /// Finds the anchor message for retry: the last input message, or for events
-    /// the last non-event message before the current event. Returns the anchor
     /// index, the anchor message, and the associated snapshot id.
     pub fn find_retry_anchor<'a>(
         &self,
@@ -88,7 +85,6 @@ impl GameServiceContext {
         Some((anchor_idx, anchor_msg, snapshot_id))
     }
 
-    /// Panics if no snapshot exists — use only in tests where a snapshot was pre-seeded.
     #[cfg(test)]
     pub fn load_state_for_test(&self) -> GameState {
         let snapshot = match self.storage.load_latest_snapshot() {
@@ -158,7 +154,7 @@ pub fn load_or_fresh(ctx: &GameServiceContext) -> GameState {
     match load_expecting_valid_state(ctx) {
         Ok(state) => state,
         Err(e) => {
-            log::error!(
+            tracing::error!(
                 "Failed to load game state ({e}), falling back to fresh state. This may indicate data corruption."
             );
             GameState::new(
@@ -185,9 +181,6 @@ pub fn save_state(ctx: &GameServiceContext, state: &GameState) -> Result<u64, En
     ctx.storage.save_snapshot(&snapshot)
 }
 
-/// Save a snapshot and persist the most recent unpersisted message.
-/// Because messages are persisted immediately, there is typically
-/// only one unpersisted message at a time.
 /// [DOC: docs/architecture/system.md]
 pub fn save_message_and_snapshot(
     ctx: &GameServiceContext,

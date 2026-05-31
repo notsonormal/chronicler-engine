@@ -233,7 +233,7 @@ impl AppState {
             .read()
             .map(|g| g.clone())
             .unwrap_or_else(|p| {
-                log::warn!("Poisoned cancel_token read lock recovered");
+                tracing::warn!("Poisoned cancel_token read lock recovered");
                 p.into_inner().clone()
             })
     }
@@ -241,7 +241,7 @@ impl AppState {
     /// If the lock is poisoned, recovers the inner value before replacing.
     pub fn replace_cancel_token(&self) {
         let mut token = self.cancel_token.write().unwrap_or_else(|p| {
-            log::warn!("Poisoned cancel_token write lock recovered");
+            tracing::warn!("Poisoned cancel_token write lock recovered");
             p.into_inner()
         });
         *token = CancellationToken::new();
@@ -250,7 +250,7 @@ impl AppState {
     /// If the lock is poisoned, recovers the inner value.
     pub fn settings(&self) -> AppSettings {
         self.settings.read().map(|g| g.clone()).unwrap_or_else(|p| {
-            log::warn!("Poisoned settings read lock recovered");
+            tracing::warn!("Poisoned settings read lock recovered");
             p.into_inner().clone()
         })
     }
@@ -293,16 +293,16 @@ pub async fn run_server_with_config(
         EngineError::Config(format!("Failed to bind to port {}: {}", config.port, e))
     })?;
 
-    log::info!("HTMX Dashboard running at http://127.0.0.1:{}", config.port);
+    tracing::info!("HTMX Dashboard running at http://127.0.0.1:{}", config.port);
 
     let shutdown_signal = async move {
         let _ = tokio::signal::ctrl_c().await;
-        log::info!("Shutdown signal received, cancelling in-flight tasks...");
+        tracing::info!("Shutdown signal received, cancelling in-flight tasks...");
         let token = cancel_token_arc
             .read()
             .map(|g| g.clone())
             .unwrap_or_else(|p| {
-                log::warn!("Poisoned cancel_token read lock recovered during shutdown");
+                tracing::warn!("Poisoned cancel_token read lock recovered during shutdown");
                 p.into_inner().clone()
             });
         token.cancel();
@@ -319,9 +319,9 @@ async fn bind_with_retry(addr: &str) -> std::io::Result<tokio::net::TcpListener>
         match tokio::net::TcpListener::bind(addr).await {
             Ok(listener) => return Ok(listener),
             Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
-                log::error!("Port in use, attempting to free it...");
+                tracing::error!("Port in use, attempting to free it...");
                 if let Some(pid) = find_process_on_port(addr) {
-                    log::error!("Found process on port, attempting to kill PID {pid}...");
+                    tracing::error!("Found process on port, attempting to kill PID {pid}...");
                     let _ = kill_process(pid);
                     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
                     continue;
@@ -330,7 +330,7 @@ async fn bind_with_retry(addr: &str) -> std::io::Result<tokio::net::TcpListener>
                 tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
             }
             Err(e) => {
-                log::error!("Bind error: {e:?}");
+                tracing::error!("Bind error: {e:?}");
                 return Err(e);
             }
         }

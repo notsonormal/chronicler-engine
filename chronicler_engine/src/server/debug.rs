@@ -31,7 +31,7 @@ pub async fn debug_state_handler(
     {
         Ok(v) => v,
         Err(_) => {
-            log::error!("State load failed during /debug/state request");
+            tracing::error!("State load failed during /debug/state request");
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     };

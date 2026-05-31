@@ -1,7 +1,6 @@
 use crate::model::character::NpcCard;
 use crate::model::state::GameState;
 use crate::model::trigger::{ComparisonOperator, NpcEncounterLog, Trigger, TriggerRequirement};
-
 /// [DOC: docs/system/triggers.md]
 pub fn evaluate_triggers(state: &GameState) -> Vec<(NpcCard, Trigger, usize)> {
     let current_room_id = &state.movement.current_room_id;
@@ -12,7 +11,7 @@ pub fn evaluate_triggers(state: &GameState) -> Vec<(NpcCard, Trigger, usize)> {
         for (index, trigger) in npc.triggers.iter().enumerate() {
             if let Some(room_id) = &trigger.room_id {
                 if room_id != current_room_id {
-                    log::debug!(
+                    tracing::debug!(
                         "[Trigger] '{}' skipped: room_id mismatch (expected '{}', current '{}')",
                         trigger.narration.name,
                         room_id,
@@ -24,7 +23,7 @@ pub fn evaluate_triggers(state: &GameState) -> Vec<(NpcCard, Trigger, usize)> {
 
             if check_condition(&state.npc_encounter_log, &npc.id, &trigger.requirement) {
                 if !trigger.repeat && is_trigger_fired(&state.npc_encounter_log, &npc.id, index) {
-                    log::debug!(
+                    tracing::debug!(
                         "[Trigger] '{}' skipped: already fired (non-repeatable)",
                         trigger.narration.name
                     );
@@ -32,7 +31,7 @@ pub fn evaluate_triggers(state: &GameState) -> Vec<(NpcCard, Trigger, usize)> {
                 }
                 results.push((npc.clone(), trigger.clone(), index));
             } else {
-                log::debug!(
+                tracing::debug!(
                     "[Trigger] '{}' skipped: condition not met for NPC '{}'",
                     trigger.narration.name,
                     npc.id

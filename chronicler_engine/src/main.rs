@@ -12,7 +12,7 @@ use chronicler_engine::cli::parse_args;
 
 fn main() -> chronicler_engine::Result<()> {
     dotenv::dotenv().ok();
-    init_logging();
+    let _guard = init_logging();
     let args = parse_args();
     run(args)
 }
