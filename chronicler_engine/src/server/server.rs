@@ -8,7 +8,7 @@ use super::router::build_router;
 use super::port_utils::bind_with_retry;
 
 /// Starts the HTTP server with the given configuration and resources.
-/// 
+///
 /// [DOC: docs/architecture/system.md]
 pub async fn run_server_with_config(
     resources: ServerResources,
@@ -23,19 +23,25 @@ pub async fn run_server_with_config(
         npcs: resources.npcs,
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         settings: Arc::clone(&resources.settings),
-        game_service: Arc::new(crate::application::game_service::DefaultGameService::with_storage(
-            Some(Arc::clone(&resources.storage)),
-            Some(Arc::clone(&resources.preset_storage)),
-            Arc::clone(&resources.settings),
-        )),
-        application_service: Arc::new(crate::application::application_service::DefaultApplicationService::new(Arc::new(
+        game_service: Arc::new(
             crate::application::game_service::DefaultGameService::with_storage(
                 Some(Arc::clone(&resources.storage)),
                 Some(Arc::clone(&resources.preset_storage)),
                 Arc::clone(&resources.settings),
             ),
-        ))),
-        cancel_token: Arc::new(std::sync::RwLock::new(tokio_util::sync::CancellationToken::new())),
+        ),
+        application_service: Arc::new(
+            crate::application::application_service::DefaultApplicationService::new(Arc::new(
+                crate::application::game_service::DefaultGameService::with_storage(
+                    Some(Arc::clone(&resources.storage)),
+                    Some(Arc::clone(&resources.preset_storage)),
+                    Arc::clone(&resources.settings),
+                ),
+            )),
+        ),
+        cancel_token: Arc::new(std::sync::RwLock::new(
+            tokio_util::sync::CancellationToken::new(),
+        )),
     };
     let cancel_token_arc = Arc::clone(&app_state.cancel_token);
 

@@ -1,4 +1,7 @@
-use axum::{Router, routing::{get, post}};
+use axum::{
+    Router,
+    routing::{get, post},
+};
 use tower_http::services::ServeDir;
 
 use super::AppState;
@@ -59,14 +62,8 @@ pub(crate) fn build_router(app_state: AppState) -> Router {
             get(fragments::llm_messages_fragment),
         )
         // Settings endpoints
-        .route(
-            "/fragment/settings",
-            get(settings_fragment::settings_panel),
-        )
-        .route(
-            "/settings",
-            post(settings_fragment::save_settings_handler),
-        )
+        .route("/fragment/settings", get(settings_fragment::settings_panel))
+        .route("/settings", post(settings_fragment::save_settings_handler))
         .route(
             "/connections/add",
             post(settings_fragment::add_connection_handler),

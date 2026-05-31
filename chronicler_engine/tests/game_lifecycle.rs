@@ -119,7 +119,7 @@ fn test_create_game_with_scenario() {
     let state = create_basic_test_state();
     let ctx = make_test_ctx(storage.clone(), game_service.clone(), state);
 
-    let lifecycle_service = GameLifecycleService::new(game_service.clone());
+    let lifecycle_service = GameLifecycleService::new();
 
     let result = lifecycle_service.create_game(ctx.clone());
     assert!(
@@ -170,7 +170,7 @@ fn test_create_game_without_scenario() {
     let state = GameState::new(world.clone(), map, player, npcs, "room1".to_string());
 
     let ctx = make_test_ctx(storage.clone(), game_service.clone(), state);
-    let lifecycle_service = GameLifecycleService::new(game_service.clone());
+    let lifecycle_service = GameLifecycleService::new();
 
     let result = lifecycle_service.create_game(ctx.clone());
     assert!(
@@ -189,7 +189,7 @@ fn test_reset_preserves_world_settings() {
     let state = create_basic_test_state();
     let ctx = make_test_ctx(storage.clone(), game_service.clone(), state);
 
-    let lifecycle_service = GameLifecycleService::new(game_service.clone());
+    let lifecycle_service = GameLifecycleService::new();
 
     lifecycle_service.create_game(ctx.clone()).unwrap();
     let first_game_id = ctx.storage.current_game_id();
@@ -228,7 +228,7 @@ fn test_reset_creates_scenario_message() {
     let state = create_basic_test_state();
     let ctx = make_test_ctx(storage.clone(), game_service.clone(), state);
 
-    let lifecycle_service = GameLifecycleService::new(game_service.clone());
+    let lifecycle_service = GameLifecycleService::new();
 
     lifecycle_service.create_game(ctx.clone()).unwrap();
 
@@ -265,7 +265,7 @@ fn test_switch_game_loads_correct_state() {
     let state = create_basic_test_state();
     let ctx = make_test_ctx(storage.clone(), game_service.clone(), state);
 
-    let lifecycle_service = GameLifecycleService::new(game_service.clone());
+    let lifecycle_service = GameLifecycleService::new();
 
     lifecycle_service.create_game(ctx.clone()).unwrap();
     let game1_id = ctx.storage.current_game_id();
@@ -308,7 +308,7 @@ fn test_list_games_returns_all() {
     let state = create_basic_test_state();
     let ctx = make_test_ctx(storage.clone(), game_service.clone(), state);
 
-    let lifecycle_service = GameLifecycleService::new(game_service.clone());
+    let lifecycle_service = GameLifecycleService::new();
 
     lifecycle_service.create_game(ctx.clone()).unwrap();
     lifecycle_service.create_game(ctx.clone()).unwrap();
@@ -331,7 +331,7 @@ async fn test_create_game_concurrent_generation_rejected() {
 
     ctx.is_generating.store(true, Ordering::SeqCst);
 
-    let lifecycle_service = GameLifecycleService::new(game_service.clone());
+    let lifecycle_service = GameLifecycleService::new();
 
     let result = lifecycle_service.create_game(ctx.clone());
     assert!(
@@ -356,7 +356,7 @@ fn test_switch_to_nonexistent_game() {
     let state = create_basic_test_state();
     let ctx = make_test_ctx(storage.clone(), game_service.clone(), state);
 
-    let lifecycle_service = GameLifecycleService::new(game_service.clone());
+    let lifecycle_service = GameLifecycleService::new();
 
     let result = lifecycle_service.switch_game(ctx.clone(), 99999);
     assert!(
@@ -374,7 +374,7 @@ fn test_reset_without_existing_game() {
     let state = create_basic_test_state();
     let ctx = make_test_ctx(storage.clone(), game_service.clone(), state);
 
-    let lifecycle_service = GameLifecycleService::new(game_service.clone());
+    let lifecycle_service = GameLifecycleService::new();
 
     let result = lifecycle_service.reset(ctx.clone());
     assert!(
