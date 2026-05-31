@@ -4,8 +4,8 @@ use crate::application::context::{
     GameServiceContext, load_or_fresh, map_llm_error, save_message_and_snapshot, save_state,
 };
 use crate::engine::action_processing::{
-    FreeActionContext, TriggerContinuationRequest, TriggerMatch, apply_npc_events,
-    commit_trigger_narration, execute_freeaction_impl,
+    FreeActionContext, TriggerMatch, apply_npc_events, commit_trigger_narration,
+    execute_freeaction_impl,
 };
 use crate::error::EngineError;
 use crate::model::character::{NpcCard, PlayerCard};
@@ -127,8 +127,8 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
                 )
             });
 
-        if let Some(ref request) = trigger_request {
-            next_state.narrative.last_trigger = Some(request.stored.clone());
+        if let Some(ref trigger) = trigger_request {
+            next_state.narrative.last_trigger = Some(trigger.clone());
         }
 
         if let Err(e) = save_message_and_snapshot(self.ctx, &mut next_state) {
@@ -294,11 +294,11 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
     fn phase_trigger_continuation(
         &self,
         mut state: GameState,
-        request: &TriggerContinuationRequest,
+        trigger: &StoredTriggerContext,
     ) -> PipelineResult<(GameState, String)> {
         state.narrative.input_buffer.status = GenerationStatus::Generating;
         state.narrative.input_buffer.phase = GenerationPhase::GeneratingEvent;
-        state.narrative.last_trigger = Some(request.stored.clone());
+        state.narrative.last_trigger = Some(trigger.clone());
 
         if self.ctx.cancel_token.is_cancelled() {
             return Err(self.handle_cancellation());
@@ -313,9 +313,9 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
 
         let continuation_result = match self.service.complete(
             crate::narrative::llm::backend::AGENT_TRIGGER,
-            &request.stored.system_prompt,
-            &request.stored.user_prompt,
-            request.stored.max_tokens,
+            &trigger.system_prompt,
+            &trigger.user_prompt,
+            trigger.max_tokens,
         ) {
             Ok(result) => result,
             Err(e) => {
@@ -352,7 +352,7 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
             });
         }
 
-        state = match commit_trigger_narration(state.clone(), request, &continuation_text) {
+        state = match commit_trigger_narration(state.clone(), trigger, &continuation_text) {
             Ok(s) => s,
             Err(e) => {
                 tracing::error!("Trigger commit failed: {e}");
@@ -459,10 +459,8 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
             };
         }
 
-        let request = TriggerContinuationRequest { stored: trigger };
-
         let mut committed_state =
-            match commit_trigger_narration(state.clone(), &request, &continuation_text) {
+            match commit_trigger_narration(state.clone(), &trigger, &continuation_text) {
                 Ok(s) => s,
                 Err(e) => {
                     tracing::error!("Trigger commit failed on retry: {e}");
@@ -605,7 +603,7 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
         player: &PlayerCard,
         all_npcs: &[NpcCard],
         trigger_match: &TriggerMatch,
-    ) -> Option<TriggerContinuationRequest> {
+    ) -> Option<StoredTriggerContext> {
         let continuation_user_msg = format!(
             "Previous narration:\n{}\n\nTrigger event: {}\n\n\
              Continue the scene naturally, incorporating the trigger event into the narrative. \
@@ -639,17 +637,15 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
             )
             .ok()?;
 
-        Some(TriggerContinuationRequest {
-            stored: StoredTriggerContext {
-                npc_id: trigger_match.npc_id.clone(),
-                trigger_idx: trigger_match.trigger_idx,
-                trigger_name: trigger_match.trigger_name.clone(),
-                trigger_repeat: trigger_match.trigger_repeat,
-                trigger_narration_prompt: trigger_match.trigger_narration_prompt.clone(),
-                system_prompt: assembled.system_prompt,
-                user_prompt: assembled.user_prompt,
-                max_tokens: Some(assembled.max_tokens),
-            },
+        Some(StoredTriggerContext {
+            npc_id: trigger_match.npc_id.clone(),
+            trigger_idx: trigger_match.trigger_idx,
+            trigger_name: trigger_match.trigger_name.clone(),
+            trigger_repeat: trigger_match.trigger_repeat,
+            trigger_narration_prompt: trigger_match.trigger_narration_prompt.clone(),
+            system_prompt: assembled.system_prompt,
+            user_prompt: assembled.user_prompt,
+            max_tokens: Some(assembled.max_tokens),
         })
     }
 }

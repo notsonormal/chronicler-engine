@@ -24,6 +24,23 @@
   - All 947 tests pass; clippy clean; build.py passes
   - Updated docs/architecture/system.md and docs/system/llm_processing.md to reflect modular structure
 
+- **Removed thin abstraction `TriggerContinuationRequest`**
+  - Deleted identity wrapper struct around `StoredTriggerContext` that added zero semantic value (4 lines in `src/engine/action_processing.rs`)
+  - Updated `commit_trigger_narration()` to accept `&StoredTriggerContext` directly instead of wrapper
+  - Updated `phase_trigger_continuation()` and `build_trigger_request()` signatures to work with `StoredTriggerContext` directly
+  - Removed wrapper construction at 10 call sites (4 production, 6 tests)
+  - Saves developers from learning `.stored` accessor pattern for zero benefit
+  - All 947 tests pass; clippy clean; build.py passes
+- **Split `llm_client.rs` into modular directory structure**
+  - Refactored 314-line single file into directory module with clear separation of concerns
+  - Created `src/narrative/llm_client/` with `mod.rs`, `request.rs`, `response.rs`, `client.rs`
+  - `request.rs` (72 lines): `REQUEST_COUNTER`, `next_request_id()`, `ChatCompletionResult`, `build_request_payload()`, `configure_request()`
+  - `response.rs` (166 lines): `extract_content_from_response()`, `parse_chat_response()`, `handle_response()`
+  - `client.rs` (114 lines): `call_chat_completions()`, `call_openrouter_with_model()`, `call_ollama()`
+  - Split tests into `tests/request_tests.rs` (45 lines, 3 tests), `tests/response_tests.rs` (140 lines, 10 tests), `tests/integration_tests.rs` (244 lines, 20 tests)
+  - Maintained 100% backward compatibility — all external callers unchanged
+  - All 947 tests pass; clippy clean; `python build.py` passes
+  - Updated docs/system/llm_processing.md to reflect new module structure
 - **Refactored `handle_movement` to split mixed responsibilities**
   - Extracted `attempt_movement()` — handles semantic walk + dynamic room creation on failure
   - Extracted `update_npc_encounters_on_room_change()` — pure function for NPC meeting state updates

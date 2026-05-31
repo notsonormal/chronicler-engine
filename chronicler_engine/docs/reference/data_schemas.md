@@ -22,8 +22,8 @@ The layout for the initial demo map features an Overworld with a single region (
 - Create `data/world/map.json`.
 - Modify `main.rs` to load the `.json` files from disk upon game boot (using `std::fs::read_to_string` and `serde_json`), deprecating the hardcoded "Aethelgard" mock data.
 
-## CharacterSheet Schema (Current)
-A unified structure for both `PlayerCard` and `NpcCard` narrative fields:
+## Character Schema (PlayerCard and NpcCard)
+Both `PlayerCard` and `NpcCard` share this unified structure for narrative fields:
 
 ```json
 {

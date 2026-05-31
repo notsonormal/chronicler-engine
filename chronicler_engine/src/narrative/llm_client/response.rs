@@ -1,31 +1,6 @@
 // [DOC: docs/system/llm_processing.md]
 
-use std::sync::atomic::{AtomicU64, Ordering};
-
-use serde_json::json;
-
 use crate::error::{EngineError, LlmFailure};
-
-static REQUEST_COUNTER: AtomicU64 = AtomicU64::new(1);
-
-fn next_request_id() -> u64 {
-    REQUEST_COUNTER.fetch_add(1, Ordering::SeqCst)
-}
-
-const DEFAULT_MAX_TOKENS: u32 = 2048;
-
-#[derive(Debug)]
-pub struct ChatCompletionResult {
-    pub text: String,
-    pub system_prompt: String,
-    pub user_prompt: String,
-    pub raw_request_json: String,
-    pub raw_response_json: String,
-}
-
-// [DOC: docs/system/llm_processing.md]
-// Model selection is now connection-driven; these helpers are retained
-// for backward compatibility during transition but delegate to Connection.
 
 pub(crate) fn extract_content_from_response(
     json: &serde_json::Value,
@@ -105,54 +80,7 @@ pub(crate) fn parse_chat_response(raw_response: &str, req_id: u64) -> crate::err
         }
     }
 }
-pub(crate) fn build_request_payload(
-    model: &str,
-    system_prompt: &str,
-    user_text: &str,
-    max_tokens: u32,
-) -> (serde_json::Value, String) {
-    let mut messages = vec![];
-    if !system_prompt.is_empty() {
-        messages.push(json!({
-            "role": "system",
-            "content": system_prompt
-        }));
-    }
-    messages.push(json!({
-        "role": "user",
-        "content": user_text
-    }));
-    let payload = json!({
-        "model": model,
-        "messages": messages,
-        "stream": false,
-        "max_tokens": max_tokens
-    });
-    let raw_request_json =
-        serde_json::to_string(&payload).unwrap_or_else(|_| format!("{{\"model\":\"{model}\"}}"));
-    (payload, raw_request_json)
-}
-pub(crate) fn configure_request(
-    client: &reqwest::blocking::Client,
-    url: &str,
-    payload: &serde_json::Value,
-    api_key: Option<&str>,
-    title: Option<&str>,
-) -> reqwest::blocking::RequestBuilder {
-    let mut request = client
-        .post(url)
-        .header("Content-Type", "application/json")
-        .header("Accept-Encoding", "gzip, deflate")
-        .json(payload);
-    if let Some(key) = api_key {
-        request = request.header("Authorization", format!("Bearer {key}"));
-    }
-    if let Some(t) = title {
-        request = request.header("X-Title", t);
-        request = request.header("HTTP-Referer", "https://github.com/chronicler-engine");
-    }
-    request
-}
+
 pub(crate) fn handle_response(
     response: reqwest::blocking::Response,
     req_id: u64,
@@ -161,7 +89,7 @@ pub(crate) fn handle_response(
     system_prompt: &str,
     user_text: &str,
     raw_request_json: String,
-) -> crate::error::Result<ChatCompletionResult> {
+) -> crate::error::Result<super::request::ChatCompletionResult> {
     let status = response.status();
     let header_time = start_time.elapsed();
     tracing::info!(
@@ -228,116 +156,11 @@ pub(crate) fn handle_response(
         }
     }
     let text = result?;
-    Ok(ChatCompletionResult {
+    Ok(super::request::ChatCompletionResult {
         text,
         system_prompt: system_prompt.to_string(),
         user_prompt: user_text.to_string(),
         raw_request_json,
         raw_response_json: raw_response,
     })
-}
-/// [DOC: docs/system/llm_processing.md]
-pub fn call_chat_completions(
-    base_url: &str,
-    api_key: Option<&str>,
-    model: &str,
-    system_prompt: &str,
-    user_text: &str,
-    title: Option<&str>,
-    max_tokens: Option<u32>,
-) -> crate::error::Result<ChatCompletionResult> {
-    let max_tokens = max_tokens.unwrap_or(DEFAULT_MAX_TOKENS);
-    let req_id = next_request_id();
-    let start_time = std::time::Instant::now();
-
-    let client = reqwest::blocking::Client::builder()
-        .timeout(std::time::Duration::from_secs(180))
-        .build()
-        .map_err(|e| {
-            EngineError::Llm(LlmFailure::Network {
-                url: format!("{base_url}/chat/completions"),
-                detail: format!("Failed to create HTTP client: {e}"),
-            })
-        })?;
-
-    tracing::info!("[LLM][req:{req_id}] Using model: {model}");
-    tracing::debug!(
-        "[LLM][req:{req_id}] System prompt length: {} chars",
-        system_prompt.len()
-    );
-    tracing::debug!(
-        "[LLM][req:{req_id}] User text length: {} chars",
-        user_text.len()
-    );
-    tracing::debug!("[LLM][req:{req_id}] Max tokens: {max_tokens}");
-
-    // Build request payload (pure function)
-    let (payload, raw_request_json) =
-        build_request_payload(model, system_prompt, user_text, max_tokens);
-    // Configure HTTP request (pure function)
-    let url = format!("{base_url}/chat/completions");
-    let request = configure_request(&client, &url, &payload, api_key, title);
-    tracing::info!("[LLM][req:{req_id}] Sending request to {url}");
-    let res = request.send();
-    // Handle response (delegates to extracted function)
-    match res {
-        Ok(response) => handle_response(
-            response,
-            req_id,
-            start_time,
-            &url,
-            system_prompt,
-            user_text,
-            raw_request_json,
-        ),
-        Err(e) => {
-            let elapsed = start_time.elapsed();
-            tracing::error!(
-                "[LLM][req:{req_id}] Request failed after {:.2}s: {e}",
-                elapsed.as_secs_f64()
-            );
-            Err(EngineError::Llm(LlmFailure::Network {
-                url,
-                detail: format!("Request failed: {e}"),
-            }))
-        }
-    }
-}
-
-/// [DOC: docs/system/llm_processing.md]
-pub fn call_openrouter_with_model(
-    api_key: &str,
-    system_prompt: &str,
-    user_text: &str,
-    model: &str,
-    max_tokens: Option<u32>,
-) -> crate::error::Result<ChatCompletionResult> {
-    call_chat_completions(
-        "https://openrouter.ai/api/v1",
-        Some(api_key),
-        model,
-        system_prompt,
-        user_text,
-        Some("Chronicler Engine"),
-        max_tokens,
-    )
-}
-
-/// [DOC: docs/system/llm_processing.md]
-pub fn call_ollama(
-    base_url: &str,
-    model: &str,
-    system_prompt: &str,
-    user_text: &str,
-    max_tokens: Option<u32>,
-) -> crate::error::Result<ChatCompletionResult> {
-    call_chat_completions(
-        base_url,
-        None,
-        model,
-        system_prompt,
-        user_text,
-        None,
-        max_tokens,
-    )
 }

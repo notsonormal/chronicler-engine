@@ -15,37 +15,39 @@ Player performs an action (movement, dialogue, etc.)
 ### 2. Generate Main Narration
 LLM generates the main narrative response
 
-### 4. Second Quantifier (Post-Narration)
+### 3. Quantifier (Post-Narration)
 The quantifier analyzes the **generated narration** to:
 - Detect NPCs that appeared in the narration
+- Detect movement intent (room changes)
 - This ensures dynamic NPC appearances (like Gabriella emerging from shadows) are detected
 
-### 5. Times Met Update
-For each NPC detected in the narration:
-- If `currently_meeting` is false: increment `times_met` and set `currently_meeting = true`
-- This tracks encounter cycles: entering → exiting → re-entering
-
-### 6. Trigger Evaluation
+### 4. Trigger Evaluation
 `crate::engine::trigger_eval::evaluate_triggers` scans **ALL NPCs** in `state.npcs`, but filters by room:
 - Triggers with `room_id: null` (or missing) are **global** — they fire anywhere
 - Triggers with `room_id: "some_room_id"` only fire when the player is in that room
 
 This ensures NPC introduction triggers (like Gabriella in the Entrance Hall) don't fire in the wrong location.
 
-### 7. Requirement Check
+### 5. Requirement Check
 Each trigger is checked against the current `NpcEncounterLog`:
 - `TimesMet Eq 0`: Fires on first encounter (times_met is 0 when evaluation happens)
 - `TimesMet Gte 1`: Fires on subsequent encounters
 
-### 8. Execution
+### 6. Execution
 - If repeatable: Trigger fires and can fire again
 - If non-repeatable: Trigger is marked as "fired" and won't re-fire
 
-### 9. Narration
+### 7. Narration
 Trigger narrations use the unified 7-layer prompt with continuation context in the user message.
 
-### 10. Inline Event Header
+### 8. Inline Event Header
 When a trigger fires, the engine stores the event name in `NarrativeState.pending_event`. The next `add_log` call (which adds the trigger continuation narration) absorbs this pending metadata into `LogEntry.event_header`. The frontend renders the event header inside the same div as the continuation narration. There is no standalone event message type.
+
+### 9. Post-Event Quantifier (Conditional)
+If a trigger fired and generated continuation narration, the quantifier runs again to:
+- Detect NPCs introduced by the event text
+- Update `scene.npcs_in_area` accordingly
+
 ## Timing: Evaluate BEFORE Increment
 
 A critical implementation detail: triggers are evaluated BEFORE `times_met` is incremented.
@@ -53,7 +55,7 @@ A critical implementation detail: triggers are evaluated BEFORE `times_met` is i
 **Why:** If we increment first, `TimesMet Eq 0` would immediately become false, and triggers would never fire.
 
 **The flow:**
-1. Second quantifier detects NPCs in narration
+1. Quantifier detects NPCs in narration
 2. Evaluate triggers (at this point, times_met still = 0, so TimesMet Eq 0 is TRUE)
 3. Trigger fires
 4. Increment times_met (now becomes 1)
@@ -179,4 +181,3 @@ The action pipeline and `execute_freeaction_impl` in `src/engine/action_processi
 - Moving step 4b inside the lock: frontend cannot poll the main narration until the trigger LLM completes — both texts appear simultaneously.
 
 This invariant is enforced by code structure, not by runtime checks. If you refactor `execute_freeaction_impl`, preserve this order explicitly.
-

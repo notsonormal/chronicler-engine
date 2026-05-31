@@ -26,10 +26,6 @@ pub struct TurnResult {
     pub narration: String,
     pub trigger_match: Option<TriggerMatch>,
 }
-/// Request type for trigger continuation narration.
-pub struct TriggerContinuationRequest {
-    pub stored: StoredTriggerContext,
-}
 
 /// Attempts movement to a destination, creating a dynamic room on failure.
 ///
@@ -130,7 +126,7 @@ pub fn apply_npc_events(state: GameState, events: &[NpcEvent]) -> Result<GameSta
 // [DOC: docs/architecture/system.md]
 pub fn commit_trigger_narration(
     state: GameState,
-    request: &TriggerContinuationRequest,
+    trigger: &StoredTriggerContext,
     continuation_text: &str,
 ) -> Result<GameState, EngineError> {
     // [DOC: docs/architecture/system.md]
@@ -138,14 +134,14 @@ pub fn commit_trigger_narration(
         return Ok(state);
     }
     let mut state = state;
-    state.narrative.last_trigger = Some(request.stored.clone());
-    state.narrative.pending_event = Some(request.stored.trigger_name.clone());
+    state.narrative.last_trigger = Some(trigger.clone());
+    state.narrative.pending_event = Some(trigger.trigger_name.clone());
     state.add_message(continuation_text.to_string(), None, MessageType::Narration);
-    if !request.stored.trigger_repeat {
+    if !trigger.trigger_repeat {
         mark_trigger_fired(
             &mut state.npc_encounter_log,
-            &request.stored.npc_id,
-            request.stored.trigger_idx,
+            &trigger.npc_id,
+            trigger.trigger_idx,
         );
     }
 

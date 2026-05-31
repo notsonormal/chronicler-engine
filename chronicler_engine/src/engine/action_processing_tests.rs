@@ -1,6 +1,5 @@
 use crate::engine::action_processing::{
-    FreeActionContext, TriggerContinuationRequest, apply_npc_events, commit_trigger_narration,
-    execute_freeaction_impl,
+    FreeActionContext, apply_npc_events, commit_trigger_narration, execute_freeaction_impl,
 };
 use crate::engine::trigger_eval::{get_times_met, is_currently_meeting, set_currently_meeting};
 use crate::model::quantifier::{
@@ -283,13 +282,11 @@ fn test_trigger_split_architecture_produces_event_header() {
     )
     .unwrap();
 
-    let request = TriggerContinuationRequest {
-        stored: crate::test_support::TestStoredTriggerContext::for_npc(
-            "carla",
-            "Carla Introduction",
-            "Carla appears",
-        ),
-    };
+    let request = crate::test_support::TestStoredTriggerContext::for_npc(
+        "carla",
+        "Carla Introduction",
+        "Carla appears",
+    );
 
     let state = commit_trigger_narration(
         turn_result.next_state,
@@ -319,13 +316,11 @@ fn test_trigger_split_architecture_produces_event_header() {
 fn test_commit_trigger_narration_adds_event_header_and_narration() {
     let state = make_test_state();
 
-    let request = TriggerContinuationRequest {
-        stored: crate::test_support::TestStoredTriggerContext::for_npc(
-            "carla",
-            "Carla Introduction",
-            "Carla appears",
-        ),
-    };
+    let request = crate::test_support::TestStoredTriggerContext::for_npc(
+        "carla",
+        "Carla Introduction",
+        "Carla appears",
+    );
 
     let state =
         commit_trigger_narration(state, &request, "Gabriella emerges from the shadows.").unwrap();
@@ -345,13 +340,11 @@ fn test_commit_trigger_narration_adds_event_header_and_narration() {
 fn test_commit_trigger_narration_marks_non_repeat_trigger_fired() {
     let state = make_test_state();
 
-    let request = TriggerContinuationRequest {
-        stored: crate::test_support::TestStoredTriggerContext::for_npc(
-            "carla",
-            "Carla Introduction",
-            "Carla appears",
-        ),
-    };
+    let request = crate::test_support::TestStoredTriggerContext::for_npc(
+        "carla",
+        "Carla Introduction",
+        "Carla appears",
+    );
 
     let state = commit_trigger_narration(state, &request, "Some text.").unwrap();
 
@@ -371,7 +364,7 @@ fn test_commit_trigger_narration_does_not_mark_repeat_trigger_fired() {
         "Carla greets",
     );
     stored.trigger_repeat = true;
-    let request = TriggerContinuationRequest { stored };
+    let request = stored;
 
     let state = commit_trigger_narration(state, &request, "Some text.").unwrap();
 
@@ -385,13 +378,11 @@ fn test_commit_trigger_narration_does_not_mark_repeat_trigger_fired() {
 fn test_commit_trigger_narration_empty_text_is_noop() {
     let state = make_test_state();
 
-    let request = TriggerContinuationRequest {
-        stored: crate::test_support::TestStoredTriggerContext::for_npc(
-            "carla",
-            "Carla Introduction",
-            "Carla appears",
-        ),
-    };
+    let request = crate::test_support::TestStoredTriggerContext::for_npc(
+        "carla",
+        "Carla Introduction",
+        "Carla appears",
+    );
 
     let state = commit_trigger_narration(state, &request, "").unwrap();
     assert!(state.narrative.history().is_empty());
@@ -404,14 +395,12 @@ fn test_commit_trigger_narration_empty_text_is_noop() {
 fn test_commit_trigger_narration_stores_trigger_context() {
     let state = make_test_state();
 
-    let request = TriggerContinuationRequest {
-        stored: crate::test_support::TestStoredTriggerContext::with_max_tokens(
-            "carla",
-            "Carla Introduction",
-            "Carla appears from shadows",
-            512,
-        ),
-    };
+    let request = crate::test_support::TestStoredTriggerContext::with_max_tokens(
+        "carla",
+        "Carla Introduction",
+        "Carla appears from shadows",
+        512,
+    );
 
     let state = commit_trigger_narration(state, &request, "Carla emerges.").unwrap();
 
