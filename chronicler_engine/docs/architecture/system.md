@@ -42,7 +42,7 @@ Orchestration layer that coordinates game flow, persistence, and LLM generation.
   - `pipeline.rs`: `ActionPipelineBackend` trait (narrow seam: `assembler()`, `complete`, `run_post_generation_agents`) and `ActionPipeline<'a, B>` generic over the trait. Encapsulates the full FreeAction pipeline (narrate → quantify → triggers → event continuation) with explicit phase methods. Used by both normal action handling (`run_from_input`) and retry logic (`run_trigger_continuation`). Checks `CancellationToken::is_cancelled()` at stage boundaries and aborts gracefully via `handle_cancellation()` to avoid wasted LLM calls on stale requests.
   - `actions.rs`: Thin dispatch layer — `execute_action_impl` creates `ActionPipeline` and delegates to `run_from_input`.
   - `retry.rs`: Retry-specific setup (anchor finding, message deletion, snapshot loading) delegates continuation regeneration to `ActionPipeline::run_trigger_continuation()` and main narration retry to `ActionPipeline::run_from_input()`.
-- **`game_service`**: Service boundary — `DefaultGameService` struct with inherent methods (`execute_action`, `retry_last_response`, `retrigger_event`). Implements `ActionPipelineBackend` trait to wire internal backends to the pipeline seam.
+- **`game_service`**: `DefaultGameService` struct implements `ActionPipelineBackend` trait. Callers invoke `execute_action_impl()`, `retry_last_response_impl()`, `retrigger_event_impl()` from `action_pipeline` module directly, passing `&DefaultGameService` as the backend.
 - **`application_service`**: Thin orchestrator struct (`DefaultApplicationService`) delegating to submodules. Contains `process_action` entry point and `GenerationGuard` RAII helper.
 
 ### 3. The Narrative Tier (`crate::narrative::*`)
@@ -199,8 +199,9 @@ Command-line argument parsing via `clap`.
 
 ### 10. The Test Support Tier (`crate::test_support`)
 Shared test fixtures and utilities.
-- **`fixtures`**: `TestGameState`, `TestNpc`, `TestMap`, etc.
-- **`context`**: Test context helpers
+- **`fixtures`**: Test GameState, Npc, Map helpers
+- **`context`**: Test context builders
+- **`forensics`**: `ForensicsCollector` for capturing tracing spans/events on test failure with automatic JSON serialization and sensitive field redaction
 - **`test_app_builder`**: Fluent test app builder API
 
 > **Note:** `assets/` contains static web assets (`index.html`) served by the server. It is not a Rust module tier.

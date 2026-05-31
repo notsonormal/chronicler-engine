@@ -1,7 +1,6 @@
 use std::sync::{Arc, RwLock};
 
 use crate::application::action_pipeline::ActionPipelineBackend;
-use crate::application::context::GameServiceContext;
 use crate::error::EngineError;
 use crate::model::agent::{AgentContext, AgentResult, ExecutionPhase, StatePatch};
 use crate::model::settings::AppSettings;
@@ -21,18 +20,6 @@ pub struct DefaultGameService {
 impl DefaultGameService {
     pub fn new() -> Self {
         Self::with_storage(None, None, Arc::new(RwLock::new(AppSettings::default())))
-    }
-
-    pub fn execute_action(&self, ctx: GameServiceContext, input: String, player_name: String) {
-        crate::application::action_pipeline::execute_action_impl(self, ctx, input, player_name);
-    }
-
-    pub fn retry_last_response(&self, ctx: GameServiceContext) {
-        crate::application::action_pipeline::retry_last_response_impl(self, ctx);
-    }
-
-    pub fn retrigger_event(&self, ctx: GameServiceContext) {
-        crate::application::action_pipeline::retrigger_event_impl(self, &ctx);
     }
 
     pub fn with_storage(

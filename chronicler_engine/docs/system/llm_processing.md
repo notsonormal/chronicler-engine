@@ -1,4 +1,4 @@
-﻿# Specification: LLM Processing & Integration
+# Specification: LLM Processing & Integration
 
 > **Related Decisions**: [ADR-004](../adr/adr-004-xml-prompt-format.md), [ADR-007](../adr/adr-007-settings-system.md), [ADR-010](../adr/adr-010-concurrency-generation-gate.md)
 
@@ -118,6 +118,58 @@ Four agent names are used consistently across the codebase:
 
 #### Dashboard Integration
 The LLM Messages tab (`/fragment/llm-messages`) renders the last 50 calls as an expandable list, polled every 4 seconds via HTMX.
+
+### 10. Runtime Tracing & Test Forensics
+
+The engine uses [`tracing`](https://tracing.rs) for structured runtime diagnostics. Critical execution paths emit spans and events automatically when `RUST_LOG` is set.
+
+#### Instrumented Functions
+
+**Action Processing** (`src/engine/action_processing.rs`):
+- `handle_movement` — tracks room transitions
+- `apply_npc_events` — tracks NPC enter/leave events
+- `execute_freeaction_impl` — tracks complete action lifecycle
+
+**Trigger Evaluation** (`src/engine/trigger_eval.rs`):
+- `evaluate_triggers` — tracks trigger firing decisions
+- `check_condition` — tracks condition evaluation
+
+**Quantifier** (`src/narrative/agents/quantifier/orchestration.rs`):
+- `determine_npcs_in_room` — tracks NPC detection confidence
+
+**LLM Client** (`src/narrative/llm_client.rs`):
+- `call_chat_completions` — tracks HTTP request/response lifecycle
+
+**Game Service** (`src/application/action_pipeline/actions.rs`, `retry.rs`):
+- `execute_action_impl` — top-level action entry point
+- `retry_last_response_impl` — retry orchestration
+- `retrigger_event_impl` — event retriggering
+
+#### Forensics Collector
+
+The `ForensicsCollector` (`src/test_support/forensics.rs`) is a tracing subscriber that:
+- Buffers spans and events during test execution
+- Automatically writes JSON on test failure to `tmp/diagnostics/`
+- Redacts sensitive fields (`api_key`, `prompt`, `raw_response`, `authorization`)
+- Truncates long strings (>10KB) to prevent oversized files
+
+#### Usage
+
+```bash
+# See info-level traces
+RUST_LOG=info cargo test
+
+# Debug specific module
+RUST_LOG=chronicler_engine::engine=debug cargo test
+
+# Full trace output
+RUST_LOG=trace cargo test
+```
+
+#### Module Location
+- **Crate path**: `crate::test_support::forensics` — `ForensicsCollector`, `ForensicsLayer`
+- **Bootstrap**: `bootstrap/run.rs` initializes `tracing_subscriber::fmt()` with `EnvFilter`
+
 
 ### Module Location
 - **Crate path**: `crate::narrative::llm` — directory module (`mod.rs`, `backend.rs`, `openrouter.rs`, `deepseek.rs`, `ollama.rs`, `mock.rs`)

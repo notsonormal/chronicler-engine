@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use chronicler_engine::application::action_pipeline::{execute_action_impl, retry_last_response_impl};
 use chronicler_engine::application::game_service::DefaultGameService;
 use chronicler_engine::model::character::{CharacterSheet, NpcCard};
 use chronicler_engine::model::state::{GameState, MessageType};
@@ -35,8 +36,12 @@ fn test_retry_main_narration_applies_new_quantifier_result() {
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         quantifier,
     );
-
-    service.execute_action(ctx.clone(), "walk around".to_string(), "Player".to_string());
+    execute_action_impl(
+        &service,
+        ctx.clone(),
+        "walk around".to_string(),
+        "Player".to_string(),
+    );
     assert!(
         wait_for_generation_complete(&ctx, 1000),
         "First execution should complete"
@@ -46,8 +51,8 @@ fn test_retry_main_narration_applies_new_quantifier_result() {
         guard.movement.current_room_id, "room1",
         "First execution: player should stay in room1"
     );
+    retry_last_response_impl(&service, ctx.clone());
 
-    service.retry_last_response(ctx.clone());
     assert!(
         wait_for_generation_complete(&ctx, 1000),
         "Retry should complete"
@@ -83,8 +88,8 @@ fn test_retry_with_different_narration_text_reruns_quantifier() {
 
     let service =
         DefaultGameService::with_mock_quantifier(llm_backend, Arc::new(MockBackend::default()));
-
-    service.execute_action(
+    execute_action_impl(
+        &service,
         ctx.clone(),
         "approach the innkeeper".to_string(),
         "Player".to_string(),
@@ -107,7 +112,7 @@ fn test_retry_with_different_narration_text_reruns_quantifier() {
     );
 
     // Retry: new narration has "Innkeeper" → quantifier should detect the NPC
-    service.retry_last_response(ctx.clone());
+    retry_last_response_impl(&service, ctx.clone());
     assert!(
         wait_for_generation_complete(&ctx, 1000),
         "Retry should complete"
@@ -149,18 +154,22 @@ fn test_double_retry_increments_swipe_and_reruns_quantifier() {
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         quantifier,
     );
-
-    service.execute_action(ctx.clone(), "walk around".to_string(), "Player".to_string());
+    execute_action_impl(
+        &service,
+        ctx.clone(),
+        "walk around".to_string(),
+        "Player".to_string(),
+    );
     assert!(wait_for_generation_complete(&ctx, 1000));
     let _snap = latest_snapshot(&ctx).expect("Should have snapshot");
 
-    service.retry_last_response(ctx.clone());
+    retry_last_response_impl(&service, ctx.clone());
     assert!(wait_for_generation_complete(&ctx, 1000));
     let _snap = latest_snapshot(&ctx).expect("Should have snapshot");
     let guard = latest_state(&ctx);
     assert_eq!(guard.movement.current_room_id, "room2");
 
-    service.retry_last_response(ctx.clone());
+    retry_last_response_impl(&service, ctx.clone());
     assert!(wait_for_generation_complete(&ctx, 1000));
     let _snap = latest_snapshot(&ctx).expect("Should have snapshot");
 
@@ -184,14 +193,18 @@ fn test_retry_preserves_input_and_does_not_create_extra_swipe() {
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         Arc::new(MockBackend::default()),
     );
-
-    service.execute_action(ctx.clone(), "walk around".to_string(), "Player".to_string());
+    execute_action_impl(
+        &service,
+        ctx.clone(),
+        "walk around".to_string(),
+        "Player".to_string(),
+    );
     assert!(
         wait_for_generation_complete(&ctx, 1000),
         "First execution should complete"
     );
 
-    service.retry_last_response(ctx.clone());
+    retry_last_response_impl(&service, ctx.clone());
     assert!(
         wait_for_generation_complete(&ctx, 1000),
         "Retry should complete"
@@ -225,8 +238,12 @@ fn test_retry_after_edited_input_uses_new_text() {
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         Arc::new(MockBackend::default()),
     );
-
-    service.execute_action(ctx.clone(), "walk around".to_string(), "Player".to_string());
+    execute_action_impl(
+        &service,
+        ctx.clone(),
+        "walk around".to_string(),
+        "Player".to_string(),
+    );
     assert!(wait_for_generation_complete(&ctx, 1000));
 
     let guard = latest_state(&ctx);
@@ -258,7 +275,7 @@ fn test_retry_after_edited_input_uses_new_text() {
         save_state(&ctx, &state);
     }
 
-    service.retry_last_response(ctx.clone());
+    retry_last_response_impl(&service, ctx.clone());
     assert!(wait_for_generation_complete(&ctx, 1000));
     let guard = latest_state(&ctx);
     let retry_narration = guard
@@ -322,8 +339,12 @@ fn test_main_retry_reevaluates_triggers() {
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         quantifier,
     );
-
-    service.execute_action(ctx.clone(), "walk around".to_string(), "Player".to_string());
+    execute_action_impl(
+        &service,
+        ctx.clone(),
+        "walk around".to_string(),
+        "Player".to_string(),
+    );
     assert!(wait_for_generation_complete(&ctx, 1000));
     let guard = latest_state(&ctx);
     let events_after_execute = guard
@@ -338,7 +359,7 @@ fn test_main_retry_reevaluates_triggers() {
     );
 
     // Retry: movement to room2 → trigger should fire
-    service.retry_last_response(ctx.clone());
+    retry_last_response_impl(&service, ctx.clone());
     assert!(wait_for_generation_complete(&ctx, 1000));
     let guard = latest_state(&ctx);
     let events_after_retry = guard
@@ -374,11 +395,15 @@ fn test_retry_completes_when_quantifier_returns_none() {
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         quantifier,
     );
-
-    service.execute_action(ctx.clone(), "walk around".to_string(), "Player".to_string());
+    execute_action_impl(
+        &service,
+        ctx.clone(),
+        "walk around".to_string(),
+        "Player".to_string(),
+    );
     assert!(wait_for_generation_complete(&ctx, 1000));
 
-    service.retry_last_response(ctx.clone());
+    retry_last_response_impl(&service, ctx.clone());
     assert!(wait_for_generation_complete(&ctx, 1000));
     let guard = latest_state(&ctx);
     assert!(
@@ -453,8 +478,8 @@ fn test_retry_no_pre_main_snapshot() {
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         Arc::new(MockBackend::default()),
     );
-
-    service.execute_action(
+    execute_action_impl(
+        &service,
         ctx.clone(),
         "examine room".to_string(),
         "Player".to_string(),
@@ -482,7 +507,7 @@ fn test_retry_no_pre_main_snapshot() {
     }
 
     // Retry should not panic
-    service.retry_last_response(ctx.clone());
+    retry_last_response_impl(&service, ctx.clone());
 
     // Verify state is stable (not stuck generating)
     let stable = wait_for_generation_complete(&ctx, 500);
@@ -512,8 +537,8 @@ fn test_movement_with_arrival_narration_retry() {
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         quantifier,
     );
-
-    service.execute_action(
+    execute_action_impl(
+        &service,
         ctx.clone(),
         "walk to room2".to_string(),
         "Player".to_string(),
@@ -528,7 +553,7 @@ fn test_movement_with_arrival_narration_retry() {
         .filter(|e| e.text.contains("MockArrival") || e.text.contains("enter"))
         .count();
 
-    service.retry_last_response(ctx.clone());
+    retry_last_response_impl(&service, ctx.clone());
     assert!(wait_for_generation_complete(&ctx, 1000));
 
     let guard = latest_state(&ctx);
@@ -564,8 +589,8 @@ fn test_retry_appends_swipe_to_existing_narration() {
 
     let service =
         DefaultGameService::with_mock_quantifier(llm_backend, Arc::new(MockBackend::default()));
-
-    service.execute_action(
+    execute_action_impl(
+        &service,
         ctx.clone(),
         "examine room".to_string(),
         "Player".to_string(),
@@ -580,7 +605,7 @@ fn test_retry_appends_swipe_to_existing_narration() {
     let original_id = narration.id;
     assert_eq!(narration.swipes.len(), 1);
 
-    service.retry_last_response(ctx.clone());
+    retry_last_response_impl(&service, ctx.clone());
     assert!(wait_for_generation_complete(&ctx, 1000));
 
     let msgs = ctx.load_messages().unwrap();

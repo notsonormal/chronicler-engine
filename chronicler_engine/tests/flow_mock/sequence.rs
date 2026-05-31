@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use chronicler_engine::application::game_service::DefaultGameService;
+use chronicler_engine::application::action_pipeline::{execute_action_impl, retry_last_response_impl};
 use chronicler_engine::model::state::MessageType;
 use chronicler_engine::narrative::llm::MockBackend;
 use chronicler_engine::test_support::make_test_context_with_sqlite;
@@ -23,7 +24,8 @@ fn test_sequential_execute_retry_execute() {
 
     // Step 1: Action A
     add_input_and_save(&ctx, "examine room");
-    service.execute_action(
+    execute_action_impl(
+        &service,
         ctx.clone(),
         "examine room".to_string(),
         "Player".to_string(),
@@ -34,7 +36,7 @@ fn test_sequential_execute_retry_execute() {
     );
 
     // Step 2: Retry A
-    service.retry_last_response(ctx.clone());
+    retry_last_response_impl(&service, ctx.clone());
     assert!(
         wait_for_generation_complete(&ctx, 1000),
         "Retry A should complete"
@@ -42,7 +44,12 @@ fn test_sequential_execute_retry_execute() {
 
     // Step 3: Action B
     add_input_and_save(&ctx, "look around");
-    service.execute_action(ctx.clone(), "look around".to_string(), "Player".to_string());
+    execute_action_impl(
+        &service,
+        ctx.clone(),
+        "look around".to_string(),
+        "Player".to_string(),
+    );
     assert!(
         wait_for_generation_complete(&ctx, 1000),
         "Action B should complete"
@@ -89,7 +96,8 @@ fn test_sequential_execute_delete_execute() {
 
     // Step 1: Action A
     add_input_and_save(&ctx, "examine room");
-    service.execute_action(
+    execute_action_impl(
+        &service,
         ctx.clone(),
         "examine room".to_string(),
         "Player".to_string(),
@@ -117,7 +125,12 @@ fn test_sequential_execute_delete_execute() {
 
     // Step 3: Action B
     add_input_and_save(&ctx, "look around");
-    service.execute_action(ctx.clone(), "look around".to_string(), "Player".to_string());
+    execute_action_impl(
+        &service,
+        ctx.clone(),
+        "look around".to_string(),
+        "Player".to_string(),
+    );
     assert!(
         wait_for_generation_complete(&ctx, 1000),
         "Action B should complete"
@@ -150,12 +163,18 @@ fn test_async_action_sequence_then_retry() {
 
     // Step 1: Async action A
     add_input_and_save(&ctx, "hello");
-    service.execute_action(ctx.clone(), "hello".to_string(), "Player".to_string());
+    execute_action_impl(
+        &service,
+        ctx.clone(),
+        "hello".to_string(),
+        "Player".to_string(),
+    );
     assert!(wait_for_generation_complete(&ctx, 1000));
 
     // Step 2: Async action B
     add_input_and_save(&ctx, "examine room");
-    service.execute_action(
+    execute_action_impl(
+        &service,
         ctx.clone(),
         "examine room".to_string(),
         "Player".to_string(),
@@ -163,7 +182,7 @@ fn test_async_action_sequence_then_retry() {
     assert!(wait_for_generation_complete(&ctx, 1000));
 
     // Step 3: Retry
-    service.retry_last_response(ctx.clone());
+    retry_last_response_impl(&service, ctx.clone());
     assert!(wait_for_generation_complete(&ctx, 1000));
 
     let guard = latest_state(&ctx);
@@ -190,7 +209,12 @@ fn test_three_actions_in_sequence() {
 
     for action in ["examine room", "look around", "check inventory"] {
         add_input_and_save(&ctx, action);
-        service.execute_action(ctx.clone(), action.to_string(), "Player".to_string());
+        execute_action_impl(
+            &service,
+            ctx.clone(),
+            action.to_string(),
+            "Player".to_string(),
+        );
         assert!(
             wait_for_generation_complete(&ctx, 1000),
             "Action '{action}' should complete"
@@ -233,7 +257,8 @@ fn test_delete_input_then_retry_fails_gracefully() {
         Arc::new(MockBackend::default()),
     );
 
-    service.execute_action(
+    execute_action_impl(
+        &service,
         ctx.clone(),
         "examine room".to_string(),
         "Player".to_string(),
@@ -248,7 +273,7 @@ fn test_delete_input_then_retry_fails_gracefully() {
     }
 
     // Retry should not panic or hang
-    service.retry_last_response(ctx.clone());
+    retry_last_response_impl(&service, ctx.clone());
     let guard = latest_state(&ctx);
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
@@ -278,7 +303,8 @@ fn test_reset_clears_history_and_state() {
         quantifier,
     );
 
-    service.execute_action(
+    execute_action_impl(
+        &service,
         ctx.clone(),
         "walk to room2".to_string(),
         "Player".to_string(),
@@ -317,7 +343,8 @@ fn test_reset_then_execute_works() {
 
     // First action
     add_input_and_save(&ctx, "examine room");
-    service.execute_action(
+    execute_action_impl(
+        &service,
         ctx.clone(),
         "examine room".to_string(),
         "Player".to_string(),
@@ -330,7 +357,12 @@ fn test_reset_then_execute_works() {
 
     // Second action after reset
     add_input_and_save(&ctx, "look around");
-    service.execute_action(ctx.clone(), "look around".to_string(), "Player".to_string());
+    execute_action_impl(
+        &service,
+        ctx.clone(),
+        "look around".to_string(),
+        "Player".to_string(),
+    );
     assert!(
         wait_for_generation_complete(&ctx, 1000),
         "Action after reset should complete"
@@ -364,7 +396,8 @@ fn test_delete_mid_sequence() {
 
     // Action A
     add_input_and_save(&ctx, "examine room");
-    service.execute_action(
+    execute_action_impl(
+        &service,
         ctx.clone(),
         "examine room".to_string(),
         "Player".to_string(),
@@ -373,7 +406,12 @@ fn test_delete_mid_sequence() {
 
     // Action B
     add_input_and_save(&ctx, "look around");
-    service.execute_action(ctx.clone(), "look around".to_string(), "Player".to_string());
+    execute_action_impl(
+        &service,
+        ctx.clone(),
+        "look around".to_string(),
+        "Player".to_string(),
+    );
     assert!(wait_for_generation_complete(&ctx, 1000));
 
     let guard = latest_state(&ctx);
@@ -395,7 +433,12 @@ fn test_delete_mid_sequence() {
 
     // Action C
     add_input_and_save(&ctx, "check door");
-    service.execute_action(ctx.clone(), "check door".to_string(), "Player".to_string());
+    execute_action_impl(
+        &service,
+        ctx.clone(),
+        "check door".to_string(),
+        "Player".to_string(),
+    );
     assert!(wait_for_generation_complete(&ctx, 1000));
 
     let guard = latest_state(&ctx);

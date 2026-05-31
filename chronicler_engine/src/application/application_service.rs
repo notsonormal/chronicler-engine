@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::Serialize;
+use crate::application::action_pipeline::execute_action_impl;
 
 use crate::application::context::{GameServiceContext, load_or_fresh};
 use crate::application::game_lifecycle::GameLifecycleService;
@@ -167,7 +168,7 @@ impl DefaultApplicationService {
                 return;
             }
             // [DOC: docs/architecture/invariants.md#INV-004]
-            game_service.execute_action(ctx_clone, input, player_name);
+            execute_action_impl(&*game_service, ctx_clone, input, player_name);
             log::info!("[DEBUG] spawn_blocking: execute_action completed");
         });
         Ok(ProcessActionResult::Started)

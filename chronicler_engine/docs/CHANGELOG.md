@@ -3,6 +3,14 @@
 ## 2026-05-30
 
 ### Changed
+
+- **Eliminated identity wrapper functions in game_service**
+  - Removed `execute_action()`, `retry_last_response()`, `retrigger_event()` wrapper methods from `DefaultGameService`
+  - Moved `#[instrument]` attributes to implementation functions: `execute_action_impl()`, `retry_last_response_impl()`, `retrigger_event_impl()`
+  - Callers updated to invoke `*_impl` functions directly with explicit deref (`&*game_service`)
+  - Removes unnecessary indirection layer; instrumentation now at actual work boundaries
+  - Updated 60+ call sites across application tier and integration tests
+  - All 650+ lib tests, 38 integration tests pass; cargo check clean
 - **Enforced message-swipe consistency via private fields**
   - Made Message text/location_header/event_header/snapshot_id private  
   - Added getters for all four fields  

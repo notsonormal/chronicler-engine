@@ -16,6 +16,7 @@ mod test_data;
 
 use std::sync::Arc;
 
+use chronicler_engine::application::action_pipeline::execute_action_impl;
 use chronicler_engine::application::game_service::{DefaultGameService, GameServiceContext};
 
 use chronicler_engine::model::state::GenerationStatus;
@@ -59,7 +60,8 @@ pub fn run_scenario(
     let state = test_data::create_test_state();
     let ctx = make_test_context(state);
 
-    service.execute_action(
+    execute_action_impl(
+        &service,
         ctx.clone(),
         "look around".to_string(),
         "Test Player".to_string(),

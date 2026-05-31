@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use chrono::Utc;
 
+use crate::application::action_pipeline::{retry_last_response_impl, retrigger_event_impl};
 use crate::application::ApplicationError;
 use crate::application::context::{GameServiceContext, load_or_fresh};
 use crate::application::game_service::DefaultGameService;
@@ -143,7 +144,7 @@ impl MessageEditingService {
             if ctx_clone.cancel_token.is_cancelled() {
                 return;
             }
-            game_service.retry_last_response(ctx_clone);
+            retry_last_response_impl(&*game_service, ctx_clone);
         });
 
         Ok(())
@@ -188,7 +189,7 @@ impl MessageEditingService {
             if ctx_clone.cancel_token.is_cancelled() {
                 return;
             }
-            game_service.retrigger_event(ctx_clone);
+            retrigger_event_impl(&*game_service, &ctx_clone);
         });
 
         Ok(())

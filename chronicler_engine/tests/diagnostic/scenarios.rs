@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use chronicler_engine::application::action_pipeline::execute_action_impl;
 use chronicler_engine::application::game_service::DefaultGameService;
 use chronicler_engine::model::character::{CharacterSheet, NpcCard};
 use chronicler_engine::model::state::GenerationStatus;
@@ -507,7 +508,8 @@ fn benchmark_trigger_wrong_room_id() {
         }),
     );
 
-    service.execute_action(
+    execute_action_impl(
+        &service,
         ctx.clone(),
         "look around".to_string(),
         "Test Player".to_string(),
@@ -598,7 +600,8 @@ fn benchmark_state_stuck_generating() {
         }),
     );
 
-    service.execute_action(
+    execute_action_impl(
+        &service,
         ctx.clone(),
         "look around".to_string(),
         "Test Player".to_string(),

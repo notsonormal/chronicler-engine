@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-31 10:11 UTC*
+*Index last generated: 2026-05-31 11:05 UTC*
 
 ### Root files
 
@@ -35,6 +35,8 @@ This folder contains all documentation for the Chronicler Engine project.
 - [ADR-019: One Table Per Storage Module](./adr/adr-019-one-table-per-storage-module.md)
 - [ADR-020: Unified Storage Struct](./adr/adr-020-storage-consolidation.md)
 - [ADR-021: State Patch Reducer for Post-Generation Agent Composition](./adr/adr-021-state-patch-reducer.md)
+- [ADR-022: PromptAssembler Trait Decoupling](./adr/adr-022-prompt-assembler.md)
+- [ADR-023: Immediate Message Persistence](./adr/adr-023-immediate-message-persistence.md)
 
 ### `docs/architecture/`
 
@@ -44,6 +46,7 @@ This folder contains all documentation for the Chronicler Engine project.
 
 ### `docs/diagnostics/`
 
+- [Debugging Guide](./diagnostics/DEBUGGING.md)
 - [Error Catalog](./diagnostics/error_catalog.md)
 
 ### `docs/external_applications/`
@@ -59,41 +62,13 @@ This folder contains all documentation for the Chronicler Engine project.
 - [LLM Infrastructure Improvements](./plans/llm-infrastructure-improvements.md)
 - [Spec: Agent-Ready Pipeline Restructure for Chronicler Engine](./plans/multi-agent-architecture-overarching-spec.md)
 - [Plan: Observability & Automated Forensics](./plans/observability-and-forensics-plan.md)
-- [Plan: State Patch Reducer for Post-Generation Agent Composition](./plans/state-patch-reducer-plan.md)
 - [AI Steering & Guided Generation](./plans/steering-and-guided-generation.md)
 - [Plan: Trigger Identity: Index → UUID](./plans/trigger-identity-uuid-plan.md)
 
 ### `docs/plans/archived/`
 
-- [Implementation Plan: One Table Per Storage Module](./plans/archived/adr-019-storage-split-plan.md)
-- [Investigation Plan: AI Agent Comprehension Challenges in Chronicler Engine](./plans/archived/agent-comprehension-investigation-plan.md)
-- [Plan: Make PromptContext Require an Assembled System Prompt](./plans/archived/beast-boy-damage-colossus.md)
-- [Plan: Multi-Game Support for Chronicler Engine](./plans/archived/big-barda-nightwing-star-lord.md)
-- [Plan: Fix Swipe Code Review Issues](./plans/archived/bobbi-morse-superboy-nightwing.md)
-- [Revised Plan: Consolidate Storage Trait System](./plans/archived/booster-gold-damage-domino.md)
-- [Plan: Restructure Prompt Presets into XML Sections](./plans/archived/carnage-jessica-jones-magik.md)
-- [Implementation Plan: Multi-Game Support Review Fixes](./plans/archived/crystal-nightwing-maria-hill.md)
-- [Plan: Reduce GameState Blast Radius](./plans/archived/doctor-mid-nite-elongated-man-devil-dinosaur.md)
-- [Plan: Split `src/storage/backend.rs` by Table Domain](./plans/archived/donna-troy-miss-martian-cable.md)
-- [Plan: Fix Silent Fallbacks & Magic Values](./plans/archived/drax-beast-boy-drax.md)
-- [Chronicler Engine: Leaky Presentation Layer Cleanup](./plans/archived/hellcat-martian-manhunter-liberty-belle.md)
-- [Plan: Fix Game UI Delay for LLM Responses](./plans/archived/jericho-vixen-lockjaw.md)
-- [Plan: Rename `try_load_state` / `load_state` to Clearer Names](./plans/archived/load-state-rename-2026-05-30.md)
-- [Plan: Enforced Message Consistency via Private Fields](./plans/archived/message-enforced-consistency-2026-05-30.md)
-- [Plan: Enforced Message Consistency via Private Fields](./plans/archived/message-enforced-consistency.md)
-- [PromptAssembler Architecture Design Plan](./plans/archived/moon-knight-mantis-spectre.md)
-- [Plan: Complete GameState Decoupling from Server + Tests](./plans/archived/orion-vixen-shatterstar.md)
-- [Plan: Refactor `application_service.rs` God Service and De-trait Application Layer](./plans/archived/refactor-application-service-2026-05-29.md)
-- [Plan: Extract Shared Retry Orchestration in MessageEditingService](./plans/archived/refactor-message-editing-retry-2026-05-30.md)
-- [Plan: Remove Old Migrations from `src/storage/db.rs`](./plans/archived/remove-old-migrations.md)
-- [Plan: Fix Test Coverage Gaps (Test-Police Follow-up)](./plans/archived/scarlet-witch-wildcat-maxima.md)
-- [Implementation Plan: Eliminate Test Duplication (Moderate Approach)](./plans/archived/silk-power-girl-x-23.md)
-- [Plan: Eliminate Test Duplication in chronicler_engine](./plans/archived/silk-static-carnage.md)
-- [Plan: Message Swipes for Chronicler Engine](./plans/archived/starfire-tempest-orphan.md)
-- [Plan: Immediate Message Persistence — Direct Implementation](./plans/archived/storm-x-23-domino.md)
-- [Plan: Phase 3 UI — Swipe Navigation & Retrigger](./plans/archived/superboy-doctor-strange-daredevil.md)
-- [Implementation Plan: Eliminate Test Duplication (Revised)](./plans/archived/wally-west-nebula-deadpool.md)
-- [Plan: MessageStorage Mutates Message Directly (Swipe Blast Radius)](./plans/archived/wildcat-red-tornado-colossus.md)
+- [Plan: Observability & Automated Forensics](./plans/archived/observability-and-forensics-plan-2026-05-31.md)
+- [Remove Identity Wrapper Functions from GameService](./plans/archived/remove-identity-wrapper-functions-2026-05-31.md)
 
 ### `docs/reference/`
 
@@ -126,7 +101,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Specification: Dashboard UI](./system/dashboard.md)
 - [System: Dynamic Pseudo-Rooms](./system/dynamic_rooms.md)
 - [Specification: Game Flow](./system/game_flow.md)
-- [Llm Processing](./system/llm_processing.md)
+- [Specification: LLM Processing & Integration](./system/llm_processing.md)
 - [Specification: Game Master Narration System](./system/narration_engine.md)
 - [Specification: Semantic Navigation](./system/navigation.md)
 - [Chronicler Engine Prompt System](./system/prompt_system.md)
