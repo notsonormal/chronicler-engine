@@ -453,6 +453,271 @@ fn test_test_backend_config_error() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// Messages — error injection tests
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn test_insert_message_failure() {
+    let (storage, handle) = Storage::new_in_memory().with_test_failures();
+    handle.set(
+        Operation::InsertMessage,
+        TestOverride::internal("simulated insert failure"),
+    );
+
+    let msg = dummy_message("test");
+    let result = storage.insert_message(&msg);
+    assert!(result.is_err());
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("simulated insert failure")
+    );
+}
+
+#[test]
+fn test_delete_message_failure() {
+    let (storage, handle) = Storage::new_in_memory().with_test_failures();
+    handle.set(
+        Operation::DeleteMessage,
+        TestOverride::config("simulated delete failure"),
+    );
+
+    let result = storage.delete_message(1);
+    assert!(result.is_err());
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("simulated delete failure")
+    );
+}
+
+#[test]
+fn test_load_message_rows_failure() {
+    let (storage, handle) = Storage::new_in_memory().with_test_failures();
+    handle.set(
+        Operation::LoadMessageRows,
+        TestOverride::internal("simulated load failure"),
+    );
+
+    let result = storage.load_message_rows();
+    assert!(result.is_err());
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("simulated load failure")
+    );
+}
+
+#[test]
+fn test_insert_swipe_failure() {
+    let (storage, handle) = Storage::new_in_memory().with_test_failures();
+    handle.set(
+        Operation::InsertSwipe,
+        TestOverride::config("simulated swipe insert failure"),
+    );
+
+    storage.set_game_id(1);
+    let msg_id = storage.insert_message(&dummy_message("test")).unwrap();
+    let swipe = Swipe {
+        text: "test swipe".to_string(),
+        snapshot_id: None,
+        location_header: None,
+        event_header: None,
+    };
+    let result = storage.insert_swipe(msg_id, &swipe, 0);
+    assert!(result.is_err());
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("simulated swipe insert failure")
+    );
+}
+
+#[test]
+fn test_update_swipe_failure() {
+    let (storage, handle) = Storage::new_in_memory().with_test_failures();
+    handle.set(
+        Operation::UpdateSwipeText,
+        TestOverride::internal("simulated swipe update failure"),
+    );
+
+    storage.set_game_id(1);
+    let msg_id = storage.insert_message(&dummy_message("test")).unwrap();
+    let swipe = Swipe {
+        text: "test swipe".to_string(),
+        snapshot_id: None,
+        location_header: None,
+        event_header: None,
+    };
+    storage.insert_swipe(msg_id, &swipe, 0).unwrap();
+    let result = storage.update_swipe_text(msg_id, 0, "updated");
+    assert!(result.is_err());
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("simulated swipe update failure")
+    );
+}
+
+#[test]
+fn test_soft_delete_message_failure() {
+    let (storage, handle) = Storage::new_in_memory().with_test_failures();
+    handle.set(
+        Operation::SoftDeleteMessage,
+        TestOverride::config("simulated soft delete failure"),
+    );
+
+    storage.set_game_id(1);
+    let msg_id = storage.insert_message(&dummy_message("test")).unwrap();
+    let result = storage.soft_delete_message(msg_id);
+    assert!(result.is_err());
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("simulated soft delete failure")
+    );
+}
+
+#[test]
+fn test_update_active_swipe_failure() {
+    let (storage, handle) = Storage::new_in_memory().with_test_failures();
+    handle.set(
+        Operation::UpdateActiveSwipe,
+        TestOverride::internal("simulated active swipe update failure"),
+    );
+
+    storage.set_game_id(1);
+    let msg_id = storage.insert_message(&dummy_message("test")).unwrap();
+    let result = storage.update_active_swipe(msg_id, 5);
+    assert!(result.is_err());
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("simulated active swipe update failure")
+    );
+}
+
+#[test]
+fn test_get_active_swipe_index_failure() {
+    let (storage, handle) = Storage::new_in_memory().with_test_failures();
+    handle.set(
+        Operation::GetActiveSwipeIndex,
+        TestOverride::config("simulated swipe index lookup failure"),
+    );
+
+    storage.set_game_id(1);
+    let msg_id = storage.insert_message(&dummy_message("test")).unwrap();
+    let result = storage.get_active_swipe_index(msg_id);
+    assert!(result.is_err());
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("simulated swipe index lookup failure")
+    );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Core storage — error recovery tests
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn test_save_snapshot_recovery_after_failure() {
+    let (storage, handle) = Storage::new_in_memory().with_test_failures();
+
+    // First, make it fail
+    handle.set(
+        Operation::SaveSnapshot,
+        TestOverride::internal("temporary failure"),
+    );
+
+    let snapshot = dummy_snapshot();
+    let first_result = storage.save_snapshot(&snapshot);
+    assert!(first_result.is_err());
+
+    // Clear the failure and retry
+    handle.clear(Operation::SaveSnapshot);
+    let second_result = storage.save_snapshot(&snapshot);
+    assert!(second_result.is_ok());
+    assert!(second_result.unwrap() > 0);
+}
+
+#[test]
+fn test_load_snapshot_graceful_degradation() {
+    let (storage, handle) = Storage::new_in_memory().with_test_failures();
+
+    // Save a snapshot first (without failure injection)
+    let snapshot = dummy_snapshot();
+    let saved_id = storage.save_snapshot(&snapshot).unwrap();
+
+    // Now inject failure for loading
+    handle.set(
+        Operation::LoadLatestSnapshot,
+        TestOverride::config("load failure"),
+    );
+
+    let result = storage.load_latest_snapshot();
+    assert!(result.is_err());
+
+    // Verify we can still load by ID
+    handle.clear(Operation::LoadLatestSnapshot);
+    let loaded = storage.load_snapshot_by_id(saved_id).unwrap();
+    assert!(loaded.is_some());
+    assert_eq!(loaded.unwrap().db_id, Some(saved_id));
+}
+
+#[test]
+fn test_purge_soft_deleted_failure() {
+    let (storage, handle) = Storage::new_in_memory().with_test_failures();
+    handle.set(
+        Operation::PurgeSoftDeleted,
+        TestOverride::internal("simulated purge failure"),
+    );
+
+    storage.set_game_id(1);
+    let msg_id = storage.insert_message(&dummy_message("test")).unwrap();
+    storage.soft_delete_message(msg_id).unwrap();
+
+    let result = storage.purge_soft_deleted(&[msg_id]);
+    assert!(result.is_err());
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("simulated purge failure")
+    );
+}
+
+#[test]
+fn test_restore_soft_deleted_failure() {
+    let (storage, handle) = Storage::new_in_memory().with_test_failures();
+    handle.set(
+        Operation::RestoreSoftDeleted,
+        TestOverride::config("simulated restore failure"),
+    );
+
+    storage.set_game_id(1);
+    let msg_id = storage.insert_message(&dummy_message("test")).unwrap();
+    storage.soft_delete_message(msg_id).unwrap();
+
+    let result = storage.restore_soft_deleted(&[msg_id]);
+    assert!(result.is_err());
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("simulated restore failure")
+    );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Game-scoped isolation
 // ═══════════════════════════════════════════════════════════════════════════════
 

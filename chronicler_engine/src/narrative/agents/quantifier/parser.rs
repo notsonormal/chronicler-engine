@@ -74,11 +74,24 @@ pub fn parse_quantifier_response_with_movement(
     let trimmed = response.trim();
 
     // Try JSON parse first for both NPCs and movement
+    tracing::debug!(
+        "[Quantifier Parser] Attempting to parse {} chars",
+        trimmed.len()
+    );
     if let Ok((npc_ids, movement_json)) = try_parse_json_full(trimmed) {
+        tracing::debug!(
+            "[Quantifier Parser] JSON parsing succeeded: {} NPCs found",
+            npc_ids.len()
+        );
         let valid_ids: Vec<String> = npc_ids
             .into_iter()
             .filter(|id| known_npc_ids.contains(id))
             .collect();
+        tracing::debug!(
+            "[Quantifier Parser] After filtering: {} valid NPCs ({:?})",
+            valid_ids.len(),
+            valid_ids
+        );
 
         let movement = movement_json.map(|m| MovementParseResult {
             movement_type: m
@@ -105,15 +118,20 @@ pub fn parse_quantifier_response_with_movement(
             }),
         };
     }
-
     // Fallback: extract NPCs via text, movement only available via JSON
+    tracing::debug!("[Quantifier Parser] JSON failed, falling back to text extraction");
     let npcs = extract_npcs(response, known_npc_ids);
+    tracing::debug!(
+        "[Quantifier Parser] Text extraction found {} NPCs ({:?}) with {:?} confidence",
+        npcs.npc_ids.len(),
+        npcs.npc_ids,
+        npcs.confidence
+    );
     let movement = MovementParseResult {
         movement_type: None,
         destination: None,
         confidence: QuantifierConfidence::Low,
     };
-
     QuantifierResult { npcs, movement }
 }
 
@@ -121,27 +139,54 @@ pub(crate) fn try_parse_json_full(
     response: &str,
 ) -> Result<(Vec<String>, Option<MovementJson>), String> {
     // Try direct JSON parse first
-    if let Ok(parsed) = serde_json::from_str::<QuantifierJsonResponse>(response) {
-        return Ok((parsed.npcs_in_room, parsed.movement));
-    }
-
-    // Try extracting JSON from markdown code fences (```json ... ```)
-    if let Some(json_content) = extract_json_from_code_fence(response) {
-        if let Ok(parsed) = serde_json::from_str::<QuantifierJsonResponse>(&json_content) {
+    match serde_json::from_str::<QuantifierJsonResponse>(response) {
+        Ok(parsed) => {
+            tracing::debug!(
+                "[Quantifier] JSON parsed successfully: npcs={:?}, movement={:?}",
+                parsed.npcs_in_room,
+                parsed.movement
+            );
             return Ok((parsed.npcs_in_room, parsed.movement));
         }
+        Err(e) => {
+            tracing::debug!("[Quantifier] Direct JSON parse failed: {}", e);
+        }
     }
-
+    // Try extracting JSON from markdown code fences (```json ... ```)
+    if let Some(json_content) = extract_json_from_code_fence(response) {
+        match serde_json::from_str::<QuantifierJsonResponse>(&json_content) {
+            Ok(parsed) => {
+                tracing::debug!(
+                    "[Quantifier] Code fence JSON parsed: npcs={:?}, movement={:?}",
+                    parsed.npcs_in_room,
+                    parsed.movement
+                );
+                return Ok((parsed.npcs_in_room, parsed.movement));
+            }
+            Err(e) => {
+                tracing::debug!("[Quantifier] Code fence JSON parse failed: {}", e);
+            }
+        }
+    }
     // Try finding JSON object in the response
     if let Some(start) = response.find('{') {
         if let Some(end) = response.rfind('}') {
             let json_str = &response[start..=end];
-            if let Ok(parsed) = serde_json::from_str::<QuantifierJsonResponse>(json_str) {
-                return Ok((parsed.npcs_in_room, parsed.movement));
+            match serde_json::from_str::<QuantifierJsonResponse>(json_str) {
+                Ok(parsed) => {
+                    tracing::debug!(
+                        "[Quantifier] Extracted JSON parsed: npcs={:?}, movement={:?}",
+                        parsed.npcs_in_room,
+                        parsed.movement
+                    );
+                    return Ok((parsed.npcs_in_room, parsed.movement));
+                }
+                Err(e) => {
+                    tracing::debug!("[Quantifier] Extracted JSON parse failed: {}", e);
+                }
             }
         }
     }
-
     Err("Failed to parse JSON".to_string())
 }
 

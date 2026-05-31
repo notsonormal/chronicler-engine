@@ -477,11 +477,25 @@ async fn test_create_game_handler() {
 
     let latest = storage.load_latest_snapshot().unwrap();
     assert!(latest.is_some(), "New game should have an initial snapshot");
-
-    // The test world has no scenario, so messages may be empty.
-    // What matters is that the snapshot was saved and the game was switched.
+    // Verify the scenario message was created
+    let messages = storage.load_message_rows().unwrap();
+    assert!(
+        !messages.is_empty(),
+        "New game should have at least one message (scenario introduction)"
+    );
+    let scenario_msg = &messages[0];
+    assert_eq!(
+        scenario_msg.message_type,
+        MessageType::Narration,
+        "First message should be Narration type"
+    );
+    // Verify swipe was persisted (count swipes for this message)
+    let swipe_count = storage.count_swipes_for_message(scenario_msg.id).unwrap();
+    assert!(
+        swipe_count > 0,
+        "Scenario message should have at least one swipe (text content)"
+    );
 }
-
 #[tokio::test]
 async fn test_switch_game_handler_success() {
     let storage = Arc::new(Storage::new_in_memory());

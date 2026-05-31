@@ -40,7 +40,15 @@ impl TestAppBuilder {
             description: "A test world".to_string(),
             global_rules: vec![],
             starting_room_id: "room_1".to_string(),
-            scenarios: vec![],
+            scenarios: vec![crate::model::scenario::StartingScenario {
+                id: "test_intro".to_string(),
+                name: "Test World Introduction".to_string(),
+                description: "A simple test scenario for validation".to_string(),
+                starting_room_id: "room_1".to_string(),
+                text: "Welcome to the Test World, {{user}}! You find yourself in a cozy room with wooden beams and a warm fire. The smell of fresh bread fills the air. A friendly innkeeper behind the bar glances your way and smiles."
+                    .to_string(),
+                npcs: vec!["npc_1".to_string()],
+            }],
             default_room_image: None,
         };
 

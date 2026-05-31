@@ -252,4 +252,31 @@ impl Storage {
             },
         )
     }
+    pub fn count_swipes_for_message(&self, message_id: u64) -> Result<usize, EngineError> {
+        self.with_backend_mut(
+            Operation::LoadSwipesForMessages,
+            |backend, _game_id| match backend {
+                Backend::Sqlite { pool } => {
+                    let conn = pool.conn();
+                    let count: i64 = conn
+                        .query_row(
+                            "SELECT COUNT(*) FROM message_swipes WHERE message_id = ?1",
+                            rusqlite::params![message_id as i64],
+                            |row| row.get(0),
+                        )
+                        .map_err(|e| EngineError::Config(format!("Failed to count swipes: {e}")))?;
+                    Ok(count as usize)
+                }
+                Backend::InMemory(data) => {
+                    let count = data
+                        .swipes
+                        .get(&message_id)
+                        .map(|vec| vec.len())
+                        .unwrap_or(0);
+                    Ok(count)
+                }
+                Backend::Test { .. } => unreachable!(),
+            },
+        )
+    }
 }
