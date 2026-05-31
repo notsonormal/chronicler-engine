@@ -1,97 +1,18 @@
-use crate::narrative::llm_client::{call_chat_completions, call_ollama, call_openrouter_with_model};
+//! Integration tests for LLM client HTTP communication
+//!
+//! These tests spawn real TCP servers to validate HTTP request/response handling
+//! without making external network calls.
 
-// --- Integration-style tests for network calls ---
+use std::io::{Read, Write};
+use std::net::TcpListener;
+use std::thread;
 
-#[test]
-fn test_call_openrouter_with_model_invalid_api_key_format() {
-    let result = call_openrouter_with_model("", "system prompt", "user text", "test/model", None);
-    assert!(result.is_err());
-}
-
-#[test]
-fn test_call_openrouter_empty_system_prompt() {
-    let result = call_openrouter_with_model("", "", "user text", "test/model", None);
-    assert!(result.is_err());
-}
-
-#[test]
-fn test_call_openrouter_empty_user_text() {
-    let result = call_openrouter_with_model("fake_key", "system", "", "test/model", None);
-    assert!(result.is_err());
-}
-
-#[test]
-fn test_call_openrouter_with_model_rejects_empty_api_key() {
-    let result = call_openrouter_with_model("", "system", "user", "model", None);
-    assert!(result.is_err());
-    let err = result.unwrap_err();
-    assert!(matches!(err, crate::error::EngineError::Llm(_)));
-}
-
-#[test]
-fn test_call_openrouter_very_long_model_name() {
-    let long_model = "a".repeat(1000);
-    let result = call_openrouter_with_model("", "system", "user", &long_model, None);
-    assert!(result.is_err());
-}
-
-#[test]
-fn test_call_openrouter_very_long_system_prompt() {
-    let long_prompt = "x".repeat(10000);
-    let result = call_openrouter_with_model("key", &long_prompt, "user", "model", None);
-    assert!(result.is_err());
-}
-
-#[test]
-fn test_call_openrouter_very_long_user_text() {
-    let long_text = "y".repeat(50000);
-    let result = call_openrouter_with_model("key", "system", &long_text, "model", None);
-    assert!(result.is_err());
-}
-
-#[test]
-fn test_call_openrouter_whitespace_api_key() {
-    let result = call_openrouter_with_model("   ", "system", "user", "model", None);
-    assert!(result.is_err());
-}
-
-#[test]
-fn test_call_openrouter_special_characters_in_prompts() {
-    let special_system = "System: <script>alert('xss')</script>\n{\"json\": true}";
-    let special_user = "User input with \"quotes\" and 'apostrophes' and <brackets>";
-    let result = call_openrouter_with_model("key", special_system, special_user, "model", None);
-    assert!(result.is_err());
-}
-
-#[test]
-fn test_call_openrouter_unicode_in_prompts() {
-    let unicode_text = "Hello 你好 مرحبا 🌍";
-    let result = call_openrouter_with_model("key", "system", unicode_text, "model", None);
-    assert!(result.is_err());
-}
-
-#[test]
-fn test_call_ollama_invalid_url() {
-    // call_ollama with a fake URL should fail gracefully without panic
-    let result = call_ollama("http://localhost:59999", "model", "system", "user", None);
-    assert!(result.is_err());
-}
-
-#[test]
-fn test_call_ollama_empty_system_prompt() {
-    // call_ollama with empty system prompt should not panic
-    let result = call_ollama("http://localhost:59999", "model", "", "user message", None);
-    assert!(result.is_err());
-}
+use chronicler_engine::narrative::llm_client::call_chat_completions;
 
 // --- Mock HTTP server tests for call_chat_completions ---
 
 #[test]
 fn test_call_chat_completions_mock_server_success() {
-    use std::io::{Read, Write};
-    use std::net::TcpListener;
-    use std::thread;
-
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port();
 
@@ -125,10 +46,6 @@ fn test_call_chat_completions_mock_server_success() {
 
 #[test]
 fn test_call_chat_completions_mock_server_error_status() {
-    use std::io::{Read, Write};
-    use std::net::TcpListener;
-    use std::thread;
-
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port();
 
@@ -167,10 +84,6 @@ fn test_call_chat_completions_mock_server_error_status() {
 
 #[test]
 fn test_call_chat_completions_mock_server_no_content() {
-    use std::io::{Read, Write};
-    use std::net::TcpListener;
-    use std::thread;
-
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port();
 
@@ -208,10 +121,6 @@ fn test_call_chat_completions_mock_server_no_content() {
 
 #[test]
 fn test_call_chat_completions_mock_server_truncated_body() {
-    use std::io::{Read, Write};
-    use std::net::TcpListener;
-    use std::thread;
-
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port();
 

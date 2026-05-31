@@ -10,7 +10,7 @@ pub(crate) fn next_request_id() -> u64 {
     REQUEST_COUNTER.fetch_add(1, Ordering::SeqCst)
 }
 
-pub(crate) const DEFAULT_MAX_TOKENS: u32 = 2048;
+pub const DEFAULT_MAX_TOKENS: u32 = 2048;
 
 #[derive(Debug)]
 pub struct ChatCompletionResult {
@@ -21,7 +21,8 @@ pub struct ChatCompletionResult {
     pub raw_response_json: String,
 }
 
-pub(crate) fn build_request_payload(
+pub fn build_request_payload(
+    // [DOC: docs/system/llm_processing.md]
     model: &str,
     system_prompt: &str,
     user_text: &str,
@@ -49,7 +50,8 @@ pub(crate) fn build_request_payload(
     (payload, raw_request_json)
 }
 
-pub(crate) fn configure_request(
+pub fn configure_request(
+    // [DOC: docs/system/llm_processing.md]
     client: &reqwest::blocking::Client,
     url: &str,
     payload: &serde_json::Value,

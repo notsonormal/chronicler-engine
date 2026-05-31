@@ -9,9 +9,9 @@ mod request;
 mod response;
 
 // Re-export public API for backward compatibility
-pub(crate) use request::{build_request_payload, configure_request, DEFAULT_MAX_TOKENS};
-pub(crate) use response::{extract_content_from_response, handle_response, parse_chat_response};
-pub(crate) use client::{call_chat_completions, call_openrouter_with_model, call_ollama};
+pub use request::{build_request_payload, configure_request, DEFAULT_MAX_TOKENS};
+pub use response::{extract_content_from_response, handle_response, parse_chat_response};
+pub use client::{call_chat_completions, call_openrouter_with_model, call_ollama};
 
 // Re-export for tests
 pub use request::ChatCompletionResult;
@@ -20,4 +20,7 @@ pub use request::ChatCompletionResult;
 pub(crate) use request::next_request_id;
 
 #[cfg(test)]
-mod tests;
+mod request_tests;
+
+#[cfg(test)]
+mod response_tests;

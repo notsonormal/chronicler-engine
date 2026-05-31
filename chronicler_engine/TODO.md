@@ -1,5 +1,9 @@
 # QUICK TODO List
 
+## Added: 2026-06-01
+
+- [] Unit test should alway sit beside the associated test class (e.g. game_service.rs -> game_service_tests.rs). If the original class was turned into a module (e.g. backend.rs -> backend\core.rs) then the original backend_tests.rs should likewise be split up. We haven't have a guardrail that ensures all classes have an associated unit test class (it gets application) but we can have a guardrail that enforces this. 
+
 ## Added: 2026-05-27
 
 - [] When a character has left a scene, they should remain in the system prompt for at least 3 turns.
