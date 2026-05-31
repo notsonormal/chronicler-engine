@@ -8,6 +8,7 @@ pub mod view_models;
 #[cfg(test)]
 mod fragments_tests;
 #[cfg(test)]
+mod view_models_tests;
 mod mod_tests;
 #[cfg(test)]
 mod prompt_presets_fragment_tests;
