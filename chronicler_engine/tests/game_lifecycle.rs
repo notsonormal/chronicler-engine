@@ -311,23 +311,18 @@ fn test_create_game_name_uniqueness() {
 
     let lifecycle_service = GameLifecycleService::new();
 
-    // Create first game
     let result1 = lifecycle_service.create_game(ctx.clone());
     assert!(result1.is_ok(), "First create_game should succeed");
 
-    // Create second game - should get _2 suffix
     let result2 = lifecycle_service.create_game(ctx.clone());
     assert!(result2.is_ok(), "Second create_game should succeed");
 
-    // Verify both games exist with correct naming
     let games = lifecycle_service.list_games(ctx.clone()).unwrap();
-    // Should have 3 games: 1 default + 2 we created
     assert_eq!(
         games.len(),
         3,
         "Should have exactly 3 games (default + 2 created)"
     );
-    // Check that naming suffixes are working (_1, _2)
     let world_date = chrono::Utc::now().format("%Y-%m-%d");
     let name_pattern = format!("Test Realm_{world_date}");
 
@@ -348,7 +343,6 @@ fn test_switch_game_world_mismatch() {
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
     let game_service = create_game_service();
 
-    // Create world "World A" with scenario
     let mut world_a = create_test_world_with_scenario();
     world_a.name = "World A".to_string();
     let world_a = Arc::new(world_a);
@@ -360,12 +354,10 @@ fn test_switch_game_world_mismatch() {
     let ctx_a = make_test_ctx(storage.clone(), game_service.clone(), state_a);
     let lifecycle_service = GameLifecycleService::new();
 
-    // Create game in World A
     let create_result = lifecycle_service.create_game(ctx_a.clone());
     assert!(create_result.is_ok(), "create_game should succeed");
     let game_id = ctx_a.storage.current_game_id();
 
-    // Create World B context with same storage
     let mut world_b = create_test_world_with_scenario();
     world_b.name = "World B".to_string();
     let world_b = Arc::new(world_b);
@@ -382,7 +374,6 @@ fn test_switch_game_world_mismatch() {
 
     let ctx_b = make_test_ctx(storage.clone(), game_service.clone(), state_b);
 
-    // Try to switch to game from World A while in World B
     let result = lifecycle_service.switch_game(ctx_b, game_id);
     assert!(
         result.is_err(),
@@ -408,29 +399,23 @@ fn test_delete_game_removes() {
 
     let lifecycle_service = GameLifecycleService::new();
 
-    // Create first game
     lifecycle_service.create_game(ctx.clone()).unwrap();
     let game_id_1 = ctx.storage.current_game_id();
 
-    // Create second game (becomes current)
     lifecycle_service.create_game(ctx.clone()).unwrap();
     let game_id_2 = ctx.storage.current_game_id();
 
     assert_ne!(game_id_1, game_id_2, "Should have different game IDs");
 
-    // Delete the first game
     let delete_result = lifecycle_service.delete_game(ctx.clone(), game_id_1);
     assert!(delete_result.is_ok(), "delete_game should succeed");
 
-    // Verify one game was removed (should have default + game_2)
     let games = lifecycle_service.list_games(ctx.clone()).unwrap();
     assert_eq!(games.len(), 2, "Should have exactly 2 games after deletion");
-    // Verify game_id_2 still exists
     assert!(
         games.iter().any(|g| g.id == game_id_2),
         "game_id_2 should still exist"
     );
-    // Verify game_id_1 is gone
     assert!(
         !games.iter().any(|g| g.id == game_id_1),
         "game_id_1 should be deleted"
@@ -448,11 +433,9 @@ fn test_delete_game_active_rejected() {
 
     let lifecycle_service = GameLifecycleService::new();
 
-    // Create game (becomes current)
     lifecycle_service.create_game(ctx.clone()).unwrap();
     let active_game_id = ctx.storage.current_game_id();
 
-    // Try to delete the active game
     let result = lifecycle_service.delete_game(ctx.clone(), active_game_id);
     assert!(
         result.is_err(),
@@ -478,7 +461,6 @@ fn test_delete_game_nonexistent() {
 
     let lifecycle_service = GameLifecycleService::new();
 
-    // Try to delete a nonexistent game - should succeed silently (no-op)
     let result = lifecycle_service.delete_game(ctx.clone(), 99999);
     assert!(
         result.is_ok(),

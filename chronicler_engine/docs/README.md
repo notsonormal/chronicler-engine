@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-31 20:53 UTC*
+*Index last generated: 2026-05-31 22:10 UTC*
 
 ### Root files
 
@@ -63,7 +63,6 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Spec: Agent-Ready Pipeline Restructure for Chronicler Engine](./plans/multi-agent-architecture-overarching-spec.md)
 - [Plan: Observability & Automated Forensics](./plans/observability-and-forensics-plan.md)
 - [AI Steering & Guided Generation](./plans/steering-and-guided-generation.md)
-- [Test Implementation Plan (Verified)](./plans/test-implementation-plan-verified.md)
 - [Plan: Trigger Identity: Index → UUID](./plans/trigger-identity-uuid-plan.md)
 
 ### `docs/plans/archived/`

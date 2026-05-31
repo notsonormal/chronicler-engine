@@ -79,7 +79,6 @@ fn test_non_overridden_operations_unaffected() {
         TestOverride::internal("simulated failure"),
     );
 
-    // InsertMessage is not overridden, should work
     let msg = dummy_message("test");
     let id = storage.insert_message(&msg).unwrap();
     assert!(id > 0);
