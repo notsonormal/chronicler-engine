@@ -1,1 +1,1 @@
-mod text_check_tests;
+mod text_check;

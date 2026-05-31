@@ -1,10 +1,10 @@
 #[path = "../helpers/pipeline_helpers.rs"]
 mod pipeline_helpers;
 
-mod service_tests;
-mod lifecycle_tests;
-mod application_service_tests;
-mod game_service_tests;
+mod service;
+mod lifecycle;
+mod application_service;
+mod game_service;
 
 mod storage;
 mod pipeline;

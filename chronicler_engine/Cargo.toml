@@ -53,8 +53,12 @@ diagnostics = []
 testing = []
 [[test]]
 name = "architecture"
-path = "tests/infrastructure/architecture_tests.rs"
+path = "tests/infrastructure/architecture.rs"
 
 [[test]]
 name = "guardrails"
 path = "tests/infrastructure/guardrails/mod.rs"
+
+[[test]]
+name = "invariant_contract"
+path = "tests/infrastructure/invariant_contract.rs"

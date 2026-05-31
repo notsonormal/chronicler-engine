@@ -18,12 +18,12 @@ use chronicler_engine::model::state::MessageType;
 use chronicler_engine::narrative::agents::registry::AgentRegistry;
 use chronicler_engine::narrative::llm::MockBackend;
 use chronicler_engine::server::fragments::GenerationGuard;
-use chronicler_engine::test_support::make_test_context;
+use chronicler_engine::test_support::make_test_context_with_sqlite;
 
-#[path = "helpers/pipeline_helpers.rs"]
-mod pipeline_helpers;
 #[path = "../helpers/fixtures.rs"]
 mod fixtures;
+#[path = "../helpers/pipeline_helpers.rs"]
+mod pipeline_helpers;
 
 use pipeline_helpers::{create_test_state_with_trigger_npc, latest_state};
 use fixtures::create_test_state;

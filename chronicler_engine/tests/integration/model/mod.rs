@@ -1,4 +1,4 @@
-mod world_tests;
-mod settings_tests;
-mod css_tests;
-mod state_patch_tests;
+mod world;
+mod settings;
+mod css;
+mod state_patch;
