@@ -1,10 +1,3 @@
-// ═══════════════════════════════════════════════════════════════════════════════
-// Core Storage Backend Tests
-// ═══════════════════════════════════════════════════════════════════════════════
-// Purpose: Test core Storage struct and backend management
-// Coverage: constructors, game_id management, error injection, TestFailureHandle
-// ═══════════════════════════════════════════════════════════════════════════════
-
 use crate::storage::backend::{Operation, Storage, TestOverride};
 use crate::storage::db::DbPool;
 
@@ -12,10 +5,6 @@ fn sqlite_storage() -> Storage {
     let pool = DbPool::new(":memory:").unwrap();
     Storage::new_sqlite(pool, 1)
 }
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Constructors & Game ID
-// ═══════════════════════════════════════════════════════════════════════════════
 
 #[test]
 fn test_new_in_memory_default_game_id() {
@@ -42,10 +31,6 @@ fn test_current_game_id_returns_stored_value() {
     storage.set_game_id(100);
     assert_eq!(storage.current_game_id(), 100);
 }
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Error Injection & TestOverride
-// ═══════════════════════════════════════════════════════════════════════════════
 
 #[test]
 fn test_with_failure_single_operation() {
@@ -146,11 +131,7 @@ fn test_clear_all_removes_all_overrides() {
     assert!(storage.load_latest_snapshot().is_ok());
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Test Helpers
-// ═══════════════════════════════════════════════════════════════════════════════
-
-use crate::model::message::{Message, Swipe};
+use crate::model::message::Message;
 use crate::model::state::MessageType;
 use crate::model::state_snapshot::{GameStateSnapshot, NarrativeSnapshot};
 use crate::model::state::{MovementState, SceneState};

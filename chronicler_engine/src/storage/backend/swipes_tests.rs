@@ -1,11 +1,3 @@
-// ═══════════════════════════════════════════════════════════════════════════════
-// Swipe Storage Backend Tests
-// ═══════════════════════════════════════════════════════════════════════════════
-// Purpose: Test swipe variant storage operations
-// Coverage: insert, update, shift, load, active swipe index management
-// Note: Requires messages to exist (FK to messages table)
-// ═══════════════════════════════════════════════════════════════════════════════
-
 use crate::model::message::{Message, Swipe};
 use crate::model::state::MessageType;
 use crate::storage::backend::{Operation, Storage, TestOverride};
@@ -34,10 +26,6 @@ fn dummy_swipe(text: &str) -> Swipe {
         event_header: None,
     }
 }
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Insert Swipe
-// ═══════════════════════════════════════════════════════════════════════════════
 
 #[test]
 fn test_insert_swipe_initial_index_zero() {
@@ -92,10 +80,6 @@ fn test_insert_swipe_increments_index() {
     let swipes = storage.load_swipes_for_messages(&[msg_id]).unwrap();
     assert_eq!(swipes[&msg_id].len(), 3);
 }
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Active Swipe Index
-// ═══════════════════════════════════════════════════════════════════════════════
 
 #[test]
 fn test_get_active_swipe_index_default() {
@@ -155,10 +139,6 @@ fn test_update_active_swipe_in_memory() {
     assert_eq!(index, 2);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Update Swipe Text
-// ═══════════════════════════════════════════════════════════════════════════════
-
 #[test]
 fn test_update_swipe_text_single() {
     let storage = Storage::new_in_memory();
@@ -188,10 +168,6 @@ fn test_update_swipe_text_sqlite() {
     let swipes = storage.load_swipes_for_messages(&[msg_id]).unwrap();
     assert_eq!(swipes[&msg_id][0].text, "changed");
 }
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Load Swipes
-// ═══════════════════════════════════════════════════════════════════════════════
 
 #[test]
 fn test_load_swipes_for_messages_empty() {
@@ -265,10 +241,6 @@ fn test_load_swipes_orders_by_index() {
     assert_eq!(swipes[&msg_id][1].text, "second");
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Shift Swipe Indices
-// ═══════════════════════════════════════════════════════════════════════════════
-
 #[test]
 fn test_shift_swipe_indices_positive_offset() {
     let storage = sqlite_storage();
@@ -309,10 +281,6 @@ fn test_shift_swipe_indices_sqlite() {
     let swipes = storage.load_swipes_for_messages(&[msg_id]).unwrap();
     assert_eq!(swipes[&msg_id].len(), 1);
 }
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Swipe Field Variants
-// ═══════════════════════════════════════════════════════════════════════════════
 
 #[test]
 fn test_swipe_with_text_only() {
@@ -392,10 +360,6 @@ fn test_swipe_with_event_header() {
         Some("CombatStarted".to_string())
     );
 }
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Error Injection Tests
-// ═══════════════════════════════════════════════════════════════════════════════
 
 #[test]
 fn test_insert_swipe_failure() {

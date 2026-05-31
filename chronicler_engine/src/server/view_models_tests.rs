@@ -1,6 +1,3 @@
-// Server Core Unit Tests - Phase 3
-// These tests cover view models, renderers, and utility functions
-
 use crate::server::view_models::markdown_to_html;
 
 #[test]

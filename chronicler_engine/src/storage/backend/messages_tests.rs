@@ -1,11 +1,3 @@
-// ═══════════════════════════════════════════════════════════════════════════════
-// Message Storage Backend Tests
-// ═══════════════════════════════════════════════════════════════════════════════
-// Purpose: Test message storage operations
-// Coverage: insert, delete, load, soft delete, restore, purge
-// Note: Requires game context (game_id) - storage.set_game_id() must be called
-// ═══════════════════════════════════════════════════════════════════════════════
-
 use crate::model::message::Message;
 use crate::model::state::MessageType;
 use crate::storage::backend::{Operation, Storage, TestOverride};
@@ -25,10 +17,6 @@ fn dummy_message(text: &str) -> Message {
         None,
     )
 }
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Insert Message
-// ═══════════════════════════════════════════════════════════════════════════════
 
 #[test]
 fn test_insert_message_returns_positive_id() {
@@ -66,14 +54,10 @@ fn test_insert_message_clears_swipes() {
         event_header: None,
     });
 
-    let id = storage.insert_message(&msg).unwrap();
+    let _id = storage.insert_message(&msg).unwrap();
     let loaded = storage.load_message_rows().unwrap();
     assert_eq!(loaded[0].swipes.len(), 0);
 }
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Load Messages
-// ═══════════════════════════════════════════════════════════════════════════════
 
 #[test]
 fn test_load_message_rows_empty() {
@@ -140,10 +124,6 @@ fn test_load_message_rows_excludes_other_games() {
     assert_eq!(rows[0].text(), "game1");
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Delete Message
-// ═══════════════════════════════════════════════════════════════════════════════
-
 #[test]
 fn test_delete_message_existing() {
     let storage = Storage::new_in_memory();
@@ -173,10 +153,6 @@ fn test_delete_message_sqlite() {
     let rows = storage.load_message_rows().unwrap();
     assert!(rows.is_empty());
 }
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Soft Delete / Restore / Purge
-// ═══════════════════════════════════════════════════════════════════════════════
 
 #[test]
 fn test_soft_delete_hides_from_load() {
@@ -266,10 +242,6 @@ fn test_purge_multiple_ids() {
 }
 
 #[test]
-// ═══════════════════════════════════════════════════════════════════════════════
-// Message Sender Types
-// ═══════════════════════════════════════════════════════════════════════════════
-#[test]
 fn test_message_with_sender_user() {
     let storage = Storage::new_in_memory();
     storage.set_game_id(1);
@@ -314,10 +286,6 @@ fn test_message_with_sender_none() {
     assert_eq!(rows[0].sender, None);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Message Types
-// ═══════════════════════════════════════════════════════════════════════════════
-
 #[test]
 fn test_message_input_type() {
     let storage = Storage::new_in_memory();
@@ -350,10 +318,6 @@ fn test_message_narration_type() {
     let rows = storage.load_message_rows().unwrap();
     assert_eq!(rows[0].message_type, MessageType::Narration);
 }
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Error Injection Tests
-// ═══════════════════════════════════════════════════════════════════════════════
 
 #[test]
 fn test_insert_message_failure() {

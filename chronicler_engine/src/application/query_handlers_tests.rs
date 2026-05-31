@@ -1,9 +1,10 @@
+use std::sync::Arc;
+
 use super::*;
 use crate::application::game_service::GameServiceContext;
 use crate::model::state::GameState;
 use crate::storage::Storage;
 use crate::test_support::fixtures::{TestWorld, TestMap, TestPlayer};
-use std::sync::Arc;
 
 fn minimal_state() -> GameState {
     GameState::new(
@@ -48,7 +49,6 @@ fn test_get_current_game_name_unknown_when_no_game() {
     let ctx = minimal_ctx();
     let handlers = QueryHandlers::new();
     let name = handlers.get_current_game_name(ctx).unwrap();
-    // TestWorld creates a game with name "default"
     assert_eq!(name, "default");
 }
 

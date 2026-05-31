@@ -43,7 +43,6 @@ pub(crate) fn build_router(app_state: AppState) -> Router {
             "/status/reset-generating",
             post(fragments::reset_generating_handler),
         )
-        // History edit, delete & retry endpoints
         .route("/history/:id", post(fragments::edit_history_handler))
         .route("/history/delete", post(fragments::delete_history_handler))
         .route("/swipe/new", post(fragments::retry_handler))
@@ -61,7 +60,6 @@ pub(crate) fn build_router(app_state: AppState) -> Router {
             "/fragment/llm-messages",
             get(fragments::llm_messages_fragment),
         )
-        // Settings endpoints
         .route("/fragment/settings", get(settings_fragment::settings_panel))
         .route("/settings", post(settings_fragment::save_settings_handler))
         .route(
@@ -96,7 +94,6 @@ pub(crate) fn build_router(app_state: AppState) -> Router {
             "/settings/text-check",
             post(settings_fragment::save_text_check_handler),
         )
-        // Prompt Presets endpoints
         .route(
             "/fragment/prompt-presets",
             get(prompt_presets_fragment::panel_handler),
@@ -133,7 +130,6 @@ pub(crate) fn build_router(app_state: AppState) -> Router {
             "/prompt-presets/:id/activate",
             post(prompt_presets_fragment::activate_preset_handler),
         )
-        // NOTE: dev-only diagnostic endpoint
         .route("/debug/state", get(debug::debug_state_handler))
         .nest_service("/assets", ServeDir::new("assets"))
         .nest_service("/data", ServeDir::new("data"))

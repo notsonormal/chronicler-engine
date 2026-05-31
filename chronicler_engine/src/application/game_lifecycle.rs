@@ -1,4 +1,3 @@
-
 use crate::application::ApplicationError;
 use crate::application::context::GameServiceContext;
 use crate::bootstrap::build_fresh_initial_state;
@@ -11,7 +10,6 @@ impl GameLifecycleService {
     pub fn new() -> Self {
         Self {}
     }
-
     pub fn create_game(&self, ctx: GameServiceContext) -> Result<u64, ApplicationError> {
         if ctx.is_generating.load(std::sync::atomic::Ordering::SeqCst) {
             return Err(ApplicationError::ConcurrentGeneration);
@@ -45,7 +43,9 @@ impl GameLifecycleService {
                         msg.id = id;
                         for (index, swipe) in msg.swipes.iter().enumerate() {
                             if let Err(e) = ctx.storage.insert_swipe(id, swipe, index) {
-                                tracing::error!("Create game failed: could not persist swipe {index}: {e}");
+                                tracing::error!(
+                                    "Create game failed: could not persist swipe {index}: {e}"
+                                );
                             }
                         }
                     }
@@ -137,5 +137,11 @@ impl GameLifecycleService {
         }
 
         Ok(())
+    }
+}
+
+impl Default for GameLifecycleService {
+    fn default() -> Self {
+        Self::new()
     }
 }

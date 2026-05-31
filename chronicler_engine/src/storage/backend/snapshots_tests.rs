@@ -1,12 +1,4 @@
-// ═══════════════════════════════════════════════════════════════════════════════
-// Game State Snapshot Storage Backend Tests
-// ═══════════════════════════════════════════════════════════════════════════════
-// Purpose: Test game state snapshot storage operations
-// Coverage: save, load_latest, load_by_id, field serialization
-// Note: Requires game context - snapshots are scoped to game_id
-// ═══════════════════════════════════════════════════════════════════════════════
-
-use crate::model::state::{MovementState, NarrativeState, SceneState};
+use crate::model::state::{MovementState, SceneState};
 use crate::model::state_snapshot::{GameStateSnapshot, NarrativeSnapshot};
 use crate::model::trigger::NpcEncounterLog;
 use crate::storage::backend::{Operation, Storage, TestOverride};
@@ -30,10 +22,6 @@ fn dummy_snapshot() -> GameStateSnapshot {
         created_at: chrono::Utc::now(),
     }
 }
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Save Snapshot
-// ═══════════════════════════════════════════════════════════════════════════════
 
 #[test]
 fn test_save_snapshot_returns_positive_id() {
@@ -69,10 +57,6 @@ fn test_save_snapshot_increments_id() {
     assert!(id2 > id1);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Load Latest Snapshot
-// ═══════════════════════════════════════════════════════════════════════════════
-
 #[test]
 fn test_load_latest_snapshot_empty() {
     let storage = Storage::new_in_memory();
@@ -92,8 +76,8 @@ fn test_load_latest_snapshot_single() {
     assert_eq!(loaded.movement.current_room_id, "start");
 }
 
-#[test]
-fn test_load_latest_snapshot_most_recent() {
+#[tokio::test]
+async fn test_load_latest_snapshot_most_recent() {
     let storage = Storage::new_in_memory();
     storage.set_game_id(1);
 
@@ -101,7 +85,7 @@ fn test_load_latest_snapshot_most_recent() {
     snap1.movement.current_room_id = "room1".to_string();
     storage.save_snapshot(&snap1).unwrap();
 
-    std::thread::sleep(std::time::Duration::from_millis(10));
+    tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
 
     let mut snap2 = dummy_snapshot();
     snap2.movement.current_room_id = "room2".to_string();
@@ -130,10 +114,6 @@ fn test_load_latest_snapshot_excludes_other_games() {
     assert_eq!(loaded.movement.current_room_id, "game1");
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Load Snapshot by ID
-// ═══════════════════════════════════════════════════════════════════════════════
-
 #[test]
 fn test_load_snapshot_by_id_found() {
     let storage = Storage::new_in_memory();
@@ -157,7 +137,7 @@ fn test_load_snapshot_by_id_excludes_other_games() {
     let storage = Storage::new_in_memory();
 
     storage.set_game_id(1);
-    let id1 = storage.save_snapshot(&dummy_snapshot()).unwrap();
+    let _id1 = storage.save_snapshot(&dummy_snapshot()).unwrap();
 
     storage.set_game_id(2);
     let id2 = storage.save_snapshot(&dummy_snapshot()).unwrap();
@@ -166,10 +146,6 @@ fn test_load_snapshot_by_id_excludes_other_games() {
     let result = storage.load_snapshot_by_id(id2).unwrap();
     assert!(result.is_none());
 }
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Snapshot Field Serialization
-// ═══════════════════════════════════════════════════════════════════════════════
 
 #[test]
 fn test_snapshot_movement_field() {
@@ -250,10 +226,6 @@ fn test_snapshot_db_id_assigned() {
 
     assert_eq!(loaded.db_id, Some(id));
 }
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Error Injection Tests
-// ═══════════════════════════════════════════════════════════════════════════════
 
 #[test]
 fn test_save_snapshot_failure() {

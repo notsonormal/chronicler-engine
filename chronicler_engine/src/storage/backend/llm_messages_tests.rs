@@ -1,11 +1,3 @@
-// ═══════════════════════════════════════════════════════════════════════════════
-// LLM Message Storage Backend Tests
-// ═══════════════════════════════════════════════════════════════════════════════
-// Purpose: Test LLM message audit log storage
-// Coverage: save, list, 50-message cap, field preservation
-// Note: LLM messages are global (not game-specific)
-// ═══════════════════════════════════════════════════════════════════════════════
-
 use crate::model::llm_message::LlmMessageBuilder;
 use crate::storage::backend::{Operation, Storage, TestOverride};
 use crate::storage::db::DbPool;
@@ -29,10 +21,6 @@ fn dummy_llm_message(model: &str) -> crate::model::llm_message::LlmMessage {
         .build()
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Save LLM Message
-// ═══════════════════════════════════════════════════════════════════════════════
-
 #[test]
 fn test_save_llm_message_in_memory() {
     let storage = Storage::new_in_memory();
@@ -52,10 +40,6 @@ fn test_save_llm_message_sqlite() {
     let list = storage.list_latest_llm_messages(50).unwrap();
     assert_eq!(list.len(), 1);
 }
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// List Latest LLM Messages
-// ═══════════════════════════════════════════════════════════════════════════════
 
 #[test]
 fn test_list_latest_llm_messages_empty() {
@@ -85,13 +69,13 @@ fn test_list_latest_llm_messages_multiple() {
     assert_eq!(list.len(), 3);
 }
 
-#[test]
-fn test_list_latest_llm_messages_ordered_by_created_at() {
+#[tokio::test]
+async fn test_list_latest_llm_messages_ordered_by_created_at() {
     let storage = Storage::new_in_memory();
     storage
         .save_llm_message(&dummy_llm_message("first"))
         .unwrap();
-    std::thread::sleep(std::time::Duration::from_millis(10));
+    tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
     storage
         .save_llm_message(&dummy_llm_message("second"))
         .unwrap();
@@ -113,10 +97,6 @@ fn test_list_latest_llm_messages_limit_applied() {
     let list = storage.list_latest_llm_messages(3).unwrap();
     assert_eq!(list.len(), 3);
 }
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// 50-Message Cap (Pruning)
-// ═══════════════════════════════════════════════════════════════════════════════
 
 #[test]
 fn test_llm_message_cap_prunes_oldest() {
@@ -161,10 +141,6 @@ fn test_llm_message_cap_prunes_in_memory() {
     assert_eq!(list.len(), 50);
     assert_eq!(list[0].model_name, "model-5");
 }
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Field Preservation
-// ═══════════════════════════════════════════════════════════════════════════════
 
 #[test]
 fn test_llm_message_all_fields_preserved() {
@@ -284,10 +260,6 @@ fn test_llm_message_raw_json_blobs() {
     assert!(list[0].raw_request_json.len() > 1000);
     assert!(list[0].raw_response_json.len() > 1000);
 }
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Error Injection Tests
-// ═══════════════════════════════════════════════════════════════════════════════
 
 #[test]
 fn test_save_llm_message_failure() {

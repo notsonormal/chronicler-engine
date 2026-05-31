@@ -1,4 +1,3 @@
-// Bootstrap module is allowed to use stdout/stderr for CLI output.
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
 mod load;
@@ -15,6 +14,7 @@ pub use state::build_fresh_initial_state;
 pub use validate::validate_loaded_data;
 #[cfg(test)]
 mod load_tests;
+#[cfg(test)]
 mod run_tests;
 #[cfg(test)]
 mod validate_tests;

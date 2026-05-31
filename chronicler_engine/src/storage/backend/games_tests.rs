@@ -1,10 +1,3 @@
-// ═══════════════════════════════════════════════════════════════════════════════
-// Game Storage Backend Tests
-// ═══════════════════════════════════════════════════════════════════════════════
-// Purpose: Test game CRUD operations
-// Note: Some tests may have isolation issues due to shared InMemory state
-// ═══════════════════════════════════════════════════════════════════════════════
-
 use crate::storage::backend::{Operation, Storage, TestOverride};
 use crate::storage::db::DbPool;
 
@@ -12,10 +5,6 @@ fn sqlite_storage() -> Storage {
     let pool = DbPool::new(":memory:").unwrap();
     Storage::new_sqlite(pool, 1)
 }
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Create Game
-// ═══════════════════════════════════════════════════════════════════════════════
 
 #[test]
 fn test_create_game_returns_positive_id() {
@@ -46,10 +35,6 @@ fn test_create_game_in_memory() {
     assert_eq!(game.name, "Game A");
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Get Game
-// ═══════════════════════════════════════════════════════════════════════════════
-
 #[test]
 fn test_get_game_found() {
     let storage = Storage::new_in_memory();
@@ -72,10 +57,6 @@ fn test_get_game_sqlite() {
     let game = storage.get_game(id).unwrap().unwrap();
     assert_eq!(game.name, "SQLiteGame");
 }
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Delete Game
-// ═══════════════════════════════════════════════════════════════════════════════
 
 #[test]
 fn test_delete_game_existing() {
@@ -104,10 +85,6 @@ fn test_delete_game_sqlite() {
     assert!(game.is_none());
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Timestamps
-// ═══════════════════════════════════════════════════════════════════════════════
-
 #[test]
 fn test_game_timestamps_created_at() {
     let storage = Storage::new_in_memory();
@@ -118,10 +95,6 @@ fn test_game_timestamps_created_at() {
     let diff = now - game.created_at;
     assert!(diff.num_seconds() < 2);
 }
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Error Injection Tests
-// ═══════════════════════════════════════════════════════════════════════════════
 
 #[test]
 fn test_create_game_failure() {

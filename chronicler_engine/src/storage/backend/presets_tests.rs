@@ -1,10 +1,3 @@
-// ═══════════════════════════════════════════════════════════════════════════════
-// Preset Storage Backend Tests
-// ═══════════════════════════════════════════════════════════════════════════════
-// Purpose: Test prompt preset storage operations
-// Coverage: list, get, save (upsert), delete for System and Quantifier types
-// ═══════════════════════════════════════════════════════════════════════════════
-
 use crate::model::prompt_preset::{PresetType, PromptPreset};
 use crate::storage::backend::{Operation, Storage, TestOverride};
 
@@ -20,10 +13,6 @@ fn dummy_preset(id: &str, preset_type: PresetType) -> PromptPreset {
         is_default: false,
     }
 }
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// List Presets
-// ═══════════════════════════════════════════════════════════════════════════════
 
 #[test]
 fn test_list_presets_filters_by_type() {
@@ -51,10 +40,6 @@ fn test_list_presets_quantifier_only() {
     assert_eq!(quantifier.len(), 1);
     assert_eq!(quantifier[0].id, "q1");
 }
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Get Preset
-// ═══════════════════════════════════════════════════════════════════════════════
 
 #[test]
 fn test_get_preset_found() {
@@ -96,10 +81,6 @@ fn test_get_preset_quantifier_type() {
     assert_eq!(loaded.preset_type, PresetType::Quantifier);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Save Preset (Upsert)
-// ═══════════════════════════════════════════════════════════════════════════════
-
 #[test]
 fn test_save_preset_insert_new() {
     let storage = Storage::new_in_memory();
@@ -135,10 +116,6 @@ fn test_save_preset_update_existing() {
     assert_eq!(loaded.name, "Updated");
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Delete Preset
-// ═══════════════════════════════════════════════════════════════════════════════
-
 #[test]
 fn test_delete_preset_existing() {
     let storage = Storage::new_in_memory();
@@ -157,10 +134,6 @@ fn test_delete_preset_nonexistent() {
     let result = storage.delete_preset("nonexistent");
     assert!(result.is_ok());
 }
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Error Injection Tests
-// ═══════════════════════════════════════════════════════════════════════════════
 
 #[test]
 fn test_list_presets_failure() {
