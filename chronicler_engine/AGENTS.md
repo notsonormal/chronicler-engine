@@ -98,7 +98,7 @@ D:\John\Git\oh-my-pi
 
 ## YOUR RESPONSIBILITY 
 
-You are /mo
+You are responsible for the overall health of the Chronicler Engine. It is more important that the repository is healthy and working (e.g. the build passes) than your specific task succeeded. For example, you should not arbitrarily delete or revert unknown or unexpected files (especially untracked file) simply because they are not working or otherwise in the way of your specific task.
 
 ## DOCUMENTATION STRATEGY: SEMANTIC MAPPING
 This project follows a **Spec-Driven Implementation** (SDI) strategy.
@@ -117,8 +117,7 @@ This project follows a **Spec-Driven Implementation** (SDI) strategy.
 This project relies on a comprehensive suite of integration tests as the ultimate source of truth for behavior.
 - **Tests as Documentation**: If you don't understand how a component works, read its tests in `tests/` before reading the source code.
 - **Test-Driven Debugging**: Before fixing a bug, find or create a failing test case. If tests pass but the bug exists, the test suite is missing a scenario.
-- **No Regression**: Every change must pass `python build.py` before commit.  
-  *During development*, iterate with the specific tool (e.g. `cargo clippy` for lint fixes, `cargo nextest run <pattern>` for test fixes). Run `build.py` only for final verification.
+- **No Regression**: Every code change must pass `python build.py` before task/plan completion. *During development*, iterate with the specific tool (e.g. `cargo clippy` for lint fixes, `cargo nextest run <pattern>` for test fixes). Run `build.py` only for final verification.
 
 ### TEST FAILURE HANDLING
 
@@ -128,7 +127,6 @@ When tests fail, you MUST:
 3. **Verify your assumptions** - if you claim "this test skips when X is missing", verify X is actually missing and the skip logic exists
 4. **Never rationalize failures away** - a test failure is a real signal that requires investigation, not dismissal
 5. **Investigate pre-existing test failures and flaky tests** - Even if a test seems unrelated to your changes, check it anyway, as often it is related. And even if it is unrelated, failing tests need to be fixed regardless. 
-6. **Don't delete failing tests because they are failing** - Tests were created for a reason. You should not arbitrary delete tests (especially untracked tests) simply because they are in the way. 
 
 If you're unsure why a test failed, say so and investigate - don't invent explanations.
 

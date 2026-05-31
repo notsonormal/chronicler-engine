@@ -95,9 +95,7 @@ fn test_execute_action_saves_narration() {
 
     assert!(
         final_history_len > initial_history_len,
-        "History should grow after action execution (before={}, after={})",
-        initial_history_len,
-        final_history_len
+        "History should grow after action execution (before={initial_history_len}, after={final_history_len})"
     );
 }
 
@@ -130,8 +128,16 @@ fn test_execute_action_clears_last_trigger() {
     let state = create_test_state();
     let ctx = make_test_context(state);
 
-    service.execute_action(ctx.clone(), "first action".to_string(), "Player".to_string());
-    service.execute_action(ctx.clone(), "second action".to_string(), "Player".to_string());
+    service.execute_action(
+        ctx.clone(),
+        "first action".to_string(),
+        "Player".to_string(),
+    );
+    service.execute_action(
+        ctx.clone(),
+        "second action".to_string(),
+        "Player".to_string(),
+    );
 
     let guard = latest_state(&ctx);
     assert!(
@@ -154,12 +160,14 @@ fn test_execute_action_preserves_input_log() {
     service.execute_action(ctx.clone(), "input two".to_string(), "Player".to_string());
 
     let messages = ctx.storage.load_message_rows().unwrap();
-    let input_count = messages.iter().filter(|m| m.text().contains("input")).count();
+    let input_count = messages
+        .iter()
+        .filter(|m| m.text().contains("input"))
+        .count();
 
     assert!(
         input_count >= 2,
-        "Multiple inputs should be preserved in history (found {})",
-        input_count
+        "Multiple inputs should be preserved in history (found={input_count})"
     );
 }
 
@@ -195,10 +203,17 @@ fn test_execute_action_trigger_continuation() {
         Arc::new(MockBackend::default()),
     ));
 
-    service.execute_action(ctx.clone(), "approach NPC".to_string(), "Player".to_string());
+    service.execute_action(
+        ctx.clone(),
+        "approach NPC".to_string(),
+        "Player".to_string(),
+    );
 
     let completed = wait_for_generation_complete(&ctx, 500);
-    assert!(completed, "Trigger narration should complete within timeout");
+    assert!(
+        completed,
+        "Trigger narration should complete within timeout"
+    );
 
     let messages = ctx.storage.load_message_rows().unwrap();
     assert!(
