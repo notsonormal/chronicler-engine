@@ -18,3 +18,4 @@ pub use query_handlers::QueryHandlers;
 
 #[cfg(test)]
 mod context_tests;
+#[cfg(test)] mod query_handlers_tests;
