@@ -1,13 +1,15 @@
 use std::sync::Arc;
 
+use tokio_util::sync::CancellationToken;
+
 use chronicler_engine::application::game_service::DefaultGameService;
+use chronicler_engine::application::DefaultApplicationService;
 use chronicler_engine::model::character::{CharacterSheet, PlayerCard};
 use chronicler_engine::model::map::{MapDef, Overworld};
 use chronicler_engine::model::settings::AppSettings;
 use chronicler_engine::model::world::WorldCard;
 use chronicler_engine::server::AppState;
 use chronicler_engine::storage::Storage;
-use tokio_util::sync::CancellationToken;
 
 #[test]
 fn test_settings_recover_from_poisoned_rwlock() {
@@ -54,11 +56,7 @@ fn test_settings_recover_from_poisoned_rwlock() {
         }),
         npcs: Arc::new(std::collections::HashMap::new()),
         game_service: Arc::clone(&game_service),
-        application_service: Arc::new(
-            chronicler_engine::application::application_service::DefaultApplicationService::new(
-                Arc::clone(&game_service),
-            ),
-        ),
+        application_service: Arc::new(DefaultApplicationService::new(Arc::clone(&game_service))),
         settings,
         cancel_token: Arc::new(std::sync::RwLock::new(CancellationToken::new())),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -114,11 +112,7 @@ fn test_cancel_token_recover_from_poisoned_rwlock() {
         }),
         npcs: Arc::new(std::collections::HashMap::new()),
         game_service: Arc::clone(&game_service),
-        application_service: Arc::new(
-            chronicler_engine::application::application_service::DefaultApplicationService::new(
-                Arc::clone(&game_service),
-            ),
-        ),
+        application_service: Arc::new(DefaultApplicationService::new(Arc::clone(&game_service))),
         settings: Arc::new(std::sync::RwLock::new(AppSettings::default())),
         cancel_token,
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),

@@ -3,8 +3,8 @@
 //! These tests verify that the parser correctly handles the exact JSON structures
 //! returned by the quantifier LLM, including edge cases that previously caused
 //! false positive "Low confidence" messages.
-use chronicler_engine::narrative::agents::quantifier::parser::parse_quantifier_response_with_movement;
-use chronicler_engine::model::quantifier::{MovementType, QuantifierConfidence};
+use crate::narrative::agents::quantifier::parser::parse_quantifier_response_with_movement;
+use crate::model::quantifier::{MovementType, QuantifierConfidence};
 
 #[test]
 fn test_parse_valid_json_with_null_movement() {

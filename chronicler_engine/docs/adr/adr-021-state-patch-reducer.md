@@ -57,4 +57,4 @@ let patch = agents
 
 - Issue: State patch reducer for post-generation agent composition
 - Code: `src/model/agent.rs` (`StatePatch::merge`)
-- Tests: `tests/components/state_patch_tests.rs`
+ Tests: `tests/integration/model/state_patch_tests.rs`
