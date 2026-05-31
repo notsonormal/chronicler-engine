@@ -7,7 +7,7 @@ fn test_delayed_llm_completes_without_deadlock() {
     let mut state = create_test_state();
     state.narrative.history.clear();
     state.narrative.input_buffer.status = GenerationStatus::Generating;
-    let ctx = make_test_context(state);
+    let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::with_delay(200)),
         Arc::new(MockBackend::default()),
@@ -32,7 +32,7 @@ fn test_quantifier_detects_movement() {
     let mut state = create_test_state();
     state.narrative.history.clear();
     state.narrative.input_buffer.status = GenerationStatus::Generating;
-    let ctx = make_test_context(state);
+    let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::default()),
         Arc::new(MockBackend {
@@ -69,7 +69,7 @@ fn test_quantifier_detects_npc_presence_and_fires_trigger() {
     if let Some(encounter) = state.npc_encounter_log.npcs.get_mut("shopkeeper") {
         encounter.times_met = 0;
     }
-    let ctx = make_test_context(state);
+    let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::default()),
         Arc::new(MockBackend {
@@ -114,7 +114,7 @@ fn test_empty_llm_response_handled_gracefully() {
     let mut state = create_test_state();
     state.narrative.history.clear();
     state.narrative.input_buffer.status = GenerationStatus::Generating;
-    let ctx = make_test_context(state);
+    let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::with_empty_response()),
         Arc::new(MockBackend::default()),
@@ -155,7 +155,7 @@ fn test_failing_trigger_narration_does_not_crash() {
     if let Some(encounter) = state.npc_encounter_log.npcs.get_mut("shopkeeper") {
         encounter.times_met = 0;
     }
-    let ctx = make_test_context(state);
+    let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::with_failing_trigger_narration()),
         Arc::new(MockBackend {
@@ -199,7 +199,7 @@ fn test_failing_trigger_narration_does_not_crash() {
 fn test_pipeline_cancels_when_token_cancelled() {
     let mut state = create_test_state();
     state.narrative.history.clear();
-    let ctx = make_test_context(state);
+    let ctx = make_test_context_with_sqlite(state).unwrap();
     ctx.cancel_token.cancel();
     let backend = working_backend();
 
@@ -218,7 +218,7 @@ async fn test_cancellation_resets_state_to_idle() {
     let mut state = create_test_state();
     state.narrative.history.clear();
     state.narrative.input_buffer.status = GenerationStatus::Generating;
-    let ctx = make_test_context(state);
+    let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::with_delay(50)),
         Arc::new(MockBackend::default()),
@@ -240,7 +240,7 @@ async fn test_pipeline_cancels_after_main_narration() {
     let mut state = create_test_state();
     state.narrative.history.clear();
     state.narrative.input_buffer.status = GenerationStatus::Generating;
-    let ctx = make_test_context(state);
+    let ctx = make_test_context_with_sqlite(state).unwrap();
     let mock_narrator = Arc::new(MockBackend::with_delay(50));
     let backend = Arc::new(DefaultGameService::with_mock_quantifier(
         mock_narrator.clone(),
@@ -293,7 +293,7 @@ async fn test_pipeline_cancels_during_trigger_continuation() {
     if let Some(encounter) = state.npc_encounter_log.npcs.get_mut("shopkeeper") {
         encounter.times_met = 0;
     }
-    let ctx = make_test_context(state);
+    let ctx = make_test_context_with_sqlite(state).unwrap();
     let mock_narrator = Arc::new(MockBackend::with_trigger_delay(50));
     let backend = Arc::new(DefaultGameService::with_mock_quantifier(
         mock_narrator.clone(),
@@ -353,7 +353,7 @@ fn test_pre_main_snapshot_saved_before_narration() {
     let mut state = create_test_state();
     state.narrative.history.clear();
     state.narrative.input_buffer.status = GenerationStatus::Idle;
-    let ctx = make_test_context(state);
+    let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::default()),
         Arc::new(MockBackend::default()),
@@ -380,7 +380,7 @@ fn test_pre_event_snapshot_saved_before_continuation() {
     if let Some(encounter) = state.npc_encounter_log.npcs.get_mut("shopkeeper") {
         encounter.times_met = 0;
     }
-    let ctx = make_test_context(state);
+    let ctx = make_test_context_with_sqlite(state).unwrap();
 
     let quantifier = MockBackend {
         per_call_prompt_responses: vec![r#"{"npcs_in_room": ["shopkeeper"]}"#.to_string()],
@@ -413,7 +413,7 @@ fn test_pipeline_with_quantifier() {
     let mut state = create_test_state();
     state.narrative.history.clear();
     state.narrative.input_buffer.status = GenerationStatus::Generating;
-    let ctx = make_test_context(state);
+    let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::default()),
         Arc::new(MockBackend::default()),

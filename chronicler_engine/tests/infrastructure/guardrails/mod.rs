@@ -5,7 +5,7 @@ pub mod structure;
 pub mod style;
 
 pub use layers::*;
-pub use structure::*;
+pub use structure::{check_no_legacy_test_context, *};
 pub use style::*;
 
 // ── Severity & Violation Types ──
@@ -182,4 +182,8 @@ fn guardrails_server_layer_boundaries() {
 #[test]
 fn guardrails_test_layer_boundaries() {
     check_tests_files("test layer boundary", check_test_layer_boundaries);
+}
+#[test]
+fn guardrails_no_legacy_test_context() {
+    check_tests_files("legacy test context", check_no_legacy_test_context);
 }

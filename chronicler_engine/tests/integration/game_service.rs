@@ -33,7 +33,7 @@ fn run_action(
 ) -> chronicler_engine::model::state::GameState {
     let mut state = state;
     state.narrative.history.clear();
-    let ctx = make_test_context(state);
+    let ctx = make_test_context_with_sqlite(state).unwrap();
     service.execute_action(ctx.clone(), command.to_string(), "Player".to_string());
     latest_state(&ctx)
 }
@@ -81,7 +81,7 @@ fn test_default_game_service_with_backends() {
     );
     let mut state = create_test_state();
     state.narrative.history.clear();
-    let ctx = make_test_context(state);
+    let ctx = make_test_context_with_sqlite(state).unwrap();
     service.execute_action(ctx.clone(), "look".to_string(), "Player".to_string());
     let guard = latest_state(&ctx);
     assert!(!guard.narrative.input_buffer.status.is_generating());
@@ -95,7 +95,7 @@ fn test_default_game_service_with_mock_quantifier() {
     );
     let mut state = create_test_state();
     state.narrative.history.clear();
-    let ctx = make_test_context(state);
+    let ctx = make_test_context_with_sqlite(state).unwrap();
     service.execute_action(ctx.clone(), "look".to_string(), "Player".to_string());
     let guard = latest_state(&ctx);
     assert!(!guard.narrative.input_buffer.status.is_generating());

@@ -174,6 +174,33 @@ pub fn check_mod_purity(path: &str, _content: &str, ast: &File) -> Vec<Violation
     violations
 }
 
+// -- No legacy make_test_context in integration tests --
+
+pub fn check_no_legacy_test_context(path: &str, content: &str) -> Vec<Violation> {
+    let mut violations = Vec::new();
+
+    // Only check integration tests
+    if !path.starts_with("integration/") {
+        return violations;
+    }
+
+    for (line_num, line) in content.lines().enumerate() {
+        // Skip comments
+        let trimmed = line.trim();
+        if trimmed.starts_with("//") || trimmed.starts_with("/*") {
+            continue;
+        }
+
+        if line.contains("make_test_context(") && !line.contains("make_test_context_with_sqlite(") {
+            violations.push(Violation::error(
+                path,
+                line_num + 1,
+                "Integration tests must use make_test_context_with_sqlite() for consistent SQLite testing.".to_string(),
+            ));
+        }
+    }
+    violations
+}
 // ── No std::thread in production code ──
 
 fn check_no_std_thread(path: &str, content: &str) -> Vec<Violation> {

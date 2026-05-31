@@ -475,7 +475,7 @@ fn benchmark_trigger_wrong_room_id() {
         vec!["trigger_npc".to_string()],
         vec![npc_with_trigger],
     );
-    let ctx = make_test_context(state);
+    let ctx = make_test_context_with_sqlite(state).unwrap();
 
     let service = DefaultGameService::with_mock_quantifier(
         Arc::new(chronicler_engine::narrative::llm::MockBackend::default()),
@@ -564,7 +564,7 @@ fn benchmark_state_stuck_generating() {
         encounter.times_met = 0;
     }
 
-    let ctx = make_test_context(state);
+    let ctx = make_test_context_with_sqlite(state).unwrap();
 
     let service = DefaultGameService::with_mock_quantifier(
         Arc::new(chronicler_engine::narrative::llm::MockBackend::with_failing_trigger_narration()),

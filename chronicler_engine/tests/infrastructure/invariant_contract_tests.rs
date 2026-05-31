@@ -151,7 +151,7 @@ fn test_inv004_cancellable_at_boundaries() {
     let mut state = create_test_state();
     state.narrative.history.clear();
 
-    let ctx = make_test_context(state);
+    let ctx = make_test_context_with_sqlite(state).unwrap();
     let cancel_token = ctx.cancel_token.clone();
 
     // Backend with a small delay so cancellation has time to fire.

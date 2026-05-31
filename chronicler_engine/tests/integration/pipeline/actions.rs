@@ -4,7 +4,7 @@ use super::*;
 fn test_pipeline_executes_and_persists_narration() {
     let mut state = create_test_state();
     state.narrative.history.clear();
-    let ctx = make_test_context(state);
+    let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = working_backend();
 
     backend.execute_action(ctx.clone(), "look".to_string(), "Player".to_string());
@@ -34,7 +34,7 @@ fn test_pipeline_persists_input_before_narration() {
         Some("Player".to_string()),
         MessageType::Input,
     );
-    let ctx = make_test_context(state);
+    let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = working_backend();
 
     backend.execute_action(
@@ -64,7 +64,7 @@ fn test_pipeline_handles_room_not_found() {
     let mut state = create_test_state();
     state.narrative.history.clear();
     state.movement.current_room_id = "non_existent_room".to_string();
-    let ctx = make_test_context(state);
+    let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = working_backend();
 
     backend.execute_action(ctx.clone(), "look".to_string(), "Player".to_string());
@@ -80,7 +80,7 @@ fn test_pipeline_handles_room_not_found() {
 fn test_pipeline_handles_llm_failure() {
     let mut state = create_test_state();
     state.narrative.history.clear();
-    let ctx = make_test_context(state);
+    let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = failing_backend();
 
     backend.execute_action(ctx.clone(), "look".to_string(), "Player".to_string());
@@ -111,7 +111,7 @@ fn test_pipeline_clears_last_trigger() {
         user_prompt: "user".to_string(),
         max_tokens: None,
     });
-    let ctx = make_test_context(state);
+    let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = working_backend();
 
     backend.execute_action(ctx.clone(), "look".to_string(), "Player".to_string());
@@ -128,7 +128,7 @@ fn test_pipeline_phase_transitions() {
     let mut state = create_test_state();
     state.narrative.history.clear();
     state.narrative.input_buffer.status = GenerationStatus::Idle;
-    let ctx = make_test_context(state);
+    let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = working_backend();
 
     backend.execute_action(ctx.clone(), "look".to_string(), "Player".to_string());
@@ -146,7 +146,7 @@ fn test_pipeline_phase_stays_narrating_on_error() {
     let mut state = create_test_state();
     state.narrative.history.clear();
     state.narrative.input_buffer.status = GenerationStatus::Idle;
-    let ctx = make_test_context(state);
+    let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = failing_backend();
 
     backend.execute_action(ctx.clone(), "look".to_string(), "Player".to_string());
@@ -163,7 +163,7 @@ fn test_pipeline_phase_stays_narrating_on_error() {
 fn test_pipeline_empty_input() {
     let mut state = create_test_state();
     state.narrative.history.clear();
-    let ctx = make_test_context(state);
+    let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = failing_backend();
 
     backend.execute_action(ctx.clone(), "".to_string(), "Player".to_string());

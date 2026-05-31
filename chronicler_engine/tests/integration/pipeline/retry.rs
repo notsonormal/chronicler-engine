@@ -11,7 +11,7 @@ fn test_retry_finds_last_input_and_runs_pipeline() {
         Some("Player".to_string()),
         MessageType::Input,
     );
-    let ctx = make_test_context(state);
+    let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = working_backend();
 
     backend.execute_action(ctx.clone(), "look around".to_string(), "Player".to_string());
@@ -43,7 +43,7 @@ fn test_retry_finds_last_input_and_runs_pipeline() {
 fn test_retry_with_empty_history_is_noop() {
     let mut state = create_test_state();
     state.narrative.history.clear();
-    let ctx = make_test_context(state);
+    let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = working_backend();
 
     backend.retry_last_response(ctx.clone());
@@ -61,7 +61,7 @@ fn test_retry_after_llm_failure_succeeds() {
         Some("Player".to_string()),
         MessageType::Input,
     );
-    let ctx = make_test_context(state);
+    let ctx = make_test_context_with_sqlite(state).unwrap();
     let failing = failing_backend();
 
     failing.execute_action(ctx.clone(), "look".to_string(), "Player".to_string());
@@ -105,7 +105,7 @@ fn test_retry_no_input_text() {
     state.add_message("System boot".to_string(), None, MessageType::System);
     state.add_message("You see a room.".to_string(), None, MessageType::Narration);
 
-    let ctx = make_test_context(state);
+    let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = DefaultGameService::with_mock_quantifier(
         Arc::new(MockBackend::default()),
         Arc::new(MockBackend::default()),
@@ -128,7 +128,7 @@ fn test_retry_room_not_found() {
     );
     state.movement.current_room_id = "non_existent_room".to_string();
 
-    let ctx = make_test_context(state.clone());
+    let ctx = make_test_context_with_sqlite(state.clone()).unwrap();
     let pre_main = GameStateSnapshot::from_game_state(&state);
     let pre_main_id = ctx.storage.save_snapshot(&pre_main).unwrap();
     for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
@@ -169,7 +169,7 @@ fn test_retry_llm_error() {
         MessageType::Input,
     );
 
-    let ctx = make_test_context(state.clone());
+    let ctx = make_test_context_with_sqlite(state.clone()).unwrap();
     let pre_main = GameStateSnapshot::from_game_state(&state);
     let pre_main_id = ctx.storage.save_snapshot(&pre_main).unwrap();
     for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
@@ -210,7 +210,7 @@ fn test_retry_empty_narration() {
         MessageType::Input,
     );
 
-    let ctx = make_test_context(state.clone());
+    let ctx = make_test_context_with_sqlite(state.clone()).unwrap();
     let pre_main = GameStateSnapshot::from_game_state(&state);
     let pre_main_id = ctx.storage.save_snapshot(&pre_main).unwrap();
     for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
@@ -252,7 +252,7 @@ fn test_retry_main_narration_uses_pre_main_snapshot() {
     );
     state.narrative.input_buffer.status = GenerationStatus::Idle;
 
-    let ctx = make_test_context(state.clone());
+    let ctx = make_test_context_with_sqlite(state.clone()).unwrap();
     let pre_main = GameStateSnapshot::from_game_state(&state);
     let pre_main_id = ctx.storage.save_snapshot(&pre_main).unwrap();
     for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
@@ -317,7 +317,7 @@ fn test_retry_event_continuation_uses_pre_event_snapshot() {
         max_tokens: None,
     });
 
-    let ctx = make_test_context(state.clone());
+    let ctx = make_test_context_with_sqlite(state.clone()).unwrap();
     let pre_event = GameStateSnapshot::from_game_state(&state);
     let pre_event_id = ctx.storage.save_snapshot(&pre_event).unwrap();
 
