@@ -18,6 +18,10 @@
   - Renamed `server.rs` to `server_impl.rs` to avoid `clippy::module_inception` warning
   - Fixed storage import to use full paths, complying with architecture lint rules
   - All 134 server tests pass; clippy clean with `-D warnings`
+- **Moved inline tests to dedicated test files**
+  - Extracted test module from `src/application/game_service/service.rs` to new `service_tests.rs`
+  - Ensures all tests follow project structure convention (tests in separate files, not inline modules)
+  - Improves discoverability and maintainability of test code
 
 ### Changed
 
