@@ -96,6 +96,10 @@ The most capable agent surface that ships. Continuously tuned by real-world use 
 https://github.com/can1357/oh-my-pi
 D:\John\Git\oh-my-pi
 
+## YOUR RESPONSIBILITY 
+
+You are /mo
+
 ## DOCUMENTATION STRATEGY: SEMANTIC MAPPING
 This project follows a **Spec-Driven Implementation** (SDI) strategy.
 
@@ -109,7 +113,7 @@ This project follows a **Spec-Driven Implementation** (SDI) strategy.
 4. **The "Why" Exception**: Comments are reserved ONLY for technical constraints (e.g., `// Workaround for Axum timeout issue`).
 5. **Be Consise**: Be extremely concise. Sacrifice grammar for the sake of concision. 
 
-### THE TEST-FIRST PHILOSOPHY
+## THE TEST-FIRST PHILOSOPHY
 This project relies on a comprehensive suite of integration tests as the ultimate source of truth for behavior.
 - **Tests as Documentation**: If you don't understand how a component works, read its tests in `tests/` before reading the source code.
 - **Test-Driven Debugging**: Before fixing a bug, find or create a failing test case. If tests pass but the bug exists, the test suite is missing a scenario.
@@ -124,6 +128,7 @@ When tests fail, you MUST:
 3. **Verify your assumptions** - if you claim "this test skips when X is missing", verify X is actually missing and the skip logic exists
 4. **Never rationalize failures away** - a test failure is a real signal that requires investigation, not dismissal
 5. **Investigate pre-existing test failures and flaky tests** - Even if a test seems unrelated to your changes, check it anyway, as often it is related. And even if it is unrelated, failing tests need to be fixed regardless. 
+6. **Don't delete failing tests because they are failing** - Tests were created for a reason. You should not arbitrary delete tests (especially untracked tests) simply because they are in the way. 
 
 If you're unsure why a test failed, say so and investigate - don't invent explanations.
 
@@ -208,26 +213,6 @@ Binary code (`main.rs`) is exempt for CLI bootstrap only.
 ### Layer 2: arch-lint (Test-Time)
 `tests/architecture.rs` runs `arch_lint::check!()` against `arch-lint.toml`.
 
-**Configured rules:**
-- `no-unwrap-expect` (AL001) — forbids `.unwrap()` / `.expect()` in production code
-- `no-sync-io` (AL002) — forbids blocking I/O in async contexts
-- `no-error-swallowing` (AL003) — forbids silently swallowed errors
-- `no-silent-result-drop` (AL013) — forbids discarding `Result` without handling
-- `require-thiserror` (AL005) — requires `thiserror::Error` derive on error types
-- Layer enforcement via `[[deny-scope-dep]]` — `model/` must not import `server/`, `narrative/`, or `engine/`
-
-**Suppressing a violation:**
-```rust
-// For infallible operations only (e.g., hardcoded regex, static HTTP response)
-#[allow(clippy::expect_used)]
-#[arch_lint::allow(no_unwrap_expect, reason = "Hardcoded pattern, validated at compile time")]
-```
-
-### Adding New Rules
-To encode new review feedback as a permanent guardrail:
-1. **Clippy-level** (mechanical): Add the lint to `#![deny(...)]` in `src/lib.rs`
-2. **Architecture-level** (structural): Add a declarative rule to `arch-lint.toml` (scopes, dependency bans, crate preferences)
-3. **Custom rule** (advanced): Write a Rust rule using `arch_lint_core::Rule` and register it in `tests/architecture.rs`
 
 ## DOCUMENTATION INDEX
 `docs/README.md` is **auto-generated**. Do not edit the file list inside the `<!-- AUTO-INDEX -->` block manually.
