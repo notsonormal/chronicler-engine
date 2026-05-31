@@ -1,11 +1,13 @@
 mod test_data;
+#[path = "../../helpers/fixtures.rs"]
+mod fixtures;
 
 use chronicler_engine::model::message::Message;
 use chronicler_engine::model::state_snapshot::GameStateSnapshot;
 use chronicler_engine::storage::Storage;
 use chronicler_engine::storage::db::DbPool;
 
-use test_data::create_test_state;
+use fixtures::create_test_state;
 
 fn create_storage() -> Storage {
     let pool = DbPool::new(":memory:").expect("in-memory db should open");

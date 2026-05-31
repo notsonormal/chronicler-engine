@@ -1,10 +1,7 @@
 //! [DOC: docs/architecture/guardrails.md]
 
-#[path = "guardrails/layers.rs"]
 pub mod layers;
-#[path = "guardrails/structure.rs"]
 pub mod structure;
-#[path = "guardrails/style.rs"]
 pub mod style;
 
 pub use layers::*;

@@ -1,5 +1,6 @@
 /// Integration tests for DefaultApplicationService
-mod test_data;
+#[path = "../helpers/fixtures.rs"]
+mod fixtures;
 
 use std::sync::Arc;
 

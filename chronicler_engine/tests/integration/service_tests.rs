@@ -1,6 +1,7 @@
 /// [DOC: docs/reference/testing.md]
 /// Comprehensive integration tests for DefaultGameService public API
-mod test_data;
+#[path = "../helpers/fixtures.rs"]
+mod fixtures;
 
 #[path = "helpers/pipeline_helpers.rs"]
 mod pipeline_helpers;
@@ -13,7 +14,7 @@ use chronicler_engine::narrative::llm::MockBackend;
 
 use chronicler_engine::test_support::make_test_context;
 use pipeline_helpers::{latest_state, add_input_and_save, wait_for_generation_complete};
-use test_data::create_test_state;
+use fixtures::create_test_state;
 
 #[test]
 fn test_with_storage_uses_external() {

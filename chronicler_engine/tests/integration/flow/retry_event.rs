@@ -14,7 +14,7 @@ use crate::pipeline_helpers::{
     add_input_and_save, create_test_state_with_trigger_npc, latest_state,
     wait_for_generation_complete,
 };
-use crate::test_data::create_test_map;
+use crate::fixtures::create_test_map;
 
 #[test]
 fn test_event_retry_does_not_create_extra_swipe_on_narration() {

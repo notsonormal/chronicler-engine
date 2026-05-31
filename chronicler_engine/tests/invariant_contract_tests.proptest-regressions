@@ -1,7 +1,0 @@
-# Seeds for failure cases proptest has generated in the past. It is
-# automatically read and these particular cases re-run before any
-# novel cases are generated.
-#
-# It is recommended to check this file in to source control so that
-# everyone who runs the test benefits from these saved cases.
-cc 6e5d4214c53e9d1b04c7e472828e2affa959d1f66d4bdd60b4819e7b1af4ad50 # shrinks to narration_text = "aਵ꒐AA🣀Aቘ🌀a", has_npc = false

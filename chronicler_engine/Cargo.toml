@@ -57,4 +57,4 @@ path = "tests/infrastructure/architecture_tests.rs"
 
 [[test]]
 name = "guardrails"
-path = "tests/infrastructure/guardrails.rs"
+path = "tests/infrastructure/guardrails/mod.rs"

@@ -22,10 +22,11 @@ use chronicler_engine::test_support::make_test_context;
 
 #[path = "helpers/pipeline_helpers.rs"]
 mod pipeline_helpers;
-mod test_data;
+#[path = "../helpers/fixtures.rs"]
+mod fixtures;
 
 use pipeline_helpers::{create_test_state_with_trigger_npc, latest_state};
-use test_data::create_test_state;
+use fixtures::create_test_state;
 
 #[test]
 fn test_inv001_generation_guard_resets_on_drop() {
@@ -288,9 +289,9 @@ fn test_inv005_handle_movement_runs_before_narration() {
     use std::sync::Arc;
 
     // Use the full test map which has room1, room2, room3
-    let world = Arc::new(test_data::create_test_world());
-    let map = Arc::new(test_data::create_test_map());
-    let player = Arc::new(test_data::create_test_player());
+    let world = Arc::new(fixtures::create_test_world());
+    let map = Arc::new(fixtures::create_test_map());
+    let player = Arc::new(fixtures::create_test_player());
     let npcs = vec![];
     let state = chronicler_engine::model::state::GameState::new(
         world,

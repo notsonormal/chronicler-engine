@@ -1,6 +1,7 @@
 /// Integration tests for GameLifecycleService
 /// [DOC: docs/reference/testing.md]
-mod test_data;
+#[path = "../helpers/fixtures.rs"]
+mod fixtures;
 
 use std::collections::HashMap;
 use std::sync::Arc;

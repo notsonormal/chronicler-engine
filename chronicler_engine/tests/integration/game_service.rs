@@ -1,5 +1,6 @@
 /// [DOC: docs/reference/testing.md]
-mod test_data;
+#[path = "../helpers/fixtures.rs"]
+mod fixtures;
 
 #[path = "helpers/pipeline_helpers.rs"]
 mod pipeline_helpers;
@@ -23,7 +24,7 @@ pub fn working_service() -> DefaultGameService {
 
 use chronicler_engine::test_support::make_test_context;
 use pipeline_helpers::latest_state;
-use test_data::create_test_state;
+use fixtures::create_test_state;
 
 fn run_action(
     state: chronicler_engine::model::state::GameState,

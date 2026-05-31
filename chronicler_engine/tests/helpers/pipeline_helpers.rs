@@ -19,7 +19,7 @@ pub fn create_test_state_with_map() -> GameState {
         default_room_image: None,
     });
 
-    let map = Arc::new(crate::test_data::create_test_map());
+    let map = Arc::new(crate::fixtures::create_test_map());
 
     let player = Arc::new(PlayerCard {
         sheet: CharacterSheet {
@@ -65,7 +65,7 @@ pub fn create_test_state_with_trigger_npc() -> GameState {
         default_room_image: None,
     });
 
-    let map = Arc::new(crate::test_data::create_test_map());
+    let map = Arc::new(crate::fixtures::create_test_map());
 
     let player = Arc::new(PlayerCard {
         sheet: CharacterSheet {

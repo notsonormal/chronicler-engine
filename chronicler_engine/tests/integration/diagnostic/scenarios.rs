@@ -471,7 +471,7 @@ fn benchmark_trigger_wrong_room_id() {
         relationships: vec![],
     };
 
-    let state = crate::test_data::create_test_state_with_npcs(
+    let state = crate::fixtures::create_test_state_with_npcs(
         vec!["trigger_npc".to_string()],
         vec![npc_with_trigger],
     );
@@ -555,7 +555,7 @@ fn benchmark_state_stuck_generating() {
         relationships: vec![],
     };
 
-    let mut state = crate::test_data::create_test_state_with_npcs(
+    let mut state = crate::fixtures::create_test_state_with_npcs(
         vec!["test_npc".to_string()],
         vec![npc_with_trigger],
     );
