@@ -195,7 +195,10 @@ fn test_snapshot_narrative_field() {
     storage.save_snapshot(&snap).unwrap();
 
     let loaded = storage.load_latest_snapshot().unwrap().unwrap();
-    assert_eq!(loaded.narrative.pending_location, Some("Castle".to_string()));
+    assert_eq!(
+        loaded.narrative.pending_location,
+        Some("Castle".to_string())
+    );
     assert_eq!(loaded.narrative.pending_event, Some("Battle".to_string()));
 }
 

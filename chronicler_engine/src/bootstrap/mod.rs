@@ -14,4 +14,7 @@ pub use scenario::inject_scenario_logs;
 pub use state::build_fresh_initial_state;
 pub use validate::validate_loaded_data;
 #[cfg(test)]
+mod load_tests;
 mod run_tests;
+#[cfg(test)]
+mod validate_tests;

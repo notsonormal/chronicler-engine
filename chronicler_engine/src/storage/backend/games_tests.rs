@@ -147,10 +147,7 @@ fn test_get_game_failure() {
 #[test]
 fn test_delete_game_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
-    handle.set(
-        Operation::DeleteGame,
-        TestOverride::config("delete failed"),
-    );
+    handle.set(Operation::DeleteGame, TestOverride::config("delete failed"));
 
     let result = storage.delete_game(1);
     assert!(result.is_err());

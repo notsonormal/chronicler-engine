@@ -56,7 +56,6 @@ fn test_with_failure_single_operation() {
     assert!(result.is_err());
 }
 
-
 #[test]
 fn test_with_test_failures_shared_handle() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();

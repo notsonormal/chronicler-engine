@@ -28,8 +28,12 @@ fn dummy_preset(id: &str, preset_type: PresetType) -> PromptPreset {
 #[test]
 fn test_list_presets_filters_by_type() {
     let storage = Storage::new_in_memory();
-    storage.save_preset(&dummy_preset("s1", PresetType::System)).unwrap();
-    storage.save_preset(&dummy_preset("q1", PresetType::Quantifier)).unwrap();
+    storage
+        .save_preset(&dummy_preset("s1", PresetType::System))
+        .unwrap();
+    storage
+        .save_preset(&dummy_preset("q1", PresetType::Quantifier))
+        .unwrap();
 
     let system = storage.list_presets(PresetType::System).unwrap();
     assert_eq!(system.len(), 1);
@@ -39,7 +43,9 @@ fn test_list_presets_filters_by_type() {
 #[test]
 fn test_list_presets_quantifier_only() {
     let storage = Storage::new_in_memory();
-    storage.save_preset(&dummy_preset("q1", PresetType::Quantifier)).unwrap();
+    storage
+        .save_preset(&dummy_preset("q1", PresetType::Quantifier))
+        .unwrap();
 
     let quantifier = storage.list_presets(PresetType::Quantifier).unwrap();
     assert_eq!(quantifier.len(), 1);
@@ -53,7 +59,9 @@ fn test_list_presets_quantifier_only() {
 #[test]
 fn test_get_preset_found() {
     let storage = Storage::new_in_memory();
-    storage.save_preset(&dummy_preset("p1", PresetType::System)).unwrap();
+    storage
+        .save_preset(&dummy_preset("p1", PresetType::System))
+        .unwrap();
 
     let loaded = storage.get_preset("p1").unwrap().unwrap();
     assert_eq!(loaded.id, "p1");
@@ -69,7 +77,9 @@ fn test_get_preset_not_found() {
 #[test]
 fn test_get_preset_system_type() {
     let storage = Storage::new_in_memory();
-    storage.save_preset(&dummy_preset("sys1", PresetType::System)).unwrap();
+    storage
+        .save_preset(&dummy_preset("sys1", PresetType::System))
+        .unwrap();
 
     let loaded = storage.get_preset("sys1").unwrap().unwrap();
     assert_eq!(loaded.preset_type, PresetType::System);
@@ -78,7 +88,9 @@ fn test_get_preset_system_type() {
 #[test]
 fn test_get_preset_quantifier_type() {
     let storage = Storage::new_in_memory();
-    storage.save_preset(&dummy_preset("quant1", PresetType::Quantifier)).unwrap();
+    storage
+        .save_preset(&dummy_preset("quant1", PresetType::Quantifier))
+        .unwrap();
 
     let loaded = storage.get_preset("quant1").unwrap().unwrap();
     assert_eq!(loaded.preset_type, PresetType::Quantifier);
@@ -130,7 +142,9 @@ fn test_save_preset_update_existing() {
 #[test]
 fn test_delete_preset_existing() {
     let storage = Storage::new_in_memory();
-    storage.save_preset(&dummy_preset("del1", PresetType::System)).unwrap();
+    storage
+        .save_preset(&dummy_preset("del1", PresetType::System))
+        .unwrap();
     storage.delete_preset("del1").unwrap();
 
     let loaded = storage.get_preset("del1").unwrap();
@@ -163,10 +177,7 @@ fn test_list_presets_failure() {
 #[test]
 fn test_save_preset_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
-    handle.set(
-        Operation::SavePreset,
-        TestOverride::config("save failed"),
-    );
+    handle.set(Operation::SavePreset, TestOverride::config("save failed"));
 
     let result = storage.save_preset(&dummy_preset("fail", PresetType::System));
     assert!(result.is_err());

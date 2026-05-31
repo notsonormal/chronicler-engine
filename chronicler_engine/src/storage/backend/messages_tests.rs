@@ -269,12 +269,17 @@ fn test_purge_multiple_ids() {
 // ═══════════════════════════════════════════════════════════════════════════════
 // Message Sender Types
 // ═══════════════════════════════════════════════════════════════════════════════
-
 #[test]
 fn test_message_with_sender_user() {
     let storage = Storage::new_in_memory();
     storage.set_game_id(1);
-    let msg = Message::new(Some("User".to_string()), "hello", MessageType::Input, None, None);
+    let msg = Message::new(
+        Some("User".to_string()),
+        "hello",
+        MessageType::Input,
+        None,
+        None,
+    );
     storage.insert_message(&msg).unwrap();
 
     let rows = storage.load_message_rows().unwrap();
@@ -285,7 +290,13 @@ fn test_message_with_sender_user() {
 fn test_message_with_sender_system() {
     let storage = Storage::new_in_memory();
     storage.set_game_id(1);
-    let msg = Message::new(Some("System".to_string()), "info", MessageType::System, None, None);
+    let msg = Message::new(
+        Some("System".to_string()),
+        "info",
+        MessageType::System,
+        None,
+        None,
+    );
     storage.insert_message(&msg).unwrap();
 
     let rows = storage.load_message_rows().unwrap();
@@ -311,7 +322,13 @@ fn test_message_with_sender_none() {
 fn test_message_input_type() {
     let storage = Storage::new_in_memory();
     storage.set_game_id(1);
-    let msg = Message::new(Some("Player".to_string()), "action", MessageType::Input, None, None);
+    let msg = Message::new(
+        Some("Player".to_string()),
+        "action",
+        MessageType::Input,
+        None,
+        None,
+    );
     storage.insert_message(&msg).unwrap();
 
     let rows = storage.load_message_rows().unwrap();

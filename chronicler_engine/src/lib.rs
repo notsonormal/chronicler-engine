@@ -43,8 +43,6 @@ pub use test_support::test_app_builder::TestAppBuilder;
 pub mod test_support;
 
 #[cfg(test)]
-mod bootstrap_tests;
-#[cfg(test)]
 mod cli_tests;
 #[cfg(test)]
 mod error_tests;

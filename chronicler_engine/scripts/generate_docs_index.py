@@ -75,9 +75,9 @@ def generate_index(docs_dir: Path) -> str:
 def _strip_timestamp(index_block: str) -> str:
     """Remove the timestamp line from an index block for comparison."""
     lines = index_block.splitlines()
-    if lines and lines[0].strip().startswith("*Index last generated:"):
-        return "\n".join(lines[1:])
-    return index_block
+    # Find and remove the timestamp line (may not be first due to leading empty lines)
+    filtered = [l for l in lines if not l.strip().startswith("*Index last generated:")]
+    return "\n".join(filtered)
 
 
 def regenerate(readme_path: Path, docs_dir: Path) -> bool:
