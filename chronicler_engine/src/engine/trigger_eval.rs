@@ -9,34 +9,38 @@ pub fn evaluate_triggers(state: &GameState) -> Vec<(NpcCard, Trigger, usize)> {
 
     for npc in state.npcs.values() {
         for (index, trigger) in npc.triggers.iter().enumerate() {
-            if let Some(room_id) = &trigger.room_id {
+            let skip_reason = if let Some(room_id) = &trigger.room_id {
                 if room_id != current_room_id {
-                    tracing::debug!(
-                        "[Trigger] '{}' skipped: room_id mismatch (expected '{}', current '{}')",
-                        trigger.narration.name,
-                        room_id,
-                        current_room_id
-                    );
-                    continue;
+                    Some("room_mismatch")
+                } else {
+                    None
                 }
-            }
-
-            if check_condition(&state.npc_encounter_log, &npc.id, &trigger.requirement) {
-                if !trigger.repeat && is_trigger_fired(&state.npc_encounter_log, &npc.id, index) {
-                    tracing::debug!(
-                        "[Trigger] '{}' skipped: already fired (non-repeatable)",
-                        trigger.narration.name
-                    );
-                    continue;
-                }
-                results.push((npc.clone(), trigger.clone(), index));
             } else {
+                None
+            };
+            let skip_reason = skip_reason.or_else(|| {
+                if check_condition(&state.npc_encounter_log, &npc.id, &trigger.requirement) {
+                    if !trigger.repeat && is_trigger_fired(&state.npc_encounter_log, &npc.id, index)
+                    {
+                        Some("already_fired")
+                    } else {
+                        None
+                    }
+                } else {
+                    Some("condition_not_met")
+                }
+            });
+            if let Some(reason) = skip_reason {
                 tracing::debug!(
-                    "[Trigger] '{}' skipped: condition not met for NPC '{}'",
-                    trigger.narration.name,
-                    npc.id
+                    npc_id = %npc.id,
+                    trigger = %trigger.narration.name,
+                    reason,
+                    "Trigger skipped"
                 );
+                continue;
             }
+            // Trigger passed all checks - add to results
+            results.push((npc.clone(), trigger.clone(), index));
         }
     }
 
