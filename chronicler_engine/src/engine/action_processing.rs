@@ -45,7 +45,7 @@ pub fn handle_movement(
     let previous_room_id = state.movement.current_room_id.clone();
 
     if let Err(e) = attempt_semantic_walk(&mut state, trigger) {
-        log::debug!("Semantic walk failed for '{trigger}': {e}");
+        tracing::debug!("Semantic walk failed for '{trigger}': {e}");
         let dynamic_room = create_dynamic_room(trigger, "A place you have never seen before.");
         state.add_message(
             format!("[System] Entered unknown location: {}", dynamic_room.id),

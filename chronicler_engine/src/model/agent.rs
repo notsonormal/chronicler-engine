@@ -57,7 +57,9 @@ impl StatePatch {
                 let destination = match dest_a {
                     Some(ref d) => {
                         if let Some(ref db) = dest_b {
-                            log::warn!("Movement destination conflict: {d} vs {db}, keeping first",);
+                            tracing::warn!(
+                                "Movement destination conflict: {d} vs {db}, keeping first",
+                            );
                         }
                         Some(d.clone())
                     }

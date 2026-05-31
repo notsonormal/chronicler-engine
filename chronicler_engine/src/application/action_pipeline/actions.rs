@@ -18,7 +18,7 @@ pub fn execute_action_impl<B: ActionPipelineBackend>(
     match pipeline.run_from_input(state, input) {
         ActionOutcome::Completed => {}
         ActionOutcome::Error { message } => {
-            log::error!("Action failed: {message}");
+            tracing::error!("Action failed: {message}");
         }
         ActionOutcome::Cancelled => {}
     }

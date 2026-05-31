@@ -70,7 +70,7 @@ pub async fn action_confirm_handler(
     let action_area_html = match render_action_area(&state) {
         Ok(html) => html,
         Err(e) => {
-            log::error!("Failed to render action area: {e}");
+            tracing::error!("Failed to render action area: {e}");
             render_error(&e.to_string())
         }
     };
@@ -107,7 +107,7 @@ pub async fn action_check_handler(
     ) {
         Ok(result) => result,
         Err(e) => {
-            log::error!("Text check failed: {e}");
+            tracing::error!("Text check failed: {e}");
             let mut response = process_action(&state, command).await;
             add_status_swap_headers(&mut response);
             return response;

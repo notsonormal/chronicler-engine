@@ -14,7 +14,7 @@ where
     match render(state) {
         Ok(html) => Html(html),
         Err(e) => {
-            log::error!("{name} failed: {e}");
+            tracing::error!("{name} failed: {e}");
             Html(super::renderers::render_error(&e.to_string()))
         }
     }
@@ -64,13 +64,13 @@ pub async fn status_ready_handler(State(_state): State<AppState>) -> Html<String
 
 /// [DOC: docs/system/game_flow.md]
 pub async fn generating_status_handler(State(state): State<AppState>) -> Html<String> {
-    log::debug!("generating_status_handler: called");
+    tracing::debug!("generating_status_handler: called");
     let ctx = state.as_game_service_context();
     // Load state fresh from storage
     let game_state = crate::application::context::load_expecting_valid_state(&ctx);
     let (status, phase) = match game_state {
         Ok(gs) => {
-            log::debug!(
+            tracing::debug!(
                 "generating_status_handler: loaded status={:?}, phase={:?}",
                 gs.narrative.input_buffer.status,
                 gs.narrative.input_buffer.phase
@@ -81,26 +81,28 @@ pub async fn generating_status_handler(State(state): State<AppState>) -> Html<St
             )
         }
         Err(e) => {
-            log::error!("generating_status_handler: failed to load state: {e}");
+            tracing::error!("generating_status_handler: failed to load state: {e}");
             Default::default()
         }
     };
     let is_gen = status.is_generating();
-    log::debug!(
+    tracing::debug!(
         "generating_status_handler: is_generating={is_gen}, status={status:?}, phase={phase:?}",
     );
-    log::info!("SERVER TRACE: status.is_generating()={is_gen}, status={status:?}, phase={phase:?}",);
+    tracing::info!(
+        "SERVER TRACE: status.is_generating()={is_gen}, status={status:?}, phase={phase:?}",
+    );
     if let Some(err) = status.error_message() {
-        log::info!("SERVER TRACE: returning error span");
+        tracing::info!("SERVER TRACE: returning error span");
         Html(format!("<span class=\"status error\">Error: {err}</span>"))
     } else if is_gen {
-        log::info!(
+        tracing::info!(
             "SERVER TRACE: returning phase str: {}",
             phase.as_endpoint_str()
         );
         Html(phase.as_endpoint_str().to_string())
     } else {
-        log::info!("SERVER TRACE: returning idle");
+        tracing::info!("SERVER TRACE: returning idle");
         Html("idle".to_string())
     }
 }

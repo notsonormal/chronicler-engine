@@ -1,4 +1,4 @@
-//! [DOC: docs/system/llm_processing.md]
+// [DOC: docs/system/llm_processing.md]
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -54,14 +54,14 @@ pub(crate) fn extract_content_from_response(
 pub(crate) fn parse_chat_response(raw_response: &str, req_id: u64) -> crate::error::Result<String> {
     match serde_json::from_str::<serde_json::Value>(raw_response.trim_start()) {
         Ok(json_response) => {
-            log::debug!("[LLM][req:{req_id}] Response JSON: {json_response:#}");
+            tracing::debug!("[LLM][req:{req_id}] Response JSON: {json_response:#}");
 
             if let Some(error) = json_response.get("error") {
                 let error_msg = error
                     .get("message")
                     .and_then(|m| m.as_str())
                     .unwrap_or("Unknown API error");
-                log::error!("[LLM][req:{req_id}] API error: {error_msg}");
+                tracing::error!("[LLM][req:{req_id}] API error: {error_msg}");
                 return Err(EngineError::Llm(LlmFailure::Http {
                     status: 200,
                     body: error_msg.to_string(),
@@ -69,7 +69,7 @@ pub(crate) fn parse_chat_response(raw_response: &str, req_id: u64) -> crate::err
             }
 
             if let Some((content, source)) = extract_content_from_response(&json_response) {
-                log::info!(
+                tracing::info!(
                     "[LLM][req:{req_id}] Extracted content via: {source} ({} chars)",
                     content.len()
                 );
@@ -77,10 +77,10 @@ pub(crate) fn parse_chat_response(raw_response: &str, req_id: u64) -> crate::err
             }
 
             // If we got here, the response structure was unexpected
-            log::error!(
+            tracing::error!(
                 "[LLM][req:{req_id}] Parse error: Could not find content in response structure"
             );
-            log::error!(
+            tracing::error!(
                 "[LLM][req:{req_id}] Response had keys: {:?}",
                 json_response
                     .as_object()
@@ -93,8 +93,8 @@ pub(crate) fn parse_chat_response(raw_response: &str, req_id: u64) -> crate::err
             }))
         }
         Err(e) => {
-            log::error!("[LLM][req:{req_id}] JSON parse error: {e}");
-            log::error!(
+            tracing::error!("[LLM][req:{req_id}] JSON parse error: {e}");
+            tracing::error!(
                 "[LLM][req:{req_id}] Raw response that failed to parse: {}",
                 raw_response.trim_start()
             );
@@ -105,7 +105,140 @@ pub(crate) fn parse_chat_response(raw_response: &str, req_id: u64) -> crate::err
         }
     }
 }
-
+/// Extracted helper for [`call_chat_completions()`](crate::narrative::llm_client::call_chat_completions).
+pub(crate) fn build_request_payload(
+    model: &str,
+    system_prompt: &str,
+    user_text: &str,
+    max_tokens: u32,
+) -> (serde_json::Value, String) {
+    let mut messages = vec![];
+    if !system_prompt.is_empty() {
+        messages.push(json!({
+            "role": "system",
+            "content": system_prompt
+        }));
+    }
+    messages.push(json!({
+        "role": "user",
+        "content": user_text
+    }));
+    let payload = json!({
+        "model": model,
+        "messages": messages,
+        "stream": false,
+        "max_tokens": max_tokens
+    });
+    let raw_request_json =
+        serde_json::to_string(&payload).unwrap_or_else(|_| format!("{{\"model\":\"{model}\"}}"));
+    (payload, raw_request_json)
+}
+/// Extracted helper for [`call_chat_completions()`](crate::narrative::llm_client::call_chat_completions).
+pub(crate) fn configure_request(
+    client: &reqwest::blocking::Client,
+    url: &str,
+    payload: &serde_json::Value,
+    api_key: Option<&str>,
+    title: Option<&str>,
+) -> reqwest::blocking::RequestBuilder {
+    let mut request = client
+        .post(url)
+        .header("Content-Type", "application/json")
+        .header("Accept-Encoding", "gzip, deflate")
+        .json(payload);
+    if let Some(key) = api_key {
+        request = request.header("Authorization", format!("Bearer {key}"));
+    }
+    if let Some(t) = title {
+        request = request.header("X-Title", t);
+        request = request.header("HTTP-Referer", "https://github.com/chronicler-engine");
+    }
+    request
+}
+/// Extracted helper for [`call_chat_completions()`](crate::narrative::llm_client::call_chat_completions).
+pub(crate) fn handle_response(
+    response: reqwest::blocking::Response,
+    req_id: u64,
+    start_time: std::time::Instant,
+    url: &str,
+    system_prompt: &str,
+    user_text: &str,
+    raw_request_json: String,
+) -> crate::error::Result<ChatCompletionResult> {
+    let status = response.status();
+    let header_time = start_time.elapsed();
+    tracing::info!(
+        "[LLM][req:{req_id}] Response status: {status} (headers after {:.2}s)",
+        header_time.as_secs_f64()
+    );
+    // Log response headers for debugging
+    tracing::debug!(
+        "[LLM][req:{req_id}] Response headers: {:?}",
+        response.headers()
+    );
+    if !status.is_success() {
+        // Include the response body so the error message is actionable
+        let error_body = response.text().unwrap_or_default();
+        tracing::error!(
+            "[LLM][req:{req_id}] Non-success HTTP status: {status}. Body: {error_body}"
+        );
+        let snippet = if error_body.len() > 500 {
+            format!("{}...", &error_body[..500])
+        } else {
+            error_body.clone()
+        };
+        return Err(EngineError::Llm(LlmFailure::Http {
+            status: status.as_u16(),
+            body: snippet,
+        }));
+    }
+    // Try to parse JSON response - get raw text first to log on failure
+    let raw_response = response.text().map_err(|e| {
+        let elapsed = start_time.elapsed();
+        tracing::error!(
+            "[LLM][req:{req_id}] Failed to read response body after {:.2}s: {e}",
+            elapsed.as_secs_f64()
+        );
+        tracing::error!(
+            "[LLM][req:{req_id}] This usually means: 1) Overall timeout (body still streaming), 2) Truncated gzip stream, 3) Server closed connection"
+        );
+        EngineError::Llm(LlmFailure::Network {
+            url: url.to_string(),
+            detail: format!("Failed to read response body: {e}"),
+        })
+    })?;
+    let body_time = start_time.elapsed();
+    tracing::debug!(
+        "[LLM][req:{req_id}] Raw response length: {} bytes (body after {:.2}s)",
+        raw_response.len(),
+        body_time.as_secs_f64()
+    );
+    let result = parse_chat_response(&raw_response, req_id);
+    let total_time = start_time.elapsed();
+    match &result {
+        Ok(content) => {
+            tracing::info!(
+                "[LLM][req:{req_id}] Success: {} chars in {:.2}s total",
+                content.len(),
+                total_time.as_secs_f64()
+            );
+        }
+        Err(e) => {
+            tracing::error!(
+                "[LLM][req:{req_id}] Failed after {:.2}s: {e}",
+                total_time.as_secs_f64()
+            );
+        }
+    }
+    let text = result?;
+    Ok(ChatCompletionResult {
+        text,
+        system_prompt: system_prompt.to_string(),
+        user_prompt: user_text.to_string(),
+        raw_request_json,
+        raw_response_json: raw_response,
+    })
+}
 /// [DOC: docs/system/llm_processing.md]
 pub fn call_chat_completions(
     base_url: &str,
@@ -130,143 +263,39 @@ pub fn call_chat_completions(
             })
         })?;
 
-    log::info!("[LLM][req:{req_id}] Using model: {model}");
-    log::debug!(
+    tracing::info!("[LLM][req:{req_id}] Using model: {model}");
+    tracing::debug!(
         "[LLM][req:{req_id}] System prompt length: {} chars",
         system_prompt.len()
     );
-    log::debug!(
+    tracing::debug!(
         "[LLM][req:{req_id}] User text length: {} chars",
         user_text.len()
     );
-    log::debug!("[LLM][req:{req_id}] Max tokens: {max_tokens}");
+    tracing::debug!("[LLM][req:{req_id}] Max tokens: {max_tokens}");
 
-    let mut messages = vec![];
-    if !system_prompt.is_empty() {
-        messages.push(json!({
-            "role": "system",
-            "content": system_prompt
-        }));
-    }
-    messages.push(json!({
-        "role": "user",
-        "content": user_text
-    }));
-
-    let payload = json!({
-        "model": model,
-        "messages": messages,
-        "stream": false,
-        "max_tokens": max_tokens
-    });
-
-    let raw_request_json =
-        serde_json::to_string(&payload).unwrap_or_else(|_| format!("{{\"model\":\"{model}\"}}"));
-
-    log::debug!("[LLM][req:{req_id}] Request payload: {payload:#}");
-
+    // Build request payload (pure function)
+    let (payload, raw_request_json) =
+        build_request_payload(model, system_prompt, user_text, max_tokens);
+    // Configure HTTP request (pure function)
     let url = format!("{base_url}/chat/completions");
-    let mut request = client
-        .post(&url)
-        .header("Content-Type", "application/json")
-        .header("Accept-Encoding", "gzip, deflate")
-        .json(&payload);
-
-    if let Some(key) = api_key {
-        request = request.header("Authorization", format!("Bearer {key}"));
-    }
-    if let Some(t) = title {
-        request = request.header("X-Title", t);
-        request = request.header("HTTP-Referer", "https://github.com/chronicler-engine");
-    }
-
-    log::info!("[LLM][req:{req_id}] Sending request to {url}");
+    let request = configure_request(&client, &url, &payload, api_key, title);
+    tracing::info!("[LLM][req:{req_id}] Sending request to {url}");
     let res = request.send();
-    let header_time = start_time.elapsed();
-
+    // Handle response (delegates to extracted function)
     match res {
-        Ok(response) => {
-            let status = response.status();
-            log::info!(
-                "[LLM][req:{req_id}] Response status: {status} (headers after {:.2}s)",
-                header_time.as_secs_f64()
-            );
-
-            // Log response headers for debugging
-            log::debug!(
-                "[LLM][req:{req_id}] Response headers: {:?}",
-                response.headers()
-            );
-
-            if !status.is_success() {
-                // Include the response body so the error message is actionable
-                let error_body = response.text().unwrap_or_default();
-                log::error!(
-                    "[LLM][req:{req_id}] Non-success HTTP status: {status}. Body: {error_body}"
-                );
-                let snippet = if error_body.len() > 500 {
-                    format!("{}...", &error_body[..500])
-                } else {
-                    error_body.clone()
-                };
-                return Err(EngineError::Llm(LlmFailure::Http {
-                    status: status.as_u16(),
-                    body: snippet,
-                }));
-            }
-
-            // Try to parse JSON response - get raw text first to log on failure
-            let raw_response = response.text().map_err(|e| {
-                let elapsed = start_time.elapsed();
-                log::error!(
-                    "[LLM][req:{req_id}] Failed to read response body after {:.2}s: {e}",
-                    elapsed.as_secs_f64()
-                );
-                log::error!(
-                    "[LLM][req:{req_id}] This usually means: 1) Overall timeout (body still streaming), 2) Truncated gzip stream, 3) Server closed connection"
-                );
-                EngineError::Llm(LlmFailure::Network {
-                    url: url.clone(),
-                    detail: format!("Failed to read response body: {e}"),
-                })
-            })?;
-
-            let body_time = start_time.elapsed();
-            log::debug!(
-                "[LLM][req:{req_id}] Raw response length: {} bytes (body after {:.2}s)",
-                raw_response.len(),
-                body_time.as_secs_f64()
-            );
-
-            let result = parse_chat_response(&raw_response, req_id);
-            let total_time = start_time.elapsed();
-            match &result {
-                Ok(content) => {
-                    log::info!(
-                        "[LLM][req:{req_id}] Success: {} chars in {:.2}s total",
-                        content.len(),
-                        total_time.as_secs_f64()
-                    );
-                }
-                Err(e) => {
-                    log::error!(
-                        "[LLM][req:{req_id}] Failed after {:.2}s: {e}",
-                        total_time.as_secs_f64()
-                    );
-                }
-            }
-            let text = result?;
-            Ok(ChatCompletionResult {
-                text,
-                system_prompt: system_prompt.to_string(),
-                user_prompt: user_text.to_string(),
-                raw_request_json,
-                raw_response_json: raw_response,
-            })
-        }
+        Ok(response) => handle_response(
+            response,
+            req_id,
+            start_time,
+            &url,
+            system_prompt,
+            user_text,
+            raw_request_json,
+        ),
         Err(e) => {
             let elapsed = start_time.elapsed();
-            log::error!(
+            tracing::error!(
                 "[LLM][req:{req_id}] Request failed after {:.2}s: {e}",
                 elapsed.as_secs_f64()
             );

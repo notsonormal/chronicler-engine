@@ -9,7 +9,7 @@ use super::template::PromptPresetsTemplate;
 macro_rules! try_lock {
     ($lock:expr) => {
         $lock.unwrap_or_else(|p| {
-            log::warn!("Poisoned settings lock recovered in handler");
+            tracing::warn!("Poisoned settings lock recovered in handler");
             p.into_inner()
         })
     };

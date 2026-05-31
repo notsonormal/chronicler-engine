@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-05-31
+
+### Changed
+
+- **Migrated from log/env_logger to tracing crate**
+  - Replaced all `log::info!`, `log::debug!`, `log::warn!`, `log::error!` calls with `tracing::info!`, `tracing::debug!`, `tracing::warn!`, `tracing::error!`
+  - Updated logging initialization in `bootstrap/logging.rs` to use `tracing_subscriber` with `tracing-appender`
+  - File logging with daily rotation to `logs/chronicler_YYYYMMDD.log`
+  - Non-blocking writer with proper guard management for application lifetime
+  - Removed `log = "0.4"` and `env_logger = "0.11"` dependencies from Cargo.toml
+  - Added `tracing-appender = "0.2"` dependency
+  - All 944 tests pass; clippy clean; full validation passes
+  - Updated 22 source files across application, bootstrap, server, narrative, model, engine, and storage tiers
+
+- **Extracted `build_request_payload`, `configure_request`, and `handle_response` from `call_chat_completions`**
+  - Refactored 160-line god-function into composable pure functions
+  - `build_request_payload()` — Pure JSON construction (no side effects)
+  - `configure_request()` — Pure RequestBuilder construction with conditional headers
+  - `handle_response()` — Focused response parsing, delegates to `parse_chat_response()`
+  - `call_chat_completions()` reduced to ≤30 lines of clear happy-path orchestration
+  - Added 3 unit tests for `build_request_payload()` (empty system prompt, non-empty system prompt, max_tokens serialization)
+  - All 947 tests pass; clippy clean; build.py passes
+  - Updated docs/architecture/system.md and docs/system/llm_processing.md to reflect modular structure
 ## 2026-05-30
 
 ### Changed

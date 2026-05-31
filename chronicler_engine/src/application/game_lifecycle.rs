@@ -49,7 +49,7 @@ impl GameLifecycleService {
                 match ctx.storage.insert_message(&*msg) {
                     Ok(id) => msg.id = id,
                     Err(e) => {
-                        log::error!("Create game failed: could not persist message: {e}")
+                        tracing::error!("Create game failed: could not persist message: {e}")
                     }
                 }
             }

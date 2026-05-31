@@ -50,13 +50,13 @@ impl GameServiceContext {
         match self.preset_storage.get_preset(&preset_id) {
             Ok(Some(preset)) => preset.assemble_prompt_text(&[], None),
             Ok(None) => {
-                log::error!(
+                tracing::error!(
                     "active quantifier preset '{preset_id}' not found — defaults not seeded?"
                 );
                 String::new()
             }
             Err(e) => {
-                log::error!("preset storage inaccessible: {e}");
+                tracing::error!("preset storage inaccessible: {e}");
                 String::new()
             }
         }
@@ -158,7 +158,7 @@ pub fn load_or_fresh(ctx: &GameServiceContext) -> GameState {
     match load_expecting_valid_state(ctx) {
         Ok(state) => state,
         Err(e) => {
-            log::error!(
+            tracing::error!(
                 "Failed to load game state ({e}), falling back to fresh state. This may indicate data corruption."
             );
             GameState::new(

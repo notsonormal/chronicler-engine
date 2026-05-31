@@ -73,7 +73,7 @@ impl LlmBackend for OllamaBackend {
         _trigger_prompt: &str,
         max_tokens: Option<u32>,
     ) -> Result<LlmCallResult, EngineError> {
-        log::info!("[LLM] Generating continuation narration");
+        tracing::info!("[LLM] Generating continuation narration");
         Ok(self.wrap_and_save(
             agent_name,
             self.call(system_prompt, user_prompt, max_tokens)?,
@@ -87,7 +87,7 @@ impl LlmBackend for OllamaBackend {
         user_prompt: &str,
         max_tokens: Option<u32>,
     ) -> Result<LlmCallResult, EngineError> {
-        log::info!("[LLM] Generating action from prompt");
+        tracing::info!("[LLM] Generating action from prompt");
         Ok(self.wrap_and_save(
             agent_name,
             self.call(system_prompt, user_prompt, max_tokens)?,

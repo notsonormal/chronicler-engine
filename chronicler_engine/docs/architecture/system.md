@@ -64,7 +64,7 @@ The interface between the synchronous engine and stochastic LLM generation.
   - **`HarperBackend`**: Wraps harper-core with curated + user dictionaries
   - **`check_player_input()`**: Facade that returns `Option<CheckResult>` based on `TextCheckMode`
   - **`CheckResult`/`CheckIssue`**: Structured lint results with byte spans and suggestions
-- **`llm_client`**: HTTP client helpers for OpenRouter and Ollama.
+  - **`llm_client`**: HTTP client helpers refactored into composable pure functions: `build_request_payload()` (JSON construction), `configure_request()` (request building), `handle_response()` (response parsing), orchestrated by `call_chat_completions()` (≤30 lines of clear happy-path code).
 
 #### NPC Event Layer
 

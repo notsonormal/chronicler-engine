@@ -20,7 +20,7 @@ This plan replaces that inferential loop with structured tracing and automatic f
 
 ## Background
 
-**Current logging:** `log = "0.4"` + `env_logger = "0.11"` provide flat string logging. There are no spans, no correlation IDs, and no structured context fields.
+**Logging framework:** `tracing = "0.1"` with `tracing-subscriber` and `tracing-appender`. File logging with daily rotation to `logs/chronicler_YYYYMMDD.log`. Structured logging with EnvFilter for runtime log level control.
 
 **Current test failures:** A panic or assertion failure in `components.rs` (1,504 lines) or `browser.rs` (781 lines) gives only the assertion message. The actual `GameState`, quantifier result, and LLM response context are lost.
 
