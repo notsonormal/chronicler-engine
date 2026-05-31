@@ -5,16 +5,16 @@ use chrono::Utc;
 use crate::application::action_pipeline::{retry_last_response_impl, retrigger_event_impl};
 use crate::application::ApplicationError;
 use crate::application::context::{GameServiceContext, load_or_fresh};
-use crate::application::game_service::DefaultGameService;
+use crate::application::game_service::GameService;
 use crate::error::{EngineError, internal_error};
 use crate::model::state_snapshot::GameStateSnapshot;
 
 pub struct MessageEditingService {
-    game_service: Arc<DefaultGameService>,
+    game_service: Arc<GameService>,
 }
 
 impl MessageEditingService {
-    pub fn new(game_service: Arc<DefaultGameService>) -> Self {
+    pub fn new(game_service: Arc<GameService>) -> Self {
         Self { game_service }
     }
 

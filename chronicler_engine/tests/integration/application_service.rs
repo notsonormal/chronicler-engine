@@ -5,7 +5,7 @@ mod fixtures;
 use std::sync::Arc;
 
 use chronicler_engine::application::application_service::{DefaultApplicationService};
-use chronicler_engine::application::game_service::DefaultGameService;
+use chronicler_engine::application::game_service::GameService;
 use chronicler_engine::model::character::{CharacterSheet, PlayerCard};
 use chronicler_engine::model::map::{MapDef, Overworld, Region, Room};
 use chronicler_engine::model::state::GameState;
@@ -16,8 +16,8 @@ use chronicler_engine::storage::{Storage, db::DbPool};
 use chronicler_engine::application::context::GameServiceContext;
 use chronicler_engine::model::state::{GenerationStatus, GenerationPhase};
 
-fn create_game_service() -> Arc<DefaultGameService> {
-    Arc::new(DefaultGameService::with_backends(
+fn create_game_service() -> Arc<GameService> {
+    Arc::new(GameService::with_backends(
         Arc::new(MockBackend::default()),
         AgentRegistry::default(),
     ))
@@ -85,7 +85,7 @@ fn create_basic_test_state() -> GameState {
 
 fn make_test_ctx(
     storage: Arc<Storage>,
-    _game_service: Arc<DefaultGameService>,
+    _game_service: Arc<GameService>,
     state: GameState,
 ) -> GameServiceContext {
     GameServiceContext {

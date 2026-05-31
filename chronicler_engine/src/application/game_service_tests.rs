@@ -1,7 +1,7 @@
-/// Unit tests for DefaultGameService
+/// Unit tests for GameService
 use std::sync::Arc;
 use crate::application::action_pipeline::pipeline::ActionPipelineBackend;
-use crate::application::game_service::service::DefaultGameService;
+use crate::application::game_service::GameService;
 use crate::model::state::GameState;
 use crate::narrative::agents::registry::AgentRegistry;
 use crate::narrative::llm::MockBackend;
@@ -12,13 +12,13 @@ use crate::test_support::{
 
 #[test]
 fn test_default_construction_creates_service() {
-    let service = DefaultGameService::default();
+    let service = GameService::default();
     let _assembler = service.assembler();
 }
 
 #[test]
 fn test_new_construction_creates_service() {
-    let service = DefaultGameService::new();
+    let service = GameService::new();
     let _assembler = service.assembler();
 }
 
@@ -26,7 +26,7 @@ fn test_new_construction_creates_service() {
 fn test_with_backends_creates_service() {
     let llm_backend = Arc::new(MockBackend::default());
     let registry = AgentRegistry::default();
-    let service = DefaultGameService::with_backends(llm_backend, registry);
+    let service = GameService::with_backends(llm_backend, registry);
     let _assembler = service.assembler();
 }
 
@@ -34,14 +34,14 @@ fn test_with_backends_creates_service() {
 fn test_with_mock_quantifier_creates_service() {
     let llm_backend = Arc::new(MockBackend::default());
     let quantifier_backend = Arc::new(MockBackend::default());
-    let service = DefaultGameService::with_mock_quantifier(llm_backend, quantifier_backend);
+    let service = GameService::with_mock_quantifier(llm_backend, quantifier_backend);
     let _assembler = service.assembler();
 }
 
 #[test]
 fn test_complete_delegates_to_llm_backend() {
     let llm_backend = Arc::new(MockBackend::default());
-    let service = DefaultGameService::with_backends(llm_backend, AgentRegistry::default());
+    let service = GameService::with_backends(llm_backend, AgentRegistry::default());
     let result = service.complete("test-agent", "system", "user", None);
     assert!(result.is_ok());
 }
@@ -49,7 +49,7 @@ fn test_complete_delegates_to_llm_backend() {
 #[test]
 fn test_complete_with_max_tokens() {
     let llm_backend = Arc::new(MockBackend::default());
-    let service = DefaultGameService::with_backends(llm_backend, AgentRegistry::default());
+    let service = GameService::with_backends(llm_backend, AgentRegistry::default());
     let result = service.complete("test-agent", "system", "user", Some(100));
     assert!(result.is_ok());
 }
@@ -57,17 +57,15 @@ fn test_complete_with_max_tokens() {
 #[test]
 fn test_complete_returns_error_when_backend_fails() {
     let llm_backend = Arc::new(MockBackend::failing());
-    let service = DefaultGameService::with_backends(llm_backend, AgentRegistry::default());
+    let service = GameService::with_backends(llm_backend, AgentRegistry::default());
     let result = service.complete("test-agent", "system", "user", None);
     assert!(result.is_err());
 }
 
 #[test]
 fn test_execute_action_with_empty_input_does_not_panic() {
-    let service = DefaultGameService::with_backends(
-        Arc::new(MockBackend::default()),
-        AgentRegistry::default(),
-    );
+    let service =
+        GameService::with_backends(Arc::new(MockBackend::default()), AgentRegistry::default());
     let state = make_test_context(GameState::new(
         Arc::new(TestWorld::minimal()),
         Arc::new(TestMap::single_room("start")),
@@ -80,10 +78,8 @@ fn test_execute_action_with_empty_input_does_not_panic() {
 
 #[test]
 fn test_execute_action_with_valid_command_does_not_panic() {
-    let service = DefaultGameService::with_backends(
-        Arc::new(MockBackend::default()),
-        AgentRegistry::default(),
-    );
+    let service =
+        GameService::with_backends(Arc::new(MockBackend::default()), AgentRegistry::default());
     let state = make_test_context(GameState::new(
         Arc::new(TestWorld::minimal()),
         Arc::new(TestMap::single_room("start")),
@@ -96,14 +92,14 @@ fn test_execute_action_with_valid_command_does_not_panic() {
 
 #[test]
 fn test_assembler_is_not_null() {
-    let service = DefaultGameService::new();
+    let service = GameService::new();
     let _assembler = service.assembler();
 }
 
 #[test]
 fn test_complete_passes_max_tokens_to_backend() {
     let llm_backend = Arc::new(MockBackend::default());
-    let service = DefaultGameService::with_backends(llm_backend, AgentRegistry::default());
+    let service = GameService::with_backends(llm_backend, AgentRegistry::default());
     let result = service.complete("test-agent", "system", "user", Some(50));
     assert!(result.is_ok());
 }
@@ -111,17 +107,15 @@ fn test_complete_passes_max_tokens_to_backend() {
 #[test]
 fn test_complete_with_empty_prompts() {
     let llm_backend = Arc::new(MockBackend::default());
-    let service = DefaultGameService::with_backends(llm_backend, AgentRegistry::default());
+    let service = GameService::with_backends(llm_backend, AgentRegistry::default());
     let result = service.complete("", "", "", None);
     assert!(result.is_ok());
 }
 
 #[test]
 fn test_execute_action_adds_message_to_state() {
-    let service = DefaultGameService::with_backends(
-        Arc::new(MockBackend::default()),
-        AgentRegistry::default(),
-    );
+    let service =
+        GameService::with_backends(Arc::new(MockBackend::default()), AgentRegistry::default());
     let state = make_test_context(GameState::new(
         Arc::new(TestWorld::minimal()),
         Arc::new(TestMap::single_room("start")),
@@ -141,10 +135,8 @@ fn test_execute_action_adds_message_to_state() {
 
 #[tokio::test]
 async fn test_retry_last_response_retriggers_generation() {
-    let service = DefaultGameService::with_backends(
-        Arc::new(MockBackend::default()),
-        AgentRegistry::default(),
-    );
+    let service =
+        GameService::with_backends(Arc::new(MockBackend::default()), AgentRegistry::default());
     let mut state = GameState::new(
         Arc::new(TestWorld::minimal()),
         Arc::new(TestMap::single_room("start")),
@@ -165,7 +157,7 @@ async fn test_retry_last_response_retriggers_generation() {
 fn test_run_post_generation_agents_merges_state_patches() {
     let llm_backend = Arc::new(MockBackend::default());
     let registry = AgentRegistry::default();
-    let service = DefaultGameService::with_backends(llm_backend, registry);
+    let service = GameService::with_backends(llm_backend, registry);
     let state = GameState::new(
         Arc::new(TestWorld::minimal()),
         Arc::new(TestMap::single_room("start")),
@@ -191,7 +183,7 @@ fn test_run_post_generation_agents_with_quantifier() {
         llm_backend.clone(),
     );
     let registry = AgentRegistry::with_agent(Box::new(quantifier));
-    let service = DefaultGameService::with_backends(llm_backend, registry);
+    let service = GameService::with_backends(llm_backend, registry);
     let state = GameState::new(
         Arc::new(TestWorld::minimal()),
         Arc::new(TestMap::single_room("start")),

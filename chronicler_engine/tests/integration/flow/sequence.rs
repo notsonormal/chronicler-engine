@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use chronicler_engine::application::game_service::DefaultGameService;
+use chronicler_engine::application::game_service::GameService;
 use chronicler_engine::model::state::MessageType;
 use chronicler_engine::narrative::llm::MockBackend;
 use chronicler_engine::test_support::make_test_context_with_sqlite;
@@ -15,7 +15,7 @@ fn test_sequential_execute_retry_execute() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let service = DefaultGameService::with_mock_quantifier(
+    let service = GameService::with_mock_quantifier(
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         Arc::new(MockBackend::default()),
     );
@@ -76,7 +76,7 @@ fn test_sequential_execute_delete_execute() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let service = DefaultGameService::with_mock_quantifier(
+    let service = GameService::with_mock_quantifier(
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         Arc::new(MockBackend::default()),
     );
@@ -132,7 +132,7 @@ fn test_async_action_sequence_then_retry() {
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
-    let service = DefaultGameService::with_mock_quantifier(
+    let service = GameService::with_mock_quantifier(
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         Arc::new(MockBackend::default()),
     );
@@ -168,7 +168,7 @@ fn test_three_actions_in_sequence() {
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
-    let service = DefaultGameService::with_mock_quantifier(
+    let service = GameService::with_mock_quantifier(
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         Arc::new(MockBackend::default()),
     );
@@ -211,7 +211,7 @@ fn test_delete_input_then_retry_fails_gracefully() {
 
     add_input_and_save(&ctx, "examine room");
 
-    let service = DefaultGameService::with_mock_quantifier(
+    let service = GameService::with_mock_quantifier(
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         Arc::new(MockBackend::default()),
     );
@@ -253,7 +253,7 @@ fn test_reset_clears_history_and_state() {
         ..Default::default()
     });
 
-    let service = DefaultGameService::with_mock_quantifier(
+    let service = GameService::with_mock_quantifier(
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         quantifier,
     );
@@ -288,7 +288,7 @@ fn test_reset_then_execute_works() {
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
-    let service = DefaultGameService::with_mock_quantifier(
+    let service = GameService::with_mock_quantifier(
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         Arc::new(MockBackend::default()),
     );
@@ -331,7 +331,7 @@ fn test_delete_mid_sequence() {
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
-    let service = DefaultGameService::with_mock_quantifier(
+    let service = GameService::with_mock_quantifier(
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         Arc::new(MockBackend::default()),
     );

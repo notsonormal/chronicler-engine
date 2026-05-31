@@ -6,7 +6,7 @@ use crate::application::action_pipeline::retry::{
 use crate::application::context::GameServiceContext;
 
 #[allow(unused_imports)]
-use crate::application::game_service::DefaultGameService;
+use crate::application::game_service::GameService;
 use crate::error::EngineError;
 use crate::model::state::{GameState, GenerationPhase, GenerationStatus, MessageType};
 use crate::narrative::llm::MockBackend;
@@ -23,8 +23,8 @@ fn make_test_state() -> GameState {
     GameState::new(world, map, player, npcs, "start".to_string())
 }
 
-fn make_service() -> DefaultGameService {
-    DefaultGameService::with_mock_quantifier(
+fn make_service() -> GameService {
+    GameService::with_mock_quantifier(
         Arc::new(MockBackend::new(None)),
         Arc::new(crate::narrative::llm::MockBackend::default()),
     )
@@ -273,7 +273,7 @@ fn test_retry_event_trigger_narration_fails() {
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
     let llm = Arc::new(MockBackend::with_failing_trigger_narration());
-    let service = DefaultGameService::with_mock_quantifier(
+    let service = GameService::with_mock_quantifier(
         llm,
         Arc::new(crate::narrative::llm::MockBackend::default()),
     );
@@ -320,7 +320,7 @@ fn test_retry_event_empty_continuation_text() {
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
     let llm = Arc::new(MockBackend::new(None));
-    let service = DefaultGameService::with_mock_quantifier(
+    let service = GameService::with_mock_quantifier(
         llm,
         Arc::new(crate::narrative::llm::MockBackend::default()),
     );
@@ -594,7 +594,7 @@ fn test_retry_event_empty_continuation_triggers_error() {
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
     let llm = Arc::new(EmptyTriggerBackend);
-    let service = DefaultGameService::with_mock_quantifier(
+    let service = GameService::with_mock_quantifier(
         llm,
         Arc::new(crate::narrative::llm::MockBackend::default()),
     );

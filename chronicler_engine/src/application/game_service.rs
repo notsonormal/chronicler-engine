@@ -12,13 +12,13 @@ use crate::narrative::llm::backend::LlmCallResult;
 use crate::narrative::prompt::{LayeredPromptAssembler, PromptAssembler};
 use crate::storage::Storage;
 
-pub struct DefaultGameService {
+pub struct GameService {
     pub(crate) llm_backend: Arc<dyn crate::narrative::llm::LlmBackend>,
     pub(crate) prompt_assembler: Arc<dyn PromptAssembler>,
     pub(crate) agent_registry: AgentRegistry,
 }
 
-impl DefaultGameService {
+impl GameService {
     pub fn new() -> Self {
         Self::with_storage(None, None, Arc::new(RwLock::new(AppSettings::default())))
     }
@@ -96,13 +96,13 @@ impl DefaultGameService {
     }
 }
 
-impl Default for DefaultGameService {
+impl Default for GameService {
     fn default() -> Self {
-        DefaultGameService::new()
+        GameService::new()
     }
 }
 
-impl ActionPipelineBackend for DefaultGameService {
+impl ActionPipelineBackend for GameService {
     fn assembler(&self) -> &dyn PromptAssembler {
         &*self.prompt_assembler
     }

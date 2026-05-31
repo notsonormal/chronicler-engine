@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use super::*;
-use crate::application::game_service::GameServiceContext;
+use crate::application::GameServiceContext;
 use crate::model::state::GameState;
 use crate::storage::Storage;
 use crate::test_support::fixtures::{TestWorld, TestMap, TestPlayer};

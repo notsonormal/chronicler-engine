@@ -5,7 +5,8 @@ use std::sync::atomic::AtomicBool;
 use tokio_util::sync::CancellationToken;
 
 use crate::application::application_service::DefaultApplicationService;
-use crate::application::game_service::DefaultGameService;
+use crate::application::GameService;
+use crate::application::GameServiceContext;
 use crate::model::character::NpcCard;
 use crate::model::character::PlayerCard;
 use crate::model::map::MapDef;
@@ -45,7 +46,7 @@ pub struct AppState {
     pub map: Arc<MapDef>,
     pub player: Arc<PlayerCard>,
     pub npcs: Arc<HashMap<String, NpcCard>>,
-    pub game_service: Arc<DefaultGameService>,
+    pub game_service: Arc<GameService>,
     pub application_service: Arc<DefaultApplicationService>,
     pub settings: Arc<RwLock<AppSettings>>,
     pub cancel_token: Arc<std::sync::RwLock<CancellationToken>>,
@@ -54,8 +55,8 @@ pub struct AppState {
 
 impl AppState {
     /// Constructs a `GameServiceContext` from this state.
-    pub fn as_game_service_context(&self) -> crate::application::game_service::GameServiceContext {
-        crate::application::game_service::GameServiceContext {
+    pub fn as_game_service_context(&self) -> GameServiceContext {
+        GameServiceContext {
             storage: Arc::clone(&self.storage),
             world: Arc::clone(&self.world),
             map: Arc::clone(&self.map),

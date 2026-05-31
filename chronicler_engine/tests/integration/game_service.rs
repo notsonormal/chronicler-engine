@@ -7,19 +7,19 @@ mod pipeline_helpers;
 
 use std::sync::Arc;
 
-use chronicler_engine::application::game_service::DefaultGameService;
+use chronicler_engine::application::game_service::GameService;
 use chronicler_engine::narrative::agents::registry::AgentRegistry;
 use chronicler_engine::narrative::llm::MockBackend;
 
-pub fn failing_service() -> DefaultGameService {
-    DefaultGameService::with_mock_quantifier(
+pub fn failing_service() -> GameService {
+    GameService::with_mock_quantifier(
         Arc::new(MockBackend::failing()),
         Arc::new(MockBackend::default()),
     )
 }
 
-pub fn working_service() -> DefaultGameService {
-    DefaultGameService::with_backends(Arc::new(MockBackend::default()), AgentRegistry::default())
+pub fn working_service() -> GameService {
+    GameService::with_backends(Arc::new(MockBackend::default()), AgentRegistry::default())
 }
 
 use chronicler_engine::test_support::make_test_context;
@@ -29,7 +29,7 @@ use fixtures::create_test_state;
 fn run_action(
     state: chronicler_engine::model::state::GameState,
     command: &str,
-    service: &DefaultGameService,
+    service: &GameService,
 ) -> chronicler_engine::model::state::GameState {
     let mut state = state;
     state.narrative.history.clear();
@@ -43,7 +43,7 @@ fn run_action(
 fn test_with_storage_uses_external() {
     let llm_backend = Arc::new(MockBackend::default());
     let quantifier = Arc::new(MockBackend::default());
-    let service = DefaultGameService::with_mock_quantifier(llm_backend, quantifier);
+    let service = GameService::with_mock_quantifier(llm_backend, quantifier);
 
     let state = create_test_state();
     let ctx = make_test_context_with_sqlite(state).unwrap();
@@ -61,7 +61,7 @@ fn test_with_storage_uses_external() {
 fn test_with_backends_no_disk_read() {
     let llm_backend = Arc::new(MockBackend::default());
     let registry = AgentRegistry::default();
-    let service = DefaultGameService::with_backends(llm_backend, registry);
+    let service = GameService::with_backends(llm_backend, registry);
 
     let state = create_test_state();
     let ctx = make_test_context_with_sqlite(state).unwrap();
@@ -79,7 +79,7 @@ fn test_with_backends_no_disk_read() {
 fn test_with_mock_quantifier() {
     let llm_backend = Arc::new(MockBackend::default());
     let quantifier = Arc::new(MockBackend::default());
-    let service = DefaultGameService::with_mock_quantifier(llm_backend, quantifier);
+    let service = GameService::with_mock_quantifier(llm_backend, quantifier);
 
     let state = create_test_state();
     let ctx = make_test_context_with_sqlite(state).unwrap();
@@ -95,7 +95,7 @@ fn test_with_mock_quantifier() {
 
 #[test]
 fn test_execute_action_saves_narration() {
-    let service = DefaultGameService::with_backends(
+    let service = GameService::with_backends(
         Arc::new(MockBackend::default()),
         AgentRegistry::default(),
     );
@@ -117,7 +117,7 @@ fn test_execute_action_saves_narration() {
 
 #[test]
 fn test_execute_action_empty_input() {
-    let service = DefaultGameService::with_backends(
+    let service = GameService::with_backends(
         Arc::new(MockBackend::default()),
         AgentRegistry::default(),
     );
@@ -136,7 +136,7 @@ fn test_execute_action_empty_input() {
 
 #[test]
 fn test_execute_action_clears_last_trigger() {
-    let service = DefaultGameService::with_backends(
+    let service = GameService::with_backends(
         Arc::new(MockBackend::default()),
         AgentRegistry::default(),
     );
@@ -164,7 +164,7 @@ fn test_execute_action_clears_last_trigger() {
 
 #[test]
 fn test_execute_action_preserves_input_log() {
-    let service = DefaultGameService::with_backends(
+    let service = GameService::with_backends(
         Arc::new(MockBackend::default()),
         AgentRegistry::default(),
     );
@@ -189,7 +189,7 @@ fn test_execute_action_preserves_input_log() {
 
 #[test]
 fn test_execute_action_cancellation() {
-    let service = DefaultGameService::with_mock_quantifier(
+    let service = GameService::with_mock_quantifier(
         Arc::new(MockBackend::with_delay(100)),
         Arc::new(MockBackend::default()),
     );
@@ -214,7 +214,7 @@ fn test_execute_action_trigger_continuation() {
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
     let mock_narrator = Arc::new(MockBackend::with_trigger_delay(50));
-    let service = Arc::new(DefaultGameService::with_mock_quantifier(
+    let service = Arc::new(GameService::with_mock_quantifier(
         mock_narrator.clone(),
         Arc::new(MockBackend::default()),
     ));
@@ -240,7 +240,7 @@ fn test_execute_action_trigger_continuation() {
 
 #[test]
 fn test_retry_finds_anchor() {
-    let service = DefaultGameService::with_backends(
+    let service = GameService::with_backends(
         Arc::new(MockBackend::default()),
         AgentRegistry::default(),
     );
@@ -262,7 +262,7 @@ fn test_retry_finds_anchor() {
 
 #[test]
 fn test_retry_event_fallback() {
-    let service = DefaultGameService::with_backends(
+    let service = GameService::with_backends(
         Arc::new(MockBackend::default()),
         AgentRegistry::default(),
     );
@@ -286,7 +286,7 @@ fn test_retry_empty_history() {
 
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
-    let service = DefaultGameService::with_backends(
+    let service = GameService::with_backends(
         Arc::new(MockBackend::default()),
         AgentRegistry::default(),
     );
@@ -329,7 +329,7 @@ fn test_switch_swipe_out_of_bounds() {
     state.narrative.history.append(msg);
 
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let service = DefaultGameService::with_backends(
+    let service = GameService::with_backends(
         Arc::new(MockBackend::default()),
         AgentRegistry::default(),
     );
@@ -367,7 +367,7 @@ fn test_edit_history_updates_text() {
     ));
 
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let service = DefaultGameService::with_backends(
+    let service = GameService::with_backends(
         Arc::new(MockBackend::default()),
         AgentRegistry::default(),
     );
@@ -403,7 +403,7 @@ fn test_edit_history_no_snapshot() {
     ));
 
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let service = DefaultGameService::with_backends(
+    let service = GameService::with_backends(
         Arc::new(MockBackend::default()),
         AgentRegistry::default(),
     );
@@ -433,7 +433,7 @@ fn test_delete_last_removes() {
     let initial_len = state.narrative.history.len();
 
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let service = DefaultGameService::with_backends(
+    let service = GameService::with_backends(
         Arc::new(MockBackend::default()),
         AgentRegistry::default(),
     );
@@ -455,7 +455,7 @@ fn test_delete_last_empty_rejected() {
     state.narrative.history.clear();
 
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let service = DefaultGameService::with_backends(
+    let service = GameService::with_backends(
         Arc::new(MockBackend::default()),
         AgentRegistry::default(),
     );
@@ -486,7 +486,7 @@ fn test_edit_history_storage_failure() {
     ));
 
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let service = DefaultGameService::with_backends(
+    let service = GameService::with_backends(
         Arc::new(MockBackend::default()),
         AgentRegistry::default(),
     );
@@ -526,7 +526,7 @@ async fn test_retrigger_happy_path() {
     ));
 
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let service = DefaultGameService::with_backends(
+    let service = GameService::with_backends(
         Arc::new(MockBackend::default()),
         AgentRegistry::default(),
     );
@@ -562,7 +562,7 @@ async fn test_retrigger_storage_operations() {
     ));
 
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let service = DefaultGameService::with_backends(
+    let service = GameService::with_backends(
         Arc::new(MockBackend::default()),
         AgentRegistry::default(),
     );
@@ -594,7 +594,7 @@ fn test_delete_last_storage_failure() {
         None,
     ));
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let service = DefaultGameService::with_backends(
+    let service = GameService::with_backends(
         Arc::new(MockBackend::default()),
         AgentRegistry::default(),
     );
@@ -619,7 +619,7 @@ async fn test_retry_cancellation() {
     let ctx = make_test_context_with_sqlite(state).unwrap();
     // Cancel the token to simulate cancellation
     ctx.cancel_token.cancel();
-    let service = DefaultGameService::with_backends(
+    let service = GameService::with_backends(
         Arc::new(MockBackend::default()),
         AgentRegistry::default(),
     );

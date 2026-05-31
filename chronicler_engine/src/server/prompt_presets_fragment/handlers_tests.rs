@@ -19,13 +19,11 @@ fn make_test_app_state_with_storage(
     let _ = storage.save_preset(&preset);
 
     let settings = Arc::new(RwLock::new(crate::model::settings::AppSettings::default()));
-    let game_service = Arc::new(
-        crate::application::game_service::DefaultGameService::with_storage(
-            Some(Arc::new(Storage::new_in_memory())),
-            None,
-            Arc::clone(&settings),
-        ),
-    );
+    let game_service = Arc::new(crate::application::game_service::GameService::with_storage(
+        Some(Arc::new(Storage::new_in_memory())),
+        None,
+        Arc::clone(&settings),
+    ));
     crate::server::AppState {
         storage: Arc::new(Storage::new_in_memory()),
         preset_storage: storage,
@@ -335,13 +333,11 @@ fn make_test_app_state_with_failing_storage(
     fail_after_setup(&handle);
 
     let settings = Arc::new(RwLock::new(crate::model::settings::AppSettings::default()));
-    let game_service = Arc::new(
-        crate::application::game_service::DefaultGameService::with_storage(
-            Some(Arc::new(Storage::new_in_memory())),
-            None,
-            Arc::clone(&settings),
-        ),
-    );
+    let game_service = Arc::new(crate::application::game_service::GameService::with_storage(
+        Some(Arc::new(Storage::new_in_memory())),
+        None,
+        Arc::clone(&settings),
+    ));
     crate::server::AppState {
         storage: Arc::new(Storage::new_in_memory()),
         preset_storage: Arc::new(storage),

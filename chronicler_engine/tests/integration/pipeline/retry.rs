@@ -90,7 +90,7 @@ fn test_retry_after_llm_failure_succeeds() {
 fn test_retry_no_snapshot() {
     let ctx = make_test_context_without_snapshot(create_test_state());
 
-    let backend = DefaultGameService::with_mock_quantifier(
+    let backend = GameService::with_mock_quantifier(
         Arc::new(MockBackend::default()),
         Arc::new(MockBackend::default()),
     );
@@ -106,7 +106,7 @@ fn test_retry_no_input_text() {
     state.add_message("You see a room.".to_string(), None, MessageType::Narration);
 
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let backend = DefaultGameService::with_mock_quantifier(
+    let backend = GameService::with_mock_quantifier(
         Arc::new(MockBackend::default()),
         Arc::new(MockBackend::default()),
     );
@@ -141,7 +141,7 @@ fn test_retry_room_not_found() {
     let main = GameStateSnapshot::from_game_state(&state);
     let _ = ctx.storage.save_snapshot(&main);
 
-    let backend = DefaultGameService::with_mock_quantifier(
+    let backend = GameService::with_mock_quantifier(
         Arc::new(MockBackend::default()),
         Arc::new(MockBackend::default()),
     );
@@ -182,7 +182,7 @@ fn test_retry_llm_error() {
     let main = GameStateSnapshot::from_game_state(&state);
     let _ = ctx.storage.save_snapshot(&main);
 
-    let backend = DefaultGameService::with_mock_quantifier(
+    let backend = GameService::with_mock_quantifier(
         Arc::new(MockBackend::failing()),
         Arc::new(MockBackend::default()),
     );
@@ -223,7 +223,7 @@ fn test_retry_empty_narration() {
     let main = GameStateSnapshot::from_game_state(&state);
     let _ = ctx.storage.save_snapshot(&main);
 
-    let backend = DefaultGameService::with_mock_quantifier(
+    let backend = GameService::with_mock_quantifier(
         Arc::new(MockBackend::with_empty_response()),
         Arc::new(MockBackend::default()),
     );
@@ -265,7 +265,7 @@ fn test_retry_main_narration_uses_pre_main_snapshot() {
     let main = GameStateSnapshot::from_game_state(&state);
     let _ = ctx.storage.save_snapshot(&main);
 
-    let backend = DefaultGameService::with_mock_quantifier(
+    let backend = GameService::with_mock_quantifier(
         Arc::new(MockBackend::default()),
         Arc::new(MockBackend::default()),
     );
@@ -335,7 +335,7 @@ fn test_retry_event_continuation_uses_pre_event_snapshot() {
         let _ = ctx.storage.insert_message(&msg);
     }
 
-    let backend = DefaultGameService::with_mock_quantifier(
+    let backend = GameService::with_mock_quantifier(
         Arc::new(MockBackend::default()),
         Arc::new(MockBackend::default()),
     );

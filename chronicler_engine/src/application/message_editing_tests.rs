@@ -25,7 +25,7 @@ fn test_edit_history_validation() {
     use crate::model::state::MessageType;
     use crate::test_support::make_test_context;
     use crate::application::message_editing::MessageEditingService;
-    use crate::application::game_service::DefaultGameService;
+    use crate::application::game_service::GameService;
     use crate::narrative::agents::registry::AgentRegistry;
     use crate::narrative::llm::MockBackend;
     use std::sync::Arc;
@@ -40,10 +40,8 @@ fn test_edit_history_validation() {
     ));
 
     let ctx = make_test_context(state);
-    let service = DefaultGameService::with_backends(
-        Arc::new(MockBackend::default()),
-        AgentRegistry::default(),
-    );
+    let service =
+        GameService::with_backends(Arc::new(MockBackend::default()), AgentRegistry::default());
     let editing_service = MessageEditingService::new(Arc::new(service));
 
     // Test editing with invalid ID (non-existent)
@@ -55,17 +53,15 @@ fn test_edit_history_validation() {
 #[test]
 fn test_delete_last_empty_error() {
     use crate::application::message_editing::MessageEditingService;
-    use crate::application::game_service::DefaultGameService;
+    use crate::application::game_service::GameService;
     use crate::narrative::agents::registry::AgentRegistry;
     use crate::narrative::llm::MockBackend;
     use std::sync::Arc;
 
     let state = test_helpers::create_test_state();
     let _ctx = crate::test_support::make_test_context(state);
-    let service = DefaultGameService::with_backends(
-        Arc::new(MockBackend::default()),
-        AgentRegistry::default(),
-    );
+    let service =
+        GameService::with_backends(Arc::new(MockBackend::default()), AgentRegistry::default());
     let _editing_service = MessageEditingService::new(Arc::new(service));
     // Logic test: verify error path exists
     // Actual empty history behavior tested in integration tests

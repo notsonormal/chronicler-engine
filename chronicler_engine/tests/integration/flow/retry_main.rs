@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use chronicler_engine::application::game_service::DefaultGameService;
+use chronicler_engine::application::game_service::GameService;
 use chronicler_engine::model::character::{CharacterSheet, NpcCard};
 use chronicler_engine::model::state::{GameState, MessageType};
 use chronicler_engine::model::trigger::{
@@ -31,7 +31,7 @@ fn test_retry_main_narration_applies_new_quantifier_result() {
         ..Default::default()
     });
 
-    let service = DefaultGameService::with_mock_quantifier(
+    let service = GameService::with_mock_quantifier(
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         quantifier,
     );
@@ -81,7 +81,7 @@ fn test_retry_with_different_narration_text_reruns_quantifier() {
     });
 
     let service =
-        DefaultGameService::with_mock_quantifier(llm_backend, Arc::new(MockBackend::default()));
+        GameService::with_mock_quantifier(llm_backend, Arc::new(MockBackend::default()));
     service.execute_action(
         ctx.clone(),
         "approach the innkeeper".to_string(),
@@ -142,7 +142,7 @@ fn test_double_retry_increments_swipe_and_reruns_quantifier() {
         ..Default::default()
     });
 
-    let service = DefaultGameService::with_mock_quantifier(
+    let service = GameService::with_mock_quantifier(
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         quantifier,
     );
@@ -176,7 +176,7 @@ fn test_retry_preserves_input_and_does_not_create_extra_swipe() {
 
     add_input_and_save(&ctx, "walk around");
 
-    let service = DefaultGameService::with_mock_quantifier(
+    let service = GameService::with_mock_quantifier(
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         Arc::new(MockBackend::default()),
     );
@@ -214,7 +214,7 @@ fn test_retry_after_edited_input_uses_new_text() {
 
     add_input_and_save(&ctx, "walk around");
 
-    let service = DefaultGameService::with_mock_quantifier(
+    let service = GameService::with_mock_quantifier(
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         Arc::new(MockBackend::default()),
     );
@@ -309,7 +309,7 @@ fn test_main_retry_reevaluates_triggers() {
         ..Default::default()
     });
 
-    let service = DefaultGameService::with_mock_quantifier(
+    let service = GameService::with_mock_quantifier(
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         quantifier,
     );
@@ -358,7 +358,7 @@ fn test_retry_completes_when_quantifier_returns_none() {
         ..Default::default()
     });
 
-    let service = DefaultGameService::with_mock_quantifier(
+    let service = GameService::with_mock_quantifier(
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         quantifier,
     );
@@ -436,7 +436,7 @@ fn test_retry_no_pre_main_snapshot() {
 
     add_input_and_save(&ctx, "examine room");
 
-    let service = DefaultGameService::with_mock_quantifier(
+    let service = GameService::with_mock_quantifier(
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         Arc::new(MockBackend::default()),
     );
@@ -489,7 +489,7 @@ fn test_movement_with_arrival_narration_retry() {
         ..Default::default()
     });
 
-    let service = DefaultGameService::with_mock_quantifier(
+    let service = GameService::with_mock_quantifier(
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         quantifier,
     );
@@ -543,7 +543,7 @@ fn test_retry_appends_swipe_to_existing_narration() {
     });
 
     let service =
-        DefaultGameService::with_mock_quantifier(llm_backend, Arc::new(MockBackend::default()));
+        GameService::with_mock_quantifier(llm_backend, Arc::new(MockBackend::default()));
     service.execute_action(
         ctx.clone(),
         "examine room".to_string(),

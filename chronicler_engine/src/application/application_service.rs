@@ -7,7 +7,7 @@ use crate::application::action_pipeline::execute_action_impl;
 
 use crate::application::context::{GameServiceContext, load_or_fresh};
 use crate::application::game_lifecycle::GameLifecycleService;
-use crate::application::game_service::DefaultGameService;
+use crate::application::game_service::GameService;
 use crate::application::message_editing::MessageEditingService;
 use crate::application::query_handlers::QueryHandlers;
 use crate::error::EngineError;
@@ -85,14 +85,14 @@ pub struct DebugStateView {
 }
 
 pub struct DefaultApplicationService {
-    game_service: Arc<DefaultGameService>,
+    game_service: Arc<GameService>,
     lifecycle: GameLifecycleService,
     editing: MessageEditingService,
     queries: QueryHandlers,
 }
 
 impl DefaultApplicationService {
-    pub fn new(game_service: Arc<DefaultGameService>) -> Self {
+    pub fn new(game_service: Arc<GameService>) -> Self {
         Self {
             lifecycle: GameLifecycleService::new(),
             editing: MessageEditingService::new(Arc::clone(&game_service)),
@@ -101,7 +101,7 @@ impl DefaultApplicationService {
         }
     }
 
-    pub fn game_service(&self) -> &Arc<DefaultGameService> {
+    pub fn game_service(&self) -> &Arc<GameService> {
         &self.game_service
     }
 
@@ -136,9 +136,7 @@ impl DefaultApplicationService {
         game_state.narrative.input_buffer.status = GenerationStatus::Generating;
         game_state.narrative.input_buffer.phase = GenerationPhase::Narrating;
 
-        if let Err(e) =
-            crate::application::game_service::save_message_and_snapshot(&ctx, &mut game_state)
-        {
+        if let Err(e) = crate::application::save_message_and_snapshot(&ctx, &mut game_state) {
             tracing::debug!(
                 "process_action: save failed, setting is_generating=false and returning error"
             );

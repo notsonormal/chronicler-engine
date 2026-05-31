@@ -8,7 +8,7 @@ fn test_delayed_llm_completes_without_deadlock() {
     state.narrative.history.clear();
     state.narrative.input_buffer.status = GenerationStatus::Generating;
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let backend = DefaultGameService::with_mock_quantifier(
+    let backend = GameService::with_mock_quantifier(
         Arc::new(MockBackend::with_delay(200)),
         Arc::new(MockBackend::default()),
     );
@@ -33,7 +33,7 @@ fn test_quantifier_detects_movement() {
     state.narrative.history.clear();
     state.narrative.input_buffer.status = GenerationStatus::Generating;
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let backend = DefaultGameService::with_mock_quantifier(
+    let backend = GameService::with_mock_quantifier(
         Arc::new(MockBackend::default()),
         Arc::new(MockBackend {
             per_call_prompt_responses: vec![r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "village_square"}}"#.to_string()],
@@ -70,7 +70,7 @@ fn test_quantifier_detects_npc_presence_and_fires_trigger() {
         encounter.times_met = 0;
     }
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let backend = DefaultGameService::with_mock_quantifier(
+    let backend = GameService::with_mock_quantifier(
         Arc::new(MockBackend::default()),
         Arc::new(MockBackend {
             per_call_prompt_responses: vec![r#"{"npcs_in_room": ["shopkeeper"]}"#.to_string()],
@@ -115,7 +115,7 @@ fn test_empty_llm_response_handled_gracefully() {
     state.narrative.history.clear();
     state.narrative.input_buffer.status = GenerationStatus::Generating;
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let backend = DefaultGameService::with_mock_quantifier(
+    let backend = GameService::with_mock_quantifier(
         Arc::new(MockBackend::with_empty_response()),
         Arc::new(MockBackend::default()),
     );
@@ -156,7 +156,7 @@ fn test_failing_trigger_narration_does_not_crash() {
         encounter.times_met = 0;
     }
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let backend = DefaultGameService::with_mock_quantifier(
+    let backend = GameService::with_mock_quantifier(
         Arc::new(MockBackend::with_failing_trigger_narration()),
         Arc::new(MockBackend {
             per_call_prompt_responses: vec![r#"{"npcs_in_room": ["shopkeeper"]}"#.to_string()],
@@ -219,7 +219,7 @@ async fn test_cancellation_resets_state_to_idle() {
     state.narrative.history.clear();
     state.narrative.input_buffer.status = GenerationStatus::Generating;
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let backend = DefaultGameService::with_mock_quantifier(
+    let backend = GameService::with_mock_quantifier(
         Arc::new(MockBackend::with_delay(50)),
         Arc::new(MockBackend::default()),
     );
@@ -242,7 +242,7 @@ async fn test_pipeline_cancels_after_main_narration() {
     state.narrative.input_buffer.status = GenerationStatus::Generating;
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let mock_narrator = Arc::new(MockBackend::with_delay(50));
-    let backend = Arc::new(DefaultGameService::with_mock_quantifier(
+    let backend = Arc::new(GameService::with_mock_quantifier(
         mock_narrator.clone(),
         Arc::new(MockBackend::default()),
     ));
@@ -295,7 +295,7 @@ async fn test_pipeline_cancels_during_trigger_continuation() {
     }
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let mock_narrator = Arc::new(MockBackend::with_trigger_delay(50));
-    let backend = Arc::new(DefaultGameService::with_mock_quantifier(
+    let backend = Arc::new(GameService::with_mock_quantifier(
         mock_narrator.clone(),
         Arc::new(MockBackend {
             per_call_prompt_responses: vec![r#"{"npcs_in_room": ["shopkeeper"]}"#.to_string()],
@@ -354,7 +354,7 @@ fn test_pre_main_snapshot_saved_before_narration() {
     state.narrative.history.clear();
     state.narrative.input_buffer.status = GenerationStatus::Idle;
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let backend = DefaultGameService::with_mock_quantifier(
+    let backend = GameService::with_mock_quantifier(
         Arc::new(MockBackend::default()),
         Arc::new(MockBackend::default()),
     );
@@ -387,7 +387,7 @@ fn test_pre_event_snapshot_saved_before_continuation() {
         ..Default::default()
     };
 
-    let backend = DefaultGameService::with_mock_quantifier(
+    let backend = GameService::with_mock_quantifier(
         Arc::new(MockBackend::default()),
         Arc::new(quantifier),
     );
@@ -414,7 +414,7 @@ fn test_pipeline_with_quantifier() {
     state.narrative.history.clear();
     state.narrative.input_buffer.status = GenerationStatus::Generating;
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let backend = DefaultGameService::with_mock_quantifier(
+    let backend = GameService::with_mock_quantifier(
         Arc::new(MockBackend::default()),
         Arc::new(MockBackend::default()),
     );

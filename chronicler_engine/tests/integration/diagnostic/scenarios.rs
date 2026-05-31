@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use chronicler_engine::application::game_service::DefaultGameService;
+use chronicler_engine::application::game_service::GameService;
 use chronicler_engine::model::character::{CharacterSheet, NpcCard};
 use chronicler_engine::model::state::GenerationStatus;
 use chronicler_engine::model::state::MessageType;
@@ -477,7 +477,7 @@ fn benchmark_trigger_wrong_room_id() {
     );
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
-    let service = DefaultGameService::with_mock_quantifier(
+    let service = GameService::with_mock_quantifier(
         Arc::new(chronicler_engine::narrative::llm::MockBackend::default()),
         Arc::new(chronicler_engine::narrative::llm::MockBackend {
             per_call_prompt_responses: vec![r#"{"npcs_in_room": ["trigger_npc"]}"#.to_string()],
@@ -566,7 +566,7 @@ fn benchmark_state_stuck_generating() {
 
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
-    let service = DefaultGameService::with_mock_quantifier(
+    let service = GameService::with_mock_quantifier(
         Arc::new(chronicler_engine::narrative::llm::MockBackend::with_failing_trigger_narration()),
         Arc::new(chronicler_engine::narrative::llm::MockBackend {
             per_call_prompt_responses: vec![r#"{"npcs_in_room": ["test_npc"]}"#.to_string()],

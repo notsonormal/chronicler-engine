@@ -23,16 +23,14 @@ pub async fn run_server_with_config(
         npcs: resources.npcs,
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         settings: Arc::clone(&resources.settings),
-        game_service: Arc::new(
-            crate::application::game_service::DefaultGameService::with_storage(
-                Some(Arc::clone(&resources.storage)),
-                Some(Arc::clone(&resources.preset_storage)),
-                Arc::clone(&resources.settings),
-            ),
-        ),
+        game_service: Arc::new(crate::application::game_service::GameService::with_storage(
+            Some(Arc::clone(&resources.storage)),
+            Some(Arc::clone(&resources.preset_storage)),
+            Arc::clone(&resources.settings),
+        )),
         application_service: Arc::new(
             crate::application::application_service::DefaultApplicationService::new(Arc::new(
-                crate::application::game_service::DefaultGameService::with_storage(
+                crate::application::game_service::GameService::with_storage(
                     Some(Arc::clone(&resources.storage)),
                     Some(Arc::clone(&resources.preset_storage)),
                     Arc::clone(&resources.settings),

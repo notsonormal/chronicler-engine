@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use chronicler_engine::application::action_pipeline::{ActionOutcome, ActionPipeline};
-use chronicler_engine::application::game_service::DefaultGameService;
+use chronicler_engine::application::game_service::GameService;
 use chronicler_engine::engine::action_processing::{
     FreeActionContext, apply_npc_events, execute_freeaction_impl,
 };
@@ -156,7 +156,7 @@ fn test_inv004_cancellable_at_boundaries() {
 
     // Backend with a small delay so cancellation has time to fire.
     let mock_backend = Arc::new(MockBackend::with_delay(100));
-    let backend = DefaultGameService::with_backends(mock_backend.clone(), AgentRegistry::default());
+    let backend = GameService::with_backends(mock_backend.clone(), AgentRegistry::default());
 
     let pipeline = ActionPipeline::new(&backend, &ctx);
 

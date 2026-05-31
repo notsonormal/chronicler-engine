@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use chronicler_engine::application::game_service::DefaultGameService;
+use chronicler_engine::application::game_service::GameService;
 use chronicler_engine::model::character::{CharacterSheet, NpcCard};
 use chronicler_engine::model::state::GameState;
 use chronicler_engine::model::trigger::{
@@ -32,7 +32,7 @@ fn test_event_retry_does_not_create_extra_swipe_on_narration() {
         ..Default::default()
     });
 
-    let service = DefaultGameService::with_mock_quantifier(
+    let service = GameService::with_mock_quantifier(
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         quantifier,
     );
@@ -83,7 +83,7 @@ fn test_retry_event_continuation_preserves_quantifier_result() {
         ..Default::default()
     });
 
-    let service = DefaultGameService::with_mock_quantifier(
+    let service = GameService::with_mock_quantifier(
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         quantifier,
     );
@@ -219,7 +219,7 @@ fn test_trigger_continuation_runs_quantifier_and_detects_new_npc() {
         ..Default::default()
     });
 
-    let service = DefaultGameService::with_mock_quantifier(llm_backend, quantifier);
+    let service = GameService::with_mock_quantifier(llm_backend, quantifier);
 
     service.execute_action(ctx.clone(), "enter shop".to_string(), "Player".to_string());
     assert!(

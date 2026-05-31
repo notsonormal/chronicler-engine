@@ -4,7 +4,7 @@ use axum::Router;
 use tokio_util::sync::CancellationToken;
 
 use crate::application::application_service::DefaultApplicationService;
-use crate::application::game_service::DefaultGameService;
+use crate::application::game_service::GameService;
 use crate::model::character::{NpcCard, PlayerCard};
 use crate::model::map::{MapDef, Overworld, Region, Room};
 use crate::model::settings::AppSettings;
@@ -29,7 +29,7 @@ pub struct TestAppBuilder {
     generation_phase: Option<GenerationPhase>,
     settings: AppSettings,
     storage: Option<Arc<Storage>>,
-    game_service: Option<Arc<DefaultGameService>>,
+    game_service: Option<Arc<GameService>>,
     is_generating: bool,
 }
 
@@ -203,7 +203,7 @@ impl TestAppBuilder {
         self
     }
 
-    pub fn game_service(mut self, service: Arc<DefaultGameService>) -> Self {
+    pub fn game_service(mut self, service: Arc<GameService>) -> Self {
         self.game_service = Some(service);
         self
     }
@@ -266,8 +266,8 @@ impl TestAppBuilder {
 
         let settings_arc = Arc::new(RwLock::new(self.settings));
         let preset_storage = Arc::new(Storage::new_in_memory());
-        let game_service: Arc<DefaultGameService> = self.game_service.unwrap_or_else(|| {
-            Arc::new(DefaultGameService::with_storage(
+        let game_service: Arc<GameService> = self.game_service.unwrap_or_else(|| {
+            Arc::new(GameService::with_storage(
                 Some(Arc::clone(&storage)),
                 Some(Arc::clone(&preset_storage)),
                 Arc::clone(&settings_arc),

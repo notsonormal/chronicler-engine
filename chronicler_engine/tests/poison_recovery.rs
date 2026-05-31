@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use tokio_util::sync::CancellationToken;
 
-use chronicler_engine::application::game_service::DefaultGameService;
+use chronicler_engine::application::game_service::GameService;
 use chronicler_engine::application::DefaultApplicationService;
 use chronicler_engine::model::character::{CharacterSheet, PlayerCard};
 use chronicler_engine::model::map::{MapDef, Overworld};
@@ -25,7 +25,7 @@ fn test_settings_recover_from_poisoned_rwlock() {
     })
     .join();
 
-    let game_service = Arc::new(DefaultGameService::with_storage(
+    let game_service = Arc::new(GameService::with_storage(
         None,
         None,
         Arc::new(std::sync::RwLock::new(AppSettings::default())),
@@ -81,7 +81,7 @@ fn test_cancel_token_recover_from_poisoned_rwlock() {
     })
     .join();
 
-    let game_service = Arc::new(DefaultGameService::with_storage(
+    let game_service = Arc::new(GameService::with_storage(
         None,
         None,
         Arc::new(std::sync::RwLock::new(AppSettings::default())),
