@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-31 14:13 UTC*
+*Index last generated: 2026-05-31 15:48 UTC*
 
 ### Root files
 
@@ -80,6 +80,10 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Reference: Quantifier Prompt](./reference/quantifier_prompt.md)
 - [Reference: System Prompt](./reference/system_prompt.md)
 - [Specification: Testing Strategy and Architecture](./reference/testing.md)
+
+### `docs/reports/`
+
+- [Documentation Consistency Report](./reports/docs-consistency-2026-05-31.md)
 
 ### `docs/reviews/`
 

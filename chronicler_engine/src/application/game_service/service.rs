@@ -1,6 +1,7 @@
 use std::sync::{Arc, RwLock};
 
 use crate::application::action_pipeline::ActionPipelineBackend;
+use crate::application::context::GameServiceContext;
 use crate::error::EngineError;
 use crate::model::agent::{AgentContext, AgentResult, ExecutionPhase, StatePatch};
 use crate::model::settings::AppSettings;
@@ -82,6 +83,16 @@ impl DefaultGameService {
             )),
             agent_registry: registry,
         }
+    }
+
+    /// Execute a player action through the action pipeline.
+    pub fn execute_action(&self, ctx: GameServiceContext, input: String, player_name: String) {
+        crate::application::action_pipeline::execute_action_impl(self, ctx, input, player_name)
+    }
+
+    /// Retry the last response.
+    pub fn retry_last_response(&self, ctx: GameServiceContext) {
+        crate::application::action_pipeline::retry_last_response_impl(self, ctx)
     }
 }
 

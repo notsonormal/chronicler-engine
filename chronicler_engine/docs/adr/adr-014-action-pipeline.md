@@ -27,7 +27,7 @@ We extracted an `ActionPipeline` module that explicitly models the game flow pha
 
 ### Positive
 
-- **Testability**: Tests can now inject a narrow mock implementing only the backend trait (3 methods) instead of constructing a full game service with mock quantifiers and registries.
+- **Testability**: Tests can now inject a narrow mock implementing only the backend trait (3 methods) instead of constructing a full game service with mock quantifiers and registries. The public API uses `DefaultGameService::execute_action()` and `DefaultGameService::retry_last_response()` wrapper methods, keeping internal implementation details private.
 - **Locality and Readability**: Action orchestration lives in one module, avoiding monoliths.
 - **Leverage**: Normal play, main retry, and event retry all use the exact same pipeline phases.
 - **Architectural Clarity**: The dependency cycle between game service and pipeline was broken by extracting shared context into a separate module and making the pipeline depend on the backend trait.

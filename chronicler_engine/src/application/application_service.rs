@@ -156,20 +156,20 @@ impl DefaultApplicationService {
             }
             return Ok(ProcessActionResult::ShuttingDown);
         }
-        tracing::info!("[DEBUG] process_action: spawning blocking task");
+        tracing::debug!("process_action: spawning blocking task");
         let game_service = Arc::clone(&self.game_service);
         let ctx_clone = ctx.clone();
         // [DOC: docs/architecture/invariants.md#INV-004]
         tokio::task::spawn_blocking(move || {
-            tracing::info!("[DEBUG] spawn_blocking: task started");
+            tracing::debug!("spawn_blocking: task started");
             let _guard = GenerationGuard(Arc::clone(&ctx_clone.is_generating));
             if ctx_clone.cancel_token.is_cancelled() {
-                tracing::info!("[DEBUG] spawn_blocking: cancelled before execute_action");
+                tracing::debug!("spawn_blocking: cancelled before execute_action");
                 return;
             }
             // [DOC: docs/architecture/invariants.md#INV-004]
             execute_action_impl(&*game_service, ctx_clone, input, player_name);
-            tracing::info!("[DEBUG] spawn_blocking: execute_action completed");
+            tracing::debug!("spawn_blocking: execute_action completed");
         });
         Ok(ProcessActionResult::Started)
     }

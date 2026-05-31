@@ -1,4 +1,3 @@
-use chronicler_engine::application::action_pipeline::execute_action_impl;
 /// [DOC: docs/reference/testing.md]
 mod test_data;
 
@@ -34,12 +33,7 @@ fn run_action(
     let mut state = state;
     state.narrative.history.clear();
     let ctx = make_test_context(state);
-    execute_action_impl(
-        service,
-        ctx.clone(),
-        command.to_string(),
-        "Player".to_string(),
-    );
+    service.execute_action(ctx.clone(), command.to_string(), "Player".to_string());
     latest_state(&ctx)
 }
 
@@ -87,12 +81,7 @@ fn test_default_game_service_with_backends() {
     let mut state = create_test_state();
     state.narrative.history.clear();
     let ctx = make_test_context(state);
-    execute_action_impl(
-        &service,
-        ctx.clone(),
-        "look".to_string(),
-        "Player".to_string(),
-    );
+    service.execute_action(ctx.clone(), "look".to_string(), "Player".to_string());
     let guard = latest_state(&ctx);
     assert!(!guard.narrative.input_buffer.status.is_generating());
 }
@@ -106,12 +95,7 @@ fn test_default_game_service_with_mock_quantifier() {
     let mut state = create_test_state();
     state.narrative.history.clear();
     let ctx = make_test_context(state);
-    execute_action_impl(
-        &service,
-        ctx.clone(),
-        "look".to_string(),
-        "Player".to_string(),
-    );
+    service.execute_action(ctx.clone(), "look".to_string(), "Player".to_string());
     let guard = latest_state(&ctx);
     assert!(!guard.narrative.input_buffer.status.is_generating());
 }

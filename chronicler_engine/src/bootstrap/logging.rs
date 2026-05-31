@@ -7,7 +7,6 @@ use tracing_subscriber::{
 };
 
 /// [DOC: docs/architecture/system.md]
-/// Returns the non-blocking guard which must be kept alive for the application lifetime
 pub fn init_logging() -> tracing_appender::non_blocking::WorkerGuard {
     let log_dir = Path::new("logs");
     if !log_dir.exists() {
@@ -38,8 +37,10 @@ pub fn init_logging() -> tracing_appender::non_blocking::WorkerGuard {
     };
 
     let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
-
-    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("debug"));
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|e| {
+        eprintln!("EnvFilter parse error: {e}, falling back to debug");
+        EnvFilter::new("debug")
+    });
 
     tracing_subscriber::registry()
         .with(env_filter)
@@ -52,8 +53,6 @@ pub fn init_logging() -> tracing_appender::non_blocking::WorkerGuard {
                 .with_target(true),
         )
         .init();
-
-    println!("Logging to file: {log_file_path:?}");
 
     tracing::info!("Logging initialized. Log file: {log_file_path:?}");
 

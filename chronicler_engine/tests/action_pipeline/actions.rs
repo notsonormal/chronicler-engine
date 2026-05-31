@@ -7,12 +7,7 @@ fn test_pipeline_executes_and_persists_narration() {
     let ctx = make_test_context(state);
     let backend = working_backend();
 
-    execute_action_impl(
-        &backend,
-        ctx.clone(),
-        "look".to_string(),
-        "Player".to_string(),
-    );
+    backend.execute_action(ctx.clone(), "look".to_string(), "Player".to_string());
 
     let final_state = latest_state(&ctx);
     let has_narration = final_state
@@ -34,7 +29,6 @@ fn test_pipeline_executes_and_persists_narration() {
 fn test_pipeline_persists_input_before_narration() {
     let mut state = create_test_state();
     state.narrative.history.clear();
-    // Pre-seed input log (server handler responsibility)
     state.add_message(
         "examine the room".to_string(),
         Some("Player".to_string()),
@@ -43,8 +37,7 @@ fn test_pipeline_persists_input_before_narration() {
     let ctx = make_test_context(state);
     let backend = working_backend();
 
-    execute_action_impl(
-        &backend,
+    backend.execute_action(
         ctx.clone(),
         "examine the room".to_string(),
         "Player".to_string(),
@@ -74,12 +67,7 @@ fn test_pipeline_handles_room_not_found() {
     let ctx = make_test_context(state);
     let backend = working_backend();
 
-    execute_action_impl(
-        &backend,
-        ctx.clone(),
-        "look".to_string(),
-        "Player".to_string(),
-    );
+    backend.execute_action(ctx.clone(), "look".to_string(), "Player".to_string());
 
     let final_state = latest_state(&ctx);
     assert!(
@@ -95,12 +83,7 @@ fn test_pipeline_handles_llm_failure() {
     let ctx = make_test_context(state);
     let backend = failing_backend();
 
-    execute_action_impl(
-        &backend,
-        ctx.clone(),
-        "look".to_string(),
-        "Player".to_string(),
-    );
+    backend.execute_action(ctx.clone(), "look".to_string(), "Player".to_string());
 
     let final_state = latest_state(&ctx);
     assert!(
@@ -131,12 +114,7 @@ fn test_pipeline_clears_last_trigger() {
     let ctx = make_test_context(state);
     let backend = working_backend();
 
-    execute_action_impl(
-        &backend,
-        ctx.clone(),
-        "look".to_string(),
-        "Player".to_string(),
-    );
+    backend.execute_action(ctx.clone(), "look".to_string(), "Player".to_string());
 
     let final_state = latest_state(&ctx);
     assert!(
@@ -153,12 +131,7 @@ fn test_pipeline_phase_transitions() {
     let ctx = make_test_context(state);
     let backend = working_backend();
 
-    execute_action_impl(
-        &backend,
-        ctx.clone(),
-        "look".to_string(),
-        "Player".to_string(),
-    );
+    backend.execute_action(ctx.clone(), "look".to_string(), "Player".to_string());
 
     let guard = latest_state(&ctx);
     assert_eq!(
@@ -176,12 +149,7 @@ fn test_pipeline_phase_stays_narrating_on_error() {
     let ctx = make_test_context(state);
     let backend = failing_backend();
 
-    execute_action_impl(
-        &backend,
-        ctx.clone(),
-        "look".to_string(),
-        "Player".to_string(),
-    );
+    backend.execute_action(ctx.clone(), "look".to_string(), "Player".to_string());
 
     let guard = latest_state(&ctx);
     assert_eq!(
@@ -198,7 +166,7 @@ fn test_pipeline_empty_input() {
     let ctx = make_test_context(state);
     let backend = failing_backend();
 
-    execute_action_impl(&backend, ctx.clone(), "".to_string(), "Player".to_string());
+    backend.execute_action(ctx.clone(), "".to_string(), "Player".to_string());
 
     let guard = latest_state(&ctx);
     assert!(

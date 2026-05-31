@@ -14,12 +14,7 @@ fn test_retry_finds_last_input_and_runs_pipeline() {
     let ctx = make_test_context(state);
     let backend = working_backend();
 
-    execute_action_impl(
-        &backend,
-        ctx.clone(),
-        "look around".to_string(),
-        "Player".to_string(),
-    );
+    backend.execute_action(ctx.clone(), "look around".to_string(), "Player".to_string());
     let after_first = latest_state(&ctx);
     let first_narration_count = after_first
         .narrative
@@ -29,7 +24,7 @@ fn test_retry_finds_last_input_and_runs_pipeline() {
         .count();
     assert_eq!(first_narration_count, 1);
 
-    retry_last_response_impl(&backend, ctx.clone());
+    backend.retry_last_response(ctx.clone());
 
     let after_retry = latest_state(&ctx);
     let retry_narration_count = after_retry
@@ -51,7 +46,7 @@ fn test_retry_with_empty_history_is_noop() {
     let ctx = make_test_context(state);
     let backend = working_backend();
 
-    retry_last_response_impl(&backend, ctx.clone());
+    backend.retry_last_response(ctx.clone());
 
     let final_state = latest_state(&ctx);
     assert!(final_state.narrative.history().is_empty());
@@ -69,12 +64,7 @@ fn test_retry_after_llm_failure_succeeds() {
     let ctx = make_test_context(state);
     let failing = failing_backend();
 
-    execute_action_impl(
-        &failing,
-        ctx.clone(),
-        "look".to_string(),
-        "Player".to_string(),
-    );
+    failing.execute_action(ctx.clone(), "look".to_string(), "Player".to_string());
     let after_fail = latest_state(&ctx);
     assert!(
         after_fail
@@ -86,7 +76,7 @@ fn test_retry_after_llm_failure_succeeds() {
     );
 
     let working = working_backend();
-    retry_last_response_impl(&working, ctx.clone());
+    working.retry_last_response(ctx.clone());
 
     let after_retry = latest_state(&ctx);
     assert!(
@@ -105,7 +95,7 @@ fn test_retry_no_snapshot() {
         Arc::new(MockBackend::default()),
     );
 
-    retry_last_response_impl(&backend, ctx.clone());
+    backend.retry_last_response(ctx.clone());
 }
 
 #[test]
@@ -121,7 +111,7 @@ fn test_retry_no_input_text() {
         Arc::new(MockBackend::default()),
     );
 
-    retry_last_response_impl(&backend, ctx.clone());
+    backend.retry_last_response(ctx.clone());
 
     let guard = latest_state(&ctx);
     assert_eq!(guard.narrative.history().len(), 2);
@@ -156,7 +146,7 @@ fn test_retry_room_not_found() {
         Arc::new(MockBackend::default()),
     );
 
-    retry_last_response_impl(&backend, ctx.clone());
+    backend.retry_last_response(ctx.clone());
 
     let guard = latest_state(&ctx);
     assert!(
@@ -197,7 +187,7 @@ fn test_retry_llm_error() {
         Arc::new(MockBackend::default()),
     );
 
-    retry_last_response_impl(&backend, ctx.clone());
+    backend.retry_last_response(ctx.clone());
 
     let guard = latest_state(&ctx);
     assert!(
@@ -238,7 +228,7 @@ fn test_retry_empty_narration() {
         Arc::new(MockBackend::default()),
     );
 
-    retry_last_response_impl(&backend, ctx.clone());
+    backend.retry_last_response(ctx.clone());
 
     let guard = latest_state(&ctx);
     assert!(
@@ -280,7 +270,7 @@ fn test_retry_main_narration_uses_pre_main_snapshot() {
         Arc::new(MockBackend::default()),
     );
 
-    retry_last_response_impl(&backend, ctx.clone());
+    backend.retry_last_response(ctx.clone());
 
     let completed = wait_for_generation_complete(&ctx, 1000);
     assert!(completed, "Retry should complete within timeout");
@@ -350,7 +340,7 @@ fn test_retry_event_continuation_uses_pre_event_snapshot() {
         Arc::new(MockBackend::default()),
     );
 
-    retry_last_response_impl(&backend, ctx.clone());
+    backend.retry_last_response(ctx.clone());
 
     let completed = wait_for_generation_complete(&ctx, 1000);
     assert!(completed, "Event retry should complete within timeout");
