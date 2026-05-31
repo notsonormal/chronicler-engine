@@ -1,6 +1,6 @@
-use crate::bootstrap::run::find_latest_game_for_world;
+use crate::bootstrap::run::{ensure_defaults, find_latest_game_for_world, list_game_names_for_world};
+use crate::model::prompt_preset::PresetType;
 use crate::storage::Storage;
-
 #[test]
 fn test_find_latest_game_for_world_uses_message_timestamp() {
     let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
@@ -28,7 +28,6 @@ fn test_find_latest_game_for_world_uses_message_timestamp() {
         conn.last_insert_rowid() as u64
     };
 
-    // Insert a message ONLY for GameA (which has older updated_at)
     {
         let conn = db_pool.conn();
         conn.execute(
@@ -44,14 +43,12 @@ fn test_find_latest_game_for_world_uses_message_timestamp() {
         .unwrap();
     }
 
-    // GameA should be returned because it has the most recent message
     let result = find_latest_game_for_world(&db_pool, "TestWorld").unwrap();
     assert!(result.is_some());
     let (id, name) = result.unwrap();
     assert_eq!(id, game_a_id);
     assert_eq!(name, "GameA");
 
-    // Also verify GameB is not returned
     assert_ne!(id, game_b_id);
 }
 
@@ -81,7 +78,6 @@ fn test_find_latest_game_for_world_fallback_to_updated_at() {
         conn.last_insert_rowid() as u64
     };
 
-    // No messages for either game - should fall back to updated_at
     let result = find_latest_game_for_world(&db_pool, "TestWorld").unwrap();
     assert!(result.is_some());
     let (id, _name) = result.unwrap();
@@ -100,7 +96,6 @@ fn test_find_latest_game_for_world_no_games() {
 fn test_restart_with_existing_game_does_not_duplicate_scenario() {
     let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
 
-    // 1. Insert a game
     let game_id = {
         let conn = db_pool.conn();
         conn.execute(
@@ -111,7 +106,6 @@ fn test_restart_with_existing_game_does_not_duplicate_scenario() {
         conn.last_insert_rowid() as u64
     };
 
-    // 2. Simulate first startup: create state, inject scenario, save snapshot + message
     let storage = Storage::new_sqlite(db_pool.clone(), game_id);
 
     let manifest = crate::model::world::WorldManifest {
@@ -172,11 +166,9 @@ fn test_restart_with_existing_game_does_not_duplicate_scenario() {
         msg.id = id;
     }
 
-    // Verify first startup created exactly one message
     let initial_messages = storage.load_message_rows().unwrap();
     assert_eq!(initial_messages.len(), 1);
 
-    // 3. Simulate restart logic: find game, load snapshot
     let found = find_latest_game_for_world(&db_pool, "TestWorld").unwrap();
     assert!(found.is_some());
     let (found_id, _) = found.unwrap();
@@ -188,8 +180,6 @@ fn test_restart_with_existing_game_does_not_duplicate_scenario() {
         "Existing snapshot should be found on restart"
     );
 
-    // If a snapshot exists, the fixed startup code loads it and skips scenario injection.
-    // Verify no duplicate was inserted.
     let msgs_after_restart = storage.load_message_rows().unwrap();
     assert_eq!(
         msgs_after_restart.len(),
@@ -197,7 +187,6 @@ fn test_restart_with_existing_game_does_not_duplicate_scenario() {
         "Restart should not duplicate the scenario message"
     );
 }
-use crate::bootstrap::run::list_game_names_for_world;
 #[test]
 fn test_list_game_names_for_world_empty() {
     let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
@@ -276,18 +265,13 @@ fn test_list_game_names_for_world_filters_by_world() {
 #[test]
 fn test_list_game_names_for_world_error_handling() {
     let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
-    // No games table - should fail
     let result = list_game_names_for_world(&db_pool, "TestWorld");
-    // In-memory DB may not have games table, so error handling should work
     assert!(result.is_err() || result.unwrap().is_empty());
 }
-use crate::bootstrap::run::ensure_defaults;
-use crate::model::prompt_preset::PresetType;
 #[test]
 fn test_ensure_defaults_empty_data_dir() {
     let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
     let temp_data = tempfile::TempDir::new().unwrap();
-    // No prompt_presets directory - should succeed gracefully
     let result = ensure_defaults(&db_pool, temp_data.path());
     assert!(result.is_ok());
 }
@@ -360,7 +344,6 @@ fn test_ensure_defaults_skips_existing_preset_with_content() {
         serde_json::to_string_pretty(&preset_content).unwrap(),
     )
     .unwrap();
-    // Pre-populate storage with existing preset that has content
     let storage = Storage::new_sqlite(db_pool.clone(), 1);
     let existing = crate::model::prompt_preset::PromptPreset {
         id: "existing_preset".to_string(),
@@ -374,7 +357,6 @@ fn test_ensure_defaults_skips_existing_preset_with_content() {
     };
     storage.save_preset(&existing).unwrap();
     ensure_defaults(&db_pool, temp_data.path()).unwrap();
-    // Preset should retain original content
     let found = storage.get_preset("existing_preset").unwrap().unwrap();
     assert_eq!(found.name, "Original Name");
     assert_eq!(found.role, Some("Original role".to_string()));
@@ -396,7 +378,6 @@ fn test_ensure_defaults_updates_empty_preset() {
         serde_json::to_string_pretty(&preset_content).unwrap(),
     )
     .unwrap();
-    // Pre-populate storage with empty preset
     let storage = Storage::new_sqlite(db_pool.clone(), 1);
     let empty = crate::model::prompt_preset::PromptPreset {
         id: "empty_preset".to_string(),
@@ -410,7 +391,6 @@ fn test_ensure_defaults_updates_empty_preset() {
     };
     storage.save_preset(&empty).unwrap();
     ensure_defaults(&db_pool, temp_data.path()).unwrap();
-    // Preset should be updated
     let found = storage.get_preset("empty_preset").unwrap().unwrap();
     assert_eq!(found.name, "Updated Name");
     assert_eq!(found.role, Some("New role from file".to_string()));
@@ -504,7 +484,6 @@ fn test_ensure_defaults_all_fields_mapped() {
 fn test_ensure_defaults_both_types() {
     let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
     let temp_data = tempfile::TempDir::new().unwrap();
-    // Create system preset
     let system_dir = temp_data.path().join("prompt_presets").join("system");
     std::fs::create_dir_all(&system_dir).unwrap();
     std::fs::write(
@@ -517,7 +496,6 @@ fn test_ensure_defaults_both_types() {
         .unwrap(),
     )
     .unwrap();
-    // Create quantifier preset
     let quantifier_dir = temp_data.path().join("prompt_presets").join("quantifier");
     std::fs::create_dir_all(&quantifier_dir).unwrap();
     std::fs::write(
@@ -555,12 +533,10 @@ fn test_ensure_defaults_idempotent() {
         .unwrap(),
     )
     .unwrap();
-    // Run ensure_defaults twice
     ensure_defaults(&db_pool, temp_data.path()).unwrap();
     ensure_defaults(&db_pool, temp_data.path()).unwrap();
     let storage = Storage::new_sqlite(db_pool, 1);
     let presets = storage.list_presets(PresetType::System).unwrap();
-    // Should only have one preset (not duplicated)
     assert_eq!(presets.len(), 1);
     assert_eq!(presets[0].id, "idempotent_test");
 }

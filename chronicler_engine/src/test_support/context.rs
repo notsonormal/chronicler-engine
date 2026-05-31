@@ -14,8 +14,8 @@ pub fn make_test_context(state: GameState) -> GameServiceContext {
     let _ = storage.save_snapshot(&snapshot);
     for msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
         if let Ok(id) = storage.insert_message(&msg) {
-            if let Some(swipe) = msg.swipes.first() {
-                let _ = storage.insert_swipe(id, swipe, 0);
+            for (idx, swipe) in msg.swipes.iter().enumerate() {
+                let _ = storage.insert_swipe(id, swipe, idx);
             }
         }
     }
@@ -28,8 +28,8 @@ pub fn make_test_context_without_snapshot(state: GameState) -> GameServiceContex
     let storage = Arc::new(Storage::new_in_memory());
     for msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
         if let Ok(id) = storage.insert_message(&msg) {
-            if let Some(swipe) = msg.swipes.first() {
-                let _ = storage.insert_swipe(id, swipe, 0);
+            for (idx, swipe) in msg.swipes.iter().enumerate() {
+                let _ = storage.insert_swipe(id, swipe, idx);
             }
         }
     }
@@ -74,8 +74,8 @@ pub fn make_test_context_with_sqlite(state: GameState) -> crate::error::Result<G
     let _ = storage.save_snapshot(&snapshot);
     for msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
         if let Ok(id) = storage.insert_message(&msg) {
-            if let Some(swipe) = msg.swipes.first() {
-                let _ = storage.insert_swipe(id, swipe, 0);
+            for (idx, swipe) in msg.swipes.iter().enumerate() {
+                let _ = storage.insert_swipe(id, swipe, idx);
             }
         }
     }

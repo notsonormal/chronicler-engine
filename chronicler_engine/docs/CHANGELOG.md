@@ -11,6 +11,17 @@
   - Also set `swipe.snapshot_id` before insertion to maintain consistency
   - Verified: Fresh game creation now properly persists scenario introduction with text and location header
   - All existing tests pass; no behavioral changes except fixing the message persistence bug
+- **Refactored server module for better maintainability**
+  - Extracted business logic from `src/server/mod.rs` (368 lines) into 6 focused modules
+  - Created: `router.rs` (routes), `app_state.rs` (state structs), `server_impl.rs` (lifecycle), `handlers.rs` (static files), `port_utils.rs` (port management)
+  - Left `mod.rs` with 29 lines: declarations + re-exports only
+  - Renamed `server.rs` to `server_impl.rs` to avoid `clippy::module_inception` warning
+  - Fixed storage import to use full paths, complying with architecture lint rules
+  - All 134 server tests pass; clippy clean with `-D warnings`
+- **Moved inline tests to dedicated test files**
+  - Extracted test module from `src/application/game_service/service.rs` to new `service_tests.rs`
+  - Ensures all tests follow project structure convention (tests in separate files, not inline modules)
+  - Improves discoverability and maintainability of test code
 
 ### Changed
 

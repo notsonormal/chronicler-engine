@@ -96,6 +96,10 @@ The most capable agent surface that ships. Continuously tuned by real-world use 
 https://github.com/can1357/oh-my-pi
 D:\John\Git\oh-my-pi
 
+## YOUR RESPONSIBILITY 
+
+You are responsible for the overall health of the Chronicler Engine. It is more important that the repository is healthy and working (e.g. the build passes) than your specific task succeeded. For example, you should not arbitrarily delete or revert unknown or unexpected files (especially untracked file) simply because they are not working or otherwise in the way of your specific task.
+
 ## DOCUMENTATION STRATEGY: SEMANTIC MAPPING
 This project follows a **Spec-Driven Implementation** (SDI) strategy.
 
@@ -109,12 +113,11 @@ This project follows a **Spec-Driven Implementation** (SDI) strategy.
 4. **The "Why" Exception**: Comments are reserved ONLY for technical constraints (e.g., `// Workaround for Axum timeout issue`).
 5. **Be Consise**: Be extremely concise. Sacrifice grammar for the sake of concision. 
 
-### THE TEST-FIRST PHILOSOPHY
+## THE TEST-FIRST PHILOSOPHY
 This project relies on a comprehensive suite of integration tests as the ultimate source of truth for behavior.
 - **Tests as Documentation**: If you don't understand how a component works, read its tests in `tests/` before reading the source code.
 - **Test-Driven Debugging**: Before fixing a bug, find or create a failing test case. If tests pass but the bug exists, the test suite is missing a scenario.
-- **No Regression**: Every change must pass `python build.py` before commit.  
-  *During development*, iterate with the specific tool (e.g. `cargo clippy` for lint fixes, `cargo nextest run <pattern>` for test fixes). Run `build.py` only for final verification.
+- **No Regression**: Every code change must pass `python build.py` before task/plan completion. *During development*, iterate with the specific tool (e.g. `cargo clippy` for lint fixes, `cargo nextest run <pattern>` for test fixes). Run `build.py` only for final verification.
 
 ### TEST FAILURE HANDLING
 
@@ -208,26 +211,6 @@ Binary code (`main.rs`) is exempt for CLI bootstrap only.
 ### Layer 2: arch-lint (Test-Time)
 `tests/architecture.rs` runs `arch_lint::check!()` against `arch-lint.toml`.
 
-**Configured rules:**
-- `no-unwrap-expect` (AL001) — forbids `.unwrap()` / `.expect()` in production code
-- `no-sync-io` (AL002) — forbids blocking I/O in async contexts
-- `no-error-swallowing` (AL003) — forbids silently swallowed errors
-- `no-silent-result-drop` (AL013) — forbids discarding `Result` without handling
-- `require-thiserror` (AL005) — requires `thiserror::Error` derive on error types
-- Layer enforcement via `[[deny-scope-dep]]` — `model/` must not import `server/`, `narrative/`, or `engine/`
-
-**Suppressing a violation:**
-```rust
-// For infallible operations only (e.g., hardcoded regex, static HTTP response)
-#[allow(clippy::expect_used)]
-#[arch_lint::allow(no_unwrap_expect, reason = "Hardcoded pattern, validated at compile time")]
-```
-
-### Adding New Rules
-To encode new review feedback as a permanent guardrail:
-1. **Clippy-level** (mechanical): Add the lint to `#![deny(...)]` in `src/lib.rs`
-2. **Architecture-level** (structural): Add a declarative rule to `arch-lint.toml` (scopes, dependency bans, crate preferences)
-3. **Custom rule** (advanced): Write a Rust rule using `arch_lint_core::Rule` and register it in `tests/architecture.rs`
 
 ## DOCUMENTATION INDEX
 `docs/README.md` is **auto-generated**. Do not edit the file list inside the `<!-- AUTO-INDEX -->` block manually.
@@ -315,48 +298,3 @@ Tests are already concurrency-safe: they allocate ports dynamically from the ran
 - When the user asks a question, answer it first before making edits or running implementation commands.
 - When responding to user feedback or an analysis, explicitly say whether you agree or disagree before saying what you changed.
 - For UI changes, verify in the browser with a screenshot before claiming completion.
-
-## AGENT SKILLS
-
-This project benefits from the **caveman** skill suite for token-efficient agent communication. Use these during long sessions, deep debugging, or when delegating to subagents.
-
-### Caveman Communication Mode
-Trigger: `/caveman` (or `/caveman lite|full|ultra`)
-
-Drops filler, articles, hedging, and pleasantries while preserving full technical accuracy. Code blocks, error strings, and symbols remain unchanged. Modes:
-- **lite** — No filler, keep full sentences. Professional but tight.
-- **full** — Drop articles, fragments OK. Default.
-- **ultra** — Extreme compression: abbreviate prose, arrows for causality, one word when enough.
-- **wenyan-lite|wenyan|wenyan-ultra** — Classical Chinese register, maximum character reduction.
-
-Deactivate with "stop caveman" or "normal mode".
-
-### Cavecrew Subagents
-Trigger: "use cavecrew", "spawn investigator/builder/reviewer", "save context"
-
-Compressed-output alternatives to vanilla subagents. Same jobs, but results injected back into main context are ~60% smaller — the difference between context exhaustion and finishing a long task.
-
-| Subagent | Use when |
-|---|---|
-| `cavecrew-investigator` | Locating definitions, callers, or uses of a symbol |
-| `cavecrew-builder` | Surgical edit in ≤2 files with obvious scope |
-| `cavecrew-reviewer` | Quick diff audit for bugs |
-
-Chain pattern: investigator → builder → reviewer. Avoid builder for 3+ file refactors (returns `too-big.`).
-
-### Utility Skills
-
-| Skill | Trigger | Purpose |
-|---|---|---|
-| `caveman-help` | `/caveman-help` | Quick-reference card for all modes and skills |
-| `caveman-commit` | `/caveman-commit` | Terse commit messages (Conventional Commits, ≤50 char subject) |
-| `caveman-review` | `/caveman-review` | One-line PR comments: `path:line: severity: problem. fix.` |
-| `caveman-compress` | `/caveman:compress <file>` | Compress markdown memory files to caveman prose (~46% token savings) |
-| `caveman-stats` | `/caveman-stats` | Show real session token usage and estimated savings |
-
-### When to Use
-- **Context is running long** (>50k tokens) — switch to `/caveman` to stretch budget.
-- **Delegating to subagents** — prefer `cavecrew-*` over vanilla to keep main context lean.
-- **Writing commits or reviews** — use `/caveman-commit` and `/caveman-review` for terse, actionable output.
-- **Compressing memory files** — use `/caveman:compress` on `.ag-memory/` or `CONTEXT.md` before they bloat.
-

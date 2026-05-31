@@ -1,23 +1,15 @@
-use std::sync::Arc;
-
 use crate::application::ApplicationError;
 use crate::application::context::GameServiceContext;
-use crate::application::game_service::DefaultGameService;
 use crate::bootstrap::build_fresh_initial_state;
 use crate::model::game::{Game, generate_game_name};
 use crate::model::state_snapshot::GameStateSnapshot;
 
-#[allow(dead_code)]
-pub struct GameLifecycleService {
-    game_service: Arc<DefaultGameService>,
-}
+pub struct GameLifecycleService {}
 
-#[allow(dead_code)]
 impl GameLifecycleService {
-    pub fn new(game_service: Arc<DefaultGameService>) -> Self {
-        Self { game_service }
+    pub fn new() -> Self {
+        Self {}
     }
-
     pub fn create_game(&self, ctx: GameServiceContext) -> Result<u64, ApplicationError> {
         if ctx.is_generating.load(std::sync::atomic::Ordering::SeqCst) {
             return Err(ApplicationError::ConcurrentGeneration);
@@ -47,7 +39,16 @@ impl GameLifecycleService {
             if msg.is_unpersisted() {
                 msg.set_snapshot_id(Some(snapshot_id));
                 match ctx.storage.insert_message(&*msg) {
-                    Ok(id) => msg.id = id,
+                    Ok(id) => {
+                        msg.id = id;
+                        for (index, swipe) in msg.swipes.iter().enumerate() {
+                            if let Err(e) = ctx.storage.insert_swipe(id, swipe, index) {
+                                tracing::error!(
+                                    "Create game failed: could not persist swipe {index}: {e}"
+                                );
+                            }
+                        }
+                    }
                     Err(e) => {
                         tracing::error!("Create game failed: could not persist message: {e}")
                     }
@@ -127,9 +128,20 @@ impl GameLifecycleService {
                 msg.set_snapshot_id(Some(snapshot_id));
                 let id = ctx.storage.insert_message(&*msg)?;
                 msg.id = id;
+                for (index, swipe) in msg.swipes.iter().enumerate() {
+                    if let Err(e) = ctx.storage.insert_swipe(id, swipe, index) {
+                        tracing::error!("Reset failed: could not persist swipe {index}: {e}");
+                    }
+                }
             }
         }
 
         Ok(())
+    }
+}
+
+impl Default for GameLifecycleService {
+    fn default() -> Self {
+        Self::new()
     }
 }

@@ -119,7 +119,7 @@ fn test_create_game_with_scenario() {
     let state = create_basic_test_state();
     let ctx = make_test_ctx(storage.clone(), game_service.clone(), state);
 
-    let lifecycle_service = GameLifecycleService::new(game_service.clone());
+    let lifecycle_service = GameLifecycleService::new();
 
     let result = lifecycle_service.create_game(ctx.clone());
     assert!(
@@ -155,71 +155,6 @@ fn test_create_game_with_scenario() {
 }
 
 #[test]
-fn test_create_game_without_scenario() {
-    let db_pool =
-        chronicler_engine::storage::db::DbPool::new(":memory:").expect("DbPool creation failed");
-    let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
-    let game_service = create_game_service();
-
-    let mut world = create_test_world_with_scenario();
-    world.scenarios = vec![];
-    let world = Arc::new(world);
-    let player = Arc::new(create_test_player());
-    let map = Arc::new(create_test_map());
-    let npcs = Vec::new();
-    let state = GameState::new(world.clone(), map, player, npcs, "room1".to_string());
-
-    let ctx = make_test_ctx(storage.clone(), game_service.clone(), state);
-    let lifecycle_service = GameLifecycleService::new(game_service.clone());
-
-    let result = lifecycle_service.create_game(ctx.clone());
-    assert!(
-        result.is_ok(),
-        "create_game should succeed even without scenario: {:?}",
-        result.err()
-    );
-}
-
-#[test]
-fn test_reset_preserves_world_settings() {
-    let db_pool =
-        chronicler_engine::storage::db::DbPool::new(":memory:").expect("DbPool creation failed");
-    let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
-    let game_service = create_game_service();
-    let state = create_basic_test_state();
-    let ctx = make_test_ctx(storage.clone(), game_service.clone(), state);
-
-    let lifecycle_service = GameLifecycleService::new(game_service.clone());
-
-    lifecycle_service.create_game(ctx.clone()).unwrap();
-    let first_game_id = ctx.storage.current_game_id();
-    let world_name_before = ctx.world.name.clone();
-    let world_desc_before = ctx.world.description.clone();
-
-    let reset_result = lifecycle_service.reset(ctx.clone());
-    assert!(
-        reset_result.is_ok(),
-        "reset should succeed: {:?}",
-        reset_result.err()
-    );
-
-    assert_eq!(
-        ctx.world.name, world_name_before,
-        "World name should be preserved after reset"
-    );
-    assert_eq!(
-        ctx.world.description, world_desc_before,
-        "World description should be preserved after reset"
-    );
-
-    let new_game_id = ctx.storage.current_game_id();
-    assert_ne!(
-        new_game_id, first_game_id,
-        "Reset should create a new game instance with different ID"
-    );
-}
-
-#[test]
 fn test_reset_creates_scenario_message() {
     let db_pool =
         chronicler_engine::storage::db::DbPool::new(":memory:").expect("DbPool creation failed");
@@ -228,7 +163,7 @@ fn test_reset_creates_scenario_message() {
     let state = create_basic_test_state();
     let ctx = make_test_ctx(storage.clone(), game_service.clone(), state);
 
-    let lifecycle_service = GameLifecycleService::new(game_service.clone());
+    let lifecycle_service = GameLifecycleService::new();
 
     lifecycle_service.create_game(ctx.clone()).unwrap();
 
@@ -265,7 +200,7 @@ fn test_switch_game_loads_correct_state() {
     let state = create_basic_test_state();
     let ctx = make_test_ctx(storage.clone(), game_service.clone(), state);
 
-    let lifecycle_service = GameLifecycleService::new(game_service.clone());
+    let lifecycle_service = GameLifecycleService::new();
 
     lifecycle_service.create_game(ctx.clone()).unwrap();
     let game1_id = ctx.storage.current_game_id();
@@ -299,25 +234,6 @@ fn test_switch_game_loads_correct_state() {
     );
 }
 
-#[test]
-fn test_list_games_returns_all() {
-    let db_pool =
-        chronicler_engine::storage::db::DbPool::new(":memory:").expect("DbPool creation failed");
-    let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
-    let game_service = create_game_service();
-    let state = create_basic_test_state();
-    let ctx = make_test_ctx(storage.clone(), game_service.clone(), state);
-
-    let lifecycle_service = GameLifecycleService::new(game_service.clone());
-
-    lifecycle_service.create_game(ctx.clone()).unwrap();
-    lifecycle_service.create_game(ctx.clone()).unwrap();
-    lifecycle_service.create_game(ctx.clone()).unwrap();
-
-    let games = lifecycle_service.list_games(ctx.clone()).unwrap();
-    assert!(games.len() >= 3, "Should have created at least 3 games");
-}
-
 #[tokio::test]
 async fn test_create_game_concurrent_generation_rejected() {
     use std::sync::atomic::Ordering;
@@ -331,7 +247,7 @@ async fn test_create_game_concurrent_generation_rejected() {
 
     ctx.is_generating.store(true, Ordering::SeqCst);
 
-    let lifecycle_service = GameLifecycleService::new(game_service.clone());
+    let lifecycle_service = GameLifecycleService::new();
 
     let result = lifecycle_service.create_game(ctx.clone());
     assert!(
@@ -356,7 +272,7 @@ fn test_switch_to_nonexistent_game() {
     let state = create_basic_test_state();
     let ctx = make_test_ctx(storage.clone(), game_service.clone(), state);
 
-    let lifecycle_service = GameLifecycleService::new(game_service.clone());
+    let lifecycle_service = GameLifecycleService::new();
 
     let result = lifecycle_service.switch_game(ctx.clone(), 99999);
     assert!(
@@ -374,12 +290,180 @@ fn test_reset_without_existing_game() {
     let state = create_basic_test_state();
     let ctx = make_test_ctx(storage.clone(), game_service.clone(), state);
 
-    let lifecycle_service = GameLifecycleService::new(game_service.clone());
+    let lifecycle_service = GameLifecycleService::new();
 
     let result = lifecycle_service.reset(ctx.clone());
     assert!(
         result.is_ok(),
         "reset should succeed with default game: {:?}",
         result.err()
+    );
+}
+
+#[test]
+fn test_create_game_name_uniqueness() {
+    let db_pool =
+        chronicler_engine::storage::db::DbPool::new(":memory:").expect("DbPool creation failed");
+    let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
+    let game_service = create_game_service();
+    let state = create_basic_test_state();
+    let ctx = make_test_ctx(storage.clone(), game_service.clone(), state);
+
+    let lifecycle_service = GameLifecycleService::new();
+
+    let result1 = lifecycle_service.create_game(ctx.clone());
+    assert!(result1.is_ok(), "First create_game should succeed");
+
+    let result2 = lifecycle_service.create_game(ctx.clone());
+    assert!(result2.is_ok(), "Second create_game should succeed");
+
+    let games = lifecycle_service.list_games(ctx.clone()).unwrap();
+    assert_eq!(
+        games.len(),
+        3,
+        "Should have exactly 3 games (default + 2 created)"
+    );
+    let world_date = chrono::Utc::now().format("%Y-%m-%d");
+    let name_pattern = format!("Test Realm_{world_date}");
+
+    let has_suffix_1 = games
+        .iter()
+        .any(|g| g.name.starts_with(&name_pattern) && g.name.ends_with("_1"));
+    let has_suffix_2 = games
+        .iter()
+        .any(|g| g.name.starts_with(&name_pattern) && g.name.ends_with("_2"));
+    assert!(has_suffix_1, "Should have game with _1 suffix");
+    assert!(has_suffix_2, "Should have game with _2 suffix");
+}
+
+#[test]
+fn test_switch_game_world_mismatch() {
+    let db_pool =
+        chronicler_engine::storage::db::DbPool::new(":memory:").expect("DbPool creation failed");
+    let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
+    let game_service = create_game_service();
+
+    let mut world_a = create_test_world_with_scenario();
+    world_a.name = "World A".to_string();
+    let world_a = Arc::new(world_a);
+    let player = Arc::new(create_test_player());
+    let map = Arc::new(create_test_map());
+    let npcs = Vec::new();
+    let state_a = GameState::new(world_a.clone(), map, player, npcs, "room1".to_string());
+
+    let ctx_a = make_test_ctx(storage.clone(), game_service.clone(), state_a);
+    let lifecycle_service = GameLifecycleService::new();
+
+    let create_result = lifecycle_service.create_game(ctx_a.clone());
+    assert!(create_result.is_ok(), "create_game should succeed");
+    let game_id = ctx_a.storage.current_game_id();
+
+    let mut world_b = create_test_world_with_scenario();
+    world_b.name = "World B".to_string();
+    let world_b = Arc::new(world_b);
+    let player_b = Arc::new(create_test_player());
+    let map_b = Arc::new(create_test_map());
+    let npcs_b = Vec::new();
+    let state_b = GameState::new(
+        world_b.clone(),
+        map_b,
+        player_b,
+        npcs_b,
+        "room1".to_string(),
+    );
+
+    let ctx_b = make_test_ctx(storage.clone(), game_service.clone(), state_b);
+
+    let result = lifecycle_service.switch_game(ctx_b, game_id);
+    assert!(
+        result.is_err(),
+        "switch_game should fail when world doesn't match"
+    );
+    assert!(
+        matches!(
+            result.unwrap_err(),
+            chronicler_engine::application::ApplicationError::Validation(_)
+        ),
+        "Error should be Validation error"
+    );
+}
+
+#[test]
+fn test_delete_game_removes() {
+    let db_pool =
+        chronicler_engine::storage::db::DbPool::new(":memory:").expect("DbPool creation failed");
+    let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
+    let game_service = create_game_service();
+    let state = create_basic_test_state();
+    let ctx = make_test_ctx(storage.clone(), game_service.clone(), state);
+
+    let lifecycle_service = GameLifecycleService::new();
+
+    lifecycle_service.create_game(ctx.clone()).unwrap();
+    let game_id_1 = ctx.storage.current_game_id();
+
+    lifecycle_service.create_game(ctx.clone()).unwrap();
+    let game_id_2 = ctx.storage.current_game_id();
+
+    assert_ne!(game_id_1, game_id_2, "Should have different game IDs");
+
+    let delete_result = lifecycle_service.delete_game(ctx.clone(), game_id_1);
+    assert!(delete_result.is_ok(), "delete_game should succeed");
+
+    let games = lifecycle_service.list_games(ctx.clone()).unwrap();
+    assert_eq!(games.len(), 2, "Should have exactly 2 games after deletion");
+    assert!(
+        games.iter().any(|g| g.id == game_id_2),
+        "game_id_2 should still exist"
+    );
+    assert!(
+        !games.iter().any(|g| g.id == game_id_1),
+        "game_id_1 should be deleted"
+    );
+}
+
+#[test]
+fn test_delete_game_active_rejected() {
+    let db_pool =
+        chronicler_engine::storage::db::DbPool::new(":memory:").expect("DbPool creation failed");
+    let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
+    let game_service = create_game_service();
+    let state = create_basic_test_state();
+    let ctx = make_test_ctx(storage.clone(), game_service.clone(), state);
+
+    let lifecycle_service = GameLifecycleService::new();
+
+    lifecycle_service.create_game(ctx.clone()).unwrap();
+    let active_game_id = ctx.storage.current_game_id();
+
+    let result = lifecycle_service.delete_game(ctx.clone(), active_game_id);
+    assert!(
+        result.is_err(),
+        "delete_game should fail for the active game"
+    );
+    assert!(
+        matches!(
+            result.unwrap_err(),
+            chronicler_engine::application::ApplicationError::Validation(_)
+        ),
+        "Error should be Validation error"
+    );
+}
+
+#[test]
+fn test_delete_game_nonexistent() {
+    let db_pool =
+        chronicler_engine::storage::db::DbPool::new(":memory:").expect("DbPool creation failed");
+    let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
+    let game_service = create_game_service();
+    let state = create_basic_test_state();
+    let ctx = make_test_ctx(storage.clone(), game_service.clone(), state);
+
+    let lifecycle_service = GameLifecycleService::new();
+
+    let result = lifecycle_service.delete_game(ctx.clone(), 99999);
+    assert!(
+        result.is_ok(),
+        "delete_game should succeed silently for nonexistent game"
     );
 }

@@ -94,7 +94,7 @@ pub struct DefaultApplicationService {
 impl DefaultApplicationService {
     pub fn new(game_service: Arc<DefaultGameService>) -> Self {
         Self {
-            lifecycle: GameLifecycleService::new(Arc::clone(&game_service)),
+            lifecycle: GameLifecycleService::new(),
             editing: MessageEditingService::new(Arc::clone(&game_service)),
             queries: QueryHandlers::new(),
             game_service,

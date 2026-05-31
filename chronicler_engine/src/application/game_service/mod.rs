@@ -1,6 +1,8 @@
 //! [DOC: docs/architecture/system.md]
 
 mod service;
+#[cfg(test)]
+mod service_tests;
 
 pub use crate::application::context::GameServiceContext;
 pub use crate::application::context::{
