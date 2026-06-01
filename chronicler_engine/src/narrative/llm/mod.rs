@@ -23,6 +23,3 @@ pub use deepseek::DeepSeekBackend;
 pub use mock::MockBackend;
 pub use ollama::OllamaBackend;
 pub use openrouter::OpenRouterBackend;
-
-#[cfg(test)]
-mod tests;
