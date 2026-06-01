@@ -5,6 +5,11 @@ use crate::model::character::NpcCard;
 use crate::storage::backend::{Backend, CharacterSeed, Operation, Storage};
 use crate::storage::models::character::DbCharacter;
 
+/// Helper: convert empty string to None for optional fields
+fn empty_to_none(s: &str) -> Option<&str> {
+    if s.is_empty() { None } else { Some(s) }
+}
+
 impl Storage {
     pub fn list_characters(&self, world_id: i64) -> Result<Vec<NpcCard>, EngineError> {
         self.with_backend_mut(Operation::ListCharacters, |backend, _game_id| match backend {
@@ -58,22 +63,22 @@ impl Storage {
                 conn.execute(
                     "INSERT OR IGNORE INTO characters (key, world_id, name, description, personality, scenario, example_dialogue, summary, profile_image, headshot_image, inventory, triggers, relationships, created_at, updated_at)
                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    [
-                        &card.id,
-                        &world_id.to_string(),
-                        &card.sheet.name,
-                        &card.sheet.description,
-                        &card.sheet.personality,
-                        &card.sheet.scenario,
-                        &card.sheet.example_dialogue,
-                        card.sheet.summary.as_deref().unwrap_or(""),
-                        card.sheet.profile_image.as_deref().unwrap_or(""),
-                        card.sheet.headshot_image.as_deref().unwrap_or(""),
-                        &inventory_json,
-                        &triggers_json,
-                        &relationships_json,
-                        &now,
-                        &now,
+                    rusqlite::params![
+                        card.id,
+                        world_id.to_string(),
+                        card.sheet.name,
+                        card.sheet.description,
+                        card.sheet.personality,
+                        card.sheet.scenario,
+                        card.sheet.example_dialogue,
+                        empty_to_none(card.sheet.summary.as_deref().unwrap_or("")),
+                        empty_to_none(card.sheet.profile_image.as_deref().unwrap_or("")),
+                        empty_to_none(card.sheet.headshot_image.as_deref().unwrap_or("")),
+                        inventory_json,
+                        triggers_json,
+                        relationships_json,
+                        now,
+                        now,
                     ],
                 )?;
                 Ok(())
@@ -93,6 +98,7 @@ impl Storage {
 }
 
 fn character_from_db(db: &DbCharacter) -> Result<NpcCard, EngineError> {
+    use crate::model::character::CharacterSheet;
     let inventory: Vec<String> = serde_json::from_str(&db.inventory)
         .map_err(|e| EngineError::Parse(format!("Failed to deserialize inventory: {e}")))?;
     let triggers: Vec<crate::model::trigger::Trigger> = serde_json::from_str(&db.triggers)
@@ -103,27 +109,15 @@ fn character_from_db(db: &DbCharacter) -> Result<NpcCard, EngineError> {
 
     Ok(NpcCard {
         id: db.key.clone(),
-        sheet: crate::model::character::CharacterSheet {
+        sheet: CharacterSheet {
             name: db.name.clone(),
             description: db.description.clone(),
             personality: db.personality.clone(),
             scenario: db.scenario.clone(),
             example_dialogue: db.example_dialogue.clone(),
-            summary: if db.summary.as_deref().unwrap_or("").is_empty() {
-                None
-            } else {
-                db.summary.clone()
-            },
-            profile_image: if db.profile_image.as_deref().unwrap_or("").is_empty() {
-                None
-            } else {
-                db.profile_image.clone()
-            },
-            headshot_image: if db.headshot_image.as_deref().unwrap_or("").is_empty() {
-                None
-            } else {
-                db.headshot_image.clone()
-            },
+            summary: db.summary.clone().filter(|s| !s.is_empty()),
+            profile_image: db.profile_image.clone().filter(|s| !s.is_empty()),
+            headshot_image: db.headshot_image.clone().filter(|s| !s.is_empty()),
         },
         inventory,
         triggers,

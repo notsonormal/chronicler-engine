@@ -5,6 +5,11 @@ use crate::model::map::MapDef;
 use crate::model::world::{WorldCard, WorldInfo, WorldManifest};
 use crate::storage::backend::{Backend, Operation, Storage, WorldSeed};
 
+/// Helper: convert empty string to None for optional fields
+fn empty_to_none(s: &str) -> Option<&str> {
+    if s.is_empty() { None } else { Some(s) }
+}
+
 #[derive(Debug, Clone)]
 pub struct WorldWithMap {
     pub info: WorldInfo,
@@ -19,7 +24,6 @@ impl Storage {
                 let mut stmt = conn.prepare(
                     "SELECT key, name, description, global_rules, starting_room_id, scenarios, default_scenario_id, default_room_image FROM worlds",
                 )?;
-                let mut worlds = Vec::new();
                 let rows = stmt.query_map([], |row| {
                     Ok((
                         row.get::<_, String>(0)?,
@@ -32,10 +36,9 @@ impl Storage {
                         row.get::<_, Option<String>>(7)?,
                     ))
                 })?;
-
-                for row_result in rows {
-                    let (key, name, description, global_rules_json, starting_room_id, scenarios_json, default_scenario_id, default_room_image) = row_result?;
-                    worlds.push(WorldInfo {
+                rows.map(|r| {
+                    let (key, name, description, global_rules_json, starting_room_id, scenarios_json, default_scenario_id, default_room_image) = r?;
+                    Ok(WorldInfo {
                         key,
                         name,
                         description,
@@ -46,9 +49,8 @@ impl Storage {
                             .map_err(|e| EngineError::Parse(format!("Failed to deserialize scenarios: {e}")))?,
                         default_scenario_id: default_scenario_id.filter(|s| !s.is_empty()),
                         default_room_image: default_room_image.filter(|s| !s.is_empty()),
-                    });
-                }
-                Ok(worlds)
+                    })
+                }).collect()
             }
             Backend::InMemory(data) => Ok(data.worlds.iter().map(|w| WorldInfo {
                 key: w.manifest.id.clone(),
@@ -90,7 +92,7 @@ impl Storage {
                     let scenarios: Vec<_> = serde_json::from_str(&scenarios_json)
                         .map_err(|_e| rusqlite::Error::InvalidColumnType(5, "scenarios".into(), rusqlite::types::Type::Text))?;
                     let map: MapDef = serde_json::from_str(&map_data_json)
-                        .map_err(|_| rusqlite::Error::InvalidColumnType(8, "map_data".into(), rusqlite::types::Type::Text))?;
+                        .map_err(|_e| rusqlite::Error::InvalidColumnType(8, "map_data".into(), rusqlite::types::Type::Text))?;
 
                     Ok(WorldWithMap {
                         info: WorldInfo {
@@ -160,8 +162,8 @@ impl Storage {
                         global_rules_json,
                         manifest.starting_room_id,
                         scenarios_json,
-                        manifest.default_scenario_id.as_deref().unwrap_or(""),
-                        manifest.default_room_image.as_deref().unwrap_or(""),
+                        empty_to_none(manifest.default_scenario_id.as_deref().unwrap_or("")),
+                        empty_to_none(manifest.default_room_image.as_deref().unwrap_or("")),
                         now,
                         now,
                     ],

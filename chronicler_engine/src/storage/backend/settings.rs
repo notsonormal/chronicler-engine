@@ -40,7 +40,7 @@ impl Storage {
                 conn.execute(
                     "INSERT OR REPLACE INTO settings (id, connections, narration_connection_id, quantifier_connection_id, response_length, text_check, agents, active_system_prompt_preset_id, active_quantifier_prompt_preset_id, created_at, updated_at)
                      VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    [
+                    rusqlite::params![
                         &connections_json,
                         &settings.narration_connection_id,
                         &settings.quantifier_connection_id,

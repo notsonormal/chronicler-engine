@@ -5,6 +5,11 @@ use crate::model::character::PlayerCard;
 use crate::storage::backend::{Backend, Operation, PlayerCardWithKey, Storage};
 use crate::storage::models::persona::DbPersona;
 
+/// Helper: convert empty string to None for optional fields
+fn empty_to_none(s: &str) -> Option<&str> {
+    if s.is_empty() { None } else { Some(s) }
+}
+
 impl Storage {
     pub fn list_personas(&self) -> Result<Vec<PlayerCard>, EngineError> {
         self.with_backend_mut(Operation::ListPersonas, |backend, _game_id| match backend {
@@ -52,19 +57,19 @@ impl Storage {
                 conn.execute(
                     "INSERT OR IGNORE INTO personas (key, name, description, personality, scenario, example_dialogue, summary, profile_image, headshot_image, inventory, created_at, updated_at)
                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    [
+                    rusqlite::params![
                         key,
-                        &card.sheet.name,
-                        &card.sheet.description,
-                        &card.sheet.personality,
-                        &card.sheet.scenario,
-                        &card.sheet.example_dialogue,
-                        card.sheet.summary.as_deref().unwrap_or(""),
-                        card.sheet.profile_image.as_deref().unwrap_or(""),
-                        card.sheet.headshot_image.as_deref().unwrap_or(""),
-                        &inventory_json,
-                        &now,
-                        &now,
+                        card.sheet.name,
+                        card.sheet.description,
+                        card.sheet.personality,
+                        card.sheet.scenario,
+                        card.sheet.example_dialogue,
+                        empty_to_none(card.sheet.summary.as_deref().unwrap_or("")),
+                        empty_to_none(card.sheet.profile_image.as_deref().unwrap_or("")),
+                        empty_to_none(card.sheet.headshot_image.as_deref().unwrap_or("")),
+                        inventory_json,
+                        now,
+                        now,
                     ],
                 )?;
                 Ok(())
@@ -95,21 +100,9 @@ fn persona_from_db(db: &DbPersona) -> Result<PlayerCard, EngineError> {
             personality: db.personality.clone(),
             scenario: db.scenario.clone(),
             example_dialogue: db.example_dialogue.clone(),
-            summary: if db.summary.as_deref().unwrap_or("").is_empty() {
-                None
-            } else {
-                db.summary.clone()
-            },
-            profile_image: if db.profile_image.as_deref().unwrap_or("").is_empty() {
-                None
-            } else {
-                db.profile_image.clone()
-            },
-            headshot_image: if db.headshot_image.as_deref().unwrap_or("").is_empty() {
-                None
-            } else {
-                db.headshot_image.clone()
-            },
+            summary: db.summary.clone().filter(|s| !s.is_empty()),
+            profile_image: db.profile_image.clone().filter(|s| !s.is_empty()),
+            headshot_image: db.headshot_image.clone().filter(|s| !s.is_empty()),
         },
         inventory,
     })
