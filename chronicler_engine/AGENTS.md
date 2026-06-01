@@ -119,6 +119,10 @@ This project relies on a comprehensive suite of integration tests as the ultimat
 - **Test-Driven Debugging**: Before fixing a bug, find or create a failing test case. If tests pass but the bug exists, the test suite is missing a scenario.
 - **No Regression**: Every code change must pass `python build.py` before task/plan completion. *During development*, iterate with the specific tool (e.g. `cargo clippy` for lint fixes, `cargo nextest run <pattern>` for test fixes). Run `build.py` only for final verification.
 
+Unit tests go in the `src/` folder beside the class they are testing (e.g. `production_class.rs` -> `production_class_test.rs`).
+
+Integration tests go in the `test/` folder.
+
 ### TEST FAILURE HANDLING
 
 When tests fail, you MUST:

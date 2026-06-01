@@ -2,6 +2,17 @@
 
 ## 2026-06-01
 
+### Fixed
+
+- **Generation phase now transitions to Quantifying during post-generation**
+  - Fixed UI status getting stuck on "Generating narration..." when quantifier was running
+  - Added `GenerationPhase::Quantifying` transition at start of `phase_post_generation()` in pipeline
+  - Mirrors existing pattern in `reconcile_post_trigger_npcs()` for consistency
+  - Frontend now correctly displays "Quantifying scene..." during post-generation analysis
+  - Modified files:
+    - `src/application/action_pipeline/pipeline.rs`: Lines 214-217 add phase transition and snapshot save
+  - All 876 tests pass; clippy clean; coverage maintained above 80%
+
 ### Added
 
 - **Coverage infrastructure — File-level exclusions for untestable code**

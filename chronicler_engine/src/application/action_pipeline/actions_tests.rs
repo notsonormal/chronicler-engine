@@ -223,3 +223,199 @@ fn test_execute_action_impl_preserves_existing_input_log() {
         "Input should appear before narration"
     );
 }
+
+#[test]
+fn test_phase_transitions_to_quantifying_during_post_generation() {
+    use std::sync::Arc;
+    use std::thread;
+    use std::time::Duration;
+
+    struct SlowQuantifierBackend {
+        narrate_result: Result<String, EngineError>,
+        quantifier_result: QuantifierResult,
+    }
+
+    impl ActionPipelineBackend for SlowQuantifierBackend {
+        fn assembler(&self) -> &dyn PromptAssembler {
+            static ASSEMBLER: std::sync::LazyLock<LayeredPromptAssembler> =
+                std::sync::LazyLock::new(|| {
+                    LayeredPromptAssembler::new(
+                        crate::narrative::prompt::budget::MAX_CONTEXT_TOKENS,
+                    )
+                });
+            &*ASSEMBLER
+        }
+
+        fn complete(
+            &self,
+            agent_name: &str,
+            _system_prompt: &str,
+            _user_prompt: &str,
+            _max_tokens: Option<u32>,
+        ) -> Result<LlmCallResult, EngineError> {
+            match &self.narrate_result {
+                Ok(text) => Ok(LlmCallResult {
+                    text: text.clone(),
+                    system_prompt: String::new(),
+                    user_prompt: String::new(),
+                    raw_request_json: String::new(),
+                    raw_response_json: String::new(),
+                    backend_name: "mock".to_string(),
+                    model_name: "mock".to_string(),
+                    agent_name: agent_name.to_string(),
+                }),
+                Err(_) => Err(EngineError::Llm(crate::error::LlmFailure::EmptyResponse)),
+            }
+        }
+
+        fn run_post_generation_agents(
+            &self,
+            _state: &GameState,
+            _player_input: &str,
+            _main_response: &str,
+            result: &mut QuantifierResult,
+        ) {
+            // Simulate slow quantifier
+            thread::sleep(Duration::from_millis(200));
+            *result = self.quantifier_result.clone();
+        }
+    }
+
+    let state = make_test_state();
+    let ctx = make_ctx(state);
+    let backend = Arc::new(SlowQuantifierBackend {
+        narrate_result: Ok("Narration text".to_string()),
+        quantifier_result: QuantifierResult::default(),
+    });
+
+    let ctx_clone = ctx.clone();
+    let backend_clone = backend.clone();
+    let handle = thread::spawn(move || {
+        execute_action_impl(
+            &*backend_clone,
+            ctx_clone,
+            "look".to_string(),
+            "Player".to_string(),
+        );
+    });
+
+    // Wait for narration to complete and quantifier to start
+    thread::sleep(Duration::from_millis(100));
+
+    // Check phase is Quantifying mid-flight
+    let mid_state = ctx.load_state_for_test();
+    assert_eq!(
+        mid_state.narrative.input_buffer.phase,
+        GenerationPhase::Quantifying,
+        "Phase should be Quantifying during post-generation, not stuck on Narrating"
+    );
+
+    handle.join().expect("Action thread should complete");
+
+    // Verify final phase is reset
+    let final_state = ctx.load_state_for_test();
+    assert_eq!(
+        final_state.narrative.input_buffer.phase,
+        GenerationPhase::default(),
+        "Phase should reset to default after completion"
+    );
+}
+
+#[test]
+fn test_narration_saved_before_quantifying_phase() {
+    use std::sync::Arc;
+    use std::thread;
+    use std::time::Duration;
+
+    struct SlowQuantifierBackend {
+        narrate_result: Result<String, EngineError>,
+        quantifier_result: QuantifierResult,
+    }
+
+    impl ActionPipelineBackend for SlowQuantifierBackend {
+        fn assembler(&self) -> &dyn PromptAssembler {
+            static ASSEMBLER: std::sync::LazyLock<LayeredPromptAssembler> =
+                std::sync::LazyLock::new(|| {
+                    LayeredPromptAssembler::new(
+                        crate::narrative::prompt::budget::MAX_CONTEXT_TOKENS,
+                    )
+                });
+            &*ASSEMBLER
+        }
+
+        fn complete(
+            &self,
+            agent_name: &str,
+            _system_prompt: &str,
+            _user_prompt: &str,
+            _max_tokens: Option<u32>,
+        ) -> Result<LlmCallResult, EngineError> {
+            match &self.narrate_result {
+                Ok(text) => Ok(LlmCallResult {
+                    text: text.clone(),
+                    system_prompt: String::new(),
+                    user_prompt: String::new(),
+                    raw_request_json: String::new(),
+                    raw_response_json: String::new(),
+                    backend_name: "mock".to_string(),
+                    model_name: "mock".to_string(),
+                    agent_name: agent_name.to_string(),
+                }),
+                Err(_) => Err(EngineError::Llm(crate::error::LlmFailure::EmptyResponse)),
+            }
+        }
+
+        fn run_post_generation_agents(
+            &self,
+            _state: &GameState,
+            _player_input: &str,
+            _main_response: &str,
+            result: &mut QuantifierResult,
+        ) {
+            thread::sleep(Duration::from_millis(200));
+            *result = self.quantifier_result.clone();
+        }
+    }
+
+    let state = make_test_state();
+    let ctx = make_ctx(state);
+    let backend = Arc::new(SlowQuantifierBackend {
+        narrate_result: Ok("Narration text".to_string()),
+        quantifier_result: QuantifierResult::default(),
+    });
+
+    let ctx_clone = ctx.clone();
+    let backend_clone = backend.clone();
+    let handle = thread::spawn(move || {
+        execute_action_impl(
+            &*backend_clone,
+            ctx_clone,
+            "test".to_string(),
+            "Player".to_string(),
+        );
+    });
+
+    // Wait for narration save (before quantifier completes)
+    thread::sleep(Duration::from_millis(100));
+
+    // Verify narration is saved
+    let messages = ctx.load_messages().unwrap();
+    let narration_count = messages
+        .iter()
+        .filter(|m| m.message_type == MessageType::Narration)
+        .count();
+    assert!(
+        narration_count >= 1,
+        "Narration should be saved before quantifier completes"
+    );
+
+    // Verify phase is Quantifying
+    let mid_state = ctx.load_state_for_test();
+    assert_eq!(
+        mid_state.narrative.input_buffer.phase,
+        GenerationPhase::Quantifying,
+        "Phase should be Quantifying while quantifier runs"
+    );
+
+    handle.join().expect("Action thread should complete");
+}

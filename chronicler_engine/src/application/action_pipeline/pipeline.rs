@@ -211,6 +211,11 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
         input: &str,
         narration_text: &str,
     ) -> QuantifierResult {
+        state.narrative.input_buffer.phase = GenerationPhase::Quantifying;
+        if let Err(e) = save_message_and_snapshot(self.ctx, state) {
+            tracing::warn!("Failed to save pre-quantifier phase update: {e}");
+        }
+
         let mut quantifier_result = QuantifierResult::default();
         self.service.run_post_generation_agents(
             state,
