@@ -15,6 +15,12 @@ pub enum QuantifierConfidence {
     Low,
 }
 
+impl QuantifierConfidence {
+    pub fn is_high(&self) -> bool {
+        matches!(self, Self::High)
+    }
+}
+
 impl From<Confidence> for QuantifierConfidence {
     fn from(c: Confidence) -> Self {
         match c {
@@ -36,11 +42,17 @@ impl From<QuantifierConfidence> for Confidence {
 }
 
 /// NPC IDs detected as present in the current room.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct QuantifierParseResult {
     pub npc_ids: Vec<String>,
     /// How confident the quantifier is in this result.
     pub confidence: QuantifierConfidence,
+}
+
+impl QuantifierParseResult {
+    pub fn is_high(&self) -> bool {
+        matches!(self.confidence, QuantifierConfidence::High)
+    }
 }
 
 /// Type of movement detected by the quantifier.
@@ -66,7 +78,7 @@ pub struct MovementParseResult {
 }
 
 /// Combined result of scene quantification: NPC presence + movement.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct QuantifierResult {
     /// NPCs detected as present in the room.
     pub npcs: QuantifierParseResult,

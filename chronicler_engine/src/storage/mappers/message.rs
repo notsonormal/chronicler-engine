@@ -30,21 +30,14 @@ pub fn db_message_to_model(db: &DbMessage, swipes: &[DbSwipe]) -> Result<Message
         });
     }
 
-    let fallback_to_first = message.active_swipe_index >= message.swipes.len();
-    if fallback_to_first {
-        tracing::warn!(
-            "active_swipe_index {} out of bounds for message {}, falling back to first swipe",
-            message.active_swipe_index,
-            message.id
-        );
-    }
-    let idx = if fallback_to_first {
-        0
-    } else {
-        message.active_swipe_index
-    };
-    if let Some(_swipe) = message.swipes.get(idx) {
-        message.set_active_swipe(idx);
+    // Use canonical validation method from Message
+    if !message.swipes.is_empty() {
+        let fallback_applied = message.ensure_valid_swipe_index();
+        if fallback_applied {
+            message.set_active_swipe(0);
+        } else {
+            message.set_active_swipe(message.active_swipe_index);
+        }
     }
 
     Ok(message)

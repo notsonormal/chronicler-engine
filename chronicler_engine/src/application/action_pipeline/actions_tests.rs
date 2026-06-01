@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::application::action_pipeline::execute_action_impl;
-use crate::application::action_pipeline::pipeline::{ActionPipelineBackend, default_quantifier_result};
+use crate::application::action_pipeline::pipeline::ActionPipelineBackend;
 use crate::application::context::GameServiceContext;
 use crate::error::EngineError;
 use crate::model::quantifier::QuantifierResult;
@@ -22,7 +22,7 @@ impl Default for MockBackend {
         Self {
             narrate_result: Ok("You look around the room.".to_string()),
             complete_result: Ok("The orb glows brighter.".to_string()),
-            quantifier_result: default_quantifier_result(&[]),
+            quantifier_result: QuantifierResult::default(),
         }
     }
 }

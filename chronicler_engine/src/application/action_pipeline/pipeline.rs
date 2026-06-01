@@ -11,10 +11,7 @@ use crate::error::EngineError;
 use crate::model::character::{NpcCard, PlayerCard};
 use crate::model::map::MapDef;
 use crate::model::prompt_preset::PromptPreset;
-use crate::model::quantifier::{
-    MovementParseResult, QuantifierConfidence, QuantifierParseResult, QuantifierResult,
-    compute_npc_events,
-};
+use crate::model::quantifier::{QuantifierConfidence, QuantifierResult, compute_npc_events};
 use crate::model::state::StoredTriggerContext;
 use crate::model::state::{GameState, GenerationPhase, GenerationStatus, MessageType};
 use crate::model::world::WorldCard;
@@ -62,7 +59,6 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
 
     /// [DOC: docs/architecture/system.md]
     pub fn run_from_input(&self, state: GameState, input: String) -> ActionOutcome {
-        tracing::debug!("run_from_input: entered");
         tracing::debug!("run_from_input: called");
         let world = Arc::clone(&state.world);
         let map = Arc::clone(&state.map);
@@ -235,7 +231,7 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
         input: &str,
         narration_text: &str,
     ) -> QuantifierResult {
-        let mut quantifier_result = default_quantifier_result(&[]);
+        let mut quantifier_result = QuantifierResult::default();
         self.service.run_post_generation_agents(
             state,
             input,
@@ -246,7 +242,18 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
         state.scene.quantifier_confidence =
             Some(format!("{:?}", quantifier_result.npcs.confidence));
 
-        if quantifier_result.npcs.confidence == QuantifierConfidence::Low {
+        // Only show warning if no agents produced results (genuinely empty, not Low confidence)
+        if quantifier_result.npcs.npc_ids.is_empty() && !quantifier_result.npcs.confidence.is_high()
+        {
+            // Use room defaults when quantifier found nothing
+            let room_default_npcs = state
+                .scene
+                .npcs_in_area
+                .iter()
+                .map(|n| n.id.clone())
+                .collect();
+            quantifier_result.npcs.npc_ids = room_default_npcs;
+            quantifier_result.npcs.confidence = QuantifierConfidence::Low;
             state.add_message(
                 "[System] NPC detection uncertain — using room defaults".to_string(),
                 None,
@@ -512,7 +519,7 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
             .iter()
             .map(|n| n.id.clone())
             .collect();
-        let mut post_trigger_result = default_quantifier_result(&previous_ids);
+        let mut post_trigger_result = QuantifierResult::default();
         self.service.run_post_generation_agents(
             &state,
             player_input,
@@ -629,15 +636,5 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
             user_prompt: assembled.user_prompt,
             max_tokens: Some(assembled.max_tokens),
         })
-    }
-}
-
-pub(crate) fn default_quantifier_result(fallback_npc_ids: &[String]) -> QuantifierResult {
-    QuantifierResult {
-        npcs: QuantifierParseResult {
-            npc_ids: fallback_npc_ids.to_vec(),
-            confidence: QuantifierConfidence::Low,
-        },
-        movement: MovementParseResult::default(),
     }
 }

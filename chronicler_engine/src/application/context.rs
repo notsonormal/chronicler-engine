@@ -114,13 +114,15 @@ pub fn load_messages_with_swipes(
     for msg in &mut messages {
         if let Some(swipes) = swipes_map.get(&msg.id) {
             msg.swipes = swipes.clone();
-            if let Some(_swipe) = msg
-                .swipes
-                .get(msg.active_swipe_index)
-                .or(msg.swipes.first())
-            {
-                msg.set_active_swipe(msg.active_swipe_index);
+            let fallback_applied = msg.ensure_valid_swipe_index();
+            if fallback_applied {
+                tracing::warn!(
+                    "active_swipe_index was out of bounds for message {} ({} swipes), fell back to 0",
+                    msg.id,
+                    msg.swipes.len()
+                );
             }
+            msg.set_active_swipe(msg.active_swipe_index);
         }
     }
     Ok(messages)

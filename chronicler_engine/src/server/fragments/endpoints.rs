@@ -89,20 +89,20 @@ pub async fn generating_status_handler(State(state): State<AppState>) -> Html<St
     tracing::debug!(
         "generating_status_handler: is_generating={is_gen}, status={status:?}, phase={phase:?}",
     );
-    tracing::info!(
+    tracing::debug!(
         "SERVER TRACE: status.is_generating()={is_gen}, status={status:?}, phase={phase:?}",
     );
     if let Some(err) = status.error_message() {
-        tracing::info!("SERVER TRACE: returning error span");
+        tracing::debug!("SERVER TRACE: returning error span");
         Html(format!("<span class=\"status error\">Error: {err}</span>"))
     } else if is_gen {
-        tracing::info!(
+        tracing::debug!(
             "SERVER TRACE: returning phase str: {}",
             phase.as_endpoint_str()
         );
         Html(phase.as_endpoint_str().to_string())
     } else {
-        tracing::info!("SERVER TRACE: returning idle");
+        tracing::debug!("SERVER TRACE: returning idle");
         Html("idle".to_string())
     }
 }

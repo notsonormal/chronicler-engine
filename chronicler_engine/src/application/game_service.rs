@@ -132,7 +132,8 @@ impl ActionPipelineBackend for GameService {
             current_room: state.current_room(),
         };
 
-        let patch = self
+        // Collect patches from all post-generation agents
+        let patches: Vec<_> = self
             .agent_registry
             .agents_for_phase(ExecutionPhase::PostGeneration)
             .filter_map(|agent| match agent.execute(&agent_ctx) {
@@ -143,22 +144,19 @@ impl ActionPipelineBackend for GameService {
                     None
                 }
             })
-            .fold(
-                StatePatch::Scene {
-                    npc_ids: result.npcs.npc_ids.clone(),
-                    movement_destination: result.movement.destination.clone(),
-                    confidence: result.npcs.confidence.clone().into(),
-                },
-                StatePatch::merge,
-            );
+            .collect();
 
-        let StatePatch::Scene {
-            npc_ids,
-            movement_destination,
-            confidence,
-        } = patch;
-        result.npcs.npc_ids = npc_ids;
-        result.movement.destination = movement_destination;
-        result.npcs.confidence = confidence.into();
+        // If we have patches, merge them; otherwise keep the existing result
+        if let Some(first_patch) = patches.into_iter().reduce(StatePatch::merge) {
+            let StatePatch::Scene {
+                npc_ids,
+                movement_destination,
+                confidence,
+            } = first_patch;
+            result.npcs.npc_ids = npc_ids;
+            result.movement.destination = movement_destination;
+            result.npcs.confidence = confidence.into();
+        }
+        // If no patches, result remains unchanged (default or whatever was passed in)
     }
 }

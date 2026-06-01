@@ -137,6 +137,17 @@ impl Message {
             is_deleted,
         }
     }
+
+    /// Validates active_swipe_index against swipes.len(), falls back to 0 if invalid.
+    /// Returns true if fallback was applied (index was out of bounds).
+    pub fn ensure_valid_swipe_index(&mut self) -> bool {
+        if self.active_swipe_index >= self.swipes.len() {
+            self.active_swipe_index = 0;
+            true
+        } else {
+            false
+        }
+    }
 }
 
 impl Message {

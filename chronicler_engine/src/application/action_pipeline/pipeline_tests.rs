@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::application::action_pipeline::pipeline::{
-    ActionOutcome, ActionPipeline, ActionPipelineBackend, default_quantifier_result,
+    ActionOutcome, ActionPipeline, ActionPipelineBackend,
 };
 use crate::application::context::GameServiceContext;
 use crate::error::EngineError;
@@ -26,7 +26,7 @@ impl Default for MockPipelineBackend {
         Self {
             narrate_result: Ok("You look around.".to_string()),
             complete_result: Ok("The orb glows brighter.".to_string()),
-            quantifier_result: default_quantifier_result(&[]),
+            quantifier_result: QuantifierResult::default(),
         }
     }
 }
@@ -194,11 +194,13 @@ fn test_pipeline_cancels_mid_run() {
 }
 
 #[test]
-fn test_default_quantifier_result_uses_fallback_ids() {
-    let fallback = vec!["npc1".to_string(), "npc2".to_string()];
-    let result = default_quantifier_result(&fallback);
-    assert_eq!(result.npcs.npc_ids, fallback);
+fn test_quantifier_result_default_has_low_confidence_and_empty_npcs() {
+    use crate::model::quantifier::QuantifierConfidence;
+
+    let result = QuantifierResult::default();
+    assert!(result.npcs.npc_ids.is_empty());
     assert_eq!(result.npcs.confidence, QuantifierConfidence::Low);
+    assert!(result.movement.destination.is_none());
 }
 
 #[test]

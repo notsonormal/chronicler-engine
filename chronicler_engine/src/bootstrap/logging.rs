@@ -45,8 +45,6 @@ pub fn init_logging() -> tracing_appender::non_blocking::WorkerGuard {
             fmt::layer()
                 .with_writer(non_blocking)
                 .with_ansi(false)
-                .with_line_number(true)
-                .with_file(true)
                 .with_target(true),
         )
         .init();
