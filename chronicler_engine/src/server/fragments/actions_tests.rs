@@ -34,8 +34,6 @@ fn make_test_app_state() -> AppState {
     }
 }
 
-
-
 #[test]
 fn test_action_form_deserialization() {
     let form: ActionForm = serde_json::from_str(r#"{"command": "look"}"#).unwrap();
@@ -77,8 +75,6 @@ fn test_action_form_roundtrip() {
     assert_eq!(original.command, parsed.command);
 }
 
-
-
 #[tokio::test]
 async fn test_action_handler_empty_command() {
     let state = make_test_app_state();
@@ -101,7 +97,6 @@ async fn test_action_handler_whitespace_command() {
 
 #[tokio::test]
 async fn test_action_handler_started() {
-
     let state = make_test_app_state();
     let form = ActionForm {
         command: "look".to_string(),
@@ -110,8 +105,6 @@ async fn test_action_handler_started() {
 
     assert_eq!(response.status(), StatusCode::OK);
 }
-
-
 
 #[tokio::test]
 async fn test_action_confirm_handler_empty_command() {

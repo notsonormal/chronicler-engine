@@ -396,7 +396,6 @@ def main():
 
     os.chdir(os.path.dirname(os.path.abspath(__file__)) or os.getcwd())
 
-    # Setup tee logging: stdout goes to both terminal and log file
     log_dir = Path("logs")
     log_dir.mkdir(exist_ok=True)
     clean_old_logs(log_dir, max_age_days=3)
@@ -409,7 +408,6 @@ def main():
     print(f"Full build log: {log_path}")
     print("=" * 60)
 
-    # Resolve target directories
     cargo_target_dir = Path(args.target_dir) if args.target_dir else Path("target")
     build_profile = "release" if args.release else "debug"
     target_dir = cargo_target_dir / build_profile
@@ -430,13 +428,11 @@ def main():
         print("Killing lingering chronicler processes...")
         kill_by_name("chronicler")
 
-        # Clean up stale port lock files from crashed test runs
         lock_dir = Path(tempfile.gettempdir()) / "chronicler_test_ports"
         if lock_dir.exists():
             print(f"Cleaning stale port locks from {lock_dir}...")
             shutil.rmtree(lock_dir)
 
-        # Clean build artifacts for the resolved target directory
         if cargo_target_dir.exists():
             print(f"Removing build directory: {cargo_target_dir}")
             shutil.rmtree(cargo_target_dir)
@@ -458,7 +454,6 @@ def main():
     print("Checking for processes on port 3000...")
     kill_port(3000)
 
-    # Base environment for cargo commands
     cargo_env = {"NEXTEST_STATUS_LEVEL": "fail"}
     if args.target_dir:
         cargo_env["CARGO_TARGET_DIR"] = str(cargo_target_dir.resolve())
@@ -470,7 +465,6 @@ def main():
             )
             print("         Another agent may be building in this directory.")
     else:
-        # Default target directory
         if is_target_locked(cargo_target_dir):
             print(
                 "WARNING: Default target directory (target/) appears to be "
@@ -507,7 +501,6 @@ def main():
         print("=== Build Complete ===")
         return 0
 
-    # Compute total steps for the main build path
     total_steps = 8  # clippy, arch, guardrails, test-structure, build, copy assets, tests, report/skip
     if not args.no_fmt:
         total_steps += 1
@@ -553,7 +546,6 @@ def main():
     steps.next("Copying data and assets for deployment...")
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    # Copy data folder (worlds, images, etc.)
     if Path("data").exists():
         dest_data = target_dir / "data"
         if dest_data.exists():
@@ -561,7 +553,6 @@ def main():
         shutil.copytree("data", dest_data)
         print(f"  Copied data/ -> {dest_data}")
 
-    # Copy assets folder (HTML, CSS, etc.)
     if Path("assets").exists():
         dest_assets = target_dir / "assets"
         if dest_assets.exists():
@@ -569,7 +560,6 @@ def main():
         shutil.copytree("assets", dest_assets)
         print(f"  Copied assets/ -> {dest_assets}")
 
-    # Create logs directory
     (target_dir / "logs").mkdir(exist_ok=True)
     print("  Created logs/")
 
@@ -587,8 +577,13 @@ def main():
         steps.next("Generating coverage report...")
         json_path = cargo_target_dir / "llvm-cov" / "coverage.json"
         json_path.parent.mkdir(parents=True, exist_ok=True)
+        # Exclude server infrastructure (router, server_impl, handlers) - tested via integration tests
+        # Exclude test_support - testing infrastructure, not business logic
+        # Exclude bootstrap/run.rs - CLI bootstrap code  
+        # Exclude LLM client backends - network calls tested via mock servers
+        ignore_regex = r'server[\\/](router|server_impl|handlers)\.rs|test_support[\\/].*\.rs|bootstrap[\\/]run\.rs|narrative[\\/]llm[\\/](openrouter|ollama|deepseek|backend)\.rs'
         run(
-            f'cargo llvm-cov report --json --output-path "{json_path}"',
+            f'cargo llvm-cov report --json --output-path "{json_path}" --ignore-filename-regex "{ignore_regex}"',
             check=False,
             env=cargo_env,
         )
@@ -610,7 +605,6 @@ def main():
 
     print("=== Build Complete ===")
 
-    # Dump SQLite database contents to JSONL for easy inspection
     db_path = target_dir / "data" / "chronicler.db"
     if db_path.exists():
         dump_dir = Path("tmp") / "db_dumps"
@@ -618,7 +612,6 @@ def main():
         clean_old_dumps(dump_dir, max_age_days=3)
         dump_sqlite_to_jsonl(db_path, dump_dir)
 
-    # Print timing summary
     if step_timings:
         print("\n--- Step Timing Summary ---")
         total = sum(t["elapsed_sec"] for t in step_timings)

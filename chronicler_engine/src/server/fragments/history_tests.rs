@@ -61,8 +61,6 @@ fn test_edit_history_form_roundtrip() {
     assert_eq!(original.text, parsed.text);
 }
 
-
-
 #[tokio::test]
 async fn test_edit_history_handler_ok() {
     let state = make_test_app_state();
@@ -79,8 +77,6 @@ async fn test_edit_history_handler_ok() {
 
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
-
-
 
 #[tokio::test]
 async fn test_delete_history_handler_ok() {
