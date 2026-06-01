@@ -4,6 +4,16 @@
 
 ### Added
 
+- **Server fragment unit tests — 68 tests covering HTMX fragment endpoints**
+  - Created 3 new test files: `games_tests.rs` (9 tests), `endpoints_tests.rs` (13 tests), `misc_tests.rs` (8 tests)
+  - Expanded 2 existing test files: `actions_tests.rs` (+9 tests), `history_tests.rs` (+1 test)
+  - Test pattern: `make_test_app_state()` helper, direct handler calls `handler(State(state), Form(form)).await`
+  - Coverage: Happy paths, error paths, edge cases for all 6 fragment handler modules
+  - Reuses `test_support::TestWorld`, `TestPlayer`, `TestMap` fixtures
+  - All 833 tests pass; clippy clean with `-D warnings`; import ordering guardrails pass
+  - Net change: ~530 lines of test code across 5 files
+  - Plan archived: `docs/plans/archived/server-fragment-unit-tests-2026-06-01.md`
+
 - **Test quality improvements**
   - Consolidated 7 duplicated fragment tests into 2 parameterized tests in `tests/http/fragment.rs`
   - Added 3 browser edge case tests in `tests/browser/editing.rs` for button visibility scenarios

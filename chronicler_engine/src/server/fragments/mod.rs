@@ -23,6 +23,12 @@ pub use renderers::{html_escape, render_error, render_llm_messages};
 #[cfg(test)]
 mod actions_tests;
 #[cfg(test)]
+mod endpoints_tests;
+#[cfg(test)]
+mod games_tests;
+#[cfg(test)]
 mod history_tests;
+#[cfg(test)]
+mod misc_tests;
 #[cfg(test)]
 mod renderers_tests;
