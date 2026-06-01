@@ -21,6 +21,8 @@ mod messages_tests;
 #[cfg(test)]
 mod presets_tests;
 #[cfg(test)]
+mod settings_tests;
+#[cfg(test)]
 mod snapshots_tests;
 #[cfg(test)]
 mod swipes_tests;

@@ -2,22 +2,17 @@ use chrono::Utc;
 
 use crate::error::EngineError;
 use crate::model::map::MapDef;
-use crate::model::world::{WorldCard, WorldManifest};
+use crate::model::world::{WorldCard, WorldInfo, WorldManifest};
 use crate::storage::backend::{Backend, Operation, Storage, WorldSeed};
 
-/// World data with associated map and metadata.
 #[derive(Debug, Clone)]
 pub struct WorldWithMap {
-    pub world: WorldCard,
-    pub world_key: String,
+    pub info: WorldInfo,
     pub map: MapDef,
-    pub scenarios: Vec<crate::model::scenario::StartingScenario>,
-    pub default_scenario_id: Option<String>,
-    pub default_room_image: Option<String>,
 }
 
 impl Storage {
-    pub fn list_worlds(&self) -> Result<Vec<WorldManifest>, EngineError> {
+    pub fn list_worlds(&self) -> Result<Vec<WorldInfo>, EngineError> {
         self.with_backend_mut(Operation::ListWorlds, |backend, _game_id| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
@@ -40,23 +35,31 @@ impl Storage {
 
                 for row_result in rows {
                     let (key, name, description, global_rules_json, starting_room_id, scenarios_json, default_scenario_id, default_room_image) = row_result?;
-                    worlds.push(WorldManifest {
-                        id: key,
+                    worlds.push(WorldInfo {
+                        key,
                         name,
                         description,
-                        global_rules: serde_json::from_str(&global_rules_json).unwrap_or_default(),
+                        global_rules: serde_json::from_str(&global_rules_json)
+                            .map_err(|e| EngineError::Parse(format!("Failed to deserialize global_rules: {e}")))?,
                         starting_room_id,
-                        map_file: "map.json".into(),
-                        player_file: "player.json".into(),
-                        characters_dir: "characters".into(),
-                        scenarios: serde_json::from_str(&scenarios_json).unwrap_or_default(),
+                        scenarios: serde_json::from_str(&scenarios_json)
+                            .map_err(|e| EngineError::Parse(format!("Failed to deserialize scenarios: {e}")))?,
                         default_scenario_id: default_scenario_id.filter(|s| !s.is_empty()),
                         default_room_image: default_room_image.filter(|s| !s.is_empty()),
                     });
                 }
                 Ok(worlds)
             }
-            Backend::InMemory(data) => Ok(data.worlds.iter().map(|w| w.manifest.clone()).collect()),
+            Backend::InMemory(data) => Ok(data.worlds.iter().map(|w| WorldInfo {
+                key: w.manifest.id.clone(),
+                name: w.manifest.name.clone(),
+                description: w.manifest.description.clone(),
+                global_rules: w.manifest.global_rules.clone(),
+                starting_room_id: w.manifest.starting_room_id.clone(),
+                scenarios: w.manifest.scenarios.clone(),
+                default_scenario_id: w.manifest.default_scenario_id.clone(),
+                default_room_image: w.manifest.default_room_image.clone(),
+            }).collect()),
             Backend::Test { .. } => unimplemented!(),
         })
     }
@@ -82,25 +85,25 @@ impl Storage {
                     let default_room_image = row.get::<_, Option<String>>(7)?;
                     let map_data_json = row.get::<_, String>(8)?;
 
-                    let global_rules: Vec<String> = serde_json::from_str(&global_rules_json).unwrap_or_default();
-                    let scenarios: Vec<_> = serde_json::from_str(&scenarios_json).unwrap_or_default();
+                    let global_rules: Vec<String> = serde_json::from_str(&global_rules_json)
+                        .map_err(|_e| rusqlite::Error::InvalidColumnType(3, "global_rules".into(), rusqlite::types::Type::Text))?;
+                    let scenarios: Vec<_> = serde_json::from_str(&scenarios_json)
+                        .map_err(|_e| rusqlite::Error::InvalidColumnType(5, "scenarios".into(), rusqlite::types::Type::Text))?;
                     let map: MapDef = serde_json::from_str(&map_data_json)
                         .map_err(|_| rusqlite::Error::InvalidColumnType(8, "map_data".into(), rusqlite::types::Type::Text))?;
 
                     Ok(WorldWithMap {
-                        world: WorldCard {
+                        info: WorldInfo {
+                            key,
                             name,
                             description,
                             global_rules,
                             starting_room_id,
-                            scenarios: scenarios.clone(),
-                            default_room_image: default_room_image.clone().filter(|s| !s.is_empty()),
+                            scenarios,
+                            default_scenario_id: default_scenario_id.filter(|s| !s.is_empty()),
+                            default_room_image: default_room_image.filter(|s| !s.is_empty()),
                         },
-                        world_key: key,
                         map,
-                        scenarios,
-                        default_scenario_id: default_scenario_id.filter(|s| !s.is_empty()),
-                        default_room_image: default_room_image.filter(|s| !s.is_empty()),
                     })
                 });
 
@@ -115,12 +118,17 @@ impl Storage {
                     .iter()
                     .find(|w| w.manifest.id == key)
                     .map(|w| WorldWithMap {
-                        world: w.world_card.clone(),
-                        world_key: w.manifest.id.clone(),
+                        info: WorldInfo {
+                            key: w.manifest.id.clone(),
+                            name: w.manifest.name.clone(),
+                            description: w.manifest.description.clone(),
+                            global_rules: w.manifest.global_rules.clone(),
+                            starting_room_id: w.manifest.starting_room_id.clone(),
+                            scenarios: w.manifest.scenarios.clone(),
+                            default_scenario_id: w.manifest.default_scenario_id.clone(),
+                            default_room_image: w.manifest.default_room_image.clone(),
+                        },
                         map: w.map.clone(),
-                        scenarios: w.manifest.scenarios.clone(),
-                        default_scenario_id: w.manifest.default_scenario_id.clone(),
-                        default_room_image: w.manifest.default_room_image.clone(),
                     })
             ),
             Backend::Test { .. } => unimplemented!(),

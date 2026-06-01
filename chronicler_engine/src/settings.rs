@@ -6,7 +6,7 @@ use crate::storage::Storage;
 
 const SETTINGS_FILENAME: &str = "settings.json";
 
-/// Returns the path to the settings file. Exists for backward compatibility; settings are DB-backed since Phase 2.
+/// Backward compat. Settings are DB-backed since Phase 2.
 pub fn get_settings_path() -> PathBuf {
     if let Ok(path) = std::env::var("CHRONICLER_SETTINGS_PATH") {
         return PathBuf::from(path);
@@ -21,7 +21,6 @@ pub fn load_settings(storage: &Storage) -> Result<AppSettings> {
     match storage.get_settings() {
         Ok(settings) => Ok(settings),
         Err(e) => {
-            // Log but fall back to defaults
             tracing::warn!("Failed to load settings from DB, using defaults: {}", e);
             Ok(AppSettings::default())
         }

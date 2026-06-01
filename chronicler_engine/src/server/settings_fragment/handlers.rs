@@ -136,7 +136,6 @@ pub async fn add_connection_handler(
         return Html(format!("<span class='error'>Save failed: {e}</span>"));
     }
 
-    // Return full settings panel so the new connection appears
     render_template(SettingsTemplate::from_settings(&settings))
 }
 
@@ -199,7 +198,6 @@ pub async fn edit_connection_handler(
         return Html(format!("<span class='error'>Save failed: {e}</span>"));
     }
 
-    // Return updated card
     match settings.find_connection(&id) {
         Some(updated_conn) => Html(connection_card_html(
             updated_conn,
@@ -227,7 +225,6 @@ pub async fn delete_connection_handler(
 
     settings.connections.remove(idx);
 
-    // Reassign active connections if the deleted one was active
     if settings.narration_connection_id == id {
         settings.narration_connection_id = settings.connections[0].id.clone();
     }
@@ -239,7 +236,6 @@ pub async fn delete_connection_handler(
         return Html(format!("<span class='error'>Save failed: {e}</span>"));
     }
 
-    // Return empty string - HTMX will remove the card
     Html(String::new())
 }
 

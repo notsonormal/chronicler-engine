@@ -16,17 +16,14 @@ use crate::server::ServerConfig;
 
 use super::{initialize_world_from_manifest, inject_scenario_logs, validate_loaded_data};
 
-/// Game ID used for preset storage (separate from active game).
 const PRESET_STORAGE_GAME_ID: u64 = 1;
 
-/// Reads from settings guard safely, handling poisoning.
 fn with_settings<T>(settings: &Arc<RwLock<AppSettings>>, f: impl FnOnce(&AppSettings) -> T) -> T {
     let guard = settings.read().unwrap_or_else(|e| e.into_inner());
     f(&guard)
 }
 
 // [DOC: docs/architecture/invariants.md#INV-004]
-/// Context passed to the spawn_blocking task for arrival narration.
 struct ArrivalTaskContext {
     storage: Arc<crate::storage::Storage>,
     world: Arc<WorldCard>,
@@ -44,7 +41,6 @@ struct ArrivalTaskContext {
 }
 
 impl ArrivalTaskContext {
-    /// Runs arrival narration in a blocking context.
     fn run(self) {
         let preset_storage = Arc::new(crate::storage::Storage::new_sqlite(
             self.db_pool.clone(),
@@ -155,7 +151,6 @@ impl ArrivalTaskContext {
     }
 }
 
-/// Entry point for the Chronicler Engine server.
 // [DOC: docs/architecture/system.md]
 pub fn run(args: Args) -> crate::error::Result<()> {
     if args.list_worlds {

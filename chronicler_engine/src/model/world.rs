@@ -2,6 +2,22 @@ use serde::{Deserialize, Serialize};
 
 use crate::model::scenario::StartingScenario;
 
+/// Runtime world descriptor from DB. No filesystem concerns.
+/// Used by `list_worlds()` and `get_world()` to return world data without file pointers.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorldInfo {
+    pub key: String,
+    pub name: String,
+    pub description: String,
+    pub global_rules: Vec<String>,
+    pub starting_room_id: String,
+    pub scenarios: Vec<StartingScenario>,
+    #[serde(default)]
+    pub default_scenario_id: Option<String>,
+    #[serde(default)]
+    pub default_room_image: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct WorldCard {
     pub name: String,
@@ -15,6 +31,10 @@ pub struct WorldCard {
     pub default_room_image: Option<String>,
 }
 
+/// Filesystem bootstrap descriptor. Deserialized from `worlds/<id>/world.json`.
+/// Contains file pointer fields (`map_file`, `player_file`, `characters_dir`) used ONLY
+/// during initial seeding in `bootstrap/load.rs::initialize_world_from_manifest()`.
+/// After seeding, these fields are meaningless — runtime data lives in the DB.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorldManifest {
     pub id: String,

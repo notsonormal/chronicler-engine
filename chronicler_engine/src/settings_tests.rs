@@ -68,17 +68,6 @@ fn test_get_settings_path_env_override() {
 }
 
 #[test]
-#[ignore = "Settings are now DB-backed, not file-based. Test deprecated."]
-fn test_load_settings_missing_file_creates_defaults_old() {
-    // This test is deprecated - settings now use DB storage
-    // See DB-backed settings tests in storage::backend::settings_tests
-    with_isolated_settings(|_path| {
-        // DB-backed settings always return defaults if row doesn't exist
-        // File path is no longer used
-    });
-}
-
-#[test]
 fn test_load_settings_valid_file() {
     with_isolated_settings(|_path| {
         let pool = crate::storage::db::DbPool::new(":memory:").unwrap();
@@ -97,13 +86,6 @@ fn test_load_settings_valid_file() {
         assert_eq!(loaded.narration_connection_id, "test");
         assert_eq!(loaded.connections.len(), 1);
     });
-}
-
-#[test]
-#[ignore = "Settings are now DB-backed, not file-based. Test deprecated."]
-fn test_load_settings_invalid_json_old() {
-    // Deprecated: settings now use DB storage
-    // File-based validation no longer applies
 }
 
 #[test]
@@ -138,13 +120,6 @@ fn test_save_settings_roundtrip() {
 }
 
 #[test]
-#[ignore = "Settings are now DB-backed, not file-based. Test deprecated."]
-fn test_save_settings_creates_parent_directory_old() {
-    // Deprecated: settings now use DB storage
-    // File path is no longer used
-}
-
-#[test]
 fn test_connection_resolve_api_key() {
     let conn = Connection {
         id: "test".into(),
@@ -163,7 +138,6 @@ fn test_connection_resolve_api_key() {
         api_key: None,
         ..conn
     };
-    // When api_key is None, checks OPENROUTER_API_KEY env var
     unsafe {
         std::env::set_var("OPENROUTER_API_KEY", "env-key");
     }
@@ -193,7 +167,6 @@ fn test_connection_resolve_base_url() {
         base_url: None,
         ..conn
     };
-    // When base_url is None, returns hardcoded default (env resolution moved to bootstrap)
     assert_eq!(conn_default.resolve_base_url(), "http://localhost:11434/v1");
 }
 

@@ -276,8 +276,6 @@ async fn test_activate_nonexistent_preset_returns_error() {
 #[tokio::test]
 #[ignore = "Settings are now DB-backed, save() no longer fails on invalid file paths"]
 async fn test_activate_preset_settings_save_error_returns_error_old() {
-    // Deprecated: settings.save() now uses DB storage and doesn't fail on file path issues
-    // When DB pool is not initialized, save() is a no-op (returns Ok(()))
     let invalid_path = format!(
         "{}\\chronicler_test_invalid_{}\\settings.json",
         std::env::temp_dir().display(),
@@ -299,8 +297,7 @@ async fn test_activate_preset_settings_save_error_returns_error_old() {
 
     unsafe { std::env::remove_var("CHRONICLER_SETTINGS_PATH") };
 
-    // This assertion no longer valid - save() succeeds with DB storage
-    assert!(!response.0.contains("Save failed")); // Changed: save no longer fails
+    assert!(!response.0.contains("Save failed"));
 }
 
 #[tokio::test]
@@ -308,7 +305,6 @@ async fn test_panel_handler_with_poisoned_settings_lock() {
     let app_state =
         make_test_app_state_with_preset(crate::test_support::TestPromptPreset::system("x", "X"));
 
-    // Poison the settings lock by panicking while holding a write guard.
     // [DOC: docs/reference/testing.md#poisoned-lock-testing]
     let settings_clone = Arc::clone(&app_state.settings);
     let handle = tokio::task::spawn_blocking(move || {
@@ -317,7 +313,6 @@ async fn test_panel_handler_with_poisoned_settings_lock() {
     });
     let _ = handle.await;
 
-    // panel_handler should recover from the poisoned lock via try_lock!.
     let response = panel_handler(axum::extract::State(app_state)).await;
     assert!(
         response.0.contains("System Prompts"),

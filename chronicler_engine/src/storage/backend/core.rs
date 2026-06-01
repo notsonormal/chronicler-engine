@@ -96,7 +96,6 @@ pub enum Operation {
     GetPersona,
     SeedPersona,
     ListCharacters,
-    ListAllCharacters,
     GetCharacter,
     SeedCharacter,
     GetSettings,

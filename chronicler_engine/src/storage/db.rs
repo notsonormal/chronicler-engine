@@ -131,7 +131,6 @@ fn run_migrations(conn: &Connection) -> Result<(), crate::error::EngineError> {
 
         exec("CREATE INDEX IF NOT EXISTS idx_prompt_presets_type ON prompt_presets(preset_type)")?;
 
-        // Insert default game row only if none exists so re-opening a DB is idempotent.
         let count: i64 = conn
             .query_row("SELECT COUNT(*) FROM games", [], |row| row.get(0))
             .unwrap_or(0);
@@ -155,7 +154,6 @@ fn run_migrations(conn: &Connection) -> Result<(), crate::error::EngineError> {
                 .map_err(|e| crate::error::EngineError::Config(format!("Migration failed: {e}")))
         };
 
-        // Worlds table (merged WorldManifest + WorldCard)
         exec(
             "CREATE TABLE IF NOT EXISTS worlds (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -172,7 +170,6 @@ fn run_migrations(conn: &Connection) -> Result<(), crate::error::EngineError> {
             )",
         )?;
 
-        // Maps table (1:1 with worlds, full MapDef as JSON blob)
         exec(
             "CREATE TABLE IF NOT EXISTS maps (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -184,7 +181,6 @@ fn run_migrations(conn: &Connection) -> Result<(), crate::error::EngineError> {
         )?;
         exec("CREATE INDEX IF NOT EXISTS idx_maps_world ON maps(world_id)")?;
 
-        // Personas table (PlayerCard)
         exec(
             "CREATE TABLE IF NOT EXISTS personas (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -203,7 +199,6 @@ fn run_migrations(conn: &Connection) -> Result<(), crate::error::EngineError> {
             )",
         )?;
 
-        // Characters table (NpcCard)
         exec(
             "CREATE TABLE IF NOT EXISTS characters (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -227,7 +222,6 @@ fn run_migrations(conn: &Connection) -> Result<(), crate::error::EngineError> {
         )?;
         exec("CREATE INDEX IF NOT EXISTS idx_characters_world ON characters(world_id)")?;
 
-        // Settings table (singleton row)
         exec(
             "CREATE TABLE IF NOT EXISTS settings (
                 id INTEGER PRIMARY KEY CHECK (id = 1),  -- singleton row

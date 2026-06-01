@@ -24,45 +24,6 @@ impl Storage {
         })
     }
 
-    pub fn list_all_characters(&self) -> Result<Vec<NpcCard>, EngineError> {
-        self.with_backend_mut(Operation::ListAllCharacters, |backend, _game_id| match backend {
-            Backend::Sqlite { pool } => {
-                let conn = pool.conn();
-                let mut stmt = conn.prepare(
-                    "SELECT id, key, world_id, name, description, personality, scenario, example_dialogue, summary, profile_image, headshot_image, inventory, triggers, relationships FROM characters",
-                )?;
-                let rows = stmt.query_map([], |row| {
-                    Ok(DbCharacter {
-                        id: row.get(0)?,
-                        key: row.get(1)?,
-                        world_id: row.get(2)?,
-                        name: row.get(3)?,
-                        description: row.get(4)?,
-                        personality: row.get(5)?,
-                        scenario: row.get(6)?,
-                        example_dialogue: row.get(7)?,
-                        summary: row.get(8)?,
-                        profile_image: row.get(9)?,
-                        headshot_image: row.get(10)?,
-                        inventory: row.get(11)?,
-                        triggers: row.get(12)?,
-                        relationships: row.get(13)?,
-                        created_at: String::new(),
-                        updated_at: String::new(),
-                    })
-                })?;
-                let mut characters = Vec::new();
-                for row_result in rows {
-                    let db_char = row_result?;
-                    characters.push(character_from_db(&db_char)?);
-                }
-                Ok(characters)
-            }
-            Backend::InMemory(data) => Ok(data.characters.iter().map(|c| c.card.clone()).collect()),
-            Backend::Test { .. } => unimplemented!(),
-        })
-    }
-
     pub fn get_character(&self, world_id: i64, key: &str) -> Result<Option<NpcCard>, EngineError> {
         self.with_backend_mut(Operation::GetCharacter, |backend, _game_id| match backend {
             Backend::Sqlite { pool } => {
