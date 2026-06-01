@@ -10,3 +10,6 @@ pub use handlers::{
     set_narrator_handler, set_quantifier_handler, settings_panel,
 };
 pub use template::{SettingsTemplate, parse_api_key};
+
+#[cfg(test)]
+mod template_tests;

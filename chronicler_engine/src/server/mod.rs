@@ -17,13 +17,7 @@ pub use router::create_app_with_state;
 pub use server_impl::run_server_with_config;
 
 #[cfg(test)]
-mod fragments_tests;
-#[cfg(test)]
 mod mod_tests;
-#[cfg(test)]
-mod prompt_presets_fragment_tests;
-#[cfg(test)]
-mod settings_fragment_tests;
 #[cfg(test)]
 mod templates_tests;
 #[cfg(test)]

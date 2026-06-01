@@ -19,3 +19,10 @@ pub use misc::{
     check_text_handler, reset_handler, retrigger_handler, retry_handler, switch_swipe_handler,
 };
 pub use renderers::{html_escape, render_error, render_llm_messages};
+
+#[cfg(test)]
+mod actions_tests;
+#[cfg(test)]
+mod history_tests;
+#[cfg(test)]
+mod renderers_tests;

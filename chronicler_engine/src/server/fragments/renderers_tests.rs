@@ -3,7 +3,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::model::llm_message::LlmMessageBuilder;
 use crate::model::settings::AppSettings;
-use crate::server::fragments::{ActionForm, html_escape, render_error};
+use crate::server::fragments::{html_escape, render_error, render_llm_messages};
 use crate::storage::Storage;
 use crate::test_support::{TestMap, TestPlayer, TestWorld};
 
@@ -66,46 +66,6 @@ fn test_html_escape_empty() {
 }
 
 #[test]
-fn test_render_error_basic() {
-    let result = render_error("Test error message");
-    assert!(result.contains("error-message"));
-    assert!(result.contains("Test error message"));
-}
-
-#[test]
-fn test_render_error_html_escaped() {
-    let result = render_error("<script>alert('xss')</script>");
-    assert!(!result.contains("<script>"));
-    assert!(result.contains("&lt;script&gt;"));
-}
-
-#[test]
-fn test_action_form_deserialization() {
-    let form: ActionForm = serde_json::from_str(r#"{"command": "look"}"#).unwrap();
-    assert_eq!(form.command, "look");
-}
-
-#[test]
-fn test_action_form_empty_command() {
-    let form: ActionForm = serde_json::from_str(r#"{"command": ""}"#).unwrap();
-    assert!(form.command.is_empty());
-}
-
-#[test]
-fn test_edit_history_form_deserialization() {
-    let form: crate::server::fragments::EditHistoryForm =
-        serde_json::from_str(r#"{"text": "Modified text"}"#).unwrap();
-    assert_eq!(form.text, "Modified text");
-}
-
-#[test]
-fn test_render_error_empty_message() {
-    let result = render_error("");
-    assert!(result.contains("error-message"));
-    assert!(result.contains("Error:"));
-}
-
-#[test]
 fn test_html_escape_newline() {
     // [DOC: docs/reference/testing.md]
     // Newlines should be preserved (not converted to &lt;br&gt;)
@@ -144,47 +104,6 @@ fn test_html_escape_repeated_escaping() {
 }
 
 #[test]
-fn test_action_form_with_whitespace_command() {
-    let form: ActionForm = serde_json::from_str(r#"{"command": "  look  "}"#).unwrap();
-    assert_eq!(form.command, "  look  ");
-}
-
-#[test]
-fn test_action_form_with_special_characters() {
-    let form: ActionForm =
-        serde_json::from_str(r#"{"command": "go north & talk to guard"}"#).unwrap();
-    assert_eq!(form.command, "go north & talk to guard");
-}
-
-#[test]
-fn test_edit_history_form_empty_text() {
-    let form: crate::server::fragments::EditHistoryForm =
-        serde_json::from_str(r#"{"text": ""}"#).unwrap();
-    assert!(form.text.is_empty());
-}
-
-#[test]
-fn test_edit_history_form_with_newlines() {
-    let form: crate::server::fragments::EditHistoryForm =
-        serde_json::from_str(r#"{"text": "Line1\nLine2\nLine3"}"#).unwrap();
-    assert!(form.text.contains('\n'));
-}
-
-#[test]
-fn test_action_form_deserialize_unicode() {
-    let form: ActionForm = serde_json::from_str(r#"{"command": "こんにちは"}"#).unwrap();
-    assert_eq!(form.command, "こんにちは");
-}
-
-#[test]
-fn test_render_error_long_message() {
-    let long_msg = "x".repeat(10000).to_string();
-    let result = render_error(&long_msg);
-    assert!(result.len() > 10000);
-    assert!(result.contains(&long_msg[..100]));
-}
-
-#[test]
 fn test_html_escape_only_ampersand() {
     assert_eq!(html_escape("&"), "&amp;");
 }
@@ -200,29 +119,38 @@ fn test_html_escape_only_gt() {
 }
 
 #[test]
-fn test_action_form_roundtrip() {
-    let original = ActionForm {
-        command: "test command".to_string(),
-    };
-    let json = serde_json::to_string(&original).unwrap();
-    let parsed: ActionForm = serde_json::from_str(&json).unwrap();
-    assert_eq!(original.command, parsed.command);
+fn test_render_error_basic() {
+    let result = render_error("Test error message");
+    assert!(result.contains("error-message"));
+    assert!(result.contains("Test error message"));
 }
 
 #[test]
-fn test_edit_history_form_roundtrip() {
-    let original = crate::server::fragments::EditHistoryForm {
-        text: "new text".to_string(),
-    };
-    let json = serde_json::to_string(&original).unwrap();
-    let parsed: crate::server::fragments::EditHistoryForm = serde_json::from_str(&json).unwrap();
-    assert_eq!(original.text, parsed.text);
+fn test_render_error_html_escaped() {
+    let result = render_error("<script>alert('xss')</script>");
+    assert!(!result.contains("<script>"));
+    assert!(result.contains("&lt;script&gt;"));
+}
+
+#[test]
+fn test_render_error_empty_message() {
+    let result = render_error("");
+    assert!(result.contains("error-message"));
+    assert!(result.contains("Error:"));
+}
+
+#[test]
+fn test_render_error_long_message() {
+    let long_msg = "x".repeat(10000).to_string();
+    let result = render_error(&long_msg);
+    assert!(result.len() > 10000);
+    assert!(result.contains(&long_msg[..100]));
 }
 
 #[test]
 fn test_render_llm_messages_empty() {
     let app_state = make_test_app_state(None);
-    let html = crate::server::fragments::render_llm_messages(&app_state).unwrap();
+    let html = render_llm_messages(&app_state).unwrap();
     assert!(html.contains("llm-message-list"));
     assert!(html.contains("No LLM messages yet"));
 }
@@ -244,7 +172,7 @@ fn test_render_llm_messages_with_data() {
     llm_storage.save_llm_message(&msg).unwrap();
 
     let app_state = make_test_app_state(Some(llm_storage));
-    let html = crate::server::fragments::render_llm_messages(&app_state).unwrap();
+    let html = render_llm_messages(&app_state).unwrap();
     assert!(html.contains("llm-message-list"));
     assert!(html.contains("narrator"));
     assert!(html.contains("OpenRouter"));

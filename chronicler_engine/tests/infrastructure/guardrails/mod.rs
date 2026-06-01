@@ -1,12 +1,14 @@
 //! [DOC: docs/architecture/guardrails.md]
 
 pub mod layers;
+pub mod location;
 pub mod structure;
 pub mod style;
 
 pub use layers::*;
 pub use structure::{check_no_legacy_test_context, *};
 pub use style::*;
+pub use location::*;
 
 // ── Severity & Violation Types ──
 
@@ -186,4 +188,9 @@ fn guardrails_test_layer_boundaries() {
 #[test]
 fn guardrails_no_legacy_test_context() {
     check_tests_files("legacy test context", check_no_legacy_test_context);
+}
+
+#[test]
+fn guardrails_test_file_location() {
+    check_src_files("test file location (src)", check_test_file_location);
 }
