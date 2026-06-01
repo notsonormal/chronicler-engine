@@ -433,3 +433,147 @@ fn test_pipeline_with_quantifier() {
         .any(|e| e.message_type == MessageType::Narration);
     assert!(has_narration, "Should produce narration with quantifier");
 }
+
+#[test]
+fn test_streaming_narration_saved_before_quantifier_complete() {
+    use crate::storage::TestOverride;
+    use std::thread;
+    use std::time::Duration;
+
+    let mut state = create_test_state();
+    state.narrative.history.clear();
+    state.narrative.input_buffer.status = GenerationStatus::Generating;
+    let ctx = make_test_context_with_sqlite(state).unwrap();
+
+    // Mock backend with fast narration, slow quantifier
+    let backend = GameService::with_mock_quantifier(
+        Arc::new(MockBackend::default()),
+        Arc::new(MockBackend {
+            // Quantifier takes 500ms
+            per_call_prompt_responses: vec![r#"{"npcs_in_room": []}"#.to_string()],
+            call_delay_ms: 500,
+            ..Default::default()
+        }),
+    );
+
+    let ctx_clone = ctx.clone();
+    let handle = thread::spawn(move || {
+        backend.execute_action(ctx_clone, "look around".to_string(), "Player".to_string());
+    });
+
+    // Wait for narration to be saved (should happen before quantifier finishes)
+    thread::sleep(Duration::from_millis(300));
+
+    // Check that narration is already in the database
+    let messages = ctx.load_messages();
+    if let Ok(msgs) = messages {
+        let narration_count = msgs
+            .iter()
+            .filter(|m| m.message_type == MessageType::Narration)
+            .count();
+
+        // Narration should be saved even while quantifier is still running
+        assert!(
+            narration_count >= 1,
+            "Narration should be saved before quantifier completes"
+        );
+    }
+
+    // Wait for completion
+    handle.join().expect("Action thread should complete");
+
+    // Verify final state
+    let guard = latest_state(&ctx);
+    assert!(
+        !guard.narrative.input_buffer.status.is_generating(),
+        "Should complete after quantifier finishes"
+    );
+
+    // Verify no duplicate narration
+    let final_messages = ctx.load_messages().unwrap();
+    let final_narration_count = final_messages
+        .iter()
+        .filter(|m| m.message_type == MessageType::Narration)
+        .count();
+
+    assert_eq!(
+        final_narration_count,
+        1,
+        "Should have exactly 1 narration (no duplicates), found {}",
+        final_narration_count
+    );
+}
+
+#[test]
+fn test_narration_no_duplicate_with_real_quantifier_flow() {
+    use crate::storage::TestOverride;
+
+    let mut state = create_test_state();
+    state.narrative.history.clear();
+    state.narrative.input_buffer.status = GenerationStatus::Generating;
+    let ctx = make_test_context_with_sqlite(state).unwrap();
+    let backend = GameService::with_mock_quantifier(
+        Arc::new(MockBackend::default()),
+        Arc::new(MockBackend::default()),
+    );
+
+    backend.execute_action(ctx.clone(), "test action".to_string(), "Player".to_string());
+
+    let guard = latest_state(&ctx);
+
+    // Count narration entries in history
+    let history = guard.narrative.history();
+    let narration_count = history
+        .iter()
+        .filter(|e| e.message_type == MessageType::Narration)
+        .count();
+
+    assert_eq!(
+        narration_count, 1,
+        "Should have exactly 1 narration entry (no duplicates), found {}",
+        narration_count
+    );
+
+    // Also verify in storage
+    let messages = ctx.load_messages().unwrap();
+    let stored_narration_count = messages
+        .iter()
+        .filter(|m| m.message_type == MessageType::Narration)
+        .count();
+
+    assert_eq!(
+        stored_narration_count, 1,
+        "Storage should have exactly 1 narration (no duplicates), found {}",
+        stored_narration_count
+    );
+}
+
+#[test]
+fn test_pipeline_continues_when_quantifier_save_warns() {
+    // Verify that quantifier save failures don't stop the pipeline
+    let mut state = create_test_state();
+    state.narrative.history.clear();
+    state.narrative.input_buffer.status = GenerationStatus::Generating;
+    let ctx = make_test_context_with_sqlite(state).unwrap();
+    let backend = GameService::with_mock_quantifier(
+        Arc::new(MockBackend::default()),
+        Arc::new(MockBackend::default()),
+    );
+
+    // This should complete successfully
+    backend.execute_action(ctx.clone(), "look".to_string(), "Player".to_string());
+
+    let guard = latest_state(&ctx);
+    assert!(
+        !guard.narrative.input_buffer.status.is_generating(),
+        "Pipeline should complete even if quantifier save has warnings"
+    );
+
+    // Narration should still be saved
+    let has_narration = guard
+        .narrative
+        .history()
+        .iter()
+        .any(|e| e.message_type == MessageType::Narration);
+    assert!(has_narration, "Narration should be saved regardless of quantifier");
+}

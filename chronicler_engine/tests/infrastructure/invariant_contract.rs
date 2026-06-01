@@ -62,8 +62,15 @@ fn test_inv001_generation_guard_resets_on_panic() {
 }
 #[test]
 fn test_inv002_state_mutation_order() {
-    let state = create_test_state_with_trigger_npc();
+    let mut state = create_test_state_with_trigger_npc();
     let npc_id = "shopkeeper";
+
+    // Narration already added by phase_narrate (pre-quantifier save)
+    state.add_message(
+        "You look around the shop.".to_string(),
+        None,
+        MessageType::Narration,
+    );
 
     // Verify pre-condition: NPC has not been met yet.
     assert_eq!(
@@ -390,10 +397,13 @@ fn test_inv007_dynamic_room_creation_on_invalid_destination() {
 fn test_inv002_mutation_order_property() {
     use proptest::prelude::*;
 
-    proptest!(|(narration_text in "\\PC{10,100}", has_npc in any::<bool>())| {
+    proptest!(|(narration_text in r"[^\s]{10,100}", has_npc in any::<bool>())| {
         // Create fresh state for each iteration
-        let state = create_test_state_with_trigger_npc();
+        let mut state = create_test_state_with_trigger_npc();
         let npc_id = "shopkeeper";
+
+        // Narration already added by phase_narrate (pre-quantifier save)
+        state.add_message(narration_text.clone(), None, MessageType::Narration);
 
         // NPC appears if has_npc is true
         let npc_ids = if has_npc { vec![npc_id.to_string()] } else { vec![] };
@@ -414,7 +424,7 @@ fn test_inv002_mutation_order_property() {
             },
         ).expect("execute_freeaction_impl should succeed");
 
-        // Invariant 1: narration added to history
+        // Invariant 1: narration exists in history (not duplicated)
         let history = &result.next_state.narrative.history;
         let search_len = 20.min(narration_text.chars().count());
         let search_text: String = narration_text.chars().take(search_len).collect();

@@ -224,3 +224,4 @@ vectors.db
 
 .devrag/
 /chronicler_engine/tmp
+*.proptest-regressions

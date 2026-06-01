@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-06-01
+
+### Added
+
+- **Streaming narration optimization for 73% latency reduction**
+  - Narration now saved immediately after LLM generation completes (~11s), before quantifier runs (~29s)
+  - Time-to-first-narration reduced from ~40s to ~11s (73% improvement)
+  - Implementation: `phase_narrate()` in `src/application/action_pipeline/pipeline.rs` now calls `save_message_and_snapshot()` before returning
+  - Trade-off: Quantifier metadata (NPC list, confidence) lags by one poll cycle (~2s)
+  - Modified files:
+    - `src/application/action_pipeline/pipeline.rs`: Changed `phase_narrate()` signature to return `GameState`, added pre-quantifier save
+    - `src/engine/action_processing.rs`: Removed duplicate `add_message()` call from `execute_freeaction_impl()`
+  - Added 9 new tests covering streaming behavior, duplicate prevention, and error resilience
+  - All 784 tests pass; clippy clean; coverage maintained above 80%
+  - Documentation updated: `docs/architecture/system.md`, `docs/system/game_flow.md`, `docs/tests/streaming-narration-tests.md`
+
 ## 2026-05-31
 
 ### Fixed

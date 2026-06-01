@@ -168,8 +168,8 @@ pub fn execute_freeaction_impl(
     )?;
     assert_state_consistency(&next_state)?;
 
-    // [DOC: docs/system/triggers.md section: Mutation Order Invariant]
-    next_state.add_message(ctx.narration_text.to_string(), None, MessageType::Narration);
+    // [DOC: docs/architecture/system.md] section: Mutation Order Invariant]
+    // Narration already added in phase_narrate (pre-quantifier save for streaming)
     next_state.scene.npcs_in_area = ctx
         .quantifier_result
         .npcs

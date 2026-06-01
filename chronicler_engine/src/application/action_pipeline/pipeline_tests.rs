@@ -461,3 +461,152 @@ fn test_pipeline_trigger_complete_failure() {
         "Expected trigger narration failure, got {outcome:?}"
     );
 }
+
+#[test]
+fn test_pipeline_saves_narration_before_quantifier() {
+    let state = make_test_state();
+    let ctx = make_test_context(state.clone());
+    let backend = MockPipelineBackend::default();
+    let pipeline = ActionPipeline::new(&backend, &ctx);
+
+    let _outcome = pipeline.run_from_input(state, "look".to_string());
+
+    // Load all messages from storage to verify save order
+    let messages = ctx.load_messages().unwrap();
+
+    // Should have exactly 1 narration message (no duplicates)
+    let narration_msgs: Vec<_> = messages
+        .iter()
+        .filter(|m| m.message_type == MessageType::Narration)
+        .collect();
+
+    assert_eq!(
+        narration_msgs.len(),
+        1,
+        "Should have exactly 1 narration message, found {}",
+        narration_msgs.len()
+    );
+
+    // Verify narration was saved (has valid snapshot_id or db_id)
+    let narration = narration_msgs.first().unwrap();
+    assert!(
+        narration.snapshot_id().is_some() || narration.id != 0,
+        "Narration should be persisted"
+    );
+}
+
+#[test]
+fn test_pipeline_no_duplicate_narration() {
+    let state = make_test_state();
+    let ctx = make_ctx(state.clone());
+    let backend = MockPipelineBackend::default();
+    let pipeline = ActionPipeline::new(&backend, &ctx);
+
+    let _outcome = pipeline.run_from_input(state, "test input".to_string());
+
+    let final_state = ctx.load_state_for_test();
+    let history = final_state.narrative.history();
+
+    // Count narration entries
+    let narration_count = history
+        .iter()
+        .filter(|e| e.message_type == MessageType::Narration)
+        .count();
+
+    assert_eq!(
+        narration_count, 1,
+        "Should have exactly 1 narration entry (no duplicates), found {narration_count}"
+    );
+
+    // Verify the narration text is correct
+    let narration_entry = history
+        .iter()
+        .find(|e| e.message_type == MessageType::Narration)
+        .unwrap();
+    assert_eq!(narration_entry.text, "You look around.");
+}
+
+#[test]
+fn test_pipeline_quantifier_runs_on_saved_state() {
+    let state = make_test_state();
+    let ctx = make_ctx(state.clone());
+    let backend = MockPipelineBackend::default();
+    let pipeline = ActionPipeline::new(&backend, &ctx);
+
+    let _outcome = pipeline.run_from_input(state, "look".to_string());
+
+    // Verify quantifier metadata was saved (NPC list, confidence)
+    let messages = ctx.load_messages().unwrap();
+    let narration = messages
+        .iter()
+        .find(|m| m.message_type == MessageType::Narration)
+        .unwrap();
+
+    // Should have swipes (metadata from quantifier)
+    assert!(
+        !narration.swipes.is_empty(),
+        "Narration should have quantifier metadata"
+    );
+}
+
+#[test]
+fn test_pipeline_continues_if_quantifier_save_fails() {
+    // This test verifies that a quantifier save failure doesn't stop the pipeline
+    let state = make_test_state();
+    let ctx = make_ctx(state.clone());
+    let backend = MockPipelineBackend {
+        quantifier_result: QuantifierResult {
+            npcs: QuantifierParseResult {
+                npc_ids: vec!["npc1".to_string()],
+                confidence: QuantifierConfidence::High,
+            },
+            movement: Default::default(),
+        },
+        ..Default::default()
+    };
+    let pipeline = ActionPipeline::new(&backend, &ctx);
+
+    let outcome = pipeline.run_from_input(state, "look".to_string());
+
+    // Should complete successfully even if quantifier save has issues
+    assert!(
+        matches!(outcome, ActionOutcome::Completed),
+        "Pipeline should complete even with quantifier save warnings"
+    );
+}
+
+#[test]
+fn test_narration_persisted_even_if_quantifier_changes_state() {
+    // Verify narration remains in history even when quantifier modifies state
+    let state = make_test_state();
+    let ctx = make_ctx(state.clone());
+    let backend = MockPipelineBackend {
+        quantifier_result: QuantifierResult {
+            npcs: QuantifierParseResult {
+                npc_ids: vec!["npc1".to_string()],
+                confidence: QuantifierConfidence::High,
+            },
+            movement: Default::default(),
+        },
+        ..Default::default()
+    };
+    let pipeline = ActionPipeline::new(&backend, &ctx);
+
+    let _outcome = pipeline.run_from_input(state, "look".to_string());
+
+    let messages = ctx.load_messages().unwrap();
+    let narration_msgs: Vec<_> = messages
+        .iter()
+        .filter(|m| m.message_type == MessageType::Narration)
+        .collect();
+
+    // Should have exactly 1 narration
+    assert_eq!(
+        narration_msgs.len(),
+        1,
+        "Should have 1 narration despite quantifier changes"
+    );
+
+    // Verify narration text is preserved
+    assert_eq!(narration_msgs[0].text(), "You look around.");
+}

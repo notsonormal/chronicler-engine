@@ -35,7 +35,13 @@ fn make_quantifier_result_with_movement(destination: &str) -> QuantifierResult {
 
 #[test]
 fn test_execute_freeaction_impl_no_movement() {
-    let state = TestGameState::with_npc_raw("room1", TestNpc::named("carla", "Carla"));
+    let mut state = TestGameState::with_npc_raw("room1", TestNpc::named("carla", "Carla"));
+    // Narration already added by phase_narrate (pre-quantifier save)
+    state.add_message(
+        "You examine the room.".to_string(),
+        None,
+        MessageType::Narration,
+    );
 
     let result = execute_freeaction_impl(
         &state,
@@ -51,7 +57,7 @@ fn test_execute_freeaction_impl_no_movement() {
         result.err()
     );
     let next_state = result.unwrap().next_state;
-    // Narration should be logged
+    // Narration should already exist (not duplicated)
     assert_eq!(next_state.narrative.history().len(), 1);
     assert_eq!(
         next_state.narrative.history()[0].message_type,
@@ -271,7 +277,13 @@ fn test_trigger_split_architecture_produces_event_header() {
         crate::model::trigger::ComparisonOperator::Eq,
         0,
     );
-    let state = TestGameState::with_npc_raw("test_room", npc);
+    let mut state = TestGameState::with_npc_raw("test_room", npc);
+    // Narration already added by phase_narrate (pre-quantifier save)
+    state.add_message(
+        "You enter the room.".to_string(),
+        None,
+        MessageType::Narration,
+    );
 
     let turn_result = execute_freeaction_impl(
         &state,
