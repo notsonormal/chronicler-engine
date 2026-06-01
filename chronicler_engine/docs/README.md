@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-06-01 21:22 UTC*
+*Index last generated: 2026-06-01 22:55 UTC*
 
 ### Root files
 
@@ -37,6 +37,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [ADR-021: State Patch Reducer for Post-Generation Agent Composition](./adr/adr-021-state-patch-reducer.md)
 - [ADR-022: PromptAssembler Trait Decoupling](./adr/adr-022-prompt-assembler.md)
 - [ADR-023: Immediate Message Persistence](./adr/adr-023-immediate-message-persistence.md)
+- [ADR 0010: Migrate Game Data to SQLite with Seed Pattern](./adr/adr-024-game-data-migration-to-sqlite.md)
 
 ### `docs/architecture/`
 
@@ -62,11 +63,13 @@ This folder contains all documentation for the Chronicler Engine project.
 - [LLM Infrastructure Improvements](./plans/llm-infrastructure-improvements.md)
 - [Spec: Agent-Ready Pipeline Restructure for Chronicler Engine](./plans/multi-agent-architecture-overarching-spec.md)
 - [Plan: Observability & Automated Forensics](./plans/observability-and-forensics-plan.md)
+- [Plan: Phase 3 - Switch Runtime World Loading from Files to Database](./plans/phase3-switch-world-loading-to-db.md)
 - [AI Steering & Guided Generation](./plans/steering-and-guided-generation.md)
 - [Plan: Trigger Identity: Index → UUID](./plans/trigger-identity-uuid-plan.md)
 
 ### `docs/plans/archived/`
 
+- [Plan: Migrate Game Data to Database with Seed Pattern](./plans/archived/db-game-data-migration.md)
 - [Plan: Fix Generation Phase Stuck on "Generating narration..." During Post-Generation](./plans/archived/fix-generation-phase-status-2026-06-01.md)
 - [Refactor handle_movement: Split Mixed Responsibilities](./plans/archived/handle-movement-refactor-2026-05-31.md)
 - [Plan: Observability & Automated Forensics](./plans/archived/observability-and-forensics-plan-2026-05-31.md)

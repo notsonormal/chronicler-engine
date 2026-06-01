@@ -2,6 +2,29 @@
 
 ## 2026-06-01
 
+### Added
+
+- **Game data migration to SQLite (Phases 1, 2, 4)**
+  - Added Migration v10 with 5 new tables: `worlds`, `maps`, `personas`, `characters`, `settings`
+  - Implemented CRUD backend modules for all entity types in `src/storage/backend/`
+  - Seed pattern: JSON files → DB at startup (idempotent, skip if exists)
+  - Settings persistence: `AppSettings::save()` and `load_settings()` now use DB
+  - All UI handlers persist settings changes automatically
+  - Phase 3 (runtime world loading from DB) deferred until UI CRUD implementation
+  - Modified files:
+    - `src/storage/db.rs` — Migration v10 schema
+    - `src/storage/models/` — New DB row structs (world, persona, character, settings)
+    - `src/storage/backend/` — New modules: worlds.rs, personas.rs, characters.rs, settings.rs
+    - `src/storage/backend/core.rs` — New InMemoryData fields and Operation variants
+    - `src/bootstrap/run.rs` — Seed logic in `ensure_defaults()`
+    - `src/settings.rs` — DB-backed settings with `init_settings_db()` initialization
+  - Documentation updates:
+    - `docs/architecture/system.md` — Storage tier expanded with seed pattern
+    - `docs/reference/data_schemas.md` — Full database schema documented
+    - `docs/adr/adr-024-game-data-migration-to-sqlite.md` — Architecture decision record
+  - Tests: 4 deprecated (file-based), 874 passing (DB-backed storage verified)
+  - Plan archived: `docs/plans/archived/db-game-data-migration.md`
+
 ### Fixed
 
 - **Generation phase now transitions to Quantifying during post-generation**

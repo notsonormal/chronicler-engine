@@ -1,10 +1,14 @@
+pub mod characters;
 pub mod core;
 pub mod games;
 pub mod llm_messages;
 pub mod messages;
+pub mod personas;
 pub mod presets;
+pub mod settings;
 pub mod snapshots;
 pub mod swipes;
+pub mod worlds;
 
 #[cfg(test)]
 mod core_tests;

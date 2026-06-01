@@ -1,7 +1,158 @@
 # Specification: Engine Data Schemas
 
 ## Objective
-Define the JSON data schemas used by the Chronicler Engine for characters, rooms, triggers, world definitions, and game state snapshots.
+Define the JSON data schemas used by the Chronicler Engine for characters, rooms, triggers, world definitions, and game state snapshots. Also documents the SQLite database schema for persistence.
+
+## Storage Architecture
+
+### JSON Seed Files
+Game data is loaded from JSON seed files at startup and persisted to SQLite. After seeding, the database is the **sole source of truth** at runtime.
+- `data/worlds/<key>/world.json` — World definitions
+- `data/worlds/<key>/map.json` — Map definitions (co-located with world.json)
+- `data/worlds/<key>/player.json` — Player persona
+- `data/worlds/<key>/characters/*.json` — NPC definitions
+- `data/personas/*.json` — Global personas
+- `data/settings.json` — Application settings
+- `data/prompt_presets/{system,quantifier}/*.json` — Prompt presets
+
+### SQLite Database Schema (Migration v10)
+
+#### Core Tables
+
+**`games`**
+- `id INTEGER PRIMARY KEY AUTOINCREMENT`
+- `world_name TEXT NOT NULL DEFAULT 'default'`
+- `name TEXT NOT NULL DEFAULT 'Unnamed'`
+- `created_at TEXT NOT NULL`
+- `updated_at TEXT NOT NULL`
+
+**`game_state_snapshots`**
+- `id INTEGER PRIMARY KEY AUTOINCREMENT`
+- `game_id INTEGER NOT NULL DEFAULT 1 REFERENCES games(id) ON DELETE CASCADE`
+- `movement TEXT NOT NULL` (JSON)
+- `narrative TEXT NOT NULL` (JSON)
+- `scene TEXT NOT NULL` (JSON)
+- `npc_encounter_log TEXT NOT NULL` (JSON)
+- `created_at TEXT NOT NULL`
+- Index: `idx_snapshots_game_latest (game_id, created_at DESC)`
+
+**`messages`**
+- `id INTEGER PRIMARY KEY AUTOINCREMENT`
+- `game_id INTEGER NOT NULL DEFAULT 1 REFERENCES games(id) ON DELETE CASCADE`
+- `sender TEXT`
+- `message_type TEXT NOT NULL`
+- `timestamp TEXT NOT NULL`
+- `active_swipe_index INTEGER NOT NULL DEFAULT 0`
+- `is_deleted INTEGER NOT NULL DEFAULT 0`
+- Index: `idx_messages_game_id (game_id, id)`
+
+**`message_swipes`**
+- `id INTEGER PRIMARY KEY AUTOINCREMENT`
+- `message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE`
+- `swipe_index INTEGER NOT NULL`
+- `text TEXT NOT NULL`
+- `snapshot_id INTEGER`
+- `location_header TEXT`
+- `event_header TEXT`
+- Unique: `(message_id, swipe_index)`
+
+**`llm_messages`**
+- `id INTEGER PRIMARY KEY AUTOINCREMENT`
+- `agent_name TEXT NOT NULL`
+- `backend_name TEXT NOT NULL`
+- `model_name TEXT NOT NULL`
+- `system_prompt TEXT NOT NULL`
+- `user_prompt TEXT NOT NULL`
+- `raw_request_json TEXT NOT NULL`
+- `raw_response_json TEXT NOT NULL`
+- `parsed_response TEXT NOT NULL`
+- `error_message TEXT`
+- `created_at TEXT NOT NULL`
+- Index: `idx_llm_messages_created_at (created_at DESC)`
+
+**`prompt_presets`**
+- `id TEXT PRIMARY KEY`
+- `name TEXT NOT NULL`
+- `preset_type TEXT NOT NULL`
+- `role TEXT`
+- `instructions TEXT`
+- `writing_style TEXT`
+- `output_format TEXT`
+- `is_default INTEGER NOT NULL DEFAULT 0`
+- `created_at TEXT NOT NULL`
+- `updated_at TEXT NOT NULL`
+- Index: `idx_prompt_presets_type (preset_type)`
+
+#### Game Data Tables (Migration v10)
+
+**`worlds`**
+- `id INTEGER PRIMARY KEY AUTOINCREMENT`
+- `key TEXT NOT NULL UNIQUE` — Original string identifier (e.g., `redmist_estate`)
+- `name TEXT NOT NULL`
+- `description TEXT NOT NULL DEFAULT ''`
+- `global_rules TEXT NOT NULL DEFAULT '[]'` — JSON: `Vec<String>`
+- `starting_room_id TEXT NOT NULL DEFAULT 'start'`
+- `scenarios TEXT NOT NULL DEFAULT '[]'` — JSON: `Vec<StartingScenario>`
+- `default_scenario_id TEXT`
+- `default_room_image TEXT`
+- `created_at TEXT NOT NULL`
+- `updated_at TEXT NOT NULL`
+
+**`maps`**
+- `id INTEGER PRIMARY KEY AUTOINCREMENT`
+- `world_id INTEGER NOT NULL REFERENCES worlds(id) ON DELETE CASCADE`
+- `map_data TEXT NOT NULL` — JSON: full `MapDef` (overworld, regions, rooms)
+- `created_at TEXT NOT NULL`
+- `updated_at TEXT NOT NULL`
+- Index: `idx_maps_world (world_id)`
+
+**`personas`**
+- `id INTEGER PRIMARY KEY AUTOINCREMENT`
+- `key TEXT NOT NULL UNIQUE` — Filename stem (e.g., `julian`)
+- `name TEXT NOT NULL`
+- `description TEXT NOT NULL DEFAULT ''`
+- `personality TEXT NOT NULL DEFAULT ''`
+- `scenario TEXT NOT NULL DEFAULT ''`
+- `example_dialogue TEXT NOT NULL DEFAULT ''`
+- `summary TEXT`
+- `profile_image TEXT`
+- `headshot_image TEXT`
+- `inventory TEXT NOT NULL DEFAULT '[]'` — JSON: `Vec<String>`
+- `created_at TEXT NOT NULL`
+- `updated_at TEXT NOT NULL`
+
+**`characters`**
+- `id INTEGER PRIMARY KEY AUTOINCREMENT`
+- `key TEXT NOT NULL` — From `NpcCard.id` (e.g., `elena_voss`)
+- `world_id INTEGER NOT NULL REFERENCES worlds(id) ON DELETE CASCADE`
+- `name TEXT NOT NULL`
+- `description TEXT NOT NULL DEFAULT ''`
+- `personality TEXT NOT NULL DEFAULT ''`
+- `scenario TEXT NOT NULL DEFAULT ''`
+- `example_dialogue TEXT NOT NULL DEFAULT ''`
+- `summary TEXT`
+- `profile_image TEXT`
+- `headshot_image TEXT`
+- `inventory TEXT NOT NULL DEFAULT '[]'` — JSON: `Vec<String>`
+- `triggers TEXT NOT NULL DEFAULT '[]'` — JSON: `Vec<Trigger>`
+- `relationships TEXT NOT NULL DEFAULT '[]'` — JSON: `Vec<Relationship>`
+- `created_at TEXT NOT NULL`
+- `updated_at TEXT NOT NULL`
+- Unique: `(key, world_id)`
+- Index: `idx_characters_world (world_id)`
+
+**`settings`**
+- `id INTEGER PRIMARY KEY CHECK (id = 1)` — Singleton row
+- `connections TEXT NOT NULL DEFAULT '[]'` — JSON: `Vec<Connection>`
+- `narration_connection_id TEXT NOT NULL DEFAULT 'openrouter-gpt-4o-mini'`
+- `quantifier_connection_id TEXT NOT NULL DEFAULT 'openrouter-gpt-4o-mini'`
+- `response_length TEXT NOT NULL DEFAULT ''`
+- `text_check TEXT NOT NULL DEFAULT '{}'` — JSON: `TextCheckSettings`
+- `agents TEXT NOT NULL DEFAULT '[]'` — JSON: `Vec<AgentConfig>`
+- `active_system_prompt_preset_id TEXT NOT NULL DEFAULT 'system_default'`
+- `active_quantifier_prompt_preset_id TEXT NOT NULL DEFAULT 'quantifier_default'`
+- `created_at TEXT NOT NULL`
+- `updated_at TEXT NOT NULL`
 
 ## Data Normalization Rules
 Character JSON files contained in `data/characters/` should be scrubbed using regular expressions or textual parsing to locate:

@@ -149,8 +149,105 @@ fn run_migrations(conn: &Connection) -> Result<(), crate::error::EngineError> {
         })?;
     }
 
-    // Template for future migrations:
-    // if version < 10 { ...; conn.pragma_update(None, "user_version", 10)?; }
+    if version < 10 {
+        let exec = |sql: &str| {
+            conn.execute(sql, [])
+                .map_err(|e| crate::error::EngineError::Config(format!("Migration failed: {e}")))
+        };
+
+        // Worlds table (merged WorldManifest + WorldCard)
+        exec(
+            "CREATE TABLE IF NOT EXISTS worlds (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                key TEXT NOT NULL UNIQUE,      -- original string ID (e.g. 'redmist_estate')
+                name TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                global_rules TEXT NOT NULL DEFAULT '[]',  -- JSON: Vec<String>
+                starting_room_id TEXT NOT NULL DEFAULT 'start',
+                scenarios TEXT NOT NULL DEFAULT '[]',     -- JSON: Vec<StartingScenario>
+                default_scenario_id TEXT,
+                default_room_image TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )",
+        )?;
+
+        // Maps table (1:1 with worlds, full MapDef as JSON blob)
+        exec(
+            "CREATE TABLE IF NOT EXISTS maps (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                world_id INTEGER NOT NULL REFERENCES worlds(id) ON DELETE CASCADE,
+                map_data TEXT NOT NULL,         -- JSON: full serialized MapDef
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )",
+        )?;
+        exec("CREATE INDEX IF NOT EXISTS idx_maps_world ON maps(world_id)")?;
+
+        // Personas table (PlayerCard)
+        exec(
+            "CREATE TABLE IF NOT EXISTS personas (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                key TEXT NOT NULL UNIQUE,      -- filename stem (e.g. 'julian')
+                name TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                personality TEXT NOT NULL DEFAULT '',
+                scenario TEXT NOT NULL DEFAULT '',
+                example_dialogue TEXT NOT NULL DEFAULT '',
+                summary TEXT,
+                profile_image TEXT,
+                headshot_image TEXT,
+                inventory TEXT NOT NULL DEFAULT '[]',  -- JSON: Vec<String>
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )",
+        )?;
+
+        // Characters table (NpcCard)
+        exec(
+            "CREATE TABLE IF NOT EXISTS characters (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                key TEXT NOT NULL,             -- from NpcCard.id (e.g. 'elena_voss')
+                world_id INTEGER NOT NULL REFERENCES worlds(id) ON DELETE CASCADE,
+                name TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                personality TEXT NOT NULL DEFAULT '',
+                scenario TEXT NOT NULL DEFAULT '',
+                example_dialogue TEXT NOT NULL DEFAULT '',
+                summary TEXT,
+                profile_image TEXT,
+                headshot_image TEXT,
+                inventory TEXT NOT NULL DEFAULT '[]',     -- JSON: Vec<String>
+                triggers TEXT NOT NULL DEFAULT '[]',      -- JSON: Vec<Trigger>
+                relationships TEXT NOT NULL DEFAULT '[]', -- JSON: Vec<Relationship>
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(key, world_id)
+            )",
+        )?;
+        exec("CREATE INDEX IF NOT EXISTS idx_characters_world ON characters(world_id)")?;
+
+        // Settings table (singleton row)
+        exec(
+            "CREATE TABLE IF NOT EXISTS settings (
+                id INTEGER PRIMARY KEY CHECK (id = 1),  -- singleton row
+                connections TEXT NOT NULL DEFAULT '[]',  -- JSON: Vec<Connection>
+                narration_connection_id TEXT NOT NULL DEFAULT 'openrouter-gpt-4o-mini',
+                quantifier_connection_id TEXT NOT NULL DEFAULT 'openrouter-gpt-4o-mini',
+                response_length TEXT NOT NULL DEFAULT '',
+                text_check TEXT NOT NULL DEFAULT '{}',    -- JSON: TextCheckSettings
+                agents TEXT NOT NULL DEFAULT '[]',        -- JSON: Vec<AgentConfig>
+                active_system_prompt_preset_id TEXT NOT NULL DEFAULT 'system_default',
+                active_quantifier_prompt_preset_id TEXT NOT NULL DEFAULT 'quantifier_default',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )",
+        )?;
+
+        conn.pragma_update(None, "user_version", 10).map_err(|e| {
+            crate::error::EngineError::Config(format!("Failed to set user_version: {e}"))
+        })?;
+    }
 
     Ok(())
 }

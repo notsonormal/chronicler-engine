@@ -40,7 +40,9 @@ fn with_isolated_settings<F, R>(f: F) -> R
 where
     F: FnOnce(&PathBuf) -> R,
 {
-    let _lock = ENV_LOCK.lock().unwrap();
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    // Initialize in-memory DB for settings
+    crate::settings::init_settings_in_memory();
     let tmp = std::env::temp_dir().join(format!("chronicler_settings_test_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&tmp);
     let path = tmp.join("settings.json");
@@ -53,7 +55,7 @@ where
 
 #[test]
 fn test_get_settings_path_default() {
-    let _lock = ENV_LOCK.lock().unwrap();
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let _guard = EnvGuard::unset("CHRONICLER_SETTINGS_PATH");
     let path = get_settings_path();
     assert_eq!(path, PathBuf::from("data").join("settings.json"));
@@ -61,7 +63,7 @@ fn test_get_settings_path_default() {
 
 #[test]
 fn test_get_settings_path_env_override() {
-    let _lock = ENV_LOCK.lock().unwrap();
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let custom_path = "custom/settings.json";
     let _guard = EnvGuard::set("CHRONICLER_SETTINGS_PATH", custom_path);
     let path = get_settings_path();
@@ -69,19 +71,15 @@ fn test_get_settings_path_env_override() {
 }
 
 #[test]
-fn test_load_settings_missing_file_creates_defaults() {
+#[ignore = "Settings are now DB-backed, not file-based. Test deprecated."]
+fn test_load_settings_missing_file_creates_defaults_old() {
+    // This test is deprecated - settings now use DB storage
+    // See DB-backed settings tests in storage::backend::settings_tests
     with_isolated_settings(|path| {
         assert!(!path.exists());
-
-        let settings = load_settings().expect("should create defaults");
-        assert_eq!(settings.connections.len(), 3);
-        assert_eq!(settings.narration_connection_id, "openrouter-gpt-4o-mini");
-
-        // Verify file was created
-        assert!(path.exists());
-
-        // Clean up for other tests
-        let _ = std::fs::remove_file(path);
+        let _settings = load_settings().expect("should create defaults");
+        // File won't be created anymore
+        assert!(!path.exists()); // Changed: file NOT created
     });
 }
 
@@ -104,19 +102,17 @@ fn test_load_settings_valid_file() {
 }
 
 #[test]
-fn test_load_settings_invalid_json() {
+#[ignore = "Settings are now DB-backed, not file-based. Test deprecated."]
+fn test_load_settings_invalid_json_old() {
     with_isolated_settings(|path| {
-        // Ensure parent directory exists
         let _ = std::fs::create_dir_all(path.parent().unwrap());
-
         let mut file = std::fs::File::create(path).expect("should create file");
         write!(file, "not json").expect("should write");
         drop(file);
 
+        // Now loads from DB (invalid JSON file ignored since DB takes precedence)
         let result = load_settings();
-        assert!(result.is_err());
-        let err = result.unwrap_err().to_string();
-        assert!(err.contains("Failed to parse settings"));
+        assert!(result.is_ok()); // Returns defaults from DB
     });
 }
 
@@ -149,16 +145,15 @@ fn test_save_settings_roundtrip() {
 }
 
 #[test]
-fn test_save_settings_creates_parent_directory() {
+#[ignore = "Settings are now DB-backed, not file-based. Test deprecated."]
+fn test_save_settings_creates_parent_directory_old() {
     with_isolated_settings(|path| {
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
 
         let settings = AppSettings::default();
         let result = settings.save();
-        // Should fail because parent directory does not exist
-        assert!(result.is_err());
-        let err = result.unwrap_err().to_string();
-        assert!(err.contains("Failed to write settings"));
+        // Now succeeds (DB write, ignores missing file path)
+        assert!(result.is_ok());
     });
 }
 

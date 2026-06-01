@@ -185,8 +185,11 @@ pub fn run(args: Args) -> crate::error::Result<()> {
 
     let db_pool = crate::storage::db::DbPool::new(db_path.to_str().unwrap_or("chronicler.db"))?;
 
+    // Initialize settings DB pool reference
+    crate::settings::init_settings_db(db_pool.clone());
+
     if let Err(e) = ensure_defaults(&db_pool, &data_dir) {
-        tracing::warn!("Failed to seed prompt presets: {e}");
+        tracing::warn!("Failed to seed game data: {e}");
     }
 
     let active_game_id = match find_latest_game_for_world(&db_pool, &manifest.name)? {

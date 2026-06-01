@@ -172,15 +172,51 @@ Unified error type shared across all tiers.
 - **`InternalError`**: Invariant violations
 
 ### 7. The Storage Tier (`crate::storage`)
-SQLite-based persistence for game state and LLM call forensics.
-- **`db`**: Database connection and schema management. Schema includes:
-  - `games` — top-level game session record (`id`, `name`, `world_name`, `created_at`, `updated_at`)
-  - `game_state_snapshots` — serialized game state metadata, scoped to `game_id`
-  - `messages` — narrative history, scoped to `game_id` (`id`, `game_id`, `sender`, `log_type`, `timestamp`, `active_swipe_index`, `is_deleted`)
-  - `message_swipes` — per-message swipe versions (`id`, `message_id`, `swipe_index`, `text`, `snapshot_id`, `location_header`, `event_header`), cascades on message delete
-  - `llm_messages` — LLM API call logging (not game-scoped)
-- **Storage structure**: Unified `Storage` struct with `Backend` enum (`Sqlite`, `InMemory`, `Test`). All table operations are methods on `Storage` — no repository structs, no separate `models` or `mappers` submodules. Database row structs defined inline in module files. Module contains: `mod.rs`, `db.rs` (schema + operations), plus test files.
-- **`GameStateSnapshot`**: Serializable subset of `GameState` for persistence (messages excluded; hydrated separately). Lives in `crate::model::state_snapshot`.
+SQLite-based persistence for game state, LLM call forensics, and game data (worlds, maps, characters, personas, settings).
+
+#### Database Schema
+
+**Core Tables** (game sessions and narrative):
+- `games` — top-level game session record (`id`, `name`, `world_name`, `created_at`, `updated_at`)
+- `game_state_snapshots` — serialized game state metadata, scoped to `game_id`
+- `messages` — narrative history, scoped to `game_id` (`id`, `game_id`, `sender`, `log_type`, `timestamp`, `active_swipe_index`, `is_deleted`)
+- `message_swipes` — per-message swipe versions (`id`, `message_id`, `swipe_index`, `text`, `snapshot_id`, `location_header`, `event_header`), cascades on message delete
+- `llm_messages` — LLM API call logging (not game-scoped)
+- `prompt_presets` — system and quantifier prompt presets
+
+**Game Data Tables** (Migration v10, seeded from JSON at startup):
+- `worlds` — world definitions (`id`, `key`, `name`, `description`, `global_rules[]`, `starting_room_id`, `scenarios[]`, `default_scenario_id`, `default_room_image`, timestamps). `key` is the original string identifier (e.g., `redmist_estate`) for lookups.
+- `maps` — world maps (`id`, `world_id` FK, `map_data` JSON blob containing full `MapDef` with overworld/regions/rooms, timestamps). 1:1 with `worlds`.
+- `personas` — player characters (`id`, `key`, `name`, `description`, `personality`, `scenario`, `example_dialogue`, `summary`, `profile_image`, `headshot_image`, `inventory[]`, timestamps). `key` is filename stem.
+- `characters` — NPCs (`id`, `key`, `world_id` FK, `name`, `description`, `personality`, `scenario`, `example_dialogue`, `summary`, images, `inventory[]`, `triggers[]`, `relationships[]`, timestamps). `UNIQUE(key, world_id)`.
+- `settings` — singleton row (`id=1`, `connections[]`, `narration_connection_id`, `quantifier_connection_id`, `response_length`, `text_check`, `agents[]`, prompt preset IDs, timestamps).
+
+#### Storage Structure
+
+Unified `Storage` struct with `Backend` enum (`Sqlite`, `InMemory`, `Test`). All table operations are methods on `Storage` — no repository structs, no separate `models` or `mappers` submodules. Database row structs defined in `src/storage/models/`. Module contains: `mod.rs`, `db.rs` (schema + migrations), `backend/` (CRUD implementations), plus test files.
+
+#### Seeding Pattern
+
+Game data is seeded from JSON files at application startup via `bootstrap::ensure_defaults()`:
+- **Idempotent**: Skips seeding if key already exists with content
+- **Worlds**: Reads `data/worlds/<key>/world.json` + `map.json` + `player.json` + `characters/*.json`
+- **Settings**: Reads `data/settings.json`
+- **Prompt presets**: Reads `data/prompt_presets/{system,quantifier}/*.json`
+
+After seeding, the database is the **sole source of truth** at runtime. JSON files act as seed templates only.
+
+#### Settings Persistence
+
+Settings use a DB-backed singleton pattern:
+- `AppSettings::save()` writes to the `settings` table (not file I/O)
+- `load_settings()` reads from DB (initialized during bootstrap)
+- All UI handlers automatically persist changes via DB write-through
+- See `src/settings.rs` for the `init_settings_db()` initialization pattern
+- See ADR-024 for the migration decision and seed pattern rationale
+
+#### GameStateSnapshot
+
+Serializable subset of `GameState` for persistence (messages excluded; hydrated separately). Lives in `crate::model::state_snapshot`.
 
 ### 8. The Bootstrap Tier (`crate::bootstrap`)
 World loading, validation, and server initialization.

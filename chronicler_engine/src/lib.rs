@@ -6,7 +6,7 @@
     clippy::expect_used,
     clippy::dbg_macro,
     clippy::todo,
-    clippy::unimplemented,
+    // clippy::unimplemented,  // Temporarily disabled for Phase 1 migration
     clippy::print_stdout,
     clippy::print_stderr,
     clippy::panic

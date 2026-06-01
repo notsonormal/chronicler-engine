@@ -3,11 +3,15 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use crate::error::{EngineError, internal_error};
+use crate::model::character::{NpcCard, PlayerCard};
 use crate::model::game::Game;
 use crate::model::llm_message::LlmMessage;
+use crate::model::map::MapDef;
 use crate::model::message::{Message, Swipe};
 use crate::model::prompt_preset::PromptPreset;
+use crate::model::settings::AppSettings;
 use crate::model::state_snapshot::GameStateSnapshot;
+use crate::model::world::{WorldCard, WorldManifest};
 use crate::storage::db::DbPool;
 
 pub struct Storage {
@@ -25,6 +29,26 @@ pub struct InMemoryData {
     pub swipes: HashMap<u64, Vec<Swipe>>,
     pub presets: Vec<PromptPreset>,
     pub llm_messages: Vec<LlmMessage>,
+    pub worlds: Vec<WorldSeed>,
+    pub personas: Vec<PlayerCardWithKey>,
+    pub characters: Vec<CharacterSeed>,
+    pub settings: AppSettings,
+}
+
+pub struct WorldSeed {
+    pub manifest: WorldManifest,
+    pub world_card: WorldCard,
+    pub map: MapDef,
+}
+
+pub struct PlayerCardWithKey {
+    pub key: String,
+    pub card: PlayerCard,
+}
+
+pub struct CharacterSeed {
+    pub world_id: i64,
+    pub card: NpcCard,
 }
 
 pub enum Backend {
@@ -65,6 +89,19 @@ pub enum Operation {
     DeletePreset,
     SaveLlmMessage,
     ListLatestLlmMessages,
+    ListWorlds,
+    GetWorld,
+    SeedWorld,
+    ListPersonas,
+    GetPersona,
+    SeedPersona,
+    ListCharacters,
+    ListAllCharacters,
+    GetCharacter,
+    SeedCharacter,
+    GetSettings,
+    SaveSettings,
+    SeedSettings,
 }
 
 pub struct TestOverride {
@@ -156,6 +193,10 @@ impl Storage {
                 swipes: HashMap::new(),
                 presets: Vec::new(),
                 llm_messages: Vec::new(),
+                worlds: vec![],
+                personas: vec![],
+                characters: vec![],
+                settings: AppSettings::default(),
             }))),
         }
     }
@@ -197,6 +238,10 @@ impl Storage {
                 swipes: HashMap::new(),
                 presets: vec![],
                 llm_messages: vec![],
+                worlds: vec![],
+                personas: vec![],
+                characters: vec![],
+                settings: AppSettings::default(),
             })),
         );
         let new_backend = match current {
