@@ -98,7 +98,7 @@ fn test_pipeline_runs_to_completion() {
 
     let outcome = pipeline.run_from_input(state, "look".to_string());
 
-    assert!(matches!(outcome, ActionOutcome::Completed));
+    assert!(matches!(outcome, Ok(())));
     let final_state = ctx.load_state_for_test();
     assert_eq!(
         final_state.narrative.input_buffer.status,
@@ -141,7 +141,7 @@ fn test_pipeline_returns_error_on_narration_failure() {
     let outcome = pipeline.run_from_input(state, "look".to_string());
 
     assert!(
-        matches!(outcome, ActionOutcome::Error { ref message } if message.contains("empty response")),
+        matches!(outcome, Err(ActionOutcome::Error { ref message }) if message.contains("empty response")),
         "Expected error for empty narration response, got {outcome:?}"
     );
     let final_state = ctx.load_state_for_test();
@@ -167,7 +167,7 @@ fn test_pipeline_returns_error_on_empty_narration_text() {
     let outcome = pipeline.run_from_input(state, "look".to_string());
 
     assert!(
-        matches!(outcome, ActionOutcome::Error { ref message } if message.contains("empty response")),
+        matches!(outcome, Err(ActionOutcome::Error { ref message }) if message.contains("empty response")),
         "Expected error for empty narration text, got {outcome:?}"
     );
 }
@@ -183,7 +183,7 @@ fn test_pipeline_cancels_mid_run() {
     let outcome = pipeline.run_from_input(state, "look".to_string());
 
     assert!(
-        matches!(outcome, ActionOutcome::Cancelled),
+        matches!(outcome, Err(ActionOutcome::Cancelled)),
         "Expected cancellation when token is cancelled, got {outcome:?}"
     );
     let final_state = ctx.load_state_for_test();
@@ -232,7 +232,7 @@ fn test_pipeline_with_custom_quantifier_result() {
 
     let outcome = pipeline.run_from_input(state, "look".to_string());
 
-    assert!(matches!(outcome, ActionOutcome::Completed));
+    assert!(matches!(outcome, Ok(())));
     let final_state = ctx.load_state_for_test();
     assert_eq!(
         final_state.scene.npcs_in_area.len(),
@@ -340,7 +340,7 @@ fn test_pipeline_trigger_happy_path() {
     let outcome = pipeline.run_from_input(state, "look".to_string());
 
     assert!(
-        matches!(outcome, ActionOutcome::Completed),
+        matches!(outcome, Ok(())),
         "Expected Completed, got {outcome:?}"
     );
     let final_state = ctx.load_state_for_test();
@@ -405,7 +405,7 @@ fn test_pipeline_trigger_empty_continuation() {
     let outcome = pipeline.run_from_input(state, "look".to_string());
 
     assert!(
-        matches!(outcome, ActionOutcome::Error { ref message } if message.contains("empty response")),
+        matches!(outcome, Err(ActionOutcome::Error { ref message }) if message.contains("empty response")),
         "Expected empty response error for trigger, got {outcome:?}"
     );
 }
@@ -457,7 +457,7 @@ fn test_pipeline_trigger_complete_failure() {
     let outcome = pipeline.run_from_input(state, "look".to_string());
 
     assert!(
-        matches!(outcome, ActionOutcome::Error { ref message } if message.contains("Trigger narration failed")),
+        matches!(outcome, Err(ActionOutcome::Error { ref message }) if message.contains("Trigger narration failed")),
         "Expected trigger narration failure, got {outcome:?}"
     );
 }
@@ -570,7 +570,7 @@ fn test_pipeline_continues_if_quantifier_save_fails() {
 
     // Should complete successfully even if quantifier save has issues
     assert!(
-        matches!(outcome, ActionOutcome::Completed),
+        matches!(outcome, Ok(())),
         "Pipeline should complete even with quantifier save warnings"
     );
 }

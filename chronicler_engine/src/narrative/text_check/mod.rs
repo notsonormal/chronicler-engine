@@ -4,6 +4,7 @@ pub mod types;
 
 pub use self::check::check_player_input;
 #[cfg(test)]
+mod check_tests;
 mod harper_backend_tests;
 mod types_tests;
 

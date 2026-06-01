@@ -1,4 +1,6 @@
+#[cfg(test)]
 use crate::model::settings::TextCheckMode;
+#[cfg(test)]
 use crate::narrative::text_check::harper_backend::HarperBackend;
 
 #[test]

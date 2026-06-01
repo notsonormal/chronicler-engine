@@ -65,21 +65,18 @@ fn test_inv002_state_mutation_order() {
     let mut state = create_test_state_with_trigger_npc();
     let npc_id = "shopkeeper";
 
-    // Narration already added by phase_narrate (pre-quantifier save)
     state.add_message(
         "You look around the shop.".to_string(),
         None,
         MessageType::Narration,
     );
 
-    // Verify pre-condition: NPC has not been met yet.
     assert_eq!(
         get_times_met(&state.npc_encounter_log, npc_id),
         0,
         "pre-condition: times_met should be 0"
     );
 
-    // Quantifier result includes the shopkeeper NPC (simulating them entering the room).
     let quantifier = QuantifierResult {
         npcs: QuantifierParseResult {
             npc_ids: vec![npc_id.to_string()],
@@ -96,21 +93,15 @@ fn test_inv002_state_mutation_order() {
         },
     )
     .expect("execute_freeaction_impl should succeed");
-
-    // Trigger fired because evaluation happened BEFORE times_met was incremented.
     assert!(
         result.trigger_match.is_some(),
         "INV-002: trigger should have fired (evaluated before times_met increment)"
     );
-
-    // NPC events were applied AFTER trigger evaluation.
     assert_eq!(
         get_times_met(&result.next_state.npc_encounter_log, npc_id),
         1,
         "INV-002: times_met should be 1 after NPC events are applied"
     );
-
-    // Narration was logged BEFORE trigger evaluation.
     let history = &result.next_state.narrative.history;
     let narration_idx = history
         .iter()
@@ -125,7 +116,6 @@ fn test_inv002_state_mutation_order() {
 fn test_inv002_violation_demo() {
     let state = create_test_state_with_trigger_npc();
     let npc_id = "shopkeeper";
-    // Pre-condition: times_met == 0
     assert_eq!(
         get_times_met(&state.npc_encounter_log, npc_id),
         0,
@@ -137,17 +127,13 @@ fn test_inv002_violation_demo() {
     }];
     let state_after_events =
         apply_npc_events(state.clone(), &events).expect("apply_npc_events should succeed");
-    // Now evaluate triggers on the post-event state
     let triggers_after_swap =
         chronicler_engine::engine::trigger_eval::evaluate_triggers(&state_after_events);
-    // The trigger should NOT fire because times_met is now 1
     assert!(
         triggers_after_swap.is_empty(),
         "VIOLATION: trigger should NOT fire when apply_npc_events runs first (times_met == 1)"
     );
-    // This is the correct order used in execute_freeaction_impl.
     let triggers_correct = chronicler_engine::engine::trigger_eval::evaluate_triggers(&state);
-    // The trigger SHOULD fire because times_met is still 0
     assert!(
         !triggers_correct.is_empty(),
         "Correct order: trigger SHOULD fire (times_met == 0)"
@@ -160,20 +146,14 @@ fn test_inv004_cancellable_at_boundaries() {
 
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let cancel_token = ctx.cancel_token.clone();
-
-    // Backend with a small delay so cancellation has time to fire.
     let mock_backend = Arc::new(MockBackend::with_delay(100));
     let backend = GameService::with_backends(mock_backend.clone(), AgentRegistry::default());
 
     let pipeline = ActionPipeline::new(&backend, &ctx);
-
-    // Clone state for the thread (ActionPipeline takes state by value).
     let state_for_thread = latest_state(&ctx);
 
     let outcome = std::thread::scope(|s| {
         let handle = s.spawn(|| pipeline.run_from_input(state_for_thread, "look".to_string()));
-
-        // Wait for the narration call to start before cancelling.
         while !mock_backend
             .narration_started
             .load(std::sync::atomic::Ordering::SeqCst)
@@ -186,7 +166,7 @@ fn test_inv004_cancellable_at_boundaries() {
     });
 
     assert!(
-        matches!(outcome, ActionOutcome::Cancelled),
+        matches!(outcome, Err(ActionOutcome::Cancelled)),
         "INV-004: pipeline should return Cancelled when token is cancelled, got {outcome:?}"
     );
 
@@ -202,31 +182,24 @@ fn test_inv004_cancellable_at_boundaries() {
 fn test_inv004b_no_concurrent_async_actions() {
     let flag = Arc::new(AtomicBool::new(false));
 
-    // First acquire succeeds.
     let first = flag.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst);
     assert!(first.is_ok(), "first compare_exchange should succeed");
 
-    // Second acquire fails (simulating concurrent action request).
     let second = flag.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst);
     assert!(
         second.is_err(),
         "INV-004b: second compare_exchange should fail (concurrent action rejected)"
     );
 
-    // Simulate action completion via GenerationGuard drop.
     {
         let _guard = GenerationGuard(Arc::clone(&flag));
-        // Guard should not change the flag (it's already true).
         assert!(flag.load(Ordering::SeqCst));
     }
 
-    // After drop, flag is reset.
     assert!(
         !flag.load(Ordering::SeqCst),
         "flag should be reset after guard drop"
     );
-
-    // Third acquire succeeds now that the flag is cleared.
     let third = flag.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst);
     assert!(
         third.is_ok(),
@@ -243,10 +216,7 @@ fn test_inv003_snapshot_restores_state_fields() {
     state.narrative.history.clear();
     state.narrative.last_trigger = None;
 
-    // Create snapshot from modified state
     let snapshot = GameStateSnapshot::from_game_state(&state);
-
-    // Verify snapshot captured the modified state
     assert_eq!(
         snapshot.movement.current_room_id, "room2",
         "INV-003: snapshot should capture modified current_room_id"
@@ -256,8 +226,6 @@ fn test_inv003_snapshot_restores_state_fields() {
         0,
         "INV-003: snapshot should capture empty npcs_in_area"
     );
-
-    // Create fresh state and apply snapshot
     let mut fresh_state = create_test_state();
     fresh_state.movement.current_room_id = "room1".to_string();
     fresh_state
@@ -265,22 +233,15 @@ fn test_inv003_snapshot_restores_state_fields() {
         .npcs_in_area
         .push(fresh_state.npcs.values().next().unwrap().clone());
 
-    // Apply snapshot restores the original state
     snapshot.apply_to(&mut fresh_state);
-
-    // INV-003: Verify movement.current_room_id is restored
     assert_eq!(
         fresh_state.movement.current_room_id, "room2",
         "INV-003: apply_to should restore current_room_id"
     );
-
-    // INV-003: Verify narrative is restored
     assert_eq!(
         fresh_state.narrative.last_trigger, None,
         "INV-003: apply_to should restore narrative.last_trigger"
     );
-
-    // INV-003: Verify npcs_in_area is restored (should be empty)
     assert_eq!(
         fresh_state.scene.npcs_in_area.len(),
         0,
@@ -295,7 +256,6 @@ fn test_inv005_handle_movement_runs_before_narration() {
     };
     use std::sync::Arc;
 
-    // Use the full test map which has room1, room2, room3
     let world = Arc::new(fixtures::create_test_world());
     let map = Arc::new(fixtures::create_test_map());
     let player = Arc::new(fixtures::create_test_player());
@@ -331,13 +291,10 @@ fn test_inv005_handle_movement_runs_before_narration() {
     )
     .expect("execute_freeaction_impl should succeed");
 
-    // INV-005: handle_movement should have updated current_room_id BEFORE narration
     assert_eq!(
         result.next_state.movement.current_room_id, target_room,
         "INV-005: current_room_id should be updated by handle_movement before narration is logged"
     );
-
-    // INV-005: Verify the room actually changed (not same room fallback)
     assert_ne!(
         result.next_state.movement.current_room_id, original_room,
         "INV-005: handle_movement should have changed the room"
@@ -350,7 +307,6 @@ fn test_inv007_dynamic_room_creation_on_invalid_destination() {
     let state = create_test_state();
     let invalid_destination = "nonexistent_place_xyz";
 
-    // Verify precondition: this room does NOT exist
     assert!(
         !state
             .map
@@ -363,20 +319,14 @@ fn test_inv007_dynamic_room_creation_on_invalid_destination() {
     );
 
     let result = handle_movement(state, Some(invalid_destination), &[]).unwrap();
-
-    // INV-007: A dynamic room should be created
     assert!(
         !result.movement.dynamic_rooms.is_empty(),
         "INV-007: dynamic room should be created for invalid destination"
     );
-
-    // INV-007: current_room_id should be updated to a dynamic room
     assert!(
         result.movement.current_room_id.starts_with("dynamic_"),
         "INV-007: current_room_id should be set to a dynamic room"
     );
-
-    // INV-007: A system message should be logged
     let history = result.narrative.history();
     let system_messages: Vec<_> = history
         .iter()
@@ -398,14 +348,9 @@ fn test_inv002_mutation_order_property() {
     use proptest::prelude::*;
 
     proptest!(|(narration_text in r"[^\s]{10,100}", has_npc in any::<bool>())| {
-        // Create fresh state for each iteration
         let mut state = create_test_state_with_trigger_npc();
         let npc_id = "shopkeeper";
-
-        // Narration already added by phase_narrate (pre-quantifier save)
         state.add_message(narration_text.clone(), None, MessageType::Narration);
-
-        // NPC appears if has_npc is true
         let npc_ids = if has_npc { vec![npc_id.to_string()] } else { vec![] };
 
         let quantifier = QuantifierResult {
@@ -423,8 +368,6 @@ fn test_inv002_mutation_order_property() {
                 quantifier_result: &quantifier,
             },
         ).expect("execute_freeaction_impl should succeed");
-
-        // Invariant 1: narration exists in history (not duplicated)
         let history = &result.next_state.narrative.history;
         let search_len = 20.min(narration_text.chars().count());
         let search_text: String = narration_text.chars().take(search_len).collect();
@@ -432,8 +375,6 @@ fn test_inv002_mutation_order_property() {
             e.message_type == MessageType::Narration && e.text().contains(&search_text)
         });
         prop_assert!(has_narration, "narration should be in history");
-
-        // Invariant 2: if NPC present, trigger fires on first encounter
         if has_npc {
             prop_assert!(result.trigger_match.is_some(), "trigger should fire when NPC appears");
             prop_assert_eq!(

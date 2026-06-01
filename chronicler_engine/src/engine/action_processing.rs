@@ -28,8 +28,6 @@ pub struct TurnResult {
 }
 
 /// Attempts movement to a destination, creating a dynamic room on failure.
-///
-/// Returns Ok(state) in both success and error cases — errors result in dynamic room creation.
 pub fn attempt_movement(state: GameState, destination: &str) -> Result<GameState, EngineError> {
     // [DOC: docs/architecture/system.md]
     let mut state = state;
@@ -55,8 +53,6 @@ pub fn attempt_movement(state: GameState, destination: &str) -> Result<GameState
 }
 
 /// Updates NPC encounter log if room changed.
-///
-/// Pure function — no I/O or logging.
 pub fn update_npc_encounters_on_room_change(
     mut state: GameState,
     previous_room_id: &str,
@@ -72,8 +68,6 @@ pub fn update_npc_encounters_on_room_change(
 }
 
 /// Updates narrative state after movement completion.
-///
-/// Pure function — sets pending location based on current room.
 pub fn log_movement_completion(state: GameState) -> GameState {
     // [DOC: docs/architecture/system.md]
     let mut state = state;
@@ -122,7 +116,6 @@ pub fn apply_npc_events(state: GameState, events: &[NpcEvent]) -> Result<GameSta
     Ok(state)
 }
 
-/// Commits trigger continuation narration to state.
 // [DOC: docs/architecture/system.md]
 pub fn commit_trigger_narration(
     state: GameState,
@@ -149,7 +142,7 @@ pub fn commit_trigger_narration(
     Ok(state)
 }
 
-/// Executes free action processing with quantifier result. Mutation order is load-bearing — see inline comment.
+/// Executes free action processing with quantifier result.
 // [DOC: docs/architecture/system.md]
 pub fn execute_freeaction_impl(
     state: &GameState,
@@ -168,8 +161,6 @@ pub fn execute_freeaction_impl(
     )?;
     assert_state_consistency(&next_state)?;
 
-    // [DOC: docs/architecture/system.md] section: Mutation Order Invariant]
-    // Narration already added in phase_narrate (pre-quantifier save for streaming)
     next_state.scene.npcs_in_area = ctx
         .quantifier_result
         .npcs
@@ -179,8 +170,6 @@ pub fn execute_freeaction_impl(
         .collect();
     let current_npc_ids = ctx.quantifier_result.npcs.npc_ids.clone();
 
-    // Evaluate triggers BEFORE applying NPC events so that trigger conditions
-    // (e.g., times_met) are checked against the pre-event state.
     let trigger_match =
         evaluate_triggers(&next_state)
             .into_iter()

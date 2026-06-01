@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-05-31 22:10 UTC*
+*Index last generated: 2026-06-01 18:00 UTC*
 
 ### Root files
 
@@ -72,6 +72,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Remove Identity Wrapper Functions from GameService](./plans/archived/remove-identity-wrapper-functions-2026-05-31.md)
 - [Remove Thin Abstraction TriggerContinuationRequest](./plans/archived/remove-trigger-continuation-request-2026-05-31.md)
 - [Server Module Refactor](./plans/archived/server-module-refactor-2026-05-31.md)
+- [Test Quality Improvements - June 2026](./plans/archived/test-quality-improvements-2026-06-01.md)
 
 ### `docs/reference/`
 

@@ -58,45 +58,26 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
     }
 
     /// [DOC: docs/architecture/system.md]
-    pub fn run_from_input(&self, state: GameState, input: String) -> ActionOutcome {
+    pub fn run_from_input(&self, state: GameState, input: String) -> PipelineResult<()> {
         tracing::debug!("run_from_input: called");
         let world = Arc::clone(&state.world);
         let map = Arc::clone(&state.map);
         let player = Arc::clone(&state.player);
         let all_npcs: Vec<NpcCard> = state.npcs.values().cloned().collect();
 
-        let state = match self.phase_pre_main_snapshot(state) {
-            Ok(s) => {
-                tracing::debug!("phase_pre_main_snapshot: completed");
-                s
-            }
-            Err(outcome) => return outcome,
-        };
+        let state = self.phase_pre_main_snapshot(state)?;
 
         let (mut state, narration_text, backend_name, model_name) =
-            match self.phase_narrate(state, &input, &world, &map, &player, &all_npcs) {
-                Ok((s, text, backend, model)) => {
-                    tracing::debug!("phase_narrate: completed");
-                    (s, text, backend, model)
-                }
-                Err(outcome) => return outcome,
-            };
+            self.phase_narrate(state, &input, &world, &map, &player, &all_npcs)?;
         state.narrative.last_backend_name = Some(backend_name);
         state.narrative.last_model_name = Some(model_name);
 
-        // Quantifier runs on the already-saved narration state
         let quantifier_result = self.phase_post_generation(&mut state, &input, &narration_text);
-        // Second save: persist quantifier metadata (NPC list, confidence)
         if let Err(e) = save_message_and_snapshot(self.ctx, &mut state) {
             tracing::warn!("Failed to save post-quantifier metadata: {e}");
-            // Continue anyway—engine commit may still succeed
         }
 
-        let turn_result = match self.phase_engine_commit(state, &narration_text, &quantifier_result)
-        {
-            Ok(result) => result,
-            Err(outcome) => return outcome,
-        };
+        let turn_result = self.phase_engine_commit(state, &narration_text, &quantifier_result)?;
         let mut next_state = turn_result.next_state;
 
         let trigger_request = turn_result
@@ -119,9 +100,9 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
 
         if let Err(e) = save_message_and_snapshot(self.ctx, &mut next_state) {
             tracing::error!("Failed to save post-engine snapshot: {e}");
-            return ActionOutcome::Error {
+            return Err(ActionOutcome::Error {
                 message: format!("Failed to save post-engine snapshot: {e}"),
-            };
+            });
         }
 
         if let Some(target) = next_state.narrative.retry_target.take() {
@@ -130,25 +111,18 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
 
         if let Some(request) = trigger_request {
             let (updated_state, continuation_text) =
-                match self.phase_trigger_continuation(next_state, &request) {
-                    Ok(pair) => pair,
-                    Err(outcome) => return outcome,
-                };
+                self.phase_trigger_continuation(next_state, &request)?;
             next_state = updated_state;
 
             if !continuation_text.is_empty() {
                 next_state =
-                    match self.phase_post_trigger_reconcile(next_state, &input, &continuation_text)
-                    {
-                        Ok(updated) => updated,
-                        Err(outcome) => return outcome,
-                    };
+                    self.phase_post_trigger_reconcile(next_state, &input, &continuation_text)?;
             }
         }
 
         self.phase_finalize(&mut next_state);
         tracing::debug!("run_from_input: done");
-        ActionOutcome::Completed
+        Ok(())
     }
 
     fn phase_pre_main_snapshot(&self, mut state: GameState) -> PipelineResult<GameState> {
@@ -218,11 +192,9 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
             return Err(self.save_early_error("LLM Error: empty response"));
         }
 
-        // Save narration immediately for UI visibility (pre-quantifier)
         state.add_message(narration_text.clone(), None, MessageType::Narration);
         if let Err(e) = save_message_and_snapshot(self.ctx, &mut state) {
             tracing::warn!("Failed to save pre-quantifier narration: {e}");
-            // Continue anyway—quantifier may still succeed
         }
 
         Ok((
@@ -250,10 +222,8 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
         state.scene.quantifier_confidence =
             Some(format!("{:?}", quantifier_result.npcs.confidence));
 
-        // Only show warning if no agents produced results (genuinely empty, not Low confidence)
         if quantifier_result.npcs.npc_ids.is_empty() && !quantifier_result.npcs.confidence.is_high()
         {
-            // Use room defaults when quantifier found nothing
             let room_default_npcs = state
                 .scene
                 .npcs_in_area
@@ -644,5 +614,15 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
             user_prompt: assembled.user_prompt,
             max_tokens: Some(assembled.max_tokens),
         })
+    }
+}
+
+impl ActionOutcome {
+    /// Bridge between refactored pipeline and legacy callers.
+    pub(crate) fn from_pipeline_result(result: PipelineResult<()>) -> Self {
+        match result {
+            Ok(()) => ActionOutcome::Completed,
+            Err(outcome) => outcome,
+        }
     }
 }

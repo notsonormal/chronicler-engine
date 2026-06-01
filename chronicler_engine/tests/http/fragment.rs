@@ -21,29 +21,28 @@ async fn fetch_body(app: Router, uri: &str) -> String {
     String::from_utf8_lossy(&body).to_string()
 }
 
+/// Test basic fragment endpoints return HTML.
 #[tokio::test]
-async fn test_header_fragment_returns_html() {
-    let body = fetch_body(TestAppBuilder::default_app(), "/fragment/header").await;
-    assert!(body.contains("class=\"header\""));
-    assert!(body.contains("Chronicler Engine"));
-}
-
-#[tokio::test]
-async fn test_story_log_fragment_returns_html() {
-    let body = fetch_body(TestAppBuilder::default_app(), "/fragment/story-log").await;
-    assert!(body.contains("id=\"story-log\""));
-}
-
-#[tokio::test]
-async fn test_visual_sidebar_fragment_returns_html() {
-    let body = fetch_body(TestAppBuilder::default_app(), "/fragment/visual-sidebar").await;
-    assert!(body.contains("id=\"visual-sidebar\""));
+async fn test_basic_fragments_return_html() {
+    let app = TestAppBuilder::default_app();
+    let fragments = [
+        ("/fragment/header", "class=\"header\""),
+        ("/fragment/story-log", "id=\"story-log\""),
+        ("/fragment/visual-sidebar", "id=\"visual-sidebar\""),
+        ("/fragment/action-area", "id=\"action-area\""),
+    ];
+    for (uri, expected) in fragments {
+        let body = fetch_body(app.clone(), uri).await;
+        assert!(
+            body.contains(expected),
+            "Fragment {uri} should contain '{expected}'"
+        );
+    }
 }
 
 #[tokio::test]
 async fn test_visual_sidebar_renders_room_image() {
     let body = fetch_body(TestAppBuilder::default_app(), "/fragment/visual-sidebar").await;
-    // Should contain the image, not "No Location Image"
     assert!(
         body.contains("data/images/test_room.png"),
         "Expected room image in sidebar: {body}"
@@ -137,15 +136,12 @@ async fn test_character_headshots_fragment() {
     );
 }
 
+/// Test the three variants of the generating status endpoint.
 #[tokio::test]
-async fn test_generating_status_handler_idle() {
+async fn test_generating_status_variants() {
     let body = fetch_body(TestAppBuilder::default_app(), "/status/generating").await;
-    // Should return "idle" when not generating
-    assert!(body.contains("idle"));
-}
+    assert!(body.contains("idle"), "Default status should be idle");
 
-#[tokio::test]
-async fn test_generating_status_handler_narrating() {
     let body = fetch_body(
         TestAppBuilder::default_test()
             .generation_status(GenerationStatus::Generating, GenerationPhase::Narrating)
@@ -153,11 +149,8 @@ async fn test_generating_status_handler_narrating() {
         "/status/generating",
     )
     .await;
-    assert!(body.contains("narrating"));
-}
+    assert!(body.contains("narrating"), "Narrating status should contain 'narrating'");
 
-#[tokio::test]
-async fn test_generating_status_handler_quantifying() {
     let body = fetch_body(
         TestAppBuilder::default_test()
             .generation_status(GenerationStatus::Generating, GenerationPhase::Quantifying)
@@ -165,14 +158,13 @@ async fn test_generating_status_handler_quantifying() {
         "/status/generating",
     )
     .await;
-    assert!(body.contains("quantifying"));
+    assert!(body.contains("quantifying"), "Quantifying status should contain 'quantifying'");
 }
 
 #[tokio::test]
 async fn test_reset_generating_handler() {
     let app = TestAppBuilder::default_app();
 
-    // reset-generating is POST, not GET
     let req = Request::builder()
         .uri("/status/reset-generating")
         .method(http::Method::POST)
@@ -185,7 +177,6 @@ async fn test_reset_generating_handler() {
         .await
         .unwrap();
     let body_str = String::from_utf8_lossy(&body);
-    // Should return "reset" on success
     assert!(body_str.contains("reset"));
 }
 
@@ -226,7 +217,6 @@ async fn test_edit_history_handler_success() {
 async fn test_edit_history_handler_not_found() {
     let app = TestAppBuilder::default_app();
 
-    // Try to edit a non-existent log entry (ID 9999) - correct path is /history/:id
     let req = Request::builder()
         .uri("/history/9999")
         .method(http::Method::POST)
@@ -237,8 +227,6 @@ async fn test_edit_history_handler_not_found() {
         .body(Body::from("text=Edited text"))
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
-
-    // Should return NOT_FOUND for non-existent entry
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
 }
 
@@ -257,7 +245,6 @@ async fn test_delete_history_handler_success() {
 
     assert_eq!(response.status(), StatusCode::OK);
 
-    // Verify the entry was deleted by fetching the story log fragment
     let body = fetch_body(app, "/fragment/story-log").await;
     assert!(
         !body.contains("Test message"),
@@ -307,8 +294,6 @@ async fn test_action_confirm_empty_command() {
 
 #[tokio::test]
 async fn test_action_concurrent_rejection() {
-    // Set is_generating directly so the test does not depend on background
-    // task timing or real LLM backends.
     let app = TestAppBuilder::default_test().is_generating(true).build();
 
     let req = Request::builder()
@@ -348,7 +333,6 @@ async fn test_action_async_inventory() {
     let response = app.oneshot(req).await.unwrap();
 
     assert!(response.status().is_success());
-    // Inventory is no longer a sync action — it goes through async generation.
     let hx_trigger = response.headers().get("HX-Trigger");
     assert!(hx_trigger.is_none(), "Inventory should be async, not sync");
 }
@@ -378,8 +362,6 @@ async fn test_list_games_fragment_empty() {
 async fn test_list_games_fragment_populated() {
     let app = TestAppBuilder::default_app();
 
-    // Create two games — the first will be active after the second is created
-    // (since create_game_handler switches to the new game).
     let req = Request::builder()
         .uri("/games")
         .method(http::Method::POST)
@@ -477,7 +459,6 @@ async fn test_create_game_handler() {
 
     let latest = storage.load_latest_snapshot().unwrap();
     assert!(latest.is_some(), "New game should have an initial snapshot");
-    // Verify the scenario message was created
     let messages = storage.load_message_rows().unwrap();
     assert!(
         !messages.is_empty(),
@@ -489,7 +470,6 @@ async fn test_create_game_handler() {
         MessageType::Narration,
         "First message should be Narration type"
     );
-    // Verify swipe was persisted (count swipes for this message)
     let swipe_count = storage.count_swipes_for_message(scenario_msg.id).unwrap();
     assert!(
         swipe_count > 0,
@@ -583,7 +563,6 @@ async fn test_delete_game_handler_success() {
 async fn test_delete_game_handler_active_game() {
     let app = TestAppBuilder::default_app();
 
-    // create_app_for_testing initializes storage with game_id = 1
     let active_id = 1u64;
 
     let req = Request::builder()
@@ -597,11 +576,8 @@ async fn test_delete_game_handler_active_game() {
 
 #[tokio::test]
 async fn test_delete_game_handler_generating() {
-    // Set is_generating directly so the test does not depend on background
-    // task timing or real LLM backends.
     let app = TestAppBuilder::default_test().is_generating(true).build();
 
-    // Deletion should be rejected while generation is in progress
     let req = Request::builder()
         .uri("/games/9999/delete")
         .method(http::Method::POST)

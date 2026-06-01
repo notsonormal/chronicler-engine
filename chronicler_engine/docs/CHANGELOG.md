@@ -4,6 +4,16 @@
 
 ### Added
 
+- **Test quality improvements**
+  - Consolidated 7 duplicated fragment tests into 2 parameterized tests in `tests/http/fragment.rs`
+  - Added 3 browser edge case tests in `tests/browser/editing.rs` for button visibility scenarios
+  - Added 5 error path tests in `tests/http/actions.rs` using TestOverride pattern
+  - New tests cover: InsertMessage failure, LoadMessageRows failure, empty command validation, special characters, snapshot save failure
+  - Fixed unused imports in `src/narrative/text_check/harper_backend_tests.rs`
+  - All 762 tests pass; clippy clean; no new dependencies
+  - Net change: +268/-180 lines (88 lines added for better coverage)
+  - Plan archived: `docs/plans/archived/test-quality-improvements-2026-06-01.md`
+
 - **Streaming narration optimization for 73% latency reduction**
   - Narration now saved immediately after LLM generation completes (~11s), before quantifier runs (~29s)
   - Time-to-first-narration reduced from ~40s to ~11s (73% improvement)

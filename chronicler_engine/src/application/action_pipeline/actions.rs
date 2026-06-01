@@ -16,10 +16,11 @@ pub fn execute_action_impl<B: ActionPipelineBackend>(
     state.narrative.last_trigger = None;
     let pipeline = ActionPipeline::new(backend, &ctx);
     match pipeline.run_from_input(state, input) {
-        ActionOutcome::Completed => {}
-        ActionOutcome::Error { message } => {
+        Ok(()) => {}
+        Err(ActionOutcome::Error { message }) => {
             tracing::error!("Action failed: {message}");
         }
-        ActionOutcome::Cancelled => {}
+        Err(ActionOutcome::Cancelled) => {}
+        Err(ActionOutcome::Completed) => {} // unreachable, but exhaustive
     }
 }

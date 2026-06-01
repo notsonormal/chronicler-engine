@@ -225,3 +225,5 @@ vectors.db
 .devrag/
 /chronicler_engine/tmp
 *.proptest-regressions
+chronicler_engine/coverage.json
+chronicler_engine/coverage_full.json

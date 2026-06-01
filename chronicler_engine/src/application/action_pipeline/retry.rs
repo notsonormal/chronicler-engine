@@ -131,7 +131,7 @@ pub(crate) fn retry_main_narration<B: ActionPipelineBackend>(
     input_text: String,
 ) -> ActionOutcome {
     let pipeline = ActionPipeline::new(backend, ctx);
-    pipeline.run_from_input(state, input_text)
+    ActionOutcome::from_pipeline_result(pipeline.run_from_input(state, input_text))
 }
 
 /// [DOC: docs/architecture/system.md]
