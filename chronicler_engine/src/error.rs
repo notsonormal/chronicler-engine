@@ -112,18 +112,12 @@ pub enum EngineError {
     ContextOverflow { requested: usize, max: usize },
 
     #[error("Database error: {0}")]
-    Database(String),
+    Database(#[from] rusqlite::Error),
 }
 
 impl From<std::io::Error> for EngineError {
     fn from(e: std::io::Error) -> Self {
         EngineError::Io(e.to_string())
-    }
-}
-
-impl From<rusqlite::Error> for EngineError {
-    fn from(e: rusqlite::Error) -> Self {
-        EngineError::Database(e.to_string())
     }
 }
 

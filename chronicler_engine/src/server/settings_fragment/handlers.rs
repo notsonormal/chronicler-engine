@@ -71,7 +71,7 @@ pub async fn save_settings_handler(
     settings.narration_connection_id = form.narration_connection_id;
     settings.quantifier_connection_id = form.quantifier_connection_id;
 
-    if let Err(e) = settings.save() {
+    if let Err(e) = settings.save(&app_state.storage) {
         return Html(format!("<span class='error'>Save failed: {e}</span>"));
     }
 
@@ -93,7 +93,7 @@ pub async fn save_text_check_handler(
     };
     settings.text_check.enable_auto_check = form.enable_auto_check;
 
-    if let Err(e) = settings.save() {
+    if let Err(e) = settings.save(&app_state.storage) {
         return Html(format!("<span class='error'>Save failed: {e}</span>"));
     }
 
@@ -132,7 +132,7 @@ pub async fn add_connection_handler(
 
     settings.connections.push(connection);
 
-    if let Err(e) = settings.save() {
+    if let Err(e) = settings.save(&app_state.storage) {
         return Html(format!("<span class='error'>Save failed: {e}</span>"));
     }
 
@@ -195,7 +195,7 @@ pub async fn edit_connection_handler(
     let is_narrator = settings.narration_connection_id == id;
     let is_quantifier = settings.quantifier_connection_id == id;
 
-    if let Err(e) = settings.save() {
+    if let Err(e) = settings.save(&app_state.storage) {
         return Html(format!("<span class='error'>Save failed: {e}</span>"));
     }
 
@@ -235,7 +235,7 @@ pub async fn delete_connection_handler(
         settings.quantifier_connection_id = settings.connections[0].id.clone();
     }
 
-    if let Err(e) = settings.save() {
+    if let Err(e) = settings.save(&app_state.storage) {
         return Html(format!("<span class='error'>Save failed: {e}</span>"));
     }
 
@@ -256,7 +256,7 @@ pub async fn set_narrator_handler(
 
     settings.narration_connection_id = id;
 
-    if let Err(e) = settings.save() {
+    if let Err(e) = settings.save(&app_state.storage) {
         return Html(format!("<span class='error'>Save failed: {e}</span>"));
     }
 
@@ -276,7 +276,7 @@ pub async fn set_quantifier_handler(
 
     settings.quantifier_connection_id = id;
 
-    if let Err(e) = settings.save() {
+    if let Err(e) = settings.save(&app_state.storage) {
         return Html(format!("<span class='error'>Save failed: {e}</span>"));
     }
 

@@ -11,34 +11,13 @@ impl Storage {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let mut stmt = conn.prepare(
-                    "SELECT id, key, world_id, name, description, personality, scenario, example_dialogue, summary, profile_image, headshot_image, inventory, triggers, relationships FROM characters WHERE world_id = ?",
+                    "SELECT id, key, world_id, name, description, personality, scenario, example_dialogue, summary, profile_image, headshot_image, inventory, triggers, relationships, created_at, updated_at FROM characters WHERE world_id = ?",
                 )?;
-                let rows = stmt.query_map([world_id], |row| {
-                    Ok(DbCharacter {
-                        id: row.get(0)?,
-                        key: row.get(1)?,
-                        world_id: row.get(2)?,
-                        name: row.get(3)?,
-                        description: row.get(4)?,
-                        personality: row.get(5)?,
-                        scenario: row.get(6)?,
-                        example_dialogue: row.get(7)?,
-                        summary: row.get(8)?,
-                        profile_image: row.get(9)?,
-                        headshot_image: row.get(10)?,
-                        inventory: row.get(11)?,
-                        triggers: row.get(12)?,
-                        relationships: row.get(13)?,
-                        created_at: String::new(),
-                        updated_at: String::new(),
-                    })
-                })?;
-                let mut characters = Vec::new();
-                for row_result in rows {
-                    let db_char = row_result?;
-                    characters.push(character_from_db(&db_char)?);
-                }
-                Ok(characters)
+                let rows = stmt
+                    .query_map([world_id], DbCharacter::from_row)?
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(EngineError::Database)?;
+                rows.iter().map(character_from_db).collect()
             }
             Backend::InMemory(data) => Ok(data.characters.iter().filter(|c| c.world_id == world_id).map(|c| c.card.clone()).collect()),
             Backend::Test { .. } => unimplemented!(),
@@ -89,32 +68,13 @@ impl Storage {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let mut stmt = conn.prepare(
-                    "SELECT id, key, world_id, name, description, personality, scenario, example_dialogue, summary, profile_image, headshot_image, inventory, triggers, relationships FROM characters WHERE world_id = ? AND key = ?",
+                    "SELECT id, key, world_id, name, description, personality, scenario, example_dialogue, summary, profile_image, headshot_image, inventory, triggers, relationships, created_at, updated_at FROM characters WHERE world_id = ? AND key = ?",
                 )?;
-                let row = stmt.query_row([&world_id.to_string(), key], |row| {
-                    Ok(DbCharacter {
-                        id: row.get(0)?,
-                        key: row.get(1)?,
-                        world_id: row.get(2)?,
-                        name: row.get(3)?,
-                        description: row.get(4)?,
-                        personality: row.get(5)?,
-                        scenario: row.get(6)?,
-                        example_dialogue: row.get(7)?,
-                        summary: row.get(8)?,
-                        profile_image: row.get(9)?,
-                        headshot_image: row.get(10)?,
-                        inventory: row.get(11)?,
-                        triggers: row.get(12)?,
-                        relationships: row.get(13)?,
-                        created_at: String::new(),
-                        updated_at: String::new(),
-                    })
-                });
-                match row {
+                let result = stmt.query_row([&world_id.to_string(), key], DbCharacter::from_row);
+                match result {
                     Ok(db_char) => Ok(Some(character_from_db(&db_char)?)),
                     Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-                    Err(e) => Err(EngineError::Database(e.to_string())),
+                    Err(e) => Err(EngineError::Database(e))
                 }
             }
             Backend::InMemory(data) => Ok(data.characters.iter().find(|c| c.world_id == world_id && c.card.id == key).map(|c| c.card.clone())),

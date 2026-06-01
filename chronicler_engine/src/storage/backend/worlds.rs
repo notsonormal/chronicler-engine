@@ -107,7 +107,7 @@ impl Storage {
                 match result {
                     Ok(world) => Ok(Some(world)),
                     Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-                    Err(e) => Err(EngineError::Database(e.to_string())),
+                    Err(e) => Err(EngineError::Database(e))
                 }
             }
             Backend::InMemory(data) => Ok(

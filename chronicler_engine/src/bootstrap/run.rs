@@ -185,9 +185,6 @@ pub fn run(args: Args) -> crate::error::Result<()> {
 
     let db_pool = crate::storage::db::DbPool::new(db_path.to_str().unwrap_or("chronicler.db"))?;
 
-    // Initialize settings DB pool reference
-    crate::settings::init_settings_db(db_pool.clone());
-
     if let Err(e) = ensure_defaults(&db_pool, &data_dir) {
         tracing::warn!("Failed to seed game data: {e}");
     }
@@ -269,7 +266,8 @@ pub fn run(args: Args) -> crate::error::Result<()> {
     let room_id = state.movement.current_room_id.clone();
     let npcs_arc = Arc::new(state.npcs.clone());
 
-    let settings = crate::settings::load_settings().unwrap_or_else(|_| AppSettings::default());
+    let settings =
+        crate::settings::load_settings(&storage).unwrap_or_else(|_| AppSettings::default());
     let settings = Arc::new(RwLock::new(settings));
 
     let config = ServerConfig { port: args.port };

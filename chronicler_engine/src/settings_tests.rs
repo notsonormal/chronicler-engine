@@ -1,4 +1,3 @@
-use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
@@ -41,8 +40,6 @@ where
     F: FnOnce(&PathBuf) -> R,
 {
     let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    // Initialize in-memory DB for settings
-    crate::settings::init_settings_in_memory();
     let tmp = std::env::temp_dir().join(format!("chronicler_settings_test_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&tmp);
     let path = tmp.join("settings.json");
@@ -75,17 +72,18 @@ fn test_get_settings_path_env_override() {
 fn test_load_settings_missing_file_creates_defaults_old() {
     // This test is deprecated - settings now use DB storage
     // See DB-backed settings tests in storage::backend::settings_tests
-    with_isolated_settings(|path| {
-        assert!(!path.exists());
-        let _settings = load_settings().expect("should create defaults");
-        // File won't be created anymore
-        assert!(!path.exists()); // Changed: file NOT created
+    with_isolated_settings(|_path| {
+        // DB-backed settings always return defaults if row doesn't exist
+        // File path is no longer used
     });
 }
 
 #[test]
 fn test_load_settings_valid_file() {
     with_isolated_settings(|_path| {
+        let pool = crate::storage::db::DbPool::new(":memory:").unwrap();
+        let storage = crate::storage::Storage::new_sqlite(pool, 1);
+
         let custom = AppSettings {
             connections: vec![Connection::new("test", "Test", LlmBackendType::OpenRouter)],
             narration_connection_id: "test".into(),
@@ -93,9 +91,9 @@ fn test_load_settings_valid_file() {
             response_length: "flexible".into(),
             ..Default::default()
         };
-        custom.save().expect("should save");
+        custom.save(&storage).expect("should save");
 
-        let loaded = load_settings().expect("should load");
+        let loaded = load_settings(&storage).expect("should load");
         assert_eq!(loaded.narration_connection_id, "test");
         assert_eq!(loaded.connections.len(), 1);
     });
@@ -104,21 +102,16 @@ fn test_load_settings_valid_file() {
 #[test]
 #[ignore = "Settings are now DB-backed, not file-based. Test deprecated."]
 fn test_load_settings_invalid_json_old() {
-    with_isolated_settings(|path| {
-        let _ = std::fs::create_dir_all(path.parent().unwrap());
-        let mut file = std::fs::File::create(path).expect("should create file");
-        write!(file, "not json").expect("should write");
-        drop(file);
-
-        // Now loads from DB (invalid JSON file ignored since DB takes precedence)
-        let result = load_settings();
-        assert!(result.is_ok()); // Returns defaults from DB
-    });
+    // Deprecated: settings now use DB storage
+    // File-based validation no longer applies
 }
 
 #[test]
 fn test_save_settings_roundtrip() {
     with_isolated_settings(|_path| {
+        let pool = crate::storage::db::DbPool::new(":memory:").unwrap();
+        let storage = crate::storage::Storage::new_sqlite(pool, 1);
+
         let settings = AppSettings {
             connections: vec![Connection {
                 id: "conn-1".into(),
@@ -136,9 +129,9 @@ fn test_save_settings_roundtrip() {
             response_length: "flexible".into(),
             ..Default::default()
         };
-        settings.save().expect("should save");
+        settings.save(&storage).expect("should save");
 
-        let loaded = load_settings().expect("should load");
+        let loaded = load_settings(&storage).expect("should load");
         assert_eq!(loaded.narration_connection_id, "conn-1");
         assert_eq!(loaded.connections[0].model, "model-a");
     });
@@ -147,14 +140,8 @@ fn test_save_settings_roundtrip() {
 #[test]
 #[ignore = "Settings are now DB-backed, not file-based. Test deprecated."]
 fn test_save_settings_creates_parent_directory_old() {
-    with_isolated_settings(|path| {
-        let _ = std::fs::remove_dir_all(path.parent().unwrap());
-
-        let settings = AppSettings::default();
-        let result = settings.save();
-        // Now succeeds (DB write, ignores missing file path)
-        assert!(result.is_ok());
-    });
+    // Deprecated: settings now use DB storage
+    // File path is no longer used
 }
 
 #[test]

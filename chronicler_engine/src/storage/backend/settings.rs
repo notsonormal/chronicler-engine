@@ -11,30 +11,13 @@ impl Storage {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let mut stmt = conn.prepare(
-                    "SELECT id, connections, narration_connection_id, quantifier_connection_id, response_length, text_check, agents, active_system_prompt_preset_id, active_quantifier_prompt_preset_id FROM settings WHERE id = 1",
+                    "SELECT id, connections, narration_connection_id, quantifier_connection_id, response_length, text_check, agents, active_system_prompt_preset_id, active_quantifier_prompt_preset_id, created_at, updated_at FROM settings WHERE id = 1",
                 )?;
-                let row = stmt.query_row([], |row| {
-                    Ok(DbSettings {
-                        id: row.get(0)?,
-                        connections: row.get(1)?,
-                        narration_connection_id: row.get(2)?,
-                        quantifier_connection_id: row.get(3)?,
-                        response_length: row.get(4)?,
-                        text_check: row.get(5)?,
-                        agents: row.get(6)?,
-                        active_system_prompt_preset_id: row.get(7)?,
-                        active_quantifier_prompt_preset_id: row.get(8)?,
-                        created_at: String::new(),
-                        updated_at: String::new(),
-                    })
-                });
-                match row {
+                let result = stmt.query_row([], DbSettings::from_row);
+                match result {
                     Ok(db_settings) => settings_from_db(&db_settings),
-                    Err(rusqlite::Error::QueryReturnedNoRows) => {
-                        // Return default settings if row doesn't exist (shouldn't happen after seeding)
-                        Ok(AppSettings::default())
-                    }
-                    Err(e) => Err(EngineError::Database(e.to_string())),
+                    Err(rusqlite::Error::QueryReturnedNoRows) => Ok(AppSettings::default()),
+                    Err(e) => Err(EngineError::Database(e))
                 }
             }
             Backend::InMemory(data) => Ok(data.settings.clone()),

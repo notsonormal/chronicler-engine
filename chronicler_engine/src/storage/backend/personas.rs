@@ -10,30 +10,12 @@ impl Storage {
         self.with_backend_mut(Operation::ListPersonas, |backend, _game_id| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
-                let mut stmt = conn.prepare("SELECT id, key, name, description, personality, scenario, example_dialogue, summary, profile_image, headshot_image, inventory FROM personas")?;
-                let rows = stmt.query_map([], |row| {
-                    Ok(DbPersona {
-                        id: row.get(0)?,
-                        key: row.get(1)?,
-                        name: row.get(2)?,
-                        description: row.get(3)?,
-                        personality: row.get(4)?,
-                        scenario: row.get(5)?,
-                        example_dialogue: row.get(6)?,
-                        summary: row.get(7)?,
-                        profile_image: row.get(8)?,
-                        headshot_image: row.get(9)?,
-                        inventory: row.get(10)?,
-                        created_at: String::new(),
-                        updated_at: String::new(),
-                    })
-                })?;
-                let mut personas = Vec::new();
-                for row_result in rows {
-                    let db_persona = row_result?;
-                    personas.push(persona_from_db(&db_persona)?);
-                }
-                Ok(personas)
+                let mut stmt = conn.prepare("SELECT id, key, name, description, personality, scenario, example_dialogue, summary, profile_image, headshot_image, inventory, created_at, updated_at FROM personas")?;
+                let rows = stmt
+                    .query_map([], DbPersona::from_row)?
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(EngineError::Database)?;
+                rows.iter().map(persona_from_db).collect()
             }
             Backend::InMemory(data) => Ok(data.personas.iter().map(|p| p.card.clone()).collect()),
             Backend::Test { .. } => unimplemented!(),
@@ -45,29 +27,13 @@ impl Storage {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let mut stmt = conn.prepare(
-                    "SELECT id, key, name, description, personality, scenario, example_dialogue, summary, profile_image, headshot_image, inventory FROM personas WHERE key = ?",
+                    "SELECT id, key, name, description, personality, scenario, example_dialogue, summary, profile_image, headshot_image, inventory, created_at, updated_at FROM personas WHERE key = ?",
                 )?;
-                let row = stmt.query_row([key], |row| {
-                    Ok(DbPersona {
-                        id: row.get(0)?,
-                        key: row.get(1)?,
-                        name: row.get(2)?,
-                        description: row.get(3)?,
-                        personality: row.get(4)?,
-                        scenario: row.get(5)?,
-                        example_dialogue: row.get(6)?,
-                        summary: row.get(7)?,
-                        profile_image: row.get(8)?,
-                        headshot_image: row.get(9)?,
-                        inventory: row.get(10)?,
-                        created_at: String::new(),
-                        updated_at: String::new(),
-                    })
-                });
-                match row {
+                let result = stmt.query_row([key], DbPersona::from_row);
+                match result {
                     Ok(db_persona) => Ok(Some(persona_from_db(&db_persona)?)),
                     Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-                    Err(e) => Err(EngineError::Database(e.to_string())),
+                    Err(e) => Err(EngineError::Database(e))
                 }
             }
             Backend::InMemory(data) => Ok(data.personas.iter().find(|p| p.key == key).map(|p| p.card.clone())),

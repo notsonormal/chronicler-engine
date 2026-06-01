@@ -12,3 +12,21 @@ pub struct DbSettings {
     pub created_at: String,
     pub updated_at: String,
 }
+
+impl DbSettings {
+    pub fn from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Self> {
+        Ok(DbSettings {
+            id: row.get(0)?,
+            connections: row.get(1)?,
+            narration_connection_id: row.get(2)?,
+            quantifier_connection_id: row.get(3)?,
+            response_length: row.get(4)?,
+            text_check: row.get(5)?,
+            agents: row.get(6)?,
+            active_system_prompt_preset_id: row.get(7)?,
+            active_quantifier_prompt_preset_id: row.get(8)?,
+            created_at: row.get(9)?,
+            updated_at: row.get(10)?,
+        })
+    }
+}

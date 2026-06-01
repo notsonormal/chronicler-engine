@@ -250,7 +250,7 @@ pub async fn activate_preset_handler(
             settings.active_quantifier_prompt_preset_id = id.clone();
         }
     }
-    if let Err(e) = settings.save() {
+    if let Err(e) = settings.save(&app_state.storage) {
         return Html(format!("<span class='error'>Save failed: {e}</span>"));
     }
 
