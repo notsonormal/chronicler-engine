@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-06-06
+
+### Fixed
+
+- **Messages/Swipes storage separation — `count_swipes_for_message` moved to correct module**
+  - Moved `count_swipes_for_message()` from `src/storage/backend/messages.rs` to `src/storage/backend/swipes.rs`
+  - Eliminates architectural violation where messages module was querying message_swipes table
+  - Added targeted guardrail `check_messages_swipes_separation()` to prevent regression
+  - Guardrail scans `messages.rs` for SQL references to `message_swipes` table (FROM, INTO, UPDATE, JOIN, DELETE)
+  - All 885 tests pass; guardrail suite expanded to 16 tests
+  - Modified files:
+    - `src/storage/backend/messages.rs` — Removed `count_swipes_for_message()` method
+    - `src/storage/backend/swipes.rs` — Added `count_swipes_for_message()` method (28 lines)
+    - `tests/infrastructure/guardrails/layers.rs` — Added `check_messages_swipes_separation()` guardrail function
+    - `tests/infrastructure/guardrails/mod.rs` — Registered new guardrail test
+    - `chronicler_engine/TODO.md` — Removed completed TODO item
+  - Coverage impact: `swipes.rs` at 76.7% (unchanged), `messages.rs` at 64.4% (unchanged)
+
 ## 2026-06-01
 
 ### Added

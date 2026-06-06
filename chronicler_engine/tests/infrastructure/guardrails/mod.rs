@@ -10,8 +10,6 @@ pub use structure::{check_no_legacy_test_context, *};
 pub use style::*;
 pub use location::*;
 
-// ── Severity & Violation Types ──
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Severity {
     Error,
@@ -53,8 +51,6 @@ impl Violation {
     }
 }
 
-// ── File Discovery ──
-
 fn discover_rs_files(root: &str) -> Vec<String> {
     walkdir::WalkDir::new(root)
         .into_iter()
@@ -68,8 +64,6 @@ fn discover_rs_files(root: &str) -> Vec<String> {
 fn relative_path(full: &str) -> &str {
     full.strip_prefix("src/").unwrap_or(full)
 }
-
-// ── Helpers ──
 
 fn assert_violations(violations: &[Violation], rule_name: &str) {
     if !violations.is_empty() {
@@ -109,8 +103,6 @@ fn check_tests_files(rule_name: &str, mut check: impl FnMut(&str, &str) -> Vec<V
     }
     assert_violations(&errors, rule_name);
 }
-
-// ── Test Functions ──
 
 #[test]
 fn guardrails_import_ordering() {
@@ -193,4 +185,12 @@ fn guardrails_no_legacy_test_context() {
 #[test]
 fn guardrails_test_file_location() {
     check_src_files("test file location (src)", check_test_file_location);
+}
+
+#[test]
+fn guardrails_messages_swipes_separation() {
+    check_src_files(
+        "messages/swipes separation",
+        check_messages_swipes_separation,
+    );
 }

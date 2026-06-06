@@ -126,6 +126,18 @@ Exemptions: getters/setters, `From`/`Into` impls, test functions.
 
 See ADR-019 for the rationale.
 
+**NOTE**: This guardrail was removed after ADR-020 unified storage into a single `Storage` struct with no `*_storage.rs` modules.
+
+### 3.8 Messages/Swipes Separation (`guardrails_messages_swipes_separation`)
+
+**Standard**: `src/storage/backend/messages.rs` must not reference the `message_swipes` table. Swipe operations belong in `swipes.rs`.
+
+**Severity**: error  
+**Scope**: `src/storage/backend/messages.rs` only  
+**Checks**: SQL table references (`FROM message_swipes`, `INTO message_swipes`, `UPDATE message_swipes`, `JOIN message_swipes`, `DELETE FROM message_swipes`)
+
+**NOTE**: This is a targeted guardrail for the messages/swipes separation concern. It does not catch dynamic SQL construction or clever abstractions — those should be caught in code review.
+
 ---
 
 ## Running Guardrails

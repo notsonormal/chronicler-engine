@@ -227,3 +227,4 @@ vectors.db
 *.proptest-regressions
 chronicler_engine/coverage.json
 chronicler_engine/coverage_full.json
+/chronicler_engine/.pi-lens/cache

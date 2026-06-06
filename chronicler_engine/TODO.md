@@ -1,5 +1,10 @@
 # QUICK TODO List
 
+## Added: 2026-06-05
+
+- [] DOC anchors should never been inside methods. Only in method signatures. Need guardrails to update the guardrails for this. If we need a DOC anchour on a specific code block, convert the code block into a separate method. Add this suggestion to the guardrail
+- [] Consider adding a guardrail to enforce class level comments. Then auto generate the structure in the AGENTS.md based on that. We only need the first line. Same for the python scripts (Should also not start with #!/usr/bin/env python3)
+
 ## Added: 2026-06-01
 
 - [x] Unit test should alway sit beside the associated test class (e.g. game_service.rs -> game_service_tests.rs). If the original class was turned into a module (e.g. backend.rs -> backend\core.rs) then the original backend_tests.rs should likewise be split up. We haven't have a guardrail that ensures all classes have an associated unit test class (it gets application) but we can have a guardrail that enforces this. 
