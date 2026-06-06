@@ -1,4 +1,5 @@
 //! [DOC: docs/system/prompt_system.md]
+//! Prompt context building
 
 use crate::error::EngineError;
 use crate::model::character::{NpcCard, PlayerCard};

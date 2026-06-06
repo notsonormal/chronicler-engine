@@ -1,4 +1,5 @@
 //! [DOC: docs/system/storage.md]
+//! Persona database model
 
 /// Database row for `personas` table (PlayerCard).
 pub struct DbPersona {

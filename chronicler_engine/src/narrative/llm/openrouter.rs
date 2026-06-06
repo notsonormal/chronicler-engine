@@ -1,4 +1,5 @@
 //! [DOC: docs/system/llm_processing.md]
+//! OpenRouter LLM provider
 
 use std::sync::Arc;
 

@@ -1,4 +1,5 @@
 //! [DOC: docs/system/llm_processing.md]
+//! Ollama LLM provider
 
 use std::sync::Arc;
 

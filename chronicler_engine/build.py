@@ -541,6 +541,8 @@ def main():
 
     timed_step("Running test structure guardrail...", "python scripts/check_test_structure.py", env=cargo_env)
 
+    timed_step("Running Python docstring guardrail...", "python scripts/check_python_docstrings.py", env=cargo_env)
+
     timed_step(f"Building ({build_profile})...", f"cargo build {'--release' if args.release else ''}".strip(), env=cargo_env)
 
     steps.next("Copying data and assets for deployment...")

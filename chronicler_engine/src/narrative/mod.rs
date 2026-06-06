@@ -1,4 +1,5 @@
 //! [DOC: docs/system/narration_engine.md]
+//! Narration engine and story generation
 
 pub mod agents;
 pub mod llm;

@@ -1,4 +1,5 @@
 //! [DOC: docs/system/startup.md]
+//! Data loading and initialization routines
 use std::{fs, path::Path};
 
 use crate::error::EngineError;

@@ -1,5 +1,39 @@
 # Changelog
 
+## 2026-06-06 (Later)
+
+### Added
+
+- **Module documentation standards and auto-generation**
+  - Extended `check_module_doc_anchors()` → `check_doc_standards()` to enforce two-line header:
+    - Line 1: `//! [DOC: docs/path/to/file.md]` (DOC anchor)
+    - Line 2: `//! Human-readable module summary` (for AGENTS.md auto-generation)
+  - Summary must be non-empty `//!` comment (not another `[DOC:]` anchor)
+  - Same exemptions as module anchors: test files, `lib.rs`, `main.rs`, `test_support/`
+  - **Python docstring guardrail**: New `scripts/check_python_docstrings.py`
+    - Errors on shebang (`#!/usr/bin/env python3`) — scripts invoked via `python script.py`
+    - Warns on missing module docstring (`"""Summary"""` as first non-blank line)
+  - **Structure auto-generation**: New `scripts/generate_structure_index.py`
+    - Parses all `src/**/*.rs` files for DOC anchors and `//!` summaries
+    - Scans Python scripts for module docstrings
+    - Generates bullet-point structure in AGENTS.md with `<!-- AUTO-STRUCTURE START/END -->` markers
+    - Format: Markdown nested bullets (no code blocks) for better readability
+  - **Pre-commit hook extended**: Regenerates both `docs/README.md` (docs index) and `AGENTS.md` (structure index)
+  - Modified files:
+    - `tests/infrastructure/guardrails/structure.rs` — Extended to `check_doc_standards()`, removed unused `extract_module_doc_anchor()`
+    - `tests/infrastructure/guardrails/mod.rs` — Renamed test to `guardrails_doc_standards`
+    - `docs/architecture/guardrails.md` — Updated section 3.2 for combined guardrail
+    - `chronicler_engine/scripts/check_python_docstrings.py` — New Python guardrail
+    - `chronicler_engine/scripts/generate_structure_index.py` — New auto-generation script
+    - `chronicler_engine/scripts/git-hooks/pre-commit` — Extended to regenerate structure index
+    - `chronicler_engine/build.py` — Added Python docstring guardrail step
+    - **128 Rust files** — Added `//!` summary lines to all `src/` modules
+    - **14 Python scripts** — Removed shebangs, added module docstrings
+    - `chronicler_engine/AGENTS.md` — STRUCTURE section now auto-generated
+    - `chronicler_engine/TODO.md` — Marked module doc + auto-gen item complete
+  - All 884 tests pass; guardrails show 0 warnings
+  - Coverage impact: Minimal (test infrastructure and scripts only)
+
 ## 2026-06-06
 
 ### Added

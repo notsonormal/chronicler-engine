@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Parse coverage report from cargo-llvm-cov JSON output.
 
 Usage:

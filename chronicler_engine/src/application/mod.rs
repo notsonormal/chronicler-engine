@@ -1,4 +1,5 @@
 //! [DOC: docs/system/game_flow.md]
+//! Application layer services and game flow orchestration
 
 pub mod action_pipeline;
 pub mod application_service;

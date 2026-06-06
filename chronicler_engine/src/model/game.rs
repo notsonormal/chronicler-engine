@@ -1,4 +1,5 @@
 //! [DOC: docs/system/game_flow.md]
+//! Game state and session management
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};

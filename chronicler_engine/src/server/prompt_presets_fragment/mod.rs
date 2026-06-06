@@ -1,4 +1,5 @@
 //! [DOC: docs/system/dashboard.md]
+//! Prompt presets fragment module
 
 mod fragments;
 mod handlers;

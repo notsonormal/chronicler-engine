@@ -1,4 +1,5 @@
 //! [DOC: docs/system/game_flow.md]
+//! Message editing and modification utilities
 
 use std::sync::Arc;
 

@@ -1,4 +1,5 @@
 //! [DOC: docs/system/storage.md]
+//! Database schema entity definitions
 
 pub mod character;
 pub mod game;

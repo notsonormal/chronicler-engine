@@ -1,4 +1,5 @@
 //! [DOC: docs/system/game_flow.md]
+//! Core data models and domain types
 
 pub mod agent;
 pub mod character;

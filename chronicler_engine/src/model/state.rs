@@ -1,4 +1,5 @@
 //! [DOC: docs/system/game_flow.md]
+//! Game state representations
 
 use std::collections::HashMap;
 use std::sync::Arc;

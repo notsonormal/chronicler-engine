@@ -1,4 +1,5 @@
 //! [DOC: docs/system/text_check.md]
+//! Harper text check backend
 
 use std::sync::Arc;
 

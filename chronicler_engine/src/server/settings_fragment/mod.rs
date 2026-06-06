@@ -1,4 +1,5 @@
 //! [DOC: docs/system/dashboard.md]
+//! Settings fragment module
 
 mod fragments;
 mod handlers;

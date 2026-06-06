@@ -115,8 +115,8 @@ fn guardrails_import_ordering_tests() {
 }
 
 #[test]
-fn guardrails_module_doc_anchors() {
-    check_src_files("module doc anchor", check_module_doc_anchors);
+fn guardrails_doc_standards() {
+    check_src_files("doc standards", check_doc_standards);
 }
 
 #[test]

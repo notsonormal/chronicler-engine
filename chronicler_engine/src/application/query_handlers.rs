@@ -1,4 +1,5 @@
 //! [DOC: docs/system/game_flow.md]
+//! Read-only data access for game state and debug views
 
 use crate::application::ApplicationError;
 use crate::application::DebugStateView;

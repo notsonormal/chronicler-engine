@@ -1,4 +1,5 @@
 //! [DOC: docs/system/llm_processing.md]
+//! LLM response parsing
 
 use crate::error::{EngineError, LlmFailure};
 

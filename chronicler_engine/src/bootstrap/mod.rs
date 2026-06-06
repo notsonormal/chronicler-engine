@@ -1,4 +1,5 @@
 //! [DOC: docs/system/startup.md]
+//! Bootstrap initialization and startup sequences
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
 mod load;

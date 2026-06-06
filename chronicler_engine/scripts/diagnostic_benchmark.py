@@ -1,18 +1,7 @@
-#!/usr/bin/env python3
-"""Diagnostic Signal Quality Benchmark Orchestrator
-
-Runs the Rust diagnostic benchmark suite and produces structured reports
-ranking failure scenarios by how hard they are to diagnose.
-
-Usage:
-    python scripts/diagnostic_benchmark.py              # Run benchmark + generate report
-    python scripts/diagnostic_benchmark.py --json       # Output raw JSON only
-    python scripts/diagnostic_benchmark.py --compare baseline.json  # Compare to previous run
-"""
+"""Run diagnostic benchmarks and rank failure scenarios by debuggability."""
 
 import argparse
 import json
-import os
 import subprocess
 import sys
 from collections import defaultdict
@@ -25,9 +14,7 @@ REPORT_DIR = Path(__file__).parent.parent.parent / "tmp" / "diagnostics"
 
 def run_benchmark():
     """Run the Rust diagnostic benchmark and collect results."""
-    cmd = [
-        "cargo", "test", "--test", "diagnostic_benchmark", "--", "--nocapture"
-    ]
+    cmd = ["cargo", "test", "--test", "diagnostic_benchmark", "--", "--nocapture"]
     print(f"Running: {' '.join(cmd)}")
     print(f"In directory: {ENGINE_DIR}")
     print("-" * 60)
@@ -52,7 +39,7 @@ def run_benchmark():
     for line in result.stdout.splitlines():
         prefix = "BENCHMARK_RESULT:"
         if line.startswith(prefix):
-            json_str = line[len(prefix):]
+            json_str = line[len(prefix) :]
             try:
                 results.append(json.loads(json_str))
             except json.JSONDecodeError as e:
@@ -153,13 +140,15 @@ def generate_markdown_report(data, timestamp):
             f"| {cat} | {stats['count']} | {stats['average']:.1f} | {stats['min']:.1f} | {stats['max']:.1f} |"
         )
 
-    lines.extend([
-        "",
-        "## Scenario Rankings (Hardest to Diagnose First)",
-        "",
-        "| Rank | Scenario | Category | Avg | Specificity | State | Logs | Diagnosable Without Logs? |",
-        "|------|----------|----------|-----|-------------|-------|-----|---------------------------|",
-    ])
+    lines.extend(
+        [
+            "",
+            "## Scenario Rankings (Hardest to Diagnose First)",
+            "",
+            "| Rank | Scenario | Category | Avg | Specificity | State | Logs | Diagnosable Without Logs? |",
+            "|------|----------|----------|-----|-------------|-------|-----|---------------------------|",
+        ]
+    )
 
     for i, s in enumerate(scenarios, 1):
         scores = s["scores"]
@@ -169,37 +158,43 @@ def generate_markdown_report(data, timestamp):
             f"{scores['error_specificity']} | {scores['state_visibility']} | {scores['log_independence']} | {no_logs} |"
         )
 
-    lines.extend([
-        "",
-        "## Detailed Findings",
-        "",
-    ])
+    lines.extend(
+        [
+            "",
+            "## Detailed Findings",
+            "",
+        ]
+    )
 
     for s in scenarios:
         s_scores = s["scores"]
-        lines.extend([
-            f"### {s['average_score']:.1f} — `{s['scenario']}` ({s['category']})",
-            "",
-            f"- **Injected failure:** {s['injected_failure']}",
-            f"- **User-facing error:** `{s['error_message']}`",
-            f"- **Phase at failure:** {s['generation_phase']}",
-            "",
-            "| Dimension | Score |",
-            "|-----------|-------|",
-            f"| Error specificity | {s_scores['error_specificity']} / 10 |",
-            f"| State visibility | {s_scores['state_visibility']} / 10 |",
-            f"| Log independence | {s_scores['log_independence']} / 10 |",
-            "",
-            f"**Notes:** {s['notes']}",
-            "",
-        ])
+        lines.extend(
+            [
+                f"### {s['average_score']:.1f} — `{s['scenario']}` ({s['category']})",
+                "",
+                f"- **Injected failure:** {s['injected_failure']}",
+                f"- **User-facing error:** `{s['error_message']}`",
+                f"- **Phase at failure:** {s['generation_phase']}",
+                "",
+                "| Dimension | Score |",
+                "|-----------|-------|",
+                f"| Error specificity | {s_scores['error_specificity']} / 10 |",
+                f"| State visibility | {s_scores['state_visibility']} / 10 |",
+                f"| Log independence | {s_scores['log_independence']} / 10 |",
+                "",
+                f"**Notes:** {s['notes']}",
+                "",
+            ]
+        )
 
-    lines.extend([
-        "## Recommendations",
-        "",
-        "Based on this baseline, the highest-impact improvements would target:",
-        "",
-    ])
+    lines.extend(
+        [
+            "## Recommendations",
+            "",
+            "Based on this baseline, the highest-impact improvements would target:",
+            "",
+        ]
+    )
 
     # Top 3 worst scenarios
     worst = scenarios[:3]
@@ -226,7 +221,7 @@ def save_json(data, path):
 
 def compare_runs(current, baseline_path):
     """Compare current run to a baseline and show deltas."""
-    with open(baseline_path, "r", encoding="utf-8") as f:
+    with open(baseline_path, encoding="utf-8") as f:
         baseline = json.load(f)
 
     print("\n=== Comparison to Baseline ===")
@@ -237,7 +232,9 @@ def compare_runs(current, baseline_path):
     baseline_overall = baseline["overall"]["average_score"]
     delta = current_overall - baseline_overall
     direction = "improved" if delta > 0 else "regressed" if delta < 0 else "unchanged"
-    print(f"Overall average: {current_overall:.1f} (was {baseline_overall:.1f}) — {direction} by {abs(delta):.1f}")
+    print(
+        f"Overall average: {current_overall:.1f} (was {baseline_overall:.1f}) — {direction} by {abs(delta):.1f}"
+    )
     print("")
 
     baseline_scenarios = {s["scenario"]: s for s in baseline["scenarios"]}
@@ -256,7 +253,9 @@ def main():
     parser = argparse.ArgumentParser(description="Diagnostic Signal Quality Benchmark")
     parser.add_argument("--json", action="store_true", help="Output raw JSON only")
     parser.add_argument("--compare", type=str, help="Compare to a previous baseline JSON file")
-    parser.add_argument("--output-dir", type=str, default=str(REPORT_DIR), help="Directory for reports")
+    parser.add_argument(
+        "--output-dir", type=str, default=str(REPORT_DIR), help="Directory for reports"
+    )
     args = parser.parse_args()
 
     if not ENGINE_DIR.exists():
@@ -307,10 +306,14 @@ def main():
     print("DIAGNOSTIC BASELINE SUMMARY")
     print("=" * 60)
     print(f"Overall average score: {data['overall']['average_score']:.1f} / 10")
-    print(f"Worst scenario: {data['scenarios'][0]['scenario']} ({data['scenarios'][0]['average_score']:.1f})")
-    print(f"Best scenario:  {data['scenarios'][-1]['scenario']} ({data['scenarios'][-1]['average_score']:.1f})")
+    print(
+        f"Worst scenario: {data['scenarios'][0]['scenario']} ({data['scenarios'][0]['average_score']:.1f})"
+    )
+    print(
+        f"Best scenario:  {data['scenarios'][-1]['scenario']} ({data['scenarios'][-1]['average_score']:.1f})"
+    )
     print("\nTop 3 hardest to diagnose:")
-    for i, s in enumerate(data['scenarios'][:3], 1):
+    for i, s in enumerate(data["scenarios"][:3], 1):
         print(f"  {i}. {s['scenario']} ({s['category']}): {s['average_score']:.1f}/10")
     print("=" * 60)
 

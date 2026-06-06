@@ -1,4 +1,5 @@
 //! [DOC: docs/system/storage.md]
+//! LLM message mapper
 
 use chrono::{DateTime, Utc};
 

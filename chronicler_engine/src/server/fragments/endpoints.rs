@@ -1,4 +1,5 @@
 //! [DOC: docs/system/dashboard.md]
+//! Fragment endpoints
 
 use axum::{extract::State, response::Html};
 

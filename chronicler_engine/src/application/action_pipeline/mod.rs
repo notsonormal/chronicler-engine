@@ -1,4 +1,5 @@
 //! [DOC: docs/system/game_flow.md]
+//! Action pipeline for processing game actions
 
 pub mod actions;
 pub mod pipeline;

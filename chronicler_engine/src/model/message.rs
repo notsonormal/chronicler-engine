@@ -1,4 +1,5 @@
 //! [DOC: docs/system/agent_system.md]
+//! Message types and conversation history
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};

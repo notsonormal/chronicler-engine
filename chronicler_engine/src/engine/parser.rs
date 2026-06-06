@@ -1,4 +1,5 @@
 //! [DOC: docs/system/game_flow.md]
+//! Parser for game data formats
 
 use crate::engine::action::Action;
 

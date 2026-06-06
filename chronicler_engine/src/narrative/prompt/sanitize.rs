@@ -1,4 +1,5 @@
 //! [DOC: docs/system/prompt_system.md]
+//! Prompt sanitization
 
 use once_cell::sync::Lazy;
 use regex::Regex;

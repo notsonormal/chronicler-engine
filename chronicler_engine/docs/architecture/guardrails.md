@@ -74,13 +74,19 @@ Each group must be separated by a blank line. Within a group, sort alphabeticall
 **Severity**: error  
 **Scope**: `src/` and `tests/`
 
-### 3.2 Module-Level DOC Anchor Requirements (`guardrails_module_doc_anchors`)
+### 3.2 Module Documentation Standards (`guardrails_doc_standards`)
 
-**Standard**: Every Rust source file in `src/` must have a module-level DOC anchor comment as its first line:
+**Standard**: Every Rust source file in `src/` must have:
 
-```rust
-//! [DOC: docs/path/to/domain-doc.md]
-```
+1. **Line 1**: DOC anchor comment
+   ```rust
+   //! [DOC: docs/path/to/domain-doc.md]
+   ```
+
+2. **Line 2**: Module summary (human-readable, non-empty)
+   ```rust
+   //! Character sheet data structures and trigger evaluation types
+   ```
 
 The anchor must point to a domain-specific documentation file (e.g., `docs/system/game_flow.md`, `docs/system/navigation.md`), not the generic architecture overview (`docs/architecture/system.md`), except for:
 
@@ -91,8 +97,8 @@ The anchor must point to a domain-specific documentation file (e.g., `docs/syste
 
 **Mapping by module**:
 
-| Module | Target Doc |
-|--------|-----------|
+|| Module | Target Doc |
+||--------|-----------|
 | `application/*` | `docs/system/game_flow.md` |
 | `engine/mod.rs`, `engine/logic.rs` | `docs/system/navigation.md` |
 | `engine/trigger_eval.rs` | `docs/system/triggers.md` |
@@ -109,7 +115,13 @@ The anchor must point to a domain-specific documentation file (e.g., `docs/syste
 | `server/*` | `docs/system/dashboard.md` |
 | `bootstrap/*` | `docs/system/startup.md` |
 
-**Rationale**: Module-level anchors provide a clear link from code to its domain documentation without cluttering individual functions. If a specific code block needs documenting, extract it into a separate method.
+**Module summary requirements**:
+- Must be a `//!` comment on line 2 (after the DOC anchor)
+- Must NOT be another `[DOC:]` anchor
+- Must be non-empty (not just `//!`)
+- Should concisely describe the module's purpose in domain terms
+
+**Rationale**: Module-level anchors provide a clear link from code to its domain documentation. The summary enables auto-generation of AGENTS.md structure listings and provides human-readable context without requiring navigation to external docs.
 
 **Severity**: warn  
 **Goal**: zero warnings.

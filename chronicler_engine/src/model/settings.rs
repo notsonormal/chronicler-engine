@@ -1,4 +1,5 @@
 //! [DOC: docs/system.md]
+//! Settings and configuration types
 
 use serde::{Deserialize, Serialize};
 

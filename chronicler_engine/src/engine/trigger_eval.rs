@@ -1,4 +1,5 @@
 //! [DOC: docs/system/triggers.md]
+//! Trigger evaluation and condition checking
 
 use crate::model::character::NpcCard;
 use crate::model::state::GameState;

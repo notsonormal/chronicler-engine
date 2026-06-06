@@ -18,20 +18,6 @@ fn is_module_doc_exempt(path: &str) -> bool {
         .any(|exempt| normalized.contains(exempt))
 }
 
-fn extract_module_doc_anchor(content: &str) -> Option<String> {
-    content
-        .lines()
-        .find(|line| line.trim().starts_with("//! [DOC:"))
-        .and_then(|line| {
-            let start = line.find('[')? + 1;
-            let end = line.find(']')?;
-            let inner = line[start..end].trim();
-            inner
-                .strip_prefix("DOC:")
-                .map(|stripped| stripped.trim().to_string())
-        })
-}
-
 fn points_to_system_md(doc_path: &str) -> bool {
     doc_path == "docs/architecture/system.md" || doc_path.ends_with("/architecture/system.md")
 }
@@ -92,7 +78,16 @@ fn expected_doc_target(path: &str) -> Option<&'static str> {
     }
 }
 
-pub fn check_module_doc_anchors(path: &str, content: &str) -> Vec<Violation> {
+fn extract_doc_anchor_path(line: &str) -> Option<&str> {
+    let start = line.find('[')? + 1;
+    let end = line.find(']')?;
+    line[start..end]
+        .trim()
+        .strip_prefix("DOC:")
+        .map(|s| s.trim())
+}
+
+pub fn check_doc_standards(path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
 
     if path.ends_with("_tests.rs") || path.ends_with("_test.rs") {
@@ -103,9 +98,10 @@ pub fn check_module_doc_anchors(path: &str, content: &str) -> Vec<Violation> {
         return violations;
     }
 
-    let anchor = extract_module_doc_anchor(content);
+    let lines: Vec<&str> = content.lines().collect();
 
-    if anchor.is_none() {
+    // Check line 1: DOC anchor
+    if lines.is_empty() || !lines[0].trim().starts_with("//! [DOC:") {
         violations.push(Violation::warn(
             path,
             1,
@@ -114,20 +110,47 @@ pub fn check_module_doc_anchors(path: &str, content: &str) -> Vec<Violation> {
         return violations;
     }
 
-    let anchor_path = anchor.unwrap();
+    let anchor_path = extract_doc_anchor_path(lines[0]);
 
-    if points_to_system_md(&anchor_path) && !is_system_md_exempt(path) {
-        violations.push(Violation::warn(
-            path,
-            1,
-            format!("Module `{path}` points to `system.md` but should point to a domain-specific doc. Files outside model/storage tiers must use specific docs (e.g., `game_flow.md`, `navigation.md`)."),
-        ));
+    if let Some(anchor) = anchor_path {
+        if points_to_system_md(anchor) && !is_system_md_exempt(path) {
+            violations.push(Violation::warn(
+                path,
+                1,
+                format!("Module `{path}` points to `system.md` but should point to a domain-specific doc. Files outside model/storage tiers must use specific docs (e.g., `game_flow.md`, `navigation.md`)."),
+            ));
+        }
     }
 
-    if let Some(expected) = expected_doc_target(path) {
-        if anchor_path != expected {
-            // Informational only
-        }
+    // Check line 2: module summary (must exist, must be //! but not another [DOC:])
+    if lines.len() < 2 {
+        violations.push(Violation::warn(
+            path,
+            2,
+            format!("Module `{path}` lacks a module summary. Add a `//!` summary line after the DOC anchor (e.g., `//! Character sheet data structures`)."),
+        ));
+        return violations;
+    }
+
+    let line2 = lines[1];
+    if !line2.starts_with("//!") {
+        violations.push(Violation::warn(
+            path,
+            2,
+            format!("Module `{path}` lacks a module summary on line 2. Add a `//!` summary line after the DOC anchor."),
+        ));
+    } else if line2.trim().starts_with("//! [DOC:") {
+        violations.push(Violation::warn(
+            path,
+            2,
+            format!("Module `{path}` has a double DOC anchor. Line 2 must be a module summary, not another anchor."),
+        ));
+    } else if line2.trim() == "//!" {
+        violations.push(Violation::warn(
+            path,
+            2,
+            format!("Module `{path}` has an empty summary. Line 2 must contain meaningful module description."),
+        ));
     }
 
     violations

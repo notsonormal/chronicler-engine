@@ -1,4 +1,5 @@
 //! [DOC: docs/system/agent_system.md]
+//! Quantifier type definitions
 
 use crate::model::character::NpcCard;
 use crate::model::map::Room;

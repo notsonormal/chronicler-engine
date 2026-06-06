@@ -1,4 +1,5 @@
 //! [DOC: docs/system/navigation.md]
+//! Game logic and rule evaluation
 
 use std::collections::HashMap;
 

@@ -1,4 +1,5 @@
 //! [DOC: docs/system/agent_system.md]
+//! Quantifier agent system
 
 //! Quantifier agent module — three responsibilities:
 //! 1. **Detection**: Analyze LLM narration to detect NPC presence and movement intent

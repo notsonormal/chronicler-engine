@@ -1,3 +1,4 @@
+"""Validate game data files for consistency."""
 import json
 import jsonschema
 import sys

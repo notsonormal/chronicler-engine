@@ -1,4 +1,5 @@
 //! [DOC: docs/system/llm_processing.md]
+//! LLM input/output sanitization
 
 //! Response sanitization for LLM backends.
 //!

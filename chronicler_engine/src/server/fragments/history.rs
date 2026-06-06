@@ -1,4 +1,5 @@
 //! [DOC: docs/system/dashboard.md]
+//! History fragment handlers
 
 use axum::{extract::Form, extract::State, http::StatusCode};
 

@@ -1,4 +1,5 @@
 //! [DOC: docs/system/dashboard.md]
+//! Fragment renderers
 
 use askama::Template;
 use axum::{body::Body, http::StatusCode, response::Response};

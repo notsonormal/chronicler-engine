@@ -1,4 +1,5 @@
 //! [DOC: docs/system/game_flow.md]
+//! Message history tracking
 
 use serde::{Deserialize, Serialize};
 

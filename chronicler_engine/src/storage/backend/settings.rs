@@ -1,4 +1,5 @@
 //! [DOC: docs/system/storage.md]
+//! Settings storage operations
 
 use chrono::Utc;
 

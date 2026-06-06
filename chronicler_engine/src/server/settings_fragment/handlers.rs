@@ -1,4 +1,5 @@
 //! [DOC: docs/system/dashboard.md]
+//! Settings handlers
 
 use axum::{Form, extract::State, response::Html};
 

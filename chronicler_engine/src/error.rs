@@ -1,4 +1,5 @@
 //! [DOC: docs/architecture/system.md]
+//! Error types and result aliases
 
 use thiserror::Error;
 

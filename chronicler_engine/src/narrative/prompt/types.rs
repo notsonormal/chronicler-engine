@@ -1,4 +1,5 @@
 //! [DOC: docs/system/prompt_system.md]
+//! Prompt type definitions
 
 use crate::model::character::{NpcCard, PlayerCard};
 use crate::model::map::Room;

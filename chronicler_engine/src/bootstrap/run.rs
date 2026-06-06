@@ -1,4 +1,5 @@
 //! [DOC: docs/system/startup.md]
+//! Main entry point and runtime execution
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};

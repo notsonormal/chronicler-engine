@@ -1,4 +1,5 @@
 //! [DOC: docs/system/game_flow.md]
+//! Game service handling gameplay operations
 
 use std::sync::{Arc, RwLock};
 

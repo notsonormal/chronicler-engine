@@ -1,3 +1,5 @@
+"""Parse lcov coverage data and generate human-readable reports."""
+
 import json
 import sys
 

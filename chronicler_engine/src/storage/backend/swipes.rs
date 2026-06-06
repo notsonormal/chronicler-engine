@@ -1,4 +1,5 @@
 //! [DOC: docs/system/game_flow.md]
+//! Swipe data storage
 
 use std::collections::HashMap;
 

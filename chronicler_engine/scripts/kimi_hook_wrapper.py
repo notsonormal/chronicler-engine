@@ -1,16 +1,4 @@
-#!/usr/bin/env python3
-"""Project-aware Kimi Code CLI hook wrapper for generate_docs_index.py.
-
-Reads hook context JSON from stdin, checks if the session is inside the
-chronicler_engine project, and conditionally runs the docs index generator.
-
-Usage in ~/.kimi/config.toml:
-
-    [[hooks]]
-    event = "SessionStart"
-    command = "python /absolute/path/to/chronicler_engine/scripts/kimi_hook_wrapper.py"
-    timeout = 10
-"""
+"""Kimi CLI hook: regenerate docs index on session start."""
 
 import json
 import subprocess

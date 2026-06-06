@@ -1,4 +1,5 @@
 //! [DOC: docs/system/dashboard.md]
+//! UI fragment modules
 
 mod actions;
 mod endpoints;

@@ -1,4 +1,5 @@
 //! [DOC: docs/system/storage.md]
+//! Character storage operations
 
 use chrono::Utc;
 

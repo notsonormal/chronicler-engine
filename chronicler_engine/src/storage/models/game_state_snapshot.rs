@@ -1,4 +1,5 @@
 //! [DOC: docs/system/storage.md]
+//! Game state snapshot model
 
 pub struct DbGameStateSnapshot {
     pub id: i64,

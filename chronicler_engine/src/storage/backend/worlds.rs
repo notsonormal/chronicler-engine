@@ -1,4 +1,5 @@
 //! [DOC: docs/system/storage.md]
+//! World storage operations
 
 use chrono::Utc;
 

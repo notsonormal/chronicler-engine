@@ -1,4 +1,5 @@
 //! [DOC: docs/system/llm_processing.md]
+//! Mock LLM provider for testing
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};

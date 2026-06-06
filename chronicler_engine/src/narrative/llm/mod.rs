@@ -1,4 +1,5 @@
 //! [DOC: docs/system/llm_processing.md]
+//! LLM provider implementations
 
 pub mod backend;
 pub mod deepseek;

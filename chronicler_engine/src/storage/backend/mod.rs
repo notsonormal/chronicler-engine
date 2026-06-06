@@ -1,4 +1,5 @@
 //! [DOC: docs/system/storage.md]
+//! Storage backend modules
 
 pub mod characters;
 pub mod core;

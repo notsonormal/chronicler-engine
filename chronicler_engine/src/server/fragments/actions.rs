@@ -1,4 +1,5 @@
 //! [DOC: docs/system/dashboard.md]
+//! Action fragment handlers
 
 use askama::Template;
 use axum::{

@@ -1,4 +1,5 @@
 //! [DOC: docs/system/dashboard.md]
+//! Prompt preset handlers
 
 use axum::{Form, extract::State, response::Html};
 

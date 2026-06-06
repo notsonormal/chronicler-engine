@@ -1,4 +1,5 @@
 //! [DOC: docs/system/agent_system.md]
+//! Agent trait definitions
 
 use crate::model::agent::{AgentContext, AgentResult, BackendSelector, ExecutionPhase};
 

@@ -1,4 +1,5 @@
 //! [DOC: docs/system/game_flow.md]
+//! Action pipeline orchestration and execution
 
 use std::sync::Arc;
 

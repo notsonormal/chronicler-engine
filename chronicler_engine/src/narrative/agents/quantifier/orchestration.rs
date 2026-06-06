@@ -1,4 +1,5 @@
 //! [DOC: docs/system/agent_system.md]
+//! Quantifier orchestration
 
 use crate::narrative::llm::backend::LlmBackend;
 

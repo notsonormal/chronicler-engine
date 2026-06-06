@@ -1,4 +1,5 @@
 //! [DOC: docs/system/game_flow.md]
+//! Action execution pipeline and validation
 use crate::engine::logic::{attempt_semantic_walk, create_dynamic_room};
 use crate::engine::state_diagnostics::assert_state_consistency;
 use crate::engine::trigger_eval::{

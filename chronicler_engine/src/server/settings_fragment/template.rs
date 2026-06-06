@@ -1,4 +1,5 @@
 //! [DOC: docs/system/dashboard.md]
+//! Settings templates
 
 use askama::Template;
 

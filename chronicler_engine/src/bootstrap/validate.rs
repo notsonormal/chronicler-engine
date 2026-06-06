@@ -1,4 +1,5 @@
 //! [DOC: docs/system/startup.md]
+//! Validation utilities for bootstrap data
 use crate::model::character::{NpcCard, PlayerCard};
 use crate::model::map::MapDef;
 use crate::model::world::WorldManifest;

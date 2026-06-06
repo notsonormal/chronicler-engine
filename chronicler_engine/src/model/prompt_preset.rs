@@ -1,4 +1,5 @@
 //! [DOC: docs/system/game_flow.md]
+//! Prompt preset configurations
 
 use serde::{Deserialize, Serialize};
 

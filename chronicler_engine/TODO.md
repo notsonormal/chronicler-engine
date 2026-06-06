@@ -3,7 +3,7 @@
 ## Added: 2026-06-05
 
 - [x] DOC anchors - replaced function-level anchors with module-level `//! [DOC: ...]` on line 1 of every `src/` file. Removed function-level and spawn-site guardrails. Module-level guardrail added. Documentation updated.
-- [] Consider adding a guardrail to enforce class level comments. Then auto generate the structure in the AGENTS.md based on that. We only need the first line. Same for the python scripts (Should also not start with #!/usr/bin/env python3)
+- [x] Module-level DOC anchors + summaries - Enforced `//! [DOC: ...]` on line 1 and `//! Summary` on line 2 for all Rust files. Python scripts removed shebangs and added module docstrings. Pre-commit hook auto-generates AGENTS.md structure index.
 
 ## Added: 2026-06-01
 

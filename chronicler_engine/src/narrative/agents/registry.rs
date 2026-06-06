@@ -1,4 +1,5 @@
 //! [DOC: docs/system/agent_system.md]
+//! Runtime agent lookup and lifecycle
 
 use std::sync::{Arc, RwLock};
 

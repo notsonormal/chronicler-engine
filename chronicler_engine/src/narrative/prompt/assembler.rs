@@ -1,4 +1,5 @@
 //! [DOC: docs/system/prompt_system.md]
+//! Multi-stage prompt builder
 
 use crate::error::EngineError;
 use crate::model::character::NpcCard;

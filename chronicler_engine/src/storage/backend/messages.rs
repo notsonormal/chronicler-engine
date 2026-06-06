@@ -1,4 +1,5 @@
 //! [DOC: docs/system/game_flow.md]
+//! Message storage operations
 
 use crate::error::EngineError;
 use crate::model::message::Message;

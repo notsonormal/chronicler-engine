@@ -1,4 +1,5 @@
 //! [DOC: docs/system/dashboard.md]
+//! Server implementation
 
 use std::sync::Arc;
 use tracing;

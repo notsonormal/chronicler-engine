@@ -1,4 +1,5 @@
 //! [DOC: docs/system/llm_processing.md]
+//! LLM backend provider types
 
 use serde::{Deserialize, Serialize};
 

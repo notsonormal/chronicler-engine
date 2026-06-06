@@ -1,4 +1,5 @@
 //! [DOC: docs/system/text_check.md]
+//! Text checking and validation
 
 pub mod check;
 pub mod harper_backend;

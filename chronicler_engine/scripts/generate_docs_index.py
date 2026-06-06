@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Generate an auto-updating index for chronicler_engine/docs/README.md.
 
 Scans all .md files in the docs directory, extracts H1 titles, and regenerates

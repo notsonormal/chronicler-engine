@@ -1,16 +1,11 @@
-#!/usr/bin/env python3
-"""
-Extract and process images from SillyTavern character cards.
-Creates two versions:
-- Original: Full image saved as-is
-- Cropped: Portrait crop (top 40%) for profile images
-"""
+"""Extract and process images from SillyTavern character cards (original + cropped versions)."""
 
-import sys
+import argparse
 import base64
+import io
 import json
 import os
-import argparse
+import sys
 from pathlib import Path
 
 try:
@@ -53,7 +48,6 @@ def extract_images(file_path: Path, output_dir: Path) -> str | None:
 
                         match = re.search(r"data:image/(\w+);base64,(.+)", avatar_data)
                         if match:
-                            fmt = match.group(1)
                             img_data = base64.b64decode(match.group(2))
                             main_img = Image.open(io.BytesIO(img_data))
             except Exception as e:

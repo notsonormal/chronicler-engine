@@ -1,4 +1,5 @@
 //! [DOC: docs/system/dashboard.md]
+//! Application settings and configuration
 
 use std::path::PathBuf;
 

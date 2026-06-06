@@ -1,4 +1,5 @@
 //! [DOC: docs/system/llm_processing.md]
+//! LLM request building
 
 use std::sync::atomic::{AtomicU64, Ordering};
 

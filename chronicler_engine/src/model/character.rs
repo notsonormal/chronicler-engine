@@ -1,4 +1,5 @@
 //! [DOC: docs/system/character_state.md]
+//! Character sheet data and NPC card definitions
 
 use serde::{Deserialize, Serialize};
 

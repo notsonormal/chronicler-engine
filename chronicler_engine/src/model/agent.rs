@@ -1,4 +1,5 @@
 //! [DOC: docs/system/agent_system.md]
+//! Agent definitions and behavior types
 
 use serde::{Deserialize, Serialize};
 

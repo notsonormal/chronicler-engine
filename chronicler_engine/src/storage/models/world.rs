@@ -1,4 +1,5 @@
 //! [DOC: docs/system/storage.md]
+//! World database model
 
 /// Database row for `worlds` table.
 pub struct DbWorld {

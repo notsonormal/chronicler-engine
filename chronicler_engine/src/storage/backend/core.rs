@@ -1,4 +1,5 @@
 //! [DOC: docs/system/storage.md]
+//! SQLite connection pooling and transactions
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};

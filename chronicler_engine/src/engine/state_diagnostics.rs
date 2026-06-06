@@ -1,4 +1,5 @@
 //! [DOC: docs/architecture/invariants.md]
+//! State diagnostics and debugging utilities
 
 use crate::error::EngineError;
 #[cfg(feature = "diagnostics")]

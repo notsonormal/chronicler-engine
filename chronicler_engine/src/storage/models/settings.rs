@@ -1,4 +1,5 @@
 //! [DOC: docs/system/storage.md]
+//! Settings database model
 
 /// Database row for `settings` table (singleton, id=1).
 pub struct DbSettings {

@@ -1,4 +1,5 @@
 //! [DOC: docs/system/dashboard.md]
+//! Miscellaneous fragment utilities
 
 use askama::Template;
 use axum::{

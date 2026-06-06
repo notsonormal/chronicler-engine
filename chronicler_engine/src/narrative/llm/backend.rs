@@ -1,4 +1,5 @@
 //! [DOC: docs/system/llm_processing.md]
+//! LLM backend abstraction
 
 use std::sync::Arc;
 

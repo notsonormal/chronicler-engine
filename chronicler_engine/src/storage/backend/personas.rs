@@ -1,4 +1,5 @@
 //! [DOC: docs/system/storage.md]
+//! Persona storage operations
 
 use chrono::Utc;
 

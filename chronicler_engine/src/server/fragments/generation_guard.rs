@@ -1,4 +1,5 @@
 //! [DOC: docs/system/dashboard.md]
+//! Generation guard logic
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};

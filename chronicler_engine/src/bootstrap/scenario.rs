@@ -1,4 +1,5 @@
 //! [DOC: docs/system/startup.md]
+//! Scenario loading and validation
 use crate::model::character::PlayerCard;
 use crate::model::state::GameState;
 use crate::model::world::WorldManifest;

@@ -1,4 +1,5 @@
 //! [DOC: docs/system/storage.md]
+//! Message database model
 
 pub struct DbMessage {
     pub id: i64,

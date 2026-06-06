@@ -1,4 +1,5 @@
 //! [DOC: docs/system/llm_processing.md]
+//! LLM message storage
 
 use crate::error::EngineError;
 use crate::model::llm_message::LlmMessage;

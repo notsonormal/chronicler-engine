@@ -1,4 +1,5 @@
 //! [DOC: docs/system/dashboard.md]
+//! Port management utilities
 
 use tokio::net::TcpListener;
 use tracing;

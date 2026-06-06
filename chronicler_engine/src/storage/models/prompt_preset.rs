@@ -1,4 +1,5 @@
 //! [DOC: docs/system/storage.md]
+//! Prompt preset model
 
 pub struct DbPromptPreset {
     pub id: String,

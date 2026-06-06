@@ -1,8 +1,4 @@
-#!/usr/bin/env python3
-"""Guardrail: enforce 1:1 test file mapping.
-
-Fails the build if any inline #[cfg(test)] mod blocks are found in src/.
-"""
+"""Enforce 1:1 test file mapping — no inline test modules in src/."""
 
 import re
 import sys
@@ -21,7 +17,7 @@ def check() -> int:
         content = rs_file.read_text(encoding="utf-8")
 
         # Ban inline #[cfg(test)] mod blocks (look for opening brace)
-        for match in re.finditer(r'#\[cfg\(test\)\]\s*mod\s+\w+\s*\{', content):
+        for match in re.finditer(r"#\[cfg\(test\)\]\s*mod\s+\w+\s*\{", content):
             errors.append(f"Inline test block found: {rs_file}")
 
     if errors:

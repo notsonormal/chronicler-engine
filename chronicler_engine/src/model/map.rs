@@ -1,4 +1,5 @@
 //! [DOC: docs/system/game_flow.md]
+//! Map and location data structures
 
 use std::collections::HashMap;
 

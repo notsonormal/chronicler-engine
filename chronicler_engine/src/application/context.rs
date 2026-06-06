@@ -1,4 +1,5 @@
 //! [DOC: docs/system/game_flow.md]
+//! Application context and state management
 
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};

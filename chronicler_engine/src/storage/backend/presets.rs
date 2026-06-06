@@ -1,4 +1,5 @@
 //! [DOC: docs/system/storage.md]
+//! Preset storage operations
 
 use crate::error::EngineError;
 use crate::model::prompt_preset::{PresetType, PromptPreset};

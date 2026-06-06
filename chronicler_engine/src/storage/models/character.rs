@@ -1,4 +1,5 @@
 //! [DOC: docs/system/storage.md]
+//! Character database model
 
 /// Database row for `characters` table (NpcCard).
 pub struct DbCharacter {

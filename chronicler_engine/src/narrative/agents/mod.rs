@@ -1,4 +1,5 @@
 //! [DOC: docs/system/agent_system.md]
+//! Agent registry and trait definitions
 
 pub mod quantifier;
 pub mod registry;

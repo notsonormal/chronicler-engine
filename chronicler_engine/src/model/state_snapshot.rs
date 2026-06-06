@@ -1,4 +1,5 @@
 //! [DOC: docs/system/game_flow.md]
+//! State snapshot serialization
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};

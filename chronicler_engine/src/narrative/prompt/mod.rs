@@ -1,4 +1,5 @@
 //! [DOC: docs/system/prompt_system.md]
+//! Prompt construction orchestration
 
 pub mod assembler;
 pub mod budget;

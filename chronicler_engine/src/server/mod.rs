@@ -1,4 +1,5 @@
 //! [DOC: docs/system/dashboard.md]
+//! HTTP server and API endpoints
 
 pub mod app_state;
 pub mod debug;

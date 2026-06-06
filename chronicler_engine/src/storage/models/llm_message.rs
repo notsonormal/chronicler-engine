@@ -1,4 +1,5 @@
 //! [DOC: docs/system/storage.md]
+//! LLM message database model
 
 pub struct DbLlmMessage {
     pub id: i64,

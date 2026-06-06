@@ -1,4 +1,5 @@
 //! [DOC: docs/system/game_flow.md]
+//! Action enum and action processing types
 
 use tracing::instrument;
 use crate::application::action_pipeline::pipeline::{

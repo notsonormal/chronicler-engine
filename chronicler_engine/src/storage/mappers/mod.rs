@@ -1,4 +1,5 @@
 //! [DOC: docs/system/storage.md]
+//! Row-to-domain object mapping
 
 pub mod llm_message;
 pub mod message;

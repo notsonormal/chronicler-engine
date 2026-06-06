@@ -1,4 +1,5 @@
 //! [DOC: docs/system/dashboard.md]
+//! Prompt preset templates
 
 use askama::Template;
 

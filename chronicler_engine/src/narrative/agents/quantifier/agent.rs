@@ -1,4 +1,5 @@
 //! [DOC: docs/system/agent_system.md]
+//! Quantifier agent implementation
 
 use std::sync::{Arc, RwLock};
 

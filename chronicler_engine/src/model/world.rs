@@ -1,4 +1,5 @@
 //! [DOC: docs/system/agent_system.md]
+//! World data and geography
 
 use serde::{Deserialize, Serialize};
 

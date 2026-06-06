@@ -1,4 +1,5 @@
 //! [DOC: docs/system/startup.md]
+//! Bootstrap game state from saved snapshots
 use std::sync::Arc;
 
 use crate::application::context::GameServiceContext;

@@ -1,4 +1,5 @@
 //! [DOC: docs/system/text_check.md]
+//! Text check execution
 
 use crate::error::EngineError;
 use crate::model::settings::TextCheckMode;

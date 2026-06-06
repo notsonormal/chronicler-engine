@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+"""Extract embedded PNG images from SillyTavern character cards."""
 import sys
 import base64
 import json

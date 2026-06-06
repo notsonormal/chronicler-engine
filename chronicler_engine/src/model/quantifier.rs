@@ -1,4 +1,5 @@
 //! [DOC: docs/system/game_flow.md]
+//! Quantifier types for narrative evaluation
 
 use crate::model::agent::Confidence;
 

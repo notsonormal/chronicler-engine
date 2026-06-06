@@ -1,4 +1,5 @@
 //! [DOC: docs/system/text_check.md]
+//! Text check type definitions
 
 use std::ops::Range;
 

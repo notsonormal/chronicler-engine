@@ -1,4 +1,5 @@
 //! [DOC: docs/system/dashboard.md]
+//! Prompt preset fragments
 
 use crate::model::prompt_preset::PromptPreset;
 use crate::server::fragments::html_escape;

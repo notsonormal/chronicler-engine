@@ -1,4 +1,5 @@
 //! [DOC: docs/system/triggers.md]
+//! Trigger conditions and event types
 
 use std::collections::HashMap;
 

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+"""Refine character JSON data format."""
 import json
 import re
 import glob

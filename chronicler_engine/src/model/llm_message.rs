@@ -1,4 +1,5 @@
 //! [DOC: docs/system/llm_processing.md]
+//! LLM message formatting and structure
 
 use chrono::{DateTime, Utc};
 

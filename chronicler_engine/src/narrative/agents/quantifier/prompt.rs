@@ -1,4 +1,5 @@
 //! [DOC: docs/system/agent_system.md]
+//! Quantifier prompt construction
 
 use crate::narrative::agents::quantifier::types::QuantifierPromptContext;
 

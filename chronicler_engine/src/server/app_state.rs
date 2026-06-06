@@ -1,4 +1,5 @@
 //! [DOC: docs/system/dashboard.md]
+//! Application state management
 
 use std::collections::HashMap;
 use std::sync::Arc;

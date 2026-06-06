@@ -1,4 +1,4 @@
-You# Chronicler Engine Knowledge Base
+# Chronicler Engine Knowledge Base
 
 **Generated:** 2026-05-10
 **Language:** Rust (Edition 2024)
@@ -8,80 +8,167 @@ You# Chronicler Engine Knowledge Base
 Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HTMX dashboard, LLM-powered narrative generation, data-driven game state from JSON configs.
 
 ## STRUCTURE
-```
-chronicler_engine/
-├── src/                    # Source code (120+ .rs files)
-│   ├── lib.rs             # Library root
-│   ├── main.rs            # Binary entry (CLI + server)
-│   ├── error.rs           # EngineError enum
-│   ├── cli.rs             # Command-line argument parsing
-│   ├── settings.rs        # Application settings management
-│   ├── bootstrap/         # Startup initialization (load, logging, run, scenario, validate)
-│   ├── engine/            # Game logic
-│   │   ├── action.rs, action_processing.rs, logic.rs, parser.rs
-│   │   ├── trigger_eval.rs, state_diagnostics.rs
-│   │   └── game_service/  # Game flow orchestration (actions, context, helpers, retry, service)
-│   ├── model/             # Data structures
-│   │   ├── agent.rs, character.rs, game.rs, llm_backend.rs, llm_message.rs
-│   │   ├── map.rs, message.rs, scenario.rs, settings.rs, state.rs, state_snapshot.rs
-│   │   ├── trigger.rs, world.rs
-│   ├── narrative/         # LLM integration
-│   │   ├── llm_client.rs  # High-level LLM client facade
-│   │   ├── agents/        # Agent subsystem (registry, trait_def, quantifier/)
-│   │   ├── llm/           # Backend implementations (backend, deepseek, mock, ollama, openrouter)
-│   │   ├── prompt/        # Prompt building (budget, builder, context, sanitize, templates, types)
-│   │   └── text_check/    # Grammar/spelling checking (check, harper_backend, types)
-│   ├── server/            # Axum HTTP/WebSocket
-│   │   ├── mod.rs, templates.rs, debug.rs
-│   │   ├── fragments/     # HTMX fragment endpoints (actions, endpoints, history, misc, renderers)
-│   │   └── settings_fragment/ # Settings UI fragments (fragments, handlers, template)
-│   ├── storage/           # Persistence layer (db, models, mappers, snapshot_storage, llm_message_storage)
-│   └── test_support/      # Shared test helpers (context, fixtures, in_memory_storage)
-├── tests/                 # Integration tests
-│   ├── architecture.rs    # arch-lint guardrail tests
-│   ├── browser.rs         # Browser automation tests (editing, interaction, structure)
-│   ├── components.rs      # In-process server tests (connections, css, debug, fragment, settings, template, text_check, world)
-│   ├── diagnostic.rs      # Diagnostic backend tests (backends, scenarios)
-│   ├── flow_llm_tests.rs  # End-to-end LLM flow tests
-│   ├── flow_mock_tests.rs # End-to-end mock flow tests
-│   ├── game_service.rs    # Game flow tests (advanced, basic)
-│   ├── guardrails.rs      # Style and structure guardrails
-│   ├── logic_tests.rs     # Game logic unit tests
-│   ├── test_data.rs       # Test data validation
-│   ├── text_check_tests.rs# Text-check integration tests
-│   ├── browser/          # Browser integration tests (editing, interaction, structure, trigger)
-│   └── test_utils/        # Shared test utilities (browser, server, wait)
-├── docs/                  # Extensive documentation (75+ .md files, auto-indexed)
-│   ├── architecture/      # System specs (system.md, guardrails.md, invariants.md)
-│   ├── system/            # Domain docs (agent_system, character_state, dashboard, dynamic_rooms, game_flow, llm_processing, narration_engine, navigation, prompt_system, startup, text_check, triggers, ui_design)
-│   ├── plans/             # Implementation plans (active + archived/)
-│   ├── adr/               # Architecture Decision Records (adr-001 through adr-013)
-│   ├── diagnostics/       # Error catalog
-│   ├── reference/         # Data schemas, API specs, testing strategy, persona/quantifier docs, SillyTavern references
-│   ├── reviews/           # Architectural reviews (holistic, defensive, agent-scalability)
-│   ├── CHANGELOG.md
-│   └── ROADMAP.md
-├── data/
-│   ├── characters/        # Character configs per world
-│   ├── images/            # Character sprites, headshots, room images
-│   ├── personas/          # Player persona configs
-│   ├── schemas/           # JSON schemas (character, map, settings, world)
-│   ├── settings.json      # Default settings
-│   └── worlds/            # World and map JSON configs
-└── scripts/               # Python helpers
-    ├── build.py           # Full validation (fmt + clippy + tests + coverage)
-    ├── check_test_structure.py
-    ├── coverage_summary.py
-    ├── diagnostic_benchmark.py
-    ├── extract_images.py
-    ├── extract_sillytavern_png.py
-    ├── generate_docs_index.py
-    ├── install_git_hooks.py
-    ├── kimi_hook_wrapper.py
-    ├── parse_coverage.py
-    ├── refine_character_json.py
-    └── validate_data.py
-```
+<!-- AUTO-STRUCTURE START -->
+- **src/**
+  - `cli.rs` — Command-line interface definitions
+  - `error.rs` — Error types and result aliases
+  - `settings.rs` — Application settings and configuration
+  - **application/**
+    - `application_service.rs` — Main application service coordinating game operations
+    - `context.rs` — Application context and state management
+    - `game_lifecycle.rs` — Game lifecycle management and state transitions
+    - `game_service.rs` — Game service handling gameplay operations
+    - `message_editing.rs` — Message editing and modification utilities
+    - `query_handlers.rs` — Read-only data access for game state and debug views
+    - **action_pipeline/**
+      - `actions.rs` — Action enum and action processing types
+      - `mod.rs` — Action pipeline for processing game actions
+      - `pipeline.rs` — Action pipeline orchestration and execution
+      - `retry.rs` — Retry logic for action pipeline operations
+  - **bootstrap/**
+    - `load.rs` — Data loading and initialization routines
+    - `logging.rs` — Logging setup and configuration
+    - `run.rs` — Main entry point and runtime execution
+    - `scenario.rs` — Scenario loading and validation
+    - `state.rs` — Bootstrap game state from saved snapshots
+    - `validate.rs` — Validation utilities for bootstrap data
+  - **engine/**
+    - `action.rs` — Action enum and semantic command types
+    - `action_processing.rs` — Action execution pipeline and validation
+    - `logic.rs` — Game logic and rule evaluation
+    - `parser.rs` — Parser for game data formats
+    - `state_diagnostics.rs` — State diagnostics and debugging utilities
+    - `trigger_eval.rs` — Trigger evaluation and condition checking
+  - **model/**
+    - `agent.rs` — Agent definitions and behavior types
+    - `character.rs` — Character sheet data and NPC card definitions
+    - `game.rs` — Game state and session management
+    - `llm_backend.rs` — LLM backend provider types
+    - `llm_message.rs` — LLM message formatting and structure
+    - `map.rs` — Map and location data structures
+    - `message.rs` — Message types and conversation history
+    - `message_history.rs` — Message history tracking
+    - `prompt_preset.rs` — Prompt preset configurations
+    - `quantifier.rs` — Quantifier types for narrative evaluation
+    - `scenario.rs` — Scenario definitions and world data
+    - `settings.rs` — Settings and configuration types
+    - `state.rs` — Game state representations
+    - `state_snapshot.rs` — State snapshot serialization
+    - `trigger.rs` — Trigger conditions and event types
+    - `world.rs` — World data and geography
+  - **narrative/**
+    - **agents/**
+      - `mod.rs` — Agent registry and trait definitions
+      - `registry.rs` — Runtime agent lookup and lifecycle
+      - `trait_def.rs` — Agent trait definitions
+      - **quantifier/**
+        - `agent.rs` — Quantifier agent implementation
+        - `mod.rs` — Quantifier agent system
+        - `orchestration.rs` — Quantifier orchestration
+        - `parser.rs` — Quantifier output parsing
+        - `prompt.rs` — Quantifier prompt construction
+        - `test_support.rs` — Quantifier test utilities
+        - `types.rs` — Quantifier type definitions
+    - **llm/**
+      - `backend.rs` — LLM backend abstraction
+      - `deepseek.rs` — DeepSeek LLM provider
+      - `mock.rs` — Mock LLM provider for testing
+      - `mod.rs` — LLM provider implementations
+      - `ollama.rs` — Ollama LLM provider
+      - `openrouter.rs` — OpenRouter LLM provider
+      - `sanitize.rs` — LLM input/output sanitization
+    - **llm_client/**
+      - `client.rs` — LLM client implementation
+      - `mod.rs` — LLM client interface
+      - `request.rs` — LLM request building
+      - `response.rs` — LLM response parsing
+    - **prompt/**
+      - `assembler.rs` — Multi-stage prompt builder
+      - `budget.rs` — Token budget management
+      - `context.rs` — Prompt context building
+      - `mod.rs` — Prompt construction orchestration
+      - `sanitize.rs` — Prompt sanitization
+      - `types.rs` — Prompt type definitions
+    - **text_check/**
+      - `check.rs` — Text check execution
+      - `harper_backend.rs` — Harper text check backend
+      - `mod.rs` — Text checking and validation
+      - `types.rs` — Text check type definitions
+  - **server/**
+    - `app_state.rs` — Application state management
+    - `debug.rs` — Debug utilities and endpoints
+    - `handlers.rs` — Core HTTP request routing and handling
+    - `port_utils.rs` — Port management utilities
+    - `router.rs` — Router configuration
+    - `server_impl.rs` — Server implementation
+    - `templates.rs` — Template rendering utilities
+    - `view_models.rs` — View models decouple templates from domain types.
+    - **fragments/**
+      - `actions.rs` — Action fragment handlers
+      - `endpoints.rs` — Fragment endpoints
+      - `games.rs` — Games fragment handlers
+      - `generation_guard.rs` — Generation guard logic
+      - `history.rs` — History fragment handlers
+      - `misc.rs` — Miscellaneous fragment utilities
+      - `mod.rs` — UI fragment modules
+      - `renderers.rs` — Fragment renderers
+    - **prompt_presets_fragment/**
+      - `fragments.rs` — Prompt preset fragments
+      - `handlers.rs` — Prompt preset handlers
+      - `mod.rs` — Prompt presets fragment module
+      - `template.rs` — Prompt preset templates
+    - **settings_fragment/**
+      - `fragments.rs` — Settings fragments
+      - `handlers.rs` — Settings handlers
+      - `mod.rs` — Settings fragment module
+      - `template.rs` — Settings templates
+  - **storage/**
+    - `db.rs` — Database connection and utilities
+    - **backend/**
+      - `characters.rs` — Character storage operations
+      - `core.rs` — SQLite connection pooling and transactions
+      - `games.rs` — Game storage operations
+      - `llm_messages.rs` — LLM message storage
+      - `messages.rs` — Message storage operations
+      - `mod.rs` — Storage backend modules
+      - `personas.rs` — Persona storage operations
+      - `presets.rs` — Preset storage operations
+      - `settings.rs` — Settings storage operations
+      - `snapshots.rs` — Snapshot storage operations
+      - `swipes.rs` — Swipe data storage
+      - `worlds.rs` — World storage operations
+    - **mappers/**
+      - `llm_message.rs` — LLM message mapper
+      - `message.rs` — Message mapper
+      - `mod.rs` — Row-to-domain object mapping
+      - `state_snapshot.rs` — State snapshot mapper
+    - **models/**
+      - `character.rs` — Character database model
+      - `game.rs` — Game database model
+      - `game_state_snapshot.rs` — Game state snapshot model
+      - `llm_message.rs` — LLM message database model
+      - `message.rs` — Message database model
+      - `mod.rs` — Database schema entity definitions
+      - `persona.rs` — Persona database model
+      - `prompt_preset.rs` — Prompt preset model
+      - `settings.rs` — Settings database model
+      - `world.rs` — World database model
+- **scripts/**
+  - `build.py` — Full build, validate, and test for Chronicler Engine.
+  - `check_python_docstrings.py` — Check Python scripts for proper module docstrings and no shebangs.
+  - `check_test_structure.py` — Enforce 1:1 test file mapping — no inline test modules in src/.
+  - `coverage_summary.py` — Parse lcov coverage data and generate human-readable reports.
+  - `diagnostic_benchmark.py` — Run diagnostic benchmarks and rank failure scenarios by debuggability.
+  - `extract_images.py` — Extract and process images from SillyTavern character cards (original + cropped versions).
+  - `extract_sillytavern_png.py` — Extract embedded PNG images from SillyTavern character cards.
+  - `generate_docs_index.py` — Generate an auto-updating index for chronicler_engine/docs/README.md.
+  - `generate_structure_index.py` — Generate AGENTS.md structure index from module summaries.
+  - `install_git_hooks.py` — Install git hooks for the chronicler_engine project.
+  - `kimi_hook_wrapper.py` — Kimi CLI hook: regenerate docs index on session start.
+  - `parse_coverage.py` — Parse coverage report from cargo-llvm-cov JSON output.
+  - `refine_character_json.py` — Refine character JSON data format.
+  - `validate_data.py` — Validate game data files for consistency.
+<!-- AUTO-STRUCTURE END -->
 
 ## Windows Development Environment
 
@@ -108,7 +195,10 @@ This project follows a **Spec-Driven Implementation** (SDI) strategy.
 
 ### Core Principles
 1. **Naming as Documentation**: Symbols (functions, types, variables) must use verbose, domain-aligned names that map 1-to-1 with concepts in the `docs/`.
-2. **Module-Level DOC Anchors**: Every file in `src/` starts with `//! [DOC: docs/path/to/domain-doc.md]` linking to its domain documentation. Function-level anchors removed.
+2. **Module-Level Two-Line Headers**: Every file in `src/` has:
+   - Line 1: `//! [DOC: docs/path/to/domain-doc.md]` (links to domain documentation)
+   - Line 2: `//! Human-readable summary` (used for auto-generating STRUCTURE section)
+   Function-level anchors removed.
 3. **Lean Code**: Remove all "What" comments. If the code isn't clear, rename the symbols.
 4. **The "Why" Exception**: Comments are reserved ONLY for technical constraints (e.g., `// Workaround for Axum timeout issue`).
 5. **Be Consise**: Be extremely concise. Sacrifice grammar for the sake of concision. 

@@ -1,4 +1,5 @@
 //! [DOC: docs/system/storage.md]
+//! Snapshot storage operations
 
 use crate::error::EngineError;
 use crate::model::state_snapshot::GameStateSnapshot;

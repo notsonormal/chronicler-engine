@@ -1,21 +1,43 @@
 #!/bin/sh
-# Git pre-commit hook: regenerate docs index if stale.
+# Git pre-commit hook: regenerate docs and structure indexes if stale.
 # Install with: python scripts/install_git_hooks.py
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+ENGINE_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-python "$PROJECT_ROOT/chronicler_engine/scripts/generate_docs_index.py"
+# Save current directory
+ORIG_DIR="$(pwd)"
 
-# If the index was updated, the working tree is now dirty.
-# Abort the commit so the user can stage the updated README.md.
-if ! git diff --quiet -- "$PROJECT_ROOT/chronicler_engine/docs/README.md"; then
+# Change to engine root for git operations
+cd "$ENGINE_ROOT"
+
+# Regenerate docs index
+python "scripts/generate_docs_index.py"
+
+# Regenerate structure index  
+python "scripts/generate_structure_index.py"
+
+# Check if AGENTS.md was updated
+if ! git diff --quiet -- "AGENTS.md"; then
     echo ""
-    echo "docs/README.md was updated by the auto-index generator."
+    echo "AGENTS.md was updated by the structure index generator."
     echo "Please stage the changes and commit again:"
-    echo "  git add chronicler_engine/docs/README.md"
+    echo "  git add AGENTS.md"
     echo "  git commit"
+    cd "$ORIG_DIR"
     exit 1
 fi
 
+# Check if docs/README.md was updated
+if ! git diff --quiet -- "docs/README.md"; then
+    echo ""
+    echo "docs/README.md was updated by the auto-index generator."
+    echo "Please stage the changes and commit again:"
+    echo "  git add docs/README.md"
+    echo "  git commit"
+    cd "$ORIG_DIR"
+    exit 1
+fi
+
+cd "$ORIG_DIR"
 exit 0

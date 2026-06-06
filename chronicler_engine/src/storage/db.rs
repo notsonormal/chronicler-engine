@@ -1,4 +1,5 @@
 //! [DOC: docs/system/storage.md]
+//! Database connection and utilities
 
 use std::sync::{Arc, Mutex};
 

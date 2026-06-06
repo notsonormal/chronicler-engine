@@ -1,4 +1,5 @@
 //! [DOC: docs/system/storage.md]
+//! Game database model
 
 pub struct DbGame {
     pub id: i64,

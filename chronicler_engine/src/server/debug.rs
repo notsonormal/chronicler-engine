@@ -1,4 +1,5 @@
 //! [DOC: docs/system/dashboard.md]
+//! Debug utilities and endpoints
 
 use axum::{Json, extract::State, http::StatusCode};
 use serde::Serialize;

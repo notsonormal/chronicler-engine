@@ -1,4 +1,5 @@
 //! [DOC: docs/system/game_flow.md]
+//! Game lifecycle management and state transitions
 
 use crate::application::ApplicationError;
 use crate::application::context::GameServiceContext;

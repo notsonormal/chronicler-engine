@@ -1,4 +1,5 @@
 //! [DOC: docs/system/agent_system.md]
+//! Scenario definitions and world data
 
 use serde::{Deserialize, Serialize};
 

@@ -1,4 +1,5 @@
 //! [DOC: docs/system/game_flow.md]
+//! Main application service coordinating game operations
 
 use std::collections::HashMap;
 use std::sync::Arc;

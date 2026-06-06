@@ -1,4 +1,5 @@
 //! [DOC: docs/system/navigation.md]
+//! Game engine core modules
 
 pub mod action;
 pub mod action_processing;

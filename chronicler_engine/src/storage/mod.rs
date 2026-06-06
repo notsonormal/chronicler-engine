@@ -1,4 +1,5 @@
 //! [DOC: docs/system/storage.md]
+//! Storage layer and database access
 
 pub mod backend;
 pub mod db;

@@ -1,4 +1,5 @@
 //! [DOC: docs/system/storage.md]
+//! State snapshot mapper
 
 use chrono::{DateTime, Utc};
 

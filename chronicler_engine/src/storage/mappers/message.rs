@@ -1,4 +1,5 @@
 //! [DOC: docs/system/storage.md]
+//! Message mapper
 
 use chrono::{DateTime, Utc};
 

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Install git hooks for the chronicler_engine project.
 
 Copies the tracked hooks from scripts/git-hooks/ into .git/hooks/.

@@ -1,4 +1,5 @@
 //! [DOC: docs/system/prompt_system.md]
+//! Token budget management
 
 /// Maximum tokens allocated for the entire context window (fallback default).
 pub const MAX_CONTEXT_TOKENS: u32 = 32768;

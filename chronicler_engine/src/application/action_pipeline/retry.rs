@@ -1,4 +1,5 @@
 //! [DOC: docs/system/game_flow.md]
+//! Retry logic for action pipeline operations
 
 use tracing::instrument;
 use crate::application::action_pipeline::pipeline::{

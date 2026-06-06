@@ -1,4 +1,5 @@
 //! [DOC: docs/system/dashboard.md]
+//! Router configuration
 
 use axum::{
     Router,

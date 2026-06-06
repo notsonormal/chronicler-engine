@@ -1,4 +1,5 @@
 //! [DOC: docs/system/dashboard.md]
+//! Games fragment handlers
 
 use axum::{
     extract::{Path, State},

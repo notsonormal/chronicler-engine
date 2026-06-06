@@ -1,4 +1,5 @@
 //! [DOC: docs/system/dashboard.md]
+//! Settings fragments
 
 use crate::model::llm_backend::LlmBackendType;
 use crate::model::settings::Connection;

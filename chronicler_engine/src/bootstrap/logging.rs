@@ -1,4 +1,5 @@
 //! [DOC: docs/system/startup.md]
+//! Logging setup and configuration
 use std::{fs, path::Path};
 
 use chrono::Local;
