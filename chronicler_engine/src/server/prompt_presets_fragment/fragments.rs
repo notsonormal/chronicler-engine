@@ -1,3 +1,5 @@
+//! [DOC: docs/system/dashboard.md]
+
 use crate::model::prompt_preset::PromptPreset;
 use crate::server::fragments::html_escape;
 

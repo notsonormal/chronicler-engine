@@ -1,3 +1,5 @@
+//! [DOC: docs/system/text_check.md]
+
 use std::sync::Arc;
 
 use harper_core::linting::{LintGroup, Linter};

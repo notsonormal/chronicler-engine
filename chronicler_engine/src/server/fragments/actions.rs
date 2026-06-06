@@ -1,3 +1,5 @@
+//! [DOC: docs/system/dashboard.md]
+
 use askama::Template;
 use axum::{
     body::Body,
@@ -21,7 +23,6 @@ pub struct ActionForm {
     pub command: String,
 }
 
-/// [DOC: docs/system/game_flow.md]
 async fn process_action(state: &AppState, command: String) -> Response<Body> {
     if command.is_empty() {
         return bad_request("<span class=\"status error\">Enter a command</span>");
@@ -44,7 +45,6 @@ async fn process_action(state: &AppState, command: String) -> Response<Body> {
     }
 }
 
-/// [DOC: docs/system/game_flow.md]
 pub async fn action_handler(
     State(state): State<AppState>,
     Form(form): Form<ActionForm>,
@@ -53,7 +53,6 @@ pub async fn action_handler(
     process_action(&state, command).await
 }
 
-/// [DOC: docs/system/game_flow.md]
 #[allow(clippy::expect_used)]
 pub async fn action_confirm_handler(
     State(state): State<AppState>,
@@ -81,7 +80,6 @@ pub async fn action_confirm_handler(
         .expect("static response body is valid")
 }
 
-/// [DOC: docs/system/text_check.md]
 pub async fn action_check_handler(
     State(state): State<AppState>,
     Form(form): Form<ActionForm>,

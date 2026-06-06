@@ -1,3 +1,5 @@
+//! [DOC: docs/system/dashboard.md]
+
 use axum::{extract::Form, extract::State, http::StatusCode};
 
 use crate::application::application_service::ApplicationError;
@@ -10,7 +12,6 @@ pub struct EditHistoryForm {
     pub text: String,
 }
 
-/// [DOC: docs/system/game_flow.md]
 pub async fn edit_history_handler(
     State(state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<u64>,
@@ -28,7 +29,6 @@ pub async fn edit_history_handler(
     }
 }
 
-/// [DOC: docs/system/game_flow.md]
 pub async fn delete_history_handler(State(state): State<AppState>) -> (StatusCode, String) {
     match state
         .application_service

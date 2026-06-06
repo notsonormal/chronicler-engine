@@ -1,3 +1,5 @@
+//! [DOC: docs/system/agent_system.md]
+
 use crate::narrative::llm::backend::LlmBackend;
 
 use super::parser::parse_quantifier_response_with_movement;
@@ -175,7 +177,6 @@ pub(crate) fn static_npc_result(
     }
 }
 
-/// [DOC: docs/system/llm_processing.md]
 pub fn determine_npcs_in_room(
     state: &crate::model::state::GameState,
     current_room: &crate::model::map::Room,

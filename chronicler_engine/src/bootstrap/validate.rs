@@ -1,8 +1,8 @@
+//! [DOC: docs/system/startup.md]
 use crate::model::character::{NpcCard, PlayerCard};
 use crate::model::map::MapDef;
 use crate::model::world::WorldManifest;
 
-/// [DOC: docs/architecture/system.md]
 pub fn validate_loaded_data(
     manifest: &WorldManifest,
     map: &MapDef,

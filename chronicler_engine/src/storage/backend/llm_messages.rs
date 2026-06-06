@@ -1,3 +1,5 @@
+//! [DOC: docs/system/llm_processing.md]
+
 use crate::error::EngineError;
 use crate::model::llm_message::LlmMessage;
 use crate::storage::backend::{Backend, Operation, Storage};

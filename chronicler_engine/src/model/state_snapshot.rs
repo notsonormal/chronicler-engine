@@ -1,3 +1,5 @@
+//! [DOC: docs/system/game_flow.md]
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 

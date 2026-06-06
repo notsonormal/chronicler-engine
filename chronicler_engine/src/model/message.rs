@@ -1,3 +1,5 @@
+//! [DOC: docs/system/agent_system.md]
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use crate::model::state::MessageType;

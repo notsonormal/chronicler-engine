@@ -8,7 +8,6 @@ use crate::model::state_snapshot::GameStateSnapshot;
 use crate::storage::Storage;
 
 pub fn make_test_context(state: GameState) -> GameServiceContext {
-    // [DOC: docs/architecture/system.md]
     let snapshot = GameStateSnapshot::from_game_state(&state);
     let storage = Arc::new(Storage::new_in_memory());
     let _ = storage.save_snapshot(&snapshot);
@@ -23,7 +22,6 @@ pub fn make_test_context(state: GameState) -> GameServiceContext {
     build_test_context(state, storage)
 }
 
-/// [DOC: docs/reference/testing.md]
 pub fn make_test_context_without_snapshot(state: GameState) -> GameServiceContext {
     let storage = Arc::new(Storage::new_in_memory());
     for msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
@@ -66,7 +64,6 @@ fn build_test_context(state: GameState, storage: Arc<Storage>) -> GameServiceCon
     }
 }
 
-/// [DOC: docs/reference/testing.md]
 pub fn make_test_context_with_sqlite(state: GameState) -> crate::error::Result<GameServiceContext> {
     let snapshot = GameStateSnapshot::from_game_state(&state);
     let db_pool = crate::storage::db::DbPool::new(":memory:")?;

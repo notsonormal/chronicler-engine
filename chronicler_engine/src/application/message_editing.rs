@@ -1,3 +1,5 @@
+//! [DOC: docs/system/game_flow.md]
+
 use std::sync::Arc;
 
 use chrono::Utc;
@@ -139,7 +141,6 @@ impl MessageEditingService {
         let game_service = Arc::clone(&self.game_service);
         let ctx_clone = ctx.clone();
 
-        // [DOC: docs/architecture/invariants.md#INV-004]
         tokio::task::spawn_blocking(move || {
             if ctx_clone.cancel_token.is_cancelled() {
                 return;
@@ -184,7 +185,6 @@ impl MessageEditingService {
         let game_service = Arc::clone(&self.game_service);
         let ctx_clone = ctx.clone();
 
-        // [DOC: docs/architecture/invariants.md#INV-004]
         tokio::task::spawn_blocking(move || {
             if ctx_clone.cancel_token.is_cancelled() {
                 return;

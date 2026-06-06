@@ -1,3 +1,5 @@
+//! [DOC: docs/system/storage.md]
+
 pub struct DbPromptPreset {
     pub id: String,
     pub name: String,

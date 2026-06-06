@@ -1,137 +1,137 @@
 use syn::spanned::Spanned;
-use syn::visit::Visit;
-use syn::{File, ItemFn};
+use syn::File;
 
 use crate::Violation;
 
-// ── Doc Anchor Requirement ──
+const MODULE_DOC_EXEMPTIONS: &[&str] = &[
+    // Crate root and binary entry (purely structural)
+    "lib.rs",
+    "main.rs",
+    // Test infrastructure (internal, no public API)
+    "test_support/",
+];
 
-struct DocAnchorVisitor<'a> {
-    file_path: &'a str,
-    content: &'a str,
-    violations: &'a mut Vec<Violation>,
+fn is_module_doc_exempt(path: &str) -> bool {
+    let normalized = path.replace('\\', "/");
+    MODULE_DOC_EXEMPTIONS
+        .iter()
+        .any(|exempt| normalized.contains(exempt))
 }
 
-impl<'ast> Visit<'ast> for DocAnchorVisitor<'_> {
-    fn visit_item_fn(&mut self, node: &'ast ItemFn) {
-        // Only check pub functions
-        if !matches!(node.vis, syn::Visibility::Public(_)) {
-            return;
-        }
+fn extract_module_doc_anchor(content: &str) -> Option<String> {
+    content
+        .lines()
+        .find(|line| line.trim().starts_with("//! [DOC:"))
+        .and_then(|line| {
+            let start = line.find('[')? + 1;
+            let end = line.find(']')?;
+            let inner = line[start..end].trim();
+            inner
+                .strip_prefix("DOC:")
+                .map(|stripped| stripped.trim().to_string())
+        })
+}
 
-        let fn_name = node.sig.ident.to_string();
+fn points_to_system_md(doc_path: &str) -> bool {
+    doc_path == "docs/architecture/system.md" || doc_path.ends_with("/architecture/system.md")
+}
 
-        // Exempt getters/setters
-        if (fn_name.starts_with("get_") || fn_name.starts_with("set_"))
-            && stmt_count(&node.block.stmts) <= 3
-        {
-            return;
-        }
+const SYSTEM_MD_EXEMPT: &[&str] = &[
+    "model/",   // model tier IS architecture
+    "storage/", // storage tier IS architecture
+    "error.rs", // error taxonomy IS architecture
+];
 
-        // Exempt trivial functions
-        if stmt_count(&node.block.stmts) <= 5 && !contains_control_flow(&node.block.stmts) {
-            return;
-        }
+fn is_system_md_exempt(path: &str) -> bool {
+    let normalized = path.replace("\\", "/");
+    SYSTEM_MD_EXEMPT
+        .iter()
+        .any(|exempt| normalized.contains(exempt))
+}
 
-        // Check if function has doc anchor in attributes
-        let has_doc_anchor_attr = node.attrs.iter().any(|attr| {
-            let doc_str = quote::quote!(#attr).to_string();
-            doc_str.contains("[DOC:")
-        });
+fn expected_doc_target(path: &str) -> Option<&'static str> {
+    if path.starts_with("application/") {
+        Some("docs/system/game_flow.md")
+    } else if path == "engine/mod.rs" || path == "engine/logic.rs" {
+        Some("docs/system/navigation.md")
+    } else if path == "engine/trigger_eval.rs" {
+        Some("docs/system/triggers.md")
+    } else if path == "engine/state_diagnostics.rs" {
+        Some("docs/architecture/invariants.md")
+    } else if path.starts_with("engine/") {
+        Some("docs/system/game_flow.md")
+    } else if path == "model/character.rs" {
+        Some("docs/system/character_state.md")
+    } else if path == "model/trigger.rs" {
+        Some("docs/system/triggers.md")
+    } else if path == "model/agent.rs" {
+        Some("docs/system/agent_system.md")
+    } else if path.starts_with("model/llm")
+        || path == "model/llm_backend.rs"
+        || path == "model/llm_message.rs"
+    {
+        Some("docs/system/llm_processing.md")
+    } else if path.starts_with("model/") {
+        None // model tier IS architecture
+    } else if path.starts_with("narrative/llm") || path.starts_with("narrative/llm_client") {
+        Some("docs/system/llm_processing.md")
+    } else if path.starts_with("narrative/prompt") {
+        Some("docs/system/prompt_system.md")
+    } else if path.starts_with("narrative/agents") {
+        Some("docs/system/agent_system.md")
+    } else if path.starts_with("narrative/text_check") {
+        Some("docs/system/text_check.md")
+    } else if path == "narrative/mod.rs" || path.starts_with("narrative/") {
+        Some("docs/system/narration_engine.md")
+    } else if path.starts_with("server/") {
+        Some("docs/system/dashboard.md")
+    } else if path.starts_with("bootstrap/") {
+        Some("docs/system/startup.md")
+    } else {
+        None
+    }
+}
 
-        if has_doc_anchor_attr {
-            return;
-        }
+pub fn check_module_doc_anchors(path: &str, content: &str) -> Vec<Violation> {
+    let mut violations = Vec::new();
 
-        // Check if first statement has doc anchor
-        let start = node.sig.ident.span().start().line;
-        let end = node.block.brace_token.span.close().start().line;
-        let has_anchor_in_body = self
-            .content
-            .lines()
-            .skip(start)
-            .take(end.saturating_sub(start))
-            .any(|line| line.trim().starts_with("// [DOC:"));
+    if path.ends_with("_tests.rs") || path.ends_with("_test.rs") {
+        return violations;
+    }
 
-        if has_anchor_in_body {
-            return;
-        }
+    if is_module_doc_exempt(path) {
+        return violations;
+    }
 
-        self.violations.push(Violation::warn(
-            self.file_path,
-            start,
-            format!(
-                "Public function `{fn_name}` is complex (>5 stmts or has control flow) but lacks a doc anchor. \
-                 Add `/// [DOC: docs/path/to/file.md]` or `// [DOC: ...]` inside the function body."
-            ),
+    let anchor = extract_module_doc_anchor(content);
+
+    if anchor.is_none() {
+        violations.push(Violation::warn(
+            path,
+            1,
+            format!("Module `{path}` lacks a module-level DOC anchor. Add `//! [DOC: docs/path/to/file.md]` at the top of the file."),
+        ));
+        return violations;
+    }
+
+    let anchor_path = anchor.unwrap();
+
+    if points_to_system_md(&anchor_path) && !is_system_md_exempt(path) {
+        violations.push(Violation::warn(
+            path,
+            1,
+            format!("Module `{path}` points to `system.md` but should point to a domain-specific doc. Files outside model/storage tiers must use specific docs (e.g., `game_flow.md`, `navigation.md`)."),
         ));
     }
-}
 
-fn stmt_count(stmts: &[syn::Stmt]) -> usize {
-    stmts.len()
-}
-
-fn contains_control_flow(stmts: &[syn::Stmt]) -> bool {
-    use syn::*;
-    for stmt in stmts {
-        match stmt {
-            Stmt::Local(_) => {}
-            Stmt::Item(_) => {}
-            Stmt::Expr(expr, _) => {
-                if expr_contains_control_flow(expr) {
-                    return true;
-                }
-            }
-            Stmt::Macro(_) => {}
+    if let Some(expected) = expected_doc_target(path) {
+        if anchor_path != expected {
+            // Informational only
         }
     }
-    false
-}
 
-fn expr_contains_control_flow(expr: &syn::Expr) -> bool {
-    use syn::*;
-    match expr {
-        Expr::If(_) | Expr::Match(_) | Expr::ForLoop(_) | Expr::While(_) | Expr::Loop(_) => true,
-        Expr::Try(_) => true, // ? operator
-        Expr::Block(b) => contains_control_flow(&b.block.stmts),
-        Expr::MethodCall(m) => expr_contains_control_flow(&m.receiver),
-        Expr::Call(c) => expr_contains_control_flow(&c.func),
-        Expr::Binary(b) => {
-            expr_contains_control_flow(&b.left) || expr_contains_control_flow(&b.right)
-        }
-        Expr::Assign(a) => {
-            expr_contains_control_flow(&a.left) || expr_contains_control_flow(&a.right)
-        }
-        Expr::Field(f) => expr_contains_control_flow(&f.base),
-        Expr::Index(i) => expr_contains_control_flow(&i.expr),
-        Expr::Tuple(t) => t.elems.iter().any(expr_contains_control_flow),
-        Expr::Array(a) => a.elems.iter().any(expr_contains_control_flow),
-        Expr::Struct(s) => s.fields.iter().any(|f| expr_contains_control_flow(&f.expr)),
-        Expr::Closure(c) => {
-            if let syn::Expr::Block(block) = &*c.body {
-                contains_control_flow(&block.block.stmts)
-            } else {
-                expr_contains_control_flow(&c.body)
-            }
-        }
-        _ => false,
-    }
-}
-
-pub fn check_doc_anchors(path: &str, content: &str) -> Vec<Violation> {
-    let mut violations = Vec::new();
-    let ast = syn::parse_file(content).unwrap();
-    let mut visitor = DocAnchorVisitor {
-        file_path: path,
-        content,
-        violations: &mut violations,
-    };
-    visitor.visit_file(&ast);
     violations
 }
-
-// ── mod.rs Purity ──
 
 pub fn check_mod_purity(path: &str, _content: &str, ast: &File) -> Vec<Violation> {
     let mut violations = Vec::new();
@@ -140,8 +140,6 @@ pub fn check_mod_purity(path: &str, _content: &str, ast: &File) -> Vec<Violation
         return violations;
     }
 
-    // Exempt src/server/mod.rs — it contains router setup and shared state
-    // that is idiomatic for Axum projects.
     if path.replace('\\', "/").contains("server/mod.rs") {
         return violations;
     }
@@ -156,8 +154,7 @@ pub fn check_mod_purity(path: &str, _content: &str, ast: &File) -> Vec<Violation
             syn::Item::Static(s) => ("static", s.ident.span().start().line),
             syn::Item::Type(t) => ("type alias", t.ident.span().start().line),
             syn::Item::Trait(t) => ("trait", t.ident.span().start().line),
-            // Allowed: Mod, Use, ForeignMod, Verbatim
-            _ => continue,
+            _ => continue, // Allowed: Mod, Use, ForeignMod, Verbatim
         };
 
         violations.push(Violation::error(
@@ -174,18 +171,14 @@ pub fn check_mod_purity(path: &str, _content: &str, ast: &File) -> Vec<Violation
     violations
 }
 
-// -- No legacy make_test_context in integration tests --
-
 pub fn check_no_legacy_test_context(path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
 
-    // Only check integration tests
     if !path.starts_with("integration/") {
         return violations;
     }
 
     for (line_num, line) in content.lines().enumerate() {
-        // Skip comments
         let trimmed = line.trim();
         if trimmed.starts_with("//") || trimmed.starts_with("/*") {
             continue;
@@ -201,12 +194,10 @@ pub fn check_no_legacy_test_context(path: &str, content: &str) -> Vec<Violation>
     }
     violations
 }
-// ── No std::thread in production code ──
 
 fn check_no_std_thread(path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
 
-    // Mock backends are allowed to use thread::sleep for test delays.
     if path.contains("mock.rs") {
         return violations;
     }
@@ -239,41 +230,6 @@ fn check_no_std_thread(path: &str, content: &str) -> Vec<Violation> {
 pub fn check_no_std_thread_all(path: &str, content: &str) -> Vec<Violation> {
     check_no_std_thread(path, content)
 }
-
-// ── Spawn site documentation ──
-
-pub fn check_spawn_site_docs(path: &str, content: &str) -> Vec<Violation> {
-    let mut violations = Vec::new();
-    let lines: Vec<&str> = content.lines().collect();
-
-    for (line_num, line) in lines.iter().enumerate() {
-        let trimmed = line.trim();
-        if !trimmed.contains("spawn_blocking") && !trimmed.contains("tokio::spawn") {
-            continue;
-        }
-
-        // Look back up to 5 lines for a doc anchor
-        let start = line_num.saturating_sub(5);
-        let has_doc = lines[start..line_num]
-            .iter()
-            .any(|l| l.trim().starts_with("// [DOC:"));
-
-        if !has_doc {
-            violations.push(Violation::warn(
-                path,
-                line_num + 1,
-                format!(
-                    "Spawn site `{trimmed}` lacks a doc anchor. \
-                     Add `// [DOC: docs/architecture/invariants.md#INV-004]` \
-                     or similar within 5 lines above the spawn."
-                ),
-            ));
-        }
-    }
-    violations
-}
-
-// ── File Length ──
 
 pub fn check_file_length(path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();

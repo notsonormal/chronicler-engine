@@ -1,3 +1,5 @@
+//! [DOC: docs/system/game_flow.md]
+
 use std::collections::HashMap;
 
 use crate::error::EngineError;

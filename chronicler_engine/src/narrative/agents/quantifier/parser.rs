@@ -1,3 +1,5 @@
+//! [DOC: docs/system/agent_system.md]
+
 use serde::Deserialize;
 
 use crate::model::quantifier::{
@@ -57,7 +59,6 @@ fn extract_npcs(response: &str, known_npc_ids: &[String]) -> QuantifierParseResu
     }
 }
 
-/// [DOC: docs/reference/quantifier_prompt.md]
 pub fn parse_quantifier_response(
     response: &str,
     known_npc_ids: &[String],
@@ -65,7 +66,6 @@ pub fn parse_quantifier_response(
     extract_npcs(response, known_npc_ids)
 }
 
-/// [DOC: docs/reference/quantifier_prompt.md]
 pub fn parse_quantifier_response_with_movement(
     response: &str,
     known_npc_ids: &[String],
@@ -215,7 +215,6 @@ pub(crate) fn extract_npc_ids_from_text(response: &str, known_npc_ids: &[String]
     found
 }
 
-/// [DOC: docs/reference/quantifier_prompt.md]
 pub fn extract_movement_from_text(
     response: &str,
     all_rooms: &[RoomInfo],

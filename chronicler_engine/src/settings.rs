@@ -1,3 +1,5 @@
+//! [DOC: docs/system/dashboard.md]
+
 use std::path::PathBuf;
 
 use crate::error::Result;

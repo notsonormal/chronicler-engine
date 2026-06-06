@@ -9,7 +9,6 @@ use crate::model::state::GameState;
 /// violations immediately at the site of the bug.
 #[cfg(feature = "diagnostics")]
 pub fn assert_state_consistency(state: &GameState) -> Result<(), EngineError> {
-    // [DOC: docs/architecture/invariants.md]
     assert_room_exists(state)?;
     assert_npc_consistency(state)?;
     assert_npc_encounter_log_consistency(state)?;

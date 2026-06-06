@@ -1,20 +1,19 @@
+//! [DOC: docs/system/navigation.md]
+
 use std::collections::HashMap;
 
 use crate::error::{EngineError, Result};
 use crate::model::map::{MapDef, Room};
 use crate::model::state::GameState;
 
-/// [DOC: docs/system/navigation.md]
 pub fn find_room_in_map<'a>(map: &'a MapDef, target_id: &str) -> Option<&'a Room> {
     map.get_room_by_id(target_id)
 }
 
 pub fn find_room_in_world_map<'a>(state: &'a GameState, target_id: &str) -> Option<&'a Room> {
-    // [DOC: docs/system/navigation.md]
     state.map.get_room_by_id(target_id)
 }
 
-/// [DOC: docs/system/navigation.md]
 pub fn attempt_semantic_walk(state: &mut GameState, room_id: &str) -> Result<String> {
     let room_name = if let Some(room) = find_room_in_world_map(state, room_id) {
         room.name.clone()
@@ -36,7 +35,6 @@ pub fn attempt_semantic_walk(state: &mut GameState, room_id: &str) -> Result<Str
 /// static map, the engine creates a placeholder room so the player can still proceed.
 /// Dynamic rooms are stored in `state.movement.dynamic_rooms` and persist for the session.
 ///
-/// [DOC: docs/system/dynamic_rooms.md]
 pub fn create_dynamic_room(name: &str, description: &str) -> Room {
     use std::time::SystemTime;
     let timestamp = SystemTime::now()

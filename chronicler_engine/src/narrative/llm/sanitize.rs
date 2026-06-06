@@ -1,3 +1,5 @@
+//! [DOC: docs/system/llm_processing.md]
+
 //! Response sanitization for LLM backends.
 //!
 //! Strips leaked thinking/reasoning artifacts from LLM output.
@@ -9,7 +11,6 @@ use regex::Regex;
 /// Strip leaked thinking/reasoning artifacts from LLM output.
 #[allow(clippy::expect_used)]
 pub fn sanitize_llm_output(text: &str) -> String {
-    // [DOC: docs/system/llm_processing.md section 9]
     static RE_LEADING_CHANNEL: Lazy<Regex> =
         Lazy::new(|| Regex::new(r"^\s*<channel\|>").expect("valid regex"));
     static RE_THOUGHT_BLOCK: Lazy<Regex> =

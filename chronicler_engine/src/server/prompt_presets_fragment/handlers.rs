@@ -1,3 +1,5 @@
+//! [DOC: docs/system/dashboard.md]
+
 use axum::{Form, extract::State, response::Html};
 
 use crate::model::prompt_preset::{PresetType, PromptPreset};
@@ -46,7 +48,6 @@ fn generate_preset_id() -> String {
     )
 }
 
-/// [DOC: docs/architecture/system.md]
 pub async fn preset_card_handler(
     State(app_state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<String>,
@@ -62,7 +63,6 @@ pub async fn preset_card_handler(
     Html(preset_card_html(&preset, is_active))
 }
 
-/// [DOC: docs/architecture/system.md]
 pub async fn view_preset_form_handler(
     State(app_state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<String>,
@@ -72,7 +72,6 @@ pub async fn view_preset_form_handler(
     Html(preset_view_form_html(&preset))
 }
 
-/// [DOC: docs/architecture/system.md]
 pub async fn panel_handler(State(app_state): State<AppState>) -> Html<String> {
     let system_presets = app_state
         .preset_storage
@@ -118,7 +117,6 @@ impl PresetForm {
     }
 }
 
-/// [DOC: docs/architecture/system.md]
 pub async fn save_preset_handler(
     State(app_state): State<AppState>,
     Form(form): Form<PresetForm>,
@@ -139,7 +137,6 @@ pub async fn save_preset_handler(
     panel_handler(State(app_state)).await
 }
 
-/// [DOC: docs/architecture/system.md]
 pub async fn edit_preset_form_handler(
     State(app_state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<String>,
@@ -163,7 +160,6 @@ pub async fn edit_preset_form_handler(
     ))
 }
 
-/// [DOC: docs/architecture/system.md]
 pub async fn update_preset_handler(
     State(app_state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<String>,
@@ -196,7 +192,6 @@ pub async fn update_preset_handler(
     Html(preset_card_html(&updated, is_active))
 }
 
-/// [DOC: docs/architecture/system.md]
 pub async fn delete_preset_handler(
     State(app_state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<String>,
@@ -214,7 +209,6 @@ pub async fn delete_preset_handler(
     Html(String::new())
 }
 
-/// [DOC: docs/architecture/system.md]
 pub async fn duplicate_preset_handler(
     State(app_state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<String>,
@@ -233,7 +227,6 @@ pub async fn duplicate_preset_handler(
     panel_handler(State(app_state)).await
 }
 
-/// [DOC: docs/architecture/system.md]
 pub async fn activate_preset_handler(
     State(app_state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<String>,

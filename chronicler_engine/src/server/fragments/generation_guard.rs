@@ -1,7 +1,8 @@
+//! [DOC: docs/system/dashboard.md]
+
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-// [DOC: docs/architecture/invariants.md#INV-004]
 /// RAII guard that clears the `is_generating` flag on drop.
 /// Used in `spawn_blocking` to ensure the flag is always released
 /// even if the background task panics.

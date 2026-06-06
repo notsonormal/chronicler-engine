@@ -1,4 +1,4 @@
-//! [DOC: docs/architecture/system.md]
+//! [DOC: docs/system/game_flow.md]
 use crate::engine::logic::{attempt_semantic_walk, create_dynamic_room};
 use crate::engine::state_diagnostics::assert_state_consistency;
 use crate::engine::trigger_eval::{
@@ -8,7 +8,6 @@ use crate::error::EngineError;
 use crate::model::character::NpcCard;
 use crate::model::quantifier::{NpcEvent, NpcTransitionType, QuantifierResult, compute_npc_events};
 use crate::model::state::{GameState, MessageType, StoredTriggerContext};
-/// [DOC: docs/architecture/system.md]
 pub struct FreeActionContext<'a> {
     pub narration_text: &'a str,
     pub quantifier_result: &'a QuantifierResult,
@@ -29,7 +28,6 @@ pub struct TurnResult {
 
 /// Attempts movement to a destination, creating a dynamic room on failure.
 pub fn attempt_movement(state: GameState, destination: &str) -> Result<GameState, EngineError> {
-    // [DOC: docs/architecture/system.md]
     let mut state = state;
     match attempt_semantic_walk(&mut state, destination) {
         Ok(_) => Ok(state),
@@ -58,7 +56,6 @@ pub fn update_npc_encounters_on_room_change(
     previous_room_id: &str,
     new_npc_ids: &[String],
 ) -> GameState {
-    // [DOC: docs/architecture/system.md]
     if previous_room_id != state.movement.current_room_id {
         for npc_id in new_npc_ids {
             set_currently_meeting(&mut state.npc_encounter_log, npc_id, true);
@@ -69,7 +66,6 @@ pub fn update_npc_encounters_on_room_change(
 
 /// Updates narrative state after movement completion.
 pub fn log_movement_completion(state: GameState) -> GameState {
-    // [DOC: docs/architecture/system.md]
     let mut state = state;
     if let Some(current_room) = state.current_room() {
         state.narrative.pending_location = Some(current_room.name.clone());
@@ -77,7 +73,6 @@ pub fn log_movement_completion(state: GameState) -> GameState {
     state
 }
 
-/// [DOC: docs/architecture/system.md]
 pub fn handle_movement(
     state: GameState,
     destination: Option<&str>,
@@ -97,7 +92,6 @@ pub fn handle_movement(
     Ok(state)
 }
 
-/// [DOC: docs/architecture/system.md]
 pub fn apply_npc_events(state: GameState, events: &[NpcEvent]) -> Result<GameState, EngineError> {
     let mut state = state;
     for event in events {
@@ -116,13 +110,11 @@ pub fn apply_npc_events(state: GameState, events: &[NpcEvent]) -> Result<GameSta
     Ok(state)
 }
 
-// [DOC: docs/architecture/system.md]
 pub fn commit_trigger_narration(
     state: GameState,
     trigger: &StoredTriggerContext,
     continuation_text: &str,
 ) -> Result<GameState, EngineError> {
-    // [DOC: docs/architecture/system.md]
     if continuation_text.trim().is_empty() {
         return Ok(state);
     }
@@ -143,12 +135,10 @@ pub fn commit_trigger_narration(
 }
 
 /// Executes free action processing with quantifier result.
-// [DOC: docs/architecture/system.md]
 pub fn execute_freeaction_impl(
     state: &GameState,
     ctx: &FreeActionContext<'_>,
 ) -> Result<TurnResult, EngineError> {
-    // [DOC: docs/architecture/system.md]
     // Mutation order: 1.handle_movement 2.resolve NPCs 3.add_message 4.evaluate_triggers 5.apply_npc_events
     // Swapping 3&4 or 4&5 breaks trigger firing.
     let previous_room_npcs: Vec<NpcCard> = state.scene.npcs_in_area.clone();

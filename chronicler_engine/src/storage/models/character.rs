@@ -1,3 +1,5 @@
+//! [DOC: docs/system/storage.md]
+
 /// Database row for `characters` table (NpcCard).
 pub struct DbCharacter {
     pub id: i64,

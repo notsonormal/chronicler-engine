@@ -1,3 +1,5 @@
+//! [DOC: docs/system/storage.md]
+
 pub mod llm_message;
 pub mod message;
 pub mod state_snapshot;

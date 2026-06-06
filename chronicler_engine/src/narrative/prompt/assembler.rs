@@ -1,3 +1,5 @@
+//! [DOC: docs/system/prompt_system.md]
+
 use crate::error::EngineError;
 use crate::model::character::NpcCard;
 use crate::model::map::Room;

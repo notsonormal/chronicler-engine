@@ -1,3 +1,5 @@
+//! [DOC: docs/system/text_check.md]
+
 pub mod check;
 pub mod harper_backend;
 pub mod types;

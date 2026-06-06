@@ -1,3 +1,5 @@
+//! [DOC: docs/system/game_flow.md]
+
 use serde::{Deserialize, Serialize};
 
 use crate::model::message::Message;

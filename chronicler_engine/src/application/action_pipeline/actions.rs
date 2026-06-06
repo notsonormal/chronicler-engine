@@ -1,10 +1,11 @@
+//! [DOC: docs/system/game_flow.md]
+
 use tracing::instrument;
 use crate::application::action_pipeline::pipeline::{
     ActionOutcome, ActionPipeline, ActionPipelineBackend,
 };
 use crate::application::context::{GameServiceContext, load_or_fresh};
 
-/// [DOC: docs/architecture/system.md]
 #[instrument(skip(backend, ctx), fields(player_name, input_length))]
 pub fn execute_action_impl<B: ActionPipelineBackend>(
     backend: &B,

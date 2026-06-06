@@ -1,3 +1,5 @@
+//! [DOC: docs/system/storage.md]
+
 use crate::error::EngineError;
 use crate::model::prompt_preset::{PresetType, PromptPreset};
 use crate::storage::backend::{Backend, Operation, Storage};

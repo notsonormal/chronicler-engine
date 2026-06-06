@@ -1,3 +1,5 @@
+//! [DOC: docs/system/dashboard.md]
+
 use axum::{Json, extract::State, http::StatusCode};
 use serde::Serialize;
 
@@ -21,7 +23,6 @@ pub struct DebugStateResponse {
 }
 
 /// NOTE: dev-only diagnostic endpoint
-/// [DOC: docs/system/game_flow.md]
 pub async fn debug_state_handler(
     State(state): State<AppState>,
 ) -> Result<Json<DebugStateResponse>, StatusCode> {

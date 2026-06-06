@@ -1,3 +1,5 @@
+//! [DOC: docs/system/storage.md]
+
 /// Database row for `worlds` table.
 pub struct DbWorld {
     pub id: i64,

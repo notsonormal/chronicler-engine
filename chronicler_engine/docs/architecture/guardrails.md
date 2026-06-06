@@ -74,18 +74,45 @@ Each group must be separated by a blank line. Within a group, sort alphabeticall
 **Severity**: error  
 **Scope**: `src/` and `tests/`
 
-### 3.2 Doc Anchor Requirements (`guardrails_doc_anchors`)
+### 3.2 Module-Level DOC Anchor Requirements (`guardrails_module_doc_anchors`)
 
-**Standard**: Public functions with >5 statements or containing control flow must contain a doc anchor comment:
+**Standard**: Every Rust source file in `src/` must have a module-level DOC anchor comment as its first line:
 
 ```rust
-// [DOC: docs/path/to/spec.md]
+//! [DOC: docs/path/to/domain-doc.md]
 ```
 
-Exemptions: getters/setters, `From`/`Into` impls, test functions.
+The anchor must point to a domain-specific documentation file (e.g., `docs/system/game_flow.md`, `docs/system/navigation.md`), not the generic architecture overview (`docs/architecture/system.md`), except for:
+
+- Cross-cutting infrastructure files: `cli.rs`, `error.rs`, `lib.rs`, `main.rs`, `settings.rs`
+- Test support files: `test_support/*`
+- Model tier files: `model/*` (model tier IS the architecture)
+- Storage tier files: `storage/*` (storage schema IS the architecture)
+
+**Mapping by module**:
+
+| Module | Target Doc |
+|--------|-----------|
+| `application/*` | `docs/system/game_flow.md` |
+| `engine/mod.rs`, `engine/logic.rs` | `docs/system/navigation.md` |
+| `engine/trigger_eval.rs` | `docs/system/triggers.md` |
+| `engine/state_diagnostics.rs` | `docs/architecture/invariants.md` |
+| `model/character.rs` | `docs/system/character_state.md` |
+| `model/trigger.rs` | `docs/system/triggers.md` |
+| `model/agent.rs` | `docs/system/agent_system.md` |
+| `model/llm*` | `docs/system/llm_processing.md` |
+| `narrative/agents/*` | `docs/system/agent_system.md` |
+| `narrative/prompt/*` | `docs/system/prompt_system.md` |
+| `narrative/llm/*`, `narrative/llm_client/*` | `docs/system/llm_processing.md` |
+| `narrative/text_check/*` | `docs/system/text_check.md` |
+| `narrative/mod.rs` | `docs/system/narration_engine.md` |
+| `server/*` | `docs/system/dashboard.md` |
+| `bootstrap/*` | `docs/system/startup.md` |
+
+**Rationale**: Module-level anchors provide a clear link from code to its domain documentation without cluttering individual functions. If a specific code block needs documenting, extract it into a separate method.
 
 **Severity**: warn  
-**Goal**: zero warnings, then promote to error.
+**Goal**: zero warnings.
 
 ### 3.3 mod.rs Purity (`guardrails_mod_purity`)
 

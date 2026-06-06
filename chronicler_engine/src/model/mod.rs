@@ -1,3 +1,5 @@
+//! [DOC: docs/system/game_flow.md]
+
 pub mod agent;
 pub mod character;
 pub mod game;

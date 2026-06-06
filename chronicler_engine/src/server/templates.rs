@@ -1,4 +1,4 @@
-//! [DOC: docs/architecture/system.md]
+//! [DOC: docs/system/dashboard.md]
 
 use askama::Template;
 
@@ -85,7 +85,6 @@ impl ActionAreaTemplate {
     }
 }
 
-/// [DOC: docs/system/text_check.md]
 #[derive(Template)]
 #[template(
     source = r##"<div class=text-check-preview>

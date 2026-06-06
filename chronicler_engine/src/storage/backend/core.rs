@@ -1,3 +1,5 @@
+//! [DOC: docs/system/storage.md]
+
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -302,7 +304,6 @@ impl Storage {
     }
 }
 
-// [DOC: docs/architecture/system.md]
 impl Storage {
     pub fn set_game_id(&self, game_id: u64) {
         let current = self.game_id();

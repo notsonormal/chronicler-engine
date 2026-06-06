@@ -1,3 +1,5 @@
+//! [DOC: docs/system/game_flow.md]
+
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -174,7 +176,6 @@ pub struct SceneState {
 
 // ─── GameState ────────────────────────────────────────────────────────────────
 
-/// [DOC: docs/architecture/system.md]
 #[derive(Debug, Clone)]
 #[non_exhaustive]
 pub struct GameState {
@@ -342,7 +343,6 @@ impl GameState {
         self.push_message(text, sender, message_type);
     }
 
-    /// [DOC: docs/system/navigation.md]
     pub fn current_room(&self) -> Option<&Room> {
         self.map
             .get_room_by_id(&self.movement.current_room_id)

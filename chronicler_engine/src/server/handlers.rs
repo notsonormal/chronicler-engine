@@ -1,3 +1,5 @@
+//! [DOC: docs/system/dashboard.md]
+
 use axum::response::Html;
 
 /// Serves the static index.html file.

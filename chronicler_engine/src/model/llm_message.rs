@@ -1,3 +1,5 @@
+//! [DOC: docs/system/llm_processing.md]
+
 use chrono::{DateTime, Utc};
 
 #[derive(Debug, Clone)]

@@ -1,3 +1,5 @@
+//! [DOC: docs/system/agent_system.md]
+
 use std::collections::HashMap;
 
 use chrono::Utc;

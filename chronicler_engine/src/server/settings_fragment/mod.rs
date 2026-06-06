@@ -1,4 +1,4 @@
-//! [DOC: docs/architecture/system.md]
+//! [DOC: docs/system/dashboard.md]
 
 mod fragments;
 mod handlers;

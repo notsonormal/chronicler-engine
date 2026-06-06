@@ -1,3 +1,5 @@
+//! [DOC: docs/system/agent_system.md]
+
 use serde::{Deserialize, Serialize};
 
 use crate::model::scenario::StartingScenario;

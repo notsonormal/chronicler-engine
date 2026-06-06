@@ -1,8 +1,8 @@
+//! [DOC: docs/system/llm_processing.md]
+
 // Allow unused imports: these are intentional re-exports for the public API
 // They appear unused locally but are consumed by external modules (ollama.rs, openrouter.rs, backend.rs)
 #![allow(unused_imports)]
-
-// [DOC: docs/system/llm_processing.md]
 
 mod client;
 mod request;

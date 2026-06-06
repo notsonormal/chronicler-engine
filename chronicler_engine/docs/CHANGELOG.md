@@ -2,11 +2,31 @@
 
 ## 2026-06-06
 
+### Added
+
+- **Module-level DOC anchor system**
+  - Replaced ~67 function-level DOC anchors with 102 module-level `//! [DOC: ...]` anchors
+  - Each `src/` file now has domain-specific anchor on line 1 (e.g., `game_flow.md`, `navigation.md`)
+  - Added `check_module_doc_anchors()` guardrail with exemption list for cross-cutting files
+  - Removed function-level anchor guardrail (`DocAnchorVisitor`, ~120 lines)
+  - Removed spawn-site DOC anchor guardrail (INV-004 already tested in contract tests)
+  - Exempt files: `cli.rs`, `error.rs`, `lib.rs`, `main.rs`, `settings.rs`, `test_support/`, `storage/`, `model/`
+  - Domain doc mapping by module tier (see `docs/architecture/guardrails.md` section 3.2)
+  - Modified files:
+    - All non-test `.rs` files in `src/` (102 files total)
+    - `tests/infrastructure/guardrails/structure.rs` — Added `check_module_doc_anchors()`, removed old guardrails
+    - `tests/infrastructure/guardrails/mod.rs` — Added `guardrails_module_doc_anchors` test, removed old tests
+    - `docs/architecture/guardrails.md` — Replaced section 3.2 with module-level anchor requirements
+    - `chronicler_engine/AGENTS.md` — Updated DOC anchor guidelines (lines 111, 191)
+    - `chronicler_engine/TODO.md` — Marked DOC anchor item complete
+  - All 884 tests pass; guardrail suite reduced to 15 tests (removed 2 obsolete tests)
+  - Coverage impact: Minimal (test infrastructure files only)
+
 ### Fixed
 
 - **Messages/Swipes storage separation — `count_swipes_for_message` moved to correct module**
   - Moved `count_swipes_for_message()` from `src/storage/backend/messages.rs` to `src/storage/backend/swipes.rs`
-  - Eliminates architectural violation where messages module was querying message_swipes table
+  - Eliminates architectural violation where messages module was querying `message_swipes` table
   - Added targeted guardrail `check_messages_swipes_separation()` to prevent regression
   - Guardrail scans `messages.rs` for SQL references to `message_swipes` table (FROM, INTO, UPDATE, JOIN, DELETE)
   - All 885 tests pass; guardrail suite expanded to 16 tests

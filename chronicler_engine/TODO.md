@@ -2,7 +2,7 @@
 
 ## Added: 2026-06-05
 
-- [] DOC anchors should never been inside methods. Only in method signatures. Need guardrails to update the guardrails for this. If we need a DOC anchour on a specific code block, convert the code block into a separate method. Add this suggestion to the guardrail
+- [x] DOC anchors - replaced function-level anchors with module-level `//! [DOC: ...]` on line 1 of every `src/` file. Removed function-level and spawn-site guardrails. Module-level guardrail added. Documentation updated.
 - [] Consider adding a guardrail to enforce class level comments. Then auto generate the structure in the AGENTS.md based on that. We only need the first line. Same for the python scripts (Should also not start with #!/usr/bin/env python3)
 
 ## Added: 2026-06-01

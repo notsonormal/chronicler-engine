@@ -1,3 +1,5 @@
+//! [DOC: docs/system/game_flow.md]
+
 use tracing::instrument;
 use crate::application::action_pipeline::pipeline::{
     ActionOutcome, ActionPipeline, ActionPipelineBackend,
@@ -6,7 +8,6 @@ use crate::application::context::{GameServiceContext, load_or_fresh, save_state}
 use crate::model::state::{GameState, GenerationPhase, GenerationStatus, MessageType};
 use std::sync::Arc;
 
-/// [DOC: docs/architecture/system.md]
 #[instrument(skip(backend, ctx))]
 pub fn retry_last_response_impl<B: ActionPipelineBackend>(backend: &B, ctx: GameServiceContext) {
     let messages = match ctx.load_messages() {
@@ -134,7 +135,6 @@ pub(crate) fn retry_main_narration<B: ActionPipelineBackend>(
     ActionOutcome::from_pipeline_result(pipeline.run_from_input(state, input_text))
 }
 
-/// [DOC: docs/architecture/system.md]
 #[instrument(skip(backend, ctx))]
 pub fn retrigger_event_impl<B: ActionPipelineBackend>(backend: &B, ctx: &GameServiceContext) {
     let state = load_or_fresh(ctx);

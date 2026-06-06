@@ -1,3 +1,5 @@
+//! [DOC: docs/architecture/system.md]
+
 use thiserror::Error;
 
 #[derive(Error, Debug)]

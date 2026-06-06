@@ -1,3 +1,5 @@
+//! [DOC: docs/system/text_check.md]
+
 use std::ops::Range;
 
 /// The result of checking a piece of text for spelling and grammar issues.

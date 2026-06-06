@@ -1,4 +1,5 @@
-/// [DOC: docs/system/llm_processing.md]
+//! [DOC: docs/system/prompt_system.md]
+
 /// Maximum tokens allocated for the entire context window (fallback default).
 pub const MAX_CONTEXT_TOKENS: u32 = 32768;
 
@@ -22,7 +23,6 @@ pub fn estimate_tokens(text: &str) -> usize {
 }
 
 pub fn truncate_to_budget(text: &str, max_tokens: usize) -> String {
-    // [DOC: docs/system/llm_processing.md]
     let max_chars = max_tokens * 4; // Reverse the token estimate
 
     if text.chars().count() <= max_chars {

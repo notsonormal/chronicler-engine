@@ -1,3 +1,5 @@
+//! [DOC: docs/system/storage.md]
+
 pub mod backend;
 pub mod db;
 pub mod mappers;

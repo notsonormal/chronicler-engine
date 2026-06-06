@@ -1,3 +1,5 @@
+//! [DOC: docs/system/startup.md]
+
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use tokio_util::sync::CancellationToken;
@@ -23,7 +25,6 @@ fn with_settings<T>(settings: &Arc<RwLock<AppSettings>>, f: impl FnOnce(&AppSett
     f(&guard)
 }
 
-// [DOC: docs/architecture/invariants.md#INV-004]
 struct ArrivalTaskContext {
     storage: Arc<crate::storage::Storage>,
     world: Arc<WorldCard>,
@@ -151,7 +152,6 @@ impl ArrivalTaskContext {
     }
 }
 
-// [DOC: docs/architecture/system.md]
 pub fn run(args: Args) -> crate::error::Result<()> {
     if args.list_worlds {
         list_available_worlds()?;
@@ -305,7 +305,6 @@ pub fn run(args: Args) -> crate::error::Result<()> {
             db_pool: db_pool.clone(),
         };
 
-        // [DOC: docs/architecture/invariants.md#INV-004]
         runtime.spawn_blocking(move || {
             task_ctx.run();
         });

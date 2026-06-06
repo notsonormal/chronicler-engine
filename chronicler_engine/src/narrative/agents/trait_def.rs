@@ -1,3 +1,5 @@
+//! [DOC: docs/system/agent_system.md]
+
 use crate::model::agent::{AgentContext, AgentResult, BackendSelector, ExecutionPhase};
 
 pub trait Agent: Send + Sync + std::fmt::Debug {

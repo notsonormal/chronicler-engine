@@ -1,3 +1,5 @@
+//! [DOC: docs/system/prompt_system.md]
+
 use crate::error::EngineError;
 use crate::model::character::{NpcCard, PlayerCard};
 use crate::model::map::Room;
@@ -7,7 +9,6 @@ use crate::narrative::prompt::budget;
 use crate::narrative::prompt::budget::estimate_tokens;
 use crate::narrative::prompt::types::PromptContext;
 
-/// [DOC: docs/system/prompt_system.md]
 pub fn fit_messages_to_context(
     system: &str,
     user: &str,
@@ -108,7 +109,6 @@ pub(crate) fn trim_history_to_budget(user: &str, target_user_tokens: usize) -> S
     format!("{prefix}{trimmed_history}{suffix}")
 }
 
-/// [DOC: docs/system/prompt_system.md]
 #[allow(clippy::too_many_arguments)]
 pub fn make_prompt_context<'a>(
     world: &'a WorldCard,

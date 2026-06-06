@@ -1,8 +1,9 @@
+//! [DOC: docs/system/dashboard.md]
+
 use askama::Template;
 
 use crate::model::settings::{AppSettings, Connection, TextCheckMode};
 
-/// [DOC: docs/architecture/system.md]
 pub fn parse_api_key(s: &str) -> Option<String> {
     if s.is_empty() {
         None

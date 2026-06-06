@@ -1,3 +1,5 @@
+//! [DOC: docs/system/dashboard.md]
+
 use askama::Template;
 use axum::{
     body::Body,
@@ -16,7 +18,6 @@ use super::renderers::{
     service_unavailable_generating,
 };
 
-/// [DOC: docs/system/text_check.md]
 #[allow(clippy::expect_used)]
 pub async fn check_text_handler(
     State(state): State<AppState>,
@@ -50,7 +51,6 @@ pub async fn check_text_handler(
     }
 }
 
-/// [DOC: docs/system/game_flow.md]
 pub async fn retry_handler(State(state): State<AppState>) -> (StatusCode, String) {
     match state
         .application_service
@@ -65,7 +65,6 @@ pub async fn retry_handler(State(state): State<AppState>) -> (StatusCode, String
 }
 
 /// Requires `last_trigger` to be present and the last message to be a narration.
-/// [DOC: docs/architecture/system.md]
 pub async fn retrigger_handler(State(state): State<AppState>) -> (StatusCode, String) {
     match state
         .application_service
@@ -79,7 +78,6 @@ pub async fn retrigger_handler(State(state): State<AppState>) -> (StatusCode, St
     }
 }
 
-/// [DOC: docs/architecture/system.md]
 pub async fn switch_swipe_handler(
     State(state): State<AppState>,
     axum::extract::Path((message_id, swipe_index)): axum::extract::Path<(u64, usize)>,
@@ -104,7 +102,6 @@ pub async fn switch_swipe_handler(
     }
 }
 
-/// [DOC: docs/system/game_flow.md]
 pub async fn reset_handler(State(state): State<AppState>) -> axum::response::Response<Body> {
     if state
         .is_generating

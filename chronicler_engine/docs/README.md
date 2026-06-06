@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-06-01 22:55 UTC*
+*Index last generated: 2026-06-06 19:10 UTC*
 
 ### Root files
 
@@ -72,6 +72,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Plan: Migrate Game Data to Database with Seed Pattern](./plans/archived/db-game-data-migration.md)
 - [Plan: Fix Generation Phase Stuck on "Generating narration..." During Post-Generation](./plans/archived/fix-generation-phase-status-2026-06-01.md)
 - [Refactor handle_movement: Split Mixed Responsibilities](./plans/archived/handle-movement-refactor-2026-05-31.md)
+- [Module-Level DOC Anchor Migration](./plans/archived/module-level-doc-anchors-2026-06-06.md)
 - [Plan: Observability & Automated Forensics](./plans/archived/observability-and-forensics-plan-2026-05-31.md)
 - [Remove Identity Wrapper Functions from GameService](./plans/archived/remove-identity-wrapper-functions-2026-05-31.md)
 - [Remove Thin Abstraction TriggerContinuationRequest](./plans/archived/remove-trigger-continuation-request-2026-05-31.md)
@@ -121,6 +122,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Specification: Semantic Navigation](./system/navigation.md)
 - [Chronicler Engine Prompt System](./system/prompt_system.md)
 - [Engine Startup & Initialization](./system/startup.md)
+- [Storage System Specification](./system/storage.md)
 - [Specification: Text Check System](./system/text_check.md)
 - [System: Auto-Trigger & Reactive Encounters](./system/triggers.md)
 - [Specification: UI Design](./system/ui_design.md)

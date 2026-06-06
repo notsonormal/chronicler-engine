@@ -1,3 +1,5 @@
+//! [DOC: docs/system/storage.md]
+
 use crate::error::EngineError;
 use crate::model::state_snapshot::GameStateSnapshot;
 use crate::storage::backend::{Backend, Operation, Storage};

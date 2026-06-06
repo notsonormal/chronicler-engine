@@ -1,3 +1,5 @@
+//! [DOC: docs/system/game_flow.md]
+
 use crate::application::ApplicationError;
 use crate::application::DebugStateView;
 use crate::application::context::{GameServiceContext, load_or_fresh};

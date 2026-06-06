@@ -1,3 +1,5 @@
+//! [DOC: docs/system/startup.md]
+
 // CLI module is allowed to use stdout/stderr for CLI output.
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 

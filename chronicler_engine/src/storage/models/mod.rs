@@ -1,3 +1,5 @@
+//! [DOC: docs/system/storage.md]
+
 pub mod character;
 pub mod game;
 pub mod game_state_snapshot;

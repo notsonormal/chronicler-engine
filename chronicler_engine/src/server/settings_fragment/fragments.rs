@@ -1,3 +1,5 @@
+//! [DOC: docs/system/dashboard.md]
+
 use crate::model::llm_backend::LlmBackendType;
 use crate::model::settings::Connection;
 

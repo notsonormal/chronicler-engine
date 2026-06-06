@@ -1,3 +1,5 @@
+//! [DOC: docs/system/dashboard.md]
+
 mod actions;
 mod endpoints;
 mod games;

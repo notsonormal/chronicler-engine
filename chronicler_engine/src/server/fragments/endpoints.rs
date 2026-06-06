@@ -1,3 +1,5 @@
+//! [DOC: docs/system/dashboard.md]
+
 use axum::{extract::State, response::Html};
 
 use crate::server::AppState;
@@ -20,27 +22,22 @@ where
     }
 }
 
-/// [DOC: docs/system/game_flow.md]
 pub async fn header_fragment(State(state): State<AppState>) -> Html<String> {
     render_fragment(&state, render_header, "header_fragment")
 }
 
-/// [DOC: docs/system/game_flow.md]
 pub async fn story_log_fragment(State(state): State<AppState>) -> Html<String> {
     render_fragment(&state, render_story_log, "story_log_fragment")
 }
 
-/// [DOC: docs/system/game_flow.md]
 pub async fn visual_sidebar_fragment(State(state): State<AppState>) -> Html<String> {
     render_fragment(&state, render_visual_sidebar, "visual_sidebar_fragment")
 }
 
-/// [DOC: docs/system/game_flow.md]
 pub async fn action_area_fragment(State(state): State<AppState>) -> Html<String> {
     render_fragment(&state, render_action_area, "action_area_fragment")
 }
 
-/// [DOC: docs/system/game_flow.md]
 pub async fn character_headshots_fragment(State(state): State<AppState>) -> Html<String> {
     render_fragment(
         &state,
@@ -49,7 +46,6 @@ pub async fn character_headshots_fragment(State(state): State<AppState>) -> Html
     )
 }
 
-/// [DOC: docs/system/game_flow.md]
 pub async fn hints_handler(State(state): State<AppState>) -> Html<String> {
     render_fragment(&state, render_action_hints, "hints_handler")
 }
@@ -62,7 +58,6 @@ pub async fn status_ready_handler(State(_state): State<AppState>) -> Html<String
     Html("<span class=\"status ready\">Ready</span>".to_string())
 }
 
-/// [DOC: docs/system/game_flow.md]
 pub async fn generating_status_handler(State(state): State<AppState>) -> Html<String> {
     tracing::debug!("generating_status_handler: called");
     let ctx = state.as_game_service_context();
@@ -107,7 +102,6 @@ pub async fn generating_status_handler(State(state): State<AppState>) -> Html<St
     }
 }
 
-/// [DOC: docs/system/game_flow.md]
 pub async fn reset_generating_handler(State(state): State<AppState>) -> Html<String> {
     match state
         .application_service

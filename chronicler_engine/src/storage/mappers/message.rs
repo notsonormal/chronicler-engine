@@ -1,10 +1,11 @@
+//! [DOC: docs/system/storage.md]
+
 use chrono::{DateTime, Utc};
 
 use crate::error::EngineError;
 use crate::model::message::{Message, Swipe};
 use crate::storage::models::message::{DbMessage, DbSwipe};
 
-/// [DOC: docs/architecture/system.md]
 pub fn db_message_to_model(db: &DbMessage, swipes: &[DbSwipe]) -> Result<Message, EngineError> {
     let message_type = serde_json::from_str(&db.message_type_json)
         .map_err(|e| EngineError::Config(format!("Failed to parse message message_type: {e}")))?;

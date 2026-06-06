@@ -1,3 +1,5 @@
+//! [DOC: docs/system/navigation.md]
+
 pub mod action;
 pub mod action_processing;
 pub mod logic;

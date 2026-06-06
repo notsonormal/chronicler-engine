@@ -1,3 +1,4 @@
+//! [DOC: docs/system/startup.md]
 use std::{fs, path::Path};
 
 use chrono::Local;
@@ -6,7 +7,6 @@ use tracing_subscriber::{
     fmt, prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt, EnvFilter,
 };
 
-/// [DOC: docs/architecture/system.md]
 pub fn init_logging() -> tracing_appender::non_blocking::WorkerGuard {
     let log_dir = Path::new("logs");
     if !log_dir.exists() {

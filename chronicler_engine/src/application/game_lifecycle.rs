@@ -1,3 +1,5 @@
+//! [DOC: docs/system/game_flow.md]
+
 use crate::application::ApplicationError;
 use crate::application::context::GameServiceContext;
 use crate::bootstrap::build_fresh_initial_state;

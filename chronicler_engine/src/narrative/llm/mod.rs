@@ -1,3 +1,5 @@
+//! [DOC: docs/system/llm_processing.md]
+
 pub mod backend;
 pub mod deepseek;
 pub mod mock;

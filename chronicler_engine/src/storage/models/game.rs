@@ -1,3 +1,5 @@
+//! [DOC: docs/system/storage.md]
+
 pub struct DbGame {
     pub id: i64,
     pub world_name: String,

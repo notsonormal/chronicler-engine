@@ -1,3 +1,5 @@
+//! [DOC: docs/system/game_flow.md]
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -12,7 +14,6 @@ pub struct Game {
 
 /// Generate a unique game name following the pattern `{WorldName}_{Date}_N`.
 /// Finds the highest existing `N` for today's prefix and returns `N+1`.
-/// [DOC: docs/system/game_flow.md]
 pub fn generate_game_name(world_name: &str, existing_names: &[String]) -> String {
     let date = Utc::now().format("%Y-%m-%d");
     let base = format!("{world_name}_{date}");

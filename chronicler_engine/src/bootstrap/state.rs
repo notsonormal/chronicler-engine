@@ -1,11 +1,10 @@
-//! [DOC: docs/architecture/system.md]
+//! [DOC: docs/system/startup.md]
 use std::sync::Arc;
 
 use crate::application::context::GameServiceContext;
 use crate::model::state::GameState;
 
 /// Builds a fresh initial game state from a game service context.
-/// [DOC: docs/architecture/system.md]
 ///
 /// This function belongs in the bootstrap layer as it initializes new game state,
 /// not in the application layer which handles request orchestration.

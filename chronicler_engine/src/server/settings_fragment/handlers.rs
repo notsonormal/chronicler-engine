@@ -1,3 +1,5 @@
+//! [DOC: docs/system/dashboard.md]
+
 use axum::{Form, extract::State, response::Html};
 
 use crate::model::llm_backend::LlmBackendType;
@@ -31,7 +33,6 @@ fn opt_string(value: &str) -> Option<String> {
     }
 }
 
-/// [DOC: docs/architecture/system.md]
 pub async fn settings_panel(State(app_state): State<AppState>) -> Html<String> {
     let settings = try_lock!(app_state.settings.read());
     render_template(SettingsTemplate::from_settings(&settings))
@@ -61,7 +62,6 @@ pub struct TextCheckForm {
     pub enable_auto_check: bool,
 }
 
-/// [DOC: docs/architecture/system.md]
 pub async fn save_settings_handler(
     State(app_state): State<AppState>,
     Form(form): Form<SettingsForm>,
@@ -78,7 +78,6 @@ pub async fn save_settings_handler(
     Html("Settings saved!".to_string())
 }
 
-/// [DOC: docs/system/text_check.md]
 pub async fn save_text_check_handler(
     State(app_state): State<AppState>,
     Form(form): Form<TextCheckForm>,
@@ -100,7 +99,6 @@ pub async fn save_text_check_handler(
     Html("Text check settings saved!".to_string())
 }
 
-/// [DOC: docs/architecture/system.md]
 pub async fn add_connection_handler(
     State(app_state): State<AppState>,
     Form(form): Form<ConnectionForm>,
@@ -171,7 +169,6 @@ pub async fn edit_connection_form(
     Html(connection_edit_form_html(&conn))
 }
 
-/// [DOC: docs/architecture/system.md]
 pub async fn edit_connection_handler(
     State(app_state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<String>,
@@ -208,7 +205,6 @@ pub async fn edit_connection_handler(
     }
 }
 
-/// [DOC: docs/architecture/system.md]
 pub async fn delete_connection_handler(
     State(app_state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<String>,
@@ -239,7 +235,6 @@ pub async fn delete_connection_handler(
     Html(String::new())
 }
 
-/// [DOC: docs/architecture/system.md]
 pub async fn set_narrator_handler(
     State(app_state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<String>,
@@ -259,7 +254,6 @@ pub async fn set_narrator_handler(
     render_template(SettingsTemplate::from_settings(&settings))
 }
 
-/// [DOC: docs/architecture/system.md]
 pub async fn set_quantifier_handler(
     State(app_state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<String>,

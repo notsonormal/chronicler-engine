@@ -1,3 +1,5 @@
+//! [DOC: docs/system/dashboard.md]
+
 use askama::Template;
 
 use crate::model::prompt_preset::PromptPreset;

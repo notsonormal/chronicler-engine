@@ -1,3 +1,5 @@
+//! [DOC: docs/system/storage.md]
+
 pub struct DbLlmMessage {
     pub id: i64,
     pub agent_name: String,

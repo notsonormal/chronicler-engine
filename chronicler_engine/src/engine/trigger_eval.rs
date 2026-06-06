@@ -1,7 +1,8 @@
+//! [DOC: docs/system/triggers.md]
+
 use crate::model::character::NpcCard;
 use crate::model::state::GameState;
 use crate::model::trigger::{ComparisonOperator, NpcEncounterLog, Trigger, TriggerRequirement};
-/// [DOC: docs/system/triggers.md]
 pub fn evaluate_triggers(state: &GameState) -> Vec<(NpcCard, Trigger, usize)> {
     let current_room_id = &state.movement.current_room_id;
 
@@ -48,7 +49,6 @@ pub fn evaluate_triggers(state: &GameState) -> Vec<(NpcCard, Trigger, usize)> {
     results
 }
 
-/// [DOC: docs/system/triggers.md]
 pub fn check_condition(
     npc_encounter_log: &crate::model::trigger::NpcEncounterLog,
     npc_id: &str,

@@ -1,3 +1,5 @@
+//! [DOC: docs/system/game_flow.md]
+
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
 
@@ -104,7 +106,6 @@ impl GameServiceContext {
     }
 }
 
-/// [DOC: docs/architecture/system.md]
 pub fn load_messages_with_swipes(
     storage: &Storage,
 ) -> Result<Vec<crate::model::message::Message>, EngineError> {
@@ -128,7 +129,6 @@ pub fn load_messages_with_swipes(
     Ok(messages)
 }
 
-/// [DOC: docs/architecture/system.md]
 pub fn load_expecting_valid_state(ctx: &GameServiceContext) -> Result<GameState, EngineError> {
     let snapshot = ctx.storage.load_latest_snapshot()?;
     let mut state = match snapshot {
@@ -151,7 +151,6 @@ pub fn load_expecting_valid_state(ctx: &GameServiceContext) -> Result<GameState,
     Ok(state)
 }
 
-/// [DOC: docs/architecture/system.md]
 pub fn load_or_fresh(ctx: &GameServiceContext) -> GameState {
     match load_expecting_valid_state(ctx) {
         Ok(state) => state,
@@ -171,19 +170,16 @@ pub fn load_or_fresh(ctx: &GameServiceContext) -> GameState {
 }
 
 pub fn load_messages_into_state(ctx: &GameServiceContext, state: &mut GameState) {
-    // [DOC: docs/architecture/system.md]
     if let Ok(msgs) = ctx.load_messages() {
         state.narrative.history.replace(msgs);
     }
 }
 
-/// [DOC: docs/architecture/system.md]
 pub fn save_state(ctx: &GameServiceContext, state: &GameState) -> Result<u64, EngineError> {
     let snapshot = GameStateSnapshot::from_game_state(state);
     ctx.storage.save_snapshot(&snapshot)
 }
 
-/// [DOC: docs/architecture/system.md]
 pub fn save_message_and_snapshot(
     ctx: &GameServiceContext,
     state: &mut GameState,
@@ -224,13 +220,11 @@ pub fn delete_and_remove_message(
     state: &mut GameState,
     id: u64,
 ) -> Result<(), EngineError> {
-    // [DOC: docs/architecture/system.md]
     ctx.storage.delete_message(id)?;
     state.narrative.history.retain(|m| m.id != id);
     Ok(())
 }
 
-/// [DOC: docs/architecture/system.md]
 pub fn map_llm_error(e: &EngineError) -> String {
     match e {
         EngineError::Llm(LlmFailure::Timeout) => "LLM Error: request timed out".to_string(),

@@ -1,3 +1,5 @@
+//! [DOC: docs/system/llm_processing.md]
+
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 

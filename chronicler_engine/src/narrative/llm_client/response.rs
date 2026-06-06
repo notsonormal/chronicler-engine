@@ -1,8 +1,8 @@
-/// [DOC: docs/system/llm_processing.md]
+//! [DOC: docs/system/llm_processing.md]
+
 use crate::error::{EngineError, LlmFailure};
 
 pub fn extract_content_from_response(json: &serde_json::Value) -> Option<(String, &'static str)> {
-    // [DOC: docs/system/llm_processing.md]
     let message = json.get("choices")?.get(0)?.get("message")?;
 
     // 1. Try content field
@@ -25,7 +25,6 @@ pub fn extract_content_from_response(json: &serde_json::Value) -> Option<(String
 
 /// Parse a raw HTTP response body from an LLM chat completions endpoint.
 pub fn parse_chat_response(raw_response: &str, req_id: u64) -> crate::error::Result<String> {
-    // [DOC: docs/system/llm_processing.md]
     match serde_json::from_str::<serde_json::Value>(raw_response.trim_start()) {
         Ok(json_response) => {
             tracing::debug!("[LLM][req:{req_id}] Response JSON: {json_response:#}");
@@ -80,7 +79,6 @@ pub fn parse_chat_response(raw_response: &str, req_id: u64) -> crate::error::Res
     }
 }
 
-/// [DOC: docs/system/llm_processing.md]
 pub fn handle_response(
     response: reqwest::blocking::Response,
     req_id: u64,

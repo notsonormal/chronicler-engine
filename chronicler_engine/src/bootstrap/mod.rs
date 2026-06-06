@@ -1,3 +1,4 @@
+//! [DOC: docs/system/startup.md]
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
 mod load;

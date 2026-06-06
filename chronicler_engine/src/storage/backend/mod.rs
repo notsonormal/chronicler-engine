@@ -1,3 +1,5 @@
+//! [DOC: docs/system/storage.md]
+
 pub mod characters;
 pub mod core;
 pub mod games;

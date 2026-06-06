@@ -1,6 +1,7 @@
+//! [DOC: docs/system/game_flow.md]
+
 use serde::{Deserialize, Serialize};
 
-/// [DOC: docs/architecture/system.md]
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PresetType {
     #[default]
@@ -29,7 +30,6 @@ impl TryFrom<&str> for PresetType {
     }
 }
 
-/// [DOC: docs/architecture/system.md]
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct PromptPreset {
     pub id: String,

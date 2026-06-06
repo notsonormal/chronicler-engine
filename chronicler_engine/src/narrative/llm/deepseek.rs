@@ -1,3 +1,5 @@
+//! [DOC: docs/system/llm_processing.md]
+
 use std::sync::Arc;
 
 use crate::error::EngineError;

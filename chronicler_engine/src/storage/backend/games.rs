@@ -1,3 +1,5 @@
+//! [DOC: docs/system/game_flow.md]
+
 use crate::error::EngineError;
 use crate::model::game::Game;
 use crate::storage::backend::{Backend, Operation, Storage};

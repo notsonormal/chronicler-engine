@@ -1,3 +1,5 @@
+//! [DOC: docs/system/storage.md]
+
 use std::sync::{Arc, Mutex};
 
 use chrono::Utc;

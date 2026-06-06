@@ -1,3 +1,5 @@
+//! [DOC: docs/system/dashboard.md]
+
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -12,7 +14,6 @@ use super::renderers::{
     render_error, service_unavailable_generating,
 };
 
-/// [DOC: docs/system/game_flow.md]
 pub async fn list_games_fragment(State(state): State<AppState>) -> Response<axum::body::Body> {
     let games = match state
         .application_service
@@ -95,7 +96,6 @@ pub async fn list_games_fragment(State(state): State<AppState>) -> Response<axum
     ok(html)
 }
 
-/// [DOC: docs/system/game_flow.md]
 pub async fn create_game_handler(State(state): State<AppState>) -> Response<axum::body::Body> {
     if state
         .is_generating
@@ -113,7 +113,6 @@ pub async fn create_game_handler(State(state): State<AppState>) -> Response<axum
     }
 }
 
-/// [DOC: docs/system/game_flow.md]
 pub async fn switch_game_handler(
     State(state): State<AppState>,
     Path(id): Path<u64>,
@@ -134,7 +133,6 @@ pub async fn switch_game_handler(
     }
 }
 
-/// [DOC: docs/system/game_flow.md]
 pub async fn delete_game_handler(
     State(state): State<AppState>,
     Path(id): Path<u64>,

@@ -1,6 +1,5 @@
+//! [DOC: docs/system/dashboard.md]
 //! View models decouple templates from domain types.
-//!
-//! [DOC: docs/architecture/system.md]
 
 use std::fmt;
 
@@ -8,7 +7,6 @@ use crate::model::llm_message::LlmMessage;
 use crate::model::state::{GenerationPhase, GenerationStatus, MessageEntry, MessageType};
 use crate::narrative::text_check::CheckResult;
 
-/// [DOC: docs/architecture/system.md]
 #[allow(private_interfaces)]
 #[derive(Debug, Clone)]
 pub struct SafeHtml(String);
@@ -23,7 +21,6 @@ impl fmt::Display for SafeHtml {
 
 pub(crate) fn markdown_to_html(text: &str) -> String {
     use pulldown_cmark::{Options, Parser, html};
-    // [DOC: docs/architecture/system.md]
     let escaped = text.replace('&', "&amp;").replace('<', "&lt;");
 
     let parser = Parser::new_ext(&escaped, Options::ENABLE_SMART_PUNCTUATION);

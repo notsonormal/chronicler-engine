@@ -1,9 +1,10 @@
+//! [DOC: docs/system/prompt_system.md]
+
 use crate::model::character::{NpcCard, PlayerCard};
 use crate::model::map::Room;
 use crate::model::state::MessageEntry;
 use crate::model::world::WorldCard;
 
-/// [DOC: docs/system/prompt_system.md]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PromptLayer {
     /// Layer 0: System prompt - global game rules and AI role

@@ -1,3 +1,5 @@
+//! [DOC: docs/system/agent_system.md]
+
 use std::sync::{Arc, RwLock};
 
 use crate::error::EngineError;

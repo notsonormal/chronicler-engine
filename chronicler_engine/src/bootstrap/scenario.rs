@@ -1,8 +1,8 @@
+//! [DOC: docs/system/startup.md]
 use crate::model::character::PlayerCard;
 use crate::model::state::GameState;
 use crate::model::world::WorldManifest;
 
-/// [DOC: docs/architecture/system.md]
 pub fn inject_scenario_logs(state: &mut GameState, manifest: &WorldManifest, player: &PlayerCard) {
     let Some(scenario) = manifest.default_scenario() else {
         return;

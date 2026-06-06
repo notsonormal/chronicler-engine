@@ -1,3 +1,5 @@
+//! [DOC: docs/system/agent_system.md]
+
 pub mod quantifier;
 pub mod registry;
 pub mod trait_def;

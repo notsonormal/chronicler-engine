@@ -1,8 +1,7 @@
-// [DOC: docs/system/llm_processing.md]
+//! [DOC: docs/system/llm_processing.md]
 
 use crate::error::{EngineError, LlmFailure};
 
-/// [DOC: docs/system/llm_processing.md]
 pub fn call_chat_completions(
     base_url: &str,
     api_key: Option<&str>,
@@ -75,7 +74,6 @@ pub fn call_chat_completions(
     }
 }
 
-/// [DOC: docs/system/llm_processing.md]
 pub fn call_openrouter_with_model(
     api_key: &str,
     system_prompt: &str,
@@ -94,7 +92,6 @@ pub fn call_openrouter_with_model(
     )
 }
 
-/// [DOC: docs/system/llm_processing.md]
 pub fn call_ollama(
     base_url: &str,
     model: &str,

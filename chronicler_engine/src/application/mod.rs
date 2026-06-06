@@ -1,4 +1,4 @@
-//! [DOC: docs/architecture/system.md]
+//! [DOC: docs/system/game_flow.md]
 
 pub mod action_pipeline;
 pub mod application_service;

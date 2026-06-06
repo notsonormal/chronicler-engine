@@ -1,3 +1,5 @@
+//! [DOC: docs/system/game_flow.md]
+
 pub mod actions;
 pub mod pipeline;
 pub mod retry;

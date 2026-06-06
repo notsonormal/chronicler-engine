@@ -1,3 +1,5 @@
+//! [DOC: docs/system/triggers.md]
+
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};

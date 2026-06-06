@@ -1,3 +1,5 @@
+//! [DOC: docs/system/dashboard.md]
+
 pub mod app_state;
 pub mod debug;
 pub mod fragments;

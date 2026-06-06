@@ -1,3 +1,5 @@
+//! [DOC: docs/system/llm_processing.md]
+
 use std::sync::Arc;
 
 use crate::error::EngineError;
@@ -98,10 +100,8 @@ pub trait LlmBackend: Send + Sync {
     ) -> Result<LlmCallResult, EngineError>;
 }
 
-// [DOC: docs/system/llm_processing.md]
 pub use crate::model::llm_backend::LlmBackendType;
 
-/// [DOC: docs/system/llm_processing.md]
 pub fn get_llm_backend_for(
     connection: &Connection,
     storage: Option<Arc<Storage>>,

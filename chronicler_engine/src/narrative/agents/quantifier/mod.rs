@@ -1,9 +1,10 @@
+//! [DOC: docs/system/agent_system.md]
+
 //! Quantifier agent module — three responsibilities:
 //! 1. **Detection**: Analyze LLM narration to detect NPC presence and movement intent
 //! 2. **Scene quantification**: Produce QuantifierResult (NPC IDs + movement destination)
 //! 3. **Event generation**: Compute NPC Enter/Leave events via state diff (compute_npc_events)
 //!
-//! [DOC: docs/architecture/system.md]
 pub mod agent;
 pub mod orchestration;
 pub mod parser;

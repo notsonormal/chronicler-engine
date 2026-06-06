@@ -1,3 +1,5 @@
+//! [DOC: docs/system/storage.md]
+
 /// Database row for `personas` table (PlayerCard).
 pub struct DbPersona {
     pub id: i64,

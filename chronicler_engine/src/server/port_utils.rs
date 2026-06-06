@@ -1,10 +1,11 @@
+//! [DOC: docs/system/dashboard.md]
+
 use tokio::net::TcpListener;
 use tracing;
 
 /// Attempts to bind to the given address, retrying if the port is in use.
 /// If a process is found on the port, it attempts to kill it.
 pub async fn bind_with_retry(addr: &str) -> std::io::Result<TcpListener> {
-    // [DOC: docs/architecture/system.md]
     loop {
         match TcpListener::bind(addr).await {
             Ok(listener) => return Ok(listener),

@@ -1,3 +1,5 @@
+//! [DOC: docs/system/storage.md]
+
 pub struct DbMessage {
     pub id: i64,
     pub game_id: i64,

@@ -1,3 +1,5 @@
+//! [DOC: docs/system/character_state.md]
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

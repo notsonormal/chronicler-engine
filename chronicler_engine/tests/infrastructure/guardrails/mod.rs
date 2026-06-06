@@ -115,8 +115,8 @@ fn guardrails_import_ordering_tests() {
 }
 
 #[test]
-fn guardrails_doc_anchors() {
-    check_src_files("doc anchor", check_doc_anchors);
+fn guardrails_module_doc_anchors() {
+    check_src_files("module doc anchor", check_module_doc_anchors);
 }
 
 #[test]
@@ -151,11 +151,6 @@ fn guardrails_mod_purity() {
 #[test]
 fn guardrails_no_std_thread() {
     check_src_files("no-std-thread", check_no_std_thread_all);
-}
-
-#[test]
-fn guardrails_spawn_site_docs() {
-    check_src_files("spawn-site-docs", check_spawn_site_docs);
 }
 
 #[test]

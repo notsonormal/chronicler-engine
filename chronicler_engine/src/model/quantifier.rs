@@ -1,5 +1,4 @@
-//! Mechanical result types for scene quantification and NPC event tracking.
-//! [DOC: docs/architecture/system.md]
+//! [DOC: docs/system/game_flow.md]
 
 use crate::model::agent::Confidence;
 
@@ -118,7 +117,6 @@ pub struct NpcEventList {
 }
 /// Computes NPC transition events by diffing previous and current NPC presence.
 pub fn compute_npc_events(previous_npc_ids: &[String], current_npc_ids: &[String]) -> NpcEventList {
-    // [DOC: docs/architecture/system.md]
     let previous_set: std::collections::HashSet<_> = previous_npc_ids.iter().collect();
     let current_set: std::collections::HashSet<_> = current_npc_ids.iter().collect();
 

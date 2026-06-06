@@ -1,4 +1,4 @@
-// [DOC: docs/system/llm_processing.md]
+//! [DOC: docs/system/llm_processing.md]
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -22,7 +22,6 @@ pub struct ChatCompletionResult {
 }
 
 pub fn build_request_payload(
-    // [DOC: docs/system/llm_processing.md]
     model: &str,
     system_prompt: &str,
     user_text: &str,
@@ -51,7 +50,6 @@ pub fn build_request_payload(
 }
 
 pub fn configure_request(
-    // [DOC: docs/system/llm_processing.md]
     client: &reqwest::blocking::Client,
     url: &str,
     payload: &serde_json::Value,

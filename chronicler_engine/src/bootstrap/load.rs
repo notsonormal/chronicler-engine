@@ -1,3 +1,4 @@
+//! [DOC: docs/system/startup.md]
 use std::{fs, path::Path};
 
 use crate::error::EngineError;
@@ -24,7 +25,6 @@ pub fn load_world_manifest(world_id: &str, data_dir: &Path) -> crate::error::Res
     read_json_file(&path)
 }
 
-/// [DOC: docs/architecture/system.md]
 pub fn initialize_world_from_manifest(
     world_id: &str,
     data_dir: &Path,
@@ -35,7 +35,6 @@ pub fn initialize_world_from_manifest(
         return Err(EngineError::WorldNotFound(world_id.to_string()));
     }
 
-    // [DOC: docs/system/startup.md]
     let manifest = load_world_manifest(world_id, data_dir)?;
 
     let map_path = world_dir.join(&manifest.map_file);

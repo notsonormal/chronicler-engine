@@ -108,7 +108,7 @@ This project follows a **Spec-Driven Implementation** (SDI) strategy.
 
 ### Core Principles
 1. **Naming as Documentation**: Symbols (functions, types, variables) must use verbose, domain-aligned names that map 1-to-1 with concepts in the `docs/`.
-2. **Doc Anchors**: Complex logic blocks are marked with `// [DOC: docs/path/to/file.md]`.
+2. **Module-Level DOC Anchors**: Every file in `src/` starts with `//! [DOC: docs/path/to/domain-doc.md]` linking to its domain documentation. Function-level anchors removed.
 3. **Lean Code**: Remove all "What" comments. If the code isn't clear, rename the symbols.
 4. **The "Why" Exception**: Comments are reserved ONLY for technical constraints (e.g., `// Workaround for Axum timeout issue`).
 5. **Be Consise**: Be extremely concise. Sacrifice grammar for the sake of concision. 
@@ -188,7 +188,7 @@ let residents = find_npcs_in_current_location(all_npcs, current_room);
 | Shared test helpers | `src/test_support/` | context, fixtures, in_memory_storage |
 
 ## CONVENTIONS
-- **Doc Anchors**: Always link complex blocks to `docs/` via `// [DOC: docs/path/to/file.md]`
+- **Module-Level DOC Anchors**: Every `src/` file has `//! [DOC: ...]` on line 1 pointing to domain-specific docs. Remove function-level `/// [DOC:` and `// [DOC:` comments.
 - **LLM backend**: Trait-based (`LlmBackend`), mock via `MockBackend` in tests
 - **Validation**: Run `python build.py` before commit (fmt + clippy + tests + guardrails)
 

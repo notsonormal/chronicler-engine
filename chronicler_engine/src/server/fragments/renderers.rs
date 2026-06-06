@@ -1,3 +1,5 @@
+//! [DOC: docs/system/dashboard.md]
+
 use askama::Template;
 use axum::{body::Body, http::StatusCode, response::Response};
 
@@ -47,7 +49,6 @@ pub fn render_story_log(state: &AppState) -> Result<String> {
         .map_err(|e| EngineError::Template(e.to_string()))
 }
 
-/// [DOC: docs/system/game_flow.md]
 pub fn render_visual_sidebar(state: &AppState) -> Result<String> {
     let (room_name, image_path) = state
         .application_service
@@ -71,7 +72,6 @@ pub fn render_visual_sidebar(state: &AppState) -> Result<String> {
         .map_err(|e| EngineError::Template(e.to_string()))
 }
 
-/// [DOC: docs/system/game_flow.md]
 pub fn render_action_area(state: &AppState) -> Result<String> {
     let (status, phase) = state
         .application_service
@@ -85,7 +85,6 @@ pub fn render_action_area(state: &AppState) -> Result<String> {
         .map_err(|e| EngineError::Template(e.to_string()))
 }
 
-/// [DOC: docs/system/game_flow.md]
 pub fn render_character_headshots(state: &AppState) -> Result<String> {
     use crate::server::templates::CharacterHeadshotsTemplate;
     use askama::Template;
@@ -167,7 +166,6 @@ pub fn service_unavailable_generating() -> Response<Body> {
     service_unavailable("<span class=\"status wait\">Generation in progress, please wait...</span>")
 }
 
-/// [DOC: docs/architecture/system.md]
 pub fn app_err_to_response(err: ApplicationError) -> Response<Body> {
     match err {
         ApplicationError::Validation(msg) => bad_request(render_error(&msg)),
@@ -179,7 +177,6 @@ pub fn app_err_to_response(err: ApplicationError) -> Response<Body> {
     }
 }
 
-/// [DOC: docs/architecture/system.md]
 pub fn app_err_to_tuple(err: ApplicationError) -> (StatusCode, String) {
     match err {
         ApplicationError::Validation(msg) => (StatusCode::BAD_REQUEST, render_error(&msg)),

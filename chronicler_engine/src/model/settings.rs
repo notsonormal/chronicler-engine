@@ -1,8 +1,9 @@
+//! [DOC: docs/system.md]
+
 use serde::{Deserialize, Serialize};
 
 use crate::model::llm_backend::LlmBackendType;
 
-/// [DOC: docs/system/text_check.md]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub enum TextCheckMode {
     #[default]
@@ -12,7 +13,6 @@ pub enum TextCheckMode {
     SpellGrammar,
 }
 
-/// [DOC: docs/system/text_check.md]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TextCheckSettings {
     pub mode: TextCheckMode,
@@ -40,7 +40,6 @@ fn default_ollama_base_url() -> String {
     "http://localhost:11434/v1".into()
 }
 
-/// [DOC: docs/architecture/system.md]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Connection {
     pub id: String,
@@ -112,7 +111,6 @@ impl Connection {
     }
 }
 
-/// [DOC: docs/architecture/system.md]
 pub fn default_agent_configs() -> Vec<crate::model::agent::AgentConfig> {
     use crate::model::agent::{AgentConfig, BackendSelector, ExecutionPhase};
     vec![AgentConfig {

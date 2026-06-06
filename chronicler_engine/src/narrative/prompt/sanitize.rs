@@ -1,7 +1,8 @@
+//! [DOC: docs/system/prompt_system.md]
+
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-// [DOC: docs/system/llm_processing.md]
 #[allow(clippy::expect_used)]
 pub fn sanitize_for_prompt(input: &str) -> String {
     static INJECTION_PATTERN: Lazy<Regex> =

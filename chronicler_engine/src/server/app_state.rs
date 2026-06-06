@@ -1,3 +1,5 @@
+//! [DOC: docs/system/dashboard.md]
+
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::RwLock;

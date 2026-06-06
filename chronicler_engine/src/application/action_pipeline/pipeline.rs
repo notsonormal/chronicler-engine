@@ -1,3 +1,5 @@
+//! [DOC: docs/system/game_flow.md]
+
 use std::sync::Arc;
 
 use crate::application::context::{
@@ -57,7 +59,6 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
         Self { service, ctx }
     }
 
-    /// [DOC: docs/architecture/system.md]
     pub fn run_from_input(&self, state: GameState, input: String) -> PipelineResult<()> {
         tracing::debug!("run_from_input: called");
         let world = Arc::clone(&state.world);
@@ -379,7 +380,6 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
         }
     }
 
-    /// [DOC: docs/architecture/system.md]
     pub fn run_trigger_continuation(
         &self,
         mut state: GameState,

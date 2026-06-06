@@ -16,7 +16,6 @@ use crate::model::world::WorldCard;
 use crate::server::{AppState, build_router};
 use crate::storage::Storage;
 
-// [DOC: docs/reference/testing.md]
 pub struct TestAppBuilder {
     world: WorldCard,
     player: PlayerCard,

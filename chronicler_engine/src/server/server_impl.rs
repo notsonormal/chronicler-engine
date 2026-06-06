@@ -1,3 +1,5 @@
+//! [DOC: docs/system/dashboard.md]
+
 use std::sync::Arc;
 use tracing;
 
@@ -9,7 +11,6 @@ use super::port_utils::bind_with_retry;
 
 /// Starts the HTTP server with the given configuration and resources.
 ///
-/// [DOC: docs/architecture/system.md]
 pub async fn run_server_with_config(
     resources: ServerResources,
     config: ServerConfig,

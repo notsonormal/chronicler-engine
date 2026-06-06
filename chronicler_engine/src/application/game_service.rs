@@ -1,3 +1,5 @@
+//! [DOC: docs/system/game_flow.md]
+
 use std::sync::{Arc, RwLock};
 
 use crate::application::action_pipeline::ActionPipelineBackend;
