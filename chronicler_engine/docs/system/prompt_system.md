@@ -24,6 +24,8 @@ The engine follows a **Marinara-Engine-inspired pattern**:
 
 ## The 8-Layer Prompt System
 
+> This section is the **authoritative source** for prompt layer definitions, token budget constants, and system/user separation. Other docs reference this section rather than duplicating it.
+
 The Chronicler Engine implements an 8-layer prompt structure (layers 0–7) mapped from SillyTavern's Prompt Manager:
 
 | Layer | Name | SillyTavern Equivalent | Purpose |
@@ -181,7 +183,7 @@ Uses the same structure as SillyTavern character cards (Jailbreak format):
 
 ### Quantifier Prompt (Separate)
 
-The engine also uses a **quantifier prompt** — a separate secondary LLM call that runs *after* narration to analyze the scene. It determines which NPCs are present and whether the player moved. This is **not** part of the 7-layer narrative prompt stack.
+The engine also uses a **quantifier prompt** — a separate secondary LLM call that runs *after* narration to analyze the scene. It determines which NPCs are present and whether the player moved. This is **not** part of the 8-layer narrative prompt stack.
 
 - See [`reference/quantifier_prompt.md`](../reference/quantifier_prompt.md) for the full prompt text
 - Rendered by: `QuantifierPromptBuilder` in `src/narrative/agents/quantifier/prompt.rs`

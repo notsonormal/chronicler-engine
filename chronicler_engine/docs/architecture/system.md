@@ -248,18 +248,17 @@ For file-to-module mapping, use `cargo doc` or navigate `src/` directly. Files f
 
 The following concerns are documented in dedicated `docs/system/` files. Those are the authoritative source — this file covers module structure only.
 
-| Topic | Document |
+|| Topic | Document |
 |-------|----------|
-| Dashboard layout, tabs, polling, edit/retry UI | [`system/dashboard.md`](../system/dashboard.md) |
-| UI design tokens, CSS components, animations | [`system/ui_design.md`](../system/ui_design.md) |
-| Full game loop phases, retry flow, status phases | [`system/game_flow.md`](../system/game_flow.md) |
-| History management, Message model | [`system/game_flow.md`](../system/game_flow.md) |
-| Server endpoint reference | [`system/game_flow.md`](../system/game_flow.md) |
-| Auto-trigger system and mutation order invariant | [`system/triggers.md`](../system/triggers.md) |
-| Navigation and movement resolution | [`system/navigation.md`](../system/navigation.md) |
-| Narration engine and Game Master logic | [`system/narration_engine.md`](../system/narration_engine.md) |
-| LLM call logging and forensics | [`system/llm_processing.md`](../system/llm_processing.md) |
-| Dynamic room creation, fallback behavior | [`system/dynamic_rooms.md`](../system/dynamic_rooms.md) |
+|| Dashboard layout, tabs, polling, edit/retry UI | [`system/dashboard.md`](../system/dashboard.md) |
+|| UI design tokens, CSS components, animations | [`system/ui_design.md`](../system/ui_design.md) |
+|| Game loop phases, retry flow, status phases | [`system/game_flow.md`](../system/game_flow.md) |
+|| Game Master role, narrative modes, GM constraints | [`system/narration_engine.md`](../system/narration_engine.md) |
+|| Auto-trigger system and mutation order invariant | [`system/triggers.md`](../system/triggers.md) |
+|| Navigation and movement resolution | [`system/navigation.md`](../system/navigation.md) |
+|| LLM infrastructure, backends, logging, tracing | [`system/llm_processing.md`](../system/llm_processing.md) |
+|| Prompt layers, token budgets, prompt composition | [`system/prompt_system.md`](../system/prompt_system.md) |
+|| Dynamic room creation, fallback behavior | [`system/dynamic_rooms.md`](../system/dynamic_rooms.md) |
 ## Error Strategy
 
 A unified error type (`crate::error::EngineError`) is shared across all tiers for consistent error propagation — from data loading through LLM failures to HTTP responses. See `src/error.rs` for the full variant list.

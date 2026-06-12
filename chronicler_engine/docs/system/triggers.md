@@ -9,6 +9,8 @@ When a player enters a room or performs an action, the engine evaluates a set of
 
 ## Core Flow
 
+For where these steps fit in the full game loop (including main narration and quantification), see [`game_flow.md`](game_flow.md).
+
 ### 1. Player Action
 Player performs an action (movement, dialogue, etc.)
 

@@ -2,6 +2,8 @@
 
 > **Related Decisions**: [ADR-005](../adr/adr-005-layered-prompts.md), [ADR-006](../adr/adr-006-quantifier-systems.md)
 
+**Scope:** This document specifies the **Game Master's role and behavior** — what the LLM should do, how it should narrate, and what boundaries it must respect. For the pipeline that triggers the GM (phase sequence, status display, retry), see [`game_flow.md`](game_flow.md). For LLM infrastructure (backends, configuration, logging), see [`llm_processing.md`](llm_processing.md). For prompt composition and layer definitions, see [`prompt_system.md`](prompt_system.md).
+
 ## Objective
 Transform the engine from a strict command parser into a hybrid free-text narrative engine. Player input that does not match a recognized system command is interpreted by an LLM acting as a **Game Master**, who narrates the outcome based on the current game state.
 
@@ -26,55 +28,12 @@ The Game Master responds to three primary events:
 ### Arrival Logic Flow
 1. **State Transition**: The engine validates the move and updates `state.movement.current_room_id` (optional—may not change if player stays in room).
 2. **Scene Setup**: The engine prints the standard room dashboard *before* narration to provide system context.
-3. **Action Narration**:
-   - The engine loads the active preset, calls `assembler.assemble()` to build the prompt, then calls `llm_backend.complete()` with the assembled system and user prompts.
-   - The LLM generates a narrative paragraph describing the outcome.
-4. **Post-Narration Quantification**:
-   - After narration is generated, the `QuantifierAgent` calls `LlmBackend::complete()` to detect:
-     - **NPCs**: Which NPCs are present in the generated narration text
-     - **Movement**: If the narration indicates player moved to a new room (destination detection)
-   - Falls back to `state.scene.npcs_in_area` (previous message's NPCs) if LLM fails or returns Low confidence.
-   - Backend is selected via `quantifier_connection_id` in `settings.json`.
-5. **Movement Processing**: If movement was detected, `handle_movement()` updates `state.movement.current_room_id` and the location header is shown.
-6. **Trigger Evaluation**: After quantification, the engine evaluates NPC triggers (see Continuation Narration below).
+3. **Action Narration**: The engine loads the active preset, calls `assembler.assemble()` to build the prompt, then calls `llm_backend.complete()` with the assembled system and user prompts. The LLM generates a narrative paragraph describing the outcome.
+4. **Post-Processing**: The quantifier detects NPCs and movement, then triggers are evaluated — see [`game_flow.md`](game_flow.md) for the full phase pipeline and [`triggers.md`](triggers.md) for trigger evaluation rules.
 
 ## Continuation Narration (Auto-Trigger)
 
-After the player moves to a new room and the first narration is generated, the engine checks for NPC triggers based on character state.
-
-**Flow:**
-1. Player movement is detected via quantifier → `attempt_semantic_walk` updates `state.movement.current_room_id`
-2. `evaluate_triggers(state, new_room_id)` is called to find matching triggers
-3. For the first matching trigger only:
-   a. Uses unified `LayeredPromptAssembler` with continuation context in user message:
-      - Full 8-layer SillyTavern prompt structure
-      - Trigger text as Layer 7 (User Input)
-      - History included for continuity
-   b. LLM generates continuation narration
-   c. Continuation is appended to the narration log
-   d. Non-repeatable triggers are marked as fired
-4. `is_generating` is reset to `false` only after ALL trigger narrations complete
-
-**NPC Event Layer:**
-After the second quantifier runs (post-narration), the engine computes NPC enter/leave events by comparing previous vs current `npcs_in_area`:
-- NPCs in current but not in previous → `Entered` event
-- NPCs in previous but not in current → `Left` event
-
-These events drive character state updates:
-- `Entered` → `set_currently_meeting(true)` + `increment_times_met()`
-- `Left` → `set_currently_meeting(false)`
-
-This means `times_met` only increments on **new encounters** (when an NPC enters the area), not simply when NPCs are present. If Carla follows you through 3 rooms, `times_met` increments once on first entry.
-
-**Key behaviors:**
-- `is_generating` stays `true` through both the first narration AND all trigger narrations
-- Trigger narrations do NOT cause further movement — quantifier is skipped for them
-- Only the first matching trigger is narrated per user action (prevents runaway chains)
-- If a trigger LLM call fails, the first narration still displays; error is logged
-
-**Trigger condition example:**
-- `TimesMet Eq 0` — fires on first encounter (when `times_met` is 0)
-- `TimesMet Lt 3` — fires on encounters 0, 1, 2 (while `times_met < 3`)
+After main narration, the engine evaluates NPC triggers and may generate a continuation narration. This uses the same 8-layer prompt with the trigger's `narration_prompt` in Layer 7 (User Input). Only the first matching trigger fires per action; `is_generating` stays true through both narrations. For the full trigger evaluation flow, `times_met` timing, NPC event semantics, and mutation order invariant, see [`triggers.md`](triggers.md).
 
 ## LLM Prompts & Guidance
 The Game Master must:

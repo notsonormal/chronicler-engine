@@ -40,34 +40,12 @@ Some models (particularly certain local/quantized models) ignore or poorly handl
 - This is a per-connection setting, so different backends can use different strategies
 
 ### 5. Prompt Construction (Layered Prompts)
-The engine uses a layered prompt system inspired by SillyTavern's Prompt Manager, refined with an **XML-sectioned instructions + XML-wrapped data** pattern for reasoning-model compatibility:
 
-| Layer | Name | Content | Role |
-|-------|------|---------|------|
-| 0 | System | XML-sectioned instructions: role, instructions, writing_style, global_rules, output_format | System |
-| 1 | Game State | `<GameState>` — Current room, present NPCs | User (data) |
-| 2 | NPC Cards | `<KnownNpcs>` roster (all NPCs, condensed) + `<NpcsInRoom>` full cards (present NPCs only) | User (data) |
-| 3 | Player | `<PlayerCharacter>` — Player persona and description | User (data) |
-| 4 | World Info | `<WorldLore>` — World lore triggered by keywords | User (data) |
-| 5 | History | `<ConversationHistory>` — Full narrative history (flattened messages) | User (data) |
-| 6 | Post-History | `<writing_style>` + `<output_format>` sections — placed after history for recency bias | User (instructions) |
-| 7 | User Input | `<PlayerInput>` — Current player message/action | User (data) |
-
-**`build_split()` separation**:
-- **System half**: XML-sectioned instructions (Layer 0)
-- **User half**: XML-wrapped data (Layers 1–5) + post-history instructions (Layer 6) + player input (Layer 7)
-
-This separation reduces the chance of reasoning models (e.g., Gemma 4) entering meta-analysis mode. However, the Gemma 4 26B model (particularly abliterated quants) can still get stuck in an infinite `<|channel>thought` loop even with XML-sectioned instructions. An additional prompt-level fix is applied for Gemma 4 models (see section 8).
+The engine uses an 8-layer prompt system inspired by SillyTavern's Prompt Manager, with XML-sectioned instructions + XML-wrapped data for reasoning-model compatibility. The prompt is split into a system half (Layer 0) and a user half (Layers 1–7). For the complete layer table, per-layer examples, system/user separation rationale, and token budget constants, see [`prompt_system.md`](prompt_system.md) — that document is the authoritative source for prompt composition.
 
 ### 6. Token Budget Management
-- **MAX_CONTEXT_TOKENS**: 32768 (fallback default; configurable per connection via `max_context_tokens`)
-- **MAX_RESPONSE_TOKENS**: 2048 (fallback default)
-- **MAX_HISTORY_TOKENS**: 16000
-- **SAFETY_MARGIN_TOKENS**: 256 (reserved for token estimation error)
-- **MIN_INPUT_BUDGET_TOKENS**: 512 (minimum space reserved for input)
-- **Strategy**: Context-aware fitting via `fit_messages_to_context()` — dynamically caps `max_tokens`, trims oldest history entries first to fit within the connection's configured context window
-- **No summarization** — maintains accuracy over compression
-- **Estimation**: Character-based token estimation (simple and fast)
+
+Token budget constants (`MAX_CONTEXT_TOKENS`, `MAX_RESPONSE_TOKENS`, `MAX_HISTORY_TOKENS`, `SAFETY_MARGIN_TOKENS`, `MIN_INPUT_BUDGET_TOKENS`) and the `fit_messages_to_context()` trimming strategy are defined in [`prompt_system.md`](prompt_system.md). Connectors override `max_context_tokens` per connection via the settings system (see Section 2 above).
 
 ### 7. Prompt Injection Sanitization
 User input is sanitized to prevent prompt injection:
