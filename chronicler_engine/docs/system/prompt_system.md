@@ -22,9 +22,9 @@ The engine follows a **Marinara-Engine-inspired pattern**:
 - **SillyTavern Docs**: https://docs.sillytavern.app/usage/prompts/prompt-manager/
 - **SillyTavern GitHub**: https://github.com/SillyTavern/SillyTavern
 
-## The 7-Layer Prompt System
+## The 8-Layer Prompt System
 
-The Chronicler Engine implements a 7-layer prompt structure mapped from SillyTavern's Prompt Manager:
+The Chronicler Engine implements an 8-layer prompt structure (layers 0–7) mapped from SillyTavern's Prompt Manager:
 
 | Layer | Name | SillyTavern Equivalent | Purpose |
 |-------|------|----------------------|---------|
@@ -191,7 +191,7 @@ The engine also uses a **quantifier prompt** — a separate secondary LLM call t
 ## Implementation
 
 ### Key Files
-- `src/narrative/prompt/assembler.rs` — `PromptAssembler` trait, `LayeredPromptAssembler` with 7-layer construction, context fitting, and budget management
+- `src/narrative/prompt/assembler.rs` — `PromptAssembler` trait, `LayeredPromptAssembler` with 8-layer construction, context fitting, and budget management
 - `src/narrative/prompt/types.rs` — `PromptContext`, `PromptLayer`
 - `src/narrative/llm/mod.rs` — LLM backend module (pure transport, no prompt assembly)
 - `src/model/state.rs` — `GameState` provides context data

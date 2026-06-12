@@ -1,6 +1,6 @@
+use crate::error::{EngineError, LlmFailure};
 use crate::narrative::llm_client::response::{extract_content_from_response, parse_chat_response};
 
-// --- extract_content_from_response tests ---
 #[test]
 fn test_extract_content_from_content_field() {
     let json = serde_json::json!({
@@ -63,7 +63,35 @@ fn test_extract_content_no_content_fields() {
     assert_eq!(result, None);
 }
 
-// --- parse_chat_response tests ---
+#[test]
+fn test_extract_content_priority_reasoning_content() {
+    let json = serde_json::json!({
+        "choices": [{
+            "message": {
+                "content": null,
+                "reasoning": null,
+                "reasoning_content": "fallback"
+            }
+        }]
+    });
+    let result = extract_content_from_response(&json);
+    assert_eq!(result, Some(("fallback".to_string(), "reasoning_content")));
+}
+
+#[test]
+fn test_extract_content_priority_content() {
+    let json = serde_json::json!({
+        "choices": [{
+            "message": {
+                "content": "main content",
+                "reasoning": "reasoning text",
+                "reasoning_content": "reasoning content field"
+            }
+        }]
+    });
+    let result = extract_content_from_response(&json);
+    assert_eq!(result, Some(("main content".to_string(), "content")));
+}
 
 #[test]
 fn test_parse_chat_response_success_content() {
@@ -137,4 +165,40 @@ fn test_parse_chat_response_empty_json() {
             .to_string()
             .contains("Failed to parse LLM response")
     );
+}
+
+#[test]
+fn test_parse_chat_response_api_error_object() {
+    let json = r#"{
+        "error": {
+            "message": "Rate limit exceeded",
+            "type": "rate_limit_error"
+        }
+    }"#;
+    let result = parse_chat_response(json, 1);
+    assert!(result.is_err());
+
+    let err_msg = result.unwrap_err().to_string();
+    assert!(
+        err_msg.contains("LLM") || err_msg.contains("Failed to parse"),
+        "Expected LLM-related error, got: {err_msg}"
+    );
+}
+
+#[test]
+fn test_parse_chat_response_empty_choices() {
+    let json = r#"{ "choices": [] }"#;
+    let result = parse_chat_response(json, 1);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_parse_chat_response_null_message() {
+    let json = r#"{
+        "choices": [{
+            "message": null
+        }]
+    }"#;
+    let result = parse_chat_response(json, 1);
+    assert!(result.is_err());
 }

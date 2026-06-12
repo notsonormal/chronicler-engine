@@ -75,7 +75,7 @@ flowchart TD
 
 ## Related ADRs
 
-- [ADR-002: HTTP Polling for Real-Time Updates](./adr-002-sse-realtime-updates.md) - Transport layer decision
+- [ADR-002: HTTP Polling for Real-Time Updates](./adr-002-http-polling.md) - Transport layer decision
 - [ADR-003: Askama Template Engine](./adr-003-askama-templates.md) - Template rendering
 - [ADR-006: Quantifier-Driven Game Systems](./adr-006-quantifier-systems.md) - Quantifier-powered features
 

@@ -13,6 +13,7 @@ use crate::model::map::MapDef;
 use crate::model::prompt_preset::PromptPreset;
 use crate::model::settings::AppSettings;
 use crate::model::state::GameState;
+use crate::model::template::TemplateVars;
 use crate::model::world::WorldCard;
 use crate::narrative::prompt::{PromptAssembler, PromptContext};
 use crate::server::ServerConfig;
@@ -100,6 +101,7 @@ impl ArrivalTaskContext {
                 player: &self.player,
                 user_message: "",
                 history: &Vec::new(),
+                template_vars: TemplateVars::new(&self.player.sheet.name),
             };
 
             let narration = if let Some(ref preset) = self.arrival_preset {

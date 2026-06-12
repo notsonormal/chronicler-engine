@@ -14,6 +14,8 @@ pub mod swipes;
 pub mod worlds;
 
 #[cfg(test)]
+mod characters_tests;
+#[cfg(test)]
 mod core_tests;
 #[cfg(test)]
 mod games_tests;
@@ -22,6 +24,8 @@ mod llm_messages_tests;
 #[cfg(test)]
 mod messages_tests;
 #[cfg(test)]
+mod personas_tests;
+#[cfg(test)]
 mod presets_tests;
 #[cfg(test)]
 mod settings_tests;
@@ -29,5 +33,7 @@ mod settings_tests;
 mod snapshots_tests;
 #[cfg(test)]
 mod swipes_tests;
+#[cfg(test)]
+mod worlds_tests;
 
 pub use core::*;

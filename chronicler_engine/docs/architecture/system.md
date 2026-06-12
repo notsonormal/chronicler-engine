@@ -97,7 +97,7 @@ The HTTP layer for the HTMX web dashboard with polling-based real-time updates.
 - **`settings_fragment`**: Settings panel fragment handlers and template rendering.
 - **`prompt_presets_fragment`**: Prompt Presets panel with two independent collections (System, Quantifier). Supports CRUD operations, active selection, and protected default presets.
 - **`view_models`**: View model structs that decouple templates from domain types.
-  - `view_models.rs`: `LogEntryView`, `LlmMessageView`, `PreviewIssueView`, `ActionAreaViewModel`, `VisualSidebarViewModel`, `NpcPortraitView`, and `SafeHtml` / `markdown_to_html`.
+  - `view_models.rs`: `MessageEntryView`, `LlmMessageView`, `PreviewIssueView`, `ActionAreaViewModel`, `VisualSidebarViewModel`, `NpcPortraitView`, and `SafeHtml` / `markdown_to_html`.
   - Domain-to-view mapping lives here; `templates.rs` focuses purely on HTML.
 - **`templates`**: Askama template definitions with type-safe rendering.
   - Templates declare required data shapes at compile time.
@@ -105,11 +105,11 @@ The HTTP layer for the HTMX web dashboard with polling-based real-time updates.
 - **`debug`**: Dev diagnostic endpoint (`/debug/state`).
 
 ### 5. The Settings Tier (`crate::settings` + `crate::model::settings`)
-Persistent JSON-based settings system for LLM configuration with reusable connection profiles.
+DB-backed settings system for LLM configuration with reusable connection profiles (seeded from JSON at startup).
 
 | Component | Purpose |
 |-----------|---------|
-| `data/settings.json` | Persistent settings file |
+| `data/settings.json` | Seed template for default settings (DB is runtime source of truth) |
 | `AppSettings` struct | Configuration data model (connections, agents, prompt presets, text check settings) |
 | `Connection` struct | Named provider+model profile |
 | `AppState.settings` | Runtime access via `Arc<RwLock<AppSettings>>` |
@@ -179,7 +179,7 @@ SQLite-based persistence for game state, LLM call forensics, and game data (worl
 **Core Tables** (game sessions and narrative):
 - `games` — top-level game session record (`id`, `name`, `world_name`, `created_at`, `updated_at`)
 - `game_state_snapshots` — serialized game state metadata, scoped to `game_id`
-- `messages` — narrative history, scoped to `game_id` (`id`, `game_id`, `sender`, `log_type`, `timestamp`, `active_swipe_index`, `is_deleted`)
+- `messages` — narrative history, scoped to `game_id` (`id`, `game_id`, `sender`, `message_type`, `timestamp`, `active_swipe_index`, `is_deleted`)
 - `message_swipes` — per-message swipe versions (`id`, `message_id`, `swipe_index`, `text`, `snapshot_id`, `location_header`, `event_header`), cascades on message delete
 - `llm_messages` — LLM API call logging (not game-scoped)
 - `prompt_presets` — system and quantifier prompt presets
@@ -193,7 +193,7 @@ SQLite-based persistence for game state, LLM call forensics, and game data (worl
 
 #### Storage Structure
 
-Unified `Storage` struct with `Backend` enum (`Sqlite`, `InMemory`, `Test`). All table operations are methods on `Storage` — no repository structs, no separate `models` or `mappers` submodules. Database row structs defined in `src/storage/models/`. Module contains: `mod.rs`, `db.rs` (schema + migrations), `backend/` (CRUD implementations), plus test files.
+Unified `Storage` struct with `Backend` enum (`Sqlite`, `InMemory`, `Test`). All table operations are methods on `Storage` — no repository structs or trait objects. DB row structs live in `src/storage/models/`; domain-model mappers in `src/storage/mappers/`. Directory structure: `mod.rs`, `db.rs` (schema + migrations), `backend/` (CRUD implementations split by table: `core.rs`, `games.rs`, `snapshots.rs`, `messages.rs`, `swipes.rs`, `presets.rs`, `llm_messages.rs`, `worlds.rs`, `personas.rs`, `characters.rs`, `settings.rs`), `models/` (row structs), `mappers/` (serialization logic), plus test files.
 
 #### Seeding Pattern
 

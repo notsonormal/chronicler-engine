@@ -6,6 +6,7 @@ use crate::model::character::NpcCard;
 use crate::model::map::Room;
 use crate::model::prompt_preset::PromptPreset;
 use crate::model::state::MessageEntry;
+use crate::model::template::{render_template, TemplateVars};
 use crate::model::world::WorldCard;
 use crate::narrative::prompt::budget;
 use crate::narrative::prompt::budget::truncate_to_budget;
@@ -20,7 +21,6 @@ pub struct AssembledPrompt {
     pub max_tokens: u32,
 }
 
-/// Decouples prompt construction from LLM transport.
 pub trait PromptAssembler: Send + Sync {
     fn assemble(
         &self,
@@ -58,8 +58,9 @@ impl PromptAssembler for LayeredPromptAssembler {
         global_rules: &[String],
         response_length: Option<&str>,
     ) -> Result<AssembledPrompt, EngineError> {
-        let system_prompt = build_system_prompt(preset, global_rules);
-        let post_history_prompt = build_post_history_prompt(preset, response_length);
+        let system_prompt = build_system_prompt(preset, global_rules, &context.template_vars);
+        let post_history_prompt =
+            build_post_history_prompt(preset, response_length, &context.template_vars);
 
         let renderer = LayerRenderer {
             world: context.world,
@@ -71,6 +72,7 @@ impl PromptAssembler for LayeredPromptAssembler {
             history: context.history,
             system_prompt,
             post_history_prompt,
+            template_vars: &context.template_vars,
         };
 
         let (system, user, max_tokens) =
@@ -84,20 +86,25 @@ impl PromptAssembler for LayeredPromptAssembler {
     }
 }
 
-// ---------------------------------------------------------------------------
-// System / post-history prompt builders (direct from preset — no delimiter)
-// ---------------------------------------------------------------------------
-
-fn build_system_prompt(preset: &PromptPreset, global_rules: &[String]) -> String {
+fn build_system_prompt(
+    preset: &PromptPreset,
+    global_rules: &[String],
+    vars: &TemplateVars,
+) -> String {
     let mut parts: Vec<String> = Vec::new();
 
-    push_section(&mut parts, preset.role.as_deref(), "role");
-    push_section(&mut parts, preset.instructions.as_deref(), "instructions");
+    let role = preset.role.as_ref().map(|r| render_template(r, vars));
+    push_section(&mut parts, role.as_deref(), "role");
+    let instructions = preset
+        .instructions
+        .as_ref()
+        .map(|i| render_template(i, vars));
+    push_section(&mut parts, instructions.as_deref(), "instructions");
 
     if !global_rules.is_empty() {
         let rules_text = global_rules
             .iter()
-            .map(|r| format!("- {r}"))
+            .map(|r| format!("- {}", render_template(r, vars)))
             .collect::<Vec<_>>()
             .join("\n");
         parts.push(wrap_xml(&rules_text, "global_rules"));
@@ -106,13 +113,21 @@ fn build_system_prompt(preset: &PromptPreset, global_rules: &[String]) -> String
     parts.join("\n\n")
 }
 
-fn build_post_history_prompt(preset: &PromptPreset, response_length: Option<&str>) -> String {
+fn build_post_history_prompt(
+    preset: &PromptPreset,
+    response_length: Option<&str>,
+    vars: &TemplateVars,
+) -> String {
     let mut parts: Vec<String> = Vec::new();
 
-    push_section(&mut parts, preset.writing_style.as_deref(), "writing_style");
+    let writing_style = preset
+        .writing_style
+        .as_ref()
+        .map(|w| render_template(w, vars));
+    push_section(&mut parts, writing_style.as_deref(), "writing_style");
 
     if let Some(output_format) = &preset.output_format {
-        let mut output_text = output_format.clone();
+        let mut output_text = render_template(output_format, vars);
         if let Some(length) = response_length {
             output_text.push_str("\n\nResponse Length:\n");
             output_text.push_str(length);
@@ -144,10 +159,6 @@ fn wrap_xml(content: &str, tag: &str) -> String {
     format!("<{tag}>\n{indented}\n</{tag}>")
 }
 
-// ---------------------------------------------------------------------------
-// Layer rendering (migrated from PromptBuilder)
-// ---------------------------------------------------------------------------
-
 struct LayerRenderer<'a> {
     world: &'a WorldCard,
     room: &'a Room,
@@ -158,6 +169,7 @@ struct LayerRenderer<'a> {
     history: &'a [MessageEntry],
     system_prompt: String,
     post_history_prompt: String,
+    template_vars: &'a TemplateVars,
 }
 
 impl<'a> LayerRenderer<'a> {
@@ -198,7 +210,7 @@ impl<'a> LayerRenderer<'a> {
         output.push_str("Current Location: ");
         output.push_str(&self.room.name);
         output.push_str("\n\n");
-        output.push_str(&self.room.description);
+        output.push_str(&render_template(&self.room.description, self.template_vars));
         output.push_str("\n\n");
         output.push_str("</GameState>\n");
         output
@@ -209,8 +221,7 @@ impl<'a> LayerRenderer<'a> {
         let in_area_ids: std::collections::HashSet<_> =
             self.npcs_in_area.iter().map(|n| n.id.as_str()).collect();
 
-        // Section 1: All known NPCs with condensed cards
-        output.push_str("<KnownNpcs>\n");
+        output.push_str("<KnownNpcs>");
         if self.all_npcs.is_empty() {
             output.push_str("No characters in this world.\n");
         } else {
@@ -235,8 +246,8 @@ impl<'a> LayerRenderer<'a> {
                             .collect::<Vec<_>>()
                             .join("\n")
                     });
+                let summary_text = render_template(&summary_text, self.template_vars);
 
-                // Indent each line of the summary
                 for line in summary_text.lines() {
                     output.push_str(&format!("  {line}\n"));
                 }
@@ -245,8 +256,7 @@ impl<'a> LayerRenderer<'a> {
         }
         output.push_str("</KnownNpcs>\n\n");
 
-        // Section 2: Present NPCs with full character cards
-        output.push_str("<NpcsInRoom>\n");
+        output.push_str("<NpcsInRoom>");
         if self.npcs_in_area.is_empty() {
             output.push_str("No NPCs are present in this location.\n");
         } else {
@@ -255,18 +265,17 @@ impl<'a> LayerRenderer<'a> {
                 output.push_str(&npc.sheet.name);
                 output.push_str(" ---\n");
                 output.push_str("Description: ");
-                output.push_str(&npc.sheet.description);
+                output.push_str(&render_template(&npc.sheet.description, self.template_vars));
                 output.push('\n');
                 output.push_str("Personality: ");
-                output.push_str(&npc.sheet.personality);
+                output.push_str(&render_template(&npc.sheet.personality, self.template_vars));
                 output.push('\n');
                 if !npc.sheet.scenario.is_empty() {
                     output.push_str("Context: ");
-                    output.push_str(&npc.sheet.scenario);
+                    output.push_str(&render_template(&npc.sheet.scenario, self.template_vars));
                     output.push('\n');
                 }
 
-                // Relationships with other NPCs present in the room
                 let present_relations: Vec<_> = npc
                     .relationships
                     .iter()
@@ -282,7 +291,11 @@ impl<'a> LayerRenderer<'a> {
                             .find(|n| n.id == rel.with)
                             .map(|n| n.sheet.name.as_str())
                             .unwrap_or(&rel.with);
-                        output.push_str(&format!("  → {}: {}\n", partner_name, rel.display_text()));
+                        output.push_str(&format!(
+                            "  → {}: {}\n",
+                            partner_name,
+                            render_template(rel.display_text(), self.template_vars)
+                        ));
                     }
                 }
 
@@ -300,13 +313,22 @@ impl<'a> LayerRenderer<'a> {
         output.push_str(&self.player.sheet.name);
         output.push_str("\n\n");
         output.push_str("Description: ");
-        output.push_str(&self.player.sheet.description);
+        output.push_str(&render_template(
+            &self.player.sheet.description,
+            self.template_vars,
+        ));
         output.push_str("\n\n");
         output.push_str("Personality: ");
-        output.push_str(&self.player.sheet.personality);
+        output.push_str(&render_template(
+            &self.player.sheet.personality,
+            self.template_vars,
+        ));
         output.push_str("\n\n");
         output.push_str("Background: ");
-        output.push_str(&self.player.sheet.scenario);
+        output.push_str(&render_template(
+            &self.player.sheet.scenario,
+            self.template_vars,
+        ));
         output.push('\n');
 
         output.push_str("</PlayerCharacter>\n");
@@ -318,7 +340,10 @@ impl<'a> LayerRenderer<'a> {
         output.push_str("World: ");
         output.push_str(&self.world.name);
         output.push_str("\n\n");
-        output.push_str(&self.world.description);
+        output.push_str(&render_template(
+            &self.world.description,
+            self.template_vars,
+        ));
         output.push_str("\n\n");
 
         output.push_str("</WorldLore>\n");
@@ -340,7 +365,6 @@ impl<'a> LayerRenderer<'a> {
             history_text.push_str(&format!("{}: {}\n", sender, entry.text));
         }
 
-        // Truncate to budget
         let truncated = truncate_to_budget(&history_text, budget::MAX_HISTORY_TOKENS as usize);
         output.push_str(&truncated);
 

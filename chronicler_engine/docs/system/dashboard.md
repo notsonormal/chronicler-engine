@@ -1,6 +1,6 @@
 # Specification: Dashboard UI
 
-> **Related Decisions**: [ADR-001](../adr/adr-001-htmx-web-dashboard.md), [ADR-002](../adr/adr-002-sse-realtime-updates.md), [ADR-003](../adr/adr-003-askama-templates.md)
+> **Related Decisions**: [ADR-001](../adr/adr-001-htmx-web-dashboard.md), [ADR-002](../adr/adr-002-http-polling.md), [ADR-003](../adr/adr-003-askama-templates.md)
 
 ## Overview
 The Chronicler Engine presents a web-based HTMX dashboard for player interaction. The UI provides narrative immersion, visual grounding, and user input in a modern chat-app aesthetic inspired by SillyTavern.
@@ -99,13 +99,13 @@ The dashboard uses HTMX polling for live updates:
 
 ## Data Model
 
-### LogEntry
+### MessageEntry
 ```rust
-pub struct LogEntry {
+pub struct MessageEntry {
     pub id: u64,                           // Unique auto-incrementing ID
     pub sender: Option<String>,
     pub text: String,                       // Active swipe text (markdown source)
-    pub log_type: LogType,
+    pub message_type: MessageType,
     pub timestamp: chrono::DateTime<chrono::Utc>,
     pub swipe_count: usize,                 // Number of swipes for this message
     pub active_swipe_index: usize,          // Currently displayed swipe index
@@ -114,13 +114,17 @@ pub struct LogEntry {
 }
 ```
 
-### LogEntryView (Rendered)
+### MessageEntryView (Rendered)
 ```rust
-pub struct LogEntryView {
+pub struct MessageEntryView {
     pub id: u64,
+    pub timestamp: String,
+    pub sender: String,
     pub text: SafeHtml,                     // Rendered HTML (markdown converted)
     pub raw_text: String,                   // Original markdown (for editing)
-    pub log_type: String,
+    pub log_type: String,                  // Stringified MessageType for CSS class
+    pub location_header: Option<String>,    // Room name header
+    pub event_header: Option<String>,       // Event name header
     pub swipe_count: usize,
     pub active_swipe_index: usize,
     pub prev_swipe_index: Option<usize>,

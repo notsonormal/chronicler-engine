@@ -345,7 +345,7 @@ Core narrative unit with swipe support.
   "id": 1,
   "sender": "Game Master",
   "text": "You enter the hall.",
-  "log_type": "Narration",
+  "message_type": "Narration",
   "timestamp": "2026-05-24T12:00:00Z",
   "location_header": "Entrance Hall",
   "event_header": null,
@@ -367,7 +367,7 @@ Core narrative unit with swipe support.
 - `id`: Auto-incrementing message ID
 - `sender`: Optional sender name (None for narration, "Player" for input)
 - `text`: Active swipe text (hydrated from `swipes[active_swipe_index]`)
-- `log_type`: `Narration`, `Dialogue`, `System`, or `Input`
+- `message_type`: `Narration`, `Dialogue`, `System`, or `Input`
 - `timestamp`: UTC timestamp
 - `location_header`: Active location header (from active swipe)
 - `event_header`: Active event header (from active swipe)

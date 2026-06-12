@@ -5,6 +5,8 @@ mod actions;
 mod endpoints;
 mod games;
 mod generation_guard;
+#[cfg(test)]
+mod generation_guard_tests;
 mod history;
 mod misc;
 mod renderers;

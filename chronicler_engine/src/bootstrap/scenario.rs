@@ -2,6 +2,7 @@
 //! Scenario loading and validation
 use crate::model::character::PlayerCard;
 use crate::model::state::GameState;
+use crate::model::template::{render_template, TemplateVars};
 use crate::model::world::WorldManifest;
 
 pub fn inject_scenario_logs(state: &mut GameState, manifest: &WorldManifest, player: &PlayerCard) {
@@ -17,6 +18,6 @@ pub fn inject_scenario_logs(state: &mut GameState, manifest: &WorldManifest, pla
         .unwrap_or_else(|| manifest.starting_room_id.clone());
 
     state.narrative.pending_location = Some(room_name);
-    let text = scenario.text.replace("{{user}}", &player.sheet.name);
+    let text = render_template(&scenario.text, &TemplateVars::new(&player.sheet.name));
     state.add_message(text, None, crate::model::state::MessageType::Narration);
 }

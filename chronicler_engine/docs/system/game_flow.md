@@ -10,56 +10,34 @@ This document defines the core game loop - the play-by-play experience from star
 
 ```mermaid
 flowchart TD
-    Start(["**START GAME**<br>*(Server starts, loads world)*"])
+    Start["Start Game"]
+    Init["1. Initialize\nLoad world, set player, render UI, start polling"]
+    Await["2. Await Input\nStatus: Ready"]
+    Process["3. Process Action\nParse, validate, log, spawn LLM task"]
+    Narrate["4. Main Narration\nBuild prompt → LLM → Save to DB"]
+    Quantify["4.5. Quantifier\nDetect movement & NPC triggers"]
+    Trigger["5. Trigger Evaluation\nIf match: continuation narration"]
+    Quantify2["5.5. Post-Event Quantifier\nUpdate NPC presence"]
+    Poll["6. Polling Update\nClient refreshes via HTMX"]
     
-    Phase1["**PHASE 1: INITIALIZE**<br>1. Load world data<br>2. Set player in starting room<br>3. Render initial UI (Header, Story Log, Sidebar)<br>4. Establish HTMX polling (story-log every 2s, status every 5s, others every 5s)"]
-    
-    Phase2["**PHASE 2: AWAIT INPUT**<br>*(Status: 'Ready')*<br>User types command → submits form. Empty input → `continue_narration()` → narrative continuation (SillyTavern 'Continue' button)."]
-    
-    Phase3["**PHASE 3: PROCESS ACTION**<br>1. Generation gate: reject if action already in flight<br>2. Parse command & execute game logic<br>3. Log command as 'Input'<br>4. Set status to 'Generating' + phase 'Narrating'<br>5. Offload to `tokio::task::spawn_blocking` for LLM work"]
-    
-    Phase4["**PHASE 4: MAIN LLM NARRATION**<br>*(Phase: Narrating)*<br>1. Build prompt via LayeredPromptAssembler<br>2. Send to LLM (see Context Pipeline below)<br>3. Add to history as 'Narration'<br>4. **IMMEDIATE SAVE** — narration persisted to DB for UI visibility (~11s)<br>5. **Cancellation checkpoint** — aborts if token cancelled"]
-    
-Phase45["**PHASE 4.5: QUANTIFIER & MOVEMENT**<br>*(Phase: Quantifying)*<br>1. **Phase transition**: `state.narrative.input_buffer.phase = GenerationPhase::Quantifying` + snapshot save<br>2. Post-narration Quantifier analyzes scene<br>3. `execute_freeaction_impl` consumes quantifier result:<br>&nbsp;&nbsp;a. Process movement intent FIRST (update current_room_id)<br>&nbsp;&nbsp;b. Evaluate NPC triggers SECOND (reads pre-event state)<br>&nbsp;&nbsp;c. Compute NPC Enter/Leave events via state diff<br>&nbsp;&nbsp;d. Apply NPC events THIRD (after trigger evaluation)<br>4. **SECOND SAVE** — quantifier metadata persisted (NPC list, confidence)"}]
-    
-    Phase5["**PHASE 5: TRIGGER EVALUATION**<br>*(Phase: GeneratingEvent — only if trigger fires)*<br>1. `evaluate_triggers(state)` — first match only (inside lock)<br>2. Build prompt with continuation context<br>3. **Cancellation checkpoint** — aborts before second LLM call if token cancelled<br>4. Call LLM (frontend can poll main narration)<br>5. **Cancellation checkpoint** — aborts before commit if token cancelled<br>6. Re-acquire lock → add event header + trigger narration<br>7. Mark trigger as fired"]
-
-    Phase55["**PHASE 5.5: POST-EVENT QUANTIFIER**<br>*(Phase: Quantifying)*<br>1. Post-continuation Quantifier analyzes<br>2. Detect NPCs introduced by event text<br>3. Determine NPC Enter/Leave events<br>4. Update scene.npcs_in_area"]
-    
-    Phase6["**PHASE 6: POLLING UPDATE**<br>1. Client polls /fragment/story-log (2s)<br>2. Client polls /status/generating (5s)<br>3. When status becomes idle, JS immediately triggers story-log refresh<br>4. Server returns updated HTML<br>5. HTMX swaps content"]
-
-    Start --> Phase1
-    Phase1 --> Phase2
-    Phase2 --> Phase3
-    Phase3 --> Phase4
-    Phase4 --> Phase45
-    Phase45 --> Phase5
-    Phase5 --> Phase55
-    Phase55 --> Phase6
-    Phase6 -.->|BACK TO 2| Phase2
+    Start --> Init --> Await --> Process --> Narrate --> Quantify --> Trigger
+    Trigger --> Quantify2 --> Poll
+    Poll -.->|Loop| Await
 ```
 
-When the engine needs LLM narration (during Phase 4), it builds a comprehensive prompt using the **8-layer system** (layers 0-7, with layer 6 as the Phi safety margin; see [`prompt_system.md`](prompt_system.md)):
-```mermaid
-flowchart TD
-    Start(["**PHASE 4: LLM GENERATION**<br>*(If narrative action)*"])
-    
-    Step1["**1. Build 8-layer prompt (SillyTavern-style)**"]
-    Sub1["Layer 0: System prompt (XML-wrapped sections: role, instructions, writing_style, global_rules, output_format)<br>Layer 1: Game state (room, NPCs)<br>Layer 2: NPC cards (in-room NPCs only)<br>Layer 3: Player persona<br>Layer 4: World info (keyword-triggered lore)<br>Layer 5: Full narration history (up to 1000 entries)<br>Layer 6: User input (current action)<br>Layer 7: Phi safety margin"]
-    
-    Step2["**2. Token budget check**<br>*(8192 max, truncate if overflow)*"]
-    Step3["**3. Send to LLM**<br>*(OpenRouter/DeepSeek)*"]
-    Step4["**4. Receive narration response**"]
-    Step5["**5. Add to narration history**<br>*(as 'Narration')*"]
-    Step6(["**6. Set status back to 'Ready'**"])
+When the engine needs LLM narration (during Phase 4), it builds a comprehensive prompt using the **8-layer system** (layers 0-7, with layer 6 as Post-History; see [`prompt_system.md`](prompt_system.md)):
 
-    Start --> Step1
-    Step1 --> Sub1
-    Sub1 --> Step2
-    Step2 --> Step3
-    Step3 --> Step4
-    Step4 --> Step5
-    Step5 --> Step6
+```mermaid
+flowchart LR
+    Start["Phase 4: LLM Generation"]
+    Build["Build 8-layer prompt"]
+    Check["Token budget check<br>(32768 max)"]
+    Send["Send to LLM"]
+    Receive["Receive response"]
+    Save["Save to history"]
+    Done["Status: Ready"]
+    
+    Start --> Build --> Check --> Send --> Receive --> Save --> Done
 ```
 
 ## Test Scenarios
@@ -141,37 +119,24 @@ Retrying a response (via the right swipe arrow on the last message) branches bas
 
 ```mermaid
 flowchart TD
-    Start(["User clicks right arrow (latest swipe)"])
-    Check{Last response was event?}
-    Main["**Main Narration Retry**"]
-    Event["**Event Continuation Retry**"]
-    FindMain["Find last Input message<br>load its `snapshot_id`"]
-    FindEvent["Find last non-event message<br>load its `snapshot_id`"]
-    SoftDelete["Soft-delete messages after anchor"]
-    Preserve["Preserve old target as a swipe"]
-    Apply["Apply snapshot to structural state"]
-    ReGenMain["Re-run Phase 4→5→5.5<br>(new quantifier + triggers)"]
-    ReGenEvent["Re-run Phase 5 only"]
-    Phase55["**PHASE 5.5: POST-EVENT QUANTIFIER**<br>*(Phase: Quantifying)*<br>1. Post-continuation Quantifier analyzes<br>2. Detect NPCs introduced by retried text<br>3. Update scene.npcs_in_area"]
-    Migrate["Migrate old swipes to new message"]
-    Purge["Purge soft-deleted messages"]
-    Save["Save final state"]
-
+    Start["User clicks retry"]
+    Check{"Event response?"}
+    Main["Main Retry Path"]
+    Event["Event Retry Path"]
+    FindAnchor["Find anchor message<br>Load snapshot"]
+    SoftDel["Soft-delete messages after anchor"]
+    Preserve["Preserve old as swipe"]
+    Restore["Restore snapshot state"]
+    ReRun["Re-run pipeline"]
+    ReRunMain["Phases 4→5→5.5<br>Full regeneration"]
+    ReRunEvent["Phase 5 only<br>Event continuation"]
+    Update["Update UI"]
+    
     Start --> Check
     Check -->|No| Main
     Check -->|Yes| Event
-    Main --> FindMain
-    Event --> FindEvent
-    FindMain --> SoftDelete
-    FindEvent --> SoftDelete
-    SoftDelete --> Preserve
-    Preserve --> Apply
-    Apply --> ReGenMain
-    Apply --> ReGenEvent
-    ReGenMain --> Migrate
-    ReGenEvent --> Migrate
-    Migrate --> Purge
-    Purge --> Save
+    Main --> FindAnchor --> SoftDel --> Preserve --> Restore --> ReRunMain --> Update
+    Event --> FindAnchor --> SoftDel --> Preserve --> Restore --> ReRunEvent --> Update
 ```
 
 **Key behaviors** (enforced by `tests/flow_mock/`):
@@ -195,7 +160,7 @@ flowchart TD
 - **Application Service**: `src/application/application_service.rs` - `DefaultApplicationService::continue_narration()`
 - **Action Pipeline**: `src/application/action_pipeline/pipeline.rs` - `ActionPipeline::run_from_input()` (passes `CONTINUE_SENTINEL` for continuation)
 - **HTMX Polling**: `assets/index.html` - story-log `hx-trigger="load, every 2s"`; status-display `hx-trigger="load, every 5s"`; visual-sidebar & action-hints `hx-trigger="load, every 5s"`
-- **LLM**: `src/narrative/llm/backend.rs` - `LlmBackend` trait (`narrate_action`, `narrate_arrival`)
+- **LLM**: `src/narrative/llm/backend.rs` - `LlmBackend` trait (`narrate_continuation`, `complete`)
 - **Prompt Assembler**: `src/narrative/prompt/assembler.rs` - 8-layer prompt construction
 - **Mock Flow Tests**: `tests/flow_mock/` - Sequential service-level flow tests with mock backends (retry, state consistency, quantifier movement)
 - **LLM Tests**: `tests/flow_llm_tests.rs` - Real LLM smoke tests (requires `OPENROUTER_API_KEY`)

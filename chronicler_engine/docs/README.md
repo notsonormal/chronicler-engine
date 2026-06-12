@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-06-12 19:53 UTC*
+*Index last generated: 2026-06-12 21:31 UTC*
 
 ### Root files
 
@@ -15,7 +15,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ### `docs/adr/`
 
 - [ADR-001: HTMX Web Dashboard Architecture](./adr/adr-001-htmx-web-dashboard.md)
-- [ADR-002: HTTP Polling for Real-Time Updates](./adr/adr-002-sse-realtime-updates.md)
+- [ADR-002: HTTP Polling for Real-Time Updates](./adr/adr-002-http-polling.md)
 - [ADR-003: Askama Template Engine for HTML Rendering](./adr/adr-003-askama-templates.md)
 - [ADR-004: XML-Structured LLM Prompts](./adr/adr-004-xml-prompt-format.md)
 - [ADR-005: SillyTavern-Style Layered Prompt System](./adr/adr-005-layered-prompts.md)
@@ -37,7 +37,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [ADR-021: State Patch Reducer for Post-Generation Agent Composition](./adr/adr-021-state-patch-reducer.md)
 - [ADR-022: PromptAssembler Trait Decoupling](./adr/adr-022-prompt-assembler.md)
 - [ADR-023: Immediate Message Persistence](./adr/adr-023-immediate-message-persistence.md)
-- [ADR 0010: Migrate Game Data to SQLite with Seed Pattern](./adr/adr-024-game-data-migration-to-sqlite.md)
+- [ADR-024: Migrate Game Data to SQLite with Seed Pattern](./adr/adr-024-game-data-migration-to-sqlite.md)
 
 ### `docs/architecture/`
 
@@ -90,10 +90,6 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Reference: Quantifier Prompt](./reference/quantifier_prompt.md)
 - [Reference: System Prompt](./reference/system_prompt.md)
 - [Specification: Testing Strategy and Architecture](./reference/testing.md)
-
-### `docs/reports/`
-
-- [Documentation Consistency Report](./reports/docs-consistency-2026-05-31.md)
 
 ### `docs/reviews/`
 

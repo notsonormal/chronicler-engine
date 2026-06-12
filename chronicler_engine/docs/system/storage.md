@@ -60,7 +60,7 @@ src/storage/
 |-------|---------|------------|
 | `games` | Top-level game session record | `id`, `name`, `world_name`, `created_at`, `updated_at` |
 | `game_state_snapshots` | Serialized game state metadata | `id`, `game_id`, `snapshot_data` (JSON), `created_at` |
-| `messages` | Narrative message history | `id`, `game_id`, `sender`, `log_type`, `timestamp`, `active_swipe_index`, `is_deleted` |
+| `messages` | Narrative message history | `id`, `game_id`, `sender`, `message_type`, `timestamp`, `active_swipe_index`, `is_deleted` |
 | `message_swipes` | Per-message alternate generations | `id`, `message_id`, `swipe_index`, `text`, `snapshot_id`, `location_header`, `event_header` |
 
 ### Global Data (not game-scoped)

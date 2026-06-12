@@ -1,6 +1,7 @@
 //! [DOC: docs/system/agent_system.md]
 //! Quantifier prompt construction
 
+use crate::model::template::{render_template, TemplateVars};
 use crate::narrative::agents::quantifier::types::QuantifierPromptContext;
 
 pub struct QuantifierPromptBuilder<'a> {
@@ -17,11 +18,14 @@ impl<'a> QuantifierPromptBuilder<'a> {
     }
 
     fn build_system_prompt(&self) -> String {
-        let mut prompt = self
-            .context
-            .quantifier_prompt_override
-            .clone()
-            .unwrap_or_default();
+        let vars = TemplateVars::new(self.context.player_name);
+        let mut prompt = render_template(
+            self.context
+                .quantifier_prompt_override
+                .as_deref()
+                .unwrap_or(""),
+            &vars,
+        );
 
         if !prompt.is_empty() {
             prompt.push_str("\n\n");
@@ -57,7 +61,6 @@ impl<'a> QuantifierPromptBuilder<'a> {
             self.context.room.description
         ));
 
-        // Include navigation hint to improve movement detection
         if let Some(nav_desc) = &self.context.room.navigation_description {
             prompt.push_str(&format!("  <Navigation>{nav_desc}</Navigation>\n"));
         }

@@ -15,6 +15,7 @@ pub mod scenario;
 pub mod settings;
 pub mod state;
 pub mod state_snapshot;
+pub mod template;
 pub mod trigger;
 pub mod world;
 
@@ -36,6 +37,8 @@ mod scenario_tests;
 mod state_snapshot_tests;
 #[cfg(test)]
 mod state_tests;
+#[cfg(test)]
+mod template_tests;
 #[cfg(test)]
 mod trigger_tests;
 #[cfg(test)]

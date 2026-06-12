@@ -56,7 +56,7 @@ Chronological narrative history. Each row is one log entry (player input, narrat
 | `id`             | INTEGER | PRIMARY KEY AUTOINCREMENT                    |
 | `game_id`        | INTEGER | NOT NULL DEFAULT 1 — foreign key to `games`  |
 | `sender`            | TEXT    | Player name, NPC name, or NULL for narrator  |
-| `log_type`          | TEXT    | JSON: `LogType` enum                         |
+| `message_type` | TEXT | JSON: `MessageType` enum |
 | `timestamp`         | TEXT    | ISO 8601 timestamp                           |
 | `active_swipe_index`| INTEGER | Index of currently active swipe version      |
 | `is_deleted`        | INTEGER | 0 or 1 — soft delete flag                    |

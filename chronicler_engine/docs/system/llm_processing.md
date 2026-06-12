@@ -12,7 +12,7 @@ The engine utilizes Large Language Models (LLMs) via the OpenRouter API, DeepSee
 - **Cancellation**: Each spawned task checks a `CancellationToken` before and after execution to handle graceful shutdown. Long-running pipelines (`ActionPipeline::run_from_input`) also check the token at internal stage boundaries (after main narration, before trigger continuation, after trigger continuation) to abort early and avoid wasting LLM calls on stale requests. When cancelled mid-pipeline, `ActionPipeline::handle_cancellation()` resets `GenerationStatus::Idle`, clears the phase, and persists the state.
 
 ### 2. Model Configuration
-The engine supports flexible model selection via connection profiles in `data/settings.json`.
+The engine supports flexible model selection via connection profiles stored in the SQLite `settings` table (seeded from `data/settings.json` at startup; see ADR-024).
 - **Connections**: Named profiles combining `provider` + `model` + `api_key` + `base_url`
 - **Narration Connection**: The connection used for Game Master narration and NPC dialogue
 - **Quantifier Connection**: The connection used for scene quantification (can differ from narration)
@@ -44,17 +44,18 @@ The engine uses a layered prompt system inspired by SillyTavern's Prompt Manager
 
 | Layer | Name | Content | Role |
 |-------|------|---------|------|
-| 0 | System | XML-wrapped sections: role, instructions, writing_style, global_rules, output_format | System |
+| 0 | System | XML-sectioned instructions: role, instructions, writing_style, global_rules, output_format | System |
 | 1 | Game State | `<GameState>` — Current room, present NPCs | User (data) |
 | 2 | NPC Cards | `<KnownNpcs>` roster (all NPCs, condensed) + `<NpcsInRoom>` full cards (present NPCs only) | User (data) |
 | 3 | Player | `<PlayerCharacter>` — Player persona and description | User (data) |
 | 4 | World Info | `<WorldLore>` — World lore triggered by keywords | User (data) |
 | 5 | History | `<ConversationHistory>` — Full narrative history (flattened messages) | User (data) |
-| 6 | User Input | `<PlayerInput>` — Current player message | User (data) |
+| 6 | Post-History | `<writing_style>` + `<output_format>` sections — placed after history for recency bias | User (instructions) |
+| 7 | User Input | `<PlayerInput>` — Current player message/action | User (data) |
 
 **`build_split()` separation**:
 - **System half**: XML-sectioned instructions (Layer 0)
-- **User half**: XML-wrapped data (Layers 1–6)
+- **User half**: XML-wrapped data (Layers 1–5) + post-history instructions (Layer 6) + player input (Layer 7)
 
 This separation reduces the chance of reasoning models (e.g., Gemma 4) entering meta-analysis mode. However, the Gemma 4 26B model (particularly abliterated quants) can still get stuck in an infinite `<|channel>thought` loop even with XML-sectioned instructions. An additional prompt-level fix is applied for Gemma 4 models (see section 8).
 
@@ -174,10 +175,10 @@ RUST_LOG=trace cargo test
 
 
 ### Module Location
-- **Crate path**: `crate::narrative::llm` — directory module (`mod.rs`, `backend.rs`, `openrouter.rs`, `deepseek.rs`, `ollama.rs`, `mock.rs`)
+- **Crate path**: `crate::narrative::llm` — directory module (`mod.rs`, `backend.rs`, `openrouter.rs`, `deepseek.rs`, `ollama.rs`, `mock.rs`, `sanitize.rs`)
 - **Crate path**: `crate::narrative::prompt` — directory module (`mod.rs`, `assembler.rs`, `budget.rs`, `context.rs`, `sanitize.rs`, `types.rs`, plus sibling `*_tests.rs` files)
-- **Crate path**: `crate::narrative::llm_client` — directory module (`mod.rs`, `request.rs`, `response.rs`, `client.rs`, plus `tests/request_tests.rs`, `tests/response_tests.rs`, `tests/integration_tests.rs`)
-- **Crate path**: `crate::storage::llm_messages` — LLM logging implementation (`Storage::save_llm_message()`, `Storage::list_latest_llm_messages()`)
+- **Crate path**: `crate::narrative::llm_client` — directory module (`mod.rs`, `request.rs`, `response.rs`, `client.rs`, plus sibling `request_tests.rs`, `response_tests.rs`)
+- **Crate path**: `crate::storage::backend::llm_messages` — LLM logging implementation (`Storage::save_llm_message()`, `Storage::list_latest_llm_messages()`)
 - **Crate path**: `crate::storage::db` — SQLite schema (`llm_messages` table)
 - **Crate path**: `crate::model::llm_message` — `LlmMessage` data model
 

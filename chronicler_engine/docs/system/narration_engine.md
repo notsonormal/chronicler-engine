@@ -47,8 +47,8 @@ After the player moves to a new room and the first narration is generated, the e
 2. `evaluate_triggers(state, new_room_id)` is called to find matching triggers
 3. For the first matching trigger only:
    a. Uses unified `LayeredPromptAssembler` with continuation context in user message:
-      - Full 7-layer SillyTavern prompt structure
-      - Trigger text as Layer 6 (User Input)
+      - Full 8-layer SillyTavern prompt structure
+      - Trigger text as Layer 7 (User Input)
       - History included for continuity
    b. LLM generates continuation narration
    c. Continuation is appended to the narration log

@@ -9,6 +9,7 @@ use crate::error::EngineError;
 use crate::model::character::NpcCard;
 use crate::model::quantifier::{NpcEvent, NpcTransitionType, QuantifierResult, compute_npc_events};
 use crate::model::state::{GameState, MessageType, StoredTriggerContext};
+use crate::model::template::{render_template, TemplateVars};
 pub struct FreeActionContext<'a> {
     pub narration_text: &'a str,
     pub quantifier_result: &'a QuantifierResult,
@@ -27,7 +28,6 @@ pub struct TurnResult {
     pub trigger_match: Option<TriggerMatch>,
 }
 
-/// Attempts movement to a destination, creating a dynamic room on failure.
 pub fn attempt_movement(state: GameState, destination: &str) -> Result<GameState, EngineError> {
     let mut state = state;
     match attempt_semantic_walk(&mut state, destination) {
@@ -51,7 +51,6 @@ pub fn attempt_movement(state: GameState, destination: &str) -> Result<GameState
     }
 }
 
-/// Updates NPC encounter log if room changed.
 pub fn update_npc_encounters_on_room_change(
     mut state: GameState,
     previous_room_id: &str,
@@ -65,7 +64,6 @@ pub fn update_npc_encounters_on_room_change(
     state
 }
 
-/// Updates narrative state after movement completion.
 pub fn log_movement_completion(state: GameState) -> GameState {
     let mut state = state;
     if let Some(current_room) = state.current_room() {
@@ -135,7 +133,6 @@ pub fn commit_trigger_narration(
     Ok(state)
 }
 
-/// Executes free action processing with quantifier result.
 pub fn execute_freeaction_impl(
     state: &GameState,
     ctx: &FreeActionContext<'_>,
@@ -170,7 +167,10 @@ pub fn execute_freeaction_impl(
                 trigger_idx: idx,
                 trigger_name: trigger.narration.name,
                 trigger_repeat: trigger.repeat,
-                trigger_narration_prompt: trigger.narration.narration_prompt,
+                trigger_narration_prompt: render_template(
+                    &trigger.narration.narration_prompt,
+                    &TemplateVars::new(&state.player.sheet.name),
+                ),
             });
 
     let events = compute_npc_events(&previous_npc_ids, &current_npc_ids);

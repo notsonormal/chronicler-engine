@@ -1,4 +1,4 @@
-# ADR 0010: Migrate Game Data to SQLite with Seed Pattern
+# ADR-024: Migrate Game Data to SQLite with Seed Pattern
 
 **Date:** 2026-06-01  
 **Status:** Accepted (Phases 1, 2, 4 implemented; Phase 3 deferred)  

@@ -5,6 +5,7 @@ use crate::error::EngineError;
 use crate::model::character::{NpcCard, PlayerCard};
 use crate::model::map::Room;
 use crate::model::state::MessageEntry;
+use crate::model::template::TemplateVars;
 use crate::model::world::WorldCard;
 use crate::narrative::prompt::budget;
 use crate::narrative::prompt::budget::estimate_tokens;
@@ -22,7 +23,6 @@ pub fn fit_messages_to_context(
     let safety_margin = budget::SAFETY_MARGIN_TOKENS as usize;
     let min_input_budget = budget::MIN_INPUT_BUDGET_TOKENS as usize;
 
-    // System prompt alone must fit with margin and minimum input budget
     if system_tokens + safety_margin + min_input_budget > max_context {
         return Err(EngineError::ContextOverflow {
             requested: system_tokens,
@@ -32,11 +32,9 @@ pub fn fit_messages_to_context(
 
     let requested = requested_max_tokens.unwrap_or(budget::MAX_RESPONSE_TOKENS) as usize;
 
-    // Available tokens for input (system + user) after reserving margin and response budget
     let available_for_input = max_context.saturating_sub(safety_margin);
     let max_input_tokens = available_for_input.saturating_sub(requested.min(available_for_input));
 
-    // Ensure we leave at least the minimum input budget
     let max_input_tokens = max_input_tokens.max(min_input_budget);
 
     let fitted_user = if user_tokens <= max_input_tokens.saturating_sub(system_tokens) {
@@ -70,7 +68,6 @@ pub(crate) fn trim_history_to_budget(user: &str, target_user_tokens: usize) -> S
     let suffix = &user[end_idx..];
     let history_content = &user[start_idx + HISTORY_OPEN.len()..end_idx];
 
-    // If already within budget, return as-is
     if estimate_tokens(user) <= target_user_tokens {
         return user.to_string();
     }
@@ -80,7 +77,6 @@ pub(crate) fn trim_history_to_budget(user: &str, target_user_tokens: usize) -> S
         return format!("{prefix}(History truncated to fit context window){suffix}");
     }
 
-    // estimate_tokens(text) <= target  <=>  text.len() <= target * 4
     let target_bytes = target_user_tokens.saturating_mul(4);
     let overhead = prefix.len() + suffix.len();
     let total_line_bytes: usize = lines.iter().map(|l| l.len()).sum();
@@ -128,5 +124,6 @@ pub fn make_prompt_context<'a>(
         player,
         user_message,
         history,
+        template_vars: TemplateVars::new(&player.sheet.name),
     }
 }

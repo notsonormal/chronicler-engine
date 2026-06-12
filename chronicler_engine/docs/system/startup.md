@@ -34,4 +34,4 @@ Settings are loaded **once** during bootstrap:
 No business logic layer reloads settings from disk. Connection changes still require a server restart.
 
 ## 5. Server Startup
-The HTTP server (Axum) is initialized after the game state is synthesized. It binds to the specified `--port` and mounts the `assets/` and `data/` directories for static resource serving.
+The HTTP server (Axum) is initialized after the game state is synthesized. It binds to the specified `--port` and serves static files: `/assets` and `/data` routes via `tower_http::services::ServeDir`, with `/assets` as the fallback for unmatched routes.
