@@ -3,13 +3,7 @@ use syn::File;
 
 use crate::Violation;
 
-const MODULE_DOC_EXEMPTIONS: &[&str] = &[
-    // Crate root and binary entry (purely structural)
-    "lib.rs",
-    "main.rs",
-    // Test infrastructure (internal, no public API)
-    "test_support/",
-];
+const MODULE_DOC_EXEMPTIONS: &[&str] = &["lib.rs", "main.rs", "test_support/"];
 
 fn is_module_doc_exempt(path: &str) -> bool {
     let normalized = path.replace('\\', "/");
@@ -35,49 +29,6 @@ fn is_system_md_exempt(path: &str) -> bool {
         .any(|exempt| normalized.contains(exempt))
 }
 
-fn expected_doc_target(path: &str) -> Option<&'static str> {
-    if path.starts_with("application/") {
-        Some("docs/system/game_flow.md")
-    } else if path == "engine/mod.rs" || path == "engine/logic.rs" {
-        Some("docs/system/navigation.md")
-    } else if path == "engine/trigger_eval.rs" {
-        Some("docs/system/triggers.md")
-    } else if path == "engine/state_diagnostics.rs" {
-        Some("docs/architecture/invariants.md")
-    } else if path.starts_with("engine/") {
-        Some("docs/system/game_flow.md")
-    } else if path == "model/character.rs" {
-        Some("docs/system/character_state.md")
-    } else if path == "model/trigger.rs" {
-        Some("docs/system/triggers.md")
-    } else if path == "model/agent.rs" {
-        Some("docs/system/agent_system.md")
-    } else if path.starts_with("model/llm")
-        || path == "model/llm_backend.rs"
-        || path == "model/llm_message.rs"
-    {
-        Some("docs/system/llm_processing.md")
-    } else if path.starts_with("model/") {
-        None // model tier IS architecture
-    } else if path.starts_with("narrative/llm") || path.starts_with("narrative/llm_client") {
-        Some("docs/system/llm_processing.md")
-    } else if path.starts_with("narrative/prompt") {
-        Some("docs/system/prompt_system.md")
-    } else if path.starts_with("narrative/agents") {
-        Some("docs/system/agent_system.md")
-    } else if path.starts_with("narrative/text_check") {
-        Some("docs/system/text_check.md")
-    } else if path == "narrative/mod.rs" || path.starts_with("narrative/") {
-        Some("docs/system/narration_engine.md")
-    } else if path.starts_with("server/") {
-        Some("docs/system/dashboard.md")
-    } else if path.starts_with("bootstrap/") {
-        Some("docs/system/startup.md")
-    } else {
-        None
-    }
-}
-
 fn extract_doc_anchor_path(line: &str) -> Option<&str> {
     let start = line.find('[')? + 1;
     let end = line.find(']')?;
@@ -100,7 +51,6 @@ pub fn check_doc_standards(path: &str, content: &str) -> Vec<Violation> {
 
     let lines: Vec<&str> = content.lines().collect();
 
-    // Check line 1: DOC anchor
     if lines.is_empty() || !lines[0].trim().starts_with("//! [DOC:") {
         violations.push(Violation::warn(
             path,
@@ -122,7 +72,6 @@ pub fn check_doc_standards(path: &str, content: &str) -> Vec<Violation> {
         }
     }
 
-    // Check line 2: module summary (must exist, must be //! but not another [DOC:])
     if lines.len() < 2 {
         violations.push(Violation::warn(
             path,

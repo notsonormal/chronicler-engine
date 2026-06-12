@@ -79,7 +79,7 @@ impl Storage {
                      LEFT JOIN maps m ON w.id = m.world_id
                      WHERE w.key = ?",
                 )?;
-                let result = stmt.query_row([key], |row| {
+                stmt.query_row([key], |row| {
                     let key = row.get::<_, String>(0)?;
                     let name = row.get::<_, String>(1)?;
                     let description = row.get::<_, String>(2)?;
@@ -110,13 +110,15 @@ impl Storage {
                         },
                         map,
                     })
-                });
-
-                match result {
-                    Ok(world) => Ok(Some(world)),
-                    Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-                    Err(e) => Err(EngineError::Database(e))
-                }
+                })
+                .map(Some)
+                .or_else(|e| match e {
+                    rusqlite::Error::QueryReturnedNoRows => Ok(None),
+                    rusqlite::Error::InvalidColumnType(_, field, _) => {
+                        Err(EngineError::Parse(format!("Failed to deserialize {field}: JSON parse error")))
+                    }
+                    e => Err(EngineError::Database(e))
+                })
             }
             Backend::InMemory(data) => Ok(
                 data.worlds

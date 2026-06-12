@@ -6,8 +6,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::Serialize;
-use crate::application::action_pipeline::execute_action_impl;
 
+use crate::application::action_pipeline::execute_action_impl;
 use crate::application::context::{GameServiceContext, load_or_fresh};
 use crate::application::game_lifecycle::GameLifecycleService;
 use crate::application::game_service::GameService;
@@ -116,11 +116,13 @@ impl DefaultApplicationService {
         let mut game_state = load_or_fresh(&ctx);
         let player_name = game_state.player.sheet.name.clone();
 
-        game_state.add_message(
-            input.clone(),
-            Some(player_name.clone()),
-            crate::model::state::MessageType::Input,
-        );
+        if !input.is_empty() {
+            game_state.add_message(
+                input.clone(),
+                Some(player_name.clone()),
+                crate::model::state::MessageType::Input,
+            );
+        }
 
         tracing::debug!("process_action: attempting to set is_generating=true");
         let was_generating = ctx.is_generating.load(Ordering::SeqCst);
@@ -160,7 +162,6 @@ impl DefaultApplicationService {
         tracing::debug!("process_action: spawning blocking task");
         let game_service = Arc::clone(&self.game_service);
         let ctx_clone = ctx.clone();
-        // [DOC: docs/architecture/invariants.md#INV-004]
         tokio::task::spawn_blocking(move || {
             tracing::debug!("spawn_blocking: task started");
             let _guard = GenerationGuard(Arc::clone(&ctx_clone.is_generating));
@@ -168,11 +169,17 @@ impl DefaultApplicationService {
                 tracing::debug!("spawn_blocking: cancelled before execute_action");
                 return;
             }
-            // [DOC: docs/architecture/invariants.md#INV-004]
             execute_action_impl(&*game_service, ctx_clone, input, player_name);
             tracing::debug!("spawn_blocking: execute_action completed");
         });
         Ok(ProcessActionResult::Started)
+    }
+
+    pub fn continue_narration(
+        &self,
+        ctx: GameServiceContext,
+    ) -> Result<ProcessActionResult, EngineError> {
+        self.process_action(ctx, String::new())
     }
 
     pub fn create_game(&self, ctx: GameServiceContext) -> Result<u64, ApplicationError> {

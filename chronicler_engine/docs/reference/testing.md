@@ -210,7 +210,7 @@ Critical tests that must not be removed:
 | Test | Why |
 |------|-----|
 | `test_list_games_fragment_escapes_html` | XSS security — template escaping |
-| `test_action_handler_empty_command` | Validation — rejects blank input |
+| `test_action_handler_empty_command` | Empty input triggers continuation (SillyTavern "Continue" behavior) |
 | `test_story_log_scrollable` | Functional — can't scroll history |
 | `test_no_horizontal_overflow` | Regression — breaks page layout |
 

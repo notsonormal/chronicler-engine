@@ -1,469 +1,544 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Chronicler Engine</title>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
-    <link rel="stylesheet" href="/assets/styles.css?v=3">
-</head>
-<body>
+    <link rel="stylesheet" href="/assets/styles.css?v=3" />
+  </head>
+  <body>
     <div class="error-notification" id="error-notification"></div>
-<div class="header-bar">
-        <div class="header" id="header" hx-get="/fragment/header" hx-trigger="load"></div>
+    <div class="header-bar">
+      <div
+        class="header"
+        id="header"
+        hx-get="/fragment/header"
+        hx-trigger="load"
+      ></div>
     </div>
     <div class="tab-bar">
-        <button class="tab active" data-tab="game">Game</button>
-        <button class="tab" data-tab="settings">Settings</button>
-        <button class="tab" data-tab="prompt-presets">Prompt Presets</button>
-        <button class="tab" data-tab="save-load">Save / Load</button>
-        <button class="tab" data-tab="llm-messages">LLM Messages</button>
+      <button class="tab active" data-tab="game">Game</button>
+      <button class="tab" data-tab="settings">Settings</button>
+      <button class="tab" data-tab="prompt-presets">Prompt Presets</button>
+      <button class="tab" data-tab="save-load">Save / Load</button>
+      <button class="tab" data-tab="llm-messages">LLM Messages</button>
     </div>
     <div class="tab-content active" id="game-tab">
-    <div class="main-container">
-        <div class="story-log" id="story-log" hx-get="/fragment/story-log" hx-trigger="load, every 2s" hx-swap="innerHTML"></div>
-        <div class="visual-sidebar" hx-get="/fragment/visual-sidebar" hx-trigger="load, every 5s"></div>
-    </div>
-    
-    <!-- Static shell: form stays in DOM, never replaced -->
-        <div class="action-area" id="action-area">
+      <div class="main-container">
+        <div
+          class="story-log"
+          id="story-log"
+          hx-get="/fragment/story-log"
+          hx-trigger="load, every 2s"
+          hx-swap="innerHTML"
+        ></div>
+        <div
+          class="visual-sidebar"
+          hx-get="/fragment/visual-sidebar"
+          hx-trigger="load, every 5s"
+        ></div>
+      </div>
+
+      <!-- Static shell: form stays in DOM, never replaced -->
+      <div class="action-area" id="action-area">
         <!-- Form targets hidden div, status updates via WS + JS -->
-        <form id="command-form"  
-              hx-post="/action/check"  
-              hx-target="#action-area"  
-              hx-swap="innerHTML"  
-              hx-sync="this:drop"
-              hx-on::before-request="saveActionArea()"
-              hx-on::after-request="onActionFormAfterRequest()">
-            <input type="text" name="command" placeholder="Enter command..." required minlength="1" autocomplete="off" />
-            <button type="submit" id="submit-btn"><span class="btn-icon">&#9654;</span> Send</button>
+        <form
+          id="command-form"
+          hx-post="/action/check"
+          hx-target="#action-area"
+          hx-swap="innerHTML"
+          hx-sync="this:drop"
+          hx-on::before-request="saveActionArea()"
+          hx-on::after-request="onActionFormAfterRequest()"
+        >
+          <input
+            type="text"
+            name="command"
+            placeholder="Enter command..."
+            autocomplete="off"
+          />
+          <button type="submit" id="submit-btn">
+            <span class="btn-icon">&#9654;</span> Send
+          </button>
         </form>
-        <div class="action-hints" id="action-hints" hx-get="/hints" hx-trigger="load, every 5s"></div>
-        <div class="status ready" id="status-display"  
-             hx-get="/status/generating"  
-             hx-trigger="load, every 5s"  
-             hx-swap="innerHTML"
-             hx-on::after-swap="onStatusPoll(this)"><span class="status ready">Ready</span></div>
-    </div>
+        <div
+          class="action-hints"
+          id="action-hints"
+          hx-get="/hints"
+          hx-trigger="load, every 5s"
+        ></div>
+        <div
+          class="status ready"
+          id="status-display"
+          hx-get="/status/generating"
+          hx-trigger="load, every 5s"
+          hx-swap="innerHTML"
+          hx-on::after-swap="onStatusPoll(this)"
+        >
+          <span class="status ready">Ready</span>
+        </div>
+      </div>
     </div>
     <div class="tab-content" id="settings-tab">
-        <div class="settings-panel" hx-get="/fragment/settings" hx-trigger="load"></div>
+      <div
+        class="settings-panel"
+        hx-get="/fragment/settings"
+        hx-trigger="load"
+      ></div>
     </div>
     <div class="tab-content" id="prompt-presets-tab">
-        <div class="prompt-presets-panel" hx-get="/fragment/prompt-presets" hx-trigger="load"></div>
+      <div
+        class="prompt-presets-panel"
+        hx-get="/fragment/prompt-presets"
+        hx-trigger="load"
+      ></div>
     </div>
     <div class="tab-content" id="save-load-tab">
-        <div class="save-load-panel" hx-get="/fragment/games" hx-trigger="load"></div>
+      <div
+        class="save-load-panel"
+        hx-get="/fragment/games"
+        hx-trigger="load"
+      ></div>
     </div>
     <div class="tab-content" id="llm-messages-tab">
-        <div class="llm-messages-panel" hx-get="/fragment/llm-messages" hx-trigger="load, every 4s" hx-swap="innerHTML" hx-on::after-swap="restoreLlmExpandedState()"></div>
+      <div
+        class="llm-messages-panel"
+        hx-get="/fragment/llm-messages"
+        hx-trigger="load, every 4s"
+        hx-swap="innerHTML"
+        hx-on::after-swap="restoreLlmExpandedState()"
+      ></div>
     </div>
     <script>
-        console.log('[HTMX] Initializing...');
-        
-        // Button state management
-        const submitBtn = document.getElementById('submit-btn');
-        
-        function setButtonState(isThinking) {
-            if (isThinking) {
-                submitBtn.innerHTML = '<span class="btn-icon">&#9632;</span> Stop';
-                submitBtn.disabled = true;
-            } else {
-                submitBtn.innerHTML = '<span class="btn-icon">&#9654;</span> Send';
-                submitBtn.disabled = false;
-            }
-        }
-        
-        // Called immediately when form is submitted (before server responds)
-        function updateToThinking() {
-            setButtonState(true);
-            const statusDisplay = document.getElementById('status-display');
-            if (statusDisplay) {
-                statusDisplay.innerHTML = '<span class="status thinking">Thinking...</span>';
-            }
-        }
-        
-        // Called after form submission to disable button immediately
-        // The server returns status and MutationObserver will re-enable it
-        function updateButtonState() {
-            setButtonState(true); // Immediately disable button on submit
-        }
-        
-        // Called after HTMX polls /status/generating
-        // The endpoint returns phase names or "idle" (plain text)
-        function onStatusPoll(el) {
-            const text = el.textContent.trim();
-            if (text === 'idle') {
-                el.innerHTML = '<span class="status ready">Ready</span>';
-                setButtonState(false);
-            } else if (text === 'narrating' || text === 'quantifying' || text === 'generating-event') {
-                const phaseMap = {
-                    'narrating': 'Generating narration...',
-                    'quantifying': 'Quantifying scene...',
-                    'generating-event': 'Generating event...'
-                };
-                el.innerHTML = '<span class="status thinking">' + phaseMap[text] + '</span>';
-                setButtonState(true);
-            }
-            // If text is empty or unexpected, do nothing
-        }
-        
-        // Watch status display for changes
-        const statusDisplay = document.getElementById('status-display');
-        const errorNotification = document.getElementById('error-notification');
-        
-        // Show error notification at top of screen
-        function showError(message) {
-            if (errorNotification) {
-                errorNotification.textContent = message;
-                errorNotification.classList.add('visible');
-                // Auto-hide after 5 seconds
-                setTimeout(() => {
-                    errorNotification.classList.remove('visible');
-                }, 5000);
-            }
-        }
-        
-        // Edit functions - inline editing with polling pause
-        let currentEditId = null;
-        let originalText = null;
-        let originalTrigger = null;
-        
-        function pausePolling() {
-            const storyLog = document.getElementById('story-log');
-            if (storyLog) {
-                originalTrigger = storyLog.getAttribute('hx-trigger');
-                storyLog.setAttribute('hx-trigger', 'none');
-                // Force HTMX to re-read the trigger attribute
-                htmx.process(storyLog);
-            }
-        }
-        
-        function resumePolling() {
-            const storyLog = document.getElementById('story-log');
-            if (storyLog && originalTrigger) {
-                storyLog.setAttribute('hx-trigger', originalTrigger);
-                htmx.process(storyLog);
-                originalTrigger = null;
-            }
-        }
-        
-        function autoResizeTextarea(textarea) {
-            textarea.style.height = 'auto';
-            textarea.style.height = textarea.scrollHeight + 'px';
-        }
-        
-        function showEditForm(id) {
-            currentEditId = id;
-            const entry = document.querySelector(`[data-id="${id}"]`);
-            if (entry) {
-                const textSpan = entry.querySelector('.text');
-                
-                // Measure original rendered height BEFORE replacing content
-                const originalHeight = textSpan.getBoundingClientRect().height;
-                
-                // Get raw text from data attribute (before markdown conversion)
-                const rawText = entry.getAttribute('data-raw-text') || '';
-                originalText = textSpan.innerHTML;
-                
-                // Replace text with textarea containing raw text
-                textSpan.innerHTML = '';
-                const textarea = document.createElement('textarea');
-                textarea.id = 'edit-textarea';
-                textarea.className = 'edit-textarea';
-                textarea.textContent = rawText;
-                textSpan.appendChild(textarea);
-                // .edit-textarea has 4px padding top+bottom + 1px border top+bottom = 10px extra
-                const textareaExtra = 10;
-                textarea.style.height = (originalHeight + textareaExtra) + 'px';
-                
-                // Auto-resize on input so the textarea grows if the user types more
-                textarea.addEventListener('input', function() {
-                    autoResizeTextarea(this);
-                });
-                
-                // Replace action buttons with save/cancel
-                const actionsContainer = entry.querySelector('.message-actions');
-                if (actionsContainer) {
-                    actionsContainer.innerHTML = `<button class="save-btn" onclick="submitEdit()" title="Save">✓</button><button class="cancel-btn" onclick="cancelEdit()" title="Cancel">✗</button>`;
-                }
-                
-                // Pause HTMX polling while editing
-                pausePolling();
-            }
-        }
-        
-        function cancelEdit() {
-            if (currentEditId === null) return;
-            const entry = document.querySelector(`[data-id="${currentEditId}"]`);
-            if (entry) {
-                const textSpan = entry.querySelector('.text');
-                textSpan.innerHTML = originalText;
-            }
-            currentEditId = null;
-            originalText = null;
-            resumePolling();
-            // Refresh to restore original button layout
-            htmx.trigger('#story-log', 'htmx:refresh');
-        }
-        
-        function submitEdit() {
-            if (currentEditId === null) return;
-            const newText = document.getElementById('edit-textarea').value;
-            const formData = new URLSearchParams();
-            formData.append('text', newText);
-            fetch(`/history/${currentEditId}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: formData
-            }).then(() => {
-                // Resume polling before refresh
-                resumePolling();
-                // Refresh story log
-                htmx.trigger('#story-log', 'htmx:refresh');
-            });
-            currentEditId = null;
-            originalText = null;
-        }
-        
-        function submitNewSwipe() {
-            updateToThinking();
-            fetch('/swipe/new', { method: 'POST' })
-                .then(response => response.text())
-                .then(() => {
-                    // Refresh story log
-                    htmx.trigger('#story-log', 'htmx:refresh');
-                });
-        }
-        
-        function submitRetrigger() {
-            updateToThinking();
-            fetch('/retrigger', { method: 'POST' })
-                .then(response => response.text())
-                .then(() => {
-                    htmx.trigger('#story-log', 'htmx:refresh');
-                });
-        }
-        
-        function switchSwipe(messageId, index) {
-            fetch(`/message/${messageId}/swipe/${index}`, { method: 'POST' })
-                .then(response => {
-                    if (response.ok) {
-                        return response.text();
-                    }
-                    throw new Error('Swipe switch failed');
-                })
-                .then(html => {
-                    document.getElementById('story-log').innerHTML = html;
-                    // Refresh visual sidebar and header to reflect restored state
-                    htmx.trigger('#visual-sidebar', 'htmx:refresh');
-                    htmx.trigger('#header', 'htmx:refresh');
-                })
-                .catch(err => {
-                    console.error('Swipe switch failed:', err);
-                    showError('Failed to switch swipe');
-                });
-        }
-        
-        function deleteMessage() {
-            if (!confirm('Delete this message?')) return;
-            fetch('/history/delete', { method: 'POST' })
-                .then(response => {
-                    if (response.ok) {
-                        htmx.ajax('GET', '/fragment/story-log', {target: '#story-log', swap: 'innerHTML'});
-                    } else {
-                        response.text().then(text => showError(text));
-                    }
-                })
-                .catch(err => {
-                    console.error('Delete failed:', err);
-                    showError('Failed to delete message');
-                });
-        }
-        
-        // Text check helpers
-        function saveActionArea() {
-            const actionArea = document.getElementById('action-area');
-            const input = actionArea.querySelector('input[name="command"]');
-            const btn = actionArea.querySelector('#submit-btn');
-            actionArea.dataset.originalHtml = actionArea.innerHTML;
-            if (input) {
-                actionArea.dataset.originalValue = input.value;
-            }
-            if (btn) {
-                btn.disabled = true;
-            }
-        }
-        
-        function onActionFormAfterRequest() {
-            const form = document.getElementById('command-form');
-            if (form && form.querySelector('input[name=command]')) {
-                form.reset();
-                updateButtonState();
-            }
-        }
-        
-        function checkCurrentInput() {
-            const input = document.querySelector('#command-form input[name="command"]');
-            if (!input || !input.value.trim()) return;
-            checkText(input.value.trim());
-        }
-        
-        function htmlUnescape(str) {
-            const textarea = document.createElement('textarea');
-            textarea.innerHTML = str;
-            return textarea.value;
-        }
-        
-        function checkText(text) {
-            const formData = new URLSearchParams();
-            formData.append('command', text);
-            
-            fetch('/check-text', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: formData
-            })
-            .then(response => response.text())
-            .then(html => {
-                const actionArea = document.getElementById('action-area');
-                if (actionArea) {
-                    saveActionArea();
-                    actionArea.innerHTML = html;
-                }
-            })
-            .catch(err => {
-                console.error('Text check failed:', err);
-                restoreActionArea();
-            });
-        }
-        
-        function checkLogText(rawText) {
-            checkText(htmlUnescape(rawText));
-        }
-        
-        function restoreActionArea() {
-            const actionArea = document.getElementById('action-area');
-            if (actionArea && actionArea.dataset.originalHtml) {
-                actionArea.innerHTML = actionArea.dataset.originalHtml;
-                if (actionArea.dataset.originalValue) {
-                    const input = actionArea.querySelector('input[name="command"]');
-                    if (input) {
-                        input.value = actionArea.dataset.originalValue;
-                    }
-                }
-                htmx.process(actionArea);
-            }
-        }
-        
-        // Create a MutationObserver to watch for status changes
-        const statusObserver = new MutationObserver(function(mutations) {
-            mutations.forEach(function(mutation) {
-                if (mutation.type === 'childList' || mutation.type === 'characterData') {
-                    // Check if the inner status span has the 'thinking' class
-                    const isThinking = statusDisplay.querySelector('.status.thinking') !== null;
-                    if (isThinking) {
-                        setButtonState(true);
-                    } else {
-                        setButtonState(false);
-                    }
-                    // Show error notification for error states
-                    const statusText = statusDisplay.textContent;
-                    if (statusText.includes('Error')) {
-                        showError(statusText);
-                    }
-                }
-            });
-        });
-        
-        // Start observing when DOM is ready
-        document.body.addEventListener('action-area-refresh', function() {
-            htmx.ajax('GET', '/fragment/action-area', {target: '#action-area', swap: 'outerHTML'});
-        });
-        
-        document.addEventListener('DOMContentLoaded', function() {
-            statusObserver.observe(statusDisplay, { 
-                childList: true, 
-                characterData: true,
-                subtree: true 
-            });
-            
-            // Also check initial state
-            if (statusDisplay.textContent.includes('Thinking')) {
-                setButtonState(true);
-            }
+      console.log("[HTMX] Initializing...");
 
-            // Tab switching
-            document.querySelectorAll('.tab').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
-                    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-                    btn.classList.add('active');
-                    document.getElementById(btn.dataset.tab + '-tab').classList.add('active');
-                    
-                    // Refresh LLM messages when switching to that tab
-                    if (btn.dataset.tab === 'llm-messages') {
-                        const panel = document.querySelector('.llm-messages-panel');
-                        if (panel) {
-                            htmx.trigger(panel, 'htmx:refresh');
-                        }
-                    }
-                });
-            });
-            
-            // LLM message expand/collapse - persists across HTMX polls
-            const expandedLlmMessages = new Set();
-            let llmOriginalTrigger = null;
-            
-            function pauseLlmPolling() {
-                const panel = document.querySelector('.llm-messages-panel');
-                if (panel) {
-                    llmOriginalTrigger = panel.getAttribute('hx-trigger');
-                    panel.setAttribute('hx-trigger', 'none');
-                    htmx.process(panel);
-                }
-            }
-            
-            function resumeLlmPolling() {
-                const panel = document.querySelector('.llm-messages-panel');
-                if (panel && llmOriginalTrigger) {
-                    panel.setAttribute('hx-trigger', llmOriginalTrigger);
-                    htmx.process(panel);
-                    llmOriginalTrigger = null;
-                }
-            }
-            
-            window.toggleLlmMessage = function(header) {
-                const card = header.closest('.llm-message-card');
-                if (card) {
-                    card.classList.toggle('expanded');
-                    const msgId = card.id;
-                    if (msgId) {
-                        if (card.classList.contains('expanded')) {
-                            expandedLlmMessages.add(msgId);
-                            pauseLlmPolling();
-                        } else {
-                            expandedLlmMessages.delete(msgId);
-                            if (expandedLlmMessages.size === 0) {
-                                resumeLlmPolling();
-                            }
-                        }
-                    }
-                }
-            };
-            
-            window.restoreLlmExpandedState = function() {
-                expandedLlmMessages.forEach(function(msgId) {
-                    const card = document.getElementById(msgId);
-                    if (card) {
-                        card.classList.add('expanded');
-                    } else {
-                        expandedLlmMessages.delete(msgId);
-                    }
-                });
-            };
+      // Button state management
+      const submitBtn = document.getElementById("submit-btn");
+
+      function setButtonState(isThinking) {
+        if (isThinking) {
+          submitBtn.innerHTML = '<span class="btn-icon">&#9632;</span> Stop';
+          submitBtn.disabled = true;
+        } else {
+          submitBtn.innerHTML = '<span class="btn-icon">&#9654;</span> Send';
+          submitBtn.disabled = false;
+        }
+      }
+
+      // Called immediately when form is submitted (before server responds)
+      function updateToThinking() {
+        setButtonState(true);
+        const statusDisplay = document.getElementById("status-display");
+        if (statusDisplay) {
+          statusDisplay.innerHTML =
+            '<span class="status thinking">Thinking...</span>';
+        }
+      }
+
+      // Called after form submission to disable button immediately
+      // The server returns status and MutationObserver will re-enable it
+      function updateButtonState() {
+        setButtonState(true); // Immediately disable button on submit
+      }
+
+      // Called after HTMX polls /status/generating
+      // The endpoint returns phase names or "idle" (plain text)
+      function onStatusPoll(el) {
+        const text = el.textContent.trim();
+        if (text === "idle") {
+          el.innerHTML = '<span class="status ready">Ready</span>';
+          setButtonState(false);
+        } else if (
+          text === "narrating" ||
+          text === "quantifying" ||
+          text === "generating-event"
+        ) {
+          const phaseMap = {
+            narrating: "Generating narration...",
+            quantifying: "Quantifying scene...",
+            "generating-event": "Generating event...",
+          };
+          el.innerHTML =
+            '<span class="status thinking">' + phaseMap[text] + "</span>";
+          setButtonState(true);
+        }
+        // If text is empty or unexpected, do nothing
+      }
+
+      // Watch status display for changes
+      const statusDisplay = document.getElementById("status-display");
+      const errorNotification = document.getElementById("error-notification");
+
+      // Show error notification at top of screen
+      function showError(message) {
+        if (errorNotification) {
+          errorNotification.textContent = message;
+          errorNotification.classList.add("visible");
+          // Auto-hide after 5 seconds
+          setTimeout(() => {
+            errorNotification.classList.remove("visible");
+          }, 5000);
+        }
+      }
+
+      // Edit functions - inline editing with polling pause
+      let currentEditId = null;
+      let originalText = null;
+      let originalTrigger = null;
+
+      function pausePolling() {
+        const storyLog = document.getElementById("story-log");
+        if (storyLog) {
+          originalTrigger = storyLog.getAttribute("hx-trigger");
+          storyLog.setAttribute("hx-trigger", "none");
+          // Force HTMX to re-read the trigger attribute
+          htmx.process(storyLog);
+        }
+      }
+
+      function resumePolling() {
+        const storyLog = document.getElementById("story-log");
+        if (storyLog && originalTrigger) {
+          storyLog.setAttribute("hx-trigger", originalTrigger);
+          htmx.process(storyLog);
+          originalTrigger = null;
+        }
+      }
+
+      function autoResizeTextarea(textarea) {
+        textarea.style.height = "auto";
+        textarea.style.height = textarea.scrollHeight + "px";
+      }
+
+      function showEditForm(id) {
+        currentEditId = id;
+        const entry = document.querySelector(`[data-id="${id}"]`);
+        if (entry) {
+          const textSpan = entry.querySelector(".text");
+
+          // Measure original rendered height BEFORE replacing content
+          const originalHeight = textSpan.getBoundingClientRect().height;
+
+          // Get raw text from data attribute (before markdown conversion)
+          const rawText = entry.getAttribute("data-raw-text") || "";
+          originalText = textSpan.innerHTML;
+
+          // Replace text with textarea containing raw text
+          textSpan.innerHTML = "";
+          const textarea = document.createElement("textarea");
+          textarea.id = "edit-textarea";
+          textarea.className = "edit-textarea";
+          textarea.textContent = rawText;
+          textSpan.appendChild(textarea);
+          // .edit-textarea has 4px padding top+bottom + 1px border top+bottom = 10px extra
+          const textareaExtra = 10;
+          textarea.style.height = originalHeight + textareaExtra + "px";
+
+          // Auto-resize on input so the textarea grows if the user types more
+          textarea.addEventListener("input", function () {
+            autoResizeTextarea(this);
+          });
+
+          // Replace action buttons with save/cancel
+          const actionsContainer = entry.querySelector(".message-actions");
+          if (actionsContainer) {
+            actionsContainer.innerHTML = `<button class="save-btn" onclick="submitEdit()" title="Save">✓</button><button class="cancel-btn" onclick="cancelEdit()" title="Cancel">✗</button>`;
+          }
+
+          // Pause HTMX polling while editing
+          pausePolling();
+        }
+      }
+
+      function cancelEdit() {
+        if (currentEditId === null) return;
+        const entry = document.querySelector(`[data-id="${currentEditId}"]`);
+        if (entry) {
+          const textSpan = entry.querySelector(".text");
+          textSpan.innerHTML = originalText;
+        }
+        currentEditId = null;
+        originalText = null;
+        resumePolling();
+        // Refresh to restore original button layout
+        htmx.trigger("#story-log", "htmx:refresh");
+      }
+
+      function submitEdit() {
+        if (currentEditId === null) return;
+        const newText = document.getElementById("edit-textarea").value;
+        const formData = new URLSearchParams();
+        formData.append("text", newText);
+        fetch(`/history/${currentEditId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: formData,
+        }).then(() => {
+          // Resume polling before refresh
+          resumePolling();
+          // Refresh story log
+          htmx.trigger("#story-log", "htmx:refresh");
         });
-        
-        </script>
-</body>
+        currentEditId = null;
+        originalText = null;
+      }
+
+      function submitNewSwipe() {
+        updateToThinking();
+        fetch("/swipe/new", { method: "POST" })
+          .then((response) => response.text())
+          .then(() => {
+            // Refresh story log
+            htmx.trigger("#story-log", "htmx:refresh");
+          });
+      }
+
+      function submitRetrigger() {
+        updateToThinking();
+        fetch("/retrigger", { method: "POST" })
+          .then((response) => response.text())
+          .then(() => {
+            htmx.trigger("#story-log", "htmx:refresh");
+          });
+      }
+
+      function switchSwipe(messageId, index) {
+        fetch(`/message/${messageId}/swipe/${index}`, { method: "POST" })
+          .then((response) => {
+            if (response.ok) {
+              return response.text();
+            }
+            throw new Error("Swipe switch failed");
+          })
+          .then((html) => {
+            document.getElementById("story-log").innerHTML = html;
+            // Refresh visual sidebar and header to reflect restored state
+            htmx.trigger("#visual-sidebar", "htmx:refresh");
+            htmx.trigger("#header", "htmx:refresh");
+          })
+          .catch((err) => {
+            console.error("Swipe switch failed:", err);
+            showError("Failed to switch swipe");
+          });
+      }
+
+      function deleteMessage() {
+        if (!confirm("Delete this message?")) return;
+        fetch("/history/delete", { method: "POST" })
+          .then((response) => {
+            if (response.ok) {
+              htmx.ajax("GET", "/fragment/story-log", {
+                target: "#story-log",
+                swap: "innerHTML",
+              });
+            } else {
+              response.text().then((text) => showError(text));
+            }
+          })
+          .catch((err) => {
+            console.error("Delete failed:", err);
+            showError("Failed to delete message");
+          });
+      }
+
+      // Text check helpers
+      function saveActionArea() {
+        const actionArea = document.getElementById("action-area");
+        const input = actionArea.querySelector('input[name="command"]');
+        const btn = actionArea.querySelector("#submit-btn");
+        actionArea.dataset.originalHtml = actionArea.innerHTML;
+        if (input) {
+          actionArea.dataset.originalValue = input.value;
+        }
+        if (btn) {
+          btn.disabled = true;
+        }
+      }
+
+      function onActionFormAfterRequest() {
+        const form = document.getElementById("command-form");
+        if (form && form.querySelector("input[name=command]")) {
+          form.reset();
+          updateButtonState();
+        }
+      }
+
+      function checkCurrentInput() {
+        const input = document.querySelector(
+          '#command-form input[name="command"]',
+        );
+        if (!input || !input.value.trim()) return;
+        checkText(input.value.trim());
+      }
+
+      function htmlUnescape(str) {
+        const textarea = document.createElement("textarea");
+        textarea.innerHTML = str;
+        return textarea.value;
+      }
+
+      function checkText(text) {
+        const formData = new URLSearchParams();
+        formData.append("command", text);
+
+        fetch("/check-text", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: formData,
+        })
+          .then((response) => response.text())
+          .then((html) => {
+            const actionArea = document.getElementById("action-area");
+            if (actionArea) {
+              saveActionArea();
+              actionArea.innerHTML = html;
+            }
+          })
+          .catch((err) => {
+            console.error("Text check failed:", err);
+            restoreActionArea();
+          });
+      }
+
+      function checkLogText(rawText) {
+        checkText(htmlUnescape(rawText));
+      }
+
+      function restoreActionArea() {
+        const actionArea = document.getElementById("action-area");
+        if (actionArea && actionArea.dataset.originalHtml) {
+          actionArea.innerHTML = actionArea.dataset.originalHtml;
+          if (actionArea.dataset.originalValue) {
+            const input = actionArea.querySelector('input[name="command"]');
+            if (input) {
+              input.value = actionArea.dataset.originalValue;
+            }
+          }
+          htmx.process(actionArea);
+        }
+      }
+
+      // Create a MutationObserver to watch for status changes
+      const statusObserver = new MutationObserver(function (mutations) {
+        mutations.forEach(function (mutation) {
+          if (
+            mutation.type === "childList" ||
+            mutation.type === "characterData"
+          ) {
+            // Check if the inner status span has the 'thinking' class
+            const isThinking =
+              statusDisplay.querySelector(".status.thinking") !== null;
+            if (isThinking) {
+              setButtonState(true);
+            } else {
+              setButtonState(false);
+            }
+            // Show error notification for error states
+            const statusText = statusDisplay.textContent;
+            if (statusText.includes("Error")) {
+              showError(statusText);
+            }
+          }
+        });
+      });
+
+      // Start observing when DOM is ready
+      document.body.addEventListener("action-area-refresh", function () {
+        htmx.ajax("GET", "/fragment/action-area", {
+          target: "#action-area",
+          swap: "outerHTML",
+        });
+      });
+
+      document.addEventListener("DOMContentLoaded", function () {
+        statusObserver.observe(statusDisplay, {
+          childList: true,
+          characterData: true,
+          subtree: true,
+        });
+
+        // Also check initial state
+        if (statusDisplay.textContent.includes("Thinking")) {
+          setButtonState(true);
+        }
+
+        // Tab switching
+        document.querySelectorAll(".tab").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            document
+              .querySelectorAll(".tab")
+              .forEach((b) => b.classList.remove("active"));
+            document
+              .querySelectorAll(".tab-content")
+              .forEach((c) => c.classList.remove("active"));
+            btn.classList.add("active");
+            document
+              .getElementById(btn.dataset.tab + "-tab")
+              .classList.add("active");
+
+            // Refresh LLM messages when switching to that tab
+            if (btn.dataset.tab === "llm-messages") {
+              const panel = document.querySelector(".llm-messages-panel");
+              if (panel) {
+                htmx.trigger(panel, "htmx:refresh");
+              }
+            }
+          });
+        });
+
+        // LLM message expand/collapse - persists across HTMX polls
+        const expandedLlmMessages = new Set();
+        let llmOriginalTrigger = null;
+
+        function pauseLlmPolling() {
+          const panel = document.querySelector(".llm-messages-panel");
+          if (panel) {
+            llmOriginalTrigger = panel.getAttribute("hx-trigger");
+            panel.setAttribute("hx-trigger", "none");
+            htmx.process(panel);
+          }
+        }
+
+        function resumeLlmPolling() {
+          const panel = document.querySelector(".llm-messages-panel");
+          if (panel && llmOriginalTrigger) {
+            panel.setAttribute("hx-trigger", llmOriginalTrigger);
+            htmx.process(panel);
+            llmOriginalTrigger = null;
+          }
+        }
+
+        window.toggleLlmMessage = function (header) {
+          const card = header.closest(".llm-message-card");
+          if (card) {
+            card.classList.toggle("expanded");
+            const msgId = card.id;
+            if (msgId) {
+              if (card.classList.contains("expanded")) {
+                expandedLlmMessages.add(msgId);
+                pauseLlmPolling();
+              } else {
+                expandedLlmMessages.delete(msgId);
+                if (expandedLlmMessages.size === 0) {
+                  resumeLlmPolling();
+                }
+              }
+            }
+          }
+        };
+
+        window.restoreLlmExpandedState = function () {
+          expandedLlmMessages.forEach(function (msgId) {
+            const card = document.getElementById(msgId);
+            if (card) {
+              card.classList.add("expanded");
+            } else {
+              expandedLlmMessages.delete(msgId);
+            }
+          });
+        };
+      });
+    </script>
+  </body>
 </html>

@@ -248,7 +248,6 @@ fn test_retry_finds_anchor() {
     let state = create_test_state();
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
-    // Use helper to add and save an input message with snapshot
     add_input_and_save(&ctx, "Test input");
 
     service.retry_last_response(ctx.clone());
@@ -300,10 +299,6 @@ fn test_retry_empty_history() {
     );
 }
 
-// ============================================================================
-// MessageEditingService Tests (10 tests)
-// ============================================================================
-
 #[test]
 fn test_switch_swipe_out_of_bounds() {
     use chronicler_engine::model::message::{Message, Swipe};
@@ -312,7 +307,6 @@ fn test_switch_swipe_out_of_bounds() {
     use chronicler_engine::application::ApplicationError;
 
     let mut state = create_test_state();
-    // Add a narration message with 2 swipes
     let mut msg = Message::new(None, "First narration", MessageType::Narration, None, None);
     msg.swipes.push(Swipe {
         text: "First narration".to_string(),
@@ -340,15 +334,10 @@ fn test_switch_swipe_out_of_bounds() {
     let message_id = last_message.id;
     let swipe_count = last_message.swipes.len();
 
-    // Try index = swipe_count (out of bounds)
     let result = editing_service.switch_swipe(ctx, message_id, swipe_count);
 
     assert!(result.is_err());
-    if let ApplicationError::Engine(_) = result.unwrap_err() {
-        // Expected
-    } else {
-        panic!("Expected Engine error");
-    }
+    assert!(matches!(result.unwrap_err(), ApplicationError::Engine(_)));
 }
 
 #[test]
@@ -380,8 +369,6 @@ fn test_edit_history_updates_text() {
     let result = editing_service.edit_history(ctx.clone(), message_id, edited_text.clone());
     assert!(result.is_ok());
 
-    // Verify updated in storage
-    // Verify updated in storage
     let messages = ctx.load_messages().unwrap();
     let stored = messages.iter().find(|m| m.id == message_id).unwrap();
     assert_eq!(stored.text(), edited_text);
@@ -413,7 +400,6 @@ fn test_edit_history_no_snapshot() {
     let message_id = messages.last().unwrap().id;
 
     let result = editing_service.edit_history(ctx.clone(), message_id, "Edited".to_string());
-    // Should succeed (no snapshot = no-op on storage side)
     assert!(result.is_ok());
 }
 
@@ -496,7 +482,6 @@ fn test_edit_history_storage_failure() {
     let message_id = messages.last().unwrap().id;
 
     let result = editing_service.edit_history(ctx.clone(), message_id, "Edited".to_string());
-    // Should succeed or handle error gracefully
     assert!(result.is_ok() || result.is_err());
 }
 
@@ -600,7 +585,6 @@ fn test_delete_last_storage_failure() {
     );
     let editing_service = MessageEditingService::new(Arc::new(service));
     let result = editing_service.delete_last(ctx.clone());
-    // Should succeed or handle error gracefully
     assert!(result.is_ok() || result.is_err());
 }
 #[tokio::test]
@@ -617,7 +601,6 @@ async fn test_retry_cancellation() {
         None,
     ));
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    // Cancel the token to simulate cancellation
     ctx.cancel_token.cancel();
     let service = GameService::with_backends(
         Arc::new(MockBackend::default()),
@@ -625,6 +608,69 @@ async fn test_retry_cancellation() {
     );
     let editing_service = MessageEditingService::new(Arc::new(service));
     let result = editing_service.retry(ctx.clone());
-    // Should return error due to cancellation
     assert!(result.is_err());
+}
+
+
+#[test]
+fn test_continue_narration_fresh_game() {
+    let state = create_test_state();
+    state.narrative.history.clear();
+    let ctx = make_test_context_with_sqlite(state).unwrap();
+    let service = working_service();
+    
+    let initial_history = latest_state(&ctx).narrative.history.len();
+    service.execute_action(ctx.clone(), String::new(), "Player".to_string());
+    
+    let guard = latest_state(&ctx);
+    assert_eq!(
+        guard.narrative.history.len(),
+        initial_history + 1,
+        "Empty input should generate narration (history should grow by 1)"
+    );
+    
+    // Verify no Input message was added (only Narration)
+    let entries: Vec<_> = guard.narrative.history.iter()
+        .skip(initial_history)
+        .collect();
+    assert_eq!(entries.len(), 1, "Should have exactly one new entry");
+    assert_eq!(
+        entries[0].message_type,
+        chronicler_engine::model::state::MessageType::Narration,
+        "Empty input should produce Narration, not Input"
+    );
+}
+
+#[test]
+fn test_continue_narration_concurrent_generation() {
+    let state = create_test_state();
+    let ctx = make_test_context_with_sqlite(state).unwrap();
+    ctx.is_generating.store(true, std::sync::atomic::Ordering::SeqCst);
+    let service = working_service();
+    
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        service.execute_action(ctx.clone(), String::new(), "Player".to_string());
+    }));
+    
+    // Concurrent generation should error or panic
+    assert!(result.is_err(), "Concurrent generation should be rejected");
+}
+
+#[test]
+fn test_whitespace_variations() {
+    let test_cases = vec![
+        "   ",      // spaces
+        "	",      // tab
+        "
+",      // newline  
+        " 	  
+", // mixed
+    ];
+    
+    for whitespace in test_cases {
+        let state = create_test_state();
+        let ctx = make_test_context_with_sqlite(state).unwrap();
+        let service = working_service();
+        service.execute_action(ctx.clone(), whitespace.to_string(), "Player".to_string());
+    }
 }

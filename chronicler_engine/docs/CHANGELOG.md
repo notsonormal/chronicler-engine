@@ -1,5 +1,47 @@
 # Changelog
 
+## 2026-06-12
+
+### Added
+
+- **Empty Send triggers narrative continuation (SillyTavern "Continue" button)**
+  - Pressing Send with empty text box now continues the story instead of showing error
+  - Added `CONTINUE_SENTINEL` constant for sentinel value
+  - Server handlers route empty input to continuation via `continue_narration()`
+  - Removed HTML5 `required minlength="1"` validation from input field
+  - Modified files:
+    - `src/application/action_pipeline/actions.rs` — Added `CONTINUE_SENTINEL` constant
+    - `src/server/fragments/actions.rs` — Replaced empty guards with continuation routing
+    - `assets/index.html` — Removed `required minlength="1"` from input
+    - `src/server/fragments/actions_tests.rs` — Updated tests to expect OK, added response text verification
+    - `docs/system/game_flow.md` — Documented empty input behavior
+    - `docs/system/dashboard.md` — Documented empty input behavior and unified "Thinking..." status
+  - 23 action tests pass; full test suite passes
+  - Coverage: Maintains 80%+ threshold (core flow change, well-tested)
+
+### Refactored
+
+- **Thermo-nuclear code quality review: collapsed duplicate continuation functions**
+  - Deleted `run_from_continue()` wrapper in `ActionPipeline` — inlined to `run_from_input(state, CONTINUE_SENTINEL)`
+  - Deleted `execute_continue_impl()` duplicate — now uses `execute_action_impl()` with `CONTINUE_SENTINEL`
+  - Collapsed `continue_narration()` divergent twin into `process_action()` with sentinel guard
+    - `process_action()` now skips `add_message()` when input equals `CONTINUE_SENTINEL`
+    - `continue_narration()` is now a one-line delegation: `self.process_action(ctx, CONTINUE_SENTINEL.to_string())`
+  - Removed `execute_continue_impl` import from `application_service.rs`
+  - Updated `mod.rs` re-exports: `CONTINUE_SENTINEL` instead of `execute_continue_impl`
+  - Fixed tautological test assertions in `test_continue_narration_fresh_game`, `test_continue_narration_concurrent_generation`, `test_whitespace_variations`
+  - Updated server handler tests to expect "Thinking..." instead of "Continuing..." for unified response
+  - Modified files:
+    - `src/application/action_pipeline/pipeline.rs` — Deleted `run_from_continue()` method
+    - `src/application/action_pipeline/actions.rs` — Deleted `execute_continue_impl()`, kept `CONTINUE_SENTINEL`
+    - `src/application/action_pipeline/mod.rs` — Re-exported `CONTINUE_SENTINEL` instead of `execute_continue_impl`
+    - `src/application/application_service.rs` — Collapsed `continue_narration()` to 1-line delegation
+    - `src/server/fragments/actions.rs` — Unified response message ("Thinking...")
+    - `src/server/fragments/actions_tests.rs` — Updated test expectations
+    - `tests/integration/game_service.rs` — Removed tautological assertions
+  - 884 tests pass (all tests pass)
+  - Coverage: No reduction — refactoring only, behavior unchanged
+
 ## 2026-06-06 (Later)
 
 ### Added

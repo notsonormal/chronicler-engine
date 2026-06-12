@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-06-06 19:10 UTC*
+*Index last generated: 2026-06-12 19:53 UTC*
 
 ### Root files
 
@@ -70,6 +70,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ### `docs/plans/archived/`
 
 - [Plan: Migrate Game Data to Database with Seed Pattern](./plans/archived/db-game-data-migration.md)
+- [Plan: Empty Send Triggers Narrative Continuation](./plans/archived/empty-send-continue-2026-06-12.md)
 - [Plan: Fix Generation Phase Stuck on "Generating narration..." During Post-Generation](./plans/archived/fix-generation-phase-status-2026-06-01.md)
 - [Refactor handle_movement: Split Mixed Responsibilities](./plans/archived/handle-movement-refactor-2026-05-31.md)
 - [Module-Level DOC Anchor Migration](./plans/archived/module-level-doc-anchors-2026-06-06.md)

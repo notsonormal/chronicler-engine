@@ -14,7 +14,7 @@ flowchart TD
     
     Phase1["**PHASE 1: INITIALIZE**<br>1. Load world data<br>2. Set player in starting room<br>3. Render initial UI (Header, Story Log, Sidebar)<br>4. Establish HTMX polling (story-log every 2s, status every 5s, others every 5s)"]
     
-    Phase2["**PHASE 2: AWAIT INPUT**<br>*(Status: 'Ready')*<br>User types command → submits form"]
+    Phase2["**PHASE 2: AWAIT INPUT**<br>*(Status: 'Ready')*<br>User types command → submits form. Empty input → `continue_narration()` → narrative continuation (SillyTavern 'Continue' button)."]
     
     Phase3["**PHASE 3: PROCESS ACTION**<br>1. Generation gate: reject if action already in flight<br>2. Parse command & execute game logic<br>3. Log command as 'Input'<br>4. Set status to 'Generating' + phase 'Narrating'<br>5. Offload to `tokio::task::spawn_blocking` for LLM work"]
     
@@ -191,9 +191,11 @@ flowchart TD
 
 ## Reference Implementation
 
-- **Server**: `src/server/fragments/actions.rs` - `action_handler`, `process_action`
+- **Server**: `src/server/fragments/actions.rs` - `action_handler`, `process_action`, `continue_narration` (empty input → narrative continuation)
+- **Application Service**: `src/application/application_service.rs` - `DefaultApplicationService::continue_narration()`
+- **Action Pipeline**: `src/application/action_pipeline/pipeline.rs` - `ActionPipeline::run_from_input()` (passes `CONTINUE_SENTINEL` for continuation)
 - **HTMX Polling**: `assets/index.html` - story-log `hx-trigger="load, every 2s"`; status-display `hx-trigger="load, every 5s"`; visual-sidebar & action-hints `hx-trigger="load, every 5s"`
 - **LLM**: `src/narrative/llm/backend.rs` - `LlmBackend` trait (`narrate_action`, `narrate_arrival`)
-- **Prompt Assembler**: `src/narrative/prompt/assembler.rs` - 7-layer prompt construction
+- **Prompt Assembler**: `src/narrative/prompt/assembler.rs` - 8-layer prompt construction
 - **Mock Flow Tests**: `tests/flow_mock/` - Sequential service-level flow tests with mock backends (retry, state consistency, quantifier movement)
 - **LLM Tests**: `tests/flow_llm_tests.rs` - Real LLM smoke tests (requires `OPENROUTER_API_KEY`)

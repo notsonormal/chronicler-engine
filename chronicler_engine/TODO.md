@@ -1,5 +1,9 @@
 # QUICK TODO List
 
+## Added: 2026-06-12
+
+- [x] Empty Send triggers narrative continuation - Pressing Send with empty text box now continues the story (SillyTavern "Continue" button behavior). Uses empty-string guard, collapsed `continue_narration()` into `process_action()` via empty string, deleted duplicate `execute_continue_impl()` and `run_from_continue()`. Server handlers unified. Tautological test assertions removed. All 884 tests pass.
+
 ## Added: 2026-06-05
 
 - [x] DOC anchors - replaced function-level anchors with module-level `//! [DOC: ...]` on line 1 of every `src/` file. Removed function-level and spawn-site guardrails. Module-level guardrail added. Documentation updated.
@@ -24,12 +28,12 @@
 - [] This error is a problem: `[System] Entered unknown location: dynamic_1778882402`. We shouldn't be showing an error message here. For one, we shouldn't be writing an error message into the conversation history. For another a 'dynamic location' isn't an error state. It just be displayed normal naturally. Probably just updating the location in the message box to `Foyer (Dynamic)` instead of `foyer`. 
 - [] The style of writing is a bit annoying. Should be an issue with the prompts
 - [x] The list of LLM messages doesn't include the quantifier for some reason. 
-- [] When you edit the player text and retry the next message, the player text is reverted
+- [x] When you edit the player text and retry the next message, the player text is reverted
 - [x] Should remove the meaningless 'sync' actions. Look, inventory, north/south/etc from the options and on the bottom left of the screen. Remove inventory from the system prompt as well
-- [] If the "Send" text box is empty. It should trigger a new narrator text generation (e.g. like Silly Tavern/Marina)
+- [x] If the "Send" text box is empty. It should trigger a new narrator text generation (e.g. like Silly Tavern/Marina) - IMPLEMENTED 2026-06-12
 - [] Move connections in a separate connections tab.
 - [] Create a presets tab for configuring narrator/event/quantifier prompts in the connections tab. Also turn it into a normal set of list + add/edit
-- [] Reimplement message swipes
+- [x] Reimplement message swipes
 - [] Need to support replacement strings (e.g. {{user}})
 
 ## Added: 2026-05-12

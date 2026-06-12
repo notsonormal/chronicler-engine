@@ -15,24 +15,25 @@ use crate::narrative::text_check::check_player_input;
 use crate::server::AppState;
 use crate::server::templates::TextCheckPreviewTemplate;
 
-use super::renderers::{
-    bad_request, internal_error, ok, render_action_area, render_error, service_unavailable,
-};
+use super::renderers::{internal_error, ok, render_action_area, render_error, service_unavailable};
 
 #[derive(Deserialize, Serialize)]
 pub struct ActionForm {
     pub command: String,
 }
 
-async fn process_action(state: &AppState, command: String) -> Response<Body> {
-    if command.is_empty() {
-        return bad_request("<span class=\"status error\">Enter a command</span>");
-    }
+async fn dispatch_action(state: &AppState, command: String) -> Response<Body> {
+    let action_result = if command.is_empty() {
+        state
+            .application_service
+            .continue_narration(state.as_game_service_context())
+    } else {
+        state
+            .application_service
+            .process_action(state.as_game_service_context(), command)
+    };
 
-    match state
-        .application_service
-        .process_action(state.as_game_service_context(), command)
-    {
+    match action_result {
         Ok(ProcessActionResult::Started) => {
             ok("<span class=\"status thinking\">Thinking...</span>")
         }
@@ -51,7 +52,7 @@ pub async fn action_handler(
     Form(form): Form<ActionForm>,
 ) -> Response<Body> {
     let command = form.command.trim().to_string();
-    process_action(&state, command).await
+    dispatch_action(&state, command).await
 }
 
 #[allow(clippy::expect_used)]
@@ -60,11 +61,8 @@ pub async fn action_confirm_handler(
     Form(form): Form<ActionForm>,
 ) -> Response<Body> {
     let command = form.command.trim().to_string();
-    if command.is_empty() {
-        return bad_request("<span class=\"status error\">Enter a command</span>");
-    }
 
-    let action_response = process_action(&state, command).await;
+    let action_response = dispatch_action(&state, command).await;
     let status = action_response.status();
 
     let action_area_html = match render_action_area(&state) {
@@ -86,15 +84,12 @@ pub async fn action_check_handler(
     Form(form): Form<ActionForm>,
 ) -> Response<Body> {
     let command = form.command.trim().to_string();
-    if command.is_empty() {
-        return bad_request("<span class=\"status error\">Enter a command</span>");
-    }
 
     let settings = state.settings();
 
     if settings.text_check.mode == TextCheckMode::Disabled || !settings.text_check.enable_auto_check
     {
-        let mut response = process_action(&state, command).await;
+        let mut response = dispatch_action(&state, command).await;
         add_status_swap_headers(&mut response);
         return response;
     }
@@ -107,7 +102,7 @@ pub async fn action_check_handler(
         Ok(result) => result,
         Err(e) => {
             tracing::error!("Text check failed: {e}");
-            let mut response = process_action(&state, command).await;
+            let mut response = dispatch_action(&state, command).await;
             add_status_swap_headers(&mut response);
             return response;
         }
@@ -122,7 +117,7 @@ pub async fn action_check_handler(
             }
         }
         None => {
-            let mut response = process_action(&state, command).await;
+            let mut response = dispatch_action(&state, command).await;
             add_status_swap_headers(&mut response);
             response
         }

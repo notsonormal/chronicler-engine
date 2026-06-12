@@ -100,13 +100,14 @@ async fn test_action_handler_empty_command() {
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
 
+    assert_eq!(response.status(), StatusCode::OK);
     let body = axum::body::to_bytes(response.into_body(), 1024)
         .await
         .unwrap();
     let body_str = String::from_utf8_lossy(&body);
     assert!(
-        body_str.contains("Enter a command"),
-        "Expected empty command error: {body_str}"
+        body_str.contains("Thinking"),
+        "Expected empty command to trigger continuation: {body_str}"
     );
 }
 
@@ -281,14 +282,14 @@ async fn test_action_confirm_empty_command() {
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
 
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(response.status(), StatusCode::OK);
     let body = axum::body::to_bytes(response.into_body(), 1024)
         .await
         .unwrap();
     let body_str = String::from_utf8_lossy(&body);
     assert!(
-        body_str.contains("Enter a command"),
-        "Expected empty command error: {body_str}"
+        body_str.contains("Thinking"),
+        "Expected empty command to trigger continuation: {body_str}"
     );
 }
 

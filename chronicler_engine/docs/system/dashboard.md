@@ -55,13 +55,16 @@ Interactive zone for player input.
   - Thinking: Green button with "Stop" text and square icon (■), disabled input
 - **Status States**:
   - "Ready" - Green (#00ff00), awaiting input
-  - "Thinking..." - Yellow (#ffff00) with pulse animation, LLM generating response
+  - "Thinking..." - Yellow (#ffff00) with pulse animation, LLM generating response (includes narrative continuation on empty input)
+  - "Still thinking..." - Yellow (#ffff00), concurrent generation in progress
 - **Text Check Preview**: When spell/grammar issues are detected, the action area temporarily shows:
   - Original vs corrected text comparison
   - Issue tags (spell = orange, grammar = pink)
   - **Send** — submits corrected text to `/action`
   - **Send Original** — submits original text to `/action`
   - **Cancel** — restores normal action area
+
+**Empty Input Behavior**: Pressing Send with an empty text box triggers narrative continuation via `continue_narration()` → `process_action(CONTINUE_SENTINEL)`. The LLM generates the next scene without player input, same as SillyTavern's "Continue" button. Status shows "Thinking..." (unified with normal generation). No HTML5 validation blocks empty submit.
 
 ### 4. Settings Tab
 Configuration panel for LLM connections.

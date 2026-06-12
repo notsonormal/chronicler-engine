@@ -174,7 +174,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
 
 The development environment is Windows, not Linux. The Chronicler Engine is NOT being developed inside a Linux devcontainer. 
 
-## OH MY PI/c
+## OH MY PI
 
 Fork of Pi by @mariozechner
 

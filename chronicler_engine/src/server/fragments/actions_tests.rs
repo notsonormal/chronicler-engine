@@ -82,7 +82,19 @@ async fn test_action_handler_empty_command() {
         command: String::new(),
     };
     let response = action_handler(axum::extract::State(state), Form(form)).await;
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "Empty command should trigger continuation"
+    );
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body_str = String::from_utf8_lossy(&body);
+    assert!(
+        body_str.contains("Thinking"),
+        "Expected Thinking status: {body_str}"
+    );
 }
 
 #[tokio::test]
@@ -92,7 +104,12 @@ async fn test_action_handler_whitespace_command() {
         command: "   ".to_string(),
     };
     let response = action_handler(axum::extract::State(state), Form(form)).await;
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body_str = String::from_utf8_lossy(&body);
+    assert!(body_str.contains("Thinking"));
 }
 
 #[tokio::test]
@@ -113,7 +130,11 @@ async fn test_action_confirm_handler_empty_command() {
         command: String::new(),
     };
     let response = action_confirm_handler(axum::extract::State(state), Form(form)).await;
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "Empty command should trigger continuation"
+    );
 }
 
 #[tokio::test]
@@ -133,7 +154,12 @@ async fn test_action_check_handler_empty_command() {
         command: String::new(),
     };
     let response = action_check_handler(axum::extract::State(state), Form(form)).await;
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body_str = String::from_utf8_lossy(&body);
+    assert!(body_str.contains("Thinking"));
 }
 
 #[tokio::test]
