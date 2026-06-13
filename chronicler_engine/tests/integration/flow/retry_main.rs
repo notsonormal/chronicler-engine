@@ -80,8 +80,7 @@ fn test_retry_with_different_narration_text_reruns_quantifier() {
         ..Default::default()
     });
 
-    let service =
-        GameService::with_mock_quantifier(llm_backend, Arc::new(MockBackend::default()));
+    let service = GameService::with_mock_quantifier(llm_backend, Arc::new(MockBackend::default()));
     service.execute_action(
         ctx.clone(),
         "approach the innkeeper".to_string(),
@@ -420,7 +419,7 @@ fn test_retry_no_pre_main_snapshot() {
         Arc::new(ps)
     };
 
-    let ctx = chronicler_engine::application::game_service::GameServiceContext {
+    let ctx = chronicler_engine::application::GameServiceContext {
         storage,
         world: state.world.clone(),
         map: state.map.clone(),
@@ -542,8 +541,7 @@ fn test_retry_appends_swipe_to_existing_narration() {
         ..Default::default()
     });
 
-    let service =
-        GameService::with_mock_quantifier(llm_backend, Arc::new(MockBackend::default()));
+    let service = GameService::with_mock_quantifier(llm_backend, Arc::new(MockBackend::default()));
     service.execute_action(
         ctx.clone(),
         "examine room".to_string(),

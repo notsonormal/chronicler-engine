@@ -6,7 +6,12 @@ edition = "2024"
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
 dotenv = "0.15.0"
-reqwest = { version = "0.13.2", features = ["blocking", "json", "gzip", "brotli"] }
+reqwest = { version = "0.13.2", features = [
+  "blocking",
+  "json",
+  "gzip",
+  "brotli",
+] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.128"
 image = "0.25.10"
@@ -62,6 +67,11 @@ path = "tests/infrastructure/guardrails/mod.rs"
 [[test]]
 name = "invariant_contract"
 path = "tests/infrastructure/invariant_contract.rs"
+
+# Integration test harness - required after test reorganization (commit 77a3350)
+# This is the SINGLE entry point for ALL integration tests under tests/integration/.
+# DO NOT add separate [[test]] entries for submodules (llm_client/, pipeline/, etc.) -
+# they are declared as modules in tests/integration/mod.rs and run under this harness.
 [[test]]
-name = "llm_client"
-path = "tests/integration/llm_client/mod.rs"
+name = "integration"
+path = "tests/integration/mod.rs"

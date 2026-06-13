@@ -1,6 +1,17 @@
 use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
 
-use super::*;
+use crate::{
+    fixtures::create_test_state,
+    pipeline_helpers::{
+        create_test_state_with_trigger_npc, latest_state, wait_for_generation_complete,
+    },
+    working_service,
+};
+use chronicler_engine::application::GameService;
+use chronicler_engine::model::state::{GenerationPhase, GenerationStatus, MessageType};
+use chronicler_engine::narrative::llm::MockBackend;
+use chronicler_engine::test_support::make_test_context_with_sqlite;
 
 #[test]
 fn test_delayed_llm_completes_without_deadlock() {
@@ -201,7 +212,7 @@ fn test_pipeline_cancels_when_token_cancelled() {
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
     ctx.cancel_token.cancel();
-    let backend = working_backend();
+    let backend = working_service();
 
     backend.execute_action(ctx.clone(), "look".to_string(), "Player".to_string());
 
@@ -387,10 +398,8 @@ fn test_pre_event_snapshot_saved_before_continuation() {
         ..Default::default()
     };
 
-    let backend = GameService::with_mock_quantifier(
-        Arc::new(MockBackend::default()),
-        Arc::new(quantifier),
-    );
+    let backend =
+        GameService::with_mock_quantifier(Arc::new(MockBackend::default()), Arc::new(quantifier));
 
     backend.execute_action(
         ctx.clone(),
@@ -436,7 +445,6 @@ fn test_pipeline_with_quantifier() {
 
 #[test]
 fn test_streaming_narration_saved_before_quantifier_complete() {
-    use crate::storage::TestOverride;
     use std::thread;
     use std::time::Duration;
 
@@ -451,7 +459,7 @@ fn test_streaming_narration_saved_before_quantifier_complete() {
         Arc::new(MockBackend {
             // Quantifier takes 500ms
             per_call_prompt_responses: vec![r#"{"npcs_in_room": []}"#.to_string()],
-            call_delay_ms: 500,
+            delay_ms: AtomicU64::new(500),
             ..Default::default()
         }),
     );
@@ -497,17 +505,13 @@ fn test_streaming_narration_saved_before_quantifier_complete() {
         .count();
 
     assert_eq!(
-        final_narration_count,
-        1,
-        "Should have exactly 1 narration (no duplicates), found {}",
-        final_narration_count
+        final_narration_count, 1,
+        "Should have exactly 1 narration (no duplicates), found {final_narration_count}"
     );
 }
 
 #[test]
 fn test_narration_no_duplicate_with_real_quantifier_flow() {
-    use crate::storage::TestOverride;
-
     let mut state = create_test_state();
     state.narrative.history.clear();
     state.narrative.input_buffer.status = GenerationStatus::Generating;
@@ -530,8 +534,7 @@ fn test_narration_no_duplicate_with_real_quantifier_flow() {
 
     assert_eq!(
         narration_count, 1,
-        "Should have exactly 1 narration entry (no duplicates), found {}",
-        narration_count
+        "Should have exactly 1 narration entry (no duplicates), found {narration_count}"
     );
 
     // Also verify in storage
@@ -543,8 +546,7 @@ fn test_narration_no_duplicate_with_real_quantifier_flow() {
 
     assert_eq!(
         stored_narration_count, 1,
-        "Storage should have exactly 1 narration (no duplicates), found {}",
-        stored_narration_count
+        "Storage should have exactly 1 narration (no duplicates), found {stored_narration_count}"
     );
 }
 
@@ -575,5 +577,8 @@ fn test_pipeline_continues_when_quantifier_save_warns() {
         .history()
         .iter()
         .any(|e| e.message_type == MessageType::Narration);
-    assert!(has_narration, "Narration should be saved regardless of quantifier");
+    assert!(
+        has_narration,
+        "Narration should be saved regardless of quantifier"
+    );
 }

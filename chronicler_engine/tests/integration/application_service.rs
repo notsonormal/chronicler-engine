@@ -1,7 +1,4 @@
 /// Integration tests for DefaultApplicationService
-#[path = "../helpers/fixtures.rs"]
-mod fixtures;
-
 use std::sync::Arc;
 
 use chronicler_engine::application::application_service::{DefaultApplicationService};
