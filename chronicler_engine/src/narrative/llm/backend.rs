@@ -107,6 +107,11 @@ pub fn get_llm_backend_for(
     connection: &Connection,
     storage: Option<Arc<Storage>>,
 ) -> Box<dyn LlmBackend> {
+    tracing::info!(
+        "Creating LLM backend: provider={:?}, model={}",
+        connection.provider,
+        connection.model
+    );
     match connection.provider {
         LlmBackendType::Mock => Box::new(super::mock::MockBackend::new(storage)),
         LlmBackendType::DeepSeek => Box::new(super::deepseek::DeepSeekBackend::from_connection(

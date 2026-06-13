@@ -165,8 +165,6 @@ fn test_reset_creates_scenario_message() {
 
     lifecycle_service.create_game(ctx.clone()).unwrap();
 
-    let _messages_before = storage.load_message_rows().unwrap();
-
     lifecycle_service.reset(ctx.clone()).unwrap();
 
     let messages_after = storage.load_message_rows().unwrap();
@@ -218,6 +216,11 @@ fn test_switch_game_loads_correct_state() {
         game1_id,
         "Should have switched to game 1"
     );
+    let snapshot1 = storage.load_latest_snapshot().unwrap();
+    assert!(
+        snapshot1.is_some(),
+        "Game 1 should have a snapshot after switching"
+    );
 
     let switch_result = lifecycle_service.switch_game(ctx.clone(), game2_id);
     assert!(
@@ -229,6 +232,11 @@ fn test_switch_game_loads_correct_state() {
         ctx.storage.current_game_id(),
         game2_id,
         "Should have switched to game 2"
+    );
+    let snapshot2 = storage.load_latest_snapshot().unwrap();
+    assert!(
+        snapshot2.is_some(),
+        "Game 2 should have a snapshot after switching"
     );
 }
 

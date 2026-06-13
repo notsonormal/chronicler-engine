@@ -1,5 +1,72 @@
 # Changelog
 
+## 2026-06-13
+
+### Changed
+
+- **Unified pipeline error model** — all pipeline errors now set `GenerationStatus::Error` on state and return `Ok(())` instead of `Err(ActionOutcome::Error)`
+  - Eliminates lost-state bugs where `Err` skipped `save_state`, leaving `GenerationStatus` stuck at `Generating`
+  - Pipeline callers check `state.narrative.input_buffer.status.error_message()` to decide whether to skip remaining phases
+  - `phase_trigger_continuation` error path uses `save_message_and_snapshot` (not just `save_state`) to persist system messages
+  - `retry_event_continuation` preserves `save_retry_error` for missing-trigger path (uses `load_or_fresh` to avoid overwriting current state)
+  - `execute_action_impl` simplified to only check `Err(ActionOutcome::Cancelled)`
+  - `ActionOutcome::Error` retained for match exhaustiveness but never constructed in production
+  - `phase_engine_commit` changed to take `&GameState` (was `GameState` by value)
+  - `load_preset_and_response_length` returns `Result<_, String>` instead of `Result<_, ActionOutcome>`
+  - `save_early_error` helper deleted (all sites inline the error-state pattern)
+  - Modified files: `pipeline.rs`, `actions.rs`, `retry.rs`, `application_service.rs`
+
+- **Replaced `catch_unwind` with self-healing stale-`Generating` detection**
+  - Removed `catch_unwind(AssertUnwindSafe)` from `process_action` — unsound after-panic `load_or_fresh` violated safety guarantees
+  - `GenerationGuard::Drop` already handles `is_generating` cleanup on panic
+  - New self-healing check: if `is_generating == false` but persisted status is `Generating`, reset to `Idle` before proceeding
+  - This correctly recovers from panics, cancellations, and any other scenario that leaves stale status
+  - Modified files: `application_service.rs`
+
+- **Deduplicated `TempSettingsGuard` to `SettingsTestGuard`** across test crates
+  - Created `tests/test_utils/settings_guard.rs` with `SettingsTestGuard` (mutex-only, no `temp_path`, no `Drop`)
+  - Deleted `TempSettingsGuard` from `tests/http/mod.rs` and `tests/integration/model/settings.rs`
+  - Both test binaries use `#[path]` direct inclusion
+  - Updated all callsites in `connections.rs`, `settings.rs`, `prompt_presets.rs`
+
+- **Simplified `wait_for_status_ready`** — removed debug HTTP endpoint polling and `eprintln!` calls; now polls only `#status-display` DOM locator
+
+- **Eliminated `#[path]` hack for `llm_client_tests.rs`** — renamed to `llm_client.rs` module, removed `#[path]` attribute in `tests/integration/mod.rs`
+
+### Updated
+
+- `docs/architecture/system.md` — error model, self-healing, `SettingsTestGuard`
+- `docs/system/game_flow.md` — error model section, stale-Generating recovery
+
+### Fixed
+
+- **Registered 94 invisible test suite tests as compiled test binaries**
+  - `tests/http/` (60 tests), `tests/browser/` (32 tests), `tests/llm/` (2 tests) had no `[[test]]` entry in `Cargo.toml` — they were never compiled or run
+  - Added `TempSettingsGuard` to `tests/http/mod.rs` for settings isolation
+  - Added `#[path]` test_utils imports to `tests/browser/mod.rs` and `tests/llm/flow_llm_tests.rs`
+  - Re-exported wait functions from `tests/test_utils/browser.rs` for browser test imports
+  - Fixed `page.fill()` calls in `tests/browser/editing.rs` (not in playwright-rs API) with `page.evaluate()` JS
+  - Fixed `retry_count` typo in `tests/browser/editing.rs`
+  - Added type annotations to `page.evaluate()` calls for compile
+  - Test count: 1191 across 10 binaries (was ~1100)
+
+### Added
+
+- **`test_process_action_persists_input_message` integration test** — verifies that `ApplicationService::process_action()` persists Input messages to history before Narration (P0 coverage gap, previously zero tests for this code path)
+
+### Changed
+
+- **Strengthened weak test assertions** across integration tests:
+  - `test_retry_no_snapshot`: Added `!is_generating()` assertion (was zero-assertion "doesn't panic" test)
+  - `test_pipeline_empty_input`: Changed from `failing_service()` to `working_service()`, three explicit assertions (generation completes, narration appears, no Input message)
+  - `test_switch_game_loads_correct_state`: Added snapshot existence assertions after game switches
+  - Removed dead `let _messages_before` in `test_reset_creates_scenario_message`
+
+### Removed
+
+- **Duplicate `test_with_mock_quantifier`** — identical to `test_with_storage_uses_external` in `tests/integration/game_service.rs`
+- **`tests/integration/llm_client/` directory** — collapsed to single `llm_client_tests.rs` file with `#[path]` attribute, preserving `llm_client::` test filter prefix
+
 ## 2026-06-12
 
 ### Added

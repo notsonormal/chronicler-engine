@@ -4,6 +4,7 @@
 
 pub mod browser;
 pub mod server;
+pub mod settings_guard;
 pub mod wait;
 
 pub use browser::*;

@@ -86,7 +86,10 @@ async fn test_action_handler_message_insert_failure() {
     assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
 }
 
-/// Test that LoadMessageRows operation failure returns an error.
+/// Test that LoadMessageRows operation failure does not crash the action handler.
+/// Because process_action spawns background work, storage failures in message loading
+/// after the action has started are not surfaced to the HTTP response — the handler
+/// returns 200 (Thinking...) and the background task fails gracefully.
 #[tokio::test]
 async fn test_action_handler_load_messages_failure() {
     let storage = Arc::new(Storage::new_in_memory().with_failure(
@@ -103,7 +106,8 @@ async fn test_action_handler_load_messages_failure() {
         .body(Body::from("command=look"))
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
-    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    // process_action returns Started immediately (spawn_blocking for pipeline)
+    assert_eq!(response.status(), StatusCode::OK);
 }
 
 /// Test that /action/check with empty command returns an error.

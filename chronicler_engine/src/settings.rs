@@ -9,11 +9,9 @@ use crate::storage::Storage;
 
 const SETTINGS_FILENAME: &str = "settings.json";
 
-/// Backward compat. Settings are DB-backed since Phase 2.
+/// Returns the default settings file path (data/settings.json).
+/// Note: Server loads settings from SQLite DB only; this is for CLI import tooling.
 pub fn get_settings_path() -> PathBuf {
-    if let Ok(path) = std::env::var("CHRONICLER_SETTINGS_PATH") {
-        return PathBuf::from(path);
-    }
     PathBuf::from("data").join(SETTINGS_FILENAME)
 }
 

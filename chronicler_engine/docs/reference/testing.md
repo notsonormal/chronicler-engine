@@ -43,20 +43,13 @@ Cross-module and browser-based tests live in the top-level `tests/` directory:
 | Test File / Directory | Purpose | Execution Model | Runtime |
 |----------------------|---------|-----------------|---------|
 | `architecture.rs` | Architecture guardrails (arch-lint, layer enforcement) | In-process | ~2s |
-| `components/` | Templates, endpoints, settings, validation, fragments | In-process | ~7s |
-| `browser/` | UI structure, layouts, interactions, editing | Browser | ~37s |
-| `flow_mock/` | Core game loop, retry, state consistency with mock LLM | In-process + Mock LLM | ~30s |
-| `flow_llm_tests.rs` | LLM narrative smoke tests | Browser + Real LLM | ~30–120s |
-| `game_service.rs` | Service boundary — constructors, trait delegation | In-process | ~1s |
-| `action_pipeline/` | Pipeline behavior — narration, quantifier, trigger, retry, cancellation | In-process | ~0.7s |
-| `guardrails/` | Custom convention tests (imports, comments, file length) | In-process | ~2s |
-| `llm_message_storage_tests.rs` | SQLite LLM message persistence, auto-pruning | In-process | ~1s |
-| `snapshot_storage_tests.rs` | SQLite snapshot persistence, game CRUD | In-process | ~2s |
-| `poison_recovery.rs` | Lock poison recovery for `Mutex`/`RwLock` | In-process | ~1s |
-| `cli_tests.rs` | CLI argument parsing | In-process | ~1s |
 | `invariant_contract_tests.rs` | Runtime invariant regression tests | In-process | ~0.1s |
-| `browser/trigger.rs` | Trigger evaluation and firing | Browser + Mock LLM | ~30s |
-| `diagnostic/` | Backend diagnostics, scenario validation | In-process | ~2s |
+| `guardrails.rs` | Custom convention tests (imports, comments, file length) | In-process | ~2s |
+| `integration/` | Cross-module integration tests (application service, game service, lifecycle, pipeline, llm_client, storage, model) | In-process + Mock LLM | ~2s |
+| `http/` | HTTP endpoint tests — action handlers, connections, fragments, status, text check | In-process | ~7s |
+| `browser/` | UI structure, layouts, interactions, editing | Browser (Playwright) | ~37s |
+| `llm/` | LLM narrative smoke tests (real LLM, `#[ignore]` by default) | Real LLM | ~30–120s |
+| `poison_recovery.rs` | Lock poison recovery for `Mutex`/`RwLock` | In-process | ~1s |
 
 ## Backend Selection
 
@@ -114,7 +107,7 @@ For integration tests that need environment-specific overrides.
 
 ### Mock Settings File
 
-Integration tests write a temporary `settings.json` with Mock connections and set `CHRONICLER_SETTINGS_PATH`.
+Browser tests write a temporary `settings.json` with Mock connections and pass it via `--settings-path` CLI flag when spawning the server process.
 
 ## Running Tests
 
@@ -130,7 +123,7 @@ cargo nextest run --run-ignored only
 python build.py --include-llm
 
 # Run only LLM tests
-cargo nextest run --test flow_llm_tests --run-ignored only
+cargo nextest run --test llm --run-ignored only
 python build.py --llm-only
 ```
 
@@ -140,13 +133,12 @@ Run individual test binaries directly (bypasses fmt, clippy, guardrails, and ful
 
 | Command | Duration | Use When |
 |---------|----------|----------|
-| `cargo nextest run --test action_pipeline` | ~0.7s | Pipeline changes |
-| `cargo nextest run --test components` | ~7s | Template/endpoint changes |
-| `cargo nextest run --test game_service` | ~1s | Service boundary changes |
-| `cargo nextest run --test guardrails` | ~2s | Guardrail changes |
-| `cargo nextest run --test invariant_contract_tests` | ~0.1s | Invariant changes |
+| `cargo nextest run --test integration` | ~2s | Integration test changes |
+| `cargo nextest run --test http` | ~7s | HTTP endpoint changes |
 | `cargo nextest run --test browser` | ~37s | UI changes |
-| `cargo nextest run --test flow_mock` | ~30s | Flow logic changes |
+| `cargo nextest run --test llm` | ~30–120s | LLM smoke tests |
+| `cargo nextest run --test guardrails` | ~2s | Guardrail changes |
+| `cargo nextest run --test architecture` | ~2s | Architecture changes |
 
 ## UI Tests
 

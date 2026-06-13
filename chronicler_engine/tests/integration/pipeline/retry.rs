@@ -110,6 +110,12 @@ fn test_retry_no_snapshot() {
     );
 
     backend.retry_last_response(ctx.clone());
+
+    let guard = latest_state(&ctx);
+    assert!(
+        !guard.narrative.input_buffer.status.is_generating(),
+        "Retry without snapshot should not hang in generating state"
+    );
 }
 
 #[test]

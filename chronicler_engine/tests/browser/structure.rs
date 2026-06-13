@@ -67,8 +67,10 @@ async fn test_action_area_elements() {
     .await;
 }
 
+/// Empty input triggers continuation (SillyTavern "Continue" behavior),
+/// so the input field must NOT have HTML5 `required` validation.
 #[tokio::test]
-async fn test_input_validation_required() {
+async fn test_input_no_required_attribute() {
     with_test_page(CONFIG_PATH, TEST_WORLD, |page, _port| async move {
         let has_required: bool = page
             .evaluate::<(), bool>(
@@ -78,8 +80,8 @@ async fn test_input_validation_required() {
             .await
             .unwrap();
         assert!(
-            has_required,
-            "Input should have required attribute for validation"
+            !has_required,
+            "Input should NOT have required attribute (empty input triggers continuation)"
         );
     })
     .await;
@@ -134,8 +136,6 @@ async fn test_no_horizontal_overflow() {
 #[tokio::test]
 async fn test_log_entry_text_wraps_within_bubble() {
     with_test_page(CONFIG_PATH, TEST_WORLD, |page, _port| async move {
-        // Inject a narration entry with indented text (renders as <pre><code>)
-        // and a very long unbroken word to stress the wrapping.
         let overflows: bool = page
             .evaluate::<(), bool>(
                 r#"() => {
@@ -151,10 +151,8 @@ async fn test_log_entry_text_wraps_within_bubble() {
                         'He ignored the distance in her eyes and the shadows that clung to the threshold.</code></pre></span>';
                     storyLog.appendChild(entry);
 
-                    // Force layout recalculation
                     void entry.offsetHeight;
 
-                    // Check if the entry itself has horizontal overflow
                     return entry.scrollWidth > entry.clientWidth;
                 }"#,
                 None,
@@ -267,7 +265,6 @@ async fn test_form_stays_static_after_submission() {
 #[tokio::test]
 async fn test_npc_portraits_horizontal_layout() {
     with_test_page(CONFIG_PATH, TEST_WORLD, |page, _port| async move {
-        // Check flex-wrap is nowrap
         let flex_wrap: String = page
             .evaluate::<(), String>(
                 r#"(() => {
@@ -284,7 +281,6 @@ async fn test_npc_portraits_horizontal_layout() {
             "NPC portraits should have flex-wrap: nowrap"
         );
 
-        // Check overflow-x is auto
         let overflow_x: String = page
             .evaluate::<(), String>(
                 r#"(() => {
@@ -307,7 +303,6 @@ async fn test_npc_portraits_horizontal_layout() {
 #[tokio::test]
 async fn test_npc_portraits_fixed_width() {
     with_test_page(CONFIG_PATH, TEST_WORLD, |page, _port| async move {
-        // Check portrait image has fixed width (not 100%)
         let width: f64 = page
             .evaluate::<(), f64>(
                 r#"(() => {
@@ -321,7 +316,6 @@ async fn test_npc_portraits_fixed_width() {
             .await
             .unwrap();
 
-        // Fixed width should be around 80px (not 100% which would be much smaller)
         assert!(
             width > 50.0 && width < 120.0,
             "NPC portrait should have fixed width around 80px, got {width}"

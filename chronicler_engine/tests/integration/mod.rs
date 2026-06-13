@@ -4,50 +4,15 @@ mod pipeline_helpers;
 #[path = "../helpers/fixtures.rs"]
 mod fixtures;
 
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::Arc;
 
 use chronicler_engine::application::game_service::GameService;
 use chronicler_engine::narrative::agents::registry::AgentRegistry;
 use chronicler_engine::narrative::llm::MockBackend;
 
-static SETTINGS_TEST_LOCK: Mutex<()> = Mutex::new(());
-static SETTINGS_TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
-
-pub struct TempSettingsGuard {
-    _lock: MutexGuard<'static, ()>,
-    temp_path: std::path::PathBuf,
-}
-
-impl Default for TempSettingsGuard {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl TempSettingsGuard {
-    pub fn new() -> Self {
-        let lock = SETTINGS_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        let counter = SETTINGS_TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-        let temp_path = std::env::temp_dir().join(format!(
-            "chronicler_test_settings_{}_{}.json",
-            std::process::id(),
-            counter
-        ));
-        unsafe { std::env::set_var("CHRONICLER_SETTINGS_PATH", &temp_path) };
-        Self {
-            _lock: lock,
-            temp_path,
-        }
-    }
-}
-
-impl Drop for TempSettingsGuard {
-    fn drop(&mut self) {
-        unsafe { std::env::remove_var("CHRONICLER_SETTINGS_PATH") };
-        let _ = std::fs::remove_file(&self.temp_path);
-    }
-}
+#[path = "../test_utils/settings_guard.rs"]
+mod settings_guard;
+pub use settings_guard::SettingsTestGuard;
 
 pub fn failing_service() -> GameService {
     GameService::with_mock_quantifier(

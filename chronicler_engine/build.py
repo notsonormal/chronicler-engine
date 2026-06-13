@@ -20,12 +20,8 @@ from pathlib import Path
 
 # Force UTF-8 for stdout/stderr on Windows to handle cargo's Unicode output
 if sys.platform == "win32":
-    sys.stdout = io.TextIOWrapper(
-        sys.stdout.buffer, encoding="utf-8", errors="replace"
-    )
-    sys.stderr = io.TextIOWrapper(
-        sys.stderr.buffer, encoding="utf-8", errors="replace"
-    )
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 
 class TeeLogger:
@@ -90,13 +86,15 @@ def require_nextest():
         text=True,
     )
     if result.returncode != 0:
-        print("ERROR: The nextest library is required. Install it with: cargo install cargo-nextest --locked")
+        print(
+            "ERROR: The nextest library is required. Install it with: cargo install cargo-nextest --locked"
+        )
         sys.exit(1)
 
 
 def get_test_cmd(include_llm=False):
     """Return the test command using nextest."""
-    cmd = "cargo nextest run --retries 2 -j 4"
+    cmd = "cargo nextest run --no-fail-fast --retries 2 -j 4"
     if include_llm:
         cmd += " --run-ignored all"
     return cmd
@@ -104,7 +102,7 @@ def get_test_cmd(include_llm=False):
 
 def get_coverage_cmd():
     """Return the coverage test command using nextest."""
-    return "cargo llvm-cov nextest --no-report --retries 2 -j 4"
+    return "cargo llvm-cov nextest --no-report --no-fail-fast --retries 2 -j 4"
 
 
 def kill_port(port: int):
@@ -182,7 +180,12 @@ def clean_old_logs(log_dir: Path, max_age_days: int = 3):
     max_age_sec = max_age_days * 86400
     removed = []
     for f in log_dir.iterdir():
-        if f.is_file() and f.name.startswith("build_") and f.suffix == ".log" and (now - f.stat().st_mtime) > max_age_sec:
+        if (
+            f.is_file()
+            and f.name.startswith("build_")
+            and f.suffix == ".log"
+            and (now - f.stat().st_mtime) > max_age_sec
+        ):
             f.unlink()
             removed.append(f.name)
     if removed:
@@ -354,8 +357,7 @@ def main():
         action="store_true",
         dest="llm_only",
         help=(
-            "Run only the slow LLM tests "
-            "(skips formatting, clippy, guardrails, and other tests)"
+            "Run only the slow LLM tests (skips formatting, clippy, guardrails, and other tests)"
         ),
     )
     parser.add_argument(
@@ -470,10 +472,7 @@ def main():
                 "WARNING: Default target directory (target/) appears to be "
                 "locked by another cargo process."
             )
-            print(
-                "         Use --target-dir to build in a unique folder "
-                "and avoid conflicts:"
-            )
+            print("         Use --target-dir to build in a unique folder and avoid conflicts:")
             print("         python build.py --target-dir target/<unique-name>")
 
     if args.llm_only:
@@ -501,7 +500,9 @@ def main():
         print("=== Build Complete ===")
         return 0
 
-    total_steps = 8  # clippy, arch, guardrails, test-structure, build, copy assets, tests, report/skip
+    total_steps = (
+        8  # clippy, arch, guardrails, test-structure, build, copy assets, tests, report/skip
+    )
     if not args.no_fmt:
         total_steps += 1
     if args.validate_data:
@@ -533,17 +534,39 @@ def main():
     else:
         print("Skipping formatting (--no-fmt set).")
 
-    timed_step("Running clippy...", "cargo clippy --all-targets --all-features -- -D warnings", env=cargo_env)
+    timed_step(
+        "Running clippy...",
+        "cargo clippy --all-targets --all-features -- -D warnings",
+        env=cargo_env,
+    )
 
-    timed_step("Running architecture guardrail tests...", "cargo nextest run --test architecture", env=cargo_env)
+    timed_step(
+        "Running architecture guardrail tests...",
+        "cargo nextest run --test architecture",
+        env=cargo_env,
+    )
 
-    timed_step("Running custom guardrails tests...", "cargo nextest run --test guardrails", env=cargo_env)
+    timed_step(
+        "Running custom guardrails tests...", "cargo nextest run --test guardrails", env=cargo_env
+    )
 
-    timed_step("Running test structure guardrail...", "python scripts/check_test_structure.py", env=cargo_env)
+    timed_step(
+        "Running test structure guardrail...",
+        "python scripts/check_test_structure.py",
+        env=cargo_env,
+    )
 
-    timed_step("Running Python docstring guardrail...", "python scripts/check_python_docstrings.py", env=cargo_env)
+    timed_step(
+        "Running Python docstring guardrail...",
+        "python scripts/check_python_docstrings.py",
+        env=cargo_env,
+    )
 
-    timed_step(f"Building ({build_profile})...", f"cargo build {'--release' if args.release else ''}".strip(), env=cargo_env)
+    timed_step(
+        f"Building ({build_profile})...",
+        f"cargo build {'--release' if args.release else ''}".strip(),
+        env=cargo_env,
+    )
 
     steps.next("Copying data and assets for deployment...")
     target_dir.mkdir(parents=True, exist_ok=True)
@@ -574,16 +597,18 @@ def main():
     clean_sqlite_dbs(target_data_dir)
 
     if args.coverage:
-        timed_step("Running all tests with coverage...", get_coverage_cmd(), check=False, env=cargo_env)
+        timed_step(
+            "Running all tests with coverage...", get_coverage_cmd(), check=False, env=cargo_env
+        )
 
         steps.next("Generating coverage report...")
         json_path = cargo_target_dir / "llvm-cov" / "coverage.json"
         json_path.parent.mkdir(parents=True, exist_ok=True)
         # Exclude server infrastructure (router, server_impl, handlers) - tested via integration tests
         # Exclude test_support - testing infrastructure, not business logic
-        # Exclude bootstrap/run.rs - CLI bootstrap code  
+        # Exclude bootstrap/run.rs - CLI bootstrap code
         # Exclude LLM client backends - network calls tested via mock servers
-        ignore_regex = r'server[\\/](router|server_impl|handlers)\.rs|test_support[\\/].*\.rs|bootstrap[\\/]run\.rs|narrative[\\/]llm[\\/](openrouter|ollama|deepseek|backend)\.rs'
+        ignore_regex = r"server[\\/](router|server_impl|handlers)\.rs|test_support[\\/].*\.rs|bootstrap[\\/]run\.rs|narrative[\\/]llm[\\/](openrouter|ollama|deepseek|backend)\.rs"
         run(
             f'cargo llvm-cov report --json --output-path "{json_path}" --ignore-filename-regex "{ignore_regex}"',
             check=False,
@@ -597,7 +622,12 @@ def main():
         else:
             print("Warning: Could not generate coverage JSON.")
     else:
-        timed_step("Running all tests...", get_test_cmd(include_llm=args.include_llm), check=False, env=cargo_env)
+        timed_step(
+            "Running all tests...",
+            get_test_cmd(include_llm=args.include_llm),
+            check=False,
+            env=cargo_env,
+        )
         if not args.include_llm:
             print(
                 "    NOTE: 3 LLM tests were skipped. "

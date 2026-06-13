@@ -274,33 +274,6 @@ async fn test_activate_nonexistent_preset_returns_error() {
 }
 
 #[tokio::test]
-#[ignore = "Settings are now DB-backed, save() no longer fails on invalid file paths"]
-async fn test_activate_preset_settings_save_error_returns_error_old() {
-    let invalid_path = format!(
-        "{}\\chronicler_test_invalid_{}\\settings.json",
-        std::env::temp_dir().display(),
-        std::process::id()
-    );
-    unsafe { std::env::set_var("CHRONICLER_SETTINGS_PATH", &invalid_path) };
-
-    let app_state = make_test_app_state_with_preset(PromptPreset {
-        id: "active-test".into(),
-        name: "Active Test".into(),
-        instructions: Some("Active prompt.".into()),
-        ..Default::default()
-    });
-    let response = activate_preset_handler(
-        axum::extract::State(app_state),
-        axum::extract::Path("active-test".to_string()),
-    )
-    .await;
-
-    unsafe { std::env::remove_var("CHRONICLER_SETTINGS_PATH") };
-
-    assert!(!response.0.contains("Save failed"));
-}
-
-#[tokio::test]
 async fn test_panel_handler_with_poisoned_settings_lock() {
     let app_state =
         make_test_app_state_with_preset(crate::test_support::TestPromptPreset::system("x", "X"));

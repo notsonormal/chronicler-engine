@@ -3,11 +3,11 @@ use tower::util::ServiceExt;
 
 use chronicler_engine::TestAppBuilder;
 
-use crate::TempSettingsGuard;
+use crate::SettingsTestGuard;
 
 #[tokio::test]
 async fn test_prompt_presets_panel_renders() {
-    let _guard = TempSettingsGuard::new();
+    let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
@@ -30,7 +30,7 @@ async fn test_prompt_presets_panel_renders() {
 
 #[tokio::test]
 async fn test_add_system_preset() {
-    let _guard = TempSettingsGuard::new();
+    let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
@@ -63,7 +63,7 @@ async fn test_add_system_preset() {
 
 #[tokio::test]
 async fn test_add_quantifier_preset() {
-    let _guard = TempSettingsGuard::new();
+    let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
@@ -96,7 +96,7 @@ async fn test_add_quantifier_preset() {
 
 #[tokio::test]
 async fn test_activate_preset_updates_settings() {
-    let _guard = TempSettingsGuard::new();
+    let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
@@ -150,7 +150,7 @@ async fn test_activate_preset_updates_settings() {
 
 #[tokio::test]
 async fn test_delete_preset() {
-    let _guard = TempSettingsGuard::new();
+    let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
@@ -204,7 +204,7 @@ async fn test_delete_preset() {
 
 #[tokio::test]
 async fn test_save_preset_invalid_type() {
-    let _guard = TempSettingsGuard::new();
+    let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
@@ -233,7 +233,7 @@ async fn test_save_preset_invalid_type() {
 
 #[tokio::test]
 async fn test_edit_nonexistent_preset() {
-    let _guard = TempSettingsGuard::new();
+    let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
@@ -256,7 +256,7 @@ async fn test_edit_nonexistent_preset() {
 
 #[tokio::test]
 async fn test_delete_nonexistent_preset() {
-    let _guard = TempSettingsGuard::new();
+    let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
@@ -279,7 +279,7 @@ async fn test_delete_nonexistent_preset() {
 
 #[tokio::test]
 async fn test_update_preset_invalid_type() {
-    let _guard = TempSettingsGuard::new();
+    let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
     // First create a preset
@@ -341,7 +341,7 @@ async fn test_update_preset_invalid_type() {
 
 #[tokio::test]
 async fn test_update_preset_success() {
-    let _guard = TempSettingsGuard::new();
+    let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
@@ -401,7 +401,7 @@ async fn test_update_preset_success() {
 
 #[tokio::test]
 async fn test_update_nonexistent_preset() {
-    let _guard = TempSettingsGuard::new();
+    let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
     let req = Request::builder()

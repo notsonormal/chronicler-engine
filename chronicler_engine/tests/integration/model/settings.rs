@@ -3,7 +3,7 @@ use tower::util::ServiceExt;
 
 use chronicler_engine::TestAppBuilder;
 
-use crate::TempSettingsGuard;
+use crate::SettingsTestGuard;
 
 #[tokio::test]
 async fn test_settings_panel_returns_html() {
@@ -78,7 +78,7 @@ async fn test_settings_panel_has_model_input() {
 
 #[tokio::test]
 async fn test_save_settings_switch_narrator() {
-    let _guard = TempSettingsGuard::new();
+    let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
@@ -107,7 +107,7 @@ async fn test_save_settings_switch_narrator() {
 
 #[tokio::test]
 async fn test_save_settings_switch_quantifier() {
-    let _guard = TempSettingsGuard::new();
+    let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
@@ -136,7 +136,7 @@ async fn test_save_settings_switch_quantifier() {
 
 #[tokio::test]
 async fn test_save_settings_switch_both() {
-    let _guard = TempSettingsGuard::new();
+    let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
     let req = Request::builder()

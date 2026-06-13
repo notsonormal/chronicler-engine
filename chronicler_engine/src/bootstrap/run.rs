@@ -264,8 +264,27 @@ pub fn run(args: Args) -> crate::error::Result<()> {
     let room_id = state.movement.current_room_id.clone();
     let npcs_arc = Arc::new(state.npcs.clone());
 
-    let settings =
-        crate::settings::load_settings(&storage).unwrap_or_else(|_| AppSettings::default());
+    let settings = if let Some(ref path) = args.settings_path {
+        let content = std::fs::read_to_string(path).map_err(|e| {
+            crate::error::EngineError::Config(format!(
+                "Failed to read settings file {}: {e}",
+                path.display()
+            ))
+        })?;
+        let imported: AppSettings = serde_json::from_str(&content).map_err(|e| {
+            crate::error::EngineError::Config(format!(
+                "Failed to parse settings file {}: {e}",
+                path.display()
+            ))
+        })?;
+        storage.save_settings(&imported).map_err(|e| {
+            crate::error::EngineError::Config(format!("Failed to save imported settings: {e}"))
+        })?;
+        tracing::info!("Imported settings from {}", path.display());
+        imported
+    } else {
+        crate::settings::load_settings(&storage).unwrap_or_else(|_| AppSettings::default())
+    };
     let settings = Arc::new(RwLock::new(settings));
 
     let config = ServerConfig { port: args.port };

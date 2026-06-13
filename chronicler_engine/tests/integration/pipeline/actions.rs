@@ -170,20 +170,29 @@ fn test_pipeline_empty_input() {
     let mut state = create_test_state();
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let backend = failing_service();
+    let backend = working_service();
 
-    backend.execute_action(ctx.clone(), "".to_string(), "Player".to_string());
+    backend.execute_action(ctx.clone(), String::new(), "Player".to_string());
 
     let guard = latest_state(&ctx);
     assert!(
-        guard
-            .narrative
-            .input_buffer
-            .status
-            .error_message()
-            .is_some()
-            || !guard.narrative.input_buffer.status.is_generating(),
-        "Empty input should complete without panic: {:?}",
+        !guard.narrative.input_buffer.status.is_generating(),
+        "Empty input should complete generation: {:?}",
         guard.narrative.input_buffer.status
     );
+    let has_narration = guard
+        .narrative
+        .history()
+        .iter()
+        .any(|e| e.message_type == MessageType::Narration);
+    assert!(
+        has_narration,
+        "Empty input should produce continuation narration"
+    );
+    let has_input = guard
+        .narrative
+        .history()
+        .iter()
+        .any(|e| e.message_type == MessageType::Input);
+    assert!(!has_input, "Empty input should not add an Input message");
 }

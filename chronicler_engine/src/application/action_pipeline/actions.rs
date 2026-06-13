@@ -17,12 +17,7 @@ pub fn execute_action_impl<B: ActionPipelineBackend>(
     let mut state = load_or_fresh(&ctx);
     state.narrative.last_trigger = None;
     let pipeline = ActionPipeline::new(backend, &ctx);
-    match pipeline.run_from_input(state, input) {
-        Ok(()) => {}
-        Err(ActionOutcome::Error { message }) => {
-            tracing::error!("Action failed: {message}");
-        }
-        Err(ActionOutcome::Cancelled) => {}
-        Err(ActionOutcome::Completed) => {} // unreachable, but exhaustive
+    if let Err(ActionOutcome::Cancelled) = pipeline.run_from_input(state, input) {
+        tracing::debug!("Pipeline cancelled");
     }
 }

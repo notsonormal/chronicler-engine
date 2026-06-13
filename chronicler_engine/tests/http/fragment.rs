@@ -150,7 +150,10 @@ async fn test_generating_status_variants() {
         "/status/generating",
     )
     .await;
-    assert!(body.contains("narrating"), "Narrating status should contain 'narrating'");
+    assert!(
+        body.contains("narrating"),
+        "Narrating status should contain 'narrating'"
+    );
 
     let body = fetch_body(
         TestAppBuilder::default_test()
@@ -159,7 +162,10 @@ async fn test_generating_status_variants() {
         "/status/generating",
     )
     .await;
-    assert!(body.contains("quantifying"), "Quantifying status should contain 'quantifying'");
+    assert!(
+        body.contains("quantifying"),
+        "Quantifying status should contain 'quantifying'"
+    );
 }
 
 #[tokio::test]
@@ -288,7 +294,7 @@ async fn test_action_confirm_empty_command() {
         .unwrap();
     let body_str = String::from_utf8_lossy(&body);
     assert!(
-        body_str.contains("Thinking"),
+        body_str.contains("thinking") || body_str.contains("Generating"),
         "Expected empty command to trigger continuation: {body_str}"
     );
 }

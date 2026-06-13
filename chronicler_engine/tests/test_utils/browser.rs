@@ -5,7 +5,8 @@ use playwright_rs::Playwright;
 use playwright_rs::expect;
 
 use super::server::{TestServer, get_config_port, wait_for_server};
-use super::wait::wait_for_element_children;
+pub use super::wait::wait_for_element_children;
+pub use super::wait::wait_for_status_ready;
 
 pub async fn goto_with_connection_check(
     page: &playwright_rs::Page,

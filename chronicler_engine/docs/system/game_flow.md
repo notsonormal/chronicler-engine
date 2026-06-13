@@ -85,4 +85,20 @@ flowchart TD
 - Snapshots are standalone — no `base_snapshot_id` chain. Each message carries the `snapshot_id` of the state captured after it was created. Each `Swipe` also stores its own `snapshot_id` so switching swipes restores the exact state that produced that text.
 - If the anchor message has no `snapshot_id` or the snapshot is missing, retry fails gracefully (`test_retry_no_pre_main_snapshot`).
 
+### Error Model
+
+Pipeline errors (LLM failures, empty responses, room-not-found, etc.) follow a unified pattern:
+1. Set `state.narrative.input_buffer.status = GenerationStatus::Error(message)` on the current `GameState`
+2. Persist via `save_state()` (or `save_message_and_snapshot()` if a system message was added)
+3. Return `Ok(state)` / `Ok(())` — **not** `Err(ActionOutcome::Error)`
+
+The caller checks `state.narrative.input_buffer.status.error_message()` to decide whether to continue to later phases or skip straight to `phase_finalize`. This ensures:
+- State is always persisted (never lost to an `Err` that skips `save_state`)
+- The UI shows the error via the existing `GenerationStatus::Error` polling path
+- `phase_finalize` always runs, resetting `is_generating`
+
+**Cancellation** is the only path that uses `Err(ActionOutcome::Cancelled)`. The `ActionOutcome::Error` variant is retained for exhaustiveness but never constructed in production code.
+
+**Stale-Generating recovery**: If `is_generating` is `false` but persisted status is still `Generating` (e.g., after a panic), `process_action` resets status to `Idle` before proceeding. Panics in `spawn_blocking` propagate naturally; `GenerationGuard::Drop` clears `is_generating`.
+
 

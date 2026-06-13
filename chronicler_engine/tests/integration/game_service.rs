@@ -46,24 +46,6 @@ fn test_with_backends_no_disk_read() {
 }
 
 #[test]
-fn test_with_mock_quantifier() {
-    let llm_backend = Arc::new(MockBackend::default());
-    let quantifier = Arc::new(MockBackend::default());
-    let service = GameService::with_mock_quantifier(llm_backend, quantifier);
-
-    let state = create_test_state();
-    let ctx = make_test_context_with_sqlite(state).unwrap();
-
-    service.execute_action(ctx.clone(), "test input".to_string(), "Player".to_string());
-
-    let guard = latest_state(&ctx);
-    assert!(
-        !guard.narrative.input_buffer.status.is_generating(),
-        "Mock quantifier should be configured correctly"
-    );
-}
-
-#[test]
 fn test_execute_action_saves_narration() {
     let service =
         GameService::with_backends(Arc::new(MockBackend::default()), AgentRegistry::default());

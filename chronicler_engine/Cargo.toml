@@ -75,3 +75,15 @@ path = "tests/infrastructure/invariant_contract.rs"
 [[test]]
 name = "integration"
 path = "tests/integration/mod.rs"
+
+[[test]]
+name = "http"
+path = "tests/http/mod.rs"
+
+[[test]]
+name = "browser"
+path = "tests/browser/mod.rs"
+
+[[test]]
+name = "llm"
+path = "tests/llm/mod.rs"

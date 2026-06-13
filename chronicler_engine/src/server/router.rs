@@ -134,6 +134,11 @@ pub(crate) fn build_router(app_state: AppState) -> Router {
             post(prompt_presets_fragment::activate_preset_handler),
         )
         .route("/debug/state", get(debug::debug_state_handler))
+        .route(
+            "/debug/is_generating",
+            get(debug::debug_is_generating_handler),
+        )
+        .route("/debug/backend", get(debug::debug_backend_handler))
         .nest_service("/assets", ServeDir::new("assets"))
         .nest_service("/data", ServeDir::new("data"))
         .fallback_service(ServeDir::new("assets"))

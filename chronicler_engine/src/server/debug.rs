@@ -7,6 +7,12 @@ use serde::Serialize;
 use crate::server::AppState;
 
 #[derive(Serialize)]
+pub struct DebugBackendResponse {
+    pub backend_name: String,
+    pub model_name: String,
+}
+
+#[derive(Serialize)]
 pub struct DebugStateResponse {
     pub current_room_id: String,
     pub npcs_in_area: Vec<String>,
@@ -63,4 +69,19 @@ pub async fn debug_state_handler(
     };
 
     Ok(Json(response))
+}
+
+pub async fn debug_is_generating_handler(State(state): State<AppState>) -> String {
+    state
+        .is_generating
+        .load(std::sync::atomic::Ordering::SeqCst)
+        .to_string()
+}
+
+pub async fn debug_backend_handler(State(state): State<AppState>) -> Json<DebugBackendResponse> {
+    let (name, model) = state.game_service.backend_info();
+    Json(DebugBackendResponse {
+        backend_name: name.to_string(),
+        model_name: model.to_string(),
+    })
 }

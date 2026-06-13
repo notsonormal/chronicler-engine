@@ -1,5 +1,6 @@
 //! [DOC: docs/reference/testing.md]
 
+#[path = "../test_utils/mod.rs"]
 mod test_utils;
 use test_utils::*;
 

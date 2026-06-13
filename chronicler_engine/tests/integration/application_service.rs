@@ -1,7 +1,9 @@
 /// Integration tests for DefaultApplicationService
 use std::sync::Arc;
 
-use chronicler_engine::application::application_service::{DefaultApplicationService};
+use chronicler_engine::application::application_service::{
+    DefaultApplicationService, ProcessActionResult,
+};
 use chronicler_engine::application::game_service::GameService;
 use chronicler_engine::model::character::{CharacterSheet, PlayerCard};
 use chronicler_engine::model::map::{MapDef, Overworld, Region, Room};
@@ -11,7 +13,7 @@ use chronicler_engine::narrative::agents::registry::AgentRegistry;
 use chronicler_engine::narrative::llm::MockBackend;
 use chronicler_engine::storage::{Storage, db::DbPool};
 use chronicler_engine::application::context::GameServiceContext;
-use chronicler_engine::model::state::{GenerationStatus, GenerationPhase};
+use chronicler_engine::model::state::{GenerationPhase, GenerationStatus, MessageType};
 
 fn create_game_service() -> Arc<GameService> {
     Arc::new(GameService::with_backends(
@@ -194,4 +196,68 @@ fn test_get_generating_status() {
     let (status, phase) = app_service.get_generating_status(ctx.clone()).unwrap();
     assert_eq!(status, GenerationStatus::Idle);
     assert_eq!(phase, GenerationPhase::default());
+}
+
+#[tokio::test]
+async fn test_process_action_persists_input_message() {
+    let game_service = create_game_service();
+    let app_service = DefaultApplicationService::new(game_service.clone());
+    let mut state = crate::fixtures::create_test_state();
+    state.narrative.history.clear();
+    let ctx = chronicler_engine::test_support::make_test_context_with_sqlite(state).unwrap();
+
+    let result = app_service.process_action(ctx.clone(), "examine the room".to_string());
+    assert!(
+        matches!(result, Ok(ProcessActionResult::Started)),
+        "process_action should return Started"
+    );
+
+    let completed = crate::pipeline_helpers::wait_for_generation_complete(&ctx, 5000);
+    assert!(completed, "Timed out waiting for generation to complete");
+
+    let guard = crate::pipeline_helpers::latest_state(&ctx);
+    let entries = guard.narrative.history();
+    let input_idx = entries
+        .iter()
+        .position(|e| e.message_type == MessageType::Input && e.text == "examine the room");
+    let narration_idx = entries
+        .iter()
+        .position(|e| e.message_type == MessageType::Narration);
+    assert!(input_idx.is_some(), "Input message should be persisted");
+    assert!(narration_idx.is_some(), "Narration should be produced");
+    assert!(
+        input_idx.unwrap() < narration_idx.unwrap(),
+        "Input should appear before Narration in history"
+    );
+}
+
+#[tokio::test]
+async fn test_process_action_self_heals_stale_generating_status() {
+    let game_service = create_game_service();
+    let app_service = DefaultApplicationService::new(game_service.clone());
+    let mut state = crate::fixtures::create_test_state();
+    state.narrative.history.clear();
+    // Simulate stale state: status=Generating but is_generating=false (e.g. after panic)
+    state.narrative.input_buffer.status = GenerationStatus::Generating;
+    state.narrative.input_buffer.phase = GenerationPhase::Narrating;
+    let ctx = chronicler_engine::test_support::make_test_context_with_sqlite(state).unwrap();
+    // is_generating should already be false (default)
+    assert!(!ctx.is_generating.load(std::sync::atomic::Ordering::SeqCst));
+
+    let result = app_service.process_action(ctx.clone(), "look around".to_string());
+    assert!(
+        matches!(result, Ok(ProcessActionResult::Started)),
+        "process_action should return Started"
+    );
+
+    let completed = crate::pipeline_helpers::wait_for_generation_complete(&ctx, 5000);
+    assert!(completed, "Timed out waiting for generation to complete");
+
+    // Verify the action completed normally (status is Idle, not stuck at Generating)
+    let guard = crate::pipeline_helpers::latest_state(&ctx);
+    assert!(
+        !guard.narrative.input_buffer.status.is_generating(),
+        "Status should not be Generating after completion, got {:?}",
+        guard.narrative.input_buffer.status
+    );
 }

@@ -114,6 +114,20 @@ impl DefaultApplicationService {
         input: String,
     ) -> Result<ProcessActionResult, EngineError> {
         let mut game_state = load_or_fresh(&ctx);
+
+        // Self-heal: if a previous generation panicked, is_generating was cleared
+        // by GenerationGuard::Drop but the persisted status may still be Generating.
+        // Reset to Idle so the new request can proceed normally.
+        if !ctx.is_generating.load(Ordering::SeqCst)
+            && game_state.narrative.input_buffer.status.is_generating()
+        {
+            tracing::warn!(
+                "Found stale Generating status without active generation, resetting to Idle"
+            );
+            game_state.narrative.input_buffer.status = GenerationStatus::Idle;
+            game_state.narrative.input_buffer.phase = GenerationPhase::default();
+        }
+
         let player_name = game_state.player.sheet.name.clone();
 
         if !input.is_empty() {
@@ -124,19 +138,13 @@ impl DefaultApplicationService {
             );
         }
 
-        tracing::debug!("process_action: attempting to set is_generating=true");
-        let was_generating = ctx.is_generating.load(Ordering::SeqCst);
-        tracing::debug!("process_action: is_generating before CAS = {was_generating}",);
-
         if ctx
             .is_generating
             .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
             .is_err()
         {
-            tracing::debug!("process_action: CAS failed, returning ConcurrentGeneration");
             return Ok(ProcessActionResult::ConcurrentGeneration);
         }
-        tracing::debug!("process_action: CAS succeeded, is_generating now true");
 
         game_state.narrative.input_buffer.status = GenerationStatus::Generating;
         game_state.narrative.input_buffer.phase = GenerationPhase::Narrating;
@@ -169,7 +177,7 @@ impl DefaultApplicationService {
                 tracing::debug!("spawn_blocking: cancelled before execute_action");
                 return;
             }
-            execute_action_impl(&*game_service, ctx_clone, input, player_name);
+            execute_action_impl(&*game_service, ctx_clone.clone(), input, player_name);
             tracing::debug!("spawn_blocking: execute_action completed");
         });
         Ok(ProcessActionResult::Started)

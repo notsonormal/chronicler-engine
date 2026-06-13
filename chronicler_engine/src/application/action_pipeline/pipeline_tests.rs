@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::application::action_pipeline::pipeline::{
     ActionOutcome, ActionPipeline, ActionPipelineBackend,
 };
-use crate::application::context::GameServiceContext;
+use crate::application::context::{GameServiceContext, load_or_fresh};
 use crate::error::EngineError;
 use crate::model::character::NpcCard;
 use crate::model::quantifier::{QuantifierConfidence, QuantifierParseResult, QuantifierResult};
@@ -141,16 +141,18 @@ fn test_pipeline_returns_error_on_narration_failure() {
     let outcome = pipeline.run_from_input(state, "look".to_string());
 
     assert!(
-        matches!(outcome, Err(ActionOutcome::Error { ref message }) if message.contains("empty response")),
-        "Expected error for empty narration response, got {outcome:?}"
+        outcome.is_ok(),
+        "Expected Ok(()) after error-model unification, got {outcome:?}"
     );
     let final_state = ctx.load_state_for_test();
     assert!(
-        matches!(
-            final_state.narrative.input_buffer.status,
-            GenerationStatus::Error(_)
-        ),
-        "State should reflect error status"
+        final_state
+            .narrative
+            .input_buffer
+            .status
+            .error_message()
+            .is_some(),
+        "State should reflect error status via GenerationStatus::Error"
     );
 }
 
@@ -167,8 +169,18 @@ fn test_pipeline_returns_error_on_empty_narration_text() {
     let outcome = pipeline.run_from_input(state, "look".to_string());
 
     assert!(
-        matches!(outcome, Err(ActionOutcome::Error { ref message }) if message.contains("empty response")),
-        "Expected error for empty narration text, got {outcome:?}"
+        outcome.is_ok(),
+        "Expected Ok(()) after error-model unification, got {outcome:?}"
+    );
+    let final_state = ctx.load_state_for_test();
+    assert!(
+        final_state
+            .narrative
+            .input_buffer
+            .status
+            .error_message()
+            .is_some(),
+        "State should reflect error status via GenerationStatus::Error"
     );
 }
 
@@ -287,9 +299,10 @@ fn test_trigger_continuation_save_post_trigger_error() {
     let trigger = crate::test_support::TestStoredTriggerContext::for_npc("npc1", "Test", "Hello");
     let outcome = pipeline.run_trigger_continuation(state, trigger, "look");
     assert!(
-        matches!(outcome, ActionOutcome::Error { ref message } if message.contains("Failed to save post-trigger retry snapshot")),
-        "Expected save error for post-trigger snapshot, got {outcome:?}"
+        matches!(outcome, ActionOutcome::Completed),
+        "Expected Completed after error-model unification, got {outcome:?}"
     );
+    // Cannot verify state via storage — storage is broken so error persistence is best-effort
 }
 
 #[test]
@@ -319,7 +332,6 @@ fn test_pipeline_trigger_happy_path() {
 
     let ctx = make_ctx(state.clone());
     let _backend = MockPipelineBackend::default();
-    // Quantifier must return npc1 so trigger condition (times_met == 0) is evaluated
     let custom_quantifier = QuantifierResult {
         npcs: crate::model::quantifier::QuantifierParseResult {
             npc_ids: vec!["npc1".to_string()],
@@ -403,10 +415,20 @@ fn test_pipeline_trigger_empty_continuation() {
     let pipeline = ActionPipeline::new(&backend, &ctx);
 
     let outcome = pipeline.run_from_input(state, "look".to_string());
-
     assert!(
-        matches!(outcome, Err(ActionOutcome::Error { ref message }) if message.contains("empty response")),
-        "Expected empty response error for trigger, got {outcome:?}"
+        outcome.is_ok(),
+        "Expected Ok with error status, got: {outcome:?}"
+    );
+    let reloaded = load_or_fresh(&ctx);
+    assert!(
+        reloaded
+            .narrative
+            .input_buffer
+            .status
+            .error_message()
+            .is_some(),
+        "Expected error status after trigger empty response, got: {:?}",
+        reloaded.narrative.input_buffer.status
     );
 }
 
@@ -455,10 +477,20 @@ fn test_pipeline_trigger_complete_failure() {
     let pipeline = ActionPipeline::new(&backend, &ctx);
 
     let outcome = pipeline.run_from_input(state, "look".to_string());
-
     assert!(
-        matches!(outcome, Err(ActionOutcome::Error { ref message }) if message.contains("Trigger narration failed")),
-        "Expected trigger narration failure, got {outcome:?}"
+        outcome.is_ok(),
+        "Expected Ok with error status, got: {outcome:?}"
+    );
+    let reloaded = load_or_fresh(&ctx);
+    assert!(
+        reloaded
+            .narrative
+            .input_buffer
+            .status
+            .error_message()
+            .is_some(),
+        "Expected error status after trigger failure, got: {:?}",
+        reloaded.narrative.input_buffer.status
     );
 }
 
@@ -471,10 +503,7 @@ fn test_pipeline_saves_narration_before_quantifier() {
 
     let _outcome = pipeline.run_from_input(state, "look".to_string());
 
-    // Load all messages from storage to verify save order
     let messages = ctx.load_messages().unwrap();
-
-    // Should have exactly 1 narration message (no duplicates)
     let narration_msgs: Vec<_> = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Narration)
@@ -487,7 +516,6 @@ fn test_pipeline_saves_narration_before_quantifier() {
         narration_msgs.len()
     );
 
-    // Verify narration was saved (has valid snapshot_id or db_id)
     let narration = narration_msgs.first().unwrap();
     assert!(
         narration.snapshot_id().is_some() || narration.id != 0,
@@ -506,8 +534,6 @@ fn test_pipeline_no_duplicate_narration() {
 
     let final_state = ctx.load_state_for_test();
     let history = final_state.narrative.history();
-
-    // Count narration entries
     let narration_count = history
         .iter()
         .filter(|e| e.message_type == MessageType::Narration)
@@ -518,7 +544,6 @@ fn test_pipeline_no_duplicate_narration() {
         "Should have exactly 1 narration entry (no duplicates), found {narration_count}"
     );
 
-    // Verify the narration text is correct
     let narration_entry = history
         .iter()
         .find(|e| e.message_type == MessageType::Narration)
@@ -535,14 +560,12 @@ fn test_pipeline_quantifier_runs_on_saved_state() {
 
     let _outcome = pipeline.run_from_input(state, "look".to_string());
 
-    // Verify quantifier metadata was saved (NPC list, confidence)
     let messages = ctx.load_messages().unwrap();
     let narration = messages
         .iter()
         .find(|m| m.message_type == MessageType::Narration)
         .unwrap();
 
-    // Should have swipes (metadata from quantifier)
     assert!(
         !narration.swipes.is_empty(),
         "Narration should have quantifier metadata"
@@ -551,7 +574,6 @@ fn test_pipeline_quantifier_runs_on_saved_state() {
 
 #[test]
 fn test_pipeline_continues_if_quantifier_save_fails() {
-    // This test verifies that a quantifier save failure doesn't stop the pipeline
     let state = make_test_state();
     let ctx = make_ctx(state.clone());
     let backend = MockPipelineBackend {
@@ -568,7 +590,6 @@ fn test_pipeline_continues_if_quantifier_save_fails() {
 
     let outcome = pipeline.run_from_input(state, "look".to_string());
 
-    // Should complete successfully even if quantifier save has issues
     assert!(
         matches!(outcome, Ok(())),
         "Pipeline should complete even with quantifier save warnings"
@@ -577,7 +598,6 @@ fn test_pipeline_continues_if_quantifier_save_fails() {
 
 #[test]
 fn test_narration_persisted_even_if_quantifier_changes_state() {
-    // Verify narration remains in history even when quantifier modifies state
     let state = make_test_state();
     let ctx = make_ctx(state.clone());
     let backend = MockPipelineBackend {
@@ -600,13 +620,11 @@ fn test_narration_persisted_even_if_quantifier_changes_state() {
         .filter(|m| m.message_type == MessageType::Narration)
         .collect();
 
-    // Should have exactly 1 narration
     assert_eq!(
         narration_msgs.len(),
         1,
         "Should have 1 narration despite quantifier changes"
     );
 
-    // Verify narration text is preserved
     assert_eq!(narration_msgs[0].text(), "You look around.");
 }

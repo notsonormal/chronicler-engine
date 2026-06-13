@@ -30,10 +30,8 @@ pub fn kill_existing_server(port: u16) {
 
 /// Start the server with optional mock LLM backend.
 /// When use_mock is true, writes a temporary settings file with Mock
-/// connections and points the server to it via CHRONICLER_SETTINGS_PATH.
-/// Returns the spawned child process and an optional temp directory path
-/// that should be cleaned up when the server shuts down.
-/// Returns the server child process, temp dir (if mock settings were written),
+/// connections and passes it via `--settings-path` CLI flag.
+/// Returns the spawned child process, temp dir (if mock settings were written),
 /// and the path to the SQLite database file the server will create.
 pub fn start_server_with_env(
     port: u16,
@@ -97,7 +95,8 @@ pub fn start_server_with_env(
             serde_json::to_string_pretty(&mock_settings).unwrap(),
         )
         .expect("Failed to write mock settings");
-        cmd.env("CHRONICLER_SETTINGS_PATH", &settings_path);
+        cmd.arg("--settings-path")
+            .arg(settings_path.to_str().unwrap());
         Some(tmp)
     } else {
         None

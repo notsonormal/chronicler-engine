@@ -45,10 +45,14 @@ impl GameService {
             let max_tokens = conn.max_tokens;
             (registry, conn, max_context_tokens, max_tokens)
         };
-        let llm_backend = Arc::from(crate::narrative::llm::get_llm_backend_for(
-            &connection,
-            storage,
-        ));
+        let llm_backend: Arc<dyn crate::narrative::llm::backend::LlmBackend> = Arc::from(
+            crate::narrative::llm::get_llm_backend_for(&connection, storage),
+        );
+        tracing::info!(
+            "GameService: backend={}, model={}",
+            llm_backend.name(),
+            llm_backend.model()
+        );
         let mut assembler = LayeredPromptAssembler::new(max_context_tokens);
         if let Some(max) = max_tokens {
             assembler = assembler.with_max_tokens(max);
@@ -97,6 +101,10 @@ impl GameService {
     pub fn retry_last_response(&self, ctx: GameServiceContext) {
         crate::application::action_pipeline::retry_last_response_impl(self, ctx)
     }
+
+    pub fn backend_info(&self) -> (&str, &str) {
+        (self.llm_backend.name(), self.llm_backend.model())
+    }
 }
 
 impl Default for GameService {
@@ -135,7 +143,6 @@ impl ActionPipelineBackend for GameService {
             current_room: state.current_room(),
         };
 
-        // Collect patches from all post-generation agents
         let patches: Vec<_> = self
             .agent_registry
             .agents_for_phase(ExecutionPhase::PostGeneration)
@@ -149,7 +156,6 @@ impl ActionPipelineBackend for GameService {
             })
             .collect();
 
-        // If we have patches, merge them; otherwise keep the existing result
         if let Some(first_patch) = patches.into_iter().reduce(StatePatch::merge) {
             let StatePatch::Scene {
                 npc_ids,
@@ -160,6 +166,5 @@ impl ActionPipelineBackend for GameService {
             result.movement.destination = movement_destination;
             result.npcs.confidence = confidence.into();
         }
-        // If no patches, result remains unchanged (default or whatever was passed in)
     }
 }

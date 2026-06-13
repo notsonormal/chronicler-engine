@@ -3,11 +3,11 @@ use tower::util::ServiceExt;
 
 use chronicler_engine::TestAppBuilder;
 
-use crate::TempSettingsGuard;
+use crate::SettingsTestGuard;
 
 #[tokio::test]
 async fn test_add_connection_openrouter() {
-    let _guard = TempSettingsGuard::new();
+    let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
@@ -36,7 +36,7 @@ async fn test_add_connection_openrouter() {
 
 #[tokio::test]
 async fn test_add_connection_deepseek() {
-    let _guard = TempSettingsGuard::new();
+    let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
@@ -65,7 +65,7 @@ async fn test_add_connection_deepseek() {
 
 #[tokio::test]
 async fn test_set_narrator() {
-    let _guard = TempSettingsGuard::new();
+    let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
@@ -88,7 +88,7 @@ async fn test_set_narrator() {
 
 #[tokio::test]
 async fn test_set_quantifier() {
-    let _guard = TempSettingsGuard::new();
+    let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
@@ -111,7 +111,7 @@ async fn test_set_quantifier() {
 
 #[tokio::test]
 async fn test_set_narrator_not_found() {
-    let _guard = TempSettingsGuard::new();
+    let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
@@ -134,7 +134,7 @@ async fn test_set_narrator_not_found() {
 
 #[tokio::test]
 async fn test_delete_connection() {
-    let _guard = TempSettingsGuard::new();
+    let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
@@ -157,7 +157,7 @@ async fn test_delete_connection() {
 
 #[tokio::test]
 async fn test_delete_connection_not_found() {
-    let _guard = TempSettingsGuard::new();
+    let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
@@ -180,7 +180,7 @@ async fn test_delete_connection_not_found() {
 
 #[tokio::test]
 async fn test_edit_connection() {
-    let _guard = TempSettingsGuard::new();
+    let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
@@ -209,7 +209,7 @@ async fn test_edit_connection() {
 
 #[tokio::test]
 async fn test_edit_connection_not_found() {
-    let _guard = TempSettingsGuard::new();
+    let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
@@ -326,7 +326,7 @@ async fn test_edit_connection_form_not_found() {
 
 #[tokio::test]
 async fn test_add_connection_with_single_user_message() {
-    let _guard = TempSettingsGuard::new();
+    let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
@@ -355,7 +355,7 @@ async fn test_add_connection_with_single_user_message() {
 
 #[tokio::test]
 async fn test_edit_connection_preserves_single_user_message() {
-    let _guard = TempSettingsGuard::new();
+    let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
     let req = Request::builder()

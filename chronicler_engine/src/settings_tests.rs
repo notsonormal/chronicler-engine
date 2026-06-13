@@ -5,46 +5,20 @@ use crate::model::llm_backend::LlmBackendType;
 use crate::model::settings::{AppSettings, Connection};
 use crate::settings::{get_settings_path, load_settings};
 
-static ENV_LOCK: Mutex<()> = Mutex::new(());
+/// Mutex to serialize tests that mutate the in-memory settings database.
+static SETTINGS_DB_LOCK: Mutex<()> = Mutex::new(());
 
-struct EnvGuard<'a> {
-    key: &'a str,
-    previous: Option<String>,
-}
-
-impl<'a> EnvGuard<'a> {
-    fn set(key: &'a str, value: &str) -> Self {
-        let previous = std::env::var(key).ok();
-        unsafe { std::env::set_var(key, value) };
-        Self { key, previous }
-    }
-
-    fn unset(key: &'a str) -> Self {
-        let previous = std::env::var(key).ok();
-        unsafe { std::env::remove_var(key) };
-        Self { key, previous }
-    }
-}
-
-impl<'a> Drop for EnvGuard<'a> {
-    fn drop(&mut self) {
-        match &self.previous {
-            Some(v) => unsafe { std::env::set_var(self.key, v) },
-            None => unsafe { std::env::remove_var(self.key) },
-        }
-    }
-}
-
+/// Helper to run tests that mutate the settings database.
+/// The lock prevents concurrent tests from interfering with each other's in-memory DB.
 fn with_isolated_settings<F, R>(f: F) -> R
 where
     F: FnOnce(&PathBuf) -> R,
 {
-    let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _lock = SETTINGS_DB_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let tmp = std::env::temp_dir().join(format!("chronicler_settings_test_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&tmp);
     let path = tmp.join("settings.json");
     let _ = std::fs::create_dir_all(&tmp);
-    let _guard = EnvGuard::set("CHRONICLER_SETTINGS_PATH", path.to_str().unwrap());
     let result = f(&path);
     let _ = std::fs::remove_dir_all(&tmp);
     result
@@ -52,19 +26,8 @@ where
 
 #[test]
 fn test_get_settings_path_default() {
-    let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    let _guard = EnvGuard::unset("CHRONICLER_SETTINGS_PATH");
     let path = get_settings_path();
     assert_eq!(path, PathBuf::from("data").join("settings.json"));
-}
-
-#[test]
-fn test_get_settings_path_env_override() {
-    let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    let custom_path = "custom/settings.json";
-    let _guard = EnvGuard::set("CHRONICLER_SETTINGS_PATH", custom_path);
-    let path = get_settings_path();
-    assert_eq!(path, PathBuf::from(custom_path));
 }
 
 #[test]

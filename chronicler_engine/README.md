@@ -54,8 +54,8 @@ The engine uses a trait-based `LlmBackend` design for flexible LLM integration:
 The engine requires a `.env` file or environment variables to be set for AI functionality:
 
 - `OPENROUTER_API_KEY`: **(Required for real LLM)** Your API key from OpenRouter.
-- `CHRONICLER_SETTINGS_PATH`: Path to `settings.json` (optional; defaults to `data/settings.json`).
 - Configure models and backends in `data/settings.json` — see `docs/adr/adr-007-settings-system.md`.
+- **Note**: Settings are loaded from SQLite DB at runtime. For tests, use `--settings-path <file>` CLI flag to import mock settings.
 
 ## Quick Start
 

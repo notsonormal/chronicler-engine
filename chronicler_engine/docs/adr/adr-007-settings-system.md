@@ -36,7 +36,7 @@ The flat design stored a single `LLM_MODEL` and `QUANTIFIER_MODEL`. Adding a thi
 ### Environment variable policy
 
 - **API keys**: Fall back to provider-specific env vars (`OPENROUTER_API_KEY`) if not in the connection — preserved for deployment convenience.
-- **Backend type**: `LLM_BACKEND` env var is **no longer consulted** — settings file is sole authority. Integration tests should write a mock settings file and set `CHRONICLER_SETTINGS_PATH`.
+- **Settings file path**: The server loads settings from SQLite DB only. Tests use `--settings-path <file>` CLI flag to import mock settings at startup. The old `CHRONICLER_SETTINGS_PATH` env var is no longer consulted.
 
 ### Concurrency
 
@@ -49,7 +49,7 @@ Settings exposed via `Arc<RwLock<AppSettings>>` in `AppState`. Write-lock held o
 ### Positive
 - Runtime reconfiguration without server restart
 - Non-technical users can manage LLM backends through the browser UI
-- Test isolation via `CHRONICLER_SETTINGS_PATH` pointing to a temp file
+- Test isolation via `--settings-path` CLI flag importing mock settings
 
 ### Negative
 - API keys stored in plain JSON (mitigated by masked UI display and `.gitignore` exclusion)

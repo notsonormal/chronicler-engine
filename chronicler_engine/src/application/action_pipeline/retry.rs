@@ -91,9 +91,8 @@ pub fn retry_last_response_impl<B: ActionPipelineBackend>(backend: &B, ctx: Game
 
     match outcome {
         ActionOutcome::Completed => {}
-        ActionOutcome::Error { message } => {
-            save_retry_error(&ctx, message);
-        }
+        // Note: not returned after error-model unification; errors go to GenerationStatus::Error on state
+        ActionOutcome::Error { .. } => {}
         ActionOutcome::Cancelled => {}
     }
 }
@@ -114,9 +113,7 @@ pub(crate) fn retry_event_continuation<B: ActionPipelineBackend>(
     let Some(trigger) = state.narrative.last_trigger.clone() else {
         tracing::error!("Missing trigger context for event retry");
         save_retry_error(ctx, "Retry failed: missing trigger context");
-        return ActionOutcome::Error {
-            message: "Retry failed: missing trigger context".to_string(),
-        };
+        return ActionOutcome::Completed;
     };
     let input_text = match state.narrative.history.last_input_text() {
         Some((_sender, text)) => text,
@@ -142,9 +139,8 @@ pub fn retrigger_event_impl<B: ActionPipelineBackend>(backend: &B, ctx: &GameSer
     let outcome = retry_event_continuation(backend, ctx, state);
     match outcome {
         ActionOutcome::Completed => {}
-        ActionOutcome::Error { message } => {
-            save_retry_error(ctx, message);
-        }
+        // Note: not returned after error-model unification; errors go to GenerationStatus::Error on state
+        ActionOutcome::Error { .. } => {}
         ActionOutcome::Cancelled => {
             let mut state = load_or_fresh(ctx);
             state.narrative.input_buffer.status = GenerationStatus::Idle;

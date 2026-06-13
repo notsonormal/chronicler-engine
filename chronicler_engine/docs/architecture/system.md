@@ -40,10 +40,10 @@ Orchestration layer that coordinates game flow, persistence, and LLM generation.
 - **`query_handlers.rs`**: Read-only query operations - `get_generating_status`, `get_current_game_name`, `list_latest_llm_messages`, `get_story_log_entries`, `get_input_status`, `get_current_room_view`, `get_npc_headshots`, `get_debug_state`.
 - **`action_pipeline`**: Action-processing workflows and the `ActionPipeline` orchestration struct.
   - `pipeline.rs`: `ActionPipelineBackend` trait (narrow seam: `assembler()`, `complete`, `run_post_generation_agents`) and `ActionPipeline<'a, B>` generic over the trait. Encapsulates the full FreeAction pipeline with explicit phase methods. **Streaming narration optimization**: `phase_narrate` saves narration immediately after LLM generation (before quantifier runs), reducing UI latency from ~40s to ~11s. Pipeline: `phase_narrate → save_message_and_snapshot → phase_post_generation(quantifier) → save_message_and_snapshot(quantifier metadata) → phase_engine_commit`. Used by both normal action handling (`run_from_input`) and retry logic (`run_trigger_continuation`). Checks `CancellationToken::is_cancelled()` at stage boundaries and aborts gracefully via `handle_cancellation()` to avoid wasted LLM calls on stale requests.
-  - `actions.rs`: Thin dispatch layer — `execute_action_impl` creates `ActionPipeline` and delegates to `run_from_input`.
+  - `actions.rs`: Thin dispatch layer — `execute_action_impl` creates `ActionPipeline` and delegates to `run_from_input`. **Error model**: pipeline errors set `GenerationStatus::Error` on state, persist via `save_state`, and return `Ok(())`; only `Err(ActionOutcome::Cancelled)` uses the `Err` path. `ActionOutcome::Error` is dead code retained for exhaustiveness.
   - `retry.rs`: Retry-specific setup (anchor finding, message deletion, snapshot loading) delegates continuation regeneration to `ActionPipeline::run_trigger_continuation()` and main narration retry to `ActionPipeline::run_from_input()`.
 - **`game_service`**: `DefaultGameService` struct implements `ActionPipelineBackend` trait and exposes public methods `execute_action(ctx, input, player_name)` and `retry_last_response(ctx)`. These wrap the internal `execute_action_impl()` and `retry_last_response_impl()` functions from the `action_pipeline` module. External callers use the `DefaultGameService` methods; only the `ActionPipeline` internals call the impl functions directly.
-- **`application_service`**: Thin orchestrator struct (`DefaultApplicationService`) delegating to submodules. Contains `process_action` entry point and `GenerationGuard` RAII helper.
+- **`application_service`**: Thin orchestrator struct (`DefaultApplicationService`) delegating to submodules. Contains `process_action` entry point with self-healing stale-`Generating` detection and `GenerationGuard` RAII helper for `is_generating` flag cleanup.
 
 ### 3. The Narrative Tier (`crate::narrative::*`)
 The interface between the synchronous engine and stochastic LLM generation.
@@ -237,6 +237,19 @@ Shared test fixtures and utilities.
 - **`context`**: Test context builders
 - **`forensics`**: `ForensicsCollector` for capturing tracing spans/events on test failure with automatic JSON serialization and sensitive field redaction
 - **`test_app_builder`**: Fluent test app builder API
+
+### 11. Test Binaries (`tests/`)
+Each `[[test]]` in `Cargo.toml` compiles an independent test binary.
+
+| Binary | Path | Count | Purpose |
+|--------|------|-------|---------|
+| `integration` | `tests/integration/mod.rs` | ~208 | Cross-module integration (application service, game service, lifecycle, pipeline, storage, model, llm_client) |
+| `http` | `tests/http/mod.rs` | ~60 | HTTP endpoint tests (action handlers, connections, fragments, status, text check) |
+| `browser` | `tests/browser/mod.rs` | ~32 | Browser E2E tests (structure, editing, interactions, triggers) — requires Playwright |
+| `llm` | `tests/llm/mod.rs` | 2 | Real LLM smoke tests — `#[ignore]` by default, requires `OPENROUTER_API_KEY` |
+| `architecture` | `tests/architecture.rs` | 1 | Architecture guardrails |
+| `guardrails` | `tests/guardrails.rs` | 15 | Convention guardrails |
+| `invariant_contract` | `tests/invariant_contract.rs` | varies | Runtime invariant contracts |
 
 > **Note:** `assets/` contains static web assets (`index.html`) served by the server. It is not a Rust module tier.
 

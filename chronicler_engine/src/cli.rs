@@ -31,6 +31,10 @@ pub struct Args {
     /// Port to run the HTTP server on
     #[arg(long, default_value = "3000")]
     pub port: u16,
+
+    /// Import settings from JSON file into database before starting
+    #[arg(long)]
+    pub settings_path: Option<std::path::PathBuf>,
 }
 
 pub fn parse_args() -> Args {

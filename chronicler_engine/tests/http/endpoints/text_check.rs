@@ -48,6 +48,8 @@ async fn test_action_check_disabled_forwards_to_action() {
     );
 }
 
+/// Test that /action/check with empty command triggers continuation (not an error).
+/// Empty input is now treated as a "Continue" action (SillyTavern behavior).
 #[tokio::test]
 async fn test_action_check_empty_command() {
     let app = TestAppBuilder::default_app();
@@ -63,7 +65,7 @@ async fn test_action_check_empty_command() {
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
 
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(response.status(), StatusCode::OK);
 }
 
 #[tokio::test]
