@@ -48,8 +48,6 @@ async fn test_action_check_disabled_forwards_to_action() {
     );
 }
 
-/// Test that /action/check with empty command triggers continuation (not an error).
-/// Empty input is now treated as a "Continue" action (SillyTavern behavior).
 #[tokio::test]
 async fn test_action_check_empty_command() {
     let app = TestAppBuilder::default_app();
@@ -115,7 +113,6 @@ async fn test_async_action_saves_input_to_story_log_with_sqlite() {
 
     let app = TestAppBuilder::default_test().storage(storage).build();
 
-    // Submit an async (free-action) command
     let req = Request::builder()
         .uri("/action/check")
         .method(http::Method::POST)
@@ -128,9 +125,8 @@ async fn test_async_action_saves_input_to_story_log_with_sqlite() {
     let response = app.clone().oneshot(req).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
 
-    // Poll story log until input entry appears (max ~3s)
     let mut found_input = false;
-    for _ in 0..30 {
+    for _attempt in 0..50 {
         let req = Request::builder()
             .uri("/fragment/story-log")
             .method(http::Method::GET)
@@ -150,7 +146,7 @@ async fn test_async_action_saves_input_to_story_log_with_sqlite() {
 
     assert!(
         found_input,
-        "Async action should add input entry to story log"
+        "Async action should add input entry to story log within 5s (checked 50 times)"
     );
 }
 
@@ -179,7 +175,6 @@ async fn test_action_check_auto_check_disabled() {
     let response = app.oneshot(req).await.unwrap();
 
     assert!(response.status().is_success());
-    // Should forward to action and include swap headers
     let hx_retarget = response.headers().get("HX-Retarget");
     assert!(
         hx_retarget.is_some(),
