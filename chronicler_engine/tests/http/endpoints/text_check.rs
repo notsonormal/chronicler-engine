@@ -125,6 +125,7 @@ async fn test_async_action_saves_input_to_story_log_with_sqlite() {
     let response = app.clone().oneshot(req).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
 
+    // Poll story log until input entry appears (async action writes to DB in background)
     let mut found_input = false;
     for _attempt in 0..50 {
         let req = Request::builder()
