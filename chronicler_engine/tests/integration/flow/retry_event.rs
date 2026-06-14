@@ -130,12 +130,12 @@ fn test_retry_event_continuation_preserves_quantifier_result() {
 #[test]
 fn test_trigger_continuation_runs_quantifier_and_detects_new_npc() {
     let world = Arc::new(WorldCard {
+        key: "test".into(),
         name: "Test World".into(),
         description: "A test world".into(),
-        global_rules: vec![],
+        player_key: "player".into(),
         starting_room_id: "room1".into(),
-        scenarios: vec![],
-        default_room_image: None,
+        ..Default::default()
     });
 
     let map = Arc::new(create_test_map());

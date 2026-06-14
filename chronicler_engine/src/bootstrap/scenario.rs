@@ -1,21 +1,22 @@
 //! [DOC: docs/system/startup.md]
-//! Scenario loading and validation
+//! Scenario injection and initialization
+
 use crate::model::character::PlayerCard;
 use crate::model::state::GameState;
 use crate::model::template::{render_template, TemplateVars};
-use crate::model::world::WorldManifest;
+use crate::model::world::WorldCard;
 
-pub fn inject_scenario_logs(state: &mut GameState, manifest: &WorldManifest, player: &PlayerCard) {
-    let Some(scenario) = manifest.default_scenario() else {
+pub fn inject_scenario_logs(state: &mut GameState, world: &WorldCard, player: &PlayerCard) {
+    let Some(scenario) = world.default_scenario() else {
         return;
     };
     if scenario.text.is_empty() {
         return;
     }
 
-    let room_name = crate::engine::logic::find_room_in_world_map(state, &manifest.starting_room_id)
+    let room_name = crate::engine::logic::find_room_in_world_map(state, &world.starting_room_id)
         .map(|r| r.name.clone())
-        .unwrap_or_else(|| manifest.starting_room_id.clone());
+        .unwrap_or_else(|| world.starting_room_id.clone());
 
     state.narrative.pending_location = Some(room_name);
     let text = render_template(&scenario.text, &TemplateVars::new(&player.sheet.name));

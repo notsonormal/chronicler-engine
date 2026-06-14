@@ -1,20 +1,18 @@
-//! Unit tests for MessageEditingService - pure logic validation without database
+//! [DOC: docs/reference/testing.md]
 
 #[test]
 fn test_switch_swipe_bounds_validation() {
     use crate::application::ApplicationError;
     use crate::error::EngineError;
 
-    // Test that out-of-bounds swipe indices are rejected
-    let result = validate_swipe_index(2, 5); // 2 items, requesting index 5
+    let result = validate_swipe_index(2, 5);
     assert!(result.is_err());
     assert!(matches!(
         result.unwrap_err(),
         ApplicationError::Engine(EngineError::Internal(_))
     ));
 
-    // Test that valid indices pass
-    let result = validate_swipe_index(5, 2); // 5 items, requesting index 2
+    let result = validate_swipe_index(5, 2);
     assert!(result.is_ok());
 }
 
@@ -44,7 +42,6 @@ fn test_edit_history_validation() {
         GameService::with_backends(Arc::new(MockBackend::default()), AgentRegistry::default());
     let editing_service = MessageEditingService::new(Arc::new(service));
 
-    // Test editing with invalid ID (non-existent)
     let result = editing_service.edit_history(ctx.clone(), 99999, "Edited".to_string());
     assert!(result.is_err());
     assert!(matches!(result.unwrap_err(), ApplicationError::Engine(_)));
@@ -63,20 +60,15 @@ fn test_delete_last_empty_error() {
     let service =
         GameService::with_backends(Arc::new(MockBackend::default()), AgentRegistry::default());
     let _editing_service = MessageEditingService::new(Arc::new(service));
-    // Logic test: verify error path exists
-    // Actual empty history behavior tested in integration tests
-    // This validates the type of error returned
 }
 
 #[test]
 fn test_retry_input_validation() {
     use crate::application::ApplicationError;
 
-    // Test that "no input to retry" validation works
     let has_input = false;
     if !has_input {
         let err = ApplicationError::Validation("No input to retry".to_string());
-        // Validate error type is correct
         assert!(matches!(err, ApplicationError::Validation(_)));
         assert_eq!(err.to_string(), "No input to retry");
     }
@@ -86,17 +78,14 @@ fn test_retry_input_validation() {
 fn test_retrigger_trigger_validation() {
     use crate::application::ApplicationError;
 
-    // Test that "no trigger context" validation works
     let has_trigger = false;
     if !has_trigger {
         let err = ApplicationError::Validation("No trigger context available".to_string());
-        // Validate error type is correct
         assert!(matches!(err, ApplicationError::Validation(_)));
         assert_eq!(err.to_string(), "No trigger context available");
     }
 }
 
-// Helper function for bounds validation logic
 fn validate_swipe_index(
     len: usize,
     index: usize,
@@ -125,12 +114,12 @@ mod test_helpers {
 
     pub fn create_test_world() -> WorldCard {
         WorldCard {
+            key: "test".into(),
             name: "Test World".into(),
             description: "A test world".into(),
-            global_rules: vec![],
+            player_key: "player".into(),
             starting_room_id: "room1".into(),
-            scenarios: vec![],
-            default_room_image: None,
+            ..Default::default()
         }
     }
 

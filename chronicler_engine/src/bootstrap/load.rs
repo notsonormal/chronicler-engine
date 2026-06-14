@@ -1,13 +1,17 @@
 //! [DOC: docs/system/startup.md]
 //! Data loading and initialization routines
+#![allow(dead_code)] // Legacy functions used by bootstrap/load_tests.rs
 use std::{fs, path::Path};
 
 use crate::error::EngineError;
 use crate::model::character::{NpcCard, PlayerCard};
 use crate::model::map::MapDef;
-use crate::model::world::WorldManifest;
+use crate::model::world::{WorldCard, WorldManifest, derive_player_key};
+use crate::storage::Storage;
 
-fn read_json_file<T: serde::de::DeserializeOwned>(path: &Path) -> crate::error::Result<T> {
+pub(crate) fn read_json_file<T: serde::de::DeserializeOwned>(
+    path: &Path,
+) -> crate::error::Result<T> {
     let json = fs::read_to_string(path).map_err(|e| EngineError::DataLoad {
         path: path.display().to_string(),
         source: Box::new(EngineError::Io(format!(
@@ -69,4 +73,93 @@ pub fn initialize_world_from_manifest(
     }
 
     Ok((manifest, map, player, npcs))
+}
+
+pub(crate) fn seed_game_data(
+    storage: &Storage,
+    data_dir: &std::path::Path,
+) -> crate::error::Result<()> {
+    let worlds_dir = data_dir.join("worlds");
+    if !worlds_dir.exists() {
+        return Ok(());
+    }
+    for entry in std::fs::read_dir(&worlds_dir)? {
+        let entry = entry?;
+        let world_dir = entry.path();
+        if !world_dir.is_dir() {
+            continue;
+        }
+        let world_json = world_dir.join("world.json");
+        if !world_json.exists() {
+            continue;
+        }
+
+        let manifest: WorldManifest = match read_json_file(&world_json) {
+            Ok(m) => m,
+            Err(e) => {
+                tracing::warn!(
+                    "Failed to parse world manifest {}: {e}",
+                    world_json.display()
+                );
+                continue;
+            }
+        };
+        let world_key = manifest.id.clone();
+
+        let player_key = derive_player_key(&manifest.player_file);
+
+        let world_id = match storage.get_world(&world_key)? {
+            Some(existing) => existing.world_id,
+            None => {
+                let world_card: WorldCard = manifest.clone().into();
+                let map_path = world_dir.join(&manifest.map_file);
+                let map: MapDef = read_json_file(&map_path)?;
+                storage.seed_world(&world_card, &map)?;
+
+                storage.get_world_id(&world_key)?.ok_or_else(|| {
+                    EngineError::Config(format!("World '{world_key}' not found after seeding"))
+                })?
+            }
+        };
+
+        if storage.get_persona(&player_key)?.is_none() {
+            let player_path = data_dir.join("personas").join(&manifest.player_file);
+            let player: PlayerCard = read_json_file(&player_path)?;
+            storage.seed_persona(&player_key, &player)?;
+            tracing::info!("Seeded persona: {player_key}");
+        }
+
+        let chars_group = if manifest.characters_dir.is_empty() {
+            world_key.as_str()
+        } else {
+            manifest.characters_dir.as_str()
+        };
+        let chars_dir = data_dir.join("characters").join(chars_group);
+        if chars_dir.is_dir() {
+            let existing_chars: std::collections::HashSet<String> = storage
+                .list_characters(world_id)?
+                .into_iter()
+                .map(|c| c.id)
+                .collect();
+            for char_entry in std::fs::read_dir(&chars_dir)? {
+                let char_entry = char_entry?;
+                let path = char_entry.path();
+                if path.extension().and_then(|s| s.to_str()) != Some("json") {
+                    continue;
+                }
+                match read_json_file::<NpcCard>(&path) {
+                    Ok(npc) => {
+                        if !existing_chars.contains(&npc.id) {
+                            storage.seed_character(world_id, &npc)?;
+                            tracing::info!("Seeded character: {}", npc.id);
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!("Failed to parse NPC {}: {e}", path.display())
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
 }

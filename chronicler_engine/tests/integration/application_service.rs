@@ -1,4 +1,4 @@
-/// Integration tests for DefaultApplicationService
+// Integration tests for DefaultApplicationService
 use std::sync::Arc;
 
 use chronicler_engine::application::application_service::{
@@ -24,12 +24,12 @@ fn create_game_service() -> Arc<GameService> {
 
 fn create_test_world() -> WorldCard {
     WorldCard {
+        key: "test".to_string(),
         name: "Test Realm".to_string(),
         description: "A testing kingdom".to_string(),
-        global_rules: vec![],
+        player_key: "player".to_string(),
         starting_room_id: "room1".to_string(),
-        scenarios: vec![],
-        default_room_image: None,
+        ..Default::default()
     }
 }
 
@@ -237,11 +237,11 @@ async fn test_process_action_self_heals_stale_generating_status() {
     let app_service = DefaultApplicationService::new(game_service.clone());
     let mut state = crate::fixtures::create_test_state();
     state.narrative.history.clear();
-    // Simulate stale state: status=Generating but is_generating=false (e.g. after panic)
+
     state.narrative.input_buffer.status = GenerationStatus::Generating;
     state.narrative.input_buffer.phase = GenerationPhase::Narrating;
     let ctx = chronicler_engine::test_support::make_test_context_with_sqlite(state).unwrap();
-    // is_generating should already be false (default)
+
     assert!(!ctx.is_generating.load(std::sync::atomic::Ordering::SeqCst));
 
     let result = app_service.process_action(ctx.clone(), "look around".to_string());
@@ -253,7 +253,6 @@ async fn test_process_action_self_heals_stale_generating_status() {
     let completed = crate::pipeline_helpers::wait_for_generation_complete(&ctx, 5000);
     assert!(completed, "Timed out waiting for generation to complete");
 
-    // Verify the action completed normally (status is Idle, not stuck at Generating)
     let guard = crate::pipeline_helpers::latest_state(&ctx);
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),

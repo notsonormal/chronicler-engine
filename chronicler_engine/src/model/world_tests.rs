@@ -1,4 +1,14 @@
-use crate::model::world::{WorldCard, WorldManifest};
+use crate::model::world::{self, WorldCard, WorldManifest};
+
+#[test]
+fn derive_player_key_fallback() {
+    assert_eq!(world::derive_player_key(""), "player");
+    assert_eq!(
+        world::derive_player_key("custom_player.json"),
+        "custom_player"
+    );
+    assert_eq!(world::derive_player_key("player.json"), "player");
+}
 
 #[test]
 fn test_world_card_serde() {
@@ -70,5 +80,6 @@ fn test_world_manifest_to_card() {
     assert_eq!(card.description, "Test desc");
     assert_eq!(card.global_rules.len(), 1);
     assert_eq!(card.starting_room_id, "start");
+    assert_eq!(card.player_key, "player");
     assert!(card.default_scenario().is_none());
 }

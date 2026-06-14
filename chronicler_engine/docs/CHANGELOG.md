@@ -1,8 +1,34 @@
 # Changelog
 
+## 2026-06-14
+
+### Changed
+
+- **Phase 3 Migration: Complete DB-first loading** — `run()` now loads all world/persona/character data from SQLite, completing the migration started on 2026-06-13
+  - Added `seed_game_data()` to `load.rs` — idempotent seeding of worlds/personas/characters from JSON files called by `ensure_defaults()`
+  - `run()` replaced `initialize_world_from_manifest()` with `Storage::get_world()`, `get_persona()`, `list_characters()` — zero file I/O at runtime
+  - Removed `effective_player_key()` method — `WorldCard::Default` now sets `player_key = "player"` directly
+  - Renamed `WorldSeed` → `InMemoryWorld` in storage backend
+  - Corrupt `world.json` files now skip that world with a warning instead of aborting the entire seeding loop
+  - Removed `validate_loaded_data` call from `run()` — validation happens at seed time
+  - Modified files: `src/bootstrap/run.rs`, `src/bootstrap/load.rs`, `src/model/world.rs`, `src/storage/backend/core.rs`, `src/storage/backend/worlds.rs`
+
 ## 2026-06-13
 
 ### Changed
+
+- **Phase 3 Migration: DB-backed world loading (ADR-024)** — Worlds, personas, and characters now load from SQLite database instead of JSON files at runtime
+  - **Phase 1: DB Schema** — Migration v11 adds `player_key` column to `worlds` table for persona association  
+  - **Phase 2: Seeding** — `ensure_defaults()` idempotently seeds worlds/personas/characters from JSON files on first startup
+  - **Phase 3: Runtime Loading** — `run()` uses `Storage::get_world()`, `get_persona()`, `list_characters()` instead of file I/O
+  - `WorldCard` extended with `key`, `default_scenario_id`, `player_key`; `WorldInfo` deleted, unified into `WorldCard`
+  - `WorldManifest` retained for seed file parsing only (contains file pointers)
+  - `Storage::seed_world()` signature changed to `(world_card, map)` (no manifest parameter)
+  - `Storage::get_world_id(key)` method added for FK resolution
+  - `validate_loaded_data()` and `inject_scenario_logs()` updated to accept `WorldCard` instead of `WorldManifest`
+  - Architecture: Seeding happens once; runtime is 100% DB-first with no filesystem coupling
+  - Modified files: `src/model/world.rs`, `src/storage/backend/*.rs`, `src/storage/db.rs`, `src/bootstrap/*.rs`, `docs/architecture/system.md`, `docs/system/startup.md`
+  - Test count: 1190 pass
 
 - **Unified pipeline error model** — all pipeline errors now set `GenerationStatus::Error` on state and return `Ok(())` instead of `Err(ActionOutcome::Error)`
   - Eliminates lost-state bugs where `Err` skipped `save_state`, leaving `GenerationStatus` stuck at `Generating`

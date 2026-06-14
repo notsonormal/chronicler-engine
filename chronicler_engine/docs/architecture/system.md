@@ -164,6 +164,36 @@ Each `Connection` contains: `id`, `name`, `provider`, `model`, `api_key` (option
 - `OPENROUTER_API_KEY` env var used as fallback when connection `api_key` is None
 - `LLM_BACKEND` env var is **not** consulted (settings file is sole source of truth)
 
+### 5.5. The Storage Tier (`crate::storage::*`) — World Seeding & Loading
+
+The storage layer implements a seed-once, load-from-DB pattern for worlds, personas, and characters.
+
+#### Phase 1: DB Schema (ADR-024)
+Migration v11 creates tables for:
+- `worlds`: key, name, description, global_rules, starting_room_id, scenarios, default_scenario_id, default_room_image, **player_key**
+- `maps`: world_id (FK), map_data (JSON)
+- `personas`: key, name, description, personality, scenario, example_dialogue, etc.
+- `characters`: world_id (FK), key, name, description, personality, scenario, triggers, relationships, etc.
+
+#### Phase 2: Seeding (File → DB, idempotent)
+On first startup, `bootstrap::ensure_defaults()`:
+1. Scans `data/worlds/*/world.json` and deserializes `WorldManifest`
+2. Converts to `WorldCard` via `From<WorldManifest>` (adds `key`, `player_key`, `default_scenario_id`)
+3. Loads `MapDef` from referenced file and calls `Storage::seed_world(world_card, map)` — INSERT OR IGNORE
+4. Loads `PlayerCard` from `data/personas/<player_file>` and calls `Storage::seed_persona(key, player)` — skip if exists
+5. Loads `NpcCard`s from `data/characters/<characters_dir>/*.json` and seeds each — skip if exists
+6. Seeds prompt presets similarly
+
+**Idempotency**: All seed operations skip existing data by key. Safe to call on every startup.
+
+#### Phase 3: Runtime Loading (DB-first)
+After seeding, the `run()` function loads from DB:
+- `Storage::get_world(key)` → `WorldCard + MapDef`
+- `world_card.player_key` → `Storage::get_persona(key)` → `PlayerCard`
+- `Storage::get_world_id(key)` → `list_characters(world_id)` → `Vec<NpcCard>`
+
+**No file I/O at runtime**: Worlds can be updated via DB directly or re-seeded by replacing JSON files and clearing DB.
+
 ### 6. The Error Tier (`crate::error`)
 Unified error type shared across all tiers.
 - **`EngineError`**: Top-level error enum (`Llm`, `Narrative`, `Internal`, `Io`, `Serde`, `Parse`, `Serialize`, `Navigation`, `RoomNotFound`, `NpcNotFound`, `WorldNotFound`, `Config`, `Template`, `DataLoad`, `ContextOverflow`)

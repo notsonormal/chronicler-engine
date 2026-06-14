@@ -1,4 +1,6 @@
 use crate::model::character::{CharacterSheet, NpcCard};
+use crate::model::map::MapDef;
+use crate::model::world::WorldCard;
 use crate::storage::backend::{Operation, Storage, TestOverride};
 use crate::storage::db::DbPool;
 
@@ -49,9 +51,9 @@ fn test_get_character_not_found_in_memory() {
 #[test]
 fn test_seed_character_sqlite() {
     let storage = sqlite_storage();
-    // First seed a world (required for FK constraint on world_id)
-    let (manifest, world_card, map) = test_world_data();
-    storage.seed_world(&manifest, &world_card, &map).unwrap();
+
+    let (world_card, map) = test_world_data();
+    storage.seed_world(&world_card, &map).unwrap();
 
     let card = test_character_card("sqlite_char", "SQLite Character");
     storage.seed_character(1, &card).unwrap();
@@ -132,36 +134,18 @@ fn test_character_card(id: &str, name: &str) -> NpcCard {
     }
 }
 
-fn test_world_data() -> (
-    crate::model::world::WorldManifest,
-    crate::model::world::WorldCard,
-    crate::model::map::MapDef,
-) {
+fn test_world_data() -> (WorldCard, MapDef) {
     use crate::model::map::{MapDef, Overworld, Region, Room};
-    use crate::model::world::{WorldCard, WorldManifest};
+    use crate::model::world::WorldCard;
     use std::collections::HashMap;
 
-    let manifest = WorldManifest {
-        id: "test_world".to_string(),
-        name: "Test World".to_string(),
-        description: "Test description".to_string(),
-        global_rules: Vec::new(),
-        starting_room_id: "start".to_string(),
-        map_file: "map.json".to_string(),
-        player_file: "player.json".to_string(),
-        characters_dir: "characters".to_string(),
-        scenarios: Vec::new(),
-        default_scenario_id: None,
-        default_room_image: None,
-    };
-
     let world_card = WorldCard {
+        key: "test".to_string(),
         name: "Test World".to_string(),
         description: "Test description".to_string(),
-        global_rules: Vec::new(),
+        player_key: "player".to_string(),
         starting_room_id: "start".to_string(),
-        scenarios: Vec::new(),
-        default_room_image: None,
+        ..Default::default()
     };
 
     let map = MapDef {
@@ -184,5 +168,5 @@ fn test_world_data() -> (
         },
     };
 
-    (manifest, world_card, map)
+    (world_card, map)
 }

@@ -1,5 +1,5 @@
-/// Integration tests for GameLifecycleService
-/// [DOC: docs/reference/testing.md]
+// Integration tests for GameLifecycleService
+// [DOC: docs/reference/testing.md]
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -23,9 +23,10 @@ fn create_game_service() -> Arc<GameService> {
 
 fn create_test_world_with_scenario() -> WorldCard {
     WorldCard {
+        key: "test".to_string(),
         name: "Test Realm".to_string(),
         description: "A small testing kingdom".to_string(),
-        global_rules: vec![],
+        player_key: "player".to_string(),
         starting_room_id: "room1".to_string(),
         scenarios: vec![StartingScenario {
             id: "test_scenario".to_string(),
@@ -35,7 +36,7 @@ fn create_test_world_with_scenario() -> WorldCard {
             text: "You wake up in a cozy room.".to_string(),
             npcs: vec![],
         }],
-        default_room_image: None,
+        ..Default::default()
     }
 }
 

@@ -10,12 +10,12 @@ use chronicler_engine::model::world::WorldCard;
 
 pub fn create_test_world() -> WorldCard {
     WorldCard {
+        key: "test".to_string(),
         name: "Test Realm".to_string(),
         description: "A small testing kingdom".to_string(),
-        global_rules: vec![],
+        player_key: "player".to_string(),
         starting_room_id: "room1".to_string(),
-        scenarios: vec![],
-        default_room_image: None,
+        ..Default::default()
     }
 }
 
@@ -110,15 +110,14 @@ pub fn create_test_npcs() -> Vec<NpcCard> {
 }
 
 /// Create a GameState with configurable room NPCs and NPC cards.
-/// Used by game_service_tests and diagnostic_benchmark.
 pub fn create_test_state_with_npcs(room_npcs: Vec<String>, npcs: Vec<NpcCard>) -> GameState {
     let world = Arc::new(WorldCard {
+        key: "test".into(),
         name: "Test World".into(),
         description: "A test world".into(),
-        global_rules: vec![],
+        player_key: "player".into(),
         starting_room_id: "room1".into(),
-        scenarios: vec![],
-        default_room_image: None,
+        ..Default::default()
     });
 
     let room1 = Room {
@@ -168,7 +167,6 @@ pub fn create_test_state_with_npcs(room_npcs: Vec<String>, npcs: Vec<NpcCard>) -
     state
 }
 
-/// Default test state with a single innkeeper NPC.
 pub fn create_test_state() -> GameState {
     create_test_state_with_npcs(
         vec!["test_npc".to_string()],
@@ -273,7 +271,6 @@ pub fn create_navigation_test_map() -> MapDef {
     MapDef { overworld }
 }
 
-/// Single room map for basic UI tests
 pub fn create_simple_test_map() -> MapDef {
     let room = Room {
         id: "start".to_string(),

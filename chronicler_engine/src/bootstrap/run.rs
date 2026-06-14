@@ -18,7 +18,7 @@ use crate::model::world::WorldCard;
 use crate::narrative::prompt::{PromptAssembler, PromptContext};
 use crate::server::ServerConfig;
 
-use super::{initialize_world_from_manifest, inject_scenario_logs, validate_loaded_data};
+use super::inject_scenario_logs;
 
 const PRESET_STORAGE_GAME_ID: u64 = 1;
 
@@ -162,44 +162,55 @@ pub fn run(args: Args) -> crate::error::Result<()> {
     }
 
     let data_dir = resolve_engine_data_path();
-    let (manifest, map, player, npcs) = initialize_world_from_manifest(&args.world, &data_dir)?;
-
-    if let Err(e) = validate_loaded_data(&manifest, &map, &player, &npcs) {
-        tracing::error!("Data validation failed for world '{}':\n{}", args.world, e);
-        eprintln!("Data validation failed for world '{}':\n{}", args.world, e);
-        std::process::exit(1);
-    }
-
-    let world_arc = Arc::new(manifest.clone().into());
-    let map_arc = Arc::new(map);
-    let player_arc = Arc::new(player.clone());
-    let npcs_map: HashMap<_, _> = npcs.into_iter().map(|n| (n.id.clone(), n)).collect();
-
     let db_dir = std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(std::path::PathBuf::from))
         .unwrap_or_else(|| data_dir.clone());
     let db_path = db_dir.join(format!("chronicler_{}.db", args.port));
-
     let db_pool = crate::storage::db::DbPool::new(db_path.to_str().unwrap_or("chronicler.db"))?;
 
     if let Err(e) = ensure_defaults(&db_pool, &data_dir) {
         tracing::warn!("Failed to seed game data: {e}");
     }
 
-    let active_game_id = match find_latest_game_for_world(&db_pool, &manifest.name)? {
+    let lookup_storage =
+        crate::storage::Storage::new_sqlite(db_pool.clone(), PRESET_STORAGE_GAME_ID);
+    let world_with_map = lookup_storage
+        .get_world(&args.world)?
+        .ok_or_else(|| crate::error::EngineError::WorldNotFound(args.world.clone()))?;
+    let world_id = world_with_map.world_id;
+    let world_card = world_with_map.world_card;
+    let map = world_with_map.map;
+
+    let player_key = if world_card.player_key.is_empty() {
+        "player".to_string()
+    } else {
+        world_card.player_key.clone()
+    };
+    let player = lookup_storage.get_persona(&player_key)?.ok_or_else(|| {
+        crate::error::EngineError::Config(format!("Persona '{player_key}' not found"))
+    })?;
+
+    let npcs = lookup_storage.list_characters(world_id)?;
+
+    let world_arc = Arc::new(world_card.clone());
+    let map_arc = Arc::new(map);
+    let player_arc = Arc::new(player.clone());
+    let npcs_map: HashMap<_, _> = npcs.into_iter().map(|n| (n.id.clone(), n)).collect();
+
+    let active_game_id = match find_latest_game_for_world(&db_pool, &world_card.name)? {
         Some((id, name)) => {
             tracing::info!("Loaded existing game '{name}' (id={id})");
             id
         }
         None => {
-            let existing_names = list_game_names_for_world(&db_pool, &manifest.name)?;
-            let name = generate_game_name(&manifest.name, &existing_names);
+            let existing_names = list_game_names_for_world(&db_pool, &world_card.name)?;
+            let name = generate_game_name(&world_card.name, &existing_names);
             let conn = db_pool.conn();
             let now = chrono::Utc::now().to_rfc3339();
             conn.execute(
                 "INSERT INTO games (world_name, name, created_at, updated_at) VALUES (?1, ?2, ?3, ?3)",
-                rusqlite::params![&manifest.name, &name, &now],
+                rusqlite::params![&world_card.name, &name, &now],
             )
             .map_err(|e| crate::error::EngineError::Config(format!("Failed to create game: {e}")))?;
             let id = conn.last_insert_rowid() as u64;
@@ -235,8 +246,8 @@ pub fn run(args: Args) -> crate::error::Result<()> {
                 npcs_map.values().cloned().collect(),
                 world_arc.starting_room_id.clone(),
             );
-            inject_scenario_logs(&mut new_state, &manifest, &player);
-            if let Some(scenario) = manifest.default_scenario() {
+            inject_scenario_logs(&mut new_state, &world_card, &player);
+            if let Some(scenario) = world_card.default_scenario() {
                 new_state.init_scenario_npcs(scenario);
             }
             let initial_snapshot =
@@ -459,6 +470,8 @@ pub(crate) fn ensure_defaults(
             tracing::info!("Seeded {} prompt preset: {}", preset_type.as_str(), id);
         }
     }
+
+    super::load::seed_game_data(&storage, data_dir)?;
 
     Ok(())
 }

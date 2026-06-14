@@ -35,9 +35,10 @@ pub struct TestAppBuilder {
 impl TestAppBuilder {
     pub fn default_test() -> Self {
         let world = WorldCard {
+            key: "test".to_string(),
             name: "Test World".to_string(),
             description: "A test world".to_string(),
-            global_rules: vec![],
+            player_key: "player".to_string(),
             starting_room_id: "room_1".to_string(),
             scenarios: vec![crate::model::scenario::StartingScenario {
                 id: "test_intro".to_string(),
@@ -48,7 +49,7 @@ impl TestAppBuilder {
                     .to_string(),
                 npcs: vec!["npc_1".to_string()],
             }],
-            default_room_image: None,
+            ..Default::default()
         };
 
         let test_room = Room {

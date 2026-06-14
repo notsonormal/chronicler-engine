@@ -1,5 +1,5 @@
 //! [DOC: docs/system/storage.md]
-//! World database model
+//! Database row structs for world and map tables
 
 /// Database row for `worlds` table.
 pub struct DbWorld {
@@ -12,6 +12,7 @@ pub struct DbWorld {
     pub scenarios: String, // JSON: Vec<StartingScenario>
     pub default_scenario_id: Option<String>,
     pub default_room_image: Option<String>,
+    pub player_key: String,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -28,8 +29,9 @@ impl DbWorld {
             scenarios: row.get(6)?,
             default_scenario_id: row.get(7)?,
             default_room_image: row.get(8)?,
-            created_at: row.get(9)?,
-            updated_at: row.get(10)?,
+            player_key: row.get(9)?,
+            created_at: row.get(10)?,
+            updated_at: row.get(11)?,
         })
     }
 }

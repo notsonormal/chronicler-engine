@@ -1,5 +1,5 @@
 //! [DOC: docs/system/storage.md]
-//! Database connection and utilities
+//! SQLite database connection pool and migrations
 
 use std::sync::{Arc, Mutex};
 
@@ -168,6 +168,7 @@ fn run_migrations(conn: &Connection) -> Result<(), crate::error::EngineError> {
                 scenarios TEXT NOT NULL DEFAULT '[]',     -- JSON: Vec<StartingScenario>
                 default_scenario_id TEXT,
                 default_room_image TEXT,
+                player_key TEXT NOT NULL DEFAULT '',  -- persona key for player (e.g. 'julian')
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             )",
@@ -241,7 +242,7 @@ fn run_migrations(conn: &Connection) -> Result<(), crate::error::EngineError> {
             )",
         )?;
 
-        conn.pragma_update(None, "user_version", 10).map_err(|e| {
+        conn.pragma_update(None, "user_version", 11).map_err(|e| {
             crate::error::EngineError::Config(format!("Failed to set user_version: {e}"))
         })?;
     }

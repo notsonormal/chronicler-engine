@@ -11,12 +11,12 @@ use chronicler_engine::model::world::WorldCard;
 
 pub fn create_test_state_with_map() -> GameState {
     let world = Arc::new(WorldCard {
+        key: "test".into(),
         name: "Test World".into(),
         description: "A test world".into(),
-        global_rules: vec![],
+        player_key: "player".into(),
         starting_room_id: "room1".into(),
-        scenarios: vec![],
-        default_room_image: None,
+        ..Default::default()
     });
 
     let map = Arc::new(crate::fixtures::create_test_map());
@@ -57,12 +57,12 @@ pub fn create_test_state_with_map() -> GameState {
 
 pub fn create_test_state_with_trigger_npc() -> GameState {
     let world = Arc::new(WorldCard {
+        key: "test".into(),
         name: "Test World".into(),
         description: "A test world".into(),
-        global_rules: vec![],
+        player_key: "player".into(),
         starting_room_id: "room1".into(),
-        scenarios: vec![],
-        default_room_image: None,
+        ..Default::default()
     });
 
     let map = Arc::new(crate::fixtures::create_test_map());

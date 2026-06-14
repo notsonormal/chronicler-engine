@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::model::map::{MapDef, Overworld, Region, Room};
-use crate::model::world::{WorldCard, WorldManifest};
+use crate::model::world::WorldCard;
 use crate::storage::backend::{Operation, Storage, TestOverride};
 use crate::storage::db::DbPool;
 
@@ -20,8 +20,8 @@ fn test_list_worlds_in_memory_empty() {
 #[test]
 fn test_list_worlds_in_memory_seeded() {
     let storage = Storage::new_in_memory();
-    let (manifest, world_card, map) = test_world_data("test_world", "Test World");
-    storage.seed_world(&manifest, &world_card, &map).unwrap();
+    let (world_card, map) = test_world_data("test_world", "Test World");
+    storage.seed_world(&world_card, &map).unwrap();
 
     let worlds = storage.list_worlds().unwrap();
     assert_eq!(worlds.len(), 1);
@@ -32,14 +32,14 @@ fn test_list_worlds_in_memory_seeded() {
 #[test]
 fn test_get_world_found_in_memory() {
     let storage = Storage::new_in_memory();
-    let (manifest, world_card, map) = test_world_data("world1", "World One");
-    storage.seed_world(&manifest, &world_card, &map).unwrap();
+    let (world_card, map) = test_world_data("world1", "World One");
+    storage.seed_world(&world_card, &map).unwrap();
 
     let result = storage.get_world("world1").unwrap();
     assert!(result.is_some());
     let world_with_map = result.unwrap();
-    assert_eq!(world_with_map.info.key, "world1");
-    assert_eq!(world_with_map.info.name, "World One");
+    assert_eq!(world_with_map.world_card.key, "world1");
+    assert_eq!(world_with_map.world_card.name, "World One");
     assert_eq!(world_with_map.map.overworld.id, "overworld1");
 }
 
@@ -53,14 +53,14 @@ fn test_get_world_not_found_in_memory() {
 #[test]
 fn test_seed_world_sqlite() {
     let storage = sqlite_storage();
-    let (manifest, world_card, map) = test_world_data("sqlite_world", "SQLite World");
-    storage.seed_world(&manifest, &world_card, &map).unwrap();
+    let (world_card, map) = test_world_data("sqlite_world", "SQLite World");
+    storage.seed_world(&world_card, &map).unwrap();
 
     let retrieved = storage.get_world("sqlite_world").unwrap();
     assert!(retrieved.is_some());
     let world_with_map = retrieved.unwrap();
-    assert_eq!(world_with_map.info.key, "sqlite_world");
-    assert_eq!(world_with_map.info.name, "SQLite World");
+    assert_eq!(world_with_map.world_card.key, "sqlite_world");
+    assert_eq!(world_with_map.world_card.name, "SQLite World");
 
     let all = storage.list_worlds().unwrap();
     assert_eq!(all.len(), 1);
@@ -69,10 +69,10 @@ fn test_seed_world_sqlite() {
 #[test]
 fn test_seed_world_idempotent_in_memory() {
     let storage = Storage::new_in_memory();
-    let (manifest, world_card, map) = test_world_data("dup_world", "Duplicate World");
+    let (world_card, map) = test_world_data("dup_world", "Duplicate World");
 
-    storage.seed_world(&manifest, &world_card, &map).unwrap();
-    storage.seed_world(&manifest, &world_card, &map).unwrap();
+    storage.seed_world(&world_card, &map).unwrap();
+    storage.seed_world(&world_card, &map).unwrap();
 
     let worlds = storage.list_worlds().unwrap();
     assert_eq!(worlds.len(), 1);
@@ -102,33 +102,18 @@ fn test_seed_world_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
     handle.set(Operation::SeedWorld, TestOverride::internal("seed failed"));
 
-    let (manifest, world_card, map) = test_world_data("fail_world", "Fail World");
-    let result = storage.seed_world(&manifest, &world_card, &map);
+    let (world_card, map) = test_world_data("fail_world", "Fail World");
+    let result = storage.seed_world(&world_card, &map);
     assert!(result.is_err());
 }
 
-fn test_world_data(id: &str, name: &str) -> (WorldManifest, WorldCard, MapDef) {
-    let manifest = WorldManifest {
-        id: id.to_string(),
-        name: name.to_string(),
-        description: "Test description".to_string(),
-        global_rules: Vec::new(),
-        starting_room_id: "start".to_string(),
-        map_file: "map.json".to_string(),
-        player_file: "player.json".to_string(),
-        characters_dir: "characters".to_string(),
-        scenarios: Vec::new(),
-        default_scenario_id: None,
-        default_room_image: None,
-    };
-
+fn test_world_data(id: &str, name: &str) -> (WorldCard, MapDef) {
     let world_card = WorldCard {
+        key: id.to_string(),
         name: name.to_string(),
         description: "Test description".to_string(),
-        global_rules: Vec::new(),
-        starting_room_id: "start".to_string(),
-        scenarios: Vec::new(),
-        default_room_image: None,
+        player_key: "player".to_string(),
+        ..Default::default()
     };
 
     let map = MapDef {
@@ -151,5 +136,5 @@ fn test_world_data(id: &str, name: &str) -> (WorldManifest, WorldCard, MapDef) {
         },
     };
 
-    (manifest, world_card, map)
+    (world_card, map)
 }

@@ -1,5 +1,5 @@
 //! [DOC: docs/system/storage.md]
-//! Character storage operations
+//! Character storage backend operations
 
 use chrono::Utc;
 
@@ -39,7 +39,7 @@ impl Storage {
                 let mut stmt = conn.prepare(
                     "SELECT id, key, world_id, name, description, personality, scenario, example_dialogue, summary, profile_image, headshot_image, inventory, triggers, relationships, created_at, updated_at FROM characters WHERE world_id = ? AND key = ?",
                 )?;
-                let result = stmt.query_row([&world_id.to_string(), key], DbCharacter::from_row);
+                let result = stmt.query_row(rusqlite::params![world_id, key], DbCharacter::from_row);
                 match result {
                     Ok(db_char) => Ok(Some(character_from_db(&db_char)?)),
                     Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
@@ -68,7 +68,7 @@ impl Storage {
                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     rusqlite::params![
                         card.id,
-                        world_id.to_string(),
+                        world_id,
                         card.sheet.name,
                         card.sheet.description,
                         card.sheet.personality,

@@ -8,20 +8,17 @@ use crate::model::state::{GameState, StoredTriggerContext};
 use crate::model::trigger::{ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement};
 use crate::model::world::{WorldCard, WorldManifest};
 
-// ─── World ───────────────────────────────────────────────────────────────────
-
 pub struct TestWorld;
 
 impl TestWorld {
     /// A minimal `WorldCard` with no rules.
     pub fn minimal() -> WorldCard {
         WorldCard {
+            key: "test".to_string(),
             name: "Test World".to_string(),
             description: "A test world.".to_string(),
-            global_rules: vec![],
-            starting_room_id: "start".to_string(),
-            scenarios: vec![],
-            default_room_image: None,
+            player_key: "player".to_string(),
+            ..Default::default()
         }
     }
 
@@ -33,8 +30,6 @@ impl TestWorld {
         }
     }
 }
-
-// ─── Player ───────────────────────────────────────────────────────────────────
 
 pub struct TestPlayer;
 
@@ -61,8 +56,6 @@ impl TestPlayer {
         Self::named("Hero")
     }
 }
-
-// ─── NPC ─────────────────────────────────────────────────────────────────────
 
 pub struct TestNpc;
 
@@ -136,8 +129,6 @@ impl TestNpc {
     }
 }
 
-// ─── Map ──────────────────────────────────────────────────────────────────────
-
 pub struct TestMap;
 
 impl TestMap {
@@ -202,8 +193,6 @@ impl TestMap {
         }
     }
 }
-
-// ─── GameState ────────────────────────────────────────────────────────────────
 
 pub struct TestGameState;
 
@@ -292,8 +281,6 @@ impl TestGameState {
     }
 }
 
-// ─── StoredTriggerContext ────────────────────────────────────────────────────
-
 pub struct TestStoredTriggerContext;
 
 impl TestStoredTriggerContext {
@@ -363,8 +350,6 @@ impl TestStoredTriggerContext {
     }
 }
 
-// ─── PromptPreset ────────────────────────────────────────────────────────────
-
 pub struct TestPromptPreset;
 
 impl TestPromptPreset {
@@ -397,8 +382,6 @@ impl TestPromptPreset {
     }
 }
 
-// ─── WorldManifest ───────────────────────────────────────────────────────────
-
 pub struct TestWorldManifest;
 
 impl TestWorldManifest {
@@ -419,8 +402,6 @@ impl TestWorldManifest {
         }
     }
 }
-
-// ─── CharacterSheet ──────────────────────────────────────────────────────────
 
 pub struct TestCharacterSheet;
 

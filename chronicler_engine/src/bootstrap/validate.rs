@@ -1,11 +1,12 @@
 //! [DOC: docs/system/startup.md]
-//! Validation utilities for bootstrap data
+//! Data validation utilities
+
 use crate::model::character::{NpcCard, PlayerCard};
 use crate::model::map::MapDef;
-use crate::model::world::WorldManifest;
+use crate::model::world::WorldCard;
 
 pub fn validate_loaded_data(
-    manifest: &WorldManifest,
+    world: &WorldCard,
     map: &MapDef,
     _player: &PlayerCard,
     npcs: &[NpcCard],
@@ -19,15 +20,13 @@ pub fn validate_loaded_data(
         }
     }
 
-    // 1. Validate starting room exists
-    if !valid_room_ids.contains(&manifest.starting_room_id) {
+    if !valid_room_ids.contains(&world.starting_room_id) {
         errors.push(format!(
             "starting_room_id '{}' not found in map",
-            manifest.starting_room_id
+            world.starting_room_id
         ));
     }
 
-    // 2. Validate trigger room_ids exist in the map
     for npc in npcs {
         for (i, trigger) in npc.triggers.iter().enumerate() {
             if let Some(room_id) = &trigger.room_id {
@@ -41,9 +40,8 @@ pub fn validate_loaded_data(
         }
     }
 
-    // 3. Validate scenario NPC references exist
     let loaded_npc_ids: std::collections::HashSet<_> = npcs.iter().map(|n| n.id.clone()).collect();
-    for scenario in &manifest.scenarios {
+    for scenario in &world.scenarios {
         for npc_id in &scenario.npcs {
             if !loaded_npc_ids.contains(npc_id) {
                 errors.push(format!(

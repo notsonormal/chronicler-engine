@@ -1,5 +1,5 @@
 //! [DOC: docs/system/storage.md]
-//! SQLite connection pooling and transactions
+//! Storage backend trait and core abstractions
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -14,7 +14,7 @@ use crate::model::message::{Message, Swipe};
 use crate::model::prompt_preset::PromptPreset;
 use crate::model::settings::AppSettings;
 use crate::model::state_snapshot::GameStateSnapshot;
-use crate::model::world::{WorldCard, WorldManifest};
+use crate::model::world::WorldCard;
 use crate::storage::db::DbPool;
 
 pub struct Storage {
@@ -32,14 +32,14 @@ pub struct InMemoryData {
     pub swipes: HashMap<u64, Vec<Swipe>>,
     pub presets: Vec<PromptPreset>,
     pub llm_messages: Vec<LlmMessage>,
-    pub worlds: Vec<WorldSeed>,
+    pub worlds: Vec<InMemoryWorld>,
     pub personas: Vec<PlayerCardWithKey>,
     pub characters: Vec<CharacterSeed>,
     pub settings: AppSettings,
 }
 
-pub struct WorldSeed {
-    pub manifest: WorldManifest,
+pub struct InMemoryWorld {
+    pub world_id: i64,
     pub world_card: WorldCard,
     pub map: MapDef,
 }
@@ -95,6 +95,7 @@ pub enum Operation {
     ListWorlds,
     GetWorld,
     SeedWorld,
+    GetWorldId,
     ListPersonas,
     GetPersona,
     SeedPersona,

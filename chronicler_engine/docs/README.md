@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-06-12 21:31 UTC*
+*Index last generated: 2026-06-14 11:34 UTC*
 
 ### Root files
 
@@ -63,7 +63,6 @@ This folder contains all documentation for the Chronicler Engine project.
 - [LLM Infrastructure Improvements](./plans/llm-infrastructure-improvements.md)
 - [Spec: Agent-Ready Pipeline Restructure for Chronicler Engine](./plans/multi-agent-architecture-overarching-spec.md)
 - [Plan: Observability & Automated Forensics](./plans/observability-and-forensics-plan.md)
-- [Plan: Phase 3 - Switch Runtime World Loading from Files to Database](./plans/phase3-switch-world-loading-to-db.md)
 - [AI Steering & Guided Generation](./plans/steering-and-guided-generation.md)
 - [Plan: Trigger Identity: Index → UUID](./plans/trigger-identity-uuid-plan.md)
 
@@ -75,6 +74,10 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Refactor handle_movement: Split Mixed Responsibilities](./plans/archived/handle-movement-refactor-2026-05-31.md)
 - [Module-Level DOC Anchor Migration](./plans/archived/module-level-doc-anchors-2026-06-06.md)
 - [Plan: Observability & Automated Forensics](./plans/archived/observability-and-forensics-plan-2026-05-31.md)
+- [Plan: Complete Phase 3 — Switch `run()` to DB-First Loading](./plans/archived/phase3-complete-db-loading-plan.md)
+- [Plan: Phase 3 Runtime Loading Fix](./plans/archived/phase3-runtime-loading-fix-plan.md)
+- [Plan: Phase 3 — Switch Runtime World Loading from Files to Database](./plans/archived/phase3-switch-world-loading-to-db-IMPLEMENTED.md)
+- [Plan: Phase 3 - Switch Runtime World Loading from Files to Database](./plans/archived/phase3-switch-world-loading-to-db.md)
 - [Remove Identity Wrapper Functions from GameService](./plans/archived/remove-identity-wrapper-functions-2026-05-31.md)
 - [Remove Thin Abstraction TriggerContinuationRequest](./plans/archived/remove-trigger-continuation-request-2026-05-31.md)
 - [Plan: Server Fragment Unit Tests](./plans/archived/server-fragment-unit-tests-2026-06-01.md)

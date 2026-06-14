@@ -187,12 +187,13 @@ The `test_support::fixtures` module provides reusable test data builders. Prefer
 ```rust
 use crate::test_support::{
     TestCharacterSheet, TestMap, TestNpc, TestPlayer,
-    TestPromptPreset, TestStoredTriggerContext, TestWorldManifest,
+    TestPromptPreset, TestStoredTriggerContext, TestWorld, TestWorldManifest,
 };
 
 let preset = TestPromptPreset::system("my_preset", "My Preset");
 let trigger = TestStoredTriggerContext::standard();
 let manifest = TestWorldManifest::minimal();
+let world = TestWorld::minimal(); // Preferred for runtime-path (DB-backed) tests
 ```
 
 ## What We Keep
