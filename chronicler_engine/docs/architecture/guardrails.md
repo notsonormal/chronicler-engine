@@ -95,36 +95,11 @@ The anchor must point to a domain-specific documentation file (e.g., `docs/syste
 - Model tier files: `model/*` (model tier IS the architecture)
 - Storage tier files: `storage/*` (storage schema IS the architecture)
 
-**Mapping by module**:
-
-|| Module | Target Doc |
-||--------|-----------|
-| `application/*` | `docs/system/game_flow.md` |
-| `engine/mod.rs`, `engine/logic.rs` | `docs/system/navigation.md` |
-| `engine/trigger_eval.rs` | `docs/system/triggers.md` |
-| `engine/state_diagnostics.rs` | `docs/architecture/invariants.md` |
-| `model/character.rs` | `docs/system/character_state.md` |
-| `model/trigger.rs` | `docs/system/triggers.md` |
-| `model/agent.rs` | `docs/system/agent_system.md` |
-| `model/llm*` | `docs/system/llm_processing.md` |
-| `narrative/agents/*` | `docs/system/agent_system.md` |
-| `narrative/prompt/*` | `docs/system/prompt_system.md` |
-| `narrative/llm/*`, `narrative/llm_client/*` | `docs/system/llm_processing.md` |
-| `narrative/text_check/*` | `docs/system/text_check.md` |
-| `narrative/mod.rs` | `docs/system/narration_engine.md` |
-| `server/*` | `docs/system/dashboard.md` |
-| `bootstrap/*` | `docs/system/startup.md` |
-
 **Module summary requirements**:
 - Must be a `//!` comment on line 2 (after the DOC anchor)
 - Must NOT be another `[DOC:]` anchor
 - Must be non-empty (not just `//!`)
 - Should concisely describe the module's purpose in domain terms
-
-**Rationale**: Module-level anchors provide a clear link from code to its domain documentation. The summary enables auto-generation of AGENTS.md structure listings and provides human-readable context without requiring navigation to external docs.
-
-**Severity**: warn  
-**Goal**: zero warnings.
 
 ### 3.3 mod.rs Purity (`guardrails_mod_purity`)
 
@@ -138,14 +113,11 @@ The anchor must point to a domain-specific documentation file (e.g., `docs/syste
 **Standard**: No runs of 5 or more consecutive `//` or `///` comment lines. Long explanations belong in external documentation linked via doc anchors.
 
 **Severity**: warn  
-**Goal**: zero warnings, then promote to error.
 
 ### 3.5 Single-Letter Variables (`guardrails_single_letter_vars`)
 
 **Standard**: No single-letter bindings outside tiny scopes (≤3 statements).
-
 **Severity**: warn  
-**Current status**: zero violations.
 
 ### 3.6 File Length (`guardrails_file_length_src`, `guardrails_file_length_tests`)
 
@@ -155,19 +127,7 @@ The anchor must point to a domain-specific documentation file (e.g., `docs/syste
 **Scope**: `src/` and `tests/`  
 **Exemptions**: None
 
-### 3.7 One Table Per Storage Module (`guardrails_one_table_per_storage`)
-
-**Standard**: Each `src/storage/*_storage.rs` module may reference exactly one physical SQLite table. No storage module may touch more than one table.
-
-**Severity**: error  
-**Scope**: `src/storage/*_storage.rs`  
-**Exemptions**: Temporary migration tables (`*_new` suffix), `sqlite_*` internal tables
-
-See ADR-019 for the rationale.
-
-**NOTE**: This guardrail was removed after ADR-020 unified storage into a single `Storage` struct with no `*_storage.rs` modules.
-
-### 3.8 Messages/Swipes Separation (`guardrails_messages_swipes_separation`)
+### 3.7 Messages/Swipes Separation (`guardrails_messages_swipes_separation`)
 
 **Standard**: `src/storage/backend/messages.rs` must not reference the `message_swipes` table. Swipe operations belong in `swipes.rs`.
 
@@ -176,6 +136,22 @@ See ADR-019 for the rationale.
 **Checks**: SQL table references (`FROM message_swipes`, `INTO message_swipes`, `UPDATE message_swipes`, `JOIN message_swipes`, `DELETE FROM message_swipes`)
 
 **NOTE**: This is a targeted guardrail for the messages/swipes separation concern. It does not catch dynamic SQL construction or clever abstractions — those should be caught in code review.
+
+### 3.8 Server Layer Boundaries (`guardrails_server_layer_boundaries`)
+
+**Standard**: The server layer (HTTP handlers) must not reference or mutate `GameState` directly. State access goes through the application service layer.
+
+**Severity**: error  
+**Scope**: `src/server/` (excluding `mod.rs` and `debug.rs`)  
+**Checks**: References to `GameState` (excluding `GameStateSnapshot`)
+
+### 3.9 Handler Return Type Consistency (`guardrails_handler_return_type`)
+
+**Standard**: All HTTP handlers in the server layer must return `Response<Body>` with error mapping via `app_err_to_response()`. The tuple return type `(StatusCode, String)` is forbidden — it bypasses the centralized error-to-HTTP mapping and creates an inconsistent HTTP contract.
+
+**Severity**: error  
+**Scope**: `src/server/` (excluding `mod.rs`, `debug.rs`, and `renderers.rs`)  
+**Checks**: Function signatures with `-> (StatusCode, String)` return type
 
 ---
 

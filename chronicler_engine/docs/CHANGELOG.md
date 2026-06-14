@@ -20,6 +20,17 @@
 
 ### Added
 
+- **Cross-World Game Flow UI** — Save/Load panel shows world badges, inline `<details>` world picker for new game creation
+  - **World Badges**: Each game in the Save/Load panel now displays its world name as a secondary badge
+  - **Inline World Picker**: "New Game" button replaced with inline `<details>` element containing world select dropdown
+  - **Create Game Handler**: Now accepts `world_key` form parameter to specify which world the new game belongs to
+  - **AppState Helper**: Consolidated `context_for_world_inner()` and `context_for_world()` into single `context_for_world()` method
+  - **CSS**: Scoped `.world-picker` rules under `.save-load-panel`, added cursor pointer for `<summary>`
+  - **Tests**: Added test for inline world picker rendering (`test_list_games_fragment_shows_world_picker`), deleted duplicate handler test
+  - Files modified: `src/server/games_fragment/template.rs`, `src/server/games_fragment/handlers.rs`, `src/server/games_fragment/mod.rs`, `src/server/app_state.rs`, `src/server/router.rs`, `chronicler_engine/assets/styles.css`, `chronicler_engine/tests/http/fragment.rs`, `chronicler_engine/src/server/games_fragment/handlers_tests.rs`
+  - Documentation: Updated `docs/system/dashboard.md`
+  - Deleted: `WorldPickerOption` and `WorldPickerTemplate` structs, `new_game_world_picker` handler, `/fragment/games/new-world-picker` route
+
 - **Worlds Management Tab UI** — Complete CRUD interface for multi-world orchestration
   - **New Tab**: Added "Worlds" tab to dashboard navigation between Prompt Presets and Save/Load tabs
   - **HTTP Handlers**: `list_worlds_fragment`, `new_world_form_handler`, `edit_world_form_handler`, `create_world_handler`, `update_world_handler`, `delete_world_handler`, `list_personas_fragment` in `src/server/worlds_fragment/`
@@ -34,6 +45,14 @@
   - Tests: 1186 pass (all-time high)
 
 ### Changed
+
+- **Code Simplification Pass** — Reduced code size by 42 lines through refactoring for clarity while preserving exact behavior
+  - **Extracted Helper Functions**: `is_generating()` replaces 3 copies of atomic load; `game_to_view()` eliminates duplicate GameToView mapping
+  - **Pattern Consolidation**: All handlers use `ctx_or_error()` helper instead of manual match-on-Result
+  - **Dead Code Removed**: Deleted `create_app_with_state()` trivial wrapper (5 lines), removed unused imports
+  - **Simplified Error Handling**: `delete_game_handler` delegates all errors to `app_err_to_tuple(e)` with single match
+  - Files modified: `src/server/app_state.rs`, `src/server/router.rs`, `src/server/mod.rs`, `src/server/games_fragment/handlers.rs`, `src/server/games_fragment/handlers_tests.rs`
+  - Tests: 1213 pass (all pass), clippy clean
 
 - **Thermo-Nuclear Code Quality Review (ADR-025 Follow-up)** — Comprehensive code quality improvements addressing 6 findings from the ADR-025 multi-world implementation review
   - **BLOCKER Fixed**: Removed `as_game_service_context_or_default()` — all handlers now propagate errors properly instead of silently returning empty defaults. Blank pages on DB corruption replaced with proper 500 errors

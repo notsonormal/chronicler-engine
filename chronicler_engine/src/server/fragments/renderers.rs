@@ -161,11 +161,13 @@ pub fn internal_error(body: impl Into<String>) -> Response<Body> {
         .expect("static response body is valid")
 }
 
-/// Helper to load game context or return None on error.
-/// Use this to avoid repeating the match-on-Result pattern in every handler.
-/// Example: `let Some(ctx) = ctx_or_error(&state) else { return internal_error("..."); };`
-pub fn ctx_or_error(state: &AppState) -> Option<crate::application::GameServiceContext> {
-    state.as_game_service_context().ok()
+pub fn ctx_or_error(
+    state: &AppState,
+) -> std::result::Result<crate::application::GameServiceContext, Box<Response<Body>>> {
+    match state.as_game_service_context() {
+        Ok(ctx) => Ok(ctx),
+        Err(e) => Err(Box::new(internal_error(e.to_string()))),
+    }
 }
 
 #[allow(clippy::expect_used)]

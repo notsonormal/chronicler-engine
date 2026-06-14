@@ -14,7 +14,7 @@ fn make_test_app_state_with_generating(is_generating: bool) -> crate::server::Ap
     state
 }
 
-// ─── Check Text Handler Tests ────────────────────────────────────────────────
+
 
 #[tokio::test]
 async fn test_check_text_handler_empty() {
@@ -47,28 +47,29 @@ async fn test_check_text_handler_ok() {
     assert_eq!(response.status(), StatusCode::OK);
 }
 
-// ─── Retry Handler Tests ─────────────────────────────────────────────────────
+
 
 #[tokio::test]
 async fn test_retry_handler() {
     let state = TestAppBuilder::default_test().build_app_state();
-    let (status, _body) = retry_handler(axum::extract::State(state)).await;
-    // May return 400 if no history to retry, or 200 if success
-    assert!(status == StatusCode::OK || status == StatusCode::BAD_REQUEST);
+
+    let response = retry_handler(axum::extract::State(state)).await;
+
+    assert!(response.status() == StatusCode::OK || response.status() == StatusCode::BAD_REQUEST);
 }
 
-// ─── Retrigger Handler Tests ─────────────────────────────────────────────────
+
 
 #[tokio::test]
 async fn test_retrigger_handler_ok() {
     let state = TestAppBuilder::default_test().build_app_state();
-    let (status, body) = retrigger_handler(axum::extract::State(state)).await;
-    assert!(status == StatusCode::OK || status == StatusCode::BAD_REQUEST);
-    // May fail if no last_trigger, but should not panic
-    assert!(!body.is_empty());
+
+    let response = retrigger_handler(axum::extract::State(state)).await;
+
+    assert!(response.status() == StatusCode::OK || response.status() == StatusCode::BAD_REQUEST);
 }
 
-// ─── Switch Swipe Handler Tests ──────────────────────────────────────────────
+
 
 #[tokio::test]
 async fn test_switch_swipe_handler() {
@@ -78,8 +79,7 @@ async fn test_switch_swipe_handler() {
         axum::extract::Path((0u64, 0usize)),
     )
     .await;
-    // May return various statuses depending on game state
-    // Just ensure it doesn't panic
+
     assert!(
         response.status().is_success()
             || response.status().is_client_error()
@@ -87,7 +87,7 @@ async fn test_switch_swipe_handler() {
     );
 }
 
-// ─── Reset Handler Tests ─────────────────────────────────────────────────────
+
 
 #[tokio::test]
 async fn test_reset_handler_ok() {

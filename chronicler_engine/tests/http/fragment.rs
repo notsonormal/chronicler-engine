@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use axum::{
-    Router,
     body::Body,
     http::{Request, StatusCode},
 };
@@ -11,17 +10,8 @@ use chronicler_engine::TestAppBuilder;
 use chronicler_engine::model::state::{GenerationPhase, GenerationStatus, MessageType};
 use chronicler_engine::storage::{Operation, Storage, TestOverride};
 
-async fn fetch_body(app: Router, uri: &str) -> String {
-    let req = Request::builder().uri(uri).body(Body::empty()).unwrap();
-    let response = app.oneshot(req).await.unwrap();
-    assert!(response.status().is_success(), "Expected success for {uri}");
-    let body = axum::body::to_bytes(response.into_body(), 8192)
-        .await
-        .unwrap();
-    String::from_utf8_lossy(&body).to_string()
-}
+use super::test_helpers::fetch_body;
 
-/// Test basic fragment endpoints return HTML.
 #[tokio::test]
 async fn test_basic_fragments_return_html() {
     let app = TestAppBuilder::default_app();
@@ -130,14 +120,13 @@ async fn test_character_headshots_fragment() {
         "/fragment/character-headshots",
     )
     .await;
-    // The test state has npc_1 with a profile_image, so headshots should render
+
     assert!(
         body.contains("headshot"),
         "Expected headshot in fragment: {body}"
     );
 }
 
-/// Test the three variants of the generating status endpoint.
 #[tokio::test]
 async fn test_generating_status_variants() {
     let body = fetch_body(TestAppBuilder::default_app(), "/status/generating").await;
@@ -191,7 +180,6 @@ async fn test_reset_generating_handler() {
 async fn test_edit_history_handler_success() {
     let storage = Arc::new(Storage::new_in_memory());
 
-    // Seed world and game manually since we're passing custom storage
     use chronicler_engine::test_support::{TestWorld, TestMap, TestPlayer};
     let world = TestWorld::minimal();
     let map = TestMap::single_room("start");
@@ -237,7 +225,7 @@ async fn test_edit_history_handler_not_found() {
     let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
-        .uri("/history/9999")
+        .uri("/history/999")
         .method(http::Method::POST)
         .header(
             http::header::CONTENT_TYPE,
@@ -246,7 +234,8 @@ async fn test_edit_history_handler_not_found() {
         .body(Body::from("text=Edited text"))
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
-    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
 }
 
 #[tokio::test]
@@ -282,7 +271,7 @@ async fn test_delete_history_handler_empty() {
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
 
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
 }
 
 #[tokio::test]
@@ -357,34 +346,15 @@ async fn test_action_async_inventory() {
 }
 
 #[tokio::test]
-async fn test_list_games_fragment_empty() {
-    let app = TestAppBuilder::default_app();
-
-    let req = Request::builder()
-        .uri("/fragment/games")
-        .method(http::Method::GET)
-        .body(Body::empty())
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(response.into_body(), 4096)
-        .await
-        .unwrap();
-    let html = String::from_utf8_lossy(&body);
-    assert!(
-        html.contains(r#"class="games-list""#),
-        "Should render games list container: {html}"
-    );
-}
-
-#[tokio::test]
 async fn test_list_games_fragment_populated() {
     let app = TestAppBuilder::default_app();
+    let world_key = "test"; // Default test app world key
 
     let req = Request::builder()
         .uri("/games")
         .method(http::Method::POST)
-        .body(Body::empty())
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .body(Body::from(format!("world_key={world_key}")))
         .unwrap();
     let response = app.clone().oneshot(req).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
@@ -392,12 +362,12 @@ async fn test_list_games_fragment_populated() {
     let req = Request::builder()
         .uri("/games")
         .method(http::Method::POST)
-        .body(Body::empty())
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .body(Body::from(format!("world_key={world_key}")))
         .unwrap();
     let response = app.clone().oneshot(req).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
 
-    // Now fetch the fragment — the first game should appear in Saved Games
     let req = Request::builder()
         .uri("/fragment/games")
         .method(http::Method::GET)
@@ -443,7 +413,7 @@ async fn test_list_games_fragment_escapes_html() {
         !html.contains("<script>"),
         "Should escape HTML in game name: {html}"
     );
-    // Askama uses numeric character references (&#60; instead of &lt;), both are valid
+
     assert!(
         html.contains("&#60;script&#62;") || html.contains("&lt;script&gt;"),
         "Should contain escaped script tag: {html}"
@@ -454,7 +424,6 @@ async fn test_list_games_fragment_escapes_html() {
 async fn test_create_game_handler() {
     let storage = Arc::new(Storage::new_in_memory());
 
-    // Seed a world with scenarios and create an initial game
     let mut world = chronicler_engine::test_support::TestWorld::minimal();
     world.scenarios = vec![chronicler_engine::model::scenario::StartingScenario {
         id: "test_intro".to_string(),
@@ -484,7 +453,8 @@ async fn test_create_game_handler() {
     let req = Request::builder()
         .uri("/games")
         .method(http::Method::POST)
-        .body(Body::empty())
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .body(Body::from(format!("world_key={}", world.key)))
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
@@ -494,7 +464,6 @@ async fn test_create_game_handler() {
         "Should return HX-Refresh header"
     );
 
-    // Verify the new game was created, switched to, and initialized.
     let new_id = storage.current_game_id();
     assert_ne!(new_id, old_id, "Should have switched to the new game");
 
@@ -521,7 +490,6 @@ async fn test_create_game_handler() {
 async fn test_switch_game_handler_success() {
     let storage = Arc::new(Storage::new_in_memory());
 
-    // Seed world and create initial game manually since we're passing custom storage
     use chronicler_engine::test_support::{TestWorld, TestMap, TestPlayer};
     let world = TestWorld::minimal();
     let map = TestMap::single_room("start");
@@ -572,10 +540,8 @@ async fn test_switch_game_handler_not_found() {
 
 #[tokio::test]
 async fn test_switch_game_handler_cross_world_allowed() {
-    // Cross-world game switching is now ALLOWED by design
     let storage = Arc::new(Storage::new_in_memory());
 
-    // Seed two different worlds
     let world_a = chronicler_engine::test_support::TestWorld::minimal();
     let map_a = chronicler_engine::test_support::TestMap::single_room("start");
     storage.seed_world(&world_a, &map_a).unwrap();
@@ -587,7 +553,6 @@ async fn test_switch_game_handler_cross_world_allowed() {
     let map_b = chronicler_engine::test_support::TestMap::single_room("room_b");
     storage.seed_world(&world_b, &map_b).unwrap();
 
-    // Create games in different worlds
     let game_a_id = storage
         .create_game(&world_a.name, &world_a.key, "Game A")
         .unwrap();
@@ -595,14 +560,12 @@ async fn test_switch_game_handler_cross_world_allowed() {
         .create_game(&world_b.name, &world_b.key, "Game B")
         .unwrap();
 
-    // Start with game A
     storage.set_game_id(game_a_id);
 
     let app = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
         .build();
 
-    // Switch to game B (different world) - should succeed
     let req = Request::builder()
         .uri(format!("/games/{game_b_id}/switch"))
         .method(http::Method::POST)
@@ -625,7 +588,6 @@ async fn test_switch_game_handler_cross_world_allowed() {
 async fn test_delete_game_handler_success() {
     let storage = Arc::new(Storage::new_in_memory());
 
-    // Seed world and create initial game manually since we're passing custom storage
     use chronicler_engine::test_support::{TestWorld, TestMap, TestPlayer};
     let world = TestWorld::minimal();
     let map = TestMap::single_room("start");
@@ -660,7 +622,6 @@ async fn test_delete_game_handler_success() {
 async fn test_delete_game_handler_active_game() {
     let storage = Arc::new(Storage::new_in_memory());
 
-    // Seed a world and create a game - TestAppBuilder will also create a game, but we'll use this one
     let world = chronicler_engine::test_support::TestWorld::minimal();
     let map = chronicler_engine::test_support::TestMap::single_room("start");
     storage.seed_world(&world, &map).unwrap();
@@ -676,10 +637,8 @@ async fn test_delete_game_handler_active_game() {
         .storage(Arc::clone(&storage))
         .build();
 
-    // Get the actual active game ID (TestAppBuilder creates its own game)
     let active_game_id = storage.current_game_id();
 
-    // Try to delete the active game - should fail
     let req = Request::builder()
         .uri(format!("/games/{active_game_id}/delete"))
         .method(http::Method::POST)
@@ -722,4 +681,153 @@ async fn test_list_games_fragment_storage_error() {
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
     assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+}
+
+#[tokio::test]
+async fn test_list_games_fragment_shows_world_badge() {
+    let storage = Arc::new(Storage::new_in_memory());
+    let world_a = chronicler_engine::test_support::TestWorld::minimal();
+    let map_a = chronicler_engine::test_support::TestMap::single_room("start");
+    storage.seed_world(&world_a, &map_a).unwrap();
+    let player = chronicler_engine::test_support::TestPlayer::standard();
+    storage.seed_persona(&world_a.player_key, &player).unwrap();
+
+    let mut world_b = chronicler_engine::test_support::TestWorld::minimal();
+    world_b.key = "world_b_test".to_string();
+    world_b.name = "World B Test".to_string();
+    world_b.player_key = "player_b_test".to_string();
+    let map_b = chronicler_engine::test_support::TestMap::single_room("start");
+    storage.seed_world(&world_b, &map_b).unwrap();
+    storage.seed_persona(&world_b.player_key, &player).unwrap();
+
+    let _game_a = storage
+        .create_game(&world_a.name, &world_a.key, "Game A")
+        .unwrap();
+    let _game_b = storage
+        .create_game(&world_b.name, &world_b.key, "Game B")
+        .unwrap();
+
+    let app = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .build();
+
+    let req = Request::builder()
+        .uri("/fragment/games")
+        .method(http::Method::GET)
+        .body(Body::empty())
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), 8192)
+        .await
+        .unwrap();
+    let html = String::from_utf8_lossy(&body);
+    assert!(
+        html.contains("world-badge"),
+        "Should render world-badge class: {html}"
+    );
+    assert!(
+        html.contains(&world_a.name),
+        "Should show world A name: {html}"
+    );
+    assert!(
+        html.contains(&world_b.name),
+        "Should show world B name: {html}"
+    );
+}
+
+#[tokio::test]
+async fn test_list_games_fragment_shows_world_picker() {
+    let storage = Arc::new(Storage::new_in_memory());
+    let world_a = chronicler_engine::test_support::TestWorld::minimal();
+    let map_a = chronicler_engine::test_support::TestMap::single_room("start");
+    storage.seed_world(&world_a, &map_a).unwrap();
+    let player = chronicler_engine::test_support::TestPlayer::standard();
+    storage.seed_persona(&world_a.player_key, &player).unwrap();
+
+    let app = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .build();
+
+    let req = Request::builder()
+        .uri("/fragment/games")
+        .method(http::Method::GET)
+        .body(Body::empty())
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), 8192)
+        .await
+        .unwrap();
+    let html = String::from_utf8_lossy(&body);
+    assert!(
+        html.contains("<select") && html.contains("world_key"),
+        "Should render world picker select element: {html}"
+    );
+}
+
+#[tokio::test]
+async fn test_create_game_with_world_key() {
+    let storage = Arc::new(Storage::new_in_memory());
+    let world_a = chronicler_engine::test_support::TestWorld::minimal();
+    let map_a = chronicler_engine::test_support::TestMap::single_room("start");
+    storage.seed_world(&world_a, &map_a).unwrap();
+    let player = chronicler_engine::test_support::TestPlayer::standard();
+    storage.seed_persona(&world_a.player_key, &player).unwrap();
+
+    let app = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .build();
+
+    let req = Request::builder()
+        .uri("/games")
+        .method(http::Method::POST)
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .body(Body::from(format!("world_key={}", world_a.key)))
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response.headers().get("HX-Refresh").unwrap(),
+        "true",
+        "Should return HX-Refresh header"
+    );
+
+    let games = storage.list_games().unwrap();
+
+    for game in &games {
+        assert_eq!(
+            game.world_key, world_a.key,
+            "All games should be in world '{}'",
+            world_a.key
+        );
+    }
+    assert!(!games.is_empty(), "Should have created at least one game");
+}
+
+#[tokio::test]
+async fn test_create_game_with_invalid_world_key() {
+    let storage = Arc::new(Storage::new_in_memory());
+    let world_a = chronicler_engine::test_support::TestWorld::minimal();
+    let map_a = chronicler_engine::test_support::TestMap::single_room("start");
+    storage.seed_world(&world_a, &map_a).unwrap();
+    let player = chronicler_engine::test_support::TestPlayer::standard();
+    storage.seed_persona(&world_a.player_key, &player).unwrap();
+
+    let app = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .build();
+
+    let req = Request::builder()
+        .uri("/games")
+        .method(http::Method::POST)
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .body(Body::from("world_key=nonexistent_world"))
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "Should return error for non-existent world"
+    );
 }

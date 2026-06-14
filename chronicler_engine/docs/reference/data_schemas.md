@@ -22,6 +22,7 @@ Game data is loaded from JSON seed files at startup and persisted to SQLite. Aft
 **`games`**
 - `id INTEGER PRIMARY KEY AUTOINCREMENT`
 - `world_name TEXT NOT NULL DEFAULT 'default'`
+- `world_key TEXT NOT NULL DEFAULT 'default'`
 - `name TEXT NOT NULL DEFAULT 'Unnamed'`
 - `created_at TEXT NOT NULL`
 - `updated_at TEXT NOT NULL`

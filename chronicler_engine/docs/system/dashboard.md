@@ -191,11 +191,11 @@ HTML template renders with `data-raw-text` attribute for inline editing:
    - Re-enable the submit button
    - Change button text back to "▶ Send"
 
-## Game Management
-Multiple independent games per world, each with isolated snapshots and messages:
-- **List games**: `GET /fragment/games` renders dropdown with all games for the current world
-- **Create game**: `POST /games` creates a new game with auto-generated name (`{WorldName}_{Date}_N`)
-- **Switch game**: `POST /games/:id/switch` loads the selected game and refreshes the page
+### Game Management
+Multiple independent games across all worlds, each with isolated snapshots and messages:
+- **List games**: `GET /fragment/games` renders all games with world badges and an inline world picker for creating new games
+- **Create game**: `POST /games` accepts form data with `world_key` parameter; creates a game under the chosen world with auto-generated name (`{WorldName}_{Date}_N`)
+- **Switch game**: `POST /games/:id/switch` loads the selected game (cross-world switching allowed) and refreshes the page
 - **Delete game**: `POST /games/:id/delete` removes the game and all its data, then refreshes
 - **Reset**: `POST /reset` deletes the current game and creates a new one with a fresh auto-generated name
 

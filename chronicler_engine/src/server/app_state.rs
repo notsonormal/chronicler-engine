@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::sync::atomic::AtomicBool;
+use std::sync::RwLockWriteGuard;
 use tokio_util::sync::CancellationToken;
 
 use crate::application::application_service::DefaultApplicationService;
@@ -14,7 +15,6 @@ use crate::error::EngineError;
 use crate::model::character::NpcCard;
 use crate::model::settings::AppSettings;
 
-/// Server configuration.
 #[derive(Clone, Debug)]
 pub struct ServerConfig {
     pub port: u16,
@@ -26,7 +26,6 @@ impl Default for ServerConfig {
     }
 }
 
-/// Resources required to initialize the server.
 #[derive(Clone)]
 pub struct ServerResources {
     pub storage: Arc<crate::storage::Storage>,
@@ -34,7 +33,6 @@ pub struct ServerResources {
     pub settings: Arc<RwLock<AppSettings>>,
 }
 
-/// Application state shared across all request handlers.
 #[derive(Clone)]
 pub struct AppState {
     pub storage: Arc<crate::storage::Storage>,
@@ -47,26 +45,18 @@ pub struct AppState {
 }
 
 impl AppState {
-    /// Constructs a `GameServiceContext` from this state by loading world data from DB.
-    pub fn as_game_service_context(&self) -> Result<GameServiceContext, EngineError> {
-        let game_id = self.storage.current_game_id();
-        let game = self
-            .storage
-            .get_game(game_id)?
-            .ok_or_else(|| EngineError::Config("No active game".to_string()))?;
+    pub fn context_for_world(&self, world_key: &str) -> Result<GameServiceContext, EngineError> {
         let world_with_map = self
             .storage
-            .get_world(&game.world_key)?
-            .ok_or_else(|| EngineError::Config(format!("World not found: {}", game.world_key)))?;
+            .get_world(world_key)?
+            .ok_or_else(|| EngineError::Config(format!("World not found: {world_key}")))?;
+
+        let player_key = &world_with_map.world_card.player_key;
         let player = self
             .storage
-            .get_persona(&world_with_map.world_card.player_key)?
-            .ok_or_else(|| {
-                EngineError::Config(format!(
-                    "Persona not found: {}",
-                    world_with_map.world_card.player_key
-                ))
-            })?;
+            .get_persona(player_key)?
+            .ok_or_else(|| EngineError::Config(format!("Persona not found: {player_key}")))?;
+
         let npcs = self.storage.list_characters(world_with_map.world_id)?;
         let npcs_map: HashMap<String, NpcCard> =
             npcs.into_iter().map(|npc| (npc.id.clone(), npc)).collect();
@@ -84,36 +74,39 @@ impl AppState {
         })
     }
 
-    // Note: Removed as_game_service_context_or_default() - see ADR-025.
-    // Callers should use as_game_service_context() and propagate errors properly.
-    // Silent error swallowing led to blank pages with no indication of DB corruption
-    // or missing world data. All handlers now return 500 errors on context failures.
-
-    /// If the lock is poisoned, recovers the inner value.
-    pub fn current_cancel_token(&self) -> CancellationToken {
-        self.cancel_token
-            .read()
-            .map(|g| g.clone())
-            .unwrap_or_else(|p| {
-                tracing::warn!("Poisoned cancel_token read lock recovered");
-                p.into_inner().clone()
-            })
+    pub fn as_game_service_context(&self) -> Result<GameServiceContext, EngineError> {
+        let game_id = self.storage.current_game_id();
+        let game = self
+            .storage
+            .get_game(game_id)?
+            .ok_or_else(|| EngineError::Config("No active game".to_string()))?;
+        self.context_for_world(&game.world_key)
     }
 
-    /// If the lock is poisoned, recovers the inner value before replacing.
+    pub fn current_cancel_token(&self) -> CancellationToken {
+        read_lock_or_recover(&self.cancel_token, "cancel_token")
+    }
+
     pub fn replace_cancel_token(&self) {
-        let mut token = self.cancel_token.write().unwrap_or_else(|p| {
-            tracing::warn!("Poisoned cancel_token write lock recovered");
-            p.into_inner()
-        });
+        let mut token = write_lock_or_recover(&self.cancel_token, "cancel_token");
         *token = CancellationToken::new();
     }
 
-    /// If the lock is poisoned, recovers the inner value.
     pub fn settings(&self) -> AppSettings {
-        self.settings.read().map(|g| g.clone()).unwrap_or_else(|p| {
-            tracing::warn!("Poisoned settings read lock recovered");
-            p.into_inner().clone()
-        })
+        read_lock_or_recover(&self.settings, "settings")
     }
+}
+
+fn read_lock_or_recover<T: Clone>(lock: &RwLock<T>, name: &str) -> T {
+    lock.read().map(|g| g.clone()).unwrap_or_else(|p| {
+        tracing::warn!("Poisoned {name} read lock recovered");
+        p.into_inner().clone()
+    })
+}
+
+fn write_lock_or_recover<'a, T>(lock: &'a RwLock<T>, name: &str) -> RwLockWriteGuard<'a, T> {
+    lock.write().unwrap_or_else(|p| {
+        tracing::warn!("Poisoned {name} write lock recovered");
+        p.into_inner()
+    })
 }

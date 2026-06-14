@@ -5,7 +5,7 @@ use askama::Template;
 use axum::{
     body::Body,
     extract::{Form, State},
-    http::StatusCode,
+    response::Response,
 };
 
 use crate::application::application_service::ApplicationError;
@@ -15,8 +15,8 @@ use crate::server::AppState;
 use crate::server::templates::TextCheckPreviewTemplate;
 
 use super::renderers::{
-    app_err_to_tuple, bad_request, internal_error, ok, ok_refresh, service_unavailable,
-    service_unavailable_generating,
+    app_err_to_response, bad_request, ctx_or_error, internal_error, ok, ok_refresh,
+    service_unavailable, service_unavailable_generating,
 };
 
 #[allow(clippy::expect_used)]
@@ -52,42 +52,29 @@ pub async fn check_text_handler(
     }
 }
 
-pub async fn retry_handler(State(state): State<AppState>) -> (StatusCode, String) {
-    let ctx = match state.as_game_service_context() {
-        Ok(ctx) => ctx,
-        Err(e) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Failed to load context: {e}"),
-            );
-        }
+pub async fn retry_handler(State(state): State<AppState>) -> Response<Body> {
+    let Ok(ctx) = ctx_or_error(&state) else {
+        return match ctx_or_error(&state) {
+            Ok(_) => unreachable!(),
+            Err(e) => *e,
+        };
     };
     match state.application_service.retry(ctx) {
-        Ok(()) => (
-            StatusCode::OK,
-            "<span class=\"status ready\">Retrying...</span>".to_string(),
-        ),
-        Err(e) => app_err_to_tuple(e),
+        Ok(()) => ok("<span class=\"status ready\">Retrying...</span>"),
+        Err(e) => app_err_to_response(e),
     }
 }
 
-/// Requires `last_trigger` to be present and the last message to be a narration.
-pub async fn retrigger_handler(State(state): State<AppState>) -> (StatusCode, String) {
-    let ctx = match state.as_game_service_context() {
-        Ok(ctx) => ctx,
-        Err(e) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Failed to load context: {e}"),
-            );
-        }
+pub async fn retrigger_handler(State(state): State<AppState>) -> Response<Body> {
+    let Ok(ctx) = ctx_or_error(&state) else {
+        return match ctx_or_error(&state) {
+            Ok(_) => unreachable!(),
+            Err(e) => *e,
+        };
     };
     match state.application_service.retrigger(ctx) {
-        Ok(()) => (
-            StatusCode::OK,
-            "<span class=\"status ready\">Retriggering...</span>".to_string(),
-        ),
-        Err(e) => app_err_to_tuple(e),
+        Ok(()) => ok("<span class=\"status ready\">Retriggering...</span>"),
+        Err(e) => app_err_to_response(e),
     }
 }
 

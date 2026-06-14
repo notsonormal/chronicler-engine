@@ -25,9 +25,8 @@ pub struct ActionForm {
 }
 
 async fn dispatch_action(state: &AppState, command: String) -> Response<Body> {
-    let ctx = match ctx_or_error(state) {
-        Some(ctx) => ctx,
-        None => return internal_error("Failed to load game context"),
+    let Ok(ctx) = ctx_or_error(state) else {
+        return internal_error("Failed to load game context");
     };
     let action_result = if command.is_empty() {
         state.application_service.continue_narration(ctx)

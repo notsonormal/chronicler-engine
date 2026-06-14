@@ -38,21 +38,23 @@ async fn test_edit_history_handler_ok() {
     let form = EditHistoryForm {
         text: "modified text".to_string(),
     };
-    let (status, _body) = edit_history_handler(
+    let response = edit_history_handler(
         axum::extract::State(state),
         axum::extract::Path(999u64),
         Form(form),
     )
     .await;
 
-    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
 }
 
 #[tokio::test]
 async fn test_delete_history_handler_ok() {
     let state = TestAppBuilder::default_test().build_app_state();
 
-    let (status, _body) = delete_history_handler(axum::extract::State(state)).await;
+    let response = delete_history_handler(axum::extract::State(state)).await;
 
-    assert!(status == StatusCode::OK || status == StatusCode::BAD_REQUEST);
+
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
 }

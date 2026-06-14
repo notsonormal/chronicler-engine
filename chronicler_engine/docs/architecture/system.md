@@ -95,7 +95,7 @@ The HTTP layer for the HTMX web dashboard with polling-based real-time updates.
   - **`history`**: History editing, deletion, and retry endpoints
   - **`misc`**: Utility endpoints (status, hints, text check)
   - **`renderers`**: HTML rendering helpers, markdown→HTML via `pulldown-cmark`. Exports `ctx_or_error()` helper for consistent context loading.
-- **`games_fragment`**: Game management sub-module (moved from `fragments/games`). Handles save/load panel, game switching, and game deletion.
+- **`games_fragment`**: Game management sub-module (moved from `fragments/games`). Handles save/load panel with world badges and inline `<details>` world picker for new game creation, game switching, and game deletion. Endpoints: `/fragment/games` (list with inline picker), `/games` (create with `world_key` form param), `/games/:id/switch`, `/games/:id/delete`.
 - **`settings_fragment`**: Settings panel fragment handlers and template rendering.
 - **`prompt_presets_fragment`**: Prompt Presets panel with two independent collections (System, Quantifier). Supports CRUD operations, active selection, and protected default presets.
 - **`worlds_fragment`**: Worlds management panel for multi-world orchestration. Supports CRUD operations on worlds including map/scenario definitions, persona assignment, and game count validation. Handlers: `list_worlds_fragment`, `new_world_form_handler`, `edit_world_form_handler`, `create_world_handler`, `update_world_handler`, `delete_world_handler`, `list_personas_fragment`. Uses HTMX for modal-based editing with persona dropdown.

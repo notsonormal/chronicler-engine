@@ -16,7 +16,6 @@ use super::prompt_presets_fragment;
 use super::worlds_fragment;
 use super::debug;
 
-/// Builds the Axum router with all routes configured.
 pub(crate) fn build_router(app_state: AppState) -> Router {
     Router::new()
         .route("/", get(index_handler))
@@ -169,9 +168,4 @@ pub(crate) fn build_router(app_state: AppState) -> Router {
         .nest_service("/data", ServeDir::new("data"))
         .fallback_service(ServeDir::new("assets"))
         .with_state(app_state)
-}
-
-/// Creates a new Axum app with the given state (public wrapper around `build_router`).
-pub fn create_app_with_state(app_state: AppState) -> Router {
-    build_router(app_state)
 }

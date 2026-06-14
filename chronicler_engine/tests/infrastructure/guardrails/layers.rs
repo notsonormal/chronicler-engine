@@ -32,6 +32,44 @@ pub fn check_messages_swipes_separation(file_path: &str, content: &str) -> Vec<V
     violations
 }
 
+
+pub fn check_handler_return_type(file_path: &str, content: &str) -> Vec<Violation> {
+    let mut violations = Vec::new();
+
+
+    let normalized_path = file_path.replace('\\', "/");
+
+
+    if !normalized_path.starts_with("src/server/")
+        || normalized_path.ends_with("mod.rs")
+        || normalized_path.ends_with("debug.rs")
+        || normalized_path.ends_with("renderers.rs")
+    {
+        return violations;
+    }
+
+    for (line_no, line) in content.lines().enumerate() {
+        let line_num = line_no + 1;
+        let trimmed = line.trim();
+
+    
+        if trimmed.starts_with("//") || trimmed.starts_with("*") {
+            continue;
+        }
+
+    
+        if trimmed.contains(") -> (StatusCode, String)") {
+            violations.push(Violation::error(
+                file_path,
+                line_num,
+                "handler returns `(StatusCode, String)` — use `Response<Body>` with `app_err_to_response()` instead",
+            ));
+        }
+    }
+
+    violations
+}
+
 pub fn check_server_layer_boundaries(file_path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
 
@@ -99,4 +137,55 @@ pub fn check_test_layer_boundaries(file_path: &str, content: &str) -> Vec<Violat
     }
 
     violations
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_check_handler_return_type_catches_violation() {
+        let violations = check_handler_return_type(
+            "src/server/test_handler.rs",
+            "pub async fn bad_handler() -> (StatusCode, String) { }",
+        );
+        assert_eq!(violations.len(), 1);
+        assert!(violations[0].message.contains("Response<Body>"));
+    }
+
+    #[test]
+    fn test_check_handler_return_type_allows_correct() {
+        let violations = check_handler_return_type(
+            "src/server/test_handler.rs",
+            "pub async fn good_handler() -> Response<Body> { }",
+        );
+        assert_eq!(violations.len(), 0);
+    }
+
+    #[test]
+    fn test_check_handler_return_type_skips_comments() {
+        let violations = check_handler_return_type(
+            "server/test_handler.rs",
+            "// pub async fn bad_handler() -> (StatusCode, String) { }",
+        );
+        assert_eq!(violations.len(), 0);
+    }
+
+    #[test]
+    fn test_check_handler_return_type_skips_debug_rs() {
+        let violations = check_handler_return_type(
+            "server/debug.rs",
+            "pub async fn bad_handler() -> (StatusCode, String) { }",
+        );
+        assert_eq!(violations.len(), 0);
+    }
+
+    #[test]
+    fn test_check_handler_return_type_skips_mod_rs() {
+        let violations = check_handler_return_type(
+            "server/mod.rs",
+            "pub async fn bad_handler() -> (StatusCode, String) { }",
+        );
+        assert_eq!(violations.len(), 0);
+    }
 }

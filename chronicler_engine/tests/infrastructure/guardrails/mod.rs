@@ -189,3 +189,8 @@ fn guardrails_messages_swipes_separation() {
         check_messages_swipes_separation,
     );
 }
+
+#[test]
+fn guardrails_handler_return_type() {
+    check_src_files("handler return type", check_handler_return_type);
+}

@@ -17,7 +17,6 @@ pub mod worlds_fragment;
 
 pub use app_state::{AppState, ServerConfig, ServerResources};
 pub(crate) use router::build_router;
-pub use router::create_app_with_state;
 pub use server_impl::run_server_with_config;
 
 #[cfg(test)]

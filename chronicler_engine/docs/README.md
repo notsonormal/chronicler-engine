@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-06-14 21:27 UTC*
+*Index last generated: 2026-06-14 23:54 UTC*
 
 ### Root files
 
@@ -60,7 +60,6 @@ This folder contains all documentation for the Chronicler Engine project.
 
 ### `docs/plans/`
 
-- [Cross-World Game Flow UI](./plans/cross-world-game-flow.md)
 - [Plan: Diagnostic Decision Tree as Agent Infrastructure](./plans/diagnostic-decision-tree-plan.md)
 - [LLM Infrastructure Improvements](./plans/llm-infrastructure-improvements.md)
 - [Spec: Agent-Ready Pipeline Restructure for Chronicler Engine](./plans/multi-agent-architecture-overarching-spec.md)
@@ -70,6 +69,7 @@ This folder contains all documentation for the Chronicler Engine project.
 
 ### `docs/plans/archived/`
 
+- [Cross-World Game Flow UI](./plans/archived/cross-world-game-flow.md)
 - [Plan: Migrate Game Data to Database with Seed Pattern](./plans/archived/db-game-data-migration.md)
 - [Deferred Cleanup: Askama Templates, Module Reorganization, and Games Migration](./plans/archived/deferred-cleanup-plan-2026-06-14.md)
 - [Plan: Empty Send Triggers Narrative Continuation](./plans/archived/empty-send-continue-2026-06-12.md)
