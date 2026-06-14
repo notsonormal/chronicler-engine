@@ -74,6 +74,7 @@ fn make_state(
         },
     });
     let player = Arc::new(crate::model::character::PlayerCard {
+        key: "test_player".to_string(),
         sheet: CharacterSheet {
             name: "Player".into(),
             description: "Test player".into(),
@@ -334,6 +335,7 @@ fn test_npc_encounter_log_initializes_with_starting_room_npcs() {
         world,
         map,
         Arc::new(crate::model::character::PlayerCard {
+            key: "test_player".to_string(),
             sheet: crate::model::character::CharacterSheet {
                 name: "Player".into(),
                 description: "".into(),

@@ -68,6 +68,7 @@ fn setup_test_state() -> GameState {
         ..Default::default()
     };
     let player = PlayerCard {
+        key: "test_player".to_string(),
         sheet: CharacterSheet {
             name: "P".into(),
             description: "P".into(),
@@ -151,6 +152,7 @@ fn test_get_current_room_failure() {
         world,
         Arc::new(map),
         Arc::new(PlayerCard {
+            key: "test_player".to_string(),
             sheet: CharacterSheet {
                 name: "P".into(),
                 description: "P".into(),

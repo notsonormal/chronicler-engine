@@ -92,6 +92,7 @@ fn persona_from_db(db: &DbPersona) -> Result<PlayerCard, EngineError> {
         .map_err(|e| EngineError::Parse(format!("Failed to deserialize inventory: {e}")))?;
 
     Ok(PlayerCard {
+        key: db.key.clone(),
         sheet: CharacterSheet {
             name: db.name.clone(),
             description: db.description.clone(),

@@ -97,6 +97,7 @@ pub enum Operation {
     SeedWorld,
     UpdateWorld,
     GetWorldById,
+    DeleteWorld,
     ListPersonas,
     GetPersona,
     SeedPersona,

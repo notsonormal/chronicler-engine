@@ -6,5 +6,6 @@ mod actions;
 mod connections;
 mod debug;
 mod fragment;
+mod worlds_fragment;
 
 mod endpoints;

@@ -22,6 +22,7 @@ pub fn create_test_state_with_map() -> GameState {
     let map = Arc::new(crate::fixtures::create_test_map());
 
     let player = Arc::new(PlayerCard {
+        key: "test_player".to_string(),
         sheet: CharacterSheet {
             name: "Test Player".into(),
             description: "A test player".into(),
@@ -68,6 +69,7 @@ pub fn create_test_state_with_trigger_npc() -> GameState {
     let map = Arc::new(crate::fixtures::create_test_map());
 
     let player = Arc::new(PlayerCard {
+        key: "test_player".to_string(),
         sheet: CharacterSheet {
             name: "Test Player".into(),
             description: "A test player".into(),

@@ -91,13 +91,14 @@ The HTTP layer for the HTMX web dashboard with polling-based real-time updates.
 - **`fragments`**: HTML fragment generators for HTMX partial updates. Split into submodules:
   - **`actions`**: Action form handlers and renderers
   - **`endpoints`**: HTMX fragment endpoints (`/fragment/story-log`, `/fragment/visual-sidebar`, etc.)
-  - **`games`**: Game management fragment endpoints
   - **`generation_guard`**: Generation lock/status fragment endpoints
   - **`history`**: History editing, deletion, and retry endpoints
   - **`misc`**: Utility endpoints (status, hints, text check)
   - **`renderers`**: HTML rendering helpers, markdown→HTML via `pulldown-cmark`. Exports `ctx_or_error()` helper for consistent context loading.
+- **`games_fragment`**: Game management sub-module (moved from `fragments/games`). Handles save/load panel, game switching, and game deletion.
 - **`settings_fragment`**: Settings panel fragment handlers and template rendering.
 - **`prompt_presets_fragment`**: Prompt Presets panel with two independent collections (System, Quantifier). Supports CRUD operations, active selection, and protected default presets.
+- **`worlds_fragment`**: Worlds management panel for multi-world orchestration. Supports CRUD operations on worlds including map/scenario definitions, persona assignment, and game count validation. Handlers: `list_worlds_fragment`, `new_world_form_handler`, `edit_world_form_handler`, `create_world_handler`, `update_world_handler`, `delete_world_handler`, `list_personas_fragment`. Uses HTMX for modal-based editing with persona dropdown.
 - **`view_models`**: View model structs that decouple templates from domain types.
   - `view_models.rs`: `MessageEntryView`, `LlmMessageView`, `PreviewIssueView`, `ActionAreaViewModel`, `VisualSidebarViewModel`, `NpcPortraitView`, and `SafeHtml` / `markdown_to_html`.
   - Domain-to-view mapping lives here; `templates.rs` focuses purely on HTML.
@@ -224,16 +225,17 @@ The following concerns are documented in dedicated `docs/system/` files. Those a
 
 ||  Topic | Document |
 ||-------|----------|
-|| Dashboard layout, tabs, polling, edit/retry UI | [`system/dashboard.md`](../system/dashboard.md) |
-|| UI design tokens, CSS components, animations | [`system/ui_design.md`](../system/ui_design.md) |
-|| Game loop phases, retry flow, status phases | [`system/game_flow.md`](../system/game_flow.md) |
-|| Game Master role, narrative modes, GM constraints | [`system/narration_engine.md`](../system/narration_engine.md) |
-|| Auto-trigger system and mutation order invariant | [`system/triggers.md`](../system/triggers.md) |
-|| Navigation and movement resolution | [`system/navigation.md`](../system/navigation.md) |
-|| LLM infrastructure, backends, logging, tracing | [`system/llm_processing.md`](../system/llm_processing.md) |
-|| Prompt layers, token budgets, prompt composition | [`system/prompt_system.md`](../system/prompt_system.md) |
-|| Dynamic room creation, fallback behavior | [`system/dynamic_rooms.md`](../system/dynamic_rooms.md) |
-|| Storage design, seeding, backend enum | [`system/storage.md`](../system/storage.md) |
+||| Dashboard layout, tabs, polling, edit/retry UI | [`system/dashboard.md`](../system/dashboard.md) |
+||| Worlds management UI, CRUD operations, world-game relationships | [`system/worlds.md`](../system/worlds.md) |
+||| UI design tokens, CSS components, animations | [`system/ui_design.md`](../system/ui_design.md) |
+||| Game loop phases, retry flow, status phases | [`system/game_flow.md`](../system/game_flow.md) |
+||| Game Master role, narrative modes, GM constraints | [`system/narration_engine.md`](../system/narration_engine.md) |
+||| Auto-trigger system and mutation order invariant | [`system/triggers.md`](../system/triggers.md) |
+||| Navigation and movement resolution | [`system/navigation.md`](../system/navigation.md) |
+||| LLM infrastructure, backends, logging, tracing | [`system/llm_processing.md`](../system/llm_processing.md) |
+||| Prompt layers, token budgets, prompt composition | [`system/prompt_system.md`](../system/prompt_system.md) |
+||| Dynamic room creation, fallback behavior | [`system/dynamic_rooms.md`](../system/dynamic_rooms.md) |
+||| Storage design, seeding, backend enum | [`system/storage.md`](../system/storage.md) |
 ## Error Strategy
 
 A unified error type (`crate::error::EngineError`) is shared across all tiers for consistent error propagation — from data loading through LLM failures to HTTP responses. See `src/error.rs` for the full variant list.

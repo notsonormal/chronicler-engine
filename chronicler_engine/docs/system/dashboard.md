@@ -14,7 +14,7 @@ Displays system-level context.
 
 ### 2. Tab Bar
 Navigation between Game, LLM Messages, and Settings views.
-- **Tabs**: Game | Settings | Prompt Presets | Save / Load | LLM Messages
+- **Tabs**: Game | Settings | Prompt Presets | Worlds | Save / Load | LLM Messages
 - **Active tab**: Green text with green bottom border
 - **Inactive tab**: Muted gray text
 
@@ -199,7 +199,75 @@ Multiple independent games per world, each with isolated snapshots and messages:
 - **Delete game**: `POST /games/:id/delete` removes the game and all its data, then refreshes
 - **Reset**: `POST /reset` deletes the current game and creates a new one with a fresh auto-generated name
 
+## Worlds Management Tab
+Dedicated tab for multi-world orchestration with CRUD operations:
+
+### Worlds Panel
+- **Endpoint**: `GET /fragment/worlds`
+- **Content**: List of all worlds with game count indicators
+- **Actions per world**:
+  - Edit button — opens modal with full world form pre-populated
+  - Delete button — blocked if games reference the world (validation error)
+- **Create New World button** — opens modal with empty form
+
+### World Form Modal
+HTMX-driven modal for create/edit operations:
+- **Create flow**: Button `hx-get="/fragment/worlds/new"` → modal loads empty form
+- **Edit flow**: Button `hx-get="/worlds/:key/edit"` → modal loads form pre-populated
+- **Submit**: Form posts to:
+  - Create: `POST /worlds` with full `WorldForm` data
+  - Update: `POST /worlds/:key` with updated world data
+- **Fields**:
+  - **Key** — unique identifier (readonly in edit mode)
+  - **Name** — display name
+  - **Description** — world lore/description
+  - **Global Rules** — one rule per line
+  - **Starting Room ID** — initial room for new games
+  - **Player Persona** — dropdown of available personas (by key)
+  - **Default Room Image** — optional default image path
+  - **Map JSON** — room/region structure as JSON
+  - **Scenarios JSON** — starting scenarios as JSON array
+- **Refresh**: On success, modal closes and worlds panel refreshes via HTMX
+
+### Backend Implementation
+- **Storage layer**: `Storage::get_world(key)` returns `Option<WorldWithMap>` with `world_id` for updates
+- **Service layer**: `ApplicationService::get_world()`, `update_world(id, world_card, map)`
+- **Validation**: Delete blocked if `games` table has rows with matching `world_key`
+- **HTMX handlers**:
+  - `new_world_form_handler` — renders create form with persona dropdown
+  - `edit_world_form_handler` — renders edit form with pre-populated data
+  - `create_world_handler` — creates world, returns refresh signal
+  - `update_world_handler` — updates world by ID, returns refresh signal
+  - `delete_world_handler` — validates no games reference world, deletes if safe
+  - `list_personas_fragment` — returns persona `<option>` tags for dropdown
+
+### JavaScript Integration
+```javascript
+window.openWorldModal = function (key) {
+  const modal = document.getElementById("world-modal");
+  const content = document.getElementById("world-modal-content");
+  if (key) {
+    title.textContent = "Edit World";
+    htmx.ajax('GET', '/worlds/' + key + '/edit', {target: content, swap: 'innerHTML'});
+  } else {
+    title.textContent = "Create World";
+    htmx.ajax('GET', '/fragment/worlds/new', {target: content, swap: 'innerHTML'});
+  }
+  modal.style.display = "flex";
+};
+```
+
 ## CSS Classes
+- `.worlds-panel` — container for worlds list with game counts
+- `.world-form-container` — modal form container styling
+- `.btn-new-world` — "Create New World" button styling
+- `.modal-overlay` — full-screen darkened backdrop
+- `.modal` — centered modal dialog
+- `.modal-header` — title + close button row
+- `.modal-body` — scrollable content area
+- `.modal-actions` — Cancel/Save button row
+- `.form-group` — label + input wrapper
+- `.json-editor` — monospace textarea for JSON fields
 - `.location-header` - Room name in location entry, inline, green bold (#4ade80)
 - `.location-timestamp` - Timestamp for location entry, inline after room name
 - `.event-header` - Event name in trigger event entry, inline, blue/cyan bold (#38bdf8)

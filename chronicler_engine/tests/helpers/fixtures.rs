@@ -21,6 +21,7 @@ pub fn create_test_world() -> WorldCard {
 
 pub fn create_test_player() -> PlayerCard {
     PlayerCard {
+        key: "test_player".to_string(),
         sheet: CharacterSheet {
             name: "Test Player".to_string(),
             description: "A brave adventurer".to_string(),
@@ -145,6 +146,7 @@ pub fn create_test_state_with_npcs(room_npcs: Vec<String>, npcs: Vec<NpcCard>) -
     });
 
     let player = Arc::new(PlayerCard {
+        key: "test_player".to_string(),
         sheet: CharacterSheet {
             name: "Test Player".into(),
             description: "A test player".into(),

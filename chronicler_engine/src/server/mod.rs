@@ -4,6 +4,7 @@
 pub mod app_state;
 pub mod debug;
 pub mod fragments;
+pub mod games_fragment;
 pub mod handlers;
 pub mod port_utils;
 pub mod prompt_presets_fragment;
@@ -12,6 +13,7 @@ pub mod server_impl;
 pub mod settings_fragment;
 pub mod templates;
 pub mod view_models;
+pub mod worlds_fragment;
 
 pub use app_state::{AppState, ServerConfig, ServerResources};
 pub(crate) use router::build_router;

@@ -10,8 +10,10 @@ use tower_http::services::ServeDir;
 use super::AppState;
 use super::handlers::index_handler;
 use super::fragments;
+use super::games_fragment;
 use super::settings_fragment;
 use super::prompt_presets_fragment;
+use super::worlds_fragment;
 use super::debug;
 
 /// Builds the Axum router with all routes configured.
@@ -55,13 +57,37 @@ pub(crate) fn build_router(app_state: AppState) -> Router {
         )
         .route("/retrigger", post(fragments::retrigger_handler))
         .route("/reset", post(fragments::reset_handler))
-        .route("/games", post(fragments::create_game_handler))
-        .route("/games/:id/switch", post(fragments::switch_game_handler))
-        .route("/games/:id/delete", post(fragments::delete_game_handler))
-        .route("/fragment/games", get(fragments::list_games_fragment))
+        .route("/games", post(games_fragment::create_game_handler))
+        .route(
+            "/games/:id/switch",
+            post(games_fragment::switch_game_handler),
+        )
+        .route(
+            "/games/:id/delete",
+            post(games_fragment::delete_game_handler),
+        )
+        .route("/fragment/games", get(games_fragment::list_games_fragment))
         .route(
             "/fragment/llm-messages",
             get(fragments::llm_messages_fragment),
+        )
+        .route(
+            "/fragment/worlds",
+            get(worlds_fragment::list_worlds_fragment),
+        )
+        .route("/worlds", post(worlds_fragment::create_world_handler))
+        .route("/worlds/:key", post(worlds_fragment::update_world_handler))
+        .route(
+            "/fragment/worlds/new",
+            get(worlds_fragment::new_world_form_handler),
+        )
+        .route(
+            "/worlds/:key/edit",
+            get(worlds_fragment::edit_world_form_handler),
+        )
+        .route(
+            "/worlds/:key/delete",
+            post(worlds_fragment::delete_world_handler),
         )
         .route("/fragment/settings", get(settings_fragment::settings_panel))
         .route("/settings", post(settings_fragment::save_settings_handler))

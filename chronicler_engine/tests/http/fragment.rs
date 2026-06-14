@@ -443,8 +443,9 @@ async fn test_list_games_fragment_escapes_html() {
         !html.contains("<script>"),
         "Should escape HTML in game name: {html}"
     );
+    // Askama uses numeric character references (&#60; instead of &lt;), both are valid
     assert!(
-        html.contains("&lt;script&gt;"),
+        html.contains("&#60;script&#62;") || html.contains("&lt;script&gt;"),
         "Should contain escaped script tag: {html}"
     );
 }

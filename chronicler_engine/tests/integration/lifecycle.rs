@@ -67,6 +67,7 @@ fn create_test_map() -> MapDef {
 
 fn create_test_player() -> PlayerCard {
     PlayerCard {
+        key: "test_player".to_string(),
         sheet: CharacterSheet {
             name: "Test Player".to_string(),
             description: "A test player".to_string(),

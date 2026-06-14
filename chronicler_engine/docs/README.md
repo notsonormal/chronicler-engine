@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-06-14 19:55 UTC*
+*Index last generated: 2026-06-14 21:27 UTC*
 
 ### Root files
 
@@ -67,11 +67,11 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Plan: Observability & Automated Forensics](./plans/observability-and-forensics-plan.md)
 - [AI Steering & Guided Generation](./plans/steering-and-guided-generation.md)
 - [Plan: Trigger Identity: Index → UUID](./plans/trigger-identity-uuid-plan.md)
-- [Worlds Management Tab UI](./plans/worlds-management-tab.md)
 
 ### `docs/plans/archived/`
 
 - [Plan: Migrate Game Data to Database with Seed Pattern](./plans/archived/db-game-data-migration.md)
+- [Deferred Cleanup: Askama Templates, Module Reorganization, and Games Migration](./plans/archived/deferred-cleanup-plan-2026-06-14.md)
 - [Plan: Empty Send Triggers Narrative Continuation](./plans/archived/empty-send-continue-2026-06-12.md)
 - [Plan: Fix Generation Phase Stuck on "Generating narration..." During Post-Generation](./plans/archived/fix-generation-phase-status-2026-06-01.md)
 - [Refactor handle_movement: Split Mixed Responsibilities](./plans/archived/handle-movement-refactor-2026-05-31.md)
@@ -89,6 +89,8 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Server Module Refactor](./plans/archived/server-module-refactor-2026-05-31.md)
 - [Test Quality Improvements - June 2026](./plans/archived/test-quality-improvements-2026-06-01.md)
 - [Thermo-Nuclear Code Quality Review: Phase 3 DB-First Loading Migration](./plans/archived/thermo-nuclear-phase3-review-plan.md)
+- [Worlds Management Tab UI](./plans/archived/worlds-management-tab-2026-06-14.md)
+- [Implementation Plan: Worlds Management Tab UI](./plans/archived/worlds-management-tab-implementation-2026-06-14.md)
 
 ### `docs/reference/`
 
@@ -131,6 +133,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Specification: Text Check System](./system/text_check.md)
 - [System: Auto-Trigger & Reactive Encounters](./system/triggers.md)
 - [Specification: UI Design](./system/ui_design.md)
+- [Worlds Management System](./system/worlds.md)
 
 <!-- AUTO-INDEX END -->
 

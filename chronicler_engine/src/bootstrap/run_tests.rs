@@ -132,6 +132,7 @@ fn test_restart_with_existing_game_does_not_duplicate_scenario() {
         },
     };
     let player = crate::model::character::PlayerCard {
+        key: "alice".to_string(),
         sheet: crate::model::character::CharacterSheet {
             name: "Alice".to_string(),
             description: "".to_string(),

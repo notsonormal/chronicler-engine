@@ -6,6 +6,10 @@ use crate::application::context::GameServiceContext;
 use crate::bootstrap::build_fresh_initial_state;
 use crate::model::game::{Game, generate_game_name};
 use crate::model::state_snapshot::GameStateSnapshot;
+use crate::model::world::WorldCard;
+use crate::model::map::MapDef;
+use crate::model::character::PlayerCard;
+use crate::storage::worlds::WorldWithMap;
 
 pub struct GameLifecycleService {}
 
@@ -145,6 +149,55 @@ impl GameLifecycleService {
         }
 
         Ok(())
+    }
+
+    // TODO(#tech-debt): Worlds CRUD methods are pure storage passthroughs.
+    // These 7 methods add no validation/orchestration - consider direct storage calls from handlers.
+    // See: https://github.com/mrn-general/issues/XXX
+    pub fn list_worlds(&self, ctx: GameServiceContext) -> Result<Vec<WorldCard>, ApplicationError> {
+        ctx.storage.list_worlds().map_err(Into::into)
+    }
+
+    pub fn get_world(
+        &self,
+        ctx: GameServiceContext,
+        key: &str,
+    ) -> Result<Option<WorldWithMap>, ApplicationError> {
+        ctx.storage.get_world(key).map_err(Into::into)
+    }
+
+    pub fn create_world(
+        &self,
+        ctx: GameServiceContext,
+        world_card: WorldCard,
+        map: MapDef,
+    ) -> Result<i64, ApplicationError> {
+        ctx.storage
+            .create_world(&world_card, &map)
+            .map_err(Into::into)
+    }
+
+    pub fn update_world(
+        &self,
+        ctx: GameServiceContext,
+        id: i64,
+        world_card: WorldCard,
+        map: MapDef,
+    ) -> Result<(), ApplicationError> {
+        ctx.storage
+            .update_world(id, &world_card, &map)
+            .map_err(Into::into)
+    }
+
+    pub fn delete_world(&self, ctx: GameServiceContext, key: &str) -> Result<(), ApplicationError> {
+        ctx.storage.delete_world(key).map_err(Into::into)
+    }
+
+    pub fn list_personas(
+        &self,
+        ctx: GameServiceContext,
+    ) -> Result<Vec<PlayerCard>, ApplicationError> {
+        ctx.storage.list_personas().map_err(Into::into)
     }
 }
 

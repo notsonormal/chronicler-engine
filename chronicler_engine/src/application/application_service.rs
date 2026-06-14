@@ -19,6 +19,10 @@ use crate::model::llm_message::LlmMessage;
 use crate::model::state::{GenerationPhase, GenerationStatus, MessageEntry};
 use crate::model::state_snapshot::GameStateSnapshot;
 use crate::model::trigger::NpcEncounterState;
+use crate::model::world::WorldCard;
+use crate::model::map::MapDef;
+use crate::model::character::PlayerCard;
+use crate::storage::worlds::WorldWithMap;
 
 pub enum ApplicationError {
     Validation(String),
@@ -304,6 +308,50 @@ impl DefaultApplicationService {
         ctx: GameServiceContext,
     ) -> Result<DebugStateView, ApplicationError> {
         self.queries.get_debug_state(ctx)
+    }
+
+    // TODO(#tech-debt): Worlds CRUD methods are pure passthroughs to GameLifecycleService.
+    // Combined with lifecycle layer, this creates 14 identity wrappers for zero logic.
+    pub fn list_worlds(&self, ctx: GameServiceContext) -> Result<Vec<WorldCard>, ApplicationError> {
+        self.lifecycle.list_worlds(ctx)
+    }
+
+    pub fn get_world(
+        &self,
+        ctx: GameServiceContext,
+        key: &str,
+    ) -> Result<Option<WorldWithMap>, ApplicationError> {
+        self.lifecycle.get_world(ctx, key)
+    }
+
+    pub fn create_world(
+        &self,
+        ctx: GameServiceContext,
+        world_card: WorldCard,
+        map: MapDef,
+    ) -> Result<i64, ApplicationError> {
+        self.lifecycle.create_world(ctx, world_card, map)
+    }
+
+    pub fn update_world(
+        &self,
+        ctx: GameServiceContext,
+        id: i64,
+        world_card: WorldCard,
+        map: MapDef,
+    ) -> Result<(), ApplicationError> {
+        self.lifecycle.update_world(ctx, id, world_card, map)
+    }
+
+    pub fn delete_world(&self, ctx: GameServiceContext, key: &str) -> Result<(), ApplicationError> {
+        self.lifecycle.delete_world(ctx, key)
+    }
+
+    pub fn list_personas(
+        &self,
+        ctx: GameServiceContext,
+    ) -> Result<Vec<PlayerCard>, ApplicationError> {
+        self.lifecycle.list_personas(ctx)
     }
 }
 

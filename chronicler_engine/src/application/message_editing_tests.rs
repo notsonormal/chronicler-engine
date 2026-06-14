@@ -125,6 +125,7 @@ mod test_helpers {
 
     pub fn create_test_player() -> PlayerCard {
         PlayerCard {
+            key: "test_player".to_string(),
             sheet: CharacterSheet {
                 name: "Test Player".into(),
                 description: "A test player".into(),

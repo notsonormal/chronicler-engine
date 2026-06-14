@@ -21,6 +21,7 @@
       <button class="tab active" data-tab="game">Game</button>
       <button class="tab" data-tab="settings">Settings</button>
       <button class="tab" data-tab="prompt-presets">Prompt Presets</button>
+      <button class="tab" data-tab="worlds">Worlds</button>
       <button class="tab" data-tab="save-load">Save / Load</button>
       <button class="tab" data-tab="llm-messages">LLM Messages</button>
     </div>
@@ -94,6 +95,13 @@
         hx-trigger="load"
       ></div>
     </div>
+    <div class="tab-content" id="worlds-tab">
+      <div
+        class="worlds-panel"
+        hx-get="/fragment/worlds"
+        hx-trigger="load"
+      ></div>
+    </div>
     <div class="tab-content" id="save-load-tab">
       <div
         class="save-load-panel"
@@ -109,6 +117,19 @@
         hx-swap="innerHTML"
         hx-on::after-swap="restoreLlmExpandedState()"
       ></div>
+    </div>
+
+    <!-- Create/Edit World Modal -->
+    <div id="world-modal" class="modal-overlay" style="display: none;">
+      <div class="modal">
+        <div class="modal-header">
+          <h3 id="world-modal-title">World</h3>
+          <button class="modal-close" onclick="closeWorldModal()">&times;</button>
+        </div>
+        <div class="modal-body" id="world-modal-content">
+          <!-- HTMX swaps the form here -->
+        </div>
+      </div>
     </div>
     <script>
       console.log("[HTMX] Initializing...");
@@ -538,6 +559,34 @@
             }
           });
         };
+
+        // World modal functions
+        window.openWorldModal = function (key) {
+          const modal = document.getElementById("world-modal");
+          const title = document.getElementById("world-modal-title");
+          const content = document.getElementById("world-modal-content");
+          if (key) {
+            title.textContent = "Edit World";
+            htmx.ajax('GET', '/worlds/' + key + '/edit', {target: content, swap: 'innerHTML'});
+          } else {
+            title.textContent = "Create World";
+            htmx.ajax('GET', '/fragment/worlds/new', {target: content, swap: 'innerHTML'});
+          }
+          modal.style.display = "flex";
+        };
+
+        window.closeWorldModal = function () {
+          const modal = document.getElementById("world-modal");
+          modal.style.display = "none";
+        };
+
+        // Close modal on overlay click
+        document.addEventListener("click", function (e) {
+          const modal = document.getElementById("world-modal");
+          if (e.target === modal) {
+            closeWorldModal();
+          }
+        });
       });
     </script>
   </body>

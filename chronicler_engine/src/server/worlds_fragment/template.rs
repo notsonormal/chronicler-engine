@@ -1,0 +1,179 @@
+//! [DOC: docs/system/worlds.md]
+//! Worlds templates
+
+use askama::Template;
+use crate::model::world::WorldCard;
+use crate::model::character::PlayerCard;
+use crate::model::map::MapDef;
+use crate::model::scenario::StartingScenario;
+
+/// Flattened view model for a world row in the panel
+pub struct WorldRowView {
+    pub key: String,
+    pub name: String,
+    pub description: String,
+    pub game_count: usize,
+}
+
+/// View model for persona dropdown options
+pub struct PersonaOption {
+    pub key: String,
+    pub name: String,
+    pub selected: bool,
+}
+
+#[derive(Template)]
+#[template(
+    source = r##"
+<div class="worlds-panel">
+    <button class="btn-new-world" hx-get="/fragment/worlds/new" hx-target="#world-modal-content" hx-swap="innerHTML" onclick="document.getElementById(&quot;world-modal&quot;).style.display=&quot;block&quot;">Create New World</button>
+
+    {% if worlds.is_empty() %}
+    <p>No worlds defined. Create your first world to get started.</p>
+    {% else %}
+    <ul class="worlds-list">
+        {% for world in worlds %}
+        <li class="world-item">
+            <strong>{{ world.name }}</strong> - {{ world.description }} <em>({{ world.game_count }} games)</em>
+            <button hx-get="/fragment/worlds/{{ world.key }}/edit" hx-target="#world-modal-content" hx-swap="innerHTML" onclick="document.getElementById(&quot;world-modal&quot;).style.display=&quot;block&quot;">Edit</button>
+            <button hx-post="/worlds/{{ world.key }}/delete" hx-confirm="Delete this world? This cannot be undone." hx-target="closest .world-item" hx-swap="outerHTML swap:0.3s" class="danger">Delete</button>
+        </li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+</div>
+"##,
+    ext = "html"
+)]
+pub struct WorldsPanelTemplate {
+    pub worlds: Vec<WorldRowView>,
+}
+
+#[derive(Template)]
+#[template(
+    source = r#"
+<div class="world-form-container">
+    <h2>{% if is_edit %}Edit World{% else %}Create New World{% endif %}</h2>
+
+    <form hx-post="{{ form_action }}" hx-target=".worlds-panel" hx-swap="outerHTML" enctype="application/x-www-form-urlencoded">
+        <label>Key: <input type="text" name="key" value="{{ key }}" {% if is_readonly %}readonly{% endif %} required /></label>
+
+        <label>Name: <input type="text" name="name" value="{{ name }}" required /></label>
+
+        <label>Description: <textarea name="description">{{ description }}</textarea></label>
+
+        <label>Global Rules (one per line): <textarea name="global_rules">{{ global_rules }}</textarea></label>
+
+        <label>Starting Room ID: <input type="text" name="starting_room_id" value="{{ starting_room_id }}" /></label>
+
+        <label>Player Persona:
+            <select name="player_key">
+                {% for p in personas %}
+                <option value="{{ p.key }}" {% if p.selected %}selected{% endif %}>{{ p.name }}</option>
+                {% endfor %}
+            </select>
+        </label>
+
+        <label>Default Room Image: <input type="text" name="default_room_image" value="{{ default_room_image }}" /></label>
+
+        <label>Map JSON:
+            <textarea name="map_json" class="json-editor" placeholder="{{ map_placeholder }}">{{ map_json }}</textarea>
+        </label>
+
+        <label>Scenarios JSON:
+            <textarea name="scenarios_json" class="json-editor" placeholder="{{ scenarios_placeholder }}">{{ scenarios_json }}</textarea>
+        </label>
+
+        <button type="submit">{{ submit_text }}</button>
+    </form>
+</div>
+"#,
+    ext = "html"
+)]
+pub struct WorldFormTemplate {
+    pub is_edit: bool,
+    pub key: String,
+    pub name: String,
+    pub description: String,
+    pub global_rules: String,
+    pub starting_room_id: String,
+    pub personas: Vec<PersonaOption>,
+    pub player_key: String,
+    pub default_room_image: String,
+    pub map_json: String,
+    pub scenarios_json: String,
+    pub form_action: String,
+    pub is_readonly: bool,
+    pub map_placeholder: String,
+    pub scenarios_placeholder: String,
+    pub submit_text: String,
+}
+
+impl WorldFormTemplate {
+    pub fn from_world_data(
+        world: Option<&WorldCard>,
+        map: Option<&MapDef>,
+        scenarios: &[StartingScenario],
+        personas: &[PlayerCard],
+    ) -> Self {
+        let is_edit = world.is_some();
+        let default_world = WorldCard::default();
+        let w = world.unwrap_or(&default_world);
+
+        let persona_options: Vec<PersonaOption> = personas
+            .iter()
+            .map(|p| PersonaOption {
+                key: p.key.clone(),
+                name: p.sheet.name.clone(),
+                selected: p.key == w.player_key,
+            })
+            .collect();
+
+        let map_json_str = map
+            .map(|m| serde_json::to_string_pretty(m).unwrap_or_default())
+            .unwrap_or_default();
+
+        let scenarios_json_str = if scenarios.is_empty() {
+            String::new()
+        } else {
+            serde_json::to_string_pretty(scenarios).unwrap_or_default()
+        };
+
+        let (map_placeholder, scenarios_placeholder) = if is_edit {
+            (String::new(), String::new())
+        } else {
+            (
+                r#"{"overworld":{"id":"overworld","name":"Overworld","regions":[]}}"#.to_string(),
+                "[]".to_string(),
+            )
+        };
+
+        Self {
+            is_edit,
+            key: w.key.clone(),
+            name: w.name.clone(),
+            description: w.description.clone(),
+            global_rules: w.global_rules.join("\n"),
+            starting_room_id: w.starting_room_id.clone(),
+            personas: persona_options,
+            player_key: w.player_key.clone(),
+            default_room_image: w.default_room_image.clone().unwrap_or_default(),
+            map_json: map_json_str,
+            scenarios_json: scenarios_json_str,
+            form_action: if is_edit {
+                format!("/worlds/{}", w.key)
+            } else {
+                "/worlds".to_string()
+            },
+            is_readonly: is_edit,
+            map_placeholder,
+            scenarios_placeholder,
+            submit_text: if is_edit {
+                "Update World"
+            } else {
+                "Create World"
+            }
+            .to_string(),
+        }
+    }
+}

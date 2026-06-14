@@ -1,6 +1,6 @@
 use axum::{http::StatusCode};
 
-use crate::server::fragments::games::{
+use crate::server::games_fragment::handlers::{
     create_game_handler, delete_game_handler, list_games_fragment, switch_game_handler,
 };
 use crate::test_support::TestAppBuilder;

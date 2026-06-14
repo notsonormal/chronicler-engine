@@ -37,6 +37,7 @@ impl TestPlayer {
     /// A `PlayerCard` with the given name and sensible defaults.
     pub fn named(name: &str) -> PlayerCard {
         PlayerCard {
+            key: name.to_lowercase().replace(' ', "-"),
             sheet: CharacterSheet {
                 name: name.to_string(),
                 description: format!("The protagonist named {name}."),

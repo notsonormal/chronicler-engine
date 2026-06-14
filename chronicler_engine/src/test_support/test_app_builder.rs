@@ -80,6 +80,7 @@ impl TestAppBuilder {
         };
 
         let player = PlayerCard {
+            key: "test-player".to_string(),
             sheet: crate::model::character::CharacterSheet {
                 name: "Test Player".to_string(),
                 description: "A test player".to_string(),

@@ -108,6 +108,7 @@ fn test_seed_persona_failure() {
 
 fn test_persona_card(_id: &str, name: &str) -> PlayerCard {
     PlayerCard {
+        key: format!("{}_key", name.to_lowercase()),
         sheet: CharacterSheet {
             name: name.to_string(),
             description: "Test description".to_string(),

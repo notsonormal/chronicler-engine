@@ -4,6 +4,37 @@
 
 ### Changed
 
+- **Askama Templates & Module Reorganization** — Migrated worlds and games fragments to Askama templates, extracted games to dedicated sub-module
+  - **Worlds Templates**: Created `src/server/worlds_fragment/template.rs` with `WorldsPanelTemplate` and `WorldFormTemplate` using inline `#[template(source = r#"..."#)]` syntax
+  - **Games Templates**: Created `src/server/games_fragment/template.rs` with `GamesPanelTemplate` for games panel
+  - **String-concat Eliminated**: Replaced 178 lines of `html.push_str(&format!(...))` in `worlds_fragment/fragments.rs` with template calls
+  - **String-concat Eliminated**: Replaced 73 lines of `html.push_str(&format!(...))` in `games_fragment/handlers.rs` with template call
+  - **Module Reorganization**: Moved `src/server/fragments/games.rs` → `src/server/games_fragment/` sub-module (handlers.rs, handlers_tests.rs, mod.rs, template.rs)
+  - **Auto-escaping**: All template fields use Askama's built-in HTML auto-escaping — removed explicit `html_escape()` calls
+  - **View Models**: Added `WorldRowView`, `PersonaOption`, `GameRowView` for template data flattening
+  - **Test Update**: Fixed `test_list_games_fragment_escapes_html` to accept Askama's numeric character references (`&#60;` instead of `&lt;`)
+  - **Documentation**: Updated `docs/architecture/system.md` to reflect `games_fragment` as separate sub-module
+  - Files added: `src/server/worlds_fragment/template.rs`, `src/server/games_fragment/` (mod.rs, handlers.rs, handlers_tests.rs, template.rs)
+  - Files modified: `src/server/worlds_fragment/fragments.rs`, `src/server/fragments/mod.rs`, `src/server/mod.rs`, `src/server/router.rs`, `chronicler_engine/tests/http/fragment.rs`
+  - Tests: 1186 pass (all unchanged, no regressions)
+
+### Added
+
+- **Worlds Management Tab UI** — Complete CRUD interface for multi-world orchestration
+  - **New Tab**: Added "Worlds" tab to dashboard navigation between Prompt Presets and Save/Load tabs
+  - **HTTP Handlers**: `list_worlds_fragment`, `new_world_form_handler`, `edit_world_form_handler`, `create_world_handler`, `update_world_handler`, `delete_world_handler`, `list_personas_fragment` in `src/server/worlds_fragment/`
+  - **Modal Form**: HTMX-driven modal with persona dropdown, map/scenario JSON editors, and full world configuration
+  - **Validation**: Delete blocked if games reference the world (game count check)
+  - **Service Layer**: Added `ApplicationService::get_world()`, `GameLifecycleService::get_world()` delegation methods
+  - **Storage Fix**: InMemory backend now validates game references on delete (matching SQLite behavior)
+  - **Tests**: 6 new tests — 4 HTTP tests (worlds_fragment.rs), 2 integration tests (world_storage.rs)
+  - **HTML/JS**: Updated `assets/index.html` modal structure and `openWorldModal()` to use HTMX AJAX
+  - Files added: `src/server/worlds_fragment/` (handlers.rs, fragments.rs, mod.rs), `tests/http/worlds_fragment.rs`, `tests/integration/storage/world_storage.rs`
+  - Files modified: `src/application/application_service.rs`, `src/application/game_lifecycle.rs`, `src/server/router.rs`, `chronicler_engine/assets/index.html`
+  - Tests: 1186 pass (all-time high)
+
+### Changed
+
 - **Thermo-Nuclear Code Quality Review (ADR-025 Follow-up)** — Comprehensive code quality improvements addressing 6 findings from the ADR-025 multi-world implementation review
   - **BLOCKER Fixed**: Removed `as_game_service_context_or_default()` — all handlers now propagate errors properly instead of silently returning empty defaults. Blank pages on DB corruption replaced with proper 500 errors
   - **Test Boilerplate Eliminated**: Added `TestAppBuilder::build_app_state()` method, removed 5 duplicate `make_test_app_state()` functions from fragment tests (debug_tests.rs, actions_tests.rs, games_tests.rs, history_tests.rs, misc_tests.rs, endpoints_tests.rs, renderers_tests.rs)

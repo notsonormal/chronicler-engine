@@ -46,6 +46,7 @@ fn create_test_room() -> Room {
 
 fn create_test_player() -> PlayerCard {
     PlayerCard {
+        key: "test_player".to_string(),
         sheet: CharacterSheet {
             name: "Test Player".to_string(),
             description: "A brave adventurer.".to_string(),

@@ -242,4 +242,38 @@ impl Storage {
             Backend::Test { .. } => unreachable!(),
         })
     }
+
+    pub fn delete_world(&self, key: &str) -> Result<(), EngineError> {
+        self.with_backend_mut(Operation::DeleteWorld, |backend, _game_id| match backend {
+            Backend::Sqlite { pool } => {
+                let conn = pool.conn();
+                // First check for referencing games
+                let count: i64 = conn.query_row(
+                    "SELECT COUNT(*) FROM games WHERE world_key = ?",
+                    [key],
+                    |row| row.get(0),
+                )?;
+                if count > 0 {
+                    return Err(EngineError::Parse(format!(
+                        "Cannot delete world with {count} games"
+                    )));
+                }
+                conn.execute("DELETE FROM worlds WHERE key = ?", [key])?;
+                // Map deletion cascades via FK
+                Ok(())
+            }
+            Backend::InMemory(data) => {
+                // Check for referencing games
+                let game_count = data.games.iter().filter(|g| g.world_key == key).count();
+                if game_count > 0 {
+                    return Err(EngineError::Parse(format!(
+                        "Cannot delete world with {game_count} games"
+                    )));
+                }
+                data.worlds.retain(|w| w.world_card.key != key);
+                Ok(())
+            }
+            Backend::Test { .. } => unreachable!(),
+        })
+    }
 }
