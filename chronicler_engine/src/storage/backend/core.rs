@@ -95,7 +95,6 @@ pub enum Operation {
     ListWorlds,
     GetWorld,
     SeedWorld,
-    GetWorldId,
     ListPersonas,
     GetPersona,
     SeedPersona,

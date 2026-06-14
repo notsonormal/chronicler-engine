@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-06-14 11:34 UTC*
+*Index last generated: 2026-06-14 12:27 UTC*
 
 ### Root files
 
@@ -84,6 +84,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Phase 3: Server Infrastructure — Coverage Resolution](./plans/archived/server-infrastructure-coverage-2026-06-01.md)
 - [Server Module Refactor](./plans/archived/server-module-refactor-2026-05-31.md)
 - [Test Quality Improvements - June 2026](./plans/archived/test-quality-improvements-2026-06-01.md)
+- [Thermo-Nuclear Code Quality Review: Phase 3 DB-First Loading Migration](./plans/archived/thermo-nuclear-phase3-review-plan.md)
 
 ### `docs/reference/`
 
@@ -122,7 +123,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Specification: Semantic Navigation](./system/navigation.md)
 - [Chronicler Engine Prompt System](./system/prompt_system.md)
 - [Engine Startup & Initialization](./system/startup.md)
-- [Storage System Specification](./system/storage.md)
+- [Storage System](./system/storage.md)
 - [Specification: Text Check System](./system/text_check.md)
 - [System: Auto-Trigger & Reactive Encounters](./system/triggers.md)
 - [Specification: UI Design](./system/ui_design.md)

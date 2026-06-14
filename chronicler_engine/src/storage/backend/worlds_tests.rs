@@ -54,13 +54,14 @@ fn test_get_world_not_found_in_memory() {
 fn test_seed_world_sqlite() {
     let storage = sqlite_storage();
     let (world_card, map) = test_world_data("sqlite_world", "SQLite World");
-    storage.seed_world(&world_card, &map).unwrap();
+    let world_id = storage.seed_world(&world_card, &map).unwrap();
 
     let retrieved = storage.get_world("sqlite_world").unwrap();
     assert!(retrieved.is_some());
     let world_with_map = retrieved.unwrap();
     assert_eq!(world_with_map.world_card.key, "sqlite_world");
     assert_eq!(world_with_map.world_card.name, "SQLite World");
+    assert_eq!(world_id, world_with_map.world_id);
 
     let all = storage.list_worlds().unwrap();
     assert_eq!(all.len(), 1);
@@ -71,8 +72,10 @@ fn test_seed_world_idempotent_in_memory() {
     let storage = Storage::new_in_memory();
     let (world_card, map) = test_world_data("dup_world", "Duplicate World");
 
-    storage.seed_world(&world_card, &map).unwrap();
-    storage.seed_world(&world_card, &map).unwrap();
+    let world_id1 = storage.seed_world(&world_card, &map).unwrap();
+    let world_id2 = storage.seed_world(&world_card, &map).unwrap();
+
+    assert_eq!(world_id1, world_id2);
 
     let worlds = storage.list_worlds().unwrap();
     assert_eq!(worlds.len(), 1);

@@ -87,20 +87,26 @@ Game data is loaded from JSON seed files at startup and persisted to SQLite. Aft
 
 **World Seeding & Loading (Phase 3)**
 
-On first startup (or if DB is empty), `bootstrap::ensure_defaults()` calls `seed_game_data()` which seeds worlds, personas, and characters from JSON files:
-1. Scans `data/worlds/*/world.json` for all worlds
-2. Deserializes `WorldManifest` (contains file pointers: `map_file`, `player_file`, `characters_dir`)
-3. Converts to `WorldCard` via `From<WorldManifest>` (adds `key`, `player_key`, `default_scenario_id`)
-4. Calls `Storage::seed_world(world_card, map)` — INSERT OR IGNORE (idempotent)
-5. Loads `PlayerCard` from `data/personas/<player_file>` and calls `Storage::seed_persona(key, player)` — skip if exists
-6. Loads `NpcCard`s from `data/characters/<characters_dir>/*.json` and seeds each — skip if exists
+On first startup (or if DB is empty), `bootstrap::run()` calls seeding functions:
+
+1. **Prompt Presets:** `ensure_presets()` seeds system and quantifier prompt presets
+2. **Game Data:** `seed_game_data()` seeds worlds, personas, and characters from JSON files:
+   - Scans `data/worlds/*/world.json` for all worlds
+   - Deserializes `WorldManifest` (contains file pointers: `map_file`, `player_file`, `characters_dir`)
+   - Converts to `WorldCard` via `From<WorldManifest>` (adds `key`, `player_key`, `default_scenario_id`)
+   - Calls `Storage::seed_world(world_card, map)` → returns `world_id: i64` (idempotent)
+   - Loads `PlayerCard` from `data/personas/<player_file>` and calls `Storage::seed_persona(key, player)` — skip if exists
+   - Loads `NpcCard`s from `data/characters/<characters_dir>/*.json` and seeds each via `seed_character(world_id, npc)` — skip if exists
 
 After seeding, runtime loading is 100% database-first:
-- `Storage::get_world(key)` → `WorldCard + MapDef`
+
+- `Storage::get_world(key)` → `WorldWithMap { world_id, world_card, map }` (uses `DbWorld::from_row()`)
 - `world_card.player_key` → `Storage::get_persona(key)` → `PlayerCard`
-- `Storage::get_world_id(key)` → `list_characters(world_id)` → `Vec<NpcCard>`
+- `world_with_map.world_id` → `Storage::list_characters(world_id)` → `Vec<NpcCard>`
 
 **File I/O only during seeding**; runtime has zero filesystem coupling.
+
+**Pattern Consistency**: World storage uses `DbWorld::from_row()` + `world_card_from_db()` conversion function, matching persona and character storage.
 
 **`worlds`**
 - `id INTEGER PRIMARY KEY AUTOINCREMENT`

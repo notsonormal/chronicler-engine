@@ -257,26 +257,6 @@ for npc in all_npcs {
 let residents = find_npcs_in_current_location(all_npcs, current_room);
 ```
 
-## WHERE TO LOOK
-| Task | Location | Notes |
-|------|----------|-------|
-| Add game feature | `src/engine/` | Action enum, parser, logic, action_processing |
-| Game flow / service | `src/engine/game_service/` | actions, context, helpers, retry, service |
-| Modify data model | `src/model/` | agent, character, map, scenario, settings, state, trigger, world |
-| LLM client / backends | `src/narrative/llm_client.rs`, `src/narrative/llm/` | High-level client + backend impls (deepseek, mock, ollama, openrouter) |
-| LLM prompts | `src/narrative/prompt/` | budget, builder, context, sanitize, templates, types |
-| Agent system | `src/narrative/agents/` | Registry, trait definitions, quantifier agent |
-| Text checking | `src/narrative/text_check/` | Grammar/spelling via harper_backend |
-| Trigger system | `src/engine/trigger_eval.rs` | Trigger evaluation, condition checking |
-| Web server | `src/server/` | Axum router, WebSocket, HTMX templates |
-| HTMX fragments | `src/server/fragments/` | Actions, endpoints, history, renderers |
-| Settings UI | `src/server/settings_fragment/` | Settings fragments, handlers, template |
-| Bootstrap / startup | `src/bootstrap/` | load, logging, run, scenario, validate |
-| CLI args | `src/cli.rs` | Command-line parsing |
-| App settings | `src/settings.rs` | Settings management |
-| Persistence | `src/storage/` | SQLite db, snapshot storage |
-| Shared test helpers | `src/test_support/` | context, fixtures, in_memory_storage |
-
 ## CONVENTIONS
 - **Module-Level DOC Anchors**: Every `src/` file has `//! [DOC: ...]` on line 1 pointing to domain-specific docs. Remove function-level `/// [DOC:` and `// [DOC:` comments.
 - **LLM backend**: Trait-based (`LlmBackend`), mock via `MockBackend` in tests
@@ -292,20 +272,6 @@ let residents = find_npcs_in_current_location(all_npcs, current_room);
 - **Never** continue previous reasoning after user says stop, wait, nevermind, or asks a direct question. Halt immediately and answer directly.
 - **Never** defend existing architecture as a reason to keep complicated code. If a simpler approach exists, propose it.
 
-## GUARDRAILS (PROGRAMMATIC ENFORCEMENT)
-
-Conventions above are **not advisory** — they are enforced automatically.
-If AI-generated code violates these rules, the build will fail.
-
-### Layer 1: Clippy (Compile-Time)
-`src/lib.rs` declares `#![deny(clippy::unwrap_used, clippy::expect_used, clippy::dbg_macro, clippy::todo, clippy::unimplemented, clippy::print_stdout, clippy::print_stderr)]`.
-Test code is exempt via `#![cfg_attr(test, allow(...))]`.
-Binary code (`main.rs`) is exempt for CLI bootstrap only.
-
-### Layer 2: arch-lint (Test-Time)
-`tests/architecture.rs` runs `arch_lint::check!()` against `arch-lint.toml`.
-
-
 ## DOCUMENTATION INDEX
 `docs/README.md` is **auto-generated**. Do not edit the file list inside the `<!-- AUTO-INDEX -->` block manually.
 
@@ -317,15 +283,6 @@ python scripts/generate_docs_index.py
 To install the git pre-commit hook (regenerates index before every commit):
 ```bash
 python scripts/install_git_hooks.py
-```
-
-### Kimi Code CLI Hook (Optional)
-Add to `~/.kimi/config.toml` to refresh the index at session start:
-```toml
-[[hooks]]
-event = "SessionStart"
-command = "python /absolute/path/to/chronicler_engine/scripts/kimi_hook_wrapper.py"
-timeout = 10
 ```
 
 ## COMMANDS

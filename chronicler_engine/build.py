@@ -501,7 +501,7 @@ def main():
         return 0
 
     total_steps = (
-        8  # clippy, arch, guardrails, test-structure, build, copy assets, tests, report/skip
+        6  # clippy, test-structure, docstrings, copy assets, tests, report/skip
     )
     if not args.no_fmt:
         total_steps += 1
@@ -541,16 +541,6 @@ def main():
     )
 
     timed_step(
-        "Running architecture guardrail tests...",
-        "cargo nextest run --test architecture",
-        env=cargo_env,
-    )
-
-    timed_step(
-        "Running custom guardrails tests...", "cargo nextest run --test guardrails", env=cargo_env
-    )
-
-    timed_step(
         "Running test structure guardrail...",
         "python scripts/check_test_structure.py",
         env=cargo_env,
@@ -559,12 +549,6 @@ def main():
     timed_step(
         "Running Python docstring guardrail...",
         "python scripts/check_python_docstrings.py",
-        env=cargo_env,
-    )
-
-    timed_step(
-        f"Building ({build_profile})...",
-        f"cargo build {'--release' if args.release else ''}".strip(),
         env=cargo_env,
     )
 

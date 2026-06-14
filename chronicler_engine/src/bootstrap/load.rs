@@ -1,6 +1,6 @@
 //! [DOC: docs/system/startup.md]
-//! Data loading and initialization routines
-#![allow(dead_code)] // Legacy functions used by bootstrap/load_tests.rs
+//! Game data seeding and initialization routines
+
 use std::{fs, path::Path};
 
 use crate::error::EngineError;
@@ -25,60 +25,7 @@ pub(crate) fn read_json_file<T: serde::de::DeserializeOwned>(
     })
 }
 
-pub fn load_world_manifest(world_id: &str, data_dir: &Path) -> crate::error::Result<WorldManifest> {
-    let path = data_dir.join("worlds").join(world_id).join("world.json");
-    read_json_file(&path)
-}
-
-pub fn initialize_world_from_manifest(
-    world_id: &str,
-    data_dir: &Path,
-) -> crate::error::Result<(WorldManifest, MapDef, PlayerCard, Vec<NpcCard>)> {
-    let world_dir = data_dir.join("worlds").join(world_id);
-
-    if !world_dir.exists() {
-        return Err(EngineError::WorldNotFound(world_id.to_string()));
-    }
-
-    let manifest = load_world_manifest(world_id, data_dir)?;
-
-    let map_path = world_dir.join(&manifest.map_file);
-    let map: MapDef = read_json_file(&map_path)?;
-
-    let player_path = data_dir.join("personas").join(&manifest.player_file);
-    let player: PlayerCard = read_json_file(&player_path)?;
-
-    let mut npcs = Vec::new();
-    let characters_group = if manifest.characters_dir.is_empty() {
-        world_id
-    } else {
-        &manifest.characters_dir
-    };
-    let chars_dir = data_dir.join("characters").join(characters_group);
-    if chars_dir.is_dir() {
-        for entry in fs::read_dir(&chars_dir)
-            .map_err(|e| EngineError::Io(format!("read_dir {}: {e}", chars_dir.display())))?
-            .flatten()
-        {
-            let path = entry.path();
-            if path.extension().and_then(|s| s.to_str()) == Some("json") {
-                match read_json_file::<NpcCard>(&path) {
-                    Ok(npc) => npcs.push(npc),
-                    Err(e) => {
-                        eprintln!("Warning: Failed to parse NPC file {path:?}: {e}");
-                    }
-                }
-            }
-        }
-    }
-
-    Ok((manifest, map, player, npcs))
-}
-
-pub(crate) fn seed_game_data(
-    storage: &Storage,
-    data_dir: &std::path::Path,
-) -> crate::error::Result<()> {
+pub fn seed_game_data(storage: &Storage, data_dir: &std::path::Path) -> crate::error::Result<()> {
     let worlds_dir = data_dir.join("worlds");
     if !worlds_dir.exists() {
         return Ok(());
@@ -105,34 +52,32 @@ pub(crate) fn seed_game_data(
             }
         };
         let world_key = manifest.id.clone();
-
         let player_key = derive_player_key(&manifest.player_file);
+        let characters_dir = manifest.characters_dir.clone();
 
-        let world_id = match storage.get_world(&world_key)? {
+        let world_with_map = storage.get_world(&world_key)?;
+        let world_id = match world_with_map {
             Some(existing) => existing.world_id,
             None => {
-                let world_card: WorldCard = manifest.clone().into();
-                let map_path = world_dir.join(&manifest.map_file);
+                let map_file = manifest.map_file.clone();
+                let world_card: WorldCard = manifest.into();
+                let map_path = world_dir.join(&map_file);
                 let map: MapDef = read_json_file(&map_path)?;
-                storage.seed_world(&world_card, &map)?;
-
-                storage.get_world_id(&world_key)?.ok_or_else(|| {
-                    EngineError::Config(format!("World '{world_key}' not found after seeding"))
-                })?
+                storage.seed_world(&world_card, &map)?
             }
         };
 
         if storage.get_persona(&player_key)?.is_none() {
-            let player_path = data_dir.join("personas").join(&manifest.player_file);
+            let player_path = data_dir.join("personas").join(format!("{player_key}.json"));
             let player: PlayerCard = read_json_file(&player_path)?;
             storage.seed_persona(&player_key, &player)?;
             tracing::info!("Seeded persona: {player_key}");
         }
 
-        let chars_group = if manifest.characters_dir.is_empty() {
+        let chars_group = if characters_dir.is_empty() {
             world_key.as_str()
         } else {
-            manifest.characters_dir.as_str()
+            characters_dir.as_str()
         };
         let chars_dir = data_dir.join("characters").join(chars_group);
         if chars_dir.is_dir() {

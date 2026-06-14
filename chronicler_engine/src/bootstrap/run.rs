@@ -169,7 +169,12 @@ pub fn run(args: Args) -> crate::error::Result<()> {
     let db_path = db_dir.join(format!("chronicler_{}.db", args.port));
     let db_pool = crate::storage::db::DbPool::new(db_path.to_str().unwrap_or("chronicler.db"))?;
 
-    if let Err(e) = ensure_defaults(&db_pool, &data_dir) {
+    if let Err(e) = ensure_presets(&db_pool, &data_dir) {
+        tracing::warn!("Failed to seed prompt presets: {e}");
+    }
+
+    let seed_storage = crate::storage::Storage::new_sqlite(db_pool.clone(), PRESET_STORAGE_GAME_ID);
+    if let Err(e) = super::load::seed_game_data(&seed_storage, &data_dir) {
         tracing::warn!("Failed to seed game data: {e}");
     }
 
@@ -182,11 +187,7 @@ pub fn run(args: Args) -> crate::error::Result<()> {
     let world_card = world_with_map.world_card;
     let map = world_with_map.map;
 
-    let player_key = if world_card.player_key.is_empty() {
-        "player".to_string()
-    } else {
-        world_card.player_key.clone()
-    };
+    let player_key = world_card.player_key.clone();
     let player = lookup_storage.get_persona(&player_key)?.ok_or_else(|| {
         crate::error::EngineError::Config(format!("Persona '{player_key}' not found"))
     })?;
@@ -406,7 +407,7 @@ pub(crate) fn list_game_names_for_world(
         .map_err(|e| crate::error::EngineError::Config(format!("Failed to read game names: {e}")))
 }
 
-pub(crate) fn ensure_defaults(
+pub(crate) fn ensure_presets(
     db_pool: &crate::storage::db::DbPool,
     data_dir: &std::path::Path,
 ) -> crate::error::Result<()> {
@@ -470,8 +471,6 @@ pub(crate) fn ensure_defaults(
             tracing::info!("Seeded {} prompt preset: {}", preset_type.as_str(), id);
         }
     }
-
-    super::load::seed_game_data(&storage, data_dir)?;
 
     Ok(())
 }

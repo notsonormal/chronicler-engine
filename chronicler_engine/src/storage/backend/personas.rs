@@ -5,13 +5,8 @@ use chrono::Utc;
 
 use crate::error::EngineError;
 use crate::model::character::PlayerCard;
-use crate::storage::backend::{Backend, Operation, PlayerCardWithKey, Storage};
+use crate::storage::backend::{empty_to_none, Backend, Operation, PlayerCardWithKey, Storage};
 use crate::storage::models::persona::DbPersona;
-
-/// Helper: convert empty string to None for optional fields
-fn empty_to_none(s: &str) -> Option<&str> {
-    if s.is_empty() { None } else { Some(s) }
-}
 
 impl Storage {
     pub fn list_personas(&self) -> Result<Vec<PlayerCard>, EngineError> {

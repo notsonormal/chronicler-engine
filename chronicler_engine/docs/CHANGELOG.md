@@ -4,14 +4,15 @@
 
 ### Changed
 
-- **Phase 3 Migration: Complete DB-first loading** — `run()` now loads all world/persona/character data from SQLite, completing the migration started on 2026-06-13
-  - Added `seed_game_data()` to `load.rs` — idempotent seeding of worlds/personas/characters from JSON files called by `ensure_defaults()`
-  - `run()` replaced `initialize_world_from_manifest()` with `Storage::get_world()`, `get_persona()`, `list_characters()` — zero file I/O at runtime
-  - Removed `effective_player_key()` method — `WorldCard::Default` now sets `player_key = "player"` directly
-  - Renamed `WorldSeed` → `InMemoryWorld` in storage backend
-  - Corrupt `world.json` files now skip that world with a warning instead of aborting the entire seeding loop
-  - Removed `validate_loaded_data` call from `run()` — validation happens at seed time
-  - Modified files: `src/bootstrap/run.rs`, `src/bootstrap/load.rs`, `src/model/world.rs`, `src/storage/backend/core.rs`, `src/storage/backend/worlds.rs`
+- **Phase 3 Code Quality Review & Pattern Alignment** — Comprehensive cleanup of Phase 3 DB-first migration
+  - **Dead Code Removed**: Deleted `load_world_manifest()`, `initialize_world_from_manifest()` from `load.rs`, removed `#![allow(dead_code)]`
+  - **DB Seed Pattern**: `seed_world()` now returns `Result<i64>` (world_id) — no more write-then-read roundtrip
+  - **Removed**: `get_world_id()` method entirely (no longer needed)
+  - **DB Model Pattern**: World storage now uses `DbWorld::from_row()` + `world_card_from_db()` conversion (matches persona/character)
+  - **Cleanup**: Moved duplicate `empty_to_none()` helper to `backend/helpers.rs`
+  - **Split Responsibilities**: Renamed `ensure_defaults()` → `ensure_presets()`, explicit `seed_game_data()` call in `run()`
+  - **Runtime Simplification**: Removed `player_key` empty-fallback conditional in `run()`
+  - **Tests**: 1180 tests pass, clippy clean, all guardrails pass
 
 ## 2026-06-13
 

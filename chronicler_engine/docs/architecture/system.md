@@ -164,35 +164,8 @@ Each `Connection` contains: `id`, `name`, `provider`, `model`, `api_key` (option
 - `OPENROUTER_API_KEY` env var used as fallback when connection `api_key` is None
 - `LLM_BACKEND` env var is **not** consulted (settings file is sole source of truth)
 
-### 5.5. The Storage Tier (`crate::storage::*`) — World Seeding & Loading
-
-The storage layer implements a seed-once, load-from-DB pattern for worlds, personas, and characters.
-
-#### Phase 1: DB Schema (ADR-024)
-Migration v11 creates tables for:
-- `worlds`: key, name, description, global_rules, starting_room_id, scenarios, default_scenario_id, default_room_image, **player_key**
-- `maps`: world_id (FK), map_data (JSON)
-- `personas`: key, name, description, personality, scenario, example_dialogue, etc.
-- `characters`: world_id (FK), key, name, description, personality, scenario, triggers, relationships, etc.
-
-#### Phase 2: Seeding (File → DB, idempotent)
-On first startup, `bootstrap::ensure_defaults()`:
-1. Scans `data/worlds/*/world.json` and deserializes `WorldManifest`
-2. Converts to `WorldCard` via `From<WorldManifest>` (adds `key`, `player_key`, `default_scenario_id`)
-3. Loads `MapDef` from referenced file and calls `Storage::seed_world(world_card, map)` — INSERT OR IGNORE
-4. Loads `PlayerCard` from `data/personas/<player_file>` and calls `Storage::seed_persona(key, player)` — skip if exists
-5. Loads `NpcCard`s from `data/characters/<characters_dir>/*.json` and seeds each — skip if exists
-6. Seeds prompt presets similarly
-
-**Idempotency**: All seed operations skip existing data by key. Safe to call on every startup.
-
-#### Phase 3: Runtime Loading (DB-first)
-After seeding, the `run()` function loads from DB:
-- `Storage::get_world(key)` → `WorldCard + MapDef`
-- `world_card.player_key` → `Storage::get_persona(key)` → `PlayerCard`
-- `Storage::get_world_id(key)` → `list_characters(world_id)` → `Vec<NpcCard>`
-
-**No file I/O at runtime**: Worlds can be updated via DB directly or re-seeded by replacing JSON files and clearing DB.
+### 5.5. The Storage Tier (`crate::storage`) — World Seeding & Loading
+Seed-once, load-from-DB pattern for worlds, personas, and characters. See [`system/storage.md`](../system/storage.md) for the full specification.
 
 ### 6. The Error Tier (`crate::error`)
 Unified error type shared across all tiers.
@@ -202,55 +175,11 @@ Unified error type shared across all tiers.
 - **`InternalError`**: Invariant violations
 
 ### 7. The Storage Tier (`crate::storage`)
-SQLite-based persistence for game state, LLM call forensics, and game data (worlds, maps, characters, personas, settings).
-
-#### Database Schema
-
-**Core Tables** (game sessions and narrative):
-- `games` — top-level game session record (`id`, `name`, `world_name`, `created_at`, `updated_at`)
-- `game_state_snapshots` — serialized game state metadata, scoped to `game_id`
-- `messages` — narrative history, scoped to `game_id` (`id`, `game_id`, `sender`, `message_type`, `timestamp`, `active_swipe_index`, `is_deleted`)
-- `message_swipes` — per-message swipe versions (`id`, `message_id`, `swipe_index`, `text`, `snapshot_id`, `location_header`, `event_header`), cascades on message delete
-- `llm_messages` — LLM API call logging (not game-scoped)
-- `prompt_presets` — system and quantifier prompt presets
-
-**Game Data Tables** (Migration v10, seeded from JSON at startup):
-- `worlds` — world definitions (`id`, `key`, `name`, `description`, `global_rules[]`, `starting_room_id`, `scenarios[]`, `default_scenario_id`, `default_room_image`, timestamps). `key` is the original string identifier (e.g., `redmist_estate`) for lookups.
-- `maps` — world maps (`id`, `world_id` FK, `map_data` JSON blob containing full `MapDef` with overworld/regions/rooms, timestamps). 1:1 with `worlds`.
-- `personas` — player characters (`id`, `key`, `name`, `description`, `personality`, `scenario`, `example_dialogue`, `summary`, `profile_image`, `headshot_image`, `inventory[]`, timestamps). `key` is filename stem.
-- `characters` — NPCs (`id`, `key`, `world_id` FK, `name`, `description`, `personality`, `scenario`, `example_dialogue`, `summary`, images, `inventory[]`, `triggers[]`, `relationships[]`, timestamps). `UNIQUE(key, world_id)`.
-- `settings` — singleton row (`id=1`, `connections[]`, `narration_connection_id`, `quantifier_connection_id`, `response_length`, `text_check`, `agents[]`, prompt preset IDs, timestamps).
-
-#### Storage Structure
-
-Unified `Storage` struct with `Backend` enum (`Sqlite`, `InMemory`, `Test`). All table operations are methods on `Storage` — no repository structs or trait objects. DB row structs live in `src/storage/models/`; domain-model mappers in `src/storage/mappers/`. Directory structure: `mod.rs`, `db.rs` (schema + migrations), `backend/` (CRUD implementations split by table: `core.rs`, `games.rs`, `snapshots.rs`, `messages.rs`, `swipes.rs`, `presets.rs`, `llm_messages.rs`, `worlds.rs`, `personas.rs`, `characters.rs`, `settings.rs`), `models/` (row structs), `mappers/` (serialization logic), plus test files.
-
-#### Seeding Pattern
-
-Game data is seeded from JSON files at application startup via `bootstrap::ensure_defaults()`:
-- **Idempotent**: Skips seeding if key already exists with content
-- **Worlds**: Reads `data/worlds/<key>/world.json` + `map.json` + `player.json` + `characters/*.json`
-- **Settings**: Reads `data/settings.json`
-- **Prompt presets**: Reads `data/prompt_presets/{system,quantifier}/*.json`
-
-After seeding, the database is the **sole source of truth** at runtime. JSON files act as seed templates only.
-
-#### Settings Persistence
-
-Settings use a DB-backed singleton pattern:
-- `AppSettings::save()` writes to the `settings` table (not file I/O)
-- `load_settings()` reads from DB (initialized during bootstrap)
-- All UI handlers automatically persist changes via DB write-through
-- See `src/settings.rs` for the `init_settings_db()` initialization pattern
-- See ADR-024 for the migration decision and seed pattern rationale
-
-#### GameStateSnapshot
-
-Serializable subset of `GameState` for persistence (messages excluded; hydrated separately). Lives in `crate::model::state_snapshot`.
+Unified `Storage` struct with `Backend` enum (`Sqlite`, `InMemory`, `Test`). All table operations are methods on `Storage` — no repository structs or trait objects. Schema lives in `src/storage/db.rs`; backend CRUD modules in `src/storage/backend/` (one file per table). See [`system/storage.md`](../system/storage.md) for design decisions, seeding pattern, module boundaries, and testing strategy.
 
 ### 8. The Bootstrap Tier (`crate::bootstrap`)
-World loading, validation, and server initialization.
-- **`load`**: World data loading from `data/worlds/`
+World seeding, validation, and server initialization.
+- **`load`**: Game data seeding from JSON files (idempotent, file I/O only during seeding) — `ensure_presets()`, `seed_game_data()`
 - **`validate`**: World data validation (rooms, NPCs, triggers)
 - **`scenario`**: Starting scenario selection
 - **`logging`**: Structured logging setup
@@ -291,8 +220,8 @@ For file-to-module mapping, use `cargo doc` or navigate `src/` directly. Files f
 
 The following concerns are documented in dedicated `docs/system/` files. Those are the authoritative source — this file covers module structure only.
 
-|| Topic | Document |
-|-------|----------|
+||  Topic | Document |
+||-------|----------|
 || Dashboard layout, tabs, polling, edit/retry UI | [`system/dashboard.md`](../system/dashboard.md) |
 || UI design tokens, CSS components, animations | [`system/ui_design.md`](../system/ui_design.md) |
 || Game loop phases, retry flow, status phases | [`system/game_flow.md`](../system/game_flow.md) |
@@ -302,6 +231,7 @@ The following concerns are documented in dedicated `docs/system/` files. Those a
 || LLM infrastructure, backends, logging, tracing | [`system/llm_processing.md`](../system/llm_processing.md) |
 || Prompt layers, token budgets, prompt composition | [`system/prompt_system.md`](../system/prompt_system.md) |
 || Dynamic room creation, fallback behavior | [`system/dynamic_rooms.md`](../system/dynamic_rooms.md) |
+|| Storage design, seeding, backend enum | [`system/storage.md`](../system/storage.md) |
 ## Error Strategy
 
 A unified error type (`crate::error::EngineError`) is shared across all tiers for consistent error propagation — from data loading through LLM failures to HTTP responses. See `src/error.rs` for the full variant list.

@@ -1,4 +1,4 @@
-use crate::bootstrap::run::{ensure_defaults, find_latest_game_for_world, list_game_names_for_world};
+use crate::bootstrap::run::{ensure_presets, find_latest_game_for_world, list_game_names_for_world};
 use crate::model::prompt_preset::PresetType;
 use crate::storage::Storage;
 #[test]
@@ -265,14 +265,14 @@ fn test_list_game_names_for_world_error_handling() {
     assert!(result.is_err() || result.unwrap().is_empty());
 }
 #[test]
-fn test_ensure_defaults_empty_data_dir() {
+fn test_ensure_presets_empty_data_dir() {
     let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
     let temp_data = tempfile::TempDir::new().unwrap();
-    let result = ensure_defaults(&db_pool, temp_data.path());
+    let result = ensure_presets(&db_pool, temp_data.path());
     assert!(result.is_ok());
 }
 #[test]
-fn test_ensure_defaults_creates_system_preset() {
+fn test_ensure_presets_creates_system_preset() {
     let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
     let temp_data = tempfile::TempDir::new().unwrap();
     let system_dir = temp_data.path().join("prompt_presets").join("system");
@@ -289,7 +289,7 @@ fn test_ensure_defaults_creates_system_preset() {
         serde_json::to_string_pretty(&preset_content).unwrap(),
     )
     .unwrap();
-    ensure_defaults(&db_pool, temp_data.path()).unwrap();
+    ensure_presets(&db_pool, temp_data.path()).unwrap();
     let storage = Storage::new_sqlite(db_pool, 1);
     let presets = storage.list_presets(PresetType::System).unwrap();
     assert_eq!(presets.len(), 1);
@@ -301,7 +301,7 @@ fn test_ensure_defaults_creates_system_preset() {
     );
 }
 #[test]
-fn test_ensure_defaults_creates_quantifier_preset() {
+fn test_ensure_presets_creates_quantifier_preset() {
     let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
     let temp_data = tempfile::TempDir::new().unwrap();
     let quantifier_dir = temp_data.path().join("prompt_presets").join("quantifier");
@@ -317,14 +317,14 @@ fn test_ensure_defaults_creates_quantifier_preset() {
         serde_json::to_string_pretty(&preset_content).unwrap(),
     )
     .unwrap();
-    ensure_defaults(&db_pool, temp_data.path()).unwrap();
+    ensure_presets(&db_pool, temp_data.path()).unwrap();
     let storage = Storage::new_sqlite(db_pool, 1);
     let presets = storage.list_presets(PresetType::Quantifier).unwrap();
     assert_eq!(presets.len(), 1);
     assert_eq!(presets[0].id, "test_quantifier");
 }
 #[test]
-fn test_ensure_defaults_skips_existing_preset_with_content() {
+fn test_ensure_presets_skips_existing_preset_with_content() {
     let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
     let temp_data = tempfile::TempDir::new().unwrap();
     let system_dir = temp_data.path().join("prompt_presets").join("system");
@@ -352,13 +352,13 @@ fn test_ensure_defaults_skips_existing_preset_with_content() {
         preset_type: PresetType::System,
     };
     storage.save_preset(&existing).unwrap();
-    ensure_defaults(&db_pool, temp_data.path()).unwrap();
+    ensure_presets(&db_pool, temp_data.path()).unwrap();
     let found = storage.get_preset("existing_preset").unwrap().unwrap();
     assert_eq!(found.name, "Original Name");
     assert_eq!(found.role, Some("Original role".to_string()));
 }
 #[test]
-fn test_ensure_defaults_updates_empty_preset() {
+fn test_ensure_presets_updates_empty_preset() {
     let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
     let temp_data = tempfile::TempDir::new().unwrap();
     let system_dir = temp_data.path().join("prompt_presets").join("system");
@@ -386,32 +386,32 @@ fn test_ensure_defaults_updates_empty_preset() {
         preset_type: PresetType::System,
     };
     storage.save_preset(&empty).unwrap();
-    ensure_defaults(&db_pool, temp_data.path()).unwrap();
+    ensure_presets(&db_pool, temp_data.path()).unwrap();
     let found = storage.get_preset("empty_preset").unwrap().unwrap();
     assert_eq!(found.name, "Updated Name");
     assert_eq!(found.role, Some("New role from file".to_string()));
 }
 #[test]
-fn test_ensure_defaults_ignores_non_json_files() {
+fn test_ensure_presets_ignores_non_json_files() {
     let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
     let temp_data = tempfile::TempDir::new().unwrap();
     let system_dir = temp_data.path().join("prompt_presets").join("system");
     std::fs::create_dir_all(&system_dir).unwrap();
     std::fs::write(system_dir.join("readme.txt"), "This is not a preset").unwrap();
     std::fs::write(system_dir.join("data.yaml"), "key: value").unwrap();
-    ensure_defaults(&db_pool, temp_data.path()).unwrap();
+    ensure_presets(&db_pool, temp_data.path()).unwrap();
     let storage = Storage::new_sqlite(db_pool, 1);
     let presets = storage.list_presets(PresetType::System).unwrap();
     assert!(presets.is_empty(), "Non-JSON files should be ignored");
 }
 #[test]
-fn test_ensure_defaults_handles_invalid_json() {
+fn test_ensure_presets_handles_invalid_json() {
     let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
     let temp_data = tempfile::TempDir::new().unwrap();
     let system_dir = temp_data.path().join("prompt_presets").join("system");
     std::fs::create_dir_all(&system_dir).unwrap();
     std::fs::write(system_dir.join("invalid.json"), "not valid json {").unwrap();
-    let result = ensure_defaults(&db_pool, temp_data.path());
+    let result = ensure_presets(&db_pool, temp_data.path());
     assert!(result.is_err());
     assert!(
         result
@@ -421,7 +421,7 @@ fn test_ensure_defaults_handles_invalid_json() {
     );
 }
 #[test]
-fn test_ensure_defaults_uses_default_id_for_missing_id() {
+fn test_ensure_presets_uses_default_id_for_missing_id() {
     let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
     let temp_data = tempfile::TempDir::new().unwrap();
     let system_dir = temp_data.path().join("prompt_presets").join("system");
@@ -436,7 +436,7 @@ fn test_ensure_defaults_uses_default_id_for_missing_id() {
         serde_json::to_string_pretty(&preset_content).unwrap(),
     )
     .unwrap();
-    ensure_defaults(&db_pool, temp_data.path()).unwrap();
+    ensure_presets(&db_pool, temp_data.path()).unwrap();
     let storage = Storage::new_sqlite(db_pool, 1);
     let presets = storage.list_presets(PresetType::System).unwrap();
     assert_eq!(presets.len(), 1);
@@ -446,7 +446,7 @@ fn test_ensure_defaults_uses_default_id_for_missing_id() {
     );
 }
 #[test]
-fn test_ensure_defaults_all_fields_mapped() {
+fn test_ensure_presets_all_fields_mapped() {
     let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
     let temp_data = tempfile::TempDir::new().unwrap();
     let system_dir = temp_data.path().join("prompt_presets").join("system");
@@ -465,7 +465,7 @@ fn test_ensure_defaults_all_fields_mapped() {
         serde_json::to_string_pretty(&preset_content).unwrap(),
     )
     .unwrap();
-    ensure_defaults(&db_pool, temp_data.path()).unwrap();
+    ensure_presets(&db_pool, temp_data.path()).unwrap();
     let storage = Storage::new_sqlite(db_pool, 1);
     let found = storage.get_preset("full_preset").unwrap().unwrap();
     assert_eq!(found.name, "Full Preset");
@@ -477,7 +477,7 @@ fn test_ensure_defaults_all_fields_mapped() {
     assert_eq!(found.preset_type, PresetType::System);
 }
 #[test]
-fn test_ensure_defaults_both_types() {
+fn test_ensure_presets_both_types() {
     let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
     let temp_data = tempfile::TempDir::new().unwrap();
     let system_dir = temp_data.path().join("prompt_presets").join("system");
@@ -504,7 +504,7 @@ fn test_ensure_defaults_both_types() {
         .unwrap(),
     )
     .unwrap();
-    ensure_defaults(&db_pool, temp_data.path()).unwrap();
+    ensure_presets(&db_pool, temp_data.path()).unwrap();
     let storage = Storage::new_sqlite(db_pool, 1);
     let system = storage.list_presets(PresetType::System).unwrap();
     let quantifier = storage.list_presets(PresetType::Quantifier).unwrap();
@@ -514,7 +514,7 @@ fn test_ensure_defaults_both_types() {
     assert_eq!(quantifier[0].id, "quantifier_test");
 }
 #[test]
-fn test_ensure_defaults_idempotent() {
+fn test_ensure_presets_idempotent() {
     let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
     let temp_data = tempfile::TempDir::new().unwrap();
     let system_dir = temp_data.path().join("prompt_presets").join("system");
@@ -529,8 +529,8 @@ fn test_ensure_defaults_idempotent() {
         .unwrap(),
     )
     .unwrap();
-    ensure_defaults(&db_pool, temp_data.path()).unwrap();
-    ensure_defaults(&db_pool, temp_data.path()).unwrap();
+    ensure_presets(&db_pool, temp_data.path()).unwrap();
+    ensure_presets(&db_pool, temp_data.path()).unwrap();
     let storage = Storage::new_sqlite(db_pool, 1);
     let presets = storage.list_presets(PresetType::System).unwrap();
     assert_eq!(presets.len(), 1);
