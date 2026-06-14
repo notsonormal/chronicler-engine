@@ -109,11 +109,24 @@ fn make_test_ctx(
     }
 }
 
+/// Seed a test world for game-related tests
+fn seed_test_world(storage: &Storage) {
+    use chronicler_engine::test_support::{TestWorld, TestMap, TestPlayer};
+    let world = TestWorld::minimal();
+    let map = TestMap::single_room("start");
+    storage.seed_world(&world, &map).expect("seed world");
+    let player = TestPlayer::standard();
+    storage
+        .seed_persona(&world.player_key, &player)
+        .expect("seed persona");
+}
+
 #[test]
 fn test_create_game_with_scenario() {
     let db_pool =
         chronicler_engine::storage::db::DbPool::new(":memory:").expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
+    seed_test_world(&storage);
     let game_service = create_game_service();
     let state = create_basic_test_state();
     let ctx = make_test_ctx(storage.clone(), game_service.clone(), state);
@@ -158,6 +171,7 @@ fn test_reset_creates_scenario_message() {
     let db_pool =
         chronicler_engine::storage::db::DbPool::new(":memory:").expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
+    seed_test_world(&storage);
     let game_service = create_game_service();
     let state = create_basic_test_state();
     let ctx = make_test_ctx(storage.clone(), game_service.clone(), state);
@@ -193,6 +207,7 @@ fn test_switch_game_loads_correct_state() {
     let db_pool =
         chronicler_engine::storage::db::DbPool::new(":memory:").expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
+    seed_test_world(&storage);
     let game_service = create_game_service();
     let state = create_basic_test_state();
     let ctx = make_test_ctx(storage.clone(), game_service.clone(), state);
@@ -312,6 +327,7 @@ fn test_create_game_name_uniqueness() {
     let db_pool =
         chronicler_engine::storage::db::DbPool::new(":memory:").expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
+    seed_test_world(&storage);
     let game_service = create_game_service();
     let state = create_basic_test_state();
     let ctx = make_test_ctx(storage.clone(), game_service.clone(), state);
@@ -325,20 +341,24 @@ fn test_create_game_name_uniqueness() {
     assert!(result2.is_ok(), "Second create_game should succeed");
 
     let games = lifecycle_service.list_games(ctx.clone()).unwrap();
-    assert_eq!(
-        games.len(),
-        3,
-        "Should have exactly 3 games (default + 2 created)"
-    );
-    let world_date = chrono::Utc::now().format("%Y-%m-%d");
-    let name_pattern = format!("Test Realm_{world_date}");
+    // Filter to only the games we created (exclude "default" game)
+    let non_default_games: Vec<_> = games.iter().filter(|g| g.name != "default").collect();
 
-    let has_suffix_1 = games
+    assert_eq!(
+        non_default_games.len(),
+        2,
+        "Should have exactly 2 non-default games"
+    );
+
+    let world_date = chrono::Utc::now().format("%Y-%m-%d");
+    let name_pattern = format!("Test World_{world_date}");
+
+    let has_suffix_1 = non_default_games
         .iter()
-        .any(|g| g.name.starts_with(&name_pattern) && g.name.ends_with("_1"));
-    let has_suffix_2 = games
+        .any(|g| g.name == format!("{name_pattern}_1"));
+    let has_suffix_2 = non_default_games
         .iter()
-        .any(|g| g.name.starts_with(&name_pattern) && g.name.ends_with("_2"));
+        .any(|g| g.name == format!("{name_pattern}_2"));
     assert!(has_suffix_1, "Should have game with _1 suffix");
     assert!(has_suffix_2, "Should have game with _2 suffix");
 }
@@ -348,6 +368,7 @@ fn test_switch_game_world_mismatch() {
     let db_pool =
         chronicler_engine::storage::db::DbPool::new(":memory:").expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
+    seed_test_world(&storage);
     let game_service = create_game_service();
 
     let mut world_a = create_test_world_with_scenario();
@@ -381,17 +402,11 @@ fn test_switch_game_world_mismatch() {
 
     let ctx_b = make_test_ctx(storage.clone(), game_service.clone(), state_b);
 
+    // Cross-world switching is now allowed - world context loads from DB
     let result = lifecycle_service.switch_game(ctx_b, game_id);
     assert!(
-        result.is_err(),
-        "switch_game should fail when world doesn't match"
-    );
-    assert!(
-        matches!(
-            result.unwrap_err(),
-            chronicler_engine::application::ApplicationError::Validation(_)
-        ),
-        "Error should be Validation error"
+        result.is_ok(),
+        "switch_game should succeed even for different worlds"
     );
 }
 
@@ -400,6 +415,7 @@ fn test_delete_game_removes() {
     let db_pool =
         chronicler_engine::storage::db::DbPool::new(":memory:").expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
+    seed_test_world(&storage);
     let game_service = create_game_service();
     let state = create_basic_test_state();
     let ctx = make_test_ctx(storage.clone(), game_service.clone(), state);
@@ -434,6 +450,7 @@ fn test_delete_game_active_rejected() {
     let db_pool =
         chronicler_engine::storage::db::DbPool::new(":memory:").expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
+    seed_test_world(&storage);
     let game_service = create_game_service();
     let state = create_basic_test_state();
     let ctx = make_test_ctx(storage.clone(), game_service.clone(), state);

@@ -4,6 +4,31 @@
 
 ### Changed
 
+- **Thermo-Nuclear Code Quality Review (ADR-025 Follow-up)** — Comprehensive code quality improvements addressing 6 findings from the ADR-025 multi-world implementation review
+  - **BLOCKER Fixed**: Removed `as_game_service_context_or_default()` — all handlers now propagate errors properly instead of silently returning empty defaults. Blank pages on DB corruption replaced with proper 500 errors
+  - **Test Boilerplate Eliminated**: Added `TestAppBuilder::build_app_state()` method, removed 5 duplicate `make_test_app_state()` functions from fragment tests (debug_tests.rs, actions_tests.rs, games_tests.rs, history_tests.rs, misc_tests.rs, endpoints_tests.rs, renderers_tests.rs)
+  - **In-Memory Storage Cleanup**: Removed default game from `Storage::new_in_memory()` that referenced nonexistent world "default" — calling code must now explicitly create games
+  - **Documentation Added**: Clarified `Game::world_name` vs `Game::world_key` design intent — `world_name` for display (avoids JOIN), `world_key` as stable foreign key (ADR-025)
+  - **SQL Comment Added**: Annotated raw INSERT in `bootstrap/run.rs` noting it must match `Storage::create_game()` column list
+  - **Helper Function Added**: `ctx_or_error()` in renderers.rs for consistent error handling pattern
+  - **In-Memory Game ID**: Changed default game_id from 1 to 0 (no default game)
+  - Files changed: 15 files across src/server/, src/storage/, src/model/, src/test_support/, tests/
+  - Tests: 1180 pass, coverage 85.5%
+
+- **Multi-World Data Foundation (ADR-025)** — Games from different worlds can now coexist; world context loaded per-request from DB based on active game's `world_key`
+  - **Migration v12**: Added `world_key TEXT NOT NULL DEFAULT ''` column to `games` table with backfill from `worlds.name`
+  - **Game Model**: Added `world_key` field to `Game` struct (src/model/game.rs) and `DbGame` (src/storage/models/game.rs)
+  - **Storage Backend**: Updated all game CRUD operations in `src/storage/backend/games.rs` to handle `world_key`
+  - **World Management**: Added `create_world`, `update_world`, `get_world_by_id` methods to `src/storage/backend/worlds.rs`
+  - **AppState Refactor**: Removed `world`, `map`, `player`, `npcs` fields from `ServerResources` and `AppState` — world context now loaded on-demand via `as_game_service_context()`
+  - **GameServiceContext**: Changed `as_game_service_context()` to return `Result` — loads world from DB based on active game's `world_key`
+  - **Fallback Strategy**: Added `as_game_service_context_or_default()` for non-critical UI rendering when world/persona not found (returns empty defaults)
+  - **Cross-World Switching**: `switch_game()` now allows switching between games from different worlds (validation removed)
+  - **Bootstrap Changes**: Initial game INSERT includes `world_key`; fallback to first available world if `--world` arg not found
+  - **Test Support**: `TestAppBuilder` now seeds test world/map/player/NPCs into storage and creates initial game for tests
+  - Modified files: 36 files across src/, tests/http/, tests/integration/
+  - Test count: 1180 pass
+
 - **Phase 3 Code Quality Review & Pattern Alignment** — Comprehensive cleanup of Phase 3 DB-first migration
   - **Dead Code Removed**: Deleted `load_world_manifest()`, `initialize_world_from_manifest()` from `load.rs`, removed `#![allow(dead_code)]`
   - **DB Seed Pattern**: `seed_world()` now returns `Result<i64>` (world_id) — no more write-then-read roundtrip

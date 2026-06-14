@@ -1,40 +1,17 @@
-use std::sync::{Arc, RwLock, atomic::AtomicBool};
-use tokio_util::sync::CancellationToken;
+use std::sync::Arc;
 
 use crate::model::llm_message::LlmMessageBuilder;
-use crate::model::settings::AppSettings;
 use crate::server::fragments::{html_escape, render_error, render_llm_messages};
 use crate::storage::Storage;
-use crate::test_support::{TestMap, TestPlayer, TestWorld};
+use crate::test_support::TestAppBuilder;
 
 fn make_test_app_state(llm_storage: Option<Arc<Storage>>) -> crate::server::AppState {
-    let storage = match llm_storage {
-        Some(s) => s,
-        None => Arc::new(Storage::new_in_memory()),
-    };
-    let game_service_storage = Arc::clone(&storage);
-    let game_service = Arc::new(crate::application::game_service::GameService::with_storage(
-        Some(game_service_storage),
-        None,
-        Arc::new(RwLock::new(AppSettings::default())),
-    ));
-    crate::server::AppState {
-        storage,
-        preset_storage: Arc::new(Storage::new_in_memory()),
-        world: Arc::new(TestWorld::minimal()),
-        map: Arc::new(TestMap::single_room("start")),
-        player: Arc::new(TestPlayer::standard()),
-        npcs: Arc::new(std::collections::HashMap::new()),
-        game_service: Arc::clone(&game_service),
-        application_service: Arc::new(
-            crate::application::application_service::DefaultApplicationService::new(Arc::clone(
-                &game_service,
-            )),
-        ),
-        settings: Arc::new(RwLock::new(AppSettings::default())),
-        cancel_token: Arc::new(RwLock::new(CancellationToken::new())),
-        is_generating: Arc::new(AtomicBool::new(false)),
+    // Use TestAppBuilder for proper world/persona setup, then swap in custom storage if needed
+    let mut builder = TestAppBuilder::default_test();
+    if let Some(storage) = llm_storage {
+        builder = builder.storage(storage);
     }
+    builder.build_app_state()
 }
 
 #[test]

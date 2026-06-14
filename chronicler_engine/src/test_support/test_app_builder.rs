@@ -1,3 +1,8 @@
+//! Test application builder for HTTP and integration tests
+//!
+//! This module is test support code and is allowed to panic on errors.
+#![allow(clippy::expect_used)]
+
 use std::sync::{Arc, RwLock};
 
 use axum::Router;
@@ -214,6 +219,38 @@ impl TestAppBuilder {
     }
 
     pub fn build(self) -> Router {
+        let app_state = self.build_app_state();
+        build_router(app_state)
+    }
+
+    pub fn build_app_state(self) -> AppState {
+        let (storage, _created_storage) = match self.storage {
+            Some(s) => (s, false),
+            None => (Arc::new(Storage::new_in_memory()), true),
+        };
+
+        // Seed world, map, and player into storage BEFORE moving into Arc
+        let world_id = storage
+            .seed_world(&self.world, &self.map)
+            .expect("test setup: seed world");
+        storage
+            .seed_persona(&self.world.player_key, &self.player)
+            .expect("test setup: seed persona");
+
+        // Seed NPCs into storage
+        for npc in &self.npcs {
+            storage
+                .seed_character(world_id, npc)
+                .expect("test setup: seed character");
+        }
+
+        // Create and set an active game so as_game_service_context() succeeds
+        // Always create a game to ensure context can be loaded (needed for tests with custom storage too)
+        let game_id = storage
+            .create_game(&self.world.name, &self.world.key, "Test Game")
+            .expect("test setup: create game");
+        storage.set_game_id(game_id);
+
         let world = Arc::new(self.world);
         let map = Arc::new(self.map);
         let player = Arc::new(self.player);
@@ -254,10 +291,6 @@ impl TestAppBuilder {
             state.add_message(text, sender, log_type);
         }
 
-        let storage = self
-            .storage
-            .unwrap_or_else(|| Arc::new(Storage::new_in_memory()));
-
         let snapshot = GameStateSnapshot::from_game_state(&state);
         let _ = storage.save_snapshot(&snapshot);
         for msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
@@ -273,19 +306,14 @@ impl TestAppBuilder {
                 Arc::clone(&settings_arc),
             ))
         });
-        let app_state = AppState {
+        AppState {
             storage,
             preset_storage,
-            world,
-            map,
-            player,
-            npcs: Arc::new(state.npcs.clone()),
             game_service: Arc::clone(&game_service),
             application_service: Arc::new(DefaultApplicationService::new(game_service)),
             settings: settings_arc,
             cancel_token: Arc::new(RwLock::new(CancellationToken::new())),
             is_generating: Arc::new(std::sync::atomic::AtomicBool::new(self.is_generating)),
-        };
-        build_router(app_state)
+        }
     }
 }

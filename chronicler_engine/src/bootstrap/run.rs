@@ -180,9 +180,31 @@ pub fn run(args: Args) -> crate::error::Result<()> {
 
     let lookup_storage =
         crate::storage::Storage::new_sqlite(db_pool.clone(), PRESET_STORAGE_GAME_ID);
-    let world_with_map = lookup_storage
-        .get_world(&args.world)?
-        .ok_or_else(|| crate::error::EngineError::WorldNotFound(args.world.clone()))?;
+    let world_with_map = match lookup_storage.get_world(&args.world)? {
+        Some(w) => w,
+        None => {
+            let all_worlds = lookup_storage.list_worlds()?;
+            if all_worlds.is_empty() {
+                return Err(crate::error::EngineError::Config(
+                    "No worlds available in database".to_string(),
+                ));
+            }
+            tracing::warn!(
+                "World '{}' not found, falling back to '{}'",
+                args.world,
+                all_worlds[0].key
+            );
+            // First world in list must exist - we just queried it
+            match lookup_storage.get_world(&all_worlds[0].key)? {
+                Some(w) => w,
+                None => {
+                    return Err(crate::error::EngineError::Config(
+                        "Failed to load fallback world".to_string(),
+                    ));
+                }
+            }
+        }
+    };
     let world_id = world_with_map.world_id;
     let world_card = world_with_map.world_card;
     let map = world_with_map.map;
@@ -199,19 +221,20 @@ pub fn run(args: Args) -> crate::error::Result<()> {
     let player_arc = Arc::new(player.clone());
     let npcs_map: HashMap<_, _> = npcs.into_iter().map(|n| (n.id.clone(), n)).collect();
 
-    let active_game_id = match find_latest_game_for_world(&db_pool, &world_card.name)? {
+    let active_game_id = match find_latest_game_for_world(&db_pool, &world_card.key)? {
         Some((id, name)) => {
             tracing::info!("Loaded existing game '{name}' (id={id})");
             id
         }
         None => {
-            let existing_names = list_game_names_for_world(&db_pool, &world_card.name)?;
+            let existing_names = list_game_names_for_world(&db_pool, &world_card.key)?;
             let name = generate_game_name(&world_card.name, &existing_names);
             let conn = db_pool.conn();
             let now = chrono::Utc::now().to_rfc3339();
+            // NOTE: This INSERT must match Storage::create_game() column list (games.rs:61)
             conn.execute(
-                "INSERT INTO games (world_name, name, created_at, updated_at) VALUES (?1, ?2, ?3, ?3)",
-                rusqlite::params![&world_card.name, &name, &now],
+                "INSERT INTO games (world_name, world_key, name, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?4)",
+                rusqlite::params![&world_card.name, &world_card.key, &name, &now],
             )
             .map_err(|e| crate::error::EngineError::Config(format!("Failed to create game: {e}")))?;
             let id = conn.last_insert_rowid() as u64;
@@ -347,10 +370,6 @@ pub fn run(args: Args) -> crate::error::Result<()> {
     let preset_storage = crate::storage::Storage::new_sqlite(db_pool, PRESET_STORAGE_GAME_ID);
 
     let resources = crate::server::ServerResources {
-        world: world_arc,
-        map: map_arc,
-        player: player_arc,
-        npcs: npcs_arc,
         storage,
         preset_storage: Arc::new(preset_storage),
         settings,
@@ -363,7 +382,7 @@ pub fn run(args: Args) -> crate::error::Result<()> {
 
 pub(crate) fn find_latest_game_for_world(
     db_pool: &crate::storage::db::DbPool,
-    world_name: &str,
+    world_key: &str,
 ) -> Result<Option<(u64, String)>, crate::error::EngineError> {
     let conn = db_pool.conn();
     let mut stmt = conn
@@ -371,16 +390,16 @@ pub(crate) fn find_latest_game_for_world(
             "SELECT g.id, g.name
              FROM games g
              LEFT JOIN (
-                 SELECT game_id, MAX(timestamp) as last_message
+                 SELECT game_id, MAX(timestamp) AS last_message
                  FROM messages
                  GROUP BY game_id
              ) m ON g.id = m.game_id
-             WHERE g.world_name = ?1
+             WHERE g.world_key = ?1
              ORDER BY COALESCE(m.last_message, g.updated_at) DESC
              LIMIT 1",
         )
         .map_err(|e| crate::error::EngineError::Config(format!("Failed to prepare query: {e}")))?;
-    let result = stmt.query_row(rusqlite::params![world_name], |row| {
+    let result = stmt.query_row(rusqlite::params![world_key], |row| {
         Ok((row.get::<_, i64>(0)? as u64, row.get::<_, String>(1)?))
     });
     match result {
@@ -394,14 +413,14 @@ pub(crate) fn find_latest_game_for_world(
 
 pub(crate) fn list_game_names_for_world(
     db_pool: &crate::storage::db::DbPool,
-    world_name: &str,
+    world_key: &str,
 ) -> Result<Vec<String>, crate::error::EngineError> {
     let conn = db_pool.conn();
     let mut stmt = conn
-        .prepare("SELECT name FROM games WHERE world_name = ?1")
+        .prepare("SELECT name FROM games WHERE world_key = ?1")
         .map_err(|e| crate::error::EngineError::Config(format!("Failed to prepare query: {e}")))?;
     let rows = stmt
-        .query_map(rusqlite::params![world_name], |row| row.get::<_, String>(0))
+        .query_map(rusqlite::params![world_key], |row| row.get::<_, String>(0))
         .map_err(|e| crate::error::EngineError::Config(format!("Failed to query games: {e}")))?;
     rows.collect::<Result<Vec<_>, _>>()
         .map_err(|e| crate::error::EngineError::Config(format!("Failed to read game names: {e}")))

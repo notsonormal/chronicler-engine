@@ -16,25 +16,21 @@ use super::renderers::{
 };
 
 pub async fn list_games_fragment(State(state): State<AppState>) -> Response<axum::body::Body> {
-    let games = match state
-        .application_service
-        .list_games(state.as_game_service_context())
-    {
+    let ctx = match state.as_game_service_context() {
+        Ok(c) => c,
+        Err(e) => return internal_error(format!("Failed to load context: {e}")),
+    };
+    let games = match state.application_service.list_games(ctx.clone()) {
         Ok(g) => g,
         Err(e) => return internal_error(e.to_string()),
     };
 
-    let active_id = state
-        .application_service
-        .current_game_id(state.as_game_service_context());
-    let current_world = &state.world.name;
+    let active_id = state.application_service.current_game_id(ctx);
 
     let mut html = String::new();
 
     // Active game section
-    let active_game = games
-        .iter()
-        .find(|g| g.id == active_id && &g.world_name == current_world);
+    let active_game = games.iter().find(|g| g.id == active_id);
     html.push_str("<div class=\"save-load-panel\">");
     html.push_str("<div class=\"save-load-section\">");
     html.push_str("<h2>Active Game</h2>");
@@ -58,15 +54,12 @@ pub async fn list_games_fragment(State(state): State<AppState>) -> Response<axum
     html.push_str("<h2>Saved Games</h2>");
     html.push_str("<div class=\"games-list\">");
 
-    let world_games: Vec<_> = games
-        .into_iter()
-        .filter(|g| &g.world_name == current_world && g.id != active_id)
-        .collect();
+    let saved_games: Vec<_> = games.into_iter().filter(|g| g.id != active_id).collect();
 
-    if world_games.is_empty() {
-        html.push_str("<div class=\"games-empty\">No saved games for this world.</div>");
+    if saved_games.is_empty() {
+        html.push_str("<div class=\"games-empty\">No saved games.</div>");
     } else {
-        for game in world_games {
+        for game in saved_games {
             let safe_name = html_escape(&game.name);
             html.push_str(&format!(
                 r#"<div class="game-item" data-id="{}">
@@ -105,10 +98,12 @@ pub async fn create_game_handler(State(state): State<AppState>) -> Response<axum
         return service_unavailable_generating();
     }
 
-    match state
-        .application_service
-        .create_game(state.as_game_service_context())
-    {
+    let ctx = match state.as_game_service_context() {
+        Ok(ctx) => ctx,
+        Err(e) => return internal_error(format!("Failed to load context: {e}")),
+    };
+
+    match state.application_service.create_game(ctx) {
         Ok(_) => ok_refresh(),
         Err(e) => app_err_to_response(e),
     }
@@ -125,10 +120,11 @@ pub async fn switch_game_handler(
         return service_unavailable_generating();
     }
 
-    match state
-        .application_service
-        .switch_game(state.as_game_service_context(), id)
-    {
+    let ctx = match state.as_game_service_context() {
+        Ok(ctx) => ctx,
+        Err(e) => return internal_error(format!("Failed to load context: {e}")),
+    };
+    match state.application_service.switch_game(ctx, id) {
         Ok(()) => ok_refresh(),
         Err(e) => app_err_to_response(e),
     }
@@ -145,10 +141,16 @@ pub async fn delete_game_handler(
         return app_err_to_tuple(ApplicationError::ConcurrentGeneration);
     }
 
-    match state
-        .application_service
-        .delete_game(state.as_game_service_context(), id)
-    {
+    let ctx = match state.as_game_service_context() {
+        Ok(ctx) => ctx,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to load context: {e}"),
+            );
+        }
+    };
+    match state.application_service.delete_game(ctx, id) {
         Ok(()) => (StatusCode::OK, String::new()),
         Err(ApplicationError::Validation(msg)) => (StatusCode::BAD_REQUEST, render_error(&msg)),
         Err(ApplicationError::ConcurrentGeneration) => {

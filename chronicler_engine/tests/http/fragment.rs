@@ -191,6 +191,18 @@ async fn test_reset_generating_handler() {
 async fn test_edit_history_handler_success() {
     let storage = Arc::new(Storage::new_in_memory());
 
+    // Seed world and game manually since we're passing custom storage
+    use chronicler_engine::test_support::{TestWorld, TestMap, TestPlayer};
+    let world = TestWorld::minimal();
+    let map = TestMap::single_room("start");
+    storage.seed_world(&world, &map).unwrap();
+    let player = TestPlayer::standard();
+    storage.seed_persona(&world.player_key, &player).unwrap();
+    let game_id = storage
+        .create_game(&world.name, &world.key, "Test Game")
+        .unwrap();
+    storage.set_game_id(game_id);
+
     let app = TestAppBuilder::default_test()
         .log("Original text", Some("Test"), MessageType::Narration)
         .storage(Arc::clone(&storage))
@@ -355,7 +367,7 @@ async fn test_list_games_fragment_empty() {
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(response.into_body(), 1024)
+    let body = axum::body::to_bytes(response.into_body(), 4096)
         .await
         .unwrap();
     let html = String::from_utf8_lossy(&body);
@@ -410,7 +422,7 @@ async fn test_list_games_fragment_escapes_html() {
     let storage = Arc::new(Storage::new_in_memory());
 
     let _ = storage
-        .create_game("Test World", "<script>alert('xss')</script>")
+        .create_game("Test World", "Test World", "<script>alert('xss')</script>")
         .unwrap();
 
     let app = TestAppBuilder::default_test()
@@ -440,6 +452,27 @@ async fn test_list_games_fragment_escapes_html() {
 #[tokio::test]
 async fn test_create_game_handler() {
     let storage = Arc::new(Storage::new_in_memory());
+
+    // Seed a world with scenarios and create an initial game
+    let mut world = chronicler_engine::test_support::TestWorld::minimal();
+    world.scenarios = vec![chronicler_engine::model::scenario::StartingScenario {
+        id: "test_intro".to_string(),
+        name: "Test Intro".to_string(),
+        description: "Test scenario".to_string(),
+        starting_room_id: "start".to_string(),
+        text: "Welcome to the test world!".to_string(),
+        npcs: vec![],
+    }];
+    let mut map = chronicler_engine::test_support::TestMap::single_room("start");
+    map.overworld.regions[0].rooms[0].id = "start".to_string();
+    storage.seed_world(&world, &map).unwrap();
+    let player = chronicler_engine::test_support::TestPlayer::standard();
+    storage.seed_persona(&world.player_key, &player).unwrap();
+
+    let initial_game_id = storage
+        .create_game(&world.name, &world.key, "Initial Game")
+        .unwrap();
+    storage.set_game_id(initial_game_id);
 
     let app = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
@@ -487,12 +520,24 @@ async fn test_create_game_handler() {
 async fn test_switch_game_handler_success() {
     let storage = Arc::new(Storage::new_in_memory());
 
+    // Seed world and create initial game manually since we're passing custom storage
+    use chronicler_engine::test_support::{TestWorld, TestMap, TestPlayer};
+    let world = TestWorld::minimal();
+    let map = TestMap::single_room("start");
+    storage.seed_world(&world, &map).unwrap();
+    let player = TestPlayer::standard();
+    storage.seed_persona(&world.player_key, &player).unwrap();
+    let initial_game_id = storage
+        .create_game(&world.name, &world.key, "Initial Game")
+        .unwrap();
+    storage.set_game_id(initial_game_id);
+
     let app = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
         .build();
 
     let other_id = storage
-        .create_game("Test World", "Test World_2026-01-01_1")
+        .create_game("Test World", "Test World", "Test World_2026-01-01_1")
         .unwrap();
     assert_ne!(other_id, storage.current_game_id());
 
@@ -525,34 +570,78 @@ async fn test_switch_game_handler_not_found() {
 }
 
 #[tokio::test]
-async fn test_switch_game_handler_wrong_world() {
+async fn test_switch_game_handler_cross_world_allowed() {
+    // Cross-world game switching is now ALLOWED by design
     let storage = Arc::new(Storage::new_in_memory());
 
-    let other_id = storage.create_game("Other World", "Other World_1").unwrap();
+    // Seed two different worlds
+    let world_a = chronicler_engine::test_support::TestWorld::minimal();
+    let map_a = chronicler_engine::test_support::TestMap::single_room("start");
+    storage.seed_world(&world_a, &map_a).unwrap();
+
+    let mut world_b = chronicler_engine::test_support::TestWorld::minimal();
+    world_b.key = "world_b".to_string();
+    world_b.name = "World B".to_string();
+    world_b.player_key = "player_b".to_string();
+    let map_b = chronicler_engine::test_support::TestMap::single_room("room_b");
+    storage.seed_world(&world_b, &map_b).unwrap();
+
+    // Create games in different worlds
+    let game_a_id = storage
+        .create_game(&world_a.name, &world_a.key, "Game A")
+        .unwrap();
+    let game_b_id = storage
+        .create_game(&world_b.name, &world_b.key, "Game B")
+        .unwrap();
+
+    // Start with game A
+    storage.set_game_id(game_a_id);
 
     let app = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
         .build();
 
+    // Switch to game B (different world) - should succeed
     let req = Request::builder()
-        .uri(format!("/games/{other_id}/switch"))
+        .uri(format!("/games/{game_b_id}/switch"))
         .method(http::Method::POST)
         .body(Body::empty())
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "Cross-world switch should succeed"
+    );
+    assert_eq!(
+        storage.current_game_id(),
+        game_b_id,
+        "Should switch to game B"
+    );
 }
 
 #[tokio::test]
 async fn test_delete_game_handler_success() {
     let storage = Arc::new(Storage::new_in_memory());
 
+    // Seed world and create initial game manually since we're passing custom storage
+    use chronicler_engine::test_support::{TestWorld, TestMap, TestPlayer};
+    let world = TestWorld::minimal();
+    let map = TestMap::single_room("start");
+    storage.seed_world(&world, &map).unwrap();
+    let player = TestPlayer::standard();
+    storage.seed_persona(&world.player_key, &player).unwrap();
+    let initial_game_id = storage
+        .create_game(&world.name, &world.key, "Initial Game")
+        .unwrap();
+    storage.set_game_id(initial_game_id);
+
     let app = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
         .build();
 
     let other_id = storage
-        .create_game("Test World", "Test World_2026-01-01_1")
+        .create_game("Test World", "Test World", "Test World_2026-01-01_1")
         .unwrap();
     assert_ne!(other_id, storage.current_game_id());
 
@@ -568,17 +657,39 @@ async fn test_delete_game_handler_success() {
 
 #[tokio::test]
 async fn test_delete_game_handler_active_game() {
-    let app = TestAppBuilder::default_app();
+    let storage = Arc::new(Storage::new_in_memory());
 
-    let active_id = 1u64;
+    // Seed a world and create a game - TestAppBuilder will also create a game, but we'll use this one
+    let world = chronicler_engine::test_support::TestWorld::minimal();
+    let map = chronicler_engine::test_support::TestMap::single_room("start");
+    storage.seed_world(&world, &map).unwrap();
+    let player = chronicler_engine::test_support::TestPlayer::standard();
+    storage.seed_persona(&world.player_key, &player).unwrap();
 
+    let game_id = storage
+        .create_game(&world.name, &world.key, "Active Game")
+        .unwrap();
+    storage.set_game_id(game_id);
+
+    let app = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .build();
+
+    // Get the actual active game ID (TestAppBuilder creates its own game)
+    let active_game_id = storage.current_game_id();
+
+    // Try to delete the active game - should fail
     let req = Request::builder()
-        .uri(format!("/games/{active_id}/delete"))
+        .uri(format!("/games/{active_game_id}/delete"))
         .method(http::Method::POST)
         .body(Body::empty())
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(
+        response.status(),
+        StatusCode::BAD_REQUEST,
+        "Cannot delete active game"
+    );
 }
 
 #[tokio::test]

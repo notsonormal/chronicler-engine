@@ -107,9 +107,22 @@ fn create_storage() -> Arc<Storage> {
     Arc::new(Storage::new_sqlite(pool, 1))
 }
 
+/// Seed a test world for game-related tests
+fn seed_test_world(storage: &Storage) {
+    use chronicler_engine::test_support::{TestWorld, TestMap, TestPlayer};
+    let world = TestWorld::minimal();
+    let map = TestMap::single_room("start");
+    storage.seed_world(&world, &map).expect("seed world");
+    let player = TestPlayer::standard();
+    storage
+        .seed_persona(&world.player_key, &player)
+        .expect("seed persona");
+}
+
 #[test]
 fn test_create_game_integration() {
     let storage = create_storage();
+    seed_test_world(&storage);
     let game_service = create_game_service();
     let state = create_basic_test_state();
     let ctx = make_test_ctx(storage.clone(), game_service.clone(), state);
@@ -128,6 +141,7 @@ fn test_create_game_integration() {
 #[test]
 fn test_switch_game_integration() {
     let storage = create_storage();
+    seed_test_world(&storage);
     let game_service = create_game_service();
     let state = create_basic_test_state();
     let ctx = make_test_ctx(storage.clone(), game_service.clone(), state);
@@ -151,6 +165,7 @@ fn test_switch_game_integration() {
 #[test]
 fn test_delete_game_integration() {
     let storage = create_storage();
+    seed_test_world(&storage);
     let game_service = create_game_service();
     let state = create_basic_test_state();
     let ctx = make_test_ctx(storage.clone(), game_service.clone(), state);
@@ -171,6 +186,7 @@ fn test_delete_game_integration() {
 #[test]
 fn test_list_games_integration() {
     let storage = create_storage();
+    seed_test_world(&storage);
     let game_service = create_game_service();
     let state = create_basic_test_state();
     let ctx = make_test_ctx(storage.clone(), game_service.clone(), state);

@@ -15,6 +15,18 @@ async fn test_action_handler_load_state_failure_graceful_degradation() {
         TestOverride::internal("simulated load failure"),
     ));
 
+    // Seed world and game manually since we're passing custom storage
+    use chronicler_engine::test_support::{TestWorld, TestMap, TestPlayer};
+    let world = TestWorld::minimal();
+    let map = TestMap::single_room("start");
+    storage.seed_world(&world, &map).unwrap();
+    let player = TestPlayer::standard();
+    storage.seed_persona(&world.player_key, &player).unwrap();
+    let game_id = storage
+        .create_game(&world.name, &world.key, "Test Game")
+        .unwrap();
+    storage.set_game_id(game_id);
+
     let app = TestAppBuilder::default_test().storage(storage).build();
 
     let req = Request::builder()
@@ -54,6 +66,18 @@ async fn test_action_confirm_handler_load_state_failure_graceful_degradation() {
         TestOverride::internal("simulated load failure"),
     ));
 
+    // Seed world and game manually since we're passing custom storage
+    use chronicler_engine::test_support::{TestWorld, TestMap, TestPlayer};
+    let world = TestWorld::minimal();
+    let map = TestMap::single_room("start");
+    storage.seed_world(&world, &map).unwrap();
+    let player = TestPlayer::standard();
+    storage.seed_persona(&world.player_key, &player).unwrap();
+    let game_id = storage
+        .create_game(&world.name, &world.key, "Test Game")
+        .unwrap();
+    storage.set_game_id(game_id);
+
     let app = TestAppBuilder::default_test().storage(storage).build();
 
     let req = Request::builder()
@@ -73,6 +97,18 @@ async fn test_action_handler_message_insert_failure() {
         Operation::InsertMessage,
         TestOverride::internal("simulated insert failure"),
     ));
+
+    // Seed world and game manually since we're passing custom storage
+    use chronicler_engine::test_support::{TestWorld, TestMap, TestPlayer};
+    let world = TestWorld::minimal();
+    let map = TestMap::single_room("start");
+    storage.seed_world(&world, &map).unwrap();
+    let player = TestPlayer::standard();
+    storage.seed_persona(&world.player_key, &player).unwrap();
+    let game_id = storage
+        .create_game(&world.name, &world.key, "Test Game")
+        .unwrap();
+    storage.set_game_id(game_id);
 
     let app = TestAppBuilder::default_test().storage(storage).build();
 
@@ -96,6 +132,18 @@ async fn test_action_handler_load_messages_failure() {
         Operation::LoadMessageRows,
         TestOverride::internal("simulated load messages failure"),
     ));
+
+    // Seed world and game manually since we're passing custom storage
+    use chronicler_engine::test_support::{TestWorld, TestMap, TestPlayer};
+    let world = TestWorld::minimal();
+    let map = TestMap::single_room("start");
+    storage.seed_world(&world, &map).unwrap();
+    let player = TestPlayer::standard();
+    storage.seed_persona(&world.player_key, &player).unwrap();
+    let game_id = storage
+        .create_game(&world.name, &world.key, "Test Game")
+        .unwrap();
+    storage.set_game_id(game_id);
 
     let app = TestAppBuilder::default_test().storage(storage).build();
 

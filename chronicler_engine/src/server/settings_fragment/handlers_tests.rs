@@ -14,8 +14,6 @@ use crate::server::AppState;
 use crate::storage::Storage;
 use crate::application::game_service::GameService;
 use crate::application::application_service::DefaultApplicationService;
-use crate::test_support::TestWorld;
-use crate::test_support::TestMap;
 use tokio_util::sync::CancellationToken;
 
 fn make_test_app_state() -> AppState {
@@ -29,10 +27,6 @@ fn make_test_app_state() -> AppState {
     AppState {
         storage: Arc::clone(&storage),
         preset_storage: Arc::new(Storage::new_in_memory()),
-        world: Arc::new(TestWorld::minimal()),
-        map: Arc::new(TestMap::single_room("start")),
-        player: Arc::new(crate::test_support::TestPlayer::standard()),
-        npcs: Arc::new(std::collections::HashMap::new()),
         game_service: Arc::clone(&game_service),
         application_service: Arc::new(DefaultApplicationService::new(Arc::clone(&game_service))),
         settings,
@@ -52,10 +46,6 @@ fn make_app_state_with_settings(settings: AppSettings) -> AppState {
     AppState {
         storage: Arc::clone(&storage),
         preset_storage: Arc::new(Storage::new_in_memory()),
-        world: Arc::new(TestWorld::minimal()),
-        map: Arc::new(TestMap::single_room("start")),
-        player: Arc::new(crate::test_support::TestPlayer::standard()),
-        npcs: Arc::new(std::collections::HashMap::new()),
         game_service: Arc::clone(&game_service),
         application_service: Arc::new(DefaultApplicationService::new(Arc::clone(&game_service))),
         settings,

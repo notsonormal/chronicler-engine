@@ -15,7 +15,9 @@ use crate::narrative::text_check::check_player_input;
 use crate::server::AppState;
 use crate::server::templates::TextCheckPreviewTemplate;
 
-use super::renderers::{internal_error, ok, render_action_area, render_error, service_unavailable};
+use super::renderers::{
+    ctx_or_error, internal_error, ok, render_action_area, render_error, service_unavailable,
+};
 
 #[derive(Deserialize, Serialize)]
 pub struct ActionForm {
@@ -23,14 +25,14 @@ pub struct ActionForm {
 }
 
 async fn dispatch_action(state: &AppState, command: String) -> Response<Body> {
+    let ctx = match ctx_or_error(state) {
+        Some(ctx) => ctx,
+        None => return internal_error("Failed to load game context"),
+    };
     let action_result = if command.is_empty() {
-        state
-            .application_service
-            .continue_narration(state.as_game_service_context())
+        state.application_service.continue_narration(ctx)
     } else {
-        state
-            .application_service
-            .process_action(state.as_game_service_context(), command)
+        state.application_service.process_action(ctx, command)
     };
 
     match action_result {

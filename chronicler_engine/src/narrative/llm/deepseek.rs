@@ -10,8 +10,8 @@ use crate::storage::Storage;
 use super::backend::{LlmBackend, LlmCallResult};
 
 #[derive(Clone, Default)]
-#[allow(dead_code)]
 pub struct DeepSeekBackend {
+    #[allow(dead_code)] // Stored for future implementation
     api_key: String,
     model: String,
     storage: Option<Arc<Storage>>,

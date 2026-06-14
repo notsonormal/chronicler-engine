@@ -4,10 +4,7 @@ use tokio_util::sync::CancellationToken;
 
 use chronicler_engine::application::game_service::GameService;
 use chronicler_engine::application::DefaultApplicationService;
-use chronicler_engine::model::character::{CharacterSheet, PlayerCard};
-use chronicler_engine::model::map::{MapDef, Overworld};
 use chronicler_engine::model::settings::AppSettings;
-use chronicler_engine::model::world::WorldCard;
 use chronicler_engine::server::AppState;
 use chronicler_engine::storage::Storage;
 
@@ -33,28 +30,6 @@ fn test_settings_recover_from_poisoned_rwlock() {
     let app_state = AppState {
         storage: Arc::new(Storage::new_in_memory()),
         preset_storage: Arc::new(Storage::new_in_memory()),
-        world: Arc::new(WorldCard::default()),
-        map: Arc::new(MapDef {
-            overworld: Overworld {
-                id: "overworld".to_string(),
-                name: "Overworld".to_string(),
-                regions: vec![],
-            },
-        }),
-        player: Arc::new(PlayerCard {
-            sheet: CharacterSheet {
-                name: "Hero".to_string(),
-                description: "A hero".to_string(),
-                personality: "Brave".to_string(),
-                scenario: "Default".to_string(),
-                example_dialogue: "".to_string(),
-                summary: None,
-                profile_image: None,
-                headshot_image: None,
-            },
-            inventory: vec![],
-        }),
-        npcs: Arc::new(std::collections::HashMap::new()),
         game_service: Arc::clone(&game_service),
         application_service: Arc::new(DefaultApplicationService::new(Arc::clone(&game_service))),
         settings,
@@ -89,28 +64,6 @@ fn test_cancel_token_recover_from_poisoned_rwlock() {
     let app_state = AppState {
         storage: Arc::new(Storage::new_in_memory()),
         preset_storage: Arc::new(Storage::new_in_memory()),
-        world: Arc::new(WorldCard::default()),
-        map: Arc::new(MapDef {
-            overworld: Overworld {
-                id: "overworld".to_string(),
-                name: "Overworld".to_string(),
-                regions: vec![],
-            },
-        }),
-        player: Arc::new(PlayerCard {
-            sheet: CharacterSheet {
-                name: "Hero".to_string(),
-                description: "A hero".to_string(),
-                personality: "Brave".to_string(),
-                scenario: "Default".to_string(),
-                example_dialogue: "".to_string(),
-                summary: None,
-                profile_image: None,
-                headshot_image: None,
-            },
-            inventory: vec![],
-        }),
-        npcs: Arc::new(std::collections::HashMap::new()),
         game_service: Arc::clone(&game_service),
         application_service: Arc::new(DefaultApplicationService::new(Arc::clone(&game_service))),
         settings: Arc::new(std::sync::RwLock::new(AppSettings::default())),

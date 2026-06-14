@@ -147,7 +147,9 @@ fn test_row_to_snapshot_bad_date() {
 fn test_create_and_get_game() {
     let storage = create_game_storage();
 
-    let game_id = storage.create_game("test_world", "My Game").unwrap();
+    let game_id = storage
+        .create_game("test_world", "test_world", "My Game")
+        .unwrap();
     assert!(game_id > 0, "create_game should return a positive id");
 
     let game = storage.get_game(game_id).unwrap();
@@ -170,8 +172,8 @@ fn test_list_games() {
     let storage = create_game_storage();
     let initial = storage.list_games().unwrap().len();
 
-    let id_a = storage.create_game("world_a", "Game A").unwrap();
-    let id_b = storage.create_game("world_b", "Game B").unwrap();
+    let id_a = storage.create_game("world_a", "world_a", "Game A").unwrap();
+    let id_b = storage.create_game("world_b", "world_b", "Game B").unwrap();
 
     let games = storage.list_games().unwrap();
     assert_eq!(
@@ -191,7 +193,9 @@ fn test_delete_game_cascades() {
     let storage = Storage::new_sqlite(pool.clone(), 1);
     let msg_storage = Storage::new_sqlite(pool, 1);
 
-    let game_id = storage.create_game("test_world", "To Delete").unwrap();
+    let game_id = storage
+        .create_game("test_world", "test_world", "To Delete")
+        .unwrap();
 
     // Switch to the new game before saving data
     storage.set_game_id(game_id);
@@ -232,8 +236,12 @@ fn test_set_game_id_isolates_snapshots() {
     let game_storage = Storage::new_sqlite(pool.clone(), 1);
     let storage = Storage::new_sqlite(pool, 1);
 
-    let game_a = game_storage.create_game("world_a", "Game A").unwrap();
-    let game_b = game_storage.create_game("world_b", "Game B").unwrap();
+    let game_a = game_storage
+        .create_game("world_a", "world_a", "Game A")
+        .unwrap();
+    let game_b = game_storage
+        .create_game("world_b", "world_b", "Game B")
+        .unwrap();
 
     // Save snapshot for game_a (current default game_id is 1, not game_a)
     storage.set_game_id(game_a);

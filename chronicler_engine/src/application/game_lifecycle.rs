@@ -18,12 +18,18 @@ impl GameLifecycleService {
             return Err(ApplicationError::ConcurrentGeneration);
         }
 
-        let world_name = ctx.world.name.clone();
+        let world_with_map = ctx
+            .storage
+            .get_world(&ctx.world.key)?
+            .ok_or_else(|| ApplicationError::validation("World not found"))?;
+        let world_name = world_with_map.world_card.name.clone();
         let games = ctx.storage.list_games()?;
         let existing_names: Vec<String> = games.iter().map(|g| g.name.clone()).collect();
         let name = generate_game_name(&world_name, &existing_names);
 
-        let new_id = ctx.storage.create_game(&world_name, &name)?;
+        let new_id = ctx
+            .storage
+            .create_game(&world_name, &ctx.world.key, &name)?;
         let old_id = ctx.storage.current_game_id();
         ctx.set_game_id(new_id);
 
@@ -68,12 +74,8 @@ impl GameLifecycleService {
         }
 
         match ctx.storage.get_game(id)? {
-            Some(game) => {
-                if game.world_name != ctx.world.name {
-                    return Err(ApplicationError::validation(
-                        "Game belongs to a different world",
-                    ));
-                }
+            Some(_game) => {
+                // Cross-world switch allowed - world context loads from DB
             }
             None => return Err(ApplicationError::validation("Game not found")),
         }
@@ -106,6 +108,7 @@ impl GameLifecycleService {
 
     pub fn reset(&self, ctx: GameServiceContext) -> Result<(), ApplicationError> {
         let current_id = ctx.storage.current_game_id();
+        let world_key = ctx.world.key.clone();
         let world_name = ctx.world.name.clone();
 
         ctx.storage.delete_game(current_id)?;
@@ -114,12 +117,14 @@ impl GameLifecycleService {
             .storage
             .list_games()?
             .into_iter()
-            .filter(|g| g.world_name == world_name)
+            .filter(|g| g.world_key == world_key)
             .map(|g| g.name)
             .collect();
 
         let new_name = generate_game_name(&world_name, &existing_names);
-        let new_id = ctx.storage.create_game(&world_name, &new_name)?;
+        let new_id = ctx
+            .storage
+            .create_game(&world_name, &world_key, &new_name)?;
         ctx.set_game_id(new_id);
 
         let mut initial_state = build_fresh_initial_state(&ctx);

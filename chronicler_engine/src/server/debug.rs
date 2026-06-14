@@ -33,10 +33,11 @@ pub struct DebugStateResponse {
 pub async fn debug_state_handler(
     State(state): State<AppState>,
 ) -> Result<Json<DebugStateResponse>, StatusCode> {
-    let view = match state
-        .application_service
-        .get_debug_state(state.as_game_service_context())
-    {
+    let ctx = state.as_game_service_context().map_err(|e| {
+        tracing::error!("State load failed during /debug/state request: {e}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    let view = match state.application_service.get_debug_state(ctx) {
         Ok(v) => v,
         Err(_) => {
             tracing::error!("State load failed during /debug/state request");

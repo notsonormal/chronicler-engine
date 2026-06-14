@@ -9,7 +9,7 @@ fn sqlite_storage() -> Storage {
 #[test]
 fn test_new_in_memory_default_game_id() {
     let storage = Storage::new_in_memory();
-    assert_eq!(storage.current_game_id(), 1);
+    assert_eq!(storage.current_game_id(), 0); // No default game
 }
 
 #[test]

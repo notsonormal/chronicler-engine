@@ -11,7 +11,7 @@ fn test_find_latest_game_for_world_uses_message_timestamp() {
     let game_a_id = {
         let conn = db_pool.conn();
         conn.execute(
-            "INSERT INTO games (world_name, name, created_at, updated_at) VALUES ('TestWorld', 'GameA', ?1, ?1)",
+            "INSERT INTO games (world_name, world_key, name, created_at, updated_at) VALUES ('TestWorld', 'TestWorld', 'GameA', ?1, ?1)",
             rusqlite::params![&older],
         )
         .unwrap();
@@ -21,7 +21,7 @@ fn test_find_latest_game_for_world_uses_message_timestamp() {
     let game_b_id = {
         let conn = db_pool.conn();
         conn.execute(
-            "INSERT INTO games (world_name, name, created_at, updated_at) VALUES ('TestWorld', 'GameB', ?1, ?1)",
+            "INSERT INTO games (world_name, world_key, name, created_at, updated_at) VALUES ('TestWorld', 'TestWorld', 'GameB', ?1, ?1)",
             rusqlite::params![&newer],
         )
         .unwrap();
@@ -62,7 +62,7 @@ fn test_find_latest_game_for_world_fallback_to_updated_at() {
     {
         let conn = db_pool.conn();
         conn.execute(
-            "INSERT INTO games (world_name, name, created_at, updated_at) VALUES ('TestWorld', 'GameA', ?1, ?1)",
+            "INSERT INTO games (world_name, world_key, name, created_at, updated_at) VALUES ('TestWorld', 'TestWorld', 'GameA', ?1, ?1)",
             rusqlite::params![&older],
         )
         .unwrap();
@@ -71,7 +71,7 @@ fn test_find_latest_game_for_world_fallback_to_updated_at() {
     let game_b_id = {
         let conn = db_pool.conn();
         conn.execute(
-            "INSERT INTO games (world_name, name, created_at, updated_at) VALUES ('TestWorld', 'GameB', ?1, ?1)",
+            "INSERT INTO games (world_name, world_key, name, created_at, updated_at) VALUES ('TestWorld', 'TestWorld', 'GameB', ?1, ?1)",
             rusqlite::params![&newer],
         )
         .unwrap();
@@ -99,7 +99,7 @@ fn test_restart_with_existing_game_does_not_duplicate_scenario() {
     let game_id = {
         let conn = db_pool.conn();
         conn.execute(
-            "INSERT INTO games (world_name, name, created_at, updated_at) VALUES ('TestWorld', 'TestGame', '2026-05-26T10:00:00+00:00', '2026-05-26T10:00:00+00:00')",
+            "INSERT INTO games (world_name, world_key, name, created_at, updated_at) VALUES ('TestWorld', 'TestWorld', 'TestGame', '2026-05-26T10:00:00+00:00', '2026-05-26T10:00:00+00:00')",
             [],
         )
         .unwrap();
@@ -195,7 +195,7 @@ fn test_list_game_names_for_world_single_game() {
     {
         let conn = db_pool.conn();
         conn.execute(
-            "INSERT INTO games (world_name, name, created_at, updated_at) VALUES ('TestWorld', 'Only Game', '2026-05-26T10:00:00+00:00', '2026-05-26T10:00:00+00:00')",
+            "INSERT INTO games (world_name, world_key, name, created_at, updated_at) VALUES ('TestWorld', 'TestWorld', 'Only Game', '2026-05-26T10:00:00+00:00', '2026-05-26T10:00:00+00:00')",
             [],
         )
         .unwrap();
@@ -210,17 +210,17 @@ fn test_list_game_names_for_world_multiple_games() {
     {
         let conn = db_pool.conn();
         conn.execute(
-            "INSERT INTO games (world_name, name, created_at, updated_at) VALUES ('TestWorld', 'Game Alpha', '2026-05-26T10:00:00+00:00', '2026-05-26T10:00:00+00:00')",
+            "INSERT INTO games (world_name, world_key, name, created_at, updated_at) VALUES ('TestWorld', 'TestWorld', 'Game Alpha', '2026-05-26T10:00:00+00:00', '2026-05-26T10:00:00+00:00')",
             [],
         )
         .unwrap();
         conn.execute(
-            "INSERT INTO games (world_name, name, created_at, updated_at) VALUES ('TestWorld', 'Game Beta', '2026-05-26T10:00:00+00:00', '2026-05-26T10:00:00+00:00')",
+            "INSERT INTO games (world_name, world_key, name, created_at, updated_at) VALUES ('TestWorld', 'TestWorld', 'Game Beta', '2026-05-26T10:00:00+00:00', '2026-05-26T10:00:00+00:00')",
             [],
         )
         .unwrap();
         conn.execute(
-            "INSERT INTO games (world_name, name, created_at, updated_at) VALUES ('TestWorld', 'Game Gamma', '2026-05-26T10:00:00+00:00', '2026-05-26T10:00:00+00:00')",
+            "INSERT INTO games (world_name, world_key, name, created_at, updated_at) VALUES ('TestWorld', 'TestWorld', 'Game Gamma', '2026-05-26T10:00:00+00:00', '2026-05-26T10:00:00+00:00')",
             [],
         )
         .unwrap();
@@ -237,17 +237,17 @@ fn test_list_game_names_for_world_filters_by_world() {
     {
         let conn = db_pool.conn();
         conn.execute(
-            "INSERT INTO games (world_name, name, created_at, updated_at) VALUES ('WorldA', 'A Game 1', '2026-05-26T10:00:00+00:00', '2026-05-26T10:00:00+00:00')",
+            "INSERT INTO games (world_name, world_key, name, created_at, updated_at) VALUES ('WorldA', 'WorldA', 'A Game 1', '2026-05-26T10:00:00+00:00', '2026-05-26T10:00:00+00:00')",
             [],
         )
         .unwrap();
         conn.execute(
-            "INSERT INTO games (world_name, name, created_at, updated_at) VALUES ('WorldA', 'A Game 2', '2026-05-26T10:00:00+00:00', '2026-05-26T10:00:00+00:00')",
+            "INSERT INTO games (world_name, world_key, name, created_at, updated_at) VALUES ('WorldA', 'WorldA', 'A Game 2', '2026-05-26T10:00:00+00:00', '2026-05-26T10:00:00+00:00')",
             [],
         )
         .unwrap();
         conn.execute(
-            "INSERT INTO games (world_name, name, created_at, updated_at) VALUES ('WorldB', 'B Game 1', '2026-05-26T10:00:00+00:00', '2026-05-26T10:00:00+00:00')",
+            "INSERT INTO games (world_name, world_key, name, created_at, updated_at) VALUES ('WorldB', 'WorldB', 'B Game 1', '2026-05-26T10:00:00+00:00', '2026-05-26T10:00:00+00:00')",
             [],
         )
         .unwrap();

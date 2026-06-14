@@ -85,6 +85,8 @@ The HTTP layer for the HTMX web dashboard with polling-based real-time updates.
 
 **Layer Boundary:** The server tier must never access `GameState` directly. All reads go through the `ApplicationService` trait (`get_story_log_entries`, `get_input_status`, `get_current_room_view`, `get_npc_headshots`, `get_debug_state_view`, etc.). All writes go through `ApplicationService` command methods (`process_action`, `retry`, `reset`, etc.). This keeps the HTTP layer decoupled from domain state structure.
 
+**Context Loading Pattern (ADR-025):** `AppState::as_game_service_context()` loads world context on-demand from DB based on active game's `world_key`. All handlers MUST propagate errors — never silently swallow with defaults. Use `ctx_or_error()` helper in `renderers.rs` to avoid repeating error handling boilerplate.
+
 **`mod`**: Axum router, request handlers, `AppState`, `run_server_with_config`. Test constructors (`create_app_for_testing`, `create_app_for_testing_with_settings`) live in `test_support/test_app_builder.rs`.
 - **`fragments`**: HTML fragment generators for HTMX partial updates. Split into submodules:
   - **`actions`**: Action form handlers and renderers
@@ -93,7 +95,7 @@ The HTTP layer for the HTMX web dashboard with polling-based real-time updates.
   - **`generation_guard`**: Generation lock/status fragment endpoints
   - **`history`**: History editing, deletion, and retry endpoints
   - **`misc`**: Utility endpoints (status, hints, text check)
-  - **`renderers`**: HTML rendering helpers, markdown→HTML via `pulldown-cmark`
+  - **`renderers`**: HTML rendering helpers, markdown→HTML via `pulldown-cmark`. Exports `ctx_or_error()` helper for consistent context loading.
 - **`settings_fragment`**: Settings panel fragment handlers and template rendering.
 - **`prompt_presets_fragment`**: Prompt Presets panel with two independent collections (System, Quantifier). Supports CRUD operations, active selection, and protected default presets.
 - **`view_models`**: View model structs that decouple templates from domain types.

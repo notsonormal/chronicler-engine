@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-06-14 12:27 UTC*
+*Index last generated: 2026-06-14 19:55 UTC*
 
 ### Root files
 
@@ -38,6 +38,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [ADR-022: PromptAssembler Trait Decoupling](./adr/adr-022-prompt-assembler.md)
 - [ADR-023: Immediate Message Persistence](./adr/adr-023-immediate-message-persistence.md)
 - [ADR-024: Migrate Game Data to SQLite with Seed Pattern](./adr/adr-024-game-data-migration-to-sqlite.md)
+- [ADR-025: Multi-World Data Foundation](./adr/adr-025-multi-world-data-foundation.md)
 
 ### `docs/architecture/`
 
@@ -59,12 +60,14 @@ This folder contains all documentation for the Chronicler Engine project.
 
 ### `docs/plans/`
 
+- [Cross-World Game Flow UI](./plans/cross-world-game-flow.md)
 - [Plan: Diagnostic Decision Tree as Agent Infrastructure](./plans/diagnostic-decision-tree-plan.md)
 - [LLM Infrastructure Improvements](./plans/llm-infrastructure-improvements.md)
 - [Spec: Agent-Ready Pipeline Restructure for Chronicler Engine](./plans/multi-agent-architecture-overarching-spec.md)
 - [Plan: Observability & Automated Forensics](./plans/observability-and-forensics-plan.md)
 - [AI Steering & Guided Generation](./plans/steering-and-guided-generation.md)
 - [Plan: Trigger Identity: Index → UUID](./plans/trigger-identity-uuid-plan.md)
+- [Worlds Management Tab UI](./plans/worlds-management-tab.md)
 
 ### `docs/plans/archived/`
 
@@ -73,6 +76,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Plan: Fix Generation Phase Stuck on "Generating narration..." During Post-Generation](./plans/archived/fix-generation-phase-status-2026-06-01.md)
 - [Refactor handle_movement: Split Mixed Responsibilities](./plans/archived/handle-movement-refactor-2026-05-31.md)
 - [Module-Level DOC Anchor Migration](./plans/archived/module-level-doc-anchors-2026-06-06.md)
+- [Multi-World Data Foundation](./plans/archived/multi-world-data-foundation.md)
 - [Plan: Observability & Automated Forensics](./plans/archived/observability-and-forensics-plan-2026-05-31.md)
 - [Plan: Complete Phase 3 — Switch `run()` to DB-First Loading](./plans/archived/phase3-complete-db-loading-plan.md)
 - [Plan: Phase 3 Runtime Loading Fix](./plans/archived/phase3-runtime-loading-fix-plan.md)

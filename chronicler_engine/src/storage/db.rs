@@ -247,5 +247,26 @@ fn run_migrations(conn: &Connection) -> Result<(), crate::error::EngineError> {
         })?;
     }
 
+    if version < 12 {
+        let exec = |sql: &str| {
+            conn.execute(sql, [])
+                .map_err(|e| crate::error::EngineError::Config(format!("Migration failed: {e}")))
+        };
+
+        exec("ALTER TABLE games ADD COLUMN world_key TEXT NOT NULL DEFAULT ''")?;
+
+        // Backfill: match world_name to worlds.key; fallback 'redmist_estate'
+        exec(
+            "UPDATE games SET world_key = COALESCE(
+            (SELECT key FROM worlds WHERE worlds.name = games.world_name),
+            'redmist_estate'
+        ) WHERE world_key = ''",
+        )?;
+
+        conn.pragma_update(None, "user_version", 12).map_err(|e| {
+            crate::error::EngineError::Config(format!("Failed to set user_version: {e}"))
+        })?;
+    }
+
     Ok(())
 }

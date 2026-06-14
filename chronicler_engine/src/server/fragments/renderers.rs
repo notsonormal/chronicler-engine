@@ -30,17 +30,19 @@ fn render_header_unlocked(game_name: String) -> Result<String> {
 }
 
 pub fn render_header(state: &AppState) -> Result<String> {
+    let ctx = state.as_game_service_context()?;
     let game_name = state
         .application_service
-        .get_current_game_name(state.as_game_service_context())
+        .get_current_game_name(ctx)
         .unwrap_or_else(|_| "Unknown".to_string());
     render_header_unlocked(game_name)
 }
 
 pub fn render_story_log(state: &AppState) -> Result<String> {
+    let ctx = state.as_game_service_context()?;
     let (entries, has_last_trigger) = state
         .application_service
-        .get_story_log_entries(state.as_game_service_context())
+        .get_story_log_entries(ctx)
         .map_err(|e| EngineError::Config(e.to_string()))?;
 
     let entries: Vec<_> = entries.into_iter().take(MAX_LOG_DISPLAY).collect();
@@ -51,14 +53,15 @@ pub fn render_story_log(state: &AppState) -> Result<String> {
 }
 
 pub fn render_visual_sidebar(state: &AppState) -> Result<String> {
+    let ctx = state.as_game_service_context()?;
     let (room_name, image_path) = state
         .application_service
-        .get_current_room_view(state.as_game_service_context())
+        .get_current_room_view(ctx.clone())
         .map_err(|e| EngineError::Config(e.to_string()))?;
 
     let npc_data = state
         .application_service
-        .get_npc_headshots(state.as_game_service_context(), true)
+        .get_npc_headshots(ctx, true)
         .map_err(|e| EngineError::Config(e.to_string()))?;
 
     let npc_portraits: Vec<NpcPortraitView> = npc_data
@@ -74,9 +77,10 @@ pub fn render_visual_sidebar(state: &AppState) -> Result<String> {
 }
 
 pub fn render_action_area(state: &AppState) -> Result<String> {
+    let ctx = state.as_game_service_context()?;
     let (status, phase) = state
         .application_service
-        .get_input_status(state.as_game_service_context())
+        .get_input_status(ctx)
         .map_err(|e| EngineError::Config(e.to_string()))?;
 
     let vm = ActionAreaViewModel::new(&status, &phase, &[]);
@@ -90,9 +94,10 @@ pub fn render_character_headshots(state: &AppState) -> Result<String> {
     use crate::server::templates::CharacterHeadshotsTemplate;
     use askama::Template;
 
+    let ctx = state.as_game_service_context()?;
     let npc_data = state
         .application_service
-        .get_npc_headshots(state.as_game_service_context(), false)
+        .get_npc_headshots(ctx, false)
         .map_err(|e| EngineError::Config(e.to_string()))?;
 
     let npc_portraits: Vec<NpcPortraitView> = npc_data
@@ -111,9 +116,10 @@ pub fn render_action_hints(_state: &AppState) -> Result<String> {
 }
 
 pub fn render_llm_messages(state: &AppState) -> Result<String> {
+    let ctx = state.as_game_service_context()?;
     let messages = state
         .application_service
-        .list_latest_llm_messages(state.as_game_service_context(), 50)
+        .list_latest_llm_messages(ctx, 50)
         .map_err(|e| EngineError::Config(e.to_string()))?;
 
     let template = LlmMessagesTemplate::new(&messages);
@@ -153,6 +159,13 @@ pub fn internal_error(body: impl Into<String>) -> Response<Body> {
         .status(StatusCode::INTERNAL_SERVER_ERROR)
         .body(Body::from(body.into()))
         .expect("static response body is valid")
+}
+
+/// Helper to load game context or return None on error.
+/// Use this to avoid repeating the match-on-Result pattern in every handler.
+/// Example: `let Some(ctx) = ctx_or_error(&state) else { return internal_error("..."); };`
+pub fn ctx_or_error(state: &AppState) -> Option<crate::application::GameServiceContext> {
+    state.as_game_service_context().ok()
 }
 
 #[allow(clippy::expect_used)]

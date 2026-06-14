@@ -61,7 +61,15 @@ pub async fn status_ready_handler(State(_state): State<AppState>) -> Html<String
 
 pub async fn generating_status_handler(State(state): State<AppState>) -> Html<String> {
     tracing::debug!("generating_status_handler: called");
-    let ctx = state.as_game_service_context();
+    let ctx = match state.as_game_service_context() {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::error!("generating_status_handler: failed to load context: {e}");
+            return Html(
+                "<span class=\"status error\">Failed to load game context</span>".to_string(),
+            );
+        }
+    };
     // Load state fresh from storage
     let game_state = crate::application::context::load_expecting_valid_state(&ctx);
     let (status, phase) = match game_state {
@@ -104,10 +112,11 @@ pub async fn generating_status_handler(State(state): State<AppState>) -> Html<St
 }
 
 pub async fn reset_generating_handler(State(state): State<AppState>) -> Html<String> {
-    match state
-        .application_service
-        .reset_generating_status(state.as_game_service_context())
-    {
+    let ctx = match state.as_game_service_context() {
+        Ok(ctx) => ctx,
+        Err(_) => return Html("failed".to_string()),
+    };
+    match state.application_service.reset_generating_status(ctx) {
         Ok(()) => Html("reset".to_string()),
         Err(_) => Html("failed".to_string()),
     }

@@ -19,10 +19,6 @@ pub async fn run_server_with_config(
     let app_state = AppState {
         storage: Arc::clone(&resources.storage),
         preset_storage: Arc::clone(&resources.preset_storage),
-        world: resources.world,
-        map: resources.map,
-        player: resources.player,
-        npcs: resources.npcs,
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         settings: Arc::clone(&resources.settings),
         game_service: Arc::new(crate::application::game_service::GameService::with_storage(

@@ -5,9 +5,16 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct MapDef {
     pub overworld: Overworld,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct Overworld {
+    pub id: String,
+    pub name: String,
+    pub regions: Vec<Region>,
 }
 
 impl MapDef {
@@ -18,13 +25,6 @@ impl MapDef {
             .flat_map(|region| &region.rooms)
             .find(|room| room.id == room_id)
     }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Overworld {
-    pub id: String,
-    pub name: String,
-    pub regions: Vec<Region>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

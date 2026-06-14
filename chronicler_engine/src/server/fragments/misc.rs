@@ -53,10 +53,16 @@ pub async fn check_text_handler(
 }
 
 pub async fn retry_handler(State(state): State<AppState>) -> (StatusCode, String) {
-    match state
-        .application_service
-        .retry(state.as_game_service_context())
-    {
+    let ctx = match state.as_game_service_context() {
+        Ok(ctx) => ctx,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to load context: {e}"),
+            );
+        }
+    };
+    match state.application_service.retry(ctx) {
         Ok(()) => (
             StatusCode::OK,
             "<span class=\"status ready\">Retrying...</span>".to_string(),
@@ -67,10 +73,16 @@ pub async fn retry_handler(State(state): State<AppState>) -> (StatusCode, String
 
 /// Requires `last_trigger` to be present and the last message to be a narration.
 pub async fn retrigger_handler(State(state): State<AppState>) -> (StatusCode, String) {
-    match state
-        .application_service
-        .retrigger(state.as_game_service_context())
-    {
+    let ctx = match state.as_game_service_context() {
+        Ok(ctx) => ctx,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to load context: {e}"),
+            );
+        }
+    };
+    match state.application_service.retrigger(ctx) {
         Ok(()) => (
             StatusCode::OK,
             "<span class=\"status ready\">Retriggering...</span>".to_string(),
@@ -83,11 +95,14 @@ pub async fn switch_swipe_handler(
     State(state): State<AppState>,
     axum::extract::Path((message_id, swipe_index)): axum::extract::Path<(u64, usize)>,
 ) -> axum::response::Response<Body> {
-    match state.application_service.switch_swipe(
-        state.as_game_service_context(),
-        message_id,
-        swipe_index,
-    ) {
+    let ctx = match state.as_game_service_context() {
+        Ok(ctx) => ctx,
+        Err(e) => return internal_error(format!("Failed to load context: {e}")),
+    };
+    match state
+        .application_service
+        .switch_swipe(ctx, message_id, swipe_index)
+    {
         Ok(()) => match super::renderers::render_story_log(&state) {
             Ok(html) => ok(html),
             Err(e) => internal_error(format!("Failed to render story log: {e}")),
@@ -113,10 +128,11 @@ pub async fn reset_handler(State(state): State<AppState>) -> axum::response::Res
 
     state.current_cancel_token().cancel();
 
-    match state
-        .application_service
-        .reset(state.as_game_service_context())
-    {
+    let ctx = match state.as_game_service_context() {
+        Ok(ctx) => ctx,
+        Err(e) => return internal_error(format!("Failed to load context: {e}")),
+    };
+    match state.application_service.reset(ctx) {
         Ok(()) => {
             state
                 .is_generating

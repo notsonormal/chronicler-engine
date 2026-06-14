@@ -23,7 +23,7 @@ impl Relationship {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct CharacterSheet {
     pub name: String,
     pub description: String,
@@ -47,7 +47,7 @@ impl CharacterSheet {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct PlayerCard {
     #[serde(flatten)]
     pub sheet: CharacterSheet,

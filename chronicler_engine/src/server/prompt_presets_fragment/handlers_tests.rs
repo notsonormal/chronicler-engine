@@ -27,10 +27,6 @@ fn make_test_app_state_with_storage(
     crate::server::AppState {
         storage: Arc::new(Storage::new_in_memory()),
         preset_storage: storage,
-        world: Arc::new(crate::test_support::TestWorld::minimal()),
-        map: Arc::new(crate::test_support::TestMap::single_room("start")),
-        player: Arc::new(crate::test_support::TestPlayer::standard()),
-        npcs: Arc::new(std::collections::HashMap::new()),
         game_service: Arc::clone(&game_service),
         application_service: Arc::new(
             crate::application::application_service::DefaultApplicationService::new(Arc::clone(
@@ -311,10 +307,6 @@ fn make_test_app_state_with_failing_storage(
     crate::server::AppState {
         storage: Arc::new(Storage::new_in_memory()),
         preset_storage: Arc::new(storage),
-        world: Arc::new(crate::test_support::TestWorld::minimal()),
-        map: Arc::new(crate::test_support::TestMap::single_room("start")),
-        player: Arc::new(crate::test_support::TestPlayer::standard()),
-        npcs: Arc::new(std::collections::HashMap::new()),
         game_service: Arc::clone(&game_service),
         application_service: Arc::new(
             crate::application::application_service::DefaultApplicationService::new(Arc::clone(

@@ -1,38 +1,9 @@
-use std::sync::{Arc, RwLock};
 use axum::{Form, http::StatusCode};
-use tokio_util::sync::CancellationToken;
 
-use crate::application::application_service::DefaultApplicationService;
-use crate::application::game_service::GameService;
-use crate::model::settings::{AppSettings, TextCheckMode};
+use crate::model::settings::TextCheckMode;
 use crate::server::fragments::actions::{action_check_handler, action_confirm_handler, action_handler};
 use crate::server::fragments::ActionForm;
-use crate::server::AppState;
-use crate::storage::Storage;
-use crate::test_support::{TestMap, TestPlayer, TestWorld};
-
-fn make_test_app_state() -> AppState {
-    let storage = Arc::new(Storage::new_in_memory());
-    let settings = Arc::new(RwLock::new(AppSettings::default()));
-    let game_service = Arc::new(GameService::with_storage(
-        Some(Arc::clone(&storage)),
-        None,
-        Arc::clone(&settings),
-    ));
-    AppState {
-        storage: Arc::clone(&storage),
-        preset_storage: Arc::new(Storage::new_in_memory()),
-        world: Arc::new(TestWorld::minimal()),
-        map: Arc::new(TestMap::single_room("start")),
-        player: Arc::new(TestPlayer::standard()),
-        npcs: Arc::new(std::collections::HashMap::new()),
-        game_service: Arc::clone(&game_service),
-        application_service: Arc::new(DefaultApplicationService::new(Arc::clone(&game_service))),
-        settings,
-        cancel_token: Arc::new(RwLock::new(CancellationToken::new())),
-        is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
-    }
-}
+use crate::test_support::TestAppBuilder;
 
 #[test]
 fn test_action_form_deserialization() {
@@ -77,7 +48,7 @@ fn test_action_form_roundtrip() {
 
 #[tokio::test]
 async fn test_action_handler_empty_command() {
-    let state = make_test_app_state();
+    let state = TestAppBuilder::default_test().build_app_state();
     let form = ActionForm {
         command: String::new(),
     };
@@ -99,7 +70,7 @@ async fn test_action_handler_empty_command() {
 
 #[tokio::test]
 async fn test_action_handler_whitespace_command() {
-    let state = make_test_app_state();
+    let state = TestAppBuilder::default_test().build_app_state();
     let form = ActionForm {
         command: "   ".to_string(),
     };
@@ -114,7 +85,7 @@ async fn test_action_handler_whitespace_command() {
 
 #[tokio::test]
 async fn test_action_handler_started() {
-    let state = make_test_app_state();
+    let state = TestAppBuilder::default_test().build_app_state();
     let form = ActionForm {
         command: "look".to_string(),
     };
@@ -125,7 +96,7 @@ async fn test_action_handler_started() {
 
 #[tokio::test]
 async fn test_action_confirm_handler_empty_command() {
-    let state = make_test_app_state();
+    let state = TestAppBuilder::default_test().build_app_state();
     let form = ActionForm {
         command: String::new(),
     };
@@ -139,7 +110,7 @@ async fn test_action_confirm_handler_empty_command() {
 
 #[tokio::test]
 async fn test_action_confirm_handler_started() {
-    let state = make_test_app_state();
+    let state = TestAppBuilder::default_test().build_app_state();
     let form = ActionForm {
         command: "look".to_string(),
     };
@@ -149,7 +120,7 @@ async fn test_action_confirm_handler_started() {
 
 #[tokio::test]
 async fn test_action_check_handler_empty_command() {
-    let state = make_test_app_state();
+    let state = TestAppBuilder::default_test().build_app_state();
     let form = ActionForm {
         command: String::new(),
     };
@@ -164,7 +135,7 @@ async fn test_action_check_handler_empty_command() {
 
 #[tokio::test]
 async fn test_action_check_handler_disabled_mode() {
-    let state = make_test_app_state();
+    let state = TestAppBuilder::default_test().build_app_state();
     state.settings.write().unwrap().text_check.mode = TextCheckMode::Disabled;
     let form = ActionForm {
         command: "test".to_string(),
@@ -175,7 +146,7 @@ async fn test_action_check_handler_disabled_mode() {
 
 #[tokio::test]
 async fn test_action_check_handler_auto_check_disabled() {
-    let state = make_test_app_state();
+    let state = TestAppBuilder::default_test().build_app_state();
     state.settings.write().unwrap().text_check.enable_auto_check = false;
     let form = ActionForm {
         command: "test".to_string(),
@@ -186,7 +157,7 @@ async fn test_action_check_handler_auto_check_disabled() {
 
 #[tokio::test]
 async fn test_action_check_handler_check_result_none() {
-    let state = make_test_app_state();
+    let state = TestAppBuilder::default_test().build_app_state();
     let form = ActionForm {
         command: "go north".to_string(),
     };

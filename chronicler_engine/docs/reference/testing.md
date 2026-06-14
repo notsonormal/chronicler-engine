@@ -109,6 +109,32 @@ For integration tests that need environment-specific overrides.
 
 Browser tests write a temporary `settings.json` with Mock connections and pass it via `--settings-path` CLI flag when spawning the server process.
 
+## Test Support Utilities
+
+### TestAppBuilder
+
+The `TestAppBuilder` in `src/test_support/test_app_builder.rs` provides a fluent builder pattern for constructing test fixtures. It handles:
+
+- **World/Map/Persona Seeding**: Automatically seeds test world, map, and player persona into storage
+- **Game Creation**: Creates an initial game and sets it as active
+- **NPC Setup**: Optional NPC seeding and room assignment
+- **State Mutation**: Optional log entries, generation status/phase, trigger context
+- **Router or AppState**: Call `.build()` for `Router` or `.build_app_state()` for `AppState` directly
+
+**Usage pattern:**
+
+```rust
+// For HTTP tests (returns Router)
+let app = TestAppBuilder::default_test()
+    .is_generating(true)
+    .build();
+
+// For unit tests needing AppState directly
+let state = TestAppBuilder::default_test().build_app_state();
+```
+
+**Avoid duplication**: Never manually recreate the world-seeding + game-creation boilerplate in test files. Always use `TestAppBuilder` unless you have a specific reason to do custom setup.
+
 ## Running Tests
 
 ### Full Suite

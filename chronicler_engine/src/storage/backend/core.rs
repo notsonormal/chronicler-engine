@@ -95,6 +95,8 @@ pub enum Operation {
     ListWorlds,
     GetWorld,
     SeedWorld,
+    UpdateWorld,
+    GetWorldById,
     ListPersonas,
     GetPersona,
     SeedPersona,
@@ -176,20 +178,13 @@ impl Storage {
     }
 
     pub fn new_in_memory() -> Self {
-        let now = chrono::Utc::now();
         Self {
-            game_id: AtomicU64::new(1),
+            game_id: AtomicU64::new(0), // No default game - calling code should create one explicitly
             backend: Mutex::new(Backend::InMemory(Box::new(InMemoryData {
                 snapshots: HashMap::new(),
                 next_snapshot_id: 1,
-                games: vec![Game {
-                    id: 1,
-                    world_name: "default".to_string(),
-                    name: "default".to_string(),
-                    created_at: now,
-                    updated_at: now,
-                }],
-                next_game_id: 2,
+                games: vec![], // No default game to avoid "world not found" errors
+                next_game_id: 1,
                 messages: HashMap::new(),
                 next_message_id: 0,
                 swipes: HashMap::new(),

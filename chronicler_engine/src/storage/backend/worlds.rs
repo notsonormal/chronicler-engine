@@ -6,7 +6,7 @@ use chrono::Utc;
 use crate::error::EngineError;
 use crate::model::map::MapDef;
 use crate::model::world::WorldCard;
-use crate::storage::backend::{empty_to_none, Backend, Operation, Storage, InMemoryWorld};
+use crate::storage::backend::{Backend, Operation, Storage, InMemoryWorld};
 use crate::storage::models::world::{DbWorld, DbMap};
 
 pub(crate) fn world_card_from_db(db: &DbWorld) -> Result<WorldCard, EngineError> {
@@ -103,60 +103,143 @@ impl Storage {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let now = Utc::now().to_rfc3339();
-                let scenarios_json = serde_json::to_string(&world_card.scenarios)
-                    .map_err(|e| EngineError::Parse(format!("Failed to serialize scenarios: {e}")))?;
-                let global_rules_json = serde_json::to_string(&world_card.global_rules)
-                    .map_err(|e| EngineError::Parse(format!("Failed to serialize global_rules: {e}")))?;
 
+                // Insert or replace world
                 conn.execute(
-                    "INSERT OR IGNORE INTO worlds (key, name, description, global_rules, starting_room_id, scenarios, default_scenario_id, default_room_image, player_key, created_at, updated_at)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT OR REPLACE INTO worlds (
+                        key, name, description, global_rules, starting_room_id,
+                        scenarios, default_scenario_id, default_room_image, player_key,
+                        created_at, updated_at
+                    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?10)",
                     rusqlite::params![
                         world_card.key,
                         world_card.name,
                         world_card.description,
-                        global_rules_json,
+                        serde_json::to_string(&world_card.global_rules)?,
                         world_card.starting_room_id,
-                        scenarios_json,
-                        empty_to_none(world_card.default_scenario_id.as_deref().unwrap_or("")),
-                        empty_to_none(world_card.default_room_image.as_deref().unwrap_or("")),
-                        &world_card.player_key,
-                        now,
-                        now,
+                        serde_json::to_string(&world_card.scenarios)?,
+                        world_card.default_scenario_id.clone().unwrap_or_default(),
+                        world_card.default_room_image.clone().unwrap_or_default(),
+                        world_card.player_key,
+                        &now,
                     ],
-                )?;
+                )
+                .map_err(EngineError::Database)?;
 
-                let world_id: i64 = conn.query_row(
-                    "SELECT id FROM worlds WHERE key = ?",
-                    [&world_card.key],
-                    |row| row.get(0),
-                )?;
+                let world_id = conn.last_insert_rowid();
 
-                let map_data_json = serde_json::to_string(map)
-                    .map_err(|e| EngineError::Parse(format!("Failed to serialize map: {e}")))?;
-
+                // Insert or replace map
                 conn.execute(
-                    "INSERT OR IGNORE INTO maps (world_id, map_data, created_at, updated_at)
-                     VALUES (?, ?, ?, ?)",
-                    rusqlite::params![world_id, map_data_json, now, now],
-                )?;
+                    "INSERT OR REPLACE INTO maps (world_id, map_data, created_at, updated_at)
+                     VALUES (?1, ?2, ?3, ?3)",
+                    rusqlite::params![world_id, serde_json::to_string(map)?, &now],
+                )
+                .map_err(EngineError::Database)?;
 
                 Ok(world_id)
             }
             Backend::InMemory(data) => {
-                if let Some(existing) = data.worlds.iter().find(|w| w.world_card.key == world_card.key) {
-                    Ok(existing.world_id)
-                } else {
-                    let world_id = (data.worlds.len() + 1) as i64;
-                    data.worlds.push(InMemoryWorld {
-                        world_id,
-                        world_card: world_card.clone(),
-                        map: map.clone(),
+                let world_id = data
+                    .worlds
+                    .iter()
+                    .find(|w| w.world_card.key == world_card.key)
+                    .map(|w| w.world_id)
+                    .unwrap_or_else(|| {
+                        let new_id = data.worlds.last().map(|w| w.world_id).unwrap_or(0) + 1;
+                        data.worlds.push(InMemoryWorld {
+                            world_id: new_id,
+                            world_card: world_card.clone(),
+                            map: map.clone(),
+                        });
+                        new_id
                     });
-                    Ok(world_id)
-                }
+                Ok(world_id)
             }
-            Backend::Test { .. } => unimplemented!(),
+            Backend::Test { .. } => unreachable!(),
+        })
+    }
+
+    pub fn create_world(&self, world_card: &WorldCard, map: &MapDef) -> Result<i64, EngineError> {
+        self.seed_world(world_card, map) // Reuse idempotent seeding
+    }
+
+    pub fn update_world(
+        &self,
+        id: i64,
+        world_card: &WorldCard,
+        map: &MapDef,
+    ) -> Result<(), EngineError> {
+        self.with_backend_mut(Operation::UpdateWorld, |backend, _game_id| match backend {
+            Backend::Sqlite { pool } => {
+                let conn = pool.conn();
+                let now = chrono::Utc::now().to_rfc3339();
+                conn.execute(
+                    "UPDATE worlds SET key=?, name=?, description=?, global_rules=?, starting_room_id=?, scenarios=?, default_scenario_id=?, default_room_image=?, player_key=?, updated_at=? WHERE id=?",
+                    rusqlite::params![
+                        world_card.key, world_card.name, world_card.description,
+                        serde_json::to_string(&world_card.global_rules)?,
+                        world_card.starting_room_id,
+                        serde_json::to_string(&world_card.scenarios)?,
+                        world_card.default_scenario_id.clone().unwrap_or_default(),
+                        world_card.default_room_image.clone().unwrap_or_default(),
+                        world_card.player_key, &now, &id
+                    ],
+                )?;
+                conn.execute(
+                    "UPDATE maps SET map_data=?, updated_at=? WHERE world_id=?",
+                    rusqlite::params![serde_json::to_string(map)?, &now, &id],
+                )?;
+                Ok(())
+            }
+            Backend::InMemory(data) => {
+                if let Some(inmem_world) = data.worlds.iter_mut().find(|w| w.world_id == id) {
+                    inmem_world.world_card = world_card.clone();
+                    inmem_world.map = map.clone();
+                }
+                Ok(())
+            }
+            Backend::Test { .. } => unreachable!(),
+        })
+    }
+
+    pub fn get_world_by_id(&self, id: i64) -> Result<Option<WorldWithMap>, EngineError> {
+        self.with_backend_mut(Operation::GetWorldById, |backend, _game_id| match backend {
+            Backend::Sqlite { pool } => {
+                let conn = pool.conn();
+                // Two separate statements, same pattern as get_world() — avoids column-index conflicts in from_row
+                let mut world_stmt = conn.prepare(
+                    "SELECT id, key, name, description, global_rules, starting_room_id, scenarios, default_scenario_id, default_room_image, player_key, created_at, updated_at
+                     FROM worlds WHERE id = ?",
+                )?;
+                let db_world = match world_stmt.query_row([id], DbWorld::from_row) {
+                    Ok(w) => w,
+                    Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(None),
+                    Err(e) => return Err(EngineError::Database(e)),
+                };
+
+                let mut map_stmt = conn.prepare(
+                    "SELECT id, world_id, map_data, created_at, updated_at FROM maps WHERE world_id = ?",
+                )?;
+                let db_map = map_stmt.query_row([db_world.id], DbMap::from_row)
+                    .map_err(EngineError::Database)?;
+
+                let world_card = world_card_from_db(&db_world)?;
+                let map: MapDef = serde_json::from_str(&db_map.map_data)
+                    .map_err(|e| EngineError::Parse(format!("Failed to deserialize map: {e}")))?;
+
+                Ok(Some(WorldWithMap { world_id: db_world.id, world_card, map }))
+            }
+            Backend::InMemory(data) => {
+                Ok(data.worlds
+                    .iter()
+                    .find(|w| w.world_id == id)
+                    .map(|w| WorldWithMap {
+                        world_id: w.world_id,
+                        world_card: w.world_card.clone(),
+                        map: w.map.clone(),
+                    }))
+            }
+            Backend::Test { .. } => unreachable!(),
         })
     }
 }

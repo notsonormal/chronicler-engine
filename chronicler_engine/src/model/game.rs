@@ -7,8 +7,12 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Game {
     pub id: u64,
-    pub name: String,
+    /// Display name of the world (denormalized for performance - avoids JOIN in queries)
     pub world_name: String,
+    /// Stable foreign key reference to the world (canonical identifier - use for lookups)
+    /// See ADR-025: Multi-World Data Foundation
+    pub world_key: String,
+    pub name: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
