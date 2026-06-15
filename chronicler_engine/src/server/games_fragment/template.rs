@@ -39,8 +39,8 @@ pub struct GameRowView {
                 <span class="game-name">{{ game.name }}</span>
                 <span class="world-badge">{{ game.world_name }}</span>
                 <div class="game-actions">
-                    <button class="btn-switch" hx-post="/games/{{ game.id }}/switch" hx-swap="none">Switch</button>
-                    <button class="btn-delete" hx-post="/games/{{ game.id }}/delete" hx-target="closest .game-item" hx-swap="outerHTML" hx-confirm="Delete this game? This cannot be undone.">Delete</button>
+                    <button class="btn-primary" hx-post="/games/{{ game.id }}/switch" hx-swap="none">Switch</button>
+                    <button class="btn-danger" hx-post="/games/{{ game.id }}/delete" hx-target="closest .game-item" hx-swap="outerHTML" hx-confirm="Delete this game? This cannot be undone.">Delete</button>
                 </div>
             </div>
             {% endfor %}
@@ -62,7 +62,7 @@ pub struct GameRowView {
             </form>
         </details>
         {% endif %}
-        <button class="btn-reset" hx-post="/reset" hx-confirm="Are you sure you want to reset the current game? All progress will be lost." hx-swap="none">Reset Current Game</button>
+        <button class="btn-danger" hx-post="/reset" hx-confirm="Are you sure you want to reset the current game? All progress will be lost." hx-swap="none">Reset Current Game</button>
     </div>
 </div>
 "#,

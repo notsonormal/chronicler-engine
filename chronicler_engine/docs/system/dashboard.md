@@ -258,9 +258,12 @@ window.openWorldModal = function (key) {
 ```
 
 ## CSS Classes
-- `.worlds-panel` — container for worlds list with game counts
-- `.world-form-container` — modal form container styling
-- `.btn-new-world` — "Create New World" button styling
+- `.worlds-panel` — container for worlds list with game counts (in `assets/worlds.css`)
+- `.world-form-container` — modal form container styling (in `assets/worlds.css`)
+- `.btn-primary` — shared green button utility class (gradient, green border/text)
+- `.btn-cyan` — shared cyan button utility class (gradient, cyan border/text)
+- `.btn-danger` — shared red button utility class (gradient, red border/text)
+- `.btn-new-world` — "Create New World" button (uses `.btn-primary` + layout overrides)
 - `.modal-overlay` — full-screen darkened backdrop
 - `.modal` — centered modal dialog
 - `.modal-header` — title + close button row

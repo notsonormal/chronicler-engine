@@ -32,13 +32,10 @@ pub fn check_messages_swipes_separation(file_path: &str, content: &str) -> Vec<V
     violations
 }
 
-
 pub fn check_handler_return_type(file_path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
 
-
     let normalized_path = file_path.replace('\\', "/");
-
 
     if !normalized_path.starts_with("src/server/")
         || normalized_path.ends_with("mod.rs")
@@ -52,12 +49,10 @@ pub fn check_handler_return_type(file_path: &str, content: &str) -> Vec<Violatio
         let line_num = line_no + 1;
         let trimmed = line.trim();
 
-    
         if trimmed.starts_with("//") || trimmed.starts_with("*") {
             continue;
         }
 
-    
         if trimmed.contains(") -> (StatusCode, String)") {
             violations.push(Violation::error(
                 file_path,

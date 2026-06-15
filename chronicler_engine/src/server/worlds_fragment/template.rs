@@ -26,7 +26,7 @@ pub struct PersonaOption {
 #[template(
     source = r##"
 <div class="worlds-panel">
-    <button class="btn-new-world" hx-get="/fragment/worlds/new" hx-target="#world-modal-content" hx-swap="innerHTML" onclick="document.getElementById(&quot;world-modal&quot;).style.display=&quot;block&quot;">Create New World</button>
+    <button class="btn-primary btn-new-world" onclick="openWorldModal()">Create New World</button>
 
     {% if worlds.is_empty() %}
     <p>No worlds defined. Create your first world to get started.</p>
@@ -35,8 +35,8 @@ pub struct PersonaOption {
         {% for world in worlds %}
         <li class="world-item">
             <strong>{{ world.name }}</strong> - {{ world.description }} <em>({{ world.game_count }} games)</em>
-            <button hx-get="/fragment/worlds/{{ world.key }}/edit" hx-target="#world-modal-content" hx-swap="innerHTML" onclick="document.getElementById(&quot;world-modal&quot;).style.display=&quot;block&quot;">Edit</button>
-            <button hx-post="/worlds/{{ world.key }}/delete" hx-confirm="Delete this world? This cannot be undone." hx-target="closest .world-item" hx-swap="outerHTML swap:0.3s" class="danger">Delete</button>
+            <button class="btn-cyan" onclick="openWorldModal('{{ world.key }}')">Edit</button>
+            <button hx-post="/worlds/{{ world.key }}/delete" hx-confirm="Delete this world? This cannot be undone." hx-target="closest .world-item" hx-swap="outerHTML swap:0.3s" class="btn-danger">Delete</button>
         </li>
         {% endfor %}
     </ul>
@@ -84,7 +84,7 @@ pub struct WorldsPanelTemplate {
             <textarea name="scenarios_json" class="json-editor" placeholder="{{ scenarios_placeholder }}">{{ scenarios_json }}</textarea>
         </label>
 
-        <button type="submit">{{ submit_text }}</button>
+        <button type="submit" class="btn-primary">{{ submit_text }}</button>
     </form>
 </div>
 "#,

@@ -48,13 +48,13 @@ pub(crate) fn provider_options_html(selected: &str) -> String {
             {{ conn.provider|fmt("{:?}") }} - {{ conn.model }}
         </div>
         <div class="card-actions">
-            <button hx-get="/fragment/connections/{{ conn.id }}/edit" hx-target="closest .connection-card" hx-swap="outerHTML">Edit</button>
-            <button hx-post="/connections/{{ conn.id }}/delete" hx-confirm="Delete this connection?" hx-target="closest .connection-card" hx-swap="outerHTML swap:0.3s" class="danger">Delete</button>
+            <button hx-get="/fragment/connections/{{ conn.id }}/edit" hx-target="closest .connection-card" hx-swap="outerHTML" class="btn-cyan">Edit</button>
+            <button hx-post="/connections/{{ conn.id }}/delete" hx-confirm="Delete this connection?" hx-target="closest .connection-card" hx-swap="outerHTML swap:0.3s" class="btn-danger">Delete</button>
             {% if conn.id != narration_connection_id %}
-            <button hx-post="/connections/{{ conn.id }}/set-narrator" hx-target=".settings-panel" hx-swap="innerHTML" class="primary">Set as Narrator</button>
+            <button hx-post="/connections/{{ conn.id }}/set-narrator" hx-target=".settings-panel" hx-swap="innerHTML" class="btn-primary">Set as Narrator</button>
             {% endif %}
             {% if conn.id != quantifier_connection_id %}
-            <button hx-post="/connections/{{ conn.id }}/set-quantifier" hx-target=".settings-panel" hx-swap="innerHTML" class="primary">Set as Quantifier</button>
+            <button hx-post="/connections/{{ conn.id }}/set-quantifier" hx-target=".settings-panel" hx-swap="innerHTML" class="btn-primary">Set as Quantifier</button>
             {% endif %}
         </div>
     </div>
@@ -90,7 +90,7 @@ pub(crate) fn provider_options_html(selected: &str) -> String {
                 Single User Message (merge system + user for models that ignore system prompts)
             </label>
         </div>
-        <button type="submit" class="primary">Add Connection</button>
+        <button type="submit" class="btn-primary">Add Connection</button>
     </form>
     <span id="settings-status"></span>
 
@@ -119,7 +119,7 @@ pub(crate) fn provider_options_html(selected: &str) -> String {
                 </label>
             </div>
             <div class="form-actions">
-                <button type="submit" class="primary">Save</button>
+                <button type="submit" class="btn-primary">Save</button>
             </div>
         </form>
     </div>

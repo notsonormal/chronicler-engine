@@ -96,6 +96,9 @@ pub enum EngineError {
     #[error("World not found: {0}")]
     WorldNotFound(String),
 
+    #[error("Cannot delete world with {game_count} games")]
+    WorldHasGames { game_count: usize },
+
     #[error("Configuration error: {0}")]
     Config(String),
 

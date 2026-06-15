@@ -384,3 +384,39 @@ async fn test_delete_world_handler_idempotent() {
         response.status()
     );
 }
+
+/// Test delete_world_handler returns inline error when games reference the world.
+#[tokio::test]
+async fn test_delete_world_handler_blocked_by_games() {
+    let app = TestAppBuilder::default_app();
+
+    // The default app seeds world "test" and creates a game referencing it
+    // Attempt to delete that world — should return inline error HTML
+    let req = Request::builder()
+        .uri("/worlds/test/delete")
+        .method(http::Method::POST)
+        .body(Body::empty())
+        .unwrap();
+    let response = app.clone().oneshot(req).await.unwrap();
+
+    // The delete returns 200 OK with inline error HTML (is_user_displayable path)
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "Expected 200 with inline error: {:?}",
+        response.status()
+    );
+
+    let body_bytes = axum::body::to_bytes(response.into_body(), 8192)
+        .await
+        .unwrap();
+    let body = String::from_utf8_lossy(&body_bytes).to_string();
+    assert!(
+        body.contains("games"),
+        "Error body should mention games: {body}"
+    );
+    assert!(
+        body.contains("error-message"),
+        "Error body should have error-message class: {body}"
+    );
+}

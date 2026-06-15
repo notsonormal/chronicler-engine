@@ -35,6 +35,13 @@ impl ApplicationError {
     pub fn validation(msg: impl Into<String>) -> Self {
         Self::Validation(msg.into())
     }
+
+    pub fn is_user_displayable(&self) -> bool {
+        matches!(
+            self,
+            Self::Validation(_) | Self::Engine(EngineError::WorldHasGames { .. })
+        )
+    }
 }
 
 impl std::fmt::Display for ApplicationError {

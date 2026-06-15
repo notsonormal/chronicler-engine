@@ -22,22 +22,22 @@ pub(crate) fn connection_card_html(
 
     let mut actions = String::new();
     actions.push_str(&format!(
-        r#"<button hx-get="/fragment/connections/{}/edit" hx-target="closest .connection-card" hx-swap="outerHTML">Edit</button>"#,
+        r#"<button hx-get="/fragment/connections/{}/edit" hx-target="closest .connection-card" hx-swap="outerHTML" class="btn-cyan">Edit</button>"#,
         html_escape(&conn.id)
     ));
     actions.push_str(&format!(
-        r#"<button hx-post="/connections/{}/delete" hx-confirm="Delete this connection?" hx-target="closest .connection-card" hx-swap="outerHTML swap:0.3s" class="danger">Delete</button>"#,
+        r#"<button hx-post="/connections/{}/delete" hx-confirm="Delete this connection?" hx-target="closest .connection-card" hx-swap="outerHTML swap:0.3s" class="btn-danger">Delete</button>"#,
         html_escape(&conn.id)
     ));
     if !is_narrator {
         actions.push_str(&format!(
-            r#"<button hx-post="/connections/{}/set-narrator" hx-target=".settings-panel" hx-swap="innerHTML" class="primary">Set as Narrator</button>"#,
+            r#"<button hx-post="/connections/{}/set-narrator" hx-target=".settings-panel" hx-swap="innerHTML" class="btn-primary">Set as Narrator</button>"#,
             html_escape(&conn.id)
         ));
     }
     if !is_quantifier {
         actions.push_str(&format!(
-            r#"<button hx-post="/connections/{}/set-quantifier" hx-target=".settings-panel" hx-swap="innerHTML" class="primary">Set as Quantifier</button>"#,
+            r#"<button hx-post="/connections/{}/set-quantifier" hx-target=".settings-panel" hx-swap="innerHTML" class="btn-primary">Set as Quantifier</button>"#,
             html_escape(&conn.id)
         ));
     }
@@ -104,8 +104,8 @@ pub(crate) fn connection_edit_form_html(conn: &Connection) -> String {
             </label>
         </div>
         <div class="form-actions">
-            <button type="submit" class="primary">Save</button>
-            <button type="button" hx-get="/fragment/connections/{}" hx-target="closest .connection-edit-form" hx-swap="outerHTML">Cancel</button>
+            <button type="submit" class="btn-primary">Save</button>
+            <button type="button" hx-get="/fragment/connections/{}" hx-target="closest .connection-edit-form" hx-swap="outerHTML" class="btn-cyan">Cancel</button>
         </div>
     </form>
 </div>"#,

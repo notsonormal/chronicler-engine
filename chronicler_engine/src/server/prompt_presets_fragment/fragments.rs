@@ -58,7 +58,7 @@ pub(crate) fn preset_view_form_html(preset: &PromptPreset) -> String {
     {writing_style_field}
     {output_format_field}
     <div class="form-actions">
-        <button type="button" hx-get="/fragment/prompt-presets/{id}" hx-target="closest .preset-card" hx-swap="outerHTML">Close</button>
+        <button type="button" hx-get="/fragment/prompt-presets/{id}" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">Close</button>
     </div>
 </div>"#,
     )
@@ -118,8 +118,8 @@ pub(crate) fn preset_edit_form_html(
         {writing_style_field}
         {output_format_field}
         <div class="form-actions">
-            <button type="submit" class="primary">Save</button>
-            <button type="button" hx-get="/fragment/prompt-presets/{id}" hx-target="closest .preset-card" hx-swap="outerHTML">Cancel</button>
+            <button type="submit" class="btn-primary">Save</button>
+            <button type="button" hx-get="/fragment/prompt-presets/{id}" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">Cancel</button>
         </div>
     </form>
 </div>"#,
@@ -138,27 +138,27 @@ pub(crate) fn preset_card_html(preset: &PromptPreset, is_active: bool) -> String
     let mut actions = String::new();
     if !is_active {
         actions.push_str(&format!(
-            r#"<button hx-post="/prompt-presets/{}/activate" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="primary">Set Active</button>"#,
+            r#"<button hx-post="/prompt-presets/{}/activate" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-primary">Set Active</button>"#,
             html_escape(&preset.id)
         ));
     }
     if preset.is_default {
         actions.push_str(&format!(
-            r#"<button hx-get="/fragment/prompt-presets/{}/view" hx-target="closest .preset-card" hx-swap="outerHTML">View</button>"#,
+            r#"<button hx-get="/fragment/prompt-presets/{}/view" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">View</button>"#,
             html_escape(&preset.id)
         ));
     } else {
         actions.push_str(&format!(
-            r#"<button hx-get="/fragment/prompt-presets/{}/edit" hx-target="closest .preset-card" hx-swap="outerHTML">Edit</button>"#,
+            r#"<button hx-get="/fragment/prompt-presets/{}/edit" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">Edit</button>"#,
             html_escape(&preset.id)
         ));
         actions.push_str(&format!(
-            r#"<button hx-post="/prompt-presets/{}/delete" hx-confirm="Delete this preset?" hx-target="closest .preset-card" hx-swap="outerHTML swap:0.3s" class="danger">Delete</button>"#,
+            r#"<button hx-post="/prompt-presets/{}/delete" hx-confirm="Delete this preset?" hx-target="closest .preset-card" hx-swap="outerHTML swap:0.3s" class="btn-danger">Delete</button>"#,
             html_escape(&preset.id)
         ));
     }
     actions.push_str(&format!(
-        r#"<button hx-post="/prompt-presets/{}/duplicate" hx-target=".prompt-presets-panel" hx-swap="outerHTML">Duplicate</button>"#,
+        r#"<button hx-post="/prompt-presets/{}/duplicate" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-cyan">Duplicate</button>"#,
         html_escape(&preset.id)
     ));
 

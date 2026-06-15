@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-06-15
+
+### Changed
+
+- **World Fragment Quality Remediation** — Structural improvements to error handling, CSS architecture, and button patterns
+  - **Typed Error Variant**: Replaced `EngineError::Parse("Cannot delete world with N games")` with `EngineError::WorldHasGames { game_count }` — type-driven dispatch instead of string-matching
+  - **Type-Driven Error Branching**: Added `ApplicationError::is_user_displayable()` — validation errors and domain constraints render inline; engine errors use `app_err_to_response()`
+  - **HTMX Error Handler**: Removed `evt.preventDefault()` from `htmx:beforeSwap` — notifications are now additive (error HTML swaps into target AND shows notification)
+  - **CSS Decomposition**: Extracted `assets/worlds.css` from `styles.css` — worlds-specific layout overrides in separate file; `.error-message` stays global
+  - **Button Utility Classes**: Added `.btn-primary`, `.btn-cyan`, `.btn-danger` shared gradient classes; replaced ~170 lines of duplicated context-scoped button gradients
+  - **Template Updates**: Updated 6 template files to use utility classes (`class="btn-primary"`, `class="btn-danger"`, `class="btn-cyan"`) instead of context-scoped selectors
+  - Files modified: `src/error.rs`, `src/storage/backend/worlds.rs`, `src/application/application_service.rs`, `src/server/worlds_fragment/handlers.rs`, `assets/index.html`, `assets/styles.css`, 4 template files in `src/server/`
+  - Files added: `assets/worlds.css`
+  - Tests: 1217 pass (all pass), added `WorldHasGames` display test
+
 ## 2026-06-14
 
 ### Changed

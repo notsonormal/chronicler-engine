@@ -45,7 +45,6 @@ async fn test_edit_history_handler_ok() {
     )
     .await;
 
-
     assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
 }
 
@@ -54,7 +53,6 @@ async fn test_delete_history_handler_ok() {
     let state = TestAppBuilder::default_test().build_app_state();
 
     let response = delete_history_handler(axum::extract::State(state)).await;
-
 
     assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
 }

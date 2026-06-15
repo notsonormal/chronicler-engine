@@ -24,15 +24,15 @@ use crate::model::prompt_preset::PromptPreset;
             <div class="card-details preset-preview">{{ preset.preview_text() | escape }}</div>
             <div class="card-actions">
                 {% if preset.id != active_system_id %}
-                <button hx-post="/prompt-presets/{{ preset.id }}/activate" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="primary">Set Active</button>
+                <button hx-post="/prompt-presets/{{ preset.id }}/activate" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-primary">Set Active</button>
                 {% endif %}
                 {% if preset.is_default %}
-                <button hx-get="/fragment/prompt-presets/{{ preset.id }}/view" hx-target="closest .preset-card" hx-swap="outerHTML">View</button>
+                <button hx-get="/fragment/prompt-presets/{{ preset.id }}/view" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">View</button>
                 {% else %}
-                <button hx-get="/fragment/prompt-presets/{{ preset.id }}/edit" hx-target="closest .preset-card" hx-swap="outerHTML">Edit</button>
-                <button hx-post="/prompt-presets/{{ preset.id }}/delete" hx-confirm="Delete this preset?" hx-target="closest .preset-card" hx-swap="outerHTML swap:0.3s" class="danger">Delete</button>
+                <button hx-get="/fragment/prompt-presets/{{ preset.id }}/edit" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">Edit</button>
+                <button hx-post="/prompt-presets/{{ preset.id }}/delete" hx-confirm="Delete this preset?" hx-target="closest .preset-card" hx-swap="outerHTML swap:0.3s" class="btn-danger">Delete</button>
                 {% endif %}
-                <button hx-post="/prompt-presets/{{ preset.id }}/duplicate" hx-target=".prompt-presets-panel" hx-swap="outerHTML">Duplicate</button>
+                <button hx-post="/prompt-presets/{{ preset.id }}/duplicate" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-cyan">Duplicate</button>
             </div>
         </div>
         {% endfor %}
@@ -60,7 +60,7 @@ use crate::model::prompt_preset::PromptPreset;
                 <label for="system-preset-output">Output Format</label>
                 <textarea id="system-preset-output" name="output_format" rows="6" placeholder="Enter output format..."></textarea>
             </div>
-            <button type="submit" class="primary">Add Preset</button>
+            <button type="submit" class="btn-primary">Add Preset</button>
         </form>
     </div>
 
@@ -79,15 +79,15 @@ use crate::model::prompt_preset::PromptPreset;
             <div class="card-details preset-preview">{{ preset.preview_text() | escape }}</div>
             <div class="card-actions">
                 {% if preset.id != active_quantifier_id %}
-                <button hx-post="/prompt-presets/{{ preset.id }}/activate" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="primary">Set Active</button>
+                <button hx-post="/prompt-presets/{{ preset.id }}/activate" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-primary">Set Active</button>
                 {% endif %}
                 {% if preset.is_default %}
-                <button hx-get="/fragment/prompt-presets/{{ preset.id }}/view" hx-target="closest .preset-card" hx-swap="outerHTML">View</button>
+                <button hx-get="/fragment/prompt-presets/{{ preset.id }}/view" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">View</button>
                 {% else %}
-                <button hx-get="/fragment/prompt-presets/{{ preset.id }}/edit" hx-target="closest .preset-card" hx-swap="outerHTML">Edit</button>
-                <button hx-post="/prompt-presets/{{ preset.id }}/delete" hx-confirm="Delete this preset?" hx-target="closest .preset-card" hx-swap="outerHTML swap:0.3s" class="danger">Delete</button>
+                <button hx-get="/fragment/prompt-presets/{{ preset.id }}/edit" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">Edit</button>
+                <button hx-post="/prompt-presets/{{ preset.id }}/delete" hx-confirm="Delete this preset?" hx-target="closest .preset-card" hx-swap="outerHTML swap:0.3s" class="btn-danger">Delete</button>
                 {% endif %}
-                <button hx-post="/prompt-presets/{{ preset.id }}/duplicate" hx-target=".prompt-presets-panel" hx-swap="outerHTML">Duplicate</button>
+                <button hx-post="/prompt-presets/{{ preset.id }}/duplicate" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-cyan">Duplicate</button>
             </div>
         </div>
         {% endfor %}
@@ -111,7 +111,7 @@ use crate::model::prompt_preset::PromptPreset;
                 <label for="quantifier-preset-output">Output Format</label>
                 <textarea id="quantifier-preset-output" name="output_format" rows="6" placeholder="Enter output format..."></textarea>
             </div>
-            <button type="submit" class="primary">Add Preset</button>
+            <button type="submit" class="btn-primary">Add Preset</button>
         </form>
     </div>
 </div>

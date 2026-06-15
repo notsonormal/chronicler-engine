@@ -61,6 +61,50 @@
     --transition-fast: 0.2s;
 }
 
+/* Shared Button Utilities */
+.btn-primary {
+    background: linear-gradient(180deg, #2a5a2a 0%, #1a4a1a 100%);
+    border: 1px solid var(--color-accent-green);
+    border-radius: 4px;
+    color: var(--color-accent-green);
+    padding: 8px 16px;
+    cursor: pointer;
+    font-size: var(--font-size-small);
+    font-weight: 500;
+}
+.btn-primary:hover {
+    background: linear-gradient(180deg, #3a6a3a 0%, #2a5a2a 100%);
+    box-shadow: 0 0 10px rgba(0, 255, 0, 0.25);
+}
+
+.btn-cyan {
+    background: linear-gradient(180deg, #2a4a5a 0%, #1a3a4a 100%);
+    border: 1px solid var(--color-accent-cyan);
+    border-radius: 4px;
+    color: var(--color-accent-cyan);
+    padding: 4px 12px;
+    cursor: pointer;
+    font-size: var(--font-size-xs);
+}
+.btn-cyan:hover {
+    background: linear-gradient(180deg, #3a5a6a 0%, #2a4a5a 100%);
+    box-shadow: 0 0 10px rgba(0, 255, 255, 0.25);
+}
+
+.btn-danger {
+    background: linear-gradient(180deg, #5a2a2a 0%, #4a1a1a 100%);
+    border: 1px solid var(--color-accent-red);
+    border-radius: 4px;
+    color: var(--color-accent-red);
+    padding: 4px 12px;
+    cursor: pointer;
+    font-size: var(--font-size-xs);
+}
+.btn-danger:hover {
+    background: linear-gradient(180deg, #6a3a3a 0%, #5a2a2a 100%);
+    box-shadow: 0 0 10px rgba(255, 68, 68, 0.25);
+}
+
 /* Custom Scrollbar - Dark Theme */
 ::-webkit-scrollbar {
     width: 8px;
@@ -594,49 +638,7 @@ body {
     max-width: 800px;
 }
 
-/* Settings Buttons */
-.settings-panel button {
-    background: linear-gradient(180deg, #2a4a5a 0%, #1a3a4a 100%);
-    border: 1px solid var(--color-accent-cyan);
-    border-radius: 4px;
-    color: var(--color-accent-cyan);
-    padding: 6px 14px;
-    cursor: pointer;
-    font-family: inherit;
-    font-size: var(--font-size-base);
-    transition: background var(--transition-fast), box-shadow var(--transition-fast);
-}
-
-.settings-panel button:hover {
-    background: linear-gradient(180deg, #3a5a6a 0%, #2a4a5a 100%);
-    box-shadow: 0 0 10px rgba(0, 255, 255, 0.25);
-}
-
-.settings-panel button:active {
-    background: linear-gradient(180deg, #1a3a4a 0%, #0a2a3a 100%);
-}
-
-.settings-panel button.danger {
-    background: linear-gradient(180deg, #5a2a2a 0%, #4a1a1a 100%);
-    border-color: var(--color-accent-red);
-    color: var(--color-accent-red);
-}
-
-.settings-panel button.danger:hover {
-    background: linear-gradient(180deg, #6a3a3a 0%, #5a2a2a 100%);
-    box-shadow: 0 0 10px rgba(255, 68, 68, 0.25);
-}
-
-.settings-panel button.primary {
-    background: linear-gradient(180deg, #2a5a2a 0%, #1a4a1a 100%);
-    border-color: var(--color-accent-green);
-    color: var(--color-accent-green);
-}
-
-.settings-panel button.primary:hover {
-    background: linear-gradient(180deg, #3a6a3a 0%, #2a5a2a 100%);
-    box-shadow: 0 0 10px rgba(0, 255, 0, 0.25);
-}
+/* Settings Buttons — gradient rules moved to .btn-primary, .btn-cyan, .btn-danger utilities */
 
 /* Connection Cards */
 .connection-card {
@@ -1517,49 +1519,7 @@ input[type="checkbox"]:focus {
     flex-wrap: wrap;
 }
 
-/* Prompt Presets Buttons */
-.prompt-presets-panel button {
-    background: linear-gradient(180deg, #2a4a5a 0%, #1a3a4a 100%);
-    border: 1px solid var(--color-accent-cyan);
-    border-radius: 4px;
-    color: var(--color-accent-cyan);
-    padding: 6px 14px;
-    cursor: pointer;
-    font-family: inherit;
-    font-size: var(--font-size-base);
-    transition: background var(--transition-fast), box-shadow var(--transition-fast);
-}
-
-.prompt-presets-panel button:hover {
-    background: linear-gradient(180deg, #3a5a6a 0%, #2a4a5a 100%);
-    box-shadow: 0 0 10px rgba(0, 255, 255, 0.25);
-}
-
-.prompt-presets-panel button:active {
-    background: linear-gradient(180deg, #1a3a4a 0%, #0a2a3a 100%);
-}
-
-.prompt-presets-panel button.danger {
-    background: linear-gradient(180deg, #5a2a2a 0%, #4a1a1a 100%);
-    border-color: var(--color-accent-red);
-    color: var(--color-accent-red);
-}
-
-.prompt-presets-panel button.danger:hover {
-    background: linear-gradient(180deg, #6a3a3a 0%, #5a2a2a 100%);
-    box-shadow: 0 0 10px rgba(255, 68, 68, 0.25);
-}
-
-.prompt-presets-panel button.primary {
-    background: linear-gradient(180deg, #2a5a2a 0%, #1a4a1a 100%);
-    border-color: var(--color-accent-green);
-    color: var(--color-accent-green);
-}
-
-.prompt-presets-panel button.primary:hover {
-    background: linear-gradient(180deg, #3a6a3a 0%, #2a5a2a 100%);
-    box-shadow: 0 0 10px rgba(0, 255, 0, 0.25);
-}
+/* Prompt Presets Buttons — gradient rules moved to .btn-primary, .btn-cyan, .btn-danger utilities */
 
 /* Save / Load Tab */
 #save-load-tab {
@@ -1691,76 +1651,7 @@ input[type="checkbox"]:focus {
     border-top: 1px solid var(--color-border);
 }
 
-.save-load-panel button {
-    background: linear-gradient(180deg, #2a4a5a 0%, #1a3a4a 100%);
-    border: 1px solid var(--color-accent-cyan);
-    border-radius: 4px;
-    color: var(--color-accent-cyan);
-    padding: 8px 18px;
-    cursor: pointer;
-    font-family: inherit;
-    font-size: var(--font-size-base);
-    font-weight: 500;
-    transition: background var(--transition-fast), box-shadow var(--transition-fast);
-}
-
-.save-load-panel button:hover {
-    background: linear-gradient(180deg, #3a5a6a 0%, #2a4a5a 100%);
-    box-shadow: 0 0 10px rgba(0, 255, 255, 0.25);
-}
-
-.save-load-panel button:active {
-    background: linear-gradient(180deg, #1a3a4a 0%, #0a2a3a 100%);
-}
-
-.save-load-panel .btn-switch {
-    background: linear-gradient(180deg, #2a5a2a 0%, #1a4a1a 100%);
-    border-color: var(--color-accent-green);
-    color: var(--color-accent-green);
-    padding: 4px 12px;
-    font-size: var(--font-size-small);
-}
-
-.save-load-panel .btn-switch:hover {
-    background: linear-gradient(180deg, #3a6a3a 0%, #2a5a2a 100%);
-    box-shadow: 0 0 8px rgba(0, 255, 0, 0.25);
-}
-
-.save-load-panel .btn-delete {
-    background: linear-gradient(180deg, #5a2a2a 0%, #4a1a1a 100%);
-    border-color: var(--color-accent-red);
-    color: var(--color-accent-red);
-    padding: 4px 12px;
-    font-size: var(--font-size-small);
-}
-
-.save-load-panel .btn-delete:hover {
-    background: linear-gradient(180deg, #6a3a3a 0%, #5a2a2a 100%);
-    box-shadow: 0 0 8px rgba(255, 68, 68, 0.25);
-}
-
-.save-load-panel .btn-new-game {
-    background: linear-gradient(180deg, #2a5a2a 0%, #1a4a1a 100%);
-    border-color: var(--color-accent-green);
-    color: var(--color-accent-green);
-    font-weight: bold;
-}
-
-.save-load-panel .btn-new-game:hover {
-    background: linear-gradient(180deg, #3a6a3a 0%, #2a5a2a 100%);
-    box-shadow: 0 0 10px rgba(0, 255, 0, 0.25);
-}
-
-.save-load-panel .btn-reset {
-    background: linear-gradient(180deg, #5a2a2a 0%, #4a1a1a 100%);
-    border-color: var(--color-accent-red);
-    color: var(--color-accent-red);
-}
-
-.save-load-panel .btn-reset:hover {
-    background: linear-gradient(180deg, #6a3a3a 0%, #5a2a2a 100%);
-    box-shadow: 0 0 10px rgba(255, 68, 68, 0.25);
-}
+/* Save/Load Buttons — gradient rules moved to .btn-primary, .btn-cyan, .btn-danger utilities */
 
 /* Prompt Presets Forms */
 .prompt-presets-panel .form-group {
@@ -1938,3 +1829,14 @@ input[type="checkbox"]:focus {
 .worlds-panel .add-world-btn {
     margin-bottom: var(--spacing-md);
 }
+
+/* Error Messages */
+.error-message {
+    color: var(--color-accent-red);
+    background: rgba(255, 68, 68, 0.1);
+    border: 1px solid var(--color-accent-red);
+    border-radius: 4px;
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-size: var(--font-size-small);
+}
+

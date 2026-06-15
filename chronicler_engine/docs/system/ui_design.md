@@ -323,9 +323,16 @@
 - Focus: cyan border, cyan box-shadow
 
 ### Settings Buttons
-- Primary (save/add): cyan gradient (#2a4a5a → #1a3a4a), cyan border, cyan text
-- Danger (delete): red gradient (#5a2a2a → #4a1a1a), red border, red text
-- Set as Narrator/Quantifier: green gradient (#2a5a2a → #1a4a1a), green border, green text
+- Primary (save/add): `.btn-primary` utility class — green gradient (#2a5a2a → #1a4a1a), green border, green text
+- Danger (delete): `.btn-danger` utility class — red gradient (#5a2a2a → #4a1a1a), red border, red text
+- Default/Edit/View: `.btn-cyan` utility class — cyan gradient (#2a4a5a → #1a3a4a), cyan border, cyan text
+
+### Button Utility Classes
+Shared gradient button classes defined in `assets/styles.css` after the design tokens, used across all panels:
+- `.btn-primary` — Green gradient, green text/border (save, create, set-narrator, submit actions)
+- `.btn-cyan` — Cyan gradient, cyan text/border (edit, view, switch actions)
+- `.btn-danger` — Red gradient, red text/border (delete, reset actions)
+- Context-scoped selectors (`.settings-panel button`, `.prompt-presets-panel button`, `.save-load-panel button`) apply layout overrides only — gradients come from utility classes
 
 ---
 
@@ -369,4 +376,4 @@ Media queries handle responsive behavior:
 
 ### Reference Implementation
 
-See `assets/styles.css` for the actual implementation containing the `:root` token definitions and component styles.
+See `assets/styles.css` for the `:root` token definitions, button utility classes (`.btn-primary`, `.btn-cyan`, `.btn-danger`), and component styles. See `assets/worlds.css` for worlds-specific layout overrides.

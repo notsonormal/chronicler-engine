@@ -32,6 +32,10 @@ fn test_engine_error_display_variants() {
     };
     assert!(err.to_string().contains("100"));
     assert!(err.to_string().contains("50"));
+
+    let err = EngineError::WorldHasGames { game_count: 3 };
+    assert!(err.to_string().contains("3"));
+    assert!(err.to_string().contains("games"));
 }
 
 #[test]

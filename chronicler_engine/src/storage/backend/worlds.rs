@@ -254,9 +254,9 @@ impl Storage {
                     |row| row.get(0),
                 )?;
                 if count > 0 {
-                    return Err(EngineError::Parse(format!(
-                        "Cannot delete world with {count} games"
-                    )));
+                    return Err(EngineError::WorldHasGames {
+                        game_count: count as usize,
+                    });
                 }
                 conn.execute("DELETE FROM worlds WHERE key = ?", [key])?;
                 // Map deletion cascades via FK
@@ -266,9 +266,7 @@ impl Storage {
                 // Check for referencing games
                 let game_count = data.games.iter().filter(|g| g.world_key == key).count();
                 if game_count > 0 {
-                    return Err(EngineError::Parse(format!(
-                        "Cannot delete world with {game_count} games"
-                    )));
+                    return Err(EngineError::WorldHasGames { game_count });
                 }
                 data.worlds.retain(|w| w.world_card.key != key);
                 Ok(())

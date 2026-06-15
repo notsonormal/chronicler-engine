@@ -43,7 +43,7 @@ Orchestration layer that coordinates game flow, persistence, and LLM generation.
   - `actions.rs`: Thin dispatch layer — `execute_action_impl` creates `ActionPipeline` and delegates to `run_from_input`. **Error model**: pipeline errors set `GenerationStatus::Error` on state, persist via `save_state`, and return `Ok(())`; only `Err(ActionOutcome::Cancelled)` uses the `Err` path. `ActionOutcome::Error` is dead code retained for exhaustiveness.
   - `retry.rs`: Retry-specific setup (anchor finding, message deletion, snapshot loading) delegates continuation regeneration to `ActionPipeline::run_trigger_continuation()` and main narration retry to `ActionPipeline::run_from_input()`.
 - **`game_service`**: `DefaultGameService` struct implements `ActionPipelineBackend` trait and exposes public methods `execute_action(ctx, input, player_name)` and `retry_last_response(ctx)`. These wrap the internal `execute_action_impl()` and `retry_last_response_impl()` functions from the `action_pipeline` module. External callers use the `DefaultGameService` methods; only the `ActionPipeline` internals call the impl functions directly.
-- **`application_service`**: Thin orchestrator struct (`DefaultApplicationService`) delegating to submodules. Contains `process_action` entry point with self-healing stale-`Generating` detection and `GenerationGuard` RAII helper for `is_generating` flag cleanup.
+- **`application_service`**: Thin orchestrator struct (`DefaultApplicationService`) delegating to submodules. Contains `process_action` entry point with self-healing stale-`Generating` detection and `GenerationGuard` RAII helper for `is_generating` flag cleanup. `ApplicationError::is_user_displayable()` enables type-driven error branching — validation errors and `WorldHasGames` domain constraints are inline-displayable; engine errors use `app_err_to_response()`.
 
 ### 3. The Narrative Tier (`crate::narrative::*`)
 The interface between the synchronous engine and stochastic LLM generation.
@@ -172,7 +172,7 @@ Seed-once, load-from-DB pattern for worlds, personas, and characters. See [`syst
 
 ### 6. The Error Tier (`crate::error`)
 Unified error type shared across all tiers.
-- **`EngineError`**: Top-level error enum (`Llm`, `Narrative`, `Internal`, `Io`, `Serde`, `Parse`, `Serialize`, `Navigation`, `RoomNotFound`, `NpcNotFound`, `WorldNotFound`, `Config`, `Template`, `DataLoad`, `ContextOverflow`)
+- **`EngineError`**: Top-level error enum (`Llm`, `Narrative`, `Internal`, `Io`, `Serde`, `Parse`, `Serialize`, `Navigation`, `RoomNotFound`, `NpcNotFound`, `WorldNotFound`, `WorldHasGames`, `Config`, `Template`, `DataLoad`, `ContextOverflow`)
 - **`LlmFailure`**: LLM-specific errors (`EmptyResponse`, `Http`, `Network`, `ParseError`, `Timeout`)
 - **`NarrativeFailure`**: Prompt build and generation failures
 - **`InternalError`**: Invariant violations

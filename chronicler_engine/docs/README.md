@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-06-14 23:54 UTC*
+*Index last generated: 2026-06-15 22:38 UTC*
 
 ### Root files
 
@@ -89,6 +89,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Server Module Refactor](./plans/archived/server-module-refactor-2026-05-31.md)
 - [Test Quality Improvements - June 2026](./plans/archived/test-quality-improvements-2026-06-01.md)
 - [Thermo-Nuclear Code Quality Review: Phase 3 DB-First Loading Migration](./plans/archived/thermo-nuclear-phase3-review-plan.md)
+- [World Fragment Quality Remediation Plan](./plans/archived/world-fragment-quality-remediation-2026-06-15.md)
 - [Worlds Management Tab UI](./plans/archived/worlds-management-tab-2026-06-14.md)
 - [Implementation Plan: Worlds Management Tab UI](./plans/archived/worlds-management-tab-implementation-2026-06-14.md)
 

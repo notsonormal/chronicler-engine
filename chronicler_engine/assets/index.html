@@ -6,6 +6,7 @@
     <title>Chronicler Engine</title>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <link rel="stylesheet" href="/assets/styles.css?v=3" />
+    <link rel="stylesheet" href="/assets/worlds.css?v=1" />
   </head>
   <body>
     <div class="error-notification" id="error-notification"></div>
@@ -202,6 +203,15 @@
           }, 5000);
         }
       }
+
+      // Global HTMX error handler - shows notification for errors, allows swap to proceed
+      document.body.addEventListener("htmx:beforeSwap", function (evt) {
+        if (evt.detail.isError) {
+          const response = evt.detail.serverResponse || "";
+          const text = response.replace(/<[^>]*>/g, "").trim();
+          showError(text || "Request failed");
+        }
+      });
 
       // Edit functions - inline editing with polling pause
       let currentEditId = null;

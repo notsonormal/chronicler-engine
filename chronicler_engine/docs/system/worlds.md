@@ -7,7 +7,7 @@ The Worlds Management Tab provides a UI for creating, editing, and managing worl
 - **Server module**: `src/server/worlds_fragment/`
 - **Domain model**: `src/model/world.rs`
 - **Storage**: `src/storage/backend/worlds.rs`
-- **UI**: `assets/index.html` (Worlds tab)
+- **CSS**: Scoped `.worlds-panel` rules under `assets/worlds.css` (extracted from `styles.css`)
 
 ## Architecture
 
@@ -124,8 +124,8 @@ Rendered by `render_worlds_panel()`:
 
 ### Delete Validation
 1. **No referencing games**: Storage layer executes SQL `SELECT COUNT(*) FROM games WHERE world_key = ?`
-2. **Returns `EngineError::ForeignKeyViolation`** if games reference the world
-3. **Handler maps to 400 Bad Request** with user-friendly message
+2. **Returns `EngineError::WorldHasGames`** if games reference the world (typed variant, not string-matched)
+3. **Handler uses `is_user_displayable()`** for type-driven branching — displayable errors render inline; others return error status
 4. **Cascades to map**: Map deleted automatically via FK cascade
 
 ## Error Handling

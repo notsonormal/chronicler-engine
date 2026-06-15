@@ -14,8 +14,6 @@ fn make_test_app_state_with_generating(is_generating: bool) -> crate::server::Ap
     state
 }
 
-
-
 #[tokio::test]
 async fn test_check_text_handler_empty() {
     let state = TestAppBuilder::default_test().build_app_state();
@@ -47,8 +45,6 @@ async fn test_check_text_handler_ok() {
     assert_eq!(response.status(), StatusCode::OK);
 }
 
-
-
 #[tokio::test]
 async fn test_retry_handler() {
     let state = TestAppBuilder::default_test().build_app_state();
@@ -58,8 +54,6 @@ async fn test_retry_handler() {
     assert!(response.status() == StatusCode::OK || response.status() == StatusCode::BAD_REQUEST);
 }
 
-
-
 #[tokio::test]
 async fn test_retrigger_handler_ok() {
     let state = TestAppBuilder::default_test().build_app_state();
@@ -68,8 +62,6 @@ async fn test_retrigger_handler_ok() {
 
     assert!(response.status() == StatusCode::OK || response.status() == StatusCode::BAD_REQUEST);
 }
-
-
 
 #[tokio::test]
 async fn test_switch_swipe_handler() {
@@ -86,8 +78,6 @@ async fn test_switch_swipe_handler() {
             || response.status().is_server_error()
     );
 }
-
-
 
 #[tokio::test]
 async fn test_reset_handler_ok() {
