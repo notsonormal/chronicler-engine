@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-06-15 22:38 UTC*
+*Index last generated: 2026-06-16 21:19 UTC*
 
 ### Root files
 
@@ -61,11 +61,9 @@ This folder contains all documentation for the Chronicler Engine project.
 ### `docs/plans/`
 
 - [Plan: Diagnostic Decision Tree as Agent Infrastructure](./plans/diagnostic-decision-tree-plan.md)
-- [LLM Infrastructure Improvements](./plans/llm-infrastructure-improvements.md)
 - [Spec: Agent-Ready Pipeline Restructure for Chronicler Engine](./plans/multi-agent-architecture-overarching-spec.md)
 - [Plan: Observability & Automated Forensics](./plans/observability-and-forensics-plan.md)
 - [AI Steering & Guided Generation](./plans/steering-and-guided-generation.md)
-- [Plan: Trigger Identity: Index → UUID](./plans/trigger-identity-uuid-plan.md)
 
 ### `docs/plans/archived/`
 
@@ -74,6 +72,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Deferred Cleanup: Askama Templates, Module Reorganization, and Games Migration](./plans/archived/deferred-cleanup-plan-2026-06-14.md)
 - [Plan: Empty Send Triggers Narrative Continuation](./plans/archived/empty-send-continue-2026-06-12.md)
 - [Plan: Fix Generation Phase Stuck on "Generating narration..." During Post-Generation](./plans/archived/fix-generation-phase-status-2026-06-01.md)
+- [Games Tab Restructure & Remove Modal Dependency](./plans/archived/games-tab-restructure-2026-06-16.md)
 - [Refactor handle_movement: Split Mixed Responsibilities](./plans/archived/handle-movement-refactor-2026-05-31.md)
 - [Module-Level DOC Anchor Migration](./plans/archived/module-level-doc-anchors-2026-06-06.md)
 - [Multi-World Data Foundation](./plans/archived/multi-world-data-foundation.md)
@@ -84,9 +83,11 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Plan: Phase 3 - Switch Runtime World Loading from Files to Database](./plans/archived/phase3-switch-world-loading-to-db.md)
 - [Remove Identity Wrapper Functions from GameService](./plans/archived/remove-identity-wrapper-functions-2026-05-31.md)
 - [Remove Thin Abstraction TriggerContinuationRequest](./plans/archived/remove-trigger-continuation-request-2026-05-31.md)
+- [Review Fixes Plan](./plans/archived/review-fixes-plan-2026-06-16.md)
 - [Plan: Server Fragment Unit Tests](./plans/archived/server-fragment-unit-tests-2026-06-01.md)
 - [Phase 3: Server Infrastructure — Coverage Resolution](./plans/archived/server-infrastructure-coverage-2026-06-01.md)
 - [Server Module Refactor](./plans/archived/server-module-refactor-2026-05-31.md)
+- [Plan: Fix weak assertions in CSS, debug, and browser trigger tests](./plans/archived/test-quality-fixes-plan-2026-06-16.md)
 - [Test Quality Improvements - June 2026](./plans/archived/test-quality-improvements-2026-06-01.md)
 - [Thermo-Nuclear Code Quality Review: Phase 3 DB-First Loading Migration](./plans/archived/thermo-nuclear-phase3-review-plan.md)
 - [World Fragment Quality Remediation Plan](./plans/archived/world-fragment-quality-remediation-2026-06-15.md)

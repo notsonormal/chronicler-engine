@@ -13,22 +13,43 @@ pub struct GameRowView {
 #[derive(Template)]
 #[template(
     source = r#"
-<div class="save-load-panel">
-    <div class="save-load-section">
+<div class="games-panel">
+    <div class="games-section">
         <h2>Active Game</h2>
         {% match active_game %}
         {% when Some(game) %}
         <div class="game-item active">
-            <span class="game-name">{{ game.name }}</span>
-            <span class="world-badge">{{ game.world_name }}</span>
-            <span class="game-badge">Current</span>
+            <div class="active-game-info">
+                <span class="game-name">{{ game.name }}</span>
+                <span class="world-badge">{{ game.world_name }}</span>
+                <span class="game-badge">Current</span>
+            </div>
+            <button class="btn-reset-small" hx-post="/reset" hx-confirm="Reset the current game? All progress will be lost." hx-swap="none" title="Reset game">&#x21bb;</button>
         </div>
         {% when None %}
         <div class="game-item"><span class="game-name">No active game</span></div>
         {% endmatch %}
     </div>
 
-    <div class="save-load-section">
+    <div class="games-section new-game-section">
+        <h2>New Game</h2>
+        {% if worlds.is_empty() %}
+        <div class="games-empty">No worlds available. Create a world first.</div>
+        {% else %}
+        <form class="new-game-form" hx-post="/games" hx-swap="none">
+            <div class="form-row">
+                <select name="world_key" required>
+                    {% for world in worlds %}
+                    <option value="{{ world.key }}" title="{{ world.description }}">{{ world.name }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="btn-primary">Start New Game</button>
+            </div>
+        </form>
+        {% endif %}
+    </div>
+
+    <div class="games-section">
         <h2>Saved Games</h2>
         <div class="games-list">
             {% if saved_games.is_empty() %}
@@ -46,23 +67,6 @@ pub struct GameRowView {
             {% endfor %}
             {% endif %}
         </div>
-    </div>
-
-    <div class="save-load-actions">
-        {% if !worlds.is_empty() %}
-        <details class="world-picker">
-            <summary>New Game</summary>
-            <form hx-post="/games" hx-swap="none">
-                <select name="world_key" required>
-                    {% for world in worlds %}
-                    <option value="{{ world.key }}" title="{{ world.description }}">{{ world.name }}</option>
-                    {% endfor %}
-                </select>
-                <button type="submit" class="btn-primary">Create Game</button>
-            </form>
-        </details>
-        {% endif %}
-        <button class="btn-danger" hx-post="/reset" hx-confirm="Are you sure you want to reset the current game? All progress will be lost." hx-swap="none">Reset Current Game</button>
     </div>
 </div>
 "#,

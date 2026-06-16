@@ -332,7 +332,7 @@ Shared gradient button classes defined in `assets/styles.css` after the design t
 - `.btn-primary` — Green gradient, green text/border (save, create, set-narrator, submit actions)
 - `.btn-cyan` — Cyan gradient, cyan text/border (edit, view, switch actions)
 - `.btn-danger` — Red gradient, red text/border (delete, reset actions)
-- Context-scoped selectors (`.settings-panel button`, `.prompt-presets-panel button`, `.save-load-panel button`) apply layout overrides only — gradients come from utility classes
+- Context-scoped selectors (`.settings-panel button`, `.prompt-presets-panel button`, `.games-panel button`) apply layout overrides only — gradients come from utility classes
 
 ---
 

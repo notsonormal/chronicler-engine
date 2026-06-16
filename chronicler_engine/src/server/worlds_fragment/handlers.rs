@@ -11,7 +11,7 @@ use crate::server::AppState;
 
 use super::fragments::{render_world_edit_form, render_worlds_panel};
 use crate::server::fragments::{
-    app_err_to_response, bad_request, ctx_or_error, internal_error, ok, ok_refresh, render_error,
+    app_err_to_response, bad_request, ctx_or_error, internal_error, ok, render_error,
 };
 
 #[derive(Debug, Deserialize)]
@@ -102,7 +102,22 @@ pub async fn create_world_handler(
         .application_service
         .create_world(ctx.clone(), world_card, map)
     {
-        Ok(_) => ok_refresh(),
+        Ok(_) => {
+            let worlds = state.application_service.list_worlds(ctx.clone());
+            let games = state
+                .application_service
+                .list_games(ctx)
+                .unwrap_or_default();
+            let mut games_per_world: std::collections::HashMap<String, usize> =
+                std::collections::HashMap::new();
+            for game in &games {
+                *games_per_world.entry(game.world_key.clone()).or_insert(0) += 1;
+            }
+            ok(render_worlds_panel(
+                &worlds.unwrap_or_default(),
+                &games_per_world,
+            ))
+        }
         Err(e) => bad_request(format!("Failed to create world: {e}")),
     }
 }
@@ -180,11 +195,28 @@ pub async fn update_world_handler(
 
     world_card.key = key;
 
-    match state
-        .application_service
-        .update_world(ctx, world_with_map.world_id, world_card, map)
-    {
-        Ok(()) => ok_refresh(),
+    match state.application_service.update_world(
+        ctx.clone(),
+        world_with_map.world_id,
+        world_card,
+        map,
+    ) {
+        Ok(()) => {
+            let worlds = state.application_service.list_worlds(ctx.clone());
+            let games = state
+                .application_service
+                .list_games(ctx)
+                .unwrap_or_default();
+            let mut games_per_world: std::collections::HashMap<String, usize> =
+                std::collections::HashMap::new();
+            for game in &games {
+                *games_per_world.entry(game.world_key.clone()).or_insert(0) += 1;
+            }
+            ok(render_worlds_panel(
+                &worlds.unwrap_or_default(),
+                &games_per_world,
+            ))
+        }
         Err(e) => internal_error(format!("Failed to update world: {e}")),
     }
 }

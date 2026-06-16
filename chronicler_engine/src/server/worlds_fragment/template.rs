@@ -7,7 +7,6 @@ use crate::model::character::PlayerCard;
 use crate::model::map::MapDef;
 use crate::model::scenario::StartingScenario;
 
-/// Flattened view model for a world row in the panel
 pub struct WorldRowView {
     pub key: String,
     pub name: String,
@@ -15,7 +14,6 @@ pub struct WorldRowView {
     pub game_count: usize,
 }
 
-/// View model for persona dropdown options
 pub struct PersonaOption {
     pub key: String,
     pub name: String,
@@ -26,7 +24,7 @@ pub struct PersonaOption {
 #[template(
     source = r##"
 <div class="worlds-panel">
-    <button class="btn-primary btn-new-world" onclick="openWorldModal()">Create New World</button>
+    <button class="btn-primary btn-new-world" hx-get="/fragment/worlds/new" hx-target=".worlds-panel" hx-swap="outerHTML">Create New World</button>
 
     {% if worlds.is_empty() %}
     <p>No worlds defined. Create your first world to get started.</p>
@@ -35,7 +33,7 @@ pub struct PersonaOption {
         {% for world in worlds %}
         <li class="world-item">
             <strong>{{ world.name }}</strong> - {{ world.description }} <em>({{ world.game_count }} games)</em>
-            <button class="btn-cyan" onclick="openWorldModal('{{ world.key }}')">Edit</button>
+            <button class="btn-cyan" hx-get="/worlds/{{ world.key }}/edit" hx-target=".worlds-panel" hx-swap="outerHTML">Edit</button>
             <button hx-post="/worlds/{{ world.key }}/delete" hx-confirm="Delete this world? This cannot be undone." hx-target="closest .world-item" hx-swap="outerHTML swap:0.3s" class="btn-danger">Delete</button>
         </li>
         {% endfor %}
@@ -52,6 +50,7 @@ pub struct WorldsPanelTemplate {
 #[derive(Template)]
 #[template(
     source = r#"
+<div class="worlds-panel">
 <div class="world-form-container">
     <h2>{% if is_edit %}Edit World{% else %}Create New World{% endif %}</h2>
 
@@ -84,8 +83,12 @@ pub struct WorldsPanelTemplate {
             <textarea name="scenarios_json" class="json-editor" placeholder="{{ scenarios_placeholder }}">{{ scenarios_json }}</textarea>
         </label>
 
-        <button type="submit" class="btn-primary">{{ submit_text }}</button>
+        <div class="form-actions">
+            <button type="submit" class="btn-primary">{{ submit_text }}</button>
+            <button type="button" class="btn-cyan" hx-get="/fragment/worlds" hx-target=".worlds-panel" hx-swap="outerHTML">Cancel</button>
+        </div>
     </form>
+</div>
 </div>
 "#,
     ext = "html"

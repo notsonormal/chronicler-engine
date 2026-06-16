@@ -12,7 +12,6 @@ use chronicler_engine::TestAppBuilder;
 
 use super::test_helpers::fetch_body;
 
-/// Helper to create valid world form data.
 fn make_world_form_data(key: &str, name: &str, map_json: &str, scenarios_json: &str) -> String {
     format!(
         "key={}&name={}&description=Test+World&global_rules=rule1&player_key=test_player&map_json={}&scenarios_json={}&starting_room_id=start",
@@ -23,7 +22,6 @@ fn make_world_form_data(key: &str, name: &str, map_json: &str, scenarios_json: &
     )
 }
 
-/// Test list_worlds_fragment returns HTML with expected structure.
 #[tokio::test]
 async fn test_list_worlds_fragment_returns_html() {
     let app = TestAppBuilder::default_app();
@@ -43,20 +41,17 @@ async fn test_list_worlds_fragment_returns_html() {
     );
 }
 
-/// Test list_worlds_fragment shows world count.
 #[tokio::test]
 async fn test_list_worlds_fragment_shows_world_count() {
     let app = TestAppBuilder::default_app();
     let body_str = fetch_body(app.clone(), "/fragment/worlds").await;
 
-    // Should contain the test world name from seeded data
     assert!(
         body_str.contains("Test World"),
         "Expected 'Test World' in list: {body_str}"
     );
 }
 
-/// Test new_world_form_handler returns form HTML.
 #[tokio::test]
 async fn test_new_world_form_handler_returns_form() {
     let app = TestAppBuilder::default_app();
@@ -84,7 +79,6 @@ async fn test_new_world_form_handler_returns_form() {
     );
 }
 
-/// Test new_world_form_handler includes persona dropdown.
 #[tokio::test]
 async fn test_new_world_form_handler_has_persona_dropdown() {
     let app = TestAppBuilder::default_app();
@@ -103,7 +97,6 @@ async fn test_new_world_form_handler_has_persona_dropdown() {
     );
 }
 
-/// Test create_world_handler with valid data creates world.
 #[tokio::test]
 async fn test_create_world_handler_valid_data() {
     let app = TestAppBuilder::default_app();
@@ -133,22 +126,21 @@ async fn test_create_world_handler_valid_data() {
         "Expected success: {:?}",
         response.status()
     );
-    // Handler returns ok_refresh() which sends HX-Refresh header with empty body
+    // Handler returns inline HTML (worlds panel) instead of HX-Refresh
     assert!(
-        response.headers().get("hx-refresh").is_some(),
-        "Expected HX-Refresh header in response"
+        response.headers().get("hx-refresh").is_none(),
+        "Expected no HX-Refresh header (inline swap)"
     );
     let body = axum::body::to_bytes(response.into_body(), 8192)
         .await
         .unwrap();
     let body_str = String::from_utf8_lossy(&body);
     assert!(
-        body_str.is_empty(),
-        "Expected empty body from ok_refresh(): {body_str}"
+        body_str.contains("worlds-panel"),
+        "Expected worlds-panel HTML in response: {body_str}"
     );
 }
 
-/// Test create_world_handler with invalid map JSON returns error.
 #[tokio::test]
 async fn test_create_world_handler_invalid_map_json() {
     let app = TestAppBuilder::default_app();
@@ -175,7 +167,6 @@ async fn test_create_world_handler_invalid_map_json() {
     );
 }
 
-/// Test create_world_handler with invalid scenarios JSON returns error.
 #[tokio::test]
 async fn test_create_world_handler_invalid_scenarios_json() {
     let app = TestAppBuilder::default_app();
@@ -214,7 +205,6 @@ async fn test_create_world_handler_invalid_scenarios_json() {
     );
 }
 
-/// Test create_world_handler with missing required fields.
 #[tokio::test]
 async fn test_create_world_handler_missing_key() {
     let app = TestAppBuilder::default_app();
@@ -224,7 +214,6 @@ async fn test_create_world_handler_missing_key() {
     })
     .to_string();
 
-    // Missing key field
     let form_data = format!(
         "name=Test&description=Test&global_rules=rule1&player_key=test&map_json={}&scenarios_json=[]&starting_room_id=start",
         urlencoding::encode(&map_json)
@@ -246,7 +235,6 @@ async fn test_create_world_handler_missing_key() {
     );
 }
 
-/// Test edit_world_form_handler for non-existent world returns error.
 #[tokio::test]
 async fn test_edit_world_form_handler_not_found() {
     let app = TestAppBuilder::default_app();
@@ -255,11 +243,9 @@ async fn test_edit_world_form_handler_not_found() {
         .body(Body::empty())
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
-    // Returns 404 Not Found for nonexistent world
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
 }
 
-/// Test update_world_handler for non-existent world returns error.
 #[tokio::test]
 async fn test_update_world_handler_not_found() {
     let app = TestAppBuilder::default_app();
@@ -292,7 +278,6 @@ async fn test_update_world_handler_not_found() {
     );
 }
 
-/// Test update_world_handler with valid data updates world.
 #[tokio::test]
 async fn test_update_world_handler_valid_data() {
     let app = TestAppBuilder::default_app();
@@ -322,22 +307,21 @@ async fn test_update_world_handler_valid_data() {
         "Expected success: {:?}",
         response.status()
     );
-    // Handler returns ok_refresh() which sends HX-Refresh header with empty body
+    // Handler returns inline HTML (worlds panel) instead of HX-Refresh
     assert!(
-        response.headers().get("hx-refresh").is_some(),
-        "Expected HX-Refresh header in response"
+        response.headers().get("hx-refresh").is_none(),
+        "Expected no HX-Refresh header (inline swap)"
     );
     let body = axum::body::to_bytes(response.into_body(), 8192)
         .await
         .unwrap();
     let body_str = String::from_utf8_lossy(&body);
     assert!(
-        body_str.is_empty(),
-        "Expected empty body from ok_refresh(): {body_str}"
+        body_str.contains("worlds-panel"),
+        "Expected worlds-panel HTML in response: {body_str}"
     );
 }
 
-/// Test update_world_handler with invalid JSON returns error.
 #[tokio::test]
 async fn test_update_world_handler_invalid_json() {
     let app = TestAppBuilder::default_app();
@@ -364,12 +348,10 @@ async fn test_update_world_handler_invalid_json() {
     );
 }
 
-/// Test delete_world_handler is idempotent (succeeds even for nonexistent worlds).
 #[tokio::test]
 async fn test_delete_world_handler_idempotent() {
     let app = TestAppBuilder::default_app();
 
-    // Delete is idempotent - succeeds even if world doesn't exist
     let req = Request::builder()
         .uri("/worlds/nonexistent/delete")
         .method(http::Method::POST)
@@ -377,7 +359,6 @@ async fn test_delete_world_handler_idempotent() {
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
 
-    // Should return success (idempotent operation)
     assert!(
         response.status().is_success(),
         "Expected success for idempotent delete: {:?}",
@@ -385,13 +366,11 @@ async fn test_delete_world_handler_idempotent() {
     );
 }
 
-/// Test delete_world_handler returns inline error when games reference the world.
 #[tokio::test]
 async fn test_delete_world_handler_blocked_by_games() {
     let app = TestAppBuilder::default_app();
 
     // The default app seeds world "test" and creates a game referencing it
-    // Attempt to delete that world — should return inline error HTML
     let req = Request::builder()
         .uri("/worlds/test/delete")
         .method(http::Method::POST)

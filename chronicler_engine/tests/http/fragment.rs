@@ -737,7 +737,7 @@ async fn test_list_games_fragment_shows_world_badge() {
 }
 
 #[tokio::test]
-async fn test_list_games_fragment_shows_world_picker() {
+async fn test_list_games_fragment_shows_new_game_form() {
     let storage = Arc::new(Storage::new_in_memory());
     let world_a = chronicler_engine::test_support::TestWorld::minimal();
     let map_a = chronicler_engine::test_support::TestMap::single_room("start");

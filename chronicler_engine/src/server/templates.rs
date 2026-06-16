@@ -104,15 +104,15 @@ impl ActionAreaTemplate {
     <div class=preview-issues>
         {% for issue in issues %}<span class="issue-tag {{ issue.kind }}">{{ issue.message }}</span>{% endfor %}
     </div>
-    <div class=preview-actions>
+    <div class="form-actions">
         <form method=post hx-post=/action/confirm hx-target="#action-area" hx-swap="outerHTML" hx-include="#corrected-textarea">
-            <button type=submit class=btn-corrected>Send</button>
+            <button type=submit class="btn-primary">Send</button>
         </form>
         <form method=post hx-post=/action/confirm hx-target="#action-area" hx-swap="outerHTML">
             <input type=hidden name=command value="{{ original }}" />
-            <button type=submit class=btn-original>Send Original</button>
+            <button type=submit class="btn-cyan">Send Original</button>
         </form>
-        <button type=button class=btn-cancel onclick="restoreActionArea()">Cancel</button>
+        <button type=button class="btn-cyan" onclick="restoreActionArea()">Cancel</button>
     </div>
 </div>"##,
     ext = "html"

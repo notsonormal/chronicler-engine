@@ -10,11 +10,11 @@ The Chronicler Engine presents a web-based HTMX dashboard for player interaction
 ### 1. Header Bar (48px height)
 Displays system-level context.
 - **Content**: Game title (left), current game name (center-left), connection status (right)
-- **Note**: Location is displayed in the story log, not the header. Game management (create, switch, delete, reset) lives in the "Save / Load" tab.
+- **Note**: Location is displayed in the story log, not the header. Game management (create, switch, delete, reset) lives in the "Games" tab.
 
 ### 2. Tab Bar
 Navigation between Game, LLM Messages, and Settings views.
-- **Tabs**: Game | Settings | Prompt Presets | Worlds | Save / Load | LLM Messages
+- **Tabs**: Game | Settings | Prompt Presets | Worlds | Games | LLM Messages
 - **Active tab**: Green text with green bottom border
 - **Inactive tab**: Muted gray text
 
@@ -193,11 +193,12 @@ HTML template renders with `data-raw-text` attribute for inline editing:
 
 ### Game Management
 Multiple independent games across all worlds, each with isolated snapshots and messages:
-- **List games**: `GET /fragment/games` renders all games with world badges and an inline world picker for creating new games
-- **Create game**: `POST /games` accepts form data with `world_key` parameter; creates a game under the chosen world with auto-generated name (`{WorldName}_{Date}_N`)
+- **List games**: `GET /fragment/games` renders the Games panel with three sections: Active Game, New Game, and Saved Games
+- **Active Game**: Shows current game name, world badge, "Current" badge, and a small reset button on the card
+- **Create game**: `POST /games` accepts form data with `world_key` parameter; creates a game under the chosen world with auto-generated name (`{WorldName}_{Date}_N`). The New Game section shows an always-visible world dropdown + "Start New Game" button
 - **Switch game**: `POST /games/:id/switch` loads the selected game (cross-world switching allowed) and refreshes the page
-- **Delete game**: `POST /games/:id/delete` removes the game and all its data, then refreshes
-- **Reset**: `POST /reset` deletes the current game and creates a new one with a fresh auto-generated name
+- **Delete game**: `POST /games/:id/delete` removes the game and all its data, then removes the item from the list via `hx-swap`
+- **Reset**: `POST /reset` deletes the current game and creates a new one with a fresh auto-generated name. Triggered by the reset button on the Active Game card with `hx-confirm` dialog
 
 ## Worlds Management Tab
 Dedicated tab for multi-world orchestration with CRUD operations:
@@ -206,17 +207,18 @@ Dedicated tab for multi-world orchestration with CRUD operations:
 - **Endpoint**: `GET /fragment/worlds`
 - **Content**: List of all worlds with game count indicators
 - **Actions per world**:
-  - Edit button — opens modal with full world form pre-populated
+  - Edit button — replaces worlds list with edit form inline (HTMX `hx-get` + `hx-target=".worlds-panel" hx-swap="outerHTML"`)
   - Delete button — blocked if games reference the world (validation error)
-- **Create New World button** — opens modal with empty form
+- **Create New World button** — replaces worlds list with empty form inline (no modal)
 
-### World Form Modal
-HTMX-driven modal for create/edit operations:
-- **Create flow**: Button `hx-get="/fragment/worlds/new"` → modal loads empty form
-- **Edit flow**: Button `hx-get="/worlds/:key/edit"` → modal loads form pre-populated
+### World Form (Inline HTMX Swap)
+Create/Edit uses inline HTMX swaps — no modal overlay:
+- **Create flow**: Button `hx-get="/fragment/worlds/new" hx-target=".worlds-panel" hx-swap="outerHTML"` — replaces panel with empty form
+- **Edit flow**: Button `hx-get="/worlds/:key/edit" hx-target=".worlds-panel" hx-swap="outerHTML"` — replaces panel with pre-populated form
 - **Submit**: Form posts to:
   - Create: `POST /worlds` with full `WorldForm` data
   - Update: `POST /worlds/:key` with updated world data
+- **Cancel**: Button `hx-get="/fragment/worlds" hx-target=".worlds-panel" hx-swap="outerHTML"` — returns to worlds list
 - **Fields**:
   - **Key** — unique identifier (readonly in edit mode)
   - **Name** — display name
@@ -227,7 +229,7 @@ HTMX-driven modal for create/edit operations:
   - **Default Room Image** — optional default image path
   - **Map JSON** — room/region structure as JSON
   - **Scenarios JSON** — starting scenarios as JSON array
-- **Refresh**: On success, modal closes and worlds panel refreshes via HTMX
+- **Refresh**: On success, handler returns re-rendered worlds panel HTML (inline HTMX swap replaces `.worlds-panel`); no full page reload
 
 ### Backend Implementation
 - **Storage layer**: `Storage::get_world(key)` returns `Option<WorldWithMap>` with `world_id` for updates
@@ -236,39 +238,24 @@ HTMX-driven modal for create/edit operations:
 - **HTMX handlers**:
   - `new_world_form_handler` — renders create form with persona dropdown
   - `edit_world_form_handler` — renders edit form with pre-populated data
-  - `create_world_handler` — creates world, returns refresh signal
-  - `update_world_handler` — updates world by ID, returns refresh signal
+  - `create_world_handler` — creates world, returns re-rendered worlds panel HTML
+  - `update_world_handler` — updates world by ID, returns re-rendered worlds panel HTML
   - `delete_world_handler` — validates no games reference world, deletes if safe
   - `list_personas_fragment` — returns persona `<option>` tags for dropdown
 
-### JavaScript Integration
-```javascript
-window.openWorldModal = function (key) {
-  const modal = document.getElementById("world-modal");
-  const content = document.getElementById("world-modal-content");
-  if (key) {
-    title.textContent = "Edit World";
-    htmx.ajax('GET', '/worlds/' + key + '/edit', {target: content, swap: 'innerHTML'});
-  } else {
-    title.textContent = "Create World";
-    htmx.ajax('GET', '/fragment/worlds/new', {target: content, swap: 'innerHTML'});
-  }
-  modal.style.display = "flex";
-};
-```
-
 ## CSS Classes
+- `.games-panel` — container for games tab content (in `assets/games.css`)
+- `.games-section` — section container within games panel (Active Game, New Game, Saved Games)
 - `.worlds-panel` — container for worlds list with game counts (in `assets/worlds.css`)
-- `.world-form-container` — modal form container styling (in `assets/worlds.css`)
-- `.btn-primary` — shared green button utility class (gradient, green border/text)
+- `.world-form-container` — inline form container styling (in `assets/worlds.css`)
+- `.btn-primary` — shared green button utility class (gradient, green border/text, padding 8px 20px, font-size base)
 - `.btn-cyan` — shared cyan button utility class (gradient, cyan border/text)
 - `.btn-danger` — shared red button utility class (gradient, red border/text)
-- `.btn-new-world` — "Create New World" button (uses `.btn-primary` + layout overrides)
-- `.modal-overlay` — full-screen darkened backdrop
-- `.modal` — centered modal dialog
-- `.modal-header` — title + close button row
-- `.modal-body` — scrollable content area
-- `.modal-actions` — Cancel/Save button row
+- `.btn-new-world` — "Create New World" button (uses `.btn-primary` + layout override for `hx-get` inline swap)
+- `.btn-reset-small` — small reset icon button on Active Game card (border-only red, ↺ glyph)
+- `.active-game-info` — flex wrapper for game name + badges on the Active Game card
+- `.new-game-form` — New Game form container (flex column)
+- `.new-game-form .form-row` — side-by-side select + submit button layout
 - `.form-group` — label + input wrapper
 - `.json-editor` — monospace textarea for JSON fields
 - `.location-header` - Room name in location entry, inline, green bold (#4ade80)

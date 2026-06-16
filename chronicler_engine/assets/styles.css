@@ -67,10 +67,10 @@
     border: 1px solid var(--color-accent-green);
     border-radius: 4px;
     color: var(--color-accent-green);
-    padding: 8px 16px;
+    padding: 8px 20px;
     cursor: pointer;
-    font-size: var(--font-size-small);
-    font-weight: 500;
+    font-size: var(--font-size-base);
+    font-weight: 600;
 }
 .btn-primary:hover {
     background: linear-gradient(180deg, #3a6a3a 0%, #2a5a2a 100%);
@@ -746,6 +746,7 @@ body {
     display: flex;
     flex-direction: column;
     gap: var(--spacing-xs);
+    margin-bottom: var(--spacing-sm);
 }
 
 .settings-panel label {
@@ -1050,17 +1051,6 @@ body {
     border-color: rgba(128, 128, 128, 0.25);
 }
 
-.preview-actions {
-    display: flex;
-    gap: var(--spacing-sm);
-    flex-wrap: wrap;
-    margin-top: var(--spacing-xs);
-}
-
-.preview-actions form {
-    display: inline;
-}
-
 /* Allow action area to expand when showing text-check preview */
 .action-area:has(.text-check-preview) {
     height: auto;
@@ -1069,64 +1059,6 @@ body {
     justify-content: center;
     padding-top: var(--spacing-md);
     padding-bottom: var(--spacing-md);
-}
-
-.btn-corrected {
-    background: linear-gradient(180deg, #00aa00 0%, #006600 100%);
-    border: 1px solid var(--color-accent-green);
-    border-radius: 4px;
-    color: var(--color-accent-green);
-    padding: 8px var(--spacing-md);
-    cursor: pointer;
-    height: var(--input-height);
-    min-width: var(--button-min-width);
-    font-family: inherit;
-    font-size: var(--font-size-base);
-    font-weight: bold;
-    transition: background var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
-    box-shadow: 0 0 8px rgba(0, 255, 0, 0.3);
-}
-
-.btn-corrected:hover {
-    background: linear-gradient(180deg, #00cc00 0%, #008800 100%);
-    border-color: var(--color-accent-green);
-    box-shadow: 0 0 12px rgba(0, 255, 0, 0.5);
-}
-
-.btn-original {
-    background: linear-gradient(180deg, #2a4a5a 0%, #1a3a4a 100%);
-    border: 1px solid var(--color-accent-cyan);
-    border-radius: 4px;
-    color: var(--color-accent-cyan);
-    padding: 8px var(--spacing-md);
-    cursor: pointer;
-    height: var(--input-height);
-    min-width: var(--button-min-width);
-    font-family: inherit;
-    font-size: var(--font-size-base);
-    transition: background var(--transition-fast), box-shadow var(--transition-fast);
-}
-
-.btn-original:hover {
-    background: linear-gradient(180deg, #3a5a6a 0%, #2a4a5a 100%);
-    box-shadow: 0 0 10px rgba(0, 255, 255, 0.25);
-}
-
-.btn-cancel {
-    background: transparent;
-    border: 1px solid transparent;
-    border-radius: 4px;
-    color: var(--color-text-muted);
-    padding: 8px var(--spacing-md);
-    cursor: pointer;
-    height: var(--input-height);
-    font-family: inherit;
-    font-size: var(--font-size-base);
-    transition: color var(--transition-fast);
-}
-
-.btn-cancel:hover {
-    color: var(--color-accent-red);
 }
 
 /* Preview editable textarea */
@@ -1159,8 +1091,8 @@ body {
 input[type="checkbox"] {
     appearance: none;
     -webkit-appearance: none;
-    width: 16px;
-    height: 16px;
+    width: 20px;
+    height: 20px;
     border: 1px solid var(--color-button-border);
     border-radius: 3px;
     background: var(--color-bg-primary);
@@ -1179,10 +1111,10 @@ input[type="checkbox"]:checked {
 input[type="checkbox"]:checked::after {
     content: '';
     position: absolute;
-    left: 5px;
+    left: 6px;
     top: 2px;
-    width: 4px;
-    height: 8px;
+    width: 5px;
+    height: 10px;
     border: solid var(--color-bg-primary);
     border-width: 0 2px 2px 0;
     transform: rotate(45deg);
@@ -1198,6 +1130,7 @@ input[type="checkbox"]:focus {
     align-items: center;
     gap: var(--spacing-sm);
     cursor: pointer;
+    line-height: 1.4;
 }
 
 .settings-panel .checkbox-label {
@@ -1414,6 +1347,11 @@ input[type="checkbox"]:focus {
     font-style: italic;
 }
 
+/* Worlds Tab Scrolling */
+#worlds-tab {
+    overflow: hidden;
+}
+
 /* Prompt Presets Tab Scrolling */
 #prompt-presets-tab {
     overflow: hidden;
@@ -1521,138 +1459,6 @@ input[type="checkbox"]:focus {
 
 /* Prompt Presets Buttons — gradient rules moved to .btn-primary, .btn-cyan, .btn-danger utilities */
 
-/* Save / Load Tab */
-#save-load-tab {
-    overflow: hidden;
-}
-
-.save-load-panel {
-    flex: 1;
-    overflow-y: auto;
-    padding: var(--spacing-md);
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-lg);
-    max-width: 800px;
-}
-
-.save-load-section h2 {
-    font-size: 1.1em;
-    color: var(--color-text-primary);
-    margin-bottom: var(--spacing-sm);
-    border-bottom: 1px solid var(--color-border);
-    padding-bottom: var(--spacing-xs);
-}
-
-.games-list {
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-sm);
-}
-
-.games-empty {
-    color: var(--color-text-muted);
-    font-style: italic;
-    padding: var(--spacing-md);
-    text-align: center;
-}
-
-.game-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    background: var(--color-bg-secondary);
-    border: 1px solid var(--color-border);
-    border-radius: 6px;
-    padding: var(--spacing-sm) var(--spacing-md);
-    gap: var(--spacing-sm);
-}
-
-.game-item.active {
-    border-color: var(--color-accent-green);
-    background: rgba(0, 255, 0, 0.06);
-    box-shadow: 0 0 8px rgba(0, 255, 0, 0.08);
-}
-
-.game-item .game-name {
-    font-weight: 500;
-    color: var(--color-text-primary);
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.game-item.active .game-name {
-    color: var(--color-accent-green);
-}
-
-.game-badge {
-    font-size: var(--font-size-xs);
-    padding: 2px 8px;
-    border-radius: 4px;
-    background: rgba(0, 255, 0, 0.15);
-    color: var(--color-accent-green);
-    border: 1px solid rgba(0, 255, 0, 0.25);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.world-badge {
-    font-size: var(--font-size-xs);
-    padding: 2px 8px;
-    margin-left: 8px;
-    border-radius: 4px;
-    background: var(--color-bg-tertiary, #2a2f3a);
-    color: var(--color-text-secondary, #a0aec0);
-    font-weight: normal;
-    letter-spacing: 0.3px;
-}
-
-.save-load-panel .world-picker {
-    margin-top: var(--spacing-sm);
-    padding: var(--spacing-sm);
-    background: var(--color-bg-tertiary, #2a2f3a);
-    border-radius: 4px;
-}
-
-.save-load-panel .world-picker summary {
-    cursor: pointer;
-    font-size: var(--font-size-sm);
-}
-
-.save-load-panel .world-picker select {
-    width: 100%;
-    padding: 6px 8px;
-    margin-bottom: var(--spacing-sm);
-    background: var(--color-bg-primary, #1a1a2e);
-    color: var(--color-text-primary);
-    border: 1px solid var(--color-border-primary, #333);
-    border-radius: 4px;
-}
-
-.save-load-panel .world-picker .btn-primary {
-    width: 100%;
-}
-
-.game-actions {
-    display: flex;
-    gap: var(--spacing-sm);
-    flex-shrink: 0;
-}
-
-.save-load-actions {
-    display: flex;
-    gap: var(--spacing-md);
-    flex-wrap: wrap;
-    padding-top: var(--spacing-sm);
-    border-top: 1px solid var(--color-border);
-}
-
-/* Save/Load Buttons — gradient rules moved to .btn-primary, .btn-cyan, .btn-danger utilities */
-
 /* Prompt Presets Forms */
 .prompt-presets-panel .form-group {
     margin-bottom: var(--spacing-sm);
@@ -1755,80 +1561,6 @@ input[type="checkbox"]:focus {
     color: var(--color-bg-primary);
 }
 
-/* Modal Styles */
-.modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.6);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-}
-
-.modal {
-    background: var(--color-bg-secondary);
-    border: 1px solid var(--color-border);
-    border-radius: 8px;
-    max-width: 500px;
-    width: 90%;
-    max-height: 80vh;
-    display: flex;
-    flex-direction: column;
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
-}
-
-.modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: var(--spacing-md);
-    border-bottom: 1px solid var(--color-border);
-}
-
-.modal-header h3 {
-    margin: 0;
-    font-size: 16px;
-    color: var(--color-text-primary);
-}
-
-.modal-close {
-    background: transparent;
-    border: none;
-    color: var(--color-text-muted);
-    font-size: 24px;
-    cursor: pointer;
-    padding: 0;
-    line-height: 1;
-    transition: color 0.15s ease;
-}
-
-.modal-close:hover {
-    color: var(--color-text-primary);
-}
-
-.modal-body {
-    padding: var(--spacing-md);
-    overflow-y: auto;
-}
-
-.modal-actions {
-    display: flex;
-    gap: var(--spacing-md);
-    justify-content: flex-end;
-    margin-top: var(--spacing-md);
-}
-
-.modal-actions button {
-    min-width: 80px;
-}
-
-.worlds-panel .add-world-btn {
-    margin-bottom: var(--spacing-md);
-}
 
 /* Error Messages */
 .error-message {

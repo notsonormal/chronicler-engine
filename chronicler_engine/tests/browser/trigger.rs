@@ -2,6 +2,24 @@
 
 use super::*;
 
+fn load_first_trigger_prompt(character_id: &str) -> String {
+    let path = format!("data/characters/test/{character_id}.json");
+    let raw = std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("Test fixture missing: {path} — {e}"));
+    let json: serde_json::Value = serde_json::from_str(&raw)
+        .unwrap_or_else(|e| panic!("Test fixture invalid JSON: {path} — {e}"));
+    json["triggers"]
+        .get(0)
+        .and_then(|t| t["narration"]["narration_prompt"].as_str())
+        .map(String::from)
+        .unwrap_or_else(|| {
+            panic!(
+                "Test fixture {path} missing triggers[0].narration.narration_prompt — \
+                 if the trigger structure changed, update this test"
+            )
+        })
+}
+
 #[tokio::test]
 async fn test_look_command_adds_narration_entries() {
     with_test_page(CONFIG_PATH, TEST_WORLD, |page, _port| async move {
@@ -77,13 +95,7 @@ async fn test_second_encounter_does_not_refire() {
         wait_for_status_ready(&page).await;
         let after_second = wait_for_log_entries(&page, after_first).await;
         println!("After second talk: {after_second} entries");
-        let shopkeeper_json = std::fs::read_to_string("data/characters/test/shopkeeper.json")
-            .expect("shopkeeper.json should exist");
-        let shopkeeper: serde_json::Value =
-            serde_json::from_str(&shopkeeper_json).expect("shopkeeper.json should parse");
-        let shopkeeper_trigger_text = shopkeeper["triggers"][0]["narration"]["narration_prompt"]
-            .as_str()
-            .expect("shopkeeper should have a trigger narration_prompt");
+        let shopkeeper_trigger_text = load_first_trigger_prompt("shopkeeper");
         let story_log = page
             .evaluate::<(), String>(
                 "document.querySelector('#story-log')?.innerText || ''",
@@ -91,7 +103,7 @@ async fn test_second_encounter_does_not_refire() {
             )
             .await
             .unwrap_or_default();
-        let trigger_count = story_log.matches(shopkeeper_trigger_text).count();
+        let trigger_count = story_log.matches(&shopkeeper_trigger_text).count();
         assert!(
             trigger_count <= 1,
             "Shopkeeper trigger should appear at most once (found {trigger_count} times)"

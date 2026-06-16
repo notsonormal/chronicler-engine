@@ -1,5 +1,8 @@
 /* Worlds Panel */
 .worlds-panel {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
     padding: var(--spacing-md);
     display: flex;
     flex-direction: column;
@@ -117,7 +120,9 @@
     line-height: 1.5;
 }
 
-.world-form-container .btn-primary[type="submit"] {
-    align-self: flex-start;
+.world-form-container .form-actions {
+    display: flex;
+    gap: var(--spacing-sm);
     margin-top: var(--spacing-sm);
 }
+

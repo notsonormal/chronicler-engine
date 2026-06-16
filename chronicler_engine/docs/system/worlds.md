@@ -99,11 +99,12 @@ The Worlds tab is the third tab in the dashboard, positioned after "Prompt Prese
 </div>
 ```
 
-### Modal Form
-Create/Edit uses a shared modal with dynamic content:
-- **Hidden by default**, shown via JS when "Create New World" or "Edit" clicked
+### Inline Form (HTMX Swap)
+Create/Edit uses inline HTMX swaps with `hx-target=".worlds-panel" hx-swap="outerHTML"` — no modal overlay:
+- **Hidden by default**, shown when "Create New World" or "Edit" clicked (replaces the worlds list)
 - **Form fields**: key (readonly for edit), name, description, global_rules (textarea), starting_room_id, player_key (dropdown), default_room_image, map_json (textarea), scenarios_json (textarea)
 - **Submit**: Form posts to `/worlds` (create) or `/worlds/:key` (update)
+- **Cancel**: Returns to worlds list via `hx-get="/fragment/worlds"` targeting `.worlds-panel`
 
 ### Worlds List Panel
 Rendered by `render_worlds_panel()`:
@@ -160,9 +161,10 @@ Rendered by `render_worlds_panel()`:
 
 ### Manual Testing
 - Tab navigation works
-- Modal opens/closes correctly
+- Inline form swap works (no modal)
 - Form validation error messages render
 - Worlds list refreshes after CRUD operations
+- Cancel button returns to worlds list
 
 ## Performance Considerations
 

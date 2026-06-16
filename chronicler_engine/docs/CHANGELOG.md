@@ -1,5 +1,55 @@
 # Changelog
 
+## 2026-06-16
+
+### Changed
+
+- **Review Fixes: CSS rename, extraction, button dedup, inline world submit** — Addressed five findings from code quality review of uncommitted changes
+  - **save-load → games rename**: Renamed `data-tab`, `id`, and CSS classes from `save-load` to `games` across `index.html`, `styles.css`, `template.rs`, `ui_design.md`
+  - **Scoped .btn-primary removed**: Deleted duplicated `.new-game-form .btn-primary` override; updated global `.btn-primary` to `padding: 8px 20px`, `font-size: var(--font-size-base)`, `font-weight: 600`
+  - **games.css extracted**: Moved all Games-panel CSS rules from `styles.css` into new `assets/games.css` (~120 lines); added `<link>` in `index.html`
+  - **World form inline submit**: `create_world_handler` and `update_world_handler` now return re-rendered worlds panel HTML instead of `ok_refresh()` (full page reload); consistent with Cancel button inline swap
+  - **Plan files staged**: Staged deleted `llm-infrastructure-improvements.md` and `trigger-identity-uuid-plan.md`; archived `games-tab-restructure-plan.md`
+  - Files modified: `assets/index.html`, `assets/styles.css`, `src/server/worlds_fragment/handlers.rs`, `src/server/games_fragment/template.rs`, `docs/system/ui_design.md`, `docs/system/dashboard.md`
+  - Files added: `assets/games.css`, `docs/plans/archived/review-fixes-plan-2026-06-16.md`
+  - Tests: 1224 pass (all pass), updated `test_create_world_handler_valid_data` and `test_update_world_handler_valid_data` for inline HTML assertions
+
+### Changed
+
+- **Test Quality: Strengthened CSS, debug, and browser trigger tests** — Added assertions for design tokens, responsive breakpoints, debug endpoint coverage, and fixture loading diagnostics
+  - **CSS tests**: Added `test_css_design_tokens_cover_core_areas` (≥5 of 6 core variable-prefix categories), `test_css_responsive_breakpoints` (width breakpoint range validation), strengthened `test_css_valid` (non-trivial length, background variable presence)
+  - **Debug tests**: Added type validation on `test_debug_state_endpoint_returns_json` (field types, enum variant matching), added `test_debug_state_endpoint_includes_all_documented_fields` (13 fields, was 6), added `test_debug_is_generating_returns_false_by_default`, `test_debug_is_generating_reflects_state`, `test_debug_backend_returns_json`
+  - **Trigger test**: Extracted `load_first_trigger_prompt()` helper with descriptive panics replacing fragile `expect` chains
+  - Files modified: `tests/integration/model/css.rs`, `tests/http/debug.rs`, `tests/browser/trigger.rs`
+  - Tests: 1224 pass (all pass), 7 new tests added
+
+### Changed
+
+- **Games Tab Restructure & Remove Modal Dependency** — Restructured the Games panel, removed world modal, replaced with inline HTMX swaps
+  - **Tab Renamed**: "Save / Load" → "Games" (label and data-tab renamed to `games`)
+  - **Games Panel Restructured**: Three vertical sections (Active Game → New Game → Saved Games) replacing the flat layout
+  - **Reset Moved**: From bottom "Reset Current Game" button to small ↺ icon button on the Active Game card (`btn-reset-small`)
+  - **New Game Always Visible**: Replaced `<details>` dropdown with always-visible form using `.form-row` side-by-side layout
+  - **World Modal Removed**: Deleted `#world-modal` overlay, `openWorldModal()`/`closeWorldModal()` JS, and modal CSS (`.modal-overlay` through `.modal-actions`)
+  - **Inline HTMX Swaps**: Create/Edit world buttons use `hx-get` + `hx-target=".worlds-panel" hx-swap="outerHTML"` instead of opening a modal
+  - **WorldFormTemplate**: Wrapped in `.worlds-panel` div so inline swap targets resolve correctly; added Cancel button returning to worlds list
+  - **CSS Updated**: Removed `.world-picker`, `.save-load-actions`, modal rules, `.add-world-btn` orphan; added `.active-game-info`, `.btn-reset-small`, `.new-game-form` rules
+  - Files modified: `assets/index.html`, `assets/styles.css`, `src/server/games_fragment/template.rs`, `src/server/worlds_fragment/template.rs`
+  - Documentation: Updated `docs/architecture/system.md`, `docs/system/dashboard.md`, `docs/system/worlds.md`
+  - Tests: 1218 pass (all pass), no new tests required (template-only changes, handlers unchanged)
+
+### Fixed
+
+- **UI Consistency: Button classes, form-actions wrappers, and scrolling** — Aligned all tabs to use the same button utility classes, form-actions containers, and scrolling patterns
+  - **Worlds tab scrolling**: Added `#worlds-tab { overflow: hidden }` and `.worlds-panel { flex: 1; overflow-y: auto; min-height: 0 }` — worlds form now scrolls correctly
+  - **Worlds form cancel button**: Changed from `btn-danger` to `btn-cyan` (Cancel is non-destructive), wrapped submit+cancel in `<div class="form-actions">`
+  - **TextCheckPreview buttons**: Replaced custom `btn-corrected`/`btn-original`/`btn-cancel` with standard `btn-primary`/`btn-cyan`/`btn-cyan` utility classes; renamed `preview-actions` → `form-actions`
+  - **Prompt Presets Add forms**: Wrapped "Add Preset" submit buttons in `<div class="form-actions">` for layout consistency
+  - **Checkbox styling**: Increased checkbox from 16×16 → 20×20px; added `margin-bottom: var(--spacing-sm)` to `.settings-panel .form-group` (was missing, causing zero spacing between form fields); added `line-height: 1.4` to `.checkbox-label` for text alignment
+  - **CSS cleanup**: Removed 75 lines of unused `btn-corrected`, `btn-original`, `btn-cancel`, `preview-actions` definitions
+  - Files modified: `assets/styles.css`, `assets/worlds.css`, `assets/index.html`, `src/server/templates.rs`, `src/server/prompt_presets_fragment/template.rs`, `src/server/worlds_fragment/template.rs`
+  - Tests: 1218 pass (all pass)
+
 ## 2026-06-15
 
 ### Changed

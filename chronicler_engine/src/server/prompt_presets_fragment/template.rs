@@ -60,7 +60,9 @@ use crate::model::prompt_preset::PromptPreset;
                 <label for="system-preset-output">Output Format</label>
                 <textarea id="system-preset-output" name="output_format" rows="6" placeholder="Enter output format..."></textarea>
             </div>
-            <button type="submit" class="btn-primary">Add Preset</button>
+            <div class="form-actions">
+                <button type="submit" class="btn-primary">Add Preset</button>
+            </div>
         </form>
     </div>
 
@@ -111,7 +113,9 @@ use crate::model::prompt_preset::PromptPreset;
                 <label for="quantifier-preset-output">Output Format</label>
                 <textarea id="quantifier-preset-output" name="output_format" rows="6" placeholder="Enter output format..."></textarea>
             </div>
-            <button type="submit" class="btn-primary">Add Preset</button>
+            <div class="form-actions">
+                <button type="submit" class="btn-primary">Add Preset</button>
+            </div>
         </form>
     </div>
 </div>
