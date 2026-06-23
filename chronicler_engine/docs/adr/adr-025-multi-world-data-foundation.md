@@ -122,4 +122,3 @@ pub async fn render_fragment(state: &AppState) -> Html<String> {
 ## Related
 
 - ADR-024: Migrate Game Data to SQLite with Seed Pattern (prerequisite)
-- Plan: `multi-world-data-foundation.md` (archived in `docs/plans/archived/`)

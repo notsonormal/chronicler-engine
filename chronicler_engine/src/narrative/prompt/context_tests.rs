@@ -3,7 +3,7 @@ use crate::narrative::prompt::budget::estimate_tokens;
 use crate::narrative::prompt::context::{
     fit_messages_to_context, make_prompt_context, trim_history_to_budget,
 };
-use crate::narrative::prompt::types::PromptContext;
+use crate::narrative::prompt::types::{NpcContext, PromptContext};
 
 #[test]
 fn test_context_fitting_no_trim_needed() {
@@ -101,13 +101,22 @@ fn test_make_prompt_context() {
     let npcs = vec![crate::test_support::TestNpc::named("npc1", "Npc")];
     let history = vec![];
 
-    let context: PromptContext =
-        make_prompt_context(&world, &room, &npcs, &npcs, &player, "hello", &history);
+    let context: PromptContext = make_prompt_context(
+        &world,
+        &room,
+        NpcContext {
+            all_npcs: &npcs,
+            npcs_in_area: &npcs,
+        },
+        &player,
+        "hello",
+        &history,
+    );
 
     assert_eq!(context.world.name, "Test World");
     assert_eq!(context.room.id, "test_room");
     assert_eq!(context.player.sheet.name, "Hero");
-    assert_eq!(context.all_npcs.len(), 1);
+    assert_eq!(context.npcs.all_npcs.len(), 1);
     assert_eq!(context.user_message, "hello");
     assert!(context.history.is_empty());
 }

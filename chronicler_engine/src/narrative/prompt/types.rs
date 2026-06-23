@@ -18,12 +18,18 @@ pub enum PromptLayer {
     User,
     Phi,
 }
+
+#[derive(Debug, Clone, Copy)]
+pub struct NpcContext<'a> {
+    pub all_npcs: &'a [NpcCard],
+    pub npcs_in_area: &'a [NpcCard],
+}
+
 #[derive(Debug, Clone)]
 pub struct PromptContext<'a> {
     pub world: &'a WorldCard,
     pub room: &'a Room,
-    pub all_npcs: &'a [NpcCard],
-    pub npcs_in_area: &'a [NpcCard],
+    pub npcs: NpcContext<'a>,
     pub player: &'a PlayerCard,
     pub user_message: &'a str,
     pub history: &'a [MessageEntry],

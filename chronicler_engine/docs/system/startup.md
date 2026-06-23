@@ -1,50 +1,39 @@
 # Engine Startup & Initialization
 
-
-
 This document defines the authoritative sequence for bootstrapping the Chronicler Engine, from environment resolution to world state creation.
 
 ## 1. Data Path Resolution
+
 The engine resolves its `data/` directory using the following priority:
-1.  **Executable Proximity**: Checks for a `data/` folder in the same directory as the engine binary (for portable deployments).
-2.  **Current Working Directory**: Defaults to `./data` (standard development mode).
 
-## 2. World Initialization Sequence (Phases 1-2: File Seeding)
-On first startup (or if the DB is empty), JSON files are seeded into the SQLite database:
-1.  **World Directory Scan**: Scans `data/worlds/*/world.json` for all available worlds
-2.  **Manifest Processing**: For each `world.json`:
-    - Deserializes `WorldManifest` (contains file pointers: `map_file`, `player_file`, `characters_dir`)
-    - Converts to `WorldCard` via `From<WorldManifest>` (adds `key`, `player_key`, `default_scenario_id`)
-    - Loads `MapDef` from `data/worlds/<id>/<map_file>`
-    - Calls `Storage::seed_world(world_card, map)` — idempotent INSERT OR IGNORE
-    - Loads `PlayerCard` from `data/personas/<player_file>` and calls `Storage::seed_persona(key, player)` — skip if exists
-    - Loads `NpcCard`s from `data/characters/<characters_dir>/*.json` and calls `Storage::seed_character(world_id, npc)` for each — skip if exists
-3.  **Preset Seeding**: Prompt presets from `data/prompt_presets/` are also seeded idempotently
+1. **Executable Proximity**: `data/` folder in the same directory as the engine binary (portable deployments).
+2. **Current Working Directory**: `./data` (standard development mode).
 
-## 3. Runtime World Loading (Phase 3: DB-First)
-After seeding, all runtime data comes from the database:
-1.  **DB Query**: `Storage::get_world(world_key)` returns `WorldCard + MapDef` from SQLite
-2.  **Persona Loading**: `Storage::get_persona(world_card.player_key)` returns `PlayerCard`
-3.  **Character Loading**: `Storage::list_characters(world_id)` returns `Vec<NpcCard>`
-4.  **State Synthesis**: Components combined into `GameState` with injection of scenario logs
+## 2. Two-Phase Bootstrap: Seed, Then DB-First
 
-**File pointers removed**: After seeding, `WorldCard` has no knowledge of filesystem paths. The `WorldManifest` type exists only for parsing seed files.
+Startup operates in two phases with a strict boundary:
 
-## 3. Binary Bootstrap (`main.rs` → `bootstrap.rs` + `cli.rs`)
-The binary entry point (`src/main.rs`) delegates to two focused modules:
-- **`cli.rs`**: Parses command-line arguments via `clap` (`Args` struct with `--world`, `--port`, `--list-worlds`).
-- **`bootstrap.rs`**: Orchestrates the full startup sequence — resolves the data directory, loads the selected world, initializes game state, constructs the `GameService`, and starts the Axum HTTP server.
+**Phase 1 — File Seeding (once, at boot):** JSON files under `data/` are read and inserted into SQLite. This is idempotent — existing rows are skipped. After seeding, the files are never read again.
 
-This split keeps `main.rs` minimal and makes the bootstrap logic independently testable.
+**Phase 2 — DB-First (all runtime):** Every subsequent read comes from the database. `WorldCard` has no knowledge of filesystem paths; `WorldManifest` exists only for parsing seed files.
 
-## 4. Settings Loading
-Settings are loaded **once** during bootstrap:
-1. **`bootstrap/run.rs`** calls `load_settings()` and wraps the result in `Arc<RwLock<AppSettings>>`
-2. The `Arc<RwLock<AppSettings>>` is passed to `run_server_with_config()`
-3. `AppState` stores it; `GameServiceContext` carries it; `DefaultGameService` receives it at construction time
-4. Backends (`OpenRouterBackend`, `OllamaBackend`) store a clone of the `Arc` for settings access
+This boundary is load-bearing: if runtime code reaches for JSON files instead of the DB, it breaks the invariant that the DB is the sole source of truth.
 
-No business logic layer reloads settings from disk. Connection changes still require a server restart.
+### Seeding Order
 
-## 5. Server Startup
-The HTTP server (Axum) is initialized after the game state is synthesized. It binds to the specified `--port` and serves static files: `/assets` and `/data` routes via `tower_http::services::ServeDir`, with `/assets` as the fallback for unmatched routes.
+Seeding proceeds in dependency order to satisfy foreign keys:
+
+1. Worlds and maps
+2. Personas (referencing world)
+3. Characters (referencing world)
+4. Prompt presets (independent)
+
+Corrupt seed files are skipped with a warning — seeding is not fatal.
+
+## 3. Settings Loaded Once
+
+Settings are loaded from the database once during bootstrap, wrapped in `Arc<RwLock<AppSettings>>`, and passed through the construction chain. No business logic layer reloads settings from disk. Connection changes require a server restart. Only `max_context_tokens` is read dynamically at runtime.
+
+## 4. Server Startup
+
+The Axum HTTP server starts after game state synthesis. It binds to the configured `--port` and serves static files at `/assets` and `/data` routes, with `/assets` as the fallback for unmatched routes.

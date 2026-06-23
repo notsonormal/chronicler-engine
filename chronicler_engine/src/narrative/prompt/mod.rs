@@ -10,7 +10,7 @@ pub mod types;
 pub use assembler::{AssembledPrompt, LayeredPromptAssembler, PromptAssembler};
 pub use context::{fit_messages_to_context, make_prompt_context};
 pub use sanitize::sanitize_for_prompt;
-pub use types::{PromptContext, PromptLayer};
+pub use types::{NpcContext, PromptContext, PromptLayer};
 
 #[cfg(test)]
 mod assembler_tests;

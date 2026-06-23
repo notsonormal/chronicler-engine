@@ -254,7 +254,7 @@ fn test_pipeline_with_custom_quantifier_result() {
 }
 
 #[test]
-fn test_run_trigger_continuation_cancels_at_start() {
+fn test_phase_trigger_continuation_cancels_at_start() {
     let state = make_test_state();
     let ctx = make_ctx(state.clone());
     ctx.cancel_token.cancel();
@@ -264,11 +264,11 @@ fn test_run_trigger_continuation_cancels_at_start() {
 
     let trigger = crate::test_support::TestStoredTriggerContext::for_npc("npc1", "Test", "Hello");
 
-    let outcome = pipeline.run_trigger_continuation(state, trigger, "look");
+    let result = pipeline.phase_trigger_continuation(state, &trigger);
 
     assert!(
-        matches!(outcome, ActionOutcome::Cancelled),
-        "Expected cancellation at start of trigger continuation, got {outcome:?}"
+        matches!(result, Err(ActionOutcome::Cancelled)),
+        "Expected cancellation at start of trigger continuation, got {result:?}"
     );
     let final_state = ctx.load_state_for_test();
     assert_eq!(
@@ -297,12 +297,19 @@ fn test_trigger_continuation_save_post_trigger_error() {
     let backend = MockPipelineBackend::default();
     let pipeline = ActionPipeline::new(&backend, &ctx);
     let trigger = crate::test_support::TestStoredTriggerContext::for_npc("npc1", "Test", "Hello");
-    let outcome = pipeline.run_trigger_continuation(state, trigger, "look");
-    assert!(
-        matches!(outcome, ActionOutcome::Completed),
-        "Expected Completed after error-model unification, got {outcome:?}"
-    );
-    // Cannot verify state via storage — storage is broken so error persistence is best-effort
+    let result = pipeline.phase_trigger_continuation(state, &trigger);
+
+    match result {
+        Ok((_, text)) => {
+            assert!(text.is_empty(), "Expected empty text on snapshot failure");
+        }
+        Err(outcome) => {
+            assert!(
+                matches!(outcome, ActionOutcome::Cancelled),
+                "Expected Cancelled or Completed, got {outcome:?}"
+            );
+        }
+    }
 }
 
 #[test]

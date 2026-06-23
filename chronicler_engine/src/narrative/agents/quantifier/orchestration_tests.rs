@@ -73,8 +73,6 @@ fn test_quantifier_no_retry_when_high_confidence() {
     assert_eq!(result.npcs.confidence, QuantifierConfidence::High);
 }
 
-// ─── Custom backends for determine_npcs_in_room tests ────────────────────────
-
 fn make_test_llm_result(text: &str) -> LlmCallResult {
     LlmCallResult {
         text: text.to_string(),
@@ -220,8 +218,6 @@ impl LlmBackend for ErrBackend {
     }
 }
 
-// ─── determine_npcs_in_room tests ────────────────────────────────────────────
-
 fn determine_npcs_with_room(
     state: &crate::model::state::GameState,
     room_npc_ids: &[String],
@@ -318,8 +314,6 @@ fn test_determine_npcs_filters_unknown_backend_ids() {
 
     assert_eq!(result.npcs.npc_ids, vec!["carla"]);
 }
-
-// ─── quantify_room_with_llm_call failure path tests ──────────────────────────
 
 #[test]
 fn test_quantifier_retry_on_llm_error() {
@@ -447,8 +441,6 @@ fn test_quantifier_low_confidence_then_error_fallback() {
     assert_eq!(result.npcs.npc_ids, vec!["carla".to_string()]);
     assert_eq!(result.npcs.confidence, QuantifierConfidence::Low);
 }
-
-// ─── static_npc_result tests ─────────────────────────────────────────────────
 
 #[test]
 fn test_static_npc_result_valid_ids() {

@@ -109,8 +109,6 @@ pub struct InputBuffer {
     pub phase: GenerationPhase,
 }
 
-// ─── Sub-state structs ────────────────────────────────────────────────────────
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MovementState {
     pub current_room_id: String,
@@ -138,14 +136,11 @@ pub struct NarrativeState {
     pub pending_location: Option<String>,
     #[serde(default)]
     pub pending_event: Option<String>,
-    /// Name of the backend used for the last narration call.
     #[serde(default)]
     pub last_backend_name: Option<String>,
-    /// Name of the model used for the last narration call.
     #[serde(default)]
     pub last_model_name: Option<String>,
-    /// Message being retried, stored outside history so the pipeline can append a swipe to it.
-    /// Not persisted in snapshots — transient for the current pipeline run only.
+    // Not persisted in snapshots — transient for the current pipeline run only.
     #[serde(skip)]
     pub retry_target: Option<Message>,
 }
@@ -170,12 +165,9 @@ impl NarrativeState {
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SceneState {
     pub npcs_in_area: Vec<NpcCard>,
-    /// Confidence of the last quantifier run (High, Medium, Low, or None if not run).
     #[serde(default)]
     pub quantifier_confidence: Option<String>,
 }
-
-// ─── GameState ────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
 #[non_exhaustive]
@@ -190,8 +182,7 @@ pub struct GameState {
     pub npc_encounter_log: NpcEncounterLog,
 }
 
-/// New fields added to `GameState` get a `Default::default()` fallback here,
-/// so existing call sites do not break when the struct grows.
+// Builder uses Option + Default so new GameState fields don't break callers.
 pub struct GameStateBuilder {
     world: Arc<WorldCard>,
     map: Arc<MapDef>,
@@ -317,7 +308,6 @@ impl GameState {
         let location_header = self.narrative.pending_location.take();
         let event_header = self.narrative.pending_event.take();
 
-        // Retry interception: append swipe instead of creating new message
         if message_type == MessageType::Narration || message_type == MessageType::Dialogue {
             if let Some(ref mut target) = self.narrative.retry_target {
                 let target_is_event = target.event_header().is_some();

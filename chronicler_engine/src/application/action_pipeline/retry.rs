@@ -91,7 +91,7 @@ pub fn retry_last_response_impl<B: ActionPipelineBackend>(backend: &B, ctx: Game
 
     match outcome {
         ActionOutcome::Completed => {}
-        // Note: not returned after error-model unification; errors go to GenerationStatus::Error on state
+        // Unused after error-model unification; errors flow through GenerationStatus::Error
         ActionOutcome::Error { .. } => {}
         ActionOutcome::Cancelled => {}
     }
@@ -120,7 +120,21 @@ pub(crate) fn retry_event_continuation<B: ActionPipelineBackend>(
         None => String::new(),
     };
     let pipeline = ActionPipeline::new(backend, ctx);
-    pipeline.run_trigger_continuation(state, trigger, &input_text)
+    let mut state = match pipeline.phase_trigger_continuation(state, &trigger) {
+        Ok((s, continuation_text)) => {
+            if !continuation_text.is_empty() {
+                pipeline.reconcile_post_trigger_npcs(s, &input_text, &continuation_text)
+            } else {
+                s
+            }
+        }
+        Err(outcome) => return outcome,
+    };
+    if let Some(target) = state.narrative.retry_target.take() {
+        state.narrative.history.append(target);
+    }
+    pipeline.phase_finalize(&mut state);
+    ActionOutcome::Completed
 }
 
 pub(crate) fn retry_main_narration<B: ActionPipelineBackend>(
@@ -139,7 +153,7 @@ pub fn retrigger_event_impl<B: ActionPipelineBackend>(backend: &B, ctx: &GameSer
     let outcome = retry_event_continuation(backend, ctx, state);
     match outcome {
         ActionOutcome::Completed => {}
-        // Note: not returned after error-model unification; errors go to GenerationStatus::Error on state
+        // Unused after error-model unification; errors flow through GenerationStatus::Error
         ActionOutcome::Error { .. } => {}
         ActionOutcome::Cancelled => {
             let mut state = load_or_fresh(ctx);

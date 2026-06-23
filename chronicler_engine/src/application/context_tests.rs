@@ -172,7 +172,6 @@ fn test_save_message_and_snapshot_persists_retry_swipe() {
     let ctx = minimal_ctx();
     let mut state = minimal_state();
 
-    // Set up a retry target with an existing swipe (as if loaded from DB)
     let mut target = Message::new(
         None,
         "Original narration",
@@ -183,7 +182,6 @@ fn test_save_message_and_snapshot_persists_retry_swipe() {
     target.id = 42; // Simulate DB-assigned ID
     target.swipes[0].snapshot_id = Some(1);
 
-    // Add a new swipe (as if push_message appended it during retry)
     target.swipes.push(crate::model::message::Swipe {
         text: "Retried narration".to_string(),
         snapshot_id: None,
@@ -197,7 +195,6 @@ fn test_save_message_and_snapshot_persists_retry_swipe() {
 
     let snapshot_id = save_message_and_snapshot(&ctx, &mut state).unwrap();
 
-    // Verify the new swipe was persisted
     let target = state.narrative.retry_target.unwrap();
     assert_eq!(target.swipes[1].snapshot_id, Some(snapshot_id));
 }
@@ -207,7 +204,6 @@ fn test_save_message_and_snapshot_skips_persisted_retry_swipe() {
     let ctx = minimal_ctx();
     let mut state = minimal_state();
 
-    // Set up a retry target where the last swipe ALREADY has a snapshot_id
     let mut target = Message::new(
         None,
         "Original narration",
@@ -229,12 +225,9 @@ fn test_save_message_and_snapshot_skips_persisted_retry_swipe() {
 
     let _snapshot_id = save_message_and_snapshot(&ctx, &mut state).unwrap();
 
-    // The last swipe should keep its original snapshot_id, not be overwritten
     let target = state.narrative.retry_target.unwrap();
     assert_eq!(target.swipes[1].snapshot_id, Some(99));
 }
-
-// ── active_quantifier_prompt tests ──────────────────────────────────────────
 
 #[test]
 fn test_active_quantifier_prompt_returns_assembled_text() {
@@ -251,7 +244,6 @@ fn test_active_quantifier_prompt_returns_assembled_text() {
     };
     ctx.preset_storage.save_preset(&preset).unwrap();
 
-    // Point settings at our test preset
     {
         let mut settings = ctx.settings.write().unwrap();
         settings.active_quantifier_prompt_preset_id = "quant-test".to_string();
@@ -265,7 +257,6 @@ fn test_active_quantifier_prompt_returns_assembled_text() {
 #[test]
 fn test_active_quantifier_prompt_missing_preset_returns_empty() {
     let ctx = minimal_ctx();
-    // Ensure no quantifier preset is seeded
     let result = ctx.active_quantifier_prompt();
     assert_eq!(
         result, "",
@@ -282,8 +273,6 @@ fn test_active_quantifier_prompt_storage_error_returns_empty() {
     let result = ctx.active_quantifier_prompt();
     assert_eq!(result, "", "Should return empty string on storage error");
 }
-
-// ── delete_and_remove_message test ──────────────────────────────────────────
 
 #[test]
 fn test_delete_and_remove_message_removes_from_storage_and_state() {
@@ -306,8 +295,6 @@ fn test_delete_and_remove_message_removes_from_storage_and_state() {
     assert_eq!(state.narrative.history.len(), 0);
     assert!(ctx.storage.load_message_rows().unwrap().is_empty());
 }
-
-// ── load_or_fresh error fallback test ──────────────────────────────────────────
 
 #[test]
 fn test_load_or_fresh_fallback_on_snapshot_error() {
@@ -335,8 +322,6 @@ fn test_load_or_fresh_fallback_on_snapshot_error() {
     let loaded = load_or_fresh(&ctx);
     assert_eq!(loaded.movement.current_room_id, "start");
 }
-
-// ── save_message_and_snapshot error path ────────────────────────────────────
 
 #[test]
 fn test_save_message_and_snapshot_propagates_snapshot_error() {

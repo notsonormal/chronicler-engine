@@ -153,6 +153,20 @@ The anchor must point to a domain-specific documentation file (e.g., `docs/syste
 **Scope**: `src/server/` (excluding `mod.rs`, `debug.rs`, and `renderers.rs`)  
 **Checks**: Function signatures with `-> (StatusCode, String)` return type
 
+## 4. Coverage Exclusion Policy
+
+Code coverage is measured via `cargo-llvm-cov` with file-level exclusions configured in `build.py`.
+
+**Approach:** `--ignore-filename-regex` flag instead of `#[coverage(off)]` attributes, because `#[coverage(off)]` requires nightly Rust (feature `coverage_attribute`) and stable Rust compatibility is required.
+
+**Excluded files** (integration-tested wiring/lifecycle, not business logic):
+- `server/(router|server_impl|handlers).rs`
+- `test_support/.*.rs`
+- `bootstrap/run.rs`
+- `narrative/llm/(openrouter|ollama|deepseek|backend).rs`
+
+**Reference:** cargo-llvm-cov Issue #453 recommends file-level exclusion for stable Rust.
+
 ---
 
 ## Running Guardrails

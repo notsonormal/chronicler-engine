@@ -36,7 +36,7 @@ Reintroduce per-message swipes as a dedicated `message_swipes` table, with each 
 
 ### Retrigger Event
 
-When a narration swipe is restored and its snapshot contains `last_trigger`, a "Retrigger Event" button appears. Clicking it runs `pipeline.run_trigger_continuation()` from that snapshot state, generating a new event continuation without rerunning the main narration.
+When a narration swipe is restored and its snapshot contains `last_trigger`, a "Retrigger Event" button appears. Clicking it runs the trigger continuation flow via `ActionPipeline::phase_trigger_continuation()` → `ActionPipeline::reconcile_post_trigger_npcs()` → `phase_finalize()` from that snapshot state, generating a new event continuation without rerunning the main narration.
 
 ### Why Only the Last Message?
 

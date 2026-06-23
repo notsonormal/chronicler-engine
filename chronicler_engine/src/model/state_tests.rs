@@ -47,21 +47,17 @@ fn test_log_ordering() {
 fn test_delete_last_log_recalculates_ids() {
     let mut state = TestGameState::in_room("room1");
 
-    // Add Input + Narration (mimics handler flow)
     state.add_message("go north".into(), Some("Player".into()), MessageType::Input);
     state.add_message("You walk north.".into(), None, MessageType::Narration);
 
     assert_eq!(state.narrative.history.len(), 2);
 
-    // Delete Narration
     state.narrative.history.delete_last().unwrap();
     assert_eq!(state.narrative.history.len(), 1);
     assert_eq!(state.narrative.history.as_slice()[0].text(), "go north");
 
-    // Delete Input
     state.narrative.history.delete_last().unwrap();
     assert!(state.narrative.history.is_empty());
-    // Verify a new Input can be added after delete
     state.add_message("go south".into(), Some("Player".into()), MessageType::Input);
     assert_eq!(state.narrative.history.last().unwrap().text(), "go south");
 }
@@ -70,7 +66,6 @@ fn test_delete_last_log_recalculates_ids() {
 fn test_push_message_appends_swipe_on_retry_target() {
     let mut state = TestGameState::in_room("room1");
 
-    // Set up a retry target (simulating a message loaded from DB)
     let target = crate::model::message::Message::new(
         None,
         "Original narration",
@@ -82,7 +77,6 @@ fn test_push_message_appends_swipe_on_retry_target() {
 
     state.add_message("Retried narration".into(), None, MessageType::Narration);
 
-    // History should NOT have grown — swipe went to retry_target
     assert_eq!(state.narrative.history.len(), 0);
 
     let target = state.narrative.retry_target.unwrap();
@@ -97,7 +91,6 @@ fn test_push_message_appends_swipe_on_retry_target() {
 fn test_push_message_creates_new_message_when_event_header_mismatches() {
     let mut state = TestGameState::in_room("room1");
 
-    // Retry target is a main narration (no event_header)
     let target = crate::model::message::Message::new(
         None,
         "Original narration",
@@ -107,11 +100,9 @@ fn test_push_message_creates_new_message_when_event_header_mismatches() {
     );
     state.narrative.retry_target = Some(target);
 
-    // But now we add an event narration (has event_header)
     state.narrative.pending_event = Some("Trigger Event".to_string());
     state.add_message("Event narration".into(), None, MessageType::Narration);
 
-    // Should create a NEW message in history, not append to retry_target
     assert_eq!(state.narrative.history.len(), 1);
     assert_eq!(
         state.narrative.history.last().unwrap().text(),
@@ -122,7 +113,6 @@ fn test_push_message_creates_new_message_when_event_header_mismatches() {
         Some("Trigger Event")
     );
 
-    // Retry target should be unchanged
     let target = state.narrative.retry_target.unwrap();
     assert_eq!(target.swipes.len(), 1);
     assert_eq!(target.text(), "Original narration");
@@ -141,8 +131,6 @@ fn test_push_message_creates_new_message_when_no_retry_target() {
     );
     assert!(state.narrative.retry_target.is_none());
 }
-
-// ─── Property-based tests ──────────────────────────────────────────────────────
 
 use proptest::prelude::*;
 

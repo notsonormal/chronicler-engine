@@ -6,6 +6,7 @@ use crate::model::world::WorldCard;
 use crate::narrative::prompt::assembler::{LayeredPromptAssembler, PromptAssembler};
 use crate::narrative::prompt::budget;
 use crate::narrative::prompt::context::make_prompt_context;
+use crate::narrative::prompt::types::NpcContext;
 
 fn create_test_preset() -> PromptPreset {
     PromptPreset {
@@ -113,8 +114,10 @@ fn test_assemble_includes_all_layers() {
     let context = make_prompt_context(
         &world,
         &room,
-        &npcs,
-        &npcs,
+        NpcContext {
+            all_npcs: &npcs,
+            npcs_in_area: &npcs,
+        },
         &player,
         "I want to explore.",
         &history,
@@ -125,7 +128,6 @@ fn test_assemble_includes_all_layers() {
         .assemble(&context, &preset, &world.global_rules, Some("Short"))
         .expect("assemble should succeed");
 
-    // System prompt should contain preset sections
     assert!(
         result.system_prompt.contains("<role>"),
         "system should contain role"
@@ -143,7 +145,6 @@ fn test_assemble_includes_all_layers() {
         "system should contain global_rules"
     );
 
-    // User prompt should contain game layers
     assert!(
         result.user_prompt.contains("<GameState>"),
         "user should contain GameState"
@@ -173,7 +174,6 @@ fn test_assemble_includes_all_layers() {
         "user should contain PlayerInput"
     );
 
-    // Post-history prompt should be in user message
     assert!(
         result.user_prompt.contains("<writing_style>"),
         "user should contain writing_style"
@@ -204,17 +204,25 @@ fn test_assemble_empty_preset_sections() {
         preset_type: crate::model::prompt_preset::PresetType::System,
     };
 
-    let context = make_prompt_context(&world, &room, &[], &[], &player, "Hello.", &[]);
+    let context = make_prompt_context(
+        &world,
+        &room,
+        NpcContext {
+            all_npcs: &[],
+            npcs_in_area: &[],
+        },
+        &player,
+        "Hello.",
+        &[],
+    );
 
     let assembler = LayeredPromptAssembler::new(budget::MAX_CONTEXT_TOKENS);
     let result = assembler
         .assemble(&context, &preset, &[], None)
         .expect("assemble should succeed");
 
-    // System prompt should be empty (no preset sections + no global rules)
     assert!(result.system_prompt.is_empty());
 
-    // User prompt should still have game layers
     assert!(result.user_prompt.contains("<GameState>"));
     assert!(result.user_prompt.contains("<PlayerInput>"));
 }
@@ -226,7 +234,17 @@ fn test_assemble_respects_max_tokens() {
     let player = create_test_player();
     let preset = create_test_preset();
 
-    let context = make_prompt_context(&world, &room, &[], &[], &player, "Test input.", &[]);
+    let context = make_prompt_context(
+        &world,
+        &room,
+        NpcContext {
+            all_npcs: &[],
+            npcs_in_area: &[],
+        },
+        &player,
+        "Test input.",
+        &[],
+    );
 
     let assembler = LayeredPromptAssembler::new(budget::MAX_CONTEXT_TOKENS).with_max_tokens(512);
     let result = assembler
@@ -243,7 +261,6 @@ fn test_assemble_budget_trimming() {
     let player = create_test_player();
     let preset = create_test_preset();
 
-    // Create a very long history to force trimming
     let long_history: Vec<MessageEntry> = (0..100)
         .map(|i| MessageEntry {
             id: i,
@@ -257,15 +274,23 @@ fn test_assemble_budget_trimming() {
         })
         .collect();
 
-    let context = make_prompt_context(&world, &room, &[], &[], &player, "Short.", &long_history);
+    let context = make_prompt_context(
+        &world,
+        &room,
+        NpcContext {
+            all_npcs: &[],
+            npcs_in_area: &[],
+        },
+        &player,
+        "Short.",
+        &long_history,
+    );
 
-    // Use a small context window to force trimming
     let assembler = LayeredPromptAssembler::new(2048);
     let result = assembler
         .assemble(&context, &preset, &[], None)
         .expect("assemble should succeed");
 
-    // Should still produce valid output
     assert!(!result.system_prompt.is_empty() || !result.user_prompt.is_empty());
     assert!(result.max_tokens > 0);
 }

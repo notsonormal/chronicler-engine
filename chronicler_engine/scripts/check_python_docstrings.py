@@ -14,7 +14,6 @@ def check_python_file(filepath: Path) -> list[str]:
         content = filepath.read_text(encoding="utf-8")
         lines = content.splitlines()
 
-        # Find first non-blank line
         first_nonblank_idx = None
         for i, line in enumerate(lines):
             if line.strip():
@@ -27,20 +26,16 @@ def check_python_file(filepath: Path) -> list[str]:
 
         first_line = lines[first_nonblank_idx]
 
-        # Error if starts with shebang
         if first_line.startswith("#!/usr/bin/env python3"):
             violations.append(
                 f"{filepath}:{first_nonblank_idx + 1}: error: "
                 f"Shebang found. Remove '#!/usr/bin/env python3' - "
                 f"scripts are invoked via 'python script.py'"
-            )
-            # Continue to check docstring on next line
+)
 
-        # Find first content line after shebang (if present)
         content_start_idx = first_nonblank_idx
         if first_line.startswith("#!/"):
             content_start_idx = first_nonblank_idx + 1
-            # Find next non-blank line
             while content_start_idx < len(lines) and not lines[content_start_idx].strip():
                 content_start_idx += 1
 
@@ -53,8 +48,7 @@ def check_python_file(filepath: Path) -> list[str]:
 
         first_content = lines[content_start_idx].strip()
 
-        # Warn if no docstring
-        if not (first_content.startswith('"""') or first_content.startswith("'''")):
+        if not (first_content.startswith('\"\"\"') or first_content.startswith("'''")):
             violations.append(
                 f"{filepath}:{content_start_idx + 1}: warning: "
                 f"Missing module docstring. "
@@ -95,10 +89,8 @@ def scan_python_files(directories: list[Path]) -> tuple[int, int]:
 
 def main() -> int:
     """Main entry point."""
-    # Get the chronicler_engine directory
     chronicler_engine = Path(__file__).parent.parent
 
-    # Scan directories
     directories = [
         chronicler_engine / "scripts",
         chronicler_engine.parent / "scripts" / "issue_tracker",

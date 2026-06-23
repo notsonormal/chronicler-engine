@@ -2,7 +2,6 @@
 //! Multi-stage prompt builder
 
 use crate::error::EngineError;
-use crate::model::character::NpcCard;
 use crate::model::map::Room;
 use crate::model::prompt_preset::PromptPreset;
 use crate::model::state::MessageEntry;
@@ -12,7 +11,7 @@ use crate::narrative::prompt::budget;
 use crate::narrative::prompt::budget::truncate_to_budget;
 use crate::narrative::prompt::context::fit_messages_to_context;
 use crate::narrative::prompt::sanitize::sanitize_for_prompt;
-use crate::narrative::prompt::types::PromptContext;
+use crate::narrative::prompt::types::{NpcContext, PromptContext};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AssembledPrompt {
@@ -65,8 +64,7 @@ impl PromptAssembler for LayeredPromptAssembler {
         let renderer = LayerRenderer {
             world: context.world,
             room: context.room,
-            all_npcs: context.all_npcs,
-            npcs_in_area: context.npcs_in_area,
+            npcs: context.npcs,
             player: context.player,
             user_message: context.user_message,
             history: context.history,
@@ -162,8 +160,7 @@ fn wrap_xml(content: &str, tag: &str) -> String {
 struct LayerRenderer<'a> {
     world: &'a WorldCard,
     room: &'a Room,
-    all_npcs: &'a [NpcCard],
-    npcs_in_area: &'a [NpcCard],
+    npcs: NpcContext<'a>,
     player: &'a crate::model::character::PlayerCard,
     user_message: &'a str,
     history: &'a [MessageEntry],
@@ -218,14 +215,18 @@ impl<'a> LayerRenderer<'a> {
 
     fn render_npc_cards_layer(&self) -> String {
         let mut output = String::new();
-        let in_area_ids: std::collections::HashSet<_> =
-            self.npcs_in_area.iter().map(|n| n.id.as_str()).collect();
+        let in_area_ids: std::collections::HashSet<_> = self
+            .npcs
+            .npcs_in_area
+            .iter()
+            .map(|n| n.id.as_str())
+            .collect();
 
         output.push_str("<KnownNpcs>");
-        if self.all_npcs.is_empty() {
+        if self.npcs.all_npcs.is_empty() {
             output.push_str("No characters in this world.\n");
         } else {
-            for npc in self.all_npcs {
+            for npc in self.npcs.all_npcs {
                 let presence = if in_area_ids.contains(npc.id.as_str()) {
                     "(in room)"
                 } else {
@@ -257,10 +258,10 @@ impl<'a> LayerRenderer<'a> {
         output.push_str("</KnownNpcs>\n\n");
 
         output.push_str("<NpcsInRoom>");
-        if self.npcs_in_area.is_empty() {
+        if self.npcs.npcs_in_area.is_empty() {
             output.push_str("No NPCs are present in this location.\n");
         } else {
-            for npc in self.npcs_in_area {
+            for npc in self.npcs.npcs_in_area {
                 output.push_str("--- ");
                 output.push_str(&npc.sheet.name);
                 output.push_str(" ---\n");
@@ -286,6 +287,7 @@ impl<'a> LayerRenderer<'a> {
                     output.push_str("Relationships:\n");
                     for rel in present_relations {
                         let partner_name = self
+                            .npcs
                             .all_npcs
                             .iter()
                             .find(|n| n.id == rel.with)

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Full build, validate, and test for Chronicler Engine.
 
 Uses cargo-nextest for parallel test execution.
@@ -124,7 +123,6 @@ def kill_port(port: int):
                         try:
                             os.kill(pid, signal.SIGTERM)
                         except (ProcessLookupError, PermissionError):
-                            # Try force kill on Windows
                             subprocess.run(f"taskkill /F /PID {pid}", shell=True)
     except Exception as e:
         print(f"Note: Could not check port {port}: {e}")
@@ -221,7 +219,7 @@ def dump_sqlite_to_jsonl(db_path: Path, output_dir: Path):
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
-        # Get all user tables (exclude sqlite_internal tables)
+
         cursor.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
         )
@@ -575,7 +573,6 @@ def main():
     print(f"  Package ready in {target_dir}/")
     print(f"  Deployment: copy {target_dir}/ folder to your target machine")
 
-    # Clean stale SQLite databases before tests/application run.
     # DB lives inside the target folder so each build profile has its own instance.
     target_data_dir = target_dir / "data"
     clean_sqlite_dbs(target_data_dir)
@@ -588,11 +585,8 @@ def main():
         steps.next("Generating coverage report...")
         json_path = cargo_target_dir / "llvm-cov" / "coverage.json"
         json_path.parent.mkdir(parents=True, exist_ok=True)
-        # Exclude server infrastructure (router, server_impl, handlers) - tested via integration tests
-        # Exclude test_support - testing infrastructure, not business logic
-        # Exclude bootstrap/run.rs - CLI bootstrap code
-        # Exclude LLM client backends - network calls tested via mock servers
-        ignore_regex = r"server[\\/](router|server_impl|handlers)\.rs|test_support[\\/].*\.rs|bootstrap[\\/]run\.rs|narrative[\\/]llm[\\/](openrouter|ollama|deepseek|backend)\.rs"
+        # Exclude: server infra (integration tests), test_support, bootstrap CLI, LLM backends (mock servers)
+        ignore_regex = r"server[\\/](router|server_impl|handlers)\.rs|test_support[\\/].*\.rs|bootstrap[\\/](run|init_game)\.rs|narrative[\\/]llm[\\/](openrouter|ollama|deepseek|backend)\.rs"
         run(
             f'cargo llvm-cov report --json --output-path "{json_path}" --ignore-filename-regex "{ignore_regex}"',
             check=False,

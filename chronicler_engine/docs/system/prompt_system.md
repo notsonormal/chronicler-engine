@@ -157,6 +157,29 @@ The engine uses a variable system similar to SillyTavern's Handlebars-style temp
 - Variables populated from `GameState` at render time
 - Used in prompt construction within `LayeredPromptAssembler`
 
+## Prompt Context Structure
+
+The `PromptContext` struct bundles all data needed for prompt assembly. To reduce parameter count and improve clarity, NPC-related data is bundled into `NpcContext<'a>`:
+
+```rust
+pub struct NpcContext<'a> {
+    pub all_npcs: &'a [NpcCard],      // Full NPC roster (known characters)
+    pub npcs_in_area: &'a [NpcCard],  // NPCs currently present in the room
+}
+
+pub struct PromptContext<'a> {
+    pub world: &'a WorldCard,
+    pub room: &'a Room,
+    pub npcs: NpcContext<'a>,         // Bundled NPC context
+    pub player: &'a PlayerCard,
+    pub user_message: &'a str,
+    pub history: &'a [MessageEntry],
+    pub template_vars: TemplateVars,
+}
+```
+
+The `make_prompt_context` helper function constructs `PromptContext` from individual parameters, taking 6 arguments (down from 7 after bundling NPC slices).
+
 ## World Info / Knowledge Base
 
 - **Trigger**: Keywords appear in player input or history
@@ -194,7 +217,7 @@ The engine also uses a **quantifier prompt** — a separate secondary LLM call t
 
 ### Key Files
 - `src/narrative/prompt/assembler.rs` — `PromptAssembler` trait, `LayeredPromptAssembler` with 8-layer construction, context fitting, and budget management
-- `src/narrative/prompt/types.rs` — `PromptContext`, `PromptLayer`
+- `src/narrative/prompt/types.rs` — `PromptContext`, `NpcContext`, `PromptLayer`
 - `src/narrative/llm/mod.rs` — LLM backend module (pure transport, no prompt assembly)
 - `src/model/state.rs` — `GameState` provides context data
 - `src/model/character.rs` — `NpcCard`, `PlayerCard` structures

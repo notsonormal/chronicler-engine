@@ -296,8 +296,9 @@ fn test_retry_event_trigger_narration_fails() {
         .set_event_header(Some("Event".to_string()));
     let final_snapshot =
         crate::model::state_snapshot::GameStateSnapshot::from_game_state(&final_state);
-    let _ = ctx.storage.save_snapshot(&final_snapshot);
+    let final_id = ctx.storage.save_snapshot(&final_snapshot).unwrap();
     if let Some(last) = final_state.narrative.history.last_mut() {
+        last.set_snapshot_id(Some(final_id));
         insert_message_with_swipe(&ctx, last);
     }
 
@@ -533,7 +534,6 @@ fn test_save_retry_error_persist_fails() {
         ..base_ctx.clone()
     };
 
-    // Should not panic when save_state fails inside save_retry_error
     super::retry::save_retry_error(&ctx, "persist failure");
 }
 
@@ -624,8 +624,9 @@ fn test_retry_event_empty_continuation_triggers_error() {
         .set_event_header(Some("Event".to_string()));
     let final_snapshot =
         crate::model::state_snapshot::GameStateSnapshot::from_game_state(&final_state);
-    let _ = ctx.storage.save_snapshot(&final_snapshot);
+    let final_id = ctx.storage.save_snapshot(&final_snapshot).unwrap();
     if let Some(last) = final_state.narrative.history.last_mut() {
+        last.set_snapshot_id(Some(final_id));
         insert_message_with_swipe(&ctx, last);
     }
     retry_last_response_impl(&service, ctx.clone());
@@ -647,7 +648,6 @@ fn test_retry_appends_swipe_to_same_message() {
     let _pre_main_id = save_pre_main(&ctx);
     let _narration_id = add_narration_and_save(&ctx, "Narration text");
 
-    // Add an extra swipe to the narration
     let msgs = ctx.load_messages().unwrap();
     let narration_msg = msgs
         .iter()
@@ -666,7 +666,6 @@ fn test_retry_appends_swipe_to_same_message() {
 
     retry_last_response_impl(&service, ctx.clone());
 
-    // After retry, the SAME message should have gained a new swipe
     let msgs = ctx.load_messages().unwrap();
     let narration = msgs
         .iter()
@@ -697,7 +696,6 @@ fn test_retrigger_event_impl_cancels_cleanly() {
     let _input_id = add_input_and_save(&ctx, "test input");
     let _pre_main_id = save_pre_main(&ctx);
 
-    // Set up pre-event snapshot with trigger context
     let mut pre_event_state = ctx.load_state_for_test();
     pre_event_state.narrative.last_trigger =
         Some(crate::test_support::TestStoredTriggerContext::standard());
@@ -720,14 +718,14 @@ fn test_retrigger_event_impl_cancels_cleanly() {
         .set_event_header(Some("Event".to_string()));
     let final_snapshot =
         crate::model::state_snapshot::GameStateSnapshot::from_game_state(&final_state);
-    let _ = ctx.storage.save_snapshot(&final_snapshot);
+    let final_id = ctx.storage.save_snapshot(&final_snapshot).unwrap();
     if let Some(last) = final_state.narrative.history.last_mut() {
+        last.set_snapshot_id(Some(final_id));
         insert_message_with_swipe(&ctx, last);
     }
 
     ctx.cancel_token.cancel();
 
-    // Directly call retrigger_event_impl to hit the Cancelled branch
     crate::application::action_pipeline::retrigger_event_impl(&service, &ctx);
 
     let state = ctx.load_state_for_test();

@@ -1,8 +1,54 @@
 # Changelog
 
+## 2026-06-17
+
+### Changed
+
+- **Review fixes: pipeline decomposition quality (round 3)** — Re-attached phase functions as `impl ActionPipeline` methods (split `impl` block in `phases.rs`), eliminating `(service, ctx)` parameter threading
+  1. **Phase functions re-attached to `ActionPipeline`**: All 10 functions in `phases.rs` converted from free functions taking `(service: &B, ctx: &GameServiceContext, ...)` to `impl` methods using `&self`. Split `impl` blocks across files are standard Rust. `phase_engine_commit` remains an associated function (no `&self` needed).
+  2. **`error_return` clone eliminated**: Function now takes `state` by value instead of `&mut GameState`, removing an entire `GameState` deep-clone on every error path
+  3. **`phase_trigger_continuation` → `phase_trigger_continuation_raw`**: Renamed to avoid clash with the public `phase_trigger_continuation` wrapper method
+  4. **`phase_pre_main_snapshot` bug fixed**: `persist_snapshot_failed` return value was discarded — now guarded like every other call site, so the pipeline aborts with error status on pre-main snapshot failure
+  5. **`retry.rs` updated**: `phases::reconcile_post_trigger_npcs(backend, ...)` → `pipeline.reconcile_post_trigger_npcs(...)`; `use super::phases` removed
+  6. **Cancellation handling unified**: Extracted `map_cancelled()` helper — both `phase_narrate` (in `run_from_input`) and `phase_trigger_continuation_raw` (in `phase_trigger_continuation`) now use the same pattern instead of one using inline match and the other using a wrapper
+  - Files modified: `src/application/action_pipeline/phases.rs`, `src/application/action_pipeline/pipeline.rs`, `src/application/action_pipeline/retry.rs`
+  - Tests: 1224 pass (all pass), no regressions
+
+### Fixed
+
+- **Review fixes: pipeline decomposition quality (round 2)** — 4 follow-up fixes from thermo-nuclear review of pipeline/run decomposition
+  1. **Unnecessary `next_state.clone()` removed**: `run_from_input` now moves `next_state` into `phase_trigger_continuation` instead of deep-copying `GameState` (HashMap of NpcCards, narrative history, Arc internals)
+  2. **`reconcile_post_trigger_npcs` inlined, `phase_post_trigger_reconcile` wrapper removed**: Function returns `GameState` directly (never `Err`); errors signaled through `GenerationStatus::Error` matching `phase_trigger_continuation` pattern. Both callers now call `phases::reconcile_post_trigger_npcs` directly, eliminating the thin wrapper that only added tracing and error mapping. `retry.rs` needs `use super::phases` import
+  3. **Arrival narration backend selection bug fixed**: `ArrivalTaskContext::run` used `AppSettings::default().narration_connection()` for LLM backend creation — always selected the Mock backend regardless of user configuration. Now stores the resolved `Connection` from settings and passes it through to `get_llm_backend_for()`
+  4. **`Copy` restored on `NpcContext`**: Two `&[T]` fat pointers are trivially copyable; `Copy` is the correct trait. Removing it forced unnecessary `.clone()` at `assembler.rs` callsite with no safety benefit
+  - Files modified: `src/application/action_pipeline/pipeline.rs`, `src/application/action_pipeline/phases.rs`, `src/application/action_pipeline/retry.rs`, `src/bootstrap/init_game.rs`, `src/narrative/prompt/types.rs`, `src/narrative/prompt/assembler.rs`
+  - Tests: 1224 pass (all pass), no regressions
+
 ## 2026-06-16
 
 ### Changed
+
+- **Pipeline decomposition quality fixes** — Addressed 7 findings from thermo-nuclear review of the pipeline/run decomposition
+  1. **Dead `_ctx` parameter removed**: `reconcile_post_trigger_npcs` no longer takes `&GameServiceContext` — was unused, spread coupling without simplifying it
+  2. **`NpcContext` derives `Copy`**: Two `&[T]` fat pointers are trivially copyable — `Copy` is the correct trait. Callsite in `assembler.rs` uses implicit copy (no `.clone()` needed)
+  3. **Fake `GameServiceContext` eliminated**: `ArrivalTaskContext::run` no longer constructs a throwaway `GameServiceContext` with `CancellationToken::new()`, `AtomicBool::new(false)`, and `AppSettings::default()` just to call `load_expecting_valid_state`. Replaced with direct `storage.load_latest_snapshot()` + `GameState::from_snapshot`/`GameState::new` + `context::load_messages_with_swipes`. Fresh-state path now includes `inject_scenario_logs` (was missing). Removed `db_pool` field from `ArrivalTaskContext` and `CancellationToken`/`GameServiceContext` imports from `init_game.rs`
+  4. **Thin `persist`/`persist_snapshot_failed` wrappers removed**: Two `ActionPipeline` methods that only delegated to `phases::persist(ctx, ...)` / `phases::persist_snapshot_failed(ctx, ...)` replaced with direct `phases::` calls at all 6 call-sites
+  5. **`phase_post_trigger_reconcile` removed as wrapper**: Return type changed from `Result<GameState, EngineError>` to `GameState` in `reconcile_post_trigger_npcs`. Wrapper deleted; callers use `phases::reconcile_post_trigger_npcs` directly
+  6. **Trigger continuation error handling unified**: `run_from_input` now calls `self.phase_trigger_continuation()` (which maps `Cancelled → handle_cancellation`) instead of `phases::phase_trigger_continuation` with inline cancellation handling. One error-handling path for reconcile, used by both `run_from_input` and `retry_event_continuation`
+  7. **Retry flow confirmed clean**: `retry_event_continuation` already uses wrappers exclusively after Steps 5-6; behavioral differences with `run_from_input` (skips narrate→quantify→commit, different `retry_target` append timing) are intentional by design
+  - Files modified: `src/application/action_pipeline/pipeline.rs`, `src/application/action_pipeline/phases.rs`, `src/application/action_pipeline/retry.rs`, `src/bootstrap/init_game.rs`, `src/narrative/prompt/types.rs`, `src/narrative/prompt/assembler.rs`
+  - Tests: 1224 pass (all pass), no regressions
+
+- **Complexity reduction: pipeline split, init_game extraction, NpcContext bundle** — Reduced action pipeline from 720 to 285 lines; extracted bootstrap init logic; removed clippy `too_many_arguments` from prompt construction
+  1. **Persist helpers**: Extracted `persist()`/`persist_snapshot_failed()` in pipeline → moved to `phases.rs` as free functions; replaced ~20 boilerplate blocks (Step 1)
+  2. **Trigger continuation unified**: Deleted `run_trigger_continuation` (~100 lines); `retry.rs` now calls `phase_trigger_continuation` + `phase_post_trigger_reconcile` + `phase_finalize` via `ActionPipeline` (Step 2)
+  3. **Pipeline → phases.rs split**: Phase methods extracted to `phases.rs` as free functions; `pipeline.rs` retains struct/trait/orchestrator (285 lines), `phases.rs` holds implementations (383 lines) (Step 3)
+  4. **Bootstrap → init_game.rs split**: `ArrivalTaskContext`, `resolve_game_id`, `load_game_state`, `spawn_arrival_task_if_needed` extracted; `run.rs` is thin orchestrator (261 lines), `init_game.rs` holds init logic (298 lines) (Step 4)
+  5. **NpcContext bundle**: `NpcContext<'a>` struct bundles `all_npcs` + `npcs_in_area`; `make_prompt_context` drops from 7→6 params; removed `#[allow(clippy::too_many_arguments)]` (Step 5)
+  - **Post-split simplification**: Extracted `error_return` helper in `phases.rs` (5 copies of error-persist-return pattern), flattened `ArrivalTaskContext::run` with guard clause + `and_then`, replaced direct `PromptContext` construction with `make_prompt_context` in `init_game.rs`
+  - Files added: `src/application/action_pipeline/phases.rs`, `src/bootstrap/init_game.rs`
+  - Files modified: `src/application/action_pipeline/pipeline.rs`, `src/application/action_pipeline/retry.rs`, `src/application/action_pipeline/mod.rs`, `src/bootstrap/run.rs`, `src/bootstrap/mod.rs`, `src/narrative/prompt/types.rs`, `src/narrative/prompt/context.rs`, `src/narrative/prompt/assembler.rs`, `src/narrative/prompt/mod.rs`
+  - Tests: 1224 pass (all pass), fixed pre-existing bug in retry_tests.rs (3 cases missing `set_snapshot_id` before `insert_message_with_swipe`)
 
 - **Review Fixes: CSS rename, extraction, button dedup, inline world submit** — Addressed five findings from code quality review of uncommitted changes
   - **save-load → games rename**: Renamed `data-tab`, `id`, and CSS classes from `save-load` to `games` across `index.html`, `styles.css`, `template.rs`, `ui_design.md`

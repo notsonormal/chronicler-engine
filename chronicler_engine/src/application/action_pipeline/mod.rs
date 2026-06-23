@@ -2,6 +2,7 @@
 //! Action pipeline for processing game actions
 
 pub mod actions;
+pub mod phases;
 pub mod pipeline;
 pub mod retry;
 

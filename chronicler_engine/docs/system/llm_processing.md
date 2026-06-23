@@ -120,10 +120,10 @@ The engine uses [`tracing`](https://tracing.rs) for structured runtime diagnosti
   - `call_chat_completions` — tracks HTTP request/response lifecycle
   - `handle_response` — tracks response parsing and error handling
   - `parse_chat_response` — tracks JSON parsing and content extraction
-**Game Service** (`src/application/action_pipeline/actions.rs`, `retry.rs`, `pipeline.rs`):
-- `ActionPipeline::run_from_input()` — main pipeline entry from player input
-- `ActionPipeline::run_trigger_continuation()` — retry/retrigger continuation
-- `ActionPipeline::phase_*` methods — granular phase execution with debug-level tracing
+**Game Service** (`src/application/action_pipeline/actions.rs`, `retry.rs`, `pipeline.rs`, `phases.rs`):
+- `ActionPipeline::run_from_input()` — main pipeline entry from player input, delegates to `self.phase_*()` methods defined in split `impl` block across `pipeline.rs` and `phases.rs`
+- `ActionPipeline::phase_trigger_continuation()` — wrapper around `phase_trigger_continuation_raw()` for retry/retrigger
+- `ActionPipeline::phase_narrate()`, `ActionPipeline::phase_post_generation()`, `ActionPipeline::phase_engine_commit()`, `ActionPipeline::phase_trigger_continuation_raw()`, `ActionPipeline::reconcile_post_trigger_npcs()`, `ActionPipeline::build_trigger_request()` — granular phase implementations (split `impl` block in `phases.rs`)
 - Pipeline checks `CancellationToken::is_cancelled()` at stage boundaries and emits `tracing::debug!` events on phase transitions (not info-level, to reduce noise)
 
 #### Forensics Collector

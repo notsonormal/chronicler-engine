@@ -30,7 +30,6 @@ async fn test_action_area_fragment() {
 async fn test_character_headshots_fragment() {
     let state = TestAppBuilder::default_test().build_app_state();
     let result = character_headshots_fragment(axum::extract::State(state)).await;
-    // May be empty if no NPCs
     assert!(result.0.is_empty() || !result.0.is_empty());
 }
 
@@ -45,7 +44,6 @@ async fn test_visual_sidebar_fragment() {
 async fn test_hints_handler() {
     let state = TestAppBuilder::default_test().build_app_state();
     let result = hints_handler(axum::extract::State(state)).await;
-    // Hints may be empty
     assert!(result.0.is_empty() || !result.0.is_empty());
 }
 
@@ -55,8 +53,6 @@ async fn test_llm_messages_fragment() {
     let result = llm_messages_fragment(axum::extract::State(state)).await;
     assert!(!result.0.is_empty());
 }
-
-// ─── Status Handler Tests ────────────────────────────────────────────────────
 
 #[tokio::test]
 async fn test_status_ready_handler() {
@@ -79,20 +75,15 @@ async fn test_generating_status_generating() {
         .is_generating
         .store(true, std::sync::atomic::Ordering::SeqCst);
     let result = generating_status_handler(axum::extract::State(state)).await;
-    // Should contain generating status
     assert!(!result.0.is_empty());
 }
 
 #[tokio::test]
 async fn test_generating_status_error() {
-    // Test with invalid game state (no snapshot)
     let state = TestAppBuilder::default_test().build_app_state();
     let result = generating_status_handler(axum::extract::State(state)).await;
-    // Should handle gracefully - either idle or error state
     assert!(!result.0.is_empty());
 }
-
-// ─── Reset Generating Tests ──────────────────────────────────────────────────
 
 #[tokio::test]
 async fn test_reset_generating_ok() {
