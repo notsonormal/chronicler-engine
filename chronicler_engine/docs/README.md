@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-06-23 19:52 UTC*
+*Index last generated: 2026-06-24 21:11 UTC*
 
 ### Root files
 
@@ -39,6 +39,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [ADR-023: Immediate Message Persistence](./adr/adr-023-immediate-message-persistence.md)
 - [ADR-024: Migrate Game Data to SQLite with Seed Pattern](./adr/adr-024-game-data-migration-to-sqlite.md)
 - [ADR-025: Multi-World Data Foundation](./adr/adr-025-multi-world-data-foundation.md)
+- [ADR-026: Relocate Persona Binding from World to Game](./adr/adr-026-persona-relocation-to-game.md)
 
 ### `docs/architecture/`
 
