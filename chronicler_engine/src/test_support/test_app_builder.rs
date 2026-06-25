@@ -16,7 +16,8 @@ use crate::model::state::{
 };
 use crate::model::state_snapshot::GameStateSnapshot;
 use crate::model::world::WorldCard;
-use crate::server::{AppState, build_router};
+use crate::server::router::build_router;
+use crate::server::AppState;
 use crate::storage::Storage;
 
 pub struct TestAppBuilder {

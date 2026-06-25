@@ -38,8 +38,11 @@ pub use error::{EngineError, Result};
 
 pub use model::settings::AppSettings;
 pub use server::AppState;
+
+#[cfg(feature = "testing")]
 pub use test_support::test_app_builder::TestAppBuilder;
 
+#[cfg(feature = "testing")]
 pub mod test_support;
 
 #[cfg(test)]

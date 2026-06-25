@@ -60,14 +60,17 @@ testing = []
 [[test]]
 name = "architecture"
 path = "tests/infrastructure/architecture.rs"
+required-features = ["testing"]
 
 [[test]]
 name = "guardrails"
 path = "tests/infrastructure/guardrails/mod.rs"
+required-features = ["testing"]
 
 [[test]]
 name = "invariant_contract"
 path = "tests/infrastructure/invariant_contract.rs"
+required-features = ["testing"]
 
 # Integration test harness - required after test reorganization (commit 77a3350)
 # This is the SINGLE entry point for ALL integration tests under tests/integration/.
@@ -76,15 +79,19 @@ path = "tests/infrastructure/invariant_contract.rs"
 [[test]]
 name = "integration"
 path = "tests/integration/mod.rs"
+required-features = ["testing"]
 
 [[test]]
 name = "http"
 path = "tests/http/mod.rs"
+required-features = ["testing"]
 
 [[test]]
 name = "browser"
 path = "tests/browser/mod.rs"
+required-features = ["testing"]
 
 [[test]]
 name = "llm"
 path = "tests/llm/mod.rs"
+required-features = ["testing"]
