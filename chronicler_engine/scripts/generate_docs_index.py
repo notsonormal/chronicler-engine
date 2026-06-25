@@ -5,11 +5,9 @@ the indexed section of README.md between AUTO-INDEX markers.
 """
 
 import argparse
-import re
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-
 
 MARKER_START = "<!-- AUTO-INDEX START -->"
 MARKER_END = "<!-- AUTO-INDEX END -->"
@@ -49,12 +47,9 @@ def generate_index(docs_dir: Path) -> str:
     groups = discover_docs(docs_dir)
     lines: list[str] = []
     lines.append("")
-    lines.append(
-        f"*Index last generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M %Z')}*"
-    )
+    lines.append(f"*Index last generated: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M %Z')}*")
     lines.append("")
 
-    # Sort directories: root first, then alphabetically
     dir_order = sorted(groups.keys(), key=lambda d: (d != "(root)", d))
 
     for directory in dir_order:
@@ -74,8 +69,7 @@ def generate_index(docs_dir: Path) -> str:
 def _strip_timestamp(index_block: str) -> str:
     """Remove the timestamp line from an index block for comparison."""
     lines = index_block.splitlines()
-    # Find and remove the timestamp line (may not be first due to leading empty lines)
-    filtered = [l for l in lines if not l.strip().startswith("*Index last generated:")]
+    filtered = [line for line in lines if not line.strip().startswith("*Index last generated:")]
     return "\n".join(filtered)
 
 

@@ -6,11 +6,10 @@ Usage:
     python scripts/parse_coverage.py --json target/llvm-cov/coverage.json
 """
 
-import json
-import sys
-import os
 import argparse
-from pathlib import Path
+import json
+import os
+import sys
 
 
 def parse_args():
@@ -46,7 +45,6 @@ def find_json_file(default_path: str) -> str | None:
     if os.path.exists(default_path):
         return default_path
 
-    # Try alternative locations
     alt_paths = [
         "coverage.json",
         "target/llvm-cov/coverage.json",
@@ -60,9 +58,12 @@ def find_json_file(default_path: str) -> str | None:
     return None
 
 
-def parse_coverage_report(json_path: str, threshold: int, show_all: bool, ignore_regex: str) -> dict:
+def parse_coverage_report(
+    json_path: str, threshold: int, show_all: bool, ignore_regex: str
+) -> dict:
     """Parse the coverage JSON and return summary data."""
     import re
+
     with open(json_path) as f:
         data = json.load(f)
 
@@ -80,18 +81,15 @@ def parse_coverage_report(json_path: str, threshold: int, show_all: bool, ignore
 
     for f in files:
         filename = f["filename"]
-        # Skip files matching the ignore regex
         if ignore_pattern and ignore_pattern.search(filename):
             continue
 
-        # Shorten the filename
         short_name = filename
         for sep in ["chronicler_engine/", "chronicler_engine\\"]:
             if sep in short_name:
                 short_name = short_name.split(sep)[-1]
                 break
 
-        # Get line coverage from summary
         summary = f.get("summary", {})
         line_info = summary.get("lines", {})
         covered = line_info.get("covered", 0)
@@ -99,23 +97,24 @@ def parse_coverage_report(json_path: str, threshold: int, show_all: bool, ignore
 
         if total > 0:
             pct = (covered / total) * 100
-            result["files"].append({
-                "name": short_name,
-                "full_path": filename,
-                "covered": covered,
-                "total": total,
-                "percent": pct,
-                "below_threshold": pct < threshold,
-            })
+            result["files"].append(
+                {
+                    "name": short_name,
+                    "full_path": filename,
+                    "covered": covered,
+                    "total": total,
+                    "percent": pct,
+                    "below_threshold": pct < threshold,
+                }
+            )
 
-    # Sort by coverage percentage (ascending)
     result["files"].sort(key=lambda x: x["percent"])
 
     return result
 
 
 def print_coverage_report(report: dict, threshold: int, show_all: bool):
-    """Print a nice coverage report."""
+    """Print a coverage report."""
     total = report["total_percent"]
     covered = report["total_covered"]
     count = report["total_count"]
@@ -132,11 +131,8 @@ def print_coverage_report(report: dict, threshold: int, show_all: bool):
 
     print("=" * 60)
 
-    # Filter files
     files_to_show = (
-        report["files"]
-        if show_all
-        else [f for f in report["files"] if f["below_threshold"]]
+        report["files"] if show_all else [f for f in report["files"] if f["below_threshold"]]
     )
 
     if not files_to_show:
@@ -154,21 +150,21 @@ def print_coverage_report(report: dict, threshold: int, show_all: bool):
 def main():
     args = parse_args()
 
-    # Find JSON file
     json_path = args.json
     if json_path is None:
         json_path = find_json_file("target/llvm-cov/coverage.json")
 
     if json_path is None or not os.path.exists(json_path):
         print("Error: Could not find coverage JSON file.", file=sys.stderr)
-        print("Run: cargo llvm-cov nextest --json --output-path target/llvm-cov/coverage.json", file=sys.stderr)
+        print(
+            "Run: cargo llvm-cov nextest --json --output-path target/llvm-cov/coverage.json",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
-    # Parse and print
     report = parse_coverage_report(json_path, args.threshold, args.show_all, args.ignore_regex)
     print_coverage_report(report, args.threshold, args.show_all)
 
-    # Exit code based on threshold
     if report["total_percent"] < args.threshold:
         sys.exit(1)
 

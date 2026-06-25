@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-06-25 18:57 UTC*
+*Index last generated: 2026-06-25 19:46 UTC*
 
 ### Root files
 
@@ -62,7 +62,6 @@ This folder contains all documentation for the Chronicler Engine project.
 ### `docs/plans/`
 
 - [Plan: Diagnostic Decision Tree as Agent Infrastructure](./plans/diagnostic-decision-tree-plan.md)
-- [Plan: Doc Drift Linter (Stale Identifier Detection in docs/)](./plans/doc-drift-linter-plan.md)
 - [Spec: Agent-Ready Pipeline Restructure for Chronicler Engine](./plans/multi-agent-architecture-overarching-spec.md)
 - [Plan: Observability & Automated Forensics](./plans/observability-and-forensics-plan.md)
 - [Plan: Rust Duplicate Code Detector (Skill-Based)](./plans/rust-duplicate-code-detector-plan.md)

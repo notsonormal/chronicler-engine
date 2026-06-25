@@ -1,14 +1,11 @@
-use std::sync::Arc;
-
 use crate::application::action_pipeline::execute_action_impl;
 use crate::application::action_pipeline::pipeline::ActionPipelineBackend;
-use crate::application::context::GameServiceContext;
 use crate::error::EngineError;
 use crate::model::quantifier::QuantifierResult;
 use crate::model::state::{GameState, GenerationPhase, GenerationStatus, MessageType};
 use crate::narrative::llm::backend::{AGENT_NARRATOR, LlmCallResult};
 use crate::narrative::prompt::{LayeredPromptAssembler, PromptAssembler};
-use crate::test_support::fixtures::{TestMap, TestNpc, TestPlayer, TestWorld};
+use crate::test_support::fixtures::{TestGameState, TestNpc};
 use crate::test_support::make_test_context;
 
 struct MockBackend {
@@ -74,21 +71,13 @@ impl ActionPipelineBackend for MockBackend {
 }
 
 fn make_test_state() -> GameState {
-    let world = Arc::new(TestWorld::minimal());
-    let map = Arc::new(TestMap::single_room("start"));
-    let player = Arc::new(TestPlayer::standard());
-    let npcs = vec![TestNpc::named("npc1", "Test NPC")];
-    GameState::new(world, map, player, npcs, "start".to_string())
-}
-
-fn make_ctx(state: GameState) -> GameServiceContext {
-    make_test_context(state)
+    TestGameState::with_npc("start", TestNpc::named("npc1", "Test NPC"))
 }
 
 #[test]
 fn test_execute_action_impl_completes_and_persists_state() {
     let state = make_test_state();
-    let ctx = make_ctx(state.clone());
+    let ctx = make_test_context(state.clone());
     let backend = MockBackend::default();
 
     execute_action_impl(
@@ -125,7 +114,7 @@ fn test_execute_action_impl_clears_last_trigger() {
         "Old Trigger",
         "npc1",
     ));
-    let ctx = make_ctx(state);
+    let ctx = make_test_context(state);
     let backend = MockBackend::default();
 
     execute_action_impl(
@@ -145,7 +134,7 @@ fn test_execute_action_impl_clears_last_trigger() {
 #[test]
 fn test_execute_action_impl_handles_narration_error() {
     let state = make_test_state();
-    let ctx = make_ctx(state.clone());
+    let ctx = make_test_context(state.clone());
     let backend = MockBackend {
         narrate_result: Err(EngineError::Llm(crate::error::LlmFailure::EmptyResponse)),
         ..Default::default()
@@ -171,7 +160,7 @@ fn test_execute_action_impl_handles_narration_error() {
 #[test]
 fn test_execute_action_impl_handles_cancellation() {
     let state = make_test_state();
-    let ctx = make_ctx(state.clone());
+    let ctx = make_test_context(state.clone());
     ctx.cancel_token.cancel();
     let backend = MockBackend::default();
 
@@ -198,7 +187,7 @@ fn test_execute_action_impl_preserves_existing_input_log() {
         Some("Player".to_string()),
         MessageType::Input,
     );
-    let ctx = make_ctx(state);
+    let ctx = make_test_context(state);
     let backend = MockBackend::default();
 
     execute_action_impl(
@@ -282,7 +271,7 @@ fn test_phase_transitions_to_quantifying_during_post_generation() {
     }
 
     let state = make_test_state();
-    let ctx = make_ctx(state);
+    let ctx = make_test_context(state);
     let backend = Arc::new(SlowQuantifierBackend {
         narrate_result: Ok("Narration text".to_string()),
         quantifier_result: QuantifierResult::default(),
@@ -378,7 +367,7 @@ fn test_narration_saved_before_quantifying_phase() {
     }
 
     let state = make_test_state();
-    let ctx = make_ctx(state);
+    let ctx = make_test_context(state);
     let backend = Arc::new(SlowQuantifierBackend {
         narrate_result: Ok("Narration text".to_string()),
         quantifier_result: QuantifierResult::default(),

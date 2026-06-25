@@ -1,15 +1,19 @@
 //! Test fixtures shared between unit and integration tests.
 #![allow(clippy::expect_used)]
+#![allow(clippy::unwrap_used)]
 
 use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::model::character::{CharacterSheet, NpcCard, PlayerCard};
 use crate::model::map::{MapDef, Overworld, Region, Room};
+use crate::model::message::{Message, Swipe};
 use crate::model::prompt_preset::{PresetType, PromptPreset};
-use crate::model::state::{GameState, StoredTriggerContext};
+use crate::model::state::{GameState, MessageType, StoredTriggerContext};
 use crate::model::trigger::{ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement};
 use crate::model::world::{WorldCard, WorldManifest};
+use crate::storage::Storage;
+use crate::storage::db::DbPool;
 
 pub struct TestWorld;
 
@@ -411,4 +415,29 @@ pub fn seed_default_game_row(
     )
     .map_err(|e| crate::error::EngineError::Config(format!("seed_default_game_row: {e}")))?;
     Ok(())
+}
+
+pub fn sqlite_storage() -> Result<Storage, crate::error::EngineError> {
+    let pool = DbPool::new(":memory:")?;
+    seed_default_game_row(&pool, 1)?;
+    Ok(Storage::new_sqlite(pool, 1))
+}
+
+pub fn dummy_message(text: &str) -> Message {
+    Message::new(
+        Some("Player".to_string()),
+        text,
+        MessageType::Input,
+        None,
+        None,
+    )
+}
+
+pub fn dummy_swipe(text: &str) -> Swipe {
+    Swipe {
+        text: text.to_string(),
+        snapshot_id: None,
+        location_header: None,
+        event_header: None,
+    }
 }

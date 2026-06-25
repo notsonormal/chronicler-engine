@@ -1,4 +1,3 @@
-"""Run diagnostic benchmarks and rank failure scenarios by debuggability."""
 
 import argparse
 import json
@@ -13,7 +12,6 @@ REPORT_DIR = Path(__file__).parent.parent.parent / "tmp" / "diagnostics"
 
 
 def run_benchmark():
-    """Run the Rust diagnostic benchmark and collect results."""
     cmd = ["cargo", "test", "--test", "diagnostic_benchmark", "--", "--nocapture"]
     print(f"Running: {' '.join(cmd)}")
     print(f"In directory: {ENGINE_DIR}")
@@ -34,7 +32,6 @@ def run_benchmark():
         print(result.stderr)
         sys.exit(1)
 
-    # Parse BENCHMARK_RESULT lines
     results = []
     for line in result.stdout.splitlines():
         prefix = "BENCHMARK_RESULT:"
@@ -56,7 +53,6 @@ def run_benchmark():
 
 
 def compute_aggregates(results):
-    """Compute aggregate statistics from benchmark results."""
     categories = defaultdict(lambda: {"count": 0, "scores": []})
     overall_scores = []
 
@@ -87,7 +83,6 @@ def compute_aggregates(results):
         "max_score": round(max(overall_scores), 1),
     }
 
-    # Sort results by average score (ascending = hardest to diagnose first)
     results_sorted = sorted(results, key=lambda r: r["average_score"])
 
     return {
@@ -98,7 +93,6 @@ def compute_aggregates(results):
 
 
 def generate_markdown_report(data, timestamp):
-    """Generate a human-readable markdown report."""
     overall = data["overall"]
     categories = data["by_category"]
     scenarios = data["scenarios"]
@@ -196,7 +190,6 @@ def generate_markdown_report(data, timestamp):
         ]
     )
 
-    # Top 3 worst scenarios
     worst = scenarios[:3]
     for i, s in enumerate(worst, 1):
         lines.append(
@@ -213,14 +206,12 @@ def generate_markdown_report(data, timestamp):
 
 
 def save_json(data, path):
-    """Save raw benchmark data as JSON."""
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
     print(f"Saved JSON: {path}")
 
 
 def compare_runs(current, baseline_path):
-    """Compare current run to a baseline and show deltas."""
     with open(baseline_path, encoding="utf-8") as f:
         baseline = json.load(f)
 
@@ -274,25 +265,20 @@ def main():
         compare_runs(data, args.compare)
         return
 
-    # Generate and save reports
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # JSON output
     json_path = output_dir / f"diagnostic_baseline_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
     save_json(data, json_path)
 
-    # Also save as latest.json for easy comparison
     latest_json = output_dir / "diagnostic_baseline_latest.json"
     save_json(data, latest_json)
 
-    # Markdown report
     report = generate_markdown_report(data, timestamp)
     md_path = output_dir / f"diagnostic_baseline_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
     with open(md_path, "w", encoding="utf-8") as f:
         f.write(report)
 
-    # Also save as latest.md
     latest_md = output_dir / "diagnostic_baseline_latest.md"
     with open(latest_md, "w", encoding="utf-8") as f:
         f.write(report)
@@ -301,7 +287,6 @@ def main():
     print(f"Saved latest: {latest_md}")
     print(f"Saved JSON:   {json_path}")
 
-    # Print summary to console
     print("\n" + "=" * 60)
     print("DIAGNOSTIC BASELINE SUMMARY")
     print("=" * 60)

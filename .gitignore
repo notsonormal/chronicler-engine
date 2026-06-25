@@ -231,3 +231,4 @@ chronicler_engine/coverage_full.json
 /.lean-ctx
 /.pi-lens/cache
 /.pi-lens
+/.pi/tasks

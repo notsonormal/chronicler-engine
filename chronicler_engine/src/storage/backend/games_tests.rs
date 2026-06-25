@@ -1,11 +1,5 @@
 use crate::storage::backend::{Operation, Storage, TestOverride};
-use crate::storage::db::DbPool;
-
-fn sqlite_storage() -> Storage {
-    let pool = DbPool::new(":memory:").unwrap();
-    crate::test_support::seed_default_game_row(&pool, 1).unwrap();
-    Storage::new_sqlite(pool, 1)
-}
+use crate::test_support::sqlite_storage;
 
 #[test]
 fn test_create_game_returns_positive_id() {
@@ -18,7 +12,7 @@ fn test_create_game_returns_positive_id() {
 
 #[test]
 fn test_create_game_sqlite() {
-    let storage = sqlite_storage();
+    let storage = sqlite_storage().unwrap();
     let id = storage
         .create_game("test", "test", "test_player", "Test Player", "Game A")
         .unwrap();
@@ -61,7 +55,7 @@ fn test_get_game_not_found() {
 
 #[test]
 fn test_get_game_sqlite() {
-    let storage = sqlite_storage();
+    let storage = sqlite_storage().unwrap();
     let id = storage
         .create_game("test", "test", "test_player", "Test Player", "SQLiteGame")
         .unwrap();
@@ -90,7 +84,7 @@ fn test_delete_game_nonexistent() {
 
 #[test]
 fn test_delete_game_sqlite() {
-    let storage = sqlite_storage();
+    let storage = sqlite_storage().unwrap();
     let id = storage
         .create_game("w", "w", "test_player", "Test Player", "ToDelete")
         .unwrap();

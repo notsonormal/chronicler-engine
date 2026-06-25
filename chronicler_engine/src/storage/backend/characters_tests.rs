@@ -2,13 +2,7 @@ use crate::model::character::{CharacterSheet, NpcCard};
 use crate::model::map::MapDef;
 use crate::model::world::WorldCard;
 use crate::storage::backend::{Operation, Storage, TestOverride};
-use crate::storage::db::DbPool;
-
-fn sqlite_storage() -> Storage {
-    let pool = DbPool::new(":memory:").unwrap();
-    crate::test_support::seed_default_game_row(&pool, 1).unwrap();
-    Storage::new_sqlite(pool, 1)
-}
+use crate::test_support::sqlite_storage;
 
 #[test]
 fn test_list_characters_in_memory_empty() {
@@ -51,7 +45,7 @@ fn test_get_character_not_found_in_memory() {
 
 #[test]
 fn test_seed_character_sqlite() {
-    let storage = sqlite_storage();
+    let storage = sqlite_storage().unwrap();
 
     let (world_card, map) = test_world_data();
     storage.seed_world(&world_card, &map).unwrap();

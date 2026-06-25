@@ -1,11 +1,9 @@
-"""Refine character JSON data format."""
 import json
 import re
 import glob
 from pathlib import Path
 
 def extract_section(text, section_name):
-    # Match "Section_name: " until the next newline or end of file
     pattern = rf"{section_name}:\s*(.*?)(?=\n\w+:|\n\n|\Z)"
     match = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
     if match:
@@ -19,7 +17,6 @@ def process_file(file_path):
     desc = data.get("description", "")
     if not desc: return
 
-    # Extract sections
     personality = extract_section(desc, "Personality")
     appearance = extract_section(desc, "Appearance")
     background = extract_section(desc, "Background")
@@ -29,7 +26,6 @@ def process_file(file_path):
     if background: scenario_parts.append(background)
     if goals: scenario_parts.append(f"Goals: {goals}")
     
-    # Clean up description to mainly be intro and appearance
     intro_match = re.match(r"(.*?)(?=\n\w+:)", desc, re.DOTALL)
     clean_desc = ""
     if intro_match:
@@ -38,7 +34,6 @@ def process_file(file_path):
     if appearance:
         clean_desc += f"\n\nAppearance: {appearance}"
 
-    # Only overwrite if we successfully found stuff
     if personality:
         data["personality"] = personality
     if scenario_parts:

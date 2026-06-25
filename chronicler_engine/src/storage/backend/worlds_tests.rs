@@ -3,13 +3,7 @@ use std::collections::HashMap;
 use crate::model::map::{MapDef, Overworld, Region, Room};
 use crate::model::world::WorldCard;
 use crate::storage::backend::{Operation, Storage, TestOverride};
-use crate::storage::db::DbPool;
-
-fn sqlite_storage() -> Storage {
-    let pool = DbPool::new(":memory:").unwrap();
-    crate::test_support::seed_default_game_row(&pool, 1).unwrap();
-    Storage::new_sqlite(pool, 1)
-}
+use crate::test_support::sqlite_storage;
 
 #[test]
 fn test_list_worlds_in_memory_empty() {
@@ -53,7 +47,7 @@ fn test_get_world_not_found_in_memory() {
 
 #[test]
 fn test_seed_world_sqlite() {
-    let storage = sqlite_storage();
+    let storage = sqlite_storage().unwrap();
     let (world_card, map) = test_world_data("sqlite_world", "SQLite World");
     let world_id = storage.seed_world(&world_card, &map).unwrap();
 

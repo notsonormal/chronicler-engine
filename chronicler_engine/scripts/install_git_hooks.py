@@ -1,16 +1,9 @@
-"""Install git hooks for the chronicler_engine project.
-
-Copies the tracked hooks from scripts/git-hooks/ into .git/hooks/.
-Run from the repo root or from within chronicler_engine/.
-"""
-
 import shutil
 import sys
 from pathlib import Path
 
 
 def find_repo_root() -> Path:
-    """Find the git repo root by walking up from the current file."""
     current = Path(__file__).resolve().parent
     while current != current.parent:
         if (current / ".git").is_dir():
@@ -33,7 +26,6 @@ def install_hooks() -> int:
         if hook_file.is_file():
             dst = hooks_dst / hook_file.name
             shutil.copy2(hook_file, dst)
-            # Make executable on Unix
             if sys.platform != "win32":
                 import stat
                 dst.chmod(dst.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)

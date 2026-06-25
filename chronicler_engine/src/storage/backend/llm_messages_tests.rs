@@ -1,12 +1,6 @@
 use crate::model::llm_message::LlmMessageBuilder;
 use crate::storage::backend::{Operation, Storage, TestOverride};
-use crate::storage::db::DbPool;
-
-fn sqlite_storage() -> Storage {
-    let pool = DbPool::new(":memory:").unwrap();
-    crate::test_support::seed_default_game_row(&pool, 1).unwrap();
-    Storage::new_sqlite(pool, 1)
-}
+use crate::test_support::sqlite_storage;
 
 fn dummy_llm_message(model: &str) -> crate::model::llm_message::LlmMessage {
     LlmMessageBuilder::new()
@@ -34,7 +28,7 @@ fn test_save_llm_message_in_memory() {
 
 #[test]
 fn test_save_llm_message_sqlite() {
-    let storage = sqlite_storage();
+    let storage = sqlite_storage().unwrap();
     let msg = dummy_llm_message("model1");
     storage.save_llm_message(&msg).unwrap();
 
@@ -101,7 +95,7 @@ fn test_list_latest_llm_messages_limit_applied() {
 
 #[test]
 fn test_llm_message_cap_prunes_oldest() {
-    let storage = sqlite_storage();
+    let storage = sqlite_storage().unwrap();
     for i in 0..55 {
         storage
             .save_llm_message(&dummy_llm_message(&format!("model-{i}")))

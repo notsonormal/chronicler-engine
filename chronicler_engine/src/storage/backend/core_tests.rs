@@ -1,11 +1,5 @@
 use crate::storage::backend::{Operation, Storage, TestOverride};
-use crate::storage::db::DbPool;
-
-fn sqlite_storage() -> Storage {
-    let pool = DbPool::new(":memory:").unwrap();
-    crate::test_support::seed_default_game_row(&pool, 1).unwrap();
-    Storage::new_sqlite(pool, 1)
-}
+use crate::test_support::{dummy_message, sqlite_storage};
 
 #[test]
 fn test_new_in_memory_default_game_id() {
@@ -15,7 +9,7 @@ fn test_new_in_memory_default_game_id() {
 
 #[test]
 fn test_new_sqlite_game_id() {
-    let storage = sqlite_storage();
+    let storage = sqlite_storage().unwrap();
     assert_eq!(storage.current_game_id(), 1);
 }
 
@@ -131,8 +125,6 @@ fn test_clear_all_removes_all_overrides() {
     assert!(storage.load_latest_snapshot().is_ok());
 }
 
-use crate::model::message::Message;
-use crate::model::state::MessageType;
 use crate::model::state_snapshot::{GameStateSnapshot, NarrativeSnapshot};
 use crate::model::state::{MovementState, SceneState};
 use crate::model::trigger::NpcEncounterLog;
@@ -149,14 +141,4 @@ fn dummy_snapshot() -> GameStateSnapshot {
         npc_encounter_log: NpcEncounterLog::default(),
         created_at: chrono::Utc::now(),
     }
-}
-
-fn dummy_message(text: &str) -> Message {
-    Message::new(
-        Some("Player".to_string()),
-        text,
-        MessageType::Input,
-        None,
-        None,
-    )
 }

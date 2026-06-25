@@ -1,5 +1,3 @@
-"""Enforce 1:1 test file mapping — no inline test modules in src/."""
-
 import re
 import sys
 from pathlib import Path
@@ -16,7 +14,6 @@ def check() -> int:
     for rs_file in src.rglob("*.rs"):
         content = rs_file.read_text(encoding="utf-8")
 
-        # Ban inline #[cfg(test)] mod blocks (look for opening brace)
         for match in re.finditer(r"#\[cfg\(test\)\]\s*mod\s+\w+\s*\{", content):
             errors.append(f"Inline test block found: {rs_file}")
 

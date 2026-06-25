@@ -1,4 +1,3 @@
-"""Validate game data files for consistency."""
 import json
 import sys
 from pathlib import Path

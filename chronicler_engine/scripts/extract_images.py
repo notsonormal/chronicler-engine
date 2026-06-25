@@ -32,17 +32,13 @@ def extract_images(file_path: Path, output_dir: Path) -> str | None:
         name = cd.get("name", "Unknown")
         char_id = name.lower().replace(" ", "_")
 
-        # Handle different image formats in SillyTavern
-        # The main image might be in different formats
         main_img = None
 
-        # Try to get the avatar/selected image from JSON
         if "avatar" in cd:
             try:
                 avatar_data = cd["avatar"]
-                # Sometimes it's base64 encoded
+                # SillyTavern sometimes base64-encodes avatar in JSON
                 if isinstance(avatar_data, str):
-                    # Check if it's base64 or a filename
                     if "," in avatar_data:  # Data URL
                         import re
 
@@ -53,20 +49,17 @@ def extract_images(file_path: Path, output_dir: Path) -> str | None:
             except Exception as e:
                 print(f"[{file_path.name}] Avatar decode error: {e}")
 
-        # Fallback: try to get from PNG directly - SillyTavern stores
-        # the main image as the base PNG itself (we already have it as 'img')
+        # SillyTavern stores main image as base PNG itself
         if main_img is None:
             main_img = img.convert("RGBA") if img.mode != "RGBA" else img.copy()
 
-        # Create output directory
         os.makedirs(output_dir, exist_ok=True)
 
-        # Save full version
         full_path = output_dir / f"{char_id}.png"
         main_img.save(full_path)
         print(f"[{file_path.name}] Full image saved to -> {full_path}")
 
-        # Create cropped portrait version (top 40%)
+        # Top 40% as portrait crop
         w, h = main_img.size
         crop_height = int(h * 0.4)
         cropped = main_img.crop((0, 0, w, crop_height))

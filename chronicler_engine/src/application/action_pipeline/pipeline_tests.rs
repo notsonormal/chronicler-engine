@@ -12,7 +12,7 @@ use crate::model::state::{GameState, GenerationPhase, GenerationStatus, MessageT
 use crate::narrative::llm::backend::{AGENT_NARRATOR, LlmCallResult};
 use crate::narrative::prompt::{LayeredPromptAssembler, PromptAssembler};
 use crate::storage::{Operation, Storage, TestOverride};
-use crate::test_support::fixtures::{TestMap, TestNpc, TestPlayer, TestWorld};
+use crate::test_support::fixtures::{TestGameState, TestNpc};
 use crate::test_support::make_test_context;
 
 struct MockPipelineBackend {
@@ -78,21 +78,13 @@ impl ActionPipelineBackend for MockPipelineBackend {
 }
 
 fn make_test_state() -> GameState {
-    let world = Arc::new(TestWorld::minimal());
-    let map = Arc::new(TestMap::single_room("start"));
-    let player = Arc::new(TestPlayer::standard());
-    let npcs = vec![TestNpc::named("npc1", "Test NPC")];
-    GameState::new(world, map, player, npcs, "start".to_string())
-}
-
-fn make_ctx(state: GameState) -> GameServiceContext {
-    make_test_context(state)
+    TestGameState::with_npc("start", TestNpc::named("npc1", "Test NPC"))
 }
 
 #[test]
 fn test_pipeline_runs_to_completion() {
     let state = make_test_state();
-    let ctx = make_ctx(state.clone());
+    let ctx = make_test_context(state.clone());
     let backend = MockPipelineBackend::default();
     let pipeline = ActionPipeline::new(&backend, &ctx);
 
@@ -113,7 +105,7 @@ fn test_pipeline_runs_to_completion() {
 #[test]
 fn test_pipeline_saves_narration_to_history() {
     let state = make_test_state();
-    let ctx = make_ctx(state.clone());
+    let ctx = make_test_context(state.clone());
     let backend = MockPipelineBackend::default();
     let pipeline = ActionPipeline::new(&backend, &ctx);
 
@@ -131,7 +123,7 @@ fn test_pipeline_saves_narration_to_history() {
 #[test]
 fn test_pipeline_returns_error_on_narration_failure() {
     let state = make_test_state();
-    let ctx = make_ctx(state.clone());
+    let ctx = make_test_context(state.clone());
     let backend = MockPipelineBackend {
         narrate_result: Err(EngineError::Llm(crate::error::LlmFailure::EmptyResponse)),
         ..Default::default()
@@ -159,7 +151,7 @@ fn test_pipeline_returns_error_on_narration_failure() {
 #[test]
 fn test_pipeline_returns_error_on_empty_narration_text() {
     let state = make_test_state();
-    let ctx = make_ctx(state.clone());
+    let ctx = make_test_context(state.clone());
     let backend = MockPipelineBackend {
         narrate_result: Ok("".to_string()),
         ..Default::default()
@@ -187,7 +179,7 @@ fn test_pipeline_returns_error_on_empty_narration_text() {
 #[test]
 fn test_pipeline_cancels_mid_run() {
     let state = make_test_state();
-    let ctx = make_ctx(state.clone());
+    let ctx = make_test_context(state.clone());
     ctx.cancel_token.cancel();
     let backend = MockPipelineBackend::default();
     let pipeline = ActionPipeline::new(&backend, &ctx);
@@ -224,7 +216,7 @@ fn test_pipeline_backend_trait_is_send_sync() {
 #[test]
 fn test_pipeline_with_custom_quantifier_result() {
     let state = make_test_state();
-    let ctx = make_ctx(state.clone());
+    let ctx = make_test_context(state.clone());
     let custom_quantifier = QuantifierResult {
         npcs: QuantifierParseResult {
             npc_ids: vec!["npc1".to_string()],
@@ -256,7 +248,7 @@ fn test_pipeline_with_custom_quantifier_result() {
 #[test]
 fn test_phase_trigger_continuation_cancels_at_start() {
     let state = make_test_state();
-    let ctx = make_ctx(state.clone());
+    let ctx = make_test_context(state.clone());
     ctx.cancel_token.cancel();
 
     let backend = MockPipelineBackend::default();
@@ -283,7 +275,7 @@ fn test_phase_trigger_continuation_cancels_at_start() {
 #[test]
 fn test_trigger_continuation_save_post_trigger_error() {
     let state = make_test_state();
-    let base_ctx = make_ctx(state.clone());
+    let base_ctx = make_test_context(state.clone());
     let (failing_storage, handle) = Storage::new_in_memory().with_test_failures();
     let failing = Arc::new(failing_storage);
     handle.set(
@@ -337,7 +329,7 @@ fn test_pipeline_trigger_happy_path() {
     let player = Arc::new(crate::test_support::fixtures::TestPlayer::standard());
     let state = GameState::new(world, map, player, vec![npc], "start".to_string());
 
-    let ctx = make_ctx(state.clone());
+    let ctx = make_test_context(state.clone());
     let _backend = MockPipelineBackend::default();
     let custom_quantifier = QuantifierResult {
         npcs: crate::model::quantifier::QuantifierParseResult {
@@ -402,7 +394,7 @@ fn test_pipeline_trigger_empty_continuation() {
     let player = Arc::new(crate::test_support::fixtures::TestPlayer::standard());
     let state = GameState::new(world, map, player, vec![npc], "start".to_string());
 
-    let ctx = make_ctx(state.clone());
+    let ctx = make_test_context(state.clone());
     let custom_quantifier = QuantifierResult {
         npcs: crate::model::quantifier::QuantifierParseResult {
             npc_ids: vec!["npc1".to_string()],
@@ -464,7 +456,7 @@ fn test_pipeline_trigger_complete_failure() {
     let player = Arc::new(crate::test_support::fixtures::TestPlayer::standard());
     let state = GameState::new(world, map, player, vec![npc], "start".to_string());
 
-    let ctx = make_ctx(state.clone());
+    let ctx = make_test_context(state.clone());
     let custom_quantifier = QuantifierResult {
         npcs: crate::model::quantifier::QuantifierParseResult {
             npc_ids: vec!["npc1".to_string()],
@@ -533,7 +525,7 @@ fn test_pipeline_saves_narration_before_quantifier() {
 #[test]
 fn test_pipeline_no_duplicate_narration() {
     let state = make_test_state();
-    let ctx = make_ctx(state.clone());
+    let ctx = make_test_context(state.clone());
     let backend = MockPipelineBackend::default();
     let pipeline = ActionPipeline::new(&backend, &ctx);
 
@@ -561,7 +553,7 @@ fn test_pipeline_no_duplicate_narration() {
 #[test]
 fn test_pipeline_quantifier_runs_on_saved_state() {
     let state = make_test_state();
-    let ctx = make_ctx(state.clone());
+    let ctx = make_test_context(state.clone());
     let backend = MockPipelineBackend::default();
     let pipeline = ActionPipeline::new(&backend, &ctx);
 
@@ -582,7 +574,7 @@ fn test_pipeline_quantifier_runs_on_saved_state() {
 #[test]
 fn test_pipeline_continues_if_quantifier_save_fails() {
     let state = make_test_state();
-    let ctx = make_ctx(state.clone());
+    let ctx = make_test_context(state.clone());
     let backend = MockPipelineBackend {
         quantifier_result: QuantifierResult {
             npcs: QuantifierParseResult {
@@ -606,7 +598,7 @@ fn test_pipeline_continues_if_quantifier_save_fails() {
 #[test]
 fn test_narration_persisted_even_if_quantifier_changes_state() {
     let state = make_test_state();
-    let ctx = make_ctx(state.clone());
+    let ctx = make_test_context(state.clone());
     let backend = MockPipelineBackend {
         quantifier_result: QuantifierResult {
             npcs: QuantifierParseResult {

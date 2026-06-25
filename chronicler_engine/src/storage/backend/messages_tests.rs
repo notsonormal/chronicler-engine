@@ -1,23 +1,7 @@
 use crate::model::message::Message;
 use crate::model::state::MessageType;
 use crate::storage::backend::{Operation, Storage, TestOverride};
-use crate::storage::db::DbPool;
-
-fn sqlite_storage() -> Storage {
-    let pool = DbPool::new(":memory:").unwrap();
-    crate::test_support::seed_default_game_row(&pool, 1).unwrap();
-    Storage::new_sqlite(pool, 1)
-}
-
-fn dummy_message(text: &str) -> Message {
-    Message::new(
-        Some("Player".to_string()),
-        text,
-        MessageType::Input,
-        None,
-        None,
-    )
-}
+use crate::test_support::{dummy_message, sqlite_storage};
 
 #[test]
 fn test_insert_message_returns_positive_id() {
@@ -29,7 +13,7 @@ fn test_insert_message_returns_positive_id() {
 
 #[test]
 fn test_insert_message_sqlite() {
-    let storage = sqlite_storage();
+    let storage = sqlite_storage().unwrap();
     storage.set_game_id(1);
     let id = storage.insert_message(&dummy_message("hello")).unwrap();
     assert!(id > 0);
@@ -146,7 +130,7 @@ fn test_delete_message_nonexistent() {
 
 #[test]
 fn test_delete_message_sqlite() {
-    let storage = sqlite_storage();
+    let storage = sqlite_storage().unwrap();
     storage.set_game_id(1);
     let id = storage.insert_message(&dummy_message("del")).unwrap();
     storage.delete_message(id).unwrap();

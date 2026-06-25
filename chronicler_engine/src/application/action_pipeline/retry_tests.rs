@@ -12,15 +12,11 @@ use crate::model::state::{GameState, GenerationPhase, GenerationStatus, MessageT
 use crate::narrative::llm::MockBackend;
 use crate::narrative::llm::backend::LlmCallResult;
 use crate::storage::{Operation, Storage, TestOverride};
-use crate::test_support::fixtures::{TestMap, TestNpc, TestPlayer, TestWorld};
+use crate::test_support::fixtures::{TestGameState, TestNpc};
 use crate::test_support::make_test_context_with_sqlite;
 
 fn make_test_state() -> GameState {
-    let world = Arc::new(TestWorld::minimal());
-    let map = Arc::new(TestMap::single_room("start"));
-    let player = Arc::new(TestPlayer::standard());
-    let npcs = vec![TestNpc::named("npc1", "Test NPC")];
-    GameState::new(world, map, player, npcs, "start".to_string())
+    TestGameState::with_npc("start", TestNpc::named("npc1", "Test NPC"))
 }
 
 fn make_service() -> GameService {

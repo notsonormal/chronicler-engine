@@ -1,32 +1,6 @@
-use crate::model::message::{Message, Swipe};
-use crate::model::state::MessageType;
+use crate::model::message::Swipe;
 use crate::storage::backend::{Operation, Storage, TestOverride};
-use crate::storage::db::DbPool;
-
-fn sqlite_storage() -> Storage {
-    let pool = DbPool::new(":memory:").unwrap();
-    crate::test_support::seed_default_game_row(&pool, 1).unwrap();
-    Storage::new_sqlite(pool, 1)
-}
-
-fn dummy_message(text: &str) -> Message {
-    Message::new(
-        Some("Player".to_string()),
-        text,
-        MessageType::Input,
-        None,
-        None,
-    )
-}
-
-fn dummy_swipe(text: &str) -> Swipe {
-    Swipe {
-        text: text.to_string(),
-        snapshot_id: None,
-        location_header: None,
-        event_header: None,
-    }
-}
+use crate::test_support::{dummy_message, dummy_swipe, sqlite_storage};
 
 #[test]
 fn test_insert_swipe_initial_index_zero() {
@@ -44,7 +18,7 @@ fn test_insert_swipe_initial_index_zero() {
 
 #[test]
 fn test_insert_swipe_sqlite() {
-    let storage = sqlite_storage();
+    let storage = sqlite_storage().unwrap();
     storage.set_game_id(1);
     let msg_id = storage.insert_message(&dummy_message("m")).unwrap();
 
@@ -109,7 +83,7 @@ fn test_get_active_swipe_index_after_update() {
 
 #[test]
 fn test_update_active_swipe_sqlite() {
-    let storage = sqlite_storage();
+    let storage = sqlite_storage().unwrap();
     storage.set_game_id(1);
     let msg_id = storage.insert_message(&dummy_message("m")).unwrap();
 
@@ -157,7 +131,7 @@ fn test_update_swipe_text_single() {
 
 #[test]
 fn test_update_swipe_text_sqlite() {
-    let storage = sqlite_storage();
+    let storage = sqlite_storage().unwrap();
     storage.set_game_id(1);
     let msg_id = storage.insert_message(&dummy_message("orig")).unwrap();
 
@@ -244,7 +218,7 @@ fn test_load_swipes_orders_by_index() {
 
 #[test]
 fn test_shift_swipe_indices_positive_offset() {
-    let storage = sqlite_storage();
+    let storage = sqlite_storage().unwrap();
     storage.set_game_id(1);
     let msg_id = storage.insert_message(&dummy_message("m")).unwrap();
 
@@ -259,7 +233,7 @@ fn test_shift_swipe_indices_positive_offset() {
 
 #[test]
 fn test_shift_swipe_indices_zero_offset() {
-    let storage = sqlite_storage();
+    let storage = sqlite_storage().unwrap();
     storage.set_game_id(1);
     let msg_id = storage.insert_message(&dummy_message("m")).unwrap();
 
@@ -272,7 +246,7 @@ fn test_shift_swipe_indices_zero_offset() {
 
 #[test]
 fn test_shift_swipe_indices_sqlite() {
-    let storage = sqlite_storage();
+    let storage = sqlite_storage().unwrap();
     storage.set_game_id(1);
     let msg_id = storage.insert_message(&dummy_message("m")).unwrap();
 

@@ -1,5 +1,3 @@
-"""Check Python scripts for proper module docstrings and no shebangs."""
-
 from __future__ import annotations
 
 import sys
@@ -7,7 +5,6 @@ from pathlib import Path
 
 
 def check_python_file(filepath: Path) -> list[str]:
-    """Check a single Python file for docstring and shebang violations."""
     violations = []
 
     try:
@@ -62,10 +59,6 @@ def check_python_file(filepath: Path) -> list[str]:
 
 
 def scan_python_files(directories: list[Path]) -> tuple[int, int]:
-    """Scan all Python files in given directories.
-
-    Returns (error_count, warning_count)
-    """
     errors = 0
     warnings = 0
 
@@ -88,7 +81,6 @@ def scan_python_files(directories: list[Path]) -> tuple[int, int]:
 
 
 def main() -> int:
-    """Main entry point."""
     chronicler_engine = Path(__file__).parent.parent
 
     directories = [
@@ -103,7 +95,6 @@ def main() -> int:
     print(f"\n{'=' * 60}")
     print(f"Summary: {errors} error(s), {warnings} warning(s)")
 
-    # Exit 1 on errors, 0 on clean (warnings are OK for now)
     return 1 if errors > 0 else 0
 
 

@@ -1,12 +1,6 @@
 use crate::model::character::{CharacterSheet, PlayerCard};
 use crate::storage::backend::{Operation, Storage, TestOverride};
-use crate::storage::db::DbPool;
-
-fn sqlite_storage() -> Storage {
-    let pool = DbPool::new(":memory:").unwrap();
-    crate::test_support::seed_default_game_row(&pool, 1).unwrap();
-    Storage::new_sqlite(pool, 1)
-}
+use crate::test_support::sqlite_storage;
 
 #[test]
 fn test_list_personas_in_memory_empty() {
@@ -47,7 +41,7 @@ fn test_get_persona_not_found_in_memory() {
 
 #[test]
 fn test_seed_persona_sqlite() {
-    let storage = sqlite_storage();
+    let storage = sqlite_storage().unwrap();
     let card = test_persona_card("sqlite_persona", "SQLite Persona");
     storage.seed_persona("sqlite_key", &card).unwrap();
 

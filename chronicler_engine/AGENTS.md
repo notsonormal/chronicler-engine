@@ -340,3 +340,7 @@ Tests are already concurrency-safe: they allocate ports dynamically from the ran
 - When the user asks a question, answer it first before making edits or running implementation commands.
 - When responding to user feedback or an analysis, explicitly say whether you agree or disagree before saying what you changed.
 - For UI changes, verify in the browser with a screenshot before claiming completion.
+
+## RUNNING REVIEWS
+
+Do not run try to compile, build or test the code when doing code reviews. Unless the review explictly calls for it (e.g. the `test-police` review). 
