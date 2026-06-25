@@ -117,7 +117,6 @@ mod test_helpers {
             key: "test".into(),
             name: "Test World".into(),
             description: "A test world".into(),
-            player_key: "player".into(),
             starting_room_id: "room1".into(),
             ..Default::default()
         }

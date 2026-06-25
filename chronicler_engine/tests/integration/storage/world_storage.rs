@@ -13,7 +13,6 @@ fn make_test_world(key: &str, name: &str) -> WorldCard {
         scenarios: vec![],
         default_scenario_id: None,
         default_room_image: Some("/images/test.png".to_string()),
-        player_key: "test_player".to_string(),
     }
 }
 
@@ -40,7 +39,6 @@ fn test_delete_world_success() {
         scenarios: vec![],
         default_scenario_id: None,
         default_room_image: None,
-        player_key: "player".to_string(),
     };
     let map = MapDef {
         overworld: Overworld {
@@ -71,7 +69,13 @@ fn test_delete_world_blocked_by_games() {
     let _world_id = storage.create_world(&world_card, &map).unwrap();
 
     let _game_id = storage
-        .create_game("Test World", "test_world_blocked", "Test Game")
+        .create_game(
+            "Test World",
+            "test_world_blocked",
+            "test_player",
+            "Test Player",
+            "Test Game",
+        )
         .unwrap();
 
     let result = storage.delete_world("test_world_blocked");

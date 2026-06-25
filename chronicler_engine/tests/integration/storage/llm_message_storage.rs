@@ -1,10 +1,10 @@
 use chronicler_engine::model::llm_message::LlmMessageBuilder;
 use chronicler_engine::storage::Storage;
-use chronicler_engine::storage::db::DbPool;
+
+use crate::fixtures::create_test_storage;
 
 fn create_storage() -> Storage {
-    let pool = DbPool::new(":memory:").expect("in-memory db should open");
-    Storage::new_sqlite(pool, 1)
+    create_test_storage(1)
 }
 
 #[test]

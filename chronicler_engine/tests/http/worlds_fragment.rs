@@ -3,7 +3,6 @@ use tower::util::ServiceExt;
 
 use chronicler_engine::TestAppBuilder;
 
-/// Test worlds fragment panel returns HTML.
 #[tokio::test]
 async fn test_list_worlds_fragment_returns_html() {
     let app = TestAppBuilder::default_app();
@@ -23,7 +22,6 @@ async fn test_list_worlds_fragment_returns_html() {
     );
 }
 
-/// Test new world form handler returns form HTML.
 #[tokio::test]
 async fn test_new_world_form_handler_returns_form() {
     let app = TestAppBuilder::default_app();
@@ -43,11 +41,11 @@ async fn test_new_world_form_handler_returns_form() {
     );
 }
 
-/// Test create world handler with invalid JSON returns error.
 #[tokio::test]
 async fn test_create_world_handler_invalid_json() {
     let app = TestAppBuilder::default_app();
-    let form_data = "key=test&name=Test&description=Test&global_rules=rule1&player_key=test&map_json=invalid&scenarios_json=[]";
+    let form_data =
+        "key=test&name=Test&description=Test&global_rules=rule1&map_json=invalid&scenarios_json=[]";
     let req = Request::builder()
         .uri("/worlds")
         .method("POST")
@@ -59,14 +57,13 @@ async fn test_create_world_handler_invalid_json() {
         .await
         .unwrap();
     let body_str = String::from_utf8_lossy(&body);
-    // Should contain an error message about invalid JSON
+
     assert!(
         body_str.contains("Invalid map JSON") || body_str.contains("error"),
         "Expected error in response: {body_str}"
     );
 }
 
-/// Test delete world handler endpoint exists.
 #[tokio::test]
 async fn test_delete_world_handler_exists() {
     let app = TestAppBuilder::default_app();
@@ -76,8 +73,7 @@ async fn test_delete_world_handler_exists() {
         .body(Body::empty())
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
-    // Should return some response - either 400 (world not found) or 500 (context error)
-    // Just verify the endpoint responds
+
     assert!(
         response.status().is_success()
             || response.status().is_client_error()

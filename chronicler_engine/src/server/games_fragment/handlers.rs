@@ -11,15 +11,16 @@ use crate::model::game::Game;
 use crate::server::AppState;
 
 use crate::server::fragments::renderers::{
-    app_err_to_response, ctx_or_error, internal_error, ok, ok_refresh,
+    app_err_to_response, bad_request, ctx_or_error, internal_error, ok, ok_refresh,
 };
-use crate::server::games_fragment::template::{GameRowView, GamesPanelTemplate};
+use crate::server::games_fragment::template::{GameRowView, GamesPanelTemplate, PersonaRowView};
 
 fn game_to_view(g: Game) -> GameRowView {
     GameRowView {
         id: g.id,
         name: g.name.clone(),
         world_name: g.world_name.clone(),
+        persona_name: g.persona_name.clone(),
     }
 }
 
@@ -53,10 +54,26 @@ pub async fn list_games_fragment(State(state): State<AppState>) -> Response<axum
         return internal_error("Failed to list worlds");
     };
 
+    let personas: Vec<PersonaRowView> =
+        match state.application_service.list_personas(ctx.clone()) {
+            Ok(p) => p,
+            Err(e) => {
+                tracing::warn!("Failed to load personas: {e}");
+                Vec::new()
+            }
+        }
+        .into_iter()
+        .map(|p| PersonaRowView {
+            key: p.key,
+            name: p.sheet.name,
+        })
+        .collect();
+
     let template = GamesPanelTemplate {
         active_game,
         saved_games,
         worlds,
+        personas,
     };
 
     ok(template.render().unwrap_or_default())
@@ -65,20 +82,21 @@ pub async fn list_games_fragment(State(state): State<AppState>) -> Response<axum
 #[derive(Debug, serde::Deserialize)]
 pub struct CreateGameForm {
     pub world_key: String,
+    pub persona_key: String,
 }
 
 pub async fn create_game_handler(
     State(state): State<AppState>,
     Form(form): Form<CreateGameForm>,
 ) -> Response<axum::body::Body> {
-    match state.context_for_world(&form.world_key) {
+    match state.context_for_world(&form.world_key, &form.persona_key) {
         Ok(ctx) => match state.application_service.create_game(ctx) {
             Ok(_) => ok_refresh(),
             Err(e) => app_err_to_response(e),
         },
-        Err(e) => internal_error(format!(
-            "Failed to build context for world '{}': {e}",
-            form.world_key
+        Err(e) => bad_request(format!(
+            "Failed to build context for world '{}' / persona '{}': {e}",
+            form.world_key, form.persona_key
         )),
     }
 }

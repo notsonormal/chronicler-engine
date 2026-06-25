@@ -8,4 +8,6 @@ pub struct DbGame {
     pub created_at: String,
     pub updated_at: String,
     pub world_key: String,
+    pub persona_key: String,
+    pub persona_name: String,
 }

@@ -4,7 +4,8 @@ use std::sync::atomic::AtomicU64;
 use crate::{
     fixtures::create_test_state,
     pipeline_helpers::{
-        create_test_state_with_trigger_npc, latest_state, wait_for_generation_complete,
+        create_test_state_with_trigger_npc, latest_state, wait_for_condition,
+        wait_for_generation_complete,
     },
     working_service,
 };
@@ -469,35 +470,33 @@ fn test_streaming_narration_saved_before_quantifier_complete() {
         backend.execute_action(ctx_clone, "look around".to_string(), "Player".to_string());
     });
 
-    // Wait for narration to be saved (should happen before quantifier finishes)
-    thread::sleep(Duration::from_millis(300));
+    // Smart wait: narration should appear in database before quantifier completes (500ms)
+    let narration_found = wait_for_condition(
+        Duration::from_millis(400),
+        Duration::from_millis(50),
+        || {
+            ctx.load_messages()
+                .map(|msgs| {
+                    msgs.iter()
+                        .any(|m| m.message_type == MessageType::Narration)
+                })
+                .unwrap_or(false)
+        },
+    );
 
-    // Check that narration is already in the database
-    let messages = ctx.load_messages();
-    if let Ok(msgs) = messages {
-        let narration_count = msgs
-            .iter()
-            .filter(|m| m.message_type == MessageType::Narration)
-            .count();
+    assert!(
+        narration_found,
+        "Narration should be saved before quantifier completes (quantifier takes 500ms)"
+    );
 
-        // Narration should be saved even while quantifier is still running
-        assert!(
-            narration_count >= 1,
-            "Narration should be saved before quantifier completes"
-        );
-    }
-
-    // Wait for completion
     handle.join().expect("Action thread should complete");
 
-    // Verify final state
     let guard = latest_state(&ctx);
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Should complete after quantifier finishes"
     );
 
-    // Verify no duplicate narration
     let final_messages = ctx.load_messages().unwrap();
     let final_narration_count = final_messages
         .iter()
@@ -525,7 +524,6 @@ fn test_narration_no_duplicate_with_real_quantifier_flow() {
 
     let guard = latest_state(&ctx);
 
-    // Count narration entries in history
     let history = guard.narrative.history();
     let narration_count = history
         .iter()
@@ -537,7 +535,6 @@ fn test_narration_no_duplicate_with_real_quantifier_flow() {
         "Should have exactly 1 narration entry (no duplicates), found {narration_count}"
     );
 
-    // Also verify in storage
     let messages = ctx.load_messages().unwrap();
     let stored_narration_count = messages
         .iter()
@@ -562,7 +559,6 @@ fn test_pipeline_continues_when_quantifier_save_warns() {
         Arc::new(MockBackend::default()),
     );
 
-    // This should complete successfully
     backend.execute_action(ctx.clone(), "look".to_string(), "Player".to_string());
 
     let guard = latest_state(&ctx);
@@ -571,7 +567,6 @@ fn test_pipeline_continues_when_quantifier_save_warns() {
         "Pipeline should complete even if quantifier save has warnings"
     );
 
-    // Narration should still be saved
     let has_narration = guard
         .narrative
         .history()

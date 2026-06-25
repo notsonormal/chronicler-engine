@@ -15,7 +15,10 @@ Top-level game session record. Every snapshot and message belongs to a game.
 | Column      | Type    | Notes                                      |
 |-------------|---------|-------------------------------------------|
 | `id`        | INTEGER | PRIMARY KEY AUTOINCREMENT                 |
+| `world_key` | TEXT    | Key of the loaded world (ADR-025)         |
 | `world_name`| TEXT    | Name of the loaded world                  |
+| `persona_key`| TEXT   | Foreign key into `personas.key` (ADR-026) |
+| `persona_name`| TEXT | Denormalized persona name for list queries |
 | `name`      | TEXT    | Display name (e.g. `Redmist_2026-05-21_1`)|
 | `created_at`| TEXT    | ISO 8601 timestamp (RFC 3339)             |
 | `updated_at`| TEXT    | ISO 8601 timestamp (RFC 3339)             |
@@ -27,6 +30,7 @@ Top-level game session record. Every snapshot and message belongs to a game.
 ### `game_state_snapshots`
 
 Frozen point-in-time captures of the mutable game state. Used for:
+
 - Loading the latest state on server startup
 - Retry (loading snapshots via message `snapshot_id`)
 
@@ -126,7 +130,7 @@ The Rust code maps to the database as follows:
 
 ## Migration Policy
 
-All databases are created fresh with the final v9 schema directly; incremental upgrade paths from v1-v8 have been removed. The `run_migrations` function still checks `PRAGMA user_version` and gates schema creation behind `if version < 9`, so future migrations (v10+) follow the same pattern. This is acceptable because `build.py --cleanup` ensures no stale databases exist between builds.
+All databases are created fresh and walked through the same migration blocks; incremental upgrade paths from v1-v8 have been removed. `run_migrations` checks `PRAGMA user_version` and runs: schema creation at `if version < 9` (the `games` CREATE TABLE excludes `persona_key`/`persona_name` — they are added in v13); `worlds`/`maps`/`personas`/`characters`/`settings` creation at `if version < 10` (the `worlds` CREATE TABLE includes a `player_key` column that v13 drops); the `games.world_key` backfill at `if version < 12` (guarded by `column_exists` since v12 may run on a v9-era DB where the column already exists from the forward-creation); and the v13 block at `if version < 13` which unconditionally `ALTER TABLE games ADD COLUMN persona_key`/`persona_name` and `ALTER TABLE worlds DROP COLUMN player_key` (safe because v9 CREATE omits the persona columns and v10 CREATE includes `player_key`). The v13 block has no `column_exists` guards: a partial-v13 crash state is prevented by the trailing `pragma_update`. Future migrations (v14+) follow the same pattern. This is acceptable because `build.py --cleanup` ensures no stale databases exist between builds.
 
 ## Future Work
 

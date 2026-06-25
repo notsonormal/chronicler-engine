@@ -3,14 +3,12 @@
 
 use askama::Template;
 
-use crate::model::character::PlayerCard;
 use crate::model::map::MapDef;
 use crate::model::scenario::StartingScenario;
 use crate::model::world::WorldCard;
 
 use super::template::{WorldFormTemplate, WorldRowView, WorldsPanelTemplate};
 
-/// Render the worlds panel listing all worlds with their game counts.
 pub fn render_worlds_panel(
     worlds: &[WorldCard],
     games_per_world: &std::collections::HashMap<String, usize>,
@@ -32,14 +30,12 @@ pub fn render_worlds_panel(
         .unwrap_or_default()
 }
 
-/// Render the world edit/create form.
 pub fn render_world_edit_form(
     world: Option<&WorldCard>,
     map: Option<&MapDef>,
     scenarios: &[StartingScenario],
-    personas: &[PlayerCard],
 ) -> String {
-    WorldFormTemplate::from_world_data(world, map, scenarios, personas)
+    WorldFormTemplate::from_world_data(world, map, scenarios)
         .render()
         .unwrap_or_default()
 }

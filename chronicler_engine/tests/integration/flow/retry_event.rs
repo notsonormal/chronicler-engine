@@ -133,7 +133,6 @@ fn test_trigger_continuation_runs_quantifier_and_detects_new_npc() {
         key: "test".into(),
         name: "Test World".into(),
         description: "A test world".into(),
-        player_key: "player".into(),
         starting_room_id: "room1".into(),
         ..Default::default()
     });

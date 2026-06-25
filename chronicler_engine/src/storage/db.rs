@@ -3,7 +3,6 @@
 
 use std::sync::{Arc, Mutex};
 
-use chrono::Utc;
 use rusqlite::Connection;
 
 #[derive(Clone)]
@@ -31,9 +30,40 @@ impl DbPool {
             Err(poisoned) => poisoned.into_inner(),
         }
     }
+
+    /// Insert a new games row and return the new rowid.
+    /// Single source of truth for the `games` INSERT column list.
+    pub fn insert_game(
+        &self,
+        world_name: &str,
+        world_key: &str,
+        persona_key: &str,
+        persona_name: &str,
+        name: &str,
+    ) -> Result<u64, crate::error::EngineError> {
+        let conn = self.conn();
+        let now = chrono::Utc::now().to_rfc3339();
+        conn.execute(
+            "INSERT INTO games (world_name, world_key, persona_key, persona_name, name, created_at, updated_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)",
+            rusqlite::params![world_name, world_key, persona_key, persona_name, name, &now],
+        )
+        .map_err(|e| crate::error::EngineError::Config(format!("Failed to create game: {e}")))?;
+        Ok(conn.last_insert_rowid() as u64)
+    }
 }
 
 fn run_migrations(conn: &Connection) -> Result<(), crate::error::EngineError> {
+    fn column_exists(conn: &Connection, table: &str, col: &str) -> bool {
+        conn.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info(?) WHERE name = ?",
+            [table, col],
+            |r| r.get::<_, i64>(0),
+        )
+        .unwrap_or(0)
+            > 0
+    }
+
     let version: i32 = conn
         .query_row("PRAGMA user_version", [], |row| row.get(0))
         .unwrap_or(0);
@@ -48,6 +78,7 @@ fn run_migrations(conn: &Connection) -> Result<(), crate::error::EngineError> {
             "CREATE TABLE IF NOT EXISTS games (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 world_name TEXT NOT NULL DEFAULT 'default',
+                world_key TEXT NOT NULL DEFAULT 'default',
                 name TEXT NOT NULL DEFAULT 'Unnamed',
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
@@ -134,18 +165,6 @@ fn run_migrations(conn: &Connection) -> Result<(), crate::error::EngineError> {
 
         exec("CREATE INDEX IF NOT EXISTS idx_prompt_presets_type ON prompt_presets(preset_type)")?;
 
-        let count: i64 = conn
-            .query_row("SELECT COUNT(*) FROM games", [], |row| row.get(0))
-            .unwrap_or(0);
-        if count == 0 {
-            let now = Utc::now().to_rfc3339();
-            conn.execute(
-                "INSERT INTO games (id, world_name, name, created_at, updated_at) VALUES (1, 'default', 'default', ?1, ?1)",
-                rusqlite::params![&now],
-            )
-            .map_err(|e| crate::error::EngineError::Config(format!("Migration failed: {e}")))?;
-        }
-
         conn.pragma_update(None, "user_version", 9).map_err(|e| {
             crate::error::EngineError::Config(format!("Failed to set user_version: {e}"))
         })?;
@@ -168,7 +187,7 @@ fn run_migrations(conn: &Connection) -> Result<(), crate::error::EngineError> {
                 scenarios TEXT NOT NULL DEFAULT '[]',     -- JSON: Vec<StartingScenario>
                 default_scenario_id TEXT,
                 default_room_image TEXT,
-                player_key TEXT NOT NULL DEFAULT '',  -- persona key for player (e.g. 'julian')
+                player_key TEXT NOT NULL DEFAULT '',  -- dropped in v13
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             )",
@@ -253,9 +272,9 @@ fn run_migrations(conn: &Connection) -> Result<(), crate::error::EngineError> {
                 .map_err(|e| crate::error::EngineError::Config(format!("Migration failed: {e}")))
         };
 
-        exec("ALTER TABLE games ADD COLUMN world_key TEXT NOT NULL DEFAULT ''")?;
-
-        // Backfill: match world_name to worlds.key; fallback 'redmist_estate'
+        if !column_exists(conn, "games", "world_key") {
+            exec("ALTER TABLE games ADD COLUMN world_key TEXT NOT NULL DEFAULT ''")?;
+        }
         exec(
             "UPDATE games SET world_key = COALESCE(
             (SELECT key FROM worlds WHERE worlds.name = games.world_name),
@@ -264,6 +283,20 @@ fn run_migrations(conn: &Connection) -> Result<(), crate::error::EngineError> {
         )?;
 
         conn.pragma_update(None, "user_version", 12).map_err(|e| {
+            crate::error::EngineError::Config(format!("Failed to set user_version: {e}"))
+        })?;
+    }
+
+    if version < 13 {
+        let exec = |sql: &str| {
+            conn.execute(sql, [])
+                .map_err(|e| crate::error::EngineError::Config(format!("Migration failed: {e}")))
+        };
+
+        exec("ALTER TABLE games ADD COLUMN persona_key TEXT NOT NULL DEFAULT ''")?;
+        exec("ALTER TABLE games ADD COLUMN persona_name TEXT NOT NULL DEFAULT ''")?;
+        exec("ALTER TABLE worlds DROP COLUMN player_key")?;
+        conn.pragma_update(None, "user_version", 13).map_err(|e| {
             crate::error::EngineError::Config(format!("Failed to set user_version: {e}"))
         })?;
     }

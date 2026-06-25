@@ -1,9 +1,11 @@
 # Worlds Management System
 
 ## Overview
+
 The Worlds Management Tab provides a UI for creating, editing, and managing worlds in the Chronicler Engine. Worlds define the setting, lore, global rules, and map structure for games. Multiple games can reference a single world, enabling reuse of world building across multiple playthroughs.
 
 ## Location
+
 - **Server module**: `src/server/worlds_fragment/`
 - **Domain model**: `src/model/world.rs`
 - **Storage**: `src/storage/backend/worlds.rs`
@@ -12,6 +14,7 @@ The Worlds Management Tab provides a UI for creating, editing, and managing worl
 ## Architecture
 
 ### Fragment Module Structure
+
 ```
 src/server/worlds_fragment/
 ├── mod.rs          # Module exports
@@ -23,6 +26,7 @@ src/server/worlds_fragment/
 ```
 
 ### Data Flow
+
 ```
 Browser (Worlds Tab)
     │
@@ -50,6 +54,7 @@ Browser (Worlds Tab)
 ## World Model
 
 ### WorldCard Fields
+
 | Field | Type | Description |
 |-------|------|-------------|
 | `key` | String | Unique identifier (immutable after creation) |
@@ -60,9 +65,9 @@ Browser (Worlds Tab)
 | `scenarios` | Vec<StartingScenario> | Available starting scenarios |
 | `default_scenario_id` | Option<String> | Default scenario if not specified |
 | `default_room_image` | Option<String> | Fallback image for rooms without specific images |
-| `player_key` | String | Default player persona key |
 
 ### World-Game Relationship
+
 - **One-to-Many**: One world can have multiple games referencing it
 - **Referential Integrity**: Cannot delete a world with referencing games
 - **Checked At**: Storage layer (`Storage::delete_world()`) and handler layer (returns 400 with game count)
@@ -70,6 +75,7 @@ Browser (Worlds Tab)
 ## API Endpoints
 
 ### Fragment Endpoints (HTMX)
+
 | Method | Path | Handler | Description |
 |--------|------|---------|-------------|
 | GET | `/fragment/worlds` | `list_worlds_fragment()` | Render worlds list panel |
@@ -77,6 +83,7 @@ Browser (Worlds Tab)
 | GET | `/worlds/:key/edit` | `edit_world_form_handler()` | Render edit form with world data pre-filled |
 
 ### CRUD Handlers
+
 | Method | Path | Handler | Description |
 |--------|------|---------|-------------|
 | POST | `/worlds` | `create_world_handler()` | Create new world from form (validates JSON via `WorldForm::into_world_card()`) |
@@ -87,12 +94,15 @@ Browser (Worlds Tab)
 ## UI Components
 
 ### Tab Structure
+
 The Worlds tab is the third tab in the dashboard, positioned after "Prompt Presets":
+
 ```html
 <button class="tab" data-tab="worlds">Worlds</button>
 ```
 
 ### Panel Layout
+
 ```html
 <div class="tab-content" id="worlds-tab">
   <div class="worlds-panel" hx-get="/fragment/worlds" hx-trigger="load"></div>
@@ -100,14 +110,18 @@ The Worlds tab is the third tab in the dashboard, positioned after "Prompt Prese
 ```
 
 ### Inline Form (HTMX Swap)
+
 Create/Edit uses inline HTMX swaps with `hx-target=".worlds-panel" hx-swap="outerHTML"` — no modal overlay:
+
 - **Hidden by default**, shown when "Create New World" or "Edit" clicked (replaces the worlds list)
-- **Form fields**: key (readonly for edit), name, description, global_rules (textarea), starting_room_id, player_key (dropdown), default_room_image, map_json (textarea), scenarios_json (textarea)
+- **Form fields**: key (readonly for edit), name, description, global_rules (textarea), starting_room_id, default_room_image, map_json (textarea), scenarios_json (textarea)
 - **Submit**: Form posts to `/worlds` (create) or `/worlds/:key` (update)
 - **Cancel**: Returns to worlds list via `hx-get="/fragment/worlds"` targeting `.worlds-panel`
 
 ### Worlds List Panel
+
 Rendered by `render_worlds_panel()`:
+
 - "Create New World" button at top
 - Empty state message if no worlds
 - List of worlds with name, description, game count, Edit/Delete buttons
@@ -116,14 +130,15 @@ Rendered by `render_worlds_panel()`:
 ## Validation Rules
 
 ### Create/Update Validation
+
 1. **key**: Required, unique, alphanumeric + underscore only
 2. **name**: Required, non-empty
 3. **starting_room_id**: Must reference a room in the map (validated in storage)
-4. **player_key**: Must reference an existing persona (validated in storage)
-5. **map_json**: Valid JSON matching `MapDef` schema
-6. **scenarios_json**: Valid JSON array of `StartingScenario` objects
+4. **map_json**: Valid JSON matching `MapDef` schema
+5. **scenarios_json**: Valid JSON array of `StartingScenario` objects
 
 ### Delete Validation
+
 1. **No referencing games**: Storage layer executes SQL `SELECT COUNT(*) FROM games WHERE world_key = ?`
 2. **Returns `EngineError::WorldHasGames`** if games reference the world (typed variant, not string-matched)
 3. **Handler uses `is_user_displayable()`** for type-driven branching — displayable errors render inline; others return error status
@@ -132,13 +147,15 @@ Rendered by `render_worlds_panel()`:
 ## Error Handling
 
 ### Handler Layer
+
 - **Form parsing errors**: Return 400 with error message in fragment
 - **Validation errors**: Return 400 with descriptive message
 - **Database errors**: Return 500 Internal Server Error
 
 ### Fragment Renderers
+
 - `render_worlds_panel(worlds, games_per_world) -> String`: HTML for worlds list
-- `render_world_edit_form(world, map, scenarios, personas) -> String`: HTML for create/edit form with pre-filled JSON
+- `render_world_edit_form(world, map, scenarios) -> String`: HTML for create/edit form with pre-filled JSON
 - `ok(html: String) -> Response`: Returns 200 OK with HTML fragment
 - `ok_refresh() -> Response`: Returns 200 with HTMX refresh header
 - `bad_request(msg: String) -> Response`: Returns 400 with error message
@@ -147,19 +164,21 @@ Rendered by `render_worlds_panel()`:
 ## Testing Strategy
 
 ### Unit Tests
+
 - Fragment renderers (HTML generation)
 - Form parsing and validation
 - Error message formatting
 
 ### Integration Tests
+
 - Create world via HTTP POST
 - Edit world loads correct data
 - Update persists changes
 - Delete blocked by referencing games
 - Delete succeeds when no games reference
-- Persona dropdown populates correctly
 
 ### Manual Testing
+
 - Tab navigation works
 - Inline form swap works (no modal)
 - Form validation error messages render
@@ -169,10 +188,12 @@ Rendered by `render_worlds_panel()`:
 ## Performance Considerations
 
 ### Caching
+
 - World list not cached (always fresh from DB)
-- Persona list fetched on-demand for edit form
+- Persona list managed on Games tab (per ADR-026); worlds form no longer loads personas
 
 ### Query Optimization
+
 - Single query for world list
 - JOIN used to count games per world in list endpoint
 - Index on `games.world_key` for fast delete checks
@@ -180,17 +201,20 @@ Rendered by `render_worlds_panel()`:
 ## Future Enhancements
 
 ### Planned
+
 - World export/import as JSON
 - World duplication (copy as new)
 - Map visualizer integration
 - Scenario management UI
 
 ### Backlog
+
 - World templates (pre-configured worlds)
 - Bulk operations (delete multiple)
 - World versioning/history
 
 ## Related Documents
+
 - [`dashboard.md`](dashboard.md) - Dashboard layout and tabs
 - [`storage.md`](storage.md) - Storage backend design
 - [`../architecture/system.md`](../architecture/system.md) - Core architecture

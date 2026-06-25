@@ -1,6 +1,7 @@
-#[path = "../test_utils/settings_guard.rs"]
-mod settings_guard;
-pub use settings_guard::SettingsTestGuard;
+#[path = "../test_utils/mod.rs"]
+mod test_utils;
+pub use test_utils::settings_guard::SettingsTestGuard;
+pub use test_utils::TEST_PERSONA;
 
 mod actions;
 mod connections;

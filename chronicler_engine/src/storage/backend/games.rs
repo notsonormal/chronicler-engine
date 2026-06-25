@@ -13,7 +13,7 @@ impl Storage {
                 let conn = pool.conn();
                 let mut stmt = conn
                     .prepare(
-                        "SELECT id, world_name, name, created_at, updated_at, world_key
+                        "SELECT id, world_name, name, created_at, updated_at, world_key, persona_key, persona_name
                          FROM games
                          ORDER BY updated_at DESC",
                     )
@@ -30,6 +30,8 @@ impl Storage {
                             created_at: row.get(3)?,
                             updated_at: row.get(4)?,
                             world_key: row.get(5)?,
+                            persona_key: row.get(6)?,
+                            persona_name: row.get(7)?,
                         })
                     })
                     .map_err(|e| EngineError::Config(format!("Failed to list games: {e}")))?
@@ -51,18 +53,13 @@ impl Storage {
         &self,
         world_name: &str,
         world_key: &str,
+        persona_key: &str,
+        persona_name: &str,
         name: &str,
     ) -> Result<u64, EngineError> {
         self.with_backend_mut(Operation::CreateGame, |backend, _game_id| match backend {
             Backend::Sqlite { pool } => {
-                let conn = pool.conn();
-                let now = chrono::Utc::now().to_rfc3339();
-                conn.execute(
-                    "INSERT INTO games (world_name, world_key, name, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?4)",
-                    rusqlite::params![world_name, world_key, name, &now],
-                )
-                .map_err(|e| EngineError::Config(format!("Failed to create game: {e}")))?;
-                Ok(conn.last_insert_rowid() as u64)
+                pool.insert_game(world_name, world_key, persona_key, persona_name, name)
             }
             Backend::Test { .. } => unreachable!(),
             Backend::InMemory(data) => {
@@ -73,6 +70,8 @@ impl Storage {
                     id,
                     world_name: world_name.to_string(),
                     world_key: world_key.to_string(),
+                    persona_key: persona_key.to_string(),
+                    persona_name: persona_name.to_string(),
                     name: name.to_string(),
                     created_at: now,
                     updated_at: now,
@@ -107,7 +106,7 @@ impl Storage {
                 let conn = pool.conn();
                 let mut stmt = conn
                     .prepare(
-                        "SELECT id, world_name, name, created_at, updated_at, world_key
+                        "SELECT id, world_name, name, created_at, updated_at, world_key, persona_key, persona_name
                          FROM games
                          WHERE id = ?1
                          LIMIT 1",
@@ -122,6 +121,8 @@ impl Storage {
                         created_at: row.get(3)?,
                         updated_at: row.get(4)?,
                         world_key: row.get(5)?,
+                        persona_key: row.get(6)?,
+                        persona_name: row.get(7)?,
                     })
                 });
 
@@ -142,6 +143,8 @@ fn db_game_to_game(db: &DbGame) -> Result<Game, EngineError> {
         id: db.id as u64,
         world_name: db.world_name.clone(),
         world_key: db.world_key.clone(), // NEW
+        persona_key: db.persona_key.clone(),
+        persona_name: db.persona_name.clone(),
         name: db.name.clone(),
         created_at: parse_datetime(&db.created_at, "created_at")?,
         updated_at: parse_datetime(&db.updated_at, "updated_at")?,

@@ -6,6 +6,7 @@ use playwright_rs::expect;
 
 use super::server::{TestServer, get_config_port, wait_for_server};
 pub use super::wait::wait_for_element_children;
+#[allow(unused_imports)]
 pub use super::wait::wait_for_status_ready;
 
 pub async fn goto_with_connection_check(
@@ -14,7 +15,6 @@ pub async fn goto_with_connection_check(
 ) -> Result<(), String> {
     let url = format!("http://127.0.0.1:{port}");
 
-    // Explicit wait for server before navigation
     if !wait_for_server(port, 100).await {
         return Err(format!("Server failed to start on port {port}"));
     }
@@ -67,13 +67,13 @@ pub async fn launch_chrome() -> (playwright_rs::Playwright, playwright_rs::Brows
 ///
 /// Handles: port allocation, mock server startup, browser launch, navigation,
 /// and waiting for initial content. Cleans up the browser on completion.
-pub async fn with_test_page<F, Fut>(config_path: &str, world: &str, test_fn: F)
+pub async fn with_test_page<F, Fut>(config_path: &str, world: &str, persona: &str, test_fn: F)
 where
     F: FnOnce(playwright_rs::Page, u16) -> Fut,
     Fut: std::future::Future<Output = ()>,
 {
     let port = get_config_port(config_path).expect("Failed to get config port");
-    let _server = TestServer::new_with_mock(port, world).await;
+    let _server = TestServer::new_with_mock(port, world, persona).await;
 
     let (_playwright, browser) = launch_chrome().await;
     let page = browser.new_page().await.unwrap();
@@ -110,7 +110,6 @@ pub async fn send_action(page: &playwright_rs::Page, text: &str) {
         )
         .await;
 
-    // Wait for status to leave "Ready" (proves the action was received).
     let status_locator = page.locator("#status-display").await;
     let _ = expect(status_locator)
         .with_timeout(Duration::from_millis(500))
@@ -118,7 +117,6 @@ pub async fn send_action(page: &playwright_rs::Page, text: &str) {
         .to_contain_text("Ready")
         .await;
 
-    // If text check dialog appeared, click "Send Original" to proceed.
     dismiss_text_check_if_present(page).await;
 }
 
@@ -130,7 +128,6 @@ pub async fn dismiss_text_check_if_present(page: &playwright_rs::Page) {
     if let Ok(true) = locator.is_visible().await {
         eprintln!("⚠️  Text check dialog detected — clicking 'Send Original'");
         let _ = locator.click(None).await;
-        // Wait for dialog to disappear and action-area to be restored
         let _ = locator
             .wait_for(Some(playwright_rs::WaitForOptions {
                 state: Some(playwright_rs::WaitForState::Hidden),

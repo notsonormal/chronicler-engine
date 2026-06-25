@@ -174,15 +174,6 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
 
 The development environment is Windows, not Linux. The Chronicler Engine is NOT being developed inside a Linux devcontainer. 
 
-## OH MY PI
-
-Fork of Pi by @mariozechner
-
-The most capable agent surface that ships. Continuously tuned by real-world use — complete out of the box, open all the way down.
-
-https://github.com/can1357/oh-my-pi
-D:\John\Git\oh-my-pi
-
 ## YOUR RESPONSIBILITY 
 
 You are responsible for the overall health of the Chronicler Engine. It is more important that the repository is healthy and working (e.g. the build passes) than your specific task succeeded. For example, you should not arbitrarily delete or revert unknown or unexpected files (especially untracked file) simply because they are not working or otherwise in the way of your specific task.
@@ -314,7 +305,7 @@ When fixing a known failure (e.g. clippy warning, single test):
 For UI bugs or single test failures, use `cargo nextest run <pattern>` or `cargo check` repeatedly. Run `python build.py` only for final validation.
 
 ## CONCURRENT BUILDS
-Multiple KimiCode agents building simultaneously can conflict because:
+Multiple agents building simultaneously can conflict because:
 - `cargo fmt` rewrites source files in-place
 - `target/` is shared, causing cargo lock contention
 

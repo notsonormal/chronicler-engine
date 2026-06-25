@@ -31,9 +31,13 @@ impl GameLifecycleService {
         let existing_names: Vec<String> = games.iter().map(|g| g.name.clone()).collect();
         let name = generate_game_name(&world_name, &existing_names);
 
-        let new_id = ctx
-            .storage
-            .create_game(&world_name, &ctx.world.key, &name)?;
+        let new_id = ctx.storage.create_game(
+            &world_name,
+            &ctx.world.key,
+            &ctx.player.key,
+            &ctx.player.sheet.name,
+            &name,
+        )?;
         let old_id = ctx.storage.current_game_id();
         ctx.set_game_id(new_id);
 
@@ -77,11 +81,8 @@ impl GameLifecycleService {
             return Err(ApplicationError::ConcurrentGeneration);
         }
 
-        match ctx.storage.get_game(id)? {
-            Some(_game) => {
-                // Cross-world switch allowed - world context loads from DB
-            }
-            None => return Err(ApplicationError::validation("Game not found")),
+        if ctx.storage.get_game(id)?.is_none() {
+            return Err(ApplicationError::validation("Game not found"));
         }
 
         ctx.set_game_id(id);
@@ -126,9 +127,13 @@ impl GameLifecycleService {
             .collect();
 
         let new_name = generate_game_name(&world_name, &existing_names);
-        let new_id = ctx
-            .storage
-            .create_game(&world_name, &world_key, &new_name)?;
+        let new_id = ctx.storage.create_game(
+            &world_name,
+            &world_key,
+            &ctx.player.key,
+            &ctx.player.sheet.name,
+            &new_name,
+        )?;
         ctx.set_game_id(new_id);
 
         let mut initial_state = build_fresh_initial_state(&ctx);
@@ -152,8 +157,6 @@ impl GameLifecycleService {
     }
 
     // TODO(#tech-debt): Worlds CRUD methods are pure storage passthroughs.
-    // These 7 methods add no validation/orchestration - consider direct storage calls from handlers.
-    // See: https://github.com/mrn-general/issues/XXX
     pub fn list_worlds(&self, ctx: GameServiceContext) -> Result<Vec<WorldCard>, ApplicationError> {
         ctx.storage.list_worlds().map_err(Into::into)
     }

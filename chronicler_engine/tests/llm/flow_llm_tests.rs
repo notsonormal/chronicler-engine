@@ -10,6 +10,7 @@ mod tests {
     use tokio::time::Duration;
 
     const TEST_WORLD: &str = "test";
+    const TEST_PERSONA: &str = "test_player";
     const CONFIG_PATH: &str = "tests/test_config.json";
 
     fn has_llm_api_key() -> bool {
@@ -52,7 +53,7 @@ mod tests {
         }
 
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
-        let _server = TestServer::new(port, TEST_WORLD).await;
+        let _server = TestServer::new(port, TEST_WORLD, TEST_PERSONA).await;
 
         let (_playwright, browser) = launch_chrome().await;
         let page = browser.new_page().await.unwrap();
@@ -96,19 +97,16 @@ mod tests {
     #[tokio::test]
     async fn test_real_llm_multi_step_stability() {
         with_real_llm(|page, port| async move {
-            // First command
             send_action(&page, "Look around the room").await;
             let result_a = wait_for_llm_idle(port, Duration::from_secs(180)).await;
             let status_a = wait_for_status_ready_or_error(&page).await;
             println!("Step 1: idle={result_a:?}, status='{status_a}'");
 
-            // Second command
             send_action(&page, "Describe what you see in detail").await;
             let result_b = wait_for_llm_idle(port, Duration::from_secs(180)).await;
             let status_b = wait_for_status_ready_or_error(&page).await;
             println!("Step 2: idle={result_b:?}, status='{status_b}'");
 
-            // Verify both completed and server is still responsive
             assert!(
                 status_a.contains("Ready") || status_a.contains("Error"),
                 "Step 1 should complete. Got: {status_a}"
@@ -118,7 +116,6 @@ mod tests {
                 "Step 2 should complete. Got: {status_b}"
             );
 
-            // Verify we can still interact with the server
             let entries = count_log_entries(&page).await;
             assert!(
                 entries >= 2,

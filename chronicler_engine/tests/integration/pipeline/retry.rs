@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     failing_service,
-    fixtures::create_test_state,
+    fixtures::{create_test_state, create_test_storage_arc},
     pipeline_helpers::{
         create_test_state_with_trigger_npc, latest_state, wait_for_generation_complete,
     },
@@ -148,10 +148,8 @@ fn test_retry_room_not_found() {
     );
     state.movement.current_room_id = "non_existent_room".to_string();
 
-    // Clear history and insert messages manually with proper snapshot_ids
     let pre_main = GameStateSnapshot::from_game_state(&state);
-    let db_pool = chronicler_engine::storage::db::DbPool::new(":memory:").unwrap();
-    let storage = Arc::new(chronicler_engine::storage::Storage::new_sqlite(db_pool, 1));
+    let storage = create_test_storage_arc(1);
     let pre_main_id = storage.save_snapshot(&pre_main).unwrap();
 
     for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
@@ -236,8 +234,7 @@ fn test_retry_llm_error() {
     );
 
     let pre_main = GameStateSnapshot::from_game_state(&state);
-    let db_pool = chronicler_engine::storage::db::DbPool::new(":memory:").unwrap();
-    let storage = Arc::new(chronicler_engine::storage::Storage::new_sqlite(db_pool, 1));
+    let storage = create_test_storage_arc(1);
     let pre_main_id = storage.save_snapshot(&pre_main).unwrap();
     for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
         if msg.message_type == MessageType::Input {
@@ -318,8 +315,7 @@ fn test_retry_empty_narration() {
     );
 
     let pre_main = GameStateSnapshot::from_game_state(&state);
-    let db_pool = chronicler_engine::storage::db::DbPool::new(":memory:").unwrap();
-    let storage = Arc::new(chronicler_engine::storage::Storage::new_sqlite(db_pool, 1));
+    let storage = create_test_storage_arc(1);
     let pre_main_id = storage.save_snapshot(&pre_main).unwrap();
     for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
         if msg.message_type == MessageType::Input {
@@ -401,8 +397,7 @@ fn test_retry_main_narration_uses_pre_main_snapshot() {
     state.narrative.input_buffer.status = GenerationStatus::Idle;
 
     let pre_main = GameStateSnapshot::from_game_state(&state);
-    let db_pool = chronicler_engine::storage::db::DbPool::new(":memory:").unwrap();
-    let storage = Arc::new(chronicler_engine::storage::Storage::new_sqlite(db_pool, 1));
+    let storage = create_test_storage_arc(1);
     let pre_main_id = storage.save_snapshot(&pre_main).unwrap();
     for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
         if msg.message_type == MessageType::Input {

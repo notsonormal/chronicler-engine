@@ -36,6 +36,7 @@ pub fn kill_existing_server(port: u16) {
 pub fn start_server_with_env(
     port: u16,
     world: &str,
+    persona: &str,
     use_mock: bool,
 ) -> (Child, Option<std::path::PathBuf>, std::path::PathBuf) {
     // Prefer pre-built binary to avoid per-test compilation overhead.
@@ -51,12 +52,28 @@ pub fn start_server_with_env(
     let mut cmd = if std::path::Path::new(&binary_path).exists() {
         let mut c = Command::new(&binary_path);
         c.env("RUST_LOG", "chronicler_engine=debug");
-        c.args(["--world", world, "--port", &port.to_string()]);
+        c.args([
+            "--world",
+            world,
+            "--persona",
+            persona,
+            "--port",
+            &port.to_string(),
+        ]);
         c
     } else {
         let mut c = Command::new("cargo");
         c.env("RUST_LOG", "chronicler_engine=debug");
-        c.args(["run", "--", "--world", world, "--port", &port.to_string()]);
+        c.args([
+            "run",
+            "--",
+            "--world",
+            world,
+            "--persona",
+            persona,
+            "--port",
+            &port.to_string(),
+        ]);
         c
     };
 
@@ -107,7 +124,6 @@ pub fn start_server_with_env(
         .stderr(std::process::Stdio::piped());
     let child = cmd.spawn().expect("Failed to start server");
 
-    // Infer where the server will place its SQLite DB.
     let db_path = std::path::PathBuf::from(&target_dir)
         .join("debug")
         .join(format!("chronicler_{port}.db"));
@@ -121,9 +137,7 @@ pub async fn wait_for_server(port: u16, max_attempts: usize) -> bool {
             // Port is open - give it more time to be fully ready
             tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
 
-            // Try to connect and verify server responds
             if std::net::TcpStream::connect(format!("127.0.0.1:{port}")).is_ok() {
-                // Give extra time for server to initialize
                 tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
                 return true;
             }
@@ -191,7 +205,6 @@ pub fn get_available_port(min: u16, max: u16) -> Result<u16, String> {
                 continue;
             }
 
-            // We have the lock file — verify port is actually free
             match TcpListener::bind(format!("127.0.0.1:{port}")) {
                 Ok(listener) => {
                     drop(listener);
@@ -213,7 +226,6 @@ pub fn get_available_port(min: u16, max: u16) -> Result<u16, String> {
                 let path = entry.path();
                 if let Ok(content) = std::fs::read_to_string(&path) {
                     if let Ok(pid) = content.trim().parse::<u32>() {
-                        // Check if the process is still alive
                         if !is_process_alive(pid) {
                             let _ = std::fs::remove_file(&path);
                         }
@@ -272,8 +284,8 @@ pub struct TestServer {
 }
 
 impl TestServer {
-    pub async fn with_config(port: u16, world: &str, use_mock: bool) -> Self {
-        Self::start(port, world, use_mock).await
+    pub async fn with_config(port: u16, world: &str, persona: &str, use_mock: bool) -> Self {
+        Self::start(port, world, persona, use_mock).await
     }
 
     /// Remove any stale SQLite database for this port before starting.
@@ -290,29 +302,28 @@ impl TestServer {
 
     pub async fn from_config(
         world: &str,
+        persona: &str,
         config_path: &str,
         test_name: &str,
     ) -> Result<(Self, u16), String> {
         let config = TestConfig::from_file(config_path)?;
         let port = get_available_port(config.port_range.min, config.port_range.max)?;
         let use_mock = config.get_backend(test_name) == "mock";
-        let server = Self::start(port, world, use_mock).await;
+        let server = Self::start(port, world, persona, use_mock).await;
         Ok((server, port))
     }
 
-    async fn start(port: u16, world: &str, use_mock: bool) -> Self {
+    async fn start(port: u16, world: &str, persona: &str, use_mock: bool) -> Self {
         if port_in_use(port) {
             kill_existing_server(port);
         }
-        // Infer where the server will place its SQLite DB.
         let target_dir = std::env::var("CARGO_TARGET_DIR").unwrap_or_else(|_| "target".to_string());
         let db_path = std::path::PathBuf::from(&target_dir)
             .join("debug")
             .join(format!("chronicler_{port}.db"));
         // Remove stale database BEFORE starting server so we don't inherit old state.
         Self::cleanup_stale_db(port, &db_path);
-        let (child, temp_dir, _db_path) = start_server_with_env(port, world, use_mock);
-        // Increased wait time for server to be fully ready
+        let (child, temp_dir, _db_path) = start_server_with_env(port, world, persona, use_mock);
         let started = wait_for_server(port, 100).await; // 100 * 100ms = 10s total
         assert!(started, "Server failed to start on port {port}");
         SERVER_MANAGED.store(true, Ordering::SeqCst);
@@ -324,12 +335,12 @@ impl TestServer {
         }
     }
 
-    pub async fn new(port: u16, world: &str) -> Self {
-        Self::start(port, world, false).await
+    pub async fn new(port: u16, world: &str, persona: &str) -> Self {
+        Self::start(port, world, persona, false).await
     }
 
-    pub async fn new_with_mock(port: u16, world: &str) -> Self {
-        Self::start(port, world, true).await
+    pub async fn new_with_mock(port: u16, world: &str, persona: &str) -> Self {
+        Self::start(port, world, persona, true).await
     }
 }
 

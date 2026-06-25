@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-06-24 21:11 UTC*
+*Index last generated: 2026-06-25 18:57 UTC*
 
 ### Root files
 
@@ -62,12 +62,16 @@ This folder contains all documentation for the Chronicler Engine project.
 ### `docs/plans/`
 
 - [Plan: Diagnostic Decision Tree as Agent Infrastructure](./plans/diagnostic-decision-tree-plan.md)
+- [Plan: Doc Drift Linter (Stale Identifier Detection in docs/)](./plans/doc-drift-linter-plan.md)
 - [Spec: Agent-Ready Pipeline Restructure for Chronicler Engine](./plans/multi-agent-architecture-overarching-spec.md)
 - [Plan: Observability & Automated Forensics](./plans/observability-and-forensics-plan.md)
+- [Plan: Rust Duplicate Code Detector (Skill-Based)](./plans/rust-duplicate-code-detector-plan.md)
 - [AI Steering & Guided Generation](./plans/steering-and-guided-generation.md)
 
 ### `docs/plans/archived/`
 
+- [ADR-026 Follow-up: Thermo-Nuclear Review Quality Fixes](./plans/archived/adr-026-followup-quality-fixes.md)
+- [Fix Boot Path: Restore Auto-Create Game with `--persona` CLI Flag](./plans/archived/fix-boot-and-default-game.md)
 - [Pipeline Decomposition Review Fixes (Round 3)](./plans/archived/pipeline-review-fixes-round3.md)
 - [Review Fixes — Pipeline Decomposition Quality](./plans/archived/review-fixes-pipeline-quality.md)
 

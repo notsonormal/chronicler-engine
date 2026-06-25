@@ -1,3 +1,6 @@
+//! Test fixtures shared between unit and integration tests.
+#![allow(clippy::expect_used)]
+
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -11,18 +14,15 @@ use crate::model::world::{WorldCard, WorldManifest};
 pub struct TestWorld;
 
 impl TestWorld {
-    /// A minimal `WorldCard` with no rules.
     pub fn minimal() -> WorldCard {
         WorldCard {
             key: "test".to_string(),
             name: "Test World".to_string(),
             description: "A test world.".to_string(),
-            player_key: "player".to_string(),
             ..Default::default()
         }
     }
 
-    /// A `WorldCard` with one global rule.
     pub fn with_rule(rule: &str) -> WorldCard {
         WorldCard {
             global_rules: vec![rule.to_string()],
@@ -34,7 +34,6 @@ impl TestWorld {
 pub struct TestPlayer;
 
 impl TestPlayer {
-    /// A `PlayerCard` with the given name and sensible defaults.
     pub fn named(name: &str) -> PlayerCard {
         PlayerCard {
             key: name.to_lowercase().replace(' ', "-"),
@@ -52,7 +51,6 @@ impl TestPlayer {
         }
     }
 
-    /// Default test player named "Hero".
     pub fn standard() -> PlayerCard {
         Self::named("Hero")
     }
@@ -74,7 +72,6 @@ impl TestNpc {
         }
     }
 
-    /// An `NpcCard` with the given ID and display name, and no triggers.
     pub fn named(id: &str, name: &str) -> NpcCard {
         NpcCard {
             id: id.to_string(),
@@ -85,7 +82,6 @@ impl TestNpc {
         }
     }
 
-    /// An `NpcCard` with one `TimesMet` trigger.
     pub fn with_times_met_trigger(id: &str, name: &str, op: ComparisonOperator, n: u32) -> NpcCard {
         NpcCard {
             id: id.to_string(),
@@ -104,7 +100,6 @@ impl TestNpc {
         }
     }
 
-    /// An `NpcCard` with a room-scoped `TimesMet` trigger.
     pub fn with_room_scoped_trigger(
         id: &str,
         name: &str,
@@ -133,7 +128,6 @@ impl TestNpc {
 pub struct TestMap;
 
 impl TestMap {
-    /// A `Room` with the given ID, no exits, and no NPCs.
     pub fn room(id: &str) -> Room {
         Room {
             id: id.to_string(),
@@ -146,7 +140,6 @@ impl TestMap {
         }
     }
 
-    /// A `Room` with the given ID and display name, no exits, and no NPCs.
     pub fn room_named(id: &str, name: &str) -> Room {
         Room {
             id: id.to_string(),
@@ -159,7 +152,6 @@ impl TestMap {
         }
     }
 
-    /// A `MapDef` containing a single region with a single room.
     pub fn single_room(room_id: &str) -> MapDef {
         MapDef {
             overworld: Overworld {
@@ -174,7 +166,6 @@ impl TestMap {
         }
     }
 
-    /// A `MapDef` with two connected rooms (north/south exits).
     pub fn two_rooms(room_a_id: &str, room_b_id: &str) -> MapDef {
         use crate::model::map::Direction;
         let mut room_a = Self::room(room_a_id);
@@ -198,7 +189,6 @@ impl TestMap {
 pub struct TestGameState;
 
 impl TestGameState {
-    /// A fully initialised `GameState` in the given room with no NPCs.
     pub fn in_room(room_id: &str) -> GameState {
         GameState::new(
             Arc::new(TestWorld::minimal()),
@@ -209,7 +199,6 @@ impl TestGameState {
         )
     }
 
-    /// A `GameState` in the given room with one NPC loaded (and listed in the room).
     pub fn with_npc(room_id: &str, npc: NpcCard) -> GameState {
         let _npc_id = npc.id.clone();
         GameState::new(
@@ -221,7 +210,6 @@ impl TestGameState {
         )
     }
 
-    /// A `GameState` in the given room with multiple NPCs loaded.
     pub fn with_npcs(room_id: &str, npcs: Vec<NpcCard>) -> GameState {
         let _npc_ids: Vec<String> = npcs.iter().map(|n| n.id.clone()).collect();
         let map = MapDef {
@@ -244,8 +232,6 @@ impl TestGameState {
         )
     }
 
-    /// A `GameState` in the given room with one NPC loaded, but with
-    /// `npc_encounter_log` set to default (no starting-room encounter tracking).
     pub fn with_npc_raw(room_id: &str, npc: NpcCard) -> GameState {
         crate::model::state::GameStateBuilder::new(
             Arc::new(TestWorld::minimal()),
@@ -285,7 +271,6 @@ impl TestGameState {
 pub struct TestStoredTriggerContext;
 
 impl TestStoredTriggerContext {
-    /// Standard test trigger context used across pipeline and retry tests.
     pub fn standard() -> StoredTriggerContext {
         StoredTriggerContext {
             npc_id: "npc1".to_string(),
@@ -299,7 +284,6 @@ impl TestStoredTriggerContext {
         }
     }
 
-    /// A trigger context for a specific NPC with custom narration prompt.
     pub fn for_npc(
         npc_id: &str,
         trigger_name: &str,
@@ -317,7 +301,6 @@ impl TestStoredTriggerContext {
         }
     }
 
-    /// A trigger context with a specific name and NPC ID.
     pub fn named(trigger_name: &str, npc_id: &str) -> StoredTriggerContext {
         StoredTriggerContext {
             npc_id: npc_id.to_string(),
@@ -331,7 +314,6 @@ impl TestStoredTriggerContext {
         }
     }
 
-    /// A trigger context with max_tokens set.
     pub fn with_max_tokens(
         npc_id: &str,
         trigger_name: &str,
@@ -354,7 +336,6 @@ impl TestStoredTriggerContext {
 pub struct TestPromptPreset;
 
 impl TestPromptPreset {
-    /// A system preset with the given id and name.
     pub fn system(id: &str, name: &str) -> PromptPreset {
         PromptPreset {
             id: id.to_string(),
@@ -368,7 +349,6 @@ impl TestPromptPreset {
         }
     }
 
-    /// A system preset marked as default.
     pub fn system_default(id: &str, name: &str) -> PromptPreset {
         PromptPreset {
             id: id.to_string(),
@@ -386,7 +366,6 @@ impl TestPromptPreset {
 pub struct TestWorldManifest;
 
 impl TestWorldManifest {
-    /// A minimal world manifest for bootstrap validation tests.
     pub fn minimal() -> WorldManifest {
         WorldManifest {
             id: "test".to_string(),
@@ -395,7 +374,6 @@ impl TestWorldManifest {
             global_rules: vec![],
             starting_room_id: "room_a".to_string(),
             map_file: "map.json".to_string(),
-            player_file: "player.json".to_string(),
             characters_dir: "".to_string(),
             scenarios: vec![],
             default_scenario_id: None,
@@ -407,7 +385,6 @@ impl TestWorldManifest {
 pub struct TestCharacterSheet;
 
 impl TestCharacterSheet {
-    /// A standard hero character sheet used in bootstrap tests.
     pub fn hero() -> CharacterSheet {
         CharacterSheet {
             name: "Hero".to_string(),
@@ -420,4 +397,18 @@ impl TestCharacterSheet {
             headshot_image: None,
         }
     }
+}
+
+pub fn seed_default_game_row(
+    pool: &crate::storage::db::DbPool,
+    game_id: u64,
+) -> Result<(), crate::error::EngineError> {
+    let conn = pool.conn();
+    conn.execute(
+        "INSERT INTO games (id, world_name, world_key, persona_key, persona_name, name, created_at, updated_at)
+         VALUES (?1, 'test', 'test', 'test_player', 'Test Player', 'Test Game', ?2, ?2)",
+        rusqlite::params![game_id as i64, chrono::Utc::now().to_rfc3339()],
+    )
+    .map_err(|e| crate::error::EngineError::Config(format!("seed_default_game_row: {e}")))?;
+    Ok(())
 }

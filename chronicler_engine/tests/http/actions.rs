@@ -15,15 +15,20 @@ async fn test_action_handler_load_state_failure_graceful_degradation() {
         TestOverride::internal("simulated load failure"),
     ));
 
-    // Seed world and game manually since we're passing custom storage
     use chronicler_engine::test_support::{TestWorld, TestMap, TestPlayer};
     let world = TestWorld::minimal();
     let map = TestMap::single_room("start");
     storage.seed_world(&world, &map).unwrap();
     let player = TestPlayer::standard();
-    storage.seed_persona(&world.player_key, &player).unwrap();
+    storage.seed_persona(&player.key, &player).unwrap();
     let game_id = storage
-        .create_game(&world.name, &world.key, "Test Game")
+        .create_game(
+            &world.name,
+            &world.key,
+            &player.key,
+            &player.sheet.name,
+            "Test Game",
+        )
         .unwrap();
     storage.set_game_id(game_id);
 
@@ -66,15 +71,20 @@ async fn test_action_confirm_handler_load_state_failure_graceful_degradation() {
         TestOverride::internal("simulated load failure"),
     ));
 
-    // Seed world and game manually since we're passing custom storage
     use chronicler_engine::test_support::{TestWorld, TestMap, TestPlayer};
     let world = TestWorld::minimal();
     let map = TestMap::single_room("start");
     storage.seed_world(&world, &map).unwrap();
     let player = TestPlayer::standard();
-    storage.seed_persona(&world.player_key, &player).unwrap();
+    storage.seed_persona(&player.key, &player).unwrap();
     let game_id = storage
-        .create_game(&world.name, &world.key, "Test Game")
+        .create_game(
+            &world.name,
+            &world.key,
+            &player.key,
+            &player.sheet.name,
+            "Test Game",
+        )
         .unwrap();
     storage.set_game_id(game_id);
 
@@ -90,7 +100,6 @@ async fn test_action_confirm_handler_load_state_failure_graceful_degradation() {
     assert_eq!(response.status(), StatusCode::OK);
 }
 
-/// Test that InsertMessage operation failure returns an error.
 #[tokio::test]
 async fn test_action_handler_message_insert_failure() {
     let storage = Arc::new(Storage::new_in_memory().with_failure(
@@ -98,15 +107,20 @@ async fn test_action_handler_message_insert_failure() {
         TestOverride::internal("simulated insert failure"),
     ));
 
-    // Seed world and game manually since we're passing custom storage
     use chronicler_engine::test_support::{TestWorld, TestMap, TestPlayer};
     let world = TestWorld::minimal();
     let map = TestMap::single_room("start");
     storage.seed_world(&world, &map).unwrap();
     let player = TestPlayer::standard();
-    storage.seed_persona(&world.player_key, &player).unwrap();
+    storage.seed_persona(&player.key, &player).unwrap();
     let game_id = storage
-        .create_game(&world.name, &world.key, "Test Game")
+        .create_game(
+            &world.name,
+            &world.key,
+            &player.key,
+            &player.sheet.name,
+            "Test Game",
+        )
         .unwrap();
     storage.set_game_id(game_id);
 
@@ -122,10 +136,6 @@ async fn test_action_handler_message_insert_failure() {
     assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
 }
 
-/// Test that LoadMessageRows operation failure does not crash the action handler.
-/// Because process_action spawns background work, storage failures in message loading
-/// after the action has started are not surfaced to the HTTP response — the handler
-/// returns 200 (Thinking...) and the background task fails gracefully.
 #[tokio::test]
 async fn test_action_handler_load_messages_failure() {
     let storage = Arc::new(Storage::new_in_memory().with_failure(
@@ -133,15 +143,20 @@ async fn test_action_handler_load_messages_failure() {
         TestOverride::internal("simulated load messages failure"),
     ));
 
-    // Seed world and game manually since we're passing custom storage
     use chronicler_engine::test_support::{TestWorld, TestMap, TestPlayer};
     let world = TestWorld::minimal();
     let map = TestMap::single_room("start");
     storage.seed_world(&world, &map).unwrap();
     let player = TestPlayer::standard();
-    storage.seed_persona(&world.player_key, &player).unwrap();
+    storage.seed_persona(&player.key, &player).unwrap();
     let game_id = storage
-        .create_game(&world.name, &world.key, "Test Game")
+        .create_game(
+            &world.name,
+            &world.key,
+            &player.key,
+            &player.sheet.name,
+            "Test Game",
+        )
         .unwrap();
     storage.set_game_id(game_id);
 
@@ -154,11 +169,10 @@ async fn test_action_handler_load_messages_failure() {
         .body(Body::from("command=look"))
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
-    // process_action returns Started immediately (spawn_blocking for pipeline)
+
     assert_eq!(response.status(), StatusCode::OK);
 }
 
-/// Test that /action/check with empty command returns an error.
 #[tokio::test]
 async fn test_action_check_handler_empty_command() {
     let app = TestAppBuilder::default_app();
@@ -196,7 +210,6 @@ async fn test_action_handler_special_characters() {
     );
 }
 
-/// Test that SaveSnapshot failure during action confirm returns an error.
 #[tokio::test]
 async fn test_action_confirm_snapshot_save_failure() {
     let storage = Arc::new(Storage::new_in_memory().with_failure(

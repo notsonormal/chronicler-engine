@@ -3,17 +3,21 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use chronicler_engine::application::context::GameServiceContext;
 use chronicler_engine::model::character::{CharacterSheet, NpcCard, PlayerCard};
 use chronicler_engine::model::map::{Direction, MapDef, Overworld, Region, Room};
+use chronicler_engine::model::scenario::StartingScenario;
+use chronicler_engine::model::settings::AppSettings;
 use chronicler_engine::model::state::GameState;
 use chronicler_engine::model::world::WorldCard;
+use chronicler_engine::storage::Storage;
+use chronicler_engine::storage::db::DbPool;
 
 pub fn create_test_world() -> WorldCard {
     WorldCard {
         key: "test".to_string(),
         name: "Test Realm".to_string(),
         description: "A small testing kingdom".to_string(),
-        player_key: "player".to_string(),
         starting_room_id: "room1".to_string(),
         ..Default::default()
     }
@@ -116,7 +120,6 @@ pub fn create_test_state_with_npcs(room_npcs: Vec<String>, npcs: Vec<NpcCard>) -
         key: "test".into(),
         name: "Test World".into(),
         description: "A test world".into(),
-        player_key: "player".into(),
         starting_room_id: "room1".into(),
         ..Default::default()
     });
@@ -297,4 +300,86 @@ pub fn create_simple_test_map() -> MapDef {
     };
 
     MapDef { overworld }
+}
+
+/// A `WorldCard` with a `StartingScenario` block. Promoted from `lifecycle.rs`.
+pub fn create_test_world_with_scenario() -> WorldCard {
+    WorldCard {
+        key: "test".to_string(),
+        name: "Test Realm".to_string(),
+        description: "A small testing kingdom".to_string(),
+        starting_room_id: "room1".to_string(),
+        scenarios: vec![StartingScenario {
+            id: "test_scenario".to_string(),
+            name: "Test Scenario".to_string(),
+            description: "A test".to_string(),
+            starting_room_id: "room1".to_string(),
+            text: "You wake up in a cozy room.".to_string(),
+            npcs: vec![],
+        }],
+        ..Default::default()
+    }
+}
+
+/// `GameState` using `create_test_world_with_scenario()`. Most integration tests
+/// want the scenario variant for `inject_scenario_logs` coverage.
+pub fn create_basic_test_state() -> GameState {
+    let world = Arc::new(create_test_world_with_scenario());
+    let map = Arc::new(create_test_map());
+    let player = Arc::new(create_test_player());
+    let npcs = Vec::new();
+    GameState::new(world, map, player, npcs, "room1".to_string())
+}
+
+/// `GameState` using `create_test_world()` (no scenario). Promoted from
+/// `application_service.rs` variant.
+pub fn create_basic_test_state_no_scenario() -> GameState {
+    let world = Arc::new(create_test_world());
+    let map = Arc::new(create_test_map());
+    let player = Arc::new(create_test_player());
+    let npcs = Vec::new();
+    GameState::new(world, map, player, npcs, "room1".to_string())
+}
+
+/// Seed a test world + persona into the storage. Promoted from `lifecycle.rs`
+/// (identical copy existed in `application_service.rs`).
+pub fn seed_test_world(storage: &Storage) {
+    use chronicler_engine::test_support::{TestMap, TestPlayer, TestWorld};
+    let world = TestWorld::minimal();
+    let map = TestMap::single_room("start");
+    storage.seed_world(&world, &map).expect("seed world");
+    let player = TestPlayer::standard();
+    storage
+        .seed_persona(&player.key, &player)
+        .expect("seed persona");
+}
+
+/// Construct a `GameServiceContext` from storage + state. Promoted from
+/// `lifecycle.rs` (functionally identical copy existed in `application_service.rs`).
+pub fn make_test_ctx(storage: Arc<Storage>, state: GameState) -> GameServiceContext {
+    GameServiceContext {
+        storage,
+        world: state.world,
+        map: state.map,
+        player: state.player,
+        npcs: Arc::new(state.npcs),
+        cancel_token: tokio_util::sync::CancellationToken::new(),
+        is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        settings: Arc::new(std::sync::RwLock::new(AppSettings::default())),
+        preset_storage: Arc::new(Storage::new_in_memory()),
+    }
+}
+
+/// Build a sqlite-backed `Storage` with the games row for `game_id` pre-seeded.
+/// Use this instead of `Storage::new_sqlite(DbPool::new(":memory:").unwrap(), 1)`
+/// to satisfy `game_state_snapshots.game_id` / `messages.game_id` FK constraints.
+pub fn create_test_storage(game_id: u64) -> Storage {
+    let pool = DbPool::new(":memory:").expect("in-memory db should open");
+    chronicler_engine::test_support::seed_default_game_row(&pool, game_id).unwrap();
+    Storage::new_sqlite(pool, game_id)
+}
+
+/// `Arc`-wrapped variant for tests that share storage across services.
+pub fn create_test_storage_arc(game_id: u64) -> Arc<Storage> {
+    Arc::new(create_test_storage(game_id))
 }

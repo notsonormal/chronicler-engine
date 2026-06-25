@@ -3,20 +3,25 @@ use crate::storage::db::DbPool;
 
 fn sqlite_storage() -> Storage {
     let pool = DbPool::new(":memory:").unwrap();
+    crate::test_support::seed_default_game_row(&pool, 1).unwrap();
     Storage::new_sqlite(pool, 1)
 }
 
 #[test]
 fn test_create_game_returns_positive_id() {
     let storage = Storage::new_in_memory();
-    let id = storage.create_game("test", "test", "Game A").unwrap();
+    let id = storage
+        .create_game("test", "test", "test_player", "Test Player", "Game A")
+        .unwrap();
     assert!(id > 0);
 }
 
 #[test]
 fn test_create_game_sqlite() {
     let storage = sqlite_storage();
-    let id = storage.create_game("test", "test", "Game A").unwrap();
+    let id = storage
+        .create_game("test", "test", "test_player", "Test Player", "Game A")
+        .unwrap();
     assert!(id > 0);
 
     let game = storage.get_game(id).unwrap().unwrap();
@@ -27,7 +32,9 @@ fn test_create_game_sqlite() {
 #[test]
 fn test_create_game_in_memory() {
     let storage = Storage::new_in_memory();
-    let id = storage.create_game("test", "test", "Game A").unwrap();
+    let id = storage
+        .create_game("test", "test", "test_player", "Test Player", "Game A")
+        .unwrap();
     assert!(id > 0);
 
     let game = storage.get_game(id).unwrap().unwrap();
@@ -38,7 +45,9 @@ fn test_create_game_in_memory() {
 #[test]
 fn test_get_game_found() {
     let storage = Storage::new_in_memory();
-    let id = storage.create_game("w", "w", "G").unwrap();
+    let id = storage
+        .create_game("w", "w", "test_player", "Test Player", "G")
+        .unwrap();
     let game = storage.get_game(id).unwrap().unwrap();
     assert_eq!(game.id, id);
 }
@@ -53,7 +62,9 @@ fn test_get_game_not_found() {
 #[test]
 fn test_get_game_sqlite() {
     let storage = sqlite_storage();
-    let id = storage.create_game("test", "test", "SQLiteGame").unwrap();
+    let id = storage
+        .create_game("test", "test", "test_player", "Test Player", "SQLiteGame")
+        .unwrap();
     let game = storage.get_game(id).unwrap().unwrap();
     assert_eq!(game.name, "SQLiteGame");
 }
@@ -61,7 +72,9 @@ fn test_get_game_sqlite() {
 #[test]
 fn test_delete_game_existing() {
     let storage = Storage::new_in_memory();
-    let id = storage.create_game("w", "w", "ToDelete").unwrap();
+    let id = storage
+        .create_game("w", "w", "test_player", "Test Player", "ToDelete")
+        .unwrap();
     storage.delete_game(id).unwrap();
 
     let game = storage.get_game(id).unwrap();
@@ -78,7 +91,9 @@ fn test_delete_game_nonexistent() {
 #[test]
 fn test_delete_game_sqlite() {
     let storage = sqlite_storage();
-    let id = storage.create_game("w", "w", "ToDelete").unwrap();
+    let id = storage
+        .create_game("w", "w", "test_player", "Test Player", "ToDelete")
+        .unwrap();
     storage.delete_game(id).unwrap();
 
     let game = storage.get_game(id).unwrap();
@@ -88,7 +103,9 @@ fn test_delete_game_sqlite() {
 #[test]
 fn test_game_timestamps_created_at() {
     let storage = Storage::new_in_memory();
-    let id = storage.create_game("w", "w", "G").unwrap();
+    let id = storage
+        .create_game("w", "w", "test_player", "Test Player", "G")
+        .unwrap();
     let game = storage.get_game(id).unwrap().unwrap();
 
     let now = chrono::Utc::now();
@@ -104,7 +121,7 @@ fn test_create_game_failure() {
         TestOverride::internal("create failed"),
     );
 
-    let result = storage.create_game("w", "w", "G");
+    let result = storage.create_game("w", "w", "test_player", "Test Player", "G");
     assert!(result.is_err());
 }
 

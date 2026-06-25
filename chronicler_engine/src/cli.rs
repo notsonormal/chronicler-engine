@@ -1,7 +1,6 @@
 //! [DOC: docs/system/startup.md]
 //! Command-line interface definitions
 
-// CLI module is allowed to use stdout/stderr for CLI output.
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
 use std::{
@@ -14,25 +13,23 @@ use clap::Parser;
 use crate::error::EngineError;
 use crate::model::world::WorldManifest;
 
-/// [DOC: docs/architecture/system.md]
 #[derive(Parser, Debug)]
 #[command(name = "chronicler-engine")]
 #[command(version = "0.1.0")]
 #[command(about = "Text adventure engine with HTMX dashboard")]
 pub struct Args {
-    /// Specify which world to load
     #[arg(long, default_value = "redmist_estate")]
     pub world: String,
 
-    /// List all available worlds and exit
+    #[arg(long, default_value = "julian")]
+    pub persona: String,
+
     #[arg(long)]
     pub list_worlds: bool,
 
-    /// Port to run the HTTP server on
     #[arg(long, default_value = "3000")]
     pub port: u16,
 
-    /// Import settings from JSON file into database before starting
     #[arg(long)]
     pub settings_path: Option<std::path::PathBuf>,
 }
@@ -41,9 +38,7 @@ pub fn parse_args() -> Args {
     Args::parse()
 }
 
-/// [DOC: docs/architecture/system.md]
 pub fn resolve_engine_data_path() -> PathBuf {
-    // [DOC: docs/system/startup.md]
     if let Ok(exe_path) = std::env::current_exe() {
         if let Some(exe_dir) = exe_path.parent() {
             let data_dir = exe_dir.join("data");
@@ -56,7 +51,6 @@ pub fn resolve_engine_data_path() -> PathBuf {
     PathBuf::from("data")
 }
 
-/// [DOC: docs/architecture/system.md]
 pub fn scan_worlds(data_dir: &Path) -> crate::error::Result<Vec<(String, String)>> {
     let worlds_dir = data_dir.join("worlds");
     if !worlds_dir.exists() {
@@ -86,7 +80,6 @@ pub fn scan_worlds(data_dir: &Path) -> crate::error::Result<Vec<(String, String)
     Ok(worlds)
 }
 
-/// [DOC: docs/architecture/system.md]
 pub fn list_available_worlds() -> crate::error::Result<()> {
     let worlds = scan_worlds(&resolve_engine_data_path())?;
 

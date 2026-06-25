@@ -1,33 +1,39 @@
 # Specification: Engine Data Schemas
 
 ## Objective
+
 Define the JSON data schemas used by the Chronicler Engine for characters, rooms, triggers, world definitions, and game state snapshots. Also documents the SQLite database schema for persistence.
 
 ## Storage Architecture
 
 ### JSON Seed Files
+
 Game data is loaded from JSON seed files at startup and persisted to SQLite. After seeding, the database is the **sole source of truth** at runtime.
+
 - `data/worlds/<key>/world.json` — World definitions
 - `data/worlds/<key>/map.json` — Map definitions (co-located with world.json)
-- `data/worlds/<key>/player.json` — Player persona
 - `data/worlds/<key>/characters/*.json` — NPC definitions
 - `data/personas/*.json` — Global personas
 - `data/settings.json` — Application settings
 - `data/prompt_presets/{system,quantifier}/*.json` — Prompt presets
 
-### SQLite Database Schema (Migration v11)
+### SQLite Database Schema (Migration v13)
 
 #### Core Tables
 
 **`games`**
+
 - `id INTEGER PRIMARY KEY AUTOINCREMENT`
 - `world_name TEXT NOT NULL DEFAULT 'default'`
 - `world_key TEXT NOT NULL DEFAULT 'default'`
+- `persona_key TEXT NOT NULL DEFAULT ''` — Stable foreign key into `personas.key`; chosen at game creation (ADR-026)
+- `persona_name TEXT NOT NULL DEFAULT ''` — Display name of the persona (denormalized for list queries)
 - `name TEXT NOT NULL DEFAULT 'Unnamed'`
 - `created_at TEXT NOT NULL`
 - `updated_at TEXT NOT NULL`
 
 **`game_state_snapshots`**
+
 - `id INTEGER PRIMARY KEY AUTOINCREMENT`
 - `game_id INTEGER NOT NULL DEFAULT 1 REFERENCES games(id) ON DELETE CASCADE`
 - `movement TEXT NOT NULL` (JSON)
@@ -38,6 +44,7 @@ Game data is loaded from JSON seed files at startup and persisted to SQLite. Aft
 - Index: `idx_snapshots_game_latest (game_id, created_at DESC)`
 
 **`messages`**
+
 - `id INTEGER PRIMARY KEY AUTOINCREMENT`
 - `game_id INTEGER NOT NULL DEFAULT 1 REFERENCES games(id) ON DELETE CASCADE`
 - `sender TEXT`
@@ -48,6 +55,7 @@ Game data is loaded from JSON seed files at startup and persisted to SQLite. Aft
 - Index: `idx_messages_game_id (game_id, id)`
 
 **`message_swipes`**
+
 - `id INTEGER PRIMARY KEY AUTOINCREMENT`
 - `message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE`
 - `swipe_index INTEGER NOT NULL`
@@ -58,6 +66,7 @@ Game data is loaded from JSON seed files at startup and persisted to SQLite. Aft
 - Unique: `(message_id, swipe_index)`
 
 **`llm_messages`**
+
 - `id INTEGER PRIMARY KEY AUTOINCREMENT`
 - `agent_name TEXT NOT NULL`
 - `backend_name TEXT NOT NULL`
@@ -72,6 +81,7 @@ Game data is loaded from JSON seed files at startup and persisted to SQLite. Aft
 - Index: `idx_llm_messages_created_at (created_at DESC)`
 
 **`prompt_presets`**
+
 - `id TEXT PRIMARY KEY`
 - `name TEXT NOT NULL`
 - `preset_type TEXT NOT NULL`
@@ -84,7 +94,7 @@ Game data is loaded from JSON seed files at startup and persisted to SQLite. Aft
 - `updated_at TEXT NOT NULL`
 - Index: `idx_prompt_presets_type (preset_type)`
 
-#### Game Data Tables (Migration v11)
+#### Game Data Tables (Migration v13)
 
 **World Seeding & Loading (Phase 3)**
 
@@ -93,16 +103,16 @@ On first startup (or if DB is empty), `bootstrap::run()` calls seeding functions
 1. **Prompt Presets:** `ensure_presets()` seeds system and quantifier prompt presets
 2. **Game Data:** `seed_game_data()` seeds worlds, personas, and characters from JSON files:
    - Scans `data/worlds/*/world.json` for all worlds
-   - Deserializes `WorldManifest` (contains file pointers: `map_file`, `player_file`, `characters_dir`)
-   - Converts to `WorldCard` via `From<WorldManifest>` (adds `key`, `player_key`, `default_scenario_id`)
+   - Deserializes `WorldManifest` (file pointers: `map_file`, `characters_dir`)
+   - Converts to `WorldCard` via `From<WorldManifest>` (adds `key`, `default_scenario_id`)
    - Calls `Storage::seed_world(world_card, map)` → returns `world_id: i64` (idempotent)
-   - Loads `PlayerCard` from `data/personas/<player_file>` and calls `Storage::seed_persona(key, player)` — skip if exists
+   - Scans `data/personas/*.json` and seeds each as a `PlayerCard` via `Storage::seed_persona(key, player)` — idempotent (see ADR-026)
    - Loads `NpcCard`s from `data/characters/<characters_dir>/*.json` and seeds each via `seed_character(world_id, npc)` — skip if exists
 
 After seeding, runtime loading is 100% database-first:
 
 - `Storage::get_world(key)` → `WorldWithMap { world_id, world_card, map }` (uses `DbWorld::from_row()`)
-- `world_card.player_key` → `Storage::get_persona(key)` → `PlayerCard`
+- `game.persona_key` → `Storage::get_persona(key)` → `PlayerCard` (the persona is bound on the game row, not the world)
 - `world_with_map.world_id` → `Storage::list_characters(world_id)` → `Vec<NpcCard>`
 
 **File I/O only during seeding**; runtime has zero filesystem coupling.
@@ -110,6 +120,7 @@ After seeding, runtime loading is 100% database-first:
 **Pattern Consistency**: World storage uses `DbWorld::from_row()` + `world_card_from_db()` conversion function, matching persona and character storage.
 
 **`worlds`**
+
 - `id INTEGER PRIMARY KEY AUTOINCREMENT`
 - `key TEXT NOT NULL UNIQUE` — Original string identifier (e.g., `redmist_estate`)
 - `name TEXT NOT NULL`
@@ -119,11 +130,11 @@ After seeding, runtime loading is 100% database-first:
 - `scenarios TEXT NOT NULL DEFAULT '[]'` — JSON: `Vec<StartingScenario>`
 - `default_scenario_id TEXT`
 - `default_room_image TEXT`
-- `player_key TEXT NOT NULL DEFAULT ''` — Filename stem of player persona (e.g., `julian` from `julian.json`). Determines which persona is the player character for this world. Falls back to `"player"` if empty.
 - `created_at TEXT NOT NULL`
 - `updated_at TEXT NOT NULL`
 
 **`maps`**
+
 - `id INTEGER PRIMARY KEY AUTOINCREMENT`
 - `world_id INTEGER NOT NULL REFERENCES worlds(id) ON DELETE CASCADE`
 - `map_data TEXT NOT NULL` — JSON: full `MapDef` (overworld, regions, rooms)
@@ -132,6 +143,7 @@ After seeding, runtime loading is 100% database-first:
 - Index: `idx_maps_world (world_id)`
 
 **`personas`**
+
 - `id INTEGER PRIMARY KEY AUTOINCREMENT`
 - `key TEXT NOT NULL UNIQUE` — Filename stem (e.g., `julian`)
 - `name TEXT NOT NULL`
@@ -147,6 +159,7 @@ After seeding, runtime loading is 100% database-first:
 - `updated_at TEXT NOT NULL`
 
 **`characters`**
+
 - `id INTEGER PRIMARY KEY AUTOINCREMENT`
 - `key TEXT NOT NULL` — From `NpcCard.id` (e.g., `elena_voss`)
 - `world_id INTEGER NOT NULL REFERENCES worlds(id) ON DELETE CASCADE`
@@ -167,6 +180,7 @@ After seeding, runtime loading is 100% database-first:
 - Index: `idx_characters_world (world_id)`
 
 **`settings`**
+
 - `id INTEGER PRIMARY KEY CHECK (id = 1)` — Singleton row
 - `connections TEXT NOT NULL DEFAULT '[]'` — JSON: `Vec<Connection>`
 - `narration_connection_id TEXT NOT NULL DEFAULT 'openrouter-gpt-4o-mini'`
@@ -180,12 +194,15 @@ After seeding, runtime loading is 100% database-first:
 - `updated_at TEXT NOT NULL`
 
 ## Data Normalization Rules
+
 Character JSON files contained in `data/characters/` should be scrubbed using regular expressions or textual parsing to locate:
+
 - `Personality: [text]` -> moved to `NpcCard.personality`
 - `Background: [text]` / `Goals: [text]` -> moved to `NpcCard.scenario`
 - `Appearance: [text]` -> Extract and leave inside `NpcCard.description` alongside the general introduction text.
 
 ## Redmist Estate Map Topology
+
 The layout for the initial demo map features an Overworld with a single region (Redmist Mansion) comprising 5 distinct rooms:
 
 1. **Front Gates**: Connected North to `Entrance Hall`. Contains: `carla`.
@@ -195,10 +212,12 @@ The layout for the initial demo map features an Overworld with a single region (
 5. **Master Quarters**: Connected South to `Entrance Hall`. Contains: `lisette`.
 
 ## Implementation Requirements
+
 - Create `data/world/map.json`.
 - Modify `main.rs` to load the `.json` files from disk upon game boot (using `std::fs::read_to_string` and `serde_json`), deprecating the hardcoded "Aethelgard" mock data.
 
 ## Character Schema (PlayerCard and NpcCard)
+
 Both `PlayerCard` and `NpcCard` share this unified structure for narrative fields:
 
 ```json
@@ -216,6 +235,7 @@ Both `PlayerCard` and `NpcCard` share this unified structure for narrative field
 ```
 
 ### Image Field Usage
+
 - `profile_image`: Preferred for character profile display
 - `headshot_image`: Used for visual sidebar NPC portraits (2-column grid)
   - Falls back to `profile_image` if not set
@@ -223,6 +243,7 @@ Both `PlayerCard` and `NpcCard` share this unified structure for narrative field
 This schema allows the LLM Game Master to treat player and NPCs with equal granular detail.
 
 ## Room Schema (Current)
+
 Rooms in map.json have the following structure:
 
 ```json
@@ -238,6 +259,7 @@ Rooms in map.json have the following structure:
 ```
 
 ## NpcCard Schema (Current)
+
 ```json
 {
   "id": "string",
@@ -261,6 +283,7 @@ Rooms in map.json have the following structure:
 ```
 
 ## Trigger Schema (NEW)
+
 Attached to an NPC. Defines a condition and the narration to inject when that condition is met.
 
 ```json
@@ -272,6 +295,7 @@ Attached to an NPC. Defines a condition and the narration to inject when that co
 ```
 
 ### Fields
+
 - `condition`: The condition that must be true for this trigger to fire. Currently supports `TimesMet` with a comparison operator.
   - `TimesMet`: Array of `[operator, value]`. Operators: `Eq` (equal), `Lt` (less than), `Gte` (greater than or equal)
 - `action.narration_prompt`: The text injected into the continuation LLM prompt when this trigger fires
@@ -279,6 +303,7 @@ Attached to an NPC. Defines a condition and the narration to inject when that co
 - `room_id` (optional): If set, this trigger only fires when the player is in this room. If omitted or `null`, the trigger is global.
 
 ## NpcEncounterState Schema (NEW)
+
 Tracks character state for a specific NPC. Stored in `GameState.npc_encounter_log`.
 
 ```json
@@ -290,11 +315,13 @@ Tracks character state for a specific NPC. Stored in `GameState.npc_encounter_lo
 ```
 
 ### Fields
+
 - `times_met`: How many times the player has encountered this NPC
 - `trigger_fired`: Map of trigger index (usize) to boolean (whether that trigger has fired)
 - `currently_meeting`: Whether the player is currently in the same room/session as this NPC
 
 ## NpcEncounterLog Schema (NEW)
+
 Contains all NPC encounter state. Top-level field in `GameState`.
 
 ```json
@@ -304,9 +331,11 @@ Contains all NPC encounter state. Top-level field in `GameState`.
 ```
 
 ### Fields
+
 - `npcs`: Map of NPC ID to `NpcEncounterState`
 
 ## NpcEventType Schema (NEW)
+
 Enum representing NPC movement event types.
 
 ```json
@@ -314,10 +343,12 @@ Enum representing NPC movement event types.
 ```
 
 ### Variants
+
 - `Entered`: NPC transitioned from not being in the area to being in the area
 - `Left`: NPC transitioned from being in the area to not being in the area
 
 ## NpcEvent Schema (NEW)
+
 A single NPC movement event.
 
 ```json
@@ -328,6 +359,7 @@ A single NPC movement event.
 ```
 
 ## NpcEventList Schema (NEW)
+
 Collection of NPC movement events with confidence level. Returned by `compute_npc_events()`.
 
 ```json
@@ -341,10 +373,12 @@ Collection of NPC movement events with confidence level. Returned by `compute_np
 ```
 
 ### Fields
+
 - `events`: Array of `NpcEvent` objects
 - `confidence`: Confidence level (`High`, `Medium`, `Low`). Medium when events detected, Low when no events.
 
 ## Swipe Schema (NEW)
+
 A single alternative generation for a message. Stored in the `message_swipes` table.
 
 ```json
@@ -357,12 +391,14 @@ A single alternative generation for a message. Stored in the `message_swipes` ta
 ```
 
 ### Fields
+
 - `text`: The generated narrative text for this swipe
 - `snapshot_id`: Reference to the `GameStateSnapshot` that produced this text. Nullable for the initial swipe (no snapshot yet).
 - `location_header`: Location header associated with this swipe (if any)
 - `event_header`: Event header associated with this swipe (if any)
 
 ## Message Schema (Updated)
+
 Core narrative unit with swipe support.
 
 ```json
@@ -389,6 +425,7 @@ Core narrative unit with swipe support.
 ```
 
 ### Fields
+
 - `id`: Auto-incrementing message ID
 - `sender`: Optional sender name (None for narration, "Player" for input)
 - `text`: Active swipe text (hydrated from `swipes[active_swipe_index]`)
@@ -402,6 +439,7 @@ Core narrative unit with swipe support.
 - `swipes`: Array of all swipes for this message
 
 ## WorldCard Schema (NEW)
+
 Top-level world definition loaded from `data/worlds/*/world.json`.
 
 ```json
@@ -425,6 +463,7 @@ Top-level world definition loaded from `data/worlds/*/world.json`.
 ```
 
 ### Fields
+
 - `name`: Display name of the world
 - `description`: Lore and setting description for the Game Master
 - `global_rules`: Array of global behavioral rules injected into the system prompt

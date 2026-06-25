@@ -45,17 +45,20 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn context_for_world(&self, world_key: &str) -> Result<GameServiceContext, EngineError> {
+    pub fn context_for_world(
+        &self,
+        world_key: &str,
+        persona_key: &str,
+    ) -> Result<GameServiceContext, EngineError> {
         let world_with_map = self
             .storage
             .get_world(world_key)?
             .ok_or_else(|| EngineError::Config(format!("World not found: {world_key}")))?;
 
-        let player_key = &world_with_map.world_card.player_key;
         let player = self
             .storage
-            .get_persona(player_key)?
-            .ok_or_else(|| EngineError::Config(format!("Persona not found: {player_key}")))?;
+            .get_persona(persona_key)?
+            .ok_or_else(|| EngineError::Config(format!("Persona not found: {persona_key}")))?;
 
         let npcs = self.storage.list_characters(world_with_map.world_id)?;
         let npcs_map: HashMap<String, NpcCard> =
@@ -80,7 +83,7 @@ impl AppState {
             .storage
             .get_game(game_id)?
             .ok_or_else(|| EngineError::Config("No active game".to_string()))?;
-        self.context_for_world(&game.world_key)
+        self.context_for_world(&game.world_key, &game.persona_key)
     }
 
     pub fn current_cancel_token(&self) -> CancellationToken {

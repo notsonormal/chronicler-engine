@@ -6,7 +6,7 @@ use std::{fs, path::Path};
 use crate::error::EngineError;
 use crate::model::character::{NpcCard, PlayerCard};
 use crate::model::map::MapDef;
-use crate::model::world::{WorldCard, WorldManifest, derive_player_key};
+use crate::model::world::{WorldCard, WorldManifest};
 use crate::storage::Storage;
 
 pub(crate) fn read_json_file<T: serde::de::DeserializeOwned>(
@@ -27,10 +27,24 @@ pub(crate) fn read_json_file<T: serde::de::DeserializeOwned>(
 
 pub fn seed_game_data(storage: &Storage, data_dir: &std::path::Path) -> crate::error::Result<()> {
     let worlds_dir = data_dir.join("worlds");
-    if !worlds_dir.exists() {
-        return Ok(());
+    if worlds_dir.is_dir() {
+        seed_worlds(storage, data_dir, &worlds_dir)?;
     }
-    for entry in std::fs::read_dir(&worlds_dir)? {
+
+    let personas_dir = data_dir.join("personas");
+    if personas_dir.is_dir() {
+        seed_personas(storage, &personas_dir)?;
+    }
+
+    Ok(())
+}
+
+fn seed_worlds(
+    storage: &Storage,
+    data_dir: &std::path::Path,
+    worlds_dir: &std::path::Path,
+) -> crate::error::Result<()> {
+    for entry in std::fs::read_dir(worlds_dir)? {
         let entry = entry?;
         let world_dir = entry.path();
         if !world_dir.is_dir() {
@@ -52,7 +66,6 @@ pub fn seed_game_data(storage: &Storage, data_dir: &std::path::Path) -> crate::e
             }
         };
         let world_key = manifest.id.clone();
-        let player_key = derive_player_key(&manifest.player_file);
         let characters_dir = manifest.characters_dir.clone();
 
         let world_with_map = storage.get_world(&world_key)?;
@@ -66,13 +79,6 @@ pub fn seed_game_data(storage: &Storage, data_dir: &std::path::Path) -> crate::e
                 storage.seed_world(&world_card, &map)?
             }
         };
-
-        if storage.get_persona(&player_key)?.is_none() {
-            let player_path = data_dir.join("personas").join(format!("{player_key}.json"));
-            let player: PlayerCard = read_json_file(&player_path)?;
-            storage.seed_persona(&player_key, &player)?;
-            tracing::info!("Seeded persona: {player_key}");
-        }
 
         let chars_group = if characters_dir.is_empty() {
             world_key.as_str()
@@ -104,6 +110,30 @@ pub fn seed_game_data(storage: &Storage, data_dir: &std::path::Path) -> crate::e
                     }
                 }
             }
+        }
+    }
+    Ok(())
+}
+
+fn seed_personas(storage: &Storage, personas_dir: &std::path::Path) -> crate::error::Result<()> {
+    for entry in std::fs::read_dir(personas_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("json") {
+            continue;
+        }
+        let key = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_string();
+        if key.is_empty() {
+            continue;
+        }
+        if storage.get_persona(&key)?.is_none() {
+            let persona: PlayerCard = read_json_file(&path)?;
+            storage.seed_persona(&key, &persona)?;
+            tracing::info!("Seeded persona: {key}");
         }
     }
     Ok(())

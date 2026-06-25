@@ -14,7 +14,6 @@ pub fn create_test_state_with_map() -> GameState {
         key: "test".into(),
         name: "Test World".into(),
         description: "A test world".into(),
-        player_key: "player".into(),
         starting_room_id: "room1".into(),
         ..Default::default()
     });
@@ -61,7 +60,6 @@ pub fn create_test_state_with_trigger_npc() -> GameState {
         key: "test".into(),
         name: "Test World".into(),
         description: "A test world".into(),
-        player_key: "player".into(),
         starting_room_id: "room1".into(),
         ..Default::default()
     });
@@ -185,4 +183,24 @@ pub fn latest_snapshot(
     ctx: &chronicler_engine::application::GameServiceContext,
 ) -> Option<chronicler_engine::model::state_snapshot::GameStateSnapshot> {
     ctx.storage.load_latest_snapshot().unwrap_or(None)
+}
+
+/// Generic sync condition wait.
+/// Polls the condition until it returns true or timeout expires.
+pub fn wait_for_condition<F>(
+    timeout: std::time::Duration,
+    poll_interval: std::time::Duration,
+    condition: F,
+) -> bool
+where
+    F: Fn() -> bool,
+{
+    let start = std::time::Instant::now();
+    while start.elapsed() < timeout {
+        if condition() {
+            return true;
+        }
+        std::thread::sleep(poll_interval);
+    }
+    false
 }

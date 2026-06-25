@@ -7,18 +7,15 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Game {
     pub id: u64,
-    /// Display name of the world (denormalized for performance - avoids JOIN in queries)
     pub world_name: String,
-    /// Stable foreign key reference to the world (canonical identifier - use for lookups)
-    /// See ADR-025: Multi-World Data Foundation
     pub world_key: String,
+    pub persona_key: String,
+    pub persona_name: String,
     pub name: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
 
-/// Generate a unique game name following the pattern `{WorldName}_{Date}_N`.
-/// Finds the highest existing `N` for today's prefix and returns `N+1`.
 pub fn generate_game_name(world_name: &str, existing_names: &[String]) -> String {
     let date = Utc::now().format("%Y-%m-%d");
     let base = format!("{world_name}_{date}");

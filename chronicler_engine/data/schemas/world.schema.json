@@ -29,10 +29,6 @@
       "type": "string",
       "default": "map.json"
     },
-    "player_file": {
-      "type": "string",
-      "default": "player.json"
-    },
     "characters_dir": {
       "type": "string",
       "default": ""

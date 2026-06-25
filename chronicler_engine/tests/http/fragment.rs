@@ -9,8 +9,10 @@ use tower::util::ServiceExt;
 use chronicler_engine::TestAppBuilder;
 use chronicler_engine::model::state::{GenerationPhase, GenerationStatus, MessageType};
 use chronicler_engine::storage::{Operation, Storage, TestOverride};
+use chronicler_engine::test_support::TestPlayer;
 
 use super::test_helpers::fetch_body;
+use crate::TEST_PERSONA;
 
 #[tokio::test]
 async fn test_basic_fragments_return_html() {
@@ -185,9 +187,15 @@ async fn test_edit_history_handler_success() {
     let map = TestMap::single_room("start");
     storage.seed_world(&world, &map).unwrap();
     let player = TestPlayer::standard();
-    storage.seed_persona(&world.player_key, &player).unwrap();
+    storage.seed_persona(&player.key, &player).unwrap();
     let game_id = storage
-        .create_game(&world.name, &world.key, "Test Game")
+        .create_game(
+            &world.name,
+            &world.key,
+            &player.key,
+            &player.sheet.name,
+            "Test Game",
+        )
         .unwrap();
     storage.set_game_id(game_id);
 
@@ -354,7 +362,9 @@ async fn test_list_games_fragment_populated() {
         .uri("/games")
         .method(http::Method::POST)
         .header("Content-Type", "application/x-www-form-urlencoded")
-        .body(Body::from(format!("world_key={world_key}")))
+        .body(Body::from(format!(
+            "world_key={world_key}&persona_key={TEST_PERSONA}"
+        )))
         .unwrap();
     let response = app.clone().oneshot(req).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
@@ -363,7 +373,9 @@ async fn test_list_games_fragment_populated() {
         .uri("/games")
         .method(http::Method::POST)
         .header("Content-Type", "application/x-www-form-urlencoded")
-        .body(Body::from(format!("world_key={world_key}")))
+        .body(Body::from(format!(
+            "world_key={world_key}&persona_key={TEST_PERSONA}"
+        )))
         .unwrap();
     let response = app.clone().oneshot(req).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
@@ -392,7 +404,13 @@ async fn test_list_games_fragment_escapes_html() {
     let storage = Arc::new(Storage::new_in_memory());
 
     let _ = storage
-        .create_game("Test World", "Test World", "<script>alert('xss')</script>")
+        .create_game(
+            "Test World",
+            "Test World",
+            "test_player",
+            "Test Player",
+            "<script>alert('xss')</script>",
+        )
         .unwrap();
 
     let app = TestAppBuilder::default_test()
@@ -437,10 +455,16 @@ async fn test_create_game_handler() {
     map.overworld.regions[0].rooms[0].id = "start".to_string();
     storage.seed_world(&world, &map).unwrap();
     let player = chronicler_engine::test_support::TestPlayer::standard();
-    storage.seed_persona(&world.player_key, &player).unwrap();
+    storage.seed_persona(&player.key, &player).unwrap();
 
     let initial_game_id = storage
-        .create_game(&world.name, &world.key, "Initial Game")
+        .create_game(
+            &world.name,
+            &world.key,
+            &player.key,
+            &player.sheet.name,
+            "Initial Game",
+        )
         .unwrap();
     storage.set_game_id(initial_game_id);
 
@@ -454,7 +478,10 @@ async fn test_create_game_handler() {
         .uri("/games")
         .method(http::Method::POST)
         .header("Content-Type", "application/x-www-form-urlencoded")
-        .body(Body::from(format!("world_key={}", world.key)))
+        .body(Body::from(format!(
+            "world_key={}&persona_key={}",
+            world.key, player.key
+        )))
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
@@ -495,9 +522,15 @@ async fn test_switch_game_handler_success() {
     let map = TestMap::single_room("start");
     storage.seed_world(&world, &map).unwrap();
     let player = TestPlayer::standard();
-    storage.seed_persona(&world.player_key, &player).unwrap();
+    storage.seed_persona(&player.key, &player).unwrap();
     let initial_game_id = storage
-        .create_game(&world.name, &world.key, "Initial Game")
+        .create_game(
+            &world.name,
+            &world.key,
+            &player.key,
+            &player.sheet.name,
+            "Initial Game",
+        )
         .unwrap();
     storage.set_game_id(initial_game_id);
 
@@ -506,7 +539,13 @@ async fn test_switch_game_handler_success() {
         .build();
 
     let other_id = storage
-        .create_game("Test World", "Test World", "Test World_2026-01-01_1")
+        .create_game(
+            "Test World",
+            "Test World",
+            &player.key,
+            &player.sheet.name,
+            "Test World_2026-01-01_1",
+        )
         .unwrap();
     assert_ne!(other_id, storage.current_game_id());
 
@@ -549,15 +588,28 @@ async fn test_switch_game_handler_cross_world_allowed() {
     let mut world_b = chronicler_engine::test_support::TestWorld::minimal();
     world_b.key = "world_b".to_string();
     world_b.name = "World B".to_string();
-    world_b.player_key = "player_b".to_string();
     let map_b = chronicler_engine::test_support::TestMap::single_room("room_b");
     storage.seed_world(&world_b, &map_b).unwrap();
 
+    let player = TestPlayer::standard();
+    storage.seed_persona(&player.key, &player).unwrap();
     let game_a_id = storage
-        .create_game(&world_a.name, &world_a.key, "Game A")
+        .create_game(
+            &world_a.name,
+            &world_a.key,
+            &player.key,
+            &player.sheet.name,
+            "Game A",
+        )
         .unwrap();
     let game_b_id = storage
-        .create_game(&world_b.name, &world_b.key, "Game B")
+        .create_game(
+            &world_b.name,
+            &world_b.key,
+            &player.key,
+            &player.sheet.name,
+            "Game B",
+        )
         .unwrap();
 
     storage.set_game_id(game_a_id);
@@ -593,9 +645,15 @@ async fn test_delete_game_handler_success() {
     let map = TestMap::single_room("start");
     storage.seed_world(&world, &map).unwrap();
     let player = TestPlayer::standard();
-    storage.seed_persona(&world.player_key, &player).unwrap();
+    storage.seed_persona(&player.key, &player).unwrap();
     let initial_game_id = storage
-        .create_game(&world.name, &world.key, "Initial Game")
+        .create_game(
+            &world.name,
+            &world.key,
+            &player.key,
+            &player.sheet.name,
+            "Initial Game",
+        )
         .unwrap();
     storage.set_game_id(initial_game_id);
 
@@ -604,7 +662,13 @@ async fn test_delete_game_handler_success() {
         .build();
 
     let other_id = storage
-        .create_game("Test World", "Test World", "Test World_2026-01-01_1")
+        .create_game(
+            "Test World",
+            "Test World",
+            &player.key,
+            &player.sheet.name,
+            "Test World_2026-01-01_1",
+        )
         .unwrap();
     assert_ne!(other_id, storage.current_game_id());
 
@@ -626,10 +690,16 @@ async fn test_delete_game_handler_active_game() {
     let map = chronicler_engine::test_support::TestMap::single_room("start");
     storage.seed_world(&world, &map).unwrap();
     let player = chronicler_engine::test_support::TestPlayer::standard();
-    storage.seed_persona(&world.player_key, &player).unwrap();
+    storage.seed_persona(&player.key, &player).unwrap();
 
     let game_id = storage
-        .create_game(&world.name, &world.key, "Active Game")
+        .create_game(
+            &world.name,
+            &world.key,
+            &player.key,
+            &player.sheet.name,
+            "Active Game",
+        )
         .unwrap();
     storage.set_game_id(game_id);
 
@@ -690,21 +760,32 @@ async fn test_list_games_fragment_shows_world_badge() {
     let map_a = chronicler_engine::test_support::TestMap::single_room("start");
     storage.seed_world(&world_a, &map_a).unwrap();
     let player = chronicler_engine::test_support::TestPlayer::standard();
-    storage.seed_persona(&world_a.player_key, &player).unwrap();
+    storage.seed_persona(&player.key, &player).unwrap();
 
     let mut world_b = chronicler_engine::test_support::TestWorld::minimal();
     world_b.key = "world_b_test".to_string();
     world_b.name = "World B Test".to_string();
-    world_b.player_key = "player_b_test".to_string();
     let map_b = chronicler_engine::test_support::TestMap::single_room("start");
     storage.seed_world(&world_b, &map_b).unwrap();
-    storage.seed_persona(&world_b.player_key, &player).unwrap();
+    storage.seed_persona(&player.key, &player).unwrap();
 
     let _game_a = storage
-        .create_game(&world_a.name, &world_a.key, "Game A")
+        .create_game(
+            &world_a.name,
+            &world_a.key,
+            &player.key,
+            &player.sheet.name,
+            "Game A",
+        )
         .unwrap();
     let _game_b = storage
-        .create_game(&world_b.name, &world_b.key, "Game B")
+        .create_game(
+            &world_b.name,
+            &world_b.key,
+            &player.key,
+            &player.sheet.name,
+            "Game B",
+        )
         .unwrap();
 
     let app = TestAppBuilder::default_test()
@@ -743,7 +824,7 @@ async fn test_list_games_fragment_shows_new_game_form() {
     let map_a = chronicler_engine::test_support::TestMap::single_room("start");
     storage.seed_world(&world_a, &map_a).unwrap();
     let player = chronicler_engine::test_support::TestPlayer::standard();
-    storage.seed_persona(&world_a.player_key, &player).unwrap();
+    storage.seed_persona(&player.key, &player).unwrap();
 
     let app = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
@@ -773,7 +854,7 @@ async fn test_create_game_with_world_key() {
     let map_a = chronicler_engine::test_support::TestMap::single_room("start");
     storage.seed_world(&world_a, &map_a).unwrap();
     let player = chronicler_engine::test_support::TestPlayer::standard();
-    storage.seed_persona(&world_a.player_key, &player).unwrap();
+    storage.seed_persona(&player.key, &player).unwrap();
 
     let app = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
@@ -783,7 +864,10 @@ async fn test_create_game_with_world_key() {
         .uri("/games")
         .method(http::Method::POST)
         .header("Content-Type", "application/x-www-form-urlencoded")
-        .body(Body::from(format!("world_key={}", world_a.key)))
+        .body(Body::from(format!(
+            "world_key={}&persona_key={}",
+            world_a.key, player.key
+        )))
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
@@ -812,7 +896,7 @@ async fn test_create_game_with_invalid_world_key() {
     let map_a = chronicler_engine::test_support::TestMap::single_room("start");
     storage.seed_world(&world_a, &map_a).unwrap();
     let player = chronicler_engine::test_support::TestPlayer::standard();
-    storage.seed_persona(&world_a.player_key, &player).unwrap();
+    storage.seed_persona(&player.key, &player).unwrap();
 
     let app = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
@@ -822,12 +906,14 @@ async fn test_create_game_with_invalid_world_key() {
         .uri("/games")
         .method(http::Method::POST)
         .header("Content-Type", "application/x-www-form-urlencoded")
-        .body(Body::from("world_key=nonexistent_world"))
+        .body(Body::from(format!(
+            "world_key=nonexistent_world&persona_key={TEST_PERSONA}",
+        )))
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
     assert_eq!(
         response.status(),
-        StatusCode::INTERNAL_SERVER_ERROR,
-        "Should return error for non-existent world"
+        StatusCode::BAD_REQUEST,
+        "Should return bad_request for non-existent world"
     );
 }

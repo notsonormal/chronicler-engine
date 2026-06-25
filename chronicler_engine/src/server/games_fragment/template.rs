@@ -8,6 +8,12 @@ pub struct GameRowView {
     pub id: u64,
     pub name: String,
     pub world_name: String,
+    pub persona_name: String,
+}
+
+pub struct PersonaRowView {
+    pub key: String,
+    pub name: String,
 }
 
 #[derive(Template)]
@@ -22,6 +28,7 @@ pub struct GameRowView {
             <div class="active-game-info">
                 <span class="game-name">{{ game.name }}</span>
                 <span class="world-badge">{{ game.world_name }}</span>
+                <span class="persona-badge">{{ game.persona_name }}</span>
                 <span class="game-badge">Current</span>
             </div>
             <button class="btn-reset-small" hx-post="/reset" hx-confirm="Reset the current game? All progress will be lost." hx-swap="none" title="Reset game">&#x21bb;</button>
@@ -43,7 +50,21 @@ pub struct GameRowView {
                     <option value="{{ world.key }}" title="{{ world.description }}">{{ world.name }}</option>
                     {% endfor %}
                 </select>
-                <button type="submit" class="btn-primary">Start New Game</button>
+            </div>
+            <div class="form-row">
+                {% if personas.is_empty() %}
+                <div class="games-empty">No personas available. Create a persona first.</div>
+                {% else %}
+                <select name="persona_key" required>
+                    {% for p in personas %}
+                    <option value="{{ p.key }}">{{ p.name }}</option>
+                    {% endfor %}
+                </select>
+                {% endif %}
+            </div>
+            <div class="form-row">
+                <button type="submit" class="btn-primary"
+                    {% if personas.is_empty() %}disabled{% endif %}>Start New Game</button>
             </div>
         </form>
         {% endif %}
@@ -59,6 +80,7 @@ pub struct GameRowView {
             <div class="game-item" data-id="{{ game.id }}">
                 <span class="game-name">{{ game.name }}</span>
                 <span class="world-badge">{{ game.world_name }}</span>
+                <span class="persona-badge">{{ game.persona_name }}</span>
                 <div class="game-actions">
                     <button class="btn-primary" hx-post="/games/{{ game.id }}/switch" hx-swap="none">Switch</button>
                     <button class="btn-danger" hx-post="/games/{{ game.id }}/delete" hx-target="closest .game-item" hx-swap="outerHTML" hx-confirm="Delete this game? This cannot be undone.">Delete</button>
@@ -76,4 +98,5 @@ pub struct GamesPanelTemplate {
     pub active_game: Option<GameRowView>,
     pub saved_games: Vec<GameRowView>,
     pub worlds: Vec<WorldCard>,
+    pub personas: Vec<PersonaRowView>,
 }

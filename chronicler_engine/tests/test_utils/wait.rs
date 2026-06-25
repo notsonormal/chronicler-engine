@@ -263,3 +263,71 @@ pub async fn wait_for_status_ready_or_error(page: &playwright_rs::Page) -> Strin
     capture_failure_state(page, "wait_for_status_ready_or_error").await;
     final_text
 }
+
+/// Wait for an element to persist (exist continuously) for a duration
+/// Useful for verifying UI state survives polling cycles or time-based operations
+pub async fn wait_for_element_persist(
+    page: &playwright_rs::Page,
+    selector: &str,
+    duration: Duration,
+) -> bool {
+    let start = std::time::Instant::now();
+    let poll_interval = Duration::from_millis(200);
+    let mut exists_count = 0;
+    let mut check_count = 0;
+
+    while start.elapsed() < duration {
+        sleep(poll_interval).await;
+        check_count += 1;
+        let count = element_count(page, selector).await;
+        if count > 0 {
+            exists_count += 1;
+        } else {
+            return false; // Element disappeared during wait
+        }
+    }
+
+    // Element must exist in all checks
+    exists_count == check_count
+}
+
+/// Generic async condition wait
+/// Polls the condition until it returns true or timeout expires
+pub async fn wait_for_condition_async<F, Fut>(
+    timeout: Duration,
+    poll_interval: Duration,
+    condition: F,
+) -> bool
+where
+    F: Fn() -> Fut,
+    Fut: std::future::Future<Output = bool>,
+{
+    let start = std::time::Instant::now();
+    while start.elapsed() < timeout {
+        if condition().await {
+            return true;
+        }
+        sleep(poll_interval).await;
+    }
+    false
+}
+
+async fn element_count(page: &playwright_rs::Page, selector: &str) -> u32 {
+    page.locator(selector).await.count().await.unwrap_or(0) as u32
+}
+
+/// Generic sync condition wait (for std::thread tests)
+/// Polls the condition until it returns true or timeout expires
+pub fn wait_for_condition_sync<F>(timeout: Duration, poll_interval: Duration, condition: F) -> bool
+where
+    F: Fn() -> bool,
+{
+    let start = std::time::Instant::now();
+    while start.elapsed() < timeout {
+        if condition() {
+            return true;
+        }
+        std::thread::sleep(poll_interval);
+    }
+    false
+}

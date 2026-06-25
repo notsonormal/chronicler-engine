@@ -1,6 +1,4 @@
 //! Test application builder for HTTP and integration tests
-//!
-//! This module is test support code and is allowed to panic on errors.
 #![allow(clippy::expect_used)]
 
 use std::sync::{Arc, RwLock};
@@ -43,7 +41,6 @@ impl TestAppBuilder {
             key: "test".to_string(),
             name: "Test World".to_string(),
             description: "A test world".to_string(),
-            player_key: "player".to_string(),
             starting_room_id: "room_1".to_string(),
             scenarios: vec![crate::model::scenario::StartingScenario {
                 id: "test_intro".to_string(),
@@ -80,7 +77,7 @@ impl TestAppBuilder {
         };
 
         let player = PlayerCard {
-            key: "test-player".to_string(),
+            key: "test_player".to_string(),
             sheet: crate::model::character::CharacterSheet {
                 name: "Test Player".to_string(),
                 description: "A test player".to_string(),
@@ -230,25 +227,27 @@ impl TestAppBuilder {
             None => (Arc::new(Storage::new_in_memory()), true),
         };
 
-        // Seed world, map, and player into storage BEFORE moving into Arc
         let world_id = storage
             .seed_world(&self.world, &self.map)
             .expect("test setup: seed world");
         storage
-            .seed_persona(&self.world.player_key, &self.player)
+            .seed_persona(&self.player.key, &self.player)
             .expect("test setup: seed persona");
 
-        // Seed NPCs into storage
         for npc in &self.npcs {
             storage
                 .seed_character(world_id, npc)
                 .expect("test setup: seed character");
         }
 
-        // Create and set an active game so as_game_service_context() succeeds
-        // Always create a game to ensure context can be loaded (needed for tests with custom storage too)
         let game_id = storage
-            .create_game(&self.world.name, &self.world.key, "Test Game")
+            .create_game(
+                &self.world.name,
+                &self.world.key,
+                &self.player.key,
+                &self.player.sheet.name,
+                "Test Game",
+            )
             .expect("test setup: create game");
         storage.set_game_id(game_id);
 

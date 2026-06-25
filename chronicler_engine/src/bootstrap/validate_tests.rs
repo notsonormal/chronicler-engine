@@ -16,7 +16,6 @@ fn test_validate_loaded_data_success() {
         scenarios: vec![],
         default_scenario_id: None,
         default_room_image: None,
-        player_key: "".to_string(),
     };
     let map = TestMap::single_room("room_a");
     let player = TestPlayer::standard();
@@ -37,7 +36,6 @@ fn test_validate_loaded_data_missing_starting_room() {
         scenarios: vec![],
         default_scenario_id: None,
         default_room_image: None,
-        player_key: "".to_string(),
     };
 
     let map = TestMap::single_room("room_a");
@@ -66,7 +64,6 @@ fn test_validate_loaded_data_basic_manifest_succeeds() {
         scenarios: vec![],
         default_scenario_id: None,
         default_room_image: None,
-        player_key: "".to_string(),
     };
     let map = TestMap::single_room("room_a");
     let player = TestPlayer::standard();
@@ -131,7 +128,6 @@ fn test_validate_loaded_data_multiple_errors() {
         name: "Test".to_string(),
         description: "A test world".to_string(),
         starting_room_id: "missing".to_string(),
-        player_key: "player".to_string(),
         ..Default::default()
     };
 

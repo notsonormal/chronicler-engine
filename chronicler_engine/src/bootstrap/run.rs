@@ -59,13 +59,30 @@ pub fn run(args: Args) -> crate::error::Result<()> {
             }
         }
     };
+
     let world_id = world_with_map.world_id;
     let world_card = world_with_map.world_card;
     let map = world_with_map.map;
 
-    let player_key = world_card.player_key.clone();
-    let player = lookup_storage.get_persona(&player_key)?.ok_or_else(|| {
-        crate::error::EngineError::Config(format!("Persona '{player_key}' not found"))
+    let player = lookup_storage.get_persona(&args.persona)?.ok_or_else(|| {
+        crate::error::EngineError::Config(format!("Persona '{}' not found", args.persona))
+    })?;
+
+    let active_game_id = super::init_game::resolve_game_id(
+        &db_pool,
+        &world_card,
+        &args.persona,
+        &player.sheet.name,
+    )?;
+    let storage = Arc::new(crate::storage::Storage::new_sqlite(
+        db_pool.clone(),
+        active_game_id,
+    ));
+
+    let config = ServerConfig { port: args.port };
+
+    let runtime = tokio::runtime::Runtime::new().map_err(|e| {
+        crate::error::EngineError::Io(format!("runtime_new {}: {e}", "tokio_runtime"))
     })?;
 
     let npcs = lookup_storage.list_characters(world_id)?;
@@ -74,12 +91,6 @@ pub fn run(args: Args) -> crate::error::Result<()> {
     let map_arc = Arc::new(map);
     let player_arc = Arc::new(player.clone());
     let npcs_map: HashMap<_, _> = npcs.into_iter().map(|n| (n.id.clone(), n)).collect();
-
-    let active_game_id = super::init_game::resolve_game_id(&db_pool, &world_arc)?;
-    let storage = Arc::new(crate::storage::Storage::new_sqlite(
-        db_pool.clone(),
-        active_game_id,
-    ));
 
     let state =
         super::init_game::load_game_state(&storage, &world_arc, &map_arc, &player_arc, &npcs_map)?;
@@ -111,12 +122,6 @@ pub fn run(args: Args) -> crate::error::Result<()> {
         crate::settings::load_settings(&storage).unwrap_or_else(|_| AppSettings::default())
     };
     let settings = Arc::new(RwLock::new(settings));
-
-    let config = ServerConfig { port: args.port };
-
-    let runtime = tokio::runtime::Runtime::new().map_err(|e| {
-        crate::error::EngineError::Io(format!("runtime_new {}: {e}", "tokio_runtime"))
-    })?;
 
     super::init_game::spawn_arrival_task_if_needed(
         &runtime,

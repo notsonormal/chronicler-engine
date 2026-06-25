@@ -25,6 +25,8 @@ fn with_settings<T>(settings: &Arc<RwLock<AppSettings>>, f: impl FnOnce(&AppSett
 pub(crate) fn resolve_game_id(
     db_pool: &crate::storage::db::DbPool,
     world: &WorldCard,
+    persona_key: &str,
+    persona_name: &str,
 ) -> crate::error::Result<u64> {
     match find_latest_game_for_world(db_pool, &world.key)? {
         Some((id, name)) => {
@@ -34,16 +36,9 @@ pub(crate) fn resolve_game_id(
         None => {
             let existing_names = list_game_names_for_world(db_pool, &world.key)?;
             let name = crate::model::game::generate_game_name(&world.name, &existing_names);
-            let conn = db_pool.conn();
-            let now = chrono::Utc::now().to_rfc3339();
-            // NOTE: This INSERT must match Storage::create_game() column list (games.rs:61)
-            conn.execute(
-                "INSERT INTO games (world_name, world_key, name, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?4)",
-                rusqlite::params![&world.name, &world.key, &name, &now],
-            )
-            .map_err(|e| crate::error::EngineError::Config(format!("Failed to create game: {e}")))?;
-            let id = conn.last_insert_rowid() as u64;
-            tracing::info!("Created new game '{name}' (id={id})");
+            let id =
+                db_pool.insert_game(&world.name, &world.key, persona_key, persona_name, &name)?;
+            tracing::info!("Created new game '{name}' (id={id}) with persona '{persona_key}'");
             Ok(id)
         }
     }

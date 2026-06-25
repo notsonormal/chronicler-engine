@@ -1,12 +1,15 @@
 # Specification: Core Architecture (Modular)
 
 ## Objective
+
 Establish a domain-driven modular architecture for the Chronicler Engine. This structure separates core data models, game mechanics, application orchestration, narrative processing, and user interface logic.
 
 ## Module Domains
 
 ### 1. The Model Tier (`crate::model::*`)
+
 Contains pure data structures, serialization schemas, and the "Single Source of Truth" for game state. This tier has zero knowledge of the UI or LLM logic.
+
 - **`world`**: Setting lore, global rules, and starting scenarios.
 - **`map`**: Room/Region hierarchy and cardinal direction definitions.
 - **`character`**: NPC attributes (name, description, personality, scenario, **profile_image**, **headshot_image**) and Player inventory. `inventory` lives on `PlayerCard`/`NpcCard`, not on the shared `CharacterSheet`.
@@ -21,7 +24,9 @@ Contains pure data structures, serialization schemas, and the "Single Source of 
 - **`state_snapshot`**: `GameStateSnapshot` for SQLite persistence. Snapshots are standalone state blobs with an auto-increment `id`. Each message stores `snapshot_id` referencing the snapshot saved after it was created.
 
 ### 2. The Engine Tier (`crate::engine::*`)
+
 Contains the mechanics that drive the simulation. It translates user intent and state into outcomes.
+
 - **`parser`**: Command wrapping — all input becomes `Action::FreeAction(String)`.
 - **`action`**: The `Action` enum defining all supported system intents.
 - **`logic`**: Rules for movement, fuzzy-matching, and room resolution.
@@ -30,7 +35,9 @@ Contains the mechanics that drive the simulation. It translates user intent and 
 - **`state_diagnostics`**: Runtime invariant checks (`INV-ROOM`, `INV-NPC`, `INV-CHAR`, `INV-LOG`), feature-flagged via `diagnostics` feature.
 
 ### 2.5. The Application Tier (`crate::application::*`)
+
 Orchestration layer that coordinates game flow, persistence, and LLM generation. Sits between the HTTP server and the pure simulation engine.
+
 - **`context`**: Shared infrastructure for game service operations.
   - `GameServiceContext`: Storage (unified SQLite/in-memory/test backend), preset storage, world/map/player/npc references, cancellation token, settings.
   - `context.rs`: Shared persistence helpers (`load_or_fresh`, `load_expecting_valid_state`, `save_state`, `save_message_and_snapshot`, `map_llm_error`). Cross-storage coordination helpers (`load_messages`, `update_message_text`, `load_state_for_test`, `migrate_swipes`).
@@ -47,7 +54,9 @@ Orchestration layer that coordinates game flow, persistence, and LLM generation.
 - **`application_service`**: Thin orchestrator struct (`DefaultApplicationService`) delegating to submodules. Contains `process_action` entry point with self-healing stale-`Generating` detection and `GenerationGuard` RAII helper for `is_generating` flag cleanup. `ApplicationError::is_user_displayable()` enables type-driven error branching — validation errors and `WorldHasGames` domain constraints are inline-displayable; engine errors use `app_err_to_response()`.
 
 ### 3. The Narrative Tier (`crate::narrative::*`)
+
 The interface between the synchronous engine and stochastic LLM generation.
+
 - **`llm`**: Directory module with traits (`LlmBackend`) and per-provider implementations (OpenRouter, DeepSeek, Ollama, Mock) for Game Master narration. The `LlmBackend` trait exposes transport primitives: `model()`, `name()`, `save_message()`, `wrap_and_save()`, `narrate_continuation()`, `complete()`. Backend-specific preprocessing (`preprocess_user_text`) and postprocessing (`postprocess_response_text`) hooks allow model-specific hacks (e.g., Gemma 4 thinking suffix, response sanitization) to live in the provider modules instead of the generic HTTP client.
   - **`get_llm_backend_for(connection, storage, settings)`**: Create a backend for a specific `Connection` profile. Settings are passed in — no file I/O inside the backend.
   - **`DefaultGameService::with_storage(storage, settings)`**: Production constructor that receives pre-loaded settings.
@@ -82,6 +91,7 @@ When `Left` fires: `currently_meeting = false`
 **times_met semantics**: Only increments on `Entered` (first encounter or NPC rejoins after leaving). Not on continuous presence across turns.
 
 ### 4. The Server Tier (`crate::server::*`)
+
 The HTTP layer for the HTMX web dashboard with polling-based real-time updates.
 
 **Layer Boundary:** The server tier must never access `GameState` directly. All reads go through the `ApplicationService` trait (`get_story_log_entries`, `get_input_status`, `get_current_room_view`, `get_npc_headshots`, `get_debug_state_view`, etc.). All writes go through `ApplicationService` command methods (`process_action`, `retry`, `reset`, etc.). This keeps the HTTP layer decoupled from domain state structure.
@@ -89,6 +99,7 @@ The HTTP layer for the HTMX web dashboard with polling-based real-time updates.
 **Context Loading Pattern (ADR-025):** `AppState::as_game_service_context()` loads world context on-demand from DB based on active game's `world_key`. All handlers MUST propagate errors — never silently swallow with defaults. Use `ctx_or_error()` helper in `renderers.rs` to avoid repeating error handling boilerplate.
 
 **`mod`**: Axum router, request handlers, `AppState`, `run_server_with_config`. Test constructors (`create_app_for_testing`, `create_app_for_testing_with_settings`) live in `test_support/test_app_builder.rs`.
+
 - **`fragments`**: HTML fragment generators for HTMX partial updates. Split into submodules:
   - **`actions`**: Action form handlers and renderers
   - **`endpoints`**: HTMX fragment endpoints (`/fragment/story-log`, `/fragment/visual-sidebar`, etc.)
@@ -96,10 +107,10 @@ The HTTP layer for the HTMX web dashboard with polling-based real-time updates.
   - **`history`**: History editing, deletion, and retry endpoints
   - **`misc`**: Utility endpoints (status, hints, text check)
   - **`renderers`**: HTML rendering helpers, markdown→HTML via `pulldown-cmark`. Exports `ctx_or_error()` helper for consistent context loading.
-- **`games_fragment`**: Game management sub-module (moved from `fragments/games`). Handles the Games panel (formerly "Save / Load") with three vertical sections: Active Game (with inline reset button), New Game (always-visible form with world dropdown), and Saved Games. Game switching, deletion, and reset. Endpoints: `/fragment/games` (list), `/games` (create with `world_key` form param), `/games/:id/switch`, `/games/:id/delete`.
+- **`games_fragment`**: Game management sub-module (moved from `fragments/games`). Handles the Games panel (formerly "Save / Load") with three vertical sections: Active Game (with inline reset button), New Game (always-visible form with world dropdown **and persona dropdown per ADR-026**), and Saved Games. Game switching, deletion, and reset. Endpoints: `/fragment/games` (list), `/games` (create with `world_key` + `persona_key` form params), `/games/:id/switch`, `/games/:id/delete`. Reset is the top-level `POST /reset` (renames/recreates the active game).
 - **`settings_fragment`**: Settings panel fragment handlers and template rendering.
 - **`prompt_presets_fragment`**: Prompt Presets panel with two independent collections (System, Quantifier). Supports CRUD operations, active selection, and protected default presets.
-- **`worlds_fragment`**: Worlds management panel for multi-world orchestration. Supports CRUD operations on worlds including map/scenario definitions, persona assignment, and game count validation. Handlers: `list_worlds_fragment`, `new_world_form_handler`, `edit_world_form_handler`, `create_world_handler`, `update_world_handler`, `delete_world_handler`, `list_personas_fragment`. Uses HTMX inline swaps (no modal) — Create/Edit buttons replace the `.worlds-panel` content; Cancel button returns to list.
+- **`worlds_fragment`**: Worlds management panel for multi-world orchestration. Supports CRUD operations on worlds including map/scenario definitions and game count validation. Persona selection moved to `games_fragment` per ADR-026. Handlers: `list_worlds_fragment`, `new_world_form_handler`, `edit_world_form_handler`, `create_world_handler`, `update_world_handler`, `delete_world_handler`. Uses HTMX inline swaps (no modal) — Create/Edit buttons replace the `.worlds-panel` content; Cancel button returns to list.
 - **`view_models`**: View model structs that decouple templates from domain types.
   - `view_models.rs`: `MessageEntryView`, `LlmMessageView`, `PreviewIssueView`, `ActionAreaViewModel`, `VisualSidebarViewModel`, `NpcPortraitView`, and `SafeHtml` / `markdown_to_html`.
   - Domain-to-view mapping lives here; `templates.rs` focuses purely on HTML.
@@ -109,6 +120,7 @@ The HTTP layer for the HTMX web dashboard with polling-based real-time updates.
 - **`debug`**: Dev diagnostic endpoint (`/debug/state`).
 
 ### 5. The Settings Tier (`crate::settings` + `crate::model::settings`)
+
 DB-backed settings system for LLM configuration with reusable connection profiles (seeded from JSON at startup).
 
 | Component | Purpose |
@@ -169,40 +181,51 @@ Each `Connection` contains: `id`, `name`, `provider`, `model`, `api_key` (option
 - `LLM_BACKEND` env var is **not** consulted (settings file is sole source of truth)
 
 ### 5.5. The Storage Tier (`crate::storage`) — World Seeding & Loading
+
 Seed-once, load-from-DB pattern for worlds, personas, and characters. See [`system/storage.md`](../system/storage.md) for the full specification.
 
 ### 6. The Error Tier (`crate::error`)
+
 Unified error type shared across all tiers.
+
 - **`EngineError`**: Top-level error enum (`Llm`, `Narrative`, `Internal`, `Io`, `Serde`, `Parse`, `Serialize`, `Navigation`, `RoomNotFound`, `NpcNotFound`, `WorldNotFound`, `WorldHasGames`, `Config`, `Template`, `DataLoad`, `ContextOverflow`)
 - **`LlmFailure`**: LLM-specific errors (`EmptyResponse`, `Http`, `Network`, `ParseError`, `Timeout`)
 - **`NarrativeFailure`**: Prompt build and generation failures
 - **`InternalError`**: Invariant violations
 
 ### 7. The Storage Tier (`crate::storage`)
+
 Unified `Storage` struct with `Backend` enum (`Sqlite`, `InMemory`, `Test`). All table operations are methods on `Storage` — no repository structs or trait objects. Schema lives in `src/storage/db.rs`; backend CRUD modules in `src/storage/backend/` (one file per table). See [`system/storage.md`](../system/storage.md) for design decisions, seeding pattern, module boundaries, and testing strategy.
 
 ### 8. The Bootstrap Tier (`crate::bootstrap`)
+
 World seeding, validation, and server initialization.
+
 - **`load`**: Game data seeding from JSON files (idempotent, file I/O only during seeding) — `ensure_presets()`, `seed_game_data()`
 - **`validate`**: World data validation (rooms, NPCs, triggers)
 - **`scenario`**: Starting scenario selection
 - **`logging`**: Structured logging setup
 - **`run`**: Server initialization and startup. Thin orchestrator that delegates to `init_game` for game state setup and arrival narration.
-- **`init_game`**: Game state initialization — `resolve_game_id()`, `load_game_state()`, `spawn_arrival_task_if_needed()`. Includes `ArrivalTaskContext` for background arrival narration with stored `Connection` for correct LLM backend selection.
+- **`init_game`**: Game state initialization — `resolve_game_id()` (auto-creates a game for the requested world using the `--persona` CLI flag when none exists), `load_game_state()`, `spawn_arrival_task_if_needed()`. Includes `ArrivalTaskContext` for background arrival narration with stored `Connection` for correct LLM backend selection.
 - **`state.rs`**: Fresh game state initialization (`build_fresh_initial_state`)
 
 ### 9. The CLI Tier (`crate::cli`)
+
 Command-line argument parsing via `clap`.
-- **`Cli`**: CLI args struct (`--world`, `--port`, etc.)
+
+- **`Cli`**: CLI args struct (`--world`, `--persona`, `--port`, etc.)
 
 ### 10. The Test Support Tier (`crate::test_support`)
+
 Shared test fixtures and utilities.
+
 - **`fixtures`**: Test GameState, Npc, Map helpers
 - **`context`**: Test context builders
 - **`forensics`**: `ForensicsCollector` for capturing tracing spans/events on test failure with automatic JSON serialization and sensitive field redaction
 - **`test_app_builder`**: Fluent test app builder API
 
 ### 11. Test Binaries (`tests/`)
+
 Each `[[test]]` in `Cargo.toml` compiles an independent test binary.
 
 | Binary | Path | Count | Purpose |
@@ -238,6 +261,7 @@ The following concerns are documented in dedicated `docs/system/` files. Those a
 ||| Prompt layers, token budgets, prompt composition | [`system/prompt_system.md`](../system/prompt_system.md) |
 ||| Dynamic room creation, fallback behavior | [`system/dynamic_rooms.md`](../system/dynamic_rooms.md) |
 ||| Storage design, seeding, backend enum | [`system/storage.md`](../system/storage.md) |
+
 ## Error Strategy
 
 A unified error type (`crate::error::EngineError`) is shared across all tiers for consistent error propagation — from data loading through LLM failures to HTTP responses. See `src/error.rs` for the full variant list.

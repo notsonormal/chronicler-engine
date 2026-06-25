@@ -1,6 +1,44 @@
+use crate::bootstrap::init_game::resolve_game_id;
 use crate::bootstrap::run::{ensure_presets, find_latest_game_for_world, list_game_names_for_world};
 use crate::model::prompt_preset::PresetType;
 use crate::storage::Storage;
+#[test]
+fn resolve_game_id_auto_creates_with_persona() {
+    let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
+
+    let world = crate::model::world::WorldCard {
+        key: "redmist_estate".to_string(),
+        name: "Redmist Estate".to_string(),
+        description: String::new(),
+        starting_room_id: "gates".to_string(),
+        scenarios: vec![],
+        ..Default::default()
+    };
+
+    let game_id = resolve_game_id(&db_pool, &world, "julian", "Julian").unwrap();
+    assert!(game_id > 0);
+
+    let (world_key, persona_key, persona_name): (String, String, String) = db_pool
+        .conn()
+        .query_row(
+            "SELECT world_key, persona_key, persona_name FROM games WHERE id = ?1",
+            rusqlite::params![game_id as i64],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .unwrap();
+    assert_eq!(world_key, "redmist_estate");
+    assert_eq!(persona_key, "julian");
+    assert_eq!(persona_name, "Julian");
+
+    let again = resolve_game_id(&db_pool, &world, "julian", "Julian").unwrap();
+    assert_eq!(again, game_id);
+
+    let count: i64 = db_pool
+        .conn()
+        .query_row("SELECT COUNT(*) FROM games", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(count, 1, "Second call should not create a duplicate game");
+}
 #[test]
 fn test_find_latest_game_for_world_uses_message_timestamp() {
     let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
@@ -113,7 +151,6 @@ fn test_restart_with_existing_game_does_not_duplicate_scenario() {
         name: "TestWorld".to_string(),
         description: "A test world".to_string(),
         starting_room_id: "start".to_string(),
-        player_key: "player".to_string(),
         scenarios: vec![crate::model::scenario::StartingScenario {
             id: "intro".to_string(),
             name: "Introduction".to_string(),

@@ -3,16 +3,13 @@ use chronicler_engine::model::state_snapshot::GameStateSnapshot;
 use chronicler_engine::storage::Storage;
 use chronicler_engine::storage::db::DbPool;
 
-use crate::fixtures::create_test_state;
-
+use crate::fixtures::{create_test_state, create_test_storage};
 fn create_storage() -> Storage {
-    let pool = DbPool::new(":memory:").expect("in-memory db should open");
-    Storage::new_sqlite(pool, 1)
+    create_test_storage(1)
 }
 
 fn create_game_storage() -> Storage {
-    let pool = DbPool::new(":memory:").expect("in-memory db should open");
-    Storage::new_sqlite(pool, 1)
+    create_test_storage(1)
 }
 
 fn create_snapshot() -> GameStateSnapshot {
@@ -98,9 +95,9 @@ fn test_save_creates_new_snapshot() {
 #[test]
 fn test_row_to_snapshot_bad_json() {
     let pool = DbPool::new(":memory:").expect("in-memory db should open");
+    chronicler_engine::test_support::seed_default_game_row(&pool, 1).unwrap();
     {
         let conn = pool.conn();
-        // Insert a row with invalid JSON in the movement column
         conn.execute(
             "INSERT INTO game_state_snapshots
              (game_id, movement, narrative, scene, npc_encounter_log, created_at)
@@ -125,6 +122,7 @@ fn test_row_to_snapshot_bad_json() {
 #[test]
 fn test_row_to_snapshot_bad_date() {
     let pool = DbPool::new(":memory:").expect("in-memory db should open");
+    chronicler_engine::test_support::seed_default_game_row(&pool, 1).unwrap();
     {
         let conn = pool.conn();
         conn.execute(
@@ -141,14 +139,18 @@ fn test_row_to_snapshot_bad_date() {
     assert!(result.is_err(), "loading bad date should return an error");
 }
 
-// �"?�"?�"? Game CRUD �"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?
-
 #[test]
 fn test_create_and_get_game() {
     let storage = create_game_storage();
 
     let game_id = storage
-        .create_game("test_world", "test_world", "My Game")
+        .create_game(
+            "test_world",
+            "test_world",
+            "test_player",
+            "Test Player",
+            "My Game",
+        )
         .unwrap();
     assert!(game_id > 0, "create_game should return a positive id");
 
@@ -172,8 +174,12 @@ fn test_list_games() {
     let storage = create_game_storage();
     let initial = storage.list_games().unwrap().len();
 
-    let id_a = storage.create_game("world_a", "world_a", "Game A").unwrap();
-    let id_b = storage.create_game("world_b", "world_b", "Game B").unwrap();
+    let id_a = storage
+        .create_game("world_a", "world_a", "test_player", "Test Player", "Game A")
+        .unwrap();
+    let id_b = storage
+        .create_game("world_b", "world_b", "test_player", "Test Player", "Game B")
+        .unwrap();
 
     let games = storage.list_games().unwrap();
     assert_eq!(
@@ -194,14 +200,18 @@ fn test_delete_game_cascades() {
     let msg_storage = Storage::new_sqlite(pool, 1);
 
     let game_id = storage
-        .create_game("test_world", "test_world", "To Delete")
+        .create_game(
+            "test_world",
+            "test_world",
+            "test_player",
+            "Test Player",
+            "To Delete",
+        )
         .unwrap();
 
-    // Switch to the new game before saving data
     storage.set_game_id(game_id);
     msg_storage.set_game_id(game_id);
 
-    // Save a snapshot and message for this game
     storage.save_snapshot(&create_snapshot()).unwrap();
     let msg = Message::new(
         Some("Player".to_string()),
@@ -228,8 +238,6 @@ fn test_delete_game_cascades() {
     );
 }
 
-// �"?�"?�"? Game ID Switching �"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?
-
 #[test]
 fn test_set_game_id_isolates_snapshots() {
     let pool = DbPool::new(":memory:").expect("in-memory db should open");
@@ -237,31 +245,27 @@ fn test_set_game_id_isolates_snapshots() {
     let storage = Storage::new_sqlite(pool, 1);
 
     let game_a = game_storage
-        .create_game("world_a", "world_a", "Game A")
+        .create_game("world_a", "world_a", "test_player", "Test Player", "Game A")
         .unwrap();
     let game_b = game_storage
-        .create_game("world_b", "world_b", "Game B")
+        .create_game("world_b", "world_b", "test_player", "Test Player", "Game B")
         .unwrap();
 
-    // Save snapshot for game_a (current default game_id is 1, not game_a)
     storage.set_game_id(game_a);
     let id_a = storage.save_snapshot(&create_snapshot()).unwrap();
 
-    // Save snapshot for game_b
     storage.set_game_id(game_b);
     let id_b = storage.save_snapshot(&create_snapshot()).unwrap();
 
-    // Load latest for game_b
     let latest_b = storage.load_latest_snapshot().unwrap().unwrap();
     assert_eq!(latest_b.db_id, Some(id_b));
 
-    // Switch back to game_a
     storage.set_game_id(game_a);
     let latest_a = storage.load_latest_snapshot().unwrap().unwrap();
     assert_eq!(latest_a.db_id, Some(id_a));
 
-    // game_id 1 (default) should have no snapshots
-    storage.set_game_id(1);
+    // game_id 999 (never used) should have no snapshots
+    storage.set_game_id(999);
     assert!(
         storage.load_latest_snapshot().unwrap().is_none(),
         "default game_id should have no snapshots"
@@ -277,11 +281,10 @@ fn test_current_game_id() {
     assert_eq!(storage.current_game_id(), 42);
 }
 
-// �"?�"?�"? Message Storage �"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?
-
 #[test]
 fn test_insert_and_load_messages() {
     let pool = DbPool::new(":memory:").expect("in-memory db should open");
+    chronicler_engine::test_support::seed_default_game_row(&pool, 1).unwrap();
     let msg_repo = Storage::new_sqlite(pool, 1);
 
     let msg = Message::new(
@@ -302,6 +305,7 @@ fn test_insert_and_load_messages() {
 #[test]
 fn test_get_and_update_active_swipe_index() {
     let pool = DbPool::new(":memory:").expect("in-memory db should open");
+    chronicler_engine::test_support::seed_default_game_row(&pool, 1).unwrap();
     let msg_repo = Storage::new_sqlite(pool, 1);
 
     let msg = Message::new(
@@ -321,6 +325,7 @@ fn test_get_and_update_active_swipe_index() {
 #[test]
 fn test_delete_message() {
     let pool = DbPool::new(":memory:").expect("in-memory db should open");
+    chronicler_engine::test_support::seed_default_game_row(&pool, 1).unwrap();
     let msg_repo = Storage::new_sqlite(pool, 1);
 
     let msg = Message::new(
@@ -347,8 +352,6 @@ fn test_load_messages_empty() {
         "load_message_rows should return empty vec when no messages"
     );
 }
-
-// �"?�"?�"? Edge Cases �"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?
 
 #[test]
 fn test_load_latest_no_snapshots() {

@@ -111,15 +111,20 @@ async fn test_async_action_saves_input_to_story_log_with_sqlite() {
     let db_pool = DbPool::new(db_path.to_str().unwrap()).unwrap();
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
 
-    // Seed world and game manually since we're passing custom storage
     use chronicler_engine::test_support::{TestWorld, TestMap, TestPlayer};
     let world = TestWorld::minimal();
     let map = TestMap::single_room("start");
     storage.seed_world(&world, &map).unwrap();
     let player = TestPlayer::standard();
-    storage.seed_persona(&world.player_key, &player).unwrap();
+    storage.seed_persona(&player.key, &player).unwrap();
     let game_id = storage
-        .create_game(&world.name, &world.key, "Test Game")
+        .create_game(
+            &world.name,
+            &world.key,
+            &player.key,
+            &player.sheet.name,
+            "Test Game",
+        )
         .unwrap();
     storage.set_game_id(game_id);
 
@@ -137,7 +142,6 @@ async fn test_async_action_saves_input_to_story_log_with_sqlite() {
     let response = app.clone().oneshot(req).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
 
-    // Poll story log until input entry appears (async action writes to DB in background)
     let mut found_input = false;
     for _attempt in 0..50 {
         let req = Request::builder()

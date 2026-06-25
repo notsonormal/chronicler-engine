@@ -7,6 +7,7 @@ use crate::storage::db::DbPool;
 
 fn sqlite_storage() -> Storage {
     let pool = DbPool::new(":memory:").unwrap();
+    crate::test_support::seed_default_game_row(&pool, 1).unwrap();
     Storage::new_sqlite(pool, 1)
 }
 
@@ -115,7 +116,6 @@ fn test_world_data(id: &str, name: &str) -> (WorldCard, MapDef) {
         key: id.to_string(),
         name: name.to_string(),
         description: "Test description".to_string(),
-        player_key: "player".to_string(),
         ..Default::default()
     };
 

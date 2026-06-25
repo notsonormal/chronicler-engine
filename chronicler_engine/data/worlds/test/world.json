@@ -8,7 +8,6 @@
     ],
     "starting_room_id": "start",
     "map_file": "map.json",
-    "player_file": "test_player.json",
     "characters_dir": "test",
     "scenarios": [
         {

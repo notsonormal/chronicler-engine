@@ -379,6 +379,7 @@ fn test_retry_no_pre_main_snapshot() {
     state.narrative.history.clear();
 
     let db_pool = chronicler_engine::storage::db::DbPool::new(":memory:").unwrap();
+    chronicler_engine::test_support::seed_default_game_row(&db_pool, 1).unwrap();
     let storage = Arc::new(chronicler_engine::storage::Storage::new_sqlite(
         db_pool.clone(),
         1,

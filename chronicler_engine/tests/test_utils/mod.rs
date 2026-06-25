@@ -7,10 +7,13 @@ pub mod server;
 pub mod settings_guard;
 pub mod wait;
 
+#[allow(unused_imports)]
 pub use browser::*;
 #[allow(unused_imports)]
 pub use server::*;
+#[allow(unused_imports)]
 pub use wait::*;
 
 pub const TEST_WORLD: &str = "test";
+pub const TEST_PERSONA: &str = "test_player";
 pub const CONFIG_PATH: &str = "tests/test_config.json";

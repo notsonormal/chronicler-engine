@@ -21,7 +21,6 @@ pub struct WorldForm {
     pub description: String,
     pub global_rules: String, // One rule per line
     pub starting_room_id: Option<String>,
-    pub player_key: String,
     pub default_room_image: Option<String>,
     pub map_json: String,
     pub scenarios_json: String,
@@ -51,7 +50,6 @@ impl WorldForm {
             scenarios,
             default_scenario_id: None,
             default_room_image: self.default_room_image.filter(|s| !s.is_empty()),
-            player_key: self.player_key,
         };
 
         Ok((world_card, map))
@@ -122,22 +120,8 @@ pub async fn create_world_handler(
     }
 }
 
-pub async fn new_world_form_handler(State(state): State<AppState>) -> Response<axum::body::Body> {
-    let ctx = match state.as_game_service_context() {
-        Ok(c) => c,
-        Err(e) => return internal_error(format!("Failed to load context: {e}")),
-    };
-
-    let personas = match state.application_service.list_personas(ctx) {
-        Ok(p) => p,
-        Err(e) => {
-            tracing::warn!("Failed to load personas: {e}");
-            Vec::new()
-        }
-    };
-
-    let html = render_world_edit_form(None, None, &[], &personas);
-    ok(html)
+pub async fn new_world_form_handler(State(_state): State<AppState>) -> Response<axum::body::Body> {
+    ok(render_world_edit_form(None, None, &[]))
 }
 
 pub async fn edit_world_form_handler(
@@ -155,19 +139,10 @@ pub async fn edit_world_form_handler(
         Err(e) => return internal_error(format!("Failed to load world: {e}")),
     };
 
-    let personas = match state.application_service.list_personas(ctx) {
-        Ok(p) => p,
-        Err(e) => {
-            tracing::warn!("Failed to load personas: {e}");
-            Vec::new()
-        }
-    };
-
     let html = render_world_edit_form(
         Some(&world_with_map.world_card),
         Some(&world_with_map.map),
         &world_with_map.world_card.scenarios,
-        &personas,
     );
     ok(html)
 }

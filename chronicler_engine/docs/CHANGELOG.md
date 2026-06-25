@@ -1,5 +1,46 @@
 # Changelog
 
+## 2026-06-25
+
+### Changed
+
+- **ADR-026 follow-up quality fixes** — Addressed thermo-nuclear review findings on the persona-relocation diff. Plan: `docs/plans/archived/adr-026-followup-quality-fixes.md`.
+  - **`DbPool::insert_game` helper**: Single source of truth for the `games` INSERT column list. `Storage::create_game` (sqlite branch) and `bootstrap::init_game::resolve_game_id` both reuse it instead of duplicating the INSERT.
+  - **`PersonaRowView`**: `GamesPanelTemplate.personas` changed from `Vec<PlayerCard>` to `Vec<PersonaRowView { key, name }`, removing the `.sheet.name` template reach-through. `games_fragment/template.rs` drops its `PlayerCard` import; `list_games_fragment` maps at the handler boundary.
+  - **`run_migrations` visibility reverted** to private `fn` (was `pub(crate)` solely for unused test-support access).
+  - **v13 migration simplified**: 3 plain ALTERs + DROP + `pragma_update`. Removed `column_exists` idempotency guards from v13 — they were papering over a partial-v13 crash state the trailing `pragma_update` prevents anyway. Required two companion schema fixes (see below).
+  - **Test persona key standardized**: `test_app_builder.rs` now uses `"test_player"` (was `"test-player"`), aligning with the `TEST_PERSONA` const in `tests/test_utils/mod.rs` and `data/personas/test_player.json`. `tests/http/fragment.rs` literals replaced with `persona_key={TEST_PERSONA}`.
+
+### Fixed
+
+- **v9 `CREATE TABLE games` schema drift**: Removed `persona_key`/`persona_name` from the v9 forward-creation so the v13 unconditional ADD genuinely adds them. Previously they appeared in both v9 CREATE and v13 ADD, causing `duplicate column name: persona_key` on fresh DBs.
+- **v10 `CREATE TABLE worlds` schema drift**: Added `player_key TEXT NOT NULL DEFAULT ''` to the v10 forward-creation (comment: `dropped in v13`) so v13's unconditional `ALTER TABLE worlds DROP COLUMN player_key` succeeds on fresh DBs. Previously the column was absent from v10 CREATE, so the DROP failed.
+
+### Restored
+
+- **`tests/test_utils/mod.rs`**: Restored `pub use browser::*;` and `pub use wait::*;` re-exports (with `#[allow(unused_imports)]`) that had been dropped during ADR-026 implementation. Without these, the `browser` test crate (which uses `use super::*;`) failed to resolve `send_action`, `wait_for_status_ready`, `get_status`, etc.
+- **`tests/test_utils/browser.rs`**: Restored `pub use super::wait::wait_for_status_ready;` re-export (with `#[allow(unused_imports)]`). The `editing.rs` browser test imports this symbol from `crate::test_utils::browser::`, where it does not natively live.
+- **`tests/http/mod.rs`**: Refactored to load `test_utils` as a single `#[path = "../test_utils/mod.rs"]` module, avoiding `clippy::duplicate_mod` (was loading `settings_guard.rs` twice — once directly, once via the `test_utils` mod tree).
+
+## 2026-06-23
+
+### Changed
+
+- **Persona Relocation: World → Game (ADR-026)** — Persona binding moved from the world to the game row; worlds stop referencing personas entirely.
+  - **Schema migration v13**: schema-only — adds `persona_key TEXT NOT NULL DEFAULT ''` and `persona_name TEXT NOT NULL DEFAULT ''` to `games`; drops `player_key` from `worlds` (with `pragma_table_info` guard for fresh DBs). No data backfill. The v9 default-game `INSERT` is also removed; fresh DBs start with zero games and rely on `resolve_game_id` auto-create below.
+  - **Storage layer**: `DbGame` gains `persona_key`/`persona_name`; `DbWorld` loses `player_key`. `Storage::create_game` signature changes from `(world_name, world_key, name)` to `(world_name, world_key, persona_key, persona_name, name)`. `backend/games.rs` list/get/insert SQL updated; `backend/worlds.rs` INSERT/UPDATE/SELECT drop `player_key`.
+  - **Models**: `WorldCard.player_key` removed; `WorldManifest.player_file` removed (manifest no longer references a persona file); `derive_player_key` deleted. `Game` struct gains `persona_key` and `persona_name` (denormalized for list queries, mirroring `world_name` pattern from ADR-025).
+  - **Bootstrap seeding**: `seed_game_data` now scans `data/personas/*.json` directly and seeds each as a `PlayerCard`, independent of any world manifest. Symmetric with `worlds/` scan.
+  - **Runtime resolver**: `AppState::context_for_world(world_key, persona_key)` now takes a persona key. `as_game_service_context` sources it from `game.persona_key`. The pre-existing `world.player_key → get_persona()` path is gone.
+  - **Bootstrap startup**: `resolve_game_id` returns `Result<u64>` and auto-creates a game when none exists for the world, using a new `--persona` CLI flag (default `julian`) mirroring `--world`. `persona_name` is resolved via `storage.get_persona()` before INSERT. Restores pre-ADR-026 auto-create behavior with explicit persona selection at startup. If `--persona <key>` does not match any persona, boot hard-errors with `EngineError::Config("Persona '<key>' not found")` — no silent fallback.
+  - **Games-tab New Game form**: gains a stacked persona `<select name="persona_key" required>` under the world select. Empty personas list gates the submit button (disabled) and renders `No personas available. Create a persona first.` `GameRowView` gains `persona_name`; the saved-games list and active-game panel render a `.persona-badge` next to the world badge.
+  - **Worlds-tab form**: removes the "Player Persona" `<select>` and all supporting loaders (`PersonaOption`, `WorldFormTemplate.personas`, `render_world_edit_form`'s `personas` parameter). `WorldForm` loses `player_key`.
+  - **Create game handler**: validates `persona_key` via `get_persona` (errors with "Persona not found") before insert.
+  - **On-disk data**: `data/worlds/redmist_estate/world.json` and `data/worlds/test/world.json` lose their `player_file` line. `data/schemas/world.schema.json` drops `player_file`. `scripts/validate_data.py` drops the `player_file` presence check.
+  - **Migration consequence**: existing DBs jumping from v12 → v13 get empty `persona_key`/`persona_name` on existing game rows; a new game is auto-created on next boot with the CLI persona. `build.py --cleanup` is the supported reset path for clean state.
+  - Files modified: 32 files across `src/storage/`, `src/model/`, `src/bootstrap/`, `src/server/`, `src/application/`, `src/test_support/`, `tests/`, `data/`, `scripts/`, `docs/`
+  - Related: `docs/adr/adr-026-persona-relocation-to-game.md`, `CONTEXT.md`
+
 ## 2026-06-17
 
 ### Changed
@@ -542,5 +583,5 @@
   - Each helper has single responsibility, testable in isolation
   - No behavioral changes — all 947 tests pass; clippy clean; build.py passes
   - Updated docs/architecture/system.md to reflect new function structure
-## 2026-05-30
 
+## 2026-05-30

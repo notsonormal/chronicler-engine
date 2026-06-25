@@ -3,17 +3,22 @@
 > **Related Decisions**: [ADR-001](../adr/adr-001-htmx-web-dashboard.md), [ADR-002](../adr/adr-002-http-polling.md), [ADR-003](../adr/adr-003-askama-templates.md)
 
 ## Overview
+
 The Chronicler Engine presents a web-based HTMX dashboard for player interaction. The UI provides narrative immersion, visual grounding, and user input in a modern chat-app aesthetic inspired by SillyTavern.
 
 ## The Dashboard Layout
 
 ### 1. Header Bar (48px height)
+
 Displays system-level context.
+
 - **Content**: Game title (left), current game name (center-left), connection status (right)
 - **Note**: Location is displayed in the story log, not the header. Game management (create, switch, delete, reset) lives in the "Games" tab.
 
 ### 2. Tab Bar
+
 Navigation between Game, LLM Messages, and Settings views.
+
 - **Tabs**: Game | Settings | Prompt Presets | Worlds | Games | LLM Messages
 - **Active tab**: Green text with green bottom border
 - **Inactive tab**: Muted gray text
@@ -21,6 +26,7 @@ Navigation between Game, LLM Messages, and Settings views.
 ### 3. Game Tab (Default)
 
 #### Main Body (Flex: 1)
+
 Horizontal split into story context and visual context:
 
 - **Story Log (80%)**: Scrollable history of narration with chat-bubble styling
@@ -48,7 +54,9 @@ Horizontal split into story context and visual context:
   - NPC Portraits (bottom): Horizontal scrollable row, 80×80px square images, object-fit cover
 
 #### Action Area (64px height)
+
 Interactive zone for player input.
+
 - **Content**: Text input field + send button + action hints + status indicator
 - **Button States**:
   - Ready: Green button with "Send" text and play icon (▶)
@@ -67,7 +75,9 @@ Interactive zone for player input.
 **Empty Input Behavior**: Pressing Send with an empty text box triggers narrative continuation via `continue_narration()` → `process_action(CONTINUE_SENTINEL)`. The LLM generates the next scene without player input, same as SillyTavern's "Continue" button. Status shows "Thinking..." (unified with normal generation). No HTML5 validation blocks empty submit.
 
 ### 4. Settings Tab
+
 Configuration panel for LLM connections.
+
 - **Connections List**: Cards showing each configured connection
   - Name, provider, model
   - Badges: "Narrator" or "Quantifier" (if assigned)
@@ -81,7 +91,9 @@ Configuration panel for LLM connections.
   - "Check before sending to LLM" checkbox
 
 ## Real-Time Updates
+
 The dashboard uses HTMX polling for live updates:
+
 - Story-log polls `/fragment/story-log` every 2 seconds for new content
 - Visual sidebar polls `/fragment/visual-sidebar` every 5 seconds
 - Status-display polls `/status/generating` every 5 seconds to update button state
@@ -92,6 +104,7 @@ The dashboard uses HTMX polling for live updates:
 - No manual refresh required
 
 ## Frontend Implementation
+
 - **HTMX**: Handles partial page updates via `hx-post` and `hx-target`
 - **HTMX Polling**: `hx-trigger="load, every 2s"` for story-log; `every 5s` for status; `every 4-5s` for sidebar and LLM messages
 - **Styling**: Modern chat-app aesthetic with chat bubbles, fade animations
@@ -100,6 +113,7 @@ The dashboard uses HTMX polling for live updates:
 ## Data Model
 
 ### MessageEntry
+
 ```rust
 pub struct MessageEntry {
     pub id: u64,                           // Unique auto-incrementing ID
@@ -115,6 +129,7 @@ pub struct MessageEntry {
 ```
 
 ### MessageEntryView (Rendered)
+
 ```rust
 pub struct MessageEntryView {
     pub id: u64,
@@ -182,6 +197,7 @@ HTML template renders with `data-raw-text` attribute for inline editing:
 5. Client refreshes story log via HTMX polling or manual trigger
 
 ## Button Logic (JavaScript)
+
 1. Monitor status element changes via MutationObserver or HTMX events
 2. When status contains "Thinking...":
    - Disable the submit button
@@ -192,18 +208,22 @@ HTML template renders with `data-raw-text` attribute for inline editing:
    - Change button text back to "▶ Send"
 
 ### Game Management
+
 Multiple independent games across all worlds, each with isolated snapshots and messages:
+
 - **List games**: `GET /fragment/games` renders the Games panel with three sections: Active Game, New Game, and Saved Games
-- **Active Game**: Shows current game name, world badge, "Current" badge, and a small reset button on the card
-- **Create game**: `POST /games` accepts form data with `world_key` parameter; creates a game under the chosen world with auto-generated name (`{WorldName}_{Date}_N`). The New Game section shows an always-visible world dropdown + "Start New Game" button
+- **Create game**: `POST /games` accepts form data with `world_key` and `persona_key` parameters (ADR-026); creates a game under the chosen world + persona with auto-generated name (`{WorldName}_{Date}_N`). The New Game section shows an always-visible world dropdown + persona dropdown + "Start New Game" button. Empty personas list disables submit and renders `No personas available. Create a persona first.`
+- **Active Game**: Shows current game name, world badge, **persona badge**, "Current" badge, and a small reset button on the card
 - **Switch game**: `POST /games/:id/switch` loads the selected game (cross-world switching allowed) and refreshes the page
 - **Delete game**: `POST /games/:id/delete` removes the game and all its data, then removes the item from the list via `hx-swap`
 - **Reset**: `POST /reset` deletes the current game and creates a new one with a fresh auto-generated name. Triggered by the reset button on the Active Game card with `hx-confirm` dialog
 
 ## Worlds Management Tab
+
 Dedicated tab for multi-world orchestration with CRUD operations:
 
 ### Worlds Panel
+
 - **Endpoint**: `GET /fragment/worlds`
 - **Content**: List of all worlds with game count indicators
 - **Actions per world**:
@@ -212,7 +232,9 @@ Dedicated tab for multi-world orchestration with CRUD operations:
 - **Create New World button** — replaces worlds list with empty form inline (no modal)
 
 ### World Form (Inline HTMX Swap)
+
 Create/Edit uses inline HTMX swaps — no modal overlay:
+
 - **Create flow**: Button `hx-get="/fragment/worlds/new" hx-target=".worlds-panel" hx-swap="outerHTML"` — replaces panel with empty form
 - **Edit flow**: Button `hx-get="/worlds/:key/edit" hx-target=".worlds-panel" hx-swap="outerHTML"` — replaces panel with pre-populated form
 - **Submit**: Form posts to:
@@ -225,25 +247,25 @@ Create/Edit uses inline HTMX swaps — no modal overlay:
   - **Description** — world lore/description
   - **Global Rules** — one rule per line
   - **Starting Room ID** — initial room for new games
-  - **Player Persona** — dropdown of available personas (by key)
   - **Default Room Image** — optional default image path
   - **Map JSON** — room/region structure as JSON
   - **Scenarios JSON** — starting scenarios as JSON array
 - **Refresh**: On success, handler returns re-rendered worlds panel HTML (inline HTMX swap replaces `.worlds-panel`); no full page reload
 
 ### Backend Implementation
+
 - **Storage layer**: `Storage::get_world(key)` returns `Option<WorldWithMap>` with `world_id` for updates
 - **Service layer**: `ApplicationService::get_world()`, `update_world(id, world_card, map)`
 - **Validation**: Delete blocked if `games` table has rows with matching `world_key`
 - **HTMX handlers**:
-  - `new_world_form_handler` — renders create form with persona dropdown
+  - `new_world_form_handler` — renders create form
   - `edit_world_form_handler` — renders edit form with pre-populated data
   - `create_world_handler` — creates world, returns re-rendered worlds panel HTML
   - `update_world_handler` — updates world by ID, returns re-rendered worlds panel HTML
   - `delete_world_handler` — validates no games reference world, deletes if safe
-  - `list_personas_fragment` — returns persona `<option>` tags for dropdown
 
 ## CSS Classes
+
 - `.games-panel` — container for games tab content (in `assets/games.css`)
 - `.games-section` — section container within games panel (Active Game, New Game, Saved Games)
 - `.worlds-panel` — container for worlds list with game counts (in `assets/worlds.css`)
@@ -286,7 +308,9 @@ Create/Edit uses inline HTMX swaps — no modal overlay:
 - `@keyframes fadeIn` - Opacity 0 to 1 for new messages
 
 ### 5. LLM Messages Tab
+
 Forensics panel showing the last 50 LLM calls with full request/response visibility.
+
 - **Content**: Compact list of LLM calls with agent name, backend, model, and parsed response
 - **Expandable rows**: Click to reveal raw request JSON and raw response JSON
 - **Order**: Oldest-first (newest at bottom), matching chronological narrative flow
@@ -295,6 +319,7 @@ Forensics panel showing the last 50 LLM calls with full request/response visibil
 - **HTMX Polling**: `hx-get="/fragment/llm-messages" hx-trigger="load, every 4s"`
 
 #### LLM Message CSS Classes
+
 - `.llm-message-list` - Container for the message list
 - `.llm-message-item` - Individual message card
 - `.llm-message-header` - Top row with agent, backend, model, timestamp

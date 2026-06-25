@@ -3,7 +3,6 @@
 
 use askama::Template;
 use crate::model::world::WorldCard;
-use crate::model::character::PlayerCard;
 use crate::model::map::MapDef;
 use crate::model::scenario::StartingScenario;
 
@@ -12,12 +11,6 @@ pub struct WorldRowView {
     pub name: String,
     pub description: String,
     pub game_count: usize,
-}
-
-pub struct PersonaOption {
-    pub key: String,
-    pub name: String,
-    pub selected: bool,
 }
 
 #[derive(Template)]
@@ -65,14 +58,6 @@ pub struct WorldsPanelTemplate {
 
         <label>Starting Room ID: <input type="text" name="starting_room_id" value="{{ starting_room_id }}" /></label>
 
-        <label>Player Persona:
-            <select name="player_key">
-                {% for p in personas %}
-                <option value="{{ p.key }}" {% if p.selected %}selected{% endif %}>{{ p.name }}</option>
-                {% endfor %}
-            </select>
-        </label>
-
         <label>Default Room Image: <input type="text" name="default_room_image" value="{{ default_room_image }}" /></label>
 
         <label>Map JSON:
@@ -100,8 +85,6 @@ pub struct WorldFormTemplate {
     pub description: String,
     pub global_rules: String,
     pub starting_room_id: String,
-    pub personas: Vec<PersonaOption>,
-    pub player_key: String,
     pub default_room_image: String,
     pub map_json: String,
     pub scenarios_json: String,
@@ -117,20 +100,10 @@ impl WorldFormTemplate {
         world: Option<&WorldCard>,
         map: Option<&MapDef>,
         scenarios: &[StartingScenario],
-        personas: &[PlayerCard],
     ) -> Self {
         let is_edit = world.is_some();
         let default_world = WorldCard::default();
         let w = world.unwrap_or(&default_world);
-
-        let persona_options: Vec<PersonaOption> = personas
-            .iter()
-            .map(|p| PersonaOption {
-                key: p.key.clone(),
-                name: p.sheet.name.clone(),
-                selected: p.key == w.player_key,
-            })
-            .collect();
 
         let map_json_str = map
             .map(|m| serde_json::to_string_pretty(m).unwrap_or_default())
@@ -158,8 +131,6 @@ impl WorldFormTemplate {
             description: w.description.clone(),
             global_rules: w.global_rules.join("\n"),
             starting_room_id: w.starting_room_id.clone(),
-            personas: persona_options,
-            player_key: w.player_key.clone(),
             default_room_image: w.default_room_image.clone().unwrap_or_default(),
             map_json: map_json_str,
             scenarios_json: scenarios_json_str,

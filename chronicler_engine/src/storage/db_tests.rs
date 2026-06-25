@@ -1,7 +1,7 @@
 use crate::storage::db::DbPool;
 
 #[test]
-fn test_db_creates_games_table() {
+fn test_db_creates_empty_games_table() {
     let pool = DbPool::new(":memory:").unwrap();
     let conn = pool.conn();
     let mut stmt = conn
@@ -9,16 +9,30 @@ fn test_db_creates_games_table() {
         .unwrap();
     let exists: Result<String, _> = stmt.query_row([], |row| row.get(0));
     assert!(exists.is_ok(), "games table should exist");
-}
 
-#[test]
-fn test_db_inserts_default_game() {
-    let pool = DbPool::new(":memory:").unwrap();
-    let conn = pool.conn();
+    // After ADR-026 fix: no default game is seeded by migrations. The server
+    // auto-creates a game via `resolve_game_id` using the `--persona` CLI flag.
     let count: i64 = conn
         .query_row("SELECT COUNT(*) FROM games", [], |row| row.get(0))
         .unwrap();
-    assert_eq!(count, 1, "default game should be inserted");
+    assert_eq!(count, 0, "no default game should be seeded by migrations");
+}
+
+#[test]
+fn test_db_games_table_has_persona_columns() {
+    let pool = DbPool::new(":memory:").unwrap();
+    let conn = pool.conn();
+    let (has_persona_key, has_persona_name): (i64, i64) = conn
+        .query_row(
+            "SELECT
+                (SELECT COUNT(*) FROM pragma_table_info('games') WHERE name='persona_key'),
+                (SELECT COUNT(*) FROM pragma_table_info('games') WHERE name='persona_name')",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(has_persona_key, 1, "games.persona_key column must exist");
+    assert_eq!(has_persona_name, 1, "games.persona_name column must exist");
 }
 
 #[test]
@@ -84,16 +98,13 @@ fn test_db_reopen_idempotent() {
     {
         let _pool = DbPool::new(temp_file.to_str().unwrap()).unwrap();
     }
-    // Re-opening should not create duplicate default game
+    // Re-opening should not create any games (migrations no longer seed a default game).
     let pool = DbPool::new(temp_file.to_str().unwrap()).unwrap();
     let conn = pool.conn();
     let count: i64 = conn
         .query_row("SELECT COUNT(*) FROM games", [], |row| row.get(0))
         .unwrap();
-    assert_eq!(
-        count, 1,
-        "Re-opening should not create duplicate default game"
-    );
+    assert_eq!(count, 0, "Re-opening should not create any games");
     let _ = std::fs::remove_file(&temp_file);
 }
 
@@ -113,15 +124,13 @@ fn test_db_cascade_delete_game() {
     let pool = DbPool::new(":memory:").unwrap();
     let conn = pool.conn();
 
-    // Insert a game (id 1 is already present from migration v1)
     conn.execute(
-        "INSERT INTO games (world_name, name, created_at, updated_at) VALUES ('w', 'n', '1', '1')",
+        "INSERT INTO games (world_name, world_key, persona_key, persona_name, name, created_at, updated_at) VALUES ('w', 'w', 'julian', 'Julian', 'n', '1', '1')",
         [],
     )
     .unwrap();
     let game_id: i64 = conn.last_insert_rowid();
 
-    // Insert a snapshot for that game
     conn.execute(
         "INSERT INTO game_state_snapshots (game_id, movement, narrative, scene, npc_encounter_log, created_at)
          VALUES (?1, '{}', '{}', '{}', '{}', '1')",
@@ -129,7 +138,6 @@ fn test_db_cascade_delete_game() {
     )
     .unwrap();
 
-    // Insert a message for that game
     conn.execute(
         "INSERT INTO messages (game_id, sender, message_type, timestamp, active_swipe_index, is_deleted)
          VALUES (?1, NULL, 'Narration', '1', 0, 0)",
@@ -138,7 +146,6 @@ fn test_db_cascade_delete_game() {
     .unwrap();
     let message_id: i64 = conn.last_insert_rowid();
 
-    // Insert a swipe for that message
     conn.execute(
         "INSERT INTO message_swipes (message_id, swipe_index, text, snapshot_id, location_header, event_header)
          VALUES (?1, 0, 'hello', NULL, NULL, NULL)",
@@ -146,7 +153,6 @@ fn test_db_cascade_delete_game() {
     )
     .unwrap();
 
-    // Verify rows exist
     let snap_count: i64 = conn
         .query_row(
             "SELECT COUNT(*) FROM game_state_snapshots WHERE game_id = ?1",
@@ -174,7 +180,6 @@ fn test_db_cascade_delete_game() {
         .unwrap();
     assert_eq!(swipe_count, 1, "swipe should exist before delete");
 
-    // Delete the game — CASCADE should clean up everything
     conn.execute(
         "DELETE FROM games WHERE id = ?1",
         rusqlite::params![game_id],

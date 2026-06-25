@@ -88,6 +88,17 @@
     letter-spacing: 0.3px;
 }
 
+.persona-badge {
+    font-size: var(--font-size-xs);
+    padding: 2px 8px;
+    margin-left: 8px;
+    border-radius: 4px;
+    background: #2d4a3e;
+    color: var(--color-text-secondary, #a0aec0);
+    font-weight: normal;
+    letter-spacing: 0.3px;
+}
+
 .game-actions {
     display: flex;
     gap: var(--spacing-sm);
