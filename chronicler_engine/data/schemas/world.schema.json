@@ -21,10 +21,6 @@
       "items": { "type": "string" },
       "description": "Global prompt rules applied to all LLM requests"
     },
-    "starting_room_id": {
-      "type": "string",
-      "default": "start"
-    },
     "map_file": {
       "type": "string",
       "default": "map.json"
@@ -44,7 +40,7 @@
           "id": { "type": "string" },
           "name": { "type": "string" },
           "description": { "type": "string" },
-          "starting_room_id": { "type": "string" },
+          "starting_room_id": { "type": "string", "default": "start" },
           "text": { "type": "string" },
           "npcs": {
             "type": "array",

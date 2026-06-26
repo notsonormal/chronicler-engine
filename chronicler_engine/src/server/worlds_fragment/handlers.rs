@@ -20,7 +20,6 @@ pub struct WorldForm {
     pub name: String,
     pub description: String,
     pub global_rules: String, // One rule per line
-    pub starting_room_id: Option<String>,
     pub default_room_image: Option<String>,
     pub map_json: String,
     pub scenarios_json: String,
@@ -46,7 +45,6 @@ impl WorldForm {
             name: self.name,
             description: self.description,
             global_rules,
-            starting_room_id: self.starting_room_id.unwrap_or_else(|| "start".to_string()),
             scenarios,
             default_scenario_id: None,
             default_room_image: self.default_room_image.filter(|s| !s.is_empty()),

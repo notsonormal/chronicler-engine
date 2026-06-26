@@ -57,10 +57,11 @@ async fn test_visual_sidebar_with_real_world_data() {
     }
 
     // Verify the current room has image_path set before building the app
+    let starting_room_id = world.starting_room_id();
     let room = map.overworld.regions[0]
         .rooms
         .iter()
-        .find(|r| r.id == manifest.starting_room_id)
+        .find(|r| r.id == starting_room_id)
         .expect("Should find starting room");
     assert!(
         room.image_path.is_some(),

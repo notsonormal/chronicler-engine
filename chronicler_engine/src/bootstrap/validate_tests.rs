@@ -10,14 +10,13 @@ fn test_validate_loaded_data_success() {
     let world = WorldCard {
         key: "test".to_string(),
         name: "Test".to_string(),
-        starting_room_id: "room_a".to_string(),
         description: "A test world".to_string(),
         global_rules: vec![],
         scenarios: vec![],
         default_scenario_id: None,
         default_room_image: None,
     };
-    let map = TestMap::single_room("room_a");
+    let map = TestMap::single_room("start");
     let player = TestPlayer::standard();
     let npc = TestNpc::named("npc1", "NPC");
 
@@ -30,10 +29,16 @@ fn test_validate_loaded_data_missing_starting_room() {
     let world = WorldCard {
         key: "test".to_string(),
         name: "Test".to_string(),
-        starting_room_id: "missing_room".to_string(),
         description: "A test world".to_string(),
         global_rules: vec![],
-        scenarios: vec![],
+        scenarios: vec![crate::model::scenario::StartingScenario {
+            id: "intro".to_string(),
+            name: "Intro".to_string(),
+            description: "".to_string(),
+            text: "".to_string(),
+            starting_room_id: "missing_room".to_string(),
+            npcs: vec![],
+        }],
         default_scenario_id: None,
         default_room_image: None,
     };
@@ -48,8 +53,8 @@ fn test_validate_loaded_data_missing_starting_room() {
     );
     let err = result.unwrap_err();
     assert!(
-        err.contains("starting_room_id"),
-        "Error should mention starting_room_id: {err}"
+        err.contains("starting room 'missing_room' not found in map"),
+        "Error should mention missing starting room: {err}"
     );
 }
 
@@ -58,14 +63,13 @@ fn test_validate_loaded_data_basic_manifest_succeeds() {
     let world = WorldCard {
         key: "test".to_string(),
         name: "Test".to_string(),
-        starting_room_id: "room_a".to_string(),
         description: "A test world".to_string(),
         global_rules: vec![],
         scenarios: vec![],
         default_scenario_id: None,
         default_room_image: None,
     };
-    let map = TestMap::single_room("room_a");
+    let map = TestMap::single_room("start");
     let player = TestPlayer::standard();
 
     let result = validate_loaded_data(&world, &map, &player, &[]);
@@ -127,8 +131,17 @@ fn test_validate_loaded_data_multiple_errors() {
         key: "test".to_string(),
         name: "Test".to_string(),
         description: "A test world".to_string(),
-        starting_room_id: "missing".to_string(),
-        ..Default::default()
+        global_rules: vec![],
+        scenarios: vec![crate::model::scenario::StartingScenario {
+            id: "intro".to_string(),
+            name: "Intro".to_string(),
+            description: "".to_string(),
+            text: "".to_string(),
+            starting_room_id: "missing".to_string(),
+            npcs: vec!["missing_npc".to_string()],
+        }],
+        default_scenario_id: None,
+        default_room_image: None,
     };
 
     let map = MapDef {
@@ -145,7 +158,7 @@ fn test_validate_loaded_data_multiple_errors() {
     assert!(result.is_err());
     let err = result.unwrap_err();
     assert!(
-        err.contains("\n") || err.contains("starting_room_id"),
-        "Should have errors: {err}"
+        err.contains("starting room 'missing' not found in map"),
+        "Should have starting room error: {err}"
     );
 }

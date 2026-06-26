@@ -30,7 +30,9 @@ Seeding proceeds in dependency order to satisfy foreign keys:
 
 Corrupt seed files are skipped with a warning — seeding is not fatal.
 
-## 3. Settings Loaded Once
+### Game State Initialization
+
+`build_fresh_initial_state` resolves the active world's default scenario (via `WorldCard::default_scenario()`) and reads `scenario.starting_room_id` to set the player's initial room. If no scenarios exist, it falls back to `"start"`.
 
 Settings are loaded from the database once during bootstrap, wrapped in `Arc<RwLock<AppSettings>>`, and passed through the construction chain. No business logic layer reloads settings from disk. Connection changes require a server restart. Only `max_context_tokens` is read dynamically at runtime.
 

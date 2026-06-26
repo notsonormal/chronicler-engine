@@ -6,7 +6,6 @@
         "Test rule 1: Be respectful",
         "Test rule 2: Have fun"
     ],
-    "starting_room_id": "start",
     "map_file": "map.json",
     "characters_dir": "test",
     "scenarios": [

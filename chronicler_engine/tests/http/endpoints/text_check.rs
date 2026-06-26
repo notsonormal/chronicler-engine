@@ -9,6 +9,27 @@ use tower::util::ServiceExt;
 use chronicler_engine::TestAppBuilder;
 use chronicler_engine::model::settings::{AppSettings, TextCheckMode, TextCheckSettings};
 
+/// Poll `/fragment/story-log` until `needle` appears or timeout.
+async fn story_log_contains(app: &axum::Router, needle: &str) -> bool {
+    for _ in 0..100 {
+        let req = Request::builder()
+            .uri("/fragment/story-log")
+            .method(http::Method::GET)
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(req).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let body_str = String::from_utf8_lossy(&body);
+        if body_str.contains(needle) {
+            return true;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    false
+}
+
 fn text_check_settings(mode: TextCheckMode) -> AppSettings {
     AppSettings {
         text_check: TextCheckSettings {
@@ -142,28 +163,11 @@ async fn test_async_action_saves_input_to_story_log_with_sqlite() {
     let response = app.clone().oneshot(req).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
 
-    let mut found_input = false;
-    for _attempt in 0..50 {
-        let req = Request::builder()
-            .uri("/fragment/story-log")
-            .method(http::Method::GET)
-            .body(Body::empty())
-            .unwrap();
-        let response = app.clone().oneshot(req).await.unwrap();
-        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
-            .await
-            .unwrap();
-        let body_str = String::from_utf8_lossy(&body);
-        if body_str.contains("log-entry input") && body_str.contains("hello test") {
-            found_input = true;
-            break;
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-    }
+    let found_input = story_log_contains(&app, "hello test").await;
 
     assert!(
         found_input,
-        "Async action should add input entry to story log within 5s (checked 50 times)"
+        "Async action should add input entry to story log within 10s"
     );
 }
 

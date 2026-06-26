@@ -132,6 +132,11 @@ The Rust code maps to the database as follows:
 
 All databases are created fresh and walked through the same migration blocks; incremental upgrade paths from v1-v8 have been removed. `run_migrations` checks `PRAGMA user_version` and runs: schema creation at `if version < 9` (the `games` CREATE TABLE excludes `persona_key`/`persona_name` — they are added in v13); `worlds`/`maps`/`personas`/`characters`/`settings` creation at `if version < 10` (the `worlds` CREATE TABLE includes a `player_key` column that v13 drops); the `games.world_key` backfill at `if version < 12` (guarded by `column_exists` since v12 may run on a v9-era DB where the column already exists from the forward-creation); and the v13 block at `if version < 13` which unconditionally `ALTER TABLE games ADD COLUMN persona_key`/`persona_name` and `ALTER TABLE worlds DROP COLUMN player_key` (safe because v9 CREATE omits the persona columns and v10 CREATE includes `player_key`). The v13 block has no `column_exists` guards: a partial-v13 crash state is prevented by the trailing `pragma_update`. Future migrations (v14+) follow the same pattern. This is acceptable because `build.py --cleanup` ensures no stale databases exist between builds.
 
+### v14: `starting_room_id` Relocation
+
+- **`ALTER TABLE worlds DROP COLUMN starting_room_id`** — The column is removed because `starting_room_id` now lives inside each `StartingScenario` JSON object within the `scenarios` column.
+- **BREAKING to existing saved games** — `python build.py --cleanup` is required to reset the DB and re-seed worlds with per-scenario `starting_room_id`.
+
 ## Future Work
 
 - **Message versioning:** Not implemented; retry creates new messages via snapshot rollback.

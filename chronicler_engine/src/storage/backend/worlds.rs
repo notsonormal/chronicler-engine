@@ -16,7 +16,6 @@ pub(crate) fn world_card_from_db(db: &DbWorld) -> Result<WorldCard, EngineError>
         description: db.description.clone(),
         global_rules: serde_json::from_str(&db.global_rules)
             .map_err(|e| EngineError::Parse(format!("Failed to deserialize global_rules: {e}")))?,
-        starting_room_id: db.starting_room_id.clone(),
         scenarios: serde_json::from_str(&db.scenarios)
             .map_err(|e| EngineError::Parse(format!("Failed to deserialize scenarios: {e}")))?,
         default_scenario_id: db.default_scenario_id.clone().filter(|s| !s.is_empty()),
@@ -37,7 +36,7 @@ impl Storage {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let mut stmt = conn.prepare(
-                    "SELECT id, key, name, description, global_rules, starting_room_id, scenarios, default_scenario_id, default_room_image, created_at, updated_at FROM worlds",
+                    "SELECT id, key, name, description, global_rules, scenarios, default_scenario_id, default_room_image, created_at, updated_at FROM worlds",
                 )?;
                 let rows = stmt.query_map([], DbWorld::from_row)?;
                 rows.map(|r| {
@@ -55,7 +54,7 @@ impl Storage {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let mut world_stmt = conn.prepare(
-                    "SELECT id, key, name, description, global_rules, starting_room_id, scenarios, default_scenario_id, default_room_image, created_at, updated_at
+                    "SELECT id, key, name, description, global_rules, scenarios, default_scenario_id, default_room_image, created_at, updated_at
                      FROM worlds
                      WHERE key = ?",
                 )?;
@@ -105,16 +104,15 @@ impl Storage {
 
                 conn.execute(
                     "INSERT OR REPLACE INTO worlds (
-                        key, name, description, global_rules, starting_room_id,
+                        key, name, description, global_rules,
                         scenarios, default_scenario_id, default_room_image,
                         created_at, updated_at
-                    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9)",
+                    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)",
                     rusqlite::params![
                         world_card.key,
                         world_card.name,
                         world_card.description,
                         serde_json::to_string(&world_card.global_rules)?,
-                        world_card.starting_room_id,
                         serde_json::to_string(&world_card.scenarios)?,
                         world_card.default_scenario_id.clone().unwrap_or_default(),
                         world_card.default_room_image.clone().unwrap_or_default(),
@@ -170,11 +168,10 @@ impl Storage {
                 let conn = pool.conn();
                 let now = chrono::Utc::now().to_rfc3339();
                 conn.execute(
-                    "UPDATE worlds SET key=?, name=?, description=?, global_rules=?, starting_room_id=?, scenarios=?, default_scenario_id=?, default_room_image=?, updated_at=? WHERE id=?",
+                    "UPDATE worlds SET key=?, name=?, description=?, global_rules=?, scenarios=?, default_scenario_id=?, default_room_image=?, updated_at=? WHERE id=?",
                     rusqlite::params![
                         world_card.key, world_card.name, world_card.description,
                         serde_json::to_string(&world_card.global_rules)?,
-                        world_card.starting_room_id,
                         serde_json::to_string(&world_card.scenarios)?,
                         world_card.default_scenario_id.clone().unwrap_or_default(),
                         world_card.default_room_image.clone().unwrap_or_default(),
@@ -204,7 +201,7 @@ impl Storage {
                 let conn = pool.conn();
                 // Two separate statements, same pattern as get_world() — avoids column-index conflicts in from_row
                 let mut world_stmt = conn.prepare(
-                    "SELECT id, key, name, description, global_rules, starting_room_id, scenarios, default_scenario_id, default_room_image, created_at, updated_at
+                    "SELECT id, key, name, description, global_rules, scenarios, default_scenario_id, default_room_image, created_at, updated_at
                      FROM worlds WHERE id = ?",
                 )?;
                 let db_world = match world_stmt.query_row([id], DbWorld::from_row) {

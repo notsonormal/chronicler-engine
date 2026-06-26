@@ -608,7 +608,7 @@ def main():
         )
         if not args.include_llm:
             print(
-                "    NOTE: 3 LLM tests were skipped. "
+                "    NOTE: 2 LLM tests were skipped. "
                 "Run 'python build.py --llm-only' to execute them."
             )
         steps.next("Skipping coverage report (use --coverage to enable)")

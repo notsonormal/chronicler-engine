@@ -10,7 +10,6 @@ fn resolve_game_id_auto_creates_with_persona() {
         key: "redmist_estate".to_string(),
         name: "Redmist Estate".to_string(),
         description: String::new(),
-        starting_room_id: "gates".to_string(),
         scenarios: vec![],
         ..Default::default()
     };
@@ -150,7 +149,6 @@ fn test_restart_with_existing_game_does_not_duplicate_scenario() {
         key: "test".to_string(),
         name: "TestWorld".to_string(),
         description: "A test world".to_string(),
-        starting_room_id: "start".to_string(),
         scenarios: vec![crate::model::scenario::StartingScenario {
             id: "intro".to_string(),
             name: "Introduction".to_string(),
@@ -188,7 +186,7 @@ fn test_restart_with_existing_game_does_not_duplicate_scenario() {
         std::sync::Arc::new(map),
         std::sync::Arc::new(player.clone()),
         vec![],
-        world_card.starting_room_id.clone(),
+        world_card.starting_room_id(),
     );
     crate::bootstrap::inject_scenario_logs(&mut state, &world_card, &player);
 

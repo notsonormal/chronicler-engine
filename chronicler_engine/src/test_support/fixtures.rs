@@ -376,7 +376,6 @@ impl TestWorldManifest {
             name: "Test".to_string(),
             description: "A test world".to_string(),
             global_rules: vec![],
-            starting_room_id: "room_a".to_string(),
             map_file: "map.json".to_string(),
             characters_dir: "".to_string(),
             scenarios: vec![],

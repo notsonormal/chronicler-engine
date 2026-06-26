@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-06-25 19:46 UTC*
+*Index last generated: 2026-06-26 21:11 UTC*
 
 ### Root files
 
@@ -61,11 +61,16 @@ This folder contains all documentation for the Chronicler Engine project.
 
 ### `docs/plans/`
 
+- [Plan: Abstraction Anti-Pattern Prevention via Advisory Healthcheck](./plans/abstraction-antipattern-healthcheck-plan.md)
+- [Plan: Abstraction Anti-Pattern Fixes (Tiered)](./plans/abstraction-fixes-plan.md)
+- [Plan: Antipattern-Checker Agent Skill](./plans/antipattern-checker-skill-plan.md)
 - [Plan: Diagnostic Decision Tree as Agent Infrastructure](./plans/diagnostic-decision-tree-plan.md)
+- [Plan: Mapless Worlds via Freeform Location Names](./plans/mapless-worlds-plan.md)
 - [Spec: Agent-Ready Pipeline Restructure for Chronicler Engine](./plans/multi-agent-architecture-overarching-spec.md)
 - [Plan: Observability & Automated Forensics](./plans/observability-and-forensics-plan.md)
-- [Plan: Rust Duplicate Code Detector (Skill-Based)](./plans/rust-duplicate-code-detector-plan.md)
 - [AI Steering & Guided Generation](./plans/steering-and-guided-generation.md)
+- [Subplan B: Quantifier `destination` field split](./plans/subplan-b-quantifier-field-split.md)
+- [Subplan C: Atomic mapless enablement](./plans/subplan-c-mapless-enablement.md)
 
 ### `docs/plans/archived/`
 
@@ -73,6 +78,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Fix Boot Path: Restore Auto-Create Game with `--persona` CLI Flag](./plans/archived/fix-boot-and-default-game.md)
 - [Pipeline Decomposition Review Fixes (Round 3)](./plans/archived/pipeline-review-fixes-round3.md)
 - [Review Fixes — Pipeline Decomposition Quality](./plans/archived/review-fixes-pipeline-quality.md)
+- [Subplan A: Relocate `starting_room_id` to `StartingScenario`](./plans/archived/subplan-a-relocate-starting-room.md)
 
 ### `docs/reference/`
 
@@ -85,8 +91,11 @@ This folder contains all documentation for the Chronicler Engine project.
 
 ### `docs/reviews/`
 
+- [Chronicler Engine — Abstraction Anti-Pattern Investigation](./reviews/abstraction-antipatterns-summary.md)
 - [Architectural Review: AI Agent Comprehension Challenges](./reviews/agent-comprehension-review.md)
 - [Documentation Consistency Report](./reviews/docs-consistency-report.md)
+- [Zone A: src/model/ — Abstraction Anti-Pattern Report](./reviews/zone-a-model.md)
+- [Zone B: application/bootstrap/engine — Abstraction Anti-Pattern Report](./reviews/zone-b-app-engine.md)
 
 ### `docs/reviews/archived/`
 

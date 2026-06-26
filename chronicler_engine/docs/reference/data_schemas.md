@@ -126,8 +126,7 @@ After seeding, runtime loading is 100% database-first:
 - `name TEXT NOT NULL`
 - `description TEXT NOT NULL DEFAULT ''`
 - `global_rules TEXT NOT NULL DEFAULT '[]'` — JSON: `Vec<String>`
-- `starting_room_id TEXT NOT NULL DEFAULT 'start'`
-- `scenarios TEXT NOT NULL DEFAULT '[]'` — JSON: `Vec<StartingScenario>`
+- `scenarios TEXT NOT NULL DEFAULT '[]'` — JSON: `Vec<StartingScenario>` (each scenario carries `starting_room_id`, default `"start"`)
 - `default_scenario_id TEXT`
 - `default_room_image TEXT`
 - `created_at TEXT NOT NULL`
@@ -447,7 +446,6 @@ Top-level world definition loaded from `data/worlds/*/world.json`.
   "name": "string",
   "description": "string",
   "global_rules": ["rule 1", "rule 2"],
-  "starting_room_id": "string",
   "scenarios": [
     {
       "id": "string",
@@ -467,4 +465,4 @@ Top-level world definition loaded from `data/worlds/*/world.json`.
 - `name`: Display name of the world
 - `description`: Lore and setting description for the Game Master
 - `global_rules`: Array of global behavioral rules injected into the system prompt
-- `default_room_image`: Optional fallback image path used when a room does not specify its own `image_path`
+- `scenarios[].starting_room_id`: Default room ID for a given starting scenario (serde default `"start"`)

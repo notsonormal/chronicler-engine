@@ -66,12 +66,13 @@ pub(crate) fn load_game_state(
             Ok(new_state)
         }
         _ => {
+            let starting_room_id = world_arc.starting_room_id();
             let mut new_state = GameState::new(
                 Arc::clone(world_arc),
                 Arc::clone(map_arc),
                 Arc::clone(player_arc),
                 npcs_map.values().cloned().collect(),
-                world_arc.starting_room_id.clone(),
+                starting_room_id,
             );
             inject_scenario_logs(&mut new_state, world_arc, player_arc);
             if let Some(scenario) = world_arc.default_scenario() {
@@ -125,12 +126,13 @@ impl ArrivalTaskContext {
             ),
             _ => {
                 tracing::warn!("No snapshot found in spawn, starting fresh");
+                let starting_room_id = self.world.starting_room_id();
                 let mut s = GameState::new(
                     Arc::clone(&self.world),
                     Arc::clone(&self.map),
                     Arc::clone(&self.player),
                     (*self.npcs).values().cloned().collect(),
-                    self.world.starting_room_id.clone(),
+                    starting_room_id,
                 );
                 inject_scenario_logs(&mut s, &self.world, &self.player);
                 s

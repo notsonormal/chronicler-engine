@@ -7,6 +7,8 @@ use axum::{
 use tower::util::ServiceExt;
 
 use chronicler_engine::TestAppBuilder;
+use chronicler_engine::model::message::{Message, Swipe};
+use chronicler_engine::model::settings::{AppSettings, TextCheckMode, TextCheckSettings};
 use chronicler_engine::model::state::{GenerationPhase, GenerationStatus, MessageType};
 use chronicler_engine::storage::{Operation, Storage, TestOverride};
 use chronicler_engine::test_support::TestPlayer;
@@ -915,5 +917,419 @@ async fn test_create_game_with_invalid_world_key() {
         response.status(),
         StatusCode::BAD_REQUEST,
         "Should return bad_request for non-existent world"
+    );
+}
+
+// ─── Misc Fragment Handler Tests ───
+
+#[tokio::test]
+async fn test_check_text_handler_disabled() {
+    let app = TestAppBuilder::default_test()
+        .settings(AppSettings {
+            text_check: TextCheckSettings {
+                mode: TextCheckMode::Disabled,
+                enable_auto_check: true,
+                ignored_words: vec![],
+            },
+            ..Default::default()
+        })
+        .build();
+
+    let req = Request::builder()
+        .uri("/check-text")
+        .method(http::Method::POST)
+        .header(
+            http::header::CONTENT_TYPE,
+            "application/x-www-form-urlencoded",
+        )
+        .body(Body::from("command=look"))
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+
+    assert!(response.status().is_success());
+    let body = axum::body::to_bytes(response.into_body(), 4096)
+        .await
+        .unwrap();
+    let body_str = String::from_utf8_lossy(&body);
+    assert!(
+        body_str.contains("disabled"),
+        "Expected disabled message: {body_str}"
+    );
+}
+
+#[tokio::test]
+async fn test_check_text_handler_finds_issues() {
+    let app = TestAppBuilder::default_test()
+        .settings(AppSettings {
+            text_check: TextCheckSettings {
+                mode: TextCheckMode::Spell,
+                enable_auto_check: true,
+                ignored_words: vec![],
+            },
+            ..Default::default()
+        })
+        .build();
+
+    let req = Request::builder()
+        .uri("/check-text")
+        .method(http::Method::POST)
+        .header(
+            http::header::CONTENT_TYPE,
+            "application/x-www-form-urlencoded",
+        )
+        .body(Body::from("command=go+to+the+casle"))
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+
+    assert!(response.status().is_success());
+    let body = axum::body::to_bytes(response.into_body(), 4096)
+        .await
+        .unwrap();
+    let body_str = String::from_utf8_lossy(&body);
+    assert!(
+        body_str.contains("text-check-preview"),
+        "Expected preview fragment: {body_str}"
+    );
+}
+
+#[tokio::test]
+async fn test_retry_handler_requires_context() {
+    let storage = Arc::new(Storage::new_in_memory());
+    let app = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .build();
+
+    let game_id = storage.current_game_id();
+    storage.delete_game(game_id).unwrap();
+
+    let req = Request::builder()
+        .uri("/swipe/new")
+        .method(http::Method::POST)
+        .body(Body::empty())
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+
+    assert_eq!(
+        response.status(),
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "Should fail when game context is missing"
+    );
+}
+
+#[tokio::test]
+async fn test_retrigger_handler_requires_context() {
+    let storage = Arc::new(Storage::new_in_memory());
+    let app = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .build();
+
+    let game_id = storage.current_game_id();
+    storage.delete_game(game_id).unwrap();
+
+    let req = Request::builder()
+        .uri("/retrigger")
+        .method(http::Method::POST)
+        .body(Body::empty())
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+
+    assert_eq!(
+        response.status(),
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "Should fail when game context is missing"
+    );
+}
+
+#[tokio::test]
+async fn test_switch_swipe_handler_success() {
+    let storage = Arc::new(Storage::new_in_memory());
+    let app = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .build();
+
+    let latest_snap = storage.load_latest_snapshot().unwrap().unwrap();
+    let snap_id = latest_snap.db_id.unwrap();
+
+    let msg = Message::new(
+        Some("Player".to_string()),
+        "original",
+        MessageType::Narration,
+        None,
+        None,
+    );
+    let id = storage.insert_message(&msg).unwrap();
+
+    storage
+        .insert_swipe(
+            id,
+            &Swipe {
+                text: "first swipe".to_string(),
+                snapshot_id: Some(snap_id),
+                location_header: None,
+                event_header: None,
+            },
+            0,
+        )
+        .unwrap();
+    storage
+        .insert_swipe(
+            id,
+            &Swipe {
+                text: "second swipe".to_string(),
+                snapshot_id: Some(snap_id),
+                location_header: None,
+                event_header: None,
+            },
+            1,
+        )
+        .unwrap();
+
+    let req = Request::builder()
+        .uri(format!("/message/{id}/swipe/1"))
+        .method(http::Method::POST)
+        .body(Body::empty())
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_reset_handler_success() {
+    let app = TestAppBuilder::default_app();
+
+    let req = Request::builder()
+        .uri("/reset")
+        .method(http::Method::POST)
+        .body(Body::empty())
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let hx_refresh = response.headers().get("HX-Refresh");
+    assert_eq!(
+        hx_refresh,
+        Some(&axum::http::HeaderValue::from_static("true")),
+        "Reset should trigger HX-Refresh"
+    );
+}
+
+#[tokio::test]
+async fn test_check_text_handler_empty() {
+    let app = TestAppBuilder::default_test()
+        .settings(AppSettings {
+            text_check: TextCheckSettings {
+                mode: TextCheckMode::Spell,
+                enable_auto_check: true,
+                ignored_words: vec![],
+            },
+            ..Default::default()
+        })
+        .build();
+
+    let req = Request::builder()
+        .uri("/check-text")
+        .method(http::Method::POST)
+        .header(
+            http::header::CONTENT_TYPE,
+            "application/x-www-form-urlencoded",
+        )
+        .body(Body::from("command="))
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+
+    assert_eq!(
+        response.status(),
+        StatusCode::BAD_REQUEST,
+        "Empty command should return bad request"
+    );
+}
+
+#[tokio::test]
+async fn test_check_text_handler_no_issues() {
+    let app = TestAppBuilder::default_test()
+        .settings(AppSettings {
+            text_check: TextCheckSettings {
+                mode: TextCheckMode::Spell,
+                enable_auto_check: true,
+                ignored_words: vec![],
+            },
+            ..Default::default()
+        })
+        .build();
+
+    let req = Request::builder()
+        .uri("/check-text")
+        .method(http::Method::POST)
+        .header(
+            http::header::CONTENT_TYPE,
+            "application/x-www-form-urlencoded",
+        )
+        .body(Body::from("command=go+to+the+castle"))
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+
+    assert!(response.status().is_success());
+    let body = axum::body::to_bytes(response.into_body(), 4096)
+        .await
+        .unwrap();
+    let body_str = String::from_utf8_lossy(&body);
+    assert!(
+        body_str.contains("No issues found"),
+        "Expected no-issues response: {body_str}"
+    );
+}
+
+#[tokio::test]
+async fn test_retry_handler_valid_context_error() {
+    let app = TestAppBuilder::default_app();
+
+    let req = Request::builder()
+        .uri("/swipe/new")
+        .method(http::Method::POST)
+        .body(Body::empty())
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+
+    assert_eq!(
+        response.status(),
+        StatusCode::BAD_REQUEST,
+        "Retry with no input should return bad request"
+    );
+}
+
+#[tokio::test]
+async fn test_retrigger_handler_valid_context_error() {
+    let app = TestAppBuilder::default_app();
+
+    let req = Request::builder()
+        .uri("/retrigger")
+        .method(http::Method::POST)
+        .body(Body::empty())
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+
+    assert_eq!(
+        response.status(),
+        StatusCode::BAD_REQUEST,
+        "Retrigger with no trigger context should return bad request"
+    );
+}
+
+#[tokio::test]
+async fn test_switch_swipe_handler_not_last() {
+    let storage = Arc::new(Storage::new_in_memory());
+    let app = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .build();
+
+    let latest_snap = storage.load_latest_snapshot().unwrap().unwrap();
+    let snap_id = latest_snap.db_id.unwrap();
+
+    let msg1 = Message::new(
+        Some("Player".to_string()),
+        "first",
+        MessageType::Narration,
+        None,
+        None,
+    );
+    let id1 = storage.insert_message(&msg1).unwrap();
+    storage
+        .insert_swipe(
+            id1,
+            &Swipe {
+                text: "swipe".to_string(),
+                snapshot_id: Some(snap_id),
+                location_header: None,
+                event_header: None,
+            },
+            0,
+        )
+        .unwrap();
+
+    let msg2 = Message::new(
+        Some("Player".to_string()),
+        "second",
+        MessageType::Narration,
+        None,
+        None,
+    );
+    let _id2 = storage.insert_message(&msg2).unwrap();
+
+    let req = Request::builder()
+        .uri(format!("/message/{id1}/swipe/0"))
+        .method(http::Method::POST)
+        .body(Body::empty())
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+
+    assert_eq!(
+        response.status(),
+        StatusCode::BAD_REQUEST,
+        "Switching swipe on non-last message should fail"
+    );
+}
+
+#[tokio::test]
+async fn test_switch_swipe_handler_concurrent() {
+    let storage = Arc::new(Storage::new_in_memory());
+    let app = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .is_generating(true)
+        .build();
+
+    let latest_snap = storage.load_latest_snapshot().unwrap().unwrap();
+    let snap_id = latest_snap.db_id.unwrap();
+
+    let msg = Message::new(
+        Some("Player".to_string()),
+        "original",
+        MessageType::Narration,
+        None,
+        None,
+    );
+    let id = storage.insert_message(&msg).unwrap();
+    storage
+        .insert_swipe(
+            id,
+            &Swipe {
+                text: "swipe".to_string(),
+                snapshot_id: Some(snap_id),
+                location_header: None,
+                event_header: None,
+            },
+            0,
+        )
+        .unwrap();
+
+    let req = Request::builder()
+        .uri(format!("/message/{id}/swipe/0"))
+        .method(http::Method::POST)
+        .body(Body::empty())
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+
+    assert_eq!(
+        response.status(),
+        StatusCode::SERVICE_UNAVAILABLE,
+        "Switching swipe during generation should fail"
+    );
+}
+
+#[tokio::test]
+async fn test_reset_handler_generating() {
+    let app = TestAppBuilder::default_test().is_generating(true).build();
+
+    let req = Request::builder()
+        .uri("/reset")
+        .method(http::Method::POST)
+        .body(Body::empty())
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+
+    assert_eq!(
+        response.status(),
+        StatusCode::SERVICE_UNAVAILABLE,
+        "Reset during generation should fail"
     );
 }

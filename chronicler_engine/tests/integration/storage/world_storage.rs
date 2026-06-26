@@ -3,13 +3,14 @@ use chronicler_engine::model::scenario::StartingScenario;
 use chronicler_engine::model::world::WorldCard;
 use chronicler_engine::storage::Storage;
 
+use crate::fixtures::create_test_storage;
+
 fn make_test_world(key: &str, name: &str) -> WorldCard {
     WorldCard {
         key: key.to_string(),
         name: name.to_string(),
         description: "Test world for integration testing".to_string(),
         global_rules: vec!["Rule 1".to_string(), "Rule 2".to_string()],
-        starting_room_id: "start".to_string(),
         scenarios: vec![],
         default_scenario_id: None,
         default_room_image: Some("/images/test.png".to_string()),
@@ -35,7 +36,6 @@ fn test_delete_world_success() {
         name: "Test World".to_string(),
         description: "Test world for deletion".to_string(),
         global_rules: vec![],
-        starting_room_id: "start".to_string(),
         scenarios: vec![],
         default_scenario_id: None,
         default_room_image: None,
@@ -305,4 +305,97 @@ fn test_delete_world_nonexistent_idempotent() {
 
     let result = storage.delete_world("nonexistent");
     assert!(result.is_ok(), "Should succeed even if world doesn't exist");
+}
+
+// ─── SQLite Backend Tests ───
+
+#[test]
+fn test_sqlite_list_worlds() {
+    let storage = create_test_storage(1);
+
+    let world_card = make_test_world("sql_list", "SQL List World");
+    let map = make_test_map("sql_map", "SQL Map");
+    storage.seed_world(&world_card, &map).unwrap();
+
+    let worlds = storage.list_worlds().unwrap();
+    assert_eq!(worlds.len(), 1);
+    assert_eq!(worlds[0].key, "sql_list");
+}
+
+#[test]
+fn test_sqlite_get_world_found() {
+    let storage = create_test_storage(1);
+
+    let world_card = make_test_world("sql_get", "SQL Get World");
+    let map = make_test_map("sql_map", "SQL Map");
+    storage.seed_world(&world_card, &map).unwrap();
+
+    let result = storage.get_world("sql_get").unwrap();
+    assert!(result.is_some());
+    let wwm = result.unwrap();
+    assert_eq!(wwm.world_card.key, "sql_get");
+    assert_eq!(wwm.world_card.name, "SQL Get World");
+}
+
+#[test]
+fn test_sqlite_get_world_not_found() {
+    let storage = create_test_storage(1);
+    let result = storage.get_world("nonexistent").unwrap();
+    assert!(result.is_none());
+}
+
+#[test]
+fn test_sqlite_seed_world_idempotent() {
+    let storage = create_test_storage(1);
+
+    let world_card = make_test_world("sql_idem", "Idempotent");
+    let map = make_test_map("sql_map", "SQL Map");
+    let _id1 = storage.seed_world(&world_card, &map).unwrap();
+    let _id2 = storage.seed_world(&world_card, &map).unwrap();
+
+    let worlds = storage.list_worlds().unwrap();
+    assert_eq!(
+        worlds.len(),
+        1,
+        "Seeding same key twice should keep one world"
+    );
+    assert_eq!(worlds[0].key, "sql_idem");
+}
+
+#[test]
+fn test_sqlite_get_world_by_id() {
+    let storage = create_test_storage(1);
+
+    let world_card = make_test_world("sql_by_id", "By ID");
+    let map = make_test_map("sql_map", "SQL Map");
+    let world_id = storage.seed_world(&world_card, &map).unwrap();
+
+    let result = storage.get_world_by_id(world_id).unwrap();
+    assert!(result.is_some());
+    assert_eq!(result.unwrap().world_card.key, "sql_by_id");
+}
+
+#[test]
+fn test_sqlite_delete_world_blocked_by_games() {
+    let storage = create_test_storage(1);
+
+    let world_card = make_test_world("sql_blocked", "Blocked");
+    let map = make_test_map("sql_map", "SQL Map");
+    storage.seed_world(&world_card, &map).unwrap();
+
+    storage
+        .create_game(
+            "Blocked",
+            "sql_blocked",
+            "test_player",
+            "Test Player",
+            "Test Game",
+        )
+        .unwrap();
+
+    let result = storage.delete_world("sql_blocked");
+    assert!(result.is_err(), "Should not delete world with games");
+
+    let worlds = storage.list_worlds().unwrap();
+    assert_eq!(worlds.len(), 1, "World should still exist");
 }

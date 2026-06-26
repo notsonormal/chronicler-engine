@@ -56,8 +56,6 @@ pub struct WorldsPanelTemplate {
 
         <label>Global Rules (one per line): <textarea name="global_rules">{{ global_rules }}</textarea></label>
 
-        <label>Starting Room ID: <input type="text" name="starting_room_id" value="{{ starting_room_id }}" /></label>
-
         <label>Default Room Image: <input type="text" name="default_room_image" value="{{ default_room_image }}" /></label>
 
         <label>Map JSON:
@@ -84,7 +82,6 @@ pub struct WorldFormTemplate {
     pub name: String,
     pub description: String,
     pub global_rules: String,
-    pub starting_room_id: String,
     pub default_room_image: String,
     pub map_json: String,
     pub scenarios_json: String,
@@ -130,7 +127,6 @@ impl WorldFormTemplate {
             name: w.name.clone(),
             description: w.description.clone(),
             global_rules: w.global_rules.join("\n"),
-            starting_room_id: w.starting_room_id.clone(),
             default_room_image: w.default_room_image.clone().unwrap_or_default(),
             map_json: map_json_str,
             scenarios_json: scenarios_json_str,

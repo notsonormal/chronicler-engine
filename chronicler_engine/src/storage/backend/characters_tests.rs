@@ -138,7 +138,6 @@ fn test_world_data() -> (WorldCard, MapDef) {
         key: "test".to_string(),
         name: "Test World".to_string(),
         description: "Test description".to_string(),
-        starting_room_id: "start".to_string(),
         ..Default::default()
     };
 

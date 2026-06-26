@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Relocate `starting_room_id` from `WorldCard` to `StartingScenario`.
+- Storage migration v14: drop `worlds.starting_room_id` column.
+
+### Breaking Changes
+
+- Existing saved games must be reset with `python build.py --cleanup` (scenarios JSON shape changes; `worlds.starting_room_id` DB column dropped).
+
 ## 2026-06-25
 
 ### Changed

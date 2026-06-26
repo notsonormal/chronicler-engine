@@ -25,3 +25,15 @@ fn test_starting_scenario_optional_text() {
     let scenario: StartingScenario = serde_json::from_str(json).unwrap();
     assert_eq!(scenario.text, "");
 }
+
+#[test]
+fn test_starting_scenario_missing_starting_room_id_defaults_to_start() {
+    let json = r#"{
+        "id": "no_room",
+        "name": "No Room",
+        "description": "Missing starting_room_id",
+        "text": ""
+    }"#;
+    let scenario: StartingScenario = serde_json::from_str(json).unwrap();
+    assert_eq!(scenario.starting_room_id, "start");
+}

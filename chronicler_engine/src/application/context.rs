@@ -140,13 +140,16 @@ pub fn load_expecting_valid_state(ctx: &GameServiceContext) -> Result<GameState,
             Arc::clone(&ctx.player),
             (*ctx.npcs).clone(),
         ),
-        None => GameState::new(
-            Arc::clone(&ctx.world),
-            Arc::clone(&ctx.map),
-            Arc::clone(&ctx.player),
-            (*ctx.npcs).values().cloned().collect(),
-            ctx.world.starting_room_id.clone(),
-        ),
+        None => {
+            let starting_room_id = ctx.world.starting_room_id();
+            GameState::new(
+                Arc::clone(&ctx.world),
+                Arc::clone(&ctx.map),
+                Arc::clone(&ctx.player),
+                (*ctx.npcs).values().cloned().collect(),
+                starting_room_id,
+            )
+        }
     };
     load_messages_into_state(ctx, &mut state);
     Ok(state)
@@ -159,12 +162,13 @@ pub fn load_or_fresh(ctx: &GameServiceContext) -> GameState {
             tracing::error!(
                 "Failed to load game state ({e}), falling back to fresh state. This may indicate data corruption."
             );
+            let starting_room_id = ctx.world.starting_room_id();
             GameState::new(
                 Arc::clone(&ctx.world),
                 Arc::clone(&ctx.map),
                 Arc::clone(&ctx.player),
                 (*ctx.npcs).values().cloned().collect(),
-                ctx.world.starting_room_id.clone(),
+                starting_room_id,
             )
         }
     }

@@ -50,7 +50,7 @@ fn test_scan_worlds_valid() {
     std::fs::create_dir_all(&worlds_dir).unwrap();
     std::fs::write(
         worlds_dir.join("world.json"),
-        r#"{"id":"test_world","name":"Test World","description":"A test world","global_rules":[],"starting_room_id":"room1"}"#,
+        r#"{"id":"test_world","name":"Test World","description":"A test world","global_rules":[]}"#,
     )
     .unwrap();
 
@@ -72,7 +72,7 @@ fn test_scan_worlds_mixed() {
     std::fs::create_dir_all(&valid_dir).unwrap();
     std::fs::write(
         valid_dir.join("world.json"),
-        r#"{"id":"valid_world","name":"Valid World","description":"A valid world","global_rules":[],"starting_room_id":"room1"}"#,
+        r#"{"id":"valid_world","name":"Valid World","description":"A valid world","global_rules":[]}"#,
     )
     .unwrap();
 

@@ -341,6 +341,6 @@ Tests are already concurrency-safe: they allocate ports dynamically from the ran
 - When responding to user feedback or an analysis, explicitly say whether you agree or disagree before saying what you changed.
 - For UI changes, verify in the browser with a screenshot before claiming completion.
 
-## RUNNING REVIEWS
+## DOING CODE REVIEWS
 
 Do not run try to compile, build or test the code when doing code reviews. Unless the review explictly calls for it (e.g. the `test-police` review). 

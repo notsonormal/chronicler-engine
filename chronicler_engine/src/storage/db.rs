@@ -183,7 +183,6 @@ fn run_migrations(conn: &Connection) -> Result<(), crate::error::EngineError> {
                 name TEXT NOT NULL,
                 description TEXT NOT NULL DEFAULT '',
                 global_rules TEXT NOT NULL DEFAULT '[]',  -- JSON: Vec<String>
-                starting_room_id TEXT NOT NULL DEFAULT 'start',
                 scenarios TEXT NOT NULL DEFAULT '[]',     -- JSON: Vec<StartingScenario>
                 default_scenario_id TEXT,
                 default_room_image TEXT,
@@ -297,6 +296,19 @@ fn run_migrations(conn: &Connection) -> Result<(), crate::error::EngineError> {
         exec("ALTER TABLE games ADD COLUMN persona_name TEXT NOT NULL DEFAULT ''")?;
         exec("ALTER TABLE worlds DROP COLUMN player_key")?;
         conn.pragma_update(None, "user_version", 13).map_err(|e| {
+            crate::error::EngineError::Config(format!("Failed to set user_version: {e}"))
+        })?;
+    }
+
+    if version < 14 {
+        let exec = |sql: &str| {
+            conn.execute(sql, [])
+                .map_err(|e| crate::error::EngineError::Config(format!("Migration failed: {e}")))
+        };
+        if column_exists(conn, "worlds", "starting_room_id") {
+            exec("ALTER TABLE worlds DROP COLUMN starting_room_id")?;
+        }
+        conn.pragma_update(None, "user_version", 14).map_err(|e| {
             crate::error::EngineError::Config(format!("Failed to set user_version: {e}"))
         })?;
     }

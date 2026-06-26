@@ -14,7 +14,6 @@ pub fn create_test_state_with_map() -> GameState {
         key: "test".into(),
         name: "Test World".into(),
         description: "A test world".into(),
-        starting_room_id: "room1".into(),
         ..Default::default()
     });
 
@@ -60,7 +59,6 @@ pub fn create_test_state_with_trigger_npc() -> GameState {
         key: "test".into(),
         name: "Test World".into(),
         description: "A test world".into(),
-        starting_room_id: "room1".into(),
         ..Default::default()
     });
 

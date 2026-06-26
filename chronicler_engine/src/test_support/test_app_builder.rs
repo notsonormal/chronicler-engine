@@ -42,7 +42,6 @@ impl TestAppBuilder {
             key: "test".to_string(),
             name: "Test World".to_string(),
             description: "A test world".to_string(),
-            starting_room_id: "room_1".to_string(),
             scenarios: vec![crate::model::scenario::StartingScenario {
                 id: "test_intro".to_string(),
                 name: "Test World Introduction".to_string(),
@@ -123,8 +122,8 @@ impl TestAppBuilder {
                     id: "test_region".to_string(),
                     name: "Test Region".to_string(),
                     rooms: vec![Room {
-                        id: world.starting_room_id.clone(),
-                        name: format!("Room {}", world.starting_room_id),
+                        id: world.starting_room_id(),
+                        name: format!("Room {}", world.starting_room_id()),
                         description: "A plain test room.".to_string(),
                         exits: std::collections::HashMap::new(),
                         items: vec![],

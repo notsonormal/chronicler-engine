@@ -10,7 +10,6 @@
         "The Redmist Estate employs a small staff including Lisette (personal maid) and Louise (personal chef), both reassigned to serve Julian.",
         "Islaport is a large coastal city with colonial architecture, a busy harbour, and distinct social classes. The Redmist family is among its most influential."
     ],
-    "starting_room_id": "front_gates",
     "map_file": "map.json",
     "characters_dir": "redmist_estate",
     "default_room_image": "data/images/Redmist Estate.png",

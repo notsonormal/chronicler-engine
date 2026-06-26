@@ -18,7 +18,6 @@ pub fn create_test_world() -> WorldCard {
         key: "test".to_string(),
         name: "Test Realm".to_string(),
         description: "A small testing kingdom".to_string(),
-        starting_room_id: "room1".to_string(),
         ..Default::default()
     }
 }
@@ -120,7 +119,6 @@ pub fn create_test_state_with_npcs(room_npcs: Vec<String>, npcs: Vec<NpcCard>) -
         key: "test".into(),
         name: "Test World".into(),
         description: "A test world".into(),
-        starting_room_id: "room1".into(),
         ..Default::default()
     });
 
@@ -308,7 +306,6 @@ pub fn create_test_world_with_scenario() -> WorldCard {
         key: "test".to_string(),
         name: "Test Realm".to_string(),
         description: "A small testing kingdom".to_string(),
-        starting_room_id: "room1".to_string(),
         scenarios: vec![StartingScenario {
             id: "test_scenario".to_string(),
             name: "Test Scenario".to_string(),

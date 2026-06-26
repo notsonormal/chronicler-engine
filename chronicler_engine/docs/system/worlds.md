@@ -61,8 +61,7 @@ Browser (Worlds Tab)
 | `name` | String | Display name |
 | `description` | String | Short description |
 | `global_rules` | Vec<String> | One rule per line, applied to all games in this world |
-| `starting_room_id` | String | Default room ID for new games |
-| `scenarios` | Vec<StartingScenario> | Available starting scenarios |
+| `scenarios` | Vec<StartingScenario> | Available starting scenarios. Each scenario declares its own `starting_room_id` (default `"start"`). |
 | `default_scenario_id` | Option<String> | Default scenario if not specified |
 | `default_room_image` | Option<String> | Fallback image for rooms without specific images |
 
@@ -114,7 +113,7 @@ The Worlds tab is the third tab in the dashboard, positioned after "Prompt Prese
 Create/Edit uses inline HTMX swaps with `hx-target=".worlds-panel" hx-swap="outerHTML"` — no modal overlay:
 
 - **Hidden by default**, shown when "Create New World" or "Edit" clicked (replaces the worlds list)
-- **Form fields**: key (readonly for edit), name, description, global_rules (textarea), starting_room_id, default_room_image, map_json (textarea), scenarios_json (textarea)
+- **Form fields**: key (readonly for edit), name, description, global_rules (textarea), default_room_image, map_json (textarea), scenarios_json (textarea). `starting_room_id` lives inside each scenario object, not at the world level.
 - **Submit**: Form posts to `/worlds` (create) or `/worlds/:key` (update)
 - **Cancel**: Returns to worlds list via `hx-get="/fragment/worlds"` targeting `.worlds-panel`
 
@@ -133,9 +132,8 @@ Rendered by `render_worlds_panel()`:
 
 1. **key**: Required, unique, alphanumeric + underscore only
 2. **name**: Required, non-empty
-3. **starting_room_id**: Must reference a room in the map (validated in storage)
+3. **scenarios_json**: Valid JSON array of `StartingScenario` objects (each scenario's `starting_room_id` must reference a room in the map; validated in storage)
 4. **map_json**: Valid JSON matching `MapDef` schema
-5. **scenarios_json**: Valid JSON array of `StartingScenario` objects
 
 ### Delete Validation
 

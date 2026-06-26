@@ -13,7 +13,7 @@ use super::test_helpers::fetch_body;
 
 fn make_world_form_data(key: &str, name: &str, map_json: &str, scenarios_json: &str) -> String {
     format!(
-        "key={}&name={}&description=Test+World&global_rules=rule1&map_json={}&scenarios_json={}&starting_room_id=start",
+        "key={}&name={}&description=Test+World&global_rules=rule1&map_json={}&scenarios_json={}",
         key,
         name,
         urlencoding::encode(map_json),
@@ -143,7 +143,7 @@ async fn test_create_world_handler_valid_data() {
 async fn test_create_world_handler_invalid_map_json() {
     let app = TestAppBuilder::default_app();
 
-    let form_data = "key=test&name=Test&description=Test&global_rules=rule1&map_json=invalid_json&scenarios_json=[]&starting_room_id=start";
+    let form_data = "key=test&name=Test&description=Test&global_rules=rule1&map_json=invalid_json&scenarios_json=[]";
 
     let req = Request::builder()
         .uri("/worlds")
@@ -179,7 +179,7 @@ async fn test_create_world_handler_invalid_scenarios_json() {
     .to_string();
 
     let form_data = format!(
-        "key=test&name=Test&description=Test&global_rules=rule1&map_json={}&scenarios_json=invalid&starting_room_id=start",
+        "key=test&name=Test&description=Test&global_rules=rule1&map_json={}&scenarios_json=invalid",
         urlencoding::encode(&map_json)
     );
 
@@ -213,7 +213,7 @@ async fn test_create_world_handler_missing_key() {
     .to_string();
 
     let form_data = format!(
-        "name=Test&description=Test&global_rules=rule1&map_json={}&scenarios_json=[]&starting_room_id=start",
+        "name=Test&description=Test&global_rules=rule1&map_json={}&scenarios_json=[]",
         urlencoding::encode(&map_json)
     );
 
@@ -323,7 +323,8 @@ async fn test_update_world_handler_valid_data() {
 async fn test_update_world_handler_invalid_json() {
     let app = TestAppBuilder::default_app();
 
-    let form_data = "key=test&name=Test&description=Test&global_rules=rule1&map_json=invalid&scenarios_json=[]&starting_room_id=start";
+    let form_data =
+        "key=test&name=Test&description=Test&global_rules=rule1&map_json=invalid&scenarios_json=[]";
 
     let req = Request::builder()
         .uri("/worlds/test")

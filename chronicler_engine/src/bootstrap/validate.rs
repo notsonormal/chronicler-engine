@@ -20,10 +20,10 @@ pub fn validate_loaded_data(
         }
     }
 
-    if !valid_room_ids.contains(&world.starting_room_id) {
+    let resolved_starting_room = world.starting_room_id();
+    if !valid_room_ids.contains(&resolved_starting_room) {
         errors.push(format!(
-            "starting_room_id '{}' not found in map",
-            world.starting_room_id
+            "starting room '{resolved_starting_room}' not found in map"
         ));
     }
 

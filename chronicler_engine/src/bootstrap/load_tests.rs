@@ -45,7 +45,6 @@ fn test_seed_game_data_idempotent() {
             "name": "Test Seed World",
             "description": "A world for testing",
             "global_rules": [],
-            "starting_room_id": "start",
             "map_file": "map.json",
             "scenarios": [],
             "default_scenario_id": null

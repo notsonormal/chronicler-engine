@@ -109,6 +109,23 @@ fn test_db_reopen_idempotent() {
 }
 
 #[test]
+fn test_db_v14_drops_starting_room_id_column() {
+    let pool = DbPool::new(":memory:").unwrap();
+    let conn = pool.conn();
+    let count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('worlds') WHERE name='starting_room_id'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(
+        count, 0,
+        "worlds.starting_room_id column must be dropped in v14"
+    );
+}
+
+#[test]
 fn test_db_message_swipes_table_exists() {
     let pool = DbPool::new(":memory:").unwrap();
     let conn = pool.conn();

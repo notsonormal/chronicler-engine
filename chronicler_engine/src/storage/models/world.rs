@@ -7,8 +7,7 @@ pub struct DbWorld {
     pub name: String,
     pub description: String,
     pub global_rules: String, // JSON: Vec<String>
-    pub starting_room_id: String,
-    pub scenarios: String, // JSON: Vec<StartingScenario>
+    pub scenarios: String,    // JSON: Vec<StartingScenario>
     pub default_scenario_id: Option<String>,
     pub default_room_image: Option<String>,
     pub created_at: String,
@@ -23,12 +22,11 @@ impl DbWorld {
             name: row.get(2)?,
             description: row.get(3)?,
             global_rules: row.get(4)?,
-            starting_room_id: row.get(5)?,
-            scenarios: row.get(6)?,
-            default_scenario_id: row.get(7)?,
-            default_room_image: row.get(8)?,
-            created_at: row.get(9)?,
-            updated_at: row.get(10)?,
+            scenarios: row.get(5)?,
+            default_scenario_id: row.get(6)?,
+            default_room_image: row.get(7)?,
+            created_at: row.get(8)?,
+            updated_at: row.get(9)?,
         })
     }
 }
