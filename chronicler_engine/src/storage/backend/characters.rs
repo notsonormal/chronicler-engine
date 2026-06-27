@@ -23,7 +23,6 @@ impl Storage {
                 rows.iter().map(character_from_db).collect()
             }
             Backend::InMemory(data) => Ok(data.characters.iter().filter(|c| c.world_id == world_id).map(|c| c.card.clone()).collect()),
-            Backend::Test { .. } => unreachable!(),
         })
     }
 
@@ -42,7 +41,6 @@ impl Storage {
                 }
             }
             Backend::InMemory(data) => Ok(data.characters.iter().find(|c| c.world_id == world_id && c.card.id == key).map(|c| c.card.clone())),
-            Backend::Test { .. } => unreachable!(),
         })
     }
 
@@ -90,7 +88,6 @@ impl Storage {
                 }
                 Ok(())
             }
-            Backend::Test { .. } => unreachable!(),
         })
     }
 }

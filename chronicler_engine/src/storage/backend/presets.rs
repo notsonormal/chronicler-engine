@@ -39,7 +39,6 @@ impl Storage {
                     .cloned()
                     .collect())
             }
-            Backend::Test { .. } => unreachable!(),
         })
     }
 
@@ -71,7 +70,6 @@ impl Storage {
             Backend::InMemory(data) => {
                 Ok(data.presets.iter().find(|p| p.id == id).cloned())
             }
-            Backend::Test { .. } => unreachable!(),
         })
     }
 
@@ -119,7 +117,6 @@ impl Storage {
                 }
                 Ok(())
             }
-            Backend::Test { .. } => unreachable!(),
         })
     }
 
@@ -135,7 +132,6 @@ impl Storage {
                 data.presets.retain(|p| p.id != id);
                 Ok(())
             }
-            Backend::Test { .. } => unreachable!(),
         })
     }
 }

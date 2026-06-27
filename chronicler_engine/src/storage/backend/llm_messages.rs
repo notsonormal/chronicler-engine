@@ -50,7 +50,6 @@ impl Storage {
                 }
                 Ok(())
             }
-            Backend::Test { .. } => unreachable!(),
         })
     }
 
@@ -99,7 +98,6 @@ impl Storage {
                 let start = data.llm_messages.len().saturating_sub(limit);
                 Ok(data.llm_messages[start..].to_vec())
             }
-            Backend::Test { .. } => unreachable!(),
         })
     }
 }

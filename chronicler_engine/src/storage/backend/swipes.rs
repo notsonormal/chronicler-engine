@@ -41,7 +41,6 @@ impl Storage {
                 }
                 Ok(())
             }
-            Backend::Test { .. } => unreachable!(),
         })
     }
 
@@ -69,7 +68,6 @@ impl Storage {
                 }
                 Ok(())
             }
-            Backend::Test { .. } => unreachable!(),
         })
     }
 
@@ -85,7 +83,6 @@ impl Storage {
                 Ok(())
             }
             Backend::InMemory(_) => Ok(()),
-            Backend::Test { .. } => unreachable!(),
         })
     }
 
@@ -151,7 +148,6 @@ impl Storage {
                 }
                 Ok(result)
             }
-            Backend::Test { .. } => unreachable!(),
         })
     }
 
@@ -176,7 +172,6 @@ impl Storage {
                     .unwrap_or(0);
                 Ok(count)
             }
-            Backend::Test { .. } => unreachable!(),
         })
     }
 }

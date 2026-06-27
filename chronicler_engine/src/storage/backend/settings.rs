@@ -24,7 +24,6 @@ impl Storage {
                 }
             }
             Backend::InMemory(data) => Ok(data.settings.clone()),
-            Backend::Test { .. } => unreachable!(),
         })
     }
 
@@ -62,7 +61,6 @@ impl Storage {
                 data.settings = settings.clone();
                 Ok(())
             }
-            Backend::Test { .. } => unreachable!(),
         })
     }
 

@@ -15,6 +15,11 @@ pub mod swipes;
 pub mod worlds;
 
 pub use helpers::empty_to_none;
+#[cfg(feature = "testing")]
+pub use test_support::{ErrorKind, TestFailureHandle, TestOverride};
+
+#[cfg(feature = "testing")]
+pub mod test_support;
 
 #[cfg(test)]
 mod characters_tests;

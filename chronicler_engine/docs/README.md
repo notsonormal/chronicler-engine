@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-06-27 17:03 UTC*
+*Index last generated: 2026-06-27 21:28 UTC*
 
 ### Root files
 
@@ -62,7 +62,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ### `docs/plans/`
 
 - [Plan: Abstraction Anti-Pattern Prevention via Advisory Healthcheck](./plans/abstraction-antipattern-healthcheck-plan.md)
-- [Plan: Abstraction Anti-Pattern Fixes (Tiered)](./plans/abstraction-fixes-plan.md)
+- [Super-Plan: Abstraction-Fixes Follow-Up](./plans/abstraction-fixes-followup-superplan.md)
 - [Plan: Antipattern-Checker Agent Skill](./plans/antipattern-checker-skill-plan.md)
 - [Plan: Diagnostic Decision Tree as Agent Infrastructure](./plans/diagnostic-decision-tree-plan.md)
 - [Plan: Mapless Worlds via Freeform Location Names](./plans/mapless-worlds-plan.md)
@@ -75,11 +75,13 @@ This folder contains all documentation for the Chronicler Engine project.
 ### `docs/plans/archived/`
 
 - [Implementation Plan: Abstraction Anti-Pattern Fixes (Corrected)](./plans/archived/abstraction-fixes-implementation-plan.md)
+- [Plan: Abstraction Anti-Pattern Fixes (Tiered)](./plans/archived/abstraction-fixes-plan.md)
 - [ADR-026 Follow-up: Thermo-Nuclear Review Quality Fixes](./plans/archived/adr-026-followup-quality-fixes.md)
 - [Fix Boot Path: Restore Auto-Create Game with `--persona` CLI Flag](./plans/archived/fix-boot-and-default-game.md)
 - [Pipeline Decomposition Review Fixes (Round 3)](./plans/archived/pipeline-review-fixes-round3.md)
 - [Review Fixes — Pipeline Decomposition Quality](./plans/archived/review-fixes-pipeline-quality.md)
 - [Subplan A: Relocate `starting_room_id` to `StartingScenario`](./plans/archived/subplan-a-relocate-starting-room.md)
+- [T7 Sub-Plan (Archived): Split `Backend` enum into `Backend` + `LayeredBackend`](./plans/archived/t7-storage-backend-layered-split.md)
 
 ### `docs/reference/`
 

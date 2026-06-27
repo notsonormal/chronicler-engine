@@ -4,6 +4,14 @@
 
 ### Changed
 
+- **Storage: Backend/LayeredBackend split**
+  - Split `Backend` enum into `Backend` (`Sqlite`, `InMemory`) + `LayeredBackend` (`Direct(Backend)` | `Test { base, overrides }`) — `Test` is now a decorator, not a peer of real backends.
+  - `LayeredBackend::Test.base` is non-recursive `Box<Backend>` — structurally enforces "at most one Test layer" (replace-not-nest invariant pinned by 2 new unit tests).
+  - Removed 40 dead `Backend::Test { .. } => unreachable!()` arms across 10 storage backend files (M1/N2 cleanup).
+  - Test-infra types (`TestOverride`, `TestFailureHandle`, `ErrorKind`) moved from `storage/backend/core.rs` to new `storage/backend/test_support.rs` module. Re-export shim preserves `crate::storage::{TestOverride, TestFailureHandle, ErrorKind}` import paths — no caller/test changes.
+  - `Storage` public API unchanged: `with_failure`, `with_test_failures`, `add_failure`, `with_shared_overrides`, `new_sqlite`, `new_in_memory` all preserved.
+  - Addresses M1 (Test variant isolation), M2 (nesting invariant), N2 (dead arms) of T7 in `docs/plans/abstraction-fixes-followup-superplan.md`.
+
 - **Thermo-nuclear follow-up cleanup** — Quality review follow-up to the abstraction-fixes branch. Mechanical, scope-bounded, no behavior changes beyond the documented `reset` per-message/swipe failure swallow.
   - Deleted one-off refactor scripts that slipped into the prior commit: `replace_test_arms.py`, `scripts/fix_storage.py`, `scripts/fix_tests.py` (the latter hardcoded an absolute Windows path). Removed the `scouts/` scout-notes directory entirely.
   - Storage backend type safety: reverted the mechanical `_ => unreachable!()` catch-alls back to explicit `Backend::Test { .. } => unreachable!()` arms across all 10 backend files (40 arms). The explicit form preserves exhaustive-match compile-time safety so future `Backend` variants can't be silently absorbed.

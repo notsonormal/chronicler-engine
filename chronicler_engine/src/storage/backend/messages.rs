@@ -38,7 +38,6 @@ impl Storage {
                 data.messages.entry(game_id).or_default().push(msg);
                 Ok(id)
             }
-            Backend::Test { .. } => unreachable!(),
         })
     }
 
@@ -60,7 +59,6 @@ impl Storage {
                 }
                 Ok(())
             }
-            Backend::Test { .. } => unreachable!(),
         })
     }
 
@@ -112,7 +110,6 @@ impl Storage {
                 .get(&game_id)
                 .map(|vec| vec.iter().filter(|m| !m.is_deleted).cloned().collect())
                 .unwrap_or_default()),
-            Backend::Test { .. } => unreachable!(),
         })
     }
 
@@ -140,7 +137,6 @@ impl Storage {
                 }
                 Err(EngineError::Config(format!("Message {id} not found")))
             }
-            Backend::Test { .. } => unreachable!(),
         })
     }
 
@@ -164,7 +160,6 @@ impl Storage {
                 }
                 Ok(())
             }
-            Backend::Test { .. } => unreachable!(),
         })
     }
 
@@ -188,7 +183,6 @@ impl Storage {
                 }
                 Ok(())
             }
-            Backend::Test { .. } => unreachable!(),
         })
     }
 
@@ -214,7 +208,6 @@ impl Storage {
                 }
                 Ok(())
             }
-            Backend::Test { .. } => unreachable!(),
         })
     }
 
@@ -238,7 +231,6 @@ impl Storage {
                 }
                 Ok(())
             }
-            Backend::Test { .. } => unreachable!(),
         })
     }
 }

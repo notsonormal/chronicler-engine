@@ -120,6 +120,57 @@ fn test_typoed_override_key_panics_on_assert() {
     handle.assert_no_unconsumed();
 }
 
+#[test]
+fn with_failure_adds_does_not_nest() {
+    // with_failure delegates to add_failure: chained calls accumulate overrides
+    // in a single Test layer, never stacking. Same-key insert must be
+    // last-write-wins inside the shared map, not a fresh map per call.
+    let s = Storage::new_in_memory()
+        .with_failure("save_snapshot", TestOverride::internal("first"))
+        .with_failure("save_snapshot", TestOverride::internal("second"));
+    let (layer, base) = s.backend_layer_info();
+    assert_eq!(
+        layer, "Test",
+        "expected single Test layer after chained with_failure"
+    );
+    assert_eq!(base, "InMemory", "with_failure must not stack Test layers");
+    let err = s.save_snapshot(&dummy_snapshot()).unwrap_err().to_string();
+    assert!(
+        err.contains("second"),
+        "latest with_failure must win for same method: {err}"
+    );
+    assert!(
+        !err.contains("first"),
+        "first override leaked through: {err}"
+    );
+}
+
+#[test]
+fn add_failure_reuses_map_does_not_nest() {
+    // add_failure reuses the existing overrides map: distinct method keys
+    // must coexist and fire when their methods are invoked. Proves the map
+    // is shared, not replaced on each call.
+    let s = Storage::new_in_memory();
+    s.add_failure("save_snapshot", TestOverride::internal("snap fail"));
+    s.add_failure("load_latest_snapshot", TestOverride::config("load fail"));
+    let (layer, base) = s.backend_layer_info();
+    assert_eq!(
+        layer, "Test",
+        "expected single Test layer after double add_failure"
+    );
+    assert_eq!(base, "InMemory", "add_failure must not stack Test layers");
+    let snap_err = s.save_snapshot(&dummy_snapshot()).unwrap_err().to_string();
+    assert!(
+        snap_err.contains("snap fail"),
+        "first add_failure must fire: {snap_err}"
+    );
+    let load_err = s.load_latest_snapshot().unwrap_err().to_string();
+    assert!(
+        load_err.contains("load fail"),
+        "second add_failure must fire: {load_err}"
+    );
+}
+
 use crate::model::state_snapshot::{GameStateSnapshot, NarrativeSnapshot};
 use crate::model::state::{MovementState, SceneState};
 use crate::model::trigger::NpcEncounterLog;

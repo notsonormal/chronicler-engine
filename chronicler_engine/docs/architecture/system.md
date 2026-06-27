@@ -194,7 +194,7 @@ Unified error type shared across all tiers.
 
 ### 7. The Storage Tier (`crate::storage`)
 
-Unified `Storage` struct with `Backend` enum (`Sqlite`, `InMemory`, `Test`). All table operations are methods on `Storage` — no repository structs or trait objects. Schema lives in `src/storage/db.rs`; backend CRUD modules in `src/storage/backend/` (one file per table). See [`system/storage.md`](../system/storage.md) for design decisions, seeding pattern, module boundaries, and testing strategy.
+Unified `Storage` struct with `Backend` enum (`Sqlite`, `InMemory`) for real backends plus `LayeredBackend` decorator (`Direct(Backend)` | `Test { base, overrides }`) for failure injection. All table operations are methods on `Storage` — no repository structs or trait objects. Schema lives in `src/storage/db.rs`; backend CRUD modules in `src/storage/backend/` (one file per table); test-infra types in `src/storage/backend/test_support.rs`. See [`system/storage.md`](../system/storage.md) for design decisions, seeding pattern, module boundaries, and testing strategy.
 
 ### 8. The Bootstrap Tier (`crate::bootstrap`)
 

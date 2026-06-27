@@ -4,6 +4,8 @@
 
 **Accepted**
 
+> **Note (2026-06-27):** As of the Backend/LayeredBackend split refactor, `Backend::Test` was reorganized into `LayeredBackend::Test`. The original decision rationale stands — failure injection still uses `Arc<Mutex<HashMap<&'static str, TestOverride>>>` maps for both static setup (`with_failure`) and dynamic toggling (`TestFailureHandle::set` / `clear`). Type location changed (test-infra types moved to `storage::backend::test_support`); purpose unchanged.
+
 ## Context
 
 The storage layer had grown to six separate traits (`GameStorage`, `SnapshotStorage`, `MessageStorage`, `MessageSwipeStorage`, `PromptPresetStorage`, `LlmMessageStorage`) with 12 repository structs (SQLite + in-memory pairs). This produced:

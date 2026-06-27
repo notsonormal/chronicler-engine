@@ -3,9 +3,11 @@
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
+#[cfg(feature = "testing")]
+use std::sync::Arc;
 
-use crate::error::{EngineError, internal_error};
+use crate::error::EngineError;
 use crate::model::character::{NpcCard, PlayerCard};
 use crate::model::game::Game;
 use crate::model::llm_message::LlmMessage;
@@ -16,10 +18,12 @@ use crate::model::settings::AppSettings;
 use crate::model::state_snapshot::GameStateSnapshot;
 use crate::model::world::WorldCard;
 use crate::storage::db::DbPool;
+#[cfg(feature = "testing")]
+use super::test_support::{TestFailureHandle, TestOverride};
 
 pub struct Storage {
     game_id: AtomicU64,
-    backend: Mutex<Backend>,
+    backend: Mutex<LayeredBackend>,
 }
 
 pub struct InMemoryData {
@@ -55,92 +59,39 @@ pub struct CharacterSeed {
 }
 
 pub enum Backend {
-    Sqlite {
-        pool: DbPool,
-    },
+    Sqlite { pool: DbPool },
     InMemory(Box<InMemoryData>),
+}
+
+/// Non-recursive by design: `Test.base` is `Box<Backend>`, not `Box<LayeredBackend>` —
+/// enforces "at most one Test layer" (replace-not-nest invariant).
+pub enum LayeredBackend {
+    Direct(Backend),
+    #[cfg(feature = "testing")]
     Test {
         base: Box<Backend>,
         overrides: Arc<Mutex<HashMap<&'static str, TestOverride>>>,
     },
 }
 
-pub struct TestOverride {
-    kind: ErrorKind,
-    message: String,
-}
-
-#[derive(Clone, Copy)]
-pub enum ErrorKind {
-    Config,
-    Internal,
-}
-
-pub struct TestFailureHandle {
-    overrides: Arc<Mutex<HashMap<&'static str, TestOverride>>>,
-}
-
-impl TestFailureHandle {
-    pub fn set(&self, method: &'static str, override_: TestOverride) {
-        self.overrides
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .insert(method, override_);
-    }
-
-    pub fn clear(&self, method: &'static str) {
-        self.overrides
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .remove(method);
-    }
-
-    pub fn clear_all(&self) {
-        self.overrides
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clear();
-    }
-
-    #[allow(clippy::panic)]
-    pub fn assert_no_unconsumed(&self) {
-        let map = self.overrides.lock().unwrap_or_else(|e| e.into_inner());
-        if !map.is_empty() {
-            let keys: Vec<_> = map.keys().cloned().collect();
-            panic!("Unconsumed overrides remain: {keys:?}");
-        }
-    }
-}
-
-impl Drop for TestFailureHandle {
-    fn drop(&mut self) {
-        let map = self.overrides.lock().unwrap_or_else(|e| e.into_inner());
-        if !map.is_empty() {
-            let keys: Vec<_> = map.keys().cloned().collect();
-            tracing::warn!("TestFailureHandle dropped with unconsumed overrides: {keys:?}");
-        }
-    }
-}
-
-impl TestOverride {
-    pub fn config(message: impl Into<String>) -> Self {
+impl InMemoryData {
+    /// Empty placeholder used by constructors that need a throwaway backend
+    /// for `mem::replace` borrow-checker workaround.
+    pub(crate) fn empty() -> Self {
         Self {
-            kind: ErrorKind::Config,
-            message: message.into(),
-        }
-    }
-
-    pub fn internal(message: impl Into<String>) -> Self {
-        Self {
-            kind: ErrorKind::Internal,
-            message: message.into(),
-        }
-    }
-
-    fn to_error(&self) -> EngineError {
-        match self.kind {
-            ErrorKind::Config => EngineError::Config(self.message.clone()),
-            ErrorKind::Internal => EngineError::Internal(internal_error(self.message.clone())),
+            snapshots: HashMap::new(),
+            next_snapshot_id: 1,
+            games: Vec::new(),
+            next_game_id: 1,
+            messages: HashMap::new(),
+            next_message_id: 0,
+            swipes: HashMap::new(),
+            presets: Vec::new(),
+            llm_messages: Vec::new(),
+            worlds: Vec::new(),
+            personas: Vec::new(),
+            characters: Vec::new(),
+            settings: AppSettings::default(),
         }
     }
 }
@@ -149,50 +100,33 @@ impl Storage {
     pub fn new_sqlite(pool: DbPool, game_id: u64) -> Self {
         Self {
             game_id: AtomicU64::new(game_id),
-            backend: Mutex::new(Backend::Sqlite { pool }),
+            backend: Mutex::new(LayeredBackend::Direct(Backend::Sqlite { pool })),
         }
     }
 
     pub fn new_in_memory() -> Self {
         Self {
             game_id: AtomicU64::new(0), // No default game - calling code should create one explicitly
-            backend: Mutex::new(Backend::InMemory(Box::new(InMemoryData {
-                snapshots: HashMap::new(),
-                next_snapshot_id: 1,
-                games: vec![], // No default game to avoid "world not found" errors
-                next_game_id: 1,
-                messages: HashMap::new(),
-                next_message_id: 0,
-                swipes: HashMap::new(),
-                presets: Vec::new(),
-                llm_messages: Vec::new(),
-                worlds: vec![],
-                personas: vec![],
-                characters: vec![],
-                settings: AppSettings::default(),
-            }))),
+            backend: Mutex::new(LayeredBackend::Direct(Backend::InMemory(Box::new(
+                InMemoryData::empty(),
+            )))),
         }
     }
 
+    #[cfg(feature = "testing")]
     pub fn with_failure(self, method: &'static str, override_: TestOverride) -> Self {
-        let mut overrides = HashMap::new();
-        overrides.insert(method, override_);
-        self.with_overrides(Arc::new(Mutex::new(overrides)))
+        self.add_failure(method, override_);
+        self
     }
 
-    pub fn with_shared_overrides(
-        self,
-        overrides: Arc<Mutex<HashMap<&'static str, TestOverride>>>,
-    ) -> Self {
-        self.with_overrides(overrides)
-    }
-
+    #[cfg(feature = "testing")]
     pub fn with_test_failures(self) -> (Self, TestFailureHandle) {
         let overrides = Arc::new(Mutex::new(HashMap::new()));
         let storage = self.with_overrides(Arc::clone(&overrides));
         (storage, TestFailureHandle { overrides })
     }
 
+    #[cfg(feature = "testing")]
     pub fn add_failure(&self, method: &'static str, override_: TestOverride) {
         use std::mem;
         let mut backend = match self.backend.lock() {
@@ -201,54 +135,41 @@ impl Storage {
         };
         let current = mem::replace(
             &mut *backend,
-            Backend::InMemory(Box::new(InMemoryData {
-                snapshots: HashMap::new(),
-                next_snapshot_id: 1,
-                games: vec![],
-                next_game_id: 1,
-                messages: HashMap::new(),
-                next_message_id: 0,
-                swipes: HashMap::new(),
-                presets: vec![],
-                llm_messages: vec![],
-                worlds: vec![],
-                personas: vec![],
-                characters: vec![],
-                settings: AppSettings::default(),
-            })),
+            LayeredBackend::Direct(Backend::InMemory(Box::new(InMemoryData::empty()))),
         );
-        let new_backend = match current {
-            Backend::Test { base, overrides } => {
+        let next = match current {
+            LayeredBackend::Test { base, overrides } => {
                 overrides
                     .lock()
                     .unwrap_or_else(|e| e.into_inner())
                     .insert(method, override_);
-                Backend::Test { base, overrides }
+                LayeredBackend::Test { base, overrides }
             }
-            other => {
+            LayeredBackend::Direct(other) => {
                 let mut overrides = HashMap::new();
                 overrides.insert(method, override_);
-                Backend::Test {
+                LayeredBackend::Test {
                     base: Box::new(other),
                     overrides: Arc::new(Mutex::new(overrides)),
                 }
             }
         };
-        *backend = new_backend;
+        *backend = next;
     }
 
+    #[cfg(feature = "testing")]
     fn with_overrides(self, overrides: Arc<Mutex<HashMap<&'static str, TestOverride>>>) -> Self {
         let backend = match self.backend.into_inner() {
             Ok(b) => b,
             Err(poisoned) => poisoned.into_inner(),
         };
         let base = match backend {
-            Backend::Test { base, .. } => base,
-            other => Box::new(other),
+            LayeredBackend::Test { base, .. } => base,
+            LayeredBackend::Direct(other) => Box::new(other),
         };
         Self {
             game_id: self.game_id,
-            backend: Mutex::new(Backend::Test { base, overrides }),
+            backend: Mutex::new(LayeredBackend::Test { base, overrides }),
         }
     }
 
@@ -256,6 +177,7 @@ impl Storage {
         self.game_id.load(Ordering::SeqCst)
     }
 
+    #[allow(unused_variables)]
     pub(crate) fn with_backend_mut<F, T>(
         &self,
         method: &'static str,
@@ -268,18 +190,20 @@ impl Storage {
             Ok(guard) => guard,
             Err(poisoned) => poisoned.into_inner(),
         };
-        let mut current = &mut *backend;
-        while let Backend::Test { overrides, base } = current {
-            if let Some(override_) = overrides
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .get(method)
-            {
-                return Err(override_.to_error());
+        match &mut *backend {
+            LayeredBackend::Direct(inner) => f(inner),
+            #[cfg(feature = "testing")]
+            LayeredBackend::Test { overrides, base } => {
+                if let Some(override_) = overrides
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .get(method)
+                {
+                    return Err(override_.to_error());
+                }
+                f(base.as_mut())
             }
-            current = base.as_mut();
         }
-        f(current)
     }
 }
 
@@ -291,7 +215,12 @@ impl Storage {
                 Ok(guard) => guard,
                 Err(poisoned) => poisoned.into_inner(),
             };
-            if let Backend::Sqlite { pool } = &*backend {
+            let target = match &*backend {
+                LayeredBackend::Direct(b) => b,
+                #[cfg(feature = "testing")]
+                LayeredBackend::Test { base, .. } => base.as_ref(),
+            };
+            if let Backend::Sqlite { pool } = target {
                 let conn = pool.conn();
                 let now = chrono::Utc::now().to_rfc3339();
                 if let Err(e) = conn.execute(
@@ -308,5 +237,26 @@ impl Storage {
 
     pub fn current_game_id(&self) -> u64 {
         self.game_id()
+    }
+}
+
+#[cfg(test)]
+impl Storage {
+    /// Pins non-recursive replace-not-nest invariant:
+    /// `with_failure`/`add_failure` must produce at most one `Test` layer with a `Direct` base.
+    pub(crate) fn backend_layer_info(&self) -> (&'static str, &'static str) {
+        let backend = self.backend.lock().unwrap_or_else(|e| e.into_inner());
+        match &*backend {
+            LayeredBackend::Direct(b) => ("Direct", backend_variant_name(b)),
+            LayeredBackend::Test { base, .. } => ("Test", backend_variant_name(base.as_ref())),
+        }
+    }
+}
+
+#[cfg(test)]
+fn backend_variant_name(b: &Backend) -> &'static str {
+    match b {
+        Backend::Sqlite { .. } => "Sqlite",
+        Backend::InMemory(_) => "InMemory",
     }
 }

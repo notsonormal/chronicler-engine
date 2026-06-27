@@ -21,7 +21,6 @@ impl Storage {
                 rows.iter().map(persona_from_db).collect()
             }
             Backend::InMemory(data) => Ok(data.personas.iter().map(|p| p.card.clone()).collect()),
-            Backend::Test { .. } => unreachable!(),
         })
     }
 
@@ -40,7 +39,6 @@ impl Storage {
                 }
             }
             Backend::InMemory(data) => Ok(data.personas.iter().find(|p| p.key == key).map(|p| p.card.clone())),
-            Backend::Test { .. } => unreachable!(),
         })
     }
 
@@ -81,7 +79,6 @@ impl Storage {
                 }
                 Ok(())
             }
-            Backend::Test { .. } => unreachable!(),
         })
     }
 }

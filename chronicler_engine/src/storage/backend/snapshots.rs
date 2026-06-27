@@ -42,7 +42,6 @@ impl Storage {
                 data.snapshots.entry(game_id).or_default().push(snap);
                 Ok(id)
             }
-            Backend::Test { .. } => unreachable!(),
         })
     }
 
@@ -93,7 +92,6 @@ impl Storage {
                 });
                 Ok(result)
             }
-            Backend::Test { .. } => unreachable!(),
         })
     }
 
@@ -137,7 +135,6 @@ impl Storage {
                     .and_then(|vec| vec.iter().find(|s| s.db_id == Some(id)).cloned());
                 Ok(result)
             }
-            Backend::Test { .. } => unreachable!(),
         })
     }
 }

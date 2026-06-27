@@ -34,6 +34,8 @@ A guardrail (`guardrails_one_table_per_storage` in `tests/guardrails.rs`) enforc
 
 The six individual traits and their implementations were consolidated into a single `Storage` struct with a `Backend` enum (`Sqlite`, `InMemory`, `Test`). The guardrail was removed because there are no longer any `*_storage.rs` files to enforce it on.
 
+> **Note (2026-06-27):** As of the Backend/LayeredBackend split refactor (see archived sub-plan `docs/plans/archived/t7-storage-backend-layered-split.md`), the `Backend` enum holds only real backends (`Sqlite`, `InMemory`); the `Test` variant moved to a separate `LayeredBackend` decorator enum. Test-infra types live in `storage/backend/test_support.rs`. The principle below — every method on `Storage` touches exactly one table — remains valid.
+
 The **underlying principle** — that each storage operation should be table-scoped, with cross-table coordination living in `GameServiceContext` helpers — remains valid. The `Storage` enum preserves this: every method on `Storage` touches exactly one table, and callers compose operations explicitly via `GameServiceContext::save_message_and_snapshot`, `load_messages_with_swipes`, etc.
 
 ## Consequences

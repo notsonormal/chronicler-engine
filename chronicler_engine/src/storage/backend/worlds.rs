@@ -45,7 +45,6 @@ impl Storage {
                 }).collect()
             }
             Backend::InMemory(data) => Ok(data.worlds.iter().map(|w| w.world_card.clone()).collect()),
-            Backend::Test { .. } => unreachable!(),
         })
     }
 
@@ -92,7 +91,6 @@ impl Storage {
                         map: w.map.clone(),
                     })
             ),
-            Backend::Test { .. } => unreachable!(),
         })
     }
 
@@ -149,7 +147,6 @@ impl Storage {
                     });
                 Ok(world_id)
             }
-            Backend::Test { .. } => unreachable!(),
         })
     }
 
@@ -191,7 +188,6 @@ impl Storage {
                 }
                 Ok(())
             }
-            Backend::Test { .. } => unreachable!(),
         })
     }
 
@@ -232,7 +228,6 @@ impl Storage {
                         map: w.map.clone(),
                     }))
             }
-            Backend::Test { .. } => unreachable!(),
         })
     }
 
@@ -262,7 +257,6 @@ impl Storage {
                 data.worlds.retain(|w| w.world_card.key != key);
                 Ok(())
             }
-            Backend::Test { .. } => unreachable!(),
         })
     }
 }

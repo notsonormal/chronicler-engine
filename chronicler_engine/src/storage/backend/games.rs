@@ -45,7 +45,6 @@ impl Storage {
                 games.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
                 Ok(games)
             }
-            Backend::Test { .. } => unreachable!(),
         })
     }
 
@@ -77,7 +76,6 @@ impl Storage {
                 });
                 Ok(id)
             }
-            Backend::Test { .. } => unreachable!(),
         })
     }
 
@@ -96,7 +94,6 @@ impl Storage {
                 data.games.retain(|g| g.id != id);
                 Ok(())
             }
-            Backend::Test { .. } => unreachable!(),
         })
     }
 
@@ -133,7 +130,6 @@ impl Storage {
                 }
             }
             Backend::InMemory(data) => Ok(data.games.iter().find(|g| g.id == id).cloned()),
-            Backend::Test { .. } => unreachable!(),
         })
     }
 }

@@ -8,7 +8,7 @@
 
 ## Overview
 
-The Chronicler Engine storage layer provides unified persistence for game sessions, narrative content, user configurations, and LLM call forensics. It uses a concrete `Storage` struct with a `Backend` enum (`Sqlite`, `InMemory`, `Test`) instead of trait-based repository patterns.
+The Chronicler Engine storage layer provides unified persistence for game sessions, narrative content, user configurations, and LLM call forensics. It uses a concrete `Storage` struct with a `Backend` enum (`Sqlite`, `InMemory`) for real backends plus a `LayeredBackend` decorator (`Direct(Backend)` | `Test { base, overrides }`) for failure injection, instead of trait-based repository patterns.
 
 **Key Design Decisions:**
 
@@ -20,12 +20,15 @@ The Chronicler Engine storage layer provides unified persistence for game sessio
 
 ## Backend Enum Pattern
 
-`Storage` is a concrete struct, not a trait. The `Backend` enum dispatches operations:
-- **Sqlite** — production backend with real database I/O
-- **InMemory** — development/testing backend with HashMap storage
-- **Test** — InMemory variant with failure injection hooks
+`Storage` is a concrete struct, not a trait. `Storage` holds a `Mutex<LayeredBackend>`:
+
+- **`Backend` enum** — real backends only: `Sqlite` (production) and `InMemory` (dev)
+- **`LayeredBackend` enum** — `Direct(Backend)` for plain use, or `Test { base: Box<Backend>, overrides }` for wrapping any real backend with failure injection
+- `Test` is a decorator, not a peer of `Sqlite`/`InMemory` — `with_backend_mut` unwraps any Test layer before dispatching to the real backend
+- Non-recursive `Box<Backend>` (not `Box<LayeredBackend>`) structurally enforces "at most one Test layer" (replace-not-nest invariant)
 
 **Contracts:**
+
 - Game-scoped operations use `game_id` set at construction (`Storage::new_sqlite(pool, game_id)`), not passed per-call
 - Each method touches exactly one table. Cross-table coordination happens in the application tier (`src/application/context.rs`)
 - All queries use parameterized bindings — no SQL injection surface
@@ -51,6 +54,7 @@ Two functions called from `bootstrap::run()` at startup:
 2. `seed_game_data(storage, data_dir)` — seeds worlds, personas, characters from JSON files
 
 **Contracts:**
+
 - Idempotent — skips if key already exists (INSERT OR IGNORE or existence check)
 - JSON files are seed templates only — DB is the sole source of truth at runtime
 - Startup-blocking — seeding must complete before server starts
@@ -83,5 +87,6 @@ Serializable subset of `GameState` for persistence. Messages excluded; hydrated 
 
 - InMemory backend for fast unit tests (no SQLite I/O)
 - `with_test_failures()` returns `(Storage, TestFailureHandle)` for failure injection
-- TestFailureHandle takes `Operation` enum variants, not strings
-- See `src/storage/backend/core.rs` for constructors
+- TestFailureHandle takes `&'static str` method-name keys + `TestOverride` failure payloads
+- Test-infra types (`TestOverride`, `TestFailureHandle`, `ErrorKind`) live in `src/storage/backend/test_support.rs`, re-exported via `crate::storage::{TestOverride, TestFailureHandle, ErrorKind}`
+- See `src/storage/backend/core.rs` for `Storage` constructors
