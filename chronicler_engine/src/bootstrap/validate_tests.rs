@@ -99,10 +99,10 @@ fn test_validate_loaded_data_invalid_trigger_room() {
         },
         inventory: vec![],
         triggers: vec![Trigger {
-            requirement: crate::model::trigger::TriggerRequirement::TimesMet(
-                crate::model::trigger::ComparisonOperator::Eq,
-                0,
-            ),
+            requirement: crate::model::trigger::TriggerRequirement {
+                operator: crate::model::trigger::ComparisonOperator::Eq,
+                threshold: 0,
+            },
             narration: crate::model::trigger::TriggerNarration {
                 name: "Test".to_string(),
                 narration_prompt: "Hello".to_string(),

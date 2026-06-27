@@ -10,7 +10,6 @@ use crate::model::world::WorldCard;
 use crate::narrative::prompt::budget;
 use crate::narrative::prompt::budget::truncate_to_budget;
 use crate::narrative::prompt::context::fit_messages_to_context;
-use crate::narrative::prompt::sanitize::sanitize_for_prompt;
 use crate::narrative::prompt::types::{NpcContext, PromptContext};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -18,16 +17,6 @@ pub struct AssembledPrompt {
     pub system_prompt: String,
     pub user_prompt: String,
     pub max_tokens: u32,
-}
-
-pub trait PromptAssembler: Send + Sync {
-    fn assemble(
-        &self,
-        context: &PromptContext,
-        preset: &PromptPreset,
-        global_rules: &[String],
-        response_length: Option<&str>,
-    ) -> Result<AssembledPrompt, EngineError>;
 }
 
 pub struct LayeredPromptAssembler {
@@ -49,8 +38,8 @@ impl LayeredPromptAssembler {
     }
 }
 
-impl PromptAssembler for LayeredPromptAssembler {
-    fn assemble(
+impl LayeredPromptAssembler {
+    pub fn assemble(
         &self,
         context: &PromptContext,
         preset: &PromptPreset,
@@ -376,9 +365,32 @@ impl<'a> LayerRenderer<'a> {
 
     fn render_user_layer(&self) -> String {
         let mut output = String::from("<PlayerInput>\n");
-        output.push_str(&sanitize_for_prompt(self.user_message));
+        let sanitized = sanitize_for_prompt(self.user_message);
+        output.push_str(&sanitized);
         output.push_str("\n</PlayerInput>\n");
 
         output
     }
+}
+
+/// Replace injection patterns like `{{system}}` with `[FILTERED]`.
+fn sanitize_for_prompt(input: &str) -> String {
+    let mut result = String::new();
+    let mut chars = input.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch == '{' && chars.peek() == Some(&'{') {
+            chars.next(); // consume second {
+            result.push_str("[FILTERED]");
+            // Skip until }}
+            while let Some(c) = chars.next() {
+                if c == '}' && chars.peek() == Some(&'}') {
+                    chars.next(); // consume second }
+                    break;
+                }
+            }
+        } else {
+            result.push(ch);
+        }
+    }
+    result
 }

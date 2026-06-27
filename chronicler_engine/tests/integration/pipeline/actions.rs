@@ -13,7 +13,7 @@ fn test_pipeline_executes_and_persists_narration() {
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = working_service();
 
-    backend.execute_action(ctx.clone(), "look".to_string(), "Player".to_string());
+    backend.execute_action(ctx.clone(), "look".to_string());
 
     let final_state = latest_state(&ctx);
     let has_narration = final_state
@@ -43,11 +43,7 @@ fn test_pipeline_persists_input_before_narration() {
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = working_service();
 
-    backend.execute_action(
-        ctx.clone(),
-        "examine the room".to_string(),
-        "Player".to_string(),
-    );
+    backend.execute_action(ctx.clone(), "examine the room".to_string());
 
     let final_state = latest_state(&ctx);
     let entries: Vec<_> = final_state.narrative.history().into_iter().collect();
@@ -73,7 +69,7 @@ fn test_pipeline_handles_room_not_found() {
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = working_service();
 
-    backend.execute_action(ctx.clone(), "look".to_string(), "Player".to_string());
+    backend.execute_action(ctx.clone(), "look".to_string());
 
     let final_state = latest_state(&ctx);
     assert!(
@@ -89,7 +85,7 @@ fn test_pipeline_handles_llm_failure() {
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = failing_service();
 
-    backend.execute_action(ctx.clone(), "look".to_string(), "Player".to_string());
+    backend.execute_action(ctx.clone(), "look".to_string());
 
     let final_state = latest_state(&ctx);
     assert!(
@@ -120,7 +116,7 @@ fn test_pipeline_clears_last_trigger() {
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = working_service();
 
-    backend.execute_action(ctx.clone(), "look".to_string(), "Player".to_string());
+    backend.execute_action(ctx.clone(), "look".to_string());
 
     let final_state = latest_state(&ctx);
     assert!(
@@ -137,7 +133,7 @@ fn test_pipeline_phase_transitions() {
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = working_service();
 
-    backend.execute_action(ctx.clone(), "look".to_string(), "Player".to_string());
+    backend.execute_action(ctx.clone(), "look".to_string());
 
     let guard = latest_state(&ctx);
     assert_eq!(
@@ -155,7 +151,7 @@ fn test_pipeline_phase_stays_narrating_on_error() {
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = failing_service();
 
-    backend.execute_action(ctx.clone(), "look".to_string(), "Player".to_string());
+    backend.execute_action(ctx.clone(), "look".to_string());
 
     let guard = latest_state(&ctx);
     assert_eq!(
@@ -172,7 +168,7 @@ fn test_pipeline_empty_input() {
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = working_service();
 
-    backend.execute_action(ctx.clone(), String::new(), "Player".to_string());
+    backend.execute_action(ctx.clone(), String::new());
 
     let guard = latest_state(&ctx);
     assert!(

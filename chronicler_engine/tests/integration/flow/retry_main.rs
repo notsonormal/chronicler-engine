@@ -35,7 +35,7 @@ fn test_retry_main_narration_applies_new_quantifier_result() {
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         quantifier,
     );
-    service.execute_action(ctx.clone(), "walk around".to_string(), "Player".to_string());
+    service.execute_action(ctx.clone(), "walk around".to_string());
     assert!(
         wait_for_generation_complete(&ctx, 1000),
         "First execution should complete"
@@ -81,11 +81,7 @@ fn test_retry_with_different_narration_text_reruns_quantifier() {
     });
 
     let service = GameService::with_mock_quantifier(llm_backend, Arc::new(MockBackend::default()));
-    service.execute_action(
-        ctx.clone(),
-        "approach the innkeeper".to_string(),
-        "Player".to_string(),
-    );
+    service.execute_action(ctx.clone(), "approach the innkeeper".to_string());
     assert!(
         wait_for_generation_complete(&ctx, 1000),
         "First execution should complete"
@@ -145,7 +141,7 @@ fn test_double_retry_increments_swipe_and_reruns_quantifier() {
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         quantifier,
     );
-    service.execute_action(ctx.clone(), "walk around".to_string(), "Player".to_string());
+    service.execute_action(ctx.clone(), "walk around".to_string());
     assert!(wait_for_generation_complete(&ctx, 1000));
     let _snap = latest_snapshot(&ctx).expect("Should have snapshot");
 
@@ -179,7 +175,7 @@ fn test_retry_preserves_input_and_does_not_create_extra_swipe() {
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         Arc::new(MockBackend::default()),
     );
-    service.execute_action(ctx.clone(), "walk around".to_string(), "Player".to_string());
+    service.execute_action(ctx.clone(), "walk around".to_string());
     assert!(
         wait_for_generation_complete(&ctx, 1000),
         "First execution should complete"
@@ -217,7 +213,7 @@ fn test_retry_after_edited_input_uses_new_text() {
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         Arc::new(MockBackend::default()),
     );
-    service.execute_action(ctx.clone(), "walk around".to_string(), "Player".to_string());
+    service.execute_action(ctx.clone(), "walk around".to_string());
     assert!(wait_for_generation_complete(&ctx, 1000));
 
     let guard = latest_state(&ctx);
@@ -284,7 +280,10 @@ fn test_main_retry_reevaluates_triggers() {
         },
         inventory: vec![],
         triggers: vec![Trigger {
-            requirement: TriggerRequirement::TimesMet(ComparisonOperator::Eq, 0),
+            requirement: TriggerRequirement {
+                operator: ComparisonOperator::Eq,
+                threshold: 0,
+            },
             narration: TriggerNarration {
                 name: "Greeting".into(),
                 narration_prompt: "The shopkeeper looks up with a smile.".into(),
@@ -312,7 +311,7 @@ fn test_main_retry_reevaluates_triggers() {
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         quantifier,
     );
-    service.execute_action(ctx.clone(), "walk around".to_string(), "Player".to_string());
+    service.execute_action(ctx.clone(), "walk around".to_string());
     assert!(wait_for_generation_complete(&ctx, 1000));
     let guard = latest_state(&ctx);
     let events_after_execute = guard
@@ -361,7 +360,7 @@ fn test_retry_completes_when_quantifier_returns_none() {
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         quantifier,
     );
-    service.execute_action(ctx.clone(), "walk around".to_string(), "Player".to_string());
+    service.execute_action(ctx.clone(), "walk around".to_string());
     assert!(wait_for_generation_complete(&ctx, 1000));
 
     service.retry_last_response(ctx.clone());
@@ -440,11 +439,7 @@ fn test_retry_no_pre_main_snapshot() {
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         Arc::new(MockBackend::default()),
     );
-    service.execute_action(
-        ctx.clone(),
-        "examine room".to_string(),
-        "Player".to_string(),
-    );
+    service.execute_action(ctx.clone(), "examine room".to_string());
     assert!(wait_for_generation_complete(&ctx, 1000));
 
     let snap = latest_snapshot(&ctx).expect("Should have snapshot");
@@ -493,11 +488,7 @@ fn test_movement_with_arrival_narration_retry() {
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
         quantifier,
     );
-    service.execute_action(
-        ctx.clone(),
-        "walk to room2".to_string(),
-        "Player".to_string(),
-    );
+    service.execute_action(ctx.clone(), "walk to room2".to_string());
     assert!(wait_for_generation_complete(&ctx, 1000));
 
     let guard = latest_state(&ctx);
@@ -543,11 +534,7 @@ fn test_retry_appends_swipe_to_existing_narration() {
     });
 
     let service = GameService::with_mock_quantifier(llm_backend, Arc::new(MockBackend::default()));
-    service.execute_action(
-        ctx.clone(),
-        "examine room".to_string(),
-        "Player".to_string(),
-    );
+    service.execute_action(ctx.clone(), "examine room".to_string());
     assert!(wait_for_generation_complete(&ctx, 1000));
 
     let msgs = ctx.load_messages().unwrap();

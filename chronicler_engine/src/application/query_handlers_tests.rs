@@ -39,32 +39,28 @@ fn minimal_ctx() -> GameServiceContext {
 #[test]
 fn test_get_generating_status_returns_current_state() {
     let ctx = minimal_ctx();
-    let handlers = QueryHandlers::new();
-    let (status, _phase) = handlers.get_generating_status(ctx).unwrap();
+    let (status, _phase) = get_generating_status(ctx).unwrap();
     assert_eq!(status, crate::model::state::GenerationStatus::Idle);
 }
 
 #[test]
 fn test_get_current_game_name_unknown_when_no_game() {
     let ctx = minimal_ctx();
-    let handlers = QueryHandlers::new();
-    let name = handlers.get_current_game_name(ctx).unwrap();
+    let name = get_current_game_name(ctx).unwrap();
     assert_eq!(name, "Unknown"); // No default game anymore
 }
 
 #[test]
 fn test_list_latest_llm_messages_empty() {
     let ctx = minimal_ctx();
-    let handlers = QueryHandlers::new();
-    let messages = handlers.list_latest_llm_messages(ctx, 10).unwrap();
+    let messages = list_latest_llm_messages(ctx, 10).unwrap();
     assert!(messages.is_empty());
 }
 
 #[test]
 fn test_get_story_log_entries_empty() {
     let ctx = minimal_ctx();
-    let handlers = QueryHandlers::new();
-    let (entries, has_trigger) = handlers.get_story_log_entries(ctx).unwrap();
+    let (entries, has_trigger) = get_story_log_entries(ctx).unwrap();
     assert!(entries.is_empty());
     assert!(!has_trigger);
 }
@@ -72,9 +68,8 @@ fn test_get_story_log_entries_empty() {
 #[test]
 fn test_get_input_status_delegates_to_generating_status() {
     let ctx = minimal_ctx();
-    let handlers = QueryHandlers::new();
-    let (status1, phase1) = handlers.get_generating_status(ctx.clone()).unwrap();
-    let (status2, phase2) = handlers.get_input_status(ctx).unwrap();
+    let (status1, phase1) = get_generating_status(ctx.clone()).unwrap();
+    let (status2, phase2) = get_input_status(ctx).unwrap();
     assert_eq!(status1, status2);
     assert_eq!(phase1, phase2);
 }
@@ -82,8 +77,7 @@ fn test_get_input_status_delegates_to_generating_status() {
 #[test]
 fn test_get_current_room_view_succeeds_with_valid_state() {
     let ctx = minimal_ctx();
-    let handlers = QueryHandlers::new();
-    let result = handlers.get_current_room_view(ctx);
+    let result = get_current_room_view(ctx);
     assert!(result.is_ok());
     let (room_name, _image_path) = result.unwrap();
     assert_eq!(room_name, "Room start");
@@ -92,24 +86,21 @@ fn test_get_current_room_view_succeeds_with_valid_state() {
 #[test]
 fn test_get_npc_headshots_scene_only_empty() {
     let ctx = minimal_ctx();
-    let handlers = QueryHandlers::new();
-    let headshots = handlers.get_npc_headshots(ctx, true).unwrap();
+    let headshots = get_npc_headshots(ctx, true).unwrap();
     assert!(headshots.is_empty());
 }
 
 #[test]
 fn test_get_npc_headshots_all_empty() {
     let ctx = minimal_ctx();
-    let handlers = QueryHandlers::new();
-    let headshots = handlers.get_npc_headshots(ctx, false).unwrap();
+    let headshots = get_npc_headshots(ctx, false).unwrap();
     assert!(headshots.is_empty());
 }
 
 #[test]
 fn test_get_debug_state_populates_fields() {
     let ctx = minimal_ctx();
-    let handlers = QueryHandlers::new();
-    let debug = handlers.get_debug_state(ctx).unwrap();
+    let debug = get_debug_state(ctx).unwrap();
     assert_eq!(debug.narration_history_length, 0);
     assert!(debug.dynamic_rooms.is_empty());
     assert_eq!(debug.dynamic_room_count, 0);
@@ -119,9 +110,8 @@ fn test_get_debug_state_populates_fields() {
 #[test]
 fn test_reset_generating_status_sets_idle() {
     let ctx = minimal_ctx();
-    let handlers = QueryHandlers::new();
-    let result = handlers.reset_generating_status(ctx.clone());
+    let result = reset_generating_status(ctx.clone());
     assert!(result.is_ok());
-    let (status, _) = handlers.get_generating_status(ctx).unwrap();
+    let (status, _) = get_generating_status(ctx).unwrap();
     assert_eq!(status, crate::model::state::GenerationStatus::Idle);
 }

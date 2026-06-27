@@ -92,7 +92,10 @@ impl TestNpc {
             sheet: Self::sheet(name),
             inventory: vec![],
             triggers: vec![Trigger {
-                requirement: TriggerRequirement::TimesMet(op, n),
+                requirement: TriggerRequirement {
+                    operator: op,
+                    threshold: n,
+                },
                 narration: TriggerNarration {
                     name: format!("{name} Introduction"),
                     narration_prompt: format!("{name} introduces themselves."),
@@ -116,7 +119,10 @@ impl TestNpc {
             sheet: Self::sheet(name),
             inventory: vec![],
             triggers: vec![Trigger {
-                requirement: TriggerRequirement::TimesMet(op, n),
+                requirement: TriggerRequirement {
+                    operator: op,
+                    threshold: n,
+                },
                 narration: TriggerNarration {
                     name: format!("{name} Encounter in {room_id}"),
                     narration_prompt: format!("{name} acknowledges you in this specific room."),

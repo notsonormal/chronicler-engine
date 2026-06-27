@@ -7,7 +7,6 @@ use crate::model::quantifier::{
     MovementParseResult, MovementType, QuantifierConfidence, QuantifierParseResult,
     QuantifierResult,
 };
-use crate::narrative::agents::quantifier::types::RoomInfo;
 
 #[derive(Deserialize, Debug)]
 struct QuantifierJsonResponse {
@@ -70,7 +69,6 @@ pub fn parse_quantifier_response(
 pub fn parse_quantifier_response_with_movement(
     response: &str,
     known_npc_ids: &[String],
-    _all_rooms: &[RoomInfo],
 ) -> QuantifierResult {
     let trimmed = response.trim();
 
@@ -214,47 +212,4 @@ pub(crate) fn extract_npc_ids_from_text(response: &str, known_npc_ids: &[String]
     }
 
     found
-}
-
-pub fn extract_movement_from_text(
-    response: &str,
-    all_rooms: &[RoomInfo],
-) -> Option<MovementParseResult> {
-    let response_lower = response.to_lowercase();
-
-    let entering_keywords = [
-        "enters",
-        "enter",
-        "walk into",
-        "go into",
-        "go to",
-        "head to",
-        "travel to",
-    ];
-    let leaving_keywords = [
-        "leaves", "leave", "exits", "exit", "go out", "walk out", "head out",
-    ];
-
-    let movement_type = if entering_keywords.iter().any(|k| response_lower.contains(k)) {
-        Some(MovementType::Entering)
-    } else if leaving_keywords.iter().any(|k| response_lower.contains(k)) {
-        Some(MovementType::Leaving)
-    } else {
-        None
-    };
-
-    let destination = all_rooms
-        .iter()
-        .find(|r| response_lower.contains(&r.name.to_lowercase()))
-        .map(|r| r.name.clone());
-
-    if movement_type.is_some() || destination.is_some() {
-        Some(MovementParseResult {
-            movement_type,
-            destination,
-            confidence: QuantifierConfidence::Medium,
-        })
-    } else {
-        None
-    }
 }

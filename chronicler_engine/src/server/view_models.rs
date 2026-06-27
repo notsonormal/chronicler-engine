@@ -154,7 +154,7 @@ pub struct ActionAreaViewModel {
 }
 
 impl ActionAreaViewModel {
-    pub fn new(status: &GenerationStatus, phase: &GenerationPhase, _exits: &[String]) -> Self {
+    pub fn new(status: &GenerationStatus, phase: &GenerationPhase) -> Self {
         let is_disabled = status.is_generating();
         let error_msg = status.error_message().unwrap_or_default().to_string();
         let status_class = if is_disabled {

@@ -20,9 +20,7 @@ pub use crate::model::quantifier::{
     MovementParseResult, MovementType, NpcEvent, NpcEventList, NpcTransitionType,
     QuantifierConfidence, QuantifierParseResult, QuantifierResult,
 };
-pub use parser::{
-    extract_movement_from_text, parse_quantifier_response, parse_quantifier_response_with_movement,
-};
+pub use parser::{parse_quantifier_response, parse_quantifier_response_with_movement};
 pub use prompt::QuantifierPromptBuilder;
 pub use types::{QuantifierPromptContext, RoomInfo};
 

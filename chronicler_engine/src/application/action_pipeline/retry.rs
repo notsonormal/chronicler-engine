@@ -89,11 +89,11 @@ pub fn retry_last_response_impl<B: ActionPipelineBackend>(backend: &B, ctx: Game
         retry_main_narration(backend, &ctx, state, input_text)
     };
 
-    match outcome {
-        ActionOutcome::Completed => {}
-        // Unused after error-model unification; errors flow through GenerationStatus::Error
-        ActionOutcome::Error { .. } => {}
-        ActionOutcome::Cancelled => {}
+    if let ActionOutcome::Cancelled = outcome {
+        let mut state = load_or_fresh(&ctx);
+        state.narrative.input_buffer.status = GenerationStatus::Idle;
+        state.narrative.input_buffer.phase = GenerationPhase::default();
+        let _ = save_state(&ctx, &state);
     }
 }
 
@@ -151,15 +151,10 @@ pub(crate) fn retry_main_narration<B: ActionPipelineBackend>(
 pub fn retrigger_event_impl<B: ActionPipelineBackend>(backend: &B, ctx: &GameServiceContext) {
     let state = load_or_fresh(ctx);
     let outcome = retry_event_continuation(backend, ctx, state);
-    match outcome {
-        ActionOutcome::Completed => {}
-        // Unused after error-model unification; errors flow through GenerationStatus::Error
-        ActionOutcome::Error { .. } => {}
-        ActionOutcome::Cancelled => {
-            let mut state = load_or_fresh(ctx);
-            state.narrative.input_buffer.status = GenerationStatus::Idle;
-            state.narrative.input_buffer.phase = GenerationPhase::default();
-            let _ = save_state(ctx, &state);
-        }
+    if let ActionOutcome::Cancelled = outcome {
+        let mut state = load_or_fresh(ctx);
+        state.narrative.input_buffer.status = GenerationStatus::Idle;
+        state.narrative.input_buffer.phase = GenerationPhase::default();
+        let _ = save_state(ctx, &state);
     }
 }

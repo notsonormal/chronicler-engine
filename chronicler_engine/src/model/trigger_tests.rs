@@ -22,11 +22,14 @@ fn test_comparison_operator_serde() {
 
 #[test]
 fn test_trigger_requirement_serde() {
-    let json = r#"{"TimesMet": ["Eq", 3]}"#;
+    let json = r#"{"operator": "Eq", "threshold": 3}"#;
     let cond: TriggerRequirement = serde_json::from_str(json).unwrap();
     assert_eq!(
         cond,
-        TriggerRequirement::TimesMet(ComparisonOperator::Eq, 3)
+        TriggerRequirement {
+            operator: ComparisonOperator::Eq,
+            threshold: 3
+        }
     );
 }
 
@@ -41,14 +44,17 @@ fn test_trigger_narration_serde() {
 #[test]
 fn test_trigger_serde_without_room_id() {
     let json = r#"{
-        "requirement": {"TimesMet": ["Gte", 2]},
+        "requirement": {"operator": "Gte", "threshold": 2},
         "narration": {"name": "Guard Recognition", "narration_prompt": "The guard recognizes you."},
         "repeat": false
     }"#;
     let trigger: Trigger = serde_json::from_str(json).unwrap();
     assert_eq!(
         trigger.requirement,
-        TriggerRequirement::TimesMet(ComparisonOperator::Gte, 2)
+        TriggerRequirement {
+            operator: ComparisonOperator::Gte,
+            threshold: 2
+        }
     );
     assert_eq!(
         trigger.narration.narration_prompt,
@@ -61,7 +67,7 @@ fn test_trigger_serde_without_room_id() {
 #[test]
 fn test_trigger_serde_with_room_id() {
     let json = r#"{
-        "requirement": {"TimesMet": ["Eq", 0]},
+        "requirement": {"operator": "Eq", "threshold": 0},
         "narration": {"name": "Introduction", "narration_prompt": "They appear."},
         "repeat": false,
         "room_id": "entrance_hall"
@@ -69,7 +75,10 @@ fn test_trigger_serde_with_room_id() {
     let trigger: Trigger = serde_json::from_str(json).unwrap();
     assert_eq!(
         trigger.requirement,
-        TriggerRequirement::TimesMet(ComparisonOperator::Eq, 0)
+        TriggerRequirement {
+            operator: ComparisonOperator::Eq,
+            threshold: 0
+        }
     );
     assert_eq!(trigger.room_id, Some("entrance_hall".to_string()));
 }

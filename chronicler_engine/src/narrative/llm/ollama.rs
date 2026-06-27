@@ -52,14 +52,8 @@ impl OllamaBackend {
         }
         Ok(result)
     }
-}
 
-impl LlmBackend for OllamaBackend {
-    fn model(&self) -> &str {
-        &self.model
-    }
-
-    fn preprocess_user_text(&self, text: &str) -> String {
+    pub fn preprocess_user_text(&self, text: &str) -> String {
         let m = self.model.to_lowercase();
         if m.contains("gemma-4") || m.contains("gemma4") {
             format!("{text}\n<|turn>model\n<|channel>thought\n<channel|>")
@@ -67,20 +61,11 @@ impl LlmBackend for OllamaBackend {
             text.to_string()
         }
     }
+}
 
-    fn narrate_continuation(
-        &self,
-        agent_name: &str,
-        system_prompt: &str,
-        user_prompt: &str,
-        _trigger_prompt: &str,
-        max_tokens: Option<u32>,
-    ) -> Result<LlmCallResult, EngineError> {
-        tracing::info!("[LLM] Generating continuation narration");
-        Ok(self.wrap_and_save(
-            agent_name,
-            self.call(system_prompt, user_prompt, max_tokens)?,
-        ))
+impl LlmBackend for OllamaBackend {
+    fn model(&self) -> &str {
+        &self.model
     }
 
     fn complete(

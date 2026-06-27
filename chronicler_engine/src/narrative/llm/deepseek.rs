@@ -50,17 +50,6 @@ impl LlmBackend for DeepSeekBackend {
         }
     }
 
-    fn narrate_continuation(
-        &self,
-        _agent_name: &str,
-        _system_prompt: &str,
-        _user_prompt: &str,
-        _trigger_prompt: &str,
-        _max_tokens: Option<u32>,
-    ) -> Result<LlmCallResult, EngineError> {
-        Self::not_implemented()
-    }
-
     fn complete(
         &self,
         _agent_name: &str,

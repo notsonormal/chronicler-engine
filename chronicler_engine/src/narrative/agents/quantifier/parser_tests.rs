@@ -1,7 +1,4 @@
-use super::parser::{
-    extract_movement_from_text, parse_quantifier_response, parse_quantifier_response_with_movement,
-};
-use super::types::RoomInfo;
+use super::parser::{parse_quantifier_response, parse_quantifier_response_with_movement};
 use crate::model::quantifier::compute_npc_events;
 use crate::model::quantifier::{MovementType, NpcTransitionType, QuantifierConfidence};
 
@@ -119,7 +116,7 @@ fn test_quantifier_confidence_levels() {
 fn test_parse_quantifier_response_no_movement() {
     let response = r#"{"npcs_in_room": ["carla"], "movement": {"type": null}}"#;
 
-    let result = parse_quantifier_response_with_movement(response, &["carla".to_string()], &[]);
+    let result = parse_quantifier_response_with_movement(response, &["carla".to_string()]);
 
     assert_eq!(result.npcs.npc_ids, vec!["carla"]);
     assert_eq!(result.movement.movement_type, None);
@@ -130,14 +127,7 @@ fn test_parse_quantifier_response_no_movement() {
 fn test_parse_movement_entering_with_destination() {
     let response = r#"{"npcs_in_room": ["carla"], "movement": {"type": "entering", "destination": "entrance_hall"}}"#;
 
-    let result = parse_quantifier_response_with_movement(
-        response,
-        &["carla".to_string()],
-        &[RoomInfo {
-            id: "entrance_hall".to_string(),
-            name: "Entrance Hall".to_string(),
-        }],
-    );
+    let result = parse_quantifier_response_with_movement(response, &["carla".to_string()]);
 
     assert_eq!(result.npcs.npc_ids, vec!["carla"]);
     assert_eq!(result.movement.movement_type, Some(MovementType::Entering));
@@ -152,14 +142,7 @@ fn test_parse_movement_leaving_with_destination() {
     let response =
         r#"{"npcs_in_room": ["carla"], "movement": {"type": "leaving", "destination": "tavern"}}"#;
 
-    let result = parse_quantifier_response_with_movement(
-        response,
-        &["carla".to_string()],
-        &[RoomInfo {
-            id: "tavern".to_string(),
-            name: "Tavern".to_string(),
-        }],
-    );
+    let result = parse_quantifier_response_with_movement(response, &["carla".to_string()]);
 
     assert_eq!(result.movement.movement_type, Some(MovementType::Leaving));
     assert_eq!(result.movement.destination, Some("tavern".to_string()));
@@ -169,7 +152,7 @@ fn test_parse_movement_leaving_with_destination() {
 fn test_parse_movement_no_movement_field() {
     let response = r#"{"npcs_in_room": ["carla"]}"#;
 
-    let result = parse_quantifier_response_with_movement(response, &["carla".to_string()], &[]);
+    let result = parse_quantifier_response_with_movement(response, &["carla".to_string()]);
 
     assert_eq!(result.npcs.npc_ids, vec!["carla"]);
     assert_eq!(result.movement.movement_type, None);
@@ -180,7 +163,7 @@ fn test_parse_movement_no_movement_field() {
 fn test_parse_movement_empty_movement_object() {
     let response = r#"{"npcs_in_room": ["carla"], "movement": {}}"#;
 
-    let result = parse_quantifier_response_with_movement(response, &["carla".to_string()], &[]);
+    let result = parse_quantifier_response_with_movement(response, &["carla".to_string()]);
 
     assert_eq!(result.npcs.npc_ids, vec!["carla"]);
     assert_eq!(result.movement.movement_type, None);
@@ -191,14 +174,7 @@ fn test_parse_movement_empty_movement_object() {
 fn test_parse_movement_unknown_type_becomes_none() {
     let response = r#"{"npcs_in_room": ["carla"], "movement": {"type": "teleporting", "destination": "castle"}}"#;
 
-    let result = parse_quantifier_response_with_movement(
-        response,
-        &["carla".to_string()],
-        &[RoomInfo {
-            id: "castle".to_string(),
-            name: "Castle".to_string(),
-        }],
-    );
+    let result = parse_quantifier_response_with_movement(response, &["carla".to_string()]);
 
     assert_eq!(result.npcs.npc_ids, vec!["carla"]);
     assert_eq!(result.movement.movement_type, None);
@@ -210,14 +186,7 @@ fn test_parse_movement_case_insensitive_type() {
     let response =
         r#"{"npcs_in_room": ["carla"], "movement": {"type": "ENTERING", "destination": "hall"}}"#;
 
-    let result = parse_quantifier_response_with_movement(
-        response,
-        &["carla".to_string()],
-        &[RoomInfo {
-            id: "hall".to_string(),
-            name: "Hall".to_string(),
-        }],
-    );
+    let result = parse_quantifier_response_with_movement(response, &["carla".to_string()]);
 
     assert_eq!(result.movement.movement_type, Some(MovementType::Entering));
 }
@@ -225,7 +194,7 @@ fn test_parse_movement_case_insensitive_type() {
 #[test]
 fn test_parse_movement_text_fallback_no_movement() {
     let response = "carla is standing in the room.";
-    let result = parse_quantifier_response_with_movement(response, &["carla".to_string()], &[]);
+    let result = parse_quantifier_response_with_movement(response, &["carla".to_string()]);
 
     assert_eq!(result.npcs.npc_ids, vec!["carla"]);
     assert_eq!(result.npcs.confidence, QuantifierConfidence::Medium);
@@ -240,7 +209,6 @@ fn test_parse_movement_json_invalid_npcs_filtered() {
     let result = parse_quantifier_response_with_movement(
         response,
         &["carla".to_string(), "gabriella".to_string()],
-        &[],
     );
 
     assert_eq!(result.npcs.npc_ids, vec!["carla", "gabriella"]);
@@ -252,7 +220,7 @@ fn test_parse_response_json_with_movement_null_type() {
     let response =
         r#"{"npcs_in_room": ["carla"], "movement": {"type": null, "destination": "hall"}}"#;
 
-    let result = parse_quantifier_response_with_movement(response, &["carla".to_string()], &[]);
+    let result = parse_quantifier_response_with_movement(response, &["carla".to_string()]);
 
     assert_eq!(result.npcs.npc_ids, vec!["carla"]);
     assert_eq!(result.movement.movement_type, None);
@@ -364,153 +332,4 @@ fn test_compute_npc_events_all_left() {
             .all(|e| e.event_type == NpcTransitionType::Left)
     );
     assert_eq!(result.confidence, QuantifierConfidence::Medium);
-}
-
-#[test]
-fn test_extract_movement_from_text_entering() {
-    let rooms = vec![RoomInfo {
-        id: "kitchen".to_string(),
-        name: "Kitchen".to_string(),
-    }];
-    let result = extract_movement_from_text("I enter the kitchen", &rooms);
-    assert!(result.is_some());
-    let result = result.unwrap();
-    assert_eq!(result.movement_type, Some(MovementType::Entering));
-}
-
-#[test]
-fn test_extract_movement_from_text_leaving() {
-    let rooms = vec![RoomInfo {
-        id: "hall".to_string(),
-        name: "Hall".to_string(),
-    }];
-    let result = extract_movement_from_text("I leave the hall", &rooms);
-    assert!(result.is_some());
-    let result = result.unwrap();
-    assert_eq!(result.movement_type, Some(MovementType::Leaving));
-}
-
-#[test]
-fn test_extract_movement_from_text_walk_into() {
-    let rooms = vec![RoomInfo {
-        id: "garden".to_string(),
-        name: "Garden".to_string(),
-    }];
-    let result = extract_movement_from_text("I walk into the garden", &rooms);
-    assert!(result.is_some());
-}
-
-#[test]
-fn test_extract_movement_from_text_head_to() {
-    let rooms = vec![RoomInfo {
-        id: "tower".to_string(),
-        name: "Tower".to_string(),
-    }];
-    let result = extract_movement_from_text("I head to the tower", &rooms);
-    assert!(result.is_some());
-}
-
-#[test]
-fn test_extract_movement_destination_not_found() {
-    let rooms = vec![RoomInfo {
-        id: "kitchen".to_string(),
-        name: "Kitchen".to_string(),
-    }];
-    let result = extract_movement_from_text("I go somewhere else", &rooms);
-    assert!(result.map(|r| r.destination.is_none()).unwrap_or(true));
-}
-
-#[test]
-fn test_extract_movement_from_text_empty() {
-    let rooms = vec![];
-    let result = extract_movement_from_text("", &rooms);
-    assert!(result.is_none());
-}
-
-#[test]
-fn test_extract_movement_case_insensitive() {
-    let rooms = vec![RoomInfo {
-        id: "FOREST".to_string(),
-        name: "Forest".to_string(),
-    }];
-    let result = extract_movement_from_text("I ENTER the FOREST", &rooms);
-    assert!(result.is_some());
-    assert_eq!(result.unwrap().movement_type, Some(MovementType::Entering));
-}
-
-#[test]
-fn test_extract_movement_go_out() {
-    let rooms = vec![RoomInfo {
-        id: "outside".to_string(),
-        name: "Outside".to_string(),
-    }];
-    let result = extract_movement_from_text("I go out", &rooms);
-    assert!(result.is_some());
-    assert_eq!(result.unwrap().movement_type, Some(MovementType::Leaving));
-}
-
-#[test]
-fn test_extract_movement_walk_out() {
-    let rooms = vec![RoomInfo {
-        id: "garden".to_string(),
-        name: "Garden".to_string(),
-    }];
-    let result = extract_movement_from_text("I walk out to the garden", &rooms);
-    assert!(result.is_some());
-    assert_eq!(result.unwrap().movement_type, Some(MovementType::Leaving));
-}
-
-#[test]
-fn test_extract_movement_head_out() {
-    let rooms = vec![RoomInfo {
-        id: "courtyard".to_string(),
-        name: "Courtyard".to_string(),
-    }];
-    let result = extract_movement_from_text("I head out to the courtyard", &rooms);
-    assert!(result.is_some());
-    assert_eq!(result.unwrap().movement_type, Some(MovementType::Leaving));
-}
-
-#[test]
-fn test_extract_movement_exits() {
-    let rooms = vec![RoomInfo {
-        id: "hallway".to_string(),
-        name: "Hallway".to_string(),
-    }];
-    let result = extract_movement_from_text("I exit to the hallway", &rooms);
-    assert!(result.is_some());
-    assert_eq!(result.unwrap().movement_type, Some(MovementType::Leaving));
-}
-
-#[test]
-fn test_extract_movement_travel_to() {
-    let rooms = vec![RoomInfo {
-        id: "village".to_string(),
-        name: "Village".to_string(),
-    }];
-    let result = extract_movement_from_text("I travel to the village", &rooms);
-    assert!(result.is_some());
-    assert_eq!(result.unwrap().movement_type, Some(MovementType::Entering));
-}
-
-#[test]
-fn test_extract_movement_go_into() {
-    let rooms = vec![RoomInfo {
-        id: "cave".to_string(),
-        name: "Cave".to_string(),
-    }];
-    let result = extract_movement_from_text("I go into the cave", &rooms);
-    assert!(result.is_some());
-    assert_eq!(result.unwrap().movement_type, Some(MovementType::Entering));
-}
-
-#[test]
-fn test_extract_movement_destination_found() {
-    let rooms = vec![RoomInfo {
-        id: "kitchen".to_string(),
-        name: "Kitchen".to_string(),
-    }];
-    let result = extract_movement_from_text("I walk to the kitchen", &rooms);
-    assert!(result.is_some());
-    assert_eq!(result.unwrap().destination, Some("Kitchen".to_string()));
 }

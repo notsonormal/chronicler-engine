@@ -4,7 +4,7 @@
 use std::sync::{Arc, RwLock};
 
 use crate::error::EngineError;
-use crate::model::agent::{AgentConfig, AgentResult, BackendSelector, ExecutionPhase};
+use crate::model::agent::{AgentConfig, ExecutionPhase};
 use crate::model::settings::AppSettings;
 use crate::narrative::agents::Agent;
 use crate::narrative::agents::quantifier::QuantifierAgent;
@@ -54,7 +54,6 @@ impl AgentRegistry {
                     preset_storage.clone(),
                     Arc::clone(&settings),
                 )?),
-                "narrator" => Box::new(NarratorAgent::new(config.name.clone())),
                 other => {
                     return Err(EngineError::Config(format!("Unknown agent type: {other}")));
                 }
@@ -83,34 +82,5 @@ impl AgentRegistry {
 
     pub fn is_empty(&self) -> bool {
         self.agents.is_empty()
-    }
-}
-
-#[derive(Debug)]
-pub struct NarratorAgent {
-    name: String,
-}
-
-impl NarratorAgent {
-    pub fn new(name: String) -> Self {
-        Self { name }
-    }
-}
-
-impl Agent for NarratorAgent {
-    fn name(&self) -> &str {
-        &self.name
-    }
-    fn phase(&self) -> ExecutionPhase {
-        ExecutionPhase::PreGeneration
-    }
-    fn backend_selector(&self) -> BackendSelector {
-        BackendSelector::UseMain
-    }
-    fn execute(
-        &self,
-        _ctx: &crate::model::agent::AgentContext,
-    ) -> Result<AgentResult, EngineError> {
-        Ok(AgentResult::NoOp)
     }
 }

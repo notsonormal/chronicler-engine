@@ -54,22 +54,6 @@ impl LlmBackend for OpenRouterBackend {
         &self.model
     }
 
-    fn narrate_continuation(
-        &self,
-        agent_name: &str,
-        system_prompt: &str,
-        user_prompt: &str,
-        _trigger_prompt: &str,
-        max_tokens: Option<u32>,
-    ) -> Result<LlmCallResult, EngineError> {
-        tracing::info!("[LLM] Generating continuation narration");
-
-        Ok(self.wrap_and_save(
-            agent_name,
-            self.call(system_prompt, user_prompt, max_tokens)?,
-        ))
-    }
-
     fn complete(
         &self,
         agent_name: &str,

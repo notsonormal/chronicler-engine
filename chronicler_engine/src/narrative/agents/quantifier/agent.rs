@@ -117,7 +117,7 @@ impl Agent for QuantifierAgent {
 
         let confidence = Confidence::from(result.npcs.confidence);
 
-        Ok(AgentResult::StatePatch(StatePatch::Scene {
+        Ok(AgentResult::StatePatch(StatePatch {
             npc_ids: result.npcs.npc_ids,
             movement_destination: result.movement.destination,
             confidence,

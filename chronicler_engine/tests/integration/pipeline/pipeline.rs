@@ -25,7 +25,7 @@ fn test_delayed_llm_completes_without_deadlock() {
         Arc::new(MockBackend::default()),
     );
 
-    backend.execute_action(ctx.clone(), "look around".to_string(), "Player".to_string());
+    backend.execute_action(ctx.clone(), "look around".to_string());
 
     let guard = latest_state(&ctx);
     assert!(
@@ -53,11 +53,7 @@ fn test_quantifier_detects_movement() {
         }),
     );
 
-    backend.execute_action(
-        ctx.clone(),
-        "walk to the village square".to_string(),
-        "Player".to_string(),
-    );
+    backend.execute_action(ctx.clone(), "walk to the village square".to_string());
 
     let completed = wait_for_generation_complete(&ctx, 500);
     assert!(completed, "Movement action should complete within timeout");
@@ -90,11 +86,7 @@ fn test_quantifier_detects_npc_presence_and_fires_trigger() {
         }),
     );
 
-    backend.execute_action(
-        ctx.clone(),
-        "enter the shop".to_string(),
-        "Player".to_string(),
-    );
+    backend.execute_action(ctx.clone(), "enter the shop".to_string());
 
     let guard = latest_state(&ctx);
     assert!(
@@ -132,11 +124,7 @@ fn test_empty_llm_response_handled_gracefully() {
         Arc::new(MockBackend::default()),
     );
 
-    backend.execute_action(
-        ctx.clone(),
-        "examine the room".to_string(),
-        "Player".to_string(),
-    );
+    backend.execute_action(ctx.clone(), "examine the room".to_string());
 
     let guard = latest_state(&ctx);
     assert!(
@@ -176,11 +164,7 @@ fn test_failing_trigger_narration_does_not_crash() {
         }),
     );
 
-    backend.execute_action(
-        ctx.clone(),
-        "examine the shopkeeper".to_string(),
-        "Player".to_string(),
-    );
+    backend.execute_action(ctx.clone(), "examine the shopkeeper".to_string());
 
     let guard = latest_state(&ctx);
     assert!(
@@ -215,7 +199,7 @@ fn test_pipeline_cancels_when_token_cancelled() {
     ctx.cancel_token.cancel();
     let backend = working_service();
 
-    backend.execute_action(ctx.clone(), "look".to_string(), "Player".to_string());
+    backend.execute_action(ctx.clone(), "look".to_string());
 
     let final_state = latest_state(&ctx);
     assert_eq!(
@@ -238,7 +222,7 @@ async fn test_cancellation_resets_state_to_idle() {
     let token = ctx.cancel_token.clone();
 
     token.cancel();
-    backend.execute_action(ctx.clone(), "look around".to_string(), "Player".to_string());
+    backend.execute_action(ctx.clone(), "look around".to_string());
 
     let guard = latest_state(&ctx);
     assert!(
@@ -263,11 +247,7 @@ async fn test_pipeline_cancels_after_main_narration() {
     let ctx_clone = ctx.clone();
     let backend_clone = Arc::clone(&backend);
     let handle = tokio::task::spawn_blocking(move || {
-        backend_clone.execute_action(
-            ctx_clone.clone(),
-            "look around".to_string(),
-            "Player".to_string(),
-        );
+        backend_clone.execute_action(ctx_clone.clone(), "look around".to_string());
     });
 
     while !mock_narrator
@@ -319,11 +299,7 @@ async fn test_pipeline_cancels_during_trigger_continuation() {
     let ctx_clone = ctx.clone();
     let backend_clone = Arc::clone(&backend);
     let handle = tokio::task::spawn_blocking(move || {
-        backend_clone.execute_action(
-            ctx_clone.clone(),
-            "enter the shop".to_string(),
-            "Player".to_string(),
-        );
+        backend_clone.execute_action(ctx_clone.clone(), "enter the shop".to_string());
     });
 
     while !mock_narrator
@@ -371,11 +347,7 @@ fn test_pre_main_snapshot_saved_before_narration() {
         Arc::new(MockBackend::default()),
     );
 
-    backend.execute_action(
-        ctx.clone(),
-        "examine the room".to_string(),
-        "Player".to_string(),
-    );
+    backend.execute_action(ctx.clone(), "examine the room".to_string());
 
     let completed = wait_for_generation_complete(&ctx, 1000);
     assert!(completed, "FreeAction should complete within timeout");
@@ -402,11 +374,7 @@ fn test_pre_event_snapshot_saved_before_continuation() {
     let backend =
         GameService::with_mock_quantifier(Arc::new(MockBackend::default()), Arc::new(quantifier));
 
-    backend.execute_action(
-        ctx.clone(),
-        "examine the shopkeeper".to_string(),
-        "Player".to_string(),
-    );
+    backend.execute_action(ctx.clone(), "examine the shopkeeper".to_string());
 
     let completed = wait_for_generation_complete(&ctx, 1000);
     assert!(
@@ -429,7 +397,7 @@ fn test_pipeline_with_quantifier() {
         Arc::new(MockBackend::default()),
     );
 
-    backend.execute_action(ctx.clone(), "look around".to_string(), "Player".to_string());
+    backend.execute_action(ctx.clone(), "look around".to_string());
 
     let guard = latest_state(&ctx);
     assert!(
@@ -467,7 +435,7 @@ fn test_streaming_narration_saved_before_quantifier_complete() {
 
     let ctx_clone = ctx.clone();
     let handle = thread::spawn(move || {
-        backend.execute_action(ctx_clone, "look around".to_string(), "Player".to_string());
+        backend.execute_action(ctx_clone, "look around".to_string());
     });
 
     // Smart wait: narration should appear in database before quantifier completes (500ms)
@@ -520,7 +488,7 @@ fn test_narration_no_duplicate_with_real_quantifier_flow() {
         Arc::new(MockBackend::default()),
     );
 
-    backend.execute_action(ctx.clone(), "test action".to_string(), "Player".to_string());
+    backend.execute_action(ctx.clone(), "test action".to_string());
 
     let guard = latest_state(&ctx);
 
@@ -559,7 +527,7 @@ fn test_pipeline_continues_when_quantifier_save_warns() {
         Arc::new(MockBackend::default()),
     );
 
-    backend.execute_action(ctx.clone(), "look".to_string(), "Player".to_string());
+    backend.execute_action(ctx.clone(), "look".to_string());
 
     let guard = latest_state(&ctx);
     assert!(

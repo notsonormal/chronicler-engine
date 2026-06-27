@@ -10,10 +10,10 @@ use crate::model::quantifier::QuantifierResult;
 use crate::model::state::StoredTriggerContext;
 use crate::model::state::{GameState, GenerationPhase, GenerationStatus};
 use crate::narrative::llm::backend::LlmCallResult;
-use crate::narrative::prompt::PromptAssembler;
+use crate::narrative::prompt::LayeredPromptAssembler;
 
 pub trait ActionPipelineBackend: Send + Sync {
-    fn assembler(&self) -> &dyn PromptAssembler;
+    fn assembler(&self) -> &LayeredPromptAssembler;
 
     fn complete(
         &self,
@@ -40,10 +40,6 @@ pub struct ActionPipeline<'a, B: ActionPipelineBackend> {
 #[derive(Debug)]
 pub enum ActionOutcome {
     Completed,
-    #[allow(dead_code)] // Errors flow through GenerationStatus::Error
-    Error {
-        message: String,
-    },
     Cancelled,
 }
 

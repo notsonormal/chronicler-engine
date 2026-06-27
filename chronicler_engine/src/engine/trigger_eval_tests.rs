@@ -108,7 +108,10 @@ fn test_evaluate_triggers_empty_room() {
 #[test]
 fn test_evaluate_triggers_first_encounter() {
     let trigger = make_trigger(
-        TriggerRequirement::TimesMet(ComparisonOperator::Eq, 0),
+        TriggerRequirement {
+            operator: ComparisonOperator::Eq,
+            threshold: 0,
+        },
         false,
     );
     let npc = make_npc("gabriella", vec![trigger]);
@@ -125,7 +128,10 @@ fn test_evaluate_triggers_first_encounter() {
 #[test]
 fn test_evaluate_triggers_no_match_when_times_met_greater() {
     let trigger = make_trigger(
-        TriggerRequirement::TimesMet(ComparisonOperator::Eq, 0),
+        TriggerRequirement {
+            operator: ComparisonOperator::Eq,
+            threshold: 0,
+        },
         false,
     );
     let npc = make_npc("gabriella", vec![trigger]);
@@ -139,7 +145,10 @@ fn test_evaluate_triggers_no_match_when_times_met_greater() {
 #[test]
 fn test_evaluate_triggers_skips_fired_non_repeatable() {
     let trigger = make_trigger(
-        TriggerRequirement::TimesMet(ComparisonOperator::Eq, 0),
+        TriggerRequirement {
+            operator: ComparisonOperator::Eq,
+            threshold: 0,
+        },
         false,
     );
     let npc = make_npc("gabriella", vec![trigger.clone()]);
@@ -154,7 +163,10 @@ fn test_evaluate_triggers_skips_fired_non_repeatable() {
 fn test_evaluate_triggers_fires_for_npc_not_in_area() {
     // [DOC: docs/architecture/system.md]
     let trigger = make_trigger(
-        TriggerRequirement::TimesMet(ComparisonOperator::Eq, 0),
+        TriggerRequirement {
+            operator: ComparisonOperator::Eq,
+            threshold: 0,
+        },
         false,
     );
     let npc = make_npc("gabriella", vec![trigger]);
@@ -183,7 +195,10 @@ fn test_evaluate_triggers_fires_for_npc_not_in_area() {
 #[test]
 fn test_room_scoped_trigger_fires_in_correct_room() {
     let trigger = make_trigger_with_room(
-        TriggerRequirement::TimesMet(ComparisonOperator::Eq, 0),
+        TriggerRequirement {
+            operator: ComparisonOperator::Eq,
+            threshold: 0,
+        },
         false,
         "room_1",
     );
@@ -205,7 +220,10 @@ fn test_room_scoped_trigger_fires_in_correct_room() {
 #[test]
 fn test_room_scoped_trigger_skipped_in_wrong_room() {
     let trigger = make_trigger_with_room(
-        TriggerRequirement::TimesMet(ComparisonOperator::Eq, 0),
+        TriggerRequirement {
+            operator: ComparisonOperator::Eq,
+            threshold: 0,
+        },
         false,
         "entrance_hall",
     );
@@ -225,7 +243,10 @@ fn test_room_scoped_trigger_skipped_in_wrong_room() {
 #[test]
 fn test_global_trigger_fires_in_any_room() {
     let trigger = make_trigger(
-        TriggerRequirement::TimesMet(ComparisonOperator::Eq, 0),
+        TriggerRequirement {
+            operator: ComparisonOperator::Eq,
+            threshold: 0,
+        },
         false,
     );
     let npc = make_npc("gabriella", vec![trigger]);
@@ -242,7 +263,10 @@ fn test_global_trigger_fires_in_any_room() {
 #[test]
 fn test_evaluate_triggers_repeatable_fires_again() {
     let trigger = make_trigger(
-        TriggerRequirement::TimesMet(ComparisonOperator::Lt, 3),
+        TriggerRequirement {
+            operator: ComparisonOperator::Lt,
+            threshold: 3,
+        },
         true,
     );
     let npc = make_npc("ranger", vec![trigger]);
@@ -361,7 +385,10 @@ fn test_npc_encounter_log_initializes_with_starting_room_npcs() {
 #[test]
 fn test_increment_times_met_and_mark_fired() {
     let trigger = make_trigger(
-        TriggerRequirement::TimesMet(ComparisonOperator::Eq, 0),
+        TriggerRequirement {
+            operator: ComparisonOperator::Eq,
+            threshold: 0,
+        },
         false,
     );
     let npc = make_npc("gabriella", vec![trigger]);
@@ -383,11 +410,17 @@ fn test_trigger_index_with_skipped_triggers() {
     // NPC with 2 triggers: trigger 0 (already fired), trigger 1 (not fired).
     // evaluate_triggers should return trigger 1 with original index 1.
     let trigger_0 = make_trigger(
-        TriggerRequirement::TimesMet(ComparisonOperator::Eq, 0),
+        TriggerRequirement {
+            operator: ComparisonOperator::Eq,
+            threshold: 0,
+        },
         false,
     );
     let trigger_1 = make_trigger(
-        TriggerRequirement::TimesMet(ComparisonOperator::Gte, 0),
+        TriggerRequirement {
+            operator: ComparisonOperator::Gte,
+            threshold: 0,
+        },
         false,
     );
     let npc = make_npc("gabriella", vec![trigger_0.clone(), trigger_1.clone()]);
@@ -408,7 +441,10 @@ fn test_trigger_index_with_skipped_triggers() {
 #[test]
 fn test_check_condition_missing_npc_defaults_to_zero() {
     let npc_encounter_log = NpcEncounterLog::default();
-    let condition = TriggerRequirement::TimesMet(ComparisonOperator::Eq, 0);
+    let condition = TriggerRequirement {
+        operator: ComparisonOperator::Eq,
+        threshold: 0,
+    };
     assert!(check_condition(
         &npc_encounter_log,
         "unknown_npc",

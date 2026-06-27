@@ -83,7 +83,7 @@ pub fn render_action_area(state: &AppState) -> Result<String> {
         .get_input_status(ctx)
         .map_err(|e| EngineError::Config(e.to_string()))?;
 
-    let vm = ActionAreaViewModel::new(&status, &phase, &[]);
+    let vm = ActionAreaViewModel::new(&status, &phase);
     let template = ActionAreaTemplate::new(vm);
     template
         .render()

@@ -12,12 +12,12 @@ use crate::model::state::GameState;
 use crate::narrative::agents::quantifier::QuantifierAgent;
 use crate::narrative::agents::registry::AgentRegistry;
 use crate::narrative::llm::backend::LlmCallResult;
-use crate::narrative::prompt::{LayeredPromptAssembler, PromptAssembler};
+use crate::narrative::prompt::LayeredPromptAssembler;
 use crate::storage::Storage;
 
 pub struct GameService {
     pub(crate) llm_backend: Arc<dyn crate::narrative::llm::LlmBackend>,
-    pub(crate) prompt_assembler: Arc<dyn PromptAssembler>,
+    pub(crate) prompt_assembler: Arc<LayeredPromptAssembler>,
     pub(crate) agent_registry: AgentRegistry,
 }
 
@@ -93,8 +93,8 @@ impl GameService {
     }
 
     /// Execute a player action through the action pipeline.
-    pub fn execute_action(&self, ctx: GameServiceContext, input: String, player_name: String) {
-        crate::application::action_pipeline::execute_action_impl(self, ctx, input, player_name)
+    pub fn execute_action(&self, ctx: GameServiceContext, input: String) {
+        crate::application::action_pipeline::execute_action_impl(self, ctx, input)
     }
 
     /// Retry the last response.
@@ -114,8 +114,8 @@ impl Default for GameService {
 }
 
 impl ActionPipelineBackend for GameService {
-    fn assembler(&self) -> &dyn PromptAssembler {
-        &*self.prompt_assembler
+    fn assembler(&self) -> &LayeredPromptAssembler {
+        &self.prompt_assembler
     }
 
     fn complete(
@@ -157,7 +157,7 @@ impl ActionPipelineBackend for GameService {
             .collect();
 
         if let Some(first_patch) = patches.into_iter().reduce(StatePatch::merge) {
-            let StatePatch::Scene {
+            let StatePatch {
                 npc_ids,
                 movement_destination,
                 confidence,

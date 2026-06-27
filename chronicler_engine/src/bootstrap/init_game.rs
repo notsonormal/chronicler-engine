@@ -12,7 +12,7 @@ use crate::model::settings::AppSettings;
 use crate::model::state::{GameState, GenerationStatus, MessageType};
 use crate::model::state_snapshot::GameStateSnapshot;
 use crate::model::world::WorldCard;
-use crate::narrative::prompt::{NpcContext, PromptAssembler, make_prompt_context};
+use crate::narrative::prompt::{NpcContext, make_prompt_context};
 
 use super::run::{PRESET_STORAGE_GAME_ID, find_latest_game_for_world, list_game_names_for_world};
 use super::inject_scenario_logs;

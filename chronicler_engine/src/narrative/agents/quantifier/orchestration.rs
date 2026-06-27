@@ -60,11 +60,7 @@ pub(crate) fn quantify_room_with_llm_call(
                     &response[..response.len().min(200)]
                 );
 
-                let result = parse_quantifier_response_with_movement(
-                    response,
-                    &known_ids,
-                    context.all_rooms,
-                );
+                let result = parse_quantifier_response_with_movement(response, &known_ids);
                 tracing::info!(
                     "[Quantifier] Detected NPCs: {:?} (confidence: {:?})",
                     result.npcs.npc_ids,

@@ -68,10 +68,6 @@ pub trait LlmBackend: Send + Sync {
 
     fn save_message(&self, _message: &LlmMessage) {}
 
-    fn preprocess_user_text(&self, text: &str) -> String {
-        text.to_string()
-    }
-
     fn postprocess_response_text(&self, text: &str) -> String {
         super::sanitize::sanitize_llm_output(text)
     }
@@ -82,15 +78,6 @@ pub trait LlmBackend: Send + Sync {
         self.save_message(&result.to_message());
         result
     }
-
-    fn narrate_continuation(
-        &self,
-        agent_name: &str,
-        system_prompt: &str,
-        user_prompt: &str,
-        trigger_prompt: &str,
-        max_tokens: Option<u32>,
-    ) -> Result<LlmCallResult, EngineError>;
 
     fn complete(
         &self,

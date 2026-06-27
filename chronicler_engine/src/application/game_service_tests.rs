@@ -73,7 +73,7 @@ fn test_execute_action_with_empty_input_does_not_panic() {
         vec![],
         "start".to_string(),
     ));
-    service.execute_action(state, "".to_string(), "Player".to_string());
+    service.execute_action(state, "".to_string());
 }
 
 #[test]
@@ -87,7 +87,7 @@ fn test_execute_action_with_valid_command_does_not_panic() {
         vec![],
         "start".to_string(),
     ));
-    service.execute_action(state, "look".to_string(), "Player".to_string());
+    service.execute_action(state, "look".to_string());
 }
 
 #[test]
@@ -124,11 +124,7 @@ fn test_execute_action_adds_message_to_state() {
         "start".to_string(),
     ));
     let history_len_before = state.load_messages().unwrap().len();
-    service.execute_action(
-        state.clone(),
-        "test input".to_string(),
-        "Player".to_string(),
-    );
+    service.execute_action(state.clone(), "test input".to_string());
     let history_len_after = state.load_messages().unwrap().len();
     assert!(history_len_after >= history_len_before);
 }

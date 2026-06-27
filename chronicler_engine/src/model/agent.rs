@@ -38,49 +38,36 @@ impl StatePatch {
     /// - `movement_destination`: keep first non-None, warn on conflict
     /// - `confidence`: take minimum (most conservative)
     pub fn merge(self, other: StatePatch) -> StatePatch {
-        match (self, other) {
-            (
-                StatePatch::Scene {
-                    npc_ids: mut ids_a,
-                    movement_destination: dest_a,
-                    confidence: conf_a,
-                },
-                StatePatch::Scene {
-                    npc_ids: ids_b,
-                    movement_destination: dest_b,
-                    confidence: conf_b,
-                },
-            ) => {
-                let ids_b_unique: Vec<_> =
-                    ids_b.into_iter().filter(|id| !ids_a.contains(id)).collect();
-                ids_a.extend(ids_b_unique);
+        let ids_b_unique: Vec<_> = other
+            .npc_ids
+            .into_iter()
+            .filter(|id| !self.npc_ids.contains(id))
+            .collect();
+        let mut npc_ids = self.npc_ids;
+        npc_ids.extend(ids_b_unique);
 
-                let destination = match dest_a {
-                    Some(ref d) => {
-                        if let Some(ref db) = dest_b {
-                            tracing::warn!(
-                                "Movement destination conflict: {d} vs {db}, keeping first",
-                            );
-                        }
-                        Some(d.clone())
-                    }
-                    None => dest_b,
-                };
-
-                let confidence = match (conf_a, conf_b) {
-                    (Confidence::High, c) => c,
-                    (c, Confidence::High) => c,
-                    (Confidence::Medium, c) => c,
-                    (c, Confidence::Medium) => c,
-                    (Confidence::Low, Confidence::Low) => Confidence::Low,
-                };
-
-                StatePatch::Scene {
-                    npc_ids: ids_a,
-                    movement_destination: destination,
-                    confidence,
+        let movement_destination = match self.movement_destination {
+            Some(ref d) => {
+                if let Some(ref db) = other.movement_destination {
+                    tracing::warn!("Movement destination conflict: {d} vs {db}, keeping first",);
                 }
+                Some(d.clone())
             }
+            None => other.movement_destination,
+        };
+
+        let confidence = match (self.confidence, other.confidence) {
+            (Confidence::High, c) => c,
+            (c, Confidence::High) => c,
+            (Confidence::Medium, c) => c,
+            (c, Confidence::Medium) => c,
+            (Confidence::Low, Confidence::Low) => Confidence::Low,
+        };
+
+        StatePatch {
+            npc_ids,
+            movement_destination,
+            confidence,
         }
     }
 }
@@ -93,12 +80,10 @@ pub enum Confidence {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum StatePatch {
-    Scene {
-        npc_ids: Vec<String>,
-        movement_destination: Option<String>,
-        confidence: Confidence,
-    },
+pub struct StatePatch {
+    pub npc_ids: Vec<String>,
+    pub movement_destination: Option<String>,
+    pub confidence: Confidence,
 }
 
 #[derive(Debug, Clone, PartialEq)]

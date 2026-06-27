@@ -28,7 +28,7 @@ fn test_retry_finds_last_input_and_runs_pipeline() {
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = working_service();
 
-    backend.execute_action(ctx.clone(), "look around".to_string(), "Player".to_string());
+    backend.execute_action(ctx.clone(), "look around".to_string());
     let after_first = latest_state(&ctx);
     let first_narration_count = after_first
         .narrative
@@ -78,7 +78,7 @@ fn test_retry_after_llm_failure_succeeds() {
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let failing = failing_service();
 
-    failing.execute_action(ctx.clone(), "look".to_string(), "Player".to_string());
+    failing.execute_action(ctx.clone(), "look".to_string());
     let after_fail = latest_state(&ctx);
     assert!(
         after_fail

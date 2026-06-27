@@ -3,7 +3,7 @@ use crate::model::map::Room;
 use crate::model::prompt_preset::PromptPreset;
 use crate::model::state::MessageEntry;
 use crate::model::world::WorldCard;
-use crate::narrative::prompt::assembler::{LayeredPromptAssembler, PromptAssembler};
+use crate::narrative::prompt::assembler::LayeredPromptAssembler;
 use crate::narrative::prompt::budget;
 use crate::narrative::prompt::context::make_prompt_context;
 use crate::narrative::prompt::types::NpcContext;

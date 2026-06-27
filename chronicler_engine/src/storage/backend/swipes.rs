@@ -157,7 +157,7 @@ impl Storage {
 
     pub fn count_swipes_for_message(&self, message_id: u64) -> Result<usize, EngineError> {
         self.with_backend_mut(
-            Operation::LoadSwipesForMessages,
+            Operation::CountSwipesForMessage,
             |backend, _game_id| match backend {
                 Backend::Sqlite { pool } => {
                     let conn = pool.conn();

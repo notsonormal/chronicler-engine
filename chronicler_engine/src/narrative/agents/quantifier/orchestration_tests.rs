@@ -115,17 +115,6 @@ impl LlmBackend for HighConfidenceBackend {
             r#"{{"npcs_in_room": {npcs_json}, "movement": {{"type": "entering", "destination": "kitchen"}}}}"#
         )))
     }
-
-    fn narrate_continuation(
-        &self,
-        _agent_name: &str,
-        _system_prompt: &str,
-        _user_prompt: &str,
-        _trigger_prompt: &str,
-        _max_tokens: Option<u32>,
-    ) -> Result<LlmCallResult, EngineError> {
-        unreachable!()
-    }
 }
 
 impl LlmBackend for MediumConfidenceBackend {
@@ -144,17 +133,6 @@ impl LlmBackend for MediumConfidenceBackend {
     ) -> Result<LlmCallResult, EngineError> {
         Ok(make_test_llm_result("Carla is standing in the room."))
     }
-
-    fn narrate_continuation(
-        &self,
-        _agent_name: &str,
-        _system_prompt: &str,
-        _user_prompt: &str,
-        _trigger_prompt: &str,
-        _max_tokens: Option<u32>,
-    ) -> Result<LlmCallResult, EngineError> {
-        unreachable!()
-    }
 }
 
 impl LlmBackend for LowConfidenceBackend {
@@ -172,17 +150,6 @@ impl LlmBackend for LowConfidenceBackend {
         _max_tokens: Option<u32>,
     ) -> Result<LlmCallResult, EngineError> {
         Ok(make_test_llm_result(""))
-    }
-
-    fn narrate_continuation(
-        &self,
-        _agent_name: &str,
-        _system_prompt: &str,
-        _user_prompt: &str,
-        _trigger_prompt: &str,
-        _max_tokens: Option<u32>,
-    ) -> Result<LlmCallResult, EngineError> {
-        unreachable!()
     }
 }
 
@@ -204,17 +171,6 @@ impl LlmBackend for ErrBackend {
             url: "mock".to_string(),
             detail: "mock failure".to_string(),
         }))
-    }
-
-    fn narrate_continuation(
-        &self,
-        _agent_name: &str,
-        _system_prompt: &str,
-        _user_prompt: &str,
-        _trigger_prompt: &str,
-        _max_tokens: Option<u32>,
-    ) -> Result<LlmCallResult, EngineError> {
-        unreachable!()
     }
 }
 
@@ -354,16 +310,6 @@ fn test_quantifier_retry_on_llm_error() {
             let mut responses = self.responses.lock().unwrap();
             let text = responses.remove(0)?;
             Ok(make_test_llm_result(&text))
-        }
-        fn narrate_continuation(
-            &self,
-            _agent_name: &str,
-            _system_prompt: &str,
-            _user_prompt: &str,
-            _trigger_prompt: &str,
-            _max_tokens: Option<u32>,
-        ) -> Result<LlmCallResult, EngineError> {
-            unreachable!()
         }
     }
 

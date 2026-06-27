@@ -10,7 +10,7 @@ use crate::model::quantifier::{QuantifierConfidence, QuantifierParseResult, Quan
 
 use crate::model::state::{GameState, GenerationPhase, GenerationStatus, MessageType};
 use crate::narrative::llm::backend::{AGENT_NARRATOR, LlmCallResult};
-use crate::narrative::prompt::{LayeredPromptAssembler, PromptAssembler};
+use crate::narrative::prompt::LayeredPromptAssembler;
 use crate::storage::{Operation, Storage, TestOverride};
 use crate::test_support::fixtures::{TestGameState, TestNpc};
 use crate::test_support::make_test_context;
@@ -32,7 +32,7 @@ impl Default for MockPipelineBackend {
 }
 
 impl ActionPipelineBackend for MockPipelineBackend {
-    fn assembler(&self) -> &dyn PromptAssembler {
+    fn assembler(&self) -> &LayeredPromptAssembler {
         static ASSEMBLER: std::sync::OnceLock<LayeredPromptAssembler> = std::sync::OnceLock::new();
         ASSEMBLER.get_or_init(|| {
             LayeredPromptAssembler::new(crate::narrative::prompt::budget::MAX_CONTEXT_TOKENS)
@@ -313,7 +313,10 @@ fn test_pipeline_trigger_happy_path() {
         sheet: crate::test_support::fixtures::TestPlayer::standard().sheet,
         inventory: vec![],
         triggers: vec![Trigger {
-            requirement: TriggerRequirement::TimesMet(ComparisonOperator::Eq, 0),
+            requirement: TriggerRequirement {
+                operator: ComparisonOperator::Eq,
+                threshold: 0,
+            },
             narration: TriggerNarration {
                 name: "Greeting".to_string(),
                 narration_prompt: "The NPC greets you warmly.".to_string(),
@@ -378,7 +381,10 @@ fn test_pipeline_trigger_empty_continuation() {
         sheet: crate::test_support::fixtures::TestPlayer::standard().sheet,
         inventory: vec![],
         triggers: vec![Trigger {
-            requirement: TriggerRequirement::TimesMet(ComparisonOperator::Eq, 0),
+            requirement: TriggerRequirement {
+                operator: ComparisonOperator::Eq,
+                threshold: 0,
+            },
             narration: TriggerNarration {
                 name: "Greeting".to_string(),
                 narration_prompt: "The NPC greets you.".to_string(),
@@ -440,7 +446,10 @@ fn test_pipeline_trigger_complete_failure() {
         sheet: crate::test_support::fixtures::TestPlayer::standard().sheet,
         inventory: vec![],
         triggers: vec![Trigger {
-            requirement: TriggerRequirement::TimesMet(ComparisonOperator::Eq, 0),
+            requirement: TriggerRequirement {
+                operator: ComparisonOperator::Eq,
+                threshold: 0,
+            },
             narration: TriggerNarration {
                 name: "Greeting".to_string(),
                 narration_prompt: "The NPC greets you.".to_string(),

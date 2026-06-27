@@ -13,8 +13,9 @@ pub enum ComparisonOperator {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum TriggerRequirement {
-    TimesMet(ComparisonOperator, u32),
+pub struct TriggerRequirement {
+    pub operator: ComparisonOperator,
+    pub threshold: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

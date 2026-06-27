@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-06-26 21:11 UTC*
+*Index last generated: 2026-06-27 11:03 UTC*
 
 ### Root files
 
@@ -62,6 +62,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ### `docs/plans/`
 
 - [Plan: Abstraction Anti-Pattern Prevention via Advisory Healthcheck](./plans/abstraction-antipattern-healthcheck-plan.md)
+- [Implementation Plan: Abstraction Anti-Pattern Fixes (Corrected)](./plans/abstraction-fixes-implementation-plan.md)
 - [Plan: Abstraction Anti-Pattern Fixes (Tiered)](./plans/abstraction-fixes-plan.md)
 - [Plan: Antipattern-Checker Agent Skill](./plans/antipattern-checker-skill-plan.md)
 - [Plan: Diagnostic Decision Tree as Agent Infrastructure](./plans/diagnostic-decision-tree-plan.md)

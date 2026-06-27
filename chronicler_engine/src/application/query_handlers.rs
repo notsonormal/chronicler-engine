@@ -8,181 +8,153 @@ use crate::error::EngineError;
 use crate::model::llm_message::LlmMessage;
 use crate::model::state::MessageEntry;
 
-pub struct QueryHandlers;
+pub fn get_generating_status(
+    ctx: GameServiceContext,
+) -> Result<
+    (
+        crate::model::state::GenerationStatus,
+        crate::model::state::GenerationPhase,
+    ),
+    ApplicationError,
+> {
+    let game_state = load_or_fresh(&ctx);
+    Ok((
+        game_state.narrative.input_buffer.status.clone(),
+        game_state.narrative.input_buffer.phase.clone(),
+    ))
+}
 
-impl Default for QueryHandlers {
-    fn default() -> Self {
-        Self
+pub fn reset_generating_status(ctx: GameServiceContext) -> Result<(), ApplicationError> {
+    let mut game_state = load_or_fresh(&ctx);
+    game_state.narrative.input_buffer.status = crate::model::state::GenerationStatus::Idle;
+    let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&game_state);
+    ctx.storage.save_snapshot(&snapshot)?;
+    Ok(())
+}
+
+pub fn get_current_game_name(ctx: GameServiceContext) -> Result<String, ApplicationError> {
+    match ctx.storage.get_game(ctx.storage.current_game_id())? {
+        Some(g) => Ok(g.name),
+        None => Ok("Unknown".to_string()),
     }
 }
 
-impl QueryHandlers {
-    pub fn new() -> Self {
-        Self
-    }
+pub fn list_latest_llm_messages(
+    ctx: GameServiceContext,
+    limit: usize,
+) -> Result<Vec<LlmMessage>, ApplicationError> {
+    ctx.storage
+        .list_latest_llm_messages(limit)
+        .map_err(Into::into)
+}
 
-    pub fn get_generating_status(
-        &self,
-        ctx: GameServiceContext,
-    ) -> Result<
-        (
-            crate::model::state::GenerationStatus,
-            crate::model::state::GenerationPhase,
-        ),
-        ApplicationError,
-    > {
-        let game_state = load_or_fresh(&ctx);
-        Ok((
-            game_state.narrative.input_buffer.status.clone(),
-            game_state.narrative.input_buffer.phase.clone(),
-        ))
-    }
+pub fn get_story_log_entries(
+    ctx: GameServiceContext,
+) -> Result<(Vec<MessageEntry>, bool), ApplicationError> {
+    let game_state = load_or_fresh(&ctx);
+    let entries: Vec<_> = game_state.narrative.history().to_vec();
+    let has_last_trigger = game_state.narrative.last_trigger.is_some();
+    Ok((entries, has_last_trigger))
+}
 
-    pub fn reset_generating_status(&self, ctx: GameServiceContext) -> Result<(), ApplicationError> {
-        let mut game_state = load_or_fresh(&ctx);
-        game_state.narrative.input_buffer.status = crate::model::state::GenerationStatus::Idle;
-        let snapshot =
-            crate::model::state_snapshot::GameStateSnapshot::from_game_state(&game_state);
-        ctx.storage.save_snapshot(&snapshot)?;
-        Ok(())
-    }
+pub fn get_input_status(
+    ctx: GameServiceContext,
+) -> Result<
+    (
+        crate::model::state::GenerationStatus,
+        crate::model::state::GenerationPhase,
+    ),
+    ApplicationError,
+> {
+    get_generating_status(ctx)
+}
 
-    pub fn get_current_game_name(
-        &self,
-        ctx: GameServiceContext,
-    ) -> Result<String, ApplicationError> {
-        match ctx.storage.get_game(ctx.storage.current_game_id())? {
-            Some(g) => Ok(g.name),
-            None => Ok("Unknown".to_string()),
-        }
-    }
+pub fn get_current_room_view(
+    ctx: GameServiceContext,
+) -> Result<(String, Option<String>), ApplicationError> {
+    let game_state = load_or_fresh(&ctx);
+    let room = game_state
+        .current_room()
+        .ok_or_else(|| EngineError::RoomNotFound("current room not found".to_string()))?;
 
-    pub fn list_latest_llm_messages(
-        &self,
-        ctx: GameServiceContext,
-        limit: usize,
-    ) -> Result<Vec<LlmMessage>, ApplicationError> {
-        ctx.storage
-            .list_latest_llm_messages(limit)
-            .map_err(Into::into)
-    }
+    let image_path = room
+        .image_path
+        .clone()
+        .or_else(|| game_state.world.default_room_image.clone());
 
-    pub fn get_story_log_entries(
-        &self,
-        ctx: GameServiceContext,
-    ) -> Result<(Vec<MessageEntry>, bool), ApplicationError> {
-        let game_state = load_or_fresh(&ctx);
-        let entries: Vec<_> = game_state.narrative.history().to_vec();
-        let has_last_trigger = game_state.narrative.last_trigger.is_some();
-        Ok((entries, has_last_trigger))
-    }
+    Ok((room.name.clone(), image_path))
+}
 
-    pub fn get_input_status(
-        &self,
-        ctx: GameServiceContext,
-    ) -> Result<
-        (
-            crate::model::state::GenerationStatus,
-            crate::model::state::GenerationPhase,
-        ),
-        ApplicationError,
-    > {
-        self.get_generating_status(ctx)
-    }
+pub fn get_npc_headshots(
+    ctx: GameServiceContext,
+    scene_only: bool,
+) -> Result<Vec<(String, String)>, ApplicationError> {
+    let game_state = load_or_fresh(&ctx);
 
-    pub fn get_current_room_view(
-        &self,
-        ctx: GameServiceContext,
-    ) -> Result<(String, Option<String>), ApplicationError> {
-        let game_state = load_or_fresh(&ctx);
-        let room = game_state
-            .current_room()
-            .ok_or_else(|| EngineError::RoomNotFound("current room not found".to_string()))?;
-
-        let image_path = room
-            .image_path
-            .clone()
-            .or_else(|| game_state.world.default_room_image.clone());
-
-        Ok((room.name.clone(), image_path))
-    }
-
-    pub fn get_npc_headshots(
-        &self,
-        ctx: GameServiceContext,
-        scene_only: bool,
-    ) -> Result<Vec<(String, String)>, ApplicationError> {
-        let game_state = load_or_fresh(&ctx);
-
-        let npc_ids: Vec<String> = if scene_only {
-            game_state
-                .scene
-                .npcs_in_area
-                .iter()
-                .map(|npc| npc.id.clone())
-                .collect()
-        } else {
-            game_state.npcs.keys().cloned().collect()
-        };
-
-        let npc_data: Vec<(String, String)> = npc_ids
-            .iter()
-            .filter_map(|id| {
-                let npc = game_state.npcs.get(id)?;
-                let image_path = npc.sheet.preferred_image()?.to_string();
-                let name = npc.sheet.name.clone();
-                Some((image_path, name))
-            })
-            .collect();
-
-        Ok(npc_data)
-    }
-
-    pub fn get_debug_state(
-        &self,
-        ctx: GameServiceContext,
-    ) -> Result<DebugStateView, ApplicationError> {
-        let game_state = load_or_fresh(&ctx);
-
-        let history_tail: Vec<MessageEntry> = game_state
-            .narrative
-            .history()
-            .iter()
-            .rev()
-            .take(5)
-            .rev()
-            .cloned()
-            .collect();
-
-        let npc_ids: Vec<String> = game_state
+    let npc_ids: Vec<String> = if scene_only {
+        game_state
             .scene
             .npcs_in_area
             .iter()
             .map(|npc| npc.id.clone())
-            .collect();
+            .collect()
+    } else {
+        game_state.npcs.keys().cloned().collect()
+    };
 
-        let dynamic_rooms: Vec<String> =
-            game_state.movement.dynamic_rooms.keys().cloned().collect();
-
-        let last_error = match &game_state.narrative.input_buffer.status {
-            crate::model::state::GenerationStatus::Error(msg) => Some(msg.clone()),
-            _ => None,
-        };
-
-        Ok(DebugStateView {
-            current_room_id: game_state.movement.current_room_id.clone(),
-            npcs_in_area: npc_ids,
-            generation_status: game_state.narrative.input_buffer.status.clone(),
-            generation_phase: game_state.narrative.input_buffer.phase.clone(),
-            npc_encounter_log: game_state.npc_encounter_log.npcs.clone(),
-            narration_history_tail: history_tail,
-            narration_history_length: game_state.narrative.history().len(),
-            dynamic_rooms,
-            dynamic_room_count: game_state.movement.dynamic_rooms.len(),
-            last_error,
-            quantifier_confidence: game_state.scene.quantifier_confidence.clone(),
-            backend_name: game_state.narrative.last_backend_name.clone(),
-            model_name: game_state.narrative.last_model_name.clone(),
+    let npc_data: Vec<(String, String)> = npc_ids
+        .iter()
+        .filter_map(|id| {
+            let npc = game_state.npcs.get(id)?;
+            let image_path = npc.sheet.preferred_image()?.to_string();
+            let name = npc.sheet.name.clone();
+            Some((image_path, name))
         })
-    }
+        .collect();
+
+    Ok(npc_data)
+}
+
+pub fn get_debug_state(ctx: GameServiceContext) -> Result<DebugStateView, ApplicationError> {
+    let game_state = load_or_fresh(&ctx);
+
+    let history_tail: Vec<MessageEntry> = game_state
+        .narrative
+        .history()
+        .iter()
+        .rev()
+        .take(5)
+        .rev()
+        .cloned()
+        .collect();
+
+    let npc_ids: Vec<String> = game_state
+        .scene
+        .npcs_in_area
+        .iter()
+        .map(|npc| npc.id.clone())
+        .collect();
+
+    let dynamic_rooms: Vec<String> = game_state.movement.dynamic_rooms.keys().cloned().collect();
+
+    let last_error = match &game_state.narrative.input_buffer.status {
+        crate::model::state::GenerationStatus::Error(msg) => Some(msg.clone()),
+        _ => None,
+    };
+
+    Ok(DebugStateView {
+        current_room_id: game_state.movement.current_room_id.clone(),
+        npcs_in_area: npc_ids,
+        generation_status: game_state.narrative.input_buffer.status.clone(),
+        generation_phase: game_state.narrative.input_buffer.phase.clone(),
+        npc_encounter_log: game_state.npc_encounter_log.npcs.clone(),
+        narration_history_tail: history_tail,
+        narration_history_length: game_state.narrative.history().len(),
+        dynamic_rooms,
+        dynamic_room_count: game_state.movement.dynamic_rooms.len(),
+        last_error,
+        quantifier_confidence: game_state.scene.quantifier_confidence.clone(),
+        backend_name: game_state.narrative.last_backend_name.clone(),
+        model_name: game_state.narrative.last_model_name.clone(),
+    })
 }

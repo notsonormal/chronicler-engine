@@ -9,5 +9,4 @@ fn test_prompt_layer_variants() {
     assert_eq!(PromptLayer::WorldInfo as u8, 4);
     assert_eq!(PromptLayer::History as u8, 5);
     assert_eq!(PromptLayer::User as u8, 6);
-    assert_eq!(PromptLayer::Phi as u8, 7);
 }

@@ -114,18 +114,6 @@ impl LlmBackend for MockBackend {
         "mock"
     }
 
-    fn narrate_continuation(
-        &self,
-        agent_name: &str,
-        _system_prompt: &str,
-        _user_prompt: &str,
-        trigger_prompt: &str,
-        _max_tokens: Option<u32>,
-    ) -> Result<LlmCallResult, EngineError> {
-        self.guard()?;
-        Ok(self.make_result(agent_name, format!("[Trigger: {trigger_prompt}]")))
-    }
-
     fn complete(
         &self,
         agent_name: &str,

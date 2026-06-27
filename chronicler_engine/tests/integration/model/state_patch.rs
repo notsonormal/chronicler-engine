@@ -7,7 +7,7 @@ fn scene_patch(
     destination: Option<&str>,
     confidence: Confidence,
 ) -> StatePatch {
-    StatePatch::Scene {
+    StatePatch {
         npc_ids: npc_ids.into_iter().map(String::from).collect(),
         movement_destination: destination.map(String::from),
         confidence,
@@ -21,7 +21,7 @@ fn test_merge_npc_ids_union_preserves_order() {
 
     let merged = a.merge(b);
 
-    let StatePatch::Scene { npc_ids, .. } = merged;
+    let StatePatch { npc_ids, .. } = merged;
     assert_eq!(npc_ids, vec!["alice", "bob", "charlie"]);
 }
 
@@ -32,7 +32,7 @@ fn test_merge_npc_ids_empty_first() {
 
     let merged = a.merge(b);
 
-    let StatePatch::Scene { npc_ids, .. } = merged;
+    let StatePatch { npc_ids, .. } = merged;
     assert_eq!(npc_ids, vec!["alice", "bob"]);
 }
 
@@ -43,7 +43,7 @@ fn test_merge_npc_ids_empty_second() {
 
     let merged = a.merge(b);
 
-    let StatePatch::Scene { npc_ids, .. } = merged;
+    let StatePatch { npc_ids, .. } = merged;
     assert_eq!(npc_ids, vec!["alice", "bob"]);
 }
 
@@ -54,7 +54,7 @@ fn test_merge_movement_destination_keeps_first() {
 
     let merged = a.merge(b);
 
-    let StatePatch::Scene {
+    let StatePatch {
         movement_destination,
         ..
     } = merged;
@@ -68,7 +68,7 @@ fn test_merge_movement_destination_falls_back_to_second() {
 
     let merged = a.merge(b);
 
-    let StatePatch::Scene {
+    let StatePatch {
         movement_destination,
         ..
     } = merged;
@@ -82,7 +82,7 @@ fn test_merge_confidence_takes_minimum_high_medium() {
 
     let merged = a.merge(b);
 
-    let StatePatch::Scene { confidence, .. } = merged;
+    let StatePatch { confidence, .. } = merged;
     assert_eq!(confidence, Confidence::Medium);
 }
 
@@ -93,7 +93,7 @@ fn test_merge_confidence_takes_minimum_medium_low() {
 
     let merged = a.merge(b);
 
-    let StatePatch::Scene { confidence, .. } = merged;
+    let StatePatch { confidence, .. } = merged;
     assert_eq!(confidence, Confidence::Low);
 }
 
@@ -104,7 +104,7 @@ fn test_merge_confidence_takes_minimum_high_low() {
 
     let merged = a.merge(b);
 
-    let StatePatch::Scene { confidence, .. } = merged;
+    let StatePatch { confidence, .. } = merged;
     assert_eq!(confidence, Confidence::Low);
 }
 
@@ -115,7 +115,7 @@ fn test_merge_confidence_both_high() {
 
     let merged = a.merge(b);
 
-    let StatePatch::Scene { confidence, .. } = merged;
+    let StatePatch { confidence, .. } = merged;
     assert_eq!(confidence, Confidence::High);
 }
 
@@ -126,7 +126,7 @@ fn test_merge_all_fields() {
 
     let merged = a.merge(b);
 
-    let StatePatch::Scene {
+    let StatePatch {
         npc_ids,
         movement_destination,
         confidence,
@@ -144,7 +144,7 @@ fn test_merge_multiple_chains() {
 
     let merged = patch1.merge(patch2).merge(patch3);
 
-    let StatePatch::Scene {
+    let StatePatch {
         npc_ids,
         movement_destination,
         confidence,

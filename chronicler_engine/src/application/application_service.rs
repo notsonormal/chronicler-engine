@@ -12,7 +12,6 @@ use crate::application::context::{GameServiceContext, load_or_fresh};
 use crate::application::game_lifecycle::GameLifecycleService;
 use crate::application::game_service::GameService;
 use crate::application::message_editing::MessageEditingService;
-use crate::application::query_handlers::QueryHandlers;
 use crate::error::EngineError;
 use crate::model::game::Game;
 use crate::model::llm_message::LlmMessage;
@@ -102,7 +101,6 @@ pub struct DefaultApplicationService {
     game_service: Arc<GameService>,
     lifecycle: GameLifecycleService,
     editing: MessageEditingService,
-    queries: QueryHandlers,
 }
 
 impl DefaultApplicationService {
@@ -110,7 +108,6 @@ impl DefaultApplicationService {
         Self {
             lifecycle: GameLifecycleService::new(),
             editing: MessageEditingService::new(Arc::clone(&game_service)),
-            queries: QueryHandlers::new(),
             game_service,
         }
     }
@@ -188,7 +185,7 @@ impl DefaultApplicationService {
                 tracing::debug!("spawn_blocking: cancelled before execute_action");
                 return;
             }
-            execute_action_impl(&*game_service, ctx_clone.clone(), input, player_name);
+            execute_action_impl(&*game_service, ctx_clone.clone(), input);
             tracing::debug!("spawn_blocking: execute_action completed");
         });
         Ok(ProcessActionResult::Started)
@@ -259,18 +256,18 @@ impl DefaultApplicationService {
         &self,
         ctx: GameServiceContext,
     ) -> Result<(GenerationStatus, GenerationPhase), ApplicationError> {
-        self.queries.get_generating_status(ctx)
+        super::query_handlers::get_generating_status(ctx)
     }
 
     pub fn reset_generating_status(&self, ctx: GameServiceContext) -> Result<(), ApplicationError> {
-        self.queries.reset_generating_status(ctx)
+        super::query_handlers::reset_generating_status(ctx)
     }
 
     pub fn get_current_game_name(
         &self,
         ctx: GameServiceContext,
     ) -> Result<String, ApplicationError> {
-        self.queries.get_current_game_name(ctx)
+        super::query_handlers::get_current_game_name(ctx)
     }
 
     pub fn list_latest_llm_messages(
@@ -278,28 +275,28 @@ impl DefaultApplicationService {
         ctx: GameServiceContext,
         limit: usize,
     ) -> Result<Vec<LlmMessage>, ApplicationError> {
-        self.queries.list_latest_llm_messages(ctx, limit)
+        super::query_handlers::list_latest_llm_messages(ctx, limit)
     }
 
     pub fn get_story_log_entries(
         &self,
         ctx: GameServiceContext,
     ) -> Result<(Vec<MessageEntry>, bool), ApplicationError> {
-        self.queries.get_story_log_entries(ctx)
+        super::query_handlers::get_story_log_entries(ctx)
     }
 
     pub fn get_input_status(
         &self,
         ctx: GameServiceContext,
     ) -> Result<(GenerationStatus, GenerationPhase), ApplicationError> {
-        self.queries.get_input_status(ctx)
+        super::query_handlers::get_input_status(ctx)
     }
 
     pub fn get_current_room_view(
         &self,
         ctx: GameServiceContext,
     ) -> Result<(String, Option<String>), ApplicationError> {
-        self.queries.get_current_room_view(ctx)
+        super::query_handlers::get_current_room_view(ctx)
     }
 
     pub fn get_npc_headshots(
@@ -307,14 +304,14 @@ impl DefaultApplicationService {
         ctx: GameServiceContext,
         scene_only: bool,
     ) -> Result<Vec<(String, String)>, ApplicationError> {
-        self.queries.get_npc_headshots(ctx, scene_only)
+        super::query_handlers::get_npc_headshots(ctx, scene_only)
     }
 
     pub fn get_debug_state(
         &self,
         ctx: GameServiceContext,
     ) -> Result<DebugStateView, ApplicationError> {
-        self.queries.get_debug_state(ctx)
+        super::query_handlers::get_debug_state(ctx)
     }
 
     // TODO(#tech-debt): Worlds CRUD methods are pure passthroughs to GameLifecycleService.

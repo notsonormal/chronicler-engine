@@ -16,7 +16,6 @@ pub enum PromptLayer {
     WorldInfo,
     History,
     User,
-    Phi,
 }
 
 #[derive(Debug, Clone, Copy)]

@@ -37,7 +37,7 @@ fn test_event_retry_does_not_create_extra_swipe_on_narration() {
         quantifier,
     );
 
-    service.execute_action(ctx.clone(), "enter shop".to_string(), "Player".to_string());
+    service.execute_action(ctx.clone(), "enter shop".to_string());
     assert!(
         wait_for_generation_complete(&ctx, 1000),
         "Execute should complete"
@@ -88,7 +88,7 @@ fn test_retry_event_continuation_preserves_quantifier_result() {
         quantifier,
     );
 
-    service.execute_action(ctx.clone(), "enter shop".to_string(), "Player".to_string());
+    service.execute_action(ctx.clone(), "enter shop".to_string());
     assert!(
         wait_for_generation_complete(&ctx, 1000),
         "Execute should complete"
@@ -167,7 +167,10 @@ fn test_trigger_continuation_runs_quantifier_and_detects_new_npc() {
         },
         inventory: vec![],
         triggers: vec![Trigger {
-            requirement: TriggerRequirement::TimesMet(ComparisonOperator::Eq, 0),
+            requirement: TriggerRequirement {
+                operator: ComparisonOperator::Eq,
+                threshold: 0,
+            },
             narration: TriggerNarration {
                 name: "Greeting".into(),
                 narration_prompt: "The shopkeeper looks up with a smile.".into(),
@@ -220,7 +223,7 @@ fn test_trigger_continuation_runs_quantifier_and_detects_new_npc() {
 
     let service = GameService::with_mock_quantifier(llm_backend, quantifier);
 
-    service.execute_action(ctx.clone(), "enter shop".to_string(), "Player".to_string());
+    service.execute_action(ctx.clone(), "enter shop".to_string());
     assert!(
         wait_for_generation_complete(&ctx, 1000),
         "Execute should complete"

@@ -7,12 +7,11 @@ use crate::application::action_pipeline::pipeline::{
 };
 use crate::application::context::{GameServiceContext, load_or_fresh};
 
-#[instrument(skip(backend, ctx), fields(player_name, input_length))]
+#[instrument(skip(backend, ctx), fields(input_length))]
 pub fn execute_action_impl<B: ActionPipelineBackend>(
     backend: &B,
     ctx: GameServiceContext,
     input: String,
-    _player_name: String,
 ) {
     let mut state = load_or_fresh(&ctx);
     state.narrative.last_trigger = None;

@@ -18,7 +18,7 @@ fn test_with_storage_uses_external() {
     let state = create_test_state();
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
-    service.execute_action(ctx.clone(), "test".to_string(), "Player".to_string());
+    service.execute_action(ctx.clone(), "test".to_string());
 
     let guard = latest_state(&ctx);
     assert!(
@@ -36,7 +36,7 @@ fn test_with_backends_no_disk_read() {
     let state = create_test_state();
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
-    service.execute_action(ctx.clone(), "test input".to_string(), "Player".to_string());
+    service.execute_action(ctx.clone(), "test input".to_string());
 
     let guard = latest_state(&ctx);
     assert!(
@@ -54,7 +54,7 @@ fn test_execute_action_saves_narration() {
     let initial_history_len = state.narrative.history.len();
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
-    service.execute_action(ctx.clone(), "test action".to_string(), "Player".to_string());
+    service.execute_action(ctx.clone(), "test action".to_string());
 
     let final_state = latest_state(&ctx);
     let final_history_len = final_state.narrative.history.len();
@@ -73,7 +73,7 @@ fn test_execute_action_empty_input() {
     let state = create_test_state();
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
-    service.execute_action(ctx.clone(), "".to_string(), "Player".to_string());
+    service.execute_action(ctx.clone(), "".to_string());
 
     let guard = latest_state(&ctx);
     assert!(
@@ -90,16 +90,8 @@ fn test_execute_action_clears_last_trigger() {
     let state = create_test_state();
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
-    service.execute_action(
-        ctx.clone(),
-        "first action".to_string(),
-        "Player".to_string(),
-    );
-    service.execute_action(
-        ctx.clone(),
-        "second action".to_string(),
-        "Player".to_string(),
-    );
+    service.execute_action(ctx.clone(), "first action".to_string());
+    service.execute_action(ctx.clone(), "second action".to_string());
 
     let guard = latest_state(&ctx);
     assert!(
@@ -120,7 +112,7 @@ fn test_execute_action_cancellation() {
 
     ctx.cancel_token.cancel();
 
-    service.execute_action(ctx.clone(), "test".to_string(), "Player".to_string());
+    service.execute_action(ctx.clone(), "test".to_string());
 
     let guard = latest_state(&ctx);
     assert!(
@@ -484,7 +476,7 @@ fn test_continue_narration_fresh_game() {
     let service = crate::working_service();
 
     let initial_history = latest_state(&ctx).narrative.history.len();
-    service.execute_action(ctx.clone(), String::new(), "Player".to_string());
+    service.execute_action(ctx.clone(), String::new());
 
     let guard = latest_state(&ctx);
     assert!(
@@ -516,7 +508,7 @@ fn test_continue_narration_with_stale_is_generating_flag() {
         .store(true, std::sync::atomic::Ordering::SeqCst);
     let service = crate::working_service();
 
-    service.execute_action(ctx.clone(), String::new(), "Player".to_string());
+    service.execute_action(ctx.clone(), String::new());
 
     let final_state = latest_state(&ctx);
     assert!(
@@ -539,7 +531,7 @@ fn test_whitespace_variations() {
         state.narrative.history.clear();
         let ctx = make_test_context_with_sqlite(state).unwrap();
         let service = crate::working_service();
-        service.execute_action(ctx.clone(), whitespace.to_string(), "Player".to_string());
+        service.execute_action(ctx.clone(), whitespace.to_string());
 
         let final_state = latest_state(&ctx);
         assert!(

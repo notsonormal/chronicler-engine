@@ -55,15 +55,15 @@ pub fn check_condition(
     npc_id: &str,
     condition: &TriggerRequirement,
 ) -> bool {
-    match condition {
-        TriggerRequirement::TimesMet(op, threshold) => {
-            let times_met = get_times_met(npc_encounter_log, npc_id);
-            match op {
-                ComparisonOperator::Eq => times_met == *threshold,
-                ComparisonOperator::Lt => times_met < *threshold,
-                ComparisonOperator::Gte => times_met >= *threshold,
-            }
-        }
+    let TriggerRequirement {
+        operator,
+        threshold,
+    } = condition;
+    let times_met = get_times_met(npc_encounter_log, npc_id);
+    match operator {
+        ComparisonOperator::Eq => times_met == *threshold,
+        ComparisonOperator::Lt => times_met < *threshold,
+        ComparisonOperator::Gte => times_met >= *threshold,
     }
 }
 

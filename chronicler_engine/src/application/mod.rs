@@ -20,7 +20,7 @@ pub use context::{
 };
 pub use game_service::GameService;
 pub use message_editing::MessageEditingService;
-pub use query_handlers::QueryHandlers;
+pub use query_handlers::*;
 
 #[cfg(test)]
 mod context_tests;

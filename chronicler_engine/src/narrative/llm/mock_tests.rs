@@ -8,42 +8,12 @@ fn test_mock_backend_name() {
 }
 
 #[test]
-fn test_mock_narrate_continuation() {
-    let backend = MockBackend::default();
-    let result = backend.narrate_continuation("test", "system", "user", "trigger_info", None);
-    assert!(result.is_ok());
-    assert!(result.unwrap().text.contains("trigger_info"));
-}
-
-#[test]
 fn test_mock_complete() {
     let backend = MockBackend::default();
     let result = backend.complete("test", "system prompt", "user action", None);
     assert!(result.is_ok());
     let response = result.unwrap().text;
     assert!(response.contains("action") || response.contains("Continuation"));
-}
-
-#[test]
-fn test_mock_narrate_continuation_empty_trigger() {
-    let backend = MockBackend::default();
-    let result = backend.narrate_continuation("test", "system", "user", "", None);
-    assert!(result.is_ok());
-    assert!(result.unwrap().text.contains("[Trigger: ]"));
-}
-
-#[test]
-fn test_mock_narrate_continuation_special_chars() {
-    let backend = MockBackend::default();
-    let result = backend.narrate_continuation(
-        "test",
-        "sys",
-        "user",
-        "trigger with <special> & chars",
-        None,
-    );
-    assert!(result.is_ok());
-    assert!(result.unwrap().text.contains("trigger with"));
 }
 
 #[test]
@@ -88,14 +58,6 @@ fn test_mock_complete_per_call_responses() {
     let result3 = backend.complete("quantifier", "sys", "user", None);
     assert!(result3.is_ok());
     assert!(result3.unwrap().text.contains("carla"));
-}
-
-#[test]
-fn test_mock_narrate_continuation_unicode_trigger() {
-    let backend = MockBackend::default();
-    let result = backend.narrate_continuation("test", "system", "user", "トリガー", None);
-    assert!(result.is_ok());
-    assert!(result.unwrap().text.contains("トリガー"));
 }
 
 #[test]

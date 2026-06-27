@@ -86,6 +86,7 @@ pub enum Operation {
     UpdateSwipeText,
     ShiftSwipeIndices,
     LoadSwipesForMessages,
+    CountSwipesForMessage,
     ListPresets,
     GetPreset,
     SavePreset,

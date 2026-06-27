@@ -93,7 +93,10 @@ pub fn create_test_state_with_trigger_npc() -> GameState {
         },
         inventory: vec![],
         triggers: vec![Trigger {
-            requirement: TriggerRequirement::TimesMet(ComparisonOperator::Eq, 0),
+            requirement: TriggerRequirement {
+                operator: ComparisonOperator::Eq,
+                threshold: 0,
+            },
             narration: TriggerNarration {
                 name: "Greeting".into(),
                 narration_prompt: "The shopkeeper greets you.".into(),

@@ -540,26 +540,6 @@ impl crate::narrative::llm::LlmBackend for EmptyTriggerBackend {
         "mock"
     }
 
-    fn narrate_continuation(
-        &self,
-        agent_name: &str,
-        _system_prompt: &str,
-        _user_prompt: &str,
-        trigger_prompt: &str,
-        _max_tokens: Option<u32>,
-    ) -> Result<LlmCallResult, EngineError> {
-        Ok(LlmCallResult {
-            text: format!("[Trigger: {trigger_prompt}]"),
-            system_prompt: String::new(),
-            user_prompt: String::new(),
-            raw_request_json: String::new(),
-            raw_response_json: String::new(),
-            backend_name: "EmptyTrigger".to_string(),
-            model_name: "mock".to_string(),
-            agent_name: agent_name.to_string(),
-        })
-    }
-
     fn complete(
         &self,
         _agent_name: &str,
