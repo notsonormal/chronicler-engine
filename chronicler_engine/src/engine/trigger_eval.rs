@@ -3,7 +3,7 @@
 
 use crate::model::character::NpcCard;
 use crate::model::state::GameState;
-use crate::model::trigger::{ComparisonOperator, NpcEncounterLog, Trigger, TriggerRequirement};
+use crate::model::trigger::{ComparisonOperator, Trigger, TriggerRequirement};
 pub fn evaluate_triggers(state: &GameState) -> Vec<(NpcCard, Trigger, usize)> {
     let current_room_id = &state.movement.current_room_id;
 
@@ -65,12 +65,4 @@ pub fn check_condition(
         ComparisonOperator::Lt => times_met < *threshold,
         ComparisonOperator::Gte => times_met >= *threshold,
     }
-}
-
-pub fn is_currently_meeting(npc_encounter_log: &NpcEncounterLog, npc_id: &str) -> bool {
-    npc_encounter_log
-        .npcs
-        .get(npc_id)
-        .map(|s| s.currently_meeting)
-        .unwrap_or(false)
 }

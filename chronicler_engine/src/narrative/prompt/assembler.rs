@@ -12,6 +12,61 @@ use crate::narrative::prompt::budget::truncate_to_budget;
 use crate::narrative::prompt::context::fit_messages_to_context;
 use crate::narrative::prompt::types::{NpcContext, PromptContext};
 
+/// Assembles prompt text from a PromptPreset into XML-wrapped sections.
+/// Section order: role → instructions → writing_style → global_rules → output_format
+pub fn assemble_prompt_text(
+    preset: &PromptPreset,
+    global_rules: &[String],
+    response_length: Option<&str>,
+) -> String {
+    let mut parts: Vec<String> = Vec::new();
+
+    push_section(&mut parts, preset.role.as_deref(), "role");
+    push_section(&mut parts, preset.instructions.as_deref(), "instructions");
+    push_section(&mut parts, preset.writing_style.as_deref(), "writing_style");
+
+    if !global_rules.is_empty() {
+        let rules_text = global_rules
+            .iter()
+            .map(|r| format!("- {r}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        parts.push(wrap_xml(&rules_text, "global_rules"));
+    }
+
+    if let Some(output_format) = &preset.output_format {
+        let mut output_text = output_format.clone();
+        if let Some(length) = response_length {
+            output_text.push_str("\n\nResponse Length:\n");
+            output_text.push_str(length);
+        }
+        parts.push(wrap_xml(&output_text, "output_format"));
+    }
+
+    parts.join("\n\n")
+}
+
+fn push_section(parts: &mut Vec<String>, content: Option<&str>, tag: &str) {
+    if let Some(content) = content {
+        parts.push(wrap_xml(content, tag));
+    }
+}
+
+fn wrap_xml(content: &str, tag: &str) -> String {
+    let indented = content
+        .lines()
+        .map(|line| {
+            if line.is_empty() {
+                line.to_string()
+            } else {
+                format!("    {line}")
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!("<{tag}>\n{indented}\n</{tag}>")
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct AssembledPrompt {
     pub system_prompt: String,
@@ -123,27 +178,6 @@ fn build_post_history_prompt(
     }
 
     parts.join("\n\n")
-}
-
-fn push_section(parts: &mut Vec<String>, content: Option<&str>, tag: &str) {
-    if let Some(content) = content {
-        parts.push(wrap_xml(content, tag));
-    }
-}
-
-fn wrap_xml(content: &str, tag: &str) -> String {
-    let indented = content
-        .lines()
-        .map(|line| {
-            if line.is_empty() {
-                line.to_string()
-            } else {
-                format!("    {line}")
-            }
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
-    format!("<{tag}>\n{indented}\n</{tag}>")
 }
 
 struct LayerRenderer<'a> {
@@ -373,7 +407,7 @@ impl<'a> LayerRenderer<'a> {
     }
 }
 
-/// Replace injection patterns like `{{system}}` with `[FILTERED]`.
+/// Sanitize injection patterns (`{{...}}`) → `[FILTERED]`.
 pub(crate) fn sanitize_for_prompt(input: &str) -> String {
     let chars: Vec<char> = input.chars().collect();
     let mut result = String::with_capacity(input.len());

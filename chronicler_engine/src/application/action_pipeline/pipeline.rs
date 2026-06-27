@@ -3,6 +3,7 @@
 
 use std::sync::Arc;
 
+use crate::application::action_pipeline::phases::PipelineInputs;
 use crate::application::context::{GameServiceContext, load_or_fresh, save_message_and_snapshot};
 use crate::error::EngineError;
 use crate::model::character::NpcCard;
@@ -57,10 +58,18 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
         let player = Arc::clone(&state.player);
         let all_npcs: Vec<NpcCard> = state.npcs.values().cloned().collect();
 
+        let inputs = PipelineInputs {
+            input: input.clone(),
+            world,
+            map,
+            player,
+            all_npcs,
+        };
+
         state = self.phase_pre_main_snapshot(state)?;
 
-        let (mut state, narration_text, backend_name, model_name) = self
-            .map_cancelled(self.phase_narrate(state, &input, &world, &map, &player, &all_npcs))?;
+        let (mut state, narration_text, backend_name, model_name) =
+            self.map_cancelled(self.phase_narrate(state, &inputs))?;
 
         if state
             .narrative
@@ -96,14 +105,7 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
             .trigger_match
             .as_ref()
             .and_then(|trigger_match| {
-                self.build_trigger_request(
-                    &next_state,
-                    &narration_text,
-                    &world,
-                    &player,
-                    &all_npcs,
-                    trigger_match,
-                )
+                self.build_trigger_request(&next_state, &narration_text, &inputs, trigger_match)
             });
 
         if let Some(trigger) = &trigger_request {

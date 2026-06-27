@@ -9,11 +9,11 @@ use serde::Serialize;
 
 use crate::application::action_pipeline::execute_action_impl;
 use crate::application::context::{GameServiceContext, load_or_fresh};
-use crate::application::game_lifecycle::GameLifecycleService;
 use crate::application::game_service::GameService;
 use crate::application::message_editing::MessageEditingService;
+use crate::bootstrap::build_fresh_initial_state;
 use crate::error::EngineError;
-use crate::model::game::Game;
+use crate::model::game::{Game, generate_game_name};
 use crate::model::llm_message::LlmMessage;
 use crate::model::state::{GenerationPhase, GenerationStatus, MessageEntry};
 use crate::model::state_snapshot::GameStateSnapshot;
@@ -99,14 +99,12 @@ pub struct DebugStateView {
 
 pub struct DefaultApplicationService {
     game_service: Arc<GameService>,
-    lifecycle: GameLifecycleService,
     editing: MessageEditingService,
 }
 
 impl DefaultApplicationService {
     pub fn new(game_service: Arc<GameService>) -> Self {
         Self {
-            lifecycle: GameLifecycleService::new(),
             editing: MessageEditingService::new(Arc::clone(&game_service)),
             game_service,
         }
@@ -175,20 +173,23 @@ impl DefaultApplicationService {
             }
             return Ok(ProcessActionResult::ShuttingDown);
         }
-        tracing::debug!("process_action: spawning blocking task");
+
+        self.spawn_pipeline_task(ctx, input);
+        Ok(ProcessActionResult::Started)
+    }
+
+    fn spawn_pipeline_task(&self, ctx: GameServiceContext, input: String) {
         let game_service = Arc::clone(&self.game_service);
-        let ctx_clone = ctx.clone();
         tokio::task::spawn_blocking(move || {
             tracing::debug!("spawn_blocking: task started");
-            let _guard = GenerationGuard(Arc::clone(&ctx_clone.is_generating));
-            if ctx_clone.cancel_token.is_cancelled() {
+            let _guard = GenerationGuard(Arc::clone(&ctx.is_generating));
+            if ctx.cancel_token.is_cancelled() {
                 tracing::debug!("spawn_blocking: cancelled before execute_action");
                 return;
             }
-            execute_action_impl(&*game_service, ctx_clone.clone(), input);
+            execute_action_impl(&*game_service, ctx.clone(), input);
             tracing::debug!("spawn_blocking: execute_action completed");
         });
-        Ok(ProcessActionResult::Started)
     }
 
     pub fn continue_narration(
@@ -199,27 +200,104 @@ impl DefaultApplicationService {
     }
 
     pub fn create_game(&self, ctx: GameServiceContext) -> Result<u64, ApplicationError> {
-        self.lifecycle.create_game(ctx)
+        if ctx.is_generating.load(Ordering::SeqCst) {
+            return Err(ApplicationError::ConcurrentGeneration);
+        }
+
+        let world_with_map = ctx
+            .storage
+            .get_world(&ctx.world.key)?
+            .ok_or_else(|| ApplicationError::validation("World not found"))?;
+        let world_name = world_with_map.world_card.name.clone();
+        let games = ctx.storage.list_games()?;
+        let existing_names: Vec<String> = games.iter().map(|g| g.name.clone()).collect();
+        let name = generate_game_name(&world_name, &existing_names);
+
+        let new_id = ctx.storage.create_game(
+            &world_name,
+            &ctx.world.key,
+            &ctx.player.key,
+            &ctx.player.sheet.name,
+            &name,
+        )?;
+        let old_id = ctx.storage.current_game_id();
+        ctx.set_game_id(new_id);
+
+        match Self::persist_initial_state_with_swipes(&ctx) {
+            Ok(_) => {}
+            Err(e) => {
+                ctx.set_game_id(old_id);
+                return Err(e);
+            }
+        }
+
+        Ok(new_id)
     }
 
     pub fn switch_game(&self, ctx: GameServiceContext, id: u64) -> Result<(), ApplicationError> {
-        self.lifecycle.switch_game(ctx, id)
+        if ctx.is_generating.load(Ordering::SeqCst) {
+            return Err(ApplicationError::ConcurrentGeneration);
+        }
+
+        if ctx.storage.get_game(id)?.is_none() {
+            return Err(ApplicationError::validation("Game not found"));
+        }
+
+        ctx.set_game_id(id);
+        Ok(())
     }
 
     pub fn delete_game(&self, ctx: GameServiceContext, id: u64) -> Result<(), ApplicationError> {
-        self.lifecycle.delete_game(ctx, id)
+        if ctx.is_generating.load(Ordering::SeqCst) {
+            return Err(ApplicationError::ConcurrentGeneration);
+        }
+
+        if id == ctx.storage.current_game_id() {
+            return Err(ApplicationError::validation(
+                "Cannot delete the active game",
+            ));
+        }
+        ctx.storage.delete_game(id)?;
+        Ok(())
     }
 
     pub fn list_games(&self, ctx: GameServiceContext) -> Result<Vec<Game>, ApplicationError> {
-        self.lifecycle.list_games(ctx)
+        ctx.storage.list_games().map_err(Into::into)
     }
 
     pub fn current_game_id(&self, ctx: GameServiceContext) -> u64 {
-        self.lifecycle.current_game_id(ctx)
+        ctx.storage.current_game_id()
     }
 
     pub fn reset(&self, ctx: GameServiceContext) -> Result<(), ApplicationError> {
-        self.lifecycle.reset(ctx)
+        let current_id = ctx.storage.current_game_id();
+        let world_key = ctx.world.key.clone();
+        let world_name = ctx.world.name.clone();
+
+        ctx.storage.delete_game(current_id)?;
+
+        let existing_names: Vec<String> = ctx
+            .storage
+            .list_games()?
+            .into_iter()
+            .filter(|g| g.world_key == world_key)
+            .map(|g| g.name)
+            .collect();
+
+        let new_name = generate_game_name(&world_name, &existing_names);
+        let new_id = ctx.storage.create_game(
+            &world_name,
+            &world_key,
+            &ctx.player.key,
+            &ctx.player.sheet.name,
+            &new_name,
+        )?;
+        ctx.set_game_id(new_id);
+
+        // snapshot already committed; message/swipe failures logged, not propagated
+        let _ = Self::persist_initial_state_with_swipes(&ctx);
+
+        Ok(())
     }
 
     pub fn retry(&self, ctx: GameServiceContext) -> Result<(), ApplicationError> {
@@ -314,10 +392,8 @@ impl DefaultApplicationService {
         super::query_handlers::get_debug_state(ctx)
     }
 
-    // TODO(#tech-debt): Worlds CRUD methods are pure passthroughs to GameLifecycleService.
-    // Combined with lifecycle layer, this creates 14 identity wrappers for zero logic.
     pub fn list_worlds(&self, ctx: GameServiceContext) -> Result<Vec<WorldCard>, ApplicationError> {
-        self.lifecycle.list_worlds(ctx)
+        ctx.storage.list_worlds().map_err(Into::into)
     }
 
     pub fn get_world(
@@ -325,7 +401,7 @@ impl DefaultApplicationService {
         ctx: GameServiceContext,
         key: &str,
     ) -> Result<Option<WorldWithMap>, ApplicationError> {
-        self.lifecycle.get_world(ctx, key)
+        ctx.storage.get_world(key).map_err(Into::into)
     }
 
     pub fn create_world(
@@ -334,7 +410,9 @@ impl DefaultApplicationService {
         world_card: WorldCard,
         map: MapDef,
     ) -> Result<i64, ApplicationError> {
-        self.lifecycle.create_world(ctx, world_card, map)
+        ctx.storage
+            .create_world(&world_card, &map)
+            .map_err(Into::into)
     }
 
     pub fn update_world(
@@ -344,18 +422,53 @@ impl DefaultApplicationService {
         world_card: WorldCard,
         map: MapDef,
     ) -> Result<(), ApplicationError> {
-        self.lifecycle.update_world(ctx, id, world_card, map)
+        ctx.storage
+            .update_world(id, &world_card, &map)
+            .map_err(Into::into)
     }
 
     pub fn delete_world(&self, ctx: GameServiceContext, key: &str) -> Result<(), ApplicationError> {
-        self.lifecycle.delete_world(ctx, key)
+        ctx.storage.delete_world(key).map_err(Into::into)
     }
 
     pub fn list_personas(
         &self,
         ctx: GameServiceContext,
     ) -> Result<Vec<PlayerCard>, ApplicationError> {
-        self.lifecycle.list_personas(ctx)
+        ctx.storage.list_personas().map_err(Into::into)
+    }
+
+    /// Build fresh initial state, persist snapshot, then persist the unpersisted
+    /// trailing message and its swipes. Snapshot save failures propagate;
+    /// message/swipe persistence failures are logged and swallowed because the
+    /// snapshot is already committed by the time those run.
+    fn persist_initial_state_with_swipes(
+        ctx: &GameServiceContext,
+    ) -> Result<u64, ApplicationError> {
+        let mut initial_state = build_fresh_initial_state(ctx);
+        let snapshot = GameStateSnapshot::from_game_state(&initial_state);
+        let snapshot_id = ctx.storage.save_snapshot(&snapshot)?;
+
+        if let Some(msg) = initial_state.narrative.history.last_mut() {
+            if msg.is_unpersisted() {
+                msg.set_snapshot_id(Some(snapshot_id));
+                match ctx.storage.insert_message(&*msg) {
+                    Ok(id) => {
+                        msg.id = id;
+                        for (index, swipe) in msg.swipes.iter().enumerate() {
+                            if let Err(e) = ctx.storage.insert_swipe(id, swipe, index) {
+                                tracing::error!("persist_initial_state: swipe {index} failed: {e}");
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        tracing::error!("persist_initial_state: message insert failed: {e}");
+                    }
+                }
+            }
+        }
+
+        Ok(snapshot_id)
     }
 }
 

@@ -40,12 +40,12 @@ impl Storage {
 
                 db_games.iter().map(db_game_to_game).collect()
             }
-            Backend::Test { .. } => unreachable!(),
             Backend::InMemory(data) => {
                 let mut games = data.games.clone();
                 games.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
                 Ok(games)
             }
+            Backend::Test { .. } => unreachable!(),
         })
     }
 
@@ -61,7 +61,6 @@ impl Storage {
             Backend::Sqlite { pool } => {
                 pool.insert_game(world_name, world_key, persona_key, persona_name, name)
             }
-            Backend::Test { .. } => unreachable!(),
             Backend::InMemory(data) => {
                 let id = data.next_game_id;
                 data.next_game_id += 1;
@@ -78,6 +77,7 @@ impl Storage {
                 });
                 Ok(id)
             }
+            Backend::Test { .. } => unreachable!(),
         })
     }
 
@@ -92,11 +92,11 @@ impl Storage {
                 .map_err(|e| EngineError::Config(format!("Failed to delete game: {e}")))?;
                 Ok(())
             }
-            Backend::Test { .. } => unreachable!(),
             Backend::InMemory(data) => {
                 data.games.retain(|g| g.id != id);
                 Ok(())
             }
+            Backend::Test { .. } => unreachable!(),
         })
     }
 

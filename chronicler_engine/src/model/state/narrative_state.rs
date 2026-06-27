@@ -20,7 +20,7 @@ pub struct NarrativeState {
     pub last_backend_name: Option<String>,
     #[serde(default)]
     pub last_model_name: Option<String>,
-    // Not persisted in snapshots — transient for the current pipeline run only.
+    // Transient — not persisted (pipeline run only).
     #[serde(skip)]
     pub retry_target: Option<Message>,
 }

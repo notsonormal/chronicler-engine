@@ -13,6 +13,7 @@ use crate::model::settings::AppSettings;
 use crate::model::state::GameState;
 use crate::model::state_snapshot::GameStateSnapshot;
 use crate::model::world::WorldCard;
+use crate::narrative::prompt::assembler::assemble_prompt_text;
 use crate::storage::Storage;
 
 #[derive(Clone)]
@@ -23,9 +24,9 @@ pub struct GameServiceContext {
     pub player: Arc<crate::model::character::PlayerCard>,
     pub npcs: Arc<std::collections::HashMap<String, NpcCard>>,
     pub cancel_token: CancellationToken,
-    /// Tracks whether an async generation is currently in flight.
+    /// Whether an async generation is in flight.
     pub is_generating: Arc<AtomicBool>,
-    /// Runtime settings (shared with AppState).
+    /// Runtime settings (shared with [`AppState`]).
     pub settings: Arc<RwLock<AppSettings>>,
     pub preset_storage: Arc<Storage>,
 }
@@ -50,7 +51,7 @@ impl GameServiceContext {
             settings.active_quantifier_prompt_preset_id.clone()
         };
         match self.preset_storage.get_preset(&preset_id) {
-            Ok(Some(preset)) => preset.assemble_prompt_text(&[], None),
+            Ok(Some(preset)) => assemble_prompt_text(&preset, &[], None),
             Ok(None) => {
                 tracing::error!(
                     "active quantifier preset '{preset_id}' not found — defaults not seeded?"
@@ -64,7 +65,7 @@ impl GameServiceContext {
         }
     }
 
-    /// index, the anchor message, and the associated snapshot id.
+    /// Returns (index, anchor message, snapshot id) for retry targeting.
     pub fn find_retry_anchor<'a>(
         &self,
         messages: &'a [Message],

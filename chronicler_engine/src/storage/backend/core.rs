@@ -112,6 +112,16 @@ impl TestFailureHandle {
     }
 }
 
+impl Drop for TestFailureHandle {
+    fn drop(&mut self) {
+        let map = self.overrides.lock().unwrap_or_else(|e| e.into_inner());
+        if !map.is_empty() {
+            let keys: Vec<_> = map.keys().cloned().collect();
+            tracing::warn!("TestFailureHandle dropped with unconsumed overrides: {keys:?}");
+        }
+    }
+}
+
 impl TestOverride {
     pub fn config(message: impl Into<String>) -> Self {
         Self {

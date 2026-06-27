@@ -4,6 +4,14 @@
 
 ### Changed
 
+- **Thermo-nuclear follow-up cleanup** — Quality review follow-up to the abstraction-fixes branch. Mechanical, scope-bounded, no behavior changes beyond the documented `reset` per-message/swipe failure swallow.
+  - Deleted one-off refactor scripts that slipped into the prior commit: `replace_test_arms.py`, `scripts/fix_storage.py`, `scripts/fix_tests.py` (the latter hardcoded an absolute Windows path). Removed the `scouts/` scout-notes directory entirely.
+  - Storage backend type safety: reverted the mechanical `_ => unreachable!()` catch-alls back to explicit `Backend::Test { .. } => unreachable!()` arms across all 10 backend files (40 arms). The explicit form preserves exhaustive-match compile-time safety so future `Backend` variants can't be silently absorbed.
+  - Extracted `persist_initial_state_with_swipes` private helper on `DefaultApplicationService`; dedupes snapshot/message/swipe persistence between `create_game` and `reset`. Behavior change: `reset` now swallows per-message/swipe persistence failures inside the helper (logged via `tracing::error!`) since the snapshot is already committed by that point — previously propagated via `?`.
+  - Moved `is_currently_meeting` from a free function in `trigger_eval.rs` to a method on `NpcEncounterLog` alongside its five siblings (`set_currently_meeting`, `increment_times_met`, `mark_trigger_fired`, `get_times_met`, `is_trigger_fired`). Six call sites updated across `action_processing_tests.rs` and `trigger_eval_tests.rs`.
+  - Added `impl Drop for TestFailureHandle` emitting `tracing::warn!` (not panic) when overrides remain unconsumed at scope exit. Soft mitigation so a forgotten `assert_no_unconsumed` call no longer silently passes for the wrong reason; explicit `assert_no_unconsumed()` still available for hard assertions and is unchanged.
+  - Renamed `tui` local variable → `buf` in `state_tests.rs::test_generation_state_status` (it's an `InputBuffer`, no TUI involved). Single function, 8 occurrences.
+
 ## 2026-06-27
 
 ### Changed

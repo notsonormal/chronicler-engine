@@ -33,12 +33,11 @@ pub struct Trigger {
     pub room_id: Option<String>,
 }
 
-/// Per-NPC encounter tracking state.
+/// Per-NPC encounter state.
 ///
-/// Tracks encounter cycles for a single NPC: entering → exiting → re-entering.
-/// - `times_met`: Increments on first encounter (Entered from not currently_meeting)
-/// - `currently_meeting`: Set true on Entered, false on Left
-/// - `trigger_fired`: Indices of non-repeatable triggers that have fired
+/// - `times_met`: Increments on first encounter (Entered from !currently_meeting)
+/// - `currently_meeting`: Set on Entered, cleared on Left
+/// - `trigger_fired`: Fired non-repeatable trigger indices
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct NpcEncounterState {
     pub times_met: u32,
@@ -76,6 +75,13 @@ impl NpcEncounterLog {
             .get(npc_id)
             .and_then(|s| s.trigger_fired.get(&trigger_index))
             .copied()
+            .unwrap_or(false)
+    }
+
+    pub fn is_currently_meeting(&self, npc_id: &str) -> bool {
+        self.npcs
+            .get(npc_id)
+            .map(|s| s.currently_meeting)
             .unwrap_or(false)
     }
 }

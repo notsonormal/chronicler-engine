@@ -4,7 +4,6 @@
 pub mod action_pipeline;
 pub mod application_service;
 pub mod context;
-pub mod game_lifecycle;
 pub mod game_service;
 #[cfg(test)]
 mod game_service_tests;

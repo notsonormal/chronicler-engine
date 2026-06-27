@@ -13,22 +13,22 @@ fn test_game_state_initialization() {
 
 #[test]
 fn test_generation_state_status() {
-    let mut tui = InputBuffer::default();
+    let mut buf = InputBuffer::default();
 
-    assert_eq!(tui.status, GenerationStatus::Idle);
-    assert!(!tui.status.is_generating());
-    assert!(tui.status.error_message().is_none());
+    assert_eq!(buf.status, GenerationStatus::Idle);
+    assert!(!buf.status.is_generating());
+    assert!(buf.status.error_message().is_none());
 
-    tui.status = GenerationStatus::Error("LLM Error: 429 Too Many Requests".to_string());
+    buf.status = GenerationStatus::Error("LLM Error: 429 Too Many Requests".to_string());
     assert_eq!(
-        tui.status,
+        buf.status,
         GenerationStatus::Error("LLM Error: 429 Too Many Requests".to_string())
     );
-    assert!(tui.status.error_message().is_some());
+    assert!(buf.status.error_message().is_some());
 
-    tui.status = GenerationStatus::Generating;
-    assert!(tui.status.is_generating());
-    assert!(tui.status.error_message().is_none());
+    buf.status = GenerationStatus::Generating;
+    assert!(buf.status.is_generating());
+    assert!(buf.status.error_message().is_none());
 }
 
 #[test]

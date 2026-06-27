@@ -28,7 +28,7 @@ fn test_insert_message_in_memory() {
 }
 
 #[test]
-fn test_insert_message_clears_swipes() {
+fn test_insert_message_preserves_swipes() {
     let storage = Storage::new_in_memory();
     storage.set_game_id(1);
     let mut msg = dummy_message("test");
@@ -41,7 +41,9 @@ fn test_insert_message_clears_swipes() {
 
     let _id = storage.insert_message(&msg).unwrap();
     let loaded = storage.load_message_rows().unwrap();
-    assert_eq!(loaded[0].swipes.len(), 0);
+    assert_eq!(loaded[0].swipes.len(), 2);
+    assert_eq!(loaded[0].swipes[0].text, "test");
+    assert_eq!(loaded[0].swipes[1].text, "alt");
 }
 
 #[test]

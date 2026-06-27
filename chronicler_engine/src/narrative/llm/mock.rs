@@ -29,9 +29,9 @@ pub struct MockBackend {
     pub per_call_prompt_responses: Vec<String>,
     pub call_index: AtomicUsize,
     pub storage: Option<Arc<Storage>>,
-    /// Set to `true` when `complete` is entered (useful for tests to detect pipeline start).
+    /// Set when `complete` narration starts (test detection).
     pub narration_started: AtomicBool,
-    /// Set to `true` when `complete` is entered with trigger agent (useful for tests to detect trigger start).
+    /// Set when `complete` trigger narration starts (test detection).
     pub trigger_started: AtomicBool,
 }
 

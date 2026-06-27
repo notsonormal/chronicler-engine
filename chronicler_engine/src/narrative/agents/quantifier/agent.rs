@@ -10,6 +10,7 @@ use crate::model::agent::{
 use crate::model::settings::AppSettings;
 
 use crate::narrative::agents::Agent;
+use crate::narrative::prompt::assembler::assemble_prompt_text;
 use crate::storage::Storage;
 
 use super::determine_npcs_in_room;
@@ -102,7 +103,7 @@ impl Agent for QuantifierAgent {
                         .ok()
                         .flatten()
                 })
-                .map(|preset| preset.assemble_prompt_text(&[], None))
+                .map(|preset| assemble_prompt_text(&preset, &[], None))
         };
 
         let result = determine_npcs_in_room(

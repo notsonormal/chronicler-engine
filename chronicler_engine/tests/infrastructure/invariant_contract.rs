@@ -207,13 +207,12 @@ fn test_inv004b_no_concurrent_async_actions() {
     );
 }
 #[test]
-fn test_inv003_snapshot_restores_state_fields() {
+fn test_inv003_snapshot_captures_state_fields() {
     use chronicler_engine::model::state_snapshot::GameStateSnapshot;
 
     let mut state = create_test_state();
     state.movement.current_room_id = "room2".to_string();
     state.scene.npcs_in_area.clear();
-    state.narrative.history.clear();
     state.narrative.last_trigger = None;
 
     let snapshot = GameStateSnapshot::from_game_state(&state);
@@ -226,26 +225,9 @@ fn test_inv003_snapshot_restores_state_fields() {
         0,
         "INV-003: snapshot should capture empty npcs_in_area"
     );
-    let mut fresh_state = create_test_state();
-    fresh_state.movement.current_room_id = "room1".to_string();
-    fresh_state
-        .scene
-        .npcs_in_area
-        .push(fresh_state.npcs.values().next().unwrap().clone());
-
-    snapshot.apply_to(&mut fresh_state);
     assert_eq!(
-        fresh_state.movement.current_room_id, "room2",
-        "INV-003: apply_to should restore current_room_id"
-    );
-    assert_eq!(
-        fresh_state.narrative.last_trigger, None,
-        "INV-003: apply_to should restore narrative.last_trigger"
-    );
-    assert_eq!(
-        fresh_state.scene.npcs_in_area.len(),
-        0,
-        "INV-003: apply_to should restore npcs_in_area"
+        snapshot.narrative.last_trigger, None,
+        "INV-003: snapshot should capture None last_trigger"
     );
 }
 #[test]

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::engine::trigger_eval::{check_condition, evaluate_triggers, is_currently_meeting};
+use crate::engine::trigger_eval::{check_condition, evaluate_triggers};
 use crate::model::character::{CharacterSheet, NpcCard};
 use crate::model::map::{MapDef, Overworld};
 use crate::model::state::GameState;
@@ -278,13 +278,13 @@ fn test_evaluate_triggers_repeatable_fires_again() {
 fn test_currently_meeting_tracks_encounters() {
     let mut npc_encounter_log = NpcEncounterLog::default();
 
-    assert!(!is_currently_meeting(&npc_encounter_log, "carla"));
+    assert!(!npc_encounter_log.is_currently_meeting("carla"));
     npc_encounter_log.set_currently_meeting("carla", true);
-    assert!(is_currently_meeting(&npc_encounter_log, "carla"));
+    assert!(npc_encounter_log.is_currently_meeting("carla"));
 
     // End meeting (player leaves room)
     npc_encounter_log.set_currently_meeting("carla", false);
-    assert!(!is_currently_meeting(&npc_encounter_log, "carla"));
+    assert!(!npc_encounter_log.is_currently_meeting("carla"));
 }
 
 #[test]
@@ -376,7 +376,7 @@ fn test_npc_encounter_log_initializes_with_starting_room_npcs() {
     // Carla should NOT be auto-initialised by GameState::new anymore
     // (room.npcs was removed; scenario-driven init happens in bootstrap/run.rs)
     assert_eq!(state.npc_encounter_log.get_times_met("carla"), 0);
-    assert!(!is_currently_meeting(&state.npc_encounter_log, "carla"));
+    assert!(!state.npc_encounter_log.is_currently_meeting("carla"));
 }
 
 #[test]

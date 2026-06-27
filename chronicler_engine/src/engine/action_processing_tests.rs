@@ -1,7 +1,6 @@
 use crate::engine::action_processing::{
     FreeActionContext, apply_npc_events, commit_trigger_narration, execute_freeaction_impl,
 };
-use crate::engine::trigger_eval::is_currently_meeting;
 use crate::model::quantifier::{
     MovementParseResult, MovementType, NpcEvent, NpcTransitionType, QuantifierConfidence,
     QuantifierParseResult, QuantifierResult,
@@ -167,7 +166,7 @@ fn test_apply_npc_events_entered() {
 
     let state = apply_npc_events(state, &events).unwrap();
 
-    assert!(is_currently_meeting(&state.npc_encounter_log, "carla"));
+    assert!(state.npc_encounter_log.is_currently_meeting("carla"));
 }
 
 #[test]
@@ -181,7 +180,7 @@ fn test_apply_npc_events_left() {
 
     let state = apply_npc_events(state, &events).unwrap();
 
-    assert!(!is_currently_meeting(&state.npc_encounter_log, "carla"));
+    assert!(!state.npc_encounter_log.is_currently_meeting("carla"));
 }
 
 #[test]
@@ -266,7 +265,7 @@ fn test_handle_movement_sets_currently_meeting() {
     let state = handle_movement(state, Some("new_room"), &["carla".to_string()]).unwrap();
 
     // Should set currently_meeting for NPCs in new room
-    assert!(is_currently_meeting(&state.npc_encounter_log, "carla"));
+    assert!(state.npc_encounter_log.is_currently_meeting("carla"));
 }
 
 #[test]

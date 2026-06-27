@@ -30,16 +30,15 @@ impl Storage {
                 let id = conn.last_insert_rowid() as u64;
                 Ok(id)
             }
-            Backend::Test { .. } => unreachable!(),
             Backend::InMemory(data) => {
                 data.next_message_id += 1;
                 let id = data.next_message_id;
                 let mut msg = msg.clone();
                 msg.id = id;
-                msg.swipes.clear();
                 data.messages.entry(game_id).or_default().push(msg);
                 Ok(id)
             }
+            Backend::Test { .. } => unreachable!(),
         })
     }
 
@@ -55,13 +54,13 @@ impl Storage {
                 .map_err(|e| EngineError::Config(format!("Failed to delete message: {e}")))?;
                 Ok(())
             }
-            Backend::Test { .. } => unreachable!(),
             Backend::InMemory(data) => {
                 if let Some(vec) = data.messages.get_mut(&game_id) {
                     vec.retain(|m| m.id != id);
                 }
                 Ok(())
             }
+            Backend::Test { .. } => unreachable!(),
         })
     }
 

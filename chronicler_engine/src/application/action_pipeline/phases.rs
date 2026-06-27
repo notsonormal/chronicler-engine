@@ -1,6 +1,8 @@
 //! [DOC: docs/system/game_flow.md]
 //! Phase implementations for the action pipeline
 
+use std::sync::Arc;
+
 use crate::application::context::{map_llm_error, save_message_and_snapshot, save_state};
 use crate::engine::action_processing::{
     FreeActionContext, TriggerMatch, apply_npc_events, commit_trigger_narration,
@@ -17,6 +19,14 @@ use crate::model::world::WorldCard;
 use crate::narrative::prompt::{NpcContext, make_prompt_context};
 
 use super::pipeline::{ActionOutcome, ActionPipeline, ActionPipelineBackend, PipelineResult};
+
+pub struct PipelineInputs {
+    pub input: String,
+    pub world: Arc<WorldCard>,
+    pub map: Arc<MapDef>,
+    pub player: Arc<PlayerCard>,
+    pub all_npcs: Vec<NpcCard>,
+}
 
 impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
     // Does not alter `state`.
@@ -50,17 +60,12 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
         Ok((state, String::new(), String::new(), String::new()))
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn phase_narrate(
         &self,
         mut state: GameState,
-        input: &str,
-        world: &WorldCard,
-        map: &MapDef,
-        player: &PlayerCard,
-        all_npcs: &[NpcCard],
+        inputs: &PipelineInputs,
     ) -> PipelineResult<(GameState, String, String, String)> {
-        let Some(room) = map.get_room_by_id(&state.movement.current_room_id) else {
+        let Some(room) = inputs.map.get_room_by_id(&state.movement.current_room_id) else {
             return self.error_return(state, "Room not found".to_string());
         };
         let history = state.narrative.history();
@@ -71,14 +76,14 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
         };
 
         let context = make_prompt_context(
-            world,
+            &inputs.world,
             room,
             NpcContext {
-                all_npcs,
+                all_npcs: &inputs.all_npcs,
                 npcs_in_area: &state.scene.npcs_in_area,
             },
-            player,
-            input,
+            &inputs.player,
+            &inputs.input,
             &history,
         );
 
@@ -307,14 +312,11 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn build_trigger_request(
         &self,
         state: &GameState,
         narration_text: &str,
-        world: &WorldCard,
-        player: &PlayerCard,
-        all_npcs: &[NpcCard],
+        inputs: &PipelineInputs,
         trigger_match: &TriggerMatch,
     ) -> Option<StoredTriggerContext> {
         let continuation_user_msg = format!(
@@ -330,13 +332,13 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
         let (preset, response_length) = self.load_preset_and_response_length().ok()?;
 
         let trigger_ctx = make_prompt_context(
-            world,
+            &inputs.world,
             room_data,
             NpcContext {
-                all_npcs,
+                all_npcs: &inputs.all_npcs,
                 npcs_in_area: &state.scene.npcs_in_area,
             },
-            player,
+            &inputs.player,
             &continuation_user_msg,
             &history,
         );
