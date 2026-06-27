@@ -8,10 +8,11 @@
 The Chronicler Engine supports an extensible agent architecture where specialized agents can inject behavior into the narrative pipeline at specific execution phases. An **agent** is any type implementing the `Agent` trait. Agents are loaded from `AppSettings` at startup and registered in the `AgentRegistry`.
 
 **Current agents** (Phase 2):
+
 - `QuantifierAgent` — Post-generation scene analysis (NPC presence, movement)
-- `NarratorAgent` — Stub pre-generation agent (reserved for future use)
 
 **Future agents** (out of scope for Phase 2):
+
 - Prose Guardian, Continuity Checker, Expression Engine, Custom Tracker, Lorebook Keeper
 
 ---
@@ -46,8 +47,9 @@ pub enum ExecutionPhase {
 ```
 
 **Pipeline flow** (simplified):
+
 1. Load state from snapshot
-2. Run **PreGeneration** agents (currently empty — `NarratorAgent` returns `NoOp`)
+2. Run **PreGeneration** agents (currently empty — no registered pre-generation agents)
 3. Generate main narration via LLM
 4. Run **PostGeneration** agents (`QuantifierAgent` analyzes narration)
 5. Apply agent results → `execute_freeaction_impl` → save snapshot
@@ -67,16 +69,14 @@ pub enum AgentResult {
 ### StatePatch
 
 ```rust
-pub enum StatePatch {
-    Scene {
-        npc_ids: Vec<String>,
-        movement_destination: Option<String>,
-        confidence: Confidence,  // High | Medium | Low
-    },
+pub struct StatePatch {
+    pub npc_ids: Vec<String>,
+    pub movement_destination: Option<String>,
+    pub confidence: Confidence,  // High | Medium | Low
 }
 ```
 
-The `QuantifierAgent` returns `StatePatch::Scene` with the NPCs it detected in the narration and any movement destination. `DefaultGameService` translates this patch back into a `QuantifierResult` for `action_processing.rs`.
+The `QuantifierAgent` returns `StatePatch` with the NPCs it detected in the narration and any movement destination. `DefaultGameService` translates this patch back into a `QuantifierResult` for `action_processing.rs`.
 
 ---
 
@@ -89,6 +89,7 @@ let registry = AgentRegistry::from_configs(&settings.agents)?;
 ```
 
 If no agent config exists, defaults are injected for backward compatibility:
+
 - `quantifier` agent enabled, `PostGeneration`, `UseNamed("quantifier")` backend
 
 ### Config Format (settings.json)
@@ -108,8 +109,9 @@ If no agent config exists, defaults are injected for backward compatibility:
 ```
 
 **Fields:**
+
 - `name` — Display name
-- `agent_type` — `"quantifier"` | `"narrator"` (unknown types fail fast at startup)
+- `agent_type` — `"quantifier"` (unknown types fail fast at startup)
 - `enabled` — `true` to register; `false` skips
 - `backend` — `{"type": "use_main"}` or `{"type": "use_named", "value": "<connection_id>"}`
 - `phase` — `"pre_generation"` | `"post_generation"`
@@ -132,6 +134,7 @@ pub enum BackendSelector {
 ## Per-Agent Backends
 
 Each agent can use a different LLM connection:
+
 - Main narrator → `narration_connection_id`
 - Quantifier → `quantifier_connection_id` (or a custom connection via `UseNamed`)
 
@@ -146,7 +149,7 @@ This enables cost optimization (cheap model for quantifier, powerful model for n
 | `src/model/agent.rs` | `AgentConfig`, `AgentResult`, `AgentContext`, `StatePatch`, `ExecutionPhase`, `BackendSelector`, `Confidence` |
 | `src/narrative/agents/mod.rs` | Module root, re-exports |
 | `src/narrative/agents/trait_def.rs` | `Agent` trait definition |
-| `src/narrative/agents/registry.rs` | `AgentRegistry`, `NarratorAgent` |
+| `src/narrative/agents/registry.rs` | `AgentRegistry` |
 | `src/narrative/agents/quantifier/mod.rs` | Quantifier module root |
 | `src/narrative/agents/quantifier/agent.rs` | `QuantifierAgent` implementing `Agent` |
 | `src/narrative/agents/quantifier/core.rs` | Core quantifier logic |

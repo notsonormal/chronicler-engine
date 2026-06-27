@@ -57,16 +57,15 @@ Orchestration layer that coordinates game flow, persistence, and LLM generation.
 
 The interface between the synchronous engine and stochastic LLM generation.
 
-- **`llm`**: Directory module with traits (`LlmBackend`) and per-provider implementations (OpenRouter, DeepSeek, Ollama, Mock) for Game Master narration. The `LlmBackend` trait exposes transport primitives: `model()`, `name()`, `save_message()`, `wrap_and_save()`, `narrate_continuation()`, `complete()`. Backend-specific preprocessing (`preprocess_user_text`) and postprocessing (`postprocess_response_text`) hooks allow model-specific hacks (e.g., Gemma 4 thinking suffix, response sanitization) to live in the provider modules instead of the generic HTTP client.
+- **`llm`**: Directory module with traits (`LlmBackend`) and per-provider implementations (OpenRouter, DeepSeek, Ollama, Mock) for Game Master narration. The `LlmBackend` trait exposes transport primitives: `model()`, `name()`, `save_message()`, `wrap_and_save()`, `complete()`. Backend-specific preprocessing (`preprocess_user_text`) and postprocessing (`postprocess_response_text`) hooks allow model-specific hacks (e.g., Gemma 4 thinking suffix, response sanitization) to live in the provider modules instead of the generic HTTP client.
   - **`get_llm_backend_for(connection, storage, settings)`**: Create a backend for a specific `Connection` profile. Settings are passed in — no file I/O inside the backend.
   - **`DefaultGameService::with_storage(storage, settings)`**: Production constructor that receives pre-loaded settings.
   - **`DefaultGameService::with_backends(llm, registry)`**: Constructor for dependency-injecting mock backends and agent registry in tests. No globals, no file I/O, fully isolated.
-- **`prompt`**: Directory module for layered prompt construction with token budget management. Uses XML-sectioned instructions + XML-wrapped data for reasoning-model compatibility. The `PromptAssembler` trait decouples prompt assembly from LLM transport. Includes `fit_messages_to_context()` for dynamic context-window fitting. `NpcContext<'a>` bundles `all_npcs` + `npcs_in_area` slices; `make_prompt_context()` takes 6 parameters (down from 7).
+- **`prompt`**: Directory module for layered prompt construction with token budget management. Uses XML-sectioned instructions + XML-wrapped data for reasoning-model compatibility. `LayeredPromptAssembler` owns prompt assembly. Includes `fit_messages_to_context()` for dynamic context-window fitting. `NpcContext<'a>` bundles `all_npcs` + `npcs_in_area` slices; `make_prompt_context()` takes 6 parameters (down from 7).
 - **`agents`**: Directory module for the agent trait, registry, and agent implementations.
   - **`Agent` trait**: Core abstraction for pre-generation and post-generation agents
   - **`AgentRegistry`**: Loads agents from config and iterates by execution phase
   - **`QuantifierAgent`**: Post-generation agent for scene quantification and dynamic room presence detection
-  - **`NarratorAgent`**: Stub pre-generation agent (reserved for future use)
 - **`quantifier`** (under `agents/`): Quantifier implementation module.
   - **`QuantifierAgent`**: Post-generation agent that uses `LlmBackend::complete()` for scene quantification. Receives the current room via `AgentContext.current_room`.
   - **`NpcEventList`**: NPC movement events from quantification (Entered, Left). Now lives in `model::quantifier`.

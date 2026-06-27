@@ -4,6 +4,32 @@
 
 ### Changed
 
+## 2026-06-27
+
+### Changed
+
+- **Phase 1–3 abstraction anti-pattern fixes** — Surgical cleanups and type collapses. Plan archived at `docs/plans/archived/abstraction-fixes-implementation-plan-2026-06-27.md`. Deferred: A3 (`Confidence`/`QuantifierConfidence`, ~80 refs) and A6 (`TemplateVars` collapse, 6+ callers).
+  - **Phase 1 (stale file)**: Deleted `src/model/agent.rs_temp` (stale duplicate).
+  - **Phase 2 (surgical removals)**:
+    - Removed `ActionOutcome::Error` variant + 2 dead match arms in `retry.rs`.
+    - Removed `PromptLayer::Phi` + test.
+    - Removed `narrate_continuation` from `LlmBackend` trait + 4 backend impls + 9 test files.
+    - Removed `_player_name` param from `execute_action_impl` + 12 callers.
+    - Removed `_all_rooms` param + `extract_movement_from_text` from parser (~14 test sites updated).
+    - Removed `_exits` param from `GenerationViewModel::new` + 5 callers.
+    - Inlined `sanitize_for_prompt` into `assembler.rs`, deleted `sanitize.rs` + `sanitize_tests.rs`.
+    - Removed `NarratorAgent` + `"narrator"` registry arm.
+    - Added `Operation::CountSwipesForMessages`, removed piggyback on `LoadSwipesForMessages`.
+  - **Phase 3 (type collapses)**:
+    - Collapsed `StatePatch` single-variant enum → struct.
+    - Collapsed `TriggerRequirement` single-variant enum → struct (`{ operator, threshold }`).
+    - Collapsed `PromptAssembler` trait → `LayeredPromptAssembler` struct.
+    - Inlined `preprocess_user_text` default into `OllamaBackend` inherent method.
+    - Converted `QueryHandlers` unit struct → free functions in `query_handlers` module.
+  - Files modified: 58 files across `src/`, `tests/`. Net deletion: ~982 lines.
+
+### Changed
+
 - Relocate `starting_room_id` from `WorldCard` to `StartingScenario`.
 - Storage migration v14: drop `worlds.starting_room_id` column.
 

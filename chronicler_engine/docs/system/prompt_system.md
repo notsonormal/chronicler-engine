@@ -19,8 +19,8 @@ The engine follows a **Marinara-Engine-inspired pattern**:
 
 ## Source
 
-- **SillyTavern Docs**: https://docs.sillytavern.app/usage/prompts/prompt-manager/
-- **SillyTavern GitHub**: https://github.com/SillyTavern/SillyTavern
+- **SillyTavern Docs**: <https://docs.sillytavern.app/usage/prompts/prompt-manager/>
+- **SillyTavern GitHub**: <https://github.com/SillyTavern/SillyTavern>
 
 ## The 8-Layer Prompt System
 
@@ -42,12 +42,14 @@ The Chronicler Engine implements an 8-layer prompt structure (layers 0–7) mapp
 ## Detailed Layer Descriptions
 
 ### Layer 0: System Prompt (Main Prompt)
+
 - **Role**: System
 - **Position**: Absolute (top)
 - **Content**: Assembled XML sections from the active preset — role, instructions, global_rules (from `world.json`). Writing style and output format are split out and placed after conversation history (see Post-History layer).
 - **Renders**: `build_system_prompt()` in `assembler.rs`
 - **Format**: XML-wrapped sections (see example below)
 - **Example**:
+
   ```xml
   <role>
       You are an interactive fiction author...
@@ -62,13 +64,16 @@ The Chronicler Engine implements an 8-layer prompt structure (layers 0–7) mapp
       - Rule 1: Be descriptive
   </global_rules>
   ```
+
 - **See also**: [`reference/system_prompt.md`](../reference/system_prompt.md) for the full prompt text and section definitions
 
 ### Layer 1: Game State
+
 - **Role**: User (data)
 - **Content**: Current room name, description, NPCs in the current room
 - **Format**: XML-wrapped (`<GameState>... </GameState>`)
 - **Example**:
+
   ```xml
   <GameState>
   Current Location: Grand Foyer
@@ -78,6 +83,7 @@ The Chronicler Engine implements an 8-layer prompt structure (layers 0–7) mapp
   ```
 
 ### Layer 2: NPC Cards (Character Description)
+
 - **Role**: User (data)
 - **Content**: Two sections:
   - `<KnownNpcs>`: Condensed roster of **all** NPCs the player has met (name, location, 3-line summary)
@@ -86,12 +92,14 @@ The Chronicler Engine implements an 8-layer prompt structure (layers 0–7) mapp
 - **Why two-tier**: The LLM needs awareness of off-screen characters to reference them or write introduction scenes, but full cards for every NPC would bloat the prompt. Condensed cards (~40-60 words) preserve identity and motivation without the bulk.
 
 ### Layer 3: Player Persona
+
 - **Role**: User (data)
 - **Content**: Player's character sheet
 - **Format**: XML-wrapped (`<PlayerCharacter>... </PlayerCharacter>`)
 - **Includes**: name, description, personality, scenario
 
 ### Layer 4: World Info (Lorebook)
+
 - **Role**: User (data)
 - **Trigger**: Keyword matching in conversation
 - **Content**: World lore, setting facts, background information
@@ -99,12 +107,14 @@ The Chronicler Engine implements an 8-layer prompt structure (layers 0–7) mapp
 - **Implementation**: Renders `world.name` and `world.description` only. `global_rules` were previously duplicated here but have been moved exclusively to Layer 0 (System Prompt) to reduce token waste.
 
 ### Layer 5: Chat History
+
 - **Role**: User (data)
 - **Content**: Full conversation history (up to token limit)
 - **Format**: XML-wrapped (`<ConversationHistory>... </ConversationHistory>`)
 - **Note**: No summarization — all conversation retained and sent. Oldest entries are trimmed first if the context window is exceeded.
 
 ### Layer 6: Post-History Instructions
+
 - **Role**: User (instructions)
 - **Position**: After `<ConversationHistory>`, before `<PlayerInput>`
 - **Content**: `<writing_style>` and `<output_format>` sections from the active preset
@@ -112,6 +122,7 @@ The Chronicler Engine implements an 8-layer prompt structure (layers 0–7) mapp
 - **Assembly**: `build_post_history_prompt()` in `assembler.rs` assembles these sections directly from the preset — no string splitting or delimiter transport is required.
 
 ### Layer 7: User Input
+
 - **Role**: User (data)
 - **Content**: The player's current message/action
 - **Format**: XML-wrapped (`<PlayerInput>... </PlayerInput>`)
@@ -154,6 +165,7 @@ plot developments, build content (above 150 words), but allow the player to reac
 ## Context Templates
 
 The engine uses a variable system similar to SillyTavern's Handlebars-style templates:
+
 - Variables populated from `GameState` at render time
 - Used in prompt construction within `LayeredPromptAssembler`
 
@@ -189,6 +201,7 @@ The `make_prompt_context` helper function constructs `PromptContext` from indivi
 ## Character Card Format
 
 Uses the same structure as SillyTavern character cards (Jailbreak format):
+
 ```json
 {
   "name": "Character Name",
@@ -216,13 +229,15 @@ The engine also uses a **quantifier prompt** — a separate secondary LLM call t
 ## Implementation
 
 ### Key Files
-- `src/narrative/prompt/assembler.rs` — `PromptAssembler` trait, `LayeredPromptAssembler` with 8-layer construction, context fitting, and budget management
+
+- `src/narrative/prompt/assembler.rs` — `LayeredPromptAssembler` with 8-layer construction, context fitting, and budget management
 - `src/narrative/prompt/types.rs` — `PromptContext`, `NpcContext`, `PromptLayer`
 - `src/narrative/llm/mod.rs` — LLM backend module (pure transport, no prompt assembly)
 - `src/model/state.rs` — `GameState` provides context data
 - `src/model/character.rs` — `NpcCard`, `PlayerCard` structures
 
 ### Code Example
+
 ```rust
 let assembled = assembler.assemble(&context, &preset, &global_rules, Some(response_length))?;
 // assembled.system_prompt — Layer 0 (sent as system message)
@@ -244,6 +259,6 @@ let assembled = assembler.assemble(&context, &preset, &global_rules, Some(respon
 
 ## References
 
-- SillyTavern Prompt Manager: https://docs.sillytavern.app/usage/prompts/prompt-manager/
-- SillyTavern Prompt Building: https://docs.sillytavern.app/usage/prompts/prompt-building/
-- Prompt Assembly Pipeline: https://deepwiki.com/SillyTavern/SillyTavern/3.3-prompt-assembly-pipeline
+- SillyTavern Prompt Manager: <https://docs.sillytavern.app/usage/prompts/prompt-manager/>
+- SillyTavern Prompt Building: <https://docs.sillytavern.app/usage/prompts/prompt-building/>
+- Prompt Assembly Pipeline: <https://deepwiki.com/SillyTavern/SillyTavern/3.3-prompt-assembly-pipeline>

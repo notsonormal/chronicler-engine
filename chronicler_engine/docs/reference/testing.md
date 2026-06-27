@@ -75,13 +75,13 @@ For tests that only need to verify pipeline behavior (narration → quantificati
 
 ```rust
 use chronicler_engine::application::action_pipeline::{ActionPipelineBackend, execute_action_impl};
-use chronicler_engine::narrative::prompt::PromptAssembler;
+use chronicler_engine::narrative::prompt::LayeredPromptAssembler;
 use chronicler_engine::application::context::GameServiceContext;
 
 struct NarrowMock;
 
 impl ActionPipelineBackend for NarrowMock {
-    fn assembler(&self) -> &dyn PromptAssembler {
+    fn assembler(&self) -> &LayeredPromptAssembler {
         // Return a test assembler (e.g., a mock or LayeredPromptAssembler)
         &TEST_ASSEMBLER
     }
@@ -98,7 +98,7 @@ impl ActionPipelineBackend for NarrowMock {
 // Usage in test:
 let backend = NarrowMock;
 let ctx = GameServiceContext::new(/* ... */);
-execute_action_impl(&backend, ctx, "look".to_string(), "Player".to_string());
+execute_action_impl(&backend, ctx, "look".to_string());
 ```
 
 ### Config File (`tests/test_config.json`)

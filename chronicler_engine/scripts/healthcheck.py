@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -49,29 +50,45 @@ def register(name: str):
     return deco
 
 
-def find_jscpd() -> str | None:
-    """Discover jscpd binary. PATH first, then pi-lens bundled install."""
+def is_executable(path: str) -> bool:
+    """Check if a file is executable on the current platform."""
+    if sys.platform == "win32":
+        return path.lower().endswith((".exe", ".cmd", ".bat"))
+    try:
+        return os.access(path, os.X_OK)
+    except OSError:
+        return False
+
+
+def find_jscpd() -> tuple[str, list[str]] | None:
+    """Discover jscpd binary or npx. Returns (binary, extra_args) or None."""
     found = shutil.which("jscpd")
-    if found:
-        return found
+    if found and is_executable(found):
+        return (found, [])
     candidate = Path.home() / ".pi-lens" / "tools" / "node_modules" / ".bin" / "jscpd"
-    if candidate.exists():
-        return str(candidate)
+    if candidate.exists() and is_executable(str(candidate)):
+        return (str(candidate), [])
+    # Fallback: npx will fetch and run jscpd on demand
+    npx = shutil.which("npx")
+    if npx:
+        return (npx, ["jscpd"])
     return None
 
 
 def run_jscpd(report_path: Path, min_lines: int = 3, min_tokens: int = 30) -> tuple[bool, str]:
     """Run jscpd on chronicler_engine src/tests. Returns (ok, message)."""
-    binary = find_jscpd()
-    if not binary:
+    result = find_jscpd()
+    if not result:
         return False, (
             "jscpd not found. Install with `npm install -g jscpd`, or "
             "ensure pi-lens tools are installed at ~/.pi-lens/tools/"
         )
+    binary, extra_args = result
 
     report_path.parent.mkdir(parents=True, exist_ok=True)
     cmd = [
         binary,
+        *extra_args,
         "--min-lines",
         str(min_lines),
         "--min-tokens",
@@ -87,12 +104,15 @@ def run_jscpd(report_path: Path, min_lines: int = 3, min_tokens: int = 30) -> tu
         str(WORKSPACE_ROOT),
     ]
     try:
+        # npx.CMD on Windows requires shell=True to execute as a script
+        use_shell = binary.lower().endswith(".cmd")
         result = subprocess.run(
             cmd,
             cwd=WORKSPACE_ROOT,
             capture_output=True,
             text=True,
             timeout=120,
+            shell=use_shell,
         )
     except subprocess.TimeoutExpired:
         return False, "jscpd timed out after 120s"
@@ -147,7 +167,14 @@ def check_duplicates(args: argparse.Namespace) -> CheckResult:
             f"Report not found at {report_path}. Run without --skip-run.",
         )
 
-    report = json.loads(report_path.read_text(encoding="utf-8"))
+    try:
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        return CheckResult(
+            "duplicates",
+            False,
+            f"Failed to parse jscpd JSON report: {e}",
+        )
     text = summarize_report(
         report,
         cross_file_only=not args.include_self,

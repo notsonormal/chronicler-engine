@@ -3,16 +3,20 @@
 > **Related Decisions**: [ADR-004](../adr/adr-004-xml-prompt-format.md), [ADR-007](../adr/adr-007-settings-system.md), [ADR-010](../adr/adr-010-concurrency-generation-gate.md)
 
 ## Objective
+
 The engine utilizes Large Language Models (LLMs) via the OpenRouter API, DeepSeek, or local Ollama to handle Game Master narration and NPC dialogue.
 
 ## Technical Architecture
 
 ### 1. The Blocking Task Pattern
+
 - **Concurrency**: The engine keeps the `GameService` trait fully synchronous. HTTP handlers in `src/server/fragments/actions.rs` offload LLM work to the async runtime via `tokio::task::spawn_blocking`. This prevents the Axum event loop from stalling during network I/O while avoiding the `#[async_trait]` + `dyn Trait` incompatibility in Rust 2024 edition.
 - **Cancellation**: Each spawned task checks a `CancellationToken` before and after execution to handle graceful shutdown. Long-running pipelines (`ActionPipeline::run_from_input`) also check the token at internal stage boundaries (after main narration, before trigger continuation, after trigger continuation) to abort early and avoid wasting LLM calls on stale requests. When cancelled mid-pipeline, `ActionPipeline::handle_cancellation()` resets `GenerationStatus::Idle`, clears the phase, and persists the state.
 
 ### 2. Model Configuration
+
 The engine supports flexible model selection via connection profiles stored in the SQLite `settings` table (seeded from `data/settings.json` at startup; see ADR-024).
+
 - **Connections**: Named profiles combining `provider` + `model` + `api_key` + `base_url`
 - **Narration Connection**: The connection used for Game Master narration and NPC dialogue
 - **Quantifier Connection**: The connection used for scene quantification (can differ from narration)
@@ -20,22 +24,28 @@ The engine supports flexible model selection via connection profiles stored in t
 - **Settings Lifecycle**: Settings are loaded once at startup (`bootstrap/run.rs`) and passed down as `Arc<RwLock<AppSettings>>`. No business logic reloads settings from disk.
 
 ### 3. Backend Selection
+
 Backend is selected per-connection via `Connection.provider`:
+
 - `openrouter` → Uses OpenRouter API with the connection's model and API key
 - `deepseek` → **Stub — not yet implemented.** Returns error on all calls.
 - `ollama` → Uses local Ollama instance with the connection's base URL and model
 - `mock` → Uses MockBackend for testing (no API key needed)
 
 ### 4. Single User Message Mode
+
 Some models (particularly certain local/quantized models) ignore or poorly handle the `system` role. The `Connection` struct provides a `single_user_message` toggle for this case:
+
 - **When `false` (default)**: System prompt is sent as the `system` message, user text as the `user` message (standard behavior)
 - **When `true`**: System and user prompts are merged into a single `user` message with a `[SYSTEM]` prefix:
+
   ```
   [SYSTEM]
   <system prompt content>
 
   <user prompt content>
   ```
+
 - The system message is omitted from the API payload when merging
 - This is a per-connection setting, so different backends can use different strategies
 
@@ -48,7 +58,9 @@ The engine uses an 8-layer prompt system inspired by SillyTavern's Prompt Manage
 Token budget constants (`MAX_CONTEXT_TOKENS`, `MAX_RESPONSE_TOKENS`, `MAX_HISTORY_TOKENS`, `SAFETY_MARGIN_TOKENS`, `MIN_INPUT_BUDGET_TOKENS`) and the `fit_messages_to_context()` trimming strategy are defined in [`prompt_system.md`](prompt_system.md). Connectors override `max_context_tokens` per connection via the settings system (see Section 2 above).
 
 ### 7. Prompt Injection Sanitization
+
 User input is sanitized to prevent prompt injection:
+
 - `{{variable}}` patterns are escaped
 - Known injection patterns are stripped
 - Legitimate text passes through unchanged
@@ -75,9 +87,11 @@ This matches SillyTavern's `last_output_sequence` preset for Gemma 4. It pre-fil
 - **Ref**: [SillyTavern Reddit discussion](https://old.reddit.com/r/SillyTavernAI/comments/1sbjwke/)
 
 ### 9. LLM Call Logging & Forensics
+
 Every LLM call is logged to a SQLite `llm_messages` table with a strict 50-row global cap. This enables rapid diagnosis when the engine misbehaves — the full request/response JSON is preserved alongside metadata.
 
 #### Architecture
+
 - **`call_chat_completions()`** in `llm_client.rs` is the single chokepoint. It returns `ChatCompletionResult { text, system_prompt, user_prompt, raw_request_json, raw_response_json }`.
 - **`LlmBackend` trait** methods take `agent_name: &str` and return `LlmCallResult`, which wraps the `ChatCompletionResult` with `backend_name` and `model_name`.
 - **Quantifier path** logs via `LlmBackend::complete()`, which uses the trait's default `wrap_and_save()` method, routing through the same `llm_client.rs` chokepoint.
@@ -87,7 +101,9 @@ Every LLM call is logged to a SQLite `llm_messages` table with a strict 50-row g
 - **Storage is optional**: Backends accept `Option<Arc<Storage>>`. When `None`, logging is silently skipped (useful for tests that don't care about forensics).
 
 #### Agent Names
+
 Four agent names are used consistently across the codebase:
+
 | Agent | Role |
 |-------|------|
 | `narrator` | Game Master narration |
@@ -96,6 +112,7 @@ Four agent names are used consistently across the codebase:
 | `dialogue` | NPC dialogue generation |
 
 #### Dashboard Integration
+
 The LLM Messages tab (`/fragment/llm-messages`) renders the last 50 calls as an expandable list, polled every 4 seconds via HTMX.
 
 ### 10. Runtime Tracing & Test Forensics
@@ -105,21 +122,25 @@ The engine uses [`tracing`](https://tracing.rs) for structured runtime diagnosti
 #### Instrumented Functions
 
 **Action Processing** (`src/engine/action_processing.rs`):
+
 - `handle_movement` — tracks room transitions
 - `apply_npc_events` — tracks NPC enter/leave events
 - `execute_freeaction_impl` — tracks complete action lifecycle
 
 **Trigger Evaluation** (`src/engine/trigger_eval.rs`):
+
 - `evaluate_triggers` — tracks trigger firing decisions
 - `check_condition` — tracks condition evaluation
 
 **Quantifier** (`src/narrative/agents/quantifier/orchestration.rs`):
+
 - `determine_npcs_in_room` — tracks NPC detection confidence
 
 **LLM Client** (`src/narrative/llm_client/mod.rs`):
-  - `call_chat_completions` — tracks HTTP request/response lifecycle
-  - `handle_response` — tracks response parsing and error handling
-  - `parse_chat_response` — tracks JSON parsing and content extraction
+
+- `call_chat_completions` — tracks HTTP request/response lifecycle
+- `handle_response` — tracks response parsing and error handling
+- `parse_chat_response` — tracks JSON parsing and content extraction
 **Game Service** (`src/application/action_pipeline/actions.rs`, `retry.rs`, `pipeline.rs`, `phases.rs`):
 - `ActionPipeline::run_from_input()` — main pipeline entry from player input, delegates to `self.phase_*()` methods defined in split `impl` block across `pipeline.rs` and `phases.rs`
 - `ActionPipeline::phase_trigger_continuation()` — wrapper around `phase_trigger_continuation_raw()` for retry/retrigger
@@ -129,6 +150,7 @@ The engine uses [`tracing`](https://tracing.rs) for structured runtime diagnosti
 #### Forensics Collector
 
 The `ForensicsCollector` (`src/test_support/forensics.rs`) is a tracing subscriber that:
+
 - Buffers spans and events during test execution
 - Automatically writes JSON on test failure to `tmp/diagnostics/`
 - Redacts sensitive fields (`api_key`, `prompt`, `raw_response`, `authorization`)
@@ -148,11 +170,12 @@ RUST_LOG=trace cargo test
 ```
 
 #### Module Location
+
 - **Crate path**: `crate::test_support::forensics` — `ForensicsCollector`, `ForensicsLayer`
 - **Bootstrap**: `bootstrap/run.rs` initializes `tracing_subscriber::fmt()` with `EnvFilter`
 
-
 ### Module Location
+
 - **Crate path**: `crate::narrative::llm` — directory module (`mod.rs`, `backend.rs`, `openrouter.rs`, `deepseek.rs`, `ollama.rs`, `mock.rs`, `sanitize.rs`)
 - **Crate path**: `crate::narrative::prompt` — directory module (`mod.rs`, `assembler.rs`, `budget.rs`, `context.rs`, `sanitize.rs`, `types.rs`, plus sibling `*_tests.rs` files)
 - **Crate path**: `crate::narrative::llm_client` — directory module (`mod.rs`, `request.rs`, `response.rs`, `client.rs`, plus sibling `request_tests.rs`, `response_tests.rs`)
@@ -161,7 +184,8 @@ RUST_LOG=trace cargo test
 - **Crate path**: `crate::model::llm_message` — `LlmMessage` data model
 
 ## Implementation Standards
+
 - Use the `LlmBackend` trait for all implementations
 - Maintain a `MockBackend` for test environments
-- Use `PromptAssembler` for all prompt construction; `LlmBackend::complete()` for all LLM transport
+- Use `LayeredPromptAssembler` for all prompt construction; `LlmBackend::complete()` for all LLM transport
 - Configure `max_context_tokens` per connection to match the model's actual context window
