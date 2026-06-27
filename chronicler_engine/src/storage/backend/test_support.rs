@@ -12,7 +12,7 @@ pub struct TestOverride {
 }
 
 #[derive(Clone, Copy)]
-pub enum ErrorKind {
+pub(crate) enum ErrorKind {
     Config,
     Internal,
 }

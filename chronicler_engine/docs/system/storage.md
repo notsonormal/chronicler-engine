@@ -88,5 +88,5 @@ Serializable subset of `GameState` for persistence. Messages excluded; hydrated 
 - InMemory backend for fast unit tests (no SQLite I/O)
 - `with_test_failures()` returns `(Storage, TestFailureHandle)` for failure injection
 - TestFailureHandle takes `&'static str` method-name keys + `TestOverride` failure payloads
-- Test-infra types (`TestOverride`, `TestFailureHandle`, `ErrorKind`) live in `src/storage/backend/test_support.rs`, re-exported via `crate::storage::{TestOverride, TestFailureHandle, ErrorKind}`
+- Test-infra types (`TestOverride`, `TestFailureHandle`) live in `src/storage/backend/test_support.rs`, re-exported via `crate::storage::backend::{TestFailureHandle, TestOverride}`
 - See `src/storage/backend/core.rs` for `Storage` constructors

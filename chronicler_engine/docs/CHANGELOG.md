@@ -8,8 +8,8 @@
   - Split `Backend` enum into `Backend` (`Sqlite`, `InMemory`) + `LayeredBackend` (`Direct(Backend)` | `Test { base, overrides }`) — `Test` is now a decorator, not a peer of real backends.
   - `LayeredBackend::Test.base` is non-recursive `Box<Backend>` — structurally enforces "at most one Test layer" (replace-not-nest invariant pinned by 2 new unit tests).
   - Removed 40 dead `Backend::Test { .. } => unreachable!()` arms across 10 storage backend files (M1/N2 cleanup).
-  - Test-infra types (`TestOverride`, `TestFailureHandle`, `ErrorKind`) moved from `storage/backend/core.rs` to new `storage/backend/test_support.rs` module. Re-export shim preserves `crate::storage::{TestOverride, TestFailureHandle, ErrorKind}` import paths — no caller/test changes.
-  - `Storage` public API unchanged: `with_failure`, `with_test_failures`, `add_failure`, `with_shared_overrides`, `new_sqlite`, `new_in_memory` all preserved.
+  - Test-infra types (`TestOverride`, `TestFailureHandle`) moved from `storage/backend/core.rs` to new `storage/backend/test_support.rs` module. Re-exported via `crate::storage::backend::{TestFailureHandle, TestOverride}`. `ErrorKind` remains in `test_support.rs` as `pub(crate)` (internal to the storage backend).
+  - `Storage` public API: `with_failure`, `with_test_failures`, `add_failure`, `new_sqlite`, `new_in_memory` preserved. `with_shared_overrides` removed (zero callers; passthrough to private `with_overrides`). `with_overrides` now `debug_assert!`s when called on an already-Test `Storage` to surface silent override-discard.
   - Addresses M1 (Test variant isolation), M2 (nesting invariant), N2 (dead arms) of T7 in `docs/plans/abstraction-fixes-followup-superplan.md`.
 
 - **Thermo-nuclear follow-up cleanup** — Quality review follow-up to the abstraction-fixes branch. Mechanical, scope-bounded, no behavior changes beyond the documented `reset` per-message/swipe failure swallow.

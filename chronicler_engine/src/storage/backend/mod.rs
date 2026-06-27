@@ -16,10 +16,10 @@ pub mod worlds;
 
 pub use helpers::empty_to_none;
 #[cfg(feature = "testing")]
-pub use test_support::{ErrorKind, TestFailureHandle, TestOverride};
+pub use test_support::{TestFailureHandle, TestOverride};
 
 #[cfg(feature = "testing")]
-pub mod test_support;
+mod test_support;
 
 #[cfg(test)]
 mod characters_tests;

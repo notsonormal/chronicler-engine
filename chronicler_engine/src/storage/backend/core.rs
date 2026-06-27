@@ -164,8 +164,14 @@ impl Storage {
             Err(poisoned) => poisoned.into_inner(),
         };
         let base = match backend {
-            LayeredBackend::Test { base, .. } => base,
             LayeredBackend::Direct(other) => Box::new(other),
+            LayeredBackend::Test { base, .. } => {
+                debug_assert!(
+                    false,
+                    "with_overrides called on Storage already in Test mode; existing overrides silently dropped"
+                );
+                base
+            }
         };
         Self {
             game_id: self.game_id,
