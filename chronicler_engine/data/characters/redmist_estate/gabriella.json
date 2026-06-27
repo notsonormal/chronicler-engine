@@ -8,10 +8,8 @@
     "triggers": [
         {
             "requirement": {
-                "TimesMet": [
-                    "Eq",
-                    0
-                ]
+                "operator": "Eq",
+                "threshold": 0
             },
             "narration": {
                 "name": "Gabriella Introduction",

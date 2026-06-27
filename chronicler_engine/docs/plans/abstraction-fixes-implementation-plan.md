@@ -4,14 +4,11 @@
 **Source:** Derived from `docs/plans/abstraction-fixes-plan.md`
 **Created:** 2026-06-26
 **Implemented:** 2026-06-27 (Phases 1–3)
-**Scope:** All 7 phases, single PR/commit for Phases 1–3; remaining phases deferred
 **Decisions:** 15 clarified decisions applied after investigation + improve-ai-plan review
 
 ---
 
 ## Summary
-
-Execute the existing `docs/plans/abstraction-fixes-plan.md` as a single PR/commit with **4 scope corrections** + **11 decision locks** applied after investigation revealed the source investigation report (`docs/reviews/abstraction-antipatterns-summary.md`) had 4 misclassifications and the plan had unresolved decisions.
 
 A6 `TemplateVars` collapse deferred per earlier user decision — 6+ callers + struct field ripple too large for this plan.
 
@@ -557,7 +554,6 @@ cargo clippy       # Lint check (lib.rs:9 FIXME removed at end of Phase 5)
 
 ## Plan adherence
 
-- Single PR / single commit (per user decision)
 - All 7 phases included
 - 4 corrections + 11 decision locks applied
 - A6 + A3 deferred

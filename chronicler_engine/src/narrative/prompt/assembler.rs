@@ -374,22 +374,31 @@ impl<'a> LayerRenderer<'a> {
 }
 
 /// Replace injection patterns like `{{system}}` with `[FILTERED]`.
-fn sanitize_for_prompt(input: &str) -> String {
-    let mut result = String::new();
-    let mut chars = input.chars().peekable();
-    while let Some(ch) = chars.next() {
-        if ch == '{' && chars.peek() == Some(&'{') {
-            chars.next(); // consume second {
-            result.push_str("[FILTERED]");
-            // Skip until }}
-            while let Some(c) = chars.next() {
-                if c == '}' && chars.peek() == Some(&'}') {
-                    chars.next(); // consume second }
+pub(crate) fn sanitize_for_prompt(input: &str) -> String {
+    let chars: Vec<char> = input.chars().collect();
+    let mut result = String::with_capacity(input.len());
+    let mut i = 0;
+
+    while i < chars.len() {
+        if chars[i] == '{' && i + 1 < chars.len() && chars[i + 1] == '{' {
+            let mut j = i + 2;
+            while j + 1 < chars.len() {
+                if chars[j] == '}' && chars[j + 1] == '}' {
                     break;
                 }
+                j += 1;
+            }
+            if j + 1 < chars.len() && j > i + 2 {
+                result.push_str("[FILTERED]");
+                i = j + 2;
+            } else {
+                result.push('{');
+                result.push('{');
+                i += 2;
             }
         } else {
-            result.push(ch);
+            result.push(chars[i]);
+            i += 1;
         }
     }
     result

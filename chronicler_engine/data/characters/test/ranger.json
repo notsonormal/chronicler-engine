@@ -10,10 +10,8 @@
     "triggers": [
         {
             "requirement": {
-                "TimesMet": [
-                    "Lt",
-                    3
-                ]
+                "operator": "Lt",
+                "threshold": 3
             },
             "narration": {
                 "name": "Ranger Recognition",
