@@ -5,12 +5,12 @@ use chrono::Utc;
 
 use crate::error::EngineError;
 use crate::model::character::NpcCard;
-use crate::storage::backend::{empty_to_none, Backend, CharacterSeed, Operation, Storage};
+use crate::storage::backend::{empty_to_none, Backend, CharacterSeed, Storage};
 use crate::storage::models::character::DbCharacter;
 
 impl Storage {
     pub fn list_characters(&self, world_id: i64) -> Result<Vec<NpcCard>, EngineError> {
-        self.with_backend_mut(Operation::ListCharacters, |backend, _game_id| match backend {
+        self.with_backend_mut("list_characters", |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let mut stmt = conn.prepare(
@@ -23,12 +23,12 @@ impl Storage {
                 rows.iter().map(character_from_db).collect()
             }
             Backend::InMemory(data) => Ok(data.characters.iter().filter(|c| c.world_id == world_id).map(|c| c.card.clone()).collect()),
-            Backend::Test { .. } => unimplemented!(),
+            Backend::Test { .. } => unreachable!(),
         })
     }
 
     pub fn get_character(&self, world_id: i64, key: &str) -> Result<Option<NpcCard>, EngineError> {
-        self.with_backend_mut(Operation::GetCharacter, |backend, _game_id| match backend {
+        self.with_backend_mut("get_character", |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let mut stmt = conn.prepare(
@@ -42,12 +42,12 @@ impl Storage {
                 }
             }
             Backend::InMemory(data) => Ok(data.characters.iter().find(|c| c.world_id == world_id && c.card.id == key).map(|c| c.card.clone())),
-            Backend::Test { .. } => unimplemented!(),
+            Backend::Test { .. } => unreachable!(),
         })
     }
 
     pub fn seed_character(&self, world_id: i64, card: &NpcCard) -> Result<(), EngineError> {
-        self.with_backend_mut(Operation::SeedCharacter, |backend, _game_id| match backend {
+        self.with_backend_mut("seed_character", |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let now = Utc::now().to_rfc3339();
@@ -90,7 +90,7 @@ impl Storage {
                 }
                 Ok(())
             }
-            Backend::Test { .. } => unimplemented!(),
+            Backend::Test { .. } => unreachable!(),
         })
     }
 }

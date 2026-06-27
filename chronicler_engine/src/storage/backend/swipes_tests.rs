@@ -1,5 +1,5 @@
 use crate::model::message::Swipe;
-use crate::storage::backend::{Operation, Storage, TestOverride};
+use crate::storage::backend::{Storage, TestOverride};
 use crate::test_support::{dummy_message, dummy_swipe, sqlite_storage};
 
 #[test]
@@ -342,10 +342,7 @@ fn test_insert_swipe_failure() {
     storage.set_game_id(1);
     storage.insert_message(&dummy_message("m")).unwrap();
 
-    handle.set(
-        Operation::InsertSwipe,
-        TestOverride::config("insert failed"),
-    );
+    handle.set("insert_swipe", TestOverride::config("insert failed"));
 
     let result = storage.insert_swipe(1, &dummy_swipe("s"), 0);
     assert!(result.is_err());
@@ -358,10 +355,7 @@ fn test_update_swipe_text_failure() {
     let msg_id = storage.insert_message(&dummy_message("m")).unwrap();
     storage.insert_swipe(msg_id, &dummy_swipe("s"), 0).unwrap();
 
-    handle.set(
-        Operation::UpdateSwipeText,
-        TestOverride::internal("update failed"),
-    );
+    handle.set("update_swipe_text", TestOverride::internal("update failed"));
 
     let result = storage.update_swipe_text(msg_id, 0, "new");
     assert!(result.is_err());
@@ -374,10 +368,7 @@ fn test_shift_swipe_indices_failure() {
     let msg_id = storage.insert_message(&dummy_message("m")).unwrap();
     storage.insert_swipe(msg_id, &dummy_swipe("s"), 0).unwrap();
 
-    handle.set(
-        Operation::ShiftSwipeIndices,
-        TestOverride::config("shift failed"),
-    );
+    handle.set("shift_swipe_indices", TestOverride::config("shift failed"));
 
     let result = storage.shift_swipe_indices(msg_id, 5);
     assert!(result.is_err());
@@ -389,7 +380,7 @@ fn test_load_swipes_for_messages_failure() {
     storage.set_game_id(1);
 
     handle.set(
-        Operation::LoadSwipesForMessages,
+        "load_swipes_for_messages",
         TestOverride::internal("load failed"),
     );
 
@@ -404,7 +395,7 @@ fn test_update_active_swipe_failure() {
     storage.insert_message(&dummy_message("m")).unwrap();
 
     handle.set(
-        Operation::UpdateActiveSwipe,
+        "update_active_swipe",
         TestOverride::internal("update failed"),
     );
 

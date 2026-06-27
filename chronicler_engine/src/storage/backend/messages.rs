@@ -3,12 +3,13 @@
 
 use crate::error::EngineError;
 use crate::model::message::Message;
-use crate::storage::backend::{Backend, Operation, Storage};
+use crate::storage::backend::{Backend, Storage};
 use crate::storage::models::message::DbMessage;
 
 impl Storage {
     pub fn insert_message(&self, msg: &Message) -> Result<u64, EngineError> {
-        self.with_backend_mut(Operation::InsertMessage, |backend, game_id| match backend {
+        let game_id = self.game_id();
+        self.with_backend_mut("insert_message", |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let db_msg =
@@ -43,7 +44,8 @@ impl Storage {
     }
 
     pub fn delete_message(&self, id: u64) -> Result<(), EngineError> {
-        self.with_backend_mut(Operation::DeleteMessage, |backend, game_id| match backend {
+        let game_id = self.game_id();
+        self.with_backend_mut("delete_message", |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 conn.execute(
@@ -64,63 +66,60 @@ impl Storage {
     }
 
     pub fn load_message_rows(&self) -> Result<Vec<Message>, EngineError> {
-        self.with_backend_mut(
-            Operation::LoadMessageRows,
-            |backend, game_id| match backend {
-                Backend::Sqlite { pool } => {
-                    let conn = pool.conn();
-                    let mut stmt = conn
-                        .prepare(
-                            "SELECT id, sender, message_type, timestamp, active_swipe_index
+        let game_id = self.game_id();
+        self.with_backend_mut("load_message_rows", |backend| match backend {
+            Backend::Sqlite { pool } => {
+                let conn = pool.conn();
+                let mut stmt = conn
+                    .prepare(
+                        "SELECT id, sender, message_type, timestamp, active_swipe_index
                          FROM messages
                          WHERE game_id = ?1 AND is_deleted = 0
                          ORDER BY id ASC",
-                        )
-                        .map_err(|e| {
-                            EngineError::Config(format!("Failed to prepare message query: {e}"))
-                        })?;
+                    )
+                    .map_err(|e| {
+                        EngineError::Config(format!("Failed to prepare message query: {e}"))
+                    })?;
 
-                    let msg_rows = stmt
-                        .query_map(rusqlite::params![game_id as i64], |row| {
-                            Ok(DbMessage {
-                                id: row.get(0)?,
-                                game_id: game_id as i64,
-                                sender: row.get(1)?,
-                                message_type_json: row.get(2)?,
-                                timestamp: row.get(3)?,
-                                active_swipe_index: row.get(4)?,
-                                is_deleted: 0,
-                            })
+                let msg_rows = stmt
+                    .query_map(rusqlite::params![game_id as i64], |row| {
+                        Ok(DbMessage {
+                            id: row.get(0)?,
+                            game_id: game_id as i64,
+                            sender: row.get(1)?,
+                            message_type_json: row.get(2)?,
+                            timestamp: row.get(3)?,
+                            active_swipe_index: row.get(4)?,
+                            is_deleted: 0,
                         })
-                        .map_err(|e| {
-                            EngineError::Config(format!("Failed to query messages: {e}"))
-                        })?;
+                    })
+                    .map_err(|e| EngineError::Config(format!("Failed to query messages: {e}")))?;
 
-                    let mut messages: Vec<Message> = Vec::new();
-                    for row in msg_rows {
-                        let db_msg = row.map_err(|e| {
-                            EngineError::Config(format!("Failed to read message row: {e}"))
-                        })?;
-                        messages.push(crate::storage::mappers::message::db_message_to_model(
-                            &db_msg,
-                            &[],
-                        )?);
-                    }
-
-                    Ok(messages)
+                let mut messages: Vec<Message> = Vec::new();
+                for row in msg_rows {
+                    let db_msg = row.map_err(|e| {
+                        EngineError::Config(format!("Failed to read message row: {e}"))
+                    })?;
+                    messages.push(crate::storage::mappers::message::db_message_to_model(
+                        &db_msg,
+                        &[],
+                    )?);
                 }
-                Backend::InMemory(data) => Ok(data
-                    .messages
-                    .get(&game_id)
-                    .map(|vec| vec.iter().filter(|m| !m.is_deleted).cloned().collect())
-                    .unwrap_or_default()),
-                Backend::Test { .. } => unreachable!(),
-            },
-        )
+
+                Ok(messages)
+            }
+            Backend::InMemory(data) => Ok(data
+                .messages
+                .get(&game_id)
+                .map(|vec| vec.iter().filter(|m| !m.is_deleted).cloned().collect())
+                .unwrap_or_default()),
+            Backend::Test { .. } => unreachable!(),
+        })
     }
 
     pub fn get_active_swipe_index(&self, id: u64) -> Result<usize, EngineError> {
-        self.with_backend_mut(Operation::GetActiveSwipeIndex, |backend, game_id| match backend {
+        let game_id = self.game_id();
+        self.with_backend_mut("get_active_swipe_index", |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let idx: i64 = conn
@@ -129,7 +128,9 @@ impl Storage {
                         rusqlite::params![id as i64, game_id as i64],
                         |row| row.get(0),
                     )
-                    .map_err(|e| EngineError::Config(format!("Failed to get active swipe index: {e}")))?;
+                    .map_err(|e| {
+                        EngineError::Config(format!("Failed to get active swipe index: {e}"))
+                    })?;
                 Ok(idx as usize)
             }
             Backend::InMemory(data) => {
@@ -145,114 +146,100 @@ impl Storage {
     }
 
     pub fn update_active_swipe(&self, message_id: u64, index: usize) -> Result<(), EngineError> {
-        self.with_backend_mut(
-            Operation::UpdateActiveSwipe,
-            |backend, game_id| match backend {
-                Backend::Sqlite { pool } => {
-                    let conn = pool.conn();
-                    conn.execute(
+        let game_id = self.game_id();
+        self.with_backend_mut("update_active_swipe", |backend| match backend {
+            Backend::Sqlite { pool } => {
+                let conn = pool.conn();
+                conn.execute(
                     "UPDATE messages SET active_swipe_index = ?1 WHERE id = ?2 AND game_id = ?3",
                     rusqlite::params![index as i64, message_id as i64, game_id as i64],
                 )
                 .map_err(|e| EngineError::Config(format!("Failed to update active swipe: {e}")))?;
-                    Ok(())
-                }
-                Backend::InMemory(data) => {
-                    if let Some(vec) = data.messages.get_mut(&game_id) {
-                        if let Some(m) = vec.iter_mut().find(|m| m.id == message_id) {
-                            m.active_swipe_index = index;
-                        }
+                Ok(())
+            }
+            Backend::InMemory(data) => {
+                if let Some(vec) = data.messages.get_mut(&game_id) {
+                    if let Some(m) = vec.iter_mut().find(|m| m.id == message_id) {
+                        m.active_swipe_index = index;
                     }
-                    Ok(())
                 }
-                Backend::Test { .. } => unreachable!(),
-            },
-        )
+                Ok(())
+            }
+            Backend::Test { .. } => unreachable!(),
+        })
     }
 
     pub fn soft_delete_message(&self, id: u64) -> Result<(), EngineError> {
-        self.with_backend_mut(
-            Operation::SoftDeleteMessage,
-            |backend, game_id| match backend {
-                Backend::Sqlite { pool } => {
-                    let conn = pool.conn();
-                    conn.execute(
-                        "UPDATE messages SET is_deleted = 1 WHERE id = ?1 AND game_id = ?2",
-                        rusqlite::params![id as i64, game_id as i64],
-                    )
-                    .map_err(|e| {
-                        EngineError::Config(format!("Failed to soft delete message: {e}"))
-                    })?;
-                    Ok(())
-                }
-                Backend::InMemory(data) => {
-                    if let Some(vec) = data.messages.get_mut(&game_id) {
-                        if let Some(m) = vec.iter_mut().find(|m| m.id == id) {
-                            m.is_deleted = true;
-                        }
+        let game_id = self.game_id();
+        self.with_backend_mut("soft_delete_message", |backend| match backend {
+            Backend::Sqlite { pool } => {
+                let conn = pool.conn();
+                conn.execute(
+                    "UPDATE messages SET is_deleted = 1 WHERE id = ?1 AND game_id = ?2",
+                    rusqlite::params![id as i64, game_id as i64],
+                )
+                .map_err(|e| EngineError::Config(format!("Failed to soft delete message: {e}")))?;
+                Ok(())
+            }
+            Backend::InMemory(data) => {
+                if let Some(vec) = data.messages.get_mut(&game_id) {
+                    if let Some(m) = vec.iter_mut().find(|m| m.id == id) {
+                        m.is_deleted = true;
                     }
-                    Ok(())
                 }
-                Backend::Test { .. } => unreachable!(),
-            },
-        )
+                Ok(())
+            }
+            Backend::Test { .. } => unreachable!(),
+        })
     }
 
     pub fn restore_soft_deleted(&self, ids: &[u64]) -> Result<(), EngineError> {
-        self.with_backend_mut(
-            Operation::RestoreSoftDeleted,
-            |backend, game_id| match backend {
-                Backend::Sqlite { pool } => {
-                    let conn = pool.conn();
-                    for id in ids {
-                        conn.execute(
-                            "UPDATE messages SET is_deleted = 0 WHERE id = ?1 AND game_id = ?2",
-                            rusqlite::params![*id as i64, game_id as i64],
-                        )
-                        .map_err(|e| {
-                            EngineError::Config(format!("Failed to restore message: {e}"))
-                        })?;
-                    }
-                    Ok(())
+        let game_id = self.game_id();
+        self.with_backend_mut("restore_soft_deleted", |backend| match backend {
+            Backend::Sqlite { pool } => {
+                let conn = pool.conn();
+                for id in ids {
+                    conn.execute(
+                        "UPDATE messages SET is_deleted = 0 WHERE id = ?1 AND game_id = ?2",
+                        rusqlite::params![*id as i64, game_id as i64],
+                    )
+                    .map_err(|e| EngineError::Config(format!("Failed to restore message: {e}")))?;
                 }
-                Backend::InMemory(data) => {
-                    if let Some(vec) = data.messages.get_mut(&game_id) {
-                        for m in vec.iter_mut().filter(|m| ids.contains(&m.id)) {
-                            m.is_deleted = false;
-                        }
+                Ok(())
+            }
+            Backend::InMemory(data) => {
+                if let Some(vec) = data.messages.get_mut(&game_id) {
+                    for m in vec.iter_mut().filter(|m| ids.contains(&m.id)) {
+                        m.is_deleted = false;
                     }
-                    Ok(())
                 }
-                Backend::Test { .. } => unreachable!(),
-            },
-        )
+                Ok(())
+            }
+            Backend::Test { .. } => unreachable!(),
+        })
     }
 
     pub fn purge_soft_deleted(&self, ids: &[u64]) -> Result<(), EngineError> {
-        self.with_backend_mut(
-            Operation::PurgeSoftDeleted,
-            |backend, game_id| match backend {
-                Backend::Sqlite { pool } => {
-                    let conn = pool.conn();
-                    for id in ids {
-                        conn.execute(
-                            "DELETE FROM messages WHERE id = ?1 AND game_id = ?2",
-                            rusqlite::params![*id as i64, game_id as i64],
-                        )
-                        .map_err(|e| {
-                            EngineError::Config(format!("Failed to purge message: {e}"))
-                        })?;
-                    }
-                    Ok(())
+        let game_id = self.game_id();
+        self.with_backend_mut("purge_soft_deleted", |backend| match backend {
+            Backend::Sqlite { pool } => {
+                let conn = pool.conn();
+                for id in ids {
+                    conn.execute(
+                        "DELETE FROM messages WHERE id = ?1 AND game_id = ?2",
+                        rusqlite::params![*id as i64, game_id as i64],
+                    )
+                    .map_err(|e| EngineError::Config(format!("Failed to purge message: {e}")))?;
                 }
-                Backend::InMemory(data) => {
-                    if let Some(vec) = data.messages.get_mut(&game_id) {
-                        vec.retain(|m| !ids.contains(&m.id));
-                    }
-                    Ok(())
+                Ok(())
+            }
+            Backend::InMemory(data) => {
+                if let Some(vec) = data.messages.get_mut(&game_id) {
+                    vec.retain(|m| !ids.contains(&m.id));
                 }
-                Backend::Test { .. } => unreachable!(),
-            },
-        )
+                Ok(())
+            }
+            Backend::Test { .. } => unreachable!(),
+        })
     }
 }

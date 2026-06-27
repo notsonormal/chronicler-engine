@@ -65,8 +65,15 @@ impl LlmCallResult {
 pub trait LlmBackend: Send + Sync {
     fn model(&self) -> &str;
     fn name(&self) -> &str;
+    fn storage(&self) -> Option<&Arc<Storage>> {
+        None
+    }
 
-    fn save_message(&self, _message: &LlmMessage) {}
+    fn save_message(&self, message: &LlmMessage) {
+        if let Some(storage) = self.storage() {
+            let _ = storage.save_llm_message(message);
+        }
+    }
 
     fn postprocess_response_text(&self, text: &str) -> String {
         super::sanitize::sanitize_llm_output(text)

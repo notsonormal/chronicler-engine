@@ -36,8 +36,6 @@ mod scenario_tests;
 #[cfg(test)]
 mod state_snapshot_tests;
 #[cfg(test)]
-mod state_tests;
-#[cfg(test)]
 mod template_tests;
 #[cfg(test)]
 mod trigger_tests;

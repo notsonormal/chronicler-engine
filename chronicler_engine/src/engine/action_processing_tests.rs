@@ -1,7 +1,7 @@
 use crate::engine::action_processing::{
     FreeActionContext, apply_npc_events, commit_trigger_narration, execute_freeaction_impl,
 };
-use crate::engine::trigger_eval::{get_times_met, is_currently_meeting, set_currently_meeting};
+use crate::engine::trigger_eval::is_currently_meeting;
 use crate::model::quantifier::{
     MovementParseResult, MovementType, NpcEvent, NpcTransitionType, QuantifierConfidence,
     QuantifierParseResult, QuantifierResult,
@@ -173,7 +173,7 @@ fn test_apply_npc_events_entered() {
 #[test]
 fn test_apply_npc_events_left() {
     let mut state = make_test_state();
-    set_currently_meeting(&mut state.npc_encounter_log, "carla", true);
+    state.npc_encounter_log.set_currently_meeting("carla", true);
     let events = vec![NpcEvent {
         npc_id: "carla".to_string(),
         event_type: NpcTransitionType::Left,
@@ -187,7 +187,7 @@ fn test_apply_npc_events_left() {
 #[test]
 fn test_apply_npc_events_increments_times_met() {
     let state = make_test_state();
-    let initial_times = get_times_met(&state.npc_encounter_log, "carla");
+    let initial_times = state.npc_encounter_log.get_times_met("carla");
     let events = vec![NpcEvent {
         npc_id: "carla".to_string(),
         event_type: NpcTransitionType::Entered,
@@ -196,7 +196,7 @@ fn test_apply_npc_events_increments_times_met() {
     let state = apply_npc_events(state, &events).unwrap();
 
     assert_eq!(
-        get_times_met(&state.npc_encounter_log, "carla"),
+        state.npc_encounter_log.get_times_met("carla"),
         initial_times + 1
     );
 }
@@ -217,13 +217,13 @@ fn test_handle_movement_same_room_no_increment() {
     let mut state = make_test_state();
     // Already in test_room, moving to same room
     state.movement.current_room_id = "test_room".to_string();
-    let initial_times = get_times_met(&state.npc_encounter_log, "carla");
+    let initial_times = state.npc_encounter_log.get_times_met("carla");
 
     let state = handle_movement(state, Some("test_room"), &["carla".to_string()]).unwrap();
 
     // times_met should not increment when room doesn't change
     assert_eq!(
-        get_times_met(&state.npc_encounter_log, "carla"),
+        state.npc_encounter_log.get_times_met("carla"),
         initial_times
     );
 }
@@ -361,7 +361,7 @@ fn test_commit_trigger_narration_marks_non_repeat_trigger_fired() {
     let state = commit_trigger_narration(state, &request, "Some text.").unwrap();
 
     assert!(
-        crate::engine::trigger_eval::is_trigger_fired(&state.npc_encounter_log, "carla", 0),
+        state.npc_encounter_log.is_trigger_fired("carla", 0),
         "Non-repeating trigger should be marked as fired"
     );
 }
@@ -381,7 +381,7 @@ fn test_commit_trigger_narration_does_not_mark_repeat_trigger_fired() {
     let state = commit_trigger_narration(state, &request, "Some text.").unwrap();
 
     assert!(
-        !crate::engine::trigger_eval::is_trigger_fired(&state.npc_encounter_log, "carla", 0),
+        !state.npc_encounter_log.is_trigger_fired("carla", 0),
         "Repeating trigger should NOT be marked as fired"
     );
 }

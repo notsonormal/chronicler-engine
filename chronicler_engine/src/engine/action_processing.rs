@@ -2,9 +2,7 @@
 //! Action execution pipeline and validation
 use crate::engine::logic::{attempt_semantic_walk, create_dynamic_room};
 use crate::engine::state_diagnostics::assert_state_consistency;
-use crate::engine::trigger_eval::{
-    evaluate_triggers, increment_times_met, mark_trigger_fired, set_currently_meeting,
-};
+use crate::engine::trigger_eval::evaluate_triggers;
 use crate::error::EngineError;
 use crate::model::character::NpcCard;
 use crate::model::quantifier::{NpcEvent, NpcTransitionType, QuantifierResult, compute_npc_events};
@@ -58,7 +56,7 @@ pub fn update_npc_encounters_on_room_change(
 ) -> GameState {
     if previous_room_id != state.movement.current_room_id {
         for npc_id in new_npc_ids {
-            set_currently_meeting(&mut state.npc_encounter_log, npc_id, true);
+            state.npc_encounter_log.set_currently_meeting(npc_id, true);
         }
     }
     state
@@ -96,11 +94,15 @@ pub fn apply_npc_events(state: GameState, events: &[NpcEvent]) -> Result<GameSta
     for event in events {
         match event.event_type {
             NpcTransitionType::Entered => {
-                set_currently_meeting(&mut state.npc_encounter_log, &event.npc_id, true);
-                increment_times_met(&mut state.npc_encounter_log, &event.npc_id);
+                state
+                    .npc_encounter_log
+                    .set_currently_meeting(&event.npc_id, true);
+                state.npc_encounter_log.increment_times_met(&event.npc_id);
             }
             NpcTransitionType::Left => {
-                set_currently_meeting(&mut state.npc_encounter_log, &event.npc_id, false);
+                state
+                    .npc_encounter_log
+                    .set_currently_meeting(&event.npc_id, false);
             }
         }
     }
@@ -122,11 +124,9 @@ pub fn commit_trigger_narration(
     state.narrative.pending_event = Some(trigger.trigger_name.clone());
     state.add_message(continuation_text.to_string(), None, MessageType::Narration);
     if !trigger.trigger_repeat {
-        mark_trigger_fired(
-            &mut state.npc_encounter_log,
-            &trigger.npc_id,
-            trigger.trigger_idx,
-        );
+        state
+            .npc_encounter_log
+            .mark_trigger_fired(&trigger.npc_id, trigger.trigger_idx);
     }
 
     assert_state_consistency(&state)?;

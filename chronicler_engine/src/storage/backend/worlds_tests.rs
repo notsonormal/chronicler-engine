@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::model::map::{MapDef, Overworld, Region, Room};
 use crate::model::world::WorldCard;
-use crate::storage::backend::{Operation, Storage, TestOverride};
+use crate::storage::backend::{Storage, TestOverride};
 use crate::test_support::sqlite_storage;
 
 #[test]
@@ -80,7 +80,7 @@ fn test_seed_world_idempotent_in_memory() {
 #[test]
 fn test_list_worlds_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
-    handle.set(Operation::ListWorlds, TestOverride::internal("list failed"));
+    handle.set("list_worlds", TestOverride::internal("list failed"));
 
     let result = storage.list_worlds();
     assert!(result.is_err());
@@ -89,7 +89,7 @@ fn test_list_worlds_failure() {
 #[test]
 fn test_get_world_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
-    handle.set(Operation::GetWorld, TestOverride::config("get failed"));
+    handle.set("get_world", TestOverride::config("get failed"));
 
     let result = storage.get_world("world");
     assert!(result.is_err());
@@ -98,7 +98,7 @@ fn test_get_world_failure() {
 #[test]
 fn test_seed_world_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
-    handle.set(Operation::SeedWorld, TestOverride::internal("seed failed"));
+    handle.set("seed_world", TestOverride::internal("seed failed"));
 
     let (world_card, map) = test_world_data("fail_world", "Fail World");
     let result = storage.seed_world(&world_card, &map);

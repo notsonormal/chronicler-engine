@@ -3,12 +3,12 @@
 
 use crate::error::EngineError;
 use crate::model::llm_message::LlmMessage;
-use crate::storage::backend::{Backend, Operation, Storage};
+use crate::storage::backend::{Backend, Storage};
 use crate::storage::models::llm_message::DbLlmMessage;
 
 impl Storage {
     pub fn save_llm_message(&self, message: &LlmMessage) -> Result<(), EngineError> {
-        self.with_backend_mut(Operation::SaveLlmMessage, |backend, _game_id| match backend {
+        self.with_backend_mut("save_llm_message", |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let db_msg = DbLlmMessage::from(message);
@@ -55,7 +55,7 @@ impl Storage {
     }
 
     pub fn list_latest_llm_messages(&self, limit: usize) -> Result<Vec<LlmMessage>, EngineError> {
-        self.with_backend_mut(Operation::ListLatestLlmMessages, |backend, _game_id| match backend {
+        self.with_backend_mut("list_latest_llm_messages", |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let mut stmt = conn

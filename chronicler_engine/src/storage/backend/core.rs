@@ -61,53 +61,8 @@ pub enum Backend {
     InMemory(Box<InMemoryData>),
     Test {
         base: Box<Backend>,
-        overrides: Arc<Mutex<HashMap<Operation, TestOverride>>>,
+        overrides: Arc<Mutex<HashMap<&'static str, TestOverride>>>,
     },
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub enum Operation {
-    SaveSnapshot,
-    LoadLatestSnapshot,
-    LoadSnapshotById,
-    ListGames,
-    CreateGame,
-    DeleteGame,
-    GetGame,
-    InsertMessage,
-    DeleteMessage,
-    LoadMessageRows,
-    GetActiveSwipeIndex,
-    UpdateActiveSwipe,
-    SoftDeleteMessage,
-    RestoreSoftDeleted,
-    PurgeSoftDeleted,
-    InsertSwipe,
-    UpdateSwipeText,
-    ShiftSwipeIndices,
-    LoadSwipesForMessages,
-    CountSwipesForMessage,
-    ListPresets,
-    GetPreset,
-    SavePreset,
-    DeletePreset,
-    SaveLlmMessage,
-    ListLatestLlmMessages,
-    ListWorlds,
-    GetWorld,
-    SeedWorld,
-    UpdateWorld,
-    GetWorldById,
-    DeleteWorld,
-    ListPersonas,
-    GetPersona,
-    SeedPersona,
-    ListCharacters,
-    GetCharacter,
-    SeedCharacter,
-    GetSettings,
-    SaveSettings,
-    SeedSettings,
 }
 
 pub struct TestOverride {
@@ -122,22 +77,22 @@ pub enum ErrorKind {
 }
 
 pub struct TestFailureHandle {
-    overrides: Arc<Mutex<HashMap<Operation, TestOverride>>>,
+    overrides: Arc<Mutex<HashMap<&'static str, TestOverride>>>,
 }
 
 impl TestFailureHandle {
-    pub fn set(&self, op: Operation, override_: TestOverride) {
+    pub fn set(&self, method: &'static str, override_: TestOverride) {
         self.overrides
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .insert(op, override_);
+            .insert(method, override_);
     }
 
-    pub fn clear(&self, op: Operation) {
+    pub fn clear(&self, method: &'static str) {
         self.overrides
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .remove(&op);
+            .remove(method);
     }
 
     pub fn clear_all(&self) {
@@ -145,6 +100,15 @@ impl TestFailureHandle {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .clear();
+    }
+
+    #[allow(clippy::panic)]
+    pub fn assert_no_unconsumed(&self) {
+        let map = self.overrides.lock().unwrap_or_else(|e| e.into_inner());
+        if !map.is_empty() {
+            let keys: Vec<_> = map.keys().cloned().collect();
+            panic!("Unconsumed overrides remain: {keys:?}");
+        }
     }
 }
 
@@ -200,15 +164,15 @@ impl Storage {
         }
     }
 
-    pub fn with_failure(self, op: Operation, override_: TestOverride) -> Self {
+    pub fn with_failure(self, method: &'static str, override_: TestOverride) -> Self {
         let mut overrides = HashMap::new();
-        overrides.insert(op, override_);
+        overrides.insert(method, override_);
         self.with_overrides(Arc::new(Mutex::new(overrides)))
     }
 
     pub fn with_shared_overrides(
         self,
-        overrides: Arc<Mutex<HashMap<Operation, TestOverride>>>,
+        overrides: Arc<Mutex<HashMap<&'static str, TestOverride>>>,
     ) -> Self {
         self.with_overrides(overrides)
     }
@@ -219,7 +183,7 @@ impl Storage {
         (storage, TestFailureHandle { overrides })
     }
 
-    pub fn add_failure(&self, op: Operation, override_: TestOverride) {
+    pub fn add_failure(&self, method: &'static str, override_: TestOverride) {
         use std::mem;
         let mut backend = match self.backend.lock() {
             Ok(guard) => guard,
@@ -248,12 +212,12 @@ impl Storage {
                 overrides
                     .lock()
                     .unwrap_or_else(|e| e.into_inner())
-                    .insert(op, override_);
+                    .insert(method, override_);
                 Backend::Test { base, overrides }
             }
             other => {
                 let mut overrides = HashMap::new();
-                overrides.insert(op, override_);
+                overrides.insert(method, override_);
                 Backend::Test {
                     base: Box::new(other),
                     overrides: Arc::new(Mutex::new(overrides)),
@@ -263,7 +227,7 @@ impl Storage {
         *backend = new_backend;
     }
 
-    fn with_overrides(self, overrides: Arc<Mutex<HashMap<Operation, TestOverride>>>) -> Self {
+    fn with_overrides(self, overrides: Arc<Mutex<HashMap<&'static str, TestOverride>>>) -> Self {
         let backend = match self.backend.into_inner() {
             Ok(b) => b,
             Err(poisoned) => poisoned.into_inner(),
@@ -282,9 +246,13 @@ impl Storage {
         self.game_id.load(Ordering::SeqCst)
     }
 
-    pub(crate) fn with_backend_mut<F, T>(&self, op: Operation, f: F) -> Result<T, EngineError>
+    pub(crate) fn with_backend_mut<F, T>(
+        &self,
+        method: &'static str,
+        f: F,
+    ) -> Result<T, EngineError>
     where
-        F: FnOnce(&mut Backend, u64) -> Result<T, EngineError>,
+        F: FnOnce(&mut Backend) -> Result<T, EngineError>,
     {
         let mut backend = match self.backend.lock() {
             Ok(guard) => guard,
@@ -292,13 +260,16 @@ impl Storage {
         };
         let mut current = &mut *backend;
         while let Backend::Test { overrides, base } = current {
-            if let Some(override_) = overrides.lock().unwrap_or_else(|e| e.into_inner()).get(&op) {
+            if let Some(override_) = overrides
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .get(method)
+            {
                 return Err(override_.to_error());
             }
             current = base.as_mut();
         }
-        let game_id = self.game_id();
-        f(current, game_id)
+        f(current)
     }
 }
 

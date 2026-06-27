@@ -6,7 +6,7 @@ use crate::error::{EngineError, LlmFailure, NarrativeFailure};
 use crate::model::message::Message;
 use crate::model::prompt_preset::{PresetType, PromptPreset};
 use crate::model::state::GameState;
-use crate::storage::{Operation, Storage, TestOverride};
+use crate::storage::{Storage, TestOverride};
 use crate::test_support::fixtures::{TestMap, TestPlayer, TestWorld};
 use std::sync::Arc;
 
@@ -269,7 +269,7 @@ fn test_active_quantifier_prompt_storage_error_returns_empty() {
     let mut ctx = minimal_ctx();
     let (failing_preset_storage, handle) = Storage::new_in_memory().with_test_failures();
     ctx.preset_storage = Arc::new(failing_preset_storage);
-    handle.set(Operation::ListPresets, TestOverride::config("fail"));
+    handle.set("list_presets", TestOverride::config("fail"));
     let result = ctx.active_quantifier_prompt();
     assert_eq!(result, "", "Should return empty string on storage error");
 }
@@ -302,7 +302,7 @@ fn test_load_or_fresh_fallback_on_snapshot_error() {
     let (failing_storage, handle) = Storage::new_in_memory().with_test_failures();
     let storage = Arc::new(failing_storage);
     handle.set(
-        Operation::LoadLatestSnapshot,
+        "load_latest_snapshot",
         TestOverride::config("test snap error"),
     );
     let ctx = GameServiceContext {
@@ -335,10 +335,7 @@ fn test_save_message_and_snapshot_propagates_snapshot_error() {
 
     let (failing_storage, handle) = Storage::new_in_memory().with_test_failures();
     let storage = Arc::new(failing_storage);
-    handle.set(
-        Operation::SaveSnapshot,
-        TestOverride::config("test snap error"),
-    );
+    handle.set("save_snapshot", TestOverride::config("test snap error"));
     let ctx = GameServiceContext {
         storage,
         world: state.world.clone(),

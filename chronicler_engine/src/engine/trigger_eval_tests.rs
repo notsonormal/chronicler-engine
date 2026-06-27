@@ -1,10 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::engine::trigger_eval::{
-    check_condition, evaluate_triggers, get_times_met, increment_times_met, is_currently_meeting,
-    mark_trigger_fired, set_currently_meeting,
-};
+use crate::engine::trigger_eval::{check_condition, evaluate_triggers, is_currently_meeting};
 use crate::model::character::{CharacterSheet, NpcCard};
 use crate::model::map::{MapDef, Overworld};
 use crate::model::state::GameState;
@@ -136,7 +133,7 @@ fn test_evaluate_triggers_no_match_when_times_met_greater() {
     );
     let npc = make_npc("gabriella", vec![trigger]);
     let mut npc_encounter_log = NpcEncounterLog::default();
-    increment_times_met(&mut npc_encounter_log, "gabriella");
+    npc_encounter_log.increment_times_met("gabriella");
     let state = make_state(vec![npc.clone()], &[npc.clone()], npc_encounter_log);
     let results = evaluate_triggers(&state);
     assert!(results.is_empty());
@@ -153,7 +150,7 @@ fn test_evaluate_triggers_skips_fired_non_repeatable() {
     );
     let npc = make_npc("gabriella", vec![trigger.clone()]);
     let mut npc_encounter_log = NpcEncounterLog::default();
-    mark_trigger_fired(&mut npc_encounter_log, "gabriella", 0);
+    npc_encounter_log.mark_trigger_fired("gabriella", 0);
     let state = make_state(vec![npc.clone()], &[npc.clone()], npc_encounter_log);
     let results = evaluate_triggers(&state);
     assert!(results.is_empty());
@@ -271,7 +268,7 @@ fn test_evaluate_triggers_repeatable_fires_again() {
     );
     let npc = make_npc("ranger", vec![trigger]);
     let mut npc_encounter_log = NpcEncounterLog::default();
-    increment_times_met(&mut npc_encounter_log, "ranger");
+    npc_encounter_log.increment_times_met("ranger");
     let state = make_state(vec![npc.clone()], &[npc.clone()], npc_encounter_log);
     let results = evaluate_triggers(&state);
     assert_eq!(results.len(), 1);
@@ -282,11 +279,11 @@ fn test_currently_meeting_tracks_encounters() {
     let mut npc_encounter_log = NpcEncounterLog::default();
 
     assert!(!is_currently_meeting(&npc_encounter_log, "carla"));
-    set_currently_meeting(&mut npc_encounter_log, "carla", true);
+    npc_encounter_log.set_currently_meeting("carla", true);
     assert!(is_currently_meeting(&npc_encounter_log, "carla"));
 
     // End meeting (player leaves room)
-    set_currently_meeting(&mut npc_encounter_log, "carla", false);
+    npc_encounter_log.set_currently_meeting("carla", false);
     assert!(!is_currently_meeting(&npc_encounter_log, "carla"));
 }
 
@@ -295,11 +292,11 @@ fn test_increment_times_met_always_increments() {
     // increment_times_met always increments - the guard is in handle_movement
     let mut npc_encounter_log = NpcEncounterLog::default();
 
-    increment_times_met(&mut npc_encounter_log, "gabriella");
-    assert_eq!(get_times_met(&npc_encounter_log, "gabriella"), 1);
+    npc_encounter_log.increment_times_met("gabriella");
+    assert_eq!(npc_encounter_log.get_times_met("gabriella"), 1);
 
-    increment_times_met(&mut npc_encounter_log, "gabriella");
-    assert_eq!(get_times_met(&npc_encounter_log, "gabriella"), 2);
+    npc_encounter_log.increment_times_met("gabriella");
+    assert_eq!(npc_encounter_log.get_times_met("gabriella"), 2);
 }
 
 #[test]
@@ -378,7 +375,7 @@ fn test_npc_encounter_log_initializes_with_starting_room_npcs() {
 
     // Carla should NOT be auto-initialised by GameState::new anymore
     // (room.npcs was removed; scenario-driven init happens in bootstrap/run.rs)
-    assert_eq!(get_times_met(&state.npc_encounter_log, "carla"), 0);
+    assert_eq!(state.npc_encounter_log.get_times_met("carla"), 0);
     assert!(!is_currently_meeting(&state.npc_encounter_log, "carla"));
 }
 
@@ -399,8 +396,8 @@ fn test_increment_times_met_and_mark_fired() {
     );
     let results = evaluate_triggers(&state);
     assert_eq!(results.len(), 1);
-    increment_times_met(&mut state.npc_encounter_log, "gabriella");
-    mark_trigger_fired(&mut state.npc_encounter_log, "gabriella", 0);
+    state.npc_encounter_log.increment_times_met("gabriella");
+    state.npc_encounter_log.mark_trigger_fired("gabriella", 0);
     let results = evaluate_triggers(&state);
     assert!(results.is_empty());
 }
@@ -425,7 +422,7 @@ fn test_trigger_index_with_skipped_triggers() {
     );
     let npc = make_npc("gabriella", vec![trigger_0.clone(), trigger_1.clone()]);
     let mut npc_encounter_log = NpcEncounterLog::default();
-    mark_trigger_fired(&mut npc_encounter_log, "gabriella", 0);
+    npc_encounter_log.mark_trigger_fired("gabriella", 0);
     let mut state = make_state(vec![npc.clone()], &[npc.clone()], npc_encounter_log);
 
     let results = evaluate_triggers(&state);
@@ -433,7 +430,7 @@ fn test_trigger_index_with_skipped_triggers() {
     assert_eq!(results[0].2, 1, "Original index should be 1, not 0");
 
     // After marking trigger 1 as fired, no triggers should match
-    mark_trigger_fired(&mut state.npc_encounter_log, "gabriella", 1);
+    state.npc_encounter_log.mark_trigger_fired("gabriella", 1);
     let results = evaluate_triggers(&state);
     assert!(results.is_empty(), "All triggers should now be skipped");
 }

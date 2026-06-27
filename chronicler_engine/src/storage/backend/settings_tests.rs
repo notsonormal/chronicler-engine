@@ -2,7 +2,7 @@ use crate::model::{
     agent::{AgentConfig, BackendSelector, ExecutionPhase},
     settings::{AppSettings, Connection, TextCheckMode, TextCheckSettings},
 };
-use crate::storage::backend::{Operation, Storage, TestOverride};
+use crate::storage::backend::{Storage, TestOverride};
 use crate::storage::db::DbPool;
 
 #[test]
@@ -207,10 +207,8 @@ fn test_get_settings_deserializes_agents_json() {
 #[test]
 fn test_get_settings_failure() {
     let pool = DbPool::new(":memory:").unwrap();
-    let storage = Storage::new_sqlite(pool, 1).with_failure(
-        Operation::GetSettings,
-        TestOverride::internal("test failure"),
-    );
+    let storage = Storage::new_sqlite(pool, 1)
+        .with_failure("get_settings", TestOverride::internal("test failure"));
 
     let result = storage.get_settings();
     assert!(
@@ -222,10 +220,8 @@ fn test_get_settings_failure() {
 #[test]
 fn test_save_settings_failure() {
     let pool = DbPool::new(":memory:").unwrap();
-    let storage = Storage::new_sqlite(pool, 1).with_failure(
-        Operation::SaveSettings,
-        TestOverride::internal("test failure"),
-    );
+    let storage = Storage::new_sqlite(pool, 1)
+        .with_failure("save_settings", TestOverride::internal("test failure"));
 
     let settings = AppSettings::default();
     let result = storage.save_settings(&settings);

@@ -1,7 +1,7 @@
 use crate::model::state::{MovementState, SceneState};
 use crate::model::state_snapshot::{GameStateSnapshot, NarrativeSnapshot};
 use crate::model::trigger::NpcEncounterLog;
-use crate::storage::backend::{Operation, Storage, TestOverride};
+use crate::storage::backend::{Storage, TestOverride};
 use crate::test_support::sqlite_storage;
 
 fn dummy_snapshot() -> GameStateSnapshot {
@@ -227,10 +227,7 @@ fn test_save_snapshot_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
     storage.set_game_id(1);
 
-    handle.set(
-        Operation::SaveSnapshot,
-        TestOverride::internal("save failed"),
-    );
+    handle.set("save_snapshot", TestOverride::internal("save failed"));
 
     let result = storage.save_snapshot(&dummy_snapshot());
     assert!(result.is_err());
@@ -241,10 +238,7 @@ fn test_load_latest_snapshot_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
     storage.set_game_id(1);
 
-    handle.set(
-        Operation::LoadLatestSnapshot,
-        TestOverride::config("load failed"),
-    );
+    handle.set("load_latest_snapshot", TestOverride::config("load failed"));
 
     let result = storage.load_latest_snapshot();
     assert!(result.is_err());
@@ -256,7 +250,7 @@ fn test_load_snapshot_by_id_failure() {
     storage.set_game_id(1);
 
     handle.set(
-        Operation::LoadSnapshotById,
+        "load_snapshot_by_id",
         TestOverride::internal("load by id failed"),
     );
 

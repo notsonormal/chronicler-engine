@@ -11,7 +11,7 @@ use crate::model::quantifier::{QuantifierConfidence, QuantifierParseResult, Quan
 use crate::model::state::{GameState, GenerationPhase, GenerationStatus, MessageType};
 use crate::narrative::llm::backend::{AGENT_NARRATOR, LlmCallResult};
 use crate::narrative::prompt::LayeredPromptAssembler;
-use crate::storage::{Operation, Storage, TestOverride};
+use crate::storage::{Storage, TestOverride};
 use crate::test_support::fixtures::{TestGameState, TestNpc};
 use crate::test_support::make_test_context;
 
@@ -279,7 +279,7 @@ fn test_trigger_continuation_save_post_trigger_error() {
     let (failing_storage, handle) = Storage::new_in_memory().with_test_failures();
     let failing = Arc::new(failing_storage);
     handle.set(
-        Operation::SaveSnapshot,
+        "save_snapshot",
         TestOverride::internal("simulated save failure"),
     );
     let ctx = GameServiceContext {

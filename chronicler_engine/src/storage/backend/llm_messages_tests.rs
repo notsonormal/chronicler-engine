@@ -1,5 +1,5 @@
 use crate::model::llm_message::LlmMessageBuilder;
-use crate::storage::backend::{Operation, Storage, TestOverride};
+use crate::storage::backend::{Storage, TestOverride};
 use crate::test_support::sqlite_storage;
 
 fn dummy_llm_message(model: &str) -> crate::model::llm_message::LlmMessage {
@@ -259,10 +259,7 @@ fn test_llm_message_raw_json_blobs() {
 #[test]
 fn test_save_llm_message_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
-    handle.set(
-        Operation::SaveLlmMessage,
-        TestOverride::internal("save failed"),
-    );
+    handle.set("save_llm_message", TestOverride::internal("save failed"));
 
     let msg = dummy_llm_message("m1");
     let result = storage.save_llm_message(&msg);
@@ -273,7 +270,7 @@ fn test_save_llm_message_failure() {
 fn test_list_latest_llm_messages_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
     handle.set(
-        Operation::ListLatestLlmMessages,
+        "list_latest_llm_messages",
         TestOverride::config("list failed"),
     );
 

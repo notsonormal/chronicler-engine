@@ -9,7 +9,7 @@ use chronicler_engine::application::game_service::GameService;
 use chronicler_engine::engine::action_processing::{
     FreeActionContext, apply_npc_events, execute_freeaction_impl,
 };
-use chronicler_engine::engine::trigger_eval::get_times_met;
+
 use chronicler_engine::model::quantifier::{
     MovementParseResult, MovementType, NpcEvent, NpcTransitionType, QuantifierConfidence,
     QuantifierParseResult, QuantifierResult,
@@ -72,7 +72,7 @@ fn test_inv002_state_mutation_order() {
     );
 
     assert_eq!(
-        get_times_met(&state.npc_encounter_log, npc_id),
+        state.npc_encounter_log.get_times_met(npc_id),
         0,
         "pre-condition: times_met should be 0"
     );
@@ -98,7 +98,7 @@ fn test_inv002_state_mutation_order() {
         "INV-002: trigger should have fired (evaluated before times_met increment)"
     );
     assert_eq!(
-        get_times_met(&result.next_state.npc_encounter_log, npc_id),
+        result.next_state.npc_encounter_log.get_times_met(npc_id),
         1,
         "INV-002: times_met should be 1 after NPC events are applied"
     );
@@ -117,7 +117,7 @@ fn test_inv002_violation_demo() {
     let state = create_test_state_with_trigger_npc();
     let npc_id = "shopkeeper";
     assert_eq!(
-        get_times_met(&state.npc_encounter_log, npc_id),
+        state.npc_encounter_log.get_times_met(npc_id),
         0,
         "pre-condition: times_met should be 0"
     );
@@ -378,7 +378,7 @@ fn test_inv002_mutation_order_property() {
         if has_npc {
             prop_assert!(result.trigger_match.is_some(), "trigger should fire when NPC appears");
             prop_assert_eq!(
-                get_times_met(&result.next_state.npc_encounter_log, npc_id),
+                result.next_state.npc_encounter_log.get_times_met(npc_id),
                 1,
                 "times_met should be 1 after apply_npc_events"
             );

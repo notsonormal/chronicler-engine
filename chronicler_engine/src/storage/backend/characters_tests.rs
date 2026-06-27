@@ -1,7 +1,7 @@
 use crate::model::character::{CharacterSheet, NpcCard};
 use crate::model::map::MapDef;
 use crate::model::world::WorldCard;
-use crate::storage::backend::{Operation, Storage, TestOverride};
+use crate::storage::backend::{Storage, TestOverride};
 use crate::test_support::sqlite_storage;
 
 #[test]
@@ -79,10 +79,7 @@ fn test_seed_character_idempotent_in_memory() {
 #[test]
 fn test_list_characters_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
-    handle.set(
-        Operation::ListCharacters,
-        TestOverride::internal("list failed"),
-    );
+    handle.set("list_characters", TestOverride::internal("list failed"));
 
     let result = storage.list_characters(1);
     assert!(result.is_err());
@@ -91,7 +88,7 @@ fn test_list_characters_failure() {
 #[test]
 fn test_get_character_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
-    handle.set(Operation::GetCharacter, TestOverride::config("get failed"));
+    handle.set("get_character", TestOverride::config("get failed"));
 
     let result = storage.get_character(1, "char");
     assert!(result.is_err());
@@ -100,10 +97,7 @@ fn test_get_character_failure() {
 #[test]
 fn test_seed_character_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
-    handle.set(
-        Operation::SeedCharacter,
-        TestOverride::internal("seed failed"),
-    );
+    handle.set("seed_character", TestOverride::internal("seed failed"));
 
     let card = test_character_card("fail_char", "Fail Character");
     let result = storage.seed_character(1, &card);

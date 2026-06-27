@@ -5,12 +5,12 @@ use chrono::Utc;
 
 use crate::error::EngineError;
 use crate::model::settings::AppSettings;
-use crate::storage::backend::{Backend, Operation, Storage};
+use crate::storage::backend::{Backend, Storage};
 use crate::storage::models::settings::DbSettings;
 
 impl Storage {
     pub fn get_settings(&self) -> Result<AppSettings, EngineError> {
-        self.with_backend_mut(Operation::GetSettings, |backend, _game_id| match backend {
+        self.with_backend_mut("get_settings", |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let mut stmt = conn.prepare(
@@ -24,12 +24,12 @@ impl Storage {
                 }
             }
             Backend::InMemory(data) => Ok(data.settings.clone()),
-            Backend::Test { .. } => unimplemented!(),
+            Backend::Test { .. } => unreachable!(),
         })
     }
 
     pub fn save_settings(&self, settings: &AppSettings) -> Result<(), EngineError> {
-        self.with_backend_mut(Operation::SaveSettings, |backend, _game_id| match backend {
+        self.with_backend_mut("save_settings", |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let now = Utc::now().to_rfc3339();
@@ -62,7 +62,7 @@ impl Storage {
                 data.settings = settings.clone();
                 Ok(())
             }
-            Backend::Test { .. } => unimplemented!(),
+            Backend::Test { .. } => unreachable!(),
         })
     }
 

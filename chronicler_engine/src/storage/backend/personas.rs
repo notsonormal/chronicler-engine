@@ -5,12 +5,12 @@ use chrono::Utc;
 
 use crate::error::EngineError;
 use crate::model::character::PlayerCard;
-use crate::storage::backend::{empty_to_none, Backend, Operation, PlayerCardWithKey, Storage};
+use crate::storage::backend::{empty_to_none, Backend, PlayerCardWithKey, Storage};
 use crate::storage::models::persona::DbPersona;
 
 impl Storage {
     pub fn list_personas(&self) -> Result<Vec<PlayerCard>, EngineError> {
-        self.with_backend_mut(Operation::ListPersonas, |backend, _game_id| match backend {
+        self.with_backend_mut("list_personas", |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let mut stmt = conn.prepare("SELECT id, key, name, description, personality, scenario, example_dialogue, summary, profile_image, headshot_image, inventory, created_at, updated_at FROM personas")?;
@@ -21,12 +21,12 @@ impl Storage {
                 rows.iter().map(persona_from_db).collect()
             }
             Backend::InMemory(data) => Ok(data.personas.iter().map(|p| p.card.clone()).collect()),
-            Backend::Test { .. } => unimplemented!(),
+            Backend::Test { .. } => unreachable!(),
         })
     }
 
     pub fn get_persona(&self, key: &str) -> Result<Option<PlayerCard>, EngineError> {
-        self.with_backend_mut(Operation::GetPersona, |backend, _game_id| match backend {
+        self.with_backend_mut("get_persona", |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let mut stmt = conn.prepare(
@@ -40,12 +40,12 @@ impl Storage {
                 }
             }
             Backend::InMemory(data) => Ok(data.personas.iter().find(|p| p.key == key).map(|p| p.card.clone())),
-            Backend::Test { .. } => unimplemented!(),
+            Backend::Test { .. } => unreachable!(),
         })
     }
 
     pub fn seed_persona(&self, key: &str, card: &PlayerCard) -> Result<(), EngineError> {
-        self.with_backend_mut(Operation::SeedPersona, |backend, _game_id| match backend {
+        self.with_backend_mut("seed_persona", |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let now = Utc::now().to_rfc3339();
@@ -81,7 +81,7 @@ impl Storage {
                 }
                 Ok(())
             }
-            Backend::Test { .. } => unimplemented!(),
+            Backend::Test { .. } => unreachable!(),
         })
     }
 }

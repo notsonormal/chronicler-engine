@@ -34,7 +34,3 @@ mod endpoints_tests;
 
 #[cfg(test)]
 mod history_tests;
-#[cfg(test)]
-mod misc_tests;
-#[cfg(test)]
-mod renderers_tests;

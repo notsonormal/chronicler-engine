@@ -66,16 +66,17 @@ pub fn check_test_file_pairing(path: &str) -> Vec<Violation> {
     let has_module_dir = module_dir.is_dir() && module_mod_rs.exists();
 
     let has_source_file = expected_source.exists();
+    let parent_has_mod_rs = parent_dir.join("mod.rs").exists();
 
     if !has_source_file {
-        if has_module_dir {
+        if has_module_dir && !parent_has_mod_rs {
             // Orphan: test outside module dir
             violations.push(Violation::error(
                 path,
                 1,
                 format!("Test file for module '{base_name}' is outside module directory. Move {file_name} to {base_name}/"),
             ));
-        } else {
+        } else if !parent_has_mod_rs {
             violations.push(Violation::error(
                 path,
                 1,

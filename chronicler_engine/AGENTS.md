@@ -23,15 +23,17 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
     - **action_pipeline/**
       - `actions.rs` — Action enum and action processing types
       - `mod.rs` — Action pipeline for processing game actions
+      - `phases.rs` — Phase implementations for the action pipeline
       - `pipeline.rs` — Action pipeline orchestration and execution
       - `retry.rs` — Retry logic for action pipeline operations
   - **bootstrap/**
-    - `load.rs` — Data loading and initialization routines
+    - `init_game.rs` — Game state initialization and arrival narration spawning
+    - `load.rs` — Game data seeding and initialization routines
     - `logging.rs` — Logging setup and configuration
     - `run.rs` — Main entry point and runtime execution
-    - `scenario.rs` — Scenario loading and validation
+    - `scenario.rs` — Scenario injection and initialization
     - `state.rs` — Bootstrap game state from saved snapshots
-    - `validate.rs` — Validation utilities for bootstrap data
+    - `validate.rs` — Data validation utilities
   - **engine/**
     - `action.rs` — Action enum and semantic command types
     - `action_processing.rs` — Action execution pipeline and validation
@@ -52,10 +54,19 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
     - `quantifier.rs` — Quantifier types for narrative evaluation
     - `scenario.rs` — Scenario definitions and world data
     - `settings.rs` — Settings and configuration types
-    - `state.rs` — Game state representations
     - `state_snapshot.rs` — State snapshot serialization
+    - `template.rs` — Template placeholder substitution for author-controlled text fields.
     - `trigger.rs` — Trigger conditions and event types
-    - `world.rs` — World data and geography
+    - `world.rs` — World model definitions
+    - **state/**
+      - `game_state.rs` — Main game state and builder
+      - `generation_status.rs` — Generation status enums and input buffer
+      - `message_types.rs` — Message type and entry definitions
+      - `mod.rs` — Game state representations (re-exports from submodules)
+      - `movement.rs` — Player movement state
+      - `narrative_state.rs` — Narrative state with history and input buffer
+      - `scene_state.rs` — Current scene NPCs and quantifier confidence
+      - `trigger_context.rs` — Stored trigger snapshot context
   - **narrative/**
     - **agents/**
       - `mod.rs` — Agent registry and trait definitions
@@ -87,7 +98,6 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - `budget.rs` — Token budget management
       - `context.rs` — Prompt context building
       - `mod.rs` — Prompt construction orchestration
-      - `sanitize.rs` — Prompt sanitization
       - `types.rs` — Prompt type definitions
     - **text_check/**
       - `check.rs` — Text check execution
@@ -106,12 +116,22 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
     - **fragments/**
       - `actions.rs` — Action fragment handlers
       - `endpoints.rs` — Fragment endpoints
-      - `games.rs` — Games fragment handlers
       - `generation_guard.rs` — Generation guard logic
       - `history.rs` — History fragment handlers
-      - `misc.rs` — Miscellaneous fragment utilities
       - `mod.rs` — UI fragment modules
-      - `renderers.rs` — Fragment renderers
+      - **misc/**
+        - `game_control.rs` — Game control fragment handlers
+        - `mod.rs` — Miscellaneous fragment utilities (re-exports from submodules)
+        - `swipe.rs` — Swipe and retry fragment handlers
+        - `text_check.rs` — Text check fragment handler
+      - **renderers/**
+        - `fragment_renderers.rs` — Fragment renderers
+        - `mod.rs` — Fragment renderers (re-exports from submodules)
+        - `response.rs` — HTTP response helpers
+    - **games_fragment/**
+      - `handlers.rs` — Games fragment handlers
+      - `mod.rs` — Games fragment module
+      - `template.rs` — Games templates
     - **prompt_presets_fragment/**
       - `fragments.rs` — Prompt preset fragments
       - `handlers.rs` — Prompt preset handlers
@@ -122,12 +142,18 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - `handlers.rs` — Settings handlers
       - `mod.rs` — Settings fragment module
       - `template.rs` — Settings templates
+    - **worlds_fragment/**
+      - `fragments.rs` — Worlds fragment renderers
+      - `handlers.rs` — Worlds management handlers
+      - `mod.rs` — Worlds management fragment module
+      - `template.rs` — Worlds templates
   - **storage/**
-    - `db.rs` — Database connection and utilities
+    - `db.rs` — SQLite database connection pool and migrations
     - **backend/**
-      - `characters.rs` — Character storage operations
-      - `core.rs` — SQLite connection pooling and transactions
+      - `characters.rs` — Character storage backend operations
+      - `core.rs` — Storage backend trait and core abstractions
       - `games.rs` — Game storage operations
+      - `helpers.rs` — Shared helper functions for storage backend operations
       - `llm_messages.rs` — LLM message storage
       - `messages.rs` — Message storage operations
       - `mod.rs` — Storage backend modules
@@ -136,7 +162,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - `settings.rs` — Settings storage operations
       - `snapshots.rs` — Snapshot storage operations
       - `swipes.rs` — Swipe data storage
-      - `worlds.rs` — World storage operations
+      - `worlds.rs` — World storage backend operations
     - **mappers/**
       - `llm_message.rs` — LLM message mapper
       - `message.rs` — Message mapper
@@ -152,22 +178,22 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - `persona.rs` — Persona database model
       - `prompt_preset.rs` — Prompt preset model
       - `settings.rs` — Settings database model
-      - `world.rs` — World database model
+      - `world.rs` — Database row structs for world and map tables
 - **scripts/**
   - `build.py` — Full build, validate, and test for Chronicler Engine.
-  - `check_python_docstrings.py` — Check Python scripts for proper module docstrings and no shebangs.
-  - `check_test_structure.py` — Enforce 1:1 test file mapping — no inline test modules in src/.
-  - `coverage_summary.py` — Parse lcov coverage data and generate human-readable reports.
-  - `diagnostic_benchmark.py` — Run diagnostic benchmarks and rank failure scenarios by debuggability.
+  - `check_python_docstrings.py` — Summary
+  - `check_test_structure.py` — No summary
+  - `coverage_summary.py` — No summary
+  - `diagnostic_benchmark.py` — No summary
   - `extract_images.py` — Extract and process images from SillyTavern character cards (original + cropped versions).
   - `extract_sillytavern_png.py` — Extract embedded PNG images from SillyTavern character cards.
   - `generate_docs_index.py` — Generate an auto-updating index for chronicler_engine/docs/README.md.
   - `generate_structure_index.py` — Generate AGENTS.md structure index from module summaries.
-  - `install_git_hooks.py` — Install git hooks for the chronicler_engine project.
-  - `kimi_hook_wrapper.py` — Kimi CLI hook: regenerate docs index on session start.
+  - `healthcheck.py` — Chronicler Engine healthcheck dispatcher.
+  - `install_git_hooks.py` — No summary
   - `parse_coverage.py` — Parse coverage report from cargo-llvm-cov JSON output.
-  - `refine_character_json.py` — Refine character JSON data format.
-  - `validate_data.py` — Validate game data files for consistency.
+  - `refine_character_json.py` — No summary
+  - `validate_data.py` — No summary
 <!-- AUTO-STRUCTURE END -->
 
 ## Windows Development Environment

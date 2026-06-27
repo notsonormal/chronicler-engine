@@ -1,5 +1,5 @@
 use crate::model::character::{CharacterSheet, PlayerCard};
-use crate::storage::backend::{Operation, Storage, TestOverride};
+use crate::storage::backend::{Storage, TestOverride};
 use crate::test_support::sqlite_storage;
 
 #[test]
@@ -70,10 +70,7 @@ fn test_seed_persona_idempotent_in_memory() {
 #[test]
 fn test_list_personas_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
-    handle.set(
-        Operation::ListPersonas,
-        TestOverride::internal("list failed"),
-    );
+    handle.set("list_personas", TestOverride::internal("list failed"));
 
     let result = storage.list_personas();
     assert!(result.is_err());
@@ -82,7 +79,7 @@ fn test_list_personas_failure() {
 #[test]
 fn test_get_persona_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
-    handle.set(Operation::GetPersona, TestOverride::config("get failed"));
+    handle.set("get_persona", TestOverride::config("get failed"));
 
     let result = storage.get_persona("persona");
     assert!(result.is_err());
@@ -91,10 +88,7 @@ fn test_get_persona_failure() {
 #[test]
 fn test_seed_persona_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
-    handle.set(
-        Operation::SeedPersona,
-        TestOverride::internal("seed failed"),
-    );
+    handle.set("seed_persona", TestOverride::internal("seed failed"));
 
     let card = test_persona_card("fail_persona", "Fail Persona");
     let result = storage.seed_persona("fail_key", &card);

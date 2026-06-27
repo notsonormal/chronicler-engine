@@ -3,12 +3,13 @@
 
 use crate::error::EngineError;
 use crate::model::state_snapshot::GameStateSnapshot;
-use crate::storage::backend::{Backend, Operation, Storage};
+use crate::storage::backend::{Backend, Storage};
 use crate::storage::models::game_state_snapshot::DbGameStateSnapshot;
 
 impl Storage {
     pub fn save_snapshot(&self, snapshot: &GameStateSnapshot) -> Result<u64, EngineError> {
-        self.with_backend_mut(Operation::SaveSnapshot, |backend, game_id| match backend {
+        let game_id = self.game_id();
+        self.with_backend_mut("save_snapshot", |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let db_snap = crate::storage::mappers::state_snapshot::snapshot_to_db(
@@ -46,105 +47,97 @@ impl Storage {
     }
 
     pub fn load_latest_snapshot(&self) -> Result<Option<GameStateSnapshot>, EngineError> {
-        self.with_backend_mut(
-            Operation::LoadLatestSnapshot,
-            |backend, game_id| match backend {
-                Backend::Sqlite { pool } => {
-                    let conn = pool.conn();
-                    let mut stmt = conn
-                        .prepare(
-                            "SELECT id, movement, narrative, scene, npc_encounter_log, created_at
+        let game_id = self.game_id();
+        self.with_backend_mut("load_latest_snapshot", |backend| match backend {
+            Backend::Sqlite { pool } => {
+                let conn = pool.conn();
+                let mut stmt = conn
+                    .prepare(
+                        "SELECT id, movement, narrative, scene, npc_encounter_log, created_at
                          FROM game_state_snapshots
                          WHERE game_id = ?1
                          ORDER BY created_at DESC, id DESC
                          LIMIT 1",
-                        )
-                        .map_err(|e| {
-                            EngineError::Config(format!("Failed to prepare query: {e}"))
-                        })?;
+                    )
+                    .map_err(|e| EngineError::Config(format!("Failed to prepare query: {e}")))?;
 
-                    let db_result = stmt.query_row(rusqlite::params![game_id as i64], |row| {
-                        Ok(DbGameStateSnapshot {
-                            id: row.get(0)?,
-                            game_id: game_id as i64,
-                            movement_json: row.get(1)?,
-                            narrative_json: row.get(2)?,
-                            scene_json: row.get(3)?,
-                            npc_encounter_log_json: row.get(4)?,
-                            created_at: row.get(5)?,
+                let db_result = stmt.query_row(rusqlite::params![game_id as i64], |row| {
+                    Ok(DbGameStateSnapshot {
+                        id: row.get(0)?,
+                        game_id: game_id as i64,
+                        movement_json: row.get(1)?,
+                        narrative_json: row.get(2)?,
+                        scene_json: row.get(3)?,
+                        npc_encounter_log_json: row.get(4)?,
+                        created_at: row.get(5)?,
+                    })
+                });
+
+                match db_result {
+                    Ok(db_snap) => Ok(Some(GameStateSnapshot::try_from(&db_snap)?)),
+                    Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+                    Err(e) => Err(EngineError::Config(format!(
+                        "Failed to load latest snapshot: {e}"
+                    ))),
+                }
+            }
+            Backend::InMemory(data) => {
+                let result = data.snapshots.get(&game_id).and_then(|vec| {
+                    vec.iter()
+                        .max_by(|a, b| {
+                            a.created_at
+                                .cmp(&b.created_at)
+                                .then_with(|| a.db_id.cmp(&b.db_id))
                         })
-                    });
-
-                    match db_result {
-                        Ok(db_snap) => Ok(Some(GameStateSnapshot::try_from(&db_snap)?)),
-                        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-                        Err(e) => Err(EngineError::Config(format!(
-                            "Failed to load latest snapshot: {e}"
-                        ))),
-                    }
-                }
-                Backend::InMemory(data) => {
-                    let result = data.snapshots.get(&game_id).and_then(|vec| {
-                        vec.iter()
-                            .max_by(|a, b| {
-                                a.created_at
-                                    .cmp(&b.created_at)
-                                    .then_with(|| a.db_id.cmp(&b.db_id))
-                            })
-                            .cloned()
-                    });
-                    Ok(result)
-                }
-                Backend::Test { .. } => unreachable!(),
-            },
-        )
+                        .cloned()
+                });
+                Ok(result)
+            }
+            Backend::Test { .. } => unreachable!(),
+        })
     }
 
     pub fn load_snapshot_by_id(&self, id: u64) -> Result<Option<GameStateSnapshot>, EngineError> {
-        self.with_backend_mut(
-            Operation::LoadSnapshotById,
-            |backend, game_id| match backend {
-                Backend::Sqlite { pool } => {
-                    let conn = pool.conn();
-                    let mut stmt = conn
-                        .prepare(
-                            "SELECT id, movement, narrative, scene, npc_encounter_log, created_at
+        let game_id = self.game_id();
+        self.with_backend_mut("load_snapshot_by_id", |backend| match backend {
+            Backend::Sqlite { pool } => {
+                let conn = pool.conn();
+                let mut stmt = conn
+                    .prepare(
+                        "SELECT id, movement, narrative, scene, npc_encounter_log, created_at
                          FROM game_state_snapshots
                          WHERE id = ?1 AND game_id = ?2",
-                        )
-                        .map_err(|e| {
-                            EngineError::Config(format!("Failed to prepare query: {e}"))
-                        })?;
+                    )
+                    .map_err(|e| EngineError::Config(format!("Failed to prepare query: {e}")))?;
 
-                    let db_result = stmt.query_row(rusqlite::params![id, game_id as i64], |row| {
-                        Ok(DbGameStateSnapshot {
-                            id: row.get(0)?,
-                            game_id: game_id as i64,
-                            movement_json: row.get(1)?,
-                            narrative_json: row.get(2)?,
-                            scene_json: row.get(3)?,
-                            npc_encounter_log_json: row.get(4)?,
-                            created_at: row.get(5)?,
-                        })
-                    });
+                let db_result = stmt.query_row(rusqlite::params![id, game_id as i64], |row| {
+                    Ok(DbGameStateSnapshot {
+                        id: row.get(0)?,
+                        game_id: game_id as i64,
+                        movement_json: row.get(1)?,
+                        narrative_json: row.get(2)?,
+                        scene_json: row.get(3)?,
+                        npc_encounter_log_json: row.get(4)?,
+                        created_at: row.get(5)?,
+                    })
+                });
 
-                    match db_result {
-                        Ok(db_snap) => Ok(Some(GameStateSnapshot::try_from(&db_snap)?)),
-                        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-                        Err(e) => Err(EngineError::Config(format!(
-                            "Failed to load snapshot by id: {e}"
-                        ))),
-                    }
+                match db_result {
+                    Ok(db_snap) => Ok(Some(GameStateSnapshot::try_from(&db_snap)?)),
+                    Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+                    Err(e) => Err(EngineError::Config(format!(
+                        "Failed to load snapshot by id: {e}"
+                    ))),
                 }
-                Backend::InMemory(data) => {
-                    let result = data
-                        .snapshots
-                        .get(&game_id)
-                        .and_then(|vec| vec.iter().find(|s| s.db_id == Some(id)).cloned());
-                    Ok(result)
-                }
-                Backend::Test { .. } => unreachable!(),
-            },
-        )
+            }
+            Backend::InMemory(data) => {
+                let result = data
+                    .snapshots
+                    .get(&game_id)
+                    .and_then(|vec| vec.iter().find(|s| s.db_id == Some(id)).cloned());
+                Ok(result)
+            }
+            Backend::Test { .. } => unreachable!(),
+        })
     }
 }

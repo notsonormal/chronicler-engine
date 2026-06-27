@@ -33,7 +33,7 @@ pub fn evaluate_triggers(state: &GameState) -> Vec<(NpcCard, Trigger, usize)> {
                 continue;
             }
 
-            if !trigger.repeat && is_trigger_fired(&state.npc_encounter_log, &npc.id, index) {
+            if !trigger.repeat && state.npc_encounter_log.is_trigger_fired(&npc.id, index) {
                 tracing::debug!(
                     npc_id = %npc.id,
                     trigger = %trigger.narration.name,
@@ -59,7 +59,7 @@ pub fn check_condition(
         operator,
         threshold,
     } = condition;
-    let times_met = get_times_met(npc_encounter_log, npc_id);
+    let times_met = npc_encounter_log.get_times_met(npc_id);
     match operator {
         ComparisonOperator::Eq => times_met == *threshold,
         ComparisonOperator::Lt => times_met < *threshold,
@@ -72,54 +72,5 @@ pub fn is_currently_meeting(npc_encounter_log: &NpcEncounterLog, npc_id: &str) -
         .npcs
         .get(npc_id)
         .map(|s| s.currently_meeting)
-        .unwrap_or(false)
-}
-
-pub fn increment_times_met(npc_encounter_log: &mut NpcEncounterLog, npc_id: &str) {
-    let entry = npc_encounter_log
-        .npcs
-        .entry(npc_id.to_string())
-        .or_default();
-    entry.times_met += 1;
-}
-
-pub fn mark_trigger_fired(
-    npc_encounter_log: &mut NpcEncounterLog,
-    npc_id: &str,
-    trigger_index: usize,
-) {
-    let entry = npc_encounter_log
-        .npcs
-        .entry(npc_id.to_string())
-        .or_default();
-    entry.trigger_fired.insert(trigger_index, true);
-}
-
-pub fn set_currently_meeting(npc_encounter_log: &mut NpcEncounterLog, npc_id: &str, meeting: bool) {
-    let entry = npc_encounter_log
-        .npcs
-        .entry(npc_id.to_string())
-        .or_default();
-    entry.currently_meeting = meeting;
-}
-
-pub fn get_times_met(npc_encounter_log: &NpcEncounterLog, npc_id: &str) -> u32 {
-    npc_encounter_log
-        .npcs
-        .get(npc_id)
-        .map(|s| s.times_met)
-        .unwrap_or(0)
-}
-
-pub fn is_trigger_fired(
-    npc_encounter_log: &NpcEncounterLog,
-    npc_id: &str,
-    trigger_index: usize,
-) -> bool {
-    npc_encounter_log
-        .npcs
-        .get(npc_id)
-        .and_then(|s| s.trigger_fired.get(&trigger_index))
-        .copied()
         .unwrap_or(false)
 }

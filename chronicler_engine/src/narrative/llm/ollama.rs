@@ -86,9 +86,7 @@ impl LlmBackend for OllamaBackend {
         "Ollama"
     }
 
-    fn save_message(&self, message: &crate::model::llm_message::LlmMessage) {
-        if let Some(storage) = &self.storage {
-            let _ = storage.save_llm_message(message);
-        }
+    fn storage(&self) -> Option<&Arc<Storage>> {
+        self.storage.as_ref()
     }
 }

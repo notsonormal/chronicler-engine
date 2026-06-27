@@ -1,4 +1,4 @@
-use crate::storage::backend::{Operation, Storage, TestOverride};
+use crate::storage::backend::{Storage, TestOverride};
 use crate::test_support::{dummy_message, sqlite_storage};
 
 #[test]
@@ -29,8 +29,8 @@ fn test_current_game_id_returns_stored_value() {
 
 #[test]
 fn test_with_failure_single_operation() {
-    let storage = Storage::new_in_memory()
-        .with_failure(Operation::SaveSnapshot, TestOverride::internal("fail"));
+    let storage =
+        Storage::new_in_memory().with_failure("save_snapshot", TestOverride::internal("fail"));
 
     let result = storage.save_snapshot(&dummy_snapshot());
     assert!(result.is_err());
@@ -40,14 +40,11 @@ fn test_with_failure_single_operation() {
 fn test_with_test_failures_shared_handle() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
 
-    handle.set(
-        Operation::SaveSnapshot,
-        TestOverride::internal("simulated failure"),
-    );
+    handle.set("save_snapshot", TestOverride::internal("simulated failure"));
 
     assert!(storage.save_snapshot(&dummy_snapshot()).is_err());
 
-    handle.clear(Operation::SaveSnapshot);
+    handle.clear("save_snapshot");
     assert!(storage.save_snapshot(&dummy_snapshot()).is_ok());
 }
 
@@ -55,11 +52,8 @@ fn test_with_test_failures_shared_handle() {
 fn test_clear_restores_operation() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
 
-    handle.set(
-        Operation::SaveSnapshot,
-        TestOverride::internal("simulated failure"),
-    );
-    handle.clear(Operation::SaveSnapshot);
+    handle.set("save_snapshot", TestOverride::internal("simulated failure"));
+    handle.clear("save_snapshot");
 
     let result = storage.save_snapshot(&dummy_snapshot());
     assert!(result.is_ok());
@@ -69,10 +63,7 @@ fn test_clear_restores_operation() {
 fn test_non_overridden_operations_unaffected() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
 
-    handle.set(
-        Operation::SaveSnapshot,
-        TestOverride::internal("simulated failure"),
-    );
+    handle.set("save_snapshot", TestOverride::internal("simulated failure"));
 
     let msg = dummy_message("test");
     let id = storage.insert_message(&msg).unwrap();
@@ -83,10 +74,7 @@ fn test_non_overridden_operations_unaffected() {
 fn test_config_error_variant() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
 
-    handle.set(
-        Operation::SaveSnapshot,
-        TestOverride::config("configuration error"),
-    );
+    handle.set("save_snapshot", TestOverride::config("configuration error"));
 
     let result = storage.save_snapshot(&dummy_snapshot());
     assert!(result.is_err());
@@ -102,10 +90,7 @@ fn test_config_error_variant() {
 fn test_internal_error_variant() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
 
-    handle.set(
-        Operation::SaveSnapshot,
-        TestOverride::internal("internal error"),
-    );
+    handle.set("save_snapshot", TestOverride::internal("internal error"));
 
     let result = storage.save_snapshot(&dummy_snapshot());
     assert!(result.is_err());
@@ -116,13 +101,23 @@ fn test_internal_error_variant() {
 fn test_clear_all_removes_all_overrides() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
 
-    handle.set(Operation::SaveSnapshot, TestOverride::internal("fail1"));
-    handle.set(Operation::LoadLatestSnapshot, TestOverride::config("fail2"));
+    handle.set("save_snapshot", TestOverride::internal("fail1"));
+    handle.set("load_latest_snapshot", TestOverride::config("fail2"));
 
     handle.clear_all();
 
     assert!(storage.save_snapshot(&dummy_snapshot()).is_ok());
     assert!(storage.load_latest_snapshot().is_ok());
+}
+
+#[test]
+#[should_panic(expected = "Unconsumed overrides remain")]
+fn test_typoed_override_key_panics_on_assert() {
+    let (storage, handle) = Storage::new_in_memory().with_test_failures();
+    handle.set("save_snapshat", TestOverride::internal("typo deliberate"));
+    // typo key is never consumed; assert should panic
+    let _ = storage.save_snapshot(&dummy_snapshot());
+    handle.assert_no_unconsumed();
 }
 
 use crate::model::state_snapshot::{GameStateSnapshot, NarrativeSnapshot};

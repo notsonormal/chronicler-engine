@@ -1,6 +1,6 @@
 use crate::model::message::Message;
 use crate::model::state::MessageType;
-use crate::storage::backend::{Operation, Storage, TestOverride};
+use crate::storage::backend::{Storage, TestOverride};
 use crate::test_support::{dummy_message, sqlite_storage};
 
 #[test]
@@ -308,10 +308,7 @@ fn test_message_narration_type() {
 fn test_insert_message_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
     storage.set_game_id(1);
-    handle.set(
-        Operation::InsertMessage,
-        TestOverride::internal("insert failed"),
-    );
+    handle.set("insert_message", TestOverride::internal("insert failed"));
 
     let result = storage.insert_message(&dummy_message("test"));
     assert!(result.is_err());
@@ -321,10 +318,7 @@ fn test_insert_message_failure() {
 fn test_delete_message_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
     storage.set_game_id(1);
-    handle.set(
-        Operation::DeleteMessage,
-        TestOverride::config("delete failed"),
-    );
+    handle.set("delete_message", TestOverride::config("delete failed"));
 
     let result = storage.delete_message(1);
     assert!(result.is_err());
@@ -334,10 +328,7 @@ fn test_delete_message_failure() {
 fn test_load_message_rows_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
     storage.set_game_id(1);
-    handle.set(
-        Operation::LoadMessageRows,
-        TestOverride::internal("load failed"),
-    );
+    handle.set("load_message_rows", TestOverride::internal("load failed"));
 
     let result = storage.load_message_rows();
     assert!(result.is_err());
@@ -348,7 +339,7 @@ fn test_soft_delete_message_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
     storage.set_game_id(1);
     handle.set(
-        Operation::SoftDeleteMessage,
+        "soft_delete_message",
         TestOverride::config("soft delete failed"),
     );
 
@@ -362,7 +353,7 @@ fn test_restore_soft_deleted_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
     storage.set_game_id(1);
     handle.set(
-        Operation::RestoreSoftDeleted,
+        "restore_soft_deleted",
         TestOverride::internal("restore failed"),
     );
 
@@ -374,10 +365,7 @@ fn test_restore_soft_deleted_failure() {
 fn test_purge_soft_deleted_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
     storage.set_game_id(1);
-    handle.set(
-        Operation::PurgeSoftDeleted,
-        TestOverride::config("purge failed"),
-    );
+    handle.set("purge_soft_deleted", TestOverride::config("purge failed"));
 
     let result = storage.purge_soft_deleted(&[1]);
     assert!(result.is_err());

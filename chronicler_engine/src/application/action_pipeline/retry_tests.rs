@@ -11,7 +11,7 @@ use crate::error::EngineError;
 use crate::model::state::{GameState, GenerationPhase, GenerationStatus, MessageType};
 use crate::narrative::llm::MockBackend;
 use crate::narrative::llm::backend::LlmCallResult;
-use crate::storage::{Operation, Storage, TestOverride};
+use crate::storage::{Storage, TestOverride};
 use crate::test_support::fixtures::{TestGameState, TestNpc};
 use crate::test_support::make_test_context_with_sqlite;
 
@@ -91,7 +91,7 @@ fn test_retry_load_messages_error() {
     let (failing_storage, handle) = Storage::new_in_memory().with_test_failures();
     let failing = Arc::new(failing_storage);
     handle.set(
-        Operation::LoadMessageRows,
+        "load_message_rows",
         TestOverride::internal("simulated load_message_rows failure"),
     );
 
@@ -186,7 +186,7 @@ fn test_retry_event_storage_error_on_pre_event() {
     let _pre_event_id = save_pre_event(&base_ctx);
 
     handle.set(
-        Operation::LoadSnapshotById,
+        "load_snapshot_by_id",
         TestOverride::internal("simulated load_by_id failure"),
     );
 
@@ -195,7 +195,7 @@ fn test_retry_event_storage_error_on_pre_event() {
 
     let _ = retry_event_continuation(&service, &base_ctx, latest);
 
-    handle.clear(Operation::LoadSnapshotById);
+    handle.clear("load_snapshot_by_id");
 
     let state = base_ctx.load_state_for_test();
     assert!(
@@ -477,14 +477,14 @@ fn test_retry_main_storage_error_on_pre_main() {
     let _final_id = add_narration_and_save(&base_ctx, "Narration text");
 
     handle.set(
-        Operation::LoadSnapshotById,
+        "load_snapshot_by_id",
         TestOverride::internal("simulated load_by_id failure"),
     );
 
     let service = make_service();
     retry_last_response_impl(&service, base_ctx.clone());
 
-    handle.clear(Operation::LoadSnapshotById);
+    handle.clear("load_snapshot_by_id");
 
     let state = base_ctx.load_state_for_test();
     assert!(
@@ -521,7 +521,7 @@ fn test_save_retry_error_persist_fails() {
     let (failing_storage, handle) = Storage::new_in_memory().with_test_failures();
     let failing = Arc::new(failing_storage);
     handle.set(
-        Operation::SaveSnapshot,
+        "save_snapshot",
         TestOverride::internal("simulated save failure"),
     );
 

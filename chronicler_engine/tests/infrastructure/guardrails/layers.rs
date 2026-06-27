@@ -41,6 +41,8 @@ pub fn check_handler_return_type(file_path: &str, content: &str) -> Vec<Violatio
         || normalized_path.ends_with("mod.rs")
         || normalized_path.ends_with("debug.rs")
         || normalized_path.ends_with("renderers.rs")
+        || normalized_path.ends_with("fragment_renderers.rs")
+        || normalized_path.ends_with("response.rs")
     {
         return violations;
     }

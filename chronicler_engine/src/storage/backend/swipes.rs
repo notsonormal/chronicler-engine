@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use crate::error::EngineError;
 use crate::model::message::Swipe;
-use crate::storage::backend::{Backend, Operation, Storage};
+use crate::storage::backend::{Backend, Storage};
 
 impl Storage {
     pub fn insert_swipe(
@@ -14,7 +14,7 @@ impl Storage {
         swipe: &Swipe,
         index: usize,
     ) -> Result<(), EngineError> {
-        self.with_backend_mut(Operation::InsertSwipe, |backend, _game_id| match backend {
+        self.with_backend_mut("insert_swipe", |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 conn.execute(
@@ -51,7 +51,7 @@ impl Storage {
         swipe_index: usize,
         text: &str,
     ) -> Result<(), EngineError> {
-        self.with_backend_mut(Operation::UpdateSwipeText, |backend, _game_id| match backend {
+        self.with_backend_mut("update_swipe_text", |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 conn.execute(
@@ -74,7 +74,7 @@ impl Storage {
     }
 
     pub fn shift_swipe_indices(&self, message_id: u64, offset: usize) -> Result<(), EngineError> {
-        self.with_backend_mut(Operation::ShiftSwipeIndices, |backend, _game_id| match backend {
+        self.with_backend_mut("shift_swipe_indices", |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 conn.execute(
@@ -93,7 +93,7 @@ impl Storage {
         &self,
         message_ids: &[u64],
     ) -> Result<HashMap<u64, Vec<Swipe>>, EngineError> {
-        self.with_backend_mut(Operation::LoadSwipesForMessages, |backend, _game_id| match backend {
+        self.with_backend_mut("load_swipes_for_messages", |backend| match backend {
             Backend::Sqlite { pool } => {
                 if message_ids.is_empty() {
                     return Ok(HashMap::new());
@@ -156,30 +156,27 @@ impl Storage {
     }
 
     pub fn count_swipes_for_message(&self, message_id: u64) -> Result<usize, EngineError> {
-        self.with_backend_mut(
-            Operation::CountSwipesForMessage,
-            |backend, _game_id| match backend {
-                Backend::Sqlite { pool } => {
-                    let conn = pool.conn();
-                    let count: i64 = conn
-                        .query_row(
-                            "SELECT COUNT(*) FROM message_swipes WHERE message_id = ?1",
-                            rusqlite::params![message_id as i64],
-                            |row| row.get(0),
-                        )
-                        .map_err(|e| EngineError::Config(format!("Failed to count swipes: {e}")))?;
-                    Ok(count as usize)
-                }
-                Backend::InMemory(data) => {
-                    let count = data
-                        .swipes
-                        .get(&message_id)
-                        .map(|vec| vec.len())
-                        .unwrap_or(0);
-                    Ok(count)
-                }
-                Backend::Test { .. } => unreachable!(),
-            },
-        )
+        self.with_backend_mut("count_swipes_for_message", |backend| match backend {
+            Backend::Sqlite { pool } => {
+                let conn = pool.conn();
+                let count: i64 = conn
+                    .query_row(
+                        "SELECT COUNT(*) FROM message_swipes WHERE message_id = ?1",
+                        rusqlite::params![message_id as i64],
+                        |row| row.get(0),
+                    )
+                    .map_err(|e| EngineError::Config(format!("Failed to count swipes: {e}")))?;
+                Ok(count as usize)
+            }
+            Backend::InMemory(data) => {
+                let count = data
+                    .swipes
+                    .get(&message_id)
+                    .map(|vec| vec.len())
+                    .unwrap_or(0);
+                Ok(count)
+            }
+            Backend::Test { .. } => unreachable!(),
+        })
     }
 }

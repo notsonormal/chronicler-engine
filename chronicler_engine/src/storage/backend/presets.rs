@@ -3,12 +3,12 @@
 
 use crate::error::EngineError;
 use crate::model::prompt_preset::{PresetType, PromptPreset};
-use crate::storage::backend::{Backend, Operation, Storage};
+use crate::storage::backend::{Backend, Storage};
 use crate::storage::models::prompt_preset::DbPromptPreset;
 
 impl Storage {
     pub fn list_presets(&self, preset_type: PresetType) -> Result<Vec<PromptPreset>, EngineError> {
-        self.with_backend_mut(Operation::ListPresets, |backend, _game_id| match backend {
+        self.with_backend_mut("list_presets", |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let mut stmt = conn
@@ -44,7 +44,7 @@ impl Storage {
     }
 
     pub fn get_preset(&self, id: &str) -> Result<Option<PromptPreset>, EngineError> {
-        self.with_backend_mut(Operation::GetPreset, |backend, _game_id| match backend {
+        self.with_backend_mut("get_preset", |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let mut stmt = conn
@@ -76,7 +76,7 @@ impl Storage {
     }
 
     pub fn save_preset(&self, preset: &PromptPreset) -> Result<(), EngineError> {
-        self.with_backend_mut(Operation::SavePreset, |backend, _game_id| match backend {
+        self.with_backend_mut("save_preset", |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let now = chrono::Utc::now().to_rfc3339();
@@ -124,7 +124,7 @@ impl Storage {
     }
 
     pub fn delete_preset(&self, id: &str) -> Result<(), EngineError> {
-        self.with_backend_mut(Operation::DeletePreset, |backend, _game_id| match backend {
+        self.with_backend_mut("delete_preset", |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 conn.execute("DELETE FROM prompt_presets WHERE id = ?1", [id])

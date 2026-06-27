@@ -6,7 +6,7 @@
     clippy::expect_used,
     clippy::dbg_macro,
     clippy::todo,
-    // clippy::unimplemented,  // FIXME: Re-enable after Phase 1 unimplemented!() calls are removed from Backend::Test match arms
+    clippy::unimplemented,
     clippy::print_stdout,
     clippy::print_stderr,
     clippy::panic

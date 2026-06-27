@@ -10,7 +10,7 @@ use chronicler_engine::TestAppBuilder;
 use chronicler_engine::model::message::{Message, Swipe};
 use chronicler_engine::model::settings::{AppSettings, TextCheckMode, TextCheckSettings};
 use chronicler_engine::model::state::{GenerationPhase, GenerationStatus, MessageType};
-use chronicler_engine::storage::{Operation, Storage, TestOverride};
+use chronicler_engine::storage::{Storage, TestOverride};
 use chronicler_engine::test_support::TestPlayer;
 
 use super::test_helpers::fetch_body;
@@ -739,10 +739,10 @@ async fn test_delete_game_handler_generating() {
 
 #[tokio::test]
 async fn test_list_games_fragment_storage_error() {
-    let storage = Arc::new(Storage::new_in_memory().with_failure(
-        Operation::ListGames,
-        TestOverride::config("list_games failed"),
-    ));
+    let storage = Arc::new(
+        Storage::new_in_memory()
+            .with_failure("list_games", TestOverride::config("list_games failed")),
+    );
 
     let app = TestAppBuilder::default_test().storage(storage).build();
 

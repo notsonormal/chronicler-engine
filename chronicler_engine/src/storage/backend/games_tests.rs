@@ -1,4 +1,4 @@
-use crate::storage::backend::{Operation, Storage, TestOverride};
+use crate::storage::backend::{Storage, TestOverride};
 use crate::test_support::sqlite_storage;
 
 #[test]
@@ -110,10 +110,7 @@ fn test_game_timestamps_created_at() {
 #[test]
 fn test_create_game_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
-    handle.set(
-        Operation::CreateGame,
-        TestOverride::internal("create failed"),
-    );
+    handle.set("create_game", TestOverride::internal("create failed"));
 
     let result = storage.create_game("w", "w", "test_player", "Test Player", "G");
     assert!(result.is_err());
@@ -122,7 +119,7 @@ fn test_create_game_failure() {
 #[test]
 fn test_get_game_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
-    handle.set(Operation::GetGame, TestOverride::config("get failed"));
+    handle.set("get_game", TestOverride::config("get failed"));
 
     let result = storage.get_game(1);
     assert!(result.is_err());
@@ -131,7 +128,7 @@ fn test_get_game_failure() {
 #[test]
 fn test_delete_game_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
-    handle.set(Operation::DeleteGame, TestOverride::config("delete failed"));
+    handle.set("delete_game", TestOverride::config("delete failed"));
 
     let result = storage.delete_game(1);
     assert!(result.is_err());

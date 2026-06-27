@@ -6,12 +6,12 @@ use std::sync::Arc;
 use tower::ServiceExt;
 
 use chronicler_engine::TestAppBuilder;
-use chronicler_engine::storage::{Operation, Storage, TestOverride};
+use chronicler_engine::storage::{Storage, TestOverride};
 
 #[tokio::test]
 async fn test_action_handler_load_state_failure_graceful_degradation() {
     let storage = Arc::new(Storage::new_in_memory().with_failure(
-        Operation::LoadLatestSnapshot,
+        "load_latest_snapshot",
         TestOverride::internal("simulated load failure"),
     ));
 
@@ -47,7 +47,7 @@ async fn test_action_handler_load_state_failure_graceful_degradation() {
 #[tokio::test]
 async fn test_action_handler_snapshot_save_failure() {
     let storage = Arc::new(Storage::new_in_memory().with_failure(
-        Operation::SaveSnapshot,
+        "save_snapshot",
         TestOverride::internal("simulated save failure"),
     ));
 
@@ -67,7 +67,7 @@ async fn test_action_handler_snapshot_save_failure() {
 #[tokio::test]
 async fn test_action_confirm_handler_load_state_failure_graceful_degradation() {
     let storage = Arc::new(Storage::new_in_memory().with_failure(
-        Operation::LoadLatestSnapshot,
+        "load_latest_snapshot",
         TestOverride::internal("simulated load failure"),
     ));
 
@@ -103,7 +103,7 @@ async fn test_action_confirm_handler_load_state_failure_graceful_degradation() {
 #[tokio::test]
 async fn test_action_handler_message_insert_failure() {
     let storage = Arc::new(Storage::new_in_memory().with_failure(
-        Operation::InsertMessage,
+        "insert_message",
         TestOverride::internal("simulated insert failure"),
     ));
 
@@ -139,7 +139,7 @@ async fn test_action_handler_message_insert_failure() {
 #[tokio::test]
 async fn test_action_handler_load_messages_failure() {
     let storage = Arc::new(Storage::new_in_memory().with_failure(
-        Operation::LoadMessageRows,
+        "load_message_rows",
         TestOverride::internal("simulated load messages failure"),
     ));
 
@@ -213,7 +213,7 @@ async fn test_action_handler_special_characters() {
 #[tokio::test]
 async fn test_action_confirm_snapshot_save_failure() {
     let storage = Arc::new(Storage::new_in_memory().with_failure(
-        Operation::SaveSnapshot,
+        "save_snapshot",
         TestOverride::internal("simulated snapshot save failure"),
     ));
 

@@ -6,7 +6,7 @@ use chrono::Utc;
 use crate::error::EngineError;
 use crate::model::map::MapDef;
 use crate::model::world::WorldCard;
-use crate::storage::backend::{Backend, Operation, Storage, InMemoryWorld};
+use crate::storage::backend::{Backend, Storage, InMemoryWorld};
 use crate::storage::models::world::{DbWorld, DbMap};
 
 pub(crate) fn world_card_from_db(db: &DbWorld) -> Result<WorldCard, EngineError> {
@@ -32,7 +32,7 @@ pub struct WorldWithMap {
 
 impl Storage {
     pub fn list_worlds(&self) -> Result<Vec<WorldCard>, EngineError> {
-        self.with_backend_mut(Operation::ListWorlds, |backend, _game_id| match backend {
+        self.with_backend_mut("list_worlds", |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let mut stmt = conn.prepare(
@@ -45,12 +45,12 @@ impl Storage {
                 }).collect()
             }
             Backend::InMemory(data) => Ok(data.worlds.iter().map(|w| w.world_card.clone()).collect()),
-            Backend::Test { .. } => unimplemented!(),
+            Backend::Test { .. } => unreachable!(),
         })
     }
 
     pub fn get_world(&self, key: &str) -> Result<Option<WorldWithMap>, EngineError> {
-        self.with_backend_mut(Operation::GetWorld, |backend, _game_id| match backend {
+        self.with_backend_mut("get_world", |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let mut world_stmt = conn.prepare(
@@ -92,12 +92,12 @@ impl Storage {
                         map: w.map.clone(),
                     })
             ),
-            Backend::Test { .. } => unimplemented!(),
+            Backend::Test { .. } => unreachable!(),
         })
     }
 
     pub fn seed_world(&self, world_card: &WorldCard, map: &MapDef) -> Result<i64, EngineError> {
-        self.with_backend_mut(Operation::SeedWorld, |backend, _game_id| match backend {
+        self.with_backend_mut("seed_world", |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let now = Utc::now().to_rfc3339();
@@ -163,7 +163,7 @@ impl Storage {
         world_card: &WorldCard,
         map: &MapDef,
     ) -> Result<(), EngineError> {
-        self.with_backend_mut(Operation::UpdateWorld, |backend, _game_id| match backend {
+        self.with_backend_mut("update_world", |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let now = chrono::Utc::now().to_rfc3339();
@@ -196,7 +196,7 @@ impl Storage {
     }
 
     pub fn get_world_by_id(&self, id: i64) -> Result<Option<WorldWithMap>, EngineError> {
-        self.with_backend_mut(Operation::GetWorldById, |backend, _game_id| match backend {
+        self.with_backend_mut("get_world_by_id", |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 // Two separate statements, same pattern as get_world() — avoids column-index conflicts in from_row
@@ -237,7 +237,7 @@ impl Storage {
     }
 
     pub fn delete_world(&self, key: &str) -> Result<(), EngineError> {
-        self.with_backend_mut(Operation::DeleteWorld, |backend, _game_id| match backend {
+        self.with_backend_mut("delete_world", |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let count: i64 = conn.query_row(

@@ -3,12 +3,12 @@
 
 use crate::error::EngineError;
 use crate::model::game::Game;
-use crate::storage::backend::{Backend, Operation, Storage};
+use crate::storage::backend::{Backend, Storage};
 use crate::storage::models::game::DbGame;
 
 impl Storage {
     pub fn list_games(&self) -> Result<Vec<Game>, EngineError> {
-        self.with_backend_mut(Operation::ListGames, |backend, _game_id| match backend {
+        self.with_backend_mut("list_games", |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let mut stmt = conn
@@ -57,7 +57,7 @@ impl Storage {
         persona_name: &str,
         name: &str,
     ) -> Result<u64, EngineError> {
-        self.with_backend_mut(Operation::CreateGame, |backend, _game_id| match backend {
+        self.with_backend_mut("create_game", |backend| match backend {
             Backend::Sqlite { pool } => {
                 pool.insert_game(world_name, world_key, persona_key, persona_name, name)
             }
@@ -82,7 +82,7 @@ impl Storage {
     }
 
     pub fn delete_game(&self, id: u64) -> Result<(), EngineError> {
-        self.with_backend_mut(Operation::DeleteGame, |backend, _game_id| match backend {
+        self.with_backend_mut("delete_game", |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 conn.execute(
@@ -101,7 +101,7 @@ impl Storage {
     }
 
     pub fn get_game(&self, id: u64) -> Result<Option<Game>, EngineError> {
-        self.with_backend_mut(Operation::GetGame, |backend, _game_id| match backend {
+        self.with_backend_mut("get_game", |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let mut stmt = conn
