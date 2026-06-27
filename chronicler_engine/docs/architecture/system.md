@@ -42,6 +42,9 @@ Orchestration layer that coordinates game flow, persistence, and LLM generation.
   - `GameServiceContext`: Storage (unified SQLite/in-memory/test backend), preset storage, world/map/player/npc references, cancellation token, settings.
   - `context.rs`: Shared persistence helpers (`load_or_fresh`, `load_expecting_valid_state`, `save_state`, `save_message_and_snapshot`, `map_llm_error`). Cross-storage coordination helpers (`load_messages`, `update_message_text`, `load_state_for_test`, `migrate_swipes`).
   - `save_message_and_snapshot()`: Saves a snapshot and immediately persists the newest unpersisted message with the snapshot ID. Messages are persisted as they are created; there is no batching or `committed` flag.
+
+**Bootstrap arrival path** (`init_game.rs::ArrivalTaskContext::run`) routes through `save_message_and_snapshot`, closing ADR-023 §4 "Bootstrap and Reset Handler". Snapshot blob carries history for audit only; `messages` table is source of truth on reload.
+
 - **`message_editing.rs`**: Message editing operations - `switch_swipe`, `edit_history`, `delete_last`, `retry`, `retrigger`.
 - **`query_handlers.rs`**: Read-only query operations - `get_generating_status`, `get_current_game_name`, `list_latest_llm_messages`, `get_story_log_entries`, `get_input_status`, `get_current_room_view`, `get_npc_headshots`, `get_debug_state`.
 - **`action_pipeline`**: Action-processing workflows and the `ActionPipeline` orchestration struct.

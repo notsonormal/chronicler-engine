@@ -32,6 +32,8 @@ mod llm_client;
 mod model;
 mod storage;
 
+#[path = "flow/arrival_persistence_tests.rs"]
+mod flow_arrival_persistence_tests;
 #[path = "flow/retry_event.rs"]
 mod flow_retry_event;
 #[path = "flow/retry_main.rs"]

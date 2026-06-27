@@ -492,12 +492,16 @@ fn test_movement_with_arrival_narration_retry() {
     assert!(wait_for_generation_complete(&ctx, 1000));
 
     let guard = latest_state(&ctx);
-    let _arrival_count_before = guard
+    let arrival_count_before = guard
         .narrative
         .history()
         .into_iter()
-        .filter(|e| e.text.contains("MockArrival") || e.text.contains("enter"))
+        .filter(|e| e.message_type == MessageType::Narration)
         .count();
+    assert!(
+        arrival_count_before > 0,
+        "Should have at least one narration persisted before retry"
+    );
 
     service.retry_last_response(ctx.clone());
     assert!(wait_for_generation_complete(&ctx, 1000));

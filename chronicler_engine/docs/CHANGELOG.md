@@ -4,6 +4,17 @@
 
 ### Changed
 
+- **Bootstrap: arrival narration persistence fix (Q1)** — `ArrivalTaskContext::run` previously
+  persisted arrival narration only to in-memory `GameState` + snapshot blob, skipping
+  `messages`/`swipes` table writes. On restart, `load_game_state` replaced history from the
+  (empty) `messages` table via `load_messages_with_swipes`, wiping the arrival message and
+  forcing re-narration. Now routes through `application::context::save_message_and_snapshot`
+  so arrival message is persisted to `messages`/`swipes` like the pipeline path. Fixes
+  violation of ADR-023 ("messages persisted as they are created, no batching"). N11 sibling
+  error-policy gap (`reset()` silent swallow) deferred to T8. N21 snapshot-drift documentation
+  added; deeper fix deferred. Test gaps filled: `retry_main.rs` arrival count assertion
+  strengthened, new reload-survival test added.
+
 - **Storage: Backend/LayeredBackend split**
   - Split `Backend` enum into `Backend` (`Sqlite`, `InMemory`) + `LayeredBackend` (`Direct(Backend)` | `Test { base, overrides }`) — `Test` is now a decorator, not a peer of real backends.
   - `LayeredBackend::Test.base` is non-recursive `Box<Backend>` — structurally enforces "at most one Test layer" (replace-not-nest invariant pinned by 2 new unit tests).

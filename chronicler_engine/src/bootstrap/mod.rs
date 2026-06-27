@@ -10,6 +10,7 @@ mod scenario;
 mod state;
 mod validate;
 
+pub use init_game::test_api;
 pub use logging::init_logging;
 pub use run::run;
 pub use scenario::inject_scenario_logs;

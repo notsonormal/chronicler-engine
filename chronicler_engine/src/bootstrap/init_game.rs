@@ -80,6 +80,8 @@ pub(crate) fn load_game_state(
             }
             let initial_snapshot = GameStateSnapshot::from_game_state(&new_state);
             let snapshot_id = storage.save_snapshot(&initial_snapshot)?;
+            // Snapshot carries history for debugging/audit; `messages` table is source of truth on load
+            // per `context::load_messages_with_swipes` replace pattern (see ADR-023).
             if let Some(msg) = new_state.narrative.history.last_mut() {
                 if msg.is_unpersisted() {
                     msg.set_snapshot_id(Some(snapshot_id));
@@ -98,12 +100,9 @@ pub(crate) fn load_game_state(
     }
 }
 
-struct ArrivalTaskContext {
-    storage: Arc<crate::storage::Storage>,
-    world: Arc<WorldCard>,
-    map: Arc<MapDef>,
-    player: Arc<PlayerCard>,
-    npcs: Arc<HashMap<String, NpcCard>>,
+#[doc(hidden)]
+pub struct ArrivalTaskContext {
+    ctx: crate::application::context::GameServiceContext,
     room_id: String,
     arrival_preset: Option<PromptPreset>,
     response_length: String,
@@ -115,35 +114,67 @@ struct ArrivalTaskContext {
 }
 
 impl ArrivalTaskContext {
+    #[doc(hidden)]
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_for_test(
+        ctx: crate::application::context::GameServiceContext,
+        room_id: String,
+        nearby_npcs: Vec<NpcCard>,
+        all_npcs: Vec<NpcCard>,
+        arrival_preset: Option<PromptPreset>,
+        response_length: String,
+        max_context_tokens: u32,
+        max_tokens: Option<u32>,
+        connection: crate::model::settings::Connection,
+    ) -> Self {
+        Self {
+            ctx,
+            room_id,
+            arrival_preset,
+            response_length,
+            max_context_tokens,
+            max_tokens,
+            nearby_npcs,
+            all_npcs,
+            connection,
+        }
+    }
+
+    #[doc(hidden)]
+    pub fn run_sync(self) {
+        self.run();
+    }
+
     fn run(self) {
-        let mut state = match self.storage.load_latest_snapshot() {
+        let mut state = match self.ctx.storage.load_latest_snapshot() {
             Ok(Some(snap)) => GameState::from_snapshot(
                 &snap,
-                Arc::clone(&self.world),
-                Arc::clone(&self.map),
-                Arc::clone(&self.player),
-                (*self.npcs).clone(),
+                Arc::clone(&self.ctx.world),
+                Arc::clone(&self.ctx.map),
+                Arc::clone(&self.ctx.player),
+                (*self.ctx.npcs).clone(),
             ),
             _ => {
                 tracing::warn!("No snapshot found in spawn, starting fresh");
-                let starting_room_id = self.world.starting_room_id();
+                let starting_room_id = self.ctx.world.starting_room_id();
                 let mut s = GameState::new(
-                    Arc::clone(&self.world),
-                    Arc::clone(&self.map),
-                    Arc::clone(&self.player),
-                    (*self.npcs).values().cloned().collect(),
+                    Arc::clone(&self.ctx.world),
+                    Arc::clone(&self.ctx.map),
+                    Arc::clone(&self.ctx.player),
+                    (*self.ctx.npcs).values().cloned().collect(),
                     starting_room_id,
                 );
-                inject_scenario_logs(&mut s, &self.world, &self.player);
+                inject_scenario_logs(&mut s, &self.ctx.world, &self.ctx.player);
                 s
             }
         };
-        if let Ok(msgs) = context::load_messages_with_swipes(&self.storage) {
+        if let Ok(msgs) = context::load_messages_with_swipes(&self.ctx.storage) {
             state.narrative.history.replace(msgs);
         }
         state.narrative.input_buffer.status = GenerationStatus::Generating;
 
         let room = match self
+            .ctx
             .map
             .overworld
             .regions
@@ -157,17 +188,17 @@ impl ArrivalTaskContext {
 
         let backend = crate::narrative::llm::get_llm_backend_for(
             &self.connection,
-            Some(Arc::clone(&self.storage)),
+            Some(Arc::clone(&self.ctx.storage)),
         );
 
-        let context = make_prompt_context(
-            &self.world,
+        let prompt_context = make_prompt_context(
+            &self.ctx.world,
             room,
             NpcContext {
                 all_npcs: &self.all_npcs,
                 npcs_in_area: &self.nearby_npcs,
             },
-            &self.player,
+            &self.ctx.player,
             "",
             &[],
         );
@@ -181,9 +212,9 @@ impl ArrivalTaskContext {
                 }
                 assembler
                     .assemble(
-                        &context,
+                        &prompt_context,
                         preset,
-                        &self.world.global_rules,
+                        &self.ctx.world.global_rules,
                         Some(&self.response_length),
                     )
                     .and_then(|assembled| {
@@ -211,11 +242,10 @@ impl ArrivalTaskContext {
             }
         }
 
-        if let Err(e) = self
-            .storage
-            .save_snapshot(&GameStateSnapshot::from_game_state(&state))
+        if let Err(e) =
+            crate::application::context::save_message_and_snapshot(&self.ctx, &mut state)
         {
-            tracing::error!("Failed to save arrival snapshot: {e}");
+            tracing::error!("Failed to save arrival message and snapshot: {e}");
         }
     }
 }
@@ -259,12 +289,21 @@ pub fn spawn_arrival_task_if_needed(
             )
         });
 
-    let task_ctx = ArrivalTaskContext {
+    let preset_storage_arc = Arc::new(preset_storage);
+    let game_ctx = crate::application::context::GameServiceContext {
         storage: Arc::clone(storage),
         world: Arc::clone(world),
         map: Arc::clone(map),
         player: Arc::clone(player),
         npcs: Arc::clone(npcs),
+        cancel_token: tokio_util::sync::CancellationToken::new(),
+        is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        settings: Arc::clone(settings),
+        preset_storage: Arc::clone(&preset_storage_arc),
+    };
+
+    let task_ctx = ArrivalTaskContext {
+        ctx: game_ctx,
         room_id: room_id.to_string(),
         arrival_preset,
         response_length,
@@ -278,4 +317,11 @@ pub fn spawn_arrival_task_if_needed(
     runtime.spawn_blocking(move || {
         task_ctx.run();
     });
+}
+
+/// Test-only API for integration tests.
+/// DO NOT USE outside of tests.
+#[doc(hidden)]
+pub mod test_api {
+    pub use super::ArrivalTaskContext;
 }
