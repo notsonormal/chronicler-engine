@@ -8,8 +8,9 @@ use crate::application::context::{GameServiceContext, load_or_fresh, save_messag
 use crate::error::EngineError;
 use crate::model::character::NpcCard;
 use crate::model::quantifier::QuantifierResult;
-use crate::model::state::StoredTriggerContext;
-use crate::model::state::{GameState, GenerationPhase, GenerationStatus};
+use crate::model::state::trigger_context::StoredTriggerContext;
+use crate::model::state::game_state::GameState;
+use crate::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::narrative::llm::backend::LlmCallResult;
 use crate::narrative::prompt::LayeredPromptAssembler;
 

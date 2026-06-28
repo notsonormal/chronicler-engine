@@ -1,16 +1,14 @@
 use std::sync::Arc;
 
-use crate::model::state::GameStateBuilder;
+use crate::model::state::game_state::GameStateBuilder;
+use crate::model::state::generation_status::GenerationStatus;
 use crate::model::state_snapshot::{GameStateSnapshot, NarrativeSnapshot};
 use crate::test_support::fixtures::{TestMap, TestPlayer, TestWorld};
 
 #[test]
 fn test_narrative_snapshot_default() {
     let snap = NarrativeSnapshot::default();
-    assert_eq!(
-        snap.input_buffer.status,
-        crate::model::state::GenerationStatus::Idle
-    );
+    assert_eq!(snap.input_buffer.status, GenerationStatus::Idle);
     assert!(snap.last_trigger.is_none());
     assert!(snap.pending_location.is_none());
     assert!(snap.pending_event.is_none());

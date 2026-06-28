@@ -3,7 +3,8 @@
 use std::sync::Arc;
 
 use chronicler_engine::model::character::{CharacterSheet, NpcCard, PlayerCard};
-use chronicler_engine::model::state::{GameState, MessageType};
+use chronicler_engine::model::state::game_state::GameState;
+use chronicler_engine::model::state::message_types::MessageType;
 use chronicler_engine::model::trigger::{
     ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement,
 };

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::model::character::NpcCard;
 use crate::model::map::Room;
-use crate::model::state::MessageEntry;
+use crate::model::state::message_types::MessageEntry;
 
 use super::prompt::QuantifierPromptBuilder;
 use super::test_support::{make_history, make_npc, make_room};

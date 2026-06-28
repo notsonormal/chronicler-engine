@@ -1,5 +1,5 @@
 use crate::model::message::Message;
-use crate::model::state::MessageType;
+use crate::model::state::message_types::MessageType;
 use crate::storage::mappers::message::{db_message_to_model, model_message_to_db, model_swipes_to_db};
 
 #[test]

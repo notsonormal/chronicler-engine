@@ -7,7 +7,7 @@ use chrono::Utc;
 
 use crate::model::character::{CharacterSheet, NpcCard};
 use crate::model::map::{Direction, Room};
-use crate::model::state::{MessageEntry, MessageType};
+use crate::model::state::message_types::{MessageEntry, MessageType};
 
 pub fn make_room() -> Room {
     Room {

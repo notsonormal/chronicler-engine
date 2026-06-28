@@ -9,7 +9,9 @@ use tower::util::ServiceExt;
 use chronicler_engine::TestAppBuilder;
 use chronicler_engine::model::message::{Message, Swipe};
 use chronicler_engine::model::settings::{AppSettings, TextCheckMode, TextCheckSettings};
-use chronicler_engine::model::state::{GenerationPhase, GenerationStatus, MessageType};
+use chronicler_engine::model::state::generation_status::GenerationPhase;
+use chronicler_engine::model::state::generation_status::GenerationStatus;
+use chronicler_engine::model::state::message_types::MessageType;
 use chronicler_engine::storage::{Storage, TestOverride};
 use chronicler_engine::test_support::TestPlayer;
 

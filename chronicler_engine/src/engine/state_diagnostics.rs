@@ -4,7 +4,7 @@
 use crate::error::EngineError;
 #[cfg(feature = "diagnostics")]
 use crate::error::internal_error;
-use crate::model::state::GameState;
+use crate::model::state::game_state::GameState;
 
 /// Call this after any public mutation function to catch invariant
 /// violations immediately at the site of the bug.

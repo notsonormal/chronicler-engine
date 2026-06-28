@@ -4,6 +4,8 @@
 
 ### Changed
 
+- **State module re-export shield removed** — Deleted `src/model/state/mod.rs:12-18` re-export shield. All callers now import via direct submodule paths (`crate::model::state::<sub>::<Symbol>`). The 7 `pub use <sub>::*;` lines deleted. Closes T9 item 4.
+
 - **Bootstrap: arrival narration persistence fix (Q1)** — `ArrivalTaskContext::run` previously
   persisted arrival narration only to in-memory `GameState` + snapshot blob, skipping
   `messages`/`swipes` table writes. On restart, `load_game_state` replaced history from the

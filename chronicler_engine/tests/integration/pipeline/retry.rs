@@ -9,7 +9,9 @@ use crate::{
     working_service,
 };
 use chronicler_engine::application::GameService;
-use chronicler_engine::model::state::{GenerationStatus, MessageType, StoredTriggerContext};
+use chronicler_engine::model::state::generation_status::GenerationStatus;
+use chronicler_engine::model::state::message_types::MessageType;
+use chronicler_engine::model::state::trigger_context::StoredTriggerContext;
 use chronicler_engine::model::state_snapshot::GameStateSnapshot;
 use chronicler_engine::narrative::llm::MockBackend;
 use chronicler_engine::test_support::{

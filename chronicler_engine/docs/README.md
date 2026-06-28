@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-06-27 21:28 UTC*
+*Index last generated: 2026-06-28 14:05 UTC*
 
 ### Root files
 
@@ -65,12 +65,22 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Super-Plan: Abstraction-Fixes Follow-Up](./plans/abstraction-fixes-followup-superplan.md)
 - [Plan: Antipattern-Checker Agent Skill](./plans/antipattern-checker-skill-plan.md)
 - [Plan: Diagnostic Decision Tree as Agent Infrastructure](./plans/diagnostic-decision-tree-plan.md)
+- [Plan: Hexagonal Architecture Reorganization](./plans/hexagonal-reorganization-plan.md)
 - [Plan: Mapless Worlds via Freeform Location Names](./plans/mapless-worlds-plan.md)
 - [Spec: Agent-Ready Pipeline Restructure for Chronicler Engine](./plans/multi-agent-architecture-overarching-spec.md)
 - [Plan: Observability & Automated Forensics](./plans/observability-and-forensics-plan.md)
+- [Plan: Reliability and Cancellation](./plans/reliability-and-cancellation-plan.md)
 - [AI Steering & Guided Generation](./plans/steering-and-guided-generation.md)
 - [Subplan B: Quantifier `destination` field split](./plans/subplan-b-quantifier-field-split.md)
 - [Subplan C: Atomic mapless enablement](./plans/subplan-c-mapless-enablement.md)
+- [T1: Error Model Unification](./plans/t1-error-model-unification.md)
+- [T10: Low-priority Cleanup Bundle](./plans/t10-low-priority-cleanup-bundle.md)
+- [T2-ARCH: Narration Deepening](./plans/t2-arch-narration-deepening.md)
+- [T3: Service Layer Cleanup](./plans/t3-service-layer-cleanup.md)
+- [T4: MockBackend Modernization](./plans/t4-mockbackend-modernization.md)
+- [T5: Type Collapses (A3 + A6)](./plans/t5-type-collapses.md)
+- [T6: MessageHistory Encapsulation](./plans/t6-messagehistory-encapsulation.md)
+- [T9: Doc / Migration Debt](./plans/t9-doc-and-migration-debt.md)
 
 ### `docs/plans/archived/`
 

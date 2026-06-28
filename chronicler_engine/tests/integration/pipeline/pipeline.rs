@@ -10,7 +10,9 @@ use crate::{
     working_service,
 };
 use chronicler_engine::application::GameService;
-use chronicler_engine::model::state::{GenerationPhase, GenerationStatus, MessageType};
+use chronicler_engine::model::state::generation_status::GenerationPhase;
+use chronicler_engine::model::state::generation_status::GenerationStatus;
+use chronicler_engine::model::state::message_types::MessageType;
 use chronicler_engine::narrative::llm::MockBackend;
 use chronicler_engine::test_support::make_test_context_with_sqlite;
 

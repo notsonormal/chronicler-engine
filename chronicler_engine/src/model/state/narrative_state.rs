@@ -5,7 +5,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::model::message::Message;
 use crate::model::message_history::MessageHistory;
-use super::{InputBuffer, MessageEntry, StoredTriggerContext};
+use super::generation_status::InputBuffer;
+use super::message_types::MessageEntry;
+use super::trigger_context::StoredTriggerContext;
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct NarrativeState {

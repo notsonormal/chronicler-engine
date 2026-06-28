@@ -9,7 +9,9 @@ use crate::model::character::{CharacterSheet, NpcCard, PlayerCard};
 use crate::model::map::{MapDef, Overworld, Region, Room};
 use crate::model::message::{Message, Swipe};
 use crate::model::prompt_preset::{PresetType, PromptPreset};
-use crate::model::state::{GameState, MessageType, StoredTriggerContext};
+use crate::model::state::game_state::{GameState, GameStateBuilder};
+use crate::model::state::message_types::MessageType;
+use crate::model::state::trigger_context::StoredTriggerContext;
 use crate::model::trigger::{ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement};
 use crate::model::world::{WorldCard, WorldManifest};
 use crate::storage::Storage;
@@ -243,7 +245,7 @@ impl TestGameState {
     }
 
     pub fn with_npc_raw(room_id: &str, npc: NpcCard) -> GameState {
-        crate::model::state::GameStateBuilder::new(
+        GameStateBuilder::new(
             Arc::new(TestWorld::minimal()),
             Arc::new(TestMap::single_room(room_id)),
             Arc::new(TestPlayer::standard()),
@@ -267,7 +269,7 @@ impl TestGameState {
                 }],
             },
         };
-        crate::model::state::GameStateBuilder::new(
+        GameStateBuilder::new(
             Arc::new(TestWorld::minimal()),
             Arc::new(map),
             Arc::new(TestPlayer::standard()),

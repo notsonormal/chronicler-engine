@@ -1,5 +1,5 @@
 use crate::model::message::{Message, Swipe};
-use crate::model::state::MessageType;
+use crate::model::state::message_types::MessageType;
 
 #[test]
 fn test_message_new_sets_fields() {

@@ -3,7 +3,8 @@
 use std::sync::Arc;
 
 use crate::application::context::GameServiceContext;
-use crate::model::state::GameState;
+use crate::model::state::game_state::GameState;
+use crate::model::state::message_types::MessageType;
 use crate::model::template::{render_template, TemplateVars};
 pub fn build_fresh_initial_state(ctx: &GameServiceContext) -> GameState {
     let starting_room_id = ctx.world.starting_room_id();
@@ -27,7 +28,7 @@ pub fn build_fresh_initial_state(ctx: &GameServiceContext) -> GameState {
 
         let text = render_template(&scenario.text, &TemplateVars::new(&ctx.player.sheet.name));
         if !text.is_empty() {
-            initial_state.add_message(text, None, crate::model::state::MessageType::Narration);
+            initial_state.add_message(text, None, MessageType::Narration);
         }
 
         initial_state.init_scenario_npcs(scenario);

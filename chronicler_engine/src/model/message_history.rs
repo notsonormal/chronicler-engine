@@ -4,7 +4,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::model::message::Message;
-use crate::model::state::{MessageEntry, MessageType};
+use crate::model::state::message_types::{MessageEntry, MessageType};
 
 const MAX_MESSAGES: usize = 1000;
 

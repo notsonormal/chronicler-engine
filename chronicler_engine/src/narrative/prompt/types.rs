@@ -3,7 +3,7 @@
 
 use crate::model::character::{NpcCard, PlayerCard};
 use crate::model::map::Room;
-use crate::model::state::MessageEntry;
+use crate::model::state::message_types::MessageEntry;
 use crate::model::template::TemplateVars;
 use crate::model::world::WorldCard;
 

@@ -13,8 +13,10 @@ use crate::model::character::{NpcCard, PlayerCard};
 use crate::model::map::MapDef;
 use crate::model::prompt_preset::PromptPreset;
 use crate::model::quantifier::{QuantifierConfidence, QuantifierResult, compute_npc_events};
-use crate::model::state::StoredTriggerContext;
-use crate::model::state::{GameState, GenerationPhase, GenerationStatus, MessageType};
+use crate::model::state::trigger_context::StoredTriggerContext;
+use crate::model::state::game_state::GameState;
+use crate::model::state::generation_status::{GenerationPhase, GenerationStatus};
+use crate::model::state::message_types::MessageType;
 use crate::model::world::WorldCard;
 use crate::narrative::prompt::{NpcContext, make_prompt_context};
 

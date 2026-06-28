@@ -267,6 +267,9 @@ fn is_process_alive(pid: u32) -> bool {
     }
     #[cfg(not(target_os = "windows"))]
     {
+        // SAFETY: signal 0 is POSIX no-op — only checks process existence / permission.
+        // Does not deliver a signal or modify process state. `pid` is bounded to u32
+        // range by the caller; cast to i32 is sound for valid PIDs.
         unsafe { libc::kill(pid as i32, 0) == 0 }
     }
 }

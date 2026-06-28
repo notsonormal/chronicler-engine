@@ -2,7 +2,8 @@ use std::sync::Arc;
 
 use super::*;
 use crate::application::GameServiceContext;
-use crate::model::state::GameState;
+use crate::model::state::game_state::GameState;
+use crate::model::state::generation_status::GenerationStatus;
 use crate::storage::Storage;
 use crate::test_support::fixtures::{TestWorld, TestMap, TestPlayer};
 
@@ -40,7 +41,7 @@ fn minimal_ctx() -> GameServiceContext {
 fn test_get_generating_status_returns_current_state() {
     let ctx = minimal_ctx();
     let (status, _phase) = get_generating_status(ctx).unwrap();
-    assert_eq!(status, crate::model::state::GenerationStatus::Idle);
+    assert_eq!(status, GenerationStatus::Idle);
 }
 
 #[test]
@@ -113,5 +114,5 @@ fn test_reset_generating_status_sets_idle() {
     let result = reset_generating_status(ctx.clone());
     assert!(result.is_ok());
     let (status, _) = get_generating_status(ctx).unwrap();
-    assert_eq!(status, crate::model::state::GenerationStatus::Idle);
+    assert_eq!(status, GenerationStatus::Idle);
 }

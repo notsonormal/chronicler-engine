@@ -8,7 +8,7 @@ use crate::application::context::GameServiceContext;
 use crate::error::EngineError;
 use crate::model::agent::{AgentContext, AgentResult, ExecutionPhase, StatePatch};
 use crate::model::settings::AppSettings;
-use crate::model::state::GameState;
+use crate::model::state::game_state::GameState;
 use crate::narrative::agents::quantifier::QuantifierAgent;
 use crate::narrative::agents::registry::AgentRegistry;
 use crate::narrative::llm::backend::LlmCallResult;

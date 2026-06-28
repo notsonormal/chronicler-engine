@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use crate::error::{EngineError, Result};
 use crate::model::map::{MapDef, Room};
-use crate::model::state::GameState;
+use crate::model::state::game_state::GameState;
 
 pub fn find_room_in_map<'a>(map: &'a MapDef, target_id: &str) -> Option<&'a Room> {
     map.get_room_by_id(target_id)

@@ -8,7 +8,7 @@ use chronicler_engine::model::character::{CharacterSheet, NpcCard, PlayerCard};
 use chronicler_engine::model::map::{Direction, MapDef, Overworld, Region, Room};
 use chronicler_engine::model::scenario::StartingScenario;
 use chronicler_engine::model::settings::AppSettings;
-use chronicler_engine::model::state::GameState;
+use chronicler_engine::model::state::game_state::GameState;
 use chronicler_engine::model::world::WorldCard;
 use chronicler_engine::storage::Storage;
 use chronicler_engine::storage::db::DbPool;

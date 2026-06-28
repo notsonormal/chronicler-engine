@@ -6,7 +6,9 @@ use crate::engine::trigger_eval::evaluate_triggers;
 use crate::error::EngineError;
 use crate::model::character::NpcCard;
 use crate::model::quantifier::{NpcEvent, NpcTransitionType, QuantifierResult, compute_npc_events};
-use crate::model::state::{GameState, MessageType, StoredTriggerContext};
+use crate::model::state::game_state::GameState;
+use crate::model::state::message_types::MessageType;
+use crate::model::state::trigger_context::StoredTriggerContext;
 use crate::model::template::{render_template, TemplateVars};
 pub struct FreeActionContext<'a> {
     pub narration_text: &'a str,

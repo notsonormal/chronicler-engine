@@ -10,6 +10,9 @@ use crate::application::ApplicationError;
 use crate::application::context::{GameServiceContext, load_or_fresh};
 use crate::application::game_service::GameService;
 use crate::error::{EngineError, internal_error};
+use crate::model::state::game_state::GameState;
+use crate::model::state::generation_status::{GenerationPhase, GenerationStatus};
+use crate::model::state::message_types::MessageType;
 use crate::model::state_snapshot::GameStateSnapshot;
 
 pub struct MessageEditingService {
@@ -27,10 +30,10 @@ impl MessageEditingService {
 
     fn prepare_retry_state(
         ctx: &GameServiceContext,
-        mut game_state: crate::model::state::GameState,
-        status: crate::model::state::GenerationStatus,
-        phase: crate::model::state::GenerationPhase,
-    ) -> Result<(crate::model::state::GameState, bool), ApplicationError> {
+        mut game_state: GameState,
+        status: GenerationStatus,
+        phase: GenerationPhase,
+    ) -> Result<(GameState, bool), ApplicationError> {
         game_state.narrative.input_buffer.status = status;
         game_state.narrative.input_buffer.phase = phase;
         let snapshot = GameStateSnapshot::from_game_state(&game_state);
@@ -132,8 +135,8 @@ impl MessageEditingService {
         let (_, cancelled) = Self::prepare_retry_state(
             &ctx,
             game_state,
-            crate::model::state::GenerationStatus::Generating,
-            crate::model::state::GenerationPhase::Narrating,
+            GenerationStatus::Generating,
+            GenerationPhase::Narrating,
         )?;
         if cancelled {
             return Err(ApplicationError::ShuttingDown);
@@ -164,8 +167,8 @@ impl MessageEditingService {
             return Err(ApplicationError::validation("No messages to retrigger"));
         };
 
-        let is_narration = last_msg.message_type == crate::model::state::MessageType::Narration
-            || last_msg.message_type == crate::model::state::MessageType::Dialogue;
+        let is_narration = last_msg.message_type == MessageType::Narration
+            || last_msg.message_type == MessageType::Dialogue;
 
         if !is_narration || last_msg.event_header().is_some() {
             return Err(ApplicationError::validation(
@@ -176,8 +179,8 @@ impl MessageEditingService {
         let (_, cancelled) = Self::prepare_retry_state(
             &ctx,
             game_state,
-            crate::model::state::GenerationStatus::Generating,
-            crate::model::state::GenerationPhase::Narrating,
+            GenerationStatus::Generating,
+            GenerationPhase::Narrating,
         )?;
         if cancelled {
             return Err(ApplicationError::ShuttingDown);

@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
-use crate::model::state::GameState;
+use crate::model::state::game_state::{GameState, GameStateBuilder};
 use crate::test_support::context::{make_test_context, make_test_context_with_sqlite};
 use crate::test_support::fixtures::{TestMap, TestPlayer, TestWorld};
 
 fn minimal_state() -> GameState {
-    crate::model::state::GameStateBuilder::new(
+    GameStateBuilder::new(
         Arc::new(TestWorld::minimal()),
         Arc::new(TestMap::single_room("start")),
         Arc::new(TestPlayer::named("Test")),

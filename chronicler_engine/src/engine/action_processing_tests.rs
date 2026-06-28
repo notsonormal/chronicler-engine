@@ -5,7 +5,7 @@ use crate::model::quantifier::{
     MovementParseResult, MovementType, NpcEvent, NpcTransitionType, QuantifierConfidence,
     QuantifierParseResult, QuantifierResult,
 };
-use crate::model::state::MessageType;
+use crate::model::state::message_types::MessageType;
 use crate::test_support::{TestGameState, TestNpc};
 
 fn make_quantifier_result_no_movement() -> QuantifierResult {
@@ -146,7 +146,7 @@ fn test_execute_freeaction_impl_npc_events_entered() {
 }
 
 use crate::engine::action_processing::handle_movement;
-use crate::model::state::GameState;
+use crate::model::state::game_state::GameState;
 
 fn make_test_state() -> GameState {
     TestGameState::with_npc_in_named_room_raw(
@@ -433,7 +433,7 @@ fn test_commit_trigger_narration_stores_trigger_context() {
 }
 use proptest::prelude::*;
 
-fn make_two_room_state() -> crate::model::state::GameState {
+fn make_two_room_state() -> GameState {
     use crate::test_support::{TestMap, TestPlayer, TestWorld};
     use std::sync::Arc;
     GameState::new(

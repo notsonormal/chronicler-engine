@@ -2,7 +2,8 @@
 use std::sync::Arc;
 use crate::application::action_pipeline::pipeline::ActionPipelineBackend;
 use crate::application::game_service::GameService;
-use crate::model::state::GameState;
+use crate::model::state::game_state::GameState;
+use crate::model::state::message_types::MessageType;
 use crate::narrative::agents::registry::AgentRegistry;
 use crate::narrative::llm::MockBackend;
 use crate::test_support::{
@@ -143,7 +144,7 @@ async fn test_retry_last_response_retriggers_generation() {
     state.add_message(
         "Test input".to_string(),
         Some("Player".to_string()),
-        crate::model::state::MessageType::Input,
+        MessageType::Input,
     );
     let ctx = make_test_context(state);
     service.retry_last_response(ctx.clone());

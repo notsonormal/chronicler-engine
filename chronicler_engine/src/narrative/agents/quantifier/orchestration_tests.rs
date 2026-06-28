@@ -1,6 +1,7 @@
 use crate::error::EngineError;
 use crate::model::character::NpcCard;
-use crate::model::state::MessageEntry;
+use crate::model::state::game_state::GameState;
+use crate::model::state::message_types::MessageEntry;
 use crate::narrative::llm::backend::{LlmBackend, LlmCallResult};
 use crate::test_support::fixtures::{TestGameState, TestNpc};
 
@@ -175,7 +176,7 @@ impl LlmBackend for ErrBackend {
 }
 
 fn determine_npcs_with_room(
-    state: &crate::model::state::GameState,
+    state: &GameState,
     room_npc_ids: &[String],
     previous_room_npcs: &[crate::model::character::NpcCard],
     player_action: &str,

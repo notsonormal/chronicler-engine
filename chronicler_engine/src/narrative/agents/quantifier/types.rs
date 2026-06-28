@@ -3,7 +3,7 @@
 
 use crate::model::character::NpcCard;
 use crate::model::map::Room;
-use crate::model::state::MessageEntry;
+use crate::model::state::message_types::MessageEntry;
 
 pub use crate::model::quantifier::{
     MovementParseResult, MovementType, NpcEvent, NpcEventList, NpcTransitionType,

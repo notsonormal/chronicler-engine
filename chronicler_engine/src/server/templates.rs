@@ -4,7 +4,7 @@
 use askama::Template;
 
 use crate::model::llm_message::LlmMessage;
-use crate::model::state::MessageEntry;
+use crate::model::state::message_types::MessageEntry;
 use crate::narrative::text_check::CheckResult;
 use crate::server::view_models::{
     ActionAreaViewModel, LlmMessageView, MessageEntryView, NpcPortraitView, PreviewIssueView,

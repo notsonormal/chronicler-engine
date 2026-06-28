@@ -4,7 +4,8 @@
 use std::fmt;
 
 use crate::model::llm_message::LlmMessage;
-use crate::model::state::{GenerationPhase, GenerationStatus, MessageEntry, MessageType};
+use crate::model::state::generation_status::{GenerationPhase, GenerationStatus};
+use crate::model::state::message_types::{MessageEntry, MessageType};
 use crate::narrative::text_check::CheckResult;
 
 #[allow(private_interfaces)]

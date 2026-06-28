@@ -15,7 +15,8 @@ use crate::bootstrap::build_fresh_initial_state;
 use crate::error::EngineError;
 use crate::model::game::{Game, generate_game_name};
 use crate::model::llm_message::LlmMessage;
-use crate::model::state::{GenerationPhase, GenerationStatus, MessageEntry};
+use crate::model::state::generation_status::{GenerationPhase, GenerationStatus};
+use crate::model::state::message_types::{MessageEntry, MessageType};
 use crate::model::state_snapshot::GameStateSnapshot;
 use crate::model::trigger::NpcEncounterState;
 use crate::model::world::WorldCard;
@@ -137,11 +138,7 @@ impl DefaultApplicationService {
         let player_name = game_state.player.sheet.name.clone();
 
         if !input.is_empty() {
-            game_state.add_message(
-                input.clone(),
-                Some(player_name.clone()),
-                crate::model::state::MessageType::Input,
-            );
+            game_state.add_message(input.clone(), Some(player_name.clone()), MessageType::Input);
         }
 
         if ctx

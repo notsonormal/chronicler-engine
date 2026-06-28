@@ -3,6 +3,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::model::state::game_state::GameState;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecutionPhase {
@@ -94,7 +96,7 @@ pub enum AgentResult {
 }
 
 pub struct AgentContext<'a> {
-    pub state: &'a crate::model::state::GameState,
+    pub state: &'a GameState,
     pub main_response: Option<&'a str>,
     pub player_input: &'a str,
     pub current_room: Option<&'a crate::model::map::Room>,

@@ -20,7 +20,7 @@ fn test_switch_swipe_bounds_validation() {
 fn test_edit_history_validation() {
     use crate::application::ApplicationError;
     use crate::model::message::Message;
-    use crate::model::state::MessageType;
+    use crate::model::state::message_types::MessageType;
     use crate::test_support::make_test_context;
     use crate::application::message_editing::MessageEditingService;
     use crate::application::game_service::GameService;
@@ -109,7 +109,7 @@ mod test_helpers {
     use std::sync::Arc;
     use crate::model::character::{CharacterSheet, PlayerCard};
     use crate::model::map::{MapDef, Overworld, Region, Room};
-    use crate::model::state::GameState;
+    use crate::model::state::game_state::GameState;
     use crate::model::world::WorldCard;
 
     pub fn create_test_world() -> WorldCard {

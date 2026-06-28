@@ -9,10 +9,13 @@
 - Source plan (archived): `docs/plans/archived/abstraction-fixes-implementation-plan.md`
 - Original investigation: `docs/reviews/abstraction-antipatterns-summary.md` + `docs/reviews/zone-{a,b}-*.md`
 - Prevention plan: `docs/plans/abstraction-antipattern-healthcheck-plan.md`
+- Reliability + concurrency findings extracted to: `docs/plans/reliability-and-cancellation-plan.md` (2026-06-28 split)
 
 ## Objective
 
 Organise remaining abstraction/cleanup debt into independently-schedulable sub-plans. Each track is self-contained enough to become its own sub-plan. This super-plan does NOT re-litigate past decisions — the [Finding State](#finding-state) table is the single source of truth for what is done, deferred, or rejected. Each track section below describes only what its sub-plan must do.
+
+**Scope narrowed 2026-06-28:** reliability and concurrency findings (N11/N17/N20/M7/M8 + the former T8 track) extracted to `docs/plans/reliability-and-cancellation-plan.md`. This plan now covers abstraction debt only.
 
 Sub-plans MUST reference this super-plan as parent, verify against actual code (the source investigation had 4 misclassifications — verify everything), and define success criteria per `AGENTS.md` goal-driven execution.
 
@@ -21,13 +24,11 @@ Sub-plans MUST reference this super-plan as parent, verify against actual code (
 | # | Track | Readiness | Priority | Blocks |
 |---|-------|-----------|----------|--------|
 | T1 | Error Model Unification | ready — needs scoping decisions | P1 | none |
-| T2 | ArrivalTaskContext cancellation + ADR-027 | ready | P0 | T1 (soft) |
-| T2-ARCH | Narration Deepening | needs grilling (G1–G5) | P1 | T1, ADR-018 |
+| T2-ARCH | Narration Deepening | needs grilling (G2–G5) | P1 | T1, ADR-018 |
 | T3 | Service Layer Cleanup | ready | P1 | none |
 | T4 | MockBackend Modernization | ready | P2 | none |
 | T5 | Type Collapses (A3 + A6) | ready | P2 | none |
 | T6 | MessageHistory Encapsulation | ready | P2 | none |
-| T8 | Persistence Reliability | needs design decision | P1 | T1 |
 | T9 | Doc / Migration Debt | ready | P0 | none |
 | T10 | Low-priority cleanup bundle | opportunistic | P3 | none |
 
@@ -35,11 +36,13 @@ Priority: P0 = no risk / anchors future work; P1 = structural/risk; P2 = debt pr
 
 T7 (Storage API Polish) is closed; see the Finding State table.
 
+T2 (ArrivalTaskContext minimal cancellation chunk) was withdrawn 2026-06-28 — the underlying bug reframed as N21 (token registration gap) and extracted to `docs/plans/reliability-and-cancellation-plan.md` (R2). N5 (drift) remains in T2-ARCH below.
+
 ---
 
 ## T1 — Error Model Unification
 
-**Findings owned:** A1, B2, B3, B9, N3 (also unblocks T8).
+**Findings owned:** A1, B2, B3, B9, N3 (also unblocks R1 in the reliability plan).
 
 **Architecture-lens reframe:** the seam is misplaced. Pipeline methods return `PipelineResult<T>` BUT failure is also signalled via `state.narrative.input_buffer.status = GenerationStatus::Error(msg)`. `Ok` does not always mean success — the interface lies. ADR-018 + commit `8e4acf5` deliberately pinned errors onto `GenerationStatus`; revisit because the friction is real. Sub-plan should run skill ADR-conflict check before proceeding.
 
@@ -57,23 +60,6 @@ T7 (Storage API Polish) is closed; see the Finding State table.
 
 ---
 
-## T2 — ArrivalTaskContext cancellation + ADR-027
-
-**Findings owned:** N17 (cancellation), N19 (ADR missing).
-
-**Scope:**
-
-1. Add `self.ctx.cancel_token.is_cancelled()` checks at the start of `ArrivalTaskContext::run()` and between prompt-context assembly and the LLM `complete()` call — mirroring the pipeline pattern (`phases.rs:113`, `message_editing.rs:146`, `application_service.rs:186`). `cancel_token` is already plumbed at `init_game.rs:296`; just plumb two `is_cancelled()` reads.
-2. Write ADR-027 as the Finding State snapshot (the table in this plan is the ADR's content).
-
-**Out of scope:** N5 drift, helper extraction, T2-ARCH deepening — all deferred to T2-ARCH.
-
-**Blast radius:** `bootstrap/init_game.rs` (8 lines) + new `docs/adr/adr-027-*.md`.
-
-**Dependency:** soft T1 — if the error model is unified first, the shared helper's error shape is cleaner when T2-ARCH lands.
-
----
-
 ## T2-ARCH — Narration Deepening
 
 **Findings owned:** N5.
@@ -85,7 +71,7 @@ T7 (Storage API Polish) is closed; see the Finding State table.
 1. **State ownership** — pipeline receives pre-loaded `GameState`; arrival owns `Arc<Storage>` and loads the snapshot inside `run()`.
 2. **Preset acquisition** — pipeline calls `self.service.load_preset_and_response_length()` at call time; arrival receives `arrival_preset` + `response_length` baked into the struct at spawn time.
 3. **Persistence policy** — both now route through `save_message_and_snapshot` (closed in T2-Q1 / `db8ab25`).
-4. **Cancellation** — pipeline checks `cancel_token` pre+post LLM call; arrival landed checks via T2 (this track's parent).
+4. **Cancellation** — pipeline checks `cancel_token` pre+post LLM call; arrival task's token registration + checks are owned by R2 in `docs/plans/reliability-and-cancellation-plan.md`.
 5. **Status reporting** — pipeline writes `GenerationStatus::Generating` and transitions through phases (`GeneratingEvent`, `Quantifying`); arrival only sets `Generating` then `Idle`/`Error`.
 6. **Backwards data flow** — pipeline returns `(text, backend_name, model_name)` for caller to persist `LlmMessage` forensics; arrival discards `backend_name`/`model_name`.
 7. **Domain role** — pipeline = "narrate user input"; arrival = "narrate arrival scene". Different domain meaning.
@@ -95,17 +81,17 @@ T7 (Storage API Polish) is closed; see the Finding State table.
 - **G2 (naming).** `Narrator` (conflicts with `AGENT_NARRATOR`?), `NarrationDriver`, `SceneNarration`, or two modules `ArrivalNarration` + `InputNarration` (rejects deepening).
 - **G3 (state ownership shape).** (a) always receive `GameState`; (b) always own storage + load internally; (c) two entry points sharing internals.
 - **G4 (cancellation).** (a) require `cancel_token` param; (b) `Option<&CancellationToken>`; (c) always require token with spawner supplying it.
-- **G5 (ADR-018 conflict).** `architecture/system.md:208-209` currently documents `ArrivalTaskContext` as deliberate; revisit if deepening proceeds, else offer ADR-027 to prevent re-flag.
+- **G5 (ADR-018 conflict).** `architecture/system.md:208-209` currently documents `ArrivalTaskContext` as deliberate; revisit if deepening proceeds. Re-flag prevention is covered by this super-plan's Finding State table + T9 task 5 annotation on `abstraction-antipatterns-summary.md`.
 
 (G1 — persistence difference — was the bug fixed in `db8ab25`.)
 
-**Sub-plan deliverable:** pick full deepening (T2-ARCH) OR minimal T2 (the cancellation chunk above). Don't propose interfaces yet — sub-plan runs `improve-codebase-architecture` skill grilling loop to resolve G2–G5 first.
+**Sub-plan deliverable:** full deepening (T2-ARCH). Don't propose interfaces yet — sub-plan runs `improve-codebase-architecture` skill grilling loop to resolve G2–G5 first. Coordinate with R2 in the reliability plan for the cancellation-plumbing grilling (G4).
 
 **Side concerns:** ArrivalTaskContext has 12 fields (coupling smell); `phase_narrate` returns `backend_name`/`model_name` for forensics (deepened module must expose them or persist `LlmMessage` itself); `spawn_blocking` is caller's concern, the deepened module stays sync.
 
 **Blast radius:** `bootstrap/init_game.rs` + `application/action_pipeline/phases.rs` + possibly new `application/narration.rs` (or `narrative/narration.rs`). High churn but mechanical-ish.
 
-**Dependencies:** soft T1 (error shape); coordinate with T9 (ADR-018 doc update).
+**Dependencies:** soft T1 (error shape); coordinate with T9 (ADR-018 doc update) + R2 in the reliability plan (cancellation plumbing).
 
 ---
 
@@ -170,22 +156,6 @@ T7 (Storage API Polish) is closed; see the Finding State table.
 
 ---
 
-## T8 — Persistence Reliability
-
-**Findings owned:** N11, N20/M7.
-
-**Architecture-lens reframe:** this is a behaviour decision (propagate vs. swallow), not a module-shape issue. Belongs in the error-model discussion — once T1 unifies the error seam, swallow-vs-propagate becomes a single-place policy, not a per-call-site decision. **Sequence after T1.**
-
-**Scope:**
-
-1. Design decision — how should partial-persistence failure surface? Options: (a) propagate to caller (`Result<(), ApplicationError>`); (b) mark `Game` row as "needs repair" + retry on next access; (c) keep silent + log + add a healthcheck rule that fails on `tracing::error!` matching "Failed to save".
-2. List all `save_message_and_snapshot` warn paths in `pipeline.rs` (3+ sites). Decide each: propagate vs. continue.
-3. Healthcheck: grep tracing `warn!`/`error!` on save paths during test runs — surfaces silent failures.
-
-**Blast radius:** small (`application_service.rs`, `pipeline.rs`), but behaviour-change risk. Integration tests need new coverage for partial-failure scenarios.
-
----
-
 ## T9 — Doc / Migration Debt
 
 **Findings owned:** N18, Phase 4 re-export shield, CHANGELOG Phase 4-7, `abstraction-antipatterns-summary.md` annotation, `docs/system/action_pipeline.md` missing, `docs/system/message_model.md` missing.
@@ -194,13 +164,12 @@ No code logic. Pure docs + ~5 import-path-only changes. Do FIRST so future audit
 
 **Scope:**
 
-1. ADR-027 — the Finding State table in this plan, snapshotted as an ADR.
-2. CHANGELOG — retroactive Phase 4-7 entries (module splits `state/`, `misc/`, `renderers/`; `GameLifecycleService` inline/delete; `Message` accessor pattern; `apply_to` deletion; `Operation` enum removal; `assemble_prompt_text` relocation).
-3. `docs/system/action_pipeline.md` — spec covering `PipelineInputs` + `spawn_pipeline_task` helper contracts. Propose DELTA from current documented arch, not contradiction.
-4. `docs/system/message_model.md` — spec covering accessor-pattern `Message` struct (reads from `swipes[active_swipe_index]`, no mirrored fields). ADR-017 alignment.
-5. Migrate top-5 high-churn callers (`game_service.rs`, `application_service.rs`, `pipeline.rs`, `phases.rs`, +1) off the `state/mod.rs:12-18` re-export shield. Architecture-lens candidate #8: re-export shields are pure pass-throughs failing the deletion test; architecture debt, not migration debt. Leave the shield in place for opportunistic completion later.
-6. Annotate `docs/reviews/abstraction-antipatterns-summary.md` with status notes ("resolved Phase 2", "deferred per ADR-027", etc.).
-7. Add `[DOC: ...]` anchors to the 7 `src/test_support/` files.
+1. CHANGELOG — retroactive Phase 4-7 entries (module splits `state/`, `misc/`, `renderers/`; `GameLifecycleService` inline/delete; `Message` accessor pattern; `apply_to` deletion; `Operation` enum removal; `assemble_prompt_text` relocation).
+2. `docs/system/action_pipeline.md` — spec covering `PipelineInputs` + `spawn_pipeline_task` helper contracts. Propose DELTA from current documented arch, not contradiction.
+3. `docs/system/message_model.md` — spec covering accessor-pattern `Message` struct (reads from `swipes[active_swipe_index]`, no mirrored fields). ADR-017 alignment.
+4. Migrate top-5 high-churn callers (`game_service.rs`, `application_service.rs`, `pipeline.rs`, `phases.rs`, +1) off the `state/mod.rs:12-18` re-export shield. Architecture-lens candidate #8: re-export shields are pure pass-throughs failing the deletion test; architecture debt, not migration debt. Leave the shield in place for opportunistic completion later.
+5. Annotate `docs/reviews/abstraction-antipatterns-summary.md` with status notes ("resolved Phase 2", "deferred — see super-plan Finding State table"). Cross-reference each finding to its Finding State class + owner track, not just the 4 misclassifications (B2/B7/B8/B9).
+6. Add `[DOC: ...]` anchors to the 7 `src/test_support/` files.
 
 **Blast radius:** docs + ~5 import-path-only changes.
 
@@ -227,7 +196,7 @@ Bundle of 12 untouched + cosmetic items. All low severity, mechanical. Pick 3-5 
 
 ## Finding State
 
-Single source of truth for every original investigation finding (A/B/C/D/M series) + every NEW issue (N1-N20) surfaced in the 2026-06-27 holistic re-review. ADR-027 will mirror this table as a snapshot.
+Single source of truth for every original abstraction investigation finding (A/B/C/D/M series) + every abstraction-related NEW issue surfaced in the 2026-06-27 holistic re-review. Reliability + concurrency findings (N11/N17/N20/M7/M8 + former T8 track) extracted to `docs/plans/reliability-and-cancellation-plan.md` on 2026-06-28. For audit-visible annotations see T9 task 5 (`abstraction-antipatterns-summary.md`); architectural deferrals are also pinned in ADR-018 + CHANGELOG.
 
 **Classes:**
 - `closed` — work landed.
@@ -250,7 +219,7 @@ Single source of truth for every original investigation finding (A/B/C/D/M serie
 | A11 `MessageEntry` DTO mirroring | active | T10 | collapse or `impl From<&Message>` |
 | A12 `apply_to` manual field clone | closed | — | deleted (thermo-nuclear) |
 | B2 `ActionOutcome::Error` variant | deferred | T1 | unused at runtime; error channel moved to `GenerationStatus::Error` (`8e4acf5`) |
-| B3 `run_from_input` monolith | deferred | T1/T2 | state-machine rewrite scoped out per Phase 6.1 (Issue 9 constraint) |
+| B3 `run_from_input` monolith | deferred | T1 | state-machine rewrite scoped out per Phase 6.1 (Issue 9 constraint) |
 | B4 `GameLifecycleService` | closed | — | flattened into `DefaultApplicationService` (thermo-nuclear); N1 passthroughs remain → T3 |
 | B7 retry mini-pipeline | non-issue | — | STALE finding: retry already delegates to `phase_trigger_continuation` + `run_from_input` (`architecture/system.md:52`, CHANGELOG L90) |
 | B8 `ArrivalTaskContext` | deferred | T2-ARCH | deliberate extraction per ADR-018 / `system.md:208-209`; deepening deferred until a 3rd narration execution path emerges |
@@ -276,28 +245,25 @@ Single source of truth for every original investigation finding (A/B/C/D/M serie
 | M2 `with_failure` non-idempotent | closed | — | idempotent per `with_failure_adds_does_not_nest` test (LayeredBackend split) |
 | M3 `response_length: Option<&str>` stringly | active | T10 | `narrative/prompt/assembler.rs:11`; enum or token count |
 | M4 `QuantifierParseResult::is_high()` only | active | T10 | add `is_low/is_medium` or derive `Ord` |
-| M7 = N20 pipeline warn-on-save | active | T8 | `pipeline.rs:108`; decide propagate vs continue |
-| M8 = N12 `context.rs` panics | non-issue | — | see N12 |
+
+
 | N1 9 identity-passthrough methods | active | T3 | `application_service.rs:333-393` |
 | N2 40 `Backend::Test` dead arms | closed | — | removed in thermo-nuclear `6a8531e` + `f914bae` |
 | N3 new code self-invents `state.status` error side-channel | deferred | T1 | consequence of B9; T1 fixes root cause |
 | N5 prompt-context + LLM + persist drift between `ArrivalTaskContext` and `phase_narrate` | deferred | T2-ARCH | one deep Narration module split across two adapters |
 | N6 `MockBackend::default()` migration backlog | deferred | T4 | cosmetic; irrelevant once fields go `pub(crate)` |
 | N7 builder ergonomics not enforced | active | T4 | fields still `pub` |
-| N11 `reset` swallows persistence errors | active | T8 | `application_service.rs:298` `let _ = ...`; T8 decides |
+
 | N12 `context.rs:96-97` panics | non-issue | — | STALE: inside `#[cfg(test)] fn load_state_for_test`; `lib.rs:4-11` denies `clippy::panic` with `cfg_attr(test, allow(clippy::panic))` |
 | N13 `Ok(_) => unreachable!()` arms in fragments | active | T10 | 4 remain (`history.rs:23,36`, `misc/swipe.rs:17,30`); invert to `let Ok(_) = ... else {}` |
 | N14 `Confidence` derive `Ord` | deferred | T5 | collapses `StatePatch::merge` to `min()`; bundle with A3 collapse |
 | N15 `from_messages` bypasses MAX_MESSAGES cap | active | T6 | only `append` enforces 1000 cap |
 | N16 `list_personas` 3-line passthrough | active | T10 | `application_service.rs:434-439`; move to direct storage calls |
-| N17 `ArrivalTaskContext::run()` no cancellation check | active | T2 | T2 chunk: add `is_cancelled()` at start + before LLM call |
 | N18 7 `test_support/` files lack `[DOC: ...]` anchor | active | T9 | add anchors |
-| N19 no ADR protecting deliberate-defer | active | T2 | T2 chunk writes ADR-027 (this table) |
-| N20 = M7 | see M7 | T8 | |
-| Phase 4 re-export shield | active | T9 | `state/mod.rs:12-18`; migrate top-5 callers |
+| N19 no ADR protecting deliberate-defer | closed | — | resolved: deliberate-defers protected by super-plan Finding State table + T9 task 5 annotation on `abstraction-antipatterns-summary.md` + existing ADR-018 + CHANGELOG `8e4acf5`. No new ADR needed. |
+| Phase 4 re-export shield | resolved | — | done 2026-06-28 via holistic migration; shield deleted, all callers migrated to direct submodule paths |
 | CHANGELOG Phase 4-7 | active | T9 | only Phase 1-3 + thermo-nuclear logged |
-| ADR-027 missing | active | T2 | N19 owner; T2 chunk writes it |
-| `abstraction-antipatterns-summary.md` annotation | active | T9 | annotate 4 misclassifications (B2/B7/B8/B9) |
+| Reliability + concurrency findings | closed | — | extracted to `docs/plans/reliability-and-cancellation-plan.md` on 2026-06-28 (N11/N17/N20/M7/M8 + former T8 track) |
 | `docs/system/action_pipeline.md` missing | active | T9 | Task 6.1 |
 | `docs/system/message_model.md` missing | active | T9 | Task 7.1 |
 | T2-Q1 arrival persistence bug | closed | — | `db8ab25` routes `ArrivalTaskContext::run` through `save_message_and_snapshot` |
@@ -319,7 +285,6 @@ These decisions belong in each sub-plan, not this super-plan. Visible here:
 - **T4:** Migrate 100 `MockBackend::default()` test sites, or leave (fields go `pub(crate)` so old code still works)?
 - **T5 A3:** Move `Confidence` to new `model/confidence.rs`, or keep in `agent.rs`?
 - **T6:** `from_messages` for storage loaders: enforce cap, or add `from_messages_trusted`?
-- **T8:** Partial-persistence failure: propagate, mark-needs-repair, or silent+healthcheck?
 
 ---
 
@@ -328,14 +293,14 @@ These decisions belong in each sub-plan, not this super-plan. Visible here:
 - Each sub-plan defines its own test guarantees + verification commands.
 - Project-level: `python build.py` (fmt + clippy + tests + coverage) is the gold standard.
 - Healthcheck: `python scripts/healthcheck.py` enforces the jscpd duplicates check; the abstraction-antipatterns-healthcheck-plan will add advisory detection for `too_many_arguments` + `dead_code`.
-- For structural tracks (T1, T3, T8): require integration test coverage of new behaviour paths before merge.
+- For structural tracks (T1, T3): require integration test coverage of new behaviour paths before merge.
 
 ## Sub-plan Creation Order (recommended)
 
 1. **T9 (docs)** — P0; no risk, anchors everything else.
-2. **T2 (ArrivalTaskContext cancellation + ADR-027)** — P0; small P0 runtime risk + ADR anchor.
-3. **T8 (persistence reliability)** — P1; behaviour risk, before more code accrues on swallow-semantics.
-4. **T1 (error model)** — P1; unblocks downstream cleanup; root cause.
+2. **R2 (arrival task cancellation, in reliability plan)** — P0; real production race (reset-during-arrival + ctrl-C-during-arrival).
+3. **T1 (error model)** — P1; unblocks downstream cleanup; root cause.
+4. **R1 (persistence reliability, in reliability plan)** — P1; behaviour risk, sequence after T1.
 5. **T3 (service layer)** — P1; quick win after T1.
 6. **T5 (A3 + A6)** — P2; mechanical, do alongside any of above opportunistically.
 7. **T6 (MessageHistory)** — P2; isolated, can run parallel.

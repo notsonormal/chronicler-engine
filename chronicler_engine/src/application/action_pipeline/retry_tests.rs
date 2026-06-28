@@ -8,7 +8,9 @@ use crate::application::context::GameServiceContext;
 #[allow(unused_imports)]
 use crate::application::game_service::GameService;
 use crate::error::EngineError;
-use crate::model::state::{GameState, GenerationPhase, GenerationStatus, MessageType};
+use crate::model::state::game_state::GameState;
+use crate::model::state::generation_status::{GenerationPhase, GenerationStatus};
+use crate::model::state::message_types::MessageType;
 use crate::narrative::llm::MockBackend;
 use crate::narrative::llm::backend::LlmCallResult;
 use crate::storage::{Storage, TestOverride};

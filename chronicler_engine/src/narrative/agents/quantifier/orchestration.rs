@@ -1,6 +1,7 @@
 //! [DOC: docs/system/agent_system.md]
 //! Quantifier orchestration
 
+use crate::model::state::game_state::GameState;
 use crate::narrative::llm::backend::LlmBackend;
 
 use super::parser::parse_quantifier_response_with_movement;
@@ -117,7 +118,7 @@ pub(crate) fn quantify_room_with_llm_call(
 /// Low confidence: fall back to static NPCs
 fn process_quantifier_result(
     result: QuantifierResult,
-    state: &crate::model::state::GameState,
+    state: &GameState,
     room_npc_ids: &[String],
 ) -> QuantifierResult {
     match result.npcs.confidence {
@@ -145,7 +146,7 @@ fn process_quantifier_result(
 }
 
 pub(crate) fn static_npc_result(
-    state: &crate::model::state::GameState,
+    state: &GameState,
     room_npc_ids: &[String],
     movement: MovementParseResult,
 ) -> QuantifierResult {
@@ -175,7 +176,7 @@ pub(crate) fn static_npc_result(
 }
 
 pub fn determine_npcs_in_room(
-    state: &crate::model::state::GameState,
+    state: &GameState,
     current_room: &crate::model::map::Room,
     room_npc_ids: &[String],
     previous_room_npcs: &[crate::model::character::NpcCard],

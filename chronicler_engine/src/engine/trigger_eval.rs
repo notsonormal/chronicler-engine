@@ -2,7 +2,7 @@
 //! Trigger evaluation and condition checking
 
 use crate::model::character::NpcCard;
-use crate::model::state::GameState;
+use crate::model::state::game_state::GameState;
 use crate::model::trigger::{ComparisonOperator, Trigger, TriggerRequirement};
 pub fn evaluate_triggers(state: &GameState) -> Vec<(NpcCard, Trigger, usize)> {
     let current_room_id = &state.movement.current_room_id;

@@ -5,7 +5,8 @@ use crate::application::context::{
 use crate::error::{EngineError, LlmFailure, NarrativeFailure};
 use crate::model::message::Message;
 use crate::model::prompt_preset::{PresetType, PromptPreset};
-use crate::model::state::GameState;
+use crate::model::state::game_state::{GameState, GameStateBuilder};
+use crate::model::state::message_types::MessageType;
 use crate::storage::{Storage, TestOverride};
 use crate::test_support::fixtures::{TestMap, TestPlayer, TestWorld};
 use std::sync::Arc;
@@ -79,7 +80,7 @@ fn test_map_llm_error_fallback() {
 }
 
 fn minimal_state() -> GameState {
-    crate::model::state::GameStateBuilder::new(
+    GameStateBuilder::new(
         Arc::new(TestWorld::minimal()),
         Arc::new(TestMap::single_room("start")),
         Arc::new(TestPlayer::named("Test")),
@@ -114,7 +115,7 @@ fn test_load_or_fresh_hydrates_messages() {
     let msg = Message::new(
         Some("System".to_string()),
         "Hello",
-        crate::model::state::MessageType::System,
+        MessageType::System,
         None,
         None,
     );
@@ -152,11 +153,7 @@ fn test_save_and_save_message_and_snapshot() {
     let ctx = minimal_ctx();
     let mut state = minimal_state();
     state.movement.current_room_id = "room2".to_string();
-    state.add_message(
-        "Test message".to_string(),
-        None,
-        crate::model::state::MessageType::Narration,
-    );
+    state.add_message("Test message".to_string(), None, MessageType::Narration);
     let id = save_state(&ctx, &state).unwrap();
     assert!(id > 0);
 
@@ -175,7 +172,7 @@ fn test_save_message_and_snapshot_persists_retry_swipe() {
     let mut target = Message::new(
         None,
         "Original narration",
-        crate::model::state::MessageType::Narration,
+        MessageType::Narration,
         None,
         None,
     );
@@ -207,7 +204,7 @@ fn test_save_message_and_snapshot_skips_persisted_retry_swipe() {
     let mut target = Message::new(
         None,
         "Original narration",
-        crate::model::state::MessageType::Narration,
+        MessageType::Narration,
         None,
         None,
     );
@@ -281,7 +278,7 @@ fn test_delete_and_remove_message_removes_from_storage_and_state() {
     let msg = Message::new(
         Some("System".to_string()),
         "To be deleted",
-        crate::model::state::MessageType::System,
+        MessageType::System,
         None,
         None,
     );
@@ -327,11 +324,7 @@ fn test_load_or_fresh_fallback_on_snapshot_error() {
 fn test_save_message_and_snapshot_propagates_snapshot_error() {
     let state = minimal_state();
     let mut state_copy = state.clone();
-    state_copy.add_message(
-        "Test".to_string(),
-        None,
-        crate::model::state::MessageType::Narration,
-    );
+    state_copy.add_message("Test".to_string(), None, MessageType::Narration);
 
     let (failing_storage, handle) = Storage::new_in_memory().with_test_failures();
     let storage = Arc::new(failing_storage);

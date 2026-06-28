@@ -1,7 +1,7 @@
 use crate::model::character::{CharacterSheet, NpcCard, PlayerCard};
 use crate::model::map::Room;
 use crate::model::prompt_preset::PromptPreset;
-use crate::model::state::MessageEntry;
+use crate::model::state::message_types::{MessageEntry, MessageType};
 use crate::model::world::WorldCard;
 use crate::narrative::prompt::assembler::LayeredPromptAssembler;
 use crate::narrative::prompt::budget;
@@ -87,7 +87,7 @@ fn create_test_history() -> Vec<MessageEntry> {
             id: 1,
             sender: Some("Narrator".to_string()),
             text: "Welcome to the game!".to_string(),
-            message_type: crate::model::state::MessageType::Narration,
+            message_type: MessageType::Narration,
             timestamp: chrono::Utc::now(),
             ..Default::default()
         },
@@ -95,7 +95,7 @@ fn create_test_history() -> Vec<MessageEntry> {
             id: 2,
             sender: Some("Player".to_string()),
             text: "I look around.".to_string(),
-            message_type: crate::model::state::MessageType::Input,
+            message_type: MessageType::Input,
             timestamp: chrono::Utc::now(),
             ..Default::default()
         },
@@ -268,7 +268,7 @@ fn test_assemble_budget_trimming() {
             text: format!(
                 "This is a very long message number {i} with lots of text to consume tokens."
             ),
-            message_type: crate::model::state::MessageType::Narration,
+            message_type: MessageType::Narration,
             timestamp: chrono::Utc::now(),
             ..Default::default()
         })

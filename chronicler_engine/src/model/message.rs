@@ -3,7 +3,7 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use crate::model::state::MessageType;
+use crate::model::state::message_types::MessageType;
 
 /// Swipe variant of a [`Message`].
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

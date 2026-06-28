@@ -8,7 +8,9 @@ use crate::error::EngineError;
 use crate::model::character::NpcCard;
 use crate::model::quantifier::{QuantifierConfidence, QuantifierParseResult, QuantifierResult};
 
-use crate::model::state::{GameState, GenerationPhase, GenerationStatus, MessageType};
+use crate::model::state::game_state::GameState;
+use crate::model::state::generation_status::{GenerationPhase, GenerationStatus};
+use crate::model::state::message_types::MessageType;
 use crate::narrative::llm::backend::{AGENT_NARRATOR, LlmCallResult};
 use crate::narrative::prompt::LayeredPromptAssembler;
 use crate::storage::{Storage, TestOverride};

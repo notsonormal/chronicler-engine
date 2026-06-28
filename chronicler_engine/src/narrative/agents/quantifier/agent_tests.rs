@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::model::agent::{AgentContext, BackendSelector, ExecutionPhase};
-use crate::model::state::GameState;
+use crate::model::state::game_state::GameState;
 use crate::narrative::agents::Agent;
 use crate::narrative::agents::quantifier::agent::QuantifierAgent;
 use crate::narrative::llm::MockBackend;

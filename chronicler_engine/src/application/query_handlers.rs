@@ -6,17 +6,12 @@ use crate::application::DebugStateView;
 use crate::application::context::{GameServiceContext, load_or_fresh};
 use crate::error::EngineError;
 use crate::model::llm_message::LlmMessage;
-use crate::model::state::MessageEntry;
+use crate::model::state::generation_status::{GenerationPhase, GenerationStatus};
+use crate::model::state::message_types::MessageEntry;
 
 pub fn get_generating_status(
     ctx: GameServiceContext,
-) -> Result<
-    (
-        crate::model::state::GenerationStatus,
-        crate::model::state::GenerationPhase,
-    ),
-    ApplicationError,
-> {
+) -> Result<(GenerationStatus, GenerationPhase), ApplicationError> {
     let game_state = load_or_fresh(&ctx);
     Ok((
         game_state.narrative.input_buffer.status.clone(),
@@ -26,7 +21,7 @@ pub fn get_generating_status(
 
 pub fn reset_generating_status(ctx: GameServiceContext) -> Result<(), ApplicationError> {
     let mut game_state = load_or_fresh(&ctx);
-    game_state.narrative.input_buffer.status = crate::model::state::GenerationStatus::Idle;
+    game_state.narrative.input_buffer.status = GenerationStatus::Idle;
     let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&game_state);
     ctx.storage.save_snapshot(&snapshot)?;
     Ok(())
@@ -59,13 +54,7 @@ pub fn get_story_log_entries(
 
 pub fn get_input_status(
     ctx: GameServiceContext,
-) -> Result<
-    (
-        crate::model::state::GenerationStatus,
-        crate::model::state::GenerationPhase,
-    ),
-    ApplicationError,
-> {
+) -> Result<(GenerationStatus, GenerationPhase), ApplicationError> {
     get_generating_status(ctx)
 }
 
@@ -138,7 +127,7 @@ pub fn get_debug_state(ctx: GameServiceContext) -> Result<DebugStateView, Applic
     let dynamic_rooms: Vec<String> = game_state.movement.dynamic_rooms.keys().cloned().collect();
 
     let last_error = match &game_state.narrative.input_buffer.status {
-        crate::model::state::GenerationStatus::Error(msg) => Some(msg.clone()),
+        GenerationStatus::Error(msg) => Some(msg.clone()),
         _ => None,
     };
 

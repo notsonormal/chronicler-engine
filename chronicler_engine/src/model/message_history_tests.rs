@@ -1,6 +1,6 @@
 use crate::model::message::Message;
 use crate::model::message_history::MessageHistory;
-use crate::model::state::MessageType;
+use crate::model::state::message_types::MessageType;
 
 fn make_message(id: u64, text: &str, log_type: MessageType) -> Message {
     let mut msg = Message::new(Some("Player".to_string()), text, log_type, None, None);

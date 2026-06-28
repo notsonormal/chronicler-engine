@@ -4,9 +4,12 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::model::state::{
-    GameState, InputBuffer, MovementState, NarrativeState, SceneState, StoredTriggerContext,
-};
+use crate::model::state::game_state::GameState;
+use crate::model::state::generation_status::InputBuffer;
+use crate::model::state::movement::MovementState;
+use crate::model::state::narrative_state::NarrativeState;
+use crate::model::state::scene_state::SceneState;
+use crate::model::state::trigger_context::StoredTriggerContext;
 use crate::model::trigger::NpcEncounterLog;
 
 /// [`NarrativeState`] sans messages (separate table, hydrated on load).

@@ -1,6 +1,8 @@
 use chronicler_engine::bootstrap::test_api::ArrivalTaskContext;
 use chronicler_engine::model::character::NpcCard;
-use chronicler_engine::model::state::MessageType;
+use chronicler_engine::model::llm_backend::LlmBackendType;
+use chronicler_engine::model::settings::Connection;
+use chronicler_engine::model::state::message_types::MessageType;
 use chronicler_engine::test_support::make_test_context_with_sqlite;
 
 use crate::pipeline_helpers::{create_test_state_with_map, latest_state};
@@ -11,10 +13,7 @@ fn test_arrival_narration_survives_reload() {
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
-    let connection = {
-        let settings_guard = ctx.settings.read().unwrap();
-        settings_guard.narration_connection()
-    };
+    let connection = Connection::new("mock", "Mock", LlmBackendType::Mock);
 
     let preset_storage = ctx.preset_storage.clone();
     let arrival_preset = preset_storage
@@ -48,13 +47,13 @@ fn test_arrival_narration_survives_reload() {
 
     assert!(
         !narration_msgs.is_empty(),
-        "Should have at least one narration message in messages table after ArrivalTaskContext::run"
+        "Should have at least one narration message in llm_messages table after ArrivalTaskContext::run"
     );
 
     let first_narration = narration_msgs.first().unwrap();
     assert_ne!(
         first_narration.id, 0,
-        "Narration message should have non-zero id (persisted to messages table)"
+        "Narration message should have non-zero id (persisted to llm_messages table)"
     );
 
     let guard = latest_state(&ctx);
@@ -70,7 +69,8 @@ fn test_arrival_narration_survives_reload() {
         "GameState should contain narration after ArrivalTaskContext::run"
     );
 
-    let history_narration_text = history_narrations.first().unwrap().text.clone();
+    let history_narration = history_narrations.first().unwrap();
+    let history_narration_text = history_narration.text.clone();
 
     let reloaded_messages =
         chronicler_engine::application::context::load_messages_with_swipes(&ctx.storage).unwrap();
@@ -84,6 +84,11 @@ fn test_arrival_narration_survives_reload() {
         .iter()
         .find(|m| m.message_type == MessageType::Narration)
         .expect("Should find narration message after reload");
+
+    assert_eq!(
+        reloaded_narration.id, history_narration.id,
+        "Reloaded narration message id should match the one in snapshot history (survives reload)"
+    );
 
     assert_eq!(
         reloaded_narration.text(),

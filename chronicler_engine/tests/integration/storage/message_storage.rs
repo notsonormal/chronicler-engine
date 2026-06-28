@@ -1,5 +1,5 @@
 use chronicler_engine::model::message::{Message, Swipe};
-use chronicler_engine::model::state::MessageType;
+use chronicler_engine::model::state::message_types::MessageType;
 use chronicler_engine::storage::Storage;
 
 use crate::fixtures::create_test_storage;

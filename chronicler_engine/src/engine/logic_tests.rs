@@ -4,7 +4,7 @@ use std::sync::Arc;
 use crate::engine::logic::{attempt_semantic_walk, create_dynamic_room, find_room_in_world_map};
 use crate::model::character::{CharacterSheet, PlayerCard};
 use crate::model::map::{Direction, MapDef, Overworld, Region, Room};
-use crate::model::state::GameState;
+use crate::model::state::game_state::GameState;
 use crate::model::world::WorldCard;
 
 fn setup_test_state() -> GameState {

@@ -4,7 +4,7 @@
 use crate::error::EngineError;
 use crate::model::map::Room;
 use crate::model::prompt_preset::PromptPreset;
-use crate::model::state::MessageEntry;
+use crate::model::state::message_types::MessageEntry;
 use crate::model::template::{render_template, TemplateVars};
 use crate::model::world::WorldCard;
 use crate::narrative::prompt::budget;

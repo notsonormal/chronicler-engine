@@ -2,7 +2,7 @@
 use std::sync::Arc;
 
 use chronicler_engine::application::game_service::GameService;
-use chronicler_engine::model::state::MessageType;
+use chronicler_engine::model::state::message_types::MessageType;
 use chronicler_engine::narrative::agents::registry::AgentRegistry;
 use chronicler_engine::narrative::llm::MockBackend;
 use chronicler_engine::test_support::make_test_context_with_sqlite;
@@ -179,7 +179,7 @@ fn test_retry_empty_history() {
 #[test]
 fn test_switch_swipe_out_of_bounds() {
     use chronicler_engine::model::message::{Message, Swipe};
-    use chronicler_engine::model::state::MessageType;
+    use chronicler_engine::model::state::message_types::MessageType;
     use chronicler_engine::application::message_editing::MessageEditingService;
     use chronicler_engine::application::ApplicationError;
 
@@ -218,7 +218,7 @@ fn test_switch_swipe_out_of_bounds() {
 #[test]
 fn test_edit_history_updates_text() {
     use chronicler_engine::model::message::Message;
-    use chronicler_engine::model::state::MessageType;
+    use chronicler_engine::model::state::message_types::MessageType;
     use chronicler_engine::application::message_editing::MessageEditingService;
 
     let mut state = create_test_state();
@@ -250,7 +250,7 @@ fn test_edit_history_updates_text() {
 #[test]
 fn test_edit_history_no_snapshot() {
     use chronicler_engine::model::message::Message;
-    use chronicler_engine::model::state::MessageType;
+    use chronicler_engine::model::state::message_types::MessageType;
     use chronicler_engine::application::message_editing::MessageEditingService;
 
     let mut state = create_test_state();
@@ -278,7 +278,7 @@ fn test_edit_history_no_snapshot() {
 fn test_delete_last_removes() {
     use chronicler_engine::application::message_editing::MessageEditingService;
     use chronicler_engine::model::message::Message;
-    use chronicler_engine::model::state::MessageType;
+    use chronicler_engine::model::state::message_types::MessageType;
     let mut state = create_test_state();
     state.narrative.history.append(Message::new(
         None,
@@ -326,7 +326,7 @@ fn test_delete_last_empty_rejected() {
 #[test]
 fn test_edit_history_storage_failure() {
     use chronicler_engine::model::message::Message;
-    use chronicler_engine::model::state::MessageType;
+    use chronicler_engine::model::state::message_types::MessageType;
     use chronicler_engine::application::message_editing::MessageEditingService;
 
     let mut state = create_test_state();
@@ -353,7 +353,8 @@ fn test_edit_history_storage_failure() {
 #[tokio::test]
 async fn test_retrigger_happy_path() {
     use chronicler_engine::model::message::Message;
-    use chronicler_engine::model::state::{MessageType, StoredTriggerContext};
+    use chronicler_engine::model::state::message_types::MessageType;
+    use chronicler_engine::model::state::trigger_context::StoredTriggerContext;
     use chronicler_engine::application::message_editing::MessageEditingService;
 
     let mut state = create_test_state();
@@ -387,7 +388,8 @@ async fn test_retrigger_happy_path() {
 #[tokio::test]
 async fn test_retrigger_storage_operations() {
     use chronicler_engine::model::message::Message;
-    use chronicler_engine::model::state::{MessageType, StoredTriggerContext};
+    use chronicler_engine::model::state::message_types::MessageType;
+    use chronicler_engine::model::state::trigger_context::StoredTriggerContext;
     use chronicler_engine::application::message_editing::MessageEditingService;
 
     let mut state = create_test_state();
@@ -429,7 +431,7 @@ async fn test_retrigger_storage_operations() {
 #[test]
 fn test_delete_last_storage_failure() {
     use chronicler_engine::model::message::Message;
-    use chronicler_engine::model::state::MessageType;
+    use chronicler_engine::model::state::message_types::MessageType;
     use chronicler_engine::application::message_editing::MessageEditingService;
     let mut state = create_test_state();
     state.narrative.history.append(Message::new(
@@ -449,7 +451,7 @@ fn test_delete_last_storage_failure() {
 #[tokio::test]
 async fn test_retry_cancellation() {
     use chronicler_engine::model::message::Message;
-    use chronicler_engine::model::state::MessageType;
+    use chronicler_engine::model::state::message_types::MessageType;
     use chronicler_engine::application::message_editing::MessageEditingService;
     let mut state = create_test_state();
     state.narrative.history.append(Message::new(

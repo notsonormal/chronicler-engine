@@ -172,7 +172,8 @@ fn add_failure_reuses_map_does_not_nest() {
 }
 
 use crate::model::state_snapshot::{GameStateSnapshot, NarrativeSnapshot};
-use crate::model::state::{MovementState, SceneState};
+use crate::model::state::movement::MovementState;
+use crate::model::state::scene_state::SceneState;
 use crate::model::trigger::NpcEncounterLog;
 
 fn dummy_snapshot() -> GameStateSnapshot {

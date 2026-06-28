@@ -4,7 +4,8 @@ use std::sync::Arc;
 use crate::engine::trigger_eval::{check_condition, evaluate_triggers};
 use crate::model::character::{CharacterSheet, NpcCard};
 use crate::model::map::{MapDef, Overworld};
-use crate::model::state::GameState;
+use crate::model::state::game_state::{GameState, GameStateBuilder};
+use crate::model::state::scene_state::SceneState;
 use crate::model::trigger::{
     ComparisonOperator, NpcEncounterLog, Trigger, TriggerNarration, TriggerRequirement,
 };
@@ -85,9 +86,9 @@ fn make_state(
         inventory: vec![],
     });
     let npcs: Vec<NpcCard> = all_npcs.to_vec();
-    crate::model::state::GameStateBuilder::new(world, map, player, "room_1")
+    GameStateBuilder::new(world, map, player, "room_1")
         .with_npcs(npcs)
-        .with_scene(crate::model::state::SceneState {
+        .with_scene(SceneState {
             npcs_in_area,
             ..Default::default()
         })
@@ -352,7 +353,7 @@ fn test_npc_encounter_log_initializes_with_starting_room_npcs() {
     };
     let npcs = vec![npc];
 
-    let state = crate::model::state::GameState::new(
+    let state = GameState::new(
         world,
         map,
         Arc::new(crate::model::character::PlayerCard {

@@ -1,5 +1,5 @@
 use crate::model::message::Message;
-use crate::model::state::MessageType;
+use crate::model::state::message_types::MessageType;
 use crate::storage::backend::{Storage, TestOverride};
 use crate::test_support::{dummy_message, sqlite_storage};
 

@@ -1,4 +1,5 @@
-use crate::model::state::{GenerationStatus, InputBuffer, MessageType};
+use crate::model::state::generation_status::{GenerationStatus, InputBuffer};
+use crate::model::state::message_types::MessageType;
 use crate::test_support::*;
 
 #[test]

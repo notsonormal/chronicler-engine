@@ -10,7 +10,8 @@ use crate::error::{EngineError, LlmFailure};
 use crate::model::character::NpcCard;
 use crate::model::message::Message;
 use crate::model::settings::AppSettings;
-use crate::model::state::GameState;
+use crate::model::state::game_state::GameState;
+use crate::model::state::message_types::MessageType;
 use crate::model::state_snapshot::GameStateSnapshot;
 use crate::model::world::WorldCard;
 use crate::narrative::prompt::assembler::assemble_prompt_text;
@@ -82,7 +83,7 @@ impl GameServiceContext {
         } else {
             messages
                 .iter()
-                .rposition(|m| m.message_type == crate::model::state::MessageType::Input)?
+                .rposition(|m| m.message_type == MessageType::Input)?
         };
         let anchor_msg = &messages[anchor_idx];
         let snapshot_id = *anchor_msg.snapshot_id().as_ref()?;

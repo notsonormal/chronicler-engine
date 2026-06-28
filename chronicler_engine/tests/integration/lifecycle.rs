@@ -2,7 +2,8 @@ use std::sync::Arc;
 
 use chronicler_engine::application::game_service::GameService;
 use chronicler_engine::application::DefaultApplicationService;
-use chronicler_engine::model::state::{GameState, MessageType};
+use chronicler_engine::model::state::game_state::GameState;
+use chronicler_engine::model::state::message_types::MessageType;
 use chronicler_engine::narrative::agents::registry::AgentRegistry;
 use chronicler_engine::narrative::llm::MockBackend;
 use chronicler_engine::storage::Storage;

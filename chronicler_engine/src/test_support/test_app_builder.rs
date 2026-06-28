@@ -11,9 +11,10 @@ use crate::application::game_service::GameService;
 use crate::model::character::{NpcCard, PlayerCard};
 use crate::model::map::{MapDef, Overworld, Region, Room};
 use crate::model::settings::AppSettings;
-use crate::model::state::{
-    GameState, GenerationPhase, GenerationStatus, MessageType, StoredTriggerContext,
-};
+use crate::model::state::game_state::GameState;
+use crate::model::state::generation_status::{GenerationPhase, GenerationStatus};
+use crate::model::state::message_types::MessageType;
+use crate::model::state::trigger_context::StoredTriggerContext;
 use crate::model::state_snapshot::GameStateSnapshot;
 use crate::model::world::WorldCard;
 use crate::server::router::build_router;

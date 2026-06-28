@@ -1,5 +1,6 @@
 use crate::bootstrap::init_game::resolve_game_id;
 use crate::bootstrap::run::{ensure_presets, find_latest_game_for_world, list_game_names_for_world};
+use crate::model::state::game_state::GameState;
 use crate::model::prompt_preset::PresetType;
 use crate::storage::Storage;
 #[test]
@@ -181,7 +182,7 @@ fn test_restart_with_existing_game_does_not_duplicate_scenario() {
         inventory: vec![],
     };
 
-    let mut state = crate::model::state::GameState::new(
+    let mut state = GameState::new(
         std::sync::Arc::new(world_card.clone()),
         std::sync::Arc::new(map),
         std::sync::Arc::new(player.clone()),

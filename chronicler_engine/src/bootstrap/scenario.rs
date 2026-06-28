@@ -2,7 +2,8 @@
 //! Scenario injection and initialization
 
 use crate::model::character::PlayerCard;
-use crate::model::state::GameState;
+use crate::model::state::game_state::GameState;
+use crate::model::state::message_types::MessageType;
 use crate::model::template::{render_template, TemplateVars};
 use crate::model::world::WorldCard;
 
@@ -20,5 +21,5 @@ pub fn inject_scenario_logs(state: &mut GameState, world: &WorldCard, player: &P
 
     state.narrative.pending_location = Some(room_name);
     let text = render_template(&scenario.text, &TemplateVars::new(&player.sheet.name));
-    state.add_message(text, None, crate::model::state::MessageType::Narration);
+    state.add_message(text, None, MessageType::Narration);
 }

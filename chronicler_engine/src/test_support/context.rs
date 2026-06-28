@@ -3,7 +3,7 @@ use std::sync::{Arc, RwLock};
 use crate::application::GameServiceContext;
 use crate::model::prompt_preset::{PresetType, PromptPreset};
 use crate::model::settings::AppSettings;
-use crate::model::state::GameState;
+use crate::model::state::game_state::GameState;
 use crate::model::state_snapshot::GameStateSnapshot;
 use crate::storage::Storage;
 

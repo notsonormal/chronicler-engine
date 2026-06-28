@@ -2,7 +2,8 @@ use std::sync::Arc;
 
 use chronicler_engine::application::game_service::GameService;
 use chronicler_engine::model::character::{CharacterSheet, NpcCard};
-use chronicler_engine::model::state::GameState;
+use chronicler_engine::model::state::game_state::GameState;
+use chronicler_engine::model::state::message_types::MessageType;
 use chronicler_engine::model::trigger::{
     ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement,
 };
@@ -54,7 +55,7 @@ fn test_event_retry_does_not_create_extra_swipe_on_narration() {
         .narrative
         .history
         .iter()
-        .filter(|m| m.message_type == chronicler_engine::model::state::MessageType::Narration)
+        .filter(|m| m.message_type == MessageType::Narration)
         .collect();
     assert_eq!(
         narration_msgs.len(),

@@ -9,7 +9,10 @@ use crate::model::map::{MapDef, Room};
 use crate::model::message::{Message, Swipe};
 use crate::model::trigger::NpcEncounterLog;
 use crate::model::world::WorldCard;
-use super::{MessageType, MovementState, NarrativeState, SceneState};
+use super::message_types::MessageType;
+use super::movement::MovementState;
+use super::narrative_state::NarrativeState;
+use super::scene_state::SceneState;
 
 #[derive(Debug, Clone)]
 #[non_exhaustive]

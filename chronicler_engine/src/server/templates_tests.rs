@@ -1,7 +1,8 @@
 use askama::Template;
 use chrono::Utc;
 
-use crate::model::state::{MessageEntry, MessageType};
+use crate::model::state::generation_status::{GenerationPhase, GenerationStatus};
+use crate::model::state::message_types::{MessageEntry, MessageType};
 use crate::server::templates::{
     ActionAreaTemplate, HeaderTemplate, StoryLogTemplate, VisualSidebarTemplate,
 };
@@ -452,8 +453,8 @@ fn test_visual_sidebar_with_npcs() {
 #[test]
 fn test_action_area_ready() {
     let template = ActionAreaTemplate::new(ActionAreaViewModel::new(
-        &crate::model::state::GenerationStatus::Idle,
-        &crate::model::state::GenerationPhase::default(),
+        &GenerationStatus::Idle,
+        &GenerationPhase::default(),
     ));
     let rendered = template.render().unwrap();
     assert!(rendered.contains("id=\"action-area\""));
@@ -463,8 +464,8 @@ fn test_action_area_ready() {
 #[test]
 fn test_action_area_thinking() {
     let template = ActionAreaTemplate::new(ActionAreaViewModel::new(
-        &crate::model::state::GenerationStatus::Generating,
-        &crate::model::state::GenerationPhase::Narrating,
+        &GenerationStatus::Generating,
+        &GenerationPhase::Narrating,
     ));
     let rendered = template.render().unwrap();
     assert!(rendered.contains("Generating narration..."));
@@ -474,8 +475,8 @@ fn test_action_area_thinking() {
 #[test]
 fn test_action_area_quantifying() {
     let template = ActionAreaTemplate::new(ActionAreaViewModel::new(
-        &crate::model::state::GenerationStatus::Generating,
-        &crate::model::state::GenerationPhase::Quantifying,
+        &GenerationStatus::Generating,
+        &GenerationPhase::Quantifying,
     ));
     let rendered = template.render().unwrap();
     assert!(rendered.contains("Quantifying scene..."));
@@ -485,8 +486,8 @@ fn test_action_area_quantifying() {
 #[test]
 fn test_action_area_generating_event() {
     let template = ActionAreaTemplate::new(ActionAreaViewModel::new(
-        &crate::model::state::GenerationStatus::Generating,
-        &crate::model::state::GenerationPhase::GeneratingEvent,
+        &GenerationStatus::Generating,
+        &GenerationPhase::GeneratingEvent,
     ));
     let rendered = template.render().unwrap();
     assert!(rendered.contains("Generating event..."));
@@ -496,8 +497,8 @@ fn test_action_area_generating_event() {
 #[test]
 fn test_action_area_no_exits() {
     let template = ActionAreaTemplate::new(ActionAreaViewModel::new(
-        &crate::model::state::GenerationStatus::Idle,
-        &crate::model::state::GenerationPhase::default(),
+        &GenerationStatus::Idle,
+        &GenerationPhase::default(),
     ));
     let rendered = template.render().unwrap();
     assert!(rendered.contains("command-form"));

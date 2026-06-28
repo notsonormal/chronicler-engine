@@ -14,7 +14,9 @@ use chronicler_engine::model::quantifier::{
     MovementParseResult, MovementType, NpcEvent, NpcTransitionType, QuantifierConfidence,
     QuantifierParseResult, QuantifierResult,
 };
-use chronicler_engine::model::state::MessageType;
+use chronicler_engine::model::state::message_types::MessageType;
+use chronicler_engine::model::state::game_state::GameState;
+use chronicler_engine::model::state::generation_status::GenerationStatus;
 use chronicler_engine::narrative::agents::registry::AgentRegistry;
 use chronicler_engine::narrative::llm::MockBackend;
 use chronicler_engine::server::fragments::GenerationGuard;
@@ -173,7 +175,7 @@ fn test_inv004_cancellable_at_boundaries() {
     let final_state = latest_state(&ctx);
     assert_eq!(
         final_state.narrative.input_buffer.status,
-        chronicler_engine::model::state::GenerationStatus::Idle,
+        GenerationStatus::Idle,
         "INV-004: status should be Idle after cancellation"
     );
 }
@@ -242,13 +244,7 @@ fn test_inv005_handle_movement_runs_before_narration() {
     let map = Arc::new(fixtures::create_test_map());
     let player = Arc::new(fixtures::create_test_player());
     let npcs = vec![];
-    let state = chronicler_engine::model::state::GameState::new(
-        world,
-        map,
-        player,
-        npcs,
-        "room1".to_string(),
-    );
+    let state = GameState::new(world, map, player, npcs, "room1".to_string());
     let original_room = state.movement.current_room_id.clone();
     let target_room = "room2";
 
