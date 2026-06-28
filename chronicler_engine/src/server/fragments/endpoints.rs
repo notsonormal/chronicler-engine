@@ -7,8 +7,8 @@ use crate::application::query_handlers;
 use crate::server::AppState;
 
 use super::renderers::{
-    render_action_area, render_action_hints, render_character_headshots, render_header,
-    render_llm_messages, render_story_log, render_visual_sidebar,
+    render_action_area, render_character_headshots, render_header, render_llm_messages,
+    render_story_log, render_visual_sidebar,
 };
 
 fn render_fragment<F>(state: &AppState, render: F, name: &str) -> Html<String>
@@ -46,10 +46,6 @@ pub async fn character_headshots_fragment(State(state): State<AppState>) -> Html
         render_character_headshots,
         "character_headshots_fragment",
     )
-}
-
-pub async fn hints_handler(State(state): State<AppState>) -> Html<String> {
-    render_fragment(&state, render_action_hints, "hints_handler")
 }
 
 pub async fn llm_messages_fragment(State(state): State<AppState>) -> Html<String> {

@@ -46,7 +46,6 @@ The frontend polls dedicated fragment endpoints at staggered intervals:
 - `/status/generating` — every 5 seconds
 - `/fragment/visual-sidebar` — every 5 seconds
 - `/fragment/llm-messages` — every 4 seconds
-- `/hints` — every 5 seconds
 
 No persistent connection is maintained. Each poll is an independent HTTP request.
 

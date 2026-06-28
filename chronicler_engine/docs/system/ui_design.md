@@ -39,7 +39,7 @@
 |-------|-------|-------|
 | `--font-family` | -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif | All text |
 | `--font-size-base` | 14px | Body text, input, buttons |
-| `--font-size-small` | 12px | NPC labels, action hints, status |
+| `--font-size-small` | 12px | NPC labels, status |
 | `--font-size-xs` | 11px | Connection status |
 
 ### Spacing

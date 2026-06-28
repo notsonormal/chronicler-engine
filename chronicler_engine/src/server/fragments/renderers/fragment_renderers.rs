@@ -98,10 +98,6 @@ pub fn render_character_headshots(state: &AppState) -> Result<String> {
         .map_err(|e| EngineError::Template(e.to_string()))
 }
 
-pub fn render_action_hints(_state: &AppState) -> Result<String> {
-    Ok(String::new())
-}
-
 pub fn render_llm_messages(state: &AppState) -> Result<String> {
     let ctx = state.as_game_service_context()?;
     let messages = query_handlers::list_latest_llm_messages(ctx, 50)

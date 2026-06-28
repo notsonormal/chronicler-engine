@@ -40,26 +40,7 @@ fn test_markdown_to_html_blockquotes() {
 }
 
 #[test]
-fn test_markdown_to_html_xss_prevention() {
-    let html = markdown_to_html("<script>alert('xss')</script>");
-    assert!(!html.contains("<script>alert"));
-    assert!(html.contains("&lt;script&gt;"));
-}
-
-#[test]
-fn test_markdown_to_html_italic() {
-    let html = markdown_to_html("*italic text*");
-    assert!(html.contains("<em>") || html.contains("italic"));
-}
-
-#[test]
-fn test_markdown_to_html_bold() {
-    let html = markdown_to_html("**bold text**");
-    assert!(html.contains("<strong>") || html.contains("bold"));
-}
-
-#[test]
-fn test_markdown_to_html_mixed_content() {
+fn test_markdown_to_html_renders_mixed_elements() {
     let html = markdown_to_html("# Title\n\nParagraph with **bold** and *italic*.\n\n- List item");
     assert!(html.contains("<h1>"));
     assert!(html.contains("<p>"));

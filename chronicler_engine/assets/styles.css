@@ -540,16 +540,6 @@ body {
     box-shadow: none;
 }
 
-/* Action Hints */
-.action-hints {
-    font-size: var(--font-size-small);
-    color: var(--color-text-muted);
-}
-
-.action-hint {
-    margin-right: var(--spacing-sm);
-}
-
 /* Status Display */
 .status {
     font-size: var(--font-size-small);

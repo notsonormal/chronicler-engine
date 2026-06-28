@@ -57,7 +57,7 @@ Horizontal split into story context and visual context:
 
 Interactive zone for player input.
 
-- **Content**: Text input field + send button + action hints + status indicator
+- **Content**: Text input field + send button + status indicator
 - **Button States**:
   - Ready: Green button with "Send" text and play icon (▶)
   - Thinking: Green button with "Stop" text and square icon (■), disabled input
@@ -97,7 +97,6 @@ The dashboard uses HTMX polling for live updates:
 - Story-log polls `/fragment/story-log` every 2 seconds for new content
 - Visual sidebar polls `/fragment/visual-sidebar` every 5 seconds
 - Status-display polls `/status/generating` every 5 seconds to update button state
-- Action hints poll `/hints` every 5 seconds
 - LLM Messages polls `/fragment/llm-messages` every 4 seconds
 - New narration appears automatically with fade-in effect
 - Button changes state during LLM processing

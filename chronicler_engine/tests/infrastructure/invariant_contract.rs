@@ -156,12 +156,18 @@ fn test_inv004_cancellable_at_boundaries() {
 
     let outcome = std::thread::scope(|s| {
         let handle = s.spawn(|| pipeline.run_from_input(state_for_thread, "look".to_string()));
-        while !mock_backend
-            .narration_started
-            .load(std::sync::atomic::Ordering::SeqCst)
-        {
-            std::thread::sleep(std::time::Duration::from_millis(5));
-        }
+        assert!(
+            pipeline_helpers::wait_for_condition(
+                std::time::Duration::from_secs(5),
+                std::time::Duration::from_millis(50),
+                || {
+                    mock_backend
+                        .narration_started
+                        .load(std::sync::atomic::Ordering::SeqCst)
+                }
+            ),
+            "narration should start within timeout"
+        );
         cancel_token.cancel();
 
         handle.join().expect("pipeline thread should not panic")

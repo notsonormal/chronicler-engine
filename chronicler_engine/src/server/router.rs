@@ -37,7 +37,6 @@ pub(crate) fn build_router(app_state: AppState) -> Router {
         .route("/action/check", post(fragments::action_check_handler))
         .route("/action/confirm", post(fragments::action_confirm_handler))
         .route("/check-text", post(fragments::check_text_handler))
-        .route("/hints", get(fragments::hints_handler))
         .route("/status/ready", get(fragments::status_ready_handler))
         .route(
             "/status/generating",

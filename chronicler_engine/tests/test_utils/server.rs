@@ -327,7 +327,7 @@ impl TestServer {
         // Remove stale database BEFORE starting server so we don't inherit old state.
         Self::cleanup_stale_db(port, &db_path);
         let (child, temp_dir, _db_path) = start_server_with_env(port, world, persona, use_mock);
-        let started = wait_for_server(port, 100).await; // 100 * 100ms = 10s total
+        let started = wait_for_server(port, 300).await; // 300 * 100ms = 30s total — CI under load can take >10s
         assert!(started, "Server failed to start on port {port}");
         SERVER_MANAGED.store(true, Ordering::SeqCst);
         TestServer {

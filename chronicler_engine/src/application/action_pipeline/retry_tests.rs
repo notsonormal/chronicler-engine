@@ -82,7 +82,14 @@ fn test_retry_no_snapshot() {
     let state = make_test_state();
     let ctx = crate::test_support::make_test_context_without_snapshot(state);
     let service = make_service();
-    retry_last_response_impl(&service, ctx);
+    retry_last_response_impl(&service, ctx.clone());
+
+    let state = ctx.load_state_for_test();
+    assert!(
+        matches!(state.narrative.input_buffer.status, GenerationStatus::Error(ref msg) if msg.contains("Retry failed: no anchor message")),
+        "Should record retry error when no anchor message exists, got {:?}",
+        state.narrative.input_buffer.status
+    );
 }
 
 #[test]

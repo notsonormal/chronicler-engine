@@ -234,3 +234,4 @@ chronicler_engine/coverage_full.json
 /.pi/tasks
 /chronicler_engine/jscpd-report
 chronicler_engine/report/jscpd-report.json
+chronicler_engine/.pi/task

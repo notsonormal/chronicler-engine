@@ -108,12 +108,6 @@ async fn test_action_handler_empty_command() {
 }
 
 #[tokio::test]
-async fn test_hints_handler() {
-    let body = fetch_body(TestAppBuilder::default_app(), "/hints").await;
-    assert!(body.is_empty(), "Expected empty hints but got: {body}");
-}
-
-#[tokio::test]
 async fn test_status_ready_handler() {
     let body = fetch_body(TestAppBuilder::default_app(), "/status/ready").await;
     assert!(body.contains("Ready"));

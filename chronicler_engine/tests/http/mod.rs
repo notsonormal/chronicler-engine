@@ -9,7 +9,6 @@ mod debug;
 mod fragment;
 mod games_fragment_handlers;
 mod test_helpers;
-mod worlds_fragment;
 mod worlds_fragment_handlers;
 
 mod endpoints;

@@ -108,7 +108,7 @@ The HTTP layer for the HTMX web dashboard with polling-based real-time updates.
   - **`endpoints`**: HTMX fragment endpoints (`/fragment/story-log`, `/fragment/visual-sidebar`, etc.)
   - **`generation_guard`**: Generation lock/status fragment endpoints
   - **`history`**: History editing, deletion, and retry endpoints
-  - **`misc`**: Utility endpoints (status, hints, text check)
+  - **`misc`**: Utility endpoints (status, text check)
   - **`renderers`**: HTML rendering helpers, markdown→HTML via `pulldown-cmark`. Exports `ctx_or_error()` helper for consistent context loading.
 - **`games_fragment`**: Game management sub-module (moved from `fragments/games`). Handles the Games panel (formerly "Save / Load") with three vertical sections: Active Game (with inline reset button), New Game (always-visible form with world dropdown **and persona dropdown per ADR-026**), and Saved Games. Game switching, deletion, and reset. Endpoints: `/fragment/games` (list), `/games` (create with `world_key` + `persona_key` form params), `/games/:id/switch`, `/games/:id/delete`. Reset is the top-level `POST /reset` (renames/recreates the active game).
 - **`settings_fragment`**: Settings panel fragment handlers and template rendering.

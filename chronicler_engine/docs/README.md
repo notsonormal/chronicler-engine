@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-06-28 21:51 UTC*
+*Index last generated: 2026-06-28 23:34 UTC*
 
 ### Root files
 
@@ -92,6 +92,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [T3: Service Layer Cleanup](./plans/archived/t3-service-layer-cleanup.md)
 - [T4: MockBackend Modernization](./plans/archived/t4-mockbackend-modernization.md)
 - [T7 Sub-Plan (Archived): Split `Backend` enum into `Backend` + `LayeredBackend`](./plans/archived/t7-storage-backend-layered-split.md)
+- [Plan: Test-Police Audit Fixes — Hints Removal + Cancel Test Alignment](./plans/archived/test-police-cancel-and-hints-removal.md)
 
 ### `docs/reference/`
 

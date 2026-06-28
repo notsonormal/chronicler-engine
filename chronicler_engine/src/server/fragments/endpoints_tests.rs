@@ -1,7 +1,7 @@
 use crate::server::fragments::endpoints::{
     action_area_fragment, character_headshots_fragment, generating_status_handler, header_fragment,
-    hints_handler, llm_messages_fragment, reset_generating_handler, status_ready_handler,
-    story_log_fragment, visual_sidebar_fragment,
+    llm_messages_fragment, reset_generating_handler, status_ready_handler, story_log_fragment,
+    visual_sidebar_fragment,
 };
 use crate::test_support::TestAppBuilder;
 
@@ -30,7 +30,7 @@ async fn test_action_area_fragment() {
 async fn test_character_headshots_fragment() {
     let state = TestAppBuilder::default_test().build_app_state();
     let result = character_headshots_fragment(axum::extract::State(state)).await;
-    assert!(result.0.is_empty() || !result.0.is_empty());
+    assert!(!result.0.is_empty());
 }
 
 #[tokio::test]
@@ -38,13 +38,6 @@ async fn test_visual_sidebar_fragment() {
     let state = TestAppBuilder::default_test().build_app_state();
     let result = visual_sidebar_fragment(axum::extract::State(state)).await;
     assert!(!result.0.is_empty());
-}
-
-#[tokio::test]
-async fn test_hints_handler() {
-    let state = TestAppBuilder::default_test().build_app_state();
-    let result = hints_handler(axum::extract::State(state)).await;
-    assert!(result.0.is_empty() || !result.0.is_empty());
 }
 
 #[tokio::test]

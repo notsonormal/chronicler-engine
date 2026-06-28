@@ -253,22 +253,6 @@ async fn test_visual_sidebar_exists() {
 }
 
 #[tokio::test]
-async fn test_action_hints_visible() {
-    with_test_page(
-        CONFIG_PATH,
-        TEST_WORLD,
-        TEST_PERSONA,
-        |page, _port| async move {
-            assert!(
-                element_exists(&page, ".action-hints").await,
-                "Action hints should exist"
-            );
-        },
-    )
-    .await;
-}
-
-#[tokio::test]
 async fn test_form_stays_static_after_submission() {
     with_test_page(
         CONFIG_PATH,

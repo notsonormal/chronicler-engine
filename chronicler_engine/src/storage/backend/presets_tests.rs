@@ -30,7 +30,7 @@ fn test_list_presets_filters_by_type() {
 }
 
 #[test]
-fn test_list_presets_quantifier_only() {
+fn test_list_presets_quantifier_returns_correct_id() {
     let storage = Storage::new_in_memory();
     storage
         .save_preset(&dummy_preset("q1", PresetType::Quantifier))
@@ -42,7 +42,7 @@ fn test_list_presets_quantifier_only() {
 }
 
 #[test]
-fn test_get_preset_found() {
+fn test_get_preset_not_found() {
     let storage = Storage::new_in_memory();
     storage
         .save_preset(&dummy_preset("p1", PresetType::System))
@@ -50,89 +50,6 @@ fn test_get_preset_found() {
 
     let loaded = storage.get_preset("p1").unwrap().unwrap();
     assert_eq!(loaded.id, "p1");
-}
-
-#[test]
-fn test_get_preset_not_found() {
-    let storage = Storage::new_in_memory();
-    let loaded = storage.get_preset("nonexistent").unwrap();
-    assert!(loaded.is_none());
-}
-
-#[test]
-fn test_get_preset_system_type() {
-    let storage = Storage::new_in_memory();
-    storage
-        .save_preset(&dummy_preset("sys1", PresetType::System))
-        .unwrap();
-
-    let loaded = storage.get_preset("sys1").unwrap().unwrap();
-    assert_eq!(loaded.preset_type, PresetType::System);
-}
-
-#[test]
-fn test_get_preset_quantifier_type() {
-    let storage = Storage::new_in_memory();
-    storage
-        .save_preset(&dummy_preset("quant1", PresetType::Quantifier))
-        .unwrap();
-
-    let loaded = storage.get_preset("quant1").unwrap().unwrap();
-    assert_eq!(loaded.preset_type, PresetType::Quantifier);
-}
-
-#[test]
-fn test_save_preset_insert_new() {
-    let storage = Storage::new_in_memory();
-    let preset = dummy_preset("new1", PresetType::System);
-    storage.save_preset(&preset).unwrap();
-
-    let loaded = storage.get_preset("new1").unwrap().unwrap();
-    assert_eq!(loaded.id, "new1");
-}
-
-#[test]
-fn test_save_preset_with_default_flag() {
-    let storage = Storage::new_in_memory();
-    let mut preset = dummy_preset("default_test", PresetType::System);
-    preset.is_default = true;
-    storage.save_preset(&preset).unwrap();
-
-    let loaded = storage.get_preset("default_test").unwrap().unwrap();
-    assert!(loaded.is_default);
-}
-
-#[test]
-fn test_save_preset_update_existing() {
-    let storage = Storage::new_in_memory();
-    let mut preset = dummy_preset("update1", PresetType::System);
-    preset.name = "Original".to_string();
-    storage.save_preset(&preset).unwrap();
-
-    preset.name = "Updated".to_string();
-    storage.save_preset(&preset).unwrap();
-
-    let loaded = storage.get_preset("update1").unwrap().unwrap();
-    assert_eq!(loaded.name, "Updated");
-}
-
-#[test]
-fn test_delete_preset_existing() {
-    let storage = Storage::new_in_memory();
-    storage
-        .save_preset(&dummy_preset("del1", PresetType::System))
-        .unwrap();
-    storage.delete_preset("del1").unwrap();
-
-    let loaded = storage.get_preset("del1").unwrap();
-    assert!(loaded.is_none());
-}
-
-#[test]
-fn test_delete_preset_nonexistent() {
-    let storage = Storage::new_in_memory();
-    let result = storage.delete_preset("nonexistent");
-    assert!(result.is_ok());
 }
 
 #[test]

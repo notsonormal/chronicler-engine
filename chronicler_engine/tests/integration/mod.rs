@@ -1,3 +1,6 @@
+#[path = "../test_utils/mod.rs"]
+mod test_utils;
+
 #[path = "../helpers/pipeline_helpers.rs"]
 mod pipeline_helpers;
 
@@ -10,9 +13,7 @@ use chronicler_engine::application::game_service::GameService;
 use chronicler_engine::narrative::agents::registry::AgentRegistry;
 use chronicler_engine::narrative::llm::MockBackend;
 
-#[path = "../test_utils/settings_guard.rs"]
-mod settings_guard;
-pub use settings_guard::SettingsTestGuard;
+pub use test_utils::settings_guard::SettingsTestGuard;
 
 pub fn failing_service() -> GameService {
     GameService::with_mock_quantifier(
