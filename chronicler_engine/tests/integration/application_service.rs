@@ -107,13 +107,11 @@ fn test_list_games_integration() {
 #[test]
 fn test_get_generating_status() {
     let storage = create_storage(1);
-    let game_service = create_game_service();
     let state = create_basic_test_state();
     let ctx = make_test_ctx(storage.clone(), state);
 
-    let app_service = DefaultApplicationService::new(game_service);
-
-    let (status, phase) = app_service.get_generating_status(ctx.clone()).unwrap();
+    let (status, phase) =
+        chronicler_engine::application::query_handlers::get_generating_status(ctx.clone()).unwrap();
     assert_eq!(status, GenerationStatus::Idle);
     assert_eq!(phase, GenerationPhase::default());
 }

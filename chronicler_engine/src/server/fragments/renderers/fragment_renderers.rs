@@ -2,6 +2,7 @@
 //! Fragment renderers
 
 use askama::Template;
+use crate::application::query_handlers;
 use crate::error::{EngineError, Result};
 use crate::server::AppState;
 use crate::server::templates::{
@@ -29,18 +30,14 @@ fn render_header_unlocked(game_name: String) -> Result<String> {
 
 pub fn render_header(state: &AppState) -> Result<String> {
     let ctx = state.as_game_service_context()?;
-    let game_name = state
-        .application_service
-        .get_current_game_name(ctx)
-        .unwrap_or_else(|_| "Unknown".to_string());
+    let game_name =
+        query_handlers::get_current_game_name(ctx).unwrap_or_else(|_| "Unknown".to_string());
     render_header_unlocked(game_name)
 }
 
 pub fn render_story_log(state: &AppState) -> Result<String> {
     let ctx = state.as_game_service_context()?;
-    let (entries, has_last_trigger) = state
-        .application_service
-        .get_story_log_entries(ctx)
+    let (entries, has_last_trigger) = query_handlers::get_story_log_entries(ctx)
         .map_err(|e| EngineError::Config(e.to_string()))?;
 
     let entries: Vec<_> = entries.into_iter().take(MAX_LOG_DISPLAY).collect();
@@ -52,14 +49,10 @@ pub fn render_story_log(state: &AppState) -> Result<String> {
 
 pub fn render_visual_sidebar(state: &AppState) -> Result<String> {
     let ctx = state.as_game_service_context()?;
-    let (room_name, image_path) = state
-        .application_service
-        .get_current_room_view(ctx.clone())
+    let (room_name, image_path) = query_handlers::get_current_room_view(ctx.clone())
         .map_err(|e| EngineError::Config(e.to_string()))?;
 
-    let npc_data = state
-        .application_service
-        .get_npc_headshots(ctx, true)
+    let npc_data = query_handlers::get_npc_headshots(ctx, true)
         .map_err(|e| EngineError::Config(e.to_string()))?;
 
     let npc_portraits: Vec<NpcPortraitView> = npc_data
@@ -76,10 +69,8 @@ pub fn render_visual_sidebar(state: &AppState) -> Result<String> {
 
 pub fn render_action_area(state: &AppState) -> Result<String> {
     let ctx = state.as_game_service_context()?;
-    let (status, phase) = state
-        .application_service
-        .get_input_status(ctx)
-        .map_err(|e| EngineError::Config(e.to_string()))?;
+    let (status, phase) =
+        query_handlers::get_input_status(ctx).map_err(|e| EngineError::Config(e.to_string()))?;
 
     let vm = ActionAreaViewModel::new(&status, &phase);
     let template = ActionAreaTemplate::new(vm);
@@ -93,9 +84,7 @@ pub fn render_character_headshots(state: &AppState) -> Result<String> {
     use askama::Template;
 
     let ctx = state.as_game_service_context()?;
-    let npc_data = state
-        .application_service
-        .get_npc_headshots(ctx, false)
+    let npc_data = query_handlers::get_npc_headshots(ctx, false)
         .map_err(|e| EngineError::Config(e.to_string()))?;
 
     let npc_portraits: Vec<NpcPortraitView> = npc_data
@@ -115,9 +104,7 @@ pub fn render_action_hints(_state: &AppState) -> Result<String> {
 
 pub fn render_llm_messages(state: &AppState) -> Result<String> {
     let ctx = state.as_game_service_context()?;
-    let messages = state
-        .application_service
-        .list_latest_llm_messages(ctx, 50)
+    let messages = query_handlers::list_latest_llm_messages(ctx, 50)
         .map_err(|e| EngineError::Config(e.to_string()))?;
 
     let template = LlmMessagesTemplate::new(&messages);

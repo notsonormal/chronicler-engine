@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-06-28 17:05 UTC*
+*Index last generated: 2026-06-28 18:02 UTC*
 
 ### Root files
 
@@ -31,7 +31,6 @@ This folder contains all documentation for the Chronicler Engine project.
 - [ADR-015: Prompt Presets System](./adr/adr-015-prompt-presets.md)
 - [ADR-016: Multi-Game Support](./adr/adr-016-multi-game-support.md)
 - [ADR-017: Message Swipes](./adr/adr-017-message-swipes.md)
-- [ADR-018: Application Service Layer](./adr/adr-018-application-service.md)
 - [ADR-019: One Table Per Storage Module](./adr/adr-019-one-table-per-storage-module.md)
 - [ADR-020: Unified Storage Struct](./adr/adr-020-storage-consolidation.md)
 - [ADR-021: State Patch Reducer for Post-Generation Agent Composition](./adr/adr-021-state-patch-reducer.md)
@@ -76,7 +75,6 @@ This folder contains all documentation for the Chronicler Engine project.
 - [T1: Error Model Unification](./plans/t1-error-model-unification.md)
 - [T10: Low-priority Cleanup Bundle](./plans/t10-low-priority-cleanup-bundle.md)
 - [T2-ARCH: Narration Deepening](./plans/t2-arch-narration-deepening.md)
-- [T3: Service Layer Cleanup](./plans/t3-service-layer-cleanup.md)
 - [T5: Type Collapses (A3 + A6)](./plans/t5-type-collapses.md)
 - [T6: MessageHistory Encapsulation](./plans/t6-messagehistory-encapsulation.md)
 - [T9: Doc / Migration Debt](./plans/t9-doc-and-migration-debt.md)
@@ -90,6 +88,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Pipeline Decomposition Review Fixes (Round 3)](./plans/archived/pipeline-review-fixes-round3.md)
 - [Review Fixes — Pipeline Decomposition Quality](./plans/archived/review-fixes-pipeline-quality.md)
 - [Subplan A: Relocate `starting_room_id` to `StartingScenario`](./plans/archived/subplan-a-relocate-starting-room.md)
+- [T3: Service Layer Cleanup](./plans/archived/t3-service-layer-cleanup.md)
 - [T4: MockBackend Modernization](./plans/archived/t4-mockbackend-modernization.md)
 - [T7 Sub-Plan (Archived): Split `Backend` enum into `Backend` + `LayeredBackend`](./plans/archived/t7-storage-backend-layered-split.md)
 

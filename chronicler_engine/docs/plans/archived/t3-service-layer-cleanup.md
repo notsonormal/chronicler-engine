@@ -1,12 +1,12 @@
 # T3: Service Layer Cleanup
 
-**Parent Plan:** [abstraction-fixes-followup-superplan.md](./abstraction-fixes-followup-superplan.md)
-**Status:** Planning — ready
+**Parent Plan:** [abstraction-fixes-followup-superplan.md](../abstraction-fixes-followup-superplan.md)
+**Status:** Done — landed 2026-06-28
 **Date:** 2026-06-28
 **Depends on:** none
 **Blocks:** none
 **Priority:** P1
-**Findings owned:** B10 (partial — `spawn_pipeline_task` extracted), N1 (9 identity-passthroughs)
+**Findings owned:** B10 (closed — `spawn_pipeline_task` extracted + reused by all 3 sites), N1 (closed — 9 identity-passthroughs deleted)
 
 ---
 

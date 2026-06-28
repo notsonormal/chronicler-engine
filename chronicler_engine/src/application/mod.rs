@@ -9,6 +9,7 @@ pub mod game_service;
 mod game_service_tests;
 pub mod message_editing;
 pub mod query_handlers;
+pub(crate) mod spawn;
 
 pub use application_service::{
     ApplicationError, DebugStateView, DefaultApplicationService, ProcessActionResult,
@@ -18,12 +19,12 @@ pub use context::{
     delete_and_remove_message, map_llm_error, save_message_and_snapshot, GameServiceContext,
 };
 pub use game_service::GameService;
-pub use message_editing::MessageEditingService;
+pub use message_editing::{delete_last, edit_history, retrigger, retry, switch_swipe};
 pub use query_handlers::*;
+pub(crate) use spawn::spawn_pipeline_task;
 
 #[cfg(test)]
 mod context_tests;
-#[cfg(test)]
-mod message_editing_tests;
+
 #[cfg(test)]
 mod query_handlers_tests;

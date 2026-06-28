@@ -181,7 +181,7 @@ fn test_retry_empty_history() {
 fn test_switch_swipe_out_of_bounds() {
     use chronicler_engine::model::message::{Message, Swipe};
     use chronicler_engine::model::state::message_types::MessageType;
-    use chronicler_engine::application::message_editing::MessageEditingService;
+    use chronicler_engine::application::message_editing;
     use chronicler_engine::application::ApplicationError;
 
     let mut state = create_test_state();
@@ -201,16 +201,13 @@ fn test_switch_swipe_out_of_bounds() {
     state.narrative.history.append(msg);
 
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let service =
-        GameService::with_backends(Arc::new(MockBackend::default()), AgentRegistry::default());
-    let editing_service = MessageEditingService::new(Arc::new(service));
 
     let messages = ctx.load_messages().unwrap();
     let last_message = messages.last().unwrap();
     let message_id = last_message.id;
     let swipe_count = last_message.swipes.len();
 
-    let result = editing_service.switch_swipe(ctx, message_id, swipe_count);
+    let result = message_editing::switch_swipe(ctx, message_id, swipe_count);
 
     assert!(result.is_err());
     assert!(matches!(result.unwrap_err(), ApplicationError::Engine(_)));
@@ -220,7 +217,7 @@ fn test_switch_swipe_out_of_bounds() {
 fn test_edit_history_updates_text() {
     use chronicler_engine::model::message::Message;
     use chronicler_engine::model::state::message_types::MessageType;
-    use chronicler_engine::application::message_editing::MessageEditingService;
+    use chronicler_engine::application::message_editing;
 
     let mut state = create_test_state();
     state.narrative.history.append(Message::new(
@@ -232,15 +229,12 @@ fn test_edit_history_updates_text() {
     ));
 
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let service =
-        GameService::with_backends(Arc::new(MockBackend::default()), AgentRegistry::default());
-    let editing_service = MessageEditingService::new(Arc::new(service));
 
     let messages = ctx.load_messages().unwrap();
     let message_id = messages.last().unwrap().id;
     let edited_text = "Edited narration".to_string();
 
-    let result = editing_service.edit_history(ctx.clone(), message_id, edited_text.clone());
+    let result = message_editing::edit_history(ctx.clone(), message_id, edited_text.clone());
     assert!(result.is_ok());
 
     let messages = ctx.load_messages().unwrap();
@@ -252,7 +246,7 @@ fn test_edit_history_updates_text() {
 fn test_edit_history_no_snapshot() {
     use chronicler_engine::model::message::Message;
     use chronicler_engine::model::state::message_types::MessageType;
-    use chronicler_engine::application::message_editing::MessageEditingService;
+    use chronicler_engine::application::message_editing;
 
     let mut state = create_test_state();
     state.narrative.history.append(Message::new(
@@ -264,20 +258,17 @@ fn test_edit_history_no_snapshot() {
     ));
 
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let service =
-        GameService::with_backends(Arc::new(MockBackend::default()), AgentRegistry::default());
-    let editing_service = MessageEditingService::new(Arc::new(service));
 
     let messages = ctx.load_messages().unwrap();
     let message_id = messages.last().unwrap().id;
 
-    let result = editing_service.edit_history(ctx.clone(), message_id, "Edited".to_string());
+    let result = message_editing::edit_history(ctx.clone(), message_id, "Edited".to_string());
     assert!(result.is_ok());
 }
 
 #[test]
 fn test_delete_last_removes() {
-    use chronicler_engine::application::message_editing::MessageEditingService;
+    use chronicler_engine::application::message_editing;
     use chronicler_engine::model::message::Message;
     use chronicler_engine::model::state::message_types::MessageType;
     let mut state = create_test_state();
@@ -291,11 +282,8 @@ fn test_delete_last_removes() {
     let initial_len = state.narrative.history.len();
 
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let service =
-        GameService::with_backends(Arc::new(MockBackend::default()), AgentRegistry::default());
-    let editing_service = MessageEditingService::new(Arc::new(service));
 
-    let result = editing_service.delete_last(ctx.clone());
+    let result = message_editing::delete_last(ctx.clone());
     assert!(result.is_ok());
 
     let messages = ctx.storage.load_message_rows().unwrap();
@@ -304,18 +292,15 @@ fn test_delete_last_removes() {
 
 #[test]
 fn test_delete_last_empty_rejected() {
-    use chronicler_engine::application::message_editing::MessageEditingService;
+    use chronicler_engine::application::message_editing;
     use chronicler_engine::application::ApplicationError;
 
     let mut state = create_test_state();
     state.narrative.history.clear();
 
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let service =
-        GameService::with_backends(Arc::new(MockBackend::default()), AgentRegistry::default());
-    let editing_service = MessageEditingService::new(Arc::new(service));
 
-    let result = editing_service.delete_last(ctx.clone());
+    let result = message_editing::delete_last(ctx.clone());
     assert!(result.is_err());
     if let ApplicationError::Engine(e) = result.unwrap_err() {
         assert!(e.to_string().contains("History is empty"));
@@ -328,7 +313,7 @@ fn test_delete_last_empty_rejected() {
 fn test_edit_history_storage_failure() {
     use chronicler_engine::model::message::Message;
     use chronicler_engine::model::state::message_types::MessageType;
-    use chronicler_engine::application::message_editing::MessageEditingService;
+    use chronicler_engine::application::message_editing;
 
     let mut state = create_test_state();
     state.narrative.history.append(Message::new(
@@ -340,14 +325,11 @@ fn test_edit_history_storage_failure() {
     ));
 
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let service =
-        GameService::with_backends(Arc::new(MockBackend::default()), AgentRegistry::default());
-    let editing_service = MessageEditingService::new(Arc::new(service));
 
     let messages = ctx.load_messages().unwrap();
     let message_id = messages.last().unwrap().id;
 
-    let result = editing_service.edit_history(ctx.clone(), message_id, "Edited".to_string());
+    let result = message_editing::edit_history(ctx.clone(), message_id, "Edited".to_string());
     assert!(result.is_ok() || result.is_err());
 }
 
@@ -356,7 +338,7 @@ async fn test_retrigger_happy_path() {
     use chronicler_engine::model::message::Message;
     use chronicler_engine::model::state::message_types::MessageType;
     use chronicler_engine::model::state::trigger_context::StoredTriggerContext;
-    use chronicler_engine::application::message_editing::MessageEditingService;
+    use chronicler_engine::application::message_editing;
 
     let mut state = create_test_state();
     state.narrative.last_trigger = Some(StoredTriggerContext {
@@ -380,9 +362,8 @@ async fn test_retrigger_happy_path() {
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let service =
         GameService::with_backends(Arc::new(MockBackend::default()), AgentRegistry::default());
-    let editing_service = MessageEditingService::new(Arc::new(service));
 
-    let result = editing_service.retrigger(ctx.clone());
+    let result = message_editing::retrigger(&Arc::new(service), ctx.clone());
     assert!(result.is_ok());
 }
 
@@ -391,7 +372,7 @@ async fn test_retrigger_storage_operations() {
     use chronicler_engine::model::message::Message;
     use chronicler_engine::model::state::message_types::MessageType;
     use chronicler_engine::model::state::trigger_context::StoredTriggerContext;
-    use chronicler_engine::application::message_editing::MessageEditingService;
+    use chronicler_engine::application::message_editing;
 
     let mut state = create_test_state();
     state.narrative.last_trigger = Some(StoredTriggerContext {
@@ -415,12 +396,11 @@ async fn test_retrigger_storage_operations() {
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let service =
         GameService::with_backends(Arc::new(MockBackend::default()), AgentRegistry::default());
-    let editing_service = MessageEditingService::new(Arc::new(service));
 
     let initial_snapshot = ctx.storage.load_latest_snapshot().unwrap();
     assert!(initial_snapshot.is_some());
 
-    let result = editing_service.retrigger(ctx.clone());
+    let result = message_editing::retrigger(&Arc::new(service), ctx.clone());
     assert!(result.is_ok());
 
     let final_snapshot = ctx.storage.load_latest_snapshot().unwrap();
@@ -433,7 +413,7 @@ async fn test_retrigger_storage_operations() {
 fn test_delete_last_storage_failure() {
     use chronicler_engine::model::message::Message;
     use chronicler_engine::model::state::message_types::MessageType;
-    use chronicler_engine::application::message_editing::MessageEditingService;
+    use chronicler_engine::application::message_editing;
     let mut state = create_test_state();
     state.narrative.history.append(Message::new(
         None,
@@ -443,17 +423,14 @@ fn test_delete_last_storage_failure() {
         None,
     ));
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let service =
-        GameService::with_backends(Arc::new(MockBackend::default()), AgentRegistry::default());
-    let editing_service = MessageEditingService::new(Arc::new(service));
-    let result = editing_service.delete_last(ctx.clone());
+    let result = message_editing::delete_last(ctx.clone());
     assert!(result.is_ok() || result.is_err());
 }
 #[tokio::test]
 async fn test_retry_cancellation() {
     use chronicler_engine::model::message::Message;
     use chronicler_engine::model::state::message_types::MessageType;
-    use chronicler_engine::application::message_editing::MessageEditingService;
+    use chronicler_engine::application::message_editing;
     let mut state = create_test_state();
     state.narrative.history.append(Message::new(
         Some("Player".to_string()),
@@ -466,8 +443,7 @@ async fn test_retry_cancellation() {
     ctx.cancel_token.cancel();
     let service =
         GameService::with_backends(Arc::new(MockBackend::default()), AgentRegistry::default());
-    let editing_service = MessageEditingService::new(Arc::new(service));
-    let result = editing_service.retry(ctx.clone());
+    let result = message_editing::retry(&Arc::new(service), ctx.clone());
     assert!(result.is_err());
 }
 

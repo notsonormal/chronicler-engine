@@ -35,24 +35,34 @@ async fn test_debug_state_endpoint_returns_json() {
         json["npcs_in_area"].is_array(),
         "npcs_in_area should be an array"
     );
+    // Unit enum variants serialize as strings, tagged variants as objects
+    let status = &json["generation_status"];
     assert!(
-        json["generation_status"].is_string(),
-        "generation_status should be a string"
+        status.is_string() || status.is_object(),
+        "generation_status should be enum (string or object)"
     );
-    let status = json["generation_status"].as_str().unwrap();
+    if let Some(s) = status.as_str() {
+        assert!(
+            s == "Idle" || s == "Generating",
+            "generation_status should be Idle or Generating, got: {s}"
+        );
+    } else if let Some(obj) = status.as_object() {
+        assert!(
+            obj.contains_key("Error"),
+            "Error variant should have 'Error' key"
+        );
+    }
+    let phase = &json["generation_phase"];
     assert!(
-        status == "Idle" || status == "Generating" || status.starts_with("Error("),
-        "generation_status should be Idle, Generating, or Error(…), got: {status}"
+        phase.is_string(),
+        "generation_phase should be string (unit enum)"
     );
-    assert!(
-        json["generation_phase"].is_string(),
-        "generation_phase should be a string"
-    );
-    let phase = json["generation_phase"].as_str().unwrap();
-    assert!(
-        matches!(phase, "Narrating" | "Quantifying" | "GeneratingEvent"),
-        "generation_phase should be a known variant, got: {phase}"
-    );
+    if let Some(p) = phase.as_str() {
+        assert!(
+            p == "Narrating" || p == "Quantifying" || p == "GeneratingEvent",
+            "generation_phase should be known variant, got: {p}"
+        );
+    }
 }
 
 #[tokio::test]

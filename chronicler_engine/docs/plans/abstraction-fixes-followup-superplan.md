@@ -25,7 +25,7 @@ Sub-plans MUST reference this super-plan as parent, verify against actual code (
 |---|-------|-----------|----------|--------|
 | T1 | Error Model Unification | ready — needs scoping decisions | P1 | none |
 | T2-ARCH | Narration Deepening | needs grilling (G2–G5) | P1 | T1, ADR-018 |
-| T3 | Service Layer Cleanup | ready | P1 | none |
+| T3 | Service Layer Cleanup | done (2026-06-28) | P1 | none |
 | T4 | MockBackend Modernization | done | P2 | none |
 | T5 | Type Collapses (A3 + A6) | ready | P2 | none |
 | T6 | MessageHistory Encapsulation | ready | P2 | none |
@@ -97,17 +97,17 @@ T2 (ArrivalTaskContext minimal cancellation chunk) was withdrawn 2026-06-28 — 
 
 ## T3 — Service Layer Cleanup
 
+**Status:** DONE — landed 2026-06-28. Archived plan: `docs/plans/archived/t3-service-layer-cleanup.md`. See CHANGELOG entry "T3 service-layer cleanup".
+
 **Findings owned:** B10 (`spawn_pipeline_task` partial), N1 (9 identity-passthroughs).
 
-**Architecture-lens reframe:** deletion test on the 9 query passthroughs says delete — pure pass-throughs, zero leverage. The "move to GameService" alternative creates a new shallow delegate in a different file; reject. Similarly, the 5 editing delegates (`retry`, `retrigger`, `switch_swipe`, `edit_history`, `delete_last`) are the same shape — delete unless mutation-coherence justifies promoting `MessageEditingService` into a deep HistoryMutation module.
+**Resolved decisions:**
+- 9 query-handler delegates deleted; server callers route to `query_handlers::X(ctx)` free fns directly.
+- `MessageEditingService` struct deleted; 5 methods converted to module-level free fns in `application/message_editing.rs`. `retry` / `retrigger` take `&Arc<GameService>` via `game_service()` accessor; `switch_swipe` / `edit_history` / `delete_last` take only `ctx` (they don't touch game_service). Mirrors `query_handlers` pattern (decision: Option 1 — delete + free fns; struct was hollow, 3 of 5 methods didn't use game_service).
+- Shared `spawn_pipeline_task(game_service, ctx, f)` free fn extracted to `application/spawn.rs`. Dedups only `Arc::clone` + `spawn_blocking`; cancel-check + `GenerationGuard` lifetime remain inside each caller's closure (zero behavior change).
+- Observability: original 3 `tracing::debug!` lines from the private method moved into `process_action`'s closure only (per Option A); `retry` / `retrigger` stay unlogged as before.
 
-**Scope:**
-
-1. Delete the 9 query-handler wrappers from `DefaultApplicationService` (`application_service.rs:333-393`); callers `use crate::application::query_handlers::*` directly.
-2. Extract a single `spawn_pipeline_task<F>` helper — signature `(ctx, f: F) where F: FnOnce(&GameService, GameServiceContext) + Send + 'static`. Used by `process_action`, `retry`, `retrigger`.
-3. Decide on `MessageEditingService`: delete the 5 delegates (default), or promote to HistoryMutation.
-
-**Blast radius:** `application_service.rs`, `message_editing.rs`, ~3–5 caller call sites (server fragments).
+**Out of scope (owned elsewhere):** retry/retrigger not setting `is_generating=true` — owned by R2 in `docs/plans/reliability-and-cancellation-plan.md`.
 
 ---
 
@@ -222,11 +222,11 @@ Single source of truth for every original abstraction investigation finding (A/B
 | A12 `apply_to` manual field clone | closed | — | deleted (thermo-nuclear) |
 | B2 `ActionOutcome::Error` variant | deferred | T1 | unused at runtime; error channel moved to `GenerationStatus::Error` (`8e4acf5`) |
 | B3 `run_from_input` monolith | deferred | T1 | state-machine rewrite scoped out per Phase 6.1 (Issue 9 constraint) |
-| B4 `GameLifecycleService` | closed | — | flattened into `DefaultApplicationService` (thermo-nuclear); N1 passthroughs remain → T3 |
+| B4 `GameLifecycleService` | closed | — | flattened into `DefaultApplicationService` (thermo-nuclear); N1 passthroughs resolved by T3 |
 | B7 retry mini-pipeline | non-issue | — | STALE finding: retry already delegates to `phase_trigger_continuation` + `run_from_input` (`architecture/system.md:52`, CHANGELOG L90) |
 | B8 `ArrivalTaskContext` | deferred | T2-ARCH | deliberate extraction per ADR-018 / `system.md:208-209`; deepening deferred until a 3rd narration execution path emerges |
 | B9 `error_return` returns `Ok` | deferred | T1 | deliberate arch per `8e4acf5` ("Unify error model onto GenerationStatus on state") |
-| B10 `spawn_pipeline_task` helper | active | T3 | extracted `application_service.rs:181`; not yet reused by `message_editing.rs:145,189` |
+| B10 `spawn_pipeline_task` helper | closed | T3 | extracted `application/spawn.rs`; reused by `process_action` + `retry` + `retrigger` (T3 landed 2026-06-28) |
 | B12 `trigger_eval.rs` cohesion | deferred | T10 | CRUD helpers in same file as `evaluate_triggers` |
 | C1 `NarratorAgent::narrate_continuation` | closed | — | zero prod callers; removed (thermo-nuclear) |
 | C2 global `sanitize_llm_output` | out-of-scope | — | backend-agnostic sanitize policy, not a dedup bug |
@@ -249,7 +249,7 @@ Single source of truth for every original abstraction investigation finding (A/B
 | M4 `QuantifierParseResult::is_high()` only | active | T10 | add `is_low/is_medium` or derive `Ord` |
 
 
-| N1 9 identity-passthrough methods | active | T3 | `application_service.rs:333-393` |
+| N1 9 identity-passthrough methods | closed | T3 | delegates deleted; server routes to `query_handlers::X` directly (T3 landed 2026-06-28) |
 | N2 40 `Backend::Test` dead arms | closed | — | removed in thermo-nuclear `6a8531e` + `f914bae` |
 | N3 new code self-invents `state.status` error side-channel | deferred | T1 | consequence of B9; T1 fixes root cause |
 | N5 prompt-context + LLM + persist drift between `ArrivalTaskContext` and `phase_narrate` | deferred | T2-ARCH | one deep Narration module split across two adapters |
@@ -283,7 +283,7 @@ These decisions belong in each sub-plan, not this super-plan. Visible here:
 
 - **T1:** Fold `ActionOutcome::Cancelled` into `PipelineError::Cancelled` or keep separate?
 - **T2-ARCH:** Extract shared `NarrationDriver` now, or sync helper overlap informally and pin for future?
-- **T3:** Keep `MessageEditingService` (promote to HistoryMutation) or delete the 5 delegates?
+- **T3:** ~~Keep `MessageEditingService` (promote to HistoryMutation) or delete the 5 delegates?~~ Resolved 2026-06-28 — delete struct + convert to free fns (Option 1).
 - **T4:** Migrate 100 `MockBackend::default()` test sites, or leave (fields go `pub(crate)` so old code still works)?
 - **T5 A3:** Move `Confidence` to new `model/confidence.rs`, or keep in `agent.rs`?
 - **T6:** `from_messages` for storage loaders: enforce cap, or add `from_messages_trusted`?

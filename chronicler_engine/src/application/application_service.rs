@@ -10,11 +10,11 @@ use serde::Serialize;
 use crate::application::action_pipeline::execute_action_impl;
 use crate::application::context::{GameServiceContext, load_or_fresh};
 use crate::application::game_service::GameService;
-use crate::application::message_editing::MessageEditingService;
+
 use crate::bootstrap::build_fresh_initial_state;
 use crate::error::EngineError;
 use crate::model::game::{Game, generate_game_name};
-use crate::model::llm_message::LlmMessage;
+
 use crate::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::model::state::message_types::{MessageEntry, MessageType};
 use crate::model::state_snapshot::GameStateSnapshot;
@@ -100,15 +100,11 @@ pub struct DebugStateView {
 
 pub struct DefaultApplicationService {
     game_service: Arc<GameService>,
-    editing: MessageEditingService,
 }
 
 impl DefaultApplicationService {
     pub fn new(game_service: Arc<GameService>) -> Self {
-        Self {
-            editing: MessageEditingService::new(Arc::clone(&game_service)),
-            game_service,
-        }
+        Self { game_service }
     }
 
     pub fn game_service(&self) -> &Arc<GameService> {
@@ -171,22 +167,18 @@ impl DefaultApplicationService {
             return Ok(ProcessActionResult::ShuttingDown);
         }
 
-        self.spawn_pipeline_task(ctx, input);
-        Ok(ProcessActionResult::Started)
-    }
-
-    fn spawn_pipeline_task(&self, ctx: GameServiceContext, input: String) {
-        let game_service = Arc::clone(&self.game_service);
-        tokio::task::spawn_blocking(move || {
+        let is_generating = Arc::clone(&ctx.is_generating);
+        crate::application::spawn_pipeline_task(&self.game_service, ctx, move |gs, ctx| {
             tracing::debug!("spawn_blocking: task started");
-            let _guard = GenerationGuard(Arc::clone(&ctx.is_generating));
+            let _guard = GenerationGuard(Arc::clone(&is_generating));
             if ctx.cancel_token.is_cancelled() {
                 tracing::debug!("spawn_blocking: cancelled before execute_action");
                 return;
             }
-            execute_action_impl(&*game_service, ctx.clone(), input);
+            execute_action_impl(gs, ctx, input);
             tracing::debug!("spawn_blocking: execute_action completed");
         });
+        Ok(ProcessActionResult::Started)
     }
 
     pub fn continue_narration(
@@ -295,98 +287,6 @@ impl DefaultApplicationService {
         let _ = Self::persist_initial_state_with_swipes(&ctx);
 
         Ok(())
-    }
-
-    pub fn retry(&self, ctx: GameServiceContext) -> Result<(), ApplicationError> {
-        self.editing.retry(ctx)
-    }
-
-    pub fn retrigger(&self, ctx: GameServiceContext) -> Result<(), ApplicationError> {
-        self.editing.retrigger(ctx)
-    }
-
-    pub fn switch_swipe(
-        &self,
-        ctx: GameServiceContext,
-        message_id: u64,
-        swipe_index: usize,
-    ) -> Result<(), ApplicationError> {
-        self.editing.switch_swipe(ctx, message_id, swipe_index)
-    }
-
-    pub fn edit_history(
-        &self,
-        ctx: GameServiceContext,
-        id: u64,
-        text: String,
-    ) -> Result<(), ApplicationError> {
-        self.editing.edit_history(ctx, id, text)
-    }
-
-    pub fn delete_last(&self, ctx: GameServiceContext) -> Result<(), ApplicationError> {
-        self.editing.delete_last(ctx)
-    }
-
-    pub fn get_generating_status(
-        &self,
-        ctx: GameServiceContext,
-    ) -> Result<(GenerationStatus, GenerationPhase), ApplicationError> {
-        super::query_handlers::get_generating_status(ctx)
-    }
-
-    pub fn reset_generating_status(&self, ctx: GameServiceContext) -> Result<(), ApplicationError> {
-        super::query_handlers::reset_generating_status(ctx)
-    }
-
-    pub fn get_current_game_name(
-        &self,
-        ctx: GameServiceContext,
-    ) -> Result<String, ApplicationError> {
-        super::query_handlers::get_current_game_name(ctx)
-    }
-
-    pub fn list_latest_llm_messages(
-        &self,
-        ctx: GameServiceContext,
-        limit: usize,
-    ) -> Result<Vec<LlmMessage>, ApplicationError> {
-        super::query_handlers::list_latest_llm_messages(ctx, limit)
-    }
-
-    pub fn get_story_log_entries(
-        &self,
-        ctx: GameServiceContext,
-    ) -> Result<(Vec<MessageEntry>, bool), ApplicationError> {
-        super::query_handlers::get_story_log_entries(ctx)
-    }
-
-    pub fn get_input_status(
-        &self,
-        ctx: GameServiceContext,
-    ) -> Result<(GenerationStatus, GenerationPhase), ApplicationError> {
-        super::query_handlers::get_input_status(ctx)
-    }
-
-    pub fn get_current_room_view(
-        &self,
-        ctx: GameServiceContext,
-    ) -> Result<(String, Option<String>), ApplicationError> {
-        super::query_handlers::get_current_room_view(ctx)
-    }
-
-    pub fn get_npc_headshots(
-        &self,
-        ctx: GameServiceContext,
-        scene_only: bool,
-    ) -> Result<Vec<(String, String)>, ApplicationError> {
-        super::query_handlers::get_npc_headshots(ctx, scene_only)
-    }
-
-    pub fn get_debug_state(
-        &self,
-        ctx: GameServiceContext,
-    ) -> Result<DebugStateView, ApplicationError> {
-        super::query_handlers::get_debug_state(ctx)
     }
 
     pub fn list_worlds(&self, ctx: GameServiceContext) -> Result<Vec<WorldCard>, ApplicationError> {

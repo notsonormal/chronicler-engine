@@ -3,6 +3,7 @@
 
 use axum::{extract::State, response::Html};
 
+use crate::application::query_handlers;
 use crate::server::AppState;
 
 use super::renderers::{
@@ -116,7 +117,7 @@ pub async fn reset_generating_handler(State(state): State<AppState>) -> Html<Str
         Ok(ctx) => ctx,
         Err(_) => return Html("failed".to_string()),
     };
-    match state.application_service.reset_generating_status(ctx) {
+    match query_handlers::reset_generating_status(ctx) {
         Ok(()) => Html("reset".to_string()),
         Err(_) => Html("failed".to_string()),
     }
