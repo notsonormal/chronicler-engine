@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-06-28 14:05 UTC*
+*Index last generated: 2026-06-28 17:05 UTC*
 
 ### Root files
 
@@ -77,7 +77,6 @@ This folder contains all documentation for the Chronicler Engine project.
 - [T10: Low-priority Cleanup Bundle](./plans/t10-low-priority-cleanup-bundle.md)
 - [T2-ARCH: Narration Deepening](./plans/t2-arch-narration-deepening.md)
 - [T3: Service Layer Cleanup](./plans/t3-service-layer-cleanup.md)
-- [T4: MockBackend Modernization](./plans/t4-mockbackend-modernization.md)
 - [T5: Type Collapses (A3 + A6)](./plans/t5-type-collapses.md)
 - [T6: MessageHistory Encapsulation](./plans/t6-messagehistory-encapsulation.md)
 - [T9: Doc / Migration Debt](./plans/t9-doc-and-migration-debt.md)
@@ -91,6 +90,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Pipeline Decomposition Review Fixes (Round 3)](./plans/archived/pipeline-review-fixes-round3.md)
 - [Review Fixes — Pipeline Decomposition Quality](./plans/archived/review-fixes-pipeline-quality.md)
 - [Subplan A: Relocate `starting_room_id` to `StartingScenario`](./plans/archived/subplan-a-relocate-starting-room.md)
+- [T4: MockBackend Modernization](./plans/archived/t4-mockbackend-modernization.md)
 - [T7 Sub-Plan (Archived): Split `Backend` enum into `Backend` + `LayeredBackend`](./plans/archived/t7-storage-backend-layered-split.md)
 
 ### `docs/reference/`

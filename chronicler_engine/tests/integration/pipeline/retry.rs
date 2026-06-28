@@ -289,7 +289,7 @@ fn test_retry_llm_error() {
     };
 
     let backend = GameService::with_mock_quantifier(
-        Arc::new(MockBackend::failing()),
+        Arc::new(MockBackend::default().with_fail()),
         Arc::new(MockBackend::default()),
     );
 
@@ -370,7 +370,7 @@ fn test_retry_empty_narration() {
     };
 
     let backend = GameService::with_mock_quantifier(
-        Arc::new(MockBackend::with_empty_response()),
+        Arc::new(MockBackend::default().with_empty_response()),
         Arc::new(MockBackend::default()),
     );
 

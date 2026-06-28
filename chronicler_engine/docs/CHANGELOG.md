@@ -4,6 +4,8 @@
 
 ### Changed
 
+- **MockBackend builder modernization (T4)** — Refactored `src/narrative/llm/mock.rs` `MockBackend` from non-composable `Default`-based associated-fn constructors into idiomatic consuming `with_*` builder methods chained from `::new()`/`Default::default()`. Privatized all config fields to `pub(crate)` (`should_fail`, `should_return_empty`, `trigger_narration_should_fail`, `delay_ms`, `trigger_delay_ms`, `per_call_narrations`, `per_call_prompt_responses`, `call_index`, `storage`) so external test code must use builders. `narration_started`/`trigger_started` remain `pub` with doc comments — legitimate test-sync primitives read via `.load(Ordering::SeqCst)`. Removed `::failing()`, `::with_empty_response()`, `::with_failing_trigger_narration()`, `::with_delay()`, `::with_trigger_delay()` associated fns. Added composable builders `with_fail`, `with_empty_response`, `with_trigger_narration_fail`, `with_delay`, `with_trigger_delay`, `with_narrations`, `with_prompt_responses`. Migrated ~30 call sites across `src/` and `tests/`, including multi-flag struct literals (e.g. `pipeline.rs` `with_prompt_responses(...).with_delay(500)`). New `test_mock_backend_builders_compose` lock-in test verifies chaining + failure propagation. No `::succeeding()` factory (standard Rust idiom: `Default::default()` is the happy path). Closes T4 in `docs/plans/abstraction-fixes-followup-superplan.md`.
+
 - **State module re-export shield removed** — Deleted `src/model/state/mod.rs:12-18` re-export shield. All callers now import via direct submodule paths (`crate::model::state::<sub>::<Symbol>`). The 7 `pub use <sub>::*;` lines deleted. Closes T9 item 4.
 
 - **Bootstrap: arrival narration persistence fix (Q1)** — `ArrivalTaskContext::run` previously

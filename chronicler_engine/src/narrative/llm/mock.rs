@@ -20,18 +20,18 @@ fn extract_player_input(user_prompt: &str) -> Option<String> {
 
 #[derive(Default)]
 pub struct MockBackend {
-    pub should_fail: AtomicBool,
-    pub should_return_empty: AtomicBool,
-    pub trigger_narration_should_fail: AtomicBool,
-    pub delay_ms: AtomicU64,
-    pub trigger_delay_ms: AtomicU64,
-    pub per_call_narrations: Vec<String>,
-    pub per_call_prompt_responses: Vec<String>,
-    pub call_index: AtomicUsize,
-    pub storage: Option<Arc<Storage>>,
-    /// Set when `complete` narration starts (test detection).
+    pub(crate) should_fail: AtomicBool,
+    pub(crate) should_return_empty: AtomicBool,
+    pub(crate) trigger_narration_should_fail: AtomicBool,
+    pub(crate) delay_ms: AtomicU64,
+    pub(crate) trigger_delay_ms: AtomicU64,
+    pub(crate) per_call_narrations: Vec<String>,
+    pub(crate) per_call_prompt_responses: Vec<String>,
+    pub(crate) call_index: AtomicUsize,
+    pub(crate) storage: Option<Arc<Storage>>,
+    /// Set when `complete` narration starts. Test-sync primitive — read with `.load(Ordering::SeqCst)`, do not mutate externally.
     pub narration_started: AtomicBool,
-    /// Set when `complete` trigger narration starts (test detection).
+    /// Set when `complete` trigger narration starts. Test-sync primitive — read with `.load(Ordering::SeqCst)`, do not mutate externally.
     pub trigger_started: AtomicBool,
 }
 
@@ -43,39 +43,39 @@ impl MockBackend {
         }
     }
 
-    pub fn failing() -> Self {
-        Self {
-            should_fail: AtomicBool::new(true),
-            ..Default::default()
-        }
+    pub fn with_fail(mut self) -> Self {
+        self.should_fail = AtomicBool::new(true);
+        self
     }
 
-    pub fn with_empty_response() -> Self {
-        Self {
-            should_return_empty: AtomicBool::new(true),
-            ..Default::default()
-        }
+    pub fn with_empty_response(mut self) -> Self {
+        self.should_return_empty = AtomicBool::new(true);
+        self
     }
 
-    pub fn with_failing_trigger_narration() -> Self {
-        Self {
-            trigger_narration_should_fail: AtomicBool::new(true),
-            ..Default::default()
-        }
+    pub fn with_trigger_narration_fail(mut self) -> Self {
+        self.trigger_narration_should_fail = AtomicBool::new(true);
+        self
     }
 
-    pub fn with_delay(ms: u64) -> Self {
-        Self {
-            delay_ms: AtomicU64::new(ms),
-            ..Default::default()
-        }
+    pub fn with_delay(mut self, ms: u64) -> Self {
+        self.delay_ms = AtomicU64::new(ms);
+        self
     }
 
-    pub fn with_trigger_delay(ms: u64) -> Self {
-        Self {
-            trigger_delay_ms: AtomicU64::new(ms),
-            ..Default::default()
-        }
+    pub fn with_trigger_delay(mut self, ms: u64) -> Self {
+        self.trigger_delay_ms = AtomicU64::new(ms);
+        self
+    }
+
+    pub fn with_narrations(mut self, v: Vec<String>) -> Self {
+        self.per_call_narrations = v;
+        self
+    }
+
+    pub fn with_prompt_responses(mut self, v: Vec<String>) -> Self {
+        self.per_call_prompt_responses = v;
+        self
     }
 
     fn make_result(&self, agent_name: &str, text: impl Into<String>) -> LlmCallResult {

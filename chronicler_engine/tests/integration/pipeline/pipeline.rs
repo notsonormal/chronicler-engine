@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use std::sync::atomic::AtomicU64;
 
 use crate::{
     fixtures::create_test_state,
@@ -23,7 +22,7 @@ fn test_delayed_llm_completes_without_deadlock() {
     state.narrative.input_buffer.status = GenerationStatus::Generating;
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = GameService::with_mock_quantifier(
-        Arc::new(MockBackend::with_delay(200)),
+        Arc::new(MockBackend::default().with_delay(200)),
         Arc::new(MockBackend::default()),
     );
 
@@ -49,10 +48,11 @@ fn test_quantifier_detects_movement() {
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = GameService::with_mock_quantifier(
         Arc::new(MockBackend::default()),
-        Arc::new(MockBackend {
-            per_call_prompt_responses: vec![r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "village_square"}}"#.to_string()],
-            ..Default::default()
-        }),
+        Arc::new(
+            MockBackend::default().with_prompt_responses(vec![
+                r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "village_square"}}"#.to_string(),
+            ]),
+        ),
     );
 
     backend.execute_action(ctx.clone(), "walk to the village square".to_string());
@@ -82,10 +82,10 @@ fn test_quantifier_detects_npc_presence_and_fires_trigger() {
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = GameService::with_mock_quantifier(
         Arc::new(MockBackend::default()),
-        Arc::new(MockBackend {
-            per_call_prompt_responses: vec![r#"{"npcs_in_room": ["shopkeeper"]}"#.to_string()],
-            ..Default::default()
-        }),
+        Arc::new(
+            MockBackend::default()
+                .with_prompt_responses(vec![r#"{"npcs_in_room": ["shopkeeper"]}"#.to_string()]),
+        ),
     );
 
     backend.execute_action(ctx.clone(), "enter the shop".to_string());
@@ -122,7 +122,7 @@ fn test_empty_llm_response_handled_gracefully() {
     state.narrative.input_buffer.status = GenerationStatus::Generating;
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = GameService::with_mock_quantifier(
-        Arc::new(MockBackend::with_empty_response()),
+        Arc::new(MockBackend::default().with_empty_response()),
         Arc::new(MockBackend::default()),
     );
 
@@ -159,11 +159,11 @@ fn test_failing_trigger_narration_does_not_crash() {
     }
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = GameService::with_mock_quantifier(
-        Arc::new(MockBackend::with_failing_trigger_narration()),
-        Arc::new(MockBackend {
-            per_call_prompt_responses: vec![r#"{"npcs_in_room": ["shopkeeper"]}"#.to_string()],
-            ..Default::default()
-        }),
+        Arc::new(MockBackend::default().with_trigger_narration_fail()),
+        Arc::new(
+            MockBackend::default()
+                .with_prompt_responses(vec![r#"{"npcs_in_room": ["shopkeeper"]}"#.to_string()]),
+        ),
     );
 
     backend.execute_action(ctx.clone(), "examine the shopkeeper".to_string());
@@ -218,7 +218,7 @@ async fn test_cancellation_resets_state_to_idle() {
     state.narrative.input_buffer.status = GenerationStatus::Generating;
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = GameService::with_mock_quantifier(
-        Arc::new(MockBackend::with_delay(50)),
+        Arc::new(MockBackend::default().with_delay(50)),
         Arc::new(MockBackend::default()),
     );
     let token = ctx.cancel_token.clone();
@@ -239,7 +239,7 @@ async fn test_pipeline_cancels_after_main_narration() {
     state.narrative.history.clear();
     state.narrative.input_buffer.status = GenerationStatus::Generating;
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let mock_narrator = Arc::new(MockBackend::with_delay(50));
+    let mock_narrator = Arc::new(MockBackend::default().with_delay(50));
     let backend = Arc::new(GameService::with_mock_quantifier(
         mock_narrator.clone(),
         Arc::new(MockBackend::default()),
@@ -288,13 +288,13 @@ async fn test_pipeline_cancels_during_trigger_continuation() {
         encounter.times_met = 0;
     }
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let mock_narrator = Arc::new(MockBackend::with_trigger_delay(50));
+    let mock_narrator = Arc::new(MockBackend::default().with_trigger_delay(50));
     let backend = Arc::new(GameService::with_mock_quantifier(
         mock_narrator.clone(),
-        Arc::new(MockBackend {
-            per_call_prompt_responses: vec![r#"{"npcs_in_room": ["shopkeeper"]}"#.to_string()],
-            ..Default::default()
-        }),
+        Arc::new(
+            MockBackend::default()
+                .with_prompt_responses(vec![r#"{"npcs_in_room": ["shopkeeper"]}"#.to_string()]),
+        ),
     ));
     let token = ctx.cancel_token.clone();
 
@@ -368,10 +368,8 @@ fn test_pre_event_snapshot_saved_before_continuation() {
     }
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
-    let quantifier = MockBackend {
-        per_call_prompt_responses: vec![r#"{"npcs_in_room": ["shopkeeper"]}"#.to_string()],
-        ..Default::default()
-    };
+    let quantifier = MockBackend::default()
+        .with_prompt_responses(vec![r#"{"npcs_in_room": ["shopkeeper"]}"#.to_string()]);
 
     let backend =
         GameService::with_mock_quantifier(Arc::new(MockBackend::default()), Arc::new(quantifier));
@@ -424,15 +422,13 @@ fn test_streaming_narration_saved_before_quantifier_complete() {
     state.narrative.input_buffer.status = GenerationStatus::Generating;
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
-    // Mock backend with fast narration, slow quantifier
     let backend = GameService::with_mock_quantifier(
         Arc::new(MockBackend::default()),
-        Arc::new(MockBackend {
-            // Quantifier takes 500ms
-            per_call_prompt_responses: vec![r#"{"npcs_in_room": []}"#.to_string()],
-            delay_ms: AtomicU64::new(500),
-            ..Default::default()
-        }),
+        Arc::new(
+            MockBackend::default()
+                .with_prompt_responses(vec![r#"{"npcs_in_room": []}"#.to_string()])
+                .with_delay(500),
+        ),
     );
 
     let ctx_clone = ctx.clone();
@@ -440,7 +436,6 @@ fn test_streaming_narration_saved_before_quantifier_complete() {
         backend.execute_action(ctx_clone, "look around".to_string());
     });
 
-    // Smart wait: narration should appear in database before quantifier completes (500ms)
     let narration_found = wait_for_condition(
         Duration::from_millis(400),
         Duration::from_millis(50),
@@ -519,7 +514,6 @@ fn test_narration_no_duplicate_with_real_quantifier_flow() {
 
 #[test]
 fn test_pipeline_continues_when_quantifier_save_warns() {
-    // Verify that quantifier save failures don't stop the pipeline
     let mut state = create_test_state();
     state.narrative.history.clear();
     state.narrative.input_buffer.status = GenerationStatus::Generating;

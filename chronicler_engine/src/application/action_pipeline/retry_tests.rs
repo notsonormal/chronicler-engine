@@ -270,7 +270,7 @@ fn test_retry_event_trigger_narration_fails() {
     let state = make_test_state();
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
-    let llm = Arc::new(MockBackend::with_failing_trigger_narration());
+    let llm = Arc::new(MockBackend::default().with_trigger_narration_fail());
     let service = GameService::with_mock_quantifier(
         llm,
         Arc::new(crate::narrative::llm::MockBackend::default()),

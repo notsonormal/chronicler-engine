@@ -1,4 +1,5 @@
-/// [DOC: docs/reference/testing.md]
+//! [DOC: docs/reference/testing.md]
+//! GameService integration tests
 use std::sync::Arc;
 
 use chronicler_engine::application::game_service::GameService;
@@ -103,7 +104,7 @@ fn test_execute_action_clears_last_trigger() {
 #[test]
 fn test_execute_action_cancellation() {
     let service = GameService::with_mock_quantifier(
-        Arc::new(MockBackend::with_delay(100)),
+        Arc::new(MockBackend::default().with_delay(100)),
         Arc::new(MockBackend::default()),
     );
 
@@ -486,7 +487,6 @@ fn test_continue_narration_fresh_game() {
         "Empty input should generate narration (history should grow)"
     );
 
-    // Verify no Input message was added (only Narration)
     let entries: Vec<_> = guard
         .narrative
         .history

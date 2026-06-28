@@ -23,14 +23,11 @@ fn test_retry_main_narration_applies_new_quantifier_result() {
 
     add_input_and_save(&ctx, "walk around");
 
-    let quantifier = Arc::new(MockBackend {
-        per_call_prompt_responses: vec![
+    let quantifier = Arc::new(MockBackend::default().with_prompt_responses(vec![
             r#"{"npcs_in_room": []}"#.to_string(),
             r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#
                 .to_string(),
-        ],
-        ..Default::default()
-    });
+        ]));
 
     let service = GameService::with_mock_quantifier(
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
@@ -73,13 +70,10 @@ fn test_retry_with_different_narration_text_reruns_quantifier() {
 
     add_input_and_save(&ctx, "approach the innkeeper");
 
-    let llm_backend = Arc::new(MockBackend {
-        per_call_narrations: vec![
-            "You look around the empty room.".to_string(),
-            "The Innkeeper greets you warmly.".to_string(),
-        ],
-        ..Default::default()
-    });
+    let llm_backend = Arc::new(MockBackend::default().with_narrations(vec![
+        "You look around the empty room.".to_string(),
+        "The Innkeeper greets you warmly.".to_string(),
+    ]));
 
     let service = GameService::with_mock_quantifier(llm_backend, Arc::new(MockBackend::default()));
     service.execute_action(ctx.clone(), "approach the innkeeper".to_string());
@@ -128,15 +122,12 @@ fn test_double_retry_increments_swipe_and_reruns_quantifier() {
 
     add_input_and_save(&ctx, "walk around");
 
-    let quantifier = Arc::new(MockBackend {
-        per_call_prompt_responses: vec![
+    let quantifier = Arc::new(MockBackend::default().with_prompt_responses(vec![
             r#"{"npcs_in_room": []}"#.to_string(),
             r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#
                 .to_string(),
             r#"{"npcs_in_room": []}"#.to_string(),
-        ],
-        ..Default::default()
-    });
+        ]));
 
     let service = GameService::with_mock_quantifier(
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
@@ -299,14 +290,11 @@ fn test_main_retry_reevaluates_triggers() {
     let ctx = make_test_context_with_sqlite(state).unwrap();
     add_input_and_save(&ctx, "walk around");
 
-    let quantifier = Arc::new(MockBackend {
-        per_call_prompt_responses: vec![
+    let quantifier = Arc::new(MockBackend::default().with_prompt_responses(vec![
             r#"{"npcs_in_room": []}"#.to_string(),
             r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#
                 .to_string(),
-        ],
-        ..Default::default()
-    });
+        ]));
 
     let service = GameService::with_mock_quantifier(
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
@@ -349,13 +337,10 @@ fn test_retry_completes_when_quantifier_returns_none() {
 
     add_input_and_save(&ctx, "walk around");
 
-    let quantifier = Arc::new(MockBackend {
-        per_call_prompt_responses: vec![
-            r#"{"npcs_in_room": []}"#.to_string(),
-            r#"{"npcs_in_room": []}"#.to_string(),
-        ],
-        ..Default::default()
-    });
+    let quantifier = Arc::new(MockBackend::default().with_prompt_responses(vec![
+        r#"{"npcs_in_room": []}"#.to_string(),
+        r#"{"npcs_in_room": []}"#.to_string(),
+    ]));
 
     let service = GameService::with_mock_quantifier(
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
@@ -477,13 +462,10 @@ fn test_movement_with_arrival_narration_retry() {
 
     add_input_and_save(&ctx, "walk to room2");
 
-    let quantifier = Arc::new(MockBackend {
-        per_call_prompt_responses: vec![
+    let quantifier = Arc::new(MockBackend::default().with_prompt_responses(vec![
             r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#
                 .to_string(),
-        ],
-        ..Default::default()
-    });
+        ]));
 
     let service = GameService::with_mock_quantifier(
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
@@ -530,13 +512,10 @@ fn test_retry_appends_swipe_to_existing_narration() {
 
     add_input_and_save(&ctx, "examine room");
 
-    let llm_backend = Arc::new(MockBackend {
-        per_call_narrations: vec![
-            "First narration text.".to_string(),
-            "Second narration text.".to_string(),
-        ],
-        ..Default::default()
-    });
+    let llm_backend = Arc::new(MockBackend::default().with_narrations(vec![
+        "First narration text.".to_string(),
+        "Second narration text.".to_string(),
+    ]));
 
     let service = GameService::with_mock_quantifier(llm_backend, Arc::new(MockBackend::default()));
     service.execute_action(ctx.clone(), "examine room".to_string());

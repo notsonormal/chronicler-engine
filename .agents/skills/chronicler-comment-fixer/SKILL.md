@@ -10,18 +10,18 @@ Before manual searching, invoke the comment finder script to identify target com
 
 ```bash
 # Mode 1: Uncommitted/new files (most common for review after coding)
-cd chronicler_engine && python ../.opencode/skills/chronicler-comment-fixer/scripts/comment_finder.py --uncommitted
+cd chronicler_engine && python ../.agents/skills/chronicler-comment-fixer/scripts/comment_finder.py --uncommitted
 
 # Mode 2: All rust files (full codebase scan)
-cd chronicler_engine && python ../.opencode/skills/chronicler-comment-fixer/scripts/comment_finder.py --all
+cd chronicler_engine && python ../.agents/skills/chronicler-comment-fixer/scripts/comment_finder.py --all
 
 # Mode 3: Specific file pattern
-cd chronicler_engine && python ../.opencode/skills/chronicler-comment-fixer/scripts/comment_finder.py --pattern "src/foo.rs"
-cd chronicler_engine && python ../.opencode/skills/chronicler-comment-fixer/scripts/comment_finder.py --pattern "src/**/*.rs"
+cd chronicler_engine && python ../.agents/skills/chronicler-comment-fixer/scripts/comment_finder.py --pattern "src/foo.rs"
+cd chronicler_engine && python ../.agents/skills/chronicler-comment-fixer/scripts/comment_finder.py --pattern "src/**/*.rs"
 
 # Mode 4: Files changed in branch vs main (or custom base)
-cd chronicler_engine && python ../.opencode/skills/chronicler-comment-fixer/scripts/comment_finder.py --branch
-cd chronicler_engine && python ../.opencode/skills/chronicler-comment-fixer/scripts/comment_finder.py --branch develop
+cd chronicler_engine && python ../.agents/skills/chronicler-comment-fixer/scripts/comment_finder.py --branch
+cd chronicler_engine && python ../.agents/skills/chronicler-comment-fixer/scripts/comment_finder.py --branch develop
 ```
 The script outputs file paths, line numbers, and comment text in the format:
   path:line - comment_text

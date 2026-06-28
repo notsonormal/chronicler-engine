@@ -28,13 +28,10 @@ fn test_quantifier_retry_on_low_confidence() {
         quantifier_prompt_override: None,
     };
 
-    let backend = crate::narrative::llm::MockBackend {
-        per_call_prompt_responses: vec![
-            "I am not sure what to say here.".to_string(),
-            r#"{"npcs_in_room": ["carla"], "movement": {"type": null}}"#.to_string(),
-        ],
-        ..Default::default()
-    };
+    let backend = crate::narrative::llm::MockBackend::default().with_prompt_responses(vec![
+        "I am not sure what to say here.".to_string(),
+        r#"{"npcs_in_room": ["carla"], "movement": {"type": null}}"#.to_string(),
+    ]);
 
     let result = quantify_room_with_llm_call(&context, &["carla".to_string()], &backend);
 
@@ -62,12 +59,9 @@ fn test_quantifier_no_retry_when_high_confidence() {
         quantifier_prompt_override: None,
     };
 
-    let backend = crate::narrative::llm::MockBackend {
-        per_call_prompt_responses: vec![
-            r#"{"npcs_in_room": ["carla"], "movement": {"type": null}}"#.to_string(),
-        ],
-        ..Default::default()
-    };
+    let backend = crate::narrative::llm::MockBackend::default().with_prompt_responses(vec![
+        r#"{"npcs_in_room": ["carla"], "movement": {"type": null}}"#.to_string(),
+    ]);
 
     let result = quantify_room_with_llm_call(&context, &["carla".to_string()], &backend);
 
@@ -347,10 +341,7 @@ fn test_quantifier_all_attempts_fail_fallback() {
         quantifier_prompt_override: None,
     };
 
-    let backend = crate::narrative::llm::MockBackend {
-        trigger_narration_should_fail: true.into(),
-        ..Default::default()
-    };
+    let backend = crate::narrative::llm::MockBackend::default().with_trigger_narration_fail();
 
     let result = quantify_room_with_llm_call(&context, &["carla".to_string()], &backend);
 
@@ -377,11 +368,9 @@ fn test_quantifier_low_confidence_then_error_fallback() {
         quantifier_prompt_override: None,
     };
 
-    let backend = crate::narrative::llm::MockBackend {
-        per_call_prompt_responses: vec!["I am not sure what to say here.".to_string()],
-        trigger_narration_should_fail: true.into(),
-        ..Default::default()
-    };
+    let backend = crate::narrative::llm::MockBackend::default()
+        .with_prompt_responses(vec!["I am not sure what to say here.".to_string()])
+        .with_trigger_narration_fail();
 
     let result = quantify_room_with_llm_call(&context, &["carla".to_string()], &backend);
 

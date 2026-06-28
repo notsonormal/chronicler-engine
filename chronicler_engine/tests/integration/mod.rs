@@ -16,7 +16,7 @@ pub use settings_guard::SettingsTestGuard;
 
 pub fn failing_service() -> GameService {
     GameService::with_mock_quantifier(
-        Arc::new(MockBackend::failing()),
+        Arc::new(MockBackend::default().with_fail()),
         Arc::new(MockBackend::default()),
     )
 }

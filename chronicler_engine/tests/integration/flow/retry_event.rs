@@ -25,13 +25,10 @@ fn test_event_retry_does_not_create_extra_swipe_on_narration() {
 
     add_input_and_save(&ctx, "enter shop");
 
-    let quantifier = Arc::new(MockBackend {
-        per_call_prompt_responses: vec![
+    let quantifier = Arc::new(MockBackend::default().with_prompt_responses(vec![
             r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#
                 .to_string(),
-        ],
-        ..Default::default()
-    });
+        ]));
 
     let service = GameService::with_mock_quantifier(
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
@@ -76,13 +73,10 @@ fn test_retry_event_continuation_preserves_quantifier_result() {
 
     add_input_and_save(&ctx, "enter shop");
 
-    let quantifier = Arc::new(MockBackend {
-        per_call_prompt_responses: vec![
+    let quantifier = Arc::new(MockBackend::default().with_prompt_responses(vec![
             r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#
                 .to_string(),
-        ],
-        ..Default::default()
-    });
+        ]));
 
     let service = GameService::with_mock_quantifier(
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
@@ -206,21 +200,15 @@ fn test_trigger_continuation_runs_quantifier_and_detects_new_npc() {
 
     add_input_and_save(&ctx, "enter shop");
 
-    let llm_backend = Arc::new(MockBackend {
-        per_call_narrations: vec![
-            "You step into the shop.".to_string(),
-            "Gabriella emerges from the shadows behind the counter.".to_string(),
-        ],
-        ..Default::default()
-    });
+    let llm_backend = Arc::new(MockBackend::default().with_narrations(vec![
+        "You step into the shop.".to_string(),
+        "Gabriella emerges from the shadows behind the counter.".to_string(),
+    ]));
 
-    let quantifier = Arc::new(MockBackend {
-        per_call_prompt_responses: vec![
-            r#"{"npcs_in_room": []}"#.to_string(),
-            r#"{"npcs_in_room": ["gabriella"]}"#.to_string(),
-        ],
-        ..Default::default()
-    });
+    let quantifier = Arc::new(MockBackend::default().with_prompt_responses(vec![
+        r#"{"npcs_in_room": []}"#.to_string(),
+        r#"{"npcs_in_room": ["gabriella"]}"#.to_string(),
+    ]));
 
     let service = GameService::with_mock_quantifier(llm_backend, quantifier);
 

@@ -229,13 +229,10 @@ fn test_reset_clears_history_and_state() {
 
     add_input_and_save(&ctx, "walk to room2");
 
-    let quantifier = Arc::new(MockBackend {
-        per_call_prompt_responses: vec![
+    let quantifier = Arc::new(MockBackend::default().with_prompt_responses(vec![
             r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#
                 .to_string(),
-        ],
-        ..Default::default()
-    });
+        ]));
 
     let service = GameService::with_mock_quantifier(
         Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),

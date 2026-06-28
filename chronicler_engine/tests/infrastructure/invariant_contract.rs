@@ -148,7 +148,7 @@ fn test_inv004_cancellable_at_boundaries() {
 
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let cancel_token = ctx.cancel_token.clone();
-    let mock_backend = Arc::new(MockBackend::with_delay(100));
+    let mock_backend = Arc::new(MockBackend::default().with_delay(100));
     let backend = GameService::with_backends(mock_backend.clone(), AgentRegistry::default());
 
     let pipeline = ActionPipeline::new(&backend, &ctx);

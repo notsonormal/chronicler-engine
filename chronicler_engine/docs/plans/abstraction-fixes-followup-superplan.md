@@ -26,7 +26,7 @@ Sub-plans MUST reference this super-plan as parent, verify against actual code (
 | T1 | Error Model Unification | ready — needs scoping decisions | P1 | none |
 | T2-ARCH | Narration Deepening | needs grilling (G2–G5) | P1 | T1, ADR-018 |
 | T3 | Service Layer Cleanup | ready | P1 | none |
-| T4 | MockBackend Modernization | ready | P2 | none |
+| T4 | MockBackend Modernization | done | P2 | none |
 | T5 | Type Collapses (A3 + A6) | ready | P2 | none |
 | T6 | MessageHistory Encapsulation | ready | P2 | none |
 | T9 | Doc / Migration Debt | ready | P0 | none |
@@ -112,6 +112,8 @@ T2 (ArrivalTaskContext minimal cancellation chunk) was withdrawn 2026-06-28 — 
 ---
 
 ## T4 — MockBackend Modernization
+
+**Status:** DONE — see `docs/CHANGELOG.md` Unreleased entry "MockBackend builder modernization (T4)" and archived plan `docs/plans/archived/t4-mockbackend-modernization.md`.
 
 **Findings owned:** C6, N6, N7.
 

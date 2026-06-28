@@ -39,14 +39,11 @@ fn test_mock_complete_empty() {
 
 #[test]
 fn test_mock_complete_per_call_responses() {
-    let backend = MockBackend {
-        per_call_prompt_responses: vec![
-            r#"{"npcs_in_room": ["carla"], "movement": {"type": null}}"#.to_string(),
-            r#"{"npcs_in_room": [], "movement": {"type": "entering", "destination": "kitchen"}}"#
-                .to_string(),
-        ],
-        ..Default::default()
-    };
+    let backend = MockBackend::default().with_prompt_responses(vec![
+        r#"{"npcs_in_room": ["carla"], "movement": {"type": null}}"#.to_string(),
+        r#"{"npcs_in_room": [], "movement": {"type": "entering", "destination": "kitchen"}}"#
+            .to_string(),
+    ]);
     let result1 = backend.complete("quantifier", "sys", "user", None);
     assert!(result1.is_ok());
     assert!(result1.unwrap().text.contains("carla"));
@@ -72,8 +69,7 @@ fn test_mock_complete_very_long_input() {
 
 #[test]
 fn test_mock_with_failing_trigger_narration() {
-    let backend = MockBackend::with_failing_trigger_narration();
-    // complete for narrator should still succeed
+    let backend = MockBackend::default().with_trigger_narration_fail();
     let narrate_result = backend.complete(
         crate::narrative::llm::backend::AGENT_NARRATOR,
         "sys",
@@ -84,7 +80,6 @@ fn test_mock_with_failing_trigger_narration() {
         narrate_result.is_ok(),
         "narrator complete should succeed even with trigger_narration_should_fail set"
     );
-    // complete for trigger should fail
     let trigger_result = backend.complete("trigger", "sys", "user", None);
     assert!(
         trigger_result.is_err(),
@@ -104,10 +99,7 @@ fn test_mock_backend_logs_to_storage() {
     use crate::storage::Storage;
     use std::sync::Arc;
     let storage = Arc::new(Storage::new_in_memory());
-    let backend = MockBackend {
-        storage: Some(Arc::clone(&storage)),
-        ..Default::default()
-    };
+    let backend = MockBackend::new(Some(Arc::clone(&storage)));
 
     let result = backend.complete("narrator", "sys", "user action", None);
     assert!(result.is_ok());
@@ -124,10 +116,7 @@ fn test_mock_backend_logs_multiple_calls() {
     use crate::storage::Storage;
     use std::sync::Arc;
     let storage = Arc::new(Storage::new_in_memory());
-    let backend = MockBackend {
-        storage: Some(Arc::clone(&storage)),
-        ..Default::default()
-    };
+    let backend = MockBackend::new(Some(Arc::clone(&storage)));
 
     let _ = backend.complete("narrator", "sys", "first", None);
     let _ = backend.complete("trigger", "sys", "second", None);
@@ -138,4 +127,31 @@ fn test_mock_backend_logs_multiple_calls() {
     assert_eq!(messages[0].agent_name, "narrator");
     assert_eq!(messages[1].agent_name, "trigger");
     assert_eq!(messages[2].agent_name, "narrator");
+}
+
+#[test]
+fn test_mock_backend_builders_compose() {
+    let backend = MockBackend::default()
+        .with_empty_response()
+        .with_prompt_responses(vec!["response1".to_string()]);
+
+    let narrate = backend.complete(
+        crate::narrative::llm::backend::AGENT_NARRATOR,
+        "sys",
+        "user",
+        None,
+    );
+    assert!(narrate.is_ok());
+    assert!(
+        narrate.unwrap().text.is_empty(),
+        "with_empty_response should win on narrator path"
+    );
+
+    let trigger = backend.complete("trigger", "sys", "user", None);
+    assert!(trigger.is_ok());
+    assert_eq!(
+        trigger.unwrap().text,
+        "response1",
+        "with_prompt_responses should survive chaining and be returned on trigger path"
+    );
 }

@@ -1,4 +1,5 @@
-/// Unit tests for GameService
+//! [DOC: docs/reference/testing.md]
+//! GameService application tests
 use std::sync::Arc;
 use crate::application::action_pipeline::pipeline::ActionPipelineBackend;
 use crate::application::game_service::GameService;
@@ -57,7 +58,7 @@ fn test_complete_with_max_tokens() {
 
 #[test]
 fn test_complete_returns_error_when_backend_fails() {
-    let llm_backend = Arc::new(MockBackend::failing());
+    let llm_backend = Arc::new(MockBackend::default().with_fail());
     let service = GameService::with_backends(llm_backend, AgentRegistry::default());
     let result = service.complete("test-agent", "system", "user", None);
     assert!(result.is_err());
