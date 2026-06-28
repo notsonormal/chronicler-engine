@@ -21,7 +21,7 @@ impl Storage {
                     .map_err(|e| EngineError::Config(format!("Failed to prepare query: {e}")))?;
 
                 let rows = stmt
-                    .query_map([preset_type.as_str()], db_row_to_preset)
+                    .query_map([preset_type.as_str()], DbPromptPreset::from_row)
                     .map_err(|e| EngineError::Config(format!("Failed to query presets: {e}")))?;
 
                 let mut presets = Vec::new();
@@ -55,7 +55,7 @@ impl Storage {
                     .map_err(|e| EngineError::Config(format!("Failed to prepare query: {e}")))?;
 
                 let mut rows = stmt
-                    .query_map([id], db_row_to_preset)
+                    .query_map([id], DbPromptPreset::from_row)
                     .map_err(|e| EngineError::Config(format!("Failed to query preset: {e}")))?;
 
                 match rows.next() {
@@ -134,21 +134,6 @@ impl Storage {
             }
         })
     }
-}
-
-fn db_row_to_preset(row: &rusqlite::Row) -> rusqlite::Result<DbPromptPreset> {
-    Ok(DbPromptPreset {
-        id: row.get(0)?,
-        name: row.get(1)?,
-        preset_type: row.get(2)?,
-        role: row.get(3)?,
-        instructions: row.get(4)?,
-        writing_style: row.get(5)?,
-        output_format: row.get(6)?,
-        is_default: row.get(7)?,
-        created_at: row.get(8)?,
-        updated_at: row.get(9)?,
-    })
 }
 
 fn db_preset_to_preset(db: DbPromptPreset) -> PromptPreset {

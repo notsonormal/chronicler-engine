@@ -68,21 +68,7 @@ impl Storage {
                     .map_err(|e| EngineError::Config(format!("Failed to prepare query: {e}")))?;
 
                 let rows = stmt
-                    .query_map([limit as i64], |row| {
-                        Ok(DbLlmMessage {
-                            id: row.get(0)?,
-                            agent_name: row.get(1)?,
-                            backend_name: row.get(2)?,
-                            model_name: row.get(3)?,
-                            system_prompt: row.get(4)?,
-                            user_prompt: row.get(5)?,
-                            raw_request_json: row.get(6)?,
-                            raw_response_json: row.get(7)?,
-                            parsed_response: row.get(8)?,
-                            error_message: row.get(9)?,
-                            created_at: row.get(10)?,
-                        })
-                    })
+                    .query_map([limit as i64], DbLlmMessage::from_row)
                     .map_err(|e| EngineError::Config(format!("Failed to query LLM messages: {e}")))?;
 
                 let mut messages = Vec::new();

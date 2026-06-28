@@ -1,0 +1,9 @@
+{
+  "subagents": {
+    "agentOverrides": {
+      "reviewer": {
+        "disabled": true
+      }
+    }
+  }
+}

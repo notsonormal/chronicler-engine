@@ -135,19 +135,6 @@ impl MessageHistory {
     }
 
     pub fn to_message_entries(&self) -> Vec<MessageEntry> {
-        self.messages
-            .iter()
-            .map(|msg| MessageEntry {
-                id: msg.id,
-                sender: msg.sender.clone(),
-                text: msg.text().to_string(),
-                message_type: msg.message_type.clone(),
-                timestamp: msg.timestamp,
-                location_header: msg.location_header().map(|s| s.to_string()),
-                event_header: msg.event_header().map(|s| s.to_string()),
-                swipe_count: msg.swipe_count(),
-                active_swipe_index: msg.active_swipe_index,
-            })
-            .collect()
+        self.messages.iter().map(MessageEntry::from).collect()
     }
 }

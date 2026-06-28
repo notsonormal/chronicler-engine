@@ -190,19 +190,27 @@ def clean_old_logs(log_dir: Path, max_age_days: int = 3):
         print(f"  Removed old build logs (> {max_age_days} days): {', '.join(removed)}")
 
 
-def clean_old_dumps(dump_dir: Path, max_age_days: int = 3):
-    """Remove dump files older than max_age_days from the dump directory."""
-    if not dump_dir.exists():
-        return
+def clean_tmp_dirs(tmp_dirs: list[Path], max_age_days: int = 3):
+    """Remove files older than max_age_days from the given tmp directories (recursing
+    into subdirectories). Subdirectories themselves are left in place."""
     now = time.time()
     max_age_sec = max_age_days * 86400
-    removed = []
-    for f in dump_dir.iterdir():
-        if f.is_file() and (now - f.stat().st_mtime) > max_age_sec:
-            f.unlink()
-            removed.append(f.name)
-    if removed:
-        print(f"  Removed old dumps (> {max_age_days} days): {', '.join(removed)}")
+    for tmp_dir in tmp_dirs:
+        if not tmp_dir.exists():
+            continue
+        removed = []
+        for root, _dirs, files in os.walk(tmp_dir):
+            for name in files:
+                p = Path(root) / name
+                try:
+                    if (now - p.stat().st_mtime) <= max_age_sec:
+                        continue
+                    p.unlink()
+                    removed.append(str(p))
+                except Exception as e:
+                    print(f"  Warning: Could not remove {p}: {e}")
+        if removed:
+            print(f"  Removed stale entries (> {max_age_days} days) in {tmp_dir}: {', '.join(removed)}")
 
 
 def dump_sqlite_to_jsonl(db_path: Path, output_dir: Path):
@@ -615,11 +623,13 @@ def main():
 
     print("=== Build Complete ===")
 
+    project_root_tmp = Path(__file__).resolve().parent.parent / "tmp"
+    engine_tmp = Path("tmp")
+    clean_tmp_dirs([project_root_tmp, engine_tmp], max_age_days=3)
+
     db_path = target_dir / "data" / "chronicler.db"
     if db_path.exists():
         dump_dir = Path("tmp") / "db_dumps"
-        dump_dir.mkdir(parents=True, exist_ok=True)
-        clean_old_dumps(dump_dir, max_age_days=3)
         dump_sqlite_to_jsonl(db_path, dump_dir)
 
     if step_timings:

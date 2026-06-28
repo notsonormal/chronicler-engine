@@ -52,7 +52,7 @@ impl Storage {
                 let conn = pool.conn();
                 let mut stmt = conn
                     .prepare(
-                        "SELECT id, movement, narrative, scene, npc_encounter_log, created_at
+                        "SELECT id, game_id, movement, narrative, scene, npc_encounter_log, created_at
                          FROM game_state_snapshots
                          WHERE game_id = ?1
                          ORDER BY created_at DESC, id DESC
@@ -61,15 +61,7 @@ impl Storage {
                     .map_err(|e| EngineError::Config(format!("Failed to prepare query: {e}")))?;
 
                 let db_result = stmt.query_row(rusqlite::params![game_id as i64], |row| {
-                    Ok(DbGameStateSnapshot {
-                        id: row.get(0)?,
-                        game_id: game_id as i64,
-                        movement_json: row.get(1)?,
-                        narrative_json: row.get(2)?,
-                        scene_json: row.get(3)?,
-                        npc_encounter_log_json: row.get(4)?,
-                        created_at: row.get(5)?,
-                    })
+                    DbGameStateSnapshot::from_row(row)
                 });
 
                 match db_result {
@@ -102,22 +94,14 @@ impl Storage {
                 let conn = pool.conn();
                 let mut stmt = conn
                     .prepare(
-                        "SELECT id, movement, narrative, scene, npc_encounter_log, created_at
+                        "SELECT id, game_id, movement, narrative, scene, npc_encounter_log, created_at
                          FROM game_state_snapshots
                          WHERE id = ?1 AND game_id = ?2",
                     )
                     .map_err(|e| EngineError::Config(format!("Failed to prepare query: {e}")))?;
 
                 let db_result = stmt.query_row(rusqlite::params![id, game_id as i64], |row| {
-                    Ok(DbGameStateSnapshot {
-                        id: row.get(0)?,
-                        game_id: game_id as i64,
-                        movement_json: row.get(1)?,
-                        narrative_json: row.get(2)?,
-                        scene_json: row.get(3)?,
-                        npc_encounter_log_json: row.get(4)?,
-                        created_at: row.get(5)?,
-                    })
+                    DbGameStateSnapshot::from_row(row)
                 });
 
                 match db_result {

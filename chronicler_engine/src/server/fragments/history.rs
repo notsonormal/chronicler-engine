@@ -19,11 +19,9 @@ pub async fn edit_history_handler(
     axum::extract::Path(id): axum::extract::Path<u64>,
     Form(form): Form<EditHistoryForm>,
 ) -> Response<axum::body::Body> {
-    let Ok(ctx) = ctx_or_error(&state) else {
-        return match ctx_or_error(&state) {
-            Ok(_) => unreachable!(),
-            Err(e) => *e,
-        };
+    let ctx = match ctx_or_error(&state) {
+        Ok(ctx) => ctx,
+        Err(e) => return *e,
     };
     match message_editing::edit_history(ctx, id, form.text) {
         Ok(()) => ok("<span class=\"status ready\">Edited</span>"),
@@ -32,11 +30,9 @@ pub async fn edit_history_handler(
 }
 
 pub async fn delete_history_handler(State(state): State<AppState>) -> Response<axum::body::Body> {
-    let Ok(ctx) = ctx_or_error(&state) else {
-        return match ctx_or_error(&state) {
-            Ok(_) => unreachable!(),
-            Err(e) => *e,
-        };
+    let ctx = match ctx_or_error(&state) {
+        Ok(ctx) => ctx,
+        Err(e) => return *e,
     };
     match message_editing::delete_last(ctx) {
         Ok(()) => ok(""),

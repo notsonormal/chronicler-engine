@@ -4,7 +4,6 @@
 pub mod characters;
 pub mod core;
 pub mod games;
-pub mod helpers;
 pub mod llm_messages;
 pub mod messages;
 pub mod personas;
@@ -14,7 +13,6 @@ pub mod snapshots;
 pub mod swipes;
 pub mod worlds;
 
-pub use helpers::empty_to_none;
 #[cfg(feature = "testing")]
 pub use test_support::{TestFailureHandle, TestOverride};
 

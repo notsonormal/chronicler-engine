@@ -5,7 +5,7 @@ use chrono::Utc;
 
 use crate::error::EngineError;
 use crate::model::character::NpcCard;
-use crate::storage::backend::{empty_to_none, Backend, CharacterSeed, Storage};
+use crate::storage::backend::{Backend, CharacterSeed, Storage};
 use crate::storage::models::character::DbCharacter;
 
 impl Storage {
@@ -67,9 +67,9 @@ impl Storage {
                         card.sheet.personality,
                         card.sheet.scenario,
                         card.sheet.example_dialogue,
-                        empty_to_none(card.sheet.summary.as_deref().unwrap_or("")),
-                        empty_to_none(card.sheet.profile_image.as_deref().unwrap_or("")),
-                        empty_to_none(card.sheet.headshot_image.as_deref().unwrap_or("")),
+                        card.sheet.summary.as_deref().filter(|s| !s.is_empty()),
+                        card.sheet.profile_image.as_deref().filter(|s| !s.is_empty()),
+                        card.sheet.headshot_image.as_deref().filter(|s| !s.is_empty()),
                         inventory_json,
                         triggers_json,
                         relationships_json,

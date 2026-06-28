@@ -19,6 +19,14 @@ impl QuantifierConfidence {
     pub fn is_high(&self) -> bool {
         matches!(self, Self::High)
     }
+
+    pub fn is_medium(&self) -> bool {
+        matches!(self, Self::Medium)
+    }
+
+    pub fn is_low(&self) -> bool {
+        matches!(self, Self::Low)
+    }
 }
 
 impl From<Confidence> for QuantifierConfidence {

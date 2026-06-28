@@ -69,7 +69,7 @@ impl Storage {
                 let conn = pool.conn();
                 let mut stmt = conn
                     .prepare(
-                        "SELECT id, sender, message_type, timestamp, active_swipe_index
+                        "SELECT id, game_id, sender, message_type, timestamp, active_swipe_index
                          FROM messages
                          WHERE game_id = ?1 AND is_deleted = 0
                          ORDER BY id ASC",
@@ -79,17 +79,7 @@ impl Storage {
                     })?;
 
                 let msg_rows = stmt
-                    .query_map(rusqlite::params![game_id as i64], |row| {
-                        Ok(DbMessage {
-                            id: row.get(0)?,
-                            game_id: game_id as i64,
-                            sender: row.get(1)?,
-                            message_type_json: row.get(2)?,
-                            timestamp: row.get(3)?,
-                            active_swipe_index: row.get(4)?,
-                            is_deleted: 0,
-                        })
-                    })
+                    .query_map(rusqlite::params![game_id as i64], DbMessage::from_row)
                     .map_err(|e| EngineError::Config(format!("Failed to query messages: {e}")))?;
 
                 let mut messages: Vec<Message> = Vec::new();

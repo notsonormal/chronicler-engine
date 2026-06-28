@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-06-28 18:02 UTC*
+*Index last generated: 2026-06-28 21:51 UTC*
 
 ### Root files
 
@@ -88,6 +88,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Pipeline Decomposition Review Fixes (Round 3)](./plans/archived/pipeline-review-fixes-round3.md)
 - [Review Fixes — Pipeline Decomposition Quality](./plans/archived/review-fixes-pipeline-quality.md)
 - [Subplan A: Relocate `starting_room_id` to `StartingScenario`](./plans/archived/subplan-a-relocate-starting-room.md)
+- [T10 Execution Plan: Safe Cleanup Items](./plans/archived/t10-execution-safe-cleanup-items.md)
 - [T3: Service Layer Cleanup](./plans/archived/t3-service-layer-cleanup.md)
 - [T4: MockBackend Modernization](./plans/archived/t4-mockbackend-modernization.md)
 - [T7 Sub-Plan (Archived): Split `Backend` enum into `Backend` + `LayeredBackend`](./plans/archived/t7-storage-backend-layered-split.md)

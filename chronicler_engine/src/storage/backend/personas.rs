@@ -5,7 +5,7 @@ use chrono::Utc;
 
 use crate::error::EngineError;
 use crate::model::character::PlayerCard;
-use crate::storage::backend::{empty_to_none, Backend, PlayerCardWithKey, Storage};
+use crate::storage::backend::{Backend, PlayerCardWithKey, Storage};
 use crate::storage::models::persona::DbPersona;
 
 impl Storage {
@@ -60,9 +60,9 @@ impl Storage {
                         card.sheet.personality,
                         card.sheet.scenario,
                         card.sheet.example_dialogue,
-                        empty_to_none(card.sheet.summary.as_deref().unwrap_or("")),
-                        empty_to_none(card.sheet.profile_image.as_deref().unwrap_or("")),
-                        empty_to_none(card.sheet.headshot_image.as_deref().unwrap_or("")),
+                        card.sheet.summary.as_deref().filter(|s| !s.is_empty()),
+                        card.sheet.profile_image.as_deref().filter(|s| !s.is_empty()),
+                        card.sheet.headshot_image.as_deref().filter(|s| !s.is_empty()),
                         inventory_json,
                         now,
                         now,

@@ -2,8 +2,8 @@
 //! Miscellaneous fragment utilities (re-exports from submodules)
 
 pub mod game_control;
-pub mod retry;
 pub mod retrigger;
+pub mod retry;
 pub mod swipe;
 pub mod text_check;
 
@@ -14,8 +14,8 @@ pub use swipe::switch_swipe_handler;
 pub use text_check::*;
 
 #[cfg(test)]
-mod retry_tests;
-#[cfg(test)]
 mod retrigger_tests;
+#[cfg(test)]
+mod retry_tests;
 #[cfg(test)]
 mod swipe_tests;

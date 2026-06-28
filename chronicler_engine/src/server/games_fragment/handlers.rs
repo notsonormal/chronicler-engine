@@ -25,11 +25,9 @@ fn game_to_view(g: Game) -> GameRowView {
 }
 
 pub async fn list_games_fragment(State(state): State<AppState>) -> Response<axum::body::Body> {
-    let Ok(ctx) = ctx_or_error(&state) else {
-        return match ctx_or_error(&state) {
-            Ok(_) => unreachable!(),
-            Err(e) => *e,
-        };
+    let ctx = match ctx_or_error(&state) {
+        Ok(ctx) => ctx,
+        Err(e) => return *e,
     };
 
     let Ok(games) = state.application_service.list_games(ctx.clone()) else {
@@ -54,20 +52,19 @@ pub async fn list_games_fragment(State(state): State<AppState>) -> Response<axum
         return internal_error("Failed to list worlds");
     };
 
-    let personas: Vec<PersonaRowView> =
-        match state.application_service.list_personas(ctx.clone()) {
-            Ok(p) => p,
-            Err(e) => {
-                tracing::warn!("Failed to load personas: {e}");
-                Vec::new()
-            }
+    let personas: Vec<PersonaRowView> = match ctx.storage.list_personas() {
+        Ok(p) => p,
+        Err(e) => {
+            tracing::warn!("Failed to load personas: {e}");
+            Vec::new()
         }
-        .into_iter()
-        .map(|p| PersonaRowView {
-            key: p.key,
-            name: p.sheet.name,
-        })
-        .collect();
+    }
+    .into_iter()
+    .map(|p| PersonaRowView {
+        key: p.key,
+        name: p.sheet.name,
+    })
+    .collect();
 
     let template = GamesPanelTemplate {
         active_game,
@@ -105,11 +102,9 @@ pub async fn switch_game_handler(
     State(state): State<AppState>,
     Path(id): Path<u64>,
 ) -> Response<axum::body::Body> {
-    let Ok(ctx) = ctx_or_error(&state) else {
-        return match ctx_or_error(&state) {
-            Ok(_) => unreachable!(),
-            Err(e) => *e,
-        };
+    let ctx = match ctx_or_error(&state) {
+        Ok(ctx) => ctx,
+        Err(e) => return *e,
     };
 
     match state.application_service.switch_game(ctx, id) {
@@ -122,11 +117,9 @@ pub async fn delete_game_handler(
     State(state): State<AppState>,
     Path(id): Path<u64>,
 ) -> Response<axum::body::Body> {
-    let Ok(ctx) = ctx_or_error(&state) else {
-        return match ctx_or_error(&state) {
-            Ok(_) => unreachable!(),
-            Err(e) => *e,
-        };
+    let ctx = match ctx_or_error(&state) {
+        Ok(ctx) => ctx,
+        Err(e) => return *e,
     };
 
     match state.application_service.delete_game(ctx, id) {

@@ -7,17 +7,23 @@ use axum::{
     extract::{Form, State},
 };
 
+use serde::Deserialize;
+
 use crate::model::settings::TextCheckMode;
 use crate::narrative::text_check::check_player_input;
 use crate::server::AppState;
-use crate::server::fragments::actions::ActionForm;
 use crate::server::fragments::renderers::{bad_request, internal_error, ok};
 use crate::server::templates::TextCheckPreviewTemplate;
+
+#[derive(Deserialize)]
+pub struct CheckTextForm {
+    pub command: String,
+}
 
 #[allow(clippy::expect_used)]
 pub async fn check_text_handler(
     State(state): State<AppState>,
-    Form(form): Form<ActionForm>,
+    Form(form): Form<CheckTextForm>,
 ) -> axum::response::Response<Body> {
     let text = form.command.trim().to_string();
     if text.is_empty() {

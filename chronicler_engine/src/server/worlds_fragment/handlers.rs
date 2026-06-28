@@ -198,11 +198,9 @@ pub async fn delete_world_handler(
     State(state): State<AppState>,
     Path(key): Path<String>,
 ) -> Response<axum::body::Body> {
-    let Ok(ctx) = ctx_or_error(&state) else {
-        return match ctx_or_error(&state) {
-            Ok(_) => unreachable!(),
-            Err(e) => *e,
-        };
+    let ctx = match ctx_or_error(&state) {
+        Ok(ctx) => ctx,
+        Err(e) => return *e,
     };
 
     match state.application_service.delete_world(ctx, &key) {

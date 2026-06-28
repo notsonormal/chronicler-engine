@@ -22,18 +22,7 @@ impl Storage {
                     })?;
 
                 let db_games: Vec<DbGame> = stmt
-                    .query_map([], |row| {
-                        Ok(DbGame {
-                            id: row.get(0)?,
-                            world_name: row.get(1)?,
-                            name: row.get(2)?,
-                            created_at: row.get(3)?,
-                            updated_at: row.get(4)?,
-                            world_key: row.get(5)?,
-                            persona_key: row.get(6)?,
-                            persona_name: row.get(7)?,
-                        })
-                    })
+                    .query_map([], DbGame::from_row)
                     .map_err(|e| EngineError::Config(format!("Failed to list games: {e}")))?
                     .collect::<Result<Vec<_>, _>>()
                     .map_err(|e| EngineError::Config(format!("Failed to read game row: {e}")))?;

@@ -78,7 +78,7 @@ pub(crate) fn quantify_room_with_llm_call(
                 }
 
                 // Retry on Low confidence (unless this was the last attempt)
-                if result.npcs.confidence == QuantifierConfidence::Low && attempt < max_attempts {
+                if result.npcs.confidence.is_low() && attempt < max_attempts {
                     tracing::warn!("[Quantifier] Low confidence on attempt {attempt}, retrying...");
                     continue;
                 }

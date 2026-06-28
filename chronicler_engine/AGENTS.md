@@ -326,6 +326,8 @@ When fixing a known failure (e.g. clippy warning, single test):
 
 For UI bugs or single test failures, use `cargo nextest run <pattern>` or `cargo check` repeatedly. Run `python build.py` only for final validation.
 
+Temporary files should be written into tmp folders e.g. `tmp` or `chronicler_engine/tmp`.
+
 ## CONCURRENT BUILDS
 Multiple agents building simultaneously can conflict because:
 - `cargo fmt` rewrites source files in-place
@@ -350,6 +352,8 @@ To clean up lingering processes and build artifacts:
 python build.py --cleanup
 python build.py --cleanup --target-dir target/test_police
 ```
+
+`build.py` writes logs to both standard output and to the `chronicler_engine/logs` folder. The standard build should take 1-2 minutes normally. If it times out, check the build logs for failures.
 
 Tests are already concurrency-safe: they allocate ports dynamically from the range 3010-3050 using file-based locking (`get_available_port` in `tests/test_utils.rs`).
 

@@ -245,6 +245,7 @@ python scripts/parse_coverage.py --threshold 80
 
 **Note:** Some files are expected to have low coverage:
 - `cli.rs` — CLI entry points (not run in tests)
+- `port_utils.rs` — Difficult to test and mostly used for the integration tests
 - `bootstrap/` — startup code (partially expected)
 - `bootstrap/logging.rs` - Logging setup code, expecting 0% coverage
 - Test support files — helpers for tests, not core logic

@@ -46,6 +46,7 @@ pub fn assemble_prompt_text(
     parts.join("\n\n")
 }
 
+#[inline]
 fn push_section(parts: &mut Vec<String>, content: Option<&str>, tag: &str) {
     if let Some(content) = content {
         parts.push(wrap_xml(content, tag));

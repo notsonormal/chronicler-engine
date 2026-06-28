@@ -21,7 +21,6 @@ use crate::model::state_snapshot::GameStateSnapshot;
 use crate::model::trigger::NpcEncounterState;
 use crate::model::world::WorldCard;
 use crate::model::map::MapDef;
-use crate::model::character::PlayerCard;
 use crate::storage::worlds::WorldWithMap;
 
 pub enum ApplicationError {
@@ -326,13 +325,6 @@ impl DefaultApplicationService {
 
     pub fn delete_world(&self, ctx: GameServiceContext, key: &str) -> Result<(), ApplicationError> {
         ctx.storage.delete_world(key).map_err(Into::into)
-    }
-
-    pub fn list_personas(
-        &self,
-        ctx: GameServiceContext,
-    ) -> Result<Vec<PlayerCard>, ApplicationError> {
-        ctx.storage.list_personas().map_err(Into::into)
     }
 
     /// Build fresh initial state, persist snapshot, then persist the unpersisted
