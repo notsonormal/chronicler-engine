@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use crate::model::llm_backend::LlmBackendType;
-use crate::model::settings::Connection;
+use crate::domain::model::llm_backend::LlmBackendType;
+use crate::domain::model::settings::Connection;
 use crate::narrative::llm::backend::LlmBackend;
 use crate::narrative::llm::ollama::OllamaBackend;
 use crate::storage::Storage;
@@ -65,7 +65,7 @@ fn test_ollama_save_message_with_storage() {
     };
     let backend = OllamaBackend::from_connection(&conn, Some(Arc::clone(&storage)));
 
-    let msg = crate::model::llm_message::LlmMessageBuilder::new()
+    let msg = crate::domain::model::llm_message::LlmMessageBuilder::new()
         .agent_name("test")
         .backend_name("Ollama")
         .model_name("llama3")
@@ -88,7 +88,7 @@ fn test_ollama_save_message_with_storage() {
 fn test_ollama_save_message_without_storage() {
     let backend = OllamaBackend::default();
 
-    let msg = crate::model::llm_message::LlmMessageBuilder::new()
+    let msg = crate::domain::model::llm_message::LlmMessageBuilder::new()
         .agent_name("test")
         .backend_name("Ollama")
         .model_name("llama3")
@@ -110,7 +110,7 @@ fn test_ollama_preprocess_gemma4_suffix() {
         &Connection {
             id: "ollama-gemma".into(),
             name: "Gemma".into(),
-            provider: crate::model::llm_backend::LlmBackendType::Ollama,
+            provider: crate::domain::model::llm_backend::LlmBackendType::Ollama,
             model: "gemma4:latest".into(),
             api_key: None,
             base_url: None,
@@ -132,7 +132,7 @@ fn test_ollama_preprocess_gemma_dash_suffix() {
         &Connection {
             id: "ollama-gemma".into(),
             name: "Gemma".into(),
-            provider: crate::model::llm_backend::LlmBackendType::Ollama,
+            provider: crate::domain::model::llm_backend::LlmBackendType::Ollama,
             model: "mradermacher/gemma-4-26b".into(),
             api_key: None,
             base_url: None,
@@ -152,7 +152,7 @@ fn test_ollama_preprocess_no_suffix_for_other_models() {
         &Connection {
             id: "ollama-llama".into(),
             name: "Llama".into(),
-            provider: crate::model::llm_backend::LlmBackendType::Ollama,
+            provider: crate::domain::model::llm_backend::LlmBackendType::Ollama,
             model: "llama3:8b".into(),
             api_key: None,
             base_url: None,

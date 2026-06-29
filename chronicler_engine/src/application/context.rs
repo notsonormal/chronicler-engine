@@ -7,13 +7,13 @@ use std::sync::{Arc, RwLock};
 use tokio_util::sync::CancellationToken;
 
 use crate::error::{EngineError, LlmFailure};
-use crate::model::character::NpcCard;
-use crate::model::message::Message;
-use crate::model::settings::AppSettings;
-use crate::model::state::game_state::GameState;
-use crate::model::state::message_types::MessageType;
-use crate::model::state_snapshot::GameStateSnapshot;
-use crate::model::world::WorldCard;
+use crate::domain::model::character::NpcCard;
+use crate::domain::model::message::Message;
+use crate::domain::model::settings::AppSettings;
+use crate::domain::model::state::game_state::GameState;
+use crate::domain::model::state::message_types::MessageType;
+use crate::domain::model::state_snapshot::GameStateSnapshot;
+use crate::domain::model::world::WorldCard;
 use crate::narrative::prompt::assembler::assemble_prompt_text;
 use crate::storage::Storage;
 
@@ -21,8 +21,8 @@ use crate::storage::Storage;
 pub struct GameServiceContext {
     pub storage: Arc<Storage>,
     pub world: Arc<WorldCard>,
-    pub map: Arc<crate::model::map::MapDef>,
-    pub player: Arc<crate::model::character::PlayerCard>,
+    pub map: Arc<crate::domain::model::map::MapDef>,
+    pub player: Arc<crate::domain::model::character::PlayerCard>,
     pub npcs: Arc<std::collections::HashMap<String, NpcCard>>,
     pub cancel_token: CancellationToken,
     /// Whether an async generation is in flight.
@@ -37,7 +37,9 @@ impl GameServiceContext {
         self.storage.set_game_id(game_id);
     }
 
-    pub fn load_messages(&self) -> Result<Vec<crate::model::message::Message>, EngineError> {
+    pub fn load_messages(
+        &self,
+    ) -> Result<Vec<crate::domain::model::message::Message>, EngineError> {
         load_messages_with_swipes(&self.storage)
     }
 
@@ -111,7 +113,7 @@ impl GameServiceContext {
 
 pub fn load_messages_with_swipes(
     storage: &Storage,
-) -> Result<Vec<crate::model::message::Message>, EngineError> {
+) -> Result<Vec<crate::domain::model::message::Message>, EngineError> {
     let mut messages = storage.load_message_rows()?;
     let ids: Vec<u64> = messages.iter().map(|m| m.id).collect();
     let swipes_map = storage.load_swipes_for_messages(&ids)?;

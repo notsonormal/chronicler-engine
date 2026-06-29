@@ -1,5 +1,5 @@
-use chronicler_engine::model::map::MapDef;
-use chronicler_engine::model::world::WorldCard;
+use chronicler_engine::domain::model::map::MapDef;
+use chronicler_engine::domain::model::world::WorldCard;
 use tower::util::ServiceExt;
 
 use chronicler_engine::TestAppBuilder;
@@ -31,12 +31,12 @@ async fn test_visual_sidebar_with_real_world_data() {
     let map: MapDef = serde_json::from_str(&map_json).unwrap();
 
     let world_json = std::fs::read_to_string("data/worlds/test/world.json").unwrap();
-    let manifest: chronicler_engine::model::world::WorldManifest =
+    let manifest: chronicler_engine::domain::model::world::WorldManifest =
         serde_json::from_str(&world_json).unwrap();
     let world: WorldCard = manifest.clone().into();
 
     let player_json = std::fs::read_to_string("data/personas/test_player.json").unwrap();
-    let player: chronicler_engine::model::character::PlayerCard =
+    let player: chronicler_engine::domain::model::character::PlayerCard =
         serde_json::from_str(&player_json).unwrap();
 
     // Load NPCs from characters directory
@@ -47,8 +47,9 @@ async fn test_visual_sidebar_with_real_world_data() {
             let path = entry.path();
             if path.extension().and_then(|s| s.to_str()) == Some("json") {
                 let char_json = std::fs::read_to_string(&path).unwrap();
-                if let Ok(npc) =
-                    serde_json::from_str::<chronicler_engine::model::character::NpcCard>(&char_json)
+                if let Ok(npc) = serde_json::from_str::<
+                    chronicler_engine::domain::model::character::NpcCard,
+                >(&char_json)
                 {
                     npcs.push(npc);
                 }

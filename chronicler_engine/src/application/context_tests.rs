@@ -3,10 +3,10 @@ use crate::application::context::{
     save_message_and_snapshot, save_state,
 };
 use crate::error::{EngineError, LlmFailure, NarrativeFailure};
-use crate::model::message::Message;
-use crate::model::prompt_preset::{PresetType, PromptPreset};
-use crate::model::state::game_state::{GameState, GameStateBuilder};
-use crate::model::state::message_types::MessageType;
+use crate::domain::model::message::Message;
+use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
+use crate::domain::model::state::game_state::{GameState, GameStateBuilder};
+use crate::domain::model::state::message_types::MessageType;
 use crate::storage::{Storage, TestOverride};
 use crate::test_support::fixtures::{TestMap, TestPlayer, TestWorld};
 use std::sync::Arc;
@@ -92,8 +92,9 @@ fn minimal_state() -> GameState {
 fn minimal_ctx() -> GameServiceContext {
     let state = minimal_state();
     let storage = Arc::new(Storage::new_in_memory());
-    let _ = storage
-        .save_snapshot(&crate::model::state_snapshot::GameStateSnapshot::from_game_state(&state));
+    let _ = storage.save_snapshot(
+        &crate::domain::model::state_snapshot::GameStateSnapshot::from_game_state(&state),
+    );
     GameServiceContext {
         storage,
         world: state.world.clone(),
@@ -103,7 +104,7 @@ fn minimal_ctx() -> GameServiceContext {
         cancel_token: tokio_util::sync::CancellationToken::new(),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         settings: Arc::new(std::sync::RwLock::new(
-            crate::model::settings::AppSettings::default(),
+            crate::domain::model::settings::AppSettings::default(),
         )),
         preset_storage: Arc::new(Storage::new_in_memory()),
     }
@@ -140,7 +141,7 @@ fn test_load_or_fresh_fallback_when_empty() {
         cancel_token: tokio_util::sync::CancellationToken::new(),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         settings: Arc::new(std::sync::RwLock::new(
-            crate::model::settings::AppSettings::default(),
+            crate::domain::model::settings::AppSettings::default(),
         )),
         preset_storage: Arc::new(Storage::new_in_memory()),
     };
@@ -179,7 +180,7 @@ fn test_save_message_and_snapshot_persists_retry_swipe() {
     target.id = 42; // Simulate DB-assigned ID
     target.swipes[0].snapshot_id = Some(1);
 
-    target.swipes.push(crate::model::message::Swipe {
+    target.swipes.push(crate::domain::model::message::Swipe {
         text: "Retried narration".to_string(),
         snapshot_id: None,
         location_header: None,
@@ -210,7 +211,7 @@ fn test_save_message_and_snapshot_skips_persisted_retry_swipe() {
     );
     target.id = 42;
     target.swipes[0].snapshot_id = Some(1);
-    target.swipes.push(crate::model::message::Swipe {
+    target.swipes.push(crate::domain::model::message::Swipe {
         text: "Retried narration".to_string(),
         snapshot_id: Some(99), // Already persisted
         location_header: None,
@@ -311,7 +312,7 @@ fn test_load_or_fresh_fallback_on_snapshot_error() {
         cancel_token: tokio_util::sync::CancellationToken::new(),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         settings: Arc::new(std::sync::RwLock::new(
-            crate::model::settings::AppSettings::default(),
+            crate::domain::model::settings::AppSettings::default(),
         )),
         preset_storage: Arc::new(Storage::new_in_memory()),
     };
@@ -338,7 +339,7 @@ fn test_save_message_and_snapshot_propagates_snapshot_error() {
         cancel_token: tokio_util::sync::CancellationToken::new(),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         settings: Arc::new(std::sync::RwLock::new(
-            crate::model::settings::AppSettings::default(),
+            crate::domain::model::settings::AppSettings::default(),
         )),
         preset_storage: Arc::new(Storage::new_in_memory()),
     };

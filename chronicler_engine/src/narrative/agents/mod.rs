@@ -5,7 +5,7 @@ pub mod quantifier;
 pub mod registry;
 pub mod trait_def;
 
-pub use crate::model::agent::{
+pub use crate::domain::model::agent::{
     AgentConfig, AgentContext, AgentResult, BackendSelector, ExecutionPhase, StatePatch,
 };
 pub use trait_def::Agent;

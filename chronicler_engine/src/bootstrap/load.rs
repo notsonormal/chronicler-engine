@@ -4,9 +4,9 @@
 use std::{fs, path::Path};
 
 use crate::error::EngineError;
-use crate::model::character::{NpcCard, PlayerCard};
-use crate::model::map::MapDef;
-use crate::model::world::{WorldCard, WorldManifest};
+use crate::domain::model::character::{NpcCard, PlayerCard};
+use crate::domain::model::map::MapDef;
+use crate::domain::model::world::{WorldCard, WorldManifest};
 use crate::storage::Storage;
 
 pub(crate) fn read_json_file<T: serde::de::DeserializeOwned>(

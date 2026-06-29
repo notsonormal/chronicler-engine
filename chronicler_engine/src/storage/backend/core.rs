@@ -8,15 +8,15 @@ use std::sync::Mutex;
 use std::sync::Arc;
 
 use crate::error::EngineError;
-use crate::model::character::{NpcCard, PlayerCard};
-use crate::model::game::Game;
-use crate::model::llm_message::LlmMessage;
-use crate::model::map::MapDef;
-use crate::model::message::{Message, Swipe};
-use crate::model::prompt_preset::PromptPreset;
-use crate::model::settings::AppSettings;
-use crate::model::state_snapshot::GameStateSnapshot;
-use crate::model::world::WorldCard;
+use crate::domain::model::character::{NpcCard, PlayerCard};
+use crate::domain::model::game::Game;
+use crate::domain::model::llm_message::LlmMessage;
+use crate::domain::model::map::MapDef;
+use crate::domain::model::message::{Message, Swipe};
+use crate::domain::model::prompt_preset::PromptPreset;
+use crate::domain::model::settings::AppSettings;
+use crate::domain::model::state_snapshot::GameStateSnapshot;
+use crate::domain::model::world::WorldCard;
 use crate::storage::db::DbPool;
 #[cfg(feature = "testing")]
 use super::test_support::{TestFailureHandle, TestOverride};

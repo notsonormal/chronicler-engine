@@ -2,7 +2,7 @@
 //! Game storage operations
 
 use crate::error::EngineError;
-use crate::model::game::Game;
+use crate::domain::model::game::Game;
 use crate::storage::backend::{Backend, Storage};
 use crate::storage::models::game::DbGame;
 

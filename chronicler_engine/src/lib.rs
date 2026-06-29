@@ -23,21 +23,19 @@
     )
 )]
 
+pub mod adapters;
 pub mod application;
 pub mod bootstrap;
-pub mod cli;
-pub mod engine;
+pub mod domain;
 pub mod error;
-pub mod model;
 pub mod narrative;
-pub mod server;
 pub mod settings;
 pub mod storage;
 
 pub use error::{EngineError, Result};
 
-pub use model::settings::AppSettings;
-pub use server::AppState;
+pub use domain::model::settings::AppSettings;
+pub use adapters::driving::http::AppState;
 
 #[cfg(feature = "testing")]
 pub use test_support::test_app_builder::TestAppBuilder;

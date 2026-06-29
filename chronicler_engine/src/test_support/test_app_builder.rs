@@ -8,17 +8,17 @@ use tokio_util::sync::CancellationToken;
 
 use crate::application::application_service::DefaultApplicationService;
 use crate::application::game_service::GameService;
-use crate::model::character::{NpcCard, PlayerCard};
-use crate::model::map::{MapDef, Overworld, Region, Room};
-use crate::model::settings::AppSettings;
-use crate::model::state::game_state::GameState;
-use crate::model::state::generation_status::{GenerationPhase, GenerationStatus};
-use crate::model::state::message_types::MessageType;
-use crate::model::state::trigger_context::StoredTriggerContext;
-use crate::model::state_snapshot::GameStateSnapshot;
-use crate::model::world::WorldCard;
-use crate::server::router::build_router;
-use crate::server::AppState;
+use crate::domain::model::character::{NpcCard, PlayerCard};
+use crate::domain::model::map::{MapDef, Overworld, Region, Room};
+use crate::domain::model::settings::AppSettings;
+use crate::domain::model::state::game_state::GameState;
+use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
+use crate::domain::model::state::message_types::MessageType;
+use crate::domain::model::state::trigger_context::StoredTriggerContext;
+use crate::domain::model::state_snapshot::GameStateSnapshot;
+use crate::domain::model::world::WorldCard;
+use crate::adapters::driving::http::router::build_router;
+use crate::adapters::driving::http::AppState;
 use crate::storage::Storage;
 
 pub struct TestAppBuilder {
@@ -43,7 +43,7 @@ impl TestAppBuilder {
             key: "test".to_string(),
             name: "Test World".to_string(),
             description: "A test world".to_string(),
-            scenarios: vec![crate::model::scenario::StartingScenario {
+            scenarios: vec![crate::domain::model::scenario::StartingScenario {
                 id: "test_intro".to_string(),
                 name: "Test World Introduction".to_string(),
                 description: "A simple test scenario for validation".to_string(),
@@ -79,7 +79,7 @@ impl TestAppBuilder {
 
         let player = PlayerCard {
             key: "test_player".to_string(),
-            sheet: crate::model::character::CharacterSheet {
+            sheet: crate::domain::model::character::CharacterSheet {
                 name: "Test Player".to_string(),
                 description: "A test player".to_string(),
                 personality: "Brave".to_string(),
@@ -94,7 +94,7 @@ impl TestAppBuilder {
 
         let npcs = vec![NpcCard {
             id: "npc_1".to_string(),
-            sheet: crate::model::character::CharacterSheet {
+            sheet: crate::domain::model::character::CharacterSheet {
                 name: "Test NPC".to_string(),
                 description: "A test NPC".to_string(),
                 personality: "Friendly".to_string(),

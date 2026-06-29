@@ -1,5 +1,5 @@
-use crate::model::message::Message;
-use crate::model::state::message_types::MessageType;
+use crate::domain::model::message::Message;
+use crate::domain::model::state::message_types::MessageType;
 use crate::storage::backend::{Storage, TestOverride};
 use crate::test_support::{dummy_message, sqlite_storage};
 
@@ -32,7 +32,7 @@ fn test_insert_message_preserves_swipes() {
     let storage = Storage::new_in_memory();
     storage.set_game_id(1);
     let mut msg = dummy_message("test");
-    msg.swipes.push(crate::model::message::Swipe {
+    msg.swipes.push(crate::domain::model::message::Swipe {
         text: "alt".to_string(),
         snapshot_id: None,
         location_header: None,

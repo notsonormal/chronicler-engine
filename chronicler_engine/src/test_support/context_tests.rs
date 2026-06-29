@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::model::state::game_state::{GameState, GameStateBuilder};
+use crate::domain::model::state::game_state::{GameState, GameStateBuilder};
 use crate::test_support::context::{make_test_context, make_test_context_with_sqlite};
 use crate::test_support::fixtures::{TestMap, TestPlayer, TestWorld};
 

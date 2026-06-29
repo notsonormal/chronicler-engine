@@ -5,12 +5,12 @@ use crate::application::action_pipeline::pipeline::{
 };
 use crate::application::context::{GameServiceContext, load_or_fresh};
 use crate::error::EngineError;
-use crate::model::character::NpcCard;
-use crate::model::quantifier::{QuantifierConfidence, QuantifierParseResult, QuantifierResult};
+use crate::domain::model::character::NpcCard;
+use crate::domain::model::quantifier::{QuantifierConfidence, QuantifierParseResult, QuantifierResult};
 
-use crate::model::state::game_state::GameState;
-use crate::model::state::generation_status::{GenerationPhase, GenerationStatus};
-use crate::model::state::message_types::MessageType;
+use crate::domain::model::state::game_state::GameState;
+use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
+use crate::domain::model::state::message_types::MessageType;
 use crate::narrative::llm::backend::{AGENT_NARRATOR, LlmCallResult};
 use crate::narrative::prompt::LayeredPromptAssembler;
 use crate::storage::{Storage, TestOverride};
@@ -201,7 +201,7 @@ fn test_pipeline_cancels_mid_run() {
 
 #[test]
 fn test_quantifier_result_default_has_low_confidence_and_empty_npcs() {
-    use crate::model::quantifier::QuantifierConfidence;
+    use crate::domain::model::quantifier::QuantifierConfidence;
 
     let result = QuantifierResult::default();
     assert!(result.npcs.npc_ids.is_empty());
@@ -224,10 +224,10 @@ fn test_pipeline_with_custom_quantifier_result() {
             npc_ids: vec!["npc1".to_string()],
             confidence: QuantifierConfidence::High,
         },
-        movement: crate::model::quantifier::MovementParseResult {
+        movement: crate::domain::model::quantifier::MovementParseResult {
             destination: None,
             movement_type: None,
-            confidence: crate::model::quantifier::QuantifierConfidence::Low,
+            confidence: crate::domain::model::quantifier::QuantifierConfidence::Low,
         },
     };
     let backend = MockPipelineBackend {
@@ -308,7 +308,9 @@ fn test_trigger_continuation_save_post_trigger_error() {
 
 #[test]
 fn test_pipeline_trigger_happy_path() {
-    use crate::model::trigger::{ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement};
+    use crate::domain::model::trigger::{
+        ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement,
+    };
 
     let npc = NpcCard {
         id: "npc1".to_string(),
@@ -337,14 +339,14 @@ fn test_pipeline_trigger_happy_path() {
     let ctx = make_test_context(state.clone());
     let _backend = MockPipelineBackend::default();
     let custom_quantifier = QuantifierResult {
-        npcs: crate::model::quantifier::QuantifierParseResult {
+        npcs: crate::domain::model::quantifier::QuantifierParseResult {
             npc_ids: vec!["npc1".to_string()],
             confidence: QuantifierConfidence::High,
         },
-        movement: crate::model::quantifier::MovementParseResult {
+        movement: crate::domain::model::quantifier::MovementParseResult {
             destination: None,
             movement_type: None,
-            confidence: crate::model::quantifier::QuantifierConfidence::Low,
+            confidence: crate::domain::model::quantifier::QuantifierConfidence::Low,
         },
     };
     let backend = MockPipelineBackend {
@@ -376,7 +378,9 @@ fn test_pipeline_trigger_happy_path() {
 
 #[test]
 fn test_pipeline_trigger_empty_continuation() {
-    use crate::model::trigger::{ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement};
+    use crate::domain::model::trigger::{
+        ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement,
+    };
 
     let npc = NpcCard {
         id: "npc1".to_string(),
@@ -404,14 +408,14 @@ fn test_pipeline_trigger_empty_continuation() {
 
     let ctx = make_test_context(state.clone());
     let custom_quantifier = QuantifierResult {
-        npcs: crate::model::quantifier::QuantifierParseResult {
+        npcs: crate::domain::model::quantifier::QuantifierParseResult {
             npc_ids: vec!["npc1".to_string()],
             confidence: QuantifierConfidence::High,
         },
-        movement: crate::model::quantifier::MovementParseResult {
+        movement: crate::domain::model::quantifier::MovementParseResult {
             destination: None,
             movement_type: None,
-            confidence: crate::model::quantifier::QuantifierConfidence::Low,
+            confidence: crate::domain::model::quantifier::QuantifierConfidence::Low,
         },
     };
     let backend = MockPipelineBackend {
@@ -441,7 +445,9 @@ fn test_pipeline_trigger_empty_continuation() {
 
 #[test]
 fn test_pipeline_trigger_complete_failure() {
-    use crate::model::trigger::{ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement};
+    use crate::domain::model::trigger::{
+        ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement,
+    };
 
     let npc = NpcCard {
         id: "npc1".to_string(),
@@ -469,14 +475,14 @@ fn test_pipeline_trigger_complete_failure() {
 
     let ctx = make_test_context(state.clone());
     let custom_quantifier = QuantifierResult {
-        npcs: crate::model::quantifier::QuantifierParseResult {
+        npcs: crate::domain::model::quantifier::QuantifierParseResult {
             npc_ids: vec!["npc1".to_string()],
             confidence: QuantifierConfidence::High,
         },
-        movement: crate::model::quantifier::MovementParseResult {
+        movement: crate::domain::model::quantifier::MovementParseResult {
             destination: None,
             movement_type: None,
-            confidence: crate::model::quantifier::QuantifierConfidence::Low,
+            confidence: crate::domain::model::quantifier::QuantifierConfidence::Low,
         },
     };
     let backend = MockPipelineBackend {

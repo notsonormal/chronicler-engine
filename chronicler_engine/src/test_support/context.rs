@@ -1,10 +1,10 @@
 use std::sync::{Arc, RwLock};
 
 use crate::application::GameServiceContext;
-use crate::model::prompt_preset::{PresetType, PromptPreset};
-use crate::model::settings::AppSettings;
-use crate::model::state::game_state::GameState;
-use crate::model::state_snapshot::GameStateSnapshot;
+use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
+use crate::domain::model::settings::AppSettings;
+use crate::domain::model::state::game_state::GameState;
+use crate::domain::model::state_snapshot::GameStateSnapshot;
 use crate::storage::Storage;
 
 pub fn make_test_context(state: GameState) -> GameServiceContext {

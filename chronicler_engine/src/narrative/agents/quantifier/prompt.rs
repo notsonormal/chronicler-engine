@@ -1,7 +1,7 @@
 //! [DOC: docs/system/agent_system.md]
 //! Quantifier prompt construction
 
-use crate::model::template::{render_template, TemplateVars};
+use crate::domain::model::template::{render_template, TemplateVars};
 use crate::narrative::agents::quantifier::types::QuantifierPromptContext;
 
 pub struct QuantifierPromptBuilder<'a> {

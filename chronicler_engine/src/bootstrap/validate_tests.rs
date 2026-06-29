@@ -1,8 +1,8 @@
 use crate::bootstrap::validate_loaded_data;
-use crate::model::character::{CharacterSheet, NpcCard};
-use crate::model::map::{MapDef, Overworld};
-use crate::model::trigger::Trigger;
-use crate::model::world::WorldCard;
+use crate::domain::model::character::{CharacterSheet, NpcCard};
+use crate::domain::model::map::{MapDef, Overworld};
+use crate::domain::model::trigger::Trigger;
+use crate::domain::model::world::WorldCard;
 use crate::test_support::{TestMap, TestNpc, TestPlayer, TestWorld};
 
 #[test]
@@ -31,7 +31,7 @@ fn test_validate_loaded_data_missing_starting_room() {
         name: "Test".to_string(),
         description: "A test world".to_string(),
         global_rules: vec![],
-        scenarios: vec![crate::model::scenario::StartingScenario {
+        scenarios: vec![crate::domain::model::scenario::StartingScenario {
             id: "intro".to_string(),
             name: "Intro".to_string(),
             description: "".to_string(),
@@ -99,11 +99,11 @@ fn test_validate_loaded_data_invalid_trigger_room() {
         },
         inventory: vec![],
         triggers: vec![Trigger {
-            requirement: crate::model::trigger::TriggerRequirement {
-                operator: crate::model::trigger::ComparisonOperator::Eq,
+            requirement: crate::domain::model::trigger::TriggerRequirement {
+                operator: crate::domain::model::trigger::ComparisonOperator::Eq,
                 threshold: 0,
             },
-            narration: crate::model::trigger::TriggerNarration {
+            narration: crate::domain::model::trigger::TriggerNarration {
                 name: "Test".to_string(),
                 narration_prompt: "Hello".to_string(),
             },
@@ -132,7 +132,7 @@ fn test_validate_loaded_data_multiple_errors() {
         name: "Test".to_string(),
         description: "A test world".to_string(),
         global_rules: vec![],
-        scenarios: vec![crate::model::scenario::StartingScenario {
+        scenarios: vec![crate::domain::model::scenario::StartingScenario {
             id: "intro".to_string(),
             name: "Intro".to_string(),
             description: "".to_string(),

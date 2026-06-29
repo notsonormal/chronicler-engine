@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use crate::model::map::{MapDef, Overworld, Region, Room};
-use crate::model::world::WorldCard;
+use crate::domain::model::map::{MapDef, Overworld, Region, Room};
+use crate::domain::model::world::WorldCard;
 use crate::storage::backend::{Storage, TestOverride};
 use crate::test_support::sqlite_storage;
 

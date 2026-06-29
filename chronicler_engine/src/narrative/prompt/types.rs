@@ -1,11 +1,11 @@
 //! [DOC: docs/system/prompt_system.md]
 //! Prompt type definitions
 
-use crate::model::character::{NpcCard, PlayerCard};
-use crate::model::map::Room;
-use crate::model::state::message_types::MessageEntry;
-use crate::model::template::TemplateVars;
-use crate::model::world::WorldCard;
+use crate::domain::model::character::{NpcCard, PlayerCard};
+use crate::domain::model::map::Room;
+use crate::domain::model::state::message_types::MessageEntry;
+use crate::domain::model::template::TemplateVars;
+use crate::domain::model::world::WorldCard;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PromptLayer {

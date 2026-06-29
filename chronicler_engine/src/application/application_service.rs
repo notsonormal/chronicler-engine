@@ -13,14 +13,14 @@ use crate::application::game_service::GameService;
 
 use crate::bootstrap::build_fresh_initial_state;
 use crate::error::EngineError;
-use crate::model::game::{Game, generate_game_name};
+use crate::domain::model::game::{Game, generate_game_name};
 
-use crate::model::state::generation_status::{GenerationPhase, GenerationStatus};
-use crate::model::state::message_types::{MessageEntry, MessageType};
-use crate::model::state_snapshot::GameStateSnapshot;
-use crate::model::trigger::NpcEncounterState;
-use crate::model::world::WorldCard;
-use crate::model::map::MapDef;
+use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
+use crate::domain::model::state::message_types::{MessageEntry, MessageType};
+use crate::domain::model::state_snapshot::GameStateSnapshot;
+use crate::domain::model::trigger::NpcEncounterState;
+use crate::domain::model::world::WorldCard;
+use crate::domain::model::map::MapDef;
 use crate::storage::worlds::WorldWithMap;
 
 pub enum ApplicationError {

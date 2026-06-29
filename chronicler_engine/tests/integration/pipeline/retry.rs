@@ -9,10 +9,10 @@ use crate::{
     working_service,
 };
 use chronicler_engine::application::GameService;
-use chronicler_engine::model::state::generation_status::GenerationStatus;
-use chronicler_engine::model::state::message_types::MessageType;
-use chronicler_engine::model::state::trigger_context::StoredTriggerContext;
-use chronicler_engine::model::state_snapshot::GameStateSnapshot;
+use chronicler_engine::domain::model::state::generation_status::GenerationStatus;
+use chronicler_engine::domain::model::state::message_types::MessageType;
+use chronicler_engine::domain::model::state::trigger_context::StoredTriggerContext;
+use chronicler_engine::domain::model::state_snapshot::GameStateSnapshot;
 use chronicler_engine::narrative::llm::MockBackend;
 use chronicler_engine::test_support::{
     make_test_context_with_sqlite, make_test_context_without_snapshot,
@@ -176,30 +176,36 @@ fn test_retry_room_not_found() {
         cancel_token: tokio_util::sync::CancellationToken::new(),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         settings: Arc::new(std::sync::RwLock::new(
-            chronicler_engine::model::settings::AppSettings::default(),
+            chronicler_engine::domain::model::settings::AppSettings::default(),
         )),
         preset_storage: {
             let ps = chronicler_engine::storage::Storage::new_in_memory();
-            let _ = ps.save_preset(&chronicler_engine::model::prompt_preset::PromptPreset {
-                id: "system_default".to_string(),
-                name: "Default System".to_string(),
-                role: Some("You are a narrator.".to_string()),
-                instructions: None,
-                writing_style: None,
-                output_format: None,
-                is_default: true,
-                preset_type: chronicler_engine::model::prompt_preset::PresetType::System,
-            });
-            let _ = ps.save_preset(&chronicler_engine::model::prompt_preset::PromptPreset {
-                id: "quantifier_default".to_string(),
-                name: "Default Quantifier".to_string(),
-                role: Some("You are a quantifier.".to_string()),
-                instructions: None,
-                writing_style: None,
-                output_format: None,
-                is_default: true,
-                preset_type: chronicler_engine::model::prompt_preset::PresetType::Quantifier,
-            });
+            let _ = ps.save_preset(
+                &chronicler_engine::domain::model::prompt_preset::PromptPreset {
+                    id: "system_default".to_string(),
+                    name: "Default System".to_string(),
+                    role: Some("You are a narrator.".to_string()),
+                    instructions: None,
+                    writing_style: None,
+                    output_format: None,
+                    is_default: true,
+                    preset_type:
+                        chronicler_engine::domain::model::prompt_preset::PresetType::System,
+                },
+            );
+            let _ = ps.save_preset(
+                &chronicler_engine::domain::model::prompt_preset::PromptPreset {
+                    id: "quantifier_default".to_string(),
+                    name: "Default Quantifier".to_string(),
+                    role: Some("You are a quantifier.".to_string()),
+                    instructions: None,
+                    writing_style: None,
+                    output_format: None,
+                    is_default: true,
+                    preset_type:
+                        chronicler_engine::domain::model::prompt_preset::PresetType::Quantifier,
+                },
+            );
             Arc::new(ps)
         },
     };
@@ -260,30 +266,36 @@ fn test_retry_llm_error() {
         cancel_token: tokio_util::sync::CancellationToken::new(),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         settings: Arc::new(std::sync::RwLock::new(
-            chronicler_engine::model::settings::AppSettings::default(),
+            chronicler_engine::domain::model::settings::AppSettings::default(),
         )),
         preset_storage: {
             let ps = chronicler_engine::storage::Storage::new_in_memory();
-            let _ = ps.save_preset(&chronicler_engine::model::prompt_preset::PromptPreset {
-                id: "system_default".to_string(),
-                name: "Default System".to_string(),
-                role: Some("You are a narrator.".to_string()),
-                instructions: None,
-                writing_style: None,
-                output_format: None,
-                is_default: true,
-                preset_type: chronicler_engine::model::prompt_preset::PresetType::System,
-            });
-            let _ = ps.save_preset(&chronicler_engine::model::prompt_preset::PromptPreset {
-                id: "quantifier_default".to_string(),
-                name: "Default Quantifier".to_string(),
-                role: Some("You are a quantifier.".to_string()),
-                instructions: None,
-                writing_style: None,
-                output_format: None,
-                is_default: true,
-                preset_type: chronicler_engine::model::prompt_preset::PresetType::Quantifier,
-            });
+            let _ = ps.save_preset(
+                &chronicler_engine::domain::model::prompt_preset::PromptPreset {
+                    id: "system_default".to_string(),
+                    name: "Default System".to_string(),
+                    role: Some("You are a narrator.".to_string()),
+                    instructions: None,
+                    writing_style: None,
+                    output_format: None,
+                    is_default: true,
+                    preset_type:
+                        chronicler_engine::domain::model::prompt_preset::PresetType::System,
+                },
+            );
+            let _ = ps.save_preset(
+                &chronicler_engine::domain::model::prompt_preset::PromptPreset {
+                    id: "quantifier_default".to_string(),
+                    name: "Default Quantifier".to_string(),
+                    role: Some("You are a quantifier.".to_string()),
+                    instructions: None,
+                    writing_style: None,
+                    output_format: None,
+                    is_default: true,
+                    preset_type:
+                        chronicler_engine::domain::model::prompt_preset::PresetType::Quantifier,
+                },
+            );
             Arc::new(ps)
         },
     };
@@ -341,30 +353,36 @@ fn test_retry_empty_narration() {
         cancel_token: tokio_util::sync::CancellationToken::new(),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         settings: Arc::new(std::sync::RwLock::new(
-            chronicler_engine::model::settings::AppSettings::default(),
+            chronicler_engine::domain::model::settings::AppSettings::default(),
         )),
         preset_storage: {
             let ps = chronicler_engine::storage::Storage::new_in_memory();
-            let _ = ps.save_preset(&chronicler_engine::model::prompt_preset::PromptPreset {
-                id: "system_default".to_string(),
-                name: "Default System".to_string(),
-                role: Some("You are a narrator.".to_string()),
-                instructions: None,
-                writing_style: None,
-                output_format: None,
-                is_default: true,
-                preset_type: chronicler_engine::model::prompt_preset::PresetType::System,
-            });
-            let _ = ps.save_preset(&chronicler_engine::model::prompt_preset::PromptPreset {
-                id: "quantifier_default".to_string(),
-                name: "Default Quantifier".to_string(),
-                role: Some("You are a quantifier.".to_string()),
-                instructions: None,
-                writing_style: None,
-                output_format: None,
-                is_default: true,
-                preset_type: chronicler_engine::model::prompt_preset::PresetType::Quantifier,
-            });
+            let _ = ps.save_preset(
+                &chronicler_engine::domain::model::prompt_preset::PromptPreset {
+                    id: "system_default".to_string(),
+                    name: "Default System".to_string(),
+                    role: Some("You are a narrator.".to_string()),
+                    instructions: None,
+                    writing_style: None,
+                    output_format: None,
+                    is_default: true,
+                    preset_type:
+                        chronicler_engine::domain::model::prompt_preset::PresetType::System,
+                },
+            );
+            let _ = ps.save_preset(
+                &chronicler_engine::domain::model::prompt_preset::PromptPreset {
+                    id: "quantifier_default".to_string(),
+                    name: "Default Quantifier".to_string(),
+                    role: Some("You are a quantifier.".to_string()),
+                    instructions: None,
+                    writing_style: None,
+                    output_format: None,
+                    is_default: true,
+                    preset_type:
+                        chronicler_engine::domain::model::prompt_preset::PresetType::Quantifier,
+                },
+            );
             Arc::new(ps)
         },
     };
@@ -423,30 +441,36 @@ fn test_retry_main_narration_uses_pre_main_snapshot() {
         cancel_token: tokio_util::sync::CancellationToken::new(),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         settings: Arc::new(std::sync::RwLock::new(
-            chronicler_engine::model::settings::AppSettings::default(),
+            chronicler_engine::domain::model::settings::AppSettings::default(),
         )),
         preset_storage: {
             let ps = chronicler_engine::storage::Storage::new_in_memory();
-            let _ = ps.save_preset(&chronicler_engine::model::prompt_preset::PromptPreset {
-                id: "system_default".to_string(),
-                name: "Default System".to_string(),
-                role: Some("You are a narrator.".to_string()),
-                instructions: None,
-                writing_style: None,
-                output_format: None,
-                is_default: true,
-                preset_type: chronicler_engine::model::prompt_preset::PresetType::System,
-            });
-            let _ = ps.save_preset(&chronicler_engine::model::prompt_preset::PromptPreset {
-                id: "quantifier_default".to_string(),
-                name: "Default Quantifier".to_string(),
-                role: Some("You are a quantifier.".to_string()),
-                instructions: None,
-                writing_style: None,
-                output_format: None,
-                is_default: true,
-                preset_type: chronicler_engine::model::prompt_preset::PresetType::Quantifier,
-            });
+            let _ = ps.save_preset(
+                &chronicler_engine::domain::model::prompt_preset::PromptPreset {
+                    id: "system_default".to_string(),
+                    name: "Default System".to_string(),
+                    role: Some("You are a narrator.".to_string()),
+                    instructions: None,
+                    writing_style: None,
+                    output_format: None,
+                    is_default: true,
+                    preset_type:
+                        chronicler_engine::domain::model::prompt_preset::PresetType::System,
+                },
+            );
+            let _ = ps.save_preset(
+                &chronicler_engine::domain::model::prompt_preset::PromptPreset {
+                    id: "quantifier_default".to_string(),
+                    name: "Default Quantifier".to_string(),
+                    role: Some("You are a quantifier.".to_string()),
+                    instructions: None,
+                    writing_style: None,
+                    output_format: None,
+                    is_default: true,
+                    preset_type:
+                        chronicler_engine::domain::model::prompt_preset::PresetType::Quantifier,
+                },
+            );
             Arc::new(ps)
         },
     };

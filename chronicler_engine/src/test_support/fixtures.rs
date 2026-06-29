@@ -5,15 +5,15 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::model::character::{CharacterSheet, NpcCard, PlayerCard};
-use crate::model::map::{MapDef, Overworld, Region, Room};
-use crate::model::message::{Message, Swipe};
-use crate::model::prompt_preset::{PresetType, PromptPreset};
-use crate::model::state::game_state::{GameState, GameStateBuilder};
-use crate::model::state::message_types::MessageType;
-use crate::model::state::trigger_context::StoredTriggerContext;
-use crate::model::trigger::{ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement};
-use crate::model::world::{WorldCard, WorldManifest};
+use crate::domain::model::character::{CharacterSheet, NpcCard, PlayerCard};
+use crate::domain::model::map::{MapDef, Overworld, Region, Room};
+use crate::domain::model::message::{Message, Swipe};
+use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
+use crate::domain::model::state::game_state::{GameState, GameStateBuilder};
+use crate::domain::model::state::message_types::MessageType;
+use crate::domain::model::state::trigger_context::StoredTriggerContext;
+use crate::domain::model::trigger::{ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement};
+use crate::domain::model::world::{WorldCard, WorldManifest};
 use crate::storage::Storage;
 use crate::storage::db::DbPool;
 
@@ -179,7 +179,7 @@ impl TestMap {
     }
 
     pub fn two_rooms(room_a_id: &str, room_b_id: &str) -> MapDef {
-        use crate::model::map::Direction;
+        use crate::domain::model::map::Direction;
         let mut room_a = Self::room(room_a_id);
         let mut room_b = Self::room(room_b_id);
         room_a.exits.insert(Direction::North, room_b_id.to_string());

@@ -1,7 +1,7 @@
 //! [DOC: docs/system/agent_system.md]
 //! Quantifier orchestration
 
-use crate::model::state::game_state::GameState;
+use crate::domain::model::state::game_state::GameState;
 use crate::narrative::llm::backend::LlmBackend;
 
 use super::parser::parse_quantifier_response_with_movement;
@@ -124,7 +124,7 @@ fn process_quantifier_result(
     match result.npcs.confidence {
         QuantifierConfidence::High | QuantifierConfidence::Medium => {
             tracing::info!("[Quantifier] Using dynamic NPCs: {:?}", result.npcs.npc_ids);
-            let npc_cards: Vec<crate::model::character::NpcCard> = result
+            let npc_cards: Vec<crate::domain::model::character::NpcCard> = result
                 .npcs
                 .npc_ids
                 .iter()
@@ -177,14 +177,15 @@ pub(crate) fn static_npc_result(
 
 pub fn determine_npcs_in_room(
     state: &GameState,
-    current_room: &crate::model::map::Room,
+    current_room: &crate::domain::model::map::Room,
     room_npc_ids: &[String],
-    previous_room_npcs: &[crate::model::character::NpcCard],
+    previous_room_npcs: &[crate::domain::model::character::NpcCard],
     player_action: &str,
     backend: &dyn LlmBackend,
     quantifier_prompt_override: Option<String>,
 ) -> QuantifierResult {
-    let all_npcs: Vec<crate::model::character::NpcCard> = state.npcs.values().cloned().collect();
+    let all_npcs: Vec<crate::domain::model::character::NpcCard> =
+        state.npcs.values().cloned().collect();
 
     let recent_history: Vec<_> = state
         .narrative

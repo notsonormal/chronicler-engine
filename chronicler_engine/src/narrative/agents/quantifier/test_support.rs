@@ -5,9 +5,9 @@ use std::collections::HashMap;
 
 use chrono::Utc;
 
-use crate::model::character::{CharacterSheet, NpcCard};
-use crate::model::map::{Direction, Room};
-use crate::model::state::message_types::{MessageEntry, MessageType};
+use crate::domain::model::character::{CharacterSheet, NpcCard};
+use crate::domain::model::map::{Direction, Room};
+use crate::domain::model::state::message_types::{MessageEntry, MessageType};
 
 pub fn make_room() -> Room {
     Room {

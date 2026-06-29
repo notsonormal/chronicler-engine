@@ -4,8 +4,8 @@
 use std::sync::{Arc, RwLock};
 
 use crate::error::EngineError;
-use crate::model::agent::{AgentConfig, ExecutionPhase};
-use crate::model::settings::AppSettings;
+use crate::domain::model::agent::{AgentConfig, ExecutionPhase};
+use crate::domain::model::settings::AppSettings;
 use crate::narrative::agents::Agent;
 use crate::narrative::agents::quantifier::QuantifierAgent;
 use crate::storage::Storage;
@@ -36,7 +36,7 @@ impl AgentRegistry {
         // If no agent configs exist, inject defaults for backward compatibility.
         // This ensures existing settings.toml files without an [agents] section
         // still get the quantifier enabled.
-        let default_configs = crate::model::settings::default_agent_configs();
+        let default_configs = crate::domain::model::settings::default_agent_configs();
         let effective_configs = if configs.is_empty() {
             &default_configs[..]
         } else {

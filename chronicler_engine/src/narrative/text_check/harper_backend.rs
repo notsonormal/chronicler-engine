@@ -8,7 +8,7 @@ use harper_core::spell::{FstDictionary, MutableDictionary};
 use harper_core::{Document, MergedDictionary};
 
 use crate::error::EngineError;
-use crate::model::settings::TextCheckMode;
+use crate::domain::model::settings::TextCheckMode;
 
 use super::types::{CheckIssue, CheckResult, IssueKind};
 

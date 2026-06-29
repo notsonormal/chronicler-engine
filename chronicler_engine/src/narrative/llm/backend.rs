@@ -4,8 +4,8 @@
 use std::sync::Arc;
 
 use crate::error::EngineError;
-use crate::model::llm_message::LlmMessage;
-use crate::model::settings::Connection;
+use crate::domain::model::llm_message::LlmMessage;
+use crate::domain::model::settings::Connection;
 use crate::narrative::llm_client::ChatCompletionResult;
 use crate::storage::Storage;
 
@@ -95,7 +95,7 @@ pub trait LlmBackend: Send + Sync {
     ) -> Result<LlmCallResult, EngineError>;
 }
 
-pub use crate::model::llm_backend::LlmBackendType;
+pub use crate::domain::model::llm_backend::LlmBackendType;
 
 pub fn get_llm_backend_for(
     connection: &Connection,

@@ -4,10 +4,10 @@
 use std::sync::{Arc, RwLock};
 
 use crate::error::EngineError;
-use crate::model::agent::{
+use crate::domain::model::agent::{
     AgentConfig, AgentContext, AgentResult, BackendSelector, Confidence, ExecutionPhase, StatePatch,
 };
-use crate::model::settings::AppSettings;
+use crate::domain::model::settings::AppSettings;
 
 use crate::narrative::agents::Agent;
 use crate::narrative::prompt::assembler::assemble_prompt_text;

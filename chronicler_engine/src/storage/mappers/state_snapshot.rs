@@ -4,7 +4,7 @@
 use chrono::{DateTime, Utc};
 
 use crate::error::EngineError;
-use crate::model::state_snapshot::GameStateSnapshot;
+use crate::domain::model::state_snapshot::GameStateSnapshot;
 use crate::storage::models::game_state_snapshot::DbGameStateSnapshot;
 
 impl TryFrom<&DbGameStateSnapshot> for GameStateSnapshot {

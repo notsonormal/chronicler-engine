@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
 use chronicler_engine::application::game_service::GameService;
-use chronicler_engine::model::character::{CharacterSheet, NpcCard};
-use chronicler_engine::model::state::game_state::GameState;
-use chronicler_engine::model::state::message_types::MessageType;
-use chronicler_engine::model::trigger::{
+use chronicler_engine::domain::model::character::{CharacterSheet, NpcCard};
+use chronicler_engine::domain::model::state::game_state::GameState;
+use chronicler_engine::domain::model::state::message_types::MessageType;
+use chronicler_engine::domain::model::trigger::{
     ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement,
 };
 use chronicler_engine::narrative::llm::MockBackend;
@@ -371,7 +371,9 @@ fn test_retry_no_pre_main_snapshot() {
     ));
 
     let snapshot =
-        chronicler_engine::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
+        chronicler_engine::domain::model::state_snapshot::GameStateSnapshot::from_game_state(
+            &state,
+        );
     let _ = storage.save_snapshot(&snapshot);
     for msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
         let id = storage.insert_message(&msg).unwrap();
@@ -382,26 +384,31 @@ fn test_retry_no_pre_main_snapshot() {
 
     let preset_storage = {
         let ps = chronicler_engine::storage::Storage::new_in_memory();
-        let _ = ps.save_preset(&chronicler_engine::model::prompt_preset::PromptPreset {
-            id: "system_default".to_string(),
-            name: "Default System".to_string(),
-            role: Some("You are a narrator.".to_string()),
-            instructions: None,
-            writing_style: None,
-            output_format: None,
-            is_default: true,
-            preset_type: chronicler_engine::model::prompt_preset::PresetType::System,
-        });
-        let _ = ps.save_preset(&chronicler_engine::model::prompt_preset::PromptPreset {
-            id: "quantifier_default".to_string(),
-            name: "Default Quantifier".to_string(),
-            role: Some("You are a quantifier.".to_string()),
-            instructions: None,
-            writing_style: None,
-            output_format: None,
-            is_default: true,
-            preset_type: chronicler_engine::model::prompt_preset::PresetType::Quantifier,
-        });
+        let _ = ps.save_preset(
+            &chronicler_engine::domain::model::prompt_preset::PromptPreset {
+                id: "system_default".to_string(),
+                name: "Default System".to_string(),
+                role: Some("You are a narrator.".to_string()),
+                instructions: None,
+                writing_style: None,
+                output_format: None,
+                is_default: true,
+                preset_type: chronicler_engine::domain::model::prompt_preset::PresetType::System,
+            },
+        );
+        let _ = ps.save_preset(
+            &chronicler_engine::domain::model::prompt_preset::PromptPreset {
+                id: "quantifier_default".to_string(),
+                name: "Default Quantifier".to_string(),
+                role: Some("You are a quantifier.".to_string()),
+                instructions: None,
+                writing_style: None,
+                output_format: None,
+                is_default: true,
+                preset_type:
+                    chronicler_engine::domain::model::prompt_preset::PresetType::Quantifier,
+            },
+        );
         Arc::new(ps)
     };
 
@@ -414,7 +421,7 @@ fn test_retry_no_pre_main_snapshot() {
         cancel_token: tokio_util::sync::CancellationToken::new(),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         settings: Arc::new(std::sync::RwLock::new(
-            chronicler_engine::model::settings::AppSettings::default(),
+            chronicler_engine::domain::model::settings::AppSettings::default(),
         )),
         preset_storage,
     };

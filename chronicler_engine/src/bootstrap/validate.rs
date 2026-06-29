@@ -1,9 +1,9 @@
 //! [DOC: docs/system/startup.md]
 //! Data validation utilities
 
-use crate::model::character::{NpcCard, PlayerCard};
-use crate::model::map::MapDef;
-use crate::model::world::WorldCard;
+use crate::domain::model::character::{NpcCard, PlayerCard};
+use crate::domain::model::map::MapDef;
+use crate::domain::model::world::WorldCard;
 
 pub fn validate_loaded_data(
     world: &WorldCard,

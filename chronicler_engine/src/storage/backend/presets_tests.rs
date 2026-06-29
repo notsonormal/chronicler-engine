@@ -1,4 +1,4 @@
-use crate::model::prompt_preset::{PresetType, PromptPreset};
+use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::storage::backend::{Storage, TestOverride};
 
 fn dummy_preset(id: &str, preset_type: PresetType) -> PromptPreset {

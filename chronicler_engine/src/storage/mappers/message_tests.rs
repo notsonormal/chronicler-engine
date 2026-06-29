@@ -1,5 +1,5 @@
-use crate::model::message::Message;
-use crate::model::state::message_types::MessageType;
+use crate::domain::model::message::Message;
+use crate::domain::model::state::message_types::MessageType;
 use crate::storage::mappers::message::{db_message_to_model, model_message_to_db, model_swipes_to_db};
 
 #[test]
@@ -12,7 +12,7 @@ fn test_message_roundtrip() {
         None,
     );
     original.set_snapshot_id(Some(3));
-    original.swipes = vec![crate::model::message::Swipe {
+    original.swipes = vec![crate::domain::model::message::Swipe {
         text: "Hello world".to_string(),
         snapshot_id: Some(3),
         location_header: Some("Room A".to_string()),
@@ -42,7 +42,7 @@ fn test_message_unpersisted_roundtrip() {
         None,
         Some("Event".to_string()),
     );
-    original.swipes = vec![crate::model::message::Swipe {
+    original.swipes = vec![crate::domain::model::message::Swipe {
         text: "Input text".to_string(),
         snapshot_id: None,
         location_header: None,
@@ -61,7 +61,7 @@ fn test_message_unpersisted_roundtrip() {
 #[test]
 fn test_message_log_type_json_serialization() {
     let mut msg = Message::new(None, "test", MessageType::Dialogue, None, None);
-    msg.swipes = vec![crate::model::message::Swipe {
+    msg.swipes = vec![crate::domain::model::message::Swipe {
         text: "test".to_string(),
         snapshot_id: None,
         location_header: None,
@@ -84,13 +84,13 @@ fn test_active_swipe_index_out_of_bounds_fallback() {
     );
     original.set_snapshot_id(Some(1));
     original.swipes = vec![
-        crate::model::message::Swipe {
+        crate::domain::model::message::Swipe {
             text: "First swipe".to_string(),
             snapshot_id: Some(1),
             location_header: Some("Room A".to_string()),
             event_header: None,
         },
-        crate::model::message::Swipe {
+        crate::domain::model::message::Swipe {
             text: "Second swipe".to_string(),
             snapshot_id: Some(2),
             location_header: Some("Room B".to_string()),

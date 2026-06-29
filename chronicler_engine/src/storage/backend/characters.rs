@@ -4,7 +4,7 @@
 use chrono::Utc;
 
 use crate::error::EngineError;
-use crate::model::character::NpcCard;
+use crate::domain::model::character::NpcCard;
 use crate::storage::backend::{Backend, CharacterSeed, Storage};
 use crate::storage::models::character::DbCharacter;
 
@@ -93,12 +93,12 @@ impl Storage {
 }
 
 fn character_from_db(db: &DbCharacter) -> Result<NpcCard, EngineError> {
-    use crate::model::character::CharacterSheet;
+    use crate::domain::model::character::CharacterSheet;
     let inventory: Vec<String> = serde_json::from_str(&db.inventory)
         .map_err(|e| EngineError::Parse(format!("Failed to deserialize inventory: {e}")))?;
-    let triggers: Vec<crate::model::trigger::Trigger> = serde_json::from_str(&db.triggers)
+    let triggers: Vec<crate::domain::model::trigger::Trigger> = serde_json::from_str(&db.triggers)
         .map_err(|e| EngineError::Parse(format!("Failed to deserialize triggers: {e}")))?;
-    let relationships: Vec<crate::model::character::Relationship> =
+    let relationships: Vec<crate::domain::model::character::Relationship> =
         serde_json::from_str(&db.relationships)
             .map_err(|e| EngineError::Parse(format!("Failed to deserialize relationships: {e}")))?;
 

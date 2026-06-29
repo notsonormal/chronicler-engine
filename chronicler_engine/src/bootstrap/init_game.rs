@@ -5,15 +5,15 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
 use crate::application::context;
-use crate::model::character::{NpcCard, PlayerCard};
-use crate::model::map::MapDef;
-use crate::model::prompt_preset::PromptPreset;
-use crate::model::settings::AppSettings;
-use crate::model::state::game_state::GameState;
-use crate::model::state::generation_status::GenerationStatus;
-use crate::model::state::message_types::MessageType;
-use crate::model::state_snapshot::GameStateSnapshot;
-use crate::model::world::WorldCard;
+use crate::domain::model::character::{NpcCard, PlayerCard};
+use crate::domain::model::map::MapDef;
+use crate::domain::model::prompt_preset::PromptPreset;
+use crate::domain::model::settings::AppSettings;
+use crate::domain::model::state::game_state::GameState;
+use crate::domain::model::state::generation_status::GenerationStatus;
+use crate::domain::model::state::message_types::MessageType;
+use crate::domain::model::state_snapshot::GameStateSnapshot;
+use crate::domain::model::world::WorldCard;
 use crate::narrative::prompt::{NpcContext, make_prompt_context};
 
 use super::run::{PRESET_STORAGE_GAME_ID, find_latest_game_for_world, list_game_names_for_world};
@@ -37,7 +37,7 @@ pub(crate) fn resolve_game_id(
         }
         None => {
             let existing_names = list_game_names_for_world(db_pool, &world.key)?;
-            let name = crate::model::game::generate_game_name(&world.name, &existing_names);
+            let name = crate::domain::model::game::generate_game_name(&world.name, &existing_names);
             let id =
                 db_pool.insert_game(&world.name, &world.key, persona_key, persona_name, &name)?;
             tracing::info!("Created new game '{name}' (id={id}) with persona '{persona_key}'");
@@ -112,7 +112,7 @@ pub struct ArrivalTaskContext {
     max_tokens: Option<u32>,
     nearby_npcs: Vec<NpcCard>,
     all_npcs: Vec<NpcCard>,
-    connection: crate::model::settings::Connection,
+    connection: crate::domain::model::settings::Connection,
 }
 
 impl ArrivalTaskContext {
@@ -127,7 +127,7 @@ impl ArrivalTaskContext {
         response_length: String,
         max_context_tokens: u32,
         max_tokens: Option<u32>,
-        connection: crate::model::settings::Connection,
+        connection: crate::domain::model::settings::Connection,
     ) -> Self {
         Self {
             ctx,

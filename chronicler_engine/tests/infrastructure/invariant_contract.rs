@@ -6,20 +6,20 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use chronicler_engine::application::action_pipeline::{ActionOutcome, ActionPipeline};
 use chronicler_engine::application::game_service::GameService;
-use chronicler_engine::engine::action_processing::{
+use chronicler_engine::domain::engine::action_processing::{
     FreeActionContext, apply_npc_events, execute_freeaction_impl,
 };
 
-use chronicler_engine::model::quantifier::{
+use chronicler_engine::domain::model::quantifier::{
     MovementParseResult, MovementType, NpcEvent, NpcTransitionType, QuantifierConfidence,
     QuantifierParseResult, QuantifierResult,
 };
-use chronicler_engine::model::state::message_types::MessageType;
-use chronicler_engine::model::state::game_state::GameState;
-use chronicler_engine::model::state::generation_status::GenerationStatus;
+use chronicler_engine::domain::model::state::message_types::MessageType;
+use chronicler_engine::domain::model::state::game_state::GameState;
+use chronicler_engine::domain::model::state::generation_status::GenerationStatus;
 use chronicler_engine::narrative::agents::registry::AgentRegistry;
 use chronicler_engine::narrative::llm::MockBackend;
-use chronicler_engine::server::fragments::GenerationGuard;
+use chronicler_engine::adapters::driving::http::fragments::GenerationGuard;
 use chronicler_engine::test_support::make_test_context_with_sqlite;
 
 #[path = "../helpers/fixtures.rs"]
@@ -130,12 +130,13 @@ fn test_inv002_violation_demo() {
     let state_after_events =
         apply_npc_events(state.clone(), &events).expect("apply_npc_events should succeed");
     let triggers_after_swap =
-        chronicler_engine::engine::trigger_eval::evaluate_triggers(&state_after_events);
+        chronicler_engine::domain::engine::trigger_eval::evaluate_triggers(&state_after_events);
     assert!(
         triggers_after_swap.is_empty(),
         "VIOLATION: trigger should NOT fire when apply_npc_events runs first (times_met == 1)"
     );
-    let triggers_correct = chronicler_engine::engine::trigger_eval::evaluate_triggers(&state);
+    let triggers_correct =
+        chronicler_engine::domain::engine::trigger_eval::evaluate_triggers(&state);
     assert!(
         !triggers_correct.is_empty(),
         "Correct order: trigger SHOULD fire (times_met == 0)"
@@ -216,7 +217,7 @@ fn test_inv004b_no_concurrent_async_actions() {
 }
 #[test]
 fn test_inv003_snapshot_captures_state_fields() {
-    use chronicler_engine::model::state_snapshot::GameStateSnapshot;
+    use chronicler_engine::domain::model::state_snapshot::GameStateSnapshot;
 
     let mut state = create_test_state();
     state.movement.current_room_id = "room2".to_string();
@@ -240,8 +241,10 @@ fn test_inv003_snapshot_captures_state_fields() {
 }
 #[test]
 fn test_inv005_handle_movement_runs_before_narration() {
-    use chronicler_engine::engine::action_processing::{FreeActionContext, execute_freeaction_impl};
-    use chronicler_engine::model::quantifier::{
+    use chronicler_engine::domain::engine::action_processing::{
+        FreeActionContext, execute_freeaction_impl,
+    };
+    use chronicler_engine::domain::model::quantifier::{
         QuantifierConfidence, QuantifierParseResult, QuantifierResult,
     };
     use std::sync::Arc;
@@ -286,7 +289,7 @@ fn test_inv005_handle_movement_runs_before_narration() {
 }
 #[test]
 fn test_inv007_dynamic_room_creation_on_invalid_destination() {
-    use chronicler_engine::engine::action_processing::handle_movement;
+    use chronicler_engine::domain::engine::action_processing::handle_movement;
 
     let state = create_test_state();
     let invalid_destination = "nonexistent_place_xyz";

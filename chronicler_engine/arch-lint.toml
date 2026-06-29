@@ -41,11 +41,11 @@ severity = "warning"
 
 [[scopes]]
 name = "model"
-paths = ["src/model/**"]
+paths = ["src/domain/model/**"]
 
 [[scopes]]
 name = "engine"
-paths = ["src/engine/**"]
+paths = ["src/domain/engine/**"]
 
 [[scopes]]
 name = "narrative"
@@ -57,7 +57,7 @@ paths = ["src/application/**"]
 
 [[scopes]]
 name = "server"
-paths = ["src/server/**"]
+paths = ["src/adapters/driving/http/**"]
 
 # Model (innermost) must not depend on any outer layer.
 [[deny-scope-dep]]

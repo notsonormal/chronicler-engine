@@ -4,20 +4,20 @@
 use std::sync::Arc;
 
 use crate::application::context::{map_llm_error, save_message_and_snapshot, save_state};
-use crate::engine::action_processing::{
+use crate::domain::engine::action_processing::{
     FreeActionContext, TriggerMatch, apply_npc_events, commit_trigger_narration,
     execute_freeaction_impl,
 };
 use crate::error::EngineError;
-use crate::model::character::{NpcCard, PlayerCard};
-use crate::model::map::MapDef;
-use crate::model::prompt_preset::PromptPreset;
-use crate::model::quantifier::{QuantifierConfidence, QuantifierResult, compute_npc_events};
-use crate::model::state::trigger_context::StoredTriggerContext;
-use crate::model::state::game_state::GameState;
-use crate::model::state::generation_status::{GenerationPhase, GenerationStatus};
-use crate::model::state::message_types::MessageType;
-use crate::model::world::WorldCard;
+use crate::domain::model::character::{NpcCard, PlayerCard};
+use crate::domain::model::map::MapDef;
+use crate::domain::model::prompt_preset::PromptPreset;
+use crate::domain::model::quantifier::{QuantifierConfidence, QuantifierResult, compute_npc_events};
+use crate::domain::model::state::trigger_context::StoredTriggerContext;
+use crate::domain::model::state::game_state::GameState;
+use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
+use crate::domain::model::state::message_types::MessageType;
+use crate::domain::model::world::WorldCard;
 use crate::narrative::prompt::{NpcContext, make_prompt_context};
 
 use super::pipeline::{ActionOutcome, ActionPipeline, ActionPipelineBackend, PipelineResult};
@@ -180,7 +180,7 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
         state: &GameState,
         narration_text: &str,
         quantifier_result: &QuantifierResult,
-    ) -> Result<crate::engine::action_processing::TurnResult, EngineError> {
+    ) -> Result<crate::domain::engine::action_processing::TurnResult, EngineError> {
         execute_freeaction_impl(
             state,
             &FreeActionContext {

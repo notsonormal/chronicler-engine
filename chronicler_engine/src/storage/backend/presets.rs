@@ -2,7 +2,7 @@
 //! Preset storage operations
 
 use crate::error::EngineError;
-use crate::model::prompt_preset::{PresetType, PromptPreset};
+use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::storage::backend::{Backend, Storage};
 use crate::storage::models::prompt_preset::DbPromptPreset;
 

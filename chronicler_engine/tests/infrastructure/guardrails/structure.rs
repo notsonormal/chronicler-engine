@@ -17,9 +17,11 @@ fn points_to_system_md(doc_path: &str) -> bool {
 }
 
 const SYSTEM_MD_EXEMPT: &[&str] = &[
-    "model/",   // model tier IS architecture
-    "storage/", // storage tier IS architecture
-    "error.rs", // error taxonomy IS architecture
+    "model/",    // model tier IS architecture
+    "storage/",  // storage tier IS architecture
+    "domain/",   // domain tier IS architecture
+    "adapters/", // adapters tier IS architecture
+    "error.rs",  // error taxonomy IS architecture
 ];
 
 fn is_system_md_exempt(path: &str) -> bool {

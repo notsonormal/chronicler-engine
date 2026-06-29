@@ -1,7 +1,9 @@
 use std::sync::{Arc, RwLock};
 
-use crate::model::agent::{AgentConfig, AgentContext, AgentResult, BackendSelector, ExecutionPhase};
-use crate::model::settings::AppSettings;
+use crate::domain::model::agent::{
+    AgentConfig, AgentContext, AgentResult, BackendSelector, ExecutionPhase,
+};
+use crate::domain::model::settings::AppSettings;
 use crate::narrative::agents::Agent;
 use crate::narrative::agents::registry::AgentRegistry;
 

@@ -2,7 +2,7 @@
 //! LLM message storage
 
 use crate::error::EngineError;
-use crate::model::llm_message::LlmMessage;
+use crate::domain::model::llm_message::LlmMessage;
 use crate::storage::backend::{Backend, Storage};
 use crate::storage::models::llm_message::DbLlmMessage;
 

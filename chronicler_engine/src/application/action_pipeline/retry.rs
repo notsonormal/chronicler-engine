@@ -6,9 +6,9 @@ use crate::application::action_pipeline::pipeline::{
     ActionOutcome, ActionPipeline, ActionPipelineBackend,
 };
 use crate::application::context::{GameServiceContext, load_or_fresh, save_state};
-use crate::model::state::game_state::GameState;
-use crate::model::state::generation_status::{GenerationPhase, GenerationStatus};
-use crate::model::state::message_types::MessageType;
+use crate::domain::model::state::game_state::GameState;
+use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
+use crate::domain::model::state::message_types::MessageType;
 use std::sync::Arc;
 
 #[instrument(skip(backend, ctx))]

@@ -15,8 +15,8 @@ pub mod types;
 pub use agent::QuantifierAgent;
 pub use orchestration::determine_npcs_in_room;
 // compute_npc_events now lives in model::quantifier; re-export for convenience.
-pub use crate::model::quantifier::compute_npc_events;
-pub use crate::model::quantifier::{
+pub use crate::domain::model::quantifier::compute_npc_events;
+pub use crate::domain::model::quantifier::{
     MovementParseResult, MovementType, NpcEvent, NpcEventList, NpcTransitionType,
     QuantifierConfidence, QuantifierParseResult, QuantifierResult,
 };

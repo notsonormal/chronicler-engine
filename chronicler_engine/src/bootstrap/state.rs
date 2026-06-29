@@ -3,9 +3,9 @@
 use std::sync::Arc;
 
 use crate::application::context::GameServiceContext;
-use crate::model::state::game_state::GameState;
-use crate::model::state::message_types::MessageType;
-use crate::model::template::{render_template, TemplateVars};
+use crate::domain::model::state::game_state::GameState;
+use crate::domain::model::state::message_types::MessageType;
+use crate::domain::model::template::{render_template, TemplateVars};
 pub fn build_fresh_initial_state(ctx: &GameServiceContext) -> GameState {
     let starting_room_id = ctx.world.starting_room_id();
 

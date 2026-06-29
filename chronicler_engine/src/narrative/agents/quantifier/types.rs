@@ -1,11 +1,11 @@
 //! [DOC: docs/system/agent_system.md]
 //! Quantifier type definitions
 
-use crate::model::character::NpcCard;
-use crate::model::map::Room;
-use crate::model::state::message_types::MessageEntry;
+use crate::domain::model::character::NpcCard;
+use crate::domain::model::map::Room;
+use crate::domain::model::state::message_types::MessageEntry;
 
-pub use crate::model::quantifier::{
+pub use crate::domain::model::quantifier::{
     MovementParseResult, MovementType, NpcEvent, NpcEventList, NpcTransitionType,
     QuantifierConfidence, QuantifierParseResult, QuantifierResult,
 };

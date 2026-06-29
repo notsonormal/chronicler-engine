@@ -1,4 +1,4 @@
-use crate::model::character::{CharacterSheet, PlayerCard};
+use crate::domain::model::character::{CharacterSheet, PlayerCard};
 use crate::storage::backend::{Storage, TestOverride};
 use crate::test_support::sqlite_storage;
 

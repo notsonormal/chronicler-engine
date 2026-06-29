@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-use crate::model::llm_backend::LlmBackendType;
-use crate::model::settings::{AppSettings, Connection};
+use crate::domain::model::llm_backend::LlmBackendType;
+use crate::domain::model::settings::{AppSettings, Connection};
 use crate::settings::{get_settings_path, load_settings};
 
 /// Mutex to serialize tests that mutate the in-memory settings database.

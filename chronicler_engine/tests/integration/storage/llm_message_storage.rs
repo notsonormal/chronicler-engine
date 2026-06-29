@@ -1,4 +1,4 @@
-use chronicler_engine::model::llm_message::LlmMessageBuilder;
+use chronicler_engine::domain::model::llm_message::LlmMessageBuilder;
 use chronicler_engine::storage::Storage;
 
 use crate::fixtures::create_test_storage;

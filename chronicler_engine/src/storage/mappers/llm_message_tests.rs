@@ -1,6 +1,6 @@
 use chrono::Utc;
 
-use crate::model::llm_message::LlmMessage;
+use crate::domain::model::llm_message::LlmMessage;
 use crate::storage::models::llm_message::DbLlmMessage;
 
 #[test]

@@ -10,10 +10,10 @@ use crate::application::ApplicationError;
 use crate::application::context::{GameServiceContext, load_or_fresh};
 use crate::application::game_service::GameService;
 use crate::error::{EngineError, internal_error};
-use crate::model::state::game_state::GameState;
-use crate::model::state::generation_status::{GenerationPhase, GenerationStatus};
-use crate::model::state::message_types::MessageType;
-use crate::model::state_snapshot::GameStateSnapshot;
+use crate::domain::model::state::game_state::GameState;
+use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
+use crate::domain::model::state::message_types::MessageType;
+use crate::domain::model::state_snapshot::GameStateSnapshot;
 
 fn app_err_internal(msg: impl Into<String>) -> ApplicationError {
     ApplicationError::Engine(EngineError::Internal(internal_error(msg)))

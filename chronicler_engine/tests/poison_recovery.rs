@@ -4,8 +4,8 @@ use tokio_util::sync::CancellationToken;
 
 use chronicler_engine::application::game_service::GameService;
 use chronicler_engine::application::DefaultApplicationService;
-use chronicler_engine::model::settings::AppSettings;
-use chronicler_engine::server::AppState;
+use chronicler_engine::domain::model::settings::AppSettings;
+use chronicler_engine::adapters::driving::http::AppState;
 use chronicler_engine::storage::Storage;
 
 #[test]

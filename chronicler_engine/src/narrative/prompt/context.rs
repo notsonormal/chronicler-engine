@@ -2,11 +2,11 @@
 //! Prompt context building
 
 use crate::error::EngineError;
-use crate::model::character::PlayerCard;
-use crate::model::map::Room;
-use crate::model::state::message_types::MessageEntry;
-use crate::model::template::TemplateVars;
-use crate::model::world::WorldCard;
+use crate::domain::model::character::PlayerCard;
+use crate::domain::model::map::Room;
+use crate::domain::model::state::message_types::MessageEntry;
+use crate::domain::model::template::TemplateVars;
+use crate::domain::model::world::WorldCard;
 use crate::narrative::prompt::budget;
 use crate::narrative::prompt::budget::estimate_tokens;
 use crate::narrative::prompt::types::{NpcContext, PromptContext};

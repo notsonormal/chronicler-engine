@@ -4,8 +4,8 @@
 use chrono::Utc;
 
 use crate::error::EngineError;
-use crate::model::map::MapDef;
-use crate::model::world::WorldCard;
+use crate::domain::model::map::MapDef;
+use crate::domain::model::world::WorldCard;
 use crate::storage::backend::{Backend, Storage, InMemoryWorld};
 use crate::storage::models::world::{DbWorld, DbMap};
 

@@ -4,9 +4,9 @@
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
-use crate::cli::{Args, list_available_worlds, resolve_engine_data_path};
-use crate::model::settings::AppSettings;
-use crate::server::ServerConfig;
+use crate::adapters::driving::cli::{Args, list_available_worlds, resolve_engine_data_path};
+use crate::domain::model::settings::AppSettings;
+use crate::adapters::driving::http::ServerConfig;
 
 pub(crate) const PRESET_STORAGE_GAME_ID: u64 = 1;
 
@@ -139,13 +139,15 @@ pub fn run(args: Args) -> crate::error::Result<()> {
 
     let preset_storage = crate::storage::Storage::new_sqlite(db_pool, PRESET_STORAGE_GAME_ID);
 
-    let resources = crate::server::ServerResources {
+    let resources = crate::adapters::driving::http::ServerResources {
         storage,
         preset_storage: Arc::new(preset_storage),
         settings,
     };
 
-    runtime.block_on(crate::server::run_server_with_config(resources, config))?;
+    runtime.block_on(crate::adapters::driving::http::run_server_with_config(
+        resources, config,
+    ))?;
 
     Ok(())
 }
@@ -200,7 +202,7 @@ pub(crate) fn ensure_presets(
     db_pool: &crate::storage::db::DbPool,
     data_dir: &std::path::Path,
 ) -> crate::error::Result<()> {
-    use crate::model::prompt_preset::{PresetType, PromptPreset};
+    use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 
     let storage = crate::storage::Storage::new_sqlite(db_pool.clone(), PRESET_STORAGE_GAME_ID);
 

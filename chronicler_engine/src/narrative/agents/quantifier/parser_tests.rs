@@ -1,6 +1,6 @@
 use super::parser::{parse_quantifier_response, parse_quantifier_response_with_movement};
-use crate::model::quantifier::compute_npc_events;
-use crate::model::quantifier::{MovementType, NpcTransitionType, QuantifierConfidence};
+use crate::domain::model::quantifier::compute_npc_events;
+use crate::domain::model::quantifier::{MovementType, NpcTransitionType, QuantifierConfidence};
 
 #[test]
 fn test_parse_json_response() {

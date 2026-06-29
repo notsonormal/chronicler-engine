@@ -4,7 +4,7 @@
 //! backend construction, and delegation to HarperBackend.
 
 use super::check_player_input;
-use crate::model::settings::TextCheckMode;
+use crate::domain::model::settings::TextCheckMode;
 
 #[test]
 fn test_check_player_input_disabled_mode_returns_none() {

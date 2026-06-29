@@ -2,7 +2,7 @@
 //! Message storage operations
 
 use crate::error::EngineError;
-use crate::model::message::Message;
+use crate::domain::model::message::Message;
 use crate::storage::backend::{Backend, Storage};
 use crate::storage::models::message::DbMessage;
 

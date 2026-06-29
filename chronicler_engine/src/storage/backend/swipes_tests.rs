@@ -1,4 +1,4 @@
-use crate::model::message::Swipe;
+use crate::domain::model::message::Swipe;
 use crate::storage::backend::{Storage, TestOverride};
 use crate::test_support::{dummy_message, dummy_swipe, sqlite_storage};
 

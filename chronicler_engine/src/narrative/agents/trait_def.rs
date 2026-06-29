@@ -1,7 +1,7 @@
 //! [DOC: docs/system/agent_system.md]
 //! Agent trait definitions
 
-use crate::model::agent::{AgentContext, AgentResult, BackendSelector, ExecutionPhase};
+use crate::domain::model::agent::{AgentContext, AgentResult, BackendSelector, ExecutionPhase};
 
 pub trait Agent: Send + Sync + std::fmt::Debug {
     fn name(&self) -> &str;

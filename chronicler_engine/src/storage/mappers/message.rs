@@ -4,7 +4,7 @@
 use chrono::{DateTime, Utc};
 
 use crate::error::EngineError;
-use crate::model::message::{Message, Swipe};
+use crate::domain::model::message::{Message, Swipe};
 use crate::storage::models::message::{DbMessage, DbSwipe};
 
 pub fn db_message_to_model(db: &DbMessage, swipes: &[DbSwipe]) -> Result<Message, EngineError> {

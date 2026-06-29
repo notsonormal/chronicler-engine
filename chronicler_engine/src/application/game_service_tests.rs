@@ -3,8 +3,8 @@
 use std::sync::Arc;
 use crate::application::action_pipeline::pipeline::ActionPipelineBackend;
 use crate::application::game_service::GameService;
-use crate::model::state::game_state::GameState;
-use crate::model::state::message_types::MessageType;
+use crate::domain::model::state::game_state::GameState;
+use crate::domain::model::state::message_types::MessageType;
 use crate::narrative::agents::registry::AgentRegistry;
 use crate::narrative::llm::MockBackend;
 use crate::test_support::{
@@ -163,12 +163,12 @@ fn test_run_post_generation_agents_merges_state_patches() {
         vec![],
         "start".to_string(),
     );
-    let mut result = crate::model::quantifier::QuantifierResult {
-        npcs: crate::model::quantifier::QuantifierParseResult {
+    let mut result = crate::domain::model::quantifier::QuantifierResult {
+        npcs: crate::domain::model::quantifier::QuantifierParseResult {
             npc_ids: Vec::new(),
-            confidence: crate::model::quantifier::QuantifierConfidence::Low,
+            confidence: crate::domain::model::quantifier::QuantifierConfidence::Low,
         },
-        movement: crate::model::quantifier::MovementParseResult::default(),
+        movement: crate::domain::model::quantifier::MovementParseResult::default(),
     };
     service.run_post_generation_agents(&state, "player input", "response", &mut result);
 }
@@ -189,12 +189,12 @@ fn test_run_post_generation_agents_with_quantifier() {
         vec![],
         "start".to_string(),
     );
-    let mut result = crate::model::quantifier::QuantifierResult {
-        npcs: crate::model::quantifier::QuantifierParseResult {
+    let mut result = crate::domain::model::quantifier::QuantifierResult {
+        npcs: crate::domain::model::quantifier::QuantifierParseResult {
             npc_ids: Vec::new(),
-            confidence: crate::model::quantifier::QuantifierConfidence::Low,
+            confidence: crate::domain::model::quantifier::QuantifierConfidence::Low,
         },
-        movement: crate::model::quantifier::MovementParseResult::default(),
+        movement: crate::domain::model::quantifier::MovementParseResult::default(),
     };
     service.run_post_generation_agents(&state, "player input", "response", &mut result);
 }

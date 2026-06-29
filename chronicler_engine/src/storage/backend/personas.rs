@@ -4,7 +4,7 @@
 use chrono::Utc;
 
 use crate::error::EngineError;
-use crate::model::character::PlayerCard;
+use crate::domain::model::character::PlayerCard;
 use crate::storage::backend::{Backend, PlayerCardWithKey, Storage};
 use crate::storage::models::persona::DbPersona;
 
@@ -84,7 +84,7 @@ impl Storage {
 }
 
 fn persona_from_db(db: &DbPersona) -> Result<PlayerCard, EngineError> {
-    use crate::model::character::CharacterSheet;
+    use crate::domain::model::character::CharacterSheet;
     let inventory: Vec<String> = serde_json::from_str(&db.inventory)
         .map_err(|e| EngineError::Parse(format!("Failed to deserialize inventory: {e}")))?;
 

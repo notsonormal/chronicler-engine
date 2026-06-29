@@ -1,8 +1,8 @@
 use chronicler_engine::bootstrap::test_api::ArrivalTaskContext;
-use chronicler_engine::model::character::NpcCard;
-use chronicler_engine::model::llm_backend::LlmBackendType;
-use chronicler_engine::model::settings::Connection;
-use chronicler_engine::model::state::message_types::MessageType;
+use chronicler_engine::domain::model::character::NpcCard;
+use chronicler_engine::domain::model::llm_backend::LlmBackendType;
+use chronicler_engine::domain::model::settings::Connection;
+use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::test_support::make_test_context_with_sqlite;
 
 use crate::pipeline_helpers::{create_test_state_with_map, latest_state};

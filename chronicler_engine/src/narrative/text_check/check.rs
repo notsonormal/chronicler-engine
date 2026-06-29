@@ -2,7 +2,7 @@
 //! Text check execution
 
 use crate::error::EngineError;
-use crate::model::settings::TextCheckMode;
+use crate::domain::model::settings::TextCheckMode;
 
 use super::harper_backend::HarperBackend;
 use super::types::CheckResult;

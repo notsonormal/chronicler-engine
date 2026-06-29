@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use crate::model::agent::{AgentContext, BackendSelector, ExecutionPhase};
-use crate::model::state::game_state::GameState;
+use crate::domain::model::agent::{AgentContext, BackendSelector, ExecutionPhase};
+use crate::domain::model::state::game_state::GameState;
 use crate::narrative::agents::Agent;
 use crate::narrative::agents::quantifier::agent::QuantifierAgent;
 use crate::narrative::llm::MockBackend;
@@ -9,7 +9,7 @@ use crate::test_support::fixtures::{TestMap, TestPlayer, TestWorld};
 
 #[test]
 fn test_from_config_creates_agent() {
-    let config = crate::model::agent::AgentConfig {
+    let config = crate::domain::model::agent::AgentConfig {
         name: "quantifier".to_string(),
         agent_type: "quantifier".to_string(),
         enabled: true,

@@ -4,7 +4,7 @@
 use chrono::Utc;
 
 use crate::error::EngineError;
-use crate::model::settings::AppSettings;
+use crate::domain::model::settings::AppSettings;
 use crate::storage::backend::{Backend, Storage};
 use crate::storage::models::settings::DbSettings;
 
@@ -71,13 +71,13 @@ impl Storage {
 }
 
 fn settings_from_db(db: &DbSettings) -> Result<AppSettings, EngineError> {
-    let connections: Vec<crate::model::settings::Connection> =
+    let connections: Vec<crate::domain::model::settings::Connection> =
         serde_json::from_str(&db.connections)
             .map_err(|e| EngineError::Parse(format!("Failed to deserialize connections: {e}")))?;
-    let text_check: crate::model::settings::TextCheckSettings =
+    let text_check: crate::domain::model::settings::TextCheckSettings =
         serde_json::from_str(&db.text_check)
             .map_err(|e| EngineError::Parse(format!("Failed to deserialize text_check: {e}")))?;
-    let agents: Vec<crate::model::agent::AgentConfig> = serde_json::from_str(&db.agents)
+    let agents: Vec<crate::domain::model::agent::AgentConfig> = serde_json::from_str(&db.agents)
         .map_err(|e| EngineError::Parse(format!("Failed to deserialize agents: {e}")))?;
 
     Ok(AppSettings {

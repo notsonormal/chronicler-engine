@@ -1,6 +1,6 @@
-use crate::model::character::{CharacterSheet, NpcCard};
-use crate::model::map::MapDef;
-use crate::model::world::WorldCard;
+use crate::domain::model::character::{CharacterSheet, NpcCard};
+use crate::domain::model::map::MapDef;
+use crate::domain::model::world::WorldCard;
 use crate::storage::backend::{Storage, TestOverride};
 use crate::test_support::sqlite_storage;
 
@@ -124,8 +124,8 @@ fn test_character_card(id: &str, name: &str) -> NpcCard {
 }
 
 fn test_world_data() -> (WorldCard, MapDef) {
-    use crate::model::map::{MapDef, Overworld, Region, Room};
-    use crate::model::world::WorldCard;
+    use crate::domain::model::map::{MapDef, Overworld, Region, Room};
+    use crate::domain::model::world::WorldCard;
     use std::collections::HashMap;
 
     let world_card = WorldCard {

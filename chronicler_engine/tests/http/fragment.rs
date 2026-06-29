@@ -7,11 +7,11 @@ use axum::{
 use tower::util::ServiceExt;
 
 use chronicler_engine::TestAppBuilder;
-use chronicler_engine::model::message::{Message, Swipe};
-use chronicler_engine::model::settings::{AppSettings, TextCheckMode, TextCheckSettings};
-use chronicler_engine::model::state::generation_status::GenerationPhase;
-use chronicler_engine::model::state::generation_status::GenerationStatus;
-use chronicler_engine::model::state::message_types::MessageType;
+use chronicler_engine::domain::model::message::{Message, Swipe};
+use chronicler_engine::domain::model::settings::{AppSettings, TextCheckMode, TextCheckSettings};
+use chronicler_engine::domain::model::state::generation_status::GenerationPhase;
+use chronicler_engine::domain::model::state::generation_status::GenerationStatus;
+use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::storage::{Storage, TestOverride};
 use chronicler_engine::test_support::TestPlayer;
 
@@ -441,14 +441,16 @@ async fn test_create_game_handler() {
     let storage = Arc::new(Storage::new_in_memory());
 
     let mut world = chronicler_engine::test_support::TestWorld::minimal();
-    world.scenarios = vec![chronicler_engine::model::scenario::StartingScenario {
-        id: "test_intro".to_string(),
-        name: "Test Intro".to_string(),
-        description: "Test scenario".to_string(),
-        starting_room_id: "start".to_string(),
-        text: "Welcome to the test world!".to_string(),
-        npcs: vec![],
-    }];
+    world.scenarios = vec![
+        chronicler_engine::domain::model::scenario::StartingScenario {
+            id: "test_intro".to_string(),
+            name: "Test Intro".to_string(),
+            description: "Test scenario".to_string(),
+            starting_room_id: "start".to_string(),
+            text: "Welcome to the test world!".to_string(),
+            npcs: vec![],
+        },
+    ];
     let mut map = chronicler_engine::test_support::TestMap::single_room("start");
     map.overworld.regions[0].rooms[0].id = "start".to_string();
     storage.seed_world(&world, &map).unwrap();

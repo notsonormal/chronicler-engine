@@ -1,4 +1,4 @@
-use crate::model::{
+use crate::domain::model::{
     agent::{AgentConfig, BackendSelector, ExecutionPhase},
     settings::{AppSettings, Connection, TextCheckMode, TextCheckSettings},
 };
@@ -47,7 +47,7 @@ fn test_save_then_get_settings_roundtrip() {
         connections: vec![Connection::new(
             "test",
             "Test",
-            crate::model::llm_backend::LlmBackendType::OpenRouter,
+            crate::domain::model::llm_backend::LlmBackendType::OpenRouter,
         )],
         narration_connection_id: "test".into(),
         quantifier_connection_id: "test".into(),
@@ -114,7 +114,7 @@ fn test_get_settings_deserializes_connections_json() {
     let conn = Connection {
         id: "conn-1".into(),
         name: "Conn 1".into(),
-        provider: crate::model::llm_backend::LlmBackendType::Ollama,
+        provider: crate::domain::model::llm_backend::LlmBackendType::Ollama,
         model: "llama3".into(),
         api_key: Some("secret-key".into()),
         base_url: Some("http://custom:11434".into()),
@@ -137,7 +137,7 @@ fn test_get_settings_deserializes_connections_json() {
     assert_eq!(loaded_conn.name, "Conn 1");
     assert_eq!(
         loaded_conn.provider,
-        crate::model::llm_backend::LlmBackendType::Ollama
+        crate::domain::model::llm_backend::LlmBackendType::Ollama
     );
     assert_eq!(loaded_conn.model, "llama3");
     assert_eq!(loaded_conn.api_key, Some("secret-key".into()));

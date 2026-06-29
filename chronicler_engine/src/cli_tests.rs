@@ -1,4 +1,4 @@
-use crate::cli::{resolve_engine_data_path, scan_worlds};
+use crate::adapters::driving::cli::{resolve_engine_data_path, scan_worlds};
 
 fn temp_dir(test_name: &str) -> std::path::PathBuf {
     std::env::temp_dir().join(format!(

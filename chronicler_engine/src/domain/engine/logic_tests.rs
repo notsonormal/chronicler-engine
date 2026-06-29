@@ -1,0 +1,233 @@
+use std::collections::HashMap;
+use std::sync::Arc;
+
+use crate::domain::engine::logic::{attempt_semantic_walk, create_dynamic_room, find_room_in_world_map};
+use crate::domain::model::character::{CharacterSheet, PlayerCard};
+use crate::domain::model::map::{Direction, MapDef, Overworld, Region, Room};
+use crate::domain::model::state::game_state::GameState;
+use crate::domain::model::world::WorldCard;
+
+fn setup_test_state() -> GameState {
+    let mut exits1 = HashMap::new();
+    exits1.insert(Direction::North, "room2".to_string());
+    exits1.insert(Direction::East, "room3".to_string());
+
+    let mut exits2 = HashMap::new();
+    exits2.insert(Direction::South, "room1".to_string());
+
+    let mut exits3 = HashMap::new();
+    exits3.insert(Direction::West, "room1".to_string());
+
+    let room1 = Room {
+        id: "room1".to_string(),
+        name: "Grand Hall".to_string(),
+        description: "A huge hall.".to_string(),
+        exits: exits1,
+        items: vec![],
+        image_path: None,
+        navigation_description: None,
+    };
+
+    let room2 = Room {
+        id: "room2".to_string(),
+        name: "Dusty Kitchen".to_string(),
+        description: "Smells like mold.".to_string(),
+        exits: exits2,
+        items: vec![],
+        image_path: None,
+        navigation_description: None,
+    };
+
+    let room3 = Room {
+        id: "room3".to_string(),
+        name: "Library".to_string(),
+        description: "Books everywhere.".to_string(),
+        exits: exits3,
+        items: vec![],
+        image_path: None,
+        navigation_description: None,
+    };
+
+    let region = Region {
+        id: "reg1".to_string(),
+        name: "Mansion".to_string(),
+        rooms: vec![room1, room2, room3],
+    };
+
+    let overworld = Overworld {
+        id: "ow1".to_string(),
+        name: "World".to_string(),
+        regions: vec![region],
+    };
+
+    let map = MapDef { overworld };
+    let world = WorldCard {
+        name: "W".into(),
+        description: "D".into(),
+        global_rules: vec![],
+        ..Default::default()
+    };
+    let player = PlayerCard {
+        key: "test_player".to_string(),
+        sheet: CharacterSheet {
+            name: "P".into(),
+            description: "P".into(),
+            personality: "P".into(),
+            scenario: "S".into(),
+            example_dialogue: "E".into(),
+            summary: None,
+            profile_image: None,
+            headshot_image: None,
+        },
+        inventory: vec![],
+    };
+
+    GameState::new(
+        Arc::new(world),
+        Arc::new(map),
+        Arc::new(player),
+        vec![],
+        "room1".to_string(),
+    )
+}
+
+#[test]
+fn test_get_room_by_id_missing() {
+    let state = setup_test_state();
+    let res = find_room_in_world_map(&state, "phantom_room");
+    assert!(res.is_none());
+}
+
+#[test]
+fn test_attempt_walk_dangling_exit() {
+    let state = setup_test_state();
+    let mut room = state.map.overworld.regions[0].rooms[0].clone();
+    room.exits
+        .insert(Direction::South, "non_existent_id".to_string());
+
+    // [DOC: docs/architecture/system.md]
+    // NOTE: Map is behind Arc, so we clone the reference for the guard.
+    let res = find_room_in_world_map(&state, "non_existent_id");
+    assert!(res.is_none());
+}
+
+#[test]
+fn test_current_room_success() {
+    let state = setup_test_state();
+    let result = state.current_room();
+    assert!(result.is_some());
+    assert_eq!(result.unwrap().name, "Grand Hall");
+}
+
+#[test]
+fn test_get_current_room_failure() {
+    let world = Arc::new(WorldCard {
+        name: "W".into(),
+        description: "D".into(),
+        global_rules: vec![],
+        ..Default::default()
+    });
+
+    let map = MapDef {
+        overworld: Overworld {
+            id: "o".into(),
+            name: "W".into(),
+            regions: vec![Region {
+                id: "r".into(),
+                name: "R".into(),
+                rooms: vec![Room {
+                    id: "room1".into(),
+                    name: "Room".to_string(),
+                    description: "D".to_string(),
+                    exits: HashMap::new(),
+                    items: vec![],
+                    image_path: None,
+                    navigation_description: None,
+                }],
+            }],
+        },
+    };
+
+    let state = GameState::new(
+        world,
+        Arc::new(map),
+        Arc::new(PlayerCard {
+            key: "test_player".to_string(),
+            sheet: CharacterSheet {
+                name: "P".into(),
+                description: "P".into(),
+                personality: "P".into(),
+                scenario: "S".into(),
+                example_dialogue: "".into(),
+                summary: None,
+                profile_image: None,
+                headshot_image: None,
+            },
+            inventory: vec![],
+        }),
+        vec![],
+        "non_existent_room".to_string(),
+    );
+
+    let result = state.current_room();
+    assert!(result.is_none());
+}
+
+#[test]
+fn test_get_room_by_id_existing() {
+    let state = setup_test_state();
+    let room = find_room_in_world_map(&state, "room1");
+    assert!(room.is_some());
+    assert_eq!(room.unwrap().name, "Grand Hall");
+}
+
+#[test]
+fn test_attempt_semantic_walk_valid() {
+    let mut state = setup_test_state();
+    let result = attempt_semantic_walk(&mut state, "room2");
+    assert!(result.is_ok());
+    assert!(result.unwrap().contains("Dusty Kitchen"));
+    assert_eq!(state.movement.current_room_id, "room2");
+}
+
+#[test]
+fn test_attempt_semantic_walk_invalid() {
+    let mut state = setup_test_state();
+    let result = attempt_semantic_walk(&mut state, "nonexistent_room");
+    assert!(result.is_err());
+    // Room ID should not change
+    assert_eq!(state.movement.current_room_id, "room1");
+}
+
+#[test]
+fn test_attempt_semantic_walk_empty() {
+    let mut state = setup_test_state();
+    let result = attempt_semantic_walk(&mut state, "");
+    assert!(result.is_err(), "Empty room id should return error");
+}
+
+#[test]
+fn test_attempt_semantic_walk_dynamic_room() {
+    let mut state = setup_test_state();
+    let dynamic = create_dynamic_room("Secret Cave", "Dark and damp.");
+    let dynamic_id = dynamic.id.clone();
+    state
+        .movement
+        .dynamic_rooms
+        .insert(dynamic_id.clone(), dynamic);
+
+    let result = attempt_semantic_walk(&mut state, &dynamic_id);
+    assert!(result.is_ok());
+    assert!(result.unwrap().contains("Secret Cave"));
+    assert_eq!(state.movement.current_room_id, dynamic_id);
+}
+
+#[test]
+fn test_create_dynamic_room() {
+    let room = create_dynamic_room("Test Room", "A test room.");
+    assert_eq!(room.name, "Test Room");
+    assert_eq!(room.description, "A test room.");
+    assert!(room.id.starts_with("dynamic_"));
+    assert!(room.exits.is_empty());
+    assert!(room.items.is_empty());
+}

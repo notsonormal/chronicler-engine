@@ -1,13 +1,13 @@
 use crate::bootstrap::init_game::resolve_game_id;
 use crate::bootstrap::run::{ensure_presets, find_latest_game_for_world, list_game_names_for_world};
-use crate::model::state::game_state::GameState;
-use crate::model::prompt_preset::PresetType;
+use crate::domain::model::state::game_state::GameState;
+use crate::domain::model::prompt_preset::PresetType;
 use crate::storage::Storage;
 #[test]
 fn resolve_game_id_auto_creates_with_persona() {
     let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
 
-    let world = crate::model::world::WorldCard {
+    let world = crate::domain::model::world::WorldCard {
         key: "redmist_estate".to_string(),
         name: "Redmist Estate".to_string(),
         description: String::new(),
@@ -146,11 +146,11 @@ fn test_restart_with_existing_game_does_not_duplicate_scenario() {
 
     let storage = Storage::new_sqlite(db_pool.clone(), game_id);
 
-    let world_card = crate::model::world::WorldCard {
+    let world_card = crate::domain::model::world::WorldCard {
         key: "test".to_string(),
         name: "TestWorld".to_string(),
         description: "A test world".to_string(),
-        scenarios: vec![crate::model::scenario::StartingScenario {
+        scenarios: vec![crate::domain::model::scenario::StartingScenario {
             id: "intro".to_string(),
             name: "Introduction".to_string(),
             description: "The beginning".to_string(),
@@ -160,16 +160,16 @@ fn test_restart_with_existing_game_does_not_duplicate_scenario() {
         }],
         ..Default::default()
     };
-    let map = crate::model::map::MapDef {
-        overworld: crate::model::map::Overworld {
+    let map = crate::domain::model::map::MapDef {
+        overworld: crate::domain::model::map::Overworld {
             id: "test".to_string(),
             name: "Test".to_string(),
             regions: vec![],
         },
     };
-    let player = crate::model::character::PlayerCard {
+    let player = crate::domain::model::character::PlayerCard {
         key: "alice".to_string(),
-        sheet: crate::model::character::CharacterSheet {
+        sheet: crate::domain::model::character::CharacterSheet {
             name: "Alice".to_string(),
             description: "".to_string(),
             personality: "".to_string(),
@@ -191,7 +191,7 @@ fn test_restart_with_existing_game_does_not_duplicate_scenario() {
     );
     crate::bootstrap::inject_scenario_logs(&mut state, &world_card, &player);
 
-    let snapshot = crate::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
+    let snapshot = crate::domain::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
     let snapshot_id = storage.save_snapshot(&snapshot).unwrap();
     if let Some(msg) = state.narrative.history.last_mut() {
         msg.set_snapshot_id(Some(snapshot_id));
@@ -378,7 +378,7 @@ fn test_ensure_presets_skips_existing_preset_with_content() {
     )
     .unwrap();
     let storage = Storage::new_sqlite(db_pool.clone(), 1);
-    let existing = crate::model::prompt_preset::PromptPreset {
+    let existing = crate::domain::model::prompt_preset::PromptPreset {
         id: "existing_preset".to_string(),
         name: "Original Name".to_string(),
         role: Some("Original role".to_string()),
@@ -412,7 +412,7 @@ fn test_ensure_presets_updates_empty_preset() {
     )
     .unwrap();
     let storage = Storage::new_sqlite(db_pool.clone(), 1);
-    let empty = crate::model::prompt_preset::PromptPreset {
+    let empty = crate::domain::model::prompt_preset::PromptPreset {
         id: "empty_preset".to_string(),
         name: "Empty".to_string(),
         role: None,

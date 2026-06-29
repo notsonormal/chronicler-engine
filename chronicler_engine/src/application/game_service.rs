@@ -6,9 +6,9 @@ use std::sync::{Arc, RwLock};
 use crate::application::action_pipeline::ActionPipelineBackend;
 use crate::application::context::GameServiceContext;
 use crate::error::EngineError;
-use crate::model::agent::{AgentContext, AgentResult, ExecutionPhase, StatePatch};
-use crate::model::settings::AppSettings;
-use crate::model::state::game_state::GameState;
+use crate::domain::model::agent::{AgentContext, AgentResult, ExecutionPhase, StatePatch};
+use crate::domain::model::settings::AppSettings;
+use crate::domain::model::state::game_state::GameState;
 use crate::narrative::agents::quantifier::QuantifierAgent;
 use crate::narrative::agents::registry::AgentRegistry;
 use crate::narrative::llm::backend::LlmCallResult;
@@ -134,7 +134,7 @@ impl ActionPipelineBackend for GameService {
         state: &GameState,
         player_input: &str,
         main_response: &str,
-        result: &mut crate::model::quantifier::QuantifierResult,
+        result: &mut crate::domain::model::quantifier::QuantifierResult,
     ) {
         let agent_ctx = AgentContext {
             state,

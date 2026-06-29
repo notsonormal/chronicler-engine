@@ -1,7 +1,7 @@
-use crate::model::state::movement::MovementState;
-use crate::model::state::scene_state::SceneState;
-use crate::model::state_snapshot::{GameStateSnapshot, NarrativeSnapshot};
-use crate::model::trigger::NpcEncounterLog;
+use crate::domain::model::state::movement::MovementState;
+use crate::domain::model::state::scene_state::SceneState;
+use crate::domain::model::state_snapshot::{GameStateSnapshot, NarrativeSnapshot};
+use crate::domain::model::trigger::NpcEncounterLog;
 use crate::storage::backend::{Storage, TestOverride};
 use crate::test_support::sqlite_storage;
 

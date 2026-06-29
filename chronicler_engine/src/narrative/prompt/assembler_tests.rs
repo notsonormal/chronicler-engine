@@ -1,8 +1,8 @@
-use crate::model::character::{CharacterSheet, NpcCard, PlayerCard};
-use crate::model::map::Room;
-use crate::model::prompt_preset::PromptPreset;
-use crate::model::state::message_types::{MessageEntry, MessageType};
-use crate::model::world::WorldCard;
+use crate::domain::model::character::{CharacterSheet, NpcCard, PlayerCard};
+use crate::domain::model::map::Room;
+use crate::domain::model::prompt_preset::PromptPreset;
+use crate::domain::model::state::message_types::{MessageEntry, MessageType};
+use crate::domain::model::world::WorldCard;
 use crate::narrative::prompt::assembler::LayeredPromptAssembler;
 use crate::narrative::prompt::budget;
 use crate::narrative::prompt::context::make_prompt_context;
@@ -17,7 +17,7 @@ fn create_test_preset() -> PromptPreset {
         writing_style: Some("Write in second person.".to_string()),
         output_format: Some("Format as prose.".to_string()),
         is_default: true,
-        preset_type: crate::model::prompt_preset::PresetType::System,
+        preset_type: crate::domain::model::prompt_preset::PresetType::System,
     }
 }
 
@@ -201,7 +201,7 @@ fn test_assemble_empty_preset_sections() {
         writing_style: None,
         output_format: None,
         is_default: false,
-        preset_type: crate::model::prompt_preset::PresetType::System,
+        preset_type: crate::domain::model::prompt_preset::PresetType::System,
     };
 
     let context = make_prompt_context(

@@ -2,11 +2,11 @@
 //! Multi-stage prompt builder
 
 use crate::error::EngineError;
-use crate::model::map::Room;
-use crate::model::prompt_preset::PromptPreset;
-use crate::model::state::message_types::MessageEntry;
-use crate::model::template::{render_template, TemplateVars};
-use crate::model::world::WorldCard;
+use crate::domain::model::map::Room;
+use crate::domain::model::prompt_preset::PromptPreset;
+use crate::domain::model::state::message_types::MessageEntry;
+use crate::domain::model::template::{render_template, TemplateVars};
+use crate::domain::model::world::WorldCard;
 use crate::narrative::prompt::budget;
 use crate::narrative::prompt::budget::truncate_to_budget;
 use crate::narrative::prompt::context::fit_messages_to_context;
@@ -185,7 +185,7 @@ struct LayerRenderer<'a> {
     world: &'a WorldCard,
     room: &'a Room,
     npcs: NpcContext<'a>,
-    player: &'a crate::model::character::PlayerCard,
+    player: &'a crate::domain::model::character::PlayerCard,
     user_message: &'a str,
     history: &'a [MessageEntry],
     system_prompt: String,

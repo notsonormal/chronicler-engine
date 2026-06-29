@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
 use chronicler_engine::application::game_service::GameService;
-use chronicler_engine::model::character::{CharacterSheet, NpcCard};
-use chronicler_engine::model::state::game_state::GameState;
-use chronicler_engine::model::state::message_types::MessageType;
-use chronicler_engine::model::trigger::{
+use chronicler_engine::domain::model::character::{CharacterSheet, NpcCard};
+use chronicler_engine::domain::model::state::game_state::GameState;
+use chronicler_engine::domain::model::state::message_types::MessageType;
+use chronicler_engine::domain::model::trigger::{
     ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement,
 };
-use chronicler_engine::model::world::WorldCard;
+use chronicler_engine::domain::model::world::WorldCard;
 use chronicler_engine::narrative::llm::MockBackend;
 use chronicler_engine::test_support::make_test_context_with_sqlite;
 
@@ -133,7 +133,7 @@ fn test_trigger_continuation_runs_quantifier_and_detects_new_npc() {
 
     let map = Arc::new(create_test_map());
 
-    let player = Arc::new(chronicler_engine::model::character::PlayerCard {
+    let player = Arc::new(chronicler_engine::domain::model::character::PlayerCard {
         key: "test_player".to_string(),
         sheet: CharacterSheet {
             name: "Test Player".into(),

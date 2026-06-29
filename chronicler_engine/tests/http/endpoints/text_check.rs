@@ -7,7 +7,7 @@ use axum::{
 use tower::util::ServiceExt;
 
 use chronicler_engine::TestAppBuilder;
-use chronicler_engine::model::settings::{AppSettings, TextCheckMode, TextCheckSettings};
+use chronicler_engine::domain::model::settings::{AppSettings, TextCheckMode, TextCheckSettings};
 
 /// Poll `/fragment/story-log` until `needle` appears or timeout.
 async fn story_log_contains(app: &axum::Router, needle: &str) -> bool {

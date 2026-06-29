@@ -3,7 +3,7 @@
 
 use serde::Deserialize;
 
-use crate::model::quantifier::{
+use crate::domain::model::quantifier::{
     MovementParseResult, MovementType, QuantifierConfidence, QuantifierParseResult,
     QuantifierResult,
 };

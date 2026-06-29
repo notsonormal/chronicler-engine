@@ -6,11 +6,11 @@ use std::sync::Arc;
 use crate::application::action_pipeline::phases::PipelineInputs;
 use crate::application::context::{GameServiceContext, load_or_fresh, save_message_and_snapshot};
 use crate::error::EngineError;
-use crate::model::character::NpcCard;
-use crate::model::quantifier::QuantifierResult;
-use crate::model::state::trigger_context::StoredTriggerContext;
-use crate::model::state::game_state::GameState;
-use crate::model::state::generation_status::{GenerationPhase, GenerationStatus};
+use crate::domain::model::character::NpcCard;
+use crate::domain::model::quantifier::QuantifierResult;
+use crate::domain::model::state::trigger_context::StoredTriggerContext;
+use crate::domain::model::state::game_state::GameState;
+use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::narrative::llm::backend::LlmCallResult;
 use crate::narrative::prompt::LayeredPromptAssembler;
 

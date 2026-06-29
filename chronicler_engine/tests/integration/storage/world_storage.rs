@@ -1,6 +1,6 @@
-use chronicler_engine::model::map::{MapDef, Overworld};
-use chronicler_engine::model::scenario::StartingScenario;
-use chronicler_engine::model::world::WorldCard;
+use chronicler_engine::domain::model::map::{MapDef, Overworld};
+use chronicler_engine::domain::model::scenario::StartingScenario;
+use chronicler_engine::domain::model::world::WorldCard;
 use chronicler_engine::storage::Storage;
 
 use crate::fixtures::create_test_storage;

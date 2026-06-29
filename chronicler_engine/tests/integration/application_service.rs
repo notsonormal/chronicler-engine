@@ -7,9 +7,9 @@ use chronicler_engine::application::application_service::{
 use chronicler_engine::application::game_service::GameService;
 use chronicler_engine::narrative::agents::registry::AgentRegistry;
 use chronicler_engine::narrative::llm::MockBackend;
-use chronicler_engine::model::state::generation_status::GenerationPhase;
-use chronicler_engine::model::state::generation_status::GenerationStatus;
-use chronicler_engine::model::state::message_types::MessageType;
+use chronicler_engine::domain::model::state::generation_status::GenerationPhase;
+use chronicler_engine::domain::model::state::generation_status::GenerationStatus;
+use chronicler_engine::domain::model::state::message_types::MessageType;
 
 use crate::fixtures::{
     create_basic_test_state, create_test_storage_arc as create_storage, make_test_ctx,

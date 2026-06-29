@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 
 use crate::error::EngineError;
-use crate::model::message::Swipe;
+use crate::domain::model::message::Swipe;
 use crate::storage::backend::{Backend, Storage};
 
 impl Storage {
