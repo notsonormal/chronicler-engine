@@ -11,7 +11,7 @@ Instead of failing or teleporting the player to a blank screen, the engine creat
 
 ## The Generation Logic
 1. **Detection**: The Quantifier detects a movement intent but finds no matching `room_id` in the overworld.
-2. **Creation**: `crate::engine::logic::create_dynamic_room` is called.
+2. **Creation**: `crate::domain::engine::logic::create_dynamic_room` is called.
 3. **Data Source**: The quantifier's extracted "Destination Name" is used as the room title.
 4. **Description**: A generic or LLM-derived description is applied.
 5. **Lifespan**: Dynamic rooms are stored in `state.dynamic_rooms` (a `HashMap`).

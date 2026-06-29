@@ -189,7 +189,6 @@ fn test_list_games() {
         "list_games should return both new games"
     );
 
-    // Most recently updated first
     assert_eq!(games[0].id, id_b);
     assert_eq!(games[1].id, id_a);
 }
@@ -265,7 +264,6 @@ fn test_set_game_id_isolates_snapshots() {
     let latest_a = storage.load_latest_snapshot().unwrap().unwrap();
     assert_eq!(latest_a.db_id, Some(id_a));
 
-    // game_id 999 (never used) should have no snapshots
     storage.set_game_id(999);
     assert!(
         storage.load_latest_snapshot().unwrap().is_none(),

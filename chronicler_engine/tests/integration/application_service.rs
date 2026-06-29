@@ -1,4 +1,4 @@
-// Integration tests for DefaultApplicationService
+//! Integration tests for DefaultApplicationService
 use std::sync::Arc;
 
 use chronicler_engine::application::application_service::{

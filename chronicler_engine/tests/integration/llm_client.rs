@@ -1,15 +1,10 @@
 //! Integration tests for LLM client HTTP communication
-//!
-//! These tests spawn real TCP servers to validate HTTP request/response handling
-//! without making external network calls.
 
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::thread;
 
 use chronicler_engine::adapters::driven::llm::transport::call_chat_completions;
-
-// --- Mock HTTP server tests for call_chat_completions ---
 
 #[test]
 fn test_call_chat_completions_mock_server_success() {

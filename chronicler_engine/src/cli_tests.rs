@@ -21,7 +21,6 @@ fn test_resolve_engine_data_path_returns_path() {
 fn test_scan_worlds_missing_dir() {
     let tmp = temp_dir("missing_dir");
     let _ = std::fs::create_dir_all(&tmp);
-    // No 'worlds' subdirectory
     let result = scan_worlds(&tmp).expect("scan should succeed");
     assert!(
         result.is_empty(),
@@ -67,7 +66,6 @@ fn test_scan_worlds_mixed() {
     let tmp = temp_dir("mixed");
     let worlds_dir = tmp.join("worlds");
 
-    // Valid world
     let valid_dir = worlds_dir.join("valid_world");
     std::fs::create_dir_all(&valid_dir).unwrap();
     std::fs::write(
@@ -76,12 +74,10 @@ fn test_scan_worlds_mixed() {
     )
     .unwrap();
 
-    // Bad JSON world
     let bad_dir = worlds_dir.join("bad_world");
     std::fs::create_dir_all(&bad_dir).unwrap();
     std::fs::write(bad_dir.join("world.json"), "bad json").unwrap();
 
-    // Directory without world.json
     let no_file_dir = worlds_dir.join("no_file");
     std::fs::create_dir_all(&no_file_dir).unwrap();
 
@@ -97,7 +93,6 @@ fn test_list_available_worlds_empty() {
     let tmp = temp_dir("empty");
     std::fs::create_dir_all(&tmp).unwrap();
 
-    // Test via scan_worlds which list_available_worlds calls.
     let result = scan_worlds(&tmp).expect("scan should succeed");
     assert!(
         result.is_empty(),

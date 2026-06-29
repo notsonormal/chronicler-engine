@@ -222,7 +222,7 @@ Uses the same structure as SillyTavern character cards (Jailbreak format):
 The engine also uses a **quantifier prompt** — a separate secondary LLM call that runs *after* narration to analyze the scene. It determines which NPCs are present and whether the player moved. This is **not** part of the 8-layer narrative prompt stack.
 
 - See [`reference/quantifier_prompt.md`](../reference/quantifier_prompt.md) for the full prompt text
-- Rendered by: `QuantifierPromptBuilder` in `src/narrative/agents/quantifier/prompt.rs`
+- Rendered by: `QuantifierPromptBuilder` in `src/application/agents/quantifier/prompt.rs`
 - Uses a separate model connection from the main narration LLM
 - The quantifier also follows the XML-sectioned instructions + XML-wrapped data pattern
 
@@ -230,11 +230,11 @@ The engine also uses a **quantifier prompt** — a separate secondary LLM call t
 
 ### Key Files
 
-- `src/narrative/prompt/assembler.rs` — `LayeredPromptAssembler` with 8-layer construction, context fitting, and budget management
-- `src/narrative/prompt/types.rs` — `PromptContext`, `NpcContext`, `PromptLayer`
-- `src/narrative/llm/mod.rs` — LLM backend module (pure transport, no prompt assembly)
-- `src/model/state.rs` — `GameState` provides context data
-- `src/model/character.rs` — `NpcCard`, `PlayerCard` structures
+- `src/application/narrative_prompt/assembler.rs` — `LayeredPromptAssembler` with 8-layer construction, context fitting, and budget management
+- `src/application/narrative_prompt/types.rs` — `PromptContext`, `NpcContext`, `PromptLayer`
+- `src/adapters/driven/llm/mod.rs` — LLM backend module (pure transport, no prompt assembly)
+- `src/domain/model/state.rs` — `GameState` provides context data
+- `src/domain/model/character.rs` — `NpcCard`, `PlayerCard` structures
 
 ### Code Example
 

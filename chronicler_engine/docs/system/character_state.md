@@ -17,5 +17,5 @@ The Auto-Trigger system relies on these metrics to prevent repetitive narration.
 - **Example**: A "First Encounter" trigger only fires if `times_met == 0`.
 
 ## Implementation
-- **Storage**: `crate::model::trigger::NpcEncounterLog`
-- **Mutators**: `crate::engine::trigger_eval::increment_times_met`, `mark_trigger_fired`, and `set_currently_meeting`.
+- **Storage**: `crate::domain::model::trigger::NpcEncounterLog`
+- **Mutators**: `crate::domain::engine::trigger_eval::increment_times_met`, `mark_trigger_fired`, and `set_currently_meeting`.

@@ -10,7 +10,7 @@ The engine utilizes Large Language Models (LLMs) via the OpenRouter API, DeepSee
 
 ### 1. The Blocking Task Pattern
 
-- **Concurrency**: The engine keeps the `GameService` trait fully synchronous. HTTP handlers in `src/server/fragments/actions.rs` offload LLM work to the async runtime via `tokio::task::spawn_blocking`. This prevents the Axum event loop from stalling during network I/O while avoiding the `#[async_trait]` + `dyn Trait` incompatibility in Rust 2024 edition.
+- **Concurrency**: The engine keeps the `GameService` trait fully synchronous. HTTP handlers in `src/adapters/driving/http/fragments/actions.rs` offload LLM work to the async runtime via `tokio::task::spawn_blocking`. This prevents the Axum event loop from stalling during network I/O while avoiding the `#[async_trait]` + `dyn Trait` incompatibility in Rust 2024 edition.
 - **Cancellation**: Each spawned task checks a `CancellationToken` before and after execution to handle graceful shutdown. Long-running pipelines (`ActionPipeline::run_from_input`) also check the token at internal stage boundaries (after main narration, before trigger continuation, after trigger continuation) to abort early and avoid wasting LLM calls on stale requests. When cancelled mid-pipeline, `ActionPipeline::handle_cancellation()` resets `GenerationStatus::Idle`, clears the phase, and persists the state.
 
 ### 2. Model Configuration
@@ -95,7 +95,7 @@ Every LLM call is logged to a SQLite `llm_messages` table with a strict 50-row g
 - **`call_chat_completions()`** in `llm_client.rs` is the single chokepoint. It returns `ChatCompletionResult { text, system_prompt, user_prompt, raw_request_json, raw_response_json }`.
 - **`LlmBackend` trait** methods take `agent_name: &str` and return `LlmCallResult`, which wraps the `ChatCompletionResult` with `backend_name` and `model_name`.
 - **Quantifier path** logs via `LlmBackend::complete()`, which uses the trait's default `wrap_and_save()` method, routing through the same `llm_client.rs` chokepoint.
-- **LLM logging implementation**: `Storage::save_llm_message()` in `src/storage/llm_messages.rs` handles persistence. No separate trait — direct implementation on `Storage` struct.
+- **LLM logging implementation**: `Storage::save_llm_message()` in `src/adapters/driven/storage/llm_messages.rs` handles persistence. No separate trait — direct implementation on `Storage` struct.
   - SQLite backend: INSERT + auto-prune to keep last 50 rows
   - InMemory backend: Ring buffer for tests
 - **Storage is optional**: Backends accept `Option<Arc<Storage>>`. When `None`, logging is silently skipped (useful for tests that don't care about forensics).
@@ -121,22 +121,22 @@ The engine uses [`tracing`](https://tracing.rs) for structured runtime diagnosti
 
 #### Instrumented Functions
 
-**Action Processing** (`src/engine/action_processing.rs`):
+**Action Processing** (`src/domain/engine/action_processing.rs`):
 
 - `handle_movement` — tracks room transitions
 - `apply_npc_events` — tracks NPC enter/leave events
 - `execute_freeaction_impl` — tracks complete action lifecycle
 
-**Trigger Evaluation** (`src/engine/trigger_eval.rs`):
+**Trigger Evaluation** (`src/domain/engine/trigger_eval.rs`):
 
 - `evaluate_triggers` — tracks trigger firing decisions
 - `check_condition` — tracks condition evaluation
 
-**Quantifier** (`src/narrative/agents/quantifier/orchestration.rs`):
+**Quantifier** (`src/application/agents/quantifier/orchestration.rs`):
 
 - `determine_npcs_in_room` — tracks NPC detection confidence
 
-**LLM Client** (`src/narrative/llm_client/mod.rs`):
+**LLM Client** (`src/adapters/driven/llm/transport/mod.rs`):
 
 - `call_chat_completions` — tracks HTTP request/response lifecycle
 - `handle_response` — tracks response parsing and error handling
@@ -176,12 +176,12 @@ RUST_LOG=trace cargo test
 
 ### Module Location
 
-- **Crate path**: `crate::narrative::llm` — directory module (`mod.rs`, `backend.rs`, `openrouter.rs`, `deepseek.rs`, `ollama.rs`, `mock.rs`, `sanitize.rs`)
-- **Crate path**: `crate::narrative::prompt` — directory module (`mod.rs`, `assembler.rs`, `budget.rs`, `context.rs`, `sanitize.rs`, `types.rs`, plus sibling `*_tests.rs` files)
-- **Crate path**: `crate::narrative::llm_client` — directory module (`mod.rs`, `request.rs`, `response.rs`, `client.rs`, plus sibling `request_tests.rs`, `response_tests.rs`)
-- **Crate path**: `crate::storage::backend::llm_messages` — LLM logging implementation (`Storage::save_llm_message()`, `Storage::list_latest_llm_messages()`)
-- **Crate path**: `crate::storage::db` — SQLite schema (`llm_messages` table)
-- **Crate path**: `crate::model::llm_message` — `LlmMessage` data model
+- **Crate path**: `crate::adapters::driven::llm::providers` — directory module (`mod.rs`, `backend.rs`, `openrouter.rs`, `deepseek.rs`, `ollama.rs`, `mock.rs`, `sanitize.rs`)
+- **Crate path**: `crate::application::narrative_prompt` — directory module (`mod.rs`, `assembler.rs`, `budget.rs`, `context.rs`, `sanitize.rs`, `types.rs`, plus sibling `*_tests.rs` files)
+- **Crate path**: `crate::adapters::driven::llm::transport` — directory module (`mod.rs`, `request.rs`, `response.rs`, `client.rs`, plus sibling `request_tests.rs`, `response_tests.rs`)
+- **Crate path**: `crate::adapters::driven::storage::backend::llm_messages` — LLM logging implementation (`Storage::save_llm_message()`, `Storage::list_latest_llm_messages()`)
+- **Crate path**: `crate::adapters::driven::storage::db` — SQLite schema (`llm_messages` table)
+- **Crate path**: `crate::adapters::driven::llm::forensics::message` — `LlmMessage` data model
 
 ## Implementation Standards
 

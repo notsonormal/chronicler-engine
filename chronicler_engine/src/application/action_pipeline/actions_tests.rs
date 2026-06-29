@@ -217,7 +217,6 @@ fn test_phase_transitions_to_quantifying_during_post_generation() {
             _main_response: &str,
             result: &mut QuantifierResult,
         ) {
-            // Simulate slow quantifier
             thread::sleep(Duration::from_millis(200));
             *result = self.quantifier_result.clone();
         }
@@ -233,9 +232,7 @@ fn test_phase_transitions_to_quantifying_during_post_generation() {
     let handle = thread::spawn(move || {
         execute_action_impl(&*backend_clone, ctx_clone, "look".to_string());
     });
-    // Wait for narration to complete and quantifier to start
     thread::sleep(Duration::from_millis(100));
-    // Check phase is Quantifying mid-flight
     let mid_state = ctx.load_state_for_test();
     assert_eq!(
         mid_state.narrative.input_buffer.phase,
@@ -243,7 +240,6 @@ fn test_phase_transitions_to_quantifying_during_post_generation() {
         "Phase should be Quantifying during post-generation, not stuck on Narrating"
     );
     handle.join().expect("Action thread should complete");
-    // Verify final phase is reset
     let final_state = ctx.load_state_for_test();
     assert_eq!(
         final_state.narrative.input_buffer.phase,
@@ -313,9 +309,7 @@ fn test_narration_saved_before_quantifying_phase() {
     let handle = thread::spawn(move || {
         execute_action_impl(&*backend_clone, ctx_clone, "test".to_string());
     });
-    // Wait for narration save (before quantifier completes)
     thread::sleep(Duration::from_millis(100));
-    // Verify narration is saved
     let messages = ctx.load_messages().unwrap();
     let narration_count = messages
         .iter()
@@ -325,7 +319,6 @@ fn test_narration_saved_before_quantifying_phase() {
         narration_count >= 1,
         "Narration should be saved before quantifier completes"
     );
-    // Verify phase is Quantifying
     let mid_state = ctx.load_state_for_test();
     assert_eq!(
         mid_state.narrative.input_buffer.phase,

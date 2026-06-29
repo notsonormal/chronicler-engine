@@ -6,11 +6,9 @@ use chronicler_engine::TestAppBuilder;
 
 #[test]
 fn test_load_world_includes_room_image_path() {
-    // Read the map.json file directly like load_world does
     let map_json = std::fs::read_to_string("data/worlds/test/map.json").unwrap();
     let map: MapDef = serde_json::from_str(&map_json).unwrap();
 
-    // Find the start room and verify image_path
     let start_room = map.overworld.regions[0]
         .rooms
         .iter()
@@ -26,7 +24,6 @@ fn test_load_world_includes_room_image_path() {
 
 #[tokio::test]
 async fn test_visual_sidebar_with_real_world_data() {
-    // Load real world data directly from JSON files
     let map_json = std::fs::read_to_string("data/worlds/test/map.json").unwrap();
     let map: MapDef = serde_json::from_str(&map_json).unwrap();
 
@@ -39,7 +36,6 @@ async fn test_visual_sidebar_with_real_world_data() {
     let player: chronicler_engine::domain::model::character::PlayerCard =
         serde_json::from_str(&player_json).unwrap();
 
-    // Load NPCs from characters directory
     let chars_dir = std::path::Path::new("data/characters/test");
     let mut npcs = Vec::new();
     if chars_dir.is_dir() {
@@ -57,7 +53,6 @@ async fn test_visual_sidebar_with_real_world_data() {
         }
     }
 
-    // Verify the current room has image_path set before building the app
     let starting_room_id = world.starting_room_id();
     let room = map.overworld.regions[0]
         .rooms
@@ -70,7 +65,6 @@ async fn test_visual_sidebar_with_real_world_data() {
     );
     eprintln!("DEBUG: room.image_path = {:?}", room.image_path);
 
-    // Create app and test the endpoint
     let app = TestAppBuilder::new(world, player)
         .map(map)
         .npcs(npcs)
@@ -87,7 +81,6 @@ async fn test_visual_sidebar_with_real_world_data() {
         .unwrap();
     let body_str = String::from_utf8_lossy(&body);
 
-    // Should show the room image, not the placeholder
     assert!(
         body_str.contains("test_room.jpg"),
         "Should contain room image: {body_str}"

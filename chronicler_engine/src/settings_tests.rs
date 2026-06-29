@@ -5,11 +5,8 @@ use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::settings::{AppSettings, Connection};
 use crate::settings::{get_settings_path, load_settings};
 
-/// Mutex to serialize tests that mutate the in-memory settings database.
 static SETTINGS_DB_LOCK: Mutex<()> = Mutex::new(());
 
-/// Helper to run tests that mutate the settings database.
-/// The lock prevents concurrent tests from interfering with each other's in-memory DB.
 fn with_isolated_settings<F, R>(f: F) -> R
 where
     F: FnOnce(&PathBuf) -> R,

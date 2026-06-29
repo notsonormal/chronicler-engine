@@ -255,7 +255,6 @@ impl TestGameState {
         .build()
     }
 
-    /// Like `with_npc_raw` but with a custom room display name.
     pub fn with_npc_in_named_room_raw(room_id: &str, room_name: &str, npc: NpcCard) -> GameState {
         let room = TestMap::room_named(room_id, room_name);
         let map = MapDef {

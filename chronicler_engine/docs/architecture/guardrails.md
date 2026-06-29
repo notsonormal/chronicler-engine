@@ -54,7 +54,7 @@ User decision (Task 0, Option B): arch-lint 0.4.3 lacks scoped file-level exempt
 
 | Deferred rule | Rationale | Blocker | Target phase |
 |---------------|-----------|---------|---------------|
-| `server` → `storage`, `narrative` | Driving adapters must not import driven adapters directly; route through application ports | Leaks in `templates.rs`, `view_models.rs` import `LlmMessage` + `CheckResult` from driven adapters | After Phase 2 closes the leaks |
+| `server` → `storage`, `narrative` | Driving adapters must not import driven adapters directly; route through application ports | 4 leak sites: `templates.rs`, `view_models.rs` (import `LlmMessage` + `CheckResult`); `fragments/actions.rs` + `fragments/misc/text_check.rs` (import `check_player_input`) | After Phase 2 closes the leaks |
 | `storage` → `narrative` | Driven adapters must not depend on other driven adapters | None currently (rule would pass today, but paired with the reverse) | After Phase 2 closes the leaks |
 | `narrative` → `storage` | Driven adapters must not depend on other driven adapters | Leaks in `application/ports/llm_provider.rs` (default impls), `application/agents/*` importing `Storage` directly | After Phase 2 closes the leaks |
 | `application` → `adapters/driven` | Application layer must not import driven adapters directly; route through ports | Scoped file-level exemptions needed for `context.rs`, `application_service.rs`, `game_service.rs`, `action_pipeline/*` — arch-lint 0.4.3 cannot express these at TOML level | Phase 2.5 (comment-only documentation); enforcement via PR review until then |
@@ -121,7 +121,7 @@ The anchor must point to a domain-specific documentation file (e.g., `docs/syste
 **Standard**: `mod.rs` should only contain `pub mod` declarations, `use` / `pub use` statements, and `//!` module-level documentation. No `struct`, `enum`, `fn`, `impl`, or `const` definitions.
 
 **Severity**: error  
-**Exemptions**: `src/server/mod.rs` — legacy structural decision.
+**Exemptions**: `src/adapters/driving/http/mod.rs` — legacy structural decision.
 
 ### 3.4 Long Comment Run Detection (`guardrails_long_comment_runs`)
 
@@ -144,10 +144,10 @@ The anchor must point to a domain-specific documentation file (e.g., `docs/syste
 
 ### 3.7 Messages/Swipes Separation (`guardrails_messages_swipes_separation`)
 
-**Standard**: `src/storage/backend/messages.rs` must not reference the `message_swipes` table. Swipe operations belong in `swipes.rs`.
+**Standard**: `src/adapters/driven/storage/backend/messages.rs` must not reference the `message_swipes` table. Swipe operations belong in `swipes.rs`.
 
 **Severity**: error  
-**Scope**: `src/storage/backend/messages.rs` only  
+**Scope**: `src/adapters/driven/storage/backend/messages.rs` only  
 **Checks**: SQL table references (`FROM message_swipes`, `INTO message_swipes`, `UPDATE message_swipes`, `JOIN message_swipes`, `DELETE FROM message_swipes`)
 
 **NOTE**: This is a targeted guardrail for the messages/swipes separation concern. It does not catch dynamic SQL construction or clever abstractions — those should be caught in code review.
@@ -157,7 +157,7 @@ The anchor must point to a domain-specific documentation file (e.g., `docs/syste
 **Standard**: The server layer (HTTP handlers) must not reference or mutate `GameState` directly. State access goes through the application service layer.
 
 **Severity**: error  
-**Scope**: `src/server/` (excluding `mod.rs` and `debug.rs`)  
+**Scope**: `src/adapters/driving/http/` (excluding `mod.rs` and `debug.rs`)  
 **Checks**: References to `GameState` (excluding `GameStateSnapshot`)
 
 ### 3.9 Handler Return Type Consistency (`guardrails_handler_return_type`)
@@ -165,7 +165,7 @@ The anchor must point to a domain-specific documentation file (e.g., `docs/syste
 **Standard**: All HTTP handlers in the server layer must return `Response<Body>` with error mapping via `app_err_to_response()`. The tuple return type `(StatusCode, String)` is forbidden — it bypasses the centralized error-to-HTTP mapping and creates an inconsistent HTTP contract.
 
 **Severity**: error  
-**Scope**: `src/server/` (excluding `mod.rs`, `debug.rs`, and `renderers.rs`)  
+**Scope**: `src/adapters/driving/http/` (excluding `mod.rs`, `debug.rs`, and `renderers.rs`)  
 **Checks**: Function signatures with `-> (StatusCode, String)` return type
 
 ## 4. Coverage Exclusion Policy

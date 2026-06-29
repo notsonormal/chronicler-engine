@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### Added
+
+- **Hexagonal architecture Phase 1 (move-only restructure)** — Reorganized `src/` to hexagonal layout. No behavior changes; no new port traits; no method signatures changed. Build stayed green throughout (1223 tests passed + 2 skipped at every checkpoint; 86.9% coverage).
+  - `src/model/` → `src/domain/model/` (1.1)
+  - `src/engine/` → `src/domain/engine/` (1.1)
+  - `src/server/` → `src/adapters/driving/http/` (1.1)
+  - `src/cli.rs` → `src/adapters/driving/cli.rs` (1.1)
+  - `src/storage/` → `src/adapters/driven/storage/` (1.2)
+  - `src/narrative/` split into `src/application/{ports,agents,narrative_prompt}/` + `src/adapters/driven/{llm,text_check}/`; `LlmBackend` trait moved to `src/application/ports/llm_provider.rs` (trait NOT renamed — deferred to Phase 2.1) (1.3)
+  - `src/domain/model/{llm_message,state_snapshot}.rs` → `src/adapters/driven/{llm/forensics/message,storage/snapshot_blob}.rs` (1.4); `LlmBackendType` KEPT in `src/domain/model/llm_backend.rs` (value-enum, not a DTO — plan deviation accepted by user)
+  - `arch-lint.toml` scope paths updated (1.7); scope NAMES preserved (`model`, `engine`, `server`, `storage`, `storage-models`, `narrative`, `application`, `bootstrap`, `test-support`) so existing deny rules continue to function. 3 new deny-scope-dep rules (`server → {storage,narrative}`, `storage → narrative`, `narrative → storage`) DEFERRED — arch-lint 0.4.3 lacks TOML-level scoped file exemptions; pre-existing layer leaks (`templates.rs`, `view_models.rs`, `ports/llm_provider.rs` default impls) would fail build. See `docs/plans/hexagonal-deferred-arch-lint-rules.md`.
+  - Live docs (13 files under `docs/architecture/`, `docs/system/`, `docs/reference/`, `docs/diagnostics/`) rewritten to reference new paths (1.8). ADRs untouched (historical). `docs/CHANGELOG.md` historical entries left as-is.
+  - Plan: `docs/plans/hexagonal-reorganization-plan.md` marked Phase 1 complete; Phase 2 to run on new branch `hexagon-phase2`.
+  - Commits on `hexagon-phase1`: `d7836a5` (1.1), `fe14cc6` (1.2), `f5c8a71` (1.3), `2592d78` (1.4), `1e5bf6b` (1.7+1.8).
+
 ### Removed
 
 - **Test-police audit fixes** — Removed unimplemented `/hints` endpoint and `render_action_hints` stub feature (code, tests, assets, docs). Feature was never implemented; original tests were tautological (`assert!(result.is_empty() || !result.is_empty())`). Pipeline cancellation tests (`test_pipeline_cancels_after_main_narration`, `test_pipeline_cancels_during_trigger_continuation`) aligned with actual contract: cancel halts pipeline and resets status to Idle per ADR-023 incremental persistence (does not roll back persisted narration). No production code changes for cancel path.

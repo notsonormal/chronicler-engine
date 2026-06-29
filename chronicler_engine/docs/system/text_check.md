@@ -27,10 +27,10 @@ flowchart TD
 
 | File | Purpose |
 |------|---------|
-| `src/narrative/text_check/mod.rs` | Module root — re-exports public API |
-| `src/narrative/text_check/check.rs` | Facade: `check_player_input()` entry point |
-| `src/narrative/text_check/harper_backend.rs` | `HarperBackend` — wraps harper-core linting |
-| `src/narrative/text_check/types.rs` | `CheckResult`, `CheckIssue`, `IssueKind` |
+| `src/adapters/driven/text_check/mod.rs` | Module root — re-exports public API |
+| `src/adapters/driven/text_check/check.rs` | Facade: `check_player_input()` entry point |
+| `src/adapters/driven/text_check/harper_backend.rs` | `HarperBackend` — wraps harper-core linting |
+| `src/adapters/driven/text_check/types.rs` | `CheckResult`, `CheckIssue`, `IssueKind` |
 
 ## Types
 

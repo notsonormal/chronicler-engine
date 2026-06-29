@@ -25,9 +25,7 @@ pub struct GameServiceContext {
     pub player: Arc<crate::domain::model::character::PlayerCard>,
     pub npcs: Arc<std::collections::HashMap<String, NpcCard>>,
     pub cancel_token: CancellationToken,
-    /// Whether an async generation is in flight.
     pub is_generating: Arc<AtomicBool>,
-    /// Runtime settings (shared with [`AppState`]).
     pub settings: Arc<RwLock<AppSettings>>,
     pub preset_storage: Arc<Storage>,
 }
@@ -68,7 +66,6 @@ impl GameServiceContext {
         }
     }
 
-    /// Returns (index, anchor message, snapshot id) for retry targeting.
     pub fn find_retry_anchor<'a>(
         &self,
         messages: &'a [Message],
@@ -196,7 +193,6 @@ pub fn save_message_and_snapshot(
     let snapshot = GameStateSnapshot::from_game_state(state);
     let snapshot_id = ctx.storage.save_snapshot(&snapshot)?;
 
-    // Persist new swipe on retry target
     if let Some(ref mut target) = state.narrative.retry_target {
         let idx = target.swipes.len().saturating_sub(1);
         if let Some(last_swipe) = target.swipes.last_mut() {

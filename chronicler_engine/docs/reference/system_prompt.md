@@ -126,7 +126,7 @@ Default presets (shipped as `data/prompt_presets/system/default.json`) are prote
 ## Sources
 
 - System preset seed: `data/prompt_presets/system/default.json`
-- Assembly logic: `src/model/prompt_preset.rs` (`assemble_prompt_text()`)
-- Prompt assembler: `src/narrative/prompt/assembler.rs` (`build_system_prompt()`, `build_post_history_prompt()`)
-- Prompt preset storage: `src/storage/prompt_preset_storage.rs`
-- Dashboard UI: `src/server/prompt_presets_fragment/`
+- Assembly logic: `src/domain/model/prompt_preset.rs` (`assemble_prompt_text()`)
+- Prompt assembler: `src/application/narrative_prompt/assembler.rs` (`build_system_prompt()`, `build_post_history_prompt()`)
+- Prompt preset storage: `src/adapters/driven/storage/prompt_preset_storage.rs`
+- Dashboard UI: `src/adapters/driving/http/prompt_presets_fragment/`

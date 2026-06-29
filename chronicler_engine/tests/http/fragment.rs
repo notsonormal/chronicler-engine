@@ -918,8 +918,6 @@ async fn test_create_game_with_invalid_world_key() {
     );
 }
 
-// ─── Misc Fragment Handler Tests ───
-
 #[tokio::test]
 async fn test_check_text_handler_disabled() {
     let app = TestAppBuilder::default_test()

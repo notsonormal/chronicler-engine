@@ -6,9 +6,9 @@ The Worlds Management Tab provides a UI for creating, editing, and managing worl
 
 ## Location
 
-- **Server module**: `src/server/worlds_fragment/`
-- **Domain model**: `src/model/world.rs`
-- **Storage**: `src/storage/backend/worlds.rs`
+- **Server module**: `src/adapters/driving/http/worlds_fragment/`
+- **Domain model**: `src/domain/model/world.rs`
+- **Storage**: `src/adapters/driven/storage/backend/worlds.rs`
 - **CSS**: Scoped `.worlds-panel` rules under `assets/worlds.css` (extracted from `styles.css`)
 
 ## Architecture
@@ -16,7 +16,7 @@ The Worlds Management Tab provides a UI for creating, editing, and managing worl
 ### Fragment Module Structure
 
 ```
-src/server/worlds_fragment/
+src/adapters/driving/http/worlds_fragment/
 ├── mod.rs          # Module exports
 ├── fragments.rs    # HTML fragment renderers
 ├── handlers.rs     # HTTP request handlers

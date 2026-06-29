@@ -146,7 +146,6 @@ fn test_shift_swipe_indices() {
     storage.shift_swipe_indices(id, 1).unwrap();
 
     let loaded = storage.load_swipes_for_messages(&[id]).unwrap();
-    // After shifting by 1, the swipe at index 0 moves to index 1
     assert_eq!(loaded[&id][0].text, "first");
     // The load order is by swipe_index, so index should be reflected
 }
@@ -226,8 +225,6 @@ fn test_count_swipes_for_message_none() {
     let count = storage.count_swipes_for_message(id).unwrap();
     assert_eq!(count, 0);
 }
-
-// ─── InMemory Backend Tests ───
 
 #[test]
 fn test_inmemory_insert_and_load() {

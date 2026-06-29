@@ -187,8 +187,6 @@ pub fn latest_snapshot(
     ctx.storage.load_latest_snapshot().unwrap_or(None)
 }
 
-/// Generic sync condition wait.
-/// Polls the condition until it returns true or timeout expires.
 pub fn wait_for_condition<F>(
     timeout: std::time::Duration,
     poll_interval: std::time::Duration,

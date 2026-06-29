@@ -24,7 +24,7 @@ The quantifier analyzes the **generated narration** to:
 - This ensures dynamic NPC appearances (like Gabriella emerging from shadows) are detected
 
 ### 4. Trigger Evaluation
-`crate::engine::trigger_eval::evaluate_triggers` scans **ALL NPCs** in `state.npcs`, but filters by room:
+`crate::domain::engine::trigger_eval::evaluate_triggers` scans **ALL NPCs** in `state.npcs`, but filters by room:
 - Triggers with `room_id: null` (or missing) are **global** — they fire anywhere
 - Triggers with `room_id: "some_room_id"` only fire when the player is in that room
 
@@ -163,7 +163,7 @@ Event headers:
 
 ## Mutation Order Invariant
 
-The action pipeline and `execute_freeaction_impl` in `src/engine/action_processing.rs` mutate state in a strict, load-bearing order. Steps 4b and 4c happen in the application pipeline (`ActionPipeline`), not inside the engine function:
+The action pipeline and `execute_freeaction_impl` in `src/domain/engine/action_processing.rs` mutate state in a strict, load-bearing order. Steps 4b and 4c happen in the application pipeline (`ActionPipeline`), not inside the engine function:
 
 | Step | Operation | Why it must come here |
 |:-----|:----------|:---------------------|

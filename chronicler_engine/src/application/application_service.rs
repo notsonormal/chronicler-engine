@@ -327,10 +327,6 @@ impl DefaultApplicationService {
         ctx.storage.delete_world(key).map_err(Into::into)
     }
 
-    /// Build fresh initial state, persist snapshot, then persist the unpersisted
-    /// trailing message and its swipes. Snapshot save failures propagate;
-    /// message/swipe persistence failures are logged and swallowed because the
-    /// snapshot is already committed by the time those run.
     fn persist_initial_state_with_swipes(
         ctx: &GameServiceContext,
     ) -> Result<u64, ApplicationError> {

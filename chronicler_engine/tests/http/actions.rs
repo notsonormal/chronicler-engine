@@ -190,12 +190,10 @@ async fn test_action_check_handler_empty_command() {
     );
 }
 
-/// Test action handler with special characters in command.
 #[tokio::test]
 async fn test_action_handler_special_characters() {
     let app = TestAppBuilder::default_app();
 
-    // URL-encoded: look at "the sign"
     let req = Request::builder()
         .uri("/action")
         .method(Method::POST)

@@ -113,7 +113,6 @@ pub fn create_test_npcs() -> Vec<NpcCard> {
     }]
 }
 
-/// Create a GameState with configurable room NPCs and NPC cards.
 pub fn create_test_state_with_npcs(room_npcs: Vec<String>, npcs: Vec<NpcCard>) -> GameState {
     let world = Arc::new(WorldCard {
         key: "test".into(),
@@ -300,7 +299,7 @@ pub fn create_simple_test_map() -> MapDef {
     MapDef { overworld }
 }
 
-/// A `WorldCard` with a `StartingScenario` block. Promoted from `lifecycle.rs`.
+/// A `WorldCard` with a `StartingScenario` block.
 pub fn create_test_world_with_scenario() -> WorldCard {
     WorldCard {
         key: "test".to_string(),
@@ -318,8 +317,8 @@ pub fn create_test_world_with_scenario() -> WorldCard {
     }
 }
 
-/// `GameState` using `create_test_world_with_scenario()`. Most integration tests
-/// want the scenario variant for `inject_scenario_logs` coverage.
+/// `GameState` using `create_test_world_with_scenario()` (scenario variant for
+/// `inject_scenario_logs` coverage).
 pub fn create_basic_test_state() -> GameState {
     let world = Arc::new(create_test_world_with_scenario());
     let map = Arc::new(create_test_map());
@@ -328,8 +327,7 @@ pub fn create_basic_test_state() -> GameState {
     GameState::new(world, map, player, npcs, "room1".to_string())
 }
 
-/// `GameState` using `create_test_world()` (no scenario). Promoted from
-/// `application_service.rs` variant.
+/// `GameState` using `create_test_world()` (no scenario).
 pub fn create_basic_test_state_no_scenario() -> GameState {
     let world = Arc::new(create_test_world());
     let map = Arc::new(create_test_map());
@@ -338,8 +336,7 @@ pub fn create_basic_test_state_no_scenario() -> GameState {
     GameState::new(world, map, player, npcs, "room1".to_string())
 }
 
-/// Seed a test world + persona into the storage. Promoted from `lifecycle.rs`
-/// (identical copy existed in `application_service.rs`).
+/// Seed a test world + persona into the storage.
 pub fn seed_test_world(storage: &Storage) {
     use chronicler_engine::test_support::{TestMap, TestPlayer, TestWorld};
     let world = TestWorld::minimal();
@@ -351,8 +348,7 @@ pub fn seed_test_world(storage: &Storage) {
         .expect("seed persona");
 }
 
-/// Construct a `GameServiceContext` from storage + state. Promoted from
-/// `lifecycle.rs` (functionally identical copy existed in `application_service.rs`).
+/// Construct a `GameServiceContext` from storage + state.
 pub fn make_test_ctx(storage: Arc<Storage>, state: GameState) -> GameServiceContext {
     GameServiceContext {
         storage,
@@ -376,7 +372,6 @@ pub fn create_test_storage(game_id: u64) -> Storage {
     Storage::new_sqlite(pool, game_id)
 }
 
-/// `Arc`-wrapped variant for tests that share storage across services.
 pub fn create_test_storage_arc(game_id: u64) -> Arc<Storage> {
     Arc::new(create_test_storage(game_id))
 }

@@ -307,8 +307,6 @@ fn test_delete_world_nonexistent_idempotent() {
     assert!(result.is_ok(), "Should succeed even if world doesn't exist");
 }
 
-// ─── SQLite Backend Tests ───
-
 #[test]
 fn test_sqlite_list_worlds() {
     let storage = create_test_storage(1);

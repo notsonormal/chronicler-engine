@@ -92,12 +92,10 @@ impl GameService {
         }
     }
 
-    /// Execute a player action through the action pipeline.
     pub fn execute_action(&self, ctx: GameServiceContext, input: String) {
         crate::application::action_pipeline::execute_action_impl(self, ctx, input)
     }
 
-    /// Retry the last response.
     pub fn retry_last_response(&self, ctx: GameServiceContext) {
         crate::application::action_pipeline::retry_last_response_impl(self, ctx)
     }

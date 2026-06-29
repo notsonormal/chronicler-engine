@@ -29,7 +29,6 @@ pub mod bootstrap;
 pub mod domain;
 pub mod error;
 pub mod settings;
-// storage module now lives under adapters::driven (declared via `pub mod adapters;` above)
 
 pub use error::{EngineError, Result};
 

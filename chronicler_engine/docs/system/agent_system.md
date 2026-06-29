@@ -146,17 +146,17 @@ This enables cost optimization (cheap model for quantifier, powerful model for n
 
 | File | Purpose |
 |------|---------|
-| `src/model/agent.rs` | `AgentConfig`, `AgentResult`, `AgentContext`, `StatePatch`, `ExecutionPhase`, `BackendSelector`, `Confidence` |
-| `src/narrative/agents/mod.rs` | Module root, re-exports |
-| `src/narrative/agents/trait_def.rs` | `Agent` trait definition |
-| `src/narrative/agents/registry.rs` | `AgentRegistry` |
-| `src/narrative/agents/quantifier/mod.rs` | Quantifier module root |
-| `src/narrative/agents/quantifier/agent.rs` | `QuantifierAgent` implementing `Agent` |
-| `src/narrative/agents/quantifier/core.rs` | Core quantifier logic |
-| `src/narrative/agents/quantifier/agent.rs` | `QuantifierAgent` implementing `Agent` |
-| `src/narrative/agents/quantifier/parser.rs` | Quantifier response parser |
-| `src/narrative/agents/quantifier/prompt.rs` | Quantifier prompt builder |
-| `src/narrative/agents/quantifier/types.rs` | Quantifier types (`NpcEventList`, `NpcEvent`, etc.) |
+| `src/domain/model/agent.rs` | `AgentConfig`, `AgentResult`, `AgentContext`, `StatePatch`, `ExecutionPhase`, `BackendSelector`, `Confidence` |
+| `src/application/agents/mod.rs` | Module root, re-exports |
+| `src/application/agents/trait_def.rs` | `Agent` trait definition |
+| `src/application/agents/registry.rs` | `AgentRegistry` |
+| `src/application/agents/quantifier/mod.rs` | Quantifier module root |
+| `src/application/agents/quantifier/agent.rs` | `QuantifierAgent` implementing `Agent` |
+| `src/application/agents/quantifier/core.rs` | Core quantifier logic |
+| `src/application/agents/quantifier/agent.rs` | `QuantifierAgent` implementing `Agent` |
+| `src/application/agents/quantifier/parser.rs` | Quantifier response parser |
+| `src/application/agents/quantifier/prompt.rs` | Quantifier prompt builder |
+| `src/application/agents/quantifier/types.rs` | Quantifier types (`NpcEventList`, `NpcEvent`, etc.) |
 | `src/application/game_service/mod.rs` | `GameService` trait |
 | `src/application/game_service/service.rs` | `DefaultGameService` — orchestrates agent execution |
 
@@ -167,6 +167,6 @@ This enables cost optimization (cheap model for quantifier, powerful model for n
 1. Create a struct implementing `Agent`
 2. Add its `agent_type` string to `AgentRegistry::from_configs`
 3. Register in `default_agent_configs()` (optional)
-4. Add tests in `src/narrative/agents/<name>_tests.rs`
+4. Add tests in `src/application/agents/<name>_tests.rs`
 
 The engine works with **zero agents** — all agent execution is optional.

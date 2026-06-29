@@ -6,7 +6,7 @@ Structured reference for every `EngineError` variant. Use this instead of greppi
 
 ## `EngineError::Llm(LlmFailure)`
 
-LLM subsystem errors. These originate in `src/narrative/llm_client.rs` and the backend implementations.
+LLM subsystem errors. These originate in `src/adapters/driven/llm/transport/client.rs` and the backend implementations.
 
 ### `LlmFailure::EmptyResponse`
 - **First Check:** Backend logs for `[LLM][req:N] Extracted content via:` — if this line is absent, the model returned an empty content/reasoning field.
@@ -162,7 +162,7 @@ Askama template render failure.
 
 - **First Check:** Template file syntax; variable names in template context.
 - **Common Causes:** Template variable renamed in Rust but not in HTML; HTML syntax error in template.
-- **Related Invariants:** `src/server/templates.rs`
+- **Related Invariants:** `src/adapters/driving/http/templates.rs`
 
 ---
 

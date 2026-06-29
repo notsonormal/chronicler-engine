@@ -1,7 +1,7 @@
 # Plan: Hexagonal Architecture Reorganization
 
 **Date:** 2026-06-28
-**Status:** Planning
+**Status:** Phase 1 complete (2026-06-29); Phases 2-3 pending
 **Scope:** `chronicler_engine/`
 
 ## Related
@@ -125,6 +125,8 @@ src/
 
 ## Phase 1 — Restructure (move-only, no behavior change)
 
+**Status:** ✅ COMPLETE (2026-06-29). Branch: `hexagon-phase1`. Commits `d7836a5` (1.1), `fe14cc6` (1.2), `f5c8a71` (1.3), `2592d78` (1.4), `1e5bf6b` (1.7+1.8). Phases 1.5/1.6 verification-only. Build green: 1223 passed + 2 skipped; coverage 86.9%. Deviations from original plan documented in sub-phase notes below + `docs/plans/hexagonal-deferred-arch-lint-rules.md`.
+
 **Goal:** file tree matches hexagonal layout. No new port traits, no method signatures changed, no file splits inside modules. `cargo build` stays green throughout. `cargo nextest run` stays green.
 
 Each sub-phase is one PR. No bundling.
@@ -173,7 +175,7 @@ Each sub-phase is one PR. No bundling.
 `src/model/` currently contains types that are persistence/adapter DTOs, not pure domain entities. Move them to the adapters that own them:
 
 - Move `src/model/llm_message.rs` → `src/adapters/driven/llm/forensics/message.rs`
-- Move `src/model/llm_backend.rs` (`LlmBackendType` enum) → `src/adapters/driven/llm/backend_type.rs`
+- ~~Move `src/model/llm_backend.rs` (`LlmBackendType` enum) → `src/adapters/driven/llm/backend_type.rs`~~ **REVERTED** (user decision: `LlmBackendType` is a value-enum, not a persistence DTO; kept at `src/domain/model/llm_backend.rs`. See sub-phase notes.)
 - Move `src/model/state_snapshot.rs` → `src/adapters/driven/storage/snapshot_blob.rs`
 - Domain model types stay: `settings.rs`, `prompt_preset.rs`, `agent.rs`, `quantifier.rs`, `message.rs`, `character.rs`, `game.rs`, `world.rs`, etc.
 - Update `use` paths
@@ -195,6 +197,8 @@ Already partially done in 1.3 (the `LlmBackend` trait file moves there). Confirm
 - **Verify:** `cargo build` green
 
 ### Phase 1.7 — Update `arch-lint.toml` rules
+
+**Status:** ✅ Scope paths updated only. All 3 new deny rules DEFERRED (arch-lint 0.4.3 lacks TOML-level scoped file exemptions; would fail build on pre-existing layer leaks). See `docs/plans/hexagonal-deferred-arch-lint-rules.md`.
 
 Update scope paths to match new tree. Add new deny rules:
 
@@ -237,6 +241,8 @@ Update scope paths to match new tree. Add new deny rules:
 ---
 
 ## Phase 2 — Layer responsibility fixes (close exemptions)
+
+**Status:** Pending. Will start on new branch `hexagon-phase2` off `hexagon-phase1` HEAD.
 
 **Goal:** split half-adapter/half-application classes so functionality sits in the correct layer. Each sub-phase removes one arch-lint exemption.
 
@@ -658,3 +664,54 @@ Two options surfaced at any STOP:
 
 - **A)** Fix this now (deviates from plan — requires explicit approval)
 - **B)** Add to plan and continue as written (preferred)
+
+---
+
+## Phase 1 deviations (recorded 2026-06-29)
+
+Phase 1 is complete. Three deviations from the original plan were accepted by the user mid-execution; all documented here for traceability. None changed Phase 1's move-only intent.
+
+### Deviation 1 — Phase 1.4: `LlmBackendType` kept in `domain/model/`
+
+**Original plan:** move `src/model/llm_backend.rs` (`LlmBackendType` enum) → `src/adapters/driven/llm/backend_type.rs`.
+
+**Actual outcome:** move reverted after worker surfaced an arch-lint violation. `src/domain/model/settings.rs` (which stays in `domain/model/` per plan) imports `LlmBackendType` ~20 times for its `Connection` and `AppSettings` structs. Moving the enum to `adapters/driven/llm/` would create a `model → narrative` deny-scope-dep violation — the plan placed `LlmBackendType` in the same `domain/model/` scope as `settings.rs` originally, then moved only the enum out, contradicting itself.
+
+**Rationale for deviation:** `LlmBackendType` is a value-enum (backend selection discriminator), not a persistence DTO. The plan's classification of it as "infrastructure DTO" was incorrect. The enum belongs in `domain/model/` next to `settings.rs` which consumes it.
+
+**User decision:** Option A — revert just the `llm_backend.rs` move. Phase 1.4 ships 2 of 3 planned moves (`llm_message.rs` → `adapters/driven/llm/forensics/message.rs`; `state_snapshot.rs` → `adapters/driven/storage/snapshot_blob.rs`). Commit `2592d78`.
+
+### Deviation 2 — Phase 1.7: no new arch-lint deny rules
+
+**Original plan:** add 3 new `deny-scope-dep` rules (`server → {storage, narrative}`, `storage → narrative`, `narrative → storage`) plus the `application → adapters/driven` rule with scoped file exemptions.
+
+**Actual outcome:** all 3 new deny rules reverted. Phase 1.7 ships as **scope-path-only** — scope NAMES preserved (`model`, `engine`, `server`, `storage`, `storage-models`, `narrative`, `application`, `bootstrap`, `test-support`); scope PATHS updated to new hexagonal locations. No new deny rules added.
+
+**Rationale for deviation:** arch-lint 0.4.3 (verified in Task 0) lacks TOML-level scoped file-level exemptions for `deny-scope-dep` rules. Adding the 3 new rules surfaced 7+ true-positive violations on pre-existing layer leaks (`templates.rs`/`view_models.rs` importing driven types; `ports/llm_provider.rs` default impls reaching into `Storage`; `application/agents/*` importing `Storage` directly). Phase 1 is move-only; closing leaks is Phase 2's job. Build stays green.
+
+**User decision (Task 0, Option B):** defer `application → adapters/driven` enforcement entirely until Phase 2.5 (comment-only documentation). Phase 1.7 reverted all 3 new rules per the same Option-B philosophy.
+
+**Tracked in:** `docs/plans/hexagonal-deferred-arch-lint-rules.md` (all deferred rules + leak sites catalogued).
+
+### Deviation 3 — Phase 1.9: post-Phase 1 review audit (not in original plan)
+
+**Original plan:** Phase 1 ended at sub-phase 1.8. No Phase 1.9 existed.
+
+**Actual outcome:** external review of the Phase 1 PR identified three true bugs the Phase 1.8 worker had introduced or missed. User directed a targeted cleanup pass as a new sub-phase 1.9:
+
+- **`lib.rs` What comment** (AGENTS.md violation). Deleted the `// storage module now lives under adapters::driven (...)` comment.
+- **Dead `crate::` paths in live docs.** Phase 1.8 worker's sed rewrote `src/...` path references but missed `crate::...` paths in prose. 6 live docs under `docs/architecture/` and `docs/system/` updated to reference new hexagonal `crate::` paths (`crate::model` → `crate::domain::model`, `crate::storage` → `crate::adapters::driven::storage`, `crate::narrative::{llm,agents,prompt,text_check,llm_client}` → new locations, `crate::server` → `crate::adapters::driving::http`, `crate::cli` → `crate::adapters::driving::cli`). 0 stale `crate::` refs remain in live docs (ADRs, archived plans, CHANGELOG history, and reviews intentionally left as historical references).
+- **Deferred-leak catalog accuracy.** Rule #2 (`server → narrative`) leak list expanded from 2 sites to 4 — added `src/adapters/driving/http/fragments/actions.rs` and `src/adapters/driving/http/fragments/misc/text_check.rs` (both import `check_player_input` from `crate::adapters::driven::text_check`). Catalog now matches actual codebase state.
+
+**User decision:** accept 3 fix-now items (P1.5, P2.7, P2.8 in review); reject rest as either Phase 2 work (P0.1, P0.3) or plan-contradicting (P0.2 `StateRepository` — see Phase 2.5 explicit rejection).
+
+**Commit:** included in Phase 1.9 cleanup commit.
+
+### What did NOT deviate
+
+For clarity, the following stayed exactly as planned:
+
+- **Phase 1.1** (`d7836a5`), **1.2** (`fe14cc6`), **1.3** (`f5c8a71`): all moves as specified, all use-path rewrites applied, scope paths updated. No sub-phase had to revert anything.
+- **Phase 1.5, 1.6:** verification-only per plan; no code changes — `application/ports/` already at correct location post-1.3, `lib.rs` and `mod.rs` declarations consistent.
+- **Phase 1.8:** AGENTS.md STRUCTURE block regenerated via `scripts/generate_structure_index.py`; `system.md` tier terminology updated; `guardrails.md` reformatted with deferred-rules subsection.
+- **Branch:** `hexagon-phase1`. Build green at every checkpoint: 1223 tests passed + 2 skipped, clippy 0 warnings, coverage 86.9%.

@@ -2,7 +2,7 @@
 
 > **Context**: The quantifier prompt is a **separate secondary prompt** used for post-narration scene analysis. It is **not** part of the 7-layer narrative prompt system. For the main narrative prompt architecture, see [`system/prompt_system.md`](../system/prompt_system.md).
 
-The quantifier prompt is rendered by `QuantifierPromptBuilder` in `src/narrative/agents/quantifier/prompt.rs`. It uses a separate LLM model connection to determine which NPCs are present in the current room and whether the player is moving.
+The quantifier prompt is rendered by `QuantifierPromptBuilder` in `src/application/agents/quantifier/prompt.rs`. It uses a separate LLM model connection to determine which NPCs are present in the current room and whether the player is moving.
 
 ## Prompt Architecture
 
@@ -139,8 +139,8 @@ Default presets (shipped as `data/prompt_presets/quantifier/default.json`) are p
 ## Sources
 
 - System prompt default: `data/prompt_presets/quantifier/default.json`
-- System prompt builder: `src/narrative/agents/quantifier/prompt.rs:build_system_prompt()` (returns `quantifier_prompt_override` when set)
-- User prompt: `src/narrative/agents/quantifier/prompt.rs:build_user_prompt()`
-- Response parsing: `src/narrative/agents/quantifier/parser.rs` (see `parse_quantifier_response` functions)
-- Prompt preset storage: `src/storage/prompt_preset_storage.rs`
-- Dashboard UI: `src/server/prompt_presets_fragment/`
+- System prompt builder: `src/application/agents/quantifier/prompt.rs:build_system_prompt()` (returns `quantifier_prompt_override` when set)
+- User prompt: `src/application/agents/quantifier/prompt.rs:build_user_prompt()`
+- Response parsing: `src/application/agents/quantifier/parser.rs` (see `parse_quantifier_response` functions)
+- Prompt preset storage: `src/adapters/driven/storage/prompt_preset_storage.rs`
+- Dashboard UI: `src/adapters/driving/http/prompt_presets_fragment/`

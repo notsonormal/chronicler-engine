@@ -1,6 +1,6 @@
 # Storage System
 
-**Module:** `crate::storage`
+**Module:** `crate::adapters::driven::storage`
 **Status:** Implemented
 **Related ADRs:** [ADR-019](../adr/adr-019-one-table-per-storage-module.md) (superseded),
 [ADR-020](../adr/adr-020-storage-consolidation.md),
@@ -32,11 +32,11 @@ The Chronicler Engine storage layer provides unified persistence for game sessio
 - Game-scoped operations use `game_id` set at construction (`Storage::new_sqlite(pool, game_id)`), not passed per-call
 - Each method touches exactly one table. Cross-table coordination happens in the application tier (`src/application/context.rs`)
 - All queries use parameterized bindings — no SQL injection surface
-- For constructor signatures and method listings, see `src/storage/backend/core.rs` and the per-table modules
+- For constructor signatures and method listings, see `src/adapters/driven/storage/backend/core.rs` and the per-table modules
 
 ## Schema
 
-Schema is defined in `src/storage/db.rs` via CREATE TABLE statements in the migration function. Tables:
+Schema is defined in `src/adapters/driven/storage/db.rs` via CREATE TABLE statements in the migration function. Tables:
 
 **Game-scoped:** `games`, `game_state_snapshots`, `messages`, `message_swipes`
 
@@ -81,12 +81,12 @@ Storage methods touch exactly one table. Multi-table operations are free functio
 
 ## GameStateSnapshot
 
-Serializable subset of `GameState` for persistence. Messages excluded; hydrated separately. Lives in `crate::model::state_snapshot`.
+Serializable subset of `GameState` for persistence. Messages excluded; hydrated separately. Lives in `crate::adapters::driven::storage::snapshot_blob`.
 
 ## Testing Strategy
 
 - InMemory backend for fast unit tests (no SQLite I/O)
 - `with_test_failures()` returns `(Storage, TestFailureHandle)` for failure injection
 - TestFailureHandle takes `&'static str` method-name keys + `TestOverride` failure payloads
-- Test-infra types (`TestOverride`, `TestFailureHandle`) live in `src/storage/backend/test_support.rs`, re-exported via `crate::storage::backend::{TestFailureHandle, TestOverride}`
-- See `src/storage/backend/core.rs` for `Storage` constructors
+- Test-infra types (`TestOverride`, `TestFailureHandle`) live in `src/adapters/driven/storage/backend/test_support.rs`, re-exported via `crate::adapters::driven::storage::backend::{TestFailureHandle, TestOverride}`
+- See `src/adapters/driven/storage/backend/core.rs` for `Storage` constructors
