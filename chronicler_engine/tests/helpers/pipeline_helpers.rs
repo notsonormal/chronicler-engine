@@ -154,7 +154,7 @@ pub fn latest_state(ctx: &chronicler_engine::application::GameServiceContext) ->
 
 pub fn save_state(ctx: &chronicler_engine::application::GameServiceContext, state: &GameState) {
     let snapshot =
-        chronicler_engine::domain::model::state_snapshot::GameStateSnapshot::from_game_state(state);
+        chronicler_engine::adapters::driven::storage::snapshot_blob::GameStateSnapshot::from_game_state(state);
     let snapshot_id = ctx.storage.save_snapshot(&snapshot).unwrap();
     let existing = ctx.load_messages().unwrap_or_default();
     for msg in existing {
@@ -183,7 +183,7 @@ pub fn add_input_and_save(ctx: &chronicler_engine::application::GameServiceConte
 
 pub fn latest_snapshot(
     ctx: &chronicler_engine::application::GameServiceContext,
-) -> Option<chronicler_engine::domain::model::state_snapshot::GameStateSnapshot> {
+) -> Option<chronicler_engine::adapters::driven::storage::snapshot_blob::GameStateSnapshot> {
     ctx.storage.load_latest_snapshot().unwrap_or(None)
 }
 

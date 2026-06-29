@@ -191,7 +191,8 @@ fn test_restart_with_existing_game_does_not_duplicate_scenario() {
     );
     crate::bootstrap::inject_scenario_logs(&mut state, &world_card, &player);
 
-    let snapshot = crate::domain::model::state_snapshot::GameStateSnapshot::from_game_state(&state);
+    let snapshot =
+        crate::adapters::driven::storage::snapshot_blob::GameStateSnapshot::from_game_state(&state);
     let snapshot_id = storage.save_snapshot(&snapshot).unwrap();
     if let Some(msg) = state.narrative.history.last_mut() {
         msg.set_snapshot_id(Some(snapshot_id));

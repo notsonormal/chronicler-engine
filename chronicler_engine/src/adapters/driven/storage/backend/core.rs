@@ -10,12 +10,12 @@ use std::sync::Arc;
 use crate::error::EngineError;
 use crate::domain::model::character::{NpcCard, PlayerCard};
 use crate::domain::model::game::Game;
-use crate::domain::model::llm_message::LlmMessage;
+use crate::adapters::driven::llm::forensics::message::LlmMessage;
 use crate::domain::model::map::MapDef;
 use crate::domain::model::message::{Message, Swipe};
 use crate::domain::model::prompt_preset::PromptPreset;
 use crate::domain::model::settings::AppSettings;
-use crate::domain::model::state_snapshot::GameStateSnapshot;
+use crate::adapters::driven::storage::snapshot_blob::GameStateSnapshot;
 use crate::domain::model::world::WorldCard;
 use crate::adapters::driven::storage::db::DbPool;
 #[cfg(feature = "testing")]

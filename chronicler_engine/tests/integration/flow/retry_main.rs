@@ -371,7 +371,7 @@ fn test_retry_no_pre_main_snapshot() {
     );
 
     let snapshot =
-        chronicler_engine::domain::model::state_snapshot::GameStateSnapshot::from_game_state(
+        chronicler_engine::adapters::driven::storage::snapshot_blob::GameStateSnapshot::from_game_state(
             &state,
         );
     let _ = storage.save_snapshot(&snapshot);

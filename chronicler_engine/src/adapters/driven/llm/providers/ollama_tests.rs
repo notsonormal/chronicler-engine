@@ -65,7 +65,7 @@ fn test_ollama_save_message_with_storage() {
     };
     let backend = OllamaBackend::from_connection(&conn, Some(Arc::clone(&storage)));
 
-    let msg = crate::domain::model::llm_message::LlmMessageBuilder::new()
+    let msg = crate::adapters::driven::llm::forensics::message::LlmMessageBuilder::new()
         .agent_name("test")
         .backend_name("Ollama")
         .model_name("llama3")
@@ -88,7 +88,7 @@ fn test_ollama_save_message_with_storage() {
 fn test_ollama_save_message_without_storage() {
     let backend = OllamaBackend::default();
 
-    let msg = crate::domain::model::llm_message::LlmMessageBuilder::new()
+    let msg = crate::adapters::driven::llm::forensics::message::LlmMessageBuilder::new()
         .agent_name("test")
         .backend_name("Ollama")
         .model_name("llama3")

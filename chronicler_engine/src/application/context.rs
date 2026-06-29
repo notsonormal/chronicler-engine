@@ -12,7 +12,7 @@ use crate::domain::model::message::Message;
 use crate::domain::model::settings::AppSettings;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::message_types::MessageType;
-use crate::domain::model::state_snapshot::GameStateSnapshot;
+use crate::adapters::driven::storage::snapshot_blob::GameStateSnapshot;
 use crate::domain::model::world::WorldCard;
 use crate::application::narrative_prompt::assembler::assemble_prompt_text;
 use crate::adapters::driven::storage::Storage;

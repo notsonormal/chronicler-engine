@@ -1,6 +1,6 @@
 use chronicler_engine::domain::model::message::Message;
 use chronicler_engine::domain::model::state::message_types::MessageType;
-use chronicler_engine::domain::model::state_snapshot::GameStateSnapshot;
+use chronicler_engine::adapters::driven::storage::snapshot_blob::GameStateSnapshot;
 use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::adapters::driven::storage::db::DbPool;
 

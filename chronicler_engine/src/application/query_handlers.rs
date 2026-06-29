@@ -5,7 +5,7 @@ use crate::application::ApplicationError;
 use crate::application::DebugStateView;
 use crate::application::context::{GameServiceContext, load_or_fresh};
 use crate::error::EngineError;
-use crate::domain::model::llm_message::LlmMessage;
+use crate::adapters::driven::llm::forensics::message::LlmMessage;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageEntry;
 
@@ -23,7 +23,9 @@ pub fn reset_generating_status(ctx: GameServiceContext) -> Result<(), Applicatio
     let mut game_state = load_or_fresh(&ctx);
     game_state.narrative.input_buffer.status = GenerationStatus::Idle;
     let snapshot =
-        crate::domain::model::state_snapshot::GameStateSnapshot::from_game_state(&game_state);
+        crate::adapters::driven::storage::snapshot_blob::GameStateSnapshot::from_game_state(
+            &game_state,
+        );
     ctx.storage.save_snapshot(&snapshot)?;
     Ok(())
 }

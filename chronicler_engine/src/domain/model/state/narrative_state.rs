@@ -33,7 +33,7 @@ impl NarrativeState {
     }
 
     pub fn from_snapshot(
-        snapshot: &crate::domain::model::state_snapshot::NarrativeSnapshot,
+        snapshot: &crate::adapters::driven::storage::snapshot_blob::NarrativeSnapshot,
     ) -> Self {
         Self {
             history: MessageHistory::new(),

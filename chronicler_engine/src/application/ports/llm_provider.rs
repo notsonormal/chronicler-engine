@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use crate::error::EngineError;
-use crate::domain::model::llm_message::LlmMessage;
+use crate::adapters::driven::llm::forensics::message::LlmMessage;
 use crate::domain::model::settings::Connection;
 use crate::adapters::driven::llm::transport::ChatCompletionResult;
 use crate::adapters::driven::storage::Storage;

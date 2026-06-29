@@ -102,7 +102,7 @@ impl GameStateBuilder {
 
 impl GameState {
     pub fn from_snapshot(
-        snapshot: &crate::domain::model::state_snapshot::GameStateSnapshot,
+        snapshot: &crate::adapters::driven::storage::snapshot_blob::GameStateSnapshot,
         world: Arc<WorldCard>,
         map: Arc<MapDef>,
         player: Arc<PlayerCard>,

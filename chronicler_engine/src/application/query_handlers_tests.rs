@@ -21,7 +21,9 @@ fn minimal_ctx() -> GameServiceContext {
     let state = minimal_state();
     let storage = Arc::new(Storage::new_in_memory());
     let _ = storage.save_snapshot(
-        &crate::domain::model::state_snapshot::GameStateSnapshot::from_game_state(&state),
+        &crate::adapters::driven::storage::snapshot_blob::GameStateSnapshot::from_game_state(
+            &state,
+        ),
     );
     GameServiceContext {
         storage,
