@@ -12,7 +12,7 @@ use chronicler_engine::domain::model::settings::{AppSettings, TextCheckMode, Tex
 use chronicler_engine::domain::model::state::generation_status::GenerationPhase;
 use chronicler_engine::domain::model::state::generation_status::GenerationStatus;
 use chronicler_engine::domain::model::state::message_types::MessageType;
-use chronicler_engine::storage::{Storage, TestOverride};
+use chronicler_engine::adapters::driven::storage::{Storage, TestOverride};
 use chronicler_engine::test_support::TestPlayer;
 
 use super::test_helpers::fetch_body;

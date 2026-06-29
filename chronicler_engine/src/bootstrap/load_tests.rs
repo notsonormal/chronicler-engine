@@ -1,4 +1,4 @@
-use crate::storage::Storage;
+use crate::adapters::driven::storage::Storage;
 
 #[test]
 fn test_seed_game_data_empty_worlds_dir() {

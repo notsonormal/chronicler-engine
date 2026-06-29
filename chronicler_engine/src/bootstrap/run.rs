@@ -22,19 +22,26 @@ pub fn run(args: Args) -> crate::error::Result<()> {
         .and_then(|p| p.parent().map(std::path::PathBuf::from))
         .unwrap_or_else(|| data_dir.clone());
     let db_path = db_dir.join(format!("chronicler_{}.db", args.port));
-    let db_pool = crate::storage::db::DbPool::new(db_path.to_str().unwrap_or("chronicler.db"))?;
+    let db_pool = crate::adapters::driven::storage::db::DbPool::new(
+        db_path.to_str().unwrap_or("chronicler.db"),
+    )?;
 
     if let Err(e) = ensure_presets(&db_pool, &data_dir) {
         tracing::warn!("Failed to seed prompt presets: {e}");
     }
 
-    let seed_storage = crate::storage::Storage::new_sqlite(db_pool.clone(), PRESET_STORAGE_GAME_ID);
+    let seed_storage = crate::adapters::driven::storage::Storage::new_sqlite(
+        db_pool.clone(),
+        PRESET_STORAGE_GAME_ID,
+    );
     if let Err(e) = super::load::seed_game_data(&seed_storage, &data_dir) {
         tracing::warn!("Failed to seed game data: {e}");
     }
 
-    let lookup_storage =
-        crate::storage::Storage::new_sqlite(db_pool.clone(), PRESET_STORAGE_GAME_ID);
+    let lookup_storage = crate::adapters::driven::storage::Storage::new_sqlite(
+        db_pool.clone(),
+        PRESET_STORAGE_GAME_ID,
+    );
     let world_with_map = match lookup_storage.get_world(&args.world)? {
         Some(w) => w,
         None => {
@@ -74,7 +81,7 @@ pub fn run(args: Args) -> crate::error::Result<()> {
         &args.persona,
         &player.sheet.name,
     )?;
-    let storage = Arc::new(crate::storage::Storage::new_sqlite(
+    let storage = Arc::new(crate::adapters::driven::storage::Storage::new_sqlite(
         db_pool.clone(),
         active_game_id,
     ));
@@ -137,7 +144,8 @@ pub fn run(args: Args) -> crate::error::Result<()> {
         &db_pool,
     );
 
-    let preset_storage = crate::storage::Storage::new_sqlite(db_pool, PRESET_STORAGE_GAME_ID);
+    let preset_storage =
+        crate::adapters::driven::storage::Storage::new_sqlite(db_pool, PRESET_STORAGE_GAME_ID);
 
     let resources = crate::adapters::driving::http::ServerResources {
         storage,
@@ -153,7 +161,7 @@ pub fn run(args: Args) -> crate::error::Result<()> {
 }
 
 pub(crate) fn find_latest_game_for_world(
-    db_pool: &crate::storage::db::DbPool,
+    db_pool: &crate::adapters::driven::storage::db::DbPool,
     world_key: &str,
 ) -> Result<Option<(u64, String)>, crate::error::EngineError> {
     let conn = db_pool.conn();
@@ -184,7 +192,7 @@ pub(crate) fn find_latest_game_for_world(
 }
 
 pub(crate) fn list_game_names_for_world(
-    db_pool: &crate::storage::db::DbPool,
+    db_pool: &crate::adapters::driven::storage::db::DbPool,
     world_key: &str,
 ) -> Result<Vec<String>, crate::error::EngineError> {
     let conn = db_pool.conn();
@@ -199,12 +207,15 @@ pub(crate) fn list_game_names_for_world(
 }
 
 pub(crate) fn ensure_presets(
-    db_pool: &crate::storage::db::DbPool,
+    db_pool: &crate::adapters::driven::storage::db::DbPool,
     data_dir: &std::path::Path,
 ) -> crate::error::Result<()> {
     use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 
-    let storage = crate::storage::Storage::new_sqlite(db_pool.clone(), PRESET_STORAGE_GAME_ID);
+    let storage = crate::adapters::driven::storage::Storage::new_sqlite(
+        db_pool.clone(),
+        PRESET_STORAGE_GAME_ID,
+    );
 
     for preset_type in [PresetType::System, PresetType::Quantifier] {
         let dir = data_dir.join("prompt_presets").join(preset_type.as_str());

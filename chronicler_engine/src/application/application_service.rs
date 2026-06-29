@@ -21,7 +21,7 @@ use crate::domain::model::state_snapshot::GameStateSnapshot;
 use crate::domain::model::trigger::NpcEncounterState;
 use crate::domain::model::world::WorldCard;
 use crate::domain::model::map::MapDef;
-use crate::storage::worlds::WorldWithMap;
+use crate::adapters::driven::storage::worlds::WorldWithMap;
 
 pub enum ApplicationError {
     Validation(String),

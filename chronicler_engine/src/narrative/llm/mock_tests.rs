@@ -96,7 +96,7 @@ fn test_mock_with_failing_trigger_narration() {
 
 #[test]
 fn test_mock_backend_logs_to_storage() {
-    use crate::storage::Storage;
+    use crate::adapters::driven::storage::Storage;
     use std::sync::Arc;
     let storage = Arc::new(Storage::new_in_memory());
     let backend = MockBackend::new(Some(Arc::clone(&storage)));
@@ -113,7 +113,7 @@ fn test_mock_backend_logs_to_storage() {
 
 #[test]
 fn test_mock_backend_logs_multiple_calls() {
-    use crate::storage::Storage;
+    use crate::adapters::driven::storage::Storage;
     use std::sync::Arc;
     let storage = Arc::new(Storage::new_in_memory());
     let backend = MockBackend::new(Some(Arc::clone(&storage)));

@@ -4,7 +4,7 @@ use super::*;
 use crate::application::GameServiceContext;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::GenerationStatus;
-use crate::storage::Storage;
+use crate::adapters::driven::storage::Storage;
 use crate::test_support::fixtures::{TestWorld, TestMap, TestPlayer};
 
 fn minimal_state() -> GameState {

@@ -28,15 +28,15 @@ impl Default for ServerConfig {
 
 #[derive(Clone)]
 pub struct ServerResources {
-    pub storage: Arc<crate::storage::Storage>,
-    pub preset_storage: Arc<crate::storage::Storage>,
+    pub storage: Arc<crate::adapters::driven::storage::Storage>,
+    pub preset_storage: Arc<crate::adapters::driven::storage::Storage>,
     pub settings: Arc<RwLock<AppSettings>>,
 }
 
 #[derive(Clone)]
 pub struct AppState {
-    pub storage: Arc<crate::storage::Storage>,
-    pub preset_storage: Arc<crate::storage::Storage>,
+    pub storage: Arc<crate::adapters::driven::storage::Storage>,
+    pub preset_storage: Arc<crate::adapters::driven::storage::Storage>,
     pub game_service: Arc<GameService>,
     pub application_service: Arc<DefaultApplicationService>,
     pub settings: Arc<RwLock<AppSettings>>,

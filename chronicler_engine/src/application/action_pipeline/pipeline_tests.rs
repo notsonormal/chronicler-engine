@@ -13,7 +13,7 @@ use crate::domain::model::state::generation_status::{GenerationPhase, Generation
 use crate::domain::model::state::message_types::MessageType;
 use crate::narrative::llm::backend::{AGENT_NARRATOR, LlmCallResult};
 use crate::narrative::prompt::LayeredPromptAssembler;
-use crate::storage::{Storage, TestOverride};
+use crate::adapters::driven::storage::{Storage, TestOverride};
 use crate::test_support::fixtures::{TestGameState, TestNpc};
 use crate::test_support::make_test_context;
 

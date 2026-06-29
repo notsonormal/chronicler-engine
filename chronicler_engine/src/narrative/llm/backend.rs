@@ -7,7 +7,7 @@ use crate::error::EngineError;
 use crate::domain::model::llm_message::LlmMessage;
 use crate::domain::model::settings::Connection;
 use crate::narrative::llm_client::ChatCompletionResult;
-use crate::storage::Storage;
+use crate::adapters::driven::storage::Storage;
 
 pub const AGENT_NARRATOR: &str = "narrator";
 pub const AGENT_QUANTIFIER: &str = "quantifier";

@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-06-29 19:54 UTC*
+*Index last generated: 2026-06-29 20:08 UTC*
 
 ### Root files
 
@@ -84,7 +84,6 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Implementation Plan: Abstraction Anti-Pattern Fixes (Corrected)](./plans/archived/abstraction-fixes-implementation-plan.md)
 - [Plan: Abstraction Anti-Pattern Fixes (Tiered)](./plans/archived/abstraction-fixes-plan.md)
 - [ADR-026 Follow-up: Thermo-Nuclear Review Quality Fixes](./plans/archived/adr-026-followup-quality-fixes.md)
-- [Plan: Antipattern-Checker Agent Skill](./plans/archived/antipattern-checker-skill-plan.md)
 - [Fix Boot Path: Restore Auto-Create Game with `--persona` CLI Flag](./plans/archived/fix-boot-and-default-game.md)
 - [Pipeline Decomposition Review Fixes (Round 3)](./plans/archived/pipeline-review-fixes-round3.md)
 - [Review Fixes — Pipeline Decomposition Quality](./plans/archived/review-fixes-pipeline-quality.md)

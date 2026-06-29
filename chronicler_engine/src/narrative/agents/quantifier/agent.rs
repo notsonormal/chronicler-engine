@@ -11,7 +11,7 @@ use crate::domain::model::settings::AppSettings;
 
 use crate::narrative::agents::Agent;
 use crate::narrative::prompt::assembler::assemble_prompt_text;
-use crate::storage::Storage;
+use crate::adapters::driven::storage::Storage;
 
 use super::determine_npcs_in_room;
 

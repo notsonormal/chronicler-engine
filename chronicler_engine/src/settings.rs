@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use crate::error::Result;
 use crate::domain::model::settings::AppSettings;
-use crate::storage::Storage;
+use crate::adapters::driven::storage::Storage;
 
 const SETTINGS_FILENAME: &str = "settings.json";
 

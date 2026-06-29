@@ -6,7 +6,7 @@ use std::sync::Arc;
 use crate::error::{EngineError, LlmFailure};
 use crate::domain::model::settings::Connection;
 use crate::narrative::llm_client::call_ollama;
-use crate::storage::Storage;
+use crate::adapters::driven::storage::Storage;
 
 use super::backend::{LlmBackend, LlmCallResult, merge_single_user_message};
 

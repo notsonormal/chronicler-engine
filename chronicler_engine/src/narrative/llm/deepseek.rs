@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use crate::error::EngineError;
 use crate::domain::model::settings::Connection;
-use crate::storage::Storage;
+use crate::adapters::driven::storage::Storage;
 
 use super::backend::{LlmBackend, LlmCallResult};
 

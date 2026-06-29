@@ -2,10 +2,10 @@ use crate::bootstrap::init_game::resolve_game_id;
 use crate::bootstrap::run::{ensure_presets, find_latest_game_for_world, list_game_names_for_world};
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::prompt_preset::PresetType;
-use crate::storage::Storage;
+use crate::adapters::driven::storage::Storage;
 #[test]
 fn resolve_game_id_auto_creates_with_persona() {
-    let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
+    let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
 
     let world = crate::domain::model::world::WorldCard {
         key: "redmist_estate".to_string(),
@@ -41,7 +41,7 @@ fn resolve_game_id_auto_creates_with_persona() {
 }
 #[test]
 fn test_find_latest_game_for_world_uses_message_timestamp() {
-    let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
+    let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
 
     let older = "2026-05-20T10:00:00+00:00";
     let newer = "2026-05-21T10:00:00+00:00";
@@ -92,7 +92,7 @@ fn test_find_latest_game_for_world_uses_message_timestamp() {
 
 #[test]
 fn test_find_latest_game_for_world_fallback_to_updated_at() {
-    let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
+    let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
 
     let older = "2026-05-20T10:00:00+00:00";
     let newer = "2026-05-21T10:00:00+00:00";
@@ -124,7 +124,7 @@ fn test_find_latest_game_for_world_fallback_to_updated_at() {
 
 #[test]
 fn test_find_latest_game_for_world_no_games() {
-    let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
+    let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
 
     let result = find_latest_game_for_world(&db_pool, "NonExistent").unwrap();
     assert!(result.is_none());
@@ -132,7 +132,7 @@ fn test_find_latest_game_for_world_no_games() {
 
 #[test]
 fn test_restart_with_existing_game_does_not_duplicate_scenario() {
-    let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
+    let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
 
     let game_id = {
         let conn = db_pool.conn();
@@ -222,13 +222,13 @@ fn test_restart_with_existing_game_does_not_duplicate_scenario() {
 }
 #[test]
 fn test_list_game_names_for_world_empty() {
-    let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
+    let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
     let result = list_game_names_for_world(&db_pool, "NonExistent").unwrap();
     assert!(result.is_empty());
 }
 #[test]
 fn test_list_game_names_for_world_single_game() {
-    let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
+    let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
     {
         let conn = db_pool.conn();
         conn.execute(
@@ -243,7 +243,7 @@ fn test_list_game_names_for_world_single_game() {
 }
 #[test]
 fn test_list_game_names_for_world_multiple_games() {
-    let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
+    let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
     {
         let conn = db_pool.conn();
         conn.execute(
@@ -270,7 +270,7 @@ fn test_list_game_names_for_world_multiple_games() {
 }
 #[test]
 fn test_list_game_names_for_world_filters_by_world() {
-    let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
+    let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
     {
         let conn = db_pool.conn();
         conn.execute(
@@ -297,20 +297,20 @@ fn test_list_game_names_for_world_filters_by_world() {
 }
 #[test]
 fn test_list_game_names_for_world_error_handling() {
-    let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
+    let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
     let result = list_game_names_for_world(&db_pool, "TestWorld");
     assert!(result.is_err() || result.unwrap().is_empty());
 }
 #[test]
 fn test_ensure_presets_empty_data_dir() {
-    let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
+    let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
     let temp_data = tempfile::TempDir::new().unwrap();
     let result = ensure_presets(&db_pool, temp_data.path());
     assert!(result.is_ok());
 }
 #[test]
 fn test_ensure_presets_creates_system_preset() {
-    let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
+    let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
     let temp_data = tempfile::TempDir::new().unwrap();
     let system_dir = temp_data.path().join("prompt_presets").join("system");
     std::fs::create_dir_all(&system_dir).unwrap();
@@ -339,7 +339,7 @@ fn test_ensure_presets_creates_system_preset() {
 }
 #[test]
 fn test_ensure_presets_creates_quantifier_preset() {
-    let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
+    let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
     let temp_data = tempfile::TempDir::new().unwrap();
     let quantifier_dir = temp_data.path().join("prompt_presets").join("quantifier");
     std::fs::create_dir_all(&quantifier_dir).unwrap();
@@ -362,7 +362,7 @@ fn test_ensure_presets_creates_quantifier_preset() {
 }
 #[test]
 fn test_ensure_presets_skips_existing_preset_with_content() {
-    let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
+    let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
     let temp_data = tempfile::TempDir::new().unwrap();
     let system_dir = temp_data.path().join("prompt_presets").join("system");
     std::fs::create_dir_all(&system_dir).unwrap();
@@ -396,7 +396,7 @@ fn test_ensure_presets_skips_existing_preset_with_content() {
 }
 #[test]
 fn test_ensure_presets_updates_empty_preset() {
-    let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
+    let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
     let temp_data = tempfile::TempDir::new().unwrap();
     let system_dir = temp_data.path().join("prompt_presets").join("system");
     std::fs::create_dir_all(&system_dir).unwrap();
@@ -430,7 +430,7 @@ fn test_ensure_presets_updates_empty_preset() {
 }
 #[test]
 fn test_ensure_presets_ignores_non_json_files() {
-    let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
+    let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
     let temp_data = tempfile::TempDir::new().unwrap();
     let system_dir = temp_data.path().join("prompt_presets").join("system");
     std::fs::create_dir_all(&system_dir).unwrap();
@@ -443,7 +443,7 @@ fn test_ensure_presets_ignores_non_json_files() {
 }
 #[test]
 fn test_ensure_presets_handles_invalid_json() {
-    let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
+    let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
     let temp_data = tempfile::TempDir::new().unwrap();
     let system_dir = temp_data.path().join("prompt_presets").join("system");
     std::fs::create_dir_all(&system_dir).unwrap();
@@ -459,7 +459,7 @@ fn test_ensure_presets_handles_invalid_json() {
 }
 #[test]
 fn test_ensure_presets_uses_default_id_for_missing_id() {
-    let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
+    let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
     let temp_data = tempfile::TempDir::new().unwrap();
     let system_dir = temp_data.path().join("prompt_presets").join("system");
     std::fs::create_dir_all(&system_dir).unwrap();
@@ -484,7 +484,7 @@ fn test_ensure_presets_uses_default_id_for_missing_id() {
 }
 #[test]
 fn test_ensure_presets_all_fields_mapped() {
-    let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
+    let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
     let temp_data = tempfile::TempDir::new().unwrap();
     let system_dir = temp_data.path().join("prompt_presets").join("system");
     std::fs::create_dir_all(&system_dir).unwrap();
@@ -515,7 +515,7 @@ fn test_ensure_presets_all_fields_mapped() {
 }
 #[test]
 fn test_ensure_presets_both_types() {
-    let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
+    let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
     let temp_data = tempfile::TempDir::new().unwrap();
     let system_dir = temp_data.path().join("prompt_presets").join("system");
     std::fs::create_dir_all(&system_dir).unwrap();
@@ -552,7 +552,7 @@ fn test_ensure_presets_both_types() {
 }
 #[test]
 fn test_ensure_presets_idempotent() {
-    let db_pool = crate::storage::db::DbPool::new(":memory:").unwrap();
+    let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
     let temp_data = tempfile::TempDir::new().unwrap();
     let system_dir = temp_data.path().join("prompt_presets").join("system");
     std::fs::create_dir_all(&system_dir).unwrap();

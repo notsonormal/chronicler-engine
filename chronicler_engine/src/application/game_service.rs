@@ -13,7 +13,7 @@ use crate::narrative::agents::quantifier::QuantifierAgent;
 use crate::narrative::agents::registry::AgentRegistry;
 use crate::narrative::llm::backend::LlmCallResult;
 use crate::narrative::prompt::LayeredPromptAssembler;
-use crate::storage::Storage;
+use crate::adapters::driven::storage::Storage;
 
 pub struct GameService {
     pub(crate) llm_backend: Arc<dyn crate::narrative::llm::LlmBackend>,

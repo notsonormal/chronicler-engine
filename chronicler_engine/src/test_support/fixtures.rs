@@ -14,8 +14,8 @@ use crate::domain::model::state::message_types::MessageType;
 use crate::domain::model::state::trigger_context::StoredTriggerContext;
 use crate::domain::model::trigger::{ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement};
 use crate::domain::model::world::{WorldCard, WorldManifest};
-use crate::storage::Storage;
-use crate::storage::db::DbPool;
+use crate::adapters::driven::storage::Storage;
+use crate::adapters::driven::storage::db::DbPool;
 
 pub struct TestWorld;
 
@@ -411,7 +411,7 @@ impl TestCharacterSheet {
 }
 
 pub fn seed_default_game_row(
-    pool: &crate::storage::db::DbPool,
+    pool: &crate::adapters::driven::storage::db::DbPool,
     game_id: u64,
 ) -> Result<(), crate::error::EngineError> {
     let conn = pool.conn();

@@ -7,7 +7,7 @@ use crate::error::EngineError;
 use crate::domain::model::character::{NpcCard, PlayerCard};
 use crate::domain::model::map::MapDef;
 use crate::domain::model::world::{WorldCard, WorldManifest};
-use crate::storage::Storage;
+use crate::adapters::driven::storage::Storage;
 
 pub(crate) fn read_json_file<T: serde::de::DeserializeOwned>(
     path: &Path,

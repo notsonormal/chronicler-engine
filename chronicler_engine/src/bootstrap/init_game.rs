@@ -25,7 +25,7 @@ fn with_settings<T>(settings: &Arc<RwLock<AppSettings>>, f: impl FnOnce(&AppSett
 }
 
 pub(crate) fn resolve_game_id(
-    db_pool: &crate::storage::db::DbPool,
+    db_pool: &crate::adapters::driven::storage::db::DbPool,
     world: &WorldCard,
     persona_key: &str,
     persona_name: &str,
@@ -47,7 +47,7 @@ pub(crate) fn resolve_game_id(
 }
 
 pub(crate) fn load_game_state(
-    storage: &crate::storage::Storage,
+    storage: &crate::adapters::driven::storage::Storage,
     world_arc: &Arc<WorldCard>,
     map_arc: &Arc<MapDef>,
     player_arc: &Arc<PlayerCard>,
@@ -256,7 +256,7 @@ impl ArrivalTaskContext {
 pub fn spawn_arrival_task_if_needed(
     runtime: &tokio::runtime::Runtime,
     settings: &Arc<RwLock<AppSettings>>,
-    storage: &Arc<crate::storage::Storage>,
+    storage: &Arc<crate::adapters::driven::storage::Storage>,
     world: &Arc<WorldCard>,
     map: &Arc<MapDef>,
     player: &Arc<PlayerCard>,
@@ -264,7 +264,7 @@ pub fn spawn_arrival_task_if_needed(
     room_id: &str,
     nearby_npcs: Vec<NpcCard>,
     all_npcs: Vec<NpcCard>,
-    db_pool: &crate::storage::db::DbPool,
+    db_pool: &crate::adapters::driven::storage::db::DbPool,
 ) {
     let has_scenario = world.default_scenario().is_some_and(|s| !s.text.is_empty());
 
@@ -272,8 +272,10 @@ pub fn spawn_arrival_task_if_needed(
         return;
     }
 
-    let preset_storage =
-        crate::storage::Storage::new_sqlite(db_pool.clone(), PRESET_STORAGE_GAME_ID);
+    let preset_storage = crate::adapters::driven::storage::Storage::new_sqlite(
+        db_pool.clone(),
+        PRESET_STORAGE_GAME_ID,
+    );
     let (arrival_preset, response_length, max_context_tokens, max_tokens, connection) =
         with_settings(settings, |guard| {
             let preset_id = &guard.active_system_prompt_preset_id;

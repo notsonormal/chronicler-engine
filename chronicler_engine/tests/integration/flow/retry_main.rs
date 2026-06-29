@@ -363,12 +363,12 @@ fn test_retry_no_pre_main_snapshot() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
 
-    let db_pool = chronicler_engine::storage::db::DbPool::new(":memory:").unwrap();
+    let db_pool =
+        chronicler_engine::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
     chronicler_engine::test_support::seed_default_game_row(&db_pool, 1).unwrap();
-    let storage = Arc::new(chronicler_engine::storage::Storage::new_sqlite(
-        db_pool.clone(),
-        1,
-    ));
+    let storage = Arc::new(
+        chronicler_engine::adapters::driven::storage::Storage::new_sqlite(db_pool.clone(), 1),
+    );
 
     let snapshot =
         chronicler_engine::domain::model::state_snapshot::GameStateSnapshot::from_game_state(
@@ -383,7 +383,7 @@ fn test_retry_no_pre_main_snapshot() {
     }
 
     let preset_storage = {
-        let ps = chronicler_engine::storage::Storage::new_in_memory();
+        let ps = chronicler_engine::adapters::driven::storage::Storage::new_in_memory();
         let _ = ps.save_preset(
             &chronicler_engine::domain::model::prompt_preset::PromptPreset {
                 id: "system_default".to_string(),

@@ -11,7 +11,7 @@ use crate::adapters::driving::http::settings_fragment::handlers::{
     TextCheckForm,
 };
 use crate::adapters::driving::http::AppState;
-use crate::storage::Storage;
+use crate::adapters::driven::storage::Storage;
 use crate::application::game_service::GameService;
 use crate::application::application_service::DefaultApplicationService;
 use tokio_util::sync::CancellationToken;

@@ -6,7 +6,7 @@ use axum::{body::Body, http::Request};
 use tower::util::ServiceExt;
 
 use chronicler_engine::TestAppBuilder;
-use chronicler_engine::storage::Storage;
+use chronicler_engine::adapters::driven::storage::Storage;
 
 use super::test_helpers::fetch_body;
 

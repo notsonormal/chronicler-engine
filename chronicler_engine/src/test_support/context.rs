@@ -5,7 +5,7 @@ use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::domain::model::settings::AppSettings;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state_snapshot::GameStateSnapshot;
-use crate::storage::Storage;
+use crate::adapters::driven::storage::Storage;
 
 pub fn make_test_context(state: GameState) -> GameServiceContext {
     let snapshot = GameStateSnapshot::from_game_state(&state);
@@ -66,7 +66,7 @@ fn build_test_context(state: GameState, storage: Arc<Storage>) -> GameServiceCon
 
 pub fn make_test_context_with_sqlite(state: GameState) -> crate::error::Result<GameServiceContext> {
     let snapshot = GameStateSnapshot::from_game_state(&state);
-    let db_pool = crate::storage::db::DbPool::new(":memory:")?;
+    let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:")?;
     crate::test_support::seed_default_game_row(&db_pool, 1)?;
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
     let _ = storage.save_snapshot(&snapshot);

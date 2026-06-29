@@ -7,7 +7,7 @@ use crate::domain::model::message::Message;
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::domain::model::state::game_state::{GameState, GameStateBuilder};
 use crate::domain::model::state::message_types::MessageType;
-use crate::storage::{Storage, TestOverride};
+use crate::adapters::driven::storage::{Storage, TestOverride};
 use crate::test_support::fixtures::{TestMap, TestPlayer, TestWorld};
 use std::sync::Arc;
 

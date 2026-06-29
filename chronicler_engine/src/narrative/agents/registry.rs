@@ -8,7 +8,7 @@ use crate::domain::model::agent::{AgentConfig, ExecutionPhase};
 use crate::domain::model::settings::AppSettings;
 use crate::narrative::agents::Agent;
 use crate::narrative::agents::quantifier::QuantifierAgent;
-use crate::storage::Storage;
+use crate::adapters::driven::storage::Storage;
 
 #[derive(Debug, Default)]
 pub struct AgentRegistry {

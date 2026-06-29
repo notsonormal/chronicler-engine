@@ -82,11 +82,11 @@ message = "Application layer must not depend on server layer."
 
 [[scopes]]
 name = "storage"
-paths = ["src/storage/**"]
+paths = ["src/adapters/driven/storage/**"]
 
 [[scopes]]
 name = "storage-models"
-paths = ["src/storage/models/**", "src/storage/mappers/**"]
+paths = ["src/adapters/driven/storage/models/**", "src/adapters/driven/storage/mappers/**"]
 
 [[scopes]]
 name = "bootstrap"

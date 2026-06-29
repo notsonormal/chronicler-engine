@@ -123,8 +123,8 @@ async fn test_action_confirm_returns_full_action_area() {
 
 #[tokio::test]
 async fn test_async_action_saves_input_to_story_log_with_sqlite() {
-    use chronicler_engine::storage::Storage;
-    use chronicler_engine::storage::db::DbPool;
+    use chronicler_engine::adapters::driven::storage::Storage;
+    use chronicler_engine::adapters::driven::storage::db::DbPool;
     let tmp_dir =
         std::env::temp_dir().join(format!("chronicler_component_test_{}", std::process::id()));
     let _ = std::fs::create_dir_all(&tmp_dir);

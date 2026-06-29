@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::domain::model::llm_message::LlmMessageBuilder;
 use crate::adapters::driving::http::fragments::{html_escape, render_error, render_llm_messages};
-use crate::storage::Storage;
+use crate::adapters::driven::storage::Storage;
 use crate::test_support::TestAppBuilder;
 
 fn make_test_app_state(

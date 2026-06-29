@@ -10,8 +10,8 @@ use chronicler_engine::domain::model::scenario::StartingScenario;
 use chronicler_engine::domain::model::settings::AppSettings;
 use chronicler_engine::domain::model::state::game_state::GameState;
 use chronicler_engine::domain::model::world::WorldCard;
-use chronicler_engine::storage::Storage;
-use chronicler_engine::storage::db::DbPool;
+use chronicler_engine::adapters::driven::storage::Storage;
+use chronicler_engine::adapters::driven::storage::db::DbPool;
 
 pub fn create_test_world() -> WorldCard {
     WorldCard {

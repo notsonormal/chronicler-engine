@@ -33,8 +33,8 @@ fn test_get_settings_path_default() {
 #[test]
 fn test_load_settings_valid_file() {
     with_isolated_settings(|_path| {
-        let pool = crate::storage::db::DbPool::new(":memory:").unwrap();
-        let storage = crate::storage::Storage::new_sqlite(pool, 1);
+        let pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
+        let storage = crate::adapters::driven::storage::Storage::new_sqlite(pool, 1);
 
         let custom = AppSettings {
             connections: vec![Connection::new("test", "Test", LlmBackendType::OpenRouter)],
@@ -54,8 +54,8 @@ fn test_load_settings_valid_file() {
 #[test]
 fn test_save_settings_roundtrip() {
     with_isolated_settings(|_path| {
-        let pool = crate::storage::db::DbPool::new(":memory:").unwrap();
-        let storage = crate::storage::Storage::new_sqlite(pool, 1);
+        let pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
+        let storage = crate::adapters::driven::storage::Storage::new_sqlite(pool, 1);
 
         let settings = AppSettings {
             connections: vec![Connection {

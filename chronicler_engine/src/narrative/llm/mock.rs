@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 
 use crate::error::{EngineError, NarrativeFailure};
-use crate::storage::Storage;
+use crate::adapters::driven::storage::Storage;
 
 use super::backend::{LlmBackend, LlmCallResult};
 

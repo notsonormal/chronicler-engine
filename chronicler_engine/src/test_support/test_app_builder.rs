@@ -19,7 +19,7 @@ use crate::domain::model::state_snapshot::GameStateSnapshot;
 use crate::domain::model::world::WorldCard;
 use crate::adapters::driving::http::router::build_router;
 use crate::adapters::driving::http::AppState;
-use crate::storage::Storage;
+use crate::adapters::driven::storage::Storage;
 
 pub struct TestAppBuilder {
     world: WorldCard,

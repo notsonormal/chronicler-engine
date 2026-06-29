@@ -1,8 +1,8 @@
 use chronicler_engine::domain::model::message::Message;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::domain::model::state_snapshot::GameStateSnapshot;
-use chronicler_engine::storage::Storage;
-use chronicler_engine::storage::db::DbPool;
+use chronicler_engine::adapters::driven::storage::Storage;
+use chronicler_engine::adapters::driven::storage::db::DbPool;
 
 use crate::fixtures::{create_test_state, create_test_storage};
 fn create_storage() -> Storage {

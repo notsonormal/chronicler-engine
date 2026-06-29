@@ -1,7 +1,7 @@
 //! Tests for Storage preset methods: list_presets, get_preset, save_preset, delete_preset
 
 use chronicler_engine::domain::model::prompt_preset::{PresetType, PromptPreset};
-use chronicler_engine::storage::Storage;
+use chronicler_engine::adapters::driven::storage::Storage;
 
 fn create_storage() -> Storage {
     Storage::new_in_memory()

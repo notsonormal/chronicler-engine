@@ -6,7 +6,7 @@ use chronicler_engine::domain::model::state::game_state::GameState;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::narrative::agents::registry::AgentRegistry;
 use chronicler_engine::narrative::llm::MockBackend;
-use chronicler_engine::storage::Storage;
+use chronicler_engine::adapters::driven::storage::Storage;
 
 use crate::fixtures::{
     create_basic_test_state, create_test_map, create_test_player, create_test_world_with_scenario,
@@ -21,8 +21,8 @@ fn create_app_service() -> Arc<DefaultApplicationService> {
 
 #[test]
 fn test_create_game_with_scenario() {
-    let db_pool =
-        chronicler_engine::storage::db::DbPool::new(":memory:").expect("DbPool creation failed");
+    let db_pool = chronicler_engine::adapters::driven::storage::db::DbPool::new(":memory:")
+        .expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
     seed_test_world(&storage);
     let app_service = create_app_service();
@@ -64,8 +64,8 @@ fn test_create_game_with_scenario() {
 
 #[test]
 fn test_reset_creates_scenario_message() {
-    let db_pool =
-        chronicler_engine::storage::db::DbPool::new(":memory:").expect("DbPool creation failed");
+    let db_pool = chronicler_engine::adapters::driven::storage::db::DbPool::new(":memory:")
+        .expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
     seed_test_world(&storage);
     let app_service = create_app_service();
@@ -98,8 +98,8 @@ fn test_reset_creates_scenario_message() {
 
 #[test]
 fn test_switch_game_loads_correct_state() {
-    let db_pool =
-        chronicler_engine::storage::db::DbPool::new(":memory:").expect("DbPool creation failed");
+    let db_pool = chronicler_engine::adapters::driven::storage::db::DbPool::new(":memory:")
+        .expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
     seed_test_world(&storage);
     let app_service = create_app_service();
@@ -152,8 +152,8 @@ fn test_switch_game_loads_correct_state() {
 async fn test_create_game_concurrent_generation_rejected() {
     use std::sync::atomic::Ordering;
 
-    let db_pool =
-        chronicler_engine::storage::db::DbPool::new(":memory:").expect("DbPool creation failed");
+    let db_pool = chronicler_engine::adapters::driven::storage::db::DbPool::new(":memory:")
+        .expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
     let app_service = create_app_service();
     let state = create_basic_test_state();
@@ -177,8 +177,8 @@ async fn test_create_game_concurrent_generation_rejected() {
 
 #[test]
 fn test_switch_to_nonexistent_game() {
-    let db_pool =
-        chronicler_engine::storage::db::DbPool::new(":memory:").expect("DbPool creation failed");
+    let db_pool = chronicler_engine::adapters::driven::storage::db::DbPool::new(":memory:")
+        .expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
     let app_service = create_app_service();
     let state = create_basic_test_state();
@@ -193,8 +193,8 @@ fn test_switch_to_nonexistent_game() {
 
 #[test]
 fn test_reset_without_existing_game() {
-    let db_pool =
-        chronicler_engine::storage::db::DbPool::new(":memory:").expect("DbPool creation failed");
+    let db_pool = chronicler_engine::adapters::driven::storage::db::DbPool::new(":memory:")
+        .expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
     let app_service = create_app_service();
     let state = create_basic_test_state();
@@ -210,8 +210,8 @@ fn test_reset_without_existing_game() {
 
 #[test]
 fn test_create_game_name_uniqueness() {
-    let db_pool =
-        chronicler_engine::storage::db::DbPool::new(":memory:").expect("DbPool creation failed");
+    let db_pool = chronicler_engine::adapters::driven::storage::db::DbPool::new(":memory:")
+        .expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
     seed_test_world(&storage);
     let app_service = create_app_service();
@@ -248,8 +248,8 @@ fn test_create_game_name_uniqueness() {
 
 #[test]
 fn test_switch_game_world_mismatch() {
-    let db_pool =
-        chronicler_engine::storage::db::DbPool::new(":memory:").expect("DbPool creation failed");
+    let db_pool = chronicler_engine::adapters::driven::storage::db::DbPool::new(":memory:")
+        .expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
     seed_test_world(&storage);
     let app_service = create_app_service();
@@ -293,8 +293,8 @@ fn test_switch_game_world_mismatch() {
 
 #[test]
 fn test_delete_game_removes() {
-    let db_pool =
-        chronicler_engine::storage::db::DbPool::new(":memory:").expect("DbPool creation failed");
+    let db_pool = chronicler_engine::adapters::driven::storage::db::DbPool::new(":memory:")
+        .expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
     seed_test_world(&storage);
     let app_service = create_app_service();
@@ -326,8 +326,8 @@ fn test_delete_game_removes() {
 
 #[test]
 fn test_delete_game_active_rejected() {
-    let db_pool =
-        chronicler_engine::storage::db::DbPool::new(":memory:").expect("DbPool creation failed");
+    let db_pool = chronicler_engine::adapters::driven::storage::db::DbPool::new(":memory:")
+        .expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
     seed_test_world(&storage);
     let app_service = create_app_service();
@@ -353,8 +353,8 @@ fn test_delete_game_active_rejected() {
 
 #[test]
 fn test_delete_game_nonexistent() {
-    let db_pool =
-        chronicler_engine::storage::db::DbPool::new(":memory:").expect("DbPool creation failed");
+    let db_pool = chronicler_engine::adapters::driven::storage::db::DbPool::new(":memory:")
+        .expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
     let app_service = create_app_service();
     let state = create_basic_test_state();

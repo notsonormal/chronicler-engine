@@ -4,7 +4,7 @@ use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::settings::Connection;
 use crate::narrative::llm::backend::LlmBackend;
 use crate::narrative::llm::ollama::OllamaBackend;
-use crate::storage::Storage;
+use crate::adapters::driven::storage::Storage;
 
 #[test]
 fn test_ollama_backend_name() {

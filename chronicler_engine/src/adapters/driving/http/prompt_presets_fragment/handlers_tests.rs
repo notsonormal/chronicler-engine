@@ -6,7 +6,7 @@ use crate::adapters::driving::http::prompt_presets_fragment::handlers::{
     edit_preset_form_handler, panel_handler, preset_card_handler, save_preset_handler,
     update_preset_handler, view_preset_form_handler,
 };
-use crate::storage::{Storage, TestOverride};
+use crate::adapters::driven::storage::{Storage, TestOverride};
 
 fn make_test_app_state_with_preset(
     preset: PromptPreset,
@@ -291,7 +291,7 @@ async fn test_panel_handler_with_poisoned_settings_lock() {
 
 fn make_test_app_state_with_failing_storage(
     preset: PromptPreset,
-    fail_after_setup: impl FnOnce(&crate::storage::TestFailureHandle),
+    fail_after_setup: impl FnOnce(&crate::adapters::driven::storage::TestFailureHandle),
 ) -> crate::adapters::driving::http::AppState {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
     let _ = storage.save_preset(&preset);

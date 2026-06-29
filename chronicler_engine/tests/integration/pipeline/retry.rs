@@ -179,7 +179,7 @@ fn test_retry_room_not_found() {
             chronicler_engine::domain::model::settings::AppSettings::default(),
         )),
         preset_storage: {
-            let ps = chronicler_engine::storage::Storage::new_in_memory();
+            let ps = chronicler_engine::adapters::driven::storage::Storage::new_in_memory();
             let _ = ps.save_preset(
                 &chronicler_engine::domain::model::prompt_preset::PromptPreset {
                     id: "system_default".to_string(),
@@ -269,7 +269,7 @@ fn test_retry_llm_error() {
             chronicler_engine::domain::model::settings::AppSettings::default(),
         )),
         preset_storage: {
-            let ps = chronicler_engine::storage::Storage::new_in_memory();
+            let ps = chronicler_engine::adapters::driven::storage::Storage::new_in_memory();
             let _ = ps.save_preset(
                 &chronicler_engine::domain::model::prompt_preset::PromptPreset {
                     id: "system_default".to_string(),
@@ -356,7 +356,7 @@ fn test_retry_empty_narration() {
             chronicler_engine::domain::model::settings::AppSettings::default(),
         )),
         preset_storage: {
-            let ps = chronicler_engine::storage::Storage::new_in_memory();
+            let ps = chronicler_engine::adapters::driven::storage::Storage::new_in_memory();
             let _ = ps.save_preset(
                 &chronicler_engine::domain::model::prompt_preset::PromptPreset {
                     id: "system_default".to_string(),
@@ -444,7 +444,7 @@ fn test_retry_main_narration_uses_pre_main_snapshot() {
             chronicler_engine::domain::model::settings::AppSettings::default(),
         )),
         preset_storage: {
-            let ps = chronicler_engine::storage::Storage::new_in_memory();
+            let ps = chronicler_engine::adapters::driven::storage::Storage::new_in_memory();
             let _ = ps.save_preset(
                 &chronicler_engine::domain::model::prompt_preset::PromptPreset {
                     id: "system_default".to_string(),

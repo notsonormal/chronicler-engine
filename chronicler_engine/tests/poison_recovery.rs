@@ -6,7 +6,7 @@ use chronicler_engine::application::game_service::GameService;
 use chronicler_engine::application::DefaultApplicationService;
 use chronicler_engine::domain::model::settings::AppSettings;
 use chronicler_engine::adapters::driving::http::AppState;
-use chronicler_engine::storage::Storage;
+use chronicler_engine::adapters::driven::storage::Storage;
 
 #[test]
 fn test_settings_recover_from_poisoned_rwlock() {

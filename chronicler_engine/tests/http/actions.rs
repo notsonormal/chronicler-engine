@@ -6,7 +6,7 @@ use std::sync::Arc;
 use tower::ServiceExt;
 
 use chronicler_engine::TestAppBuilder;
-use chronicler_engine::storage::{Storage, TestOverride};
+use chronicler_engine::adapters::driven::storage::{Storage, TestOverride};
 
 #[tokio::test]
 async fn test_action_handler_load_state_failure_graceful_degradation() {
