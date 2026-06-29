@@ -41,12 +41,27 @@ Declarative architecture rules in `arch-lint.toml`.
 
 ### Scope/Layer Enforcement
 
-| Scope | Cannot depend on |
-|-------|-----------------|
-| `model` | `server`, `narrative`, `engine`, `application` |
-| `engine` | `server`, `application`, `narrative` |
-| `application` | `server` |
-| `server` | `storage` |
+| From Scope | To Scope(s) | Rationale |
+|------------|-------------|----------|
+| `model` | `server`, `narrative`, `engine`, `application` | Domain layer must be pure; no outer layer dependencies |
+| `engine` | `server`, `application`, `narrative` | Engine layer isolated from orchestration and I/O |
+| `application` | `server` | Application orchestration independent of driving adapters |
+| `server` | `storage` | Driving adapter must not access storage directly; use application ports |
+
+### Deferred arch-lint rules (not yet enforced)
+
+User decision (Task 0, Option B): arch-lint 0.4.3 lacks scoped file-level exemptions for `deny-scope-dep`. Pre-existing layer leaks (e.g. `templates.rs`/`view_models.rs` importing `LlmMessage`/`CheckResult`; `ports/llm_provider.rs` default impls reaching into `Storage`) would make every would-be Phase 1.7 rule fail the build at red. Instead these rules are deferred until Phase 2 closes the leaks (or a grep-based guardrail test replaces arch-lint enforcement).
+
+| Deferred rule | Rationale | Blocker | Target phase |
+|---------------|-----------|---------|---------------|
+| `server` → `storage`, `narrative` | Driving adapters must not import driven adapters directly; route through application ports | Leaks in `templates.rs`, `view_models.rs` import `LlmMessage` + `CheckResult` from driven adapters | After Phase 2 closes the leaks |
+| `storage` → `narrative` | Driven adapters must not depend on other driven adapters | None currently (rule would pass today, but paired with the reverse) | After Phase 2 closes the leaks |
+| `narrative` → `storage` | Driven adapters must not depend on other driven adapters | Leaks in `application/ports/llm_provider.rs` (default impls), `application/agents/*` importing `Storage` directly | After Phase 2 closes the leaks |
+| `application` → `adapters/driven` | Application layer must not import driven adapters directly; route through ports | Scoped file-level exemptions needed for `context.rs`, `application_service.rs`, `game_service.rs`, `action_pipeline/*` — arch-lint 0.4.3 cannot express these at TOML level | Phase 2.5 (comment-only documentation); enforcement via PR review until then |
+| `domain` → anything (explicit) | Already covered by existing `model` scope deny rules; plan repeats for emphasis | Subsumed — no action | Already enforced |
+| `application/ports` → anything | Ports must depend only on `domain` and `error` | Subsumed by `application` → `server` rule + (deferred) `application` → `adapters/driven` rule | After Phase 2 closes the leaks |
+
+See [`docs/plans/hexagonal-reorganization-plan.md`](../plans/hexagonal-reorganization-plan.md) Phase 1.7 + Phase 2 for the deferred-leak cleanup items.
 
 ### Rules
 

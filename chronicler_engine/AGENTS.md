@@ -10,64 +10,48 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
 ## STRUCTURE
 <!-- AUTO-STRUCTURE START -->
 - **src/**
-  - `cli.rs` — Command-line interface definitions
   - `error.rs` — Error types and result aliases
   - `settings.rs` — Application settings and configuration
+  - **adapters/**
+    - **driven/**
+      - `mod.rs` — Driven adapters: outbound external systems (storage, LLM providers, text check)
+      - **llm/**
+        - `mod.rs` — LLM driven adapters: provider implementations and HTTP transport
+      - **storage/**
+        - `db.rs` — SQLite database connection pool and migrations
+        - `mod.rs` — Storage layer and database access
+        - `snapshot_blob.rs` — State snapshot serialization
+      - **text_check/**
+        - `check.rs` — Text check execution
+        - `harper_backend.rs` — Harper text check backend
+        - `mod.rs` — Text checking and validation
+        - `types.rs` — Text check type definitions
+    - **driving/**
+      - `cli.rs` — Command-line interface definitions
+      - `mod.rs` — Driving adapters: HTTP and CLI interfaces
+      - **http/**
+        - `app_state.rs` — Application state management
+        - `debug.rs` — Debug utilities and endpoints
+        - `handlers.rs` — Core HTTP request routing and handling
+        - `mod.rs` — HTTP server and API endpoints
+        - `port_utils.rs` — Port management utilities
+        - `router.rs` — Router configuration
+        - `server_impl.rs` — Server implementation
+        - `templates.rs` — Template rendering utilities
+        - `view_models.rs` — View models decouple templates from domain types.
   - **application/**
     - `application_service.rs` — Main application service coordinating game operations
     - `context.rs` — Application context and state management
-    - `game_lifecycle.rs` — Game lifecycle management and state transitions
     - `game_service.rs` — Game service handling gameplay operations
     - `message_editing.rs` — Message editing and modification utilities
     - `query_handlers.rs` — Read-only data access for game state and debug views
+    - `spawn.rs` — Shared spawn helper for pipeline tasks
     - **action_pipeline/**
       - `actions.rs` — Action enum and action processing types
       - `mod.rs` — Action pipeline for processing game actions
       - `phases.rs` — Phase implementations for the action pipeline
       - `pipeline.rs` — Action pipeline orchestration and execution
       - `retry.rs` — Retry logic for action pipeline operations
-  - **bootstrap/**
-    - `init_game.rs` — Game state initialization and arrival narration spawning
-    - `load.rs` — Game data seeding and initialization routines
-    - `logging.rs` — Logging setup and configuration
-    - `run.rs` — Main entry point and runtime execution
-    - `scenario.rs` — Scenario injection and initialization
-    - `state.rs` — Bootstrap game state from saved snapshots
-    - `validate.rs` — Data validation utilities
-  - **engine/**
-    - `action.rs` — Action enum and semantic command types
-    - `action_processing.rs` — Action execution pipeline and validation
-    - `logic.rs` — Game logic and rule evaluation
-    - `parser.rs` — Parser for game data formats
-    - `state_diagnostics.rs` — State diagnostics and debugging utilities
-    - `trigger_eval.rs` — Trigger evaluation and condition checking
-  - **model/**
-    - `agent.rs` — Agent definitions and behavior types
-    - `character.rs` — Character sheet data and NPC card definitions
-    - `game.rs` — Game state and session management
-    - `llm_backend.rs` — LLM backend provider types
-    - `llm_message.rs` — LLM message formatting and structure
-    - `map.rs` — Map and location data structures
-    - `message.rs` — Message types and conversation history
-    - `message_history.rs` — Message history tracking
-    - `prompt_preset.rs` — Prompt preset configurations
-    - `quantifier.rs` — Quantifier types for narrative evaluation
-    - `scenario.rs` — Scenario definitions and world data
-    - `settings.rs` — Settings and configuration types
-    - `state_snapshot.rs` — State snapshot serialization
-    - `template.rs` — Template placeholder substitution for author-controlled text fields.
-    - `trigger.rs` — Trigger conditions and event types
-    - `world.rs` — World model definitions
-    - **state/**
-      - `game_state.rs` — Main game state and builder
-      - `generation_status.rs` — Generation status enums and input buffer
-      - `message_types.rs` — Message type and entry definitions
-      - `mod.rs` — Game state representations (re-exports from submodules)
-      - `movement.rs` — Player movement state
-      - `narrative_state.rs` — Narrative state with history and input buffer
-      - `scene_state.rs` — Current scene NPCs and quantifier confidence
-      - `trigger_context.rs` — Stored trigger snapshot context
-  - **narrative/**
     - **agents/**
       - `mod.rs` — Agent registry and trait definitions
       - `registry.rs` — Runtime agent lookup and lifecycle
@@ -80,105 +64,57 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - `prompt.rs` — Quantifier prompt construction
         - `test_support.rs` — Quantifier test utilities
         - `types.rs` — Quantifier type definitions
-    - **llm/**
-      - `backend.rs` — LLM backend abstraction
-      - `deepseek.rs` — DeepSeek LLM provider
-      - `mock.rs` — Mock LLM provider for testing
-      - `mod.rs` — LLM provider implementations
-      - `ollama.rs` — Ollama LLM provider
-      - `openrouter.rs` — OpenRouter LLM provider
-      - `sanitize.rs` — LLM input/output sanitization
-    - **llm_client/**
-      - `client.rs` — LLM client implementation
-      - `mod.rs` — LLM client interface
-      - `request.rs` — LLM request building
-      - `response.rs` — LLM response parsing
-    - **prompt/**
+    - **narrative_prompt/**
       - `assembler.rs` — Multi-stage prompt builder
       - `budget.rs` — Token budget management
       - `context.rs` — Prompt context building
       - `mod.rs` — Prompt construction orchestration
       - `types.rs` — Prompt type definitions
-    - **text_check/**
-      - `check.rs` — Text check execution
-      - `harper_backend.rs` — Harper text check backend
-      - `mod.rs` — Text checking and validation
-      - `types.rs` — Text check type definitions
-  - **server/**
-    - `app_state.rs` — Application state management
-    - `debug.rs` — Debug utilities and endpoints
-    - `handlers.rs` — Core HTTP request routing and handling
-    - `port_utils.rs` — Port management utilities
-    - `router.rs` — Router configuration
-    - `server_impl.rs` — Server implementation
-    - `templates.rs` — Template rendering utilities
-    - `view_models.rs` — View models decouple templates from domain types.
-    - **fragments/**
-      - `actions.rs` — Action fragment handlers
-      - `endpoints.rs` — Fragment endpoints
-      - `generation_guard.rs` — Generation guard logic
-      - `history.rs` — History fragment handlers
-      - `mod.rs` — UI fragment modules
-      - **misc/**
-        - `game_control.rs` — Game control fragment handlers
-        - `mod.rs` — Miscellaneous fragment utilities (re-exports from submodules)
-        - `swipe.rs` — Swipe and retry fragment handlers
-        - `text_check.rs` — Text check fragment handler
-      - **renderers/**
-        - `fragment_renderers.rs` — Fragment renderers
-        - `mod.rs` — Fragment renderers (re-exports from submodules)
-        - `response.rs` — HTTP response helpers
-    - **games_fragment/**
-      - `handlers.rs` — Games fragment handlers
-      - `mod.rs` — Games fragment module
-      - `template.rs` — Games templates
-    - **prompt_presets_fragment/**
-      - `fragments.rs` — Prompt preset fragments
-      - `handlers.rs` — Prompt preset handlers
-      - `mod.rs` — Prompt presets fragment module
-      - `template.rs` — Prompt preset templates
-    - **settings_fragment/**
-      - `fragments.rs` — Settings fragments
-      - `handlers.rs` — Settings handlers
-      - `mod.rs` — Settings fragment module
-      - `template.rs` — Settings templates
-    - **worlds_fragment/**
-      - `fragments.rs` — Worlds fragment renderers
-      - `handlers.rs` — Worlds management handlers
-      - `mod.rs` — Worlds management fragment module
-      - `template.rs` — Worlds templates
-  - **storage/**
-    - `db.rs` — SQLite database connection pool and migrations
-    - **backend/**
-      - `characters.rs` — Character storage backend operations
-      - `core.rs` — Storage backend trait and core abstractions
-      - `games.rs` — Game storage operations
-      - `helpers.rs` — Shared helper functions for storage backend operations
-      - `llm_messages.rs` — LLM message storage
-      - `messages.rs` — Message storage operations
-      - `mod.rs` — Storage backend modules
-      - `personas.rs` — Persona storage operations
-      - `presets.rs` — Preset storage operations
-      - `settings.rs` — Settings storage operations
-      - `snapshots.rs` — Snapshot storage operations
-      - `swipes.rs` — Swipe data storage
-      - `worlds.rs` — World storage backend operations
-    - **mappers/**
-      - `llm_message.rs` — LLM message mapper
-      - `message.rs` — Message mapper
-      - `mod.rs` — Row-to-domain object mapping
-      - `state_snapshot.rs` — State snapshot mapper
-    - **models/**
-      - `character.rs` — Character database model
-      - `game.rs` — Game database model
-      - `game_state_snapshot.rs` — Game state snapshot model
-      - `llm_message.rs` — LLM message database model
-      - `message.rs` — Message database model
-      - `mod.rs` — Database schema entity definitions
-      - `persona.rs` — Persona database model
-      - `prompt_preset.rs` — Prompt preset model
-      - `settings.rs` — Settings database model
-      - `world.rs` — Database row structs for world and map tables
+    - **ports/**
+      - `llm_provider.rs` — LLM backend abstraction
+      - `mod.rs` — Application ports: outbound interfaces (driven port traits)
+  - **bootstrap/**
+    - `init_game.rs` — Game state initialization and arrival narration spawning
+    - `load.rs` — Game data seeding and initialization routines
+    - `logging.rs` — Logging setup and configuration
+    - `run.rs` — Main entry point and runtime execution
+    - `scenario.rs` — Scenario injection and initialization
+    - `state.rs` — Bootstrap game state from saved snapshots
+    - `validate.rs` — Data validation utilities
+  - **domain/**
+    - **engine/**
+      - `action.rs` — Action enum and semantic command types
+      - `action_processing.rs` — Action execution pipeline and validation
+      - `logic.rs` — Game logic and rule evaluation
+      - `mod.rs` — Game engine core modules
+      - `parser.rs` — Parser for game data formats
+      - `state_diagnostics.rs` — State diagnostics and debugging utilities
+      - `trigger_eval.rs` — Trigger evaluation and condition checking
+    - **model/**
+      - `agent.rs` — Agent definitions and behavior types
+      - `character.rs` — Character sheet data and NPC card definitions
+      - `game.rs` — Game state and session management
+      - `llm_backend.rs` — LLM backend provider types
+      - `map.rs` — Map and location data structures
+      - `message.rs` — Message types and conversation history
+      - `message_history.rs` — Message history tracking
+      - `mod.rs` — Core data models and domain types
+      - `prompt_preset.rs` — Prompt preset configurations
+      - `quantifier.rs` — Quantifier types for narrative evaluation
+      - `scenario.rs` — Scenario definitions and world data
+      - `settings.rs` — Settings and configuration types
+      - `template.rs` — Template placeholder substitution for author-controlled text fields.
+      - `trigger.rs` — Trigger conditions and event types
+      - `world.rs` — World model definitions
+      - **state/**
+        - `game_state.rs` — Main game state and builder
+        - `generation_status.rs` — Generation status enums and input buffer
+        - `message_types.rs` — Message type and entry definitions
+        - `mod.rs` — Game state representations (submodule declarations)
+        - `movement.rs` — Player movement state
+        - `narrative_state.rs` — Narrative state with history and input buffer
+        - `scene_state.rs` — Current scene NPCs and quantifier confidence
+        - `trigger_context.rs` — Stored trigger snapshot context
 - **scripts/**
   - `build.py` — Full build, validate, and test for Chronicler Engine.
   - `check_python_docstrings.py` — Summary

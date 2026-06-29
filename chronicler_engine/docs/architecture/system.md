@@ -57,9 +57,9 @@ Orchestration layer that coordinates game flow, persistence, and LLM generation.
 - **`game_service`**: `DefaultGameService` struct implements `ActionPipelineBackend` trait and exposes public methods `execute_action(ctx, input, player_name)` and `retry_last_response(ctx)`. These wrap the internal `execute_action_impl()` and `retry_last_response_impl()` functions from the `action_pipeline` module. External callers use the `DefaultGameService` methods; only the `ActionPipeline` internals call the impl functions directly.
 - **`application_service`**: Thin orchestrator struct (`DefaultApplicationService`) with game lifecycle operations inlined (`create_game`, `switch_game`, `delete_game`, `list_games`, `current_game_id`, `reset`, worlds CRUD). Contains `process_action` entry point with self-healing stale-`Generating` detection and `GenerationGuard` RAII helper for `is_generating` flag cleanup. `process_action` spawns its blocking task via the shared `application::spawn_pipeline_task` helper. Read-only query and message-editing operations are NOT delegated through this struct anymore — server callers route to `application::query_handlers` and `application::message_editing` module free fns directly (T3 service-layer cleanup). `ApplicationError::is_user_displayable()` enables type-driven error branching — validation errors and `WorldHasGames` domain constraints are inline-displayable; engine errors use `app_err_to_response()`.
 
-### 3. The Narrative Tier (`crate::narrative::*`)
+### 3. Driven Adapters: LLM and Text-Check (`crate::narrative::*`)
 
-The interface between the synchronous engine and stochastic LLM generation.
+Driven adapters implementing LLM generation (via `narrative/llm/`) and text-checking (via `narrative/text_check/`). These adapters implement application ports for external services.
 
 - **`llm`**: Directory module with traits (`LlmBackend`) and per-provider implementations (OpenRouter, DeepSeek, Ollama, Mock) for Game Master narration. The `LlmBackend` trait exposes transport primitives: `model()`, `name()`, `save_message()`, `wrap_and_save()`, `complete()`. Backend-specific preprocessing (`preprocess_user_text`) and postprocessing (`postprocess_response_text`) hooks allow model-specific hacks (e.g., Gemma 4 thinking suffix, response sanitization) to live in the provider modules instead of the generic HTTP client.
   - **`get_llm_backend_for(connection, storage, settings)`**: Create a backend for a specific `Connection` profile. Settings are passed in — no file I/O inside the backend.
@@ -183,24 +183,24 @@ Each `Connection` contains: `id`, `name`, `provider`, `model`, `api_key` (option
 - `OPENROUTER_API_KEY` env var used as fallback when connection `api_key` is None
 - `LLM_BACKEND` env var is **not** consulted (settings file is sole source of truth)
 
-### 5.5. The Storage Tier (`crate::storage`) — World Seeding & Loading
+### 5.5. Storage Module (`crate::storage`) — World Seeding & Loading
 
 Seed-once, load-from-DB pattern for worlds, personas, and characters. See [`system/storage.md`](../system/storage.md) for the full specification.
 
-### 6. The Error Tier (`crate::error`)
+### 6. Error Module (`crate::error`)
 
-Unified error type shared across all tiers.
+Unified error type shared across all layers.
 
 - **`EngineError`**: Top-level error enum (`Llm`, `Narrative`, `Internal`, `Io`, `Serde`, `Parse`, `Serialize`, `Navigation`, `RoomNotFound`, `NpcNotFound`, `WorldNotFound`, `WorldHasGames`, `Config`, `Template`, `DataLoad`, `ContextOverflow`)
 - **`LlmFailure`**: LLM-specific errors (`EmptyResponse`, `Http`, `Network`, `ParseError`, `Timeout`)
 - **`NarrativeFailure`**: Prompt build and generation failures
 - **`InternalError`**: Invariant violations
 
-### 7. The Storage Tier (`crate::storage`)
+### 7. Driven Adapter: Storage (`crate::storage`)
 
-Unified `Storage` struct with `Backend` enum (`Sqlite`, `InMemory`) for real backends plus `LayeredBackend` decorator (`Direct(Backend)` | `Test { base, overrides }`) for failure injection. All table operations are methods on `Storage` — no repository structs or trait objects. Schema lives in `src/storage/db.rs`; backend CRUD modules in `src/storage/backend/` (one file per table); test-infra types in `src/storage/backend/test_support.rs`. See [`system/storage.md`](../system/storage.md) for design decisions, seeding pattern, module boundaries, and testing strategy.
+Driven adapter implementing storage operations. Uses `Storage` struct with `Backend` enum (`Sqlite`, `InMemory`) for real backends plus `LayeredBackend` decorator (`Direct(Backend)` | `Test { base, overrides }`) for failure injection. All table operations are methods on `Storage` — no repository structs or trait objects. Schema lives in `src/storage/db.rs`; backend CRUD modules in `src/storage/backend/` (one file per table); test-infra types in `src/storage/backend/test_support.rs`. See [`system/storage.md`](../system/storage.md) for design decisions, seeding pattern, module boundaries, and testing strategy.
 
-### 8. The Bootstrap Tier (`crate::bootstrap`)
+### 8. Bootstrap Module (`crate::bootstrap`)
 
 World seeding, validation, and server initialization.
 
@@ -212,13 +212,13 @@ World seeding, validation, and server initialization.
 - **`init_game`**: Game state initialization — `resolve_game_id()` (auto-creates a game for the requested world using the `--persona` CLI flag when none exists), `load_game_state()`, `spawn_arrival_task_if_needed()`. Includes `ArrivalTaskContext` for background arrival narration with stored `Connection` for correct LLM backend selection.
 - **`state.rs`**: Fresh game state initialization (`build_fresh_initial_state`)
 
-### 9. The CLI Tier (`crate::cli`)
+### 9. CLI Module (`crate::cli`)
 
 Command-line argument parsing via `clap`.
 
 - **`Cli`**: CLI args struct (`--world`, `--persona`, `--port`, etc.)
 
-### 10. The Test Support Tier (`crate::test_support`)
+### 10. Test Support Module (`crate::test_support`)
 
 Shared test fixtures and utilities.
 

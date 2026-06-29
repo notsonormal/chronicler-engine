@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-06-29 20:08 UTC*
+*Index last generated: 2026-06-29 21:07 UTC*
 
 ### Root files
 
@@ -64,6 +64,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Super-Plan: Abstraction-Fixes Follow-Up](./plans/abstraction-fixes-followup-superplan.md)
 - [Plan: Antipattern-Checker Agent Skill](./plans/antipattern-checker-skill-plan.md)
 - [Plan: Diagnostic Decision Tree as Agent Infrastructure](./plans/diagnostic-decision-tree-plan.md)
+- [Deferred arch-lint Rules — Hexagonal Reorganization](./plans/hexagonal-deferred-arch-lint-rules.md)
 - [Plan: Hexagonal Architecture Reorganization](./plans/hexagonal-reorganization-plan.md)
 - [Plan: Mapless Worlds via Freeform Location Names](./plans/mapless-worlds-plan.md)
 - [Spec: Agent-Ready Pipeline Restructure for Chronicler Engine](./plans/multi-agent-architecture-overarching-spec.md)
