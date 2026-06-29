@@ -1,5 +1,5 @@
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
-use crate::narrative::prompt::assembler::assemble_prompt_text;
+use crate::application::narrative_prompt::assembler::assemble_prompt_text;
 
 #[test]
 fn test_preset_type_system_as_str() {

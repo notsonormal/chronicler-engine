@@ -14,7 +14,7 @@ use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::message_types::MessageType;
 use crate::domain::model::state_snapshot::GameStateSnapshot;
 use crate::domain::model::world::WorldCard;
-use crate::narrative::prompt::assembler::assemble_prompt_text;
+use crate::application::narrative_prompt::assembler::assemble_prompt_text;
 use crate::adapters::driven::storage::Storage;
 
 #[derive(Clone)]

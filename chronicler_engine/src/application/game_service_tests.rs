@@ -5,8 +5,8 @@ use crate::application::action_pipeline::pipeline::ActionPipelineBackend;
 use crate::application::game_service::GameService;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::message_types::MessageType;
-use crate::narrative::agents::registry::AgentRegistry;
-use crate::narrative::llm::MockBackend;
+use crate::application::agents::registry::AgentRegistry;
+use crate::adapters::driven::llm::providers::MockBackend;
 use crate::test_support::{
     fixtures::{TestWorld, TestMap, TestPlayer},
     make_test_context,
@@ -176,7 +176,7 @@ fn test_run_post_generation_agents_merges_state_patches() {
 #[test]
 fn test_run_post_generation_agents_with_quantifier() {
     let llm_backend = Arc::new(MockBackend::default());
-    let quantifier = crate::narrative::agents::quantifier::QuantifierAgent::with_backend(
+    let quantifier = crate::application::agents::quantifier::QuantifierAgent::with_backend(
         "test_quantifier".to_string(),
         llm_backend.clone(),
     );

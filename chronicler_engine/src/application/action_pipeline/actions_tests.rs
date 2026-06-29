@@ -5,8 +5,8 @@ use crate::domain::model::quantifier::QuantifierResult;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageType;
-use crate::narrative::llm::backend::{AGENT_NARRATOR, LlmCallResult};
-use crate::narrative::prompt::LayeredPromptAssembler;
+use crate::application::ports::llm_provider::{AGENT_NARRATOR, LlmCallResult};
+use crate::application::narrative_prompt::LayeredPromptAssembler;
 use crate::test_support::fixtures::{TestGameState, TestNpc};
 use crate::test_support::make_test_context;
 struct MockBackend {
@@ -27,7 +27,9 @@ impl ActionPipelineBackend for MockBackend {
     fn assembler(&self) -> &LayeredPromptAssembler {
         static ASSEMBLER: std::sync::OnceLock<LayeredPromptAssembler> = std::sync::OnceLock::new();
         ASSEMBLER.get_or_init(|| {
-            LayeredPromptAssembler::new(crate::narrative::prompt::budget::MAX_CONTEXT_TOKENS)
+            LayeredPromptAssembler::new(
+                crate::application::narrative_prompt::budget::MAX_CONTEXT_TOKENS,
+            )
         })
     }
     fn complete(
@@ -182,7 +184,7 @@ fn test_phase_transitions_to_quantifying_during_post_generation() {
             static ASSEMBLER: std::sync::LazyLock<LayeredPromptAssembler> =
                 std::sync::LazyLock::new(|| {
                     LayeredPromptAssembler::new(
-                        crate::narrative::prompt::budget::MAX_CONTEXT_TOKENS,
+                        crate::application::narrative_prompt::budget::MAX_CONTEXT_TOKENS,
                     )
                 });
             &ASSEMBLER
@@ -263,7 +265,7 @@ fn test_narration_saved_before_quantifying_phase() {
             static ASSEMBLER: std::sync::LazyLock<LayeredPromptAssembler> =
                 std::sync::LazyLock::new(|| {
                     LayeredPromptAssembler::new(
-                        crate::narrative::prompt::budget::MAX_CONTEXT_TOKENS,
+                        crate::application::narrative_prompt::budget::MAX_CONTEXT_TOKENS,
                     )
                 });
             &ASSEMBLER

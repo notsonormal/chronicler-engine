@@ -9,14 +9,14 @@ use crate::error::EngineError;
 use crate::domain::model::agent::{AgentContext, AgentResult, ExecutionPhase, StatePatch};
 use crate::domain::model::settings::AppSettings;
 use crate::domain::model::state::game_state::GameState;
-use crate::narrative::agents::quantifier::QuantifierAgent;
-use crate::narrative::agents::registry::AgentRegistry;
-use crate::narrative::llm::backend::LlmCallResult;
-use crate::narrative::prompt::LayeredPromptAssembler;
+use crate::application::agents::quantifier::QuantifierAgent;
+use crate::application::agents::registry::AgentRegistry;
+use crate::application::ports::llm_provider::LlmCallResult;
+use crate::application::narrative_prompt::LayeredPromptAssembler;
 use crate::adapters::driven::storage::Storage;
 
 pub struct GameService {
-    pub(crate) llm_backend: Arc<dyn crate::narrative::llm::LlmBackend>,
+    pub(crate) llm_backend: Arc<dyn crate::application::ports::llm_provider::LlmBackend>,
     pub(crate) prompt_assembler: Arc<LayeredPromptAssembler>,
     pub(crate) agent_registry: AgentRegistry,
 }
@@ -45,8 +45,8 @@ impl GameService {
             let max_tokens = conn.max_tokens;
             (registry, conn, max_context_tokens, max_tokens)
         };
-        let llm_backend: Arc<dyn crate::narrative::llm::backend::LlmBackend> = Arc::from(
-            crate::narrative::llm::get_llm_backend_for(&connection, storage),
+        let llm_backend: Arc<dyn crate::application::ports::llm_provider::LlmBackend> = Arc::from(
+            crate::application::ports::llm_provider::get_llm_backend_for(&connection, storage),
         );
         tracing::info!(
             "GameService: backend={}, model={}",
@@ -65,28 +65,28 @@ impl GameService {
     }
 
     pub fn with_backends(
-        llm_backend: Arc<dyn crate::narrative::llm::LlmBackend>,
+        llm_backend: Arc<dyn crate::application::ports::llm_provider::LlmBackend>,
         agent_registry: AgentRegistry,
     ) -> Self {
         Self {
             llm_backend,
             prompt_assembler: Arc::new(LayeredPromptAssembler::new(
-                crate::narrative::prompt::budget::MAX_CONTEXT_TOKENS,
+                crate::application::narrative_prompt::budget::MAX_CONTEXT_TOKENS,
             )),
             agent_registry,
         }
     }
 
     pub fn with_mock_quantifier(
-        llm_backend: Arc<dyn crate::narrative::llm::LlmBackend>,
-        quantifier_backend: Arc<dyn crate::narrative::llm::LlmBackend>,
+        llm_backend: Arc<dyn crate::application::ports::llm_provider::LlmBackend>,
+        quantifier_backend: Arc<dyn crate::application::ports::llm_provider::LlmBackend>,
     ) -> Self {
         let agent = QuantifierAgent::with_backend("quantifier".to_string(), quantifier_backend);
         let registry = AgentRegistry::with_agent(Box::new(agent));
         Self {
             llm_backend,
             prompt_assembler: Arc::new(LayeredPromptAssembler::new(
-                crate::narrative::prompt::budget::MAX_CONTEXT_TOKENS,
+                crate::application::narrative_prompt::budget::MAX_CONTEXT_TOKENS,
             )),
             agent_registry: registry,
         }

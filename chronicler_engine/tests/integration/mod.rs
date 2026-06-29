@@ -10,8 +10,8 @@ mod fixtures;
 use std::sync::Arc;
 
 use chronicler_engine::application::game_service::GameService;
-use chronicler_engine::narrative::agents::registry::AgentRegistry;
-use chronicler_engine::narrative::llm::MockBackend;
+use chronicler_engine::application::agents::registry::AgentRegistry;
+use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 
 pub use test_utils::settings_guard::SettingsTestGuard;
 

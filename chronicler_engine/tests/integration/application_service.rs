@@ -5,8 +5,8 @@ use chronicler_engine::application::application_service::{
     DefaultApplicationService, ProcessActionResult,
 };
 use chronicler_engine::application::game_service::GameService;
-use chronicler_engine::narrative::agents::registry::AgentRegistry;
-use chronicler_engine::narrative::llm::MockBackend;
+use chronicler_engine::application::agents::registry::AgentRegistry;
+use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::domain::model::state::generation_status::GenerationPhase;
 use chronicler_engine::domain::model::state::generation_status::GenerationStatus;
 use chronicler_engine::domain::model::state::message_types::MessageType;

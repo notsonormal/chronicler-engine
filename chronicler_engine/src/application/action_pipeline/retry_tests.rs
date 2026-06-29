@@ -11,8 +11,8 @@ use crate::error::EngineError;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageType;
-use crate::narrative::llm::MockBackend;
-use crate::narrative::llm::backend::LlmCallResult;
+use crate::adapters::driven::llm::providers::MockBackend;
+use crate::application::ports::llm_provider::LlmCallResult;
 use crate::adapters::driven::storage::{Storage, TestOverride};
 use crate::test_support::fixtures::{TestGameState, TestNpc};
 use crate::test_support::make_test_context_with_sqlite;
@@ -24,7 +24,7 @@ fn make_test_state() -> GameState {
 fn make_service() -> GameService {
     GameService::with_mock_quantifier(
         Arc::new(MockBackend::new(None)),
-        Arc::new(crate::narrative::llm::MockBackend::default()),
+        Arc::new(crate::adapters::driven::llm::providers::MockBackend::default()),
     )
 }
 
@@ -283,7 +283,7 @@ fn test_retry_event_trigger_narration_fails() {
     let llm = Arc::new(MockBackend::default().with_trigger_narration_fail());
     let service = GameService::with_mock_quantifier(
         llm,
-        Arc::new(crate::narrative::llm::MockBackend::default()),
+        Arc::new(crate::adapters::driven::llm::providers::MockBackend::default()),
     );
 
     let _input_id = add_input_and_save(&ctx, "test input");
@@ -331,7 +331,7 @@ fn test_retry_event_empty_continuation_text() {
     let llm = Arc::new(MockBackend::new(None));
     let service = GameService::with_mock_quantifier(
         llm,
-        Arc::new(crate::narrative::llm::MockBackend::default()),
+        Arc::new(crate::adapters::driven::llm::providers::MockBackend::default()),
     );
 
     let _input_id = add_input_and_save(&ctx, "test input");
@@ -547,7 +547,7 @@ fn test_save_retry_error_persist_fails() {
 
 struct EmptyTriggerBackend;
 
-impl crate::narrative::llm::LlmBackend for EmptyTriggerBackend {
+impl crate::application::ports::llm_provider::LlmBackend for EmptyTriggerBackend {
     fn model(&self) -> &str {
         "mock"
     }
@@ -584,7 +584,7 @@ fn test_retry_event_empty_continuation_triggers_error() {
     let llm = Arc::new(EmptyTriggerBackend);
     let service = GameService::with_mock_quantifier(
         llm,
-        Arc::new(crate::narrative::llm::MockBackend::default()),
+        Arc::new(crate::adapters::driven::llm::providers::MockBackend::default()),
     );
 
     let _input_id = add_input_and_save(&ctx, "test input");

@@ -18,7 +18,7 @@ use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageType;
 use crate::domain::model::world::WorldCard;
-use crate::narrative::prompt::{NpcContext, make_prompt_context};
+use crate::application::narrative_prompt::{NpcContext, make_prompt_context};
 
 use super::pipeline::{ActionOutcome, ActionPipeline, ActionPipelineBackend, PipelineResult};
 
@@ -101,7 +101,7 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
 
         tracing::info!("Pipeline ▶ Narration LLM call (agent=narrator)");
         let narration_result = match self.service.complete(
-            crate::narrative::llm::backend::AGENT_NARRATOR,
+            crate::application::ports::llm_provider::AGENT_NARRATOR,
             &assembled.system_prompt,
             &assembled.user_prompt,
             Some(assembled.max_tokens),
@@ -213,7 +213,7 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
 
         tracing::info!("Pipeline ▶ Trigger LLM call (agent=trigger)");
         let continuation_result = match self.service.complete(
-            crate::narrative::llm::backend::AGENT_TRIGGER,
+            crate::application::ports::llm_provider::AGENT_TRIGGER,
             &trigger.system_prompt,
             &trigger.user_prompt,
             trigger.max_tokens,

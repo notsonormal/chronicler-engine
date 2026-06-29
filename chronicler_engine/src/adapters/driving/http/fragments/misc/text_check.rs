@@ -10,7 +10,7 @@ use axum::{
 use serde::Deserialize;
 
 use crate::domain::model::settings::TextCheckMode;
-use crate::narrative::text_check::check_player_input;
+use crate::adapters::driven::text_check::check_player_input;
 use crate::adapters::driving::http::AppState;
 use crate::adapters::driving::http::fragments::renderers::{bad_request, internal_error, ok};
 use crate::adapters::driving::http::templates::TextCheckPreviewTemplate;

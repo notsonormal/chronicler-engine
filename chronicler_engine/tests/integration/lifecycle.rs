@@ -4,8 +4,8 @@ use chronicler_engine::application::game_service::GameService;
 use chronicler_engine::application::DefaultApplicationService;
 use chronicler_engine::domain::model::state::game_state::GameState;
 use chronicler_engine::domain::model::state::message_types::MessageType;
-use chronicler_engine::narrative::agents::registry::AgentRegistry;
-use chronicler_engine::narrative::llm::MockBackend;
+use chronicler_engine::application::agents::registry::AgentRegistry;
+use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::adapters::driven::storage::Storage;
 
 use crate::fixtures::{

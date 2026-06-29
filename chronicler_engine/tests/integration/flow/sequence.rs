@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use chronicler_engine::application::game_service::GameService;
 use chronicler_engine::domain::model::state::message_types::MessageType;
-use chronicler_engine::narrative::llm::MockBackend;
+use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::test_support::make_test_context_with_sqlite;
 
 use crate::pipeline_helpers::{

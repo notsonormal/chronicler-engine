@@ -28,7 +28,6 @@ pub mod application;
 pub mod bootstrap;
 pub mod domain;
 pub mod error;
-pub mod narrative;
 pub mod settings;
 // storage module now lives under adapters::driven (declared via `pub mod adapters;` above)
 

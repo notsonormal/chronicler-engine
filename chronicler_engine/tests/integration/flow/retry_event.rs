@@ -8,7 +8,7 @@ use chronicler_engine::domain::model::trigger::{
     ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement,
 };
 use chronicler_engine::domain::model::world::WorldCard;
-use chronicler_engine::narrative::llm::MockBackend;
+use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::test_support::make_test_context_with_sqlite;
 
 use crate::pipeline_helpers::{

@@ -13,7 +13,7 @@ use chronicler_engine::application::GameService;
 use chronicler_engine::domain::model::state::generation_status::GenerationPhase;
 use chronicler_engine::domain::model::state::generation_status::GenerationStatus;
 use chronicler_engine::domain::model::state::message_types::MessageType;
-use chronicler_engine::narrative::llm::MockBackend;
+use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::test_support::make_test_context_with_sqlite;
 
 #[test]

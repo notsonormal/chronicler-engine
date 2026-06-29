@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::application::application_service::ProcessActionResult;
 use crate::domain::model::settings::TextCheckMode;
-use crate::narrative::text_check::check_player_input;
+use crate::adapters::driven::text_check::check_player_input;
 use crate::adapters::driving::http::AppState;
 use crate::adapters::driving::http::templates::TextCheckPreviewTemplate;
 

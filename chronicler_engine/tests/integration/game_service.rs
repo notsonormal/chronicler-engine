@@ -4,8 +4,8 @@ use std::sync::Arc;
 
 use chronicler_engine::application::game_service::GameService;
 use chronicler_engine::domain::model::state::message_types::MessageType;
-use chronicler_engine::narrative::agents::registry::AgentRegistry;
-use chronicler_engine::narrative::llm::MockBackend;
+use chronicler_engine::application::agents::registry::AgentRegistry;
+use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::test_support::make_test_context_with_sqlite;
 use crate::fixtures::create_test_state;
 use crate::pipeline_helpers::{latest_state, add_input_and_save};

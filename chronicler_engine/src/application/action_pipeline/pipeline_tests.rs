@@ -11,8 +11,8 @@ use crate::domain::model::quantifier::{QuantifierConfidence, QuantifierParseResu
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageType;
-use crate::narrative::llm::backend::{AGENT_NARRATOR, LlmCallResult};
-use crate::narrative::prompt::LayeredPromptAssembler;
+use crate::application::ports::llm_provider::{AGENT_NARRATOR, LlmCallResult};
+use crate::application::narrative_prompt::LayeredPromptAssembler;
 use crate::adapters::driven::storage::{Storage, TestOverride};
 use crate::test_support::fixtures::{TestGameState, TestNpc};
 use crate::test_support::make_test_context;
@@ -37,7 +37,9 @@ impl ActionPipelineBackend for MockPipelineBackend {
     fn assembler(&self) -> &LayeredPromptAssembler {
         static ASSEMBLER: std::sync::OnceLock<LayeredPromptAssembler> = std::sync::OnceLock::new();
         ASSEMBLER.get_or_init(|| {
-            LayeredPromptAssembler::new(crate::narrative::prompt::budget::MAX_CONTEXT_TOKENS)
+            LayeredPromptAssembler::new(
+                crate::application::narrative_prompt::budget::MAX_CONTEXT_TOKENS,
+            )
         })
     }
 

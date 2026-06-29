@@ -49,7 +49,13 @@ paths = ["src/domain/engine/**"]
 
 [[scopes]]
 name = "narrative"
-paths = ["src/narrative/**"]
+paths = [
+  "src/application/agents/**",
+  "src/application/narrative_prompt/**",
+  "src/application/ports/**",
+  "src/adapters/driven/llm/**",
+  "src/adapters/driven/text_check/**",
+]
 
 [[scopes]]
 name = "application"

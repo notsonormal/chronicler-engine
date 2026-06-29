@@ -7,7 +7,7 @@ use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::thread;
 
-use chronicler_engine::narrative::llm_client::call_chat_completions;
+use chronicler_engine::adapters::driven::llm::transport::call_chat_completions;
 
 // --- Mock HTTP server tests for call_chat_completions ---
 

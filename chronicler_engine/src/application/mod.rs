@@ -2,12 +2,15 @@
 //! Application layer services and game flow orchestration
 
 pub mod action_pipeline;
+pub mod agents;
 pub mod application_service;
 pub mod context;
 pub mod game_service;
 #[cfg(test)]
 mod game_service_tests;
 pub mod message_editing;
+pub mod narrative_prompt;
+pub mod ports;
 pub mod query_handlers;
 pub(crate) mod spawn;
 

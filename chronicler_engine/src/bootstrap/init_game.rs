@@ -14,7 +14,7 @@ use crate::domain::model::state::generation_status::GenerationStatus;
 use crate::domain::model::state::message_types::MessageType;
 use crate::domain::model::state_snapshot::GameStateSnapshot;
 use crate::domain::model::world::WorldCard;
-use crate::narrative::prompt::{NpcContext, make_prompt_context};
+use crate::application::narrative_prompt::{NpcContext, make_prompt_context};
 
 use super::run::{PRESET_STORAGE_GAME_ID, find_latest_game_for_world, list_game_names_for_world};
 use super::inject_scenario_logs;
@@ -188,7 +188,7 @@ impl ArrivalTaskContext {
             None => return,
         };
 
-        let backend = crate::narrative::llm::get_llm_backend_for(
+        let backend = crate::application::ports::llm_provider::get_llm_backend_for(
             &self.connection,
             Some(Arc::clone(&self.ctx.storage)),
         );
@@ -208,7 +208,9 @@ impl ArrivalTaskContext {
         let narration = match self.arrival_preset.as_ref() {
             Some(preset) => {
                 let mut assembler =
-                    crate::narrative::prompt::LayeredPromptAssembler::new(self.max_context_tokens);
+                    crate::application::narrative_prompt::LayeredPromptAssembler::new(
+                        self.max_context_tokens,
+                    );
                 if let Some(max) = self.max_tokens {
                     assembler = assembler.with_max_tokens(max);
                 }
@@ -221,7 +223,7 @@ impl ArrivalTaskContext {
                     )
                     .and_then(|assembled| {
                         backend.complete(
-                            crate::narrative::llm::backend::AGENT_NARRATOR,
+                            crate::application::ports::llm_provider::AGENT_NARRATOR,
                             &assembled.system_prompt,
                             &assembled.user_prompt,
                             Some(assembled.max_tokens),
