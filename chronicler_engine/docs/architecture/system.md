@@ -106,33 +106,36 @@ Orchestration layer that coordinates game flow, persistence, and LLM generation.
 - **`query_handlers.rs`**: Free fns for read-only query operations - `get_generating_status`, `reset_generating_status`, `get_current_game_name`, `list_latest_llm_messages`, `get_story_log_entries`, `get_input_status`, `get_current_room_view`, `get_npc_headshots`, `get_debug_state`.
 - **`spawn.rs`**: `pub(crate) fn spawn_pipeline_task(game_service, ctx, f: F)` — dedupes `Arc::clone` + `tokio::task::spawn_blocking`. Cancel-check + `GenerationGuard` lifetime stay inside each caller's closure (zero behavior change).
 - **`action_pipeline`**: Action-processing workflows and the `ActionPipeline` orchestration struct.
-  - `pipeline.rs`: `ActionPipelineBackend` trait (narrow seam: `assembler()`, `complete`, `run_post_generation_agents`) and `ActionPipeline<'a, B>` generic over the trait. Orchestrates the full FreeAction pipeline via `run_from_input`. Checks `CancellationToken::is_cancelled()` at stage boundaries and aborts gracefully via `handle_cancellation()`. **Error model**: pipeline errors set `GenerationStatus::Error` on state and return `Ok(())`; only `Err(ActionOutcome::Cancelled)` uses the `Err` path.
+  - `pipeline.rs`: `ActionPipeline` struct holds direct fields (`prompt_assembler: Arc<LayeredPromptAssembler>`, `llm_recorder: Arc<LlmCallRecorder>`, `agent_registry: Arc<AgentRegistry>`); `run_post_generation_agents` is now an inline phase method. Orchestrates the full FreeAction pipeline via `run_from_input`. Checks `CancellationToken::is_cancelled()` at stage boundaries and aborts gracefully via `handle_cancellation()`. **Error model**: pipeline errors set `GenerationStatus::Error` on state and return `Ok(())`; only `Err(ActionOutcome::Cancelled)` uses the `Err` path.
   - `phases.rs`: Split `impl ActionPipeline` block — phase methods re-attached to `ActionPipeline` while keeping the separate file. `phase_narrate`, `phase_post_generation`, `phase_engine_commit`, `phase_trigger_continuation_raw`, `reconcile_post_trigger_npcs`, `build_trigger_request` are `pub(super)` methods. Includes `persist()`, `persist_snapshot_failed()`, and `error_return()` helpers. `pipeline.rs` calls these as `self.method()` rather than `phases::fn(service, ctx, ...)`.
   - `PipelineInputs`: Owned struct bundling pipeline input parameters (owned `Vec<NpcCard>` + `String`) passed to `run_from_input` / `build_trigger_request` / `phase_trigger_continuation_raw`. Avoids borrow-checker fights by owning data outright instead of borrowing from `GameState`.
   - `actions.rs`: Thin dispatch layer — `execute_action_impl` creates `ActionPipeline` and delegates to `run_from_input`.
   - `retry.rs`: Retry-specific setup (anchor finding, message deletion, snapshot loading) delegates continuation regeneration to `ActionPipeline::phase_trigger_continuation()` + `ActionPipeline::reconcile_post_trigger_npcs()` and main narration retry to `ActionPipeline::run_from_input()`.
-- **`game_service`**: `DefaultGameService` struct implements `ActionPipelineBackend` trait and exposes public methods `execute_action(ctx, input, player_name)` and `retry_last_response(ctx)`. These wrap the internal `execute_action_impl()` and `retry_last_response_impl()` functions from the `action_pipeline` module. External callers use the `DefaultGameService` methods; only the `ActionPipeline` internals call the impl functions directly.
+- **`game_service`**: `GameService` struct (renamed from `DefaultGameService`) exposes `execute_action(ctx, input)` and `retry_last_response(ctx)`. No trait impl — `ActionPipelineBackend` deleted. These wrap the internal `execute_action_impl()` and `retry_last_response_impl()` functions from the `action_pipeline` module. External callers use the `GameService` methods; only the `ActionPipeline` internals call the impl functions directly.
 - **`application_service`**: Thin orchestrator struct (`DefaultApplicationService`) with game lifecycle operations inlined (`create_game`, `switch_game`, `delete_game`, `list_games`, `current_game_id`, `reset`, worlds CRUD). Contains `process_action` entry point with self-healing stale-`Generating` detection and `GenerationGuard` RAII helper for `is_generating` flag cleanup. `process_action` spawns its blocking task via the shared `application::spawn_pipeline_task` helper. Read-only query and message-editing operations are NOT delegated through this struct anymore — server callers route to `application::query_handlers` and `application::message_editing` module free fns directly (T3 service-layer cleanup). `ApplicationError::is_user_displayable()` enables type-driven error branching — validation errors and `WorldHasGames` domain constraints are inline-displayable; engine errors use `app_err_to_response()`.
 
 ### 3. Driven Adapters: LLM and Text-Check (`crate::adapters::driven::llm` + `crate::adapters::driven::text_check`)
 
 Driven adapters implementing LLM generation (via `narrative/llm/`) and text-checking (via `narrative/text_check/`). These adapters implement application ports for external services.
 
-- **`llm`**: Directory module with traits (`LlmBackend`) and per-provider implementations (OpenRouter, DeepSeek, Ollama, Mock) for Game Master narration. The `LlmBackend` trait exposes transport primitives: `model()`, `name()`, `save_message()`, `wrap_and_save()`, `complete()`. Backend-specific preprocessing (`preprocess_user_text`) and postprocessing (`postprocess_response_text`) hooks allow model-specific hacks (e.g., Gemma 4 thinking suffix, response sanitization) to live in the provider modules instead of the generic HTTP client.
-  - **`get_llm_backend_for(connection, storage, settings)`**: Create a backend for a specific `Connection` profile. Settings are passed in — no file I/O inside the backend.
-  - **`DefaultGameService::with_storage(storage, settings)`**: Production constructor that receives pre-loaded settings.
-  - **`DefaultGameService::with_backends(llm, registry)`**: Constructor for dependency-injecting mock backends and agent registry in tests. No globals, no file I/O, fully isolated.
+- **`llm`**: Directory module with trait (`LlmProvider`) and per-provider implementations (OpenRouter, DeepSeek, Ollama, Mock) for Game Master narration. The `LlmProvider` trait is transport-only: `name()`, `model()`, `complete()`. Default impls removed — orchestration lives in `LlmCallRecorder` at `application/llm_recorder.rs`. Backend-specific preprocessing (`preprocess_user_text`) and postprocessing (`postprocess_response_text`) hooks allow model-specific hacks (e.g., Gemma 4 thinking suffix, response sanitization) to live in the provider modules instead of the generic HTTP client.
+  - **`bootstrap::llm_factory::get_llm_recorder_for(connection, storage)`**: Create an `Arc<LlmCallRecorder>` for a specific `Connection` profile. No settings arg.
+  - **`GameService::with_storage(storage, preset_storage, settings)`**: Production constructor that receives pre-loaded settings.
+  - **`GameService::with_backends(llm_recorder: Arc<LlmCallRecorder>, agent_registry: AgentRegistry)`**: Constructor for dependency-injecting mock recorders and agent registry in tests. No globals, no file I/O, fully isolated.
+  - **`GameService::with_mock_quantifier(narrator_recorder, quantifier_recorder)`**: Test constructor taking two `Arc<LlmCallRecorder>` instances — one for narration, one for quantifier agent.
 - **`prompt`**: Directory module for layered prompt construction with token budget management. Uses XML-sectioned instructions + XML-wrapped data for reasoning-model compatibility. `LayeredPromptAssembler` owns prompt assembly. Includes `fit_messages_to_context()` for dynamic context-window fitting. `NpcContext<'a>` bundles `all_npcs` + `npcs_in_area` slices; `make_prompt_context()` takes 6 parameters (down from 7).
 - **`agents`**: Directory module for the agent trait, registry, and agent implementations.
   - **`Agent` trait**: Core abstraction for pre-generation and post-generation agents
   - **`AgentRegistry`**: Loads agents from config and iterates by execution phase
   - **`QuantifierAgent`**: Post-generation agent for scene quantification and dynamic room presence detection
 - **`quantifier`** (under `agents/`): Quantifier implementation module.
-  - **`QuantifierAgent`**: Post-generation agent that uses `LlmBackend::complete()` for scene quantification. Receives the current room via `AgentContext.current_room`.
+  - **`QuantifierAgent`**: Post-generation agent that uses `LlmProvider::complete()` via injected `Arc<LlmCallRecorder>` for scene quantification. Receives the current room via `AgentContext.current_room`.
   - **`NpcEventList`**: NPC movement events from quantification (Entered, Left). Now lives in `model::quantifier`.
 - **`text_check`**: Directory module for spell and grammar checking of player input.
-  - **`HarperBackend`**: Wraps harper-core with curated + user dictionaries
-  - **`check_player_input()`**: Facade that returns `Option<CheckResult>` based on `TextCheckMode`
+  - **`HarperTextChecker`**: Adapter implementing `TextChecker` port at `src/adapters/driven/text_check/harper_text_checker.rs`. Wraps harper-core with curated + user dictionaries.
+  - **`TextCheckService`**: Orchestrator at `src/application/text_check_service.rs`. `check_player_input` is a method on this service. Driving adapters call `app.text_check_service.check_player_input(...)`.
+  - **`TextChecker`**: Port trait at `src/application/ports/text_checker.rs`
+  - **`bootstrap/text_check_factory.rs`**: Factory wiring for text check service.
   - **`CheckResult`/`CheckIssue`**: Structured lint results with byte spans and suggestions
 - **`llm_client`**: Directory module (`mod.rs`, `request.rs`, `response.rs`, `client.rs`) with composable pure functions: `build_request_payload()`, `configure_request()`, `extract_content_from_response()`, `handle_response()`, and the main `call_chat_completions()` orchestration. Backend implementations live in `narrative/llm/` directory.
 
@@ -199,8 +202,8 @@ flowchart TD
     A["bootstrap/run.rs"] --> B["load_settings() — ONCE"]
     B --> C["Arc<RwLock<AppSettings>>"]
     C --> D["AppState.settings"]
-    D --> E["DefaultGameService::with_storage(storage, settings)"]
-    E --> F["get_llm_backend_for(connection, storage, settings)"]
+    D --> E["GameService::with_storage(storage, preset_storage, settings)"]
+    E --> F["bootstrap::llm_factory::get_llm_recorder_for(connection, storage)"]
     E --> G["AgentRegistry::from_configs_with_storage(configs, storage, &settings)"]
     G --> H["QuantifierAgent::from_config_with_storage(config, storage, &settings)"]
 ```
@@ -266,7 +269,7 @@ World seeding, validation, and server initialization.
 - **`scenario`**: Starting scenario selection
 - **`logging`**: Structured logging setup
 - **`run`**: Server initialization and startup. Thin orchestrator that delegates to `init_game` for game state setup and arrival narration.
-- **`init_game`**: Game state initialization — `resolve_game_id()` (auto-creates a game for the requested world using the `--persona` CLI flag when none exists), `load_game_state()`, `spawn_arrival_task_if_needed()`. Includes `ArrivalTaskContext` for background arrival narration with stored `Connection` for correct LLM backend selection.
+- **`init_game`**: Game state initialization — `resolve_game_id()` (auto-creates a game for the requested world using the `--persona` CLI flag when none exists), `load_game_state()`, `spawn_arrival_task_if_needed()`. Includes `ArrivalTaskContext` for background arrival narration with stored `recorder: Arc<LlmCallRecorder>` for correct LLM provider selection.
 - **`state.rs`**: Fresh game state initialization (`build_fresh_initial_state`)
 
 ### 9. CLI Module (`crate::adapters::driving::cli`)

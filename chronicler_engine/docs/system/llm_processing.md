@@ -83,7 +83,7 @@ This matches SillyTavern's `last_output_sequence` preset for Gemma 4. It pre-fil
 - **OpenRouter / chat-template backends**: Suffix is NOT applied — the backend's native chat template handles turn structure
 - **Non-Gemma models**: Completely unaffected
 - **Validation**: Reduced completion tokens from 2048 (all reasoning) to ~211 (actual content) on `mradermacher/gemma-4-26b-a4b-it-abliterated:iq2xs`
-- **Safety net**: `narrative::llm::sanitize::sanitize_llm_output()` strips any leaked `<channel|>`, `<thought>`, or `<|channel>thought` artifacts from all responses regardless of model via `LlmBackend::postprocess_response_text`
+- **Safety net**: `narrative::llm::sanitize::sanitize_llm_output()` (at `src/adapters/driven/llm/sanitize.rs`) strips any leaked `<channel|>`, `<thought>`, or `<|channel>thought` artifacts from all responses regardless of model. Sanitization runs inside `LlmCallRecorder::complete()` as part of postprocessing.
 - **Ref**: [SillyTavern Reddit discussion](https://old.reddit.com/r/SillyTavernAI/comments/1sbjwke/)
 
 ### 9. LLM Call Logging & Forensics
@@ -93,9 +93,9 @@ Every LLM call is logged to a SQLite `llm_messages` table with a strict 50-row g
 #### Architecture
 
 - **`call_chat_completions()`** in `llm_client.rs` is the single chokepoint. It returns `ChatCompletionResult { text, system_prompt, user_prompt, raw_request_json, raw_response_json }`.
-- **`LlmBackend` trait** methods take `agent_name: &str` and return `LlmCallResult`, which wraps the `ChatCompletionResult` with `backend_name` and `model_name`.
-- **Quantifier path** logs via `LlmBackend::complete()`, which uses the trait's default `wrap_and_save()` method, routing through the same `llm_client.rs` chokepoint.
-- **LLM logging implementation**: `Storage::save_llm_message()` in `src/adapters/driven/storage/llm_messages.rs` handles persistence. No separate trait — direct implementation on `Storage` struct.
+- **`LlmProvider` trait** methods take `agent_name: &str` and return `LlmCallResult`, which wraps the `ChatCompletionResult` with `backend_name` and `model_name`. Trait is transport-only.
+- **Quantifier path** logs via `LlmCallRecorder::complete()` which delegates to `LlmProvider::complete()` (transport) then `LlmMessageRepository::save_llm_message()` (forensics). No `wrap_and_save` default impl — deleted in Phase 2.1.
+- **LLM logging implementation**: `LlmMessageRepository` port at `src/application/ports/llm_message_repository.rs`, implemented by `Storage` struct.
   - SQLite backend: INSERT + auto-prune to keep last 50 rows
   - InMemory backend: Ring buffer for tests
 - **Storage is optional**: Backends accept `Option<Arc<Storage>>`. When `None`, logging is silently skipped (useful for tests that don't care about forensics).
@@ -185,7 +185,8 @@ RUST_LOG=trace cargo test
 
 ## Implementation Standards
 
-- Use the `LlmBackend` trait for all implementations
+- Use the `LlmProvider` trait for transport implementations (OpenRouter, DeepSeek, Ollama, Mock)
 - Maintain a `MockBackend` for test environments
-- Use `LayeredPromptAssembler` for all prompt construction; `LlmBackend::complete()` for all LLM transport
+- Use `LlmCallRecorder` for orchestration (forensics + postprocessing)
+- Use `LayeredPromptAssembler` for all prompt construction; `LlmProvider::complete()` for transport; `LlmCallRecorder::complete()` for orchestration
 - Configure `max_context_tokens` per connection to match the model's actual context window

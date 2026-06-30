@@ -8,7 +8,7 @@ Establish a formal policy for ensuring the Chronicler Engine remains heavily tes
 
 1. **Isolated Unit Tests**: All modules maintain fully isolated unit tests `#[test]` with zero networking overhead. Unit tests live in separate `*_tests.rs` sibling files (not inline `#[cfg(test)]` blocks) to keep source files under the 2,000-line guardrail.
 2. **Integration Capabilities**: Cross-module and end-to-end tests live in the top-level `tests/` directory.
-3. **LLM Abstraction (The Trait Pattern)**: No component outside of `main.rs` should be hardcoded to contact an external LLM API. Use `MockBackend` (implements `LlmBackend`) for tests.
+3. **LLM Abstraction (The Trait Pattern)**: No component outside of `main.rs` should be hardcoded to contact an external LLM API. Use `MockBackend` (implements `LlmProvider`) for tests. The `make_test_recorder` helper at `tests/test_utils/mod.rs` wraps `MockBackend` in `LlmCallRecorder` for use with `with_backends`/`with_mock_quantifier`.
 
 ## Test File Organization
 
@@ -71,35 +71,28 @@ service.execute_action(ctx, "look around".to_string(), "Player".to_string());
 
 ### Pipeline-Only Mocking
 
-For tests that only need to verify pipeline behavior (narration → quantification → trigger continuation), implement the `ActionPipelineBackend` trait directly. This avoids constructing `DefaultGameService` and its full backend/registry graph. The narrow mock can then be used with the `execute_action_impl()` function from the action pipeline module:
+For tests that only need to verify pipeline behavior (narration → quantification → trigger continuation), use the `make_test_recorder` helper to construct `Arc<LlmCallRecorder>` with `MockBackend`, then pass to `GameService::with_backends` or `with_mock_quantifier`:
 
 ```rust
-use chronicler_engine::application::action_pipeline::{ActionPipelineBackend, execute_action_impl};
-use chronicler_engine::narrative::prompt::LayeredPromptAssembler;
+use chronicler_engine::application::llm_recorder::LlmCallRecorder;
+use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::application::context::GameServiceContext;
+use std::sync::Arc;
 
-struct NarrowMock;
+// For slow-timing tests, the delay must live in the AGENT (not backend)
+// since run_post_generation_agents is now inline in ActionPipeline.
+let mock_backend = MockBackend::default().with_narrations(vec!["test response".to_string()]);
+let recorder = Arc::new(LlmCallRecorder::new(
+    Arc::new(mock_backend),
+    Arc::new(mock_forensics), // or test impl of LlmMessageRepository
+));
 
-impl ActionPipelineBackend for NarrowMock {
-    fn assembler(&self) -> &LayeredPromptAssembler {
-        // Return a test assembler (e.g., a mock or LayeredPromptAssembler)
-        &TEST_ASSEMBLER
-    }
-
-    fn complete(&self, _agent: &str, _sys: &str, _usr: &str, _max: Option<u32>) -> Result<LlmCallResult, EngineError> {
-        Ok(LlmCallResult { /* ... */ })
-    }
-
-    fn run_post_generation_agents(&self, _state: &GameState, _input: &str, _response: &str, _result: &mut QuantifierResult) {
-        // Directly set quantifier result without running real agents
-    }
-}
-
-// Usage in test:
-let backend = NarrowMock;
+let service = GameService::with_backends(recorder, agent_registry);
 let ctx = GameServiceContext::new(/* ... */);
-execute_action_impl(&backend, ctx, "look".to_string());
+service.execute_action(ctx, "look".to_string());
 ```
+
+**Note:** The `ActionPipelineBackend` trait was deleted in Phase 2. The `ActionPipeline` struct is no longer generic — it holds direct fields (`prompt_assembler`, `llm_recorder`, `agent_registry`). The `run_post_generation_agents` method is now an inline phase method in `ActionPipeline`. See `tests/integration/pipeline/pipeline_tests.rs` for working examples.
 
 ### Config File (`tests/test_config.json`)
 

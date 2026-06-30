@@ -28,9 +28,11 @@ flowchart TD
 | File | Purpose |
 |------|---------|
 | `src/adapters/driven/text_check/mod.rs` | Module root — re-exports public API |
-| `src/adapters/driven/text_check/check.rs` | Facade: `check_player_input()` entry point |
-| `src/adapters/driven/text_check/harper_backend.rs` | `HarperBackend` — wraps harper-core linting |
+| `src/application/text_check_service.rs` | `TextCheckService` orchestrator — `check_player_input()` entry point |
+| `src/adapters/driven/text_check/harper_text_checker.rs` | `HarperTextChecker` adapter implementing `TextChecker` port |
+| `src/application/ports/text_checker.rs` | `TextChecker` port trait |
 | `src/adapters/driven/text_check/types.rs` | `CheckResult`, `CheckIssue`, `IssueKind` |
+| `src/bootstrap/text_check_factory.rs` | Factory wiring for text check service |
 
 ## Types
 
@@ -81,7 +83,7 @@ pub enum IssueKind {
 
 ## Dictionary Strategy
 
-The `HarperBackend` merges two dictionaries:
+The `HarperTextChecker` merges two dictionaries:
 
 1. **`FstDictionary::curated()`** — harper-core's built-in English dictionary (~130K words)
 2. **`MutableDictionary`** — user-provided ignored words from `TextCheckSettings.ignored_words`
@@ -144,13 +146,37 @@ A "Text Check" card appears in the Settings tab below Connections:
 ## Performance
 
 - Linting is synchronous and in-memory (no I/O).
-- `HarperBackend` is instantiated per-check (dictionary merge is cheap for small ignore lists).
+- `HarperTextChecker` is instantiated per-check (dictionary merge is cheap for small ignore lists).
 - Typical check latency: <10ms for a single sentence.
 
 ## Testing
 
  **Integration tests**: `tests/http/endpoints/text_check_tests.rs` — misspelling detection, clean text, disabled mode, ignored words
 - **Integration tests**: Preview endpoint returns fragment when issues exist; forwards when disabled
+
+## Architecture Components
+
+### `TextChecker` Port
+
+The `TextChecker` trait at `src/application/ports/text_checker.rs` defines the contract:
+
+```rust
+pub trait TextChecker {
+    fn check(&self, text: &str, mode: TextCheckMode) -> CheckResult;
+}
+```
+
+### `TextCheckService` Orchestrator
+
+The `TextCheckService` at `src/application/text_check_service.rs` owns the `TextChecker` adapter and exposes `check_player_input()` as its public API. Driving adapters (HTTP handlers) call through this service:
+
+```rust
+app.text_check_service.check_player_input(text, mode)
+```
+
+### Factory Wiring
+
+The `bootstrap/text_check_factory.rs` module constructs the `TextCheckService` from the `HarperTextChecker` adapter and settings. This is the composition root for text checking.
 
 ## Boundaries
 
