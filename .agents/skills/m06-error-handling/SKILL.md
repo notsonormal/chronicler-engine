@@ -1,7 +1,8 @@
 ---
 name: m06-error-handling
-description: "CRITICAL: Use for error handling. Triggers: Result, Option, Error, ?, unwrap, expect, panic, anyhow, thiserror, when to panic vs return Result, custom error, error propagation, 错误处理, Result 用法, 什么时候用 panic"
-user-invocable: false
+description: "Error handling design (Result Option ? panic anyhow thiserror unwrap expect). Layer 1 of the rust-router dispatch."
+disable-model-invocation: true
+user-invocable: true
 ---
 
 # Error Handling

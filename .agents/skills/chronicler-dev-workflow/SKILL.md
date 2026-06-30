@@ -17,23 +17,7 @@ I follow the workflow defined in `chronicler_engine/docs/README.md`:
 4. **Validate**: Run `cargo fmt`, `cargo clippy`, `cargo nextest run`.
 5. **Archive**: Move completed plan to `docs/plans/archived/`.
 
-## Documentation Sync
-
-When implementing changes, ALWAYS update these documents BEFORE writing code:
-
-1. **Plan** (`docs/plans/<name>.md`) - Document problem, solution, files to change
-2. **Architecture** (`docs/architecture/system.md`) - Core module structure changes
-3. **System docs** (`docs/system/*.md`) - Domain-specific docs (dashboard.md, game_flow.md, etc.)
-4. **Reference docs** (`docs/reference/*.md`) - Data schemas, API specs
-5. **ADRs** (`docs/adr/*.md`) - If making architectural decisions
-6. **CHANGELOG.md** - Record the change
-
-Example: If adding a new HTMX polling endpoint, update:
-- Plan document
-- architecture/system.md (Server tier)
-- system/dashboard.md (frontend section)
-- reference/testing.md (add test)
-- CHANGELOG.md
+_See `_shared/chronicler-shared.md` for documentation sync and visual verification steps._
 
 ## Reference
 
@@ -64,23 +48,7 @@ cargo nextest run --lib
 
 **All Tests Must Pass**: The build must complete, and every single test must pass for a feature to be considered finished. This is a solo developer project, failing tests and bugs must be fixed before we can move onto the next feature. Flaky tests are never acceptable. Failing tests must be fixed, regardless of how unrelated they might seem to the feature in development.
 
-## Visual/UI Verification (MANDATORY)
-
-For any CSS, layout, or visual changes:
-
-1. **Rebuild** the project after CSS changes
-2. **Restart** the server with the new build
-3. **Navigate** to the affected page in the browser
-4. **Take a screenshot** and **actually look at it** -- do not skip this step
-5. **Confirm visually** that the change renders correctly before claiming done
-
-**NEVER claim "verified" or "browser verification complete" without a screenshot that you have personally reviewed.** Subagent verification does not count — you must see the rendered result yourself.
-
-Common CSS pitfalls that pass build but break visually:
-- `flex: 1` on containers causing unwanted expansion
-- `align-items: center` centering content in unexpectedly large spaces
-- Missing `overflow` properties causing content to spill or disappear
-- Z-index conflicts hiding elements behind others 
+_See `_shared/chronicler-shared.md` for documentation sync and visual verification steps._
 
 ## When to use me
 

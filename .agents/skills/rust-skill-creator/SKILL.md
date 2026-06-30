@@ -1,6 +1,6 @@
 ---
 name: rust-skill-creator
-description: "Use when creating skills for Rust crates or std library documentation. Keywords: create rust skill, create crate skill, create std skill, 创建 rust skill, 创建 crate skill, 创建 std skill, 动态 rust skill, 动态 crate skill, skill for tokio, skill for serde, skill for axum, generate rust skill, rust 技能, crate 技能, 从文档创建skill, from docs create skill"
+description: "Use when creating skills for Rust crates or std library documentation. Keywords: create rust skill, create crate skill, create std skill, skill for tokio, skill for serde, skill for axum, generate rust skill, from docs create skill."
 argument-hint: "<crate_name|std::module>"
 context: fork
 agent: general-purpose
@@ -19,64 +19,11 @@ This skill handles requests to create skills for:
 - Rust standard library (std::sync, std::marker, etc.)
 - Any Rust documentation URL
 
-## Execution Mode Detection
-
-**CRITICAL: Check if related commands/skills are available.**
-
-This skill relies on:
-- `/create-llms-for-skills` command
-- `/create-skills-via-llms` command
+_See `_shared/execution-mode-detection.md` for mode detection protocol._
 
 ---
 
-## Agent Mode (Plugin Install)
-
-**When the commands above are available (full plugin installation):**
-
-### Workflow
-
-#### 1. Identify the Target
-
-| User Request | Target Type | URL Pattern |
-|--------------|-------------|-------------|
-| "create tokio skill" | Third-party crate | `docs.rs/tokio/latest/tokio/` |
-| "create Send trait skill" | Std library | `doc.rust-lang.org/std/marker/trait.Send.html` |
-| "create skill from URL" + URL | Custom URL | User-provided URL |
-
-#### 2. Execute the Command
-
-Use the `/create-llms-for-skills` command:
-
-```
-/create-llms-for-skills <url> [requirements]
-```
-
-**Examples:**
-
-```bash
-# For third-party crate
-/create-llms-for-skills https://docs.rs/tokio/latest/tokio/
-
-# For std library
-/create-llms-for-skills https://doc.rust-lang.org/std/marker/trait.Send.html
-
-# With specific requirements
-/create-llms-for-skills https://docs.rs/axum/latest/axum/ "Focus on routing and extractors"
-```
-
-#### 3. Follow-up with Skill Creation
-
-After llms.txt is generated, use:
-
-```
-/create-skills-via-llms <crate_name> <llms_path> [version]
-```
-
----
-
-## Inline Mode (Skills-only Install)
-
-**When the commands above are NOT available, create skills manually:**
+_Inline Mode workflow: see `_shared/execution-mode-detection.md`._
 
 ### Step 1: Identify Target and Construct URL
 
@@ -116,7 +63,7 @@ Create `~/.claude/skills/{crate_name}/SKILL.md` with this template:
 ```markdown
 ---
 name: {crate_name}
-description: "Documentation for {crate_name} crate. Keywords: {keywords}"
+description: "Use when creating skills for Rust crates or std library documentation. Keywords: create rust skill, create crate skill, create std skill, skill for tokio, skill for serde, skill for axum, generate rust skill, from docs create skill."
 ---
 
 # {Crate Name}

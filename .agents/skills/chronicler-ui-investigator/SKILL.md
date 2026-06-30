@@ -20,7 +20,7 @@ Provides browser automation to:
 
 ## Prerequisites
 
-- `/playwright` skill loaded
+- Requires a browser automation MCP (e.g. chrome-devtools) configured in the host.
 - Chronicler Engine project at `chronicler_engine/`
 
 ## Usage Patterns

@@ -1,7 +1,8 @@
 ---
 name: m03-mutability
-description: "CRITICAL: Use for mutability issues. Triggers: E0596, E0499, E0502, cannot borrow as mutable, already borrowed as immutable, mut, &mut, interior mutability, Cell, RefCell, Mutex, RwLock, 可变性, 内部可变性, 借用冲突"
-user-invocable: false
+description: "Mutability and borrow conflicts (E0596 E0499 E0502 interior mutability Cell RefCell Mutex RwLock). Layer 1 of the rust-router dispatch."
+disable-model-invocation: true
+user-invocable: true
 ---
 
 # Mutability

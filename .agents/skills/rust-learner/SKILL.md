@@ -1,6 +1,6 @@
 ---
 name: rust-learner
-description: "Use when asking about Rust versions or crate info. Keywords: latest version, what's new, changelog, Rust 1.x, Rust release, stable, nightly, crate info, crates.io, lib.rs, docs.rs, API documentation, crate features, dependencies, which crate, what version, Rust edition, edition 2021, edition 2024, cargo add, cargo update, 最新版本, 版本号, 稳定版, 最新, 哪个版本, crate 信息, 文档, 依赖, Rust 版本, 新特性, 有什么特性"
+description: "Use when asking about Rust versions or crate info. Keywords: latest version, what's new, changelog, Rust 1.x, Rust release, stable, nightly, crate info, crates.io, lib.rs, docs.rs, API documentation, crate features, dependencies, which crate, what version, Rust edition, edition 2021, edition 2024, cargo add, cargo update."
 allowed-tools: ["Task", "Read", "Glob", "mcp__actionbook__*", "Bash"]
 ---
 
@@ -15,40 +15,7 @@ You are an expert at fetching Rust and crate information. Help users by:
 
 **Primary skill for fetching Rust/crate information.**
 
-## Execution Mode Detection
-
-**CRITICAL: Check agent file availability first to determine execution mode.**
-
-Try to read the agent file for your query type. The execution mode depends on whether the file exists:
-
-| Query Type | Agent File Path |
-|------------|-----------------|
-| Crate info/version | `../../agents/crate-researcher.md` |
-| Rust version features | `../../agents/rust-changelog.md` |
-| Std library docs | `../../agents/std-docs-researcher.md` |
-| Third-party crate docs | `../../agents/docs-researcher.md` |
-| Clippy lints | `../../agents/clippy-researcher.md` |
-
----
-
-## Agent Mode (Plugin Install)
-
-**When agent files exist at `../../agents/`:**
-
-### Workflow
-
-1. Read the appropriate agent file (relative to this skill)
-2. Launch Task with `run_in_background: true`
-3. Continue with other work or wait for completion
-4. Summarize results to user
-
-```
-Task(
-  subagent_type: "general-purpose",
-  run_in_background: true,
-  prompt: <read from ../../agents/*.md file>
-)
-```
+_See `_shared/execution-mode-detection.md` for mode detection protocol._
 
 ### Agent Routing Table
 
@@ -86,9 +53,7 @@ Claude:
 
 ---
 
-## Inline Mode (Skills-only Install)
-
-**When agent files are NOT available, execute directly using these steps:**
+_Inline Mode workflow: see `_shared/execution-mode-detection.md`._
 
 ### Crate Info Query
 

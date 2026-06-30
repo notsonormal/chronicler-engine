@@ -1,7 +1,8 @@
 ---
 name: m07-concurrency
-description: "CRITICAL: Use for concurrency/async. Triggers: E0277 Send Sync, cannot be sent between threads, thread, spawn, channel, mpsc, Mutex, RwLock, Atomic, async, await, Future, tokio, deadlock, race condition, 并发, 线程, 异步, 死锁"
-user-invocable: false
+description: "Concurrency and async (E0277 Send Sync thread spawn channel Mutex RwLock Atomic async await Future tokio). Layer 1 of the rust-router dispatch."
+disable-model-invocation: true
+user-invocable: true
 ---
 
 # Concurrency

@@ -24,83 +24,11 @@ Check and fix missing reference files in dynamic skills.
 - `--check-only`: Only report issues, don't fix
 - `--remove-invalid`: Remove invalid references instead of creating files
 
-## Execution Mode Detection
-
-**CRITICAL: Check if agent infrastructure is available.**
-
-This skill can run in two modes:
-
-- **Agent Mode**: Uses background agents for documentation fetching
-- **Inline Mode**: Executes directly using agent-browser CLI or WebFetch
+_See `_shared/execution-mode-detection.md` for mode detection protocol._
 
 ---
 
-## Agent Mode (Plugin Install)
-
-**When agent infrastructure is available, use background agents for fetching:**
-
-### Instructions
-
-#### 1. Scan Skills Directory
-
-```bash
-# If crate_name provided
-skill_dir=~/.claude/skills/{crate_name}
-
-# Otherwise scan all
-for dir in ~/.claude/skills/*/; do
-    # Process each skill
-done
-```
-
-#### 2. Parse SKILL.md for References
-
-Extract referenced files from Documentation section:
-
-```markdown
-## Documentation
-- `./references/file1.md` - Description
-```
-
-#### 3. Check File Existence
-
-```bash
-if [ ! -f "{skill_dir}/references/{filename}" ]; then
-    echo "MISSING: {filename}"
-fi
-```
-
-#### 4. Report Status
-
-```
-=== {crate_name} ===
-SKILL.md: OK
-references/:
-  - sync.md: OK
-  - runtime.md: MISSING
-
-Action needed: 1 file missing
-```
-
-#### 5. Fix Missing Files (Agent Mode)
-
-Launch background agent to fetch documentation:
-
-```
-Task(
-  subagent_type: "general-purpose",
-  run_in_background: true,
-  prompt: "Fetch documentation for {crate_name}/{module} from docs.rs.
-           Use agent-browser CLI to navigate to https://docs.rs/{crate_name}/latest/{crate_name}/{module}/
-           Extract the main documentation and save to ~/.claude/skills/{crate_name}/references/{module}.md"
-)
-```
-
----
-
-## Inline Mode (Skills-only Install)
-
-**When agent infrastructure is NOT available, execute directly:**
+_Inline Mode workflow: see `_shared/execution-mode-detection.md`._
 
 ### Step 1: Scan Skills Directory
 

@@ -1,6 +1,8 @@
 ---
 name: core-actionbook
-description: "Internal tool - no auto-trigger. Used by rust-learner agents for pre-computed selectors."
+description: "Internal tool — pre-computed selectors used by rust-learner. Not auto-triggered; invoke explicitly."
+disable-model-invocation: true
+user-invocable: true
 ---
 
 # Actionbook

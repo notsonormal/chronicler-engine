@@ -1,6 +1,6 @@
 ---
 name: rust-router
-description: "CRITICAL: Use for ALL Rust questions including errors, design, and coding. HIGHEST PRIORITY for: 比较, 对比, compare, vs, versus, 区别, difference, 最佳实践, best practice, tokio vs, async-std vs, 比较 tokio, 比较 async, Triggers on: Rust, cargo, rustc, crate, Cargo.toml, 意图分析, 问题分析, 语义分析, analyze intent, question analysis, compile error, borrow error, lifetime error, ownership error, type error, trait error, value moved, cannot borrow, does not live long enough, mismatched types, not satisfied, E0382, E0597, E0277, E0308, E0499, E0502, E0596, async, await, Send, Sync, tokio, concurrency, error handling, 编译错误, compile error, 所有权, ownership, 借用, borrow, 生命周期, lifetime, 类型错误, type error, 异步, async, 并发, concurrency, 错误处理, error handling, 问题, problem, question, 怎么用, how to use, 如何, how to, 为什么, why, 什么是, what is, 帮我写, help me write, 实现, implement, 解释, explain"
+description: "Router for all Rust questions — error codes drive Layer 1 (m01-m07) dispatch, design questions Layer 2 (m09-m15), domain questions Layer 3."
 globs: ["**/Cargo.toml", "**/*.rs"]
 ---
 
@@ -57,61 +57,6 @@ Layer 1: Language Mechanics (HOW)
 | CLI, terminal, clap | m07-concurrency | **domain-cli** |
 | kubernetes, grpc, microservice | m07-concurrency | **domain-cloud-native** |
 | embedded, no_std, MCU | m02-resource | **domain-embedded** |
-
----
-
-## INSTRUCTIONS FOR CLAUDE
-
-### CRITICAL: Negotiation Protocol Trigger
-
-**BEFORE answering, check if negotiation is required:**
-
-| Query Contains | Action |
-|----------------|--------|
-| "比较", "对比", "compare", "vs", "versus" | **MUST use negotiation** |
-| "最佳实践", "best practice" | **MUST use negotiation** |
-| Domain + error (e.g., "交易系统 E0382") | **MUST use negotiation** |
-| Ambiguous scope (e.g., "tokio 性能") | **SHOULD use negotiation** |
-
-**When negotiation is required, include:**
-
-```markdown
-## Negotiation Analysis
-
-**Query Type:** [Comparative | Cross-domain | Synthesis | Ambiguous]
-**Negotiation:** Enabled
-
-### Source: [Agent/Skill Name]
-**Confidence:** HIGH | MEDIUM | LOW | UNCERTAIN
-**Gaps:** [What's missing]
-
-## Synthesized Answer
-[Answer]
-
-**Overall Confidence:** [Level]
-**Disclosed Gaps:** [Gaps user should know]
-```
-
-> **详细协议见:** `patterns/negotiation.md`
-
----
-
-### Default Project Settings
-
-When creating new Rust projects or Cargo.toml files, ALWAYS use:
-
-```toml
-[package]
-edition = "2024"  # ALWAYS use latest stable edition
-rust-version = "1.85"
-
-[lints.rust]
-unsafe_code = "warn"
-
-[lints.clippy]
-all = "warn"
-pedantic = "warn"
-```
 
 ---
 

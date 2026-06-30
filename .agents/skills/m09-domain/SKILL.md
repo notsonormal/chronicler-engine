@@ -1,7 +1,8 @@
 ---
 name: m09-domain
-description: "CRITICAL: Use for domain modeling. Triggers: domain model, DDD, domain-driven design, entity, value object, aggregate, repository pattern, business rules, validation, invariant, 领域模型, 领域驱动设计, 业务规则"
-user-invocable: false
+description: "Domain modeling and DDD (entity value object aggregate repository invariant). Layer 2 of the rust-router dispatch."
+disable-model-invocation: true
+user-invocable: true
 ---
 
 # Domain Modeling

@@ -1,7 +1,8 @@
 ---
 name: m01-ownership
-description: "CRITICAL: Use for ownership/borrow/lifetime issues. Triggers: E0382, E0597, E0506, E0507, E0515, E0716, E0106, value moved, borrowed value does not live long enough, cannot move out of, use of moved value, ownership, borrow, lifetime, 'a, 'static, move, clone, Copy, 所有权, 借用, 生命周期"
-user-invocable: false
+description: "Ownership, borrow, and lifetime errors (E0382 E0597 E0506 E0507 E0515 E0716 E0106). Layer 1 of the rust-router dispatch."
+disable-model-invocation: true
+user-invocable: true
 ---
 
 # Ownership & Lifetimes

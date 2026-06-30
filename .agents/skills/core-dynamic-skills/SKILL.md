@@ -40,57 +40,11 @@ When entering a directory with Cargo.toml:
 - `/clean-crate-skills [crate]` - Remove skills
 - `/update-crate-skill <crate>` - Update specific skill
 
-## Execution Mode Detection
-
-**CRITICAL: Check if agent and command infrastructure is available.**
-
-Try to read: `../../agents/` directory
-Check if `/create-llms-for-skills` and `/create-skills-via-llms` commands work.
+_See `_shared/execution-mode-detection.md` for mode detection protocol._
 
 ---
 
-## Agent Mode (Plugin Install)
-
-**When full plugin infrastructure is available:**
-
-### Architecture
-
-```
-Cargo.toml
-    ↓
-Parse dependencies
-    ↓
-For each crate:
-  ├─ Check ~/.claude/skills/{crate}/
-  ├─ If missing: Check actionbook for llms.txt
-  │     ├─ Found: /create-skills-via-llms
-  │     └─ Not found: /create-llms-for-skills first
-  └─ Load skill
-```
-
-### Workflow Priority
-
-1. **actionbook MCP** - Check for pre-generated llms.txt
-2. **/create-llms-for-skills** - Generate llms.txt from docs.rs
-3. **/create-skills-via-llms** - Create skills from llms.txt
-
-### Sync Command
-
-```bash
-/sync-crate-skills [--force]
-```
-
-1. Parse Cargo.toml for dependencies
-2. For each dependency:
-   - Check if skill exists at `~/.claude/skills/{crate}/`
-   - If missing (or --force): generate skill
-3. Report results
-
----
-
-## Inline Mode (Skills-only Install)
-
-**When agent/command infrastructure is NOT available, execute manually:**
+_Inline Mode workflow: see `_shared/execution-mode-detection.md`._
 
 ### Step 1: Parse Cargo.toml
 

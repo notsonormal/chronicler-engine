@@ -1,9 +1,6 @@
 ---
 name: rust-daily
-description: |
-  CRITICAL: Use for Rust news and daily/weekly/monthly reports. Triggers on:
-  rust news, rust daily, rust weekly, TWIR, rust blog,
-  Rust 日报, Rust 周报, Rust 新闻, Rust 动态
+description: "Rust news and daily/weekly/monthly reports. Triggers on: rust news, rust daily, rust weekly, TWIR, rust blog."
 argument-hint: "[today|week|month]"
 context: fork
 agent: Explore
@@ -28,32 +25,11 @@ Fetch Rust community updates, filtered by time range.
 - `time_range`: day | week | month (default: week)
 - `category`: all | ecosystem | official | foundation
 
-## Execution Mode Detection
-
-**CRITICAL: Check agent file availability first to determine execution mode.**
-
-Try to read: `../../agents/rust-daily-reporter.md`
+_See `_shared/execution-mode-detection.md` for mode detection protocol._
 
 ---
 
-## Agent Mode (Plugin Install)
-
-**When `../../agents/rust-daily-reporter.md` exists:**
-
-### Workflow
-
-```
-1. Read: ../../agents/rust-daily-reporter.md
-2. Task(subagent_type: "general-purpose", run_in_background: false, prompt: <agent content>)
-3. Wait for result
-4. Format and present to user
-```
-
----
-
-## Inline Mode (Skills-only Install)
-
-**When agent file is NOT available, execute each source directly:**
+_Inline Mode workflow: see `_shared/execution-mode-detection.md`._
 
 ### 1. Reddit r/rust
 

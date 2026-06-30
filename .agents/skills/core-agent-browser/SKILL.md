@@ -1,6 +1,8 @@
 ---
 name: core-agent-browser
-description: "Internal tool - no auto-trigger. Used by rust-learner, docs-researcher, crate-researcher agents."
+description: "Internal tool — browser automation for rust-learner, docs-researcher, crate-researcher. Not auto-triggered; invoke explicitly."
+disable-model-invocation: true
+user-invocable: true
 ---
 
 # Browser Automation with agent-browser

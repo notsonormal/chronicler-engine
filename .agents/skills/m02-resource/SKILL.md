@@ -1,7 +1,8 @@
 ---
 name: m02-resource
-description: "CRITICAL: Use for smart pointers and resource management. Triggers: Box, Rc, Arc, Weak, RefCell, Cell, smart pointer, heap allocation, reference counting, RAII, Drop, should I use Box or Rc, when to use Arc vs Rc, 智能指针, 引用计数, 堆分配"
-user-invocable: false
+description: "Smart pointers and resource management (Box Rc Arc Weak RefCell Cell RAII Drop). Layer 1 of the rust-router dispatch."
+disable-model-invocation: true
+user-invocable: true
 ---
 
 # Resource Management

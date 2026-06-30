@@ -1,7 +1,8 @@
 ---
 name: m10-performance
-description: "CRITICAL: Use for performance optimization. Triggers: performance, optimization, benchmark, profiling, flamegraph, criterion, slow, fast, allocation, cache, SIMD, make it faster, 性能优化, 基准测试"
-user-invocable: false
+description: "Performance optimization (benchmark profiling flamegraph criterion allocation cache SIMD). Layer 2 of the rust-router dispatch."
+disable-model-invocation: true
+user-invocable: true
 ---
 
 # Performance Optimization

@@ -1,7 +1,8 @@
 ---
 name: m05-type-driven
-description: "CRITICAL: Use for type-driven design. Triggers: type state, PhantomData, newtype, marker trait, builder pattern, make invalid states unrepresentable, compile-time validation, sealed trait, ZST, 类型状态, 新类型模式, 类型驱动设计"
-user-invocable: false
+description: "Type-driven design (type state PhantomData newtype marker trait sealed trait ZST). Layer 2 of the rust-router dispatch."
+disable-model-invocation: true
+user-invocable: true
 ---
 
 # Type-Driven Design

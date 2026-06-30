@@ -82,4 +82,4 @@ Severity levels:
 
 # Stay Focused On Fixing Comments
 
-Do build or run tests. 
+Do NOT build or run tests. 
