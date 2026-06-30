@@ -3,23 +3,19 @@
 
 use std::sync::{Arc, RwLock};
 
-use crate::application::action_pipeline::ActionPipelineBackend;
 use crate::application::context::GameServiceContext;
 use crate::error::EngineError;
-use crate::domain::model::agent::{AgentContext, AgentResult, ExecutionPhase, StatePatch};
 use crate::domain::model::settings::AppSettings;
-use crate::domain::model::state::game_state::GameState;
 use crate::application::agents::quantifier::QuantifierAgent;
 use crate::application::agents::registry::AgentRegistry;
-use crate::application::ports::llm_provider::LlmCallResult;
 use crate::application::narrative_prompt::LayeredPromptAssembler;
 use crate::application::llm_recorder::LlmCallRecorder;
 use crate::adapters::driven::storage::Storage;
 
 pub struct GameService {
-    pub(crate) llm_recorder: Arc<LlmCallRecorder>,
-    pub(crate) prompt_assembler: Arc<LayeredPromptAssembler>,
-    pub(crate) agent_registry: AgentRegistry,
+    pub llm_recorder: Arc<LlmCallRecorder>,
+    pub prompt_assembler: Arc<LayeredPromptAssembler>,
+    pub agent_registry: Arc<AgentRegistry>,
 }
 
 impl GameService {
@@ -74,7 +70,7 @@ impl GameService {
         Self {
             llm_recorder,
             prompt_assembler: Arc::new(assembler),
-            agent_registry: registry,
+            agent_registry: Arc::new(registry),
         }
     }
 
@@ -87,7 +83,7 @@ impl GameService {
             prompt_assembler: Arc::new(LayeredPromptAssembler::new(
                 crate::application::narrative_prompt::budget::MAX_CONTEXT_TOKENS,
             )),
-            agent_registry,
+            agent_registry: Arc::new(agent_registry),
         }
     }
 
@@ -105,7 +101,7 @@ impl GameService {
             prompt_assembler: Arc::new(LayeredPromptAssembler::new(
                 crate::application::narrative_prompt::budget::MAX_CONTEXT_TOKENS,
             )),
-            agent_registry: registry,
+            agent_registry: Arc::new(registry),
         }
     }
 
@@ -128,61 +124,5 @@ impl GameService {
 impl Default for GameService {
     fn default() -> Self {
         GameService::new()
-    }
-}
-
-impl ActionPipelineBackend for GameService {
-    fn assembler(&self) -> &LayeredPromptAssembler {
-        &self.prompt_assembler
-    }
-
-    fn complete(
-        &self,
-        agent_name: &str,
-        system_prompt: &str,
-        user_prompt: &str,
-        max_tokens: Option<u32>,
-    ) -> Result<LlmCallResult, EngineError> {
-        self.llm_recorder
-            .complete(agent_name, system_prompt, user_prompt, max_tokens)
-    }
-
-    fn run_post_generation_agents(
-        &self,
-        state: &GameState,
-        player_input: &str,
-        main_response: &str,
-        result: &mut crate::domain::model::quantifier::QuantifierResult,
-    ) {
-        let agent_ctx = AgentContext {
-            state,
-            main_response: Some(main_response),
-            player_input,
-            current_room: state.current_room(),
-        };
-
-        let patches: Vec<_> = self
-            .agent_registry
-            .agents_for_phase(ExecutionPhase::PostGeneration)
-            .filter_map(|agent| match agent.execute(&agent_ctx) {
-                Ok(AgentResult::StatePatch(patch)) => Some(patch),
-                Ok(AgentResult::NoOp) | Ok(AgentResult::PromptDirective(_)) => None,
-                Err(e) => {
-                    tracing::warn!("Agent {} failed: {e}", agent.name());
-                    None
-                }
-            })
-            .collect();
-
-        if let Some(first_patch) = patches.into_iter().reduce(StatePatch::merge) {
-            let StatePatch {
-                npc_ids,
-                movement_destination,
-                confidence,
-            } = first_patch;
-            result.npcs.npc_ids = npc_ids;
-            result.movement.destination = movement_destination;
-            result.npcs.confidence = confidence.into();
-        }
     }
 }

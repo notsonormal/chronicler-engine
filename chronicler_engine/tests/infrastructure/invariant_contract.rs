@@ -184,11 +184,16 @@ fn test_inv004_cancellable_at_boundaries() {
     let mock_backend = make_test_recorder(mock_backend_raw.clone());
     let backend = GameService::with_backends(mock_backend.clone(), AgentRegistry::default());
 
-    let pipeline = ActionPipeline::new(&backend, &ctx);
+    let pipeline = ActionPipeline::new(
+        Arc::clone(&backend.prompt_assembler),
+        Arc::clone(&backend.llm_recorder),
+        Arc::clone(&backend.agent_registry),
+    );
     let state_for_thread = latest_state(&ctx);
 
     let outcome = std::thread::scope(|s| {
-        let handle = s.spawn(|| pipeline.run_from_input(state_for_thread, "look".to_string()));
+        let handle =
+            s.spawn(|| pipeline.run_from_input(&ctx, state_for_thread, "look".to_string()));
         assert!(
             pipeline_helpers::wait_for_condition(
                 std::time::Duration::from_secs(5),

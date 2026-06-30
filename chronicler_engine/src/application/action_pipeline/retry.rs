@@ -1,18 +1,18 @@
 //! [DOC: docs/system/game_flow.md]
 //! Retry logic for action pipeline operations
 
+use std::sync::Arc;
+
 use tracing::instrument;
-use crate::application::action_pipeline::pipeline::{
-    ActionOutcome, ActionPipeline, ActionPipelineBackend,
-};
+use crate::application::action_pipeline::pipeline::{ActionOutcome, ActionPipeline};
 use crate::application::context::{GameServiceContext, load_or_fresh, save_state};
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageType;
-use std::sync::Arc;
+use crate::application::game_service::GameService;
 
-#[instrument(skip(backend, ctx))]
-pub fn retry_last_response_impl<B: ActionPipelineBackend>(backend: &B, ctx: GameServiceContext) {
+#[instrument(skip(service, ctx))]
+pub fn retry_last_response_impl(service: &GameService, ctx: GameServiceContext) {
     let messages = match ctx.load_messages() {
         Ok(msgs) => msgs,
         Err(e) => {
@@ -86,9 +86,9 @@ pub fn retry_last_response_impl<B: ActionPipelineBackend>(backend: &B, ctx: Game
     };
 
     let outcome = if is_event {
-        retry_event_continuation(backend, &ctx, state)
+        retry_event_continuation(service, &ctx, state)
     } else {
-        retry_main_narration(backend, &ctx, state, input_text)
+        retry_main_narration(service, &ctx, state, input_text)
     };
 
     if let ActionOutcome::Cancelled = outcome {
@@ -107,8 +107,8 @@ pub(crate) fn save_retry_error(ctx: &GameServiceContext, message: impl Into<Stri
     }
 }
 
-pub(crate) fn retry_event_continuation<B: ActionPipelineBackend>(
-    backend: &B,
+pub(crate) fn retry_event_continuation(
+    service: &GameService,
     ctx: &GameServiceContext,
     state: GameState,
 ) -> ActionOutcome {
@@ -121,11 +121,15 @@ pub(crate) fn retry_event_continuation<B: ActionPipelineBackend>(
         Some((_sender, text)) => text,
         None => String::new(),
     };
-    let pipeline = ActionPipeline::new(backend, ctx);
-    let mut state = match pipeline.phase_trigger_continuation(state, &trigger) {
+    let pipeline = ActionPipeline::new(
+        Arc::clone(&service.prompt_assembler),
+        Arc::clone(&service.llm_recorder),
+        Arc::clone(&service.agent_registry),
+    );
+    let mut state = match pipeline.phase_trigger_continuation(state, &trigger, ctx) {
         Ok((s, continuation_text)) => {
             if !continuation_text.is_empty() {
-                pipeline.reconcile_post_trigger_npcs(s, &input_text, &continuation_text)
+                pipeline.reconcile_post_trigger_npcs(s, &input_text, &continuation_text, ctx)
             } else {
                 s
             }
@@ -135,24 +139,28 @@ pub(crate) fn retry_event_continuation<B: ActionPipelineBackend>(
     if let Some(target) = state.narrative.retry_target.take() {
         state.narrative.history.append(target);
     }
-    pipeline.phase_finalize(&mut state);
+    pipeline.phase_finalize(&mut state, ctx);
     ActionOutcome::Completed
 }
 
-pub(crate) fn retry_main_narration<B: ActionPipelineBackend>(
-    backend: &B,
+pub(crate) fn retry_main_narration(
+    service: &GameService,
     ctx: &GameServiceContext,
     state: GameState,
     input_text: String,
 ) -> ActionOutcome {
-    let pipeline = ActionPipeline::new(backend, ctx);
-    ActionOutcome::from_pipeline_result(pipeline.run_from_input(state, input_text))
+    let pipeline = ActionPipeline::new(
+        Arc::clone(&service.prompt_assembler),
+        Arc::clone(&service.llm_recorder),
+        Arc::clone(&service.agent_registry),
+    );
+    ActionOutcome::from_pipeline_result(pipeline.run_from_input(ctx, state, input_text))
 }
 
-#[instrument(skip(backend, ctx))]
-pub fn retrigger_event_impl<B: ActionPipelineBackend>(backend: &B, ctx: &GameServiceContext) {
+#[instrument(skip(service, ctx))]
+pub fn retrigger_event_impl(service: &GameService, ctx: &GameServiceContext) {
     let state = load_or_fresh(ctx);
-    let outcome = retry_event_continuation(backend, ctx, state);
+    let outcome = retry_event_continuation(service, ctx, state);
     if let ActionOutcome::Cancelled = outcome {
         let mut state = load_or_fresh(ctx);
         state.narrative.input_buffer.status = GenerationStatus::Idle;

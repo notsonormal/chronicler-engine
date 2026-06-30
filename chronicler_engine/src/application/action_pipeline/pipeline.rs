@@ -5,38 +5,22 @@ use std::sync::Arc;
 
 use crate::application::action_pipeline::phases::PipelineInputs;
 use crate::application::context::{GameServiceContext, load_or_fresh, save_message_and_snapshot};
-use crate::error::EngineError;
+
 use crate::domain::model::character::NpcCard;
 use crate::domain::model::quantifier::QuantifierResult;
 use crate::domain::model::state::trigger_context::StoredTriggerContext;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
-use crate::application::ports::llm_provider::LlmCallResult;
+
 use crate::application::narrative_prompt::LayeredPromptAssembler;
+use crate::application::llm_recorder::LlmCallRecorder;
+use crate::application::agents::registry::AgentRegistry;
+use crate::domain::model::agent::{AgentContext, AgentResult, ExecutionPhase, StatePatch};
 
-pub trait ActionPipelineBackend: Send + Sync {
-    fn assembler(&self) -> &LayeredPromptAssembler;
-
-    fn complete(
-        &self,
-        agent_name: &str,
-        system_prompt: &str,
-        user_prompt: &str,
-        max_tokens: Option<u32>,
-    ) -> Result<LlmCallResult, EngineError>;
-
-    fn run_post_generation_agents(
-        &self,
-        state: &GameState,
-        player_input: &str,
-        main_response: &str,
-        result: &mut QuantifierResult,
-    );
-}
-
-pub struct ActionPipeline<'a, B: ActionPipelineBackend> {
-    pub(super) service: &'a B,
-    pub(super) ctx: &'a GameServiceContext,
+pub struct ActionPipeline {
+    pub(super) assembler: Arc<LayeredPromptAssembler>,
+    pub(super) recorder: Arc<LlmCallRecorder>,
+    pub(super) agents: Arc<AgentRegistry>,
 }
 
 #[derive(Debug)]
@@ -47,12 +31,25 @@ pub enum ActionOutcome {
 
 pub(super) type PipelineResult<T> = Result<T, ActionOutcome>;
 
-impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
-    pub fn new(service: &'a B, ctx: &'a GameServiceContext) -> Self {
-        Self { service, ctx }
+impl ActionPipeline {
+    pub fn new(
+        assembler: Arc<LayeredPromptAssembler>,
+        recorder: Arc<LlmCallRecorder>,
+        agents: Arc<AgentRegistry>,
+    ) -> Self {
+        Self {
+            assembler,
+            recorder,
+            agents,
+        }
     }
 
-    pub fn run_from_input(&self, mut state: GameState, input: String) -> PipelineResult<()> {
+    pub fn run_from_input(
+        &self,
+        ctx: &GameServiceContext,
+        mut state: GameState,
+        input: String,
+    ) -> PipelineResult<()> {
         tracing::debug!("run_from_input: called");
         let world = Arc::clone(&state.world);
         let map = Arc::clone(&state.map);
@@ -67,10 +64,10 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
             all_npcs,
         };
 
-        state = self.phase_pre_main_snapshot(state)?;
+        state = self.phase_pre_main_snapshot(state, ctx)?;
 
         let (mut state, narration_text, backend_name, model_name) =
-            self.map_cancelled(self.phase_narrate(state, &inputs))?;
+            self.map_cancelled(self.phase_narrate(state, &inputs, ctx), ctx)?;
 
         if state
             .narrative
@@ -79,14 +76,15 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
             .error_message()
             .is_some()
         {
-            self.phase_finalize(&mut state);
+            self.phase_finalize(&mut state, ctx);
             return Ok(());
         }
         state.narrative.last_backend_name = Some(backend_name);
         state.narrative.last_model_name = Some(model_name);
 
-        let quantifier_result = self.phase_post_generation(&mut state, &input, &narration_text);
-        if let Err(e) = save_message_and_snapshot(self.ctx, &mut state) {
+        let quantifier_result =
+            self.phase_post_generation(ctx, &mut state, &input, &narration_text);
+        if let Err(e) = save_message_and_snapshot(ctx, &mut state) {
             tracing::warn!("Failed to save post-quantifier metadata: {e}");
         }
 
@@ -96,7 +94,7 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
                 Err(e) => {
                     state.narrative.input_buffer.status =
                         GenerationStatus::Error(format!("Error: {e}"));
-                    self.phase_finalize(&mut state);
+                    self.phase_finalize(&mut state, ctx);
                     return Ok(());
                 }
             };
@@ -106,15 +104,21 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
             .trigger_match
             .as_ref()
             .and_then(|trigger_match| {
-                self.build_trigger_request(&next_state, &narration_text, &inputs, trigger_match)
+                self.build_trigger_request(
+                    &next_state,
+                    &narration_text,
+                    &inputs,
+                    trigger_match,
+                    ctx,
+                )
             });
 
         if let Some(trigger) = &trigger_request {
             next_state.narrative.last_trigger = Some(trigger.clone());
         }
 
-        if self.persist_snapshot_failed(&mut next_state, "post-engine snapshot") {
-            self.phase_finalize(&mut next_state);
+        if self.persist_snapshot_failed(&mut next_state, "post-engine snapshot", ctx) {
+            self.phase_finalize(&mut next_state, ctx);
             return Ok(());
         }
 
@@ -123,7 +127,7 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
         }
 
         if let Some(request) = trigger_request {
-            match self.phase_trigger_continuation(next_state, &request) {
+            match self.phase_trigger_continuation(next_state, &request, ctx) {
                 Ok((updated_state, continuation_text)) => {
                     next_state = updated_state;
 
@@ -132,6 +136,7 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
                             next_state,
                             &input,
                             &continuation_text,
+                            ctx,
                         );
                     }
                 }
@@ -141,17 +146,21 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
             }
         }
 
-        self.phase_finalize(&mut next_state);
+        self.phase_finalize(&mut next_state, ctx);
         tracing::debug!("run_from_input: done");
         Ok(())
     }
 
-    fn phase_pre_main_snapshot(&self, mut state: GameState) -> PipelineResult<GameState> {
+    fn phase_pre_main_snapshot(
+        &self,
+        mut state: GameState,
+        ctx: &GameServiceContext,
+    ) -> PipelineResult<GameState> {
         tracing::info!("Pipeline ▶ Narrating");
         state.narrative.input_buffer.status = GenerationStatus::Generating;
         state.narrative.input_buffer.phase = GenerationPhase::Narrating;
-        if self.persist_snapshot_failed(&mut state, "pre-main snapshot") {
-            self.phase_finalize(&mut state);
+        if self.persist_snapshot_failed(&mut state, "pre-main snapshot", ctx) {
+            self.phase_finalize(&mut state, ctx);
             return Ok(state);
         }
         Ok(state)
@@ -161,18 +170,26 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
         &self,
         state: GameState,
         trigger: &StoredTriggerContext,
+        ctx: &GameServiceContext,
     ) -> PipelineResult<(GameState, String)> {
-        self.map_cancelled(self.phase_trigger_continuation_raw(state, trigger))
+        self.map_cancelled(
+            self.phase_trigger_continuation_raw(state, trigger, ctx),
+            ctx,
+        )
     }
 
-    fn map_cancelled<T>(&self, result: PipelineResult<T>) -> PipelineResult<T> {
+    fn map_cancelled<T>(
+        &self,
+        result: PipelineResult<T>,
+        ctx: &GameServiceContext,
+    ) -> PipelineResult<T> {
         match result {
-            Err(ActionOutcome::Cancelled) => Err(self.handle_cancellation()),
+            Err(ActionOutcome::Cancelled) => Err(self.handle_cancellation(ctx)),
             other => other,
         }
     }
 
-    pub(crate) fn phase_finalize(&self, state: &mut GameState) {
+    pub(crate) fn phase_finalize(&self, state: &mut GameState, ctx: &GameServiceContext) {
         tracing::info!(
             "Pipeline ✓ Finalize (status={:?})",
             state.narrative.input_buffer.status
@@ -188,16 +205,59 @@ impl<'a, B: ActionPipelineBackend> ActionPipeline<'a, B> {
             state.narrative.input_buffer.status = GenerationStatus::Idle;
         }
         state.narrative.input_buffer.phase = GenerationPhase::default();
-        self.persist(state);
+        self.persist(state, ctx);
     }
 
-    fn handle_cancellation(&self) -> ActionOutcome {
+    fn handle_cancellation(&self, ctx: &GameServiceContext) -> ActionOutcome {
         tracing::warn!("Pipeline cancelled — aborting remaining stages");
-        let mut state = load_or_fresh(self.ctx);
+        let mut state = load_or_fresh(ctx);
         state.narrative.input_buffer.status = GenerationStatus::Idle;
         state.narrative.input_buffer.phase = GenerationPhase::default();
-        self.persist(&state);
+        self.persist(&state, ctx);
         ActionOutcome::Cancelled
+    }
+
+    /// Run post-generation agents inline, aggregating their state patches into QuantifierResult
+    pub(super) fn run_post_generation_agents(
+        &self,
+        state: &GameState,
+        player_input: &str,
+        main_response: &str,
+    ) -> QuantifierResult {
+        let mut result = QuantifierResult::default();
+
+        let agent_ctx = AgentContext {
+            state,
+            main_response: Some(main_response),
+            player_input,
+            current_room: state.current_room(),
+        };
+
+        let patches: Vec<_> = self
+            .agents
+            .agents_for_phase(ExecutionPhase::PostGeneration)
+            .filter_map(|agent| match agent.execute(&agent_ctx) {
+                Ok(AgentResult::StatePatch(patch)) => Some(patch),
+                Ok(AgentResult::NoOp) | Ok(AgentResult::PromptDirective(_)) => None,
+                Err(e) => {
+                    tracing::warn!("Agent {} failed: {e}", agent.name());
+                    None
+                }
+            })
+            .collect();
+
+        if let Some(first_patch) = patches.into_iter().reduce(StatePatch::merge) {
+            let StatePatch {
+                npc_ids,
+                movement_destination,
+                confidence,
+            } = first_patch;
+            result.npcs.npc_ids = npc_ids;
+            result.movement.destination = movement_destination;
+            result.npcs.confidence = confidence.into();
+        }
+
+        result
     }
 }
 
