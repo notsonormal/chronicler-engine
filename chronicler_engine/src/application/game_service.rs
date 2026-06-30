@@ -13,10 +13,11 @@ use crate::application::agents::quantifier::QuantifierAgent;
 use crate::application::agents::registry::AgentRegistry;
 use crate::application::ports::llm_provider::LlmCallResult;
 use crate::application::narrative_prompt::LayeredPromptAssembler;
+use crate::application::llm_recorder::LlmCallRecorder;
 use crate::adapters::driven::storage::Storage;
 
 pub struct GameService {
-    pub(crate) llm_backend: Arc<dyn crate::application::ports::llm_provider::LlmBackend>,
+    pub(crate) llm_recorder: Arc<LlmCallRecorder>,
     pub(crate) prompt_assembler: Arc<LayeredPromptAssembler>,
     pub(crate) agent_registry: AgentRegistry,
 }
@@ -31,7 +32,7 @@ impl GameService {
         preset_storage: Option<Arc<Storage>>,
         settings: Arc<RwLock<AppSettings>>,
     ) -> Self {
-        let (registry, connection, max_context_tokens, max_tokens) = {
+        let (registry, connection, max_context_tokens, max_tokens, storage) = {
             let settings_guard = settings.read().unwrap_or_else(|e| e.into_inner());
             let registry = AgentRegistry::from_configs_with_storage(
                 &settings_guard.agents,
@@ -43,33 +44,46 @@ impl GameService {
             let conn = settings_guard.narration_connection();
             let max_context_tokens = conn.resolve_max_context_tokens();
             let max_tokens = conn.max_tokens;
-            (registry, conn, max_context_tokens, max_tokens)
+            // Use provided storage or fresh storage
+            let storage = storage.unwrap_or_else(|| Arc::new(Storage::new_in_memory()));
+            (registry, conn, max_context_tokens, max_tokens, storage)
         };
-        let llm_backend: Arc<dyn crate::application::ports::llm_provider::LlmBackend> = Arc::from(
-            crate::application::ports::llm_provider::get_llm_backend_for(&connection, storage),
-        );
+        let llm_recorder = crate::bootstrap::llm_factory::get_llm_recorder_for(&connection, Arc::clone(&storage))
+            .unwrap_or_else(|e| {
+                tracing::error!("Failed to create LLM recorder: {e}");
+                // Fallback to mock
+                struct NoopForensics;
+                impl crate::application::ports::llm_message_repository::LlmMessageRepository for NoopForensics {
+                    fn save_llm_message(&self, _message: &crate::application::ports::llm_message_repository::LlmMessage) -> Result<(), EngineError> { Ok(()) }
+                    fn list_latest_llm_messages(&self, _limit: usize) -> Result<Vec<crate::application::ports::llm_message_repository::LlmMessage>, EngineError> { Ok(Vec::new()) }
+                }
+                Arc::new(crate::application::llm_recorder::LlmCallRecorder::new(
+                    Arc::new(crate::adapters::driven::llm::providers::MockBackend::new(Some(Arc::clone(&storage)))),
+                    Arc::new(NoopForensics),
+                ))
+            });
         tracing::info!(
             "GameService: backend={}, model={}",
-            llm_backend.name(),
-            llm_backend.model()
+            llm_recorder.provider().name(),
+            llm_recorder.provider().model()
         );
         let mut assembler = LayeredPromptAssembler::new(max_context_tokens);
         if let Some(max) = max_tokens {
             assembler = assembler.with_max_tokens(max);
         }
         Self {
-            llm_backend,
+            llm_recorder,
             prompt_assembler: Arc::new(assembler),
             agent_registry: registry,
         }
     }
 
     pub fn with_backends(
-        llm_backend: Arc<dyn crate::application::ports::llm_provider::LlmBackend>,
+        llm_recorder: Arc<LlmCallRecorder>,
         agent_registry: AgentRegistry,
     ) -> Self {
         Self {
-            llm_backend,
+            llm_recorder,
             prompt_assembler: Arc::new(LayeredPromptAssembler::new(
                 crate::application::narrative_prompt::budget::MAX_CONTEXT_TOKENS,
             )),
@@ -78,13 +92,16 @@ impl GameService {
     }
 
     pub fn with_mock_quantifier(
-        llm_backend: Arc<dyn crate::application::ports::llm_provider::LlmBackend>,
-        quantifier_backend: Arc<dyn crate::application::ports::llm_provider::LlmBackend>,
+        llm_recorder: Arc<LlmCallRecorder>,
+        quantifier_recorder: Arc<LlmCallRecorder>,
     ) -> Self {
-        let agent = QuantifierAgent::with_backend("quantifier".to_string(), quantifier_backend);
+        let agent = QuantifierAgent::with_backend(
+            "quantifier".to_string(),
+            quantifier_recorder.provider().clone(),
+        );
         let registry = AgentRegistry::with_agent(Box::new(agent));
         Self {
-            llm_backend,
+            llm_recorder,
             prompt_assembler: Arc::new(LayeredPromptAssembler::new(
                 crate::application::narrative_prompt::budget::MAX_CONTEXT_TOKENS,
             )),
@@ -101,7 +118,10 @@ impl GameService {
     }
 
     pub fn backend_info(&self) -> (&str, &str) {
-        (self.llm_backend.name(), self.llm_backend.model())
+        (
+            self.llm_recorder.provider().name(),
+            self.llm_recorder.provider().model(),
+        )
     }
 }
 
@@ -123,7 +143,7 @@ impl ActionPipelineBackend for GameService {
         user_prompt: &str,
         max_tokens: Option<u32>,
     ) -> Result<LlmCallResult, EngineError> {
-        self.llm_backend
+        self.llm_recorder
             .complete(agent_name, system_prompt, user_prompt, max_tokens)
     }
 

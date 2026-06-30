@@ -1,4 +1,4 @@
-use crate::application::ports::llm_provider::LlmBackend;
+use crate::application::ports::llm_provider::LlmProvider;
 use crate::adapters::driven::llm::providers::mock::MockBackend;
 
 #[test]

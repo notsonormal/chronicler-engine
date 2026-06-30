@@ -1,30 +1,25 @@
 //! [DOC: docs/system/llm_processing.md]
 //! Ollama LLM provider
 
-use std::sync::Arc;
-
 use crate::error::{EngineError, LlmFailure};
 use crate::domain::model::settings::Connection;
 use crate::adapters::driven::llm::transport::call_ollama;
-use crate::adapters::driven::storage::Storage;
 
-use crate::application::ports::llm_provider::{LlmBackend, LlmCallResult, merge_single_user_message};
+use crate::application::ports::llm_provider::{LlmProvider, LlmCallResult, merge_single_user_message};
 
 #[derive(Clone, Default)]
 pub struct OllamaBackend {
     base_url: String,
     model: String,
     single_user_message: bool,
-    storage: Option<Arc<Storage>>,
 }
 
 impl OllamaBackend {
-    pub fn from_connection(connection: &Connection, storage: Option<Arc<Storage>>) -> Self {
+    pub fn from_connection(connection: &Connection) -> Self {
         Self {
             base_url: connection.resolve_base_url(),
             model: connection.model.clone(),
             single_user_message: connection.single_user_message,
-            storage,
         }
     }
 
@@ -63,7 +58,7 @@ impl OllamaBackend {
     }
 }
 
-impl LlmBackend for OllamaBackend {
+impl LlmProvider for OllamaBackend {
     fn model(&self) -> &str {
         &self.model
     }
@@ -76,17 +71,16 @@ impl LlmBackend for OllamaBackend {
         max_tokens: Option<u32>,
     ) -> Result<LlmCallResult, EngineError> {
         tracing::info!("[LLM] Generating action from prompt");
-        Ok(self.wrap_and_save(
+        let chat = self.call(system_prompt, user_prompt, max_tokens)?;
+        Ok(LlmCallResult::from_chat_result(
             agent_name,
-            self.call(system_prompt, user_prompt, max_tokens)?,
+            self.name(),
+            self.model(),
+            chat,
         ))
     }
 
     fn name(&self) -> &str {
         "Ollama"
-    }
-
-    fn storage(&self) -> Option<&Arc<Storage>> {
-        self.storage.as_ref()
     }
 }

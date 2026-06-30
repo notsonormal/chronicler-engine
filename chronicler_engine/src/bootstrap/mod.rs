@@ -2,7 +2,8 @@
 //! Bootstrap initialization and startup sequences
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
-mod init_game;
+pub mod init_game;
+pub mod llm_factory;
 mod load;
 mod logging;
 mod run;

@@ -8,6 +8,7 @@ pub mod context;
 pub mod game_service;
 #[cfg(test)]
 mod game_service_tests;
+pub mod llm_recorder;
 pub mod message_editing;
 pub mod narrative_prompt;
 pub mod ports;

@@ -4,6 +4,8 @@ use crate::application::action_pipeline::retry::{
     retry_event_continuation, retry_last_response_impl, retry_main_narration,
 };
 use crate::application::context::GameServiceContext;
+use crate::application::llm_recorder::LlmCallRecorder;
+use crate::application::ports::llm_provider::LlmProvider;
 
 #[allow(unused_imports)]
 use crate::application::game_service::GameService;
@@ -17,14 +19,37 @@ use crate::adapters::driven::storage::{Storage, TestOverride};
 use crate::test_support::fixtures::{TestGameState, TestNpc};
 use crate::test_support::make_test_context_with_sqlite;
 
+/// Test helper: wrap a provider in a LlmCallRecorder with noop forensics
+fn make_test_recorder(provider: Arc<dyn LlmProvider>) -> Arc<LlmCallRecorder> {
+    struct NoopForensics;
+    impl crate::application::ports::llm_message_repository::LlmMessageRepository for NoopForensics {
+        fn save_llm_message(
+            &self,
+            _: &crate::application::ports::llm_message_repository::LlmMessage,
+        ) -> Result<(), crate::error::EngineError> {
+            Ok(())
+        }
+        fn list_latest_llm_messages(
+            &self,
+            _: usize,
+        ) -> Result<
+            Vec<crate::application::ports::llm_message_repository::LlmMessage>,
+            crate::error::EngineError,
+        > {
+            Ok(vec![])
+        }
+    }
+    Arc::new(LlmCallRecorder::new(provider, Arc::new(NoopForensics)))
+}
+
 fn make_test_state() -> GameState {
     TestGameState::with_npc("start", TestNpc::named("npc1", "Test NPC"))
 }
 
 fn make_service() -> GameService {
     GameService::with_mock_quantifier(
-        Arc::new(MockBackend::new(None)),
-        Arc::new(crate::adapters::driven::llm::providers::MockBackend::default()),
+        make_test_recorder(Arc::new(MockBackend::new(None))),
+        make_test_recorder(Arc::new(MockBackend::default())),
     )
 }
 
@@ -290,10 +315,14 @@ fn test_retry_event_trigger_narration_fails() {
     let state = make_test_state();
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
-    let llm = Arc::new(MockBackend::default().with_trigger_narration_fail());
+    let llm = make_test_recorder(Arc::new(
+        MockBackend::default().with_trigger_narration_fail(),
+    ));
     let service = GameService::with_mock_quantifier(
         llm,
-        Arc::new(crate::adapters::driven::llm::providers::MockBackend::default()),
+        make_test_recorder(Arc::new(
+            crate::adapters::driven::llm::providers::MockBackend::default(),
+        )),
     );
 
     let _input_id = add_input_and_save(&ctx, "test input");
@@ -341,10 +370,12 @@ fn test_retry_event_empty_continuation_text() {
     let state = make_test_state();
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
-    let llm = Arc::new(MockBackend::new(None));
+    let llm = make_test_recorder(Arc::new(MockBackend::new(None)));
     let service = GameService::with_mock_quantifier(
         llm,
-        Arc::new(crate::adapters::driven::llm::providers::MockBackend::default()),
+        make_test_recorder(Arc::new(
+            crate::adapters::driven::llm::providers::MockBackend::default(),
+        )),
     );
 
     let _input_id = add_input_and_save(&ctx, "test input");
@@ -569,7 +600,7 @@ fn test_save_retry_error_persist_fails() {
 
 struct EmptyTriggerBackend;
 
-impl crate::application::ports::llm_provider::LlmBackend for EmptyTriggerBackend {
+impl crate::application::ports::llm_provider::LlmProvider for EmptyTriggerBackend {
     fn model(&self) -> &str {
         "mock"
     }
@@ -603,10 +634,12 @@ fn test_retry_event_empty_continuation_triggers_error() {
     let state = make_test_state();
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
-    let llm = Arc::new(EmptyTriggerBackend);
+    let llm = make_test_recorder(Arc::new(EmptyTriggerBackend));
     let service = GameService::with_mock_quantifier(
         llm,
-        Arc::new(crate::adapters::driven::llm::providers::MockBackend::default()),
+        make_test_recorder(Arc::new(
+            crate::adapters::driven::llm::providers::MockBackend::default(),
+        )),
     );
 
     let _input_id = add_input_and_save(&ctx, "test input");

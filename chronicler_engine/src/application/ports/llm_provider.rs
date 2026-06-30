@@ -1,12 +1,12 @@
 //! [DOC: docs/system/llm_processing.md]
-//! LLM backend abstraction
+//! LLM provider port (transport-only)
 
 use std::sync::Arc;
 
 use crate::error::EngineError;
 use crate::application::ports::llm_message_repository::LlmMessage;
-use crate::domain::model::settings::Connection;
 use crate::adapters::driven::llm::transport::ChatCompletionResult;
+use crate::domain::model::settings::Connection;
 use crate::adapters::driven::storage::Storage;
 
 pub const AGENT_NARRATOR: &str = "narrator";
@@ -62,29 +62,9 @@ impl LlmCallResult {
     }
 }
 
-pub trait LlmBackend: Send + Sync {
+pub trait LlmProvider: Send + Sync {
     fn model(&self) -> &str;
     fn name(&self) -> &str;
-    fn storage(&self) -> Option<&Arc<Storage>> {
-        None
-    }
-
-    fn save_message(&self, message: &LlmMessage) {
-        if let Some(storage) = self.storage() {
-            let _ = storage.save_llm_message(message);
-        }
-    }
-
-    fn postprocess_response_text(&self, text: &str) -> String {
-        crate::adapters::driven::llm::providers::sanitize::sanitize_llm_output(text)
-    }
-
-    fn wrap_and_save(&self, agent_name: &str, mut chat: ChatCompletionResult) -> LlmCallResult {
-        chat.text = self.postprocess_response_text(&chat.text);
-        let result = LlmCallResult::from_chat_result(agent_name, self.name(), self.model(), chat);
-        self.save_message(&result.to_message());
-        result
-    }
 
     fn complete(
         &self,
@@ -97,10 +77,15 @@ pub trait LlmBackend: Send + Sync {
 
 pub use crate::domain::model::llm_backend::LlmBackendType;
 
+/// Legacy re-export for transition — deprecated, use `bootstrap::llm_factory::get_llm_recorder_for` instead.
+#[deprecated(
+    since = "0.2.1",
+    note = "Use get_llm_recorder_for from bootstrap/llm_factory.rs"
+)]
 pub fn get_llm_backend_for(
     connection: &Connection,
     storage: Option<Arc<Storage>>,
-) -> Box<dyn LlmBackend> {
+) -> Box<dyn LlmProvider> {
     tracing::info!(
         "Creating LLM backend: provider={:?}, model={}",
         connection.provider,
@@ -111,19 +96,13 @@ pub fn get_llm_backend_for(
             crate::adapters::driven::llm::providers::MockBackend::new(storage),
         ),
         LlmBackendType::DeepSeek => Box::new(
-            crate::adapters::driven::llm::providers::DeepSeekBackend::from_connection(
-                connection, storage,
-            ),
+            crate::adapters::driven::llm::providers::DeepSeekBackend::from_connection(connection),
         ),
         LlmBackendType::OpenRouter => Box::new(
-            crate::adapters::driven::llm::providers::OpenRouterBackend::from_connection(
-                connection, storage,
-            ),
+            crate::adapters::driven::llm::providers::OpenRouterBackend::from_connection(connection),
         ),
         LlmBackendType::Ollama => Box::new(
-            crate::adapters::driven::llm::providers::OllamaBackend::from_connection(
-                connection, storage,
-            ),
+            crate::adapters::driven::llm::providers::OllamaBackend::from_connection(connection),
         ),
     }
 }

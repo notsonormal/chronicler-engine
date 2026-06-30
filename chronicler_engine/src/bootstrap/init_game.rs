@@ -112,7 +112,7 @@ pub struct ArrivalTaskContext {
     max_tokens: Option<u32>,
     nearby_npcs: Vec<NpcCard>,
     all_npcs: Vec<NpcCard>,
-    connection: crate::domain::model::settings::Connection,
+    recorder: Arc<crate::application::llm_recorder::LlmCallRecorder>,
 }
 
 impl ArrivalTaskContext {
@@ -127,7 +127,7 @@ impl ArrivalTaskContext {
         response_length: String,
         max_context_tokens: u32,
         max_tokens: Option<u32>,
-        connection: crate::domain::model::settings::Connection,
+        recorder: Arc<crate::application::llm_recorder::LlmCallRecorder>,
     ) -> Self {
         Self {
             ctx,
@@ -138,7 +138,7 @@ impl ArrivalTaskContext {
             max_tokens,
             nearby_npcs,
             all_npcs,
-            connection,
+            recorder,
         }
     }
 
@@ -188,11 +188,6 @@ impl ArrivalTaskContext {
             None => return,
         };
 
-        let backend = crate::application::ports::llm_provider::get_llm_backend_for(
-            &self.connection,
-            Some(Arc::clone(&self.ctx.storage)),
-        );
-
         let prompt_context = make_prompt_context(
             &self.ctx.world,
             room,
@@ -222,7 +217,7 @@ impl ArrivalTaskContext {
                         Some(&self.response_length),
                     )
                     .and_then(|assembled| {
-                        backend.complete(
+                        self.recorder.complete(
                             crate::application::ports::llm_provider::AGENT_NARRATOR,
                             &assembled.system_prompt,
                             &assembled.user_prompt,
@@ -308,6 +303,26 @@ pub fn spawn_arrival_task_if_needed(
         preset_storage: Arc::clone(&preset_storage_arc),
     };
 
+    let recorder = crate::bootstrap::llm_factory::get_llm_recorder_for(
+        &connection,
+        Arc::clone(storage),
+    ).unwrap_or_else(|e| {
+        tracing::error!("Failed to create LLM recorder for arrival task: {e}");
+        // Fallback to mock
+        use crate::application::ports::llm_provider::LlmProvider;
+        use crate::adapters::driven::llm::providers::MockBackend;
+        let mock: Arc<dyn LlmProvider> = Arc::new(MockBackend::new(Some(Arc::clone(storage))));
+        struct NoopForensics;
+        impl crate::application::ports::llm_message_repository::LlmMessageRepository for NoopForensics {
+            fn save_llm_message(&self, _message: &crate::application::ports::llm_message_repository::LlmMessage) -> Result<(), crate::error::EngineError> { Ok(()) }
+            fn list_latest_llm_messages(&self, _limit: usize) -> Result<Vec<crate::application::ports::llm_message_repository::LlmMessage>, crate::error::EngineError> { Ok(Vec::new()) }
+        }
+        Arc::new(crate::application::llm_recorder::LlmCallRecorder::new(
+            mock,
+            Arc::new(NoopForensics),
+        ))
+    });
+
     let task_ctx = ArrivalTaskContext {
         ctx: game_ctx,
         room_id: room_id.to_string(),
@@ -317,7 +332,7 @@ pub fn spawn_arrival_task_if_needed(
         max_tokens,
         nearby_npcs,
         all_npcs,
-        connection,
+        recorder,
     };
 
     runtime.spawn_blocking(move || {

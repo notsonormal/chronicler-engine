@@ -1,31 +1,26 @@
 //! [DOC: docs/system/llm_processing.md]
 //! OpenRouter LLM provider
 
-use std::sync::Arc;
-
 use crate::error::{EngineError, LlmFailure};
 use crate::domain::model::settings::Connection;
 use crate::adapters::driven::llm::transport::call_openrouter_with_model;
-use crate::adapters::driven::storage::Storage;
 
-use crate::application::ports::llm_provider::{LlmBackend, LlmCallResult, merge_single_user_message};
+use crate::application::ports::llm_provider::{LlmProvider, LlmCallResult, merge_single_user_message};
 
 #[derive(Clone, Default)]
 pub struct OpenRouterBackend {
     api_key: String,
     model: String,
     single_user_message: bool,
-    storage: Option<Arc<Storage>>,
 }
 
 impl OpenRouterBackend {
-    pub fn from_connection(connection: &Connection, storage: Option<Arc<Storage>>) -> Self {
+    pub fn from_connection(connection: &Connection) -> Self {
         let api_key = connection.resolve_api_key().unwrap_or_default();
         Self {
             api_key,
             model: connection.model.clone(),
             single_user_message: connection.single_user_message,
-            storage,
         }
     }
 
@@ -49,7 +44,7 @@ impl OpenRouterBackend {
     }
 }
 
-impl LlmBackend for OpenRouterBackend {
+impl LlmProvider for OpenRouterBackend {
     fn model(&self) -> &str {
         &self.model
     }
@@ -62,18 +57,16 @@ impl LlmBackend for OpenRouterBackend {
         max_tokens: Option<u32>,
     ) -> Result<LlmCallResult, EngineError> {
         tracing::info!("[LLM] Generating action from prompt");
-
-        Ok(self.wrap_and_save(
+        let chat = self.call(system_prompt, user_prompt, max_tokens)?;
+        Ok(LlmCallResult::from_chat_result(
             agent_name,
-            self.call(system_prompt, user_prompt, max_tokens)?,
+            self.name(),
+            self.model(),
+            chat,
         ))
     }
 
     fn name(&self) -> &str {
         "OpenRouter"
-    }
-
-    fn storage(&self) -> Option<&Arc<Storage>> {
-        self.storage.as_ref()
     }
 }

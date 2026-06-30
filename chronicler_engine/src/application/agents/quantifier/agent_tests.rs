@@ -22,7 +22,7 @@ fn test_from_config_creates_agent() {
 
 #[test]
 fn test_with_backend() {
-    let backend: Arc<dyn crate::application::ports::llm_provider::LlmBackend> =
+    let backend: Arc<dyn crate::application::ports::llm_provider::LlmProvider> =
         Arc::new(MockBackend::default());
     let agent = QuantifierAgent::with_backend("custom".to_string(), backend);
     assert_eq!(agent.name(), "custom");
@@ -30,7 +30,7 @@ fn test_with_backend() {
 
 #[test]
 fn test_name() {
-    let backend: Arc<dyn crate::application::ports::llm_provider::LlmBackend> =
+    let backend: Arc<dyn crate::application::ports::llm_provider::LlmProvider> =
         Arc::new(MockBackend::default());
     let agent = QuantifierAgent::with_backend("quantifier".to_string(), backend);
     assert_eq!(agent.name(), "quantifier");
@@ -38,7 +38,7 @@ fn test_name() {
 
 #[test]
 fn test_phase() {
-    let backend: Arc<dyn crate::application::ports::llm_provider::LlmBackend> =
+    let backend: Arc<dyn crate::application::ports::llm_provider::LlmProvider> =
         Arc::new(MockBackend::default());
     let agent = QuantifierAgent::with_backend("q".to_string(), backend);
     assert_eq!(agent.phase(), ExecutionPhase::PostGeneration);
@@ -46,7 +46,7 @@ fn test_phase() {
 
 #[test]
 fn test_backend_selector() {
-    let backend: Arc<dyn crate::application::ports::llm_provider::LlmBackend> =
+    let backend: Arc<dyn crate::application::ports::llm_provider::LlmProvider> =
         Arc::new(MockBackend::default());
     let agent = QuantifierAgent::with_backend("q".to_string(), backend);
     assert_eq!(
@@ -57,7 +57,7 @@ fn test_backend_selector() {
 
 #[test]
 fn test_execute_missing_main_response() {
-    let backend: Arc<dyn crate::application::ports::llm_provider::LlmBackend> =
+    let backend: Arc<dyn crate::application::ports::llm_provider::LlmProvider> =
         Arc::new(MockBackend::default());
     let agent = QuantifierAgent::with_backend("q".to_string(), backend);
 

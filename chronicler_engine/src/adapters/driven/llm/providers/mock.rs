@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use crate::error::{EngineError, NarrativeFailure};
 use crate::adapters::driven::storage::Storage;
 
-use crate::application::ports::llm_provider::{LlmBackend, LlmCallResult};
+use crate::application::ports::llm_provider::{LlmProvider, LlmCallResult};
 
 fn extract_player_input(user_prompt: &str) -> Option<String> {
     const OPEN: &str = "<PlayerInput>\n";
@@ -90,7 +90,10 @@ impl MockBackend {
             model_name: self.model().to_string(),
             agent_name: agent_name.to_string(),
         };
-        self.save_message(&result.to_message());
+        // MockBackend keeps storage for test assertions on saved messages
+        if let Some(storage) = &self.storage {
+            let _ = storage.save_llm_message(&result.to_message());
+        }
         result
     }
 
@@ -109,9 +112,13 @@ impl MockBackend {
     }
 }
 
-impl LlmBackend for MockBackend {
+impl LlmProvider for MockBackend {
     fn model(&self) -> &str {
         "mock"
+    }
+
+    fn name(&self) -> &str {
+        "Mock"
     }
 
     fn complete(
@@ -174,13 +181,5 @@ impl LlmBackend for MockBackend {
                 ),
             ))
         }
-    }
-
-    fn name(&self) -> &str {
-        "Mock"
-    }
-
-    fn storage(&self) -> Option<&Arc<Storage>> {
-        self.storage.as_ref()
     }
 }

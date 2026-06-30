@@ -2,7 +2,7 @@ use crate::error::EngineError;
 use crate::domain::model::character::NpcCard;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::message_types::MessageEntry;
-use crate::application::ports::llm_provider::{LlmBackend, LlmCallResult};
+use crate::application::ports::llm_provider::{LlmProvider, LlmCallResult};
 use crate::test_support::fixtures::{TestGameState, TestNpc};
 
 use super::orchestration::{determine_npcs_in_room, quantify_room_with_llm_call, static_npc_result};
@@ -93,7 +93,7 @@ struct LowConfidenceBackend;
 
 struct ErrBackend;
 
-impl LlmBackend for HighConfidenceBackend {
+impl LlmProvider for HighConfidenceBackend {
     fn model(&self) -> &str {
         "test"
     }
@@ -114,7 +114,7 @@ impl LlmBackend for HighConfidenceBackend {
     }
 }
 
-impl LlmBackend for MediumConfidenceBackend {
+impl LlmProvider for MediumConfidenceBackend {
     fn model(&self) -> &str {
         "test"
     }
@@ -132,7 +132,7 @@ impl LlmBackend for MediumConfidenceBackend {
     }
 }
 
-impl LlmBackend for LowConfidenceBackend {
+impl LlmProvider for LowConfidenceBackend {
     fn model(&self) -> &str {
         "test"
     }
@@ -150,7 +150,7 @@ impl LlmBackend for LowConfidenceBackend {
     }
 }
 
-impl LlmBackend for ErrBackend {
+impl LlmProvider for ErrBackend {
     fn model(&self) -> &str {
         "test"
     }
@@ -176,7 +176,7 @@ fn determine_npcs_with_room(
     room_npc_ids: &[String],
     previous_room_npcs: &[crate::domain::model::character::NpcCard],
     player_action: &str,
-    backend: &dyn crate::application::ports::llm_provider::LlmBackend,
+    backend: &dyn crate::application::ports::llm_provider::LlmProvider,
 ) -> crate::domain::model::quantifier::QuantifierResult {
     determine_npcs_in_room(
         state,
@@ -290,7 +290,7 @@ fn test_quantifier_retry_on_llm_error() {
     struct RotatingBackend {
         responses: std::sync::Mutex<Vec<Result<String, EngineError>>>,
     }
-    impl LlmBackend for RotatingBackend {
+    impl LlmProvider for RotatingBackend {
         fn model(&self) -> &str {
             "test"
         }
