@@ -1,8 +1,8 @@
-use crate::adapters::driven::llm::forensics::message::LlmMessageBuilder;
+use crate::application::ports::llm_message_repository::LlmMessageBuilder;
 use crate::adapters::driven::storage::backend::{Storage, TestOverride};
 use crate::test_support::sqlite_storage;
 
-fn dummy_llm_message(model: &str) -> crate::adapters::driven::llm::forensics::message::LlmMessage {
+fn dummy_llm_message(model: &str) -> crate::application::ports::llm_message_repository::LlmMessage {
     LlmMessageBuilder::new()
         .agent_name("narrator")
         .backend_name("test")

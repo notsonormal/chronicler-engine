@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::adapters::driven::llm::forensics::message::LlmMessageBuilder;
+use crate::application::ports::llm_message_repository::LlmMessageBuilder;
 use crate::adapters::driving::http::fragments::{html_escape, render_error, render_llm_messages};
 use crate::adapters::driven::storage::Storage;
 use crate::test_support::TestAppBuilder;

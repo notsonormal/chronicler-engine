@@ -65,7 +65,7 @@ fn test_openrouter_save_message_with_storage() {
     };
     let backend = OpenRouterBackend::from_connection(&conn, Some(Arc::clone(&storage)));
 
-    let msg = crate::adapters::driven::llm::forensics::message::LlmMessageBuilder::new()
+    let msg = crate::application::ports::llm_message_repository::LlmMessageBuilder::new()
         .agent_name("test")
         .backend_name("OpenRouter")
         .model_name("gpt-4")
@@ -88,7 +88,7 @@ fn test_openrouter_save_message_with_storage() {
 fn test_openrouter_save_message_without_storage() {
     let backend = OpenRouterBackend::default();
 
-    let msg = crate::adapters::driven::llm::forensics::message::LlmMessageBuilder::new()
+    let msg = crate::application::ports::llm_message_repository::LlmMessageBuilder::new()
         .agent_name("test")
         .backend_name("OpenRouter")
         .model_name("gpt-4")

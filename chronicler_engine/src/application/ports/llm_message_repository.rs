@@ -1,7 +1,9 @@
 //! [DOC: docs/system/llm_processing.md]
-//! LLM message formatting and structure
+//! LLM message persistence port
 
 use chrono::{DateTime, Utc};
+
+use crate::error::EngineError;
 
 #[derive(Debug, Clone)]
 pub struct LlmMessage {
@@ -96,4 +98,9 @@ impl LlmMessageBuilder {
             created_at: Utc::now(),
         }
     }
+}
+
+pub trait LlmMessageRepository: Send + Sync {
+    fn save_llm_message(&self, message: &LlmMessage) -> Result<(), EngineError>;
+    fn list_latest_llm_messages(&self, limit: usize) -> Result<Vec<LlmMessage>, EngineError>;
 }

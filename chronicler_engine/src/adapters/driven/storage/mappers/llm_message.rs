@@ -4,7 +4,7 @@
 use chrono::{DateTime, Utc};
 
 use crate::error::EngineError;
-use crate::adapters::driven::llm::forensics::message::LlmMessage;
+use crate::application::ports::llm_message_repository::LlmMessage;
 use crate::adapters::driven::storage::models::llm_message::DbLlmMessage;
 
 impl TryFrom<&DbLlmMessage> for LlmMessage {

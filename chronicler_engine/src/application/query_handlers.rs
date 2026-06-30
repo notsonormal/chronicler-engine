@@ -5,7 +5,7 @@ use crate::application::ApplicationError;
 use crate::application::DebugStateView;
 use crate::application::context::{GameServiceContext, load_or_fresh};
 use crate::error::EngineError;
-use crate::adapters::driven::llm::forensics::message::LlmMessage;
+use crate::application::ports::llm_message_repository::LlmMessage;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageEntry;
 
