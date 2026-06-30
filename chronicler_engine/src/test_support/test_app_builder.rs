@@ -8,6 +8,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::application::application_service::DefaultApplicationService;
 use crate::application::game_service::GameService;
+use crate::bootstrap::text_check_factory::create_text_check_service;
 use crate::domain::model::character::{NpcCard, PlayerCard};
 use crate::domain::model::map::{MapDef, Overworld, Region, Room};
 use crate::domain::model::settings::AppSettings;
@@ -298,7 +299,7 @@ impl TestAppBuilder {
             let _ = storage.insert_message(&msg);
         }
 
-        let settings_arc = Arc::new(RwLock::new(self.settings));
+        let settings_arc = Arc::new(RwLock::new(self.settings.clone()));
         let preset_storage = Arc::new(Storage::new_in_memory());
         let game_service: Arc<GameService> = self.game_service.unwrap_or_else(|| {
             Arc::new(GameService::with_storage(
@@ -307,11 +308,13 @@ impl TestAppBuilder {
                 Arc::clone(&settings_arc),
             ))
         });
+        let text_check_service = Arc::new(create_text_check_service(&self.settings));
         AppState {
             storage,
             preset_storage,
             game_service: Arc::clone(&game_service),
             application_service: Arc::new(DefaultApplicationService::new(game_service)),
+            text_check_service,
             settings: settings_arc,
             cancel_token: Arc::new(RwLock::new(CancellationToken::new())),
             is_generating: Arc::new(std::sync::atomic::AtomicBool::new(self.is_generating)),

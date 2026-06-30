@@ -1,14 +1,13 @@
 //! [DOC: docs/system/text_check.md]
 //! Text checking and validation
 
-pub mod check;
-pub mod harper_backend;
+pub mod harper_text_checker;
 pub mod types;
 
-pub use self::check::check_player_input;
+pub use self::harper_text_checker::HarperTextChecker;
 #[cfg(test)]
-mod check_tests;
-mod harper_backend_tests;
-mod types_tests;
+mod harper_text_checker_tests;
+// types_tests removed - types tests moved to port
 
-pub use self::types::{CheckIssue, CheckResult, IssueKind};
+// Re-export types from the port for backwards compatibility
+pub use crate::application::ports::text_checker::{CheckIssue, CheckResult, IssueKind};

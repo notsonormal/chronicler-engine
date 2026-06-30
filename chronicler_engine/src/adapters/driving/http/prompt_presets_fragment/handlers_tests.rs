@@ -28,6 +28,9 @@ fn make_test_app_state_with_storage(
         None,
         Arc::clone(&settings),
     ));
+    let text_check_service = Arc::new(
+        crate::bootstrap::text_check_factory::create_text_check_service(&settings.read().unwrap()),
+    );
     crate::adapters::driving::http::AppState {
         storage: Arc::new(Storage::new_in_memory()),
         preset_storage: storage,
@@ -37,6 +40,7 @@ fn make_test_app_state_with_storage(
                 &game_service,
             )),
         ),
+        text_check_service,
         settings,
         cancel_token: Arc::new(RwLock::new(tokio_util::sync::CancellationToken::new())),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -305,6 +309,9 @@ fn make_test_app_state_with_failing_storage(
         None,
         Arc::clone(&settings),
     ));
+    let text_check_service = Arc::new(
+        crate::bootstrap::text_check_factory::create_text_check_service(&settings.read().unwrap()),
+    );
     crate::adapters::driving::http::AppState {
         storage: Arc::new(Storage::new_in_memory()),
         preset_storage: Arc::new(storage),
@@ -314,6 +321,7 @@ fn make_test_app_state_with_failing_storage(
                 &game_service,
             )),
         ),
+        text_check_service,
         settings,
         cancel_token: Arc::new(RwLock::new(tokio_util::sync::CancellationToken::new())),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),

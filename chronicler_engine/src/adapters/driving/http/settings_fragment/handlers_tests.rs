@@ -24,11 +24,15 @@ fn make_test_app_state() -> AppState {
         None,
         Arc::clone(&settings),
     ));
+    let text_check_service = Arc::new(
+        crate::bootstrap::text_check_factory::create_text_check_service(&settings.read().unwrap()),
+    );
     AppState {
         storage: Arc::clone(&storage),
         preset_storage: Arc::new(Storage::new_in_memory()),
         game_service: Arc::clone(&game_service),
         application_service: Arc::new(DefaultApplicationService::new(Arc::clone(&game_service))),
+        text_check_service,
         settings,
         cancel_token: Arc::new(RwLock::new(CancellationToken::new())),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -43,11 +47,15 @@ fn make_app_state_with_settings(settings: AppSettings) -> AppState {
         None,
         Arc::clone(&settings),
     ));
+    let text_check_service = Arc::new(
+        crate::bootstrap::text_check_factory::create_text_check_service(&settings.read().unwrap()),
+    );
     AppState {
         storage: Arc::clone(&storage),
         preset_storage: Arc::new(Storage::new_in_memory()),
         game_service: Arc::clone(&game_service),
         application_service: Arc::new(DefaultApplicationService::new(Arc::clone(&game_service))),
+        text_check_service,
         settings,
         cancel_token: Arc::new(RwLock::new(CancellationToken::new())),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),

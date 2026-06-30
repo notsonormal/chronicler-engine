@@ -10,7 +10,6 @@ use axum::{
 use serde::Deserialize;
 
 use crate::domain::model::settings::TextCheckMode;
-use crate::adapters::driven::text_check::check_player_input;
 use crate::adapters::driving::http::AppState;
 use crate::adapters::driving::http::fragments::renderers::{bad_request, internal_error, ok};
 use crate::adapters::driving::http::templates::TextCheckPreviewTemplate;
@@ -36,7 +35,7 @@ pub async fn check_text_handler(
         return ok("<span class=\"status ready\">Text check is disabled</span>");
     }
 
-    match check_player_input(
+    match state.text_check_service().check_player_input(
         &text,
         settings.text_check.mode,
         &settings.text_check.ignored_words,

@@ -11,6 +11,7 @@ use tokio_util::sync::CancellationToken;
 use crate::application::application_service::DefaultApplicationService;
 use crate::application::GameService;
 use crate::application::GameServiceContext;
+use crate::application::text_check_service::TextCheckService;
 use crate::error::EngineError;
 use crate::domain::model::character::NpcCard;
 use crate::domain::model::settings::AppSettings;
@@ -39,6 +40,7 @@ pub struct AppState {
     pub preset_storage: Arc<crate::adapters::driven::storage::Storage>,
     pub game_service: Arc<GameService>,
     pub application_service: Arc<DefaultApplicationService>,
+    pub text_check_service: Arc<TextCheckService>,
     pub settings: Arc<RwLock<AppSettings>>,
     pub cancel_token: Arc<std::sync::RwLock<CancellationToken>>,
     pub is_generating: Arc<AtomicBool>,
@@ -97,6 +99,10 @@ impl AppState {
 
     pub fn settings(&self) -> AppSettings {
         read_lock_or_recover(&self.settings, "settings")
+    }
+
+    pub fn text_check_service(&self) -> &TextCheckService {
+        &self.text_check_service
     }
 }
 

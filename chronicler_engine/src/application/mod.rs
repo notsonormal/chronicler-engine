@@ -14,6 +14,7 @@ pub mod narrative_prompt;
 pub mod ports;
 pub mod query_handlers;
 pub(crate) mod spawn;
+pub mod text_check_service;
 
 pub use application_service::{
     ApplicationError, DebugStateView, DefaultApplicationService, ProcessActionResult,

@@ -1,6 +1,6 @@
 #[test]
 fn test_issue_kind_display() {
-    use crate::adapters::driven::text_check::types::IssueKind;
+    use crate::application::ports::text_checker::IssueKind;
 
     assert_eq!(format!("{}", IssueKind::Spelling), "spell");
     assert_eq!(format!("{}", IssueKind::Grammar), "grammar");

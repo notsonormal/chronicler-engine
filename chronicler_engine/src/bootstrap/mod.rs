@@ -9,6 +9,7 @@ mod logging;
 mod run;
 mod scenario;
 mod state;
+pub mod text_check_factory;
 mod validate;
 
 pub use init_game::test_api;

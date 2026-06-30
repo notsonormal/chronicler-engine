@@ -11,7 +11,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::application::application_service::ProcessActionResult;
 use crate::domain::model::settings::TextCheckMode;
-use crate::adapters::driven::text_check::check_player_input;
 use crate::adapters::driving::http::AppState;
 use crate::adapters::driving::http::templates::TextCheckPreviewTemplate;
 
@@ -95,7 +94,7 @@ pub async fn action_check_handler(
         return response;
     }
 
-    let result = match check_player_input(
+    let result = match state.text_check_service().check_player_input(
         &command,
         settings.text_check.mode,
         &settings.text_check.ignored_words,

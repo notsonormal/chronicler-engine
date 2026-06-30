@@ -1,5 +1,5 @@
 //! [DOC: docs/system/text_check.md]
-//! Harper text check backend
+//! Harper text check adapter implementing TextChecker port
 
 use std::sync::Arc;
 
@@ -9,14 +9,13 @@ use harper_core::{Document, MergedDictionary};
 
 use crate::error::EngineError;
 use crate::domain::model::settings::TextCheckMode;
+use crate::application::ports::text_checker::{CheckIssue, CheckResult, IssueKind, TextChecker};
 
-use super::types::{CheckIssue, CheckResult, IssueKind};
-
-pub struct HarperBackend {
+pub struct HarperTextChecker {
     dictionary: Arc<MergedDictionary>,
 }
 
-impl HarperBackend {
+impl HarperTextChecker {
     pub fn new(ignored_words: &[String]) -> Self {
         let mut merged = MergedDictionary::new();
         merged.add_dictionary(FstDictionary::curated());
@@ -33,11 +32,14 @@ impl HarperBackend {
             dictionary: Arc::new(merged),
         }
     }
+}
 
-    pub fn check(
+impl TextChecker for HarperTextChecker {
+    fn check(
         &self,
         text: &str,
         mode: TextCheckMode,
+        _ignored_words: &[String],
     ) -> Result<Option<CheckResult>, EngineError> {
         if mode == TextCheckMode::Disabled {
             return Ok(None);
