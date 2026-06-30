@@ -1,5 +1,6 @@
 //! [DOC: docs/system/game_flow.md]
 //! Main application service coordinating game operations
+//! arch-lint: storage-direct — intentional, see ADR-027
 
 use std::collections::HashMap;
 use std::sync::Arc;

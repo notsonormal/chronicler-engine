@@ -1,5 +1,6 @@
 //! [DOC: docs/system/game_flow.md]
 //! Game service handling gameplay operations
+//! arch-lint: storage-direct — intentional, see ADR-027
 
 use std::sync::{Arc, RwLock};
 

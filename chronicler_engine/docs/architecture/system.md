@@ -4,6 +4,63 @@
 
 Establish a domain-driven modular architecture for the Chronicler Engine. This structure separates core data models, game mechanics, application orchestration, narrative processing, and user interface logic.
 
+## Hexagonal Architecture (Ports & Adapters)
+
+Chronicler Engine adopts **Ports & Adapters (Hexagonal) Architecture** as of Phase 1 (2026-06-29). The codebase is organized around explicit dependency direction:
+
+```
+┌──────────────────────────────────────────────┐
+│ Core                                         │
+│   domain/        (entities + pure rules)     │
+│   application/   (use cases + ports)        │
+└────┬───────────────────────────────────┬─────┘
+     │ (depends on)                     │ (depends on)
+     ▼                                   ▼
+┌─────────┐                         ┌────────────┐
+│  Port   │                         │   Port     │
+│  trait  │                         │   trait    │
+└────▲────┘                         └─────▲──────┘
+     │ (impls)                            │ (impls)
+┌────┴────────────┐                ┌──────┴───────┐
+│ Driving adapter │                │ Driven       │
+│ (HTTP, CLI)     │                │ adapter      │
+└─────────────────┘                │ (SQLite,LLM) │
+                                   └──────────────┘
+```
+
+### Ports (Driven-Side Contracts)
+
+Port traits are owned by the core (`application/ports/`) and define contracts for external systems:
+
+| Port | Path | Impl Count | Rationale |
+|------|------|------------|------------|
+| `LlmProvider` | `application/ports/llm_provider.rs` | 4 | OpenRouter, DeepSeek, Ollama, Mock. Clear substitution seam. |
+| `LlmMessageRepository` | `application/ports/llm_message_repository.rs` | 1 | Consumer (`LlmCallRecorder`) in core; producer (`Storage`) is adapter. Port justified by consumer location. |
+| `TextChecker` | `application/ports/text_checker.rs` | 1 | Consumer (`TextCheckService`) in core; producer (`HarperTextChecker`) is adapter. |
+
+**Rejected ports:** `StateRepository` (single-impl `Storage`, substitution via `Backend` enum), `DebugPort` (phantom — single consumer + single surface). See **ADR-027** for full decision rationale and "phantom port" heuristic.
+
+### Adapters
+
+| Type | Path | Examples |
+|------|------|----------|
+| Driving (inbound) | `adapters/driving/` | HTTP server (`http/`), CLI (`cli.rs`) |
+| Driven (outbound) | `adapters/driven/` | Storage (SQLite/InMemory/Test), LLM providers, HarperTextChecker |
+
+### Dependency Invariant
+
+- **Core → Ports:** `domain/` and `application/` depend on port traits only
+- **Adapters → Ports:** Adapter impls depend on port traits they implement
+- **Bootstrap → Both:** Only `bootstrap/` imports both port traits and adapter impls (composition root)
+
+**Storage Exception:** `Storage` concrete struct is accessed directly by exactly 3 application files (`context.rs`, `application_service.rs`, `game_service.rs`). Marked with `// arch-lint: storage-direct` comments. See **ADR-027** + `docs/plans/hexagonal-deferred-arch-lint-rules.md` for rationale.
+
+### Related
+
+- **ADR-027:** Hexagonal Architecture Migration (decisions, rejected ports, phantom port heuristic)
+- **Plan:** `docs/plans/hexagonal-reorganization-plan.md` (Phase 1–3 execution)
+- **Deferred Rules:** `docs/plans/hexagonal-deferred-arch-lint-rules.md` (arch-lint limitations)
+
 ## Module Domains
 
 ### 1. The Model Tier (`crate::domain::model::*`)

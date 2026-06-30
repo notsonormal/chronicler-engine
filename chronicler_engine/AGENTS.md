@@ -22,10 +22,9 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - `mod.rs` — Storage layer and database access
         - `snapshot_blob.rs` — State snapshot serialization
       - **text_check/**
-        - `check.rs` — Text check execution
-        - `harper_backend.rs` — Harper text check backend
+        - `harper_text_checker.rs` — Harper text check adapter implementing TextChecker port
         - `mod.rs` — Text checking and validation
-        - `types.rs` — Text check type definitions
+        - `types.rs` — Text check adapter-specific type definitions
     - **driving/**
       - `cli.rs` — Command-line interface definitions
       - `mod.rs` — Driving adapters: HTTP and CLI interfaces
@@ -43,9 +42,11 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
     - `application_service.rs` — Main application service coordinating game operations
     - `context.rs` — Application context and state management
     - `game_service.rs` — Game service handling gameplay operations
+    - `llm_recorder.rs` — LLM call orchestrator - owns forensics save + postprocessing
     - `message_editing.rs` — Message editing and modification utilities
     - `query_handlers.rs` — Read-only data access for game state and debug views
     - `spawn.rs` — Shared spawn helper for pipeline tasks
+    - `text_check_service.rs` — TextCheckService orchestrator for text checking
     - **action_pipeline/**
       - `actions.rs` — Action enum and action processing types
       - `mod.rs` — Action pipeline for processing game actions
@@ -71,15 +72,19 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - `mod.rs` — Prompt construction orchestration
       - `types.rs` — Prompt type definitions
     - **ports/**
-      - `llm_provider.rs` — LLM backend abstraction
+      - `llm_message_repository.rs` — LLM message persistence port
+      - `llm_provider.rs` — LLM provider port (transport-only)
       - `mod.rs` — Application ports: outbound interfaces (driven port traits)
+      - `text_checker.rs` — TextChecker port trait and CheckResult DTO
   - **bootstrap/**
     - `init_game.rs` — Game state initialization and arrival narration spawning
+    - `llm_factory.rs` — LLM factory - wires LlmProvider port to provider impls and returns LlmCallRecorder
     - `load.rs` — Game data seeding and initialization routines
     - `logging.rs` — Logging setup and configuration
     - `run.rs` — Main entry point and runtime execution
     - `scenario.rs` — Scenario injection and initialization
     - `state.rs` — Bootstrap game state from saved snapshots
+    - `text_check_factory.rs` — Text check factory - wires TextChecker port to HarperTextChecker impl
     - `validate.rs` — Data validation utilities
   - **domain/**
     - **engine/**

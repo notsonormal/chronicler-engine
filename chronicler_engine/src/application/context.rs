@@ -1,5 +1,6 @@
 //! [DOC: docs/system/game_flow.md]
 //! Application context and state management
+//! arch-lint: storage-direct — intentional, see ADR-027
 
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};

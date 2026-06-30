@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-06-29 21:07 UTC*
+*Index last generated: 2026-06-30 21:37 UTC*
 
 ### Root files
 
@@ -39,6 +39,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [ADR-024: Migrate Game Data to SQLite with Seed Pattern](./adr/adr-024-game-data-migration-to-sqlite.md)
 - [ADR-025: Multi-World Data Foundation](./adr/adr-025-multi-world-data-foundation.md)
 - [ADR-026: Relocate Persona Binding from World to Game](./adr/adr-026-persona-relocation-to-game.md)
+- [ADR-027: Hexagonal Architecture Migration](./adr/adr-027-hexagonal-architecture-migration.md)
 
 ### `docs/architecture/`
 
@@ -62,7 +63,6 @@ This folder contains all documentation for the Chronicler Engine project.
 
 - [Plan: Abstraction Anti-Pattern Prevention via Advisory Healthcheck](./plans/abstraction-antipattern-healthcheck-plan.md)
 - [Super-Plan: Abstraction-Fixes Follow-Up](./plans/abstraction-fixes-followup-superplan.md)
-- [Plan: Antipattern-Checker Agent Skill](./plans/antipattern-checker-skill-plan.md)
 - [Plan: Diagnostic Decision Tree as Agent Infrastructure](./plans/diagnostic-decision-tree-plan.md)
 - [Deferred arch-lint Rules — Hexagonal Reorganization](./plans/hexagonal-deferred-arch-lint-rules.md)
 - [Plan: Hexagonal Architecture Reorganization](./plans/hexagonal-reorganization-plan.md)
@@ -85,6 +85,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Implementation Plan: Abstraction Anti-Pattern Fixes (Corrected)](./plans/archived/abstraction-fixes-implementation-plan.md)
 - [Plan: Abstraction Anti-Pattern Fixes (Tiered)](./plans/archived/abstraction-fixes-plan.md)
 - [ADR-026 Follow-up: Thermo-Nuclear Review Quality Fixes](./plans/archived/adr-026-followup-quality-fixes.md)
+- [Plan: Antipattern-Checker Agent Skill](./plans/archived/antipattern-checker-skill-plan.md)
 - [Fix Boot Path: Restore Auto-Create Game with `--persona` CLI Flag](./plans/archived/fix-boot-and-default-game.md)
 - [Pipeline Decomposition Review Fixes (Round 3)](./plans/archived/pipeline-review-fixes-round3.md)
 - [Review Fixes — Pipeline Decomposition Quality](./plans/archived/review-fixes-pipeline-quality.md)
