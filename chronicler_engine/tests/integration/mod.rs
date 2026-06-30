@@ -14,16 +14,20 @@ use chronicler_engine::application::agents::registry::AgentRegistry;
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 
 pub use test_utils::settings_guard::SettingsTestGuard;
+pub use test_utils::make_test_recorder;
 
 pub fn failing_service() -> GameService {
     GameService::with_mock_quantifier(
-        Arc::new(MockBackend::default().with_fail()),
-        Arc::new(MockBackend::default()),
+        make_test_recorder(Arc::new(MockBackend::default().with_fail())),
+        make_test_recorder(Arc::new(MockBackend::default())),
     )
 }
 
 pub fn working_service() -> GameService {
-    GameService::with_backends(Arc::new(MockBackend::default()), AgentRegistry::default())
+    GameService::with_backends(
+        make_test_recorder(Arc::new(MockBackend::default())),
+        AgentRegistry::default(),
+    )
 }
 
 mod application_service;

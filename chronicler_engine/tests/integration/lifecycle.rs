@@ -15,7 +15,10 @@ use crate::fixtures::{
 
 fn create_app_service() -> Arc<DefaultApplicationService> {
     Arc::new(DefaultApplicationService::new(Arc::new(
-        GameService::with_backends(Arc::new(MockBackend::default()), AgentRegistry::default()),
+        GameService::with_backends(
+            crate::make_test_recorder(Arc::new(MockBackend::default())),
+            AgentRegistry::default(),
+        ),
     )))
 }
 

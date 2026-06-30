@@ -4,9 +4,26 @@ use tokio_util::sync::CancellationToken;
 
 use chronicler_engine::application::game_service::GameService;
 use chronicler_engine::application::DefaultApplicationService;
+use chronicler_engine::application::text_check_service::TextCheckService;
+use chronicler_engine::application::ports::text_checker::TextChecker;
 use chronicler_engine::domain::model::settings::AppSettings;
+use chronicler_engine::domain::model::settings::TextCheckMode;
 use chronicler_engine::adapters::driving::http::AppState;
 use chronicler_engine::adapters::driven::storage::Storage;
+use chronicler_engine::error::EngineError;
+use chronicler_engine::application::ports::text_checker::CheckResult;
+
+struct NoopTextChecker;
+impl TextChecker for NoopTextChecker {
+    fn check(
+        &self,
+        _text: &str,
+        _mode: TextCheckMode,
+        _ignored_words: &[String],
+    ) -> Result<Option<CheckResult>, EngineError> {
+        Ok(None)
+    }
+}
 
 #[test]
 fn test_settings_recover_from_poisoned_rwlock() {
@@ -32,6 +49,7 @@ fn test_settings_recover_from_poisoned_rwlock() {
         preset_storage: Arc::new(Storage::new_in_memory()),
         game_service: Arc::clone(&game_service),
         application_service: Arc::new(DefaultApplicationService::new(Arc::clone(&game_service))),
+        text_check_service: Arc::new(TextCheckService::new(Arc::new(NoopTextChecker))),
         settings,
         cancel_token: Arc::new(std::sync::RwLock::new(CancellationToken::new())),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -66,6 +84,7 @@ fn test_cancel_token_recover_from_poisoned_rwlock() {
         preset_storage: Arc::new(Storage::new_in_memory()),
         game_service: Arc::clone(&game_service),
         application_service: Arc::new(DefaultApplicationService::new(Arc::clone(&game_service))),
+        text_check_service: Arc::new(TextCheckService::new(Arc::new(NoopTextChecker))),
         settings: Arc::new(std::sync::RwLock::new(AppSettings::default())),
         cancel_token,
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),

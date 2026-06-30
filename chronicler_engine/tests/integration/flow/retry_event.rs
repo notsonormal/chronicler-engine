@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
 use chronicler_engine::application::game_service::GameService;
+use chronicler_engine::application::llm_recorder::LlmCallRecorder;
+use chronicler_engine::application::ports::llm_provider::LlmProvider;
+use chronicler_engine::application::ports::llm_message_repository::LlmMessageRepository;
 use chronicler_engine::domain::model::character::{CharacterSheet, NpcCard};
 use chronicler_engine::domain::model::state::game_state::GameState;
 use chronicler_engine::domain::model::state::message_types::MessageType;
@@ -9,6 +12,7 @@ use chronicler_engine::domain::model::trigger::{
 };
 use chronicler_engine::domain::model::world::WorldCard;
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
+use chronicler_engine::error::EngineError;
 use chronicler_engine::test_support::make_test_context_with_sqlite;
 
 use crate::pipeline_helpers::{
@@ -16,6 +20,28 @@ use crate::pipeline_helpers::{
     wait_for_generation_complete,
 };
 use crate::fixtures::create_test_map;
+
+fn make_test_recorder(provider: Arc<dyn LlmProvider>) -> Arc<LlmCallRecorder> {
+    struct NoopForensics;
+    impl LlmMessageRepository for NoopForensics {
+        fn save_llm_message(
+            &self,
+            _: &chronicler_engine::application::ports::llm_message_repository::LlmMessage,
+        ) -> Result<(), EngineError> {
+            Ok(())
+        }
+        fn list_latest_llm_messages(
+            &self,
+            _: usize,
+        ) -> Result<
+            Vec<chronicler_engine::application::ports::llm_message_repository::LlmMessage>,
+            EngineError,
+        > {
+            Ok(vec![])
+        }
+    }
+    Arc::new(LlmCallRecorder::new(provider, Arc::new(NoopForensics)))
+}
 
 #[test]
 fn test_event_retry_does_not_create_extra_swipe_on_narration() {
@@ -25,13 +51,15 @@ fn test_event_retry_does_not_create_extra_swipe_on_narration() {
 
     add_input_and_save(&ctx, "enter shop");
 
-    let quantifier = Arc::new(MockBackend::default().with_prompt_responses(vec![
+    let quantifier = make_test_recorder(Arc::new(MockBackend::default().with_prompt_responses(
+        vec![
             r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#
                 .to_string(),
-        ]));
+        ],
+    )));
 
     let service = GameService::with_mock_quantifier(
-        Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
+        make_test_recorder(Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage))))),
         quantifier,
     );
 
@@ -73,13 +101,15 @@ fn test_retry_event_continuation_preserves_quantifier_result() {
 
     add_input_and_save(&ctx, "enter shop");
 
-    let quantifier = Arc::new(MockBackend::default().with_prompt_responses(vec![
+    let quantifier = make_test_recorder(Arc::new(MockBackend::default().with_prompt_responses(
+        vec![
             r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#
                 .to_string(),
-        ]));
+        ],
+    )));
 
     let service = GameService::with_mock_quantifier(
-        Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
+        make_test_recorder(Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage))))),
         quantifier,
     );
 
@@ -200,15 +230,17 @@ fn test_trigger_continuation_runs_quantifier_and_detects_new_npc() {
 
     add_input_and_save(&ctx, "enter shop");
 
-    let llm_backend = Arc::new(MockBackend::default().with_narrations(vec![
+    let llm_backend = make_test_recorder(Arc::new(MockBackend::default().with_narrations(vec![
         "You step into the shop.".to_string(),
         "Gabriella emerges from the shadows behind the counter.".to_string(),
-    ]));
+    ])));
 
-    let quantifier = Arc::new(MockBackend::default().with_prompt_responses(vec![
-        r#"{"npcs_in_room": []}"#.to_string(),
-        r#"{"npcs_in_room": ["gabriella"]}"#.to_string(),
-    ]));
+    let quantifier = make_test_recorder(Arc::new(MockBackend::default().with_prompt_responses(
+        vec![
+            r#"{"npcs_in_room": []}"#.to_string(),
+            r#"{"npcs_in_room": ["gabriella"]}"#.to_string(),
+        ],
+    )));
 
     let service = GameService::with_mock_quantifier(llm_backend, quantifier);
 

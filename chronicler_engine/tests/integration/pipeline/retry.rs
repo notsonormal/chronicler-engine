@@ -107,8 +107,8 @@ fn test_retry_no_snapshot() {
     let ctx = make_test_context_without_snapshot(create_test_state());
 
     let backend = GameService::with_mock_quantifier(
-        Arc::new(MockBackend::default()),
-        Arc::new(MockBackend::default()),
+        crate::make_test_recorder(Arc::new(MockBackend::default())),
+        crate::make_test_recorder(Arc::new(MockBackend::default())),
     );
 
     backend.retry_last_response(ctx.clone());
@@ -129,8 +129,8 @@ fn test_retry_no_input_text() {
 
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = GameService::with_mock_quantifier(
-        Arc::new(MockBackend::default()),
-        Arc::new(MockBackend::default()),
+        crate::make_test_recorder(Arc::new(MockBackend::default())),
+        crate::make_test_recorder(Arc::new(MockBackend::default())),
     );
 
     backend.retry_last_response(ctx.clone());
@@ -214,8 +214,8 @@ fn test_retry_room_not_found() {
     let _ = ctx.storage.save_snapshot(&main);
 
     let backend = GameService::with_mock_quantifier(
-        Arc::new(MockBackend::default()),
-        Arc::new(MockBackend::default()),
+        crate::make_test_recorder(Arc::new(MockBackend::default())),
+        crate::make_test_recorder(Arc::new(MockBackend::default())),
     );
 
     backend.retry_last_response(ctx.clone());
@@ -301,8 +301,8 @@ fn test_retry_llm_error() {
     };
 
     let backend = GameService::with_mock_quantifier(
-        Arc::new(MockBackend::default().with_fail()),
-        Arc::new(MockBackend::default()),
+        crate::make_test_recorder(Arc::new(MockBackend::default().with_fail())),
+        crate::make_test_recorder(Arc::new(MockBackend::default())),
     );
 
     backend.retry_last_response(ctx.clone());
@@ -388,8 +388,8 @@ fn test_retry_empty_narration() {
     };
 
     let backend = GameService::with_mock_quantifier(
-        Arc::new(MockBackend::default().with_empty_response()),
-        Arc::new(MockBackend::default()),
+        crate::make_test_recorder(Arc::new(MockBackend::default().with_empty_response())),
+        crate::make_test_recorder(Arc::new(MockBackend::default())),
     );
 
     backend.retry_last_response(ctx.clone());
@@ -476,8 +476,8 @@ fn test_retry_main_narration_uses_pre_main_snapshot() {
     };
 
     let backend = GameService::with_mock_quantifier(
-        Arc::new(MockBackend::default()),
-        Arc::new(MockBackend::default()),
+        crate::make_test_recorder(Arc::new(MockBackend::default())),
+        crate::make_test_recorder(Arc::new(MockBackend::default())),
     );
 
     backend.retry_last_response(ctx.clone());
@@ -546,8 +546,8 @@ fn test_retry_event_continuation_uses_pre_event_snapshot() {
     }
 
     let backend = GameService::with_mock_quantifier(
-        Arc::new(MockBackend::default()),
-        Arc::new(MockBackend::default()),
+        crate::make_test_recorder(Arc::new(MockBackend::default())),
+        crate::make_test_recorder(Arc::new(MockBackend::default())),
     );
 
     backend.retry_last_response(ctx.clone());

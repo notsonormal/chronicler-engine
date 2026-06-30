@@ -16,8 +16,8 @@ fn test_sequential_execute_retry_execute() {
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let service = GameService::with_mock_quantifier(
-        Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
-        Arc::new(MockBackend::default()),
+        crate::make_test_recorder(Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage))))),
+        crate::make_test_recorder(Arc::new(MockBackend::default())),
     );
 
     add_input_and_save(&ctx, "examine room");
@@ -73,8 +73,8 @@ fn test_sequential_execute_delete_execute() {
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let service = GameService::with_mock_quantifier(
-        Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
-        Arc::new(MockBackend::default()),
+        crate::make_test_recorder(Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage))))),
+        crate::make_test_recorder(Arc::new(MockBackend::default())),
     );
 
     add_input_and_save(&ctx, "examine room");
@@ -125,8 +125,8 @@ fn test_async_action_sequence_then_retry() {
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
     let service = GameService::with_mock_quantifier(
-        Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
-        Arc::new(MockBackend::default()),
+        crate::make_test_recorder(Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage))))),
+        crate::make_test_recorder(Arc::new(MockBackend::default())),
     );
 
     add_input_and_save(&ctx, "hello");
@@ -157,8 +157,8 @@ fn test_three_actions_in_sequence() {
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
     let service = GameService::with_mock_quantifier(
-        Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
-        Arc::new(MockBackend::default()),
+        crate::make_test_recorder(Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage))))),
+        crate::make_test_recorder(Arc::new(MockBackend::default())),
     );
 
     for action in ["examine room", "look around", "check inventory"] {
@@ -200,8 +200,8 @@ fn test_delete_input_then_retry_fails_gracefully() {
     add_input_and_save(&ctx, "examine room");
 
     let service = GameService::with_mock_quantifier(
-        Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
-        Arc::new(MockBackend::default()),
+        crate::make_test_recorder(Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage))))),
+        crate::make_test_recorder(Arc::new(MockBackend::default())),
     );
 
     service.execute_action(ctx.clone(), "examine room".to_string());
@@ -235,8 +235,8 @@ fn test_reset_clears_history_and_state() {
         ]));
 
     let service = GameService::with_mock_quantifier(
-        Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
-        quantifier,
+        crate::make_test_recorder(Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage))))),
+        crate::make_test_recorder(quantifier),
     );
 
     service.execute_action(ctx.clone(), "walk to room2".to_string());
@@ -266,8 +266,8 @@ fn test_reset_then_execute_works() {
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
     let service = GameService::with_mock_quantifier(
-        Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
-        Arc::new(MockBackend::default()),
+        crate::make_test_recorder(Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage))))),
+        crate::make_test_recorder(Arc::new(MockBackend::default())),
     );
 
     add_input_and_save(&ctx, "examine room");
@@ -305,8 +305,8 @@ fn test_delete_mid_sequence() {
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
     let service = GameService::with_mock_quantifier(
-        Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage)))),
-        Arc::new(MockBackend::default()),
+        crate::make_test_recorder(Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage))))),
+        crate::make_test_recorder(Arc::new(MockBackend::default())),
     );
 
     add_input_and_save(&ctx, "examine room");
