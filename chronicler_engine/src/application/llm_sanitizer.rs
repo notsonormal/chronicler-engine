@@ -1,11 +1,6 @@
 //! [DOC: docs/system/llm_processing.md]
 //! LLM input/output sanitization
 
-//! Response sanitization for LLM backends.
-//!
-//! Strips leaked thinking/reasoning artifacts from LLM output.
-//! Applied as a defensive safety net via [`LlmBackend::postprocess_response_text`].
-
 use once_cell::sync::Lazy;
 use regex::Regex;
 

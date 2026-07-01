@@ -5,8 +5,9 @@ use std::sync::Arc;
 
 use crate::error::EngineError;
 use crate::domain::model::settings::Connection;
+use crate::domain::model::llm_backend::LlmBackendType;
 use crate::adapters::driven::storage::Storage;
-use crate::application::ports::llm_provider::{LlmBackendType, LlmProvider};
+use crate::application::ports::llm_provider::LlmProvider;
 use crate::application::ports::llm_message_repository::LlmMessageRepository;
 use crate::application::llm_recorder::LlmCallRecorder;
 use crate::adapters::driven::llm::providers::{

@@ -7,6 +7,7 @@ pub mod application_service;
 pub mod context;
 pub mod game_service;
 pub mod llm_recorder;
+pub mod llm_sanitizer;
 pub mod message_editing;
 pub mod narrative_prompt;
 pub mod ports;
@@ -28,6 +29,9 @@ pub(crate) use spawn::spawn_pipeline_task;
 
 #[cfg(test)]
 mod context_tests;
+
+#[cfg(test)]
+mod llm_sanitizer_tests;
 
 #[cfg(test)]
 mod query_handlers_tests;

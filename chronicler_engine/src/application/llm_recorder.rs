@@ -6,6 +6,7 @@ use std::sync::Arc;
 use crate::error::EngineError;
 use crate::application::ports::llm_provider::{LlmProvider, LlmCallResult};
 use crate::application::ports::llm_message_repository::LlmMessageRepository;
+use crate::application::llm_sanitizer::sanitize_llm_output;
 
 pub struct LlmCallRecorder {
     provider: Arc<dyn LlmProvider>,
@@ -32,9 +33,8 @@ impl LlmCallRecorder {
             .provider
             .complete(agent_name, system_prompt, user_prompt, max_tokens)?;
 
-        // 2. Postprocess response text (sanitization - was LlmBackend::postprocess_response_text)
-        let sanitized_text =
-            crate::adapters::driven::llm::providers::sanitize::sanitize_llm_output(&result.text);
+        // 2. Postprocess response text (sanitization)
+        let sanitized_text = sanitize_llm_output(&result.text);
 
         // 3. Build message with sanitized text and save to forensics
         let mut message = result.to_message();

@@ -1,13 +1,9 @@
 //! [DOC: docs/system/llm_processing.md]
 //! LLM provider port (transport-only)
 
-use std::sync::Arc;
-
 use crate::error::EngineError;
 use crate::application::ports::llm_message_repository::LlmMessage;
 use crate::adapters::driven::llm::transport::ChatCompletionResult;
-use crate::domain::model::settings::Connection;
-use crate::adapters::driven::storage::Storage;
 
 pub const AGENT_NARRATOR: &str = "narrator";
 pub const AGENT_QUANTIFIER: &str = "quantifier";
@@ -73,38 +69,6 @@ pub trait LlmProvider: Send + Sync {
         user_prompt: &str,
         max_tokens: Option<u32>,
     ) -> Result<LlmCallResult, EngineError>;
-}
-
-pub use crate::domain::model::llm_backend::LlmBackendType;
-
-/// Legacy re-export for transition — deprecated, use `bootstrap::llm_factory::get_llm_recorder_for` instead.
-#[deprecated(
-    since = "0.2.1",
-    note = "Use get_llm_recorder_for from bootstrap/llm_factory.rs"
-)]
-pub fn get_llm_backend_for(
-    connection: &Connection,
-    storage: Option<Arc<Storage>>,
-) -> Box<dyn LlmProvider> {
-    tracing::info!(
-        "Creating LLM backend: provider={:?}, model={}",
-        connection.provider,
-        connection.model
-    );
-    match connection.provider {
-        LlmBackendType::Mock => Box::new(
-            crate::adapters::driven::llm::providers::MockBackend::new(storage),
-        ),
-        LlmBackendType::DeepSeek => Box::new(
-            crate::adapters::driven::llm::providers::DeepSeekBackend::from_connection(connection),
-        ),
-        LlmBackendType::OpenRouter => Box::new(
-            crate::adapters::driven::llm::providers::OpenRouterBackend::from_connection(connection),
-        ),
-        LlmBackendType::Ollama => Box::new(
-            crate::adapters::driven::llm::providers::OllamaBackend::from_connection(connection),
-        ),
-    }
 }
 
 /// Merge system + user for models that ignore system role.
