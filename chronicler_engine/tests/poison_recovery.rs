@@ -39,11 +39,14 @@ fn test_settings_recover_from_poisoned_rwlock() {
     })
     .join();
 
-    let game_service = Arc::new(GameService::with_storage(
-        None,
-        None,
-        Arc::new(std::sync::RwLock::new(AppSettings::default())),
-    ));
+    let game_service = Arc::new(
+        GameService::with_storage(
+            None,
+            None,
+            Arc::new(std::sync::RwLock::new(AppSettings::default())),
+        )
+        .expect("GameService::with_storage should succeed"),
+    );
     let app_state = AppState {
         storage: Arc::new(Storage::new_in_memory()),
         preset_storage: Arc::new(Storage::new_in_memory()),
@@ -74,11 +77,14 @@ fn test_cancel_token_recover_from_poisoned_rwlock() {
     })
     .join();
 
-    let game_service = Arc::new(GameService::with_storage(
-        None,
-        None,
-        Arc::new(std::sync::RwLock::new(AppSettings::default())),
-    ));
+    let game_service = Arc::new(
+        GameService::with_storage(
+            None,
+            None,
+            Arc::new(std::sync::RwLock::new(AppSettings::default())),
+        )
+        .expect("GameService::with_storage should succeed"),
+    );
     let app_state = AppState {
         storage: Arc::new(Storage::new_in_memory()),
         preset_storage: Arc::new(Storage::new_in_memory()),

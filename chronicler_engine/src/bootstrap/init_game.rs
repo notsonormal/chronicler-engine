@@ -303,25 +303,15 @@ pub fn spawn_arrival_task_if_needed(
         preset_storage: Arc::clone(&preset_storage_arc),
     };
 
-    let recorder = crate::bootstrap::llm_factory::get_llm_recorder_for(
-        &connection,
-        Arc::clone(storage),
-    ).unwrap_or_else(|e| {
-        tracing::error!("Failed to create LLM recorder for arrival task: {e}");
-        // Fallback to mock
-        use crate::application::ports::llm_provider::LlmProvider;
-        use crate::adapters::driven::llm::providers::MockBackend;
-        let mock: Arc<dyn LlmProvider> = Arc::new(MockBackend::new(Some(Arc::clone(storage))));
-        struct NoopForensics;
-        impl crate::application::ports::llm_message_repository::LlmMessageRepository for NoopForensics {
-            fn save_llm_message(&self, _message: &crate::application::ports::llm_message_repository::LlmMessage) -> Result<(), crate::error::EngineError> { Ok(()) }
-            fn list_latest_llm_messages(&self, _limit: usize) -> Result<Vec<crate::application::ports::llm_message_repository::LlmMessage>, crate::error::EngineError> { Ok(Vec::new()) }
-        }
-        Arc::new(crate::application::llm_recorder::LlmCallRecorder::new(
-            mock,
-            Arc::new(NoopForensics),
-        ))
-    });
+    let recorder =
+        match crate::bootstrap::llm_factory::get_llm_recorder_for(&connection, Arc::clone(storage))
+        {
+            Ok(recorder) => recorder,
+            Err(e) => {
+                tracing::error!("Failed to create LLM recorder for arrival task: {e}");
+                return;
+            }
+        };
 
     let task_ctx = ArrivalTaskContext {
         ctx: game_ctx,

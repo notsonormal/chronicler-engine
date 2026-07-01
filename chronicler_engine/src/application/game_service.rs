@@ -20,15 +20,11 @@ pub struct GameService {
 }
 
 impl GameService {
-    pub fn new() -> Self {
-        Self::with_storage(None, None, Arc::new(RwLock::new(AppSettings::default())))
-    }
-
     pub fn with_storage(
         storage: Option<Arc<Storage>>,
         preset_storage: Option<Arc<Storage>>,
         settings: Arc<RwLock<AppSettings>>,
-    ) -> Self {
+    ) -> Result<Self, EngineError> {
         let (registry, connection, max_context_tokens, max_tokens, storage) = {
             let settings_guard = settings.read().unwrap_or_else(|e| e.into_inner());
             let registry = AgentRegistry::from_configs_with_storage(
@@ -45,20 +41,8 @@ impl GameService {
             let storage = storage.unwrap_or_else(|| Arc::new(Storage::new_in_memory()));
             (registry, conn, max_context_tokens, max_tokens, storage)
         };
-        let llm_recorder = crate::bootstrap::llm_factory::get_llm_recorder_for(&connection, Arc::clone(&storage))
-            .unwrap_or_else(|e| {
-                tracing::error!("Failed to create LLM recorder: {e}");
-                // Fallback to mock
-                struct NoopForensics;
-                impl crate::application::ports::llm_message_repository::LlmMessageRepository for NoopForensics {
-                    fn save_llm_message(&self, _message: &crate::application::ports::llm_message_repository::LlmMessage) -> Result<(), EngineError> { Ok(()) }
-                    fn list_latest_llm_messages(&self, _limit: usize) -> Result<Vec<crate::application::ports::llm_message_repository::LlmMessage>, EngineError> { Ok(Vec::new()) }
-                }
-                Arc::new(crate::application::llm_recorder::LlmCallRecorder::new(
-                    Arc::new(crate::adapters::driven::llm::providers::MockBackend::new(Some(Arc::clone(&storage)))),
-                    Arc::new(NoopForensics),
-                ))
-            });
+        let llm_recorder =
+            crate::bootstrap::llm_factory::get_llm_recorder_for(&connection, Arc::clone(&storage))?;
         tracing::info!(
             "GameService: backend={}, model={}",
             llm_recorder.provider().name(),
@@ -68,11 +52,11 @@ impl GameService {
         if let Some(max) = max_tokens {
             assembler = assembler.with_max_tokens(max);
         }
-        Self {
+        Ok(Self {
             llm_recorder,
             prompt_assembler: Arc::new(assembler),
             agent_registry: Arc::new(registry),
-        }
+        })
     }
 
     pub fn with_backends(
@@ -119,11 +103,5 @@ impl GameService {
             self.llm_recorder.provider().name(),
             self.llm_recorder.provider().model(),
         )
-    }
-}
-
-impl Default for GameService {
-    fn default() -> Self {
-        GameService::new()
     }
 }

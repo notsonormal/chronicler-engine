@@ -19,11 +19,10 @@ use tokio_util::sync::CancellationToken;
 fn make_test_app_state() -> AppState {
     let storage = Arc::new(Storage::new_in_memory());
     let settings = Arc::new(RwLock::new(AppSettings::default()));
-    let game_service = Arc::new(GameService::with_storage(
-        Some(Arc::clone(&storage)),
-        None,
-        Arc::clone(&settings),
-    ));
+    let game_service = Arc::new(
+        GameService::with_storage(Some(Arc::clone(&storage)), None, Arc::clone(&settings))
+            .expect("GameService::with_storage should succeed"),
+    );
     let text_check_service = Arc::new(
         crate::bootstrap::text_check_factory::create_text_check_service(&settings.read().unwrap()),
     );
@@ -42,11 +41,10 @@ fn make_test_app_state() -> AppState {
 fn make_app_state_with_settings(settings: AppSettings) -> AppState {
     let storage = Arc::new(Storage::new_in_memory());
     let settings = Arc::new(RwLock::new(settings));
-    let game_service = Arc::new(GameService::with_storage(
-        Some(Arc::clone(&storage)),
-        None,
-        Arc::clone(&settings),
-    ));
+    let game_service = Arc::new(
+        GameService::with_storage(Some(Arc::clone(&storage)), None, Arc::clone(&settings))
+            .expect("GameService::with_storage should succeed"),
+    );
     let text_check_service = Arc::new(
         crate::bootstrap::text_check_factory::create_text_check_service(&settings.read().unwrap()),
     );

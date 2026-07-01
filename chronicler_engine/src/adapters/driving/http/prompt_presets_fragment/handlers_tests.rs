@@ -23,11 +23,14 @@ fn make_test_app_state_with_storage(
     let settings = Arc::new(RwLock::new(
         crate::domain::model::settings::AppSettings::default(),
     ));
-    let game_service = Arc::new(crate::application::game_service::GameService::with_storage(
-        Some(Arc::new(Storage::new_in_memory())),
-        None,
-        Arc::clone(&settings),
-    ));
+    let game_service = Arc::new(
+        crate::application::game_service::GameService::with_storage(
+            Some(Arc::new(Storage::new_in_memory())),
+            None,
+            Arc::clone(&settings),
+        )
+        .expect("GameService::with_storage should succeed"),
+    );
     let text_check_service = Arc::new(
         crate::bootstrap::text_check_factory::create_text_check_service(&settings.read().unwrap()),
     );
@@ -304,11 +307,14 @@ fn make_test_app_state_with_failing_storage(
     let settings = Arc::new(RwLock::new(
         crate::domain::model::settings::AppSettings::default(),
     ));
-    let game_service = Arc::new(crate::application::game_service::GameService::with_storage(
-        Some(Arc::new(Storage::new_in_memory())),
-        None,
-        Arc::clone(&settings),
-    ));
+    let game_service = Arc::new(
+        crate::application::game_service::GameService::with_storage(
+            Some(Arc::new(Storage::new_in_memory())),
+            None,
+            Arc::clone(&settings),
+        )
+        .expect("GameService::with_storage should succeed"),
+    );
     let text_check_service = Arc::new(
         crate::bootstrap::text_check_factory::create_text_check_service(&settings.read().unwrap()),
     );

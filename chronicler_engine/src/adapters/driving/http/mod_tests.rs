@@ -53,8 +53,11 @@ fn test_server_config_max_port() {
 #[test]
 fn test_app_state_struct_fields() {
     // Verify AppState struct has expected fields
-    let game_service: Arc<GameService> = Arc::new(GameService::new());
     let settings = Arc::new(std::sync::RwLock::new(AppSettings::default()));
+    let game_service: Arc<GameService> = Arc::new(
+        GameService::with_storage(None, None, Arc::clone(&settings))
+            .expect("GameService::with_storage should succeed"),
+    );
 
     // Verify we can construct AppState-like struct with required fields
     let _app_state = (game_service, settings);

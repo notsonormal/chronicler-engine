@@ -302,11 +302,14 @@ impl TestAppBuilder {
         let settings_arc = Arc::new(RwLock::new(self.settings.clone()));
         let preset_storage = Arc::new(Storage::new_in_memory());
         let game_service: Arc<GameService> = self.game_service.unwrap_or_else(|| {
-            Arc::new(GameService::with_storage(
-                Some(Arc::clone(&storage)),
-                Some(Arc::clone(&preset_storage)),
-                Arc::clone(&settings_arc),
-            ))
+            Arc::new(
+                GameService::with_storage(
+                    Some(Arc::clone(&storage)),
+                    Some(Arc::clone(&preset_storage)),
+                    Arc::clone(&settings_arc),
+                )
+                .expect("GameService::with_storage should succeed"),
+            )
         });
         let text_check_service = Arc::new(create_text_check_service(&self.settings));
         AppState {

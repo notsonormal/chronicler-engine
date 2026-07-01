@@ -30,25 +30,27 @@ pub async fn run_server_with_config(
     let drop_settings = resources.settings.clone();
     let _ = drop_settings.write().map(|mut s| *s = settings);
 
+    let game_service = crate::application::game_service::GameService::with_storage(
+        Some(Arc::clone(&resources.storage)),
+        Some(Arc::clone(&resources.preset_storage)),
+        Arc::clone(&resources.settings),
+    )?;
+    let application_service =
+        crate::application::application_service::DefaultApplicationService::new(Arc::new(
+            crate::application::game_service::GameService::with_storage(
+                Some(Arc::clone(&resources.storage)),
+                Some(Arc::clone(&resources.preset_storage)),
+                Arc::clone(&resources.settings),
+            )?,
+        ));
+
     let app_state = AppState {
         storage: Arc::clone(&resources.storage),
         preset_storage: Arc::clone(&resources.preset_storage),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         settings: Arc::clone(&resources.settings),
-        game_service: Arc::new(crate::application::game_service::GameService::with_storage(
-            Some(Arc::clone(&resources.storage)),
-            Some(Arc::clone(&resources.preset_storage)),
-            Arc::clone(&resources.settings),
-        )),
-        application_service: Arc::new(
-            crate::application::application_service::DefaultApplicationService::new(Arc::new(
-                crate::application::game_service::GameService::with_storage(
-                    Some(Arc::clone(&resources.storage)),
-                    Some(Arc::clone(&resources.preset_storage)),
-                    Arc::clone(&resources.settings),
-                ),
-            )),
-        ),
+        game_service: Arc::new(game_service),
+        application_service: Arc::new(application_service),
         text_check_service,
         cancel_token: Arc::new(std::sync::RwLock::new(
             tokio_util::sync::CancellationToken::new(),
