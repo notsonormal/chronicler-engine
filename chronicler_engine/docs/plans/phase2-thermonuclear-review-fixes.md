@@ -1,17 +1,30 @@
 # Plan: Phase 2 Thermonuclear Review Fixes
 
-**Date:** 2026-06-30
-**Status:** Draft (not yet started)
+**Date:** 2026-06-30 (decisions locked 2026-07-01)
+**Status:** Approved (implementation in progress)
 **Scope:** `chronicler_engine/`
-**Branch target:** `hexagon-phase2` (fix-up commits) or new `hexagon-phase2-review-fixes` branch off `hexagon-phase2`
+**Branch target:** stay on current `hexagon-phase2` branch (commit fix-up commits directly)
+
+## Locked decisions (post plan-review)
+
+- **Fix 1:** Option B — delete `LlmCallResult::from_chat_result`; each provider constructs `LlmCallResult` directly in its `complete()` impl. `ChatCompletionResult` stays adapter-internal (`src/adapters/driven/llm/transport/request.rs`). Port file drops `use crate::adapters::driven::llm::transport::ChatCompletionResult;`. Original Option A plan rejected: would have moved `ChatCompletionResult` into port while Fix 12 drops its `system_prompt`/`user_prompt` echo fields → port would own adapter-shaped transport DTO with dead fields. Option B avoids that.
+- **Fix 6:** Option A — `QuantifierAgent` holds `Arc<dyn LlmProvider>` directly, drops `Arc<LlmCallRecorder>`. `with_backend` deleted; callers migrate to construct `Arc<dyn LlmProvider>` and pass directly.
+- **Fix 7:** Option B — delete dead `text_check_service` field on `DefaultApplicationService` (plus builder + accessor). Accept plan deviation from 2.3; `AppState.text_check_service` stays direct.
+- **Fix 12:** Option A — drop `system_prompt` + `user_prompt` from `LlmCallResult`. Recorder builds `LlmMessage` from its own args + chat result fields.
+- **Fix 13:** included in this plan (no defer).
+- **Fix 14:** Path A, full scope. Move `GameStateSnapshot` to `src/domain/model/state/game_state_snapshot.rs`; update all ~40 usage sites to import from domain (NO re-export shim at adapter path — full retag). Close Storage leaks in `agents/registry.rs`, `agents/quantifier/agent.rs`, `message_editing.rs`.
+- **Branch strategy:** stay on current `hexagon-phase2` branch.
+- **Scope:** no split. Test plan (`phase2-tests-coverage-fixes.md`) deferred until these fixes land.
 
 ## Context
 
 External review of branch `hexagon-phase2` (commits `4b018d3` → `0c87b12` → `923c91c`) returned **"Not approved"** with 14 findings across P0–P3 severities. Every claim in the review was independently verified against the codebase — all confirmed accurate (see Verification Log at end). Two additional structural concerns (test misalignment + missing unit tests for new files) are split into a separate plan: `phase2-tests-coverage-fixes.md`.
 
-This plan covers code-level fixes only. The test-coverage plan covers the new-file unit tests + integration-test reorganization.
+This plan covers code-level fixes only. The test-coverage plan covers the new-file unit tests + integration-test reorganization, and is deferred until this plan lands.
 
 **Reviewer verdict recap:** "Not approved. P0 #1 (port file violates the invariant the ADR is built around), P0 #2 (silent Mock fallback in prod drops forensics), and P0 #3 (double-save through MockBackend) are blocking. P1 items are clear code-judo opportunities the plan explicitly asked the reviewer to push for. P2/P3 are cleanup that can land with the fixes."
+
+**Plan-review (improve-ai-plan skill) completed 2026-07-01** — all open decisions locked, Failure modes section added, Implementation handoff section added. See locked decisions block at top.
 
 ## Related
 
@@ -72,10 +85,11 @@ Application orchestrator directly imports an adapter module function. Plan 2.1c 
 
 1. **Delete `get_llm_backend_for`** from `src/application/ports/llm_provider.rs` (lines 80-104 + surrounding `use` lines for `Storage`, `Connection`, `LlmBackendType`, the 4 provider types). Zero callers — safe delete.
 2. **Move `sanitize_llm_output`** out of `src/adapters/driven/llm/providers/sanitize.rs` to `src/application/llm_sanitizer.rs` (or inline into `llm_recorder.rs`). It's pure regex postprocessing — no I/O, no adapter concern. Update `llm_recorder.rs:35` call site + any test imports. Stale module doc comment in `sanitize.rs` referencing `LlmBackend::postprocess_response_text` (trait was deleted) gets removed with the move.
-3. **`ChatCompletionResult` resolution — choose one:**
-   - **Option A (preferred):** Move `ChatCompletionResult` DTO into the port file (or `application/ports/llm_provider.rs`) as the transport return type. Adapters fill it. `LlmCallResult::from_chat_result` then operates on a port-owned DTO.
-   - **Option B:** Drop `from_chat_result` entirely; have each provider construct `LlmCallResult` directly in its `complete()` impl. More per-provider boilerplate but cleaner port.
-   - Plan should pick A unless inspection reveals providers have divergent construction logic that B handles better.
+3. **`ChatCompletionResult` resolution — Option B (locked):** Drop `LlmCallResult::from_chat_result` entirely. Each provider (`openrouter`, `ollama`, `deepseek`, `mock`) constructs `LlmCallResult` directly in its `complete()` impl using fields from `ChatCompletionResult` (which stays adapter-internal at `src/adapters/driven/llm/transport/request.rs`). `mock.rs::make_result` already uses a literal; the other 3 providers replace `LlmCallResult::from_chat_result(agent_name, name(), model(), chat)` with a `LlmCallResult { text: chat.text, raw_request_json: chat.raw_request_json, raw_response_json: chat.raw_response_json, backend_name: self.name().to_string(), model_name: self.model().to_string(), agent_name: agent_name.to_string() }` literal.
+
+**Interaction with Fix 12:** `LlmCallResult` drops `system_prompt`/`user_prompt` in Fix 12. The literal constructed here must use post-Fix 12 field set. Implement Fix 1 provider-direct-construction + Fix 12 field-drop together (single atomic `LlmCallResult` reshaping pass) to avoid mid-step rebuilds.
+
+**Implementation note:** Plan-review rejected original Option A (move `ChatCompletionResult` into port). Reason: Fix 12 leaves that struct with dead `system_prompt`/`user_prompt` echo fields, so port-ownership would introduce dead fields at the port layer — architecturally worse than the original adapter-internal state.
 
 **Files to change:**
 - `src/application/ports/llm_provider.rs` — delete `get_llm_backend_for`, remove adapter imports
@@ -126,6 +140,10 @@ Make `get_llm_recorder_for` errors propagate. Two call sites:
    **Drop the `Mock` + `NoopForensics` fallback entirely from prod paths.** Move Mock fallback to a `#[cfg(test)]`-only feature flag if test paths genuinely need it.
 
    **Note:** `QuantifierAgent::from_config_with_storage` (NOT `QuantifierAgent::new` — that doesn't exist) already uses `?` propagation against `get_llm_recorder_for`. For `GameService::with_storage`, the same `?` pattern applies once the return type is `Result`. `GameService::new()` (line 23) also delegates to `with_storage` and would inherit the Result return — its 2 callers (`src/adapters/driving/http/mod_tests.rs:56` test + the `Default` impl at `game_service.rs:127`) must handle the new signature. Alternatively, `GameService::new()` can be deleted if its only caller is the `Default` impl and tests can use `with_storage` directly.
+
+**Caller inventory (re-verified during plan review):** `GameService::with_storage` has 10 total callers — 2 prod (`server_impl.rs:38,45`) + 8 test (`tests/poison_recovery.rs:42,77`, `src/test_support/test_app_builder.rs:305`, `settings_fragment/handlers_tests.rs:22,45`, `prompt_presets_fragment/handlers_tests.rs:26,307`). All propagate via `?` (tests use `.expect(...)`). `tests/integration/flow/arrival_persistence.rs:51` calls `task_ctx.run_sync()` (unit return) — Option A loud-skip needs no caller change.
+
+**Failure modes (per plan review):** Loud-skip (Option A) for `ArrivalTaskContext::run` returns before any `is_generating` mutation or state write (factory call at `init_game.rs:305` precedes snapshot load at `run()` line 150); no stale flag, no half-written storage. `server_impl.rs:38,45` propagation: broken LLM config halts bootstrap with logged `EngineError` (acceptable — silent degradation was the bug). Mock connection path stays infallible post-Fix 3 (`MockBackend::new()` cannot fail), so `arrival_persistence.rs:51` test stays green.
 
 **Side benefit:** removes 2 of the 9 `NoopForensics` copies (Fix 4 below).
 
@@ -283,10 +301,10 @@ pub fn with_backend(
 **Fix:**
 
 Two clean options:
-- **Option A (reviewer's preferred):** `QuantifierAgent` holds `Arc<dyn LlmProvider>` directly (not full recorder). Test (or factory) wraps in recorder if needed. Quantifier is pure consumer of `complete()` — doesn't need forensics.
+- **Option A (locked):** `QuantifierAgent` holds `Arc<dyn LlmProvider>` directly (not full recorder). Test (or factory) wraps in recorder if needed. Quantifier is pure consumer of `complete()` — doesn't need forensics.
 - **Option B:** Move `with_backend` to `test_support/` as `QuantifierAgent::test_with_backend(...)`, keep prod `QuantifierAgent::from_config_with_storage` using `Arc<LlmCallRecorder>`.
 
-Option A is cleaner. Plan should pick A unless existing call sites prove hard to migrate.
+Option A locked. Implement per Option A unless existing call sites prove hard to migrate (re-verify during implementation).
 
 **Note:** `QuantifierAgent` has NO `new` constructor. Prod constructors are `from_config` and `from_config_with_storage`. Don't reference a fictional `QuantifierAgent::new`.
 
@@ -315,7 +333,7 @@ HTTP layer bypasses `ApplicationService` entirely — `AppState.text_check_servi
 - **Option A (plan compliance):** Wire through `ApplicationService`. HTTP layer calls `app.application_service.text_check_service().check_player_input(...)` instead of `state.text_check_service().check_player_input(...)`. `ApplicationService::new` takes the `TextCheckService` (no `Option`), `with_text_check_service` builder goes away (becomes required arg in constructor). `AppState` drops its direct `text_check_service` field; routing goes through `ApplicationService`.
 - **Option B (delete dead code):** Delete field + builder + accessor on `ApplicationService`. Accept that text-check lives on `AppState` directly. Document deviation from plan 2.3 in `hexagonal-reorganization-plan.md` Phase 2 deviations.
 
-Plan should pick B unless reviewers want strict ADR-027 plan compliance. B is simpler — less surface area. A is plan-correct but adds an indirection layer.
+Plan picks B (locked during plan review) — simpler, less surface area, accepts the plan deviation from 2.3. Document deviation in `hexagonal-reorganization-plan.md` Phase 2 deviations when this lands.
 
 **Files to change (Option B):**
 - `src/application/application_service.rs` — delete field, builder, accessor, import
@@ -406,10 +424,12 @@ Recorder passes `(system_prompt, user_prompt)` into `provider.complete(...)`, th
 
 **Fix — choose one:**
 
-- **Option A (reviewer's preferred):** Build the `LlmMessage` in the recorder from its args + the chat result fields. Drop `system_prompt` + `user_prompt` from `LlmCallResult`. Adapters no longer echo them back.
+- **Option A (locked):** Build the `LlmMessage` in the recorder from its args + the chat result fields. Drop `system_prompt` + `user_prompt` from `LlmCallResult`. Adapters no longer echo them back.
 - **Option B:** Keep the round-trip — document why (e.g. if some adapter needs to mutate the prompts during transport).
 
-Option A is cleaner unless inspection reveals a real reason for B. Plan should pick A.
+Option A locked. Grep confirms no provider mutates `system_prompt`/`user_prompt` during transport today (MockBackend echoes `""`; openrouter/ollama/deepseek echo their input args). Regression risk: zero now, but the contract is tightened — provider loses round-trip channel for prompts. Documented as intentional.
+
+**Implement together with Fix 1 provider-direct-construction (single atomic `LlmCallResult` reshaping pass).**
 
 **Files to change:**
 - `src/application/ports/llm_provider.rs` — drop 2 fields + update `to_message` (or delete `to_message` and move construction to recorder)
@@ -432,7 +452,7 @@ Option A is cleaner unless inspection reveals a real reason for B. Plan should p
 
 All eventually thread back from `run_from_input(&ctx, ...)`.
 
-**Fix (deferred per reviewer):**
+**Fix (included in this plan per plan-review decision — not deferred):**
 
 Introduce a `PipelineRun<'a>` struct borrowing `(pipeline, ctx)` for the duration of `run_from_input`:
 
@@ -457,7 +477,7 @@ impl ActionPipeline {
 
 Drops ~15 `ctx` parameters across `phases.rs`. Not a blocker — accept defer to a Phase 2.x cleanup pass if scope creeps.
 
-**Reviewer flagged as "Acceptable to defer, but call it out as missed cleanup."**
+**Reviewer flagged as "Acceptable to defer, but call it out as missed cleanup."** Plan-review decision: include in this plan, no defer.
 
 **Files to change:**
 - `src/application/action_pipeline/phases.rs` — extract `PipelineRun<'a>`, rewrite 9 phase method signatures
@@ -498,13 +518,14 @@ Two distinct violation patterns exist — they should not be conflated:
 **Fix:**
 
 Two paths:
-- **Path A (close the leaks):** Fix the leaks so ADR-027's claim becomes true.
+- **Path A (locked, full scope):** Close the leaks so ADR-027's claim becomes true.
   - `ports/llm_provider.rs` imports — closed by Fix 1.
   - `agents/registry.rs` + `agents/quantifier/agent.rs` — route through `LlmCallRecorder` (or another port) instead of importing `Storage` directly. Plan 2.1 should have closed these per the original "core → ports only" invariant. Investigate why worker left these imports.
-  - `message_editing.rs` `GameStateSnapshot` import — this is a DTO import, not a Storage import. `GameStateSnapshot` should move to `domain/model/` (it's a value type) and be re-exported from there. Then `message_editing.rs` + the 3 exempted files can import it from `domain/` instead of `adapters/driven/storage/snapshot_blob`.
-- **Path B (honest ADR):** Update ADR-027 to honestly describe the actual exemption list. Add `agents/registry.rs`, `agents/quantifier/agent.rs`, `message_editing.rs` to the exemption list with rationale + markers. Accept the deviation as documented.
+  - `message_editing.rs` `GameStateSnapshot` import — this is a DTO import, not a Storage import. `GameStateSnapshot` moves to `src/domain/model/state/game_state_snapshot.rs` (value type). All ~40 usage sites retagged to import from `domain::` — NO re-export shim at the adapter path. Plan-review decision: full retag, no shim.
+  - The 3 "exempted" files (`context.rs`, `application_service.rs`) also update their import path to `domain::`.
+- **Path B (fallback):** Update ADR-027 to honestly describe the actual exemption list. Add `agents/registry.rs`, `agents/quantifier/agent.rs`, `message_editing.rs` to the exemption list with rationale + markers. Accept the deviation as documented.
 
-Plan should pick Path A — closing leaks is the spirit of Phase 2. Path B is fallback if any leak proves hard to close without breaking T2 reliability plan work.
+Path A locked. **Fallback trigger:** if closing the `agents/registry.rs` + `agents/quantifier/agent.rs` leaks proves load-bearing (constructor signature cascade into T2 reliability plan territory — these constructors take `Storage` to build their own LLM recorder via `get_llm_recorder_for(..., Arc<Storage>)`), fall back to Path B for those 2 files ONLY. `message_editing.rs` leak closes unconditionally via the snapshot move. **Risk flag:** the Storage-arg-to-agents pattern is T2-adjacent; don't let it block the rest of Path A.
 
 **Files to change:**
 - `docs/adr/adr-027-hexagonal-architecture-migration.md` — update exemption count + list
@@ -554,22 +575,79 @@ Each step ends with `python build.py` green.
 
 ---
 
-## Open decisions (need user input before implementation)
+## Open decisions (all locked during plan review)
 
-1. **Fix 1 — `ChatCompletionResult` placement:** Option A (move into port) vs Option B (drop `from_chat_result`, providers construct `LlmCallResult` directly).
-2. **Fix 6 — `QuantifierAgent` shape:** Option A (hold `Arc<dyn LlmProvider>` directly) vs Option B (move `with_backend` to `test_support/`).
-3. **Fix 7 — `text_check_service` field:** Option A (wire through ApplicationService per plan 2.3) vs Option B (delete dead field, accept plan deviation).
-4. **Fix 12 — `LlmCallResult` prompts:** Option A (drop fields, build `LlmMessage` in recorder) vs Option B (keep, document reason).
-5. **Fix 13 — `PipelineRun` refactor:** defer to separate Phase 2.x cleanup or include in this plan?
-6. **Fix 14 — Path A (close leaks) vs Path B (honest ADR):** reviewer preferred A; user call on `agents/registry.rs` + `agents/quantifier/agent.rs` + `message_editing.rs` work scope.
-7. **Branch strategy:** fix-up commits on `hexagon-phase2` or new `hexagon-phase2-review-fixes` branch off it?
+1. **Fix 1 — `ChatCompletionResult` placement:** Option B locked. Providers construct `LlmCallResult` directly; `ChatCompletionResult` stays adapter-internal.
+2. **Fix 6 — `QuantifierAgent` shape:** Option A locked. Holds `Arc<dyn LlmProvider>` directly.
+3. **Fix 7 — `text_check_service` field:** Option B locked. Delete dead field; document deviation.
+4. **Fix 12 — `LlmCallResult` prompts:** Option A locked. Drop fields; recorder builds `LlmMessage` from args.
+5. **Fix 13 — `PipelineRun` refactor:** included in this plan, no defer.
+6. **Fix 14 — Path A full scope locked.** Path B fallback only for `agents/registry.rs` + `agents/quantifier/agent.rs` IF leak-closing proves T2-load-bearing.
+7. **Branch strategy:** new `hexagon-phase2-review-fixes` branch off `hexagon-phase2`.
 8. **Phase 2 Deviation 1 amendment:** Fix 3 removes the MockBackend storage-field deviation. Update `hexagonal-reorganization-plan.md` Phase 2 deviations list to reflect amendment.
 
 ---
 
 ## What this plan does NOT cover
 
-- **Missing unit tests for new Phase 2 files** (`llm_recorder.rs`, `text_check_service.rs`, `llm_factory.rs`, `text_check_factory.rs`, `llm_message_repository.rs`, `text_checker.rs`) — separate plan: `phase2-tests-coverage-fixes.md`.
-- **Integration test folder/file structure misalignment** with `src/` — separate plan: `phase2-tests-coverage-fixes.md`.
+- **Missing unit tests for new Phase 2 files** (`llm_recorder.rs`, `text_check_service.rs`, `llm_factory.rs`, `text_check_factory.rs`, `llm_message_repository.rs`, `text_checker.rs`) — separate plan: `phase2-tests-coverage-fixes.md` (deferred until this plan lands).
+- **Integration test folder/file structure misalignment** with `src/` — separate plan: `phase2-tests-coverage-fixes.md` (deferred).
 - **T2 reliability plan work** (`ArrivalTaskContext` cancel-token registration + reset race) — `docs/plans/reliability-and-cancellation-plan.md`. Phase 2 Deviation 3 noted T2 not in active window; re-audit when T2 lands.
 - **arch-lint rule activation** — Phase 1.7 deviation persists. Out of scope. Marker comments + grep-based acceptance remain status quo.
+
+---
+
+## Failure modes (per plan review)
+
+For each new codepath introduced or behavior change:
+
+- **Fix 2 — `get_llm_recorder_for` returns `Err` in prod:**
+  - `GameService::with_storage` propagates `?` → callers panic (`.expect`) or propagate further (server bootstrap). Affects `server_impl.rs:38,45` — server fails to start with logged `EngineError`. Acceptable: broken LLM config should halt bootstrap, not silently degrade.
+  - `ArrivalTaskContext::run` loud-skips (Option A): logs `error!` and returns. Early-return happens BEFORE any `is_generating` mutation or state write (factory call at `init_game.rs:305` precedes snapshot load at `run()` line 150). No cleanup needed; no stale `is_generating=true`; no half-written state in storage.
+  - Test paths using `with_backends`/`with_mock_quantifier` unaffected — inject explicit recorders.
+
+- **Fix 3 — `MockBackend::new()` no-storage:**
+  - Tests previously asserting on MockBackend's self-save now fail loudly. Migration assert: drive through `LlmCallRecorder::complete` + assert on injected repo. If a test silently constructs MockBackend with `None` and then asserts forensics were saved → test fails (correct signal — those tests were testing the double-save behavior, which was the bug).
+
+- **Fix 4 + Fix 6 — shared `NoopForensics` / `make_test_recorder` migration:**
+  - If any test site continues to define its own local `NoopForensics` after the canonical import exists → grep-based acceptance (`struct NoopForensics` count = 1) catches it.
+  - If a test previously relied on `QuantifierAgent::with_backend` wrapping its injected provider in an ad-hoc recorder with NoopForensics, the migrated version must explicitly construct `Arc<dyn LlmProvider>` and pass directly. Risk: test loses NoopForensics-wrapped recorder behavior. Acceptable — Quantifier was the only consumer of that provider, and forensics for quantifier calls now flow through the actual storage-injected recorder at the orchestrator layer (which is the whole point of Fix 6).
+
+- **Fix 5 — `GameService::pipeline()` returning by value:**
+  - 3 `Arc::clone`s per call. Cheap (Arc refcount). No lifetime hazard (verified — `ActionPipeline` has no lifetime param). Failure mode: none — pure refactor.
+
+- **Fix 1 + Fix 12 (atomic) — provider-direct-construction + `LlmCallResult` field-drop:**
+  - Each of 4 providers must now build `LlmCallResult` literally instead of via helper. `mock.rs::make_result` already constructs the literal directly (just wraps in helper) — easiest migration. `openrouter/ollama/deepseek` use `call()` → `from_chat_result`. They replace with `LlmCallResult { text: chat.text, raw_request_json: chat.raw_request_json, raw_response_json: chat.raw_response_json, ... }`. Risk: field-set drift between providers if one forgets a field. Mitigation: clippy catches unused fields; tests catch missing field. Acceptable.
+  - If a future provider's `complete()` mutates `system_prompt`/`user_prompt` during transport (e.g., token compression), the recorder now uses the ORIGINAL args, not the mutated ones. Grep confirms no provider mutates these today. Regression risk: zero now, but the contract is tightened — provider loses round-trip channel for prompts. Documented as intentional.
+
+- **Fix 13 — `PipelineRun<'a>` refactor:**
+  - Pure refactor, no behavior change. Borrow lifetime ties pipeline+ctx to `run_from_input`'s scope. Failure mode: borrow-checker rejection if a phase method escapes with `self` reference leak. Mitigation: phases.rs methods already return `ActionOutcome` (owned), no reference escape.
+
+- **Fix 14 Path A — `GameStateSnapshot` move + leak closing in `agents/registry.rs`,`agents/quantifier/agent.rs`:**
+  - If leaks prove load-bearing (constructor signature cascade into T2 territory), plan fallback to Path B (honest exemption list) for those specific files only. `message_editing.rs` leak closes unconditionally via the snapshot move. Don't let it block the rest.
+
+- **`server_impl.rs` no-op write-back deletion (Fix 9):**
+  - Removing the write-back is pure no-op removal. The `read_lock_or_recover` produces a clone used only for `text_check_service` construction; the deleted lines wrote that same value back to the lock it was just read from. Zero behavior change.
+
+- **Coverage regression check:**
+  - `python build.py --coverage` gate: overall ≥80% threshold must hold post-fix. Pre-fix level is 86.3%. Several Phase 2 files have <50% coverage today and will only be re-tested in the deferred test plan. If coverage drops below 80% due to behavioral-path shifts during these fixes, the gate fails — and since test plan is deferred, the fix plan must not introduce untested new codepaths. Confirmed: every change here is behavior-preserving at the public-API level OR tightens error propagation (Fix 2), so existing tests should remain sufficient. If any existing test breaks due to error-propagation strictness, handle inline — not a plan-level blocker.
+
+---
+
+## Implementation handoff (parent orchestrates subagents)
+
+Sequencing constraint: each step ends with `python build.py` green; steps share files, so implementation MUST be sequential. Workers operate one at a time on the active worktree; parent verifies with `build.py` + targeted grep between steps.
+
+SP estimate + agent routing per step (per AGENTS.md §"PREFER TO USE SUBAGENTS FOR WORK"):
+
+1. **Fix 1 port-cleanup (delete dead `get_llm_backend_for` + adapter imports) + sanitize move** — ~5 SP → `worker`.
+2. **Fix 1 finish (provider direct-construction) + Fix 11 (drop builder) + Fix 12 (drop fields)** — ~5 SP → `worker`. Single atomic `LlmCallResult`/`LlmMessage` reshaping pass.
+3. **Fix 2 + Fix 10** (silent Mock fallback removal + `GameService::with_storage` → `Result`) — ~8 SP → break into: (a) `GameService`/`init_game` signature change (worker), (b) caller propagation across 10 sites (worker).
+4. **Fix 3 MockBackend storage drop** — ~5 SP → `worker`. Migrate `test_mock_backend_logs_to_storage` + 2 `mock_tests.rs` sites + 20+ `MockBackend::new(Some(...))` test sites.
+5. **Fix 4 NoopForensics extract + `make_test_recorder` dedupe** — ~5 SP → `worker`.
+6. **Fix 6 QuantifierAgent reshape** — ~8 SP → `worker`. Migrate 5 `agent_tests.rs` callers + 9 `pipeline/actions_tests.rs` callers.
+7. **Fix 5 `GameService::pipeline()`** — ~3 SP → `delegate`.
+8. **Fix 7 dead field deletion** — ~1 SP → `delegate`.
+9. **Fix 9 no-op + dedupe** — ~3 SP → `delegate`.
+10. **Fix 13 `PipelineRun<'a>` refactor** — ~5 SP → `worker`.
+11. **Fix 14 Path A — `GameStateSnapshot` move + full retag + leak closing + ADR update** — ~13 SP → break into: (a) snapshot move + re-tag ~40 sites (worker), (b) close `agents/registry.rs` + `agents/quantifier/agent.rs` Storage leaks (worker), (c) ADR-027 update (delegate).
