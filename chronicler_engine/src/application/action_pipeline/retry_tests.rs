@@ -4,8 +4,6 @@ use crate::application::action_pipeline::retry::{
     retry_event_continuation, retry_last_response_impl, retry_main_narration,
 };
 use crate::application::context::GameServiceContext;
-use crate::application::llm_recorder::LlmCallRecorder;
-use crate::application::ports::llm_provider::LlmProvider;
 
 #[allow(unused_imports)]
 use crate::application::game_service::GameService;
@@ -18,29 +16,7 @@ use crate::application::ports::llm_provider::LlmCallResult;
 use crate::adapters::driven::storage::{Storage, TestOverride};
 use crate::test_support::fixtures::{TestGameState, TestNpc};
 use crate::test_support::make_test_context_with_sqlite;
-
-/// Test helper: wrap a provider in a LlmCallRecorder with noop forensics
-fn make_test_recorder(provider: Arc<dyn LlmProvider>) -> Arc<LlmCallRecorder> {
-    struct NoopForensics;
-    impl crate::application::ports::llm_message_repository::LlmMessageRepository for NoopForensics {
-        fn save_llm_message(
-            &self,
-            _: &crate::application::ports::llm_message_repository::LlmMessage,
-        ) -> Result<(), crate::error::EngineError> {
-            Ok(())
-        }
-        fn list_latest_llm_messages(
-            &self,
-            _: usize,
-        ) -> Result<
-            Vec<crate::application::ports::llm_message_repository::LlmMessage>,
-            crate::error::EngineError,
-        > {
-            Ok(vec![])
-        }
-    }
-    Arc::new(LlmCallRecorder::new(provider, Arc::new(NoopForensics)))
-}
+use crate::test_support::make_test_recorder;
 
 fn make_test_state() -> GameState {
     TestGameState::with_npc("start", TestNpc::named("npc1", "Test NPC"))

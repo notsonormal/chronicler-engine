@@ -19,7 +19,7 @@ use chronicler_engine::domain::model::state::game_state::GameState;
 use chronicler_engine::domain::model::state::generation_status::GenerationStatus;
 use chronicler_engine::application::agents::registry::AgentRegistry;
 use chronicler_engine::adapters::driving::http::fragments::GenerationGuard;
-use chronicler_engine::test_support::make_test_context_with_sqlite;
+use chronicler_engine::test_support::{make_test_context_with_sqlite, make_test_recorder};
 
 #[path = "../helpers/fixtures.rs"]
 mod fixtures;
@@ -28,37 +28,6 @@ mod pipeline_helpers;
 
 use pipeline_helpers::{create_test_state_with_trigger_npc, latest_state};
 use fixtures::create_test_state;
-
-fn make_test_recorder(
-    provider: std::sync::Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider>,
-) -> std::sync::Arc<chronicler_engine::application::llm_recorder::LlmCallRecorder> {
-    use chronicler_engine::application::ports::llm_message_repository::LlmMessageRepository;
-    use chronicler_engine::error::EngineError;
-    struct NoopForensics;
-    impl LlmMessageRepository for NoopForensics {
-        fn save_llm_message(
-            &self,
-            _: &chronicler_engine::application::ports::llm_message_repository::LlmMessage,
-        ) -> Result<(), EngineError> {
-            Ok(())
-        }
-        fn list_latest_llm_messages(
-            &self,
-            _: usize,
-        ) -> Result<
-            Vec<chronicler_engine::application::ports::llm_message_repository::LlmMessage>,
-            EngineError,
-        > {
-            Ok(vec![])
-        }
-    }
-    std::sync::Arc::new(
-        chronicler_engine::application::llm_recorder::LlmCallRecorder::new(
-            provider,
-            std::sync::Arc::new(NoopForensics),
-        ),
-    )
-}
 
 #[test]
 fn test_inv001_generation_guard_resets_on_drop() {

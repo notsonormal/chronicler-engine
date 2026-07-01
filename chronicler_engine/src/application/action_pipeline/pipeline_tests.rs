@@ -12,30 +12,7 @@ use crate::adapters::driven::storage::{Storage, TestOverride};
 use crate::adapters::driven::llm::providers::MockBackend;
 use crate::test_support::fixtures::{TestGameState, TestNpc};
 use crate::test_support::make_test_context;
-
-fn make_test_recorder(
-    provider: Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
-) -> Arc<LlmCallRecorder> {
-    struct NoopForensics;
-    impl crate::application::ports::llm_message_repository::LlmMessageRepository for NoopForensics {
-        fn save_llm_message(
-            &self,
-            _: &crate::application::ports::llm_message_repository::LlmMessage,
-        ) -> Result<(), crate::error::EngineError> {
-            Ok(())
-        }
-        fn list_latest_llm_messages(
-            &self,
-            _: usize,
-        ) -> Result<
-            Vec<crate::application::ports::llm_message_repository::LlmMessage>,
-            crate::error::EngineError,
-        > {
-            Ok(vec![])
-        }
-    }
-    Arc::new(LlmCallRecorder::new(provider, Arc::new(NoopForensics)))
-}
+use crate::test_support::make_test_recorder;
 
 fn make_test_pipeline(
     _ctx: &GameServiceContext,

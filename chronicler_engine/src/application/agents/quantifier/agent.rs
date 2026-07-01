@@ -63,34 +63,13 @@ impl QuantifierAgent {
         })
     }
 
+    #[cfg(feature = "testing")]
     pub fn with_backend(
         name: String,
         recorder_or_provider: Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
     ) -> Self {
-        // For tests, create a recorder with the given provider and mock forensics
-        use crate::application::ports::llm_message_repository::LlmMessageRepository;
-        struct NoopForensics;
-        impl LlmMessageRepository for NoopForensics {
-            fn save_llm_message(
-                &self,
-                _message: &crate::application::ports::llm_message_repository::LlmMessage,
-            ) -> Result<(), EngineError> {
-                Ok(())
-            }
-            fn list_latest_llm_messages(
-                &self,
-                _limit: usize,
-            ) -> Result<
-                Vec<crate::application::ports::llm_message_repository::LlmMessage>,
-                EngineError,
-            > {
-                Ok(Vec::new())
-            }
-        }
-        let recorder = Arc::new(LlmCallRecorder::new(
-            recorder_or_provider,
-            Arc::new(NoopForensics),
-        ));
+        use crate::test_support::noop_forensics::make_test_recorder;
+        let recorder = make_test_recorder(recorder_or_provider);
         Self {
             name,
             recorder,

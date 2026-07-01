@@ -1,5 +1,6 @@
 pub mod context;
 pub mod fixtures;
+pub mod noop_forensics;
 pub mod test_app_builder;
 
 #[cfg(test)]
@@ -9,4 +10,5 @@ pub use context::{
     make_test_context, make_test_context_with_sqlite, make_test_context_without_snapshot,
 };
 pub use fixtures::*;
+pub use noop_forensics::{make_test_recorder, make_test_recorder_with_storage, NoopForensics};
 pub use test_app_builder::TestAppBuilder;

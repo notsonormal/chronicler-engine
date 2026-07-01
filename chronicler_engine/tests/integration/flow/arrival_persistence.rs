@@ -4,16 +4,9 @@ use chronicler_engine::bootstrap::test_api::ArrivalTaskContext;
 use chronicler_engine::domain::model::character::NpcCard;
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::domain::model::state::message_types::MessageType;
-use chronicler_engine::test_support::make_test_context_with_sqlite;
+use chronicler_engine::test_support::{make_test_context_with_sqlite, make_test_recorder_with_storage};
 
 use crate::pipeline_helpers::{create_test_state_with_map, latest_state};
-
-fn make_test_recorder(
-    provider: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider>,
-    storage: Arc<chronicler_engine::adapters::driven::storage::Storage>,
-) -> Arc<chronicler_engine::application::llm_recorder::LlmCallRecorder> {
-    Arc::new(chronicler_engine::application::llm_recorder::LlmCallRecorder::new(provider, storage))
-}
 
 #[test]
 fn test_arrival_narration_survives_reload() {
@@ -31,7 +24,7 @@ fn test_arrival_narration_survives_reload() {
     let nearby_npcs: Vec<NpcCard> = vec![];
     let all_npcs: Vec<NpcCard> = vec![];
 
-    let recorder = make_test_recorder(
+    let recorder = make_test_recorder_with_storage(
         Arc::new(MockBackend::default())
             as Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider>,
         Arc::clone(&ctx.storage),

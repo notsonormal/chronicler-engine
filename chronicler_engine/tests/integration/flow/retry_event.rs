@@ -1,9 +1,6 @@
 use std::sync::Arc;
 
 use chronicler_engine::application::game_service::GameService;
-use chronicler_engine::application::llm_recorder::LlmCallRecorder;
-use chronicler_engine::application::ports::llm_provider::LlmProvider;
-use chronicler_engine::application::ports::llm_message_repository::LlmMessageRepository;
 use chronicler_engine::domain::model::character::{CharacterSheet, NpcCard};
 use chronicler_engine::domain::model::state::game_state::GameState;
 use chronicler_engine::domain::model::state::message_types::MessageType;
@@ -12,8 +9,7 @@ use chronicler_engine::domain::model::trigger::{
 };
 use chronicler_engine::domain::model::world::WorldCard;
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
-use chronicler_engine::error::EngineError;
-use chronicler_engine::test_support::make_test_context_with_sqlite;
+use chronicler_engine::test_support::{make_test_context_with_sqlite, make_test_recorder};
 use crate::make_test_recorder_with_storage;
 
 use crate::pipeline_helpers::{
@@ -21,28 +17,6 @@ use crate::pipeline_helpers::{
     wait_for_generation_complete,
 };
 use crate::fixtures::create_test_map;
-
-fn make_test_recorder(provider: Arc<dyn LlmProvider>) -> Arc<LlmCallRecorder> {
-    struct NoopForensics;
-    impl LlmMessageRepository for NoopForensics {
-        fn save_llm_message(
-            &self,
-            _: &chronicler_engine::application::ports::llm_message_repository::LlmMessage,
-        ) -> Result<(), EngineError> {
-            Ok(())
-        }
-        fn list_latest_llm_messages(
-            &self,
-            _: usize,
-        ) -> Result<
-            Vec<chronicler_engine::application::ports::llm_message_repository::LlmMessage>,
-            EngineError,
-        > {
-            Ok(vec![])
-        }
-    }
-    Arc::new(LlmCallRecorder::new(provider, Arc::new(NoopForensics)))
-}
 
 #[test]
 fn test_event_retry_does_not_create_extra_swipe_on_narration() {
