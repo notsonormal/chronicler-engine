@@ -24,7 +24,7 @@ fn test_delayed_llm_completes_without_deadlock() {
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = GameService::with_mock_quantifier(
         crate::make_test_recorder(Arc::new(MockBackend::default().with_delay(200))),
-        crate::make_test_recorder(Arc::new(MockBackend::default())),
+        Arc::new(MockBackend::default()),
     );
 
     backend.execute_action(ctx.clone(), "look around".to_string());
@@ -47,11 +47,11 @@ fn test_quantifier_detects_movement() {
     state.narrative.history.clear();
     state.narrative.input_buffer.status = GenerationStatus::Generating;
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let quantifier_recorder = crate::make_test_recorder(Arc::new(
+    let quantifier_recorder: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> = Arc::new(
         MockBackend::default().with_prompt_responses(vec![
             r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "village_square"}}"#.to_string(),
         ]),
-    ));
+    );
     let backend = GameService::with_mock_quantifier(
         crate::make_test_recorder(Arc::new(MockBackend::default())),
         quantifier_recorder,
@@ -82,10 +82,12 @@ fn test_quantifier_detects_npc_presence_and_fires_trigger() {
         encounter.times_met = 0;
     }
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let quantifier_recorder = crate::make_test_recorder(Arc::new(
+    let quantifier_recorder: Arc<
+        dyn chronicler_engine::application::ports::llm_provider::LlmProvider,
+    > = Arc::new(
         MockBackend::default()
             .with_prompt_responses(vec![r#"{"npcs_in_room": ["shopkeeper"]}"#.to_string()]),
-    ));
+    );
     let backend = GameService::with_mock_quantifier(
         crate::make_test_recorder(Arc::new(MockBackend::default())),
         quantifier_recorder,
@@ -126,7 +128,7 @@ fn test_empty_llm_response_handled_gracefully() {
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = GameService::with_mock_quantifier(
         crate::make_test_recorder(Arc::new(MockBackend::default().with_empty_response())),
-        crate::make_test_recorder(Arc::new(MockBackend::default())),
+        Arc::new(MockBackend::default()),
     );
 
     backend.execute_action(ctx.clone(), "examine the room".to_string());
@@ -161,10 +163,12 @@ fn test_failing_trigger_narration_does_not_crash() {
         encounter.times_met = 0;
     }
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let quantifier_recorder = crate::make_test_recorder(Arc::new(
+    let quantifier_recorder: Arc<
+        dyn chronicler_engine::application::ports::llm_provider::LlmProvider,
+    > = Arc::new(
         MockBackend::default()
             .with_prompt_responses(vec![r#"{"npcs_in_room": ["shopkeeper"]}"#.to_string()]),
-    ));
+    );
     let backend = GameService::with_mock_quantifier(
         crate::make_test_recorder(Arc::new(
             MockBackend::default().with_trigger_narration_fail(),
@@ -225,7 +229,7 @@ async fn test_cancellation_resets_state_to_idle() {
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = GameService::with_mock_quantifier(
         crate::make_test_recorder(Arc::new(MockBackend::default().with_delay(50))),
-        crate::make_test_recorder(Arc::new(MockBackend::default())),
+        Arc::new(MockBackend::default()),
     );
     let token = ctx.cancel_token.clone();
 
@@ -248,7 +252,9 @@ async fn test_pipeline_cancels_after_main_narration() {
     let mock_narrator_backend = Arc::new(MockBackend::default().with_delay(50));
     let mock_narrator_recorder = crate::make_test_recorder(Arc::clone(&mock_narrator_backend)
         as Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider>);
-    let quantifier_recorder = crate::make_test_recorder(Arc::new(MockBackend::default()));
+    let quantifier_recorder: Arc<
+        dyn chronicler_engine::application::ports::llm_provider::LlmProvider,
+    > = Arc::new(MockBackend::default());
     let backend = Arc::new(GameService::with_mock_quantifier(
         mock_narrator_recorder,
         quantifier_recorder,
@@ -297,10 +303,12 @@ async fn test_pipeline_cancels_during_trigger_continuation() {
     let mock_narrator_backend = Arc::new(MockBackend::default().with_trigger_delay(50));
     let mock_narrator_recorder = crate::make_test_recorder(Arc::clone(&mock_narrator_backend)
         as Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider>);
-    let quantifier_recorder = crate::make_test_recorder(Arc::new(
+    let quantifier_recorder: Arc<
+        dyn chronicler_engine::application::ports::llm_provider::LlmProvider,
+    > = Arc::new(
         MockBackend::default()
             .with_prompt_responses(vec![r#"{"npcs_in_room": ["shopkeeper"]}"#.to_string()]),
-    ));
+    );
     let backend = Arc::new(GameService::with_mock_quantifier(
         mock_narrator_recorder,
         quantifier_recorder,
@@ -352,7 +360,7 @@ fn test_pre_main_snapshot_saved_before_narration() {
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = GameService::with_mock_quantifier(
         crate::make_test_recorder(Arc::new(MockBackend::default())),
-        crate::make_test_recorder(Arc::new(MockBackend::default())),
+        Arc::new(MockBackend::default()),
     );
 
     backend.execute_action(ctx.clone(), "examine the room".to_string());
@@ -374,10 +382,12 @@ fn test_pre_event_snapshot_saved_before_continuation() {
     }
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
-    let quantifier_recorder = crate::make_test_recorder(Arc::new(
+    let quantifier_recorder: Arc<
+        dyn chronicler_engine::application::ports::llm_provider::LlmProvider,
+    > = Arc::new(
         MockBackend::default()
             .with_prompt_responses(vec![r#"{"npcs_in_room": ["shopkeeper"]}"#.to_string()]),
-    ));
+    );
 
     let backend = GameService::with_mock_quantifier(
         crate::make_test_recorder(Arc::new(MockBackend::default())),
@@ -404,7 +414,7 @@ fn test_pipeline_with_quantifier() {
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = GameService::with_mock_quantifier(
         crate::make_test_recorder(Arc::new(MockBackend::default())),
-        crate::make_test_recorder(Arc::new(MockBackend::default())),
+        Arc::new(MockBackend::default()),
     );
 
     backend.execute_action(ctx.clone(), "look around".to_string());
@@ -432,11 +442,13 @@ fn test_streaming_narration_saved_before_quantifier_complete() {
     state.narrative.input_buffer.status = GenerationStatus::Generating;
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
-    let quantifier_recorder = crate::make_test_recorder(Arc::new(
+    let quantifier_recorder: Arc<
+        dyn chronicler_engine::application::ports::llm_provider::LlmProvider,
+    > = Arc::new(
         MockBackend::default()
             .with_prompt_responses(vec![r#"{"npcs_in_room": []}"#.to_string()])
             .with_delay(500),
-    ));
+    );
     let backend = GameService::with_mock_quantifier(
         crate::make_test_recorder(Arc::new(MockBackend::default())),
         quantifier_recorder,
@@ -493,7 +505,7 @@ fn test_narration_no_duplicate_with_real_quantifier_flow() {
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = GameService::with_mock_quantifier(
         crate::make_test_recorder(Arc::new(MockBackend::default())),
-        crate::make_test_recorder(Arc::new(MockBackend::default())),
+        Arc::new(MockBackend::default()),
     );
 
     backend.execute_action(ctx.clone(), "test action".to_string());
@@ -531,7 +543,7 @@ fn test_pipeline_continues_when_quantifier_save_warns() {
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = GameService::with_mock_quantifier(
         crate::make_test_recorder(Arc::new(MockBackend::default())),
-        crate::make_test_recorder(Arc::new(MockBackend::default())),
+        Arc::new(MockBackend::default()),
     );
 
     backend.execute_action(ctx.clone(), "look".to_string());

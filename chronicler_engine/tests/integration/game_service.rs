@@ -13,7 +13,8 @@ use crate::pipeline_helpers::{latest_state, add_input_and_save};
 #[test]
 fn test_with_storage_uses_external() {
     let llm_backend = crate::make_test_recorder(Arc::new(MockBackend::default()));
-    let quantifier = crate::make_test_recorder(Arc::new(MockBackend::default()));
+    let quantifier: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
+        Arc::new(MockBackend::default());
     let service = GameService::with_mock_quantifier(llm_backend, quantifier);
 
     let state = create_test_state();
@@ -111,7 +112,7 @@ fn test_execute_action_clears_last_trigger() {
 fn test_execute_action_cancellation() {
     let service = GameService::with_mock_quantifier(
         crate::make_test_recorder(Arc::new(MockBackend::default().with_delay(100))),
-        crate::make_test_recorder(Arc::new(MockBackend::default())),
+        Arc::new(MockBackend::default()),
     );
 
     let state = create_test_state();

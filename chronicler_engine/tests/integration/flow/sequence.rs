@@ -20,7 +20,7 @@ fn test_sequential_execute_retry_execute() {
             Arc::new(MockBackend::new()),
             Arc::clone(&ctx.storage),
         ),
-        crate::make_test_recorder(Arc::new(MockBackend::default())),
+        Arc::new(MockBackend::default()),
     );
 
     add_input_and_save(&ctx, "examine room");
@@ -80,7 +80,7 @@ fn test_sequential_execute_delete_execute() {
             Arc::new(MockBackend::new()),
             Arc::clone(&ctx.storage),
         ),
-        crate::make_test_recorder(Arc::new(MockBackend::default())),
+        Arc::new(MockBackend::default()),
     );
 
     add_input_and_save(&ctx, "examine room");
@@ -135,7 +135,7 @@ fn test_async_action_sequence_then_retry() {
             Arc::new(MockBackend::new()),
             Arc::clone(&ctx.storage),
         ),
-        crate::make_test_recorder(Arc::new(MockBackend::default())),
+        Arc::new(MockBackend::default()),
     );
 
     add_input_and_save(&ctx, "hello");
@@ -170,7 +170,7 @@ fn test_three_actions_in_sequence() {
             Arc::new(MockBackend::new()),
             Arc::clone(&ctx.storage),
         ),
-        crate::make_test_recorder(Arc::new(MockBackend::default())),
+        Arc::new(MockBackend::default()),
     );
 
     for action in ["examine room", "look around", "check inventory"] {
@@ -216,7 +216,7 @@ fn test_delete_input_then_retry_fails_gracefully() {
             Arc::new(MockBackend::new()),
             Arc::clone(&ctx.storage),
         ),
-        crate::make_test_recorder(Arc::new(MockBackend::default())),
+        Arc::new(MockBackend::default()),
     );
 
     service.execute_action(ctx.clone(), "examine room".to_string());
@@ -254,7 +254,7 @@ fn test_reset_clears_history_and_state() {
             Arc::new(MockBackend::new()),
             Arc::clone(&ctx.storage),
         ),
-        crate::make_test_recorder(quantifier),
+        quantifier,
     );
 
     service.execute_action(ctx.clone(), "walk to room2".to_string());
@@ -288,7 +288,7 @@ fn test_reset_then_execute_works() {
             Arc::new(MockBackend::new()),
             Arc::clone(&ctx.storage),
         ),
-        crate::make_test_recorder(Arc::new(MockBackend::default())),
+        Arc::new(MockBackend::default()),
     );
 
     add_input_and_save(&ctx, "examine room");
@@ -330,7 +330,7 @@ fn test_delete_mid_sequence() {
             Arc::new(MockBackend::new()),
             Arc::clone(&ctx.storage),
         ),
-        crate::make_test_recorder(Arc::new(MockBackend::default())),
+        Arc::new(MockBackend::default()),
     );
 
     add_input_and_save(&ctx, "examine room");

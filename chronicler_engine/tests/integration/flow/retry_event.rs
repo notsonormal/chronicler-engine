@@ -26,12 +26,11 @@ fn test_event_retry_does_not_create_extra_swipe_on_narration() {
 
     add_input_and_save(&ctx, "enter shop");
 
-    let quantifier = make_test_recorder(Arc::new(MockBackend::default().with_prompt_responses(
-        vec![
+    let quantifier: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
+        Arc::new(MockBackend::default().with_prompt_responses(vec![
             r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#
                 .to_string(),
-        ],
-    )));
+        ]));
 
     let service = GameService::with_mock_quantifier(
         make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(&ctx.storage)),
@@ -76,12 +75,11 @@ fn test_retry_event_continuation_preserves_quantifier_result() {
 
     add_input_and_save(&ctx, "enter shop");
 
-    let quantifier = make_test_recorder(Arc::new(MockBackend::default().with_prompt_responses(
-        vec![
+    let quantifier: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
+        Arc::new(MockBackend::default().with_prompt_responses(vec![
             r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#
                 .to_string(),
-        ],
-    )));
+        ]));
 
     let service = GameService::with_mock_quantifier(
         make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(&ctx.storage)),
@@ -210,12 +208,11 @@ fn test_trigger_continuation_runs_quantifier_and_detects_new_npc() {
         "Gabriella emerges from the shadows behind the counter.".to_string(),
     ])));
 
-    let quantifier = make_test_recorder(Arc::new(MockBackend::default().with_prompt_responses(
-        vec![
+    let quantifier: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
+        Arc::new(MockBackend::default().with_prompt_responses(vec![
             r#"{"npcs_in_room": []}"#.to_string(),
             r#"{"npcs_in_room": ["gabriella"]}"#.to_string(),
-        ],
-    )));
+        ]));
 
     let service = GameService::with_mock_quantifier(llm_backend, quantifier);
 

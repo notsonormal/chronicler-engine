@@ -23,13 +23,12 @@ fn test_retry_main_narration_applies_new_quantifier_result() {
 
     add_input_and_save(&ctx, "walk around");
 
-    let quantifier = crate::make_test_recorder(Arc::new(
-        MockBackend::default().with_prompt_responses(vec![
+    let quantifier: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
+        Arc::new(MockBackend::default().with_prompt_responses(vec![
             r#"{"npcs_in_room": []}"#.to_string(),
             r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#
                 .to_string(),
-        ]),
-    ));
+        ]));
 
     let service = GameService::with_mock_quantifier(
         crate::make_test_recorder_with_storage(
@@ -81,10 +80,7 @@ fn test_retry_with_different_narration_text_reruns_quantifier() {
             "The Innkeeper greets you warmly.".to_string(),
         ])));
 
-    let service = GameService::with_mock_quantifier(
-        llm_backend,
-        crate::make_test_recorder(Arc::new(MockBackend::default())),
-    );
+    let service = GameService::with_mock_quantifier(llm_backend, Arc::new(MockBackend::default()));
     service.execute_action(ctx.clone(), "approach the innkeeper".to_string());
     assert!(
         wait_for_generation_complete(&ctx, 1000),
@@ -131,14 +127,13 @@ fn test_double_retry_increments_swipe_and_reruns_quantifier() {
 
     add_input_and_save(&ctx, "walk around");
 
-    let quantifier = crate::make_test_recorder(Arc::new(
-        MockBackend::default().with_prompt_responses(vec![
+    let quantifier: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
+        Arc::new(MockBackend::default().with_prompt_responses(vec![
             r#"{"npcs_in_room": []}"#.to_string(),
             r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#
                 .to_string(),
             r#"{"npcs_in_room": []}"#.to_string(),
-        ]),
-    ));
+        ]));
 
     let service = GameService::with_mock_quantifier(
         crate::make_test_recorder_with_storage(
@@ -182,7 +177,7 @@ fn test_retry_preserves_input_and_does_not_create_extra_swipe() {
             Arc::new(MockBackend::new()),
             Arc::clone(&ctx.storage),
         ),
-        crate::make_test_recorder(Arc::new(MockBackend::default())),
+        Arc::new(MockBackend::default()),
     );
     service.execute_action(ctx.clone(), "walk around".to_string());
     assert!(
@@ -223,7 +218,7 @@ fn test_retry_after_edited_input_uses_new_text() {
             Arc::new(MockBackend::new()),
             Arc::clone(&ctx.storage),
         ),
-        crate::make_test_recorder(Arc::new(MockBackend::default())),
+        Arc::new(MockBackend::default()),
     );
     service.execute_action(ctx.clone(), "walk around".to_string());
     assert!(wait_for_generation_complete(&ctx, 1000));
@@ -310,13 +305,12 @@ fn test_main_retry_reevaluates_triggers() {
     let ctx = make_test_context_with_sqlite(state).unwrap();
     add_input_and_save(&ctx, "walk around");
 
-    let quantifier = crate::make_test_recorder(Arc::new(
-        MockBackend::default().with_prompt_responses(vec![
+    let quantifier: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
+        Arc::new(MockBackend::default().with_prompt_responses(vec![
             r#"{"npcs_in_room": []}"#.to_string(),
             r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#
                 .to_string(),
-        ]),
-    ));
+        ]));
 
     let service = GameService::with_mock_quantifier(
         crate::make_test_recorder_with_storage(
@@ -362,12 +356,11 @@ fn test_retry_completes_when_quantifier_returns_none() {
 
     add_input_and_save(&ctx, "walk around");
 
-    let quantifier = crate::make_test_recorder(Arc::new(
-        MockBackend::default().with_prompt_responses(vec![
+    let quantifier: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
+        Arc::new(MockBackend::default().with_prompt_responses(vec![
             r#"{"npcs_in_room": []}"#.to_string(),
             r#"{"npcs_in_room": []}"#.to_string(),
-        ]),
-    ));
+        ]));
 
     let service = GameService::with_mock_quantifier(
         crate::make_test_recorder_with_storage(
@@ -463,7 +456,7 @@ fn test_retry_no_pre_main_snapshot() {
             Arc::new(MockBackend::new()),
             Arc::clone(&ctx.storage),
         ),
-        crate::make_test_recorder(Arc::new(MockBackend::default())),
+        Arc::new(MockBackend::default()),
     );
     service.execute_action(ctx.clone(), "examine room".to_string());
     assert!(wait_for_generation_complete(&ctx, 1000));
@@ -502,12 +495,11 @@ fn test_movement_with_arrival_narration_retry() {
 
     add_input_and_save(&ctx, "walk to room2");
 
-    let quantifier = crate::make_test_recorder(Arc::new(
-        MockBackend::default().with_prompt_responses(vec![
+    let quantifier: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
+        Arc::new(MockBackend::default().with_prompt_responses(vec![
             r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#
                 .to_string(),
-        ]),
-    ));
+        ]));
 
     let service = GameService::with_mock_quantifier(
         crate::make_test_recorder_with_storage(
@@ -563,10 +555,7 @@ fn test_retry_appends_swipe_to_existing_narration() {
             "Second narration text.".to_string(),
         ])));
 
-    let service = GameService::with_mock_quantifier(
-        llm_backend,
-        crate::make_test_recorder(Arc::new(MockBackend::default())),
-    );
+    let service = GameService::with_mock_quantifier(llm_backend, Arc::new(MockBackend::default()));
     service.execute_action(ctx.clone(), "examine room".to_string());
     assert!(wait_for_generation_complete(&ctx, 1000));
 
