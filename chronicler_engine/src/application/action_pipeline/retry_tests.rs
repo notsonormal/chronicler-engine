@@ -25,7 +25,8 @@ fn make_test_state() -> GameState {
 fn make_service() -> GameService {
     GameService::with_mock_quantifier(
         make_test_recorder(Arc::new(MockBackend::new())),
-        make_test_recorder(Arc::new(MockBackend::default())),
+        Arc::new(MockBackend::default())
+            as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
     )
 }
 
@@ -296,9 +297,8 @@ fn test_retry_event_trigger_narration_fails() {
     ));
     let service = GameService::with_mock_quantifier(
         llm,
-        make_test_recorder(Arc::new(
-            crate::adapters::driven::llm::providers::MockBackend::default(),
-        )),
+        Arc::new(crate::adapters::driven::llm::providers::MockBackend::default())
+            as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
     );
 
     let _input_id = add_input_and_save(&ctx, "test input");
@@ -349,9 +349,8 @@ fn test_retry_event_empty_continuation_text() {
     let llm = make_test_recorder(Arc::new(MockBackend::new()));
     let service = GameService::with_mock_quantifier(
         llm,
-        make_test_recorder(Arc::new(
-            crate::adapters::driven::llm::providers::MockBackend::default(),
-        )),
+        Arc::new(crate::adapters::driven::llm::providers::MockBackend::default())
+            as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
     );
 
     let _input_id = add_input_and_save(&ctx, "test input");
@@ -611,9 +610,8 @@ fn test_retry_event_empty_continuation_triggers_error() {
     let llm = make_test_recorder(Arc::new(EmptyTriggerBackend));
     let service = GameService::with_mock_quantifier(
         llm,
-        make_test_recorder(Arc::new(
-            crate::adapters::driven::llm::providers::MockBackend::default(),
-        )),
+        Arc::new(crate::adapters::driven::llm::providers::MockBackend::default())
+            as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
     );
 
     let _input_id = add_input_and_save(&ctx, "test input");

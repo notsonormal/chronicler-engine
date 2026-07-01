@@ -74,12 +74,9 @@ impl GameService {
 
     pub fn with_mock_quantifier(
         llm_recorder: Arc<LlmCallRecorder>,
-        quantifier_recorder: Arc<LlmCallRecorder>,
+        quantifier_provider: Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
     ) -> Self {
-        let agent = QuantifierAgent::with_backend(
-            "quantifier".to_string(),
-            quantifier_recorder.provider().clone(),
-        );
+        let agent = QuantifierAgent::with_provider("quantifier".to_string(), quantifier_provider);
         let registry = AgentRegistry::with_agent(Box::new(agent));
         Self {
             llm_recorder,

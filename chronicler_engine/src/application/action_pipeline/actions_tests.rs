@@ -16,12 +16,9 @@ use crate::domain::model::agent::{AgentContext, AgentResult, BackendSelector, Ex
 
 fn make_test_service(
     narrator_recorder: Arc<LlmCallRecorder>,
-    quantifier_recorder: Arc<LlmCallRecorder>,
+    quantifier_provider: Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
 ) -> crate::application::game_service::GameService {
-    let agent = QuantifierAgent::with_backend(
-        "quantifier".to_string(),
-        quantifier_recorder.provider().clone(),
-    );
+    let agent = QuantifierAgent::with_provider("quantifier".to_string(), quantifier_provider);
     let registry = AgentRegistry::with_agent(Box::new(agent));
     crate::application::game_service::GameService::with_backends(narrator_recorder, registry)
 }
@@ -43,8 +40,9 @@ fn test_execute_action_impl_completes_and_persists_state() {
     let state = make_test_state();
     let ctx = make_test_context(state.clone());
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
-    let quantifier_recorder = make_test_recorder(Arc::new(MockBackend::default()));
-    let service = make_test_service(narrator_recorder, quantifier_recorder);
+    let quantifier_provider = Arc::new(MockBackend::default())
+        as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
+    let service = make_test_service(narrator_recorder, quantifier_provider);
     execute_action_impl(&service, ctx.clone(), "look".to_string());
     let final_state = ctx.load_state_for_test();
     assert_eq!(
@@ -75,8 +73,9 @@ fn test_execute_action_impl_clears_last_trigger() {
     ));
     let ctx = make_test_context(state);
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
-    let quantifier_recorder = make_test_recorder(Arc::new(MockBackend::default()));
-    let service = make_test_service(narrator_recorder, quantifier_recorder);
+    let quantifier_provider = Arc::new(MockBackend::default())
+        as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
+    let service = make_test_service(narrator_recorder, quantifier_provider);
     execute_action_impl(&service, ctx.clone(), "look".to_string());
     let final_state = ctx.load_state_for_test();
     assert!(
@@ -90,8 +89,9 @@ fn test_execute_action_impl_handles_narration_error() {
     let state = make_test_state();
     let ctx = make_test_context(state.clone());
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default().with_fail()));
-    let quantifier_recorder = make_test_recorder(Arc::new(MockBackend::default()));
-    let service = make_test_service(narrator_recorder, quantifier_recorder);
+    let quantifier_provider = Arc::new(MockBackend::default())
+        as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
+    let service = make_test_service(narrator_recorder, quantifier_provider);
     execute_action_impl(&service, ctx.clone(), "look".to_string());
     let final_state = ctx.load_state_for_test();
     assert!(
@@ -109,8 +109,9 @@ fn test_execute_action_impl_handles_cancellation() {
     let ctx = make_test_context(state.clone());
     ctx.cancel_token.cancel();
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
-    let quantifier_recorder = make_test_recorder(Arc::new(MockBackend::default()));
-    let service = make_test_service(narrator_recorder, quantifier_recorder);
+    let quantifier_provider = Arc::new(MockBackend::default())
+        as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
+    let service = make_test_service(narrator_recorder, quantifier_provider);
     execute_action_impl(&service, ctx.clone(), "look".to_string());
     let final_state = ctx.load_state_for_test();
     assert_eq!(
@@ -130,8 +131,9 @@ fn test_execute_action_impl_preserves_existing_input_log() {
     );
     let ctx = make_test_context(state);
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
-    let quantifier_recorder = make_test_recorder(Arc::new(MockBackend::default()));
-    let service = make_test_service(narrator_recorder, quantifier_recorder);
+    let quantifier_provider = Arc::new(MockBackend::default())
+        as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
+    let service = make_test_service(narrator_recorder, quantifier_provider);
     execute_action_impl(&service, ctx.clone(), "examine room".to_string());
     let final_state = ctx.load_state_for_test();
     let entries: Vec<_> = final_state.narrative.history().into_iter().collect();
@@ -187,11 +189,10 @@ fn test_phase_transitions_to_quantifying_during_post_generation() {
     // Fast narration backend - narration completes immediately
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     // Fast quantifier backend - LLM calls return immediately
-    let quantifier_recorder = make_test_recorder(Arc::new(MockBackend::default()));
-    let base_agent = QuantifierAgent::with_backend(
-        "quantifier".to_string(),
-        quantifier_recorder.provider().clone(),
-    );
+    let quantifier_provider = Arc::new(MockBackend::default())
+        as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
+    let base_agent =
+        QuantifierAgent::with_provider("quantifier".to_string(), quantifier_provider.clone());
     let slow_agent = Box::new(SlowQuantifierAgent {
         inner: base_agent,
         delay_ms: 200,
@@ -259,11 +260,10 @@ fn test_narration_saved_before_quantifying_phase() {
     // Fast narration backend - narration completes immediately
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     // Fast quantifier backend - LLM calls return immediately
-    let quantifier_recorder = make_test_recorder(Arc::new(MockBackend::default()));
-    let base_agent = QuantifierAgent::with_backend(
-        "quantifier".to_string(),
-        quantifier_recorder.provider().clone(),
-    );
+    let quantifier_provider = Arc::new(MockBackend::default())
+        as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
+    let base_agent =
+        QuantifierAgent::with_provider("quantifier".to_string(), quantifier_provider.clone());
     let slow_agent = Box::new(SlowQuantifierAgent {
         inner: base_agent,
         delay_ms: 200,

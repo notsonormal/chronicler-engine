@@ -169,13 +169,9 @@ fn test_pipeline_with_custom_quantifier_result() {
     let custom_quantifier_result = r#"{"npcs_in_room": ["npc1"], "movement": null}"#.to_string();
     let mock_provider =
         Arc::new(MockBackend::default().with_prompt_responses(vec![custom_quantifier_result]));
-    let quantifier_recorder = make_test_recorder(
-        mock_provider as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
-    );
-    let agent = QuantifierAgent::with_backend(
-        "quantifier".to_string(),
-        quantifier_recorder.provider().clone(),
-    );
+    let quantifier_provider =
+        mock_provider as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
+    let agent = QuantifierAgent::with_provider("quantifier".to_string(), quantifier_provider);
     let agent_registry = Arc::new(AgentRegistry::with_agent(Box::new(agent)));
 
     let prompt_assembler = Arc::new(
@@ -297,13 +293,9 @@ fn test_pipeline_trigger_happy_path() {
     let custom_quantifier_result = r#"{"npcs_in_room": ["npc1"], "movement": null}"#.to_string();
     let mock_provider =
         Arc::new(MockBackend::default().with_prompt_responses(vec![custom_quantifier_result]));
-    let quantifier_recorder = make_test_recorder(
-        mock_provider as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
-    );
-    let agent = QuantifierAgent::with_backend(
-        "quantifier".to_string(),
-        quantifier_recorder.provider().clone(),
-    );
+    let quantifier_provider =
+        mock_provider as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
+    let agent = QuantifierAgent::with_provider("quantifier".to_string(), quantifier_provider);
     let agent_registry = Arc::new(AgentRegistry::with_agent(Box::new(agent)));
 
     let prompt_assembler = Arc::new(
@@ -376,13 +368,9 @@ fn test_pipeline_trigger_empty_continuation() {
     let custom_quantifier_result = r#"{"npcs_in_room": ["npc1"], "movement": null}"#.to_string();
     let mock_provider =
         Arc::new(MockBackend::default().with_prompt_responses(vec![custom_quantifier_result]));
-    let quantifier_recorder = make_test_recorder(
-        mock_provider as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
-    );
-    let agent = QuantifierAgent::with_backend(
-        "quantifier".to_string(),
-        quantifier_recorder.provider().clone(),
-    );
+    let quantifier_provider =
+        mock_provider as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
+    let agent = QuantifierAgent::with_provider("quantifier".to_string(), quantifier_provider);
     let agent_registry = Arc::new(AgentRegistry::with_agent(Box::new(agent)));
 
     let prompt_assembler = Arc::new(
@@ -450,13 +438,9 @@ fn test_pipeline_trigger_complete_failure() {
     let custom_quantifier_result = r#"{"npcs_in_room": ["npc1"], "movement": null}"#.to_string();
     let mock_provider =
         Arc::new(MockBackend::default().with_prompt_responses(vec![custom_quantifier_result]));
-    let quantifier_recorder = make_test_recorder(
-        mock_provider as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
-    );
-    let agent = QuantifierAgent::with_backend(
-        "quantifier".to_string(),
-        quantifier_recorder.provider().clone(),
-    );
+    let quantifier_provider =
+        mock_provider as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
+    let agent = QuantifierAgent::with_provider("quantifier".to_string(), quantifier_provider);
     let agent_registry = Arc::new(AgentRegistry::with_agent(Box::new(agent)));
 
     let prompt_assembler = Arc::new(
@@ -576,14 +560,10 @@ fn test_pipeline_continues_if_quantifier_save_fails() {
     let custom_quantifier_result = r#"{"npcs_in_room": ["npc1"], "movement": null}"#.to_string();
     let mock_provider =
         Arc::new(MockBackend::default().with_prompt_responses(vec![custom_quantifier_result]));
-    let quantifier_recorder = make_test_recorder(
-        mock_provider as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
-    );
+    let quantifier_provider =
+        mock_provider as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
     use crate::application::agents::quantifier::QuantifierAgent;
-    let agent = QuantifierAgent::with_backend(
-        "quantifier".to_string(),
-        quantifier_recorder.provider().clone(),
-    );
+    let agent = QuantifierAgent::with_provider("quantifier".to_string(), quantifier_provider);
     let agent_registry = Arc::new(AgentRegistry::with_agent(Box::new(agent)));
 
     let prompt_assembler = Arc::new(
@@ -610,14 +590,10 @@ fn test_narration_persisted_even_if_quantifier_changes_state() {
     let custom_quantifier_result = r#"{"npcs_in_room": ["npc1"], "movement": null}"#.to_string();
     let mock_provider =
         Arc::new(MockBackend::default().with_prompt_responses(vec![custom_quantifier_result]));
-    let quantifier_recorder = make_test_recorder(
-        mock_provider as Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
-    );
+    let quantifier_provider =
+        mock_provider as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
     use crate::application::agents::quantifier::QuantifierAgent;
-    let agent = QuantifierAgent::with_backend(
-        "quantifier".to_string(),
-        quantifier_recorder.provider().clone(),
-    );
+    let agent = QuantifierAgent::with_provider("quantifier".to_string(), quantifier_provider);
     let agent_registry = Arc::new(AgentRegistry::with_agent(Box::new(agent)));
 
     let prompt_assembler = Arc::new(

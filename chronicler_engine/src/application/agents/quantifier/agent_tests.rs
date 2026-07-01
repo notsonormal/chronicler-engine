@@ -24,7 +24,7 @@ fn test_from_config_creates_agent() {
 fn test_with_backend() {
     let backend: Arc<dyn crate::application::ports::llm_provider::LlmProvider> =
         Arc::new(MockBackend::default());
-    let agent = QuantifierAgent::with_backend("custom".to_string(), backend);
+    let agent = QuantifierAgent::with_provider("custom".to_string(), backend);
     assert_eq!(agent.name(), "custom");
 }
 
@@ -32,7 +32,7 @@ fn test_with_backend() {
 fn test_name() {
     let backend: Arc<dyn crate::application::ports::llm_provider::LlmProvider> =
         Arc::new(MockBackend::default());
-    let agent = QuantifierAgent::with_backend("quantifier".to_string(), backend);
+    let agent = QuantifierAgent::with_provider("quantifier".to_string(), backend);
     assert_eq!(agent.name(), "quantifier");
 }
 
@@ -40,7 +40,7 @@ fn test_name() {
 fn test_phase() {
     let backend: Arc<dyn crate::application::ports::llm_provider::LlmProvider> =
         Arc::new(MockBackend::default());
-    let agent = QuantifierAgent::with_backend("q".to_string(), backend);
+    let agent = QuantifierAgent::with_provider("q".to_string(), backend);
     assert_eq!(agent.phase(), ExecutionPhase::PostGeneration);
 }
 
@@ -48,7 +48,7 @@ fn test_phase() {
 fn test_backend_selector() {
     let backend: Arc<dyn crate::application::ports::llm_provider::LlmProvider> =
         Arc::new(MockBackend::default());
-    let agent = QuantifierAgent::with_backend("q".to_string(), backend);
+    let agent = QuantifierAgent::with_provider("q".to_string(), backend);
     assert_eq!(
         agent.backend_selector(),
         BackendSelector::UseNamed("quantifier".to_string())
@@ -59,7 +59,7 @@ fn test_backend_selector() {
 fn test_execute_missing_main_response() {
     let backend: Arc<dyn crate::application::ports::llm_provider::LlmProvider> =
         Arc::new(MockBackend::default());
-    let agent = QuantifierAgent::with_backend("q".to_string(), backend);
+    let agent = QuantifierAgent::with_provider("q".to_string(), backend);
 
     let state = GameState::new(
         Arc::new(TestWorld::minimal()),

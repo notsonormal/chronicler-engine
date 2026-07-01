@@ -11,14 +11,14 @@ use crate::domain::model::settings::AppSettings;
 
 use crate::application::agents::Agent;
 use crate::application::narrative_prompt::assembler::assemble_prompt_text;
-use crate::application::llm_recorder::LlmCallRecorder;
+use crate::application::ports::llm_provider::LlmProvider;
 use crate::adapters::driven::storage::Storage;
 
 use super::determine_npcs_in_room;
 
 pub struct QuantifierAgent {
     name: String,
-    recorder: Arc<LlmCallRecorder>,
+    provider: Arc<dyn LlmProvider>,
     preset_storage: Option<Arc<Storage>>,
     settings: Arc<RwLock<AppSettings>>,
 }
@@ -57,22 +57,17 @@ impl QuantifierAgent {
         )?;
         Ok(Self {
             name: "quantifier".to_string(),
-            recorder,
+            provider: recorder.provider().clone(),
             preset_storage,
             settings: Arc::clone(&settings),
         })
     }
 
     #[cfg(feature = "testing")]
-    pub fn with_backend(
-        name: String,
-        recorder_or_provider: Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
-    ) -> Self {
-        use crate::test_support::noop_forensics::make_test_recorder;
-        let recorder = make_test_recorder(recorder_or_provider);
+    pub fn with_provider(name: String, provider: Arc<dyn LlmProvider>) -> Self {
         Self {
             name,
-            recorder,
+            provider,
             preset_storage: None,
             settings: Arc::new(RwLock::new(AppSettings::default())),
         }
@@ -122,7 +117,7 @@ impl Agent for QuantifierAgent {
             &[],
             &previous_room_npcs,
             main_response,
-            self.recorder.provider().as_ref(),
+            self.provider.as_ref(),
             quantifier_prompt_override,
         );
 
