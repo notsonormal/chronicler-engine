@@ -18,9 +18,11 @@ pub use test_utils::make_test_recorder;
 pub use test_utils::make_test_recorder_with_storage;
 
 pub fn failing_service() -> GameService {
+    let quantifier: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
+        Arc::new(MockBackend::default());
     GameService::with_mock_quantifier(
         make_test_recorder(Arc::new(MockBackend::default().with_fail())),
-        make_test_recorder(Arc::new(MockBackend::default())),
+        quantifier,
     )
 }
 
