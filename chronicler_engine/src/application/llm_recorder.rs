@@ -36,8 +36,8 @@ impl LlmCallRecorder {
         // 2. Postprocess response text (sanitization)
         let sanitized_text = sanitize_llm_output(&result.text);
 
-        // 3. Build message with sanitized text and save to forensics
-        let mut message = result.to_message();
+        // 3. Build message with prompts from args + sanitized text, save to forensics
+        let mut message = result.to_message(system_prompt, user_prompt);
         message.parsed_response = sanitized_text.clone();
         self.forensics.save_llm_message(&message)?;
 

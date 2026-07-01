@@ -614,8 +614,6 @@ impl crate::application::ports::llm_provider::LlmProvider for EmptyTriggerBacken
     ) -> Result<LlmCallResult, EngineError> {
         Ok(LlmCallResult {
             text: String::new(),
-            system_prompt: String::new(),
-            user_prompt: String::new(),
             raw_request_json: String::new(),
             raw_response_json: String::new(),
             backend_name: "EmptyTrigger".to_string(),

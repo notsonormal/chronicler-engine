@@ -3,7 +3,6 @@
 
 use crate::error::EngineError;
 use crate::application::ports::llm_message_repository::LlmMessage;
-use crate::adapters::driven::llm::transport::ChatCompletionResult;
 
 pub const AGENT_NARRATOR: &str = "narrator";
 pub const AGENT_QUANTIFIER: &str = "quantifier";
@@ -13,8 +12,6 @@ pub const AGENT_DIALOGUE: &str = "dialogue";
 #[derive(Debug)]
 pub struct LlmCallResult {
     pub text: String,
-    pub system_prompt: String,
-    pub user_prompt: String,
     pub raw_request_json: String,
     pub raw_response_json: String,
     pub backend_name: String,
@@ -23,32 +20,16 @@ pub struct LlmCallResult {
 }
 
 impl LlmCallResult {
-    pub fn from_chat_result(
-        agent_name: &str,
-        backend_name: &str,
-        model_name: &str,
-        chat: ChatCompletionResult,
-    ) -> Self {
-        Self {
-            text: chat.text,
-            system_prompt: chat.system_prompt,
-            user_prompt: chat.user_prompt,
-            raw_request_json: chat.raw_request_json,
-            raw_response_json: chat.raw_response_json,
-            backend_name: backend_name.to_string(),
-            model_name: model_name.to_string(),
-            agent_name: agent_name.to_string(),
-        }
-    }
-
-    pub fn to_message(&self) -> LlmMessage {
+    /// Build forensic message from result + original prompts.
+    /// Prompts are not echoed in the transport result — caller supplies them.
+    pub fn to_message(&self, system_prompt: &str, user_prompt: &str) -> LlmMessage {
         LlmMessage {
             id: 0,
             agent_name: self.agent_name.clone(),
             backend_name: self.backend_name.clone(),
             model_name: self.model_name.clone(),
-            system_prompt: self.system_prompt.clone(),
-            user_prompt: self.user_prompt.clone(),
+            system_prompt: system_prompt.to_string(),
+            user_prompt: user_prompt.to_string(),
             raw_request_json: self.raw_request_json.clone(),
             raw_response_json: self.raw_response_json.clone(),
             parsed_response: self.text.clone(),

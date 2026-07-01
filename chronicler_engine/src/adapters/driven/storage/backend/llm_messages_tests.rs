@@ -1,19 +1,22 @@
-use crate::application::ports::llm_message_repository::LlmMessageBuilder;
+use chrono::Utc;
+use crate::application::ports::llm_message_repository::LlmMessage;
 use crate::adapters::driven::storage::backend::{Storage, TestOverride};
 use crate::test_support::sqlite_storage;
 
 fn dummy_llm_message(model: &str) -> crate::application::ports::llm_message_repository::LlmMessage {
-    LlmMessageBuilder::new()
-        .agent_name("narrator")
-        .backend_name("test")
-        .model_name(model)
-        .system_prompt("sys")
-        .user_prompt("user")
-        .raw_request_json("req")
-        .raw_response_json("res")
-        .parsed_response("parsed")
-        .error_message(None::<String>)
-        .build()
+    LlmMessage {
+        id: 0,
+        agent_name: "narrator".to_string(),
+        backend_name: "test".to_string(),
+        model_name: model.to_string(),
+        system_prompt: "sys".to_string(),
+        user_prompt: "user".to_string(),
+        raw_request_json: "req".to_string(),
+        raw_response_json: "res".to_string(),
+        parsed_response: "parsed".to_string(),
+        error_message: None,
+        created_at: Utc::now(),
+    }
 }
 
 #[test]
@@ -140,17 +143,19 @@ fn test_llm_message_cap_prunes_in_memory() {
 #[test]
 fn test_llm_message_all_fields_preserved() {
     let storage = Storage::new_in_memory();
-    let msg = LlmMessageBuilder::new()
-        .agent_name("agent")
-        .backend_name("backend")
-        .model_name("model")
-        .system_prompt("sys")
-        .user_prompt("user")
-        .raw_request_json("req")
-        .raw_response_json("res")
-        .parsed_response("parsed")
-        .error_message(Some("error"))
-        .build();
+    let msg = LlmMessage {
+        id: 0,
+        agent_name: "agent".to_string(),
+        backend_name: "backend".to_string(),
+        model_name: "model".to_string(),
+        system_prompt: "sys".to_string(),
+        user_prompt: "user".to_string(),
+        raw_request_json: "req".to_string(),
+        raw_response_json: "res".to_string(),
+        parsed_response: "parsed".to_string(),
+        error_message: Some("error".to_string()),
+        created_at: Utc::now(),
+    };
 
     storage.save_llm_message(&msg).unwrap();
     let list = storage.list_latest_llm_messages(50).unwrap();
@@ -166,10 +171,19 @@ fn test_llm_message_all_fields_preserved() {
 #[test]
 fn test_llm_message_agent_name() {
     let storage = Storage::new_in_memory();
-    let msg = LlmMessageBuilder::new()
-        .agent_name("custom_agent")
-        .model_name("m")
-        .build();
+    let msg = LlmMessage {
+        id: 0,
+        agent_name: "custom_agent".to_string(),
+        backend_name: String::new(),
+        model_name: "m".to_string(),
+        system_prompt: String::new(),
+        user_prompt: String::new(),
+        raw_request_json: String::new(),
+        raw_response_json: String::new(),
+        parsed_response: String::new(),
+        error_message: None,
+        created_at: Utc::now(),
+    };
     storage.save_llm_message(&msg).unwrap();
 
     let list = storage.list_latest_llm_messages(50).unwrap();
@@ -179,10 +193,19 @@ fn test_llm_message_agent_name() {
 #[test]
 fn test_llm_message_backend_name() {
     let storage = Storage::new_in_memory();
-    let msg = LlmMessageBuilder::new()
-        .backend_name("custom_backend")
-        .model_name("m")
-        .build();
+    let msg = LlmMessage {
+        id: 0,
+        agent_name: String::new(),
+        backend_name: "custom_backend".to_string(),
+        model_name: "m".to_string(),
+        system_prompt: String::new(),
+        user_prompt: String::new(),
+        raw_request_json: String::new(),
+        raw_response_json: String::new(),
+        parsed_response: String::new(),
+        error_message: None,
+        created_at: Utc::now(),
+    };
     storage.save_llm_message(&msg).unwrap();
 
     let list = storage.list_latest_llm_messages(50).unwrap();
@@ -192,7 +215,19 @@ fn test_llm_message_backend_name() {
 #[test]
 fn test_llm_message_model_name() {
     let storage = Storage::new_in_memory();
-    let msg = LlmMessageBuilder::new().model_name("gpt-4").build();
+    let msg = LlmMessage {
+        id: 0,
+        agent_name: String::new(),
+        backend_name: String::new(),
+        model_name: "gpt-4".to_string(),
+        system_prompt: String::new(),
+        user_prompt: String::new(),
+        raw_request_json: String::new(),
+        raw_response_json: String::new(),
+        parsed_response: String::new(),
+        error_message: None,
+        created_at: Utc::now(),
+    };
     storage.save_llm_message(&msg).unwrap();
 
     let list = storage.list_latest_llm_messages(50).unwrap();
@@ -202,10 +237,19 @@ fn test_llm_message_model_name() {
 #[test]
 fn test_llm_message_system_prompt() {
     let storage = Storage::new_in_memory();
-    let msg = LlmMessageBuilder::new()
-        .system_prompt("You are a helpful assistant")
-        .model_name("m")
-        .build();
+    let msg = LlmMessage {
+        id: 0,
+        agent_name: String::new(),
+        backend_name: String::new(),
+        model_name: "m".to_string(),
+        system_prompt: "You are a helpful assistant".to_string(),
+        user_prompt: String::new(),
+        raw_request_json: String::new(),
+        raw_response_json: String::new(),
+        parsed_response: String::new(),
+        error_message: None,
+        created_at: Utc::now(),
+    };
     storage.save_llm_message(&msg).unwrap();
 
     let list = storage.list_latest_llm_messages(50).unwrap();
@@ -215,10 +259,19 @@ fn test_llm_message_system_prompt() {
 #[test]
 fn test_llm_message_user_prompt() {
     let storage = Storage::new_in_memory();
-    let msg = LlmMessageBuilder::new()
-        .user_prompt("Hello, AI")
-        .model_name("m")
-        .build();
+    let msg = LlmMessage {
+        id: 0,
+        agent_name: String::new(),
+        backend_name: String::new(),
+        model_name: "m".to_string(),
+        system_prompt: String::new(),
+        user_prompt: "Hello, AI".to_string(),
+        raw_request_json: String::new(),
+        raw_response_json: String::new(),
+        parsed_response: String::new(),
+        error_message: None,
+        created_at: Utc::now(),
+    };
     storage.save_llm_message(&msg).unwrap();
 
     let list = storage.list_latest_llm_messages(50).unwrap();
@@ -228,10 +281,19 @@ fn test_llm_message_user_prompt() {
 #[test]
 fn test_llm_message_error_message_some() {
     let storage = Storage::new_in_memory();
-    let msg = LlmMessageBuilder::new()
-        .model_name("m")
-        .error_message(Some("API timeout"))
-        .build();
+    let msg = LlmMessage {
+        id: 0,
+        agent_name: String::new(),
+        backend_name: String::new(),
+        model_name: "m".to_string(),
+        system_prompt: String::new(),
+        user_prompt: String::new(),
+        raw_request_json: String::new(),
+        raw_response_json: String::new(),
+        parsed_response: String::new(),
+        error_message: Some("API timeout".to_string()),
+        created_at: Utc::now(),
+    };
     storage.save_llm_message(&msg).unwrap();
 
     let list = storage.list_latest_llm_messages(50).unwrap();
@@ -244,11 +306,19 @@ fn test_llm_message_raw_json_blobs() {
     let large_request = "{\"key\": \"value\"}".repeat(100);
     let large_response = "{\"response\": \"data\"}".repeat(100);
 
-    let msg = LlmMessageBuilder::new()
-        .model_name("m")
-        .raw_request_json(&large_request)
-        .raw_response_json(&large_response)
-        .build();
+    let msg = LlmMessage {
+        id: 0,
+        agent_name: String::new(),
+        backend_name: String::new(),
+        model_name: "m".to_string(),
+        system_prompt: String::new(),
+        user_prompt: String::new(),
+        raw_request_json: large_request,
+        raw_response_json: large_response,
+        parsed_response: String::new(),
+        error_message: None,
+        created_at: Utc::now(),
+    };
     storage.save_llm_message(&msg).unwrap();
 
     let list = storage.list_latest_llm_messages(50).unwrap();

@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
-use crate::application::ports::llm_message_repository::LlmMessageBuilder;
+use chrono::Utc;
+use crate::application::ports::llm_message_repository::LlmMessage;
 use crate::adapters::driving::http::fragments::{html_escape, render_error, render_llm_messages};
 use crate::adapters::driven::storage::Storage;
 use crate::test_support::TestAppBuilder;
@@ -137,17 +138,19 @@ fn test_render_llm_messages_empty() {
 #[test]
 fn test_render_llm_messages_with_data() {
     let llm_storage = Arc::new(Storage::new_in_memory());
-    let msg = LlmMessageBuilder::new()
-        .agent_name("narrator")
-        .backend_name("OpenRouter")
-        .model_name("gpt-4")
-        .system_prompt("sys")
-        .user_prompt("user")
-        .raw_request_json("req")
-        .raw_response_json("res")
-        .parsed_response("hello")
-        .error_message(None::<String>)
-        .build();
+    let msg = LlmMessage {
+        id: 0,
+        agent_name: "narrator".to_string(),
+        backend_name: "OpenRouter".to_string(),
+        model_name: "gpt-4".to_string(),
+        system_prompt: "sys".to_string(),
+        user_prompt: "user".to_string(),
+        raw_request_json: "req".to_string(),
+        raw_response_json: "res".to_string(),
+        parsed_response: "hello".to_string(),
+        error_message: None,
+        created_at: Utc::now(),
+    };
     llm_storage.save_llm_message(&msg).unwrap();
 
     let app_state = make_test_app_state(Some(llm_storage));

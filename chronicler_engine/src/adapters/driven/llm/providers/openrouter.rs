@@ -58,12 +58,14 @@ impl LlmProvider for OpenRouterBackend {
     ) -> Result<LlmCallResult, EngineError> {
         tracing::info!("[LLM] Generating action from prompt");
         let chat = self.call(system_prompt, user_prompt, max_tokens)?;
-        Ok(LlmCallResult::from_chat_result(
-            agent_name,
-            self.name(),
-            self.model(),
-            chat,
-        ))
+        Ok(LlmCallResult {
+            text: chat.text,
+            raw_request_json: chat.raw_request_json,
+            raw_response_json: chat.raw_response_json,
+            backend_name: self.name().to_string(),
+            model_name: self.model().to_string(),
+            agent_name: agent_name.to_string(),
+        })
     }
 
     fn name(&self) -> &str {

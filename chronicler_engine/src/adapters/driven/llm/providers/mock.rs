@@ -78,12 +78,16 @@ impl MockBackend {
         self
     }
 
-    fn make_result(&self, agent_name: &str, text: impl Into<String>) -> LlmCallResult {
+    fn make_result(
+        &self,
+        agent_name: &str,
+        text: impl Into<String>,
+        system_prompt: &str,
+        user_prompt: &str,
+    ) -> LlmCallResult {
         let text = text.into();
         let result = LlmCallResult {
             text: text.clone(),
-            system_prompt: String::new(),
-            user_prompt: String::new(),
             raw_request_json: String::new(),
             raw_response_json: format!("{{\"content\":\"{text}\"}}"),
             backend_name: self.name().to_string(),
@@ -92,7 +96,7 @@ impl MockBackend {
         };
         // MockBackend keeps storage for test assertions on saved messages
         if let Some(storage) = &self.storage {
-            let _ = storage.save_llm_message(&result.to_message());
+            let _ = storage.save_llm_message(&result.to_message(system_prompt, user_prompt));
         }
         result
     }
@@ -139,18 +143,30 @@ impl LlmProvider for MockBackend {
             }
             self.guard()?;
             if self.should_return_empty.load(Ordering::SeqCst) {
-                return Ok(self.make_result(agent_name, String::new()));
+                return Ok(self.make_result(
+                    agent_name,
+                    String::new(),
+                    _system_prompt,
+                    user_prompt,
+                ));
             }
             if !self.per_call_narrations.is_empty() {
                 let idx = self.call_index.fetch_add(1, Ordering::SeqCst);
                 return Ok(self.make_result(
                     agent_name,
                     self.per_call_narrations[idx % self.per_call_narrations.len()].clone(),
+                    _system_prompt,
+                    user_prompt,
                 ));
             }
             let input = extract_player_input(user_prompt)
                 .unwrap_or_else(|| user_prompt.lines().next().unwrap_or("...").to_string());
-            Ok(self.make_result(agent_name, format!("[MockNarration] {input}")))
+            Ok(self.make_result(
+                agent_name,
+                format!("[MockNarration] {input}"),
+                _system_prompt,
+                user_prompt,
+            ))
         } else {
             self.trigger_started.store(true, Ordering::SeqCst);
             let delay = self.trigger_delay_ms.load(Ordering::SeqCst);
@@ -171,6 +187,8 @@ impl LlmProvider for MockBackend {
                     agent_name,
                     self.per_call_prompt_responses[idx % self.per_call_prompt_responses.len()]
                         .clone(),
+                    _system_prompt,
+                    user_prompt,
                 ));
             }
             Ok(self.make_result(
@@ -179,6 +197,8 @@ impl LlmProvider for MockBackend {
                     "[Continuation: {}]",
                     user_prompt.lines().next().unwrap_or("...")
                 ),
+                _system_prompt,
+                user_prompt,
             ))
         }
     }
