@@ -1,11 +1,9 @@
 //! [DOC: docs/system/llm_processing.md]
 //! Mock LLM provider for testing
 
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 
 use crate::error::{EngineError, NarrativeFailure};
-use crate::adapters::driven::storage::Storage;
 
 use crate::application::ports::llm_provider::{LlmProvider, LlmCallResult};
 
@@ -28,7 +26,6 @@ pub struct MockBackend {
     pub(crate) per_call_narrations: Vec<String>,
     pub(crate) per_call_prompt_responses: Vec<String>,
     pub(crate) call_index: AtomicUsize,
-    pub(crate) storage: Option<Arc<Storage>>,
     /// Set when `complete` narration starts. Test-sync primitive — read with `.load(Ordering::SeqCst)`, do not mutate externally.
     pub narration_started: AtomicBool,
     /// Set when `complete` trigger narration starts. Test-sync primitive — read with `.load(Ordering::SeqCst)`, do not mutate externally.
@@ -36,11 +33,8 @@ pub struct MockBackend {
 }
 
 impl MockBackend {
-    pub fn new(storage: Option<Arc<Storage>>) -> Self {
-        Self {
-            storage,
-            ..Default::default()
-        }
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn with_fail(mut self) -> Self {
@@ -82,23 +76,18 @@ impl MockBackend {
         &self,
         agent_name: &str,
         text: impl Into<String>,
-        system_prompt: &str,
-        user_prompt: &str,
+        _system_prompt: &str,
+        _user_prompt: &str,
     ) -> LlmCallResult {
         let text = text.into();
-        let result = LlmCallResult {
+        LlmCallResult {
             text: text.clone(),
             raw_request_json: String::new(),
             raw_response_json: format!("{{\"content\":\"{text}\"}}"),
             backend_name: self.name().to_string(),
             model_name: self.model().to_string(),
             agent_name: agent_name.to_string(),
-        };
-        // MockBackend keeps storage for test assertions on saved messages
-        if let Some(storage) = &self.storage {
-            let _ = storage.save_llm_message(&result.to_message(system_prompt, user_prompt));
         }
-        result
     }
 
     fn make_error(&self) -> EngineError {

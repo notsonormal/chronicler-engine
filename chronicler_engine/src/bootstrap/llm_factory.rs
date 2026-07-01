@@ -28,7 +28,7 @@ pub fn get_llm_recorder_for(
 
     // Create the provider (adapter)
     let provider: Arc<dyn LlmProvider> = match connection.provider {
-        LlmBackendType::Mock => Arc::new(MockBackend::new(Some(Arc::clone(&storage)))),
+        LlmBackendType::Mock => Arc::new(MockBackend::new()),
         LlmBackendType::DeepSeek => Arc::new(DeepSeekBackend::from_connection(connection)),
         LlmBackendType::OpenRouter => Arc::new(OpenRouterBackend::from_connection(connection)),
         LlmBackendType::Ollama => Arc::new(OllamaBackend::from_connection(connection)),

@@ -46,3 +46,11 @@ pub fn make_test_recorder(provider: Arc<dyn LlmProvider>) -> Arc<LlmCallRecorder
     }
     Arc::new(LlmCallRecorder::new(provider, Arc::new(NoopForensics)))
 }
+
+/// Test helper: wrap an LlmProvider in LlmCallRecorder with real storage forensics
+pub fn make_test_recorder_with_storage(
+    provider: Arc<dyn LlmProvider>,
+    storage: Arc<chronicler_engine::adapters::driven::storage::Storage>,
+) -> Arc<LlmCallRecorder> {
+    Arc::new(LlmCallRecorder::new(provider, storage))
+}

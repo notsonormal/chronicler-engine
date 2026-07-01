@@ -14,6 +14,7 @@ use chronicler_engine::domain::model::world::WorldCard;
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::error::EngineError;
 use chronicler_engine::test_support::make_test_context_with_sqlite;
+use crate::make_test_recorder_with_storage;
 
 use crate::pipeline_helpers::{
     add_input_and_save, create_test_state_with_trigger_npc, latest_state,
@@ -59,7 +60,7 @@ fn test_event_retry_does_not_create_extra_swipe_on_narration() {
     )));
 
     let service = GameService::with_mock_quantifier(
-        make_test_recorder(Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage))))),
+        make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(&ctx.storage)),
         quantifier,
     );
 
@@ -109,7 +110,7 @@ fn test_retry_event_continuation_preserves_quantifier_result() {
     )));
 
     let service = GameService::with_mock_quantifier(
-        make_test_recorder(Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage))))),
+        make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(&ctx.storage)),
         quantifier,
     );
 

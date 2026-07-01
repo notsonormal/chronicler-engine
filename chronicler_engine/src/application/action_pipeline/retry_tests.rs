@@ -48,7 +48,7 @@ fn make_test_state() -> GameState {
 
 fn make_service() -> GameService {
     GameService::with_mock_quantifier(
-        make_test_recorder(Arc::new(MockBackend::new(None))),
+        make_test_recorder(Arc::new(MockBackend::new())),
         make_test_recorder(Arc::new(MockBackend::default())),
     )
 }
@@ -370,7 +370,7 @@ fn test_retry_event_empty_continuation_text() {
     let state = make_test_state();
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
-    let llm = make_test_recorder(Arc::new(MockBackend::new(None)));
+    let llm = make_test_recorder(Arc::new(MockBackend::new()));
     let service = GameService::with_mock_quantifier(
         llm,
         make_test_recorder(Arc::new(

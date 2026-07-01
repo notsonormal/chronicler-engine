@@ -97,11 +97,14 @@ fn test_mock_with_failing_trigger_narration() {
 #[test]
 fn test_mock_backend_logs_to_storage() {
     use crate::adapters::driven::storage::Storage;
+    use crate::application::llm_recorder::LlmCallRecorder;
+    use crate::application::ports::llm_message_repository::LlmMessageRepository;
     use std::sync::Arc;
-    let storage = Arc::new(Storage::new_in_memory());
-    let backend = MockBackend::new(Some(Arc::clone(&storage)));
+    let storage: Arc<dyn LlmMessageRepository> = Arc::new(Storage::new_in_memory());
+    let backend = Arc::new(MockBackend::new());
+    let recorder = Arc::new(LlmCallRecorder::new(backend, Arc::clone(&storage)));
 
-    let result = backend.complete("narrator", "sys", "user action", None);
+    let result = recorder.complete("narrator", "sys", "user action", None);
     assert!(result.is_ok());
 
     let messages = storage.list_latest_llm_messages(50).unwrap();
@@ -114,13 +117,16 @@ fn test_mock_backend_logs_to_storage() {
 #[test]
 fn test_mock_backend_logs_multiple_calls() {
     use crate::adapters::driven::storage::Storage;
+    use crate::application::llm_recorder::LlmCallRecorder;
+    use crate::application::ports::llm_message_repository::LlmMessageRepository;
     use std::sync::Arc;
-    let storage = Arc::new(Storage::new_in_memory());
-    let backend = MockBackend::new(Some(Arc::clone(&storage)));
+    let storage: Arc<dyn LlmMessageRepository> = Arc::new(Storage::new_in_memory());
+    let backend = Arc::new(MockBackend::new());
+    let recorder = Arc::new(LlmCallRecorder::new(backend, Arc::clone(&storage)));
 
-    let _ = backend.complete("narrator", "sys", "first", None);
-    let _ = backend.complete("trigger", "sys", "second", None);
-    let _ = backend.complete("narrator", "sys", "third", None);
+    let _ = recorder.complete("narrator", "sys", "first", None);
+    let _ = recorder.complete("trigger", "sys", "second", None);
+    let _ = recorder.complete("narrator", "sys", "third", None);
 
     let messages = storage.list_latest_llm_messages(50).unwrap();
     assert_eq!(messages.len(), 3);

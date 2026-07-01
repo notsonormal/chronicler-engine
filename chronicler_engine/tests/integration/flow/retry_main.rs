@@ -32,7 +32,10 @@ fn test_retry_main_narration_applies_new_quantifier_result() {
     ));
 
     let service = GameService::with_mock_quantifier(
-        crate::make_test_recorder(Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage))))),
+        crate::make_test_recorder_with_storage(
+            Arc::new(MockBackend::new()),
+            Arc::clone(&ctx.storage),
+        ),
         quantifier,
     );
     service.execute_action(ctx.clone(), "walk around".to_string());
@@ -138,7 +141,10 @@ fn test_double_retry_increments_swipe_and_reruns_quantifier() {
     ));
 
     let service = GameService::with_mock_quantifier(
-        crate::make_test_recorder(Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage))))),
+        crate::make_test_recorder_with_storage(
+            Arc::new(MockBackend::new()),
+            Arc::clone(&ctx.storage),
+        ),
         quantifier,
     );
     service.execute_action(ctx.clone(), "walk around".to_string());
@@ -172,7 +178,10 @@ fn test_retry_preserves_input_and_does_not_create_extra_swipe() {
     add_input_and_save(&ctx, "walk around");
 
     let service = GameService::with_mock_quantifier(
-        crate::make_test_recorder(Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage))))),
+        crate::make_test_recorder_with_storage(
+            Arc::new(MockBackend::new()),
+            Arc::clone(&ctx.storage),
+        ),
         crate::make_test_recorder(Arc::new(MockBackend::default())),
     );
     service.execute_action(ctx.clone(), "walk around".to_string());
@@ -210,7 +219,10 @@ fn test_retry_after_edited_input_uses_new_text() {
     add_input_and_save(&ctx, "walk around");
 
     let service = GameService::with_mock_quantifier(
-        crate::make_test_recorder(Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage))))),
+        crate::make_test_recorder_with_storage(
+            Arc::new(MockBackend::new()),
+            Arc::clone(&ctx.storage),
+        ),
         crate::make_test_recorder(Arc::new(MockBackend::default())),
     );
     service.execute_action(ctx.clone(), "walk around".to_string());
@@ -307,7 +319,10 @@ fn test_main_retry_reevaluates_triggers() {
     ));
 
     let service = GameService::with_mock_quantifier(
-        crate::make_test_recorder(Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage))))),
+        crate::make_test_recorder_with_storage(
+            Arc::new(MockBackend::new()),
+            Arc::clone(&ctx.storage),
+        ),
         quantifier,
     );
     service.execute_action(ctx.clone(), "walk around".to_string());
@@ -355,7 +370,10 @@ fn test_retry_completes_when_quantifier_returns_none() {
     ));
 
     let service = GameService::with_mock_quantifier(
-        crate::make_test_recorder(Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage))))),
+        crate::make_test_recorder_with_storage(
+            Arc::new(MockBackend::new()),
+            Arc::clone(&ctx.storage),
+        ),
         quantifier,
     );
     service.execute_action(ctx.clone(), "walk around".to_string());
@@ -441,7 +459,10 @@ fn test_retry_no_pre_main_snapshot() {
     add_input_and_save(&ctx, "examine room");
 
     let service = GameService::with_mock_quantifier(
-        crate::make_test_recorder(Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage))))),
+        crate::make_test_recorder_with_storage(
+            Arc::new(MockBackend::new()),
+            Arc::clone(&ctx.storage),
+        ),
         crate::make_test_recorder(Arc::new(MockBackend::default())),
     );
     service.execute_action(ctx.clone(), "examine room".to_string());
@@ -489,7 +510,10 @@ fn test_movement_with_arrival_narration_retry() {
     ));
 
     let service = GameService::with_mock_quantifier(
-        crate::make_test_recorder(Arc::new(MockBackend::new(Some(Arc::clone(&ctx.storage))))),
+        crate::make_test_recorder_with_storage(
+            Arc::new(MockBackend::new()),
+            Arc::clone(&ctx.storage),
+        ),
         quantifier,
     );
     service.execute_action(ctx.clone(), "walk to room2".to_string());

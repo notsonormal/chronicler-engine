@@ -15,6 +15,7 @@ use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 
 pub use test_utils::settings_guard::SettingsTestGuard;
 pub use test_utils::make_test_recorder;
+pub use test_utils::make_test_recorder_with_storage;
 
 pub fn failing_service() -> GameService {
     GameService::with_mock_quantifier(
