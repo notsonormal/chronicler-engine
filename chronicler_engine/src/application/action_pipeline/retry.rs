@@ -125,7 +125,9 @@ pub(crate) fn retry_event_continuation(
     let mut state = match pipeline.phase_trigger_continuation(state, &trigger, ctx) {
         Ok((s, continuation_text)) => {
             if !continuation_text.is_empty() {
-                pipeline.reconcile_post_trigger_npcs(s, &input_text, &continuation_text, ctx)
+                let run =
+                    crate::application::action_pipeline::phases::PipelineRun::new(&pipeline, ctx);
+                run.reconcile_post_trigger_npcs(s, &input_text, &continuation_text)
             } else {
                 s
             }
@@ -135,7 +137,10 @@ pub(crate) fn retry_event_continuation(
     if let Some(target) = state.narrative.retry_target.take() {
         state.narrative.history.append(target);
     }
-    pipeline.phase_finalize(&mut state, ctx);
+    {
+        let run = crate::application::action_pipeline::phases::PipelineRun::new(&pipeline, ctx);
+        run.phase_finalize(&mut state);
+    }
     ActionOutcome::Completed
 }
 

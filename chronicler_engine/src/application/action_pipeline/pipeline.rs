@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use crate::application::action_pipeline::phases::PipelineInputs;
+use crate::application::action_pipeline::phases::{PipelineInputs, PipelineRun};
 use crate::application::context::{GameServiceContext, load_or_fresh, save_message_and_snapshot};
 
 use crate::domain::model::character::NpcCard;
@@ -51,6 +51,8 @@ impl ActionPipeline {
         input: String,
     ) -> PipelineResult<()> {
         tracing::debug!("run_from_input: called");
+        let run = PipelineRun::new(self, ctx);
+
         let world = Arc::clone(&state.world);
         let map = Arc::clone(&state.map);
         let player = Arc::clone(&state.player);
@@ -64,10 +66,10 @@ impl ActionPipeline {
             all_npcs,
         };
 
-        state = self.phase_pre_main_snapshot(state, ctx)?;
+        state = run.phase_pre_main_snapshot(state)?;
 
         let (mut state, narration_text, backend_name, model_name) =
-            self.map_cancelled(self.phase_narrate(state, &inputs, ctx), ctx)?;
+            run.map_cancelled(run.phase_narrate(state, &inputs))?;
 
         if state
             .narrative
@@ -76,14 +78,13 @@ impl ActionPipeline {
             .error_message()
             .is_some()
         {
-            self.phase_finalize(&mut state, ctx);
+            run.phase_finalize(&mut state);
             return Ok(());
         }
         state.narrative.last_backend_name = Some(backend_name);
         state.narrative.last_model_name = Some(model_name);
 
-        let quantifier_result =
-            self.phase_post_generation(ctx, &mut state, &input, &narration_text);
+        let quantifier_result = run.phase_post_generation(&mut state, &input, &narration_text);
         if let Err(e) = save_message_and_snapshot(ctx, &mut state) {
             tracing::warn!("Failed to save post-quantifier metadata: {e}");
         }
@@ -94,7 +95,7 @@ impl ActionPipeline {
                 Err(e) => {
                     state.narrative.input_buffer.status =
                         GenerationStatus::Error(format!("Error: {e}"));
-                    self.phase_finalize(&mut state, ctx);
+                    run.phase_finalize(&mut state);
                     return Ok(());
                 }
             };
@@ -104,21 +105,15 @@ impl ActionPipeline {
             .trigger_match
             .as_ref()
             .and_then(|trigger_match| {
-                self.build_trigger_request(
-                    &next_state,
-                    &narration_text,
-                    &inputs,
-                    trigger_match,
-                    ctx,
-                )
+                run.build_trigger_request(&next_state, &narration_text, &inputs, trigger_match)
             });
 
         if let Some(trigger) = &trigger_request {
             next_state.narrative.last_trigger = Some(trigger.clone());
         }
 
-        if self.persist_snapshot_failed(&mut next_state, "post-engine snapshot", ctx) {
-            self.phase_finalize(&mut next_state, ctx);
+        if run.persist_snapshot_failed(&mut next_state, "post-engine snapshot") {
+            run.phase_finalize(&mut next_state);
             return Ok(());
         }
 
@@ -127,17 +122,13 @@ impl ActionPipeline {
         }
 
         if let Some(request) = trigger_request {
-            match self.phase_trigger_continuation(next_state, &request, ctx) {
+            match run.phase_trigger_continuation(next_state, &request) {
                 Ok((updated_state, continuation_text)) => {
                     next_state = updated_state;
 
                     if !continuation_text.is_empty() {
-                        next_state = self.reconcile_post_trigger_npcs(
-                            next_state,
-                            &input,
-                            &continuation_text,
-                            ctx,
-                        );
+                        next_state =
+                            run.reconcile_post_trigger_npcs(next_state, &input, &continuation_text);
                     }
                 }
                 Err(e) => {
@@ -146,24 +137,9 @@ impl ActionPipeline {
             }
         }
 
-        self.phase_finalize(&mut next_state, ctx);
+        run.phase_finalize(&mut next_state);
         tracing::debug!("run_from_input: done");
         Ok(())
-    }
-
-    fn phase_pre_main_snapshot(
-        &self,
-        mut state: GameState,
-        ctx: &GameServiceContext,
-    ) -> PipelineResult<GameState> {
-        tracing::info!("Pipeline ▶ Narrating");
-        state.narrative.input_buffer.status = GenerationStatus::Generating;
-        state.narrative.input_buffer.phase = GenerationPhase::Narrating;
-        if self.persist_snapshot_failed(&mut state, "pre-main snapshot", ctx) {
-            self.phase_finalize(&mut state, ctx);
-            return Ok(state);
-        }
-        Ok(state)
     }
 
     pub(crate) fn phase_trigger_continuation(
@@ -172,49 +148,8 @@ impl ActionPipeline {
         trigger: &StoredTriggerContext,
         ctx: &GameServiceContext,
     ) -> PipelineResult<(GameState, String)> {
-        self.map_cancelled(
-            self.phase_trigger_continuation_raw(state, trigger, ctx),
-            ctx,
-        )
-    }
-
-    fn map_cancelled<T>(
-        &self,
-        result: PipelineResult<T>,
-        ctx: &GameServiceContext,
-    ) -> PipelineResult<T> {
-        match result {
-            Err(ActionOutcome::Cancelled) => Err(self.handle_cancellation(ctx)),
-            other => other,
-        }
-    }
-
-    pub(crate) fn phase_finalize(&self, state: &mut GameState, ctx: &GameServiceContext) {
-        tracing::info!(
-            "Pipeline ✓ Finalize (status={:?})",
-            state.narrative.input_buffer.status
-        );
-
-        if state
-            .narrative
-            .input_buffer
-            .status
-            .error_message()
-            .is_none()
-        {
-            state.narrative.input_buffer.status = GenerationStatus::Idle;
-        }
-        state.narrative.input_buffer.phase = GenerationPhase::default();
-        self.persist(state, ctx);
-    }
-
-    fn handle_cancellation(&self, ctx: &GameServiceContext) -> ActionOutcome {
-        tracing::warn!("Pipeline cancelled — aborting remaining stages");
-        let mut state = load_or_fresh(ctx);
-        state.narrative.input_buffer.status = GenerationStatus::Idle;
-        state.narrative.input_buffer.phase = GenerationPhase::default();
-        self.persist(&state, ctx);
-        ActionOutcome::Cancelled
+        let run = PipelineRun::new(self, ctx);
+        run.phase_trigger_continuation(state, trigger)
     }
 
     /// Run post-generation agents inline, aggregating their state patches into QuantifierResult
@@ -258,6 +193,65 @@ impl ActionPipeline {
         }
 
         result
+    }
+}
+
+impl<'a> PipelineRun<'a> {
+    pub(super) fn phase_pre_main_snapshot(
+        &self,
+        mut state: GameState,
+    ) -> PipelineResult<GameState> {
+        tracing::info!("Pipeline ▶ Narrating");
+        state.narrative.input_buffer.status = GenerationStatus::Generating;
+        state.narrative.input_buffer.phase = GenerationPhase::Narrating;
+        if self.persist_snapshot_failed(&mut state, "pre-main snapshot") {
+            self.phase_finalize(&mut state);
+            return Ok(state);
+        }
+        Ok(state)
+    }
+
+    fn phase_trigger_continuation(
+        &self,
+        state: GameState,
+        trigger: &StoredTriggerContext,
+    ) -> PipelineResult<(GameState, String)> {
+        self.map_cancelled(self.phase_trigger_continuation_raw(state, trigger))
+    }
+
+    pub(super) fn map_cancelled<T>(&self, result: PipelineResult<T>) -> PipelineResult<T> {
+        match result {
+            Err(ActionOutcome::Cancelled) => Err(self.handle_cancellation()),
+            other => other,
+        }
+    }
+
+    pub(super) fn phase_finalize(&self, state: &mut GameState) {
+        tracing::info!(
+            "Pipeline ✓ Finalize (status={:?})",
+            state.narrative.input_buffer.status
+        );
+
+        if state
+            .narrative
+            .input_buffer
+            .status
+            .error_message()
+            .is_none()
+        {
+            state.narrative.input_buffer.status = GenerationStatus::Idle;
+        }
+        state.narrative.input_buffer.phase = GenerationPhase::default();
+        self.persist(state);
+    }
+
+    pub(super) fn handle_cancellation(&self) -> ActionOutcome {
+        tracing::warn!("Pipeline cancelled — aborting remaining stages");
+        let mut state = load_or_fresh(self.ctx);
+        state.narrative.input_buffer.status = GenerationStatus::Idle;
+        state.narrative.input_buffer.phase = GenerationPhase::default();
+        self.persist(&state);
+        ActionOutcome::Cancelled
     }
 }
 

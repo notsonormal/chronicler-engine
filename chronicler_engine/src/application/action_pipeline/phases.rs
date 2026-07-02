@@ -32,41 +32,41 @@ pub struct PipelineInputs {
     pub all_npcs: Vec<NpcCard>,
 }
 
-impl ActionPipeline {
-    // Does not alter `state`.
-    pub(super) fn persist(&self, state: &GameState, ctx: &GameServiceContext) {
-        if let Err(e) = save_state(ctx, state) {
+pub(super) struct PipelineRun<'a> {
+    pub(super) pipeline: &'a ActionPipeline,
+    pub(super) ctx: &'a GameServiceContext,
+}
+
+impl<'a> PipelineRun<'a> {
+    pub(super) fn new(pipeline: &'a ActionPipeline, ctx: &'a GameServiceContext) -> Self {
+        Self { pipeline, ctx }
+    }
+
+    pub(super) fn persist(&self, state: &GameState) {
+        if let Err(e) = save_state(self.ctx, state) {
             tracing::error!("Failed to persist state: {e}");
         }
     }
 
-    // Returns true if save failed (caller should early-return).
-    pub(super) fn persist_snapshot_failed(
-        &self,
-        state: &mut GameState,
-        label: &str,
-        ctx: &GameServiceContext,
-    ) -> bool {
-        if let Err(e) = save_message_and_snapshot(ctx, state) {
+    pub(super) fn persist_snapshot_failed(&self, state: &mut GameState, label: &str) -> bool {
+        if let Err(e) = save_message_and_snapshot(self.ctx, state) {
             tracing::error!("Failed to save {label}: {e}");
             state.narrative.input_buffer.status =
                 GenerationStatus::Error(format!("Failed to save {label}: {e}"));
-            self.persist(state, ctx);
+            self.persist(state);
             true
         } else {
             false
         }
     }
 
-    // Signals errors through `state.status` rather than `Err`.
-    fn error_return(
+    pub(super) fn error_return(
         &self,
         mut state: GameState,
         msg: String,
-        ctx: &GameServiceContext,
     ) -> PipelineResult<(GameState, String, String, String)> {
         state.narrative.input_buffer.status = GenerationStatus::Error(msg);
-        self.persist(&state, ctx);
+        self.persist(&state);
         Ok((state, String::new(), String::new(), String::new()))
     }
 
@@ -74,16 +74,15 @@ impl ActionPipeline {
         &self,
         mut state: GameState,
         inputs: &PipelineInputs,
-        ctx: &GameServiceContext,
     ) -> PipelineResult<(GameState, String, String, String)> {
         let Some(room) = inputs.map.get_room_by_id(&state.movement.current_room_id) else {
-            return self.error_return(state, "Room not found".to_string(), ctx);
+            return self.error_return(state, "Room not found".to_string());
         };
         let history = state.narrative.history();
 
-        let (preset, response_length) = match self.load_preset_and_response_length(ctx) {
+        let (preset, response_length) = match self.load_preset_and_response_length() {
             Ok(p) => p,
-            Err(msg) => return self.error_return(state, msg, ctx),
+            Err(msg) => return self.error_return(state, msg),
         };
 
         let context = make_prompt_context(
@@ -98,39 +97,39 @@ impl ActionPipeline {
             &history,
         );
 
-        let assembled = match self.assembler.assemble(
+        let assembled = match self.pipeline.assembler.assemble(
             &context,
             &preset,
-            &ctx.world.global_rules,
+            &self.ctx.world.global_rules,
             Some(&response_length),
         ) {
             Ok(a) => a,
-            Err(e) => return self.error_return(state, map_llm_error(&e), ctx),
+            Err(e) => return self.error_return(state, map_llm_error(&e)),
         };
 
         tracing::info!("Pipeline ▶ Narration LLM call (agent=narrator)");
-        let narration_result = match self.recorder.complete(
+        let narration_result = match self.pipeline.recorder.complete(
             AGENT_NARRATOR,
             &assembled.system_prompt,
             &assembled.user_prompt,
             Some(assembled.max_tokens),
         ) {
             Ok(result) => result,
-            Err(e) => return self.error_return(state, map_llm_error(&e), ctx),
+            Err(e) => return self.error_return(state, map_llm_error(&e)),
         };
         tracing::info!("Pipeline ✓ Narration complete");
         let narration_text = narration_result.text;
 
-        if ctx.cancel_token.is_cancelled() {
+        if self.ctx.cancel_token.is_cancelled() {
             return Err(ActionOutcome::Cancelled);
         }
 
         if narration_text.trim().is_empty() {
-            return self.error_return(state, "LLM Error: empty response".to_string(), ctx);
+            return self.error_return(state, "LLM Error: empty response".to_string());
         }
 
         state.add_message(narration_text.clone(), None, MessageType::Narration);
-        if let Err(e) = save_message_and_snapshot(ctx, &mut state) {
+        if let Err(e) = save_message_and_snapshot(self.ctx, &mut state) {
             tracing::warn!("Failed to save pre-quantifier narration: {e}");
         }
 
@@ -144,18 +143,19 @@ impl ActionPipeline {
 
     pub(super) fn phase_post_generation(
         &self,
-        ctx: &GameServiceContext,
         state: &mut GameState,
         input: &str,
         narration_text: &str,
     ) -> QuantifierResult {
         tracing::info!("Pipeline ▶ Quantifying");
         state.narrative.input_buffer.phase = GenerationPhase::Quantifying;
-        if let Err(e) = save_message_and_snapshot(ctx, state) {
+        if let Err(e) = save_message_and_snapshot(self.ctx, state) {
             tracing::warn!("Failed to save pre-quantifier phase update: {e}");
         }
 
-        let mut quantifier_result = self.run_post_generation_agents(state, input, narration_text);
+        let mut quantifier_result =
+            self.pipeline
+                .run_post_generation_agents(state, input, narration_text);
 
         state.scene.quantifier_confidence =
             Some(format!("{:?}", quantifier_result.npcs.confidence));
@@ -180,25 +180,10 @@ impl ActionPipeline {
         quantifier_result
     }
 
-    pub(super) fn phase_engine_commit(
-        state: &GameState,
-        narration_text: &str,
-        quantifier_result: &QuantifierResult,
-    ) -> Result<crate::domain::engine::action_processing::TurnResult, EngineError> {
-        execute_freeaction_impl(
-            state,
-            &FreeActionContext {
-                narration_text,
-                quantifier_result,
-            },
-        )
-    }
-
     pub(super) fn phase_trigger_continuation_raw(
         &self,
         mut state: GameState,
         trigger: &StoredTriggerContext,
-        ctx: &GameServiceContext,
     ) -> PipelineResult<(GameState, String)> {
         state.narrative.input_buffer.status = GenerationStatus::Generating;
         state.narrative.input_buffer.phase = GenerationPhase::GeneratingEvent;
@@ -208,16 +193,16 @@ impl ActionPipeline {
             trigger.trigger_name
         );
 
-        if ctx.cancel_token.is_cancelled() {
+        if self.ctx.cancel_token.is_cancelled() {
             return Err(ActionOutcome::Cancelled);
         }
 
-        if self.persist_snapshot_failed(&mut state, "pre-event snapshot", ctx) {
+        if self.persist_snapshot_failed(&mut state, "pre-event snapshot") {
             return Ok((state, String::new()));
         }
 
         tracing::info!("Pipeline ▶ Trigger LLM call (agent=trigger)");
-        let continuation_result = match self.recorder.complete(
+        let continuation_result = match self.pipeline.recorder.complete(
             AGENT_TRIGGER,
             &trigger.system_prompt,
             &trigger.user_prompt,
@@ -233,7 +218,7 @@ impl ActionPipeline {
                 );
                 state.narrative.input_buffer.status =
                     GenerationStatus::Error(format!("Error: {e}"));
-                if let Err(e2) = save_message_and_snapshot(ctx, &mut state) {
+                if let Err(e2) = save_message_and_snapshot(self.ctx, &mut state) {
                     tracing::error!("Failed to persist trigger error state: {e2}");
                 }
                 return Ok((state, String::new()));
@@ -242,14 +227,14 @@ impl ActionPipeline {
         tracing::info!("Pipeline ✓ Trigger complete");
         let continuation_text = continuation_result.text;
 
-        if ctx.cancel_token.is_cancelled() {
+        if self.ctx.cancel_token.is_cancelled() {
             return Err(ActionOutcome::Cancelled);
         }
 
         if continuation_text.trim().is_empty() {
             state.narrative.input_buffer.status =
                 GenerationStatus::Error("LLM Error: empty response".to_string());
-            self.persist(&state, ctx);
+            self.persist(&state);
             return Ok((state, String::new()));
         }
 
@@ -259,12 +244,12 @@ impl ActionPipeline {
                 tracing::error!("Trigger commit failed: {e}");
                 state.narrative.input_buffer.status =
                     GenerationStatus::Error(format!("Trigger error: {e}"));
-                self.persist(&state, ctx);
+                self.persist(&state);
                 return Ok((state, String::new()));
             }
         };
 
-        if self.persist_snapshot_failed(&mut state, "post-trigger snapshot", ctx) {
+        if self.persist_snapshot_failed(&mut state, "post-trigger snapshot") {
             return Ok((state, String::new()));
         }
 
@@ -276,7 +261,6 @@ impl ActionPipeline {
         mut state: GameState,
         player_input: &str,
         continuation_text: &str,
-        _ctx: &GameServiceContext,
     ) -> GameState {
         tracing::info!("Pipeline ▶ Post-trigger reconcile");
         state.narrative.input_buffer.phase = GenerationPhase::Quantifying;
@@ -288,7 +272,8 @@ impl ActionPipeline {
             .map(|n| n.id.clone())
             .collect();
         let post_trigger_result =
-            self.run_post_generation_agents(&state, player_input, continuation_text);
+            self.pipeline
+                .run_post_generation_agents(&state, player_input, continuation_text);
 
         state.scene.quantifier_confidence =
             Some(format!("{:?}", post_trigger_result.npcs.confidence));
@@ -321,7 +306,6 @@ impl ActionPipeline {
         narration_text: &str,
         inputs: &PipelineInputs,
         trigger_match: &TriggerMatch,
-        ctx: &GameServiceContext,
     ) -> Option<StoredTriggerContext> {
         let continuation_user_msg = format!(
             "Previous narration:\n{}\n\nTrigger event: {}\n\n\
@@ -333,7 +317,7 @@ impl ActionPipeline {
         let room_data = state.current_room()?;
         let history = state.narrative.history();
 
-        let (preset, response_length) = self.load_preset_and_response_length(ctx).ok()?;
+        let (preset, response_length) = self.load_preset_and_response_length().ok()?;
 
         let trigger_ctx = make_prompt_context(
             &inputs.world,
@@ -348,11 +332,12 @@ impl ActionPipeline {
         );
 
         let assembled = self
+            .pipeline
             .assembler
             .assemble(
                 &trigger_ctx,
                 &preset,
-                &ctx.world.global_rules,
+                &self.ctx.world.global_rules,
                 Some(&response_length),
             )
             .ok()?;
@@ -369,14 +354,11 @@ impl ActionPipeline {
         })
     }
 
-    fn load_preset_and_response_length(
-        &self,
-        ctx: &GameServiceContext,
-    ) -> Result<(PromptPreset, String), String> {
-        let settings = ctx.settings.read().unwrap_or_else(|e| e.into_inner());
+    pub(super) fn load_preset_and_response_length(&self) -> Result<(PromptPreset, String), String> {
+        let settings = self.ctx.settings.read().unwrap_or_else(|e| e.into_inner());
         let preset_id = settings.active_system_prompt_preset_id.clone();
         let response_length = settings.response_length.clone();
-        match ctx.preset_storage.get_preset(&preset_id) {
+        match self.ctx.preset_storage.get_preset(&preset_id) {
             Ok(Some(p)) => Ok((p, response_length)),
             Ok(None) => {
                 tracing::error!(
@@ -389,5 +371,21 @@ impl ActionPipeline {
                 Err("Preset storage inaccessible".to_string())
             }
         }
+    }
+}
+
+impl ActionPipeline {
+    pub(super) fn phase_engine_commit(
+        state: &GameState,
+        narration_text: &str,
+        quantifier_result: &QuantifierResult,
+    ) -> Result<crate::domain::engine::action_processing::TurnResult, EngineError> {
+        execute_freeaction_impl(
+            state,
+            &FreeActionContext {
+                narration_text,
+                quantifier_result,
+            },
+        )
     }
 }
