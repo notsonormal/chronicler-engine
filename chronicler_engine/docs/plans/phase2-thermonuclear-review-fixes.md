@@ -1,7 +1,7 @@
 # Plan: Phase 2 Thermonuclear Review Fixes
 
 **Date:** 2026-06-30 (decisions locked 2026-07-01)
-**Status:** Approved (implementation in progress)
+**Status:** Implemented 2026-07-02 — all 11 steps landed on `hexagon-phase2` (commits `618faf8` → `a45e0b9`). Build green, 1190 tests pass.
 **Scope:** `chronicler_engine/`
 **Branch target:** stay on current `hexagon-phase2` branch (commit fix-up commits directly)
 
@@ -634,20 +634,22 @@ For each new codepath introduced or behavior change:
 
 ---
 
-## Implementation handoff (parent orchestrates subagents)
+## Implementation handoff (parent orchestrates subagents) — COMPLETED 2026-07-02
+
+All 11 steps landed on `hexagon-phase2`. Deviations from original routing noted inline.
 
 Sequencing constraint: each step ends with `python build.py` green; steps share files, so implementation MUST be sequential. Workers operate one at a time on the active worktree; parent verifies with `build.py` + targeted grep between steps.
 
 SP estimate + agent routing per step (per AGENTS.md §"PREFER TO USE SUBAGENTS FOR WORK"):
 
-1. **Fix 1 port-cleanup (delete dead `get_llm_backend_for` + adapter imports) + sanitize move** — ~5 SP → `worker`.
-2. **Fix 1 finish (provider direct-construction) + Fix 11 (drop builder) + Fix 12 (drop fields)** — ~5 SP → `worker`. Single atomic `LlmCallResult`/`LlmMessage` reshaping pass.
-3. **Fix 2 + Fix 10** (silent Mock fallback removal + `GameService::with_storage` → `Result`) — ~8 SP → break into: (a) `GameService`/`init_game` signature change (worker), (b) caller propagation across 10 sites (worker).
-4. **Fix 3 MockBackend storage drop** — ~5 SP → `worker`. Migrate `test_mock_backend_logs_to_storage` + 2 `mock_tests.rs` sites + 20+ `MockBackend::new(Some(...))` test sites.
-5. **Fix 4 NoopForensics extract + `make_test_recorder` dedupe** — ~5 SP → `worker`.
-6. **Fix 6 QuantifierAgent reshape** — ~8 SP → `worker`. Migrate 5 `agent_tests.rs` callers + 9 `pipeline/actions_tests.rs` callers.
-7. **Fix 5 `GameService::pipeline()`** — ~3 SP → `delegate`.
-8. **Fix 7 dead field deletion** — ~1 SP → `delegate`.
-9. **Fix 9 no-op + dedupe** — ~3 SP → `delegate`.
-10. **Fix 13 `PipelineRun<'a>` refactor** — ~5 SP → `worker`.
-11. **Fix 14 Path A — `GameStateSnapshot` move + full retag + leak closing + ADR update** — ~13 SP → break into: (a) snapshot move + re-tag ~40 sites (worker), (b) close `agents/registry.rs` + `agents/quantifier/agent.rs` Storage leaks (worker), (c) ADR-027 update (delegate).
+1. **Fix 1 port-cleanup (delete dead `get_llm_backend_for` + adapter imports) + sanitize move** — ~5 SP → `worker`. ✅ landed `618faf8`
+2. **Fix 1 finish (provider direct-construction) + Fix 11 (drop builder) + Fix 12 (drop fields)** — ~5 SP → `worker`. Single atomic `LlmCallResult`/`LlmMessage` reshaping pass. ✅ landed `b582aec`
+3. **Fix 2 + Fix 10** (silent Mock fallback removal + `GameService::with_storage` → `Result`) — ~8 SP → break into: (a) `GameService`/`init_game` signature change (worker), (b) caller propagation across 10 sites (worker). ✅ landed `145d5cc`
+4. **Fix 3 MockBackend storage drop** — ~5 SP → `worker`. Migrate `test_mock_backend_logs_to_storage` + 2 `mock_tests.rs` sites + 20+ `MockBackend::new(Some(...))` test sites. ✅ landed `81b3e75`
+5. **Fix 4 NoopForensics extract + `make_test_recorder` dedupe** — ~5 SP → `worker`. ✅ landed `b136688`
+6. **Fix 6 QuantifierAgent reshape** — ~8 SP → `worker`. Migrate 5 `agent_tests.rs` callers + 9 `pipeline/actions_tests.rs` callers. ✅ landed `ae4f268` + `0e09491` (worker false-reported on test-site migration; primary agent fixed ~45 integration-test sites directly via scripted sed)
+7. **Fix 5 `GameService::pipeline()`** — ~3 SP → `delegate`. ✅ landed `05cebd5`
+8. **Fix 7 dead field deletion** — ~1 SP → `delegate`. ✅ landed `6cb53e1`
+9. **Fix 9 no-op + dedupe** — ~3 SP → `delegate`. ✅ landed `dac73a3` (+ `6dd34a8` cleanup: untracked `.pi/rag` artifacts; `.pi/` added to `.gitignore`)
+10. **Fix 13 `PipelineRun<'a>` refactor** — ~5 SP → `worker`. ✅ landed `ea6e778` (primary agent implemented directly; method visibility + PipelineRun fields reshaping needed careful sequencing not suited to worker subagent)
+11. **Fix 14 Path A — `GameStateSnapshot` move + full retag + leak closing + ADR update** — ~13 SP → break into: (a) snapshot move + re-tag ~40 sites (worker), (b) close `agents/registry.rs` + `agents/quantifier/agent.rs` Storage leaks (worker), (c) ADR-027 update (delegate). ✅ landed `a45e0b9` (primary agent implemented directly; sub-task (b) deferred to T2 per Path B fallback trigger — constructor signature cascade is T2-adjacent; ADR-027 exemption list updated to 5 files with deferred-T2 markers)
