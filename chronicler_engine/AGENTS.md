@@ -167,6 +167,20 @@ Unit tests go in the `src/` folder beside the class they are testing (e.g. `prod
 
 Integration tests go in the `test/` folder.
 
+### TEST MIRROR CONVENTION (2026-07-02)
+
+Integration test structure mirrors `src/` paths **within each test binary**. The test **binary** is chosen by fixture weight (integration/http/browser/llm/infrastructure); inside each binary, file paths mirror `src/` subpaths.
+
+Examples:
+- `src/application/action_pipeline/pipeline.rs` ↔ `tests/integration/application/action_pipeline/pipeline.rs`
+- `src/application/game_service.rs` ↔ `tests/integration/application/game_service.rs`
+- `src/adapters/driving/http/fragments/actions.rs` ↔ `tests/http/fragments/actions.rs` (http test binary naturally mirrors the http subset)
+- `src/adapters/driven/llm/transport.rs` ↔ `tests/integration/adapters/driven/llm/transport.rs` (or `tests/integration/adapters/driven/llm_client.rs` for legacy reasons)
+
+**Exceptions allowed:** Cross-cutting tests (e.g., `lifecycle.rs` spans multiple `src/application/` modules) may live at a sensible location with a **rationale comment** at the top of the test file. The convention is doc-only—no script guardrail enforces it.
+
+Rationale: This convention keeps test discovery intuitive—"where is the test for X?" → "mirrored path under tests/". It also scales as src/ grows without requiring constant reorg.
+
 ### TEST FAILURE HANDLING
 
 When tests fail, you MUST:

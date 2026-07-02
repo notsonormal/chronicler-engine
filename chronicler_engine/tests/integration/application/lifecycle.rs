@@ -1,3 +1,9 @@
+//! Integration tests for game lifecycle operations.
+//!
+//! RATIONALE: This file is cross-cutting over `src/application/` rather than a mirror
+//! of a single src file. Kept here for simplicity; future refactor could split
+//! into per-module tests under `application/` subdirs if it grows organically.
+
 use std::sync::Arc;
 
 use chronicler_engine::application::game_service::GameService;

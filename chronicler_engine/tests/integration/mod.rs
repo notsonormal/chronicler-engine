@@ -33,12 +33,20 @@ pub fn working_service() -> GameService {
     )
 }
 
-mod application_service;
-mod game_service;
-mod lifecycle;
-mod llm_client;
 mod model;
 mod storage;
+
+#[path = "application/application_service.rs"]
+mod application_service;
+#[path = "application/game_service.rs"]
+mod game_service;
+#[path = "application/lifecycle.rs"]
+mod lifecycle;
+#[path = "adapters/driven/llm/llm_client.rs"]
+mod llm_client;
+
+#[path = "application/wiring.rs"]
+mod application_wiring;
 
 #[path = "flow/arrival_persistence.rs"]
 mod flow_arrival_persistence;
@@ -48,9 +56,9 @@ mod flow_retry_event;
 mod flow_retry_main;
 #[path = "flow/sequence.rs"]
 mod flow_sequence;
-#[path = "pipeline/actions.rs"]
+#[path = "application/action_pipeline/actions.rs"]
 mod pipeline_actions;
-#[path = "pipeline/retry.rs"]
+#[path = "application/action_pipeline/retry.rs"]
 mod pipeline_retry;
-#[path = "pipeline/pipeline.rs"]
+#[path = "application/action_pipeline/pipeline.rs"]
 mod pipeline_tests;

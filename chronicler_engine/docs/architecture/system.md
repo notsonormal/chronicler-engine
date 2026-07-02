@@ -293,7 +293,7 @@ Each `[[test]]` in `Cargo.toml` compiles an independent test binary.
 
 | Binary | Path | Count | Purpose |
 |--------|------|-------|---------|
-| `integration` | `tests/integration/mod.rs` | ~208 | Cross-module integration (application service, game service, lifecycle, pipeline, storage, model, llm_client) |
+| `integration` | `tests/integration/mod.rs` | ~221 | Cross-module integration — paths mirror `src/` subpaths inside the binary (e.g. `src/application/action_pipeline/` → `tests/integration/application/action_pipeline/`). Subdirs: `application/` (service + pipeline tests), `flow/` (arrival + retry flow), `model/` (state tests), `storage/` (persistence tests), `adapters/driven/llm/` (HTTP transport tests). Cross-cutting tests (e.g. `lifecycle.rs`) include a rationale comment.
 | `http` | `tests/http/mod.rs` | ~60 | HTTP endpoint tests (action handlers, connections, fragments, status, text check) |
 | `browser` | `tests/browser/mod.rs` | ~32 | Browser E2E tests (structure, editing, interactions, triggers) — requires Playwright |
 | `llm` | `tests/llm/mod.rs` | 2 | Real LLM smoke tests — `#[ignore]` by default, requires `OPENROUTER_API_KEY` |

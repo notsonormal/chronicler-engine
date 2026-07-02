@@ -1,9 +1,21 @@
 # Plan: Phase 2 Tests + Coverage Fixes
 
 **Date:** 2026-06-30
-**Status:** Draft (not yet started)
+**Status:** In Progress (implementation started 2026-07-02)
 **Scope:** `chronicler_engine/`
-**Branch target:** `hexagon-phase2` fix-up commits or new `hexagon-phase2-tests-fixes` branch off `hexagon-phase2`
+**Branch target:** `hexagon-phase2` (fix-up commits on current branch — no new branch)
+
+## Locked decisions (resolved 2026-07-02)
+
+1. **Branch** — fix-up commits directly on `hexagon-phase2`.
+2. **Scope** — Both Axis A (new tests for 6 Phase 2 files) AND Axis B (reorganize `tests/` + document convention).
+3. **Test convention** — test binary chosen by fixture weight (integration/http/browser/llm/infrastructure); inside each binary, paths mirror `src/` subpaths; exceptions allowed with rationale comment in the test file. Doc-only enforcement, no script guardrail.
+4. **Coverage targets** — no per-file minimum enforced; rely on overall ≥80% project gate. Per-file targets below are success criteria for this plan only, not build-enforced.
+5. **`tests/http/` fate** — stays a separate test binary. Internal paths already roughly mirror `src/adapters/driving/http/`; verify and adjust only if needed.
+6. **Flat files** — move `application_service.rs`, `game_service.rs`, `lifecycle.rs`, `llm_client.rs` into `tests/integration/application/` (mirrored subdir). `lifecycle.rs` is cross-cutting but moves with rationale comment in the file.
+7. **Sequencing** — Option 1 (code fixes first, then tests) satisfied: sibling plan `phase2-thermonuclear-review-fixes.md` is marked Implemented (commits b582aec..6fa95ac). Tests target the FINAL code shape.
+8. **Shared test doubles** — add a `RecordingLlmMessageRepository` spy to `src/test_support/` alongside the canonical `NoopForensics`. The spy counts `save_llm_message` calls, captures the last `LlmMessage`, and returns configurable errors. Used by orchestrator + factory tests.
+9. **`src/application/ports/llm_provider_tests.rs`** — leave as-is; do NOT extend it for orchestrator-side methods (overall-only coverage decision). Focus on the 6 zero-coverage files.
 
 ## Context
 
@@ -44,31 +56,37 @@ The integration test folder structure and file names have drifted from the post-
   - `src/application/ports/llm_message_repository.rs`
   - `src/application/ports/text_checker.rs`
 - At minimum, tests verify:
-  - **Port traits:** trait enforces the expected method signatures; the impl contract (e.g. `Storage::save_llm_message` round-trip through `list_latest_llm_messages`) is exercised.
+  - **Port traits:** trait enforces the expected method signatures; trait polymorphism (dyn dispatch between prod impl + test double) is exercised.
   - **Factories (`llm_factory`, `text_check_factory`):** the prod wiring path (`get_llm_recorder_for`, `create_text_check_service`) is exercised at least once with a real-ish `Connection` + `Storage` — not only the `with_mock_quantifier` test bypass.
   - **Orchestrators (`LlmCallRecorder`, `TextCheckService`):** the orchestration logic itself is the subject under test — provider gets called, forensics get saved, sanitization runs, etc. Currently only the test-double wiring duplicates the orchestrator; nobody tests what the orchestrator actually does.
-- `python build.py --coverage` shows coverage improvement on the 6 flagged files:
-  - `src/application/ports/llm_provider.rs` (was 32.7%) — target ≥70%
-  - `src/application/ports/text_checker.rs` (was 44.4%) — target ≥70%
-  - `src/bootstrap/text_check_factory.rs` (was 75%) — target ≥85%
-  - `src/bootstrap/llm_factory.rs` (was 78.6%) — target ≥85%
-  - `src/application/llm_recorder.rs` (untested) — target ≥80%
-  - `src/application/text_check_service.rs` (untested) — target ≥80%
+- `python build.py --coverage` shows **non-zero coverage improvement** on the 6 flagged files (no per-file minimum enforced — see locked decision 4). Pre-fix levels for reference:
+  - `src/application/ports/llm_provider.rs` (was 32.7%)
+  - `src/application/ports/text_checker.rs` (was 44.4%)
+  - `src/bootstrap/text_check_factory.rs` (was 75%)
+  - `src/bootstrap/llm_factory.rs` (was 78.6%)
+  - `src/application/llm_recorder.rs` (untested — 0% direct)
+  - `src/application/text_check_service.rs` (untested — 0% direct)
 - Overall coverage holds ≥80% (project threshold).
 
 ### Axis B success criteria
 
-- `tests/` folder structure mirrors `src/` folder structure — every `src/<tier>/<module>/` has a `tests/<tier>/<module>/` counterpart (or a documented reason why it doesn't).
-- Flat-file integration tests (`tests/integration/application_service.rs`, `game_service.rs`, `lifecycle.rs`, `llm_client.rs`, `mod.rs`) are either:
-  - Reorganized into mirrored subdirs matching `src/application/`, OR
-  - Documented as an intentional exception with rationale (e.g., cross-cutting tests that legitimately span multiple src dirs).
-- `tests/integration/pipeline/` → `tests/integration/action_pipeline/` (rename to match `src/application/action_pipeline/`).
-- `tests/http/` → `tests/integration/driving/http/` OR `tests/driving/http/` (decide: integration-only or keep separate binary) — match the `src/adapters/driving/http/` path.
+- Establish a "Test Mirror Convention" (NEW — no convention exists today). The convention is **binary by fixture weight + mirror `src/` paths inside each binary**, doc-only enforcement (no script guardrail — see locked decision 3 + 5):
+  - Test binary is chosen by fixture weight: `integration` (in-process, no HTTP server), `http` (axum TestClient, real HTTP layer), `browser` (Playwright), `llm` (real LLM API, `#[ignore]`), `infrastructure` (guardrails).
+  - Inside each binary, file paths mirror `src/` subpaths. Example: `src/application/action_pipeline/pipeline.rs` ↔ `tests/integration/application/action_pipeline/pipeline.rs`.
+  - Exceptions allowed with a rationale comment at the top of the test file (e.g., cross-cutting tests that span multiple src dirs).
+- `tests/integration/pipeline/` → `tests/integration/application/action_pipeline/` (rename + nested under `application/` to match `src/application/action_pipeline/`).
+- `tests/http/` stays a separate test binary (locked decision 5). Internal paths already roughly mirror `src/adapters/driving/http/`; worker verifies and adjusts only if needed.
+- Flat-file integration tests move into mirrored subdirs under `tests/integration/application/`:
+  - `application_service.rs` → `tests/integration/application/application_service.rs`
+  - `game_service.rs` → `tests/integration/application/game_service.rs`
+  - `lifecycle.rs` → `tests/integration/application/lifecycle.rs` (rationale comment: cross-cutting over `application/` not a single src file)
+  - `llm_client.rs` → `tests/integration/application/llm_client.rs` (or a deeper mirror — worker decides based on content)
 - AGENTS.md §"THE TEST-FIRST PHILOSOPHY" extended with a "Test Mirror Convention" subsection documenting:
   - Unit tests: `<src_dir>/<file>_tests.rs` sibling pattern (already enforced by `check_test_structure.py`).
-  - Integration tests: `tests/<src_tier_path_mirror>/...` — same subpath as `src/` module being tested.
-  - Update `docs/architecture/system.md` §11 to reflect the actual mirrored structure post-reorganization.
-- A new guardrail (script or doc-only) lists the canonical `src/` ↔ `tests/` mapping; if a future change adds an unmirrored test file, `python build.py` warns (or fails — decide).
+  - Integration tests: `tests/<binary>/<src_tier_path_mirror>/...` — binary by fixture weight, same subpath as `src/` module being tested inside the binary.
+  - Exceptions allowed with rationale comment.
+  - No script enforcement.
+- Update `docs/architecture/system.md` §11 to reflect the actual mirrored structure post-reorganization.
 - All tests green; `python build.py` green.
 
 ---
@@ -279,88 +297,80 @@ Add at least one integration test (suggested home: `tests/integration/pipeline/p
 
 This catches the silent-fallback regression (sibling plan Fix 2) at the integration level — if someone reintroduces `unwrap_or_else(Mock+Noop)`, the test should fail on the forensics assertion.
 
-### Phase B.1 — Decide test mirror convention (write it down)
+### Phase B.1 — Test mirror convention (locked)
 
-Before reorganizing, decide and document. **No written convention exists today** — not in AGENTS.md, not in `docs/architecture/system.md` §11, not in `scripts/check_test_structure.py`. The `tests/integration/storage/` mirror is a one-off that was never propagated or codified. This plan therefore **ESTABLISHES a new convention** (not restores an existing one):
+**No written convention existed before this plan.** Convention below is LOCKED (see locked decisions 3 + 5). Code-only guardrail script was considered and rejected (locked decision 5 — no script enforcement).
 
 1. **Unit tests:** `<src_dir>/<file>_tests.rs` sibling — already enforced by `check_test_structure.py`. No change.
-2. **Integration tests:** `tests/<src_tier_path_mirror>/<module>.rs` — full path mirror.
-   - Example: `src/application/action_pipeline/pipeline.rs` ↔ `tests/application/action_pipeline/pipeline.rs`
-   - Example: `src/adapters/driving/http/fragments/actions.rs` ↔ `tests/adapters/driving/http/fragments/actions.rs`
-   - Exception: tests that span multiple src dirs (lifecycle, integration) — document per-file.
-3. **Test binaries:** Decide if `tests/integration/mod.rs`, `tests/http/mod.rs`, `tests/browser/mod.rs` stay as separate `[[test]]` binaries in `Cargo.toml` (current state) or get reorganized. Recommendation: keep separate binaries for build parallelism, but reorganize the directory structure inside each binary.
-
-Update AGENTS.md §"THE TEST-FIRST PHILOSOPHY" + `docs/architecture/system.md` §11 with the convention. Codify in `scripts/check_test_structure.py` (new rule) so drift can't recur silently.
+2. **Integration tests:** test binary chosen by fixture weight (`integration` / `http` / `browser` / `llm` / `infrastructure`); inside each binary, paths mirror `src/` subpaths.
+   - Example: `src/application/action_pipeline/pipeline.rs` ↔ `tests/integration/application/action_pipeline/pipeline.rs`
+   - Example: `src/adapters/driving/http/fragments/actions.rs` ↔ `tests/http/fragments/actions.rs` (http binary naturally mirrors the http subset of `src/`)
+   - Exception: tests that span multiple src dirs (e.g., `lifecycle.rs`) — keep a rationale comment at the top of the file.
+3. **Test binaries:** keep current `[[test]]` entries in `Cargo.toml` (separate binaries for build parallelism). No `[[test]]` changes needed; only `mod.rs` `#[path]` declarations shift.
+Update AGENTS.md §"THE TEST-FIRST PHILOSOPHY" + `docs/architecture/system.md` §11 with this convention.
 
 ### Phase B.2 — Reorganize integration tests per convention
 
-Per B.1 decision, reorganize:
+Per B.1 locked convention, reorganize:
 
-1. **`tests/integration/pipeline/` → `tests/integration/action_pipeline/`** (rename to match `src/application/action_pipeline/`).
-2. **`tests/http/` → either `tests/integration/driving/http/` OR keep as separate binary but rename `tests/driving/http/`** — decide in B.1.
-3. **Create missing test directories:**
-   - `tests/integration/ports/` (for `llm_message_repository`, `text_checker`, `llm_provider` port trait tests)
+1. **`tests/integration/pipeline/` → `tests/integration/application/action_pipeline/`** (rename + nest under `application/` to match `src/application/action_pipeline/`).
+2. **`tests/http/` stays as-is** as a separate test binary (locked decision 5). Worker verifies internal paths roughly mirror `src/adapters/driving/http/`; adjusts only if clearly misaligned.
+3. **Create missing test directories under `tests/integration/application/`:**
    - `tests/integration/application/` (for `llm_recorder`, `text_check_service`, `application_service`, `game_service`, `lifecycle` — move the flat files here)
-   - `tests/integration/agents/` + `tests/integration/agents/quantifier/` (mirror src)
-   - `tests/integration/narrative_prompt/`
-   - `tests/integration/text_check/` (driven adapter)
-   - `tests/integration/bootstrap/` (or move `src/bootstrap/*_tests.rs` tests out if they belong at integration level — verify per case)
-   - `tests/integration/action_pipeline/` (created in step 1)
+   - `tests/integration/application/action_pipeline/` (created in step 1)
 4. **Move flat-file tests into mirrored subdirs:**
    - `tests/integration/application_service.rs` → `tests/integration/application/application_service.rs`
    - `tests/integration/game_service.rs` → `tests/integration/application/game_service.rs`
-   - `tests/integration/lifecycle.rs` → `tests/integration/application/lifecycle.rs` (verify mirror; "lifecycle" might be cross-cutting — document if so)
-   - `tests/integration/llm_client.rs` → `tests/integration/adapters/driven/llm/client.rs` (or similar mirror)
-5. **Update `Cargo.toml` `[[test]]` entries if paths changed.**
-6. **Update `tests/integration/mod.rs` (or equivalent) to declare the new submodules.**
+   - `tests/integration/lifecycle.rs` → `tests/integration/application/lifecycle.rs` (cross-cutting — add rationale comment at top of file)
+   - `tests/integration/llm_client.rs` → `tests/integration/application/llm_client.rs` (worker chooses deeper mirror based on content; `application/` is the safe default)
+5. **No `Cargo.toml` `[[test]]` changes** — single integration binary entry unchanged; only `tests/integration/mod.rs` `#[path]` declarations shift.
+6. **Update `tests/integration/mod.rs`** to declare new submodules with `#[path = "..."]` attributes (matches existing pattern at lines 35–47).
 7. **Update `docs/architecture/system.md` §11 test binary catalog.**
 
-### Phase B.3 — Add test-mirror guardrail
+**Out of scope** (deliberately deferred — these dirs are not required for Phase 2 coverage fix and would balloon reorg scope): `tests/integration/ports/`, `tests/integration/agents/`, `tests/integration/narrative_prompt/`, `tests/integration/text_check/`, `tests/integration/bootstrap/`. Create them only when corresponding integration tests are added in future plans; convention applies then.
 
-Extend `scripts/check_test_structure.py` (or add a new `scripts/check_test_mirror.py`) to verify:
+### Phase B.3 — ~~Add test-mirror guardrail~~ REMOVED
 
-1. For every `tests/<tier>/<module>.rs`, the corresponding `src/<tier>/<module>.rs` exists. (Or document exceptions.)
-2. For every new `src/` module with substantial code (say >50 lines non-test), a corresponding `tests/` file exists (either sibling `*_tests.rs` OR an integration test in the mirrored path).
-3. Run as part of `python build.py` — fail or warn (decide) on violations.
-
-This prevents drift recurring after future phases.
+**REMOVED per locked decision 3 + 5.** Doc-only enforcement. No script guardrail. Convention lives in AGENTS.md §"Test Mirror Convention" + `docs/architecture/system.md` §11. Rationale: user flagged "perfect mirror" is not the goal; exceptions should be pragmatic, and a strict script guardrail would either fail noise or erode signal. If drift recurs in a future phase, revisit then.
 
 ---
 
 ## Sequencing vs sibling plan
 
-Two valid orderings:
+**RESOLVED — Option 1 (code fixes first, then tests) is in effect.** Sibling plan `phase2-thermonuclear-review-fixes.md` is marked Implemented (commits b582aec..6fa95ac). Tests target the FINAL, fixed code shape.
 
-### Option 1 — Code fixes first, then tests (safer)
+### Implementation order (within this plan)
 
-1. Implement `archived/phase2-thermonuclear-review-fixes.md` first.
-2. Then implement this plan — tests cover the FINAL shape of the code, not the broken shape.
-3. Risk: longer total time before tests catch regressions.
+1. **Phase 0** — sync this plan doc with locked decisions (primary agent).
+2. **Phase 1** — add `RecordingLlmMessageRepository` spy to `src/test_support/` + sibling `*_tests.rs` (primary agent). Unblocks Phase A.1 orchestrator tests.
+3. **Phase A** — 3 parallel `worker` subagents (foreground synchronous — async has startup flakiness per AGENTS.md):
+   - Worker A: `src/application/llm_recorder_tests.rs` (5 SP — 8 cases per A.1.1, uses spy from Phase 1 + `MockBackend`)
+   - Worker B: `src/application/text_check_service_tests.rs` (3 SP, A.1.2) + `src/application/ports/text_checker_tests.rs` (2 SP, A.3.2)
+   - Worker C: `src/bootstrap/llm_factory_tests.rs` (3 SP, A.2.1) + `src/bootstrap/text_check_factory_tests.rs` (3 SP, A.2.2) + `src/application/ports/llm_message_repository_tests.rs` (2 SP, A.3.1)
+4. **Phase A.4** — single sequential `worker`: `tests/integration/application/wiring.rs` (5 SP) exercises prod factory path.
+5. **Phase B** — single sequential `worker`: reorganize `tests/integration/` per Phase B.2.
+6. **Phase B Docs** — `delegate` subagent: AGENTS.md + `docs/architecture/system.md` §11 convention docs.
+7. **Phase Z** — `delegate` subagent: `python build.py` final validation + docs index regen.
 
-### Option 2 — Tests first, then code fixes (faster regression catch)
-
-1. Write tests for the CURRENT (broken) shape first — tests will pass against current code.
-2. Implement code fixes — tests should still pass (behavior-preserving) OR tests need adjustment (behavior-changing fixes).
-3. Risk: rework on tests that targeted the broken shape.
-
-### Recommendation
-
-Option 1 (code first, then tests). The code fixes change behavior in 3 places (Fix 2 silent fallback removal is behavior-changing — prod errors propagate instead of silent Mock). Writing tests against the silent-fallback behavior would be wasted work. Write tests against the fixed shape.
-
-If time pressure demands parallelism: Phase A.1 (orchestrator unit tests) is mostly behavior-preserving and could be written against current code in parallel with code fixes, then adjusted if needed. Phase B (test reorganization) is fully independent — can run any time.
+### Primary agent verification gates
+- After Phase A workers return: `cargo test --workspace` green.
+- For 5 SP tasks (`llm_recorder_tests.rs`, `wiring.rs`): primary agent runs `build.py` after worker returns (AGENTS.md rule for 5 SP tasks).
+- After Phase B reorg worker: `python build.py` green (no broken `#[path]` declarations).
 
 ---
 
-## Open decisions (need user input before implementation)
+## Open decisions (RESOLVED 2026-07-02)
 
-1. **Axis A scope — per-file coverage targets:** proposed 70% for ports, 85% for factories, 80% for orchestrators. Confirm or adjust.
-2. **Axis B — strict vs documented mirror:** does every `src/` subdir need a `tests/` mirror, or are documented exceptions OK (e.g., `src/test_support/` obviously has no test mirror)?
-3. **Axis B — `tests/http/` fate:** merge into `tests/integration/driving/http/` (one binary) or rename to `tests/driving/http/` (separate binary)?
-4. **Axis B — flat-file handling:** `lifecycle.rs` is cross-cutting — does it stay as a flat file with documented exception, or get split into per-module tests?
-5. **Phase B.3 guardrail severity:** fail build on mirror violation, or warn only?
-6. **Sequencing:** Option 1 (code first) vs Option 2 (tests first) vs parallel.
-7. **Shared test doubles:** sibling plan Fix 4 extracts `NoopForensics` to `test_support/`. This plan references it for the new orchestrator tests. Should there be a recording `LlmMessageRepository` (counts calls, captures last message) shared in `test_support/` too, or duplicated per test file?
-8. **`src/application/ports/llm_provider_tests.rs` (already exists, 32.7% coverage):** extend it to cover the orchestrator-side methods + LlmCallResult shape, or leave as-is and focus on the 6 zero-coverage files?
+All 8 open decisions resolved; see "Locked decisions" block at the top of this doc. Summary:
+
+1. **Per-file coverage targets** — No per-file minimum enforced. Overall ≥80% gate only. Per-file numbers above are reference, not gates.
+2. **Strict vs documented mirror** — Documented convention only; exceptions allowed with rationale comment. No script enforcement.
+3. **`tests/http/` fate** — Stays a separate test binary.
+4. **Flat-file handling** — Move all 4 flat files (`application_service.rs`, `game_service.rs`, `lifecycle.rs`, `llm_client.rs`) into `tests/integration/application/`. `lifecycle.rs` keeps a rationale comment for cross-cutting nature.
+5. **Phase B.3 guardrail severity** — REMOVED. No script guardrail. Doc-only enforcement.
+6. **Sequencing** — Option 1 (code first) already satisfied — sibling plan implemented.
+7. **Shared test doubles** — Add `RecordingLlmMessageRepository` spy to `src/test_support/` alongside `NoopForensics`.
+8. **`llm_provider_tests.rs`** — Leave as-is. Do not extend. Focus on the 6 zero/near-zero coverage files.
 
 ---
 

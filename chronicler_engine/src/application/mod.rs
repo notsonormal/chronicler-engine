@@ -31,7 +31,13 @@ pub(crate) use spawn::spawn_pipeline_task;
 mod context_tests;
 
 #[cfg(test)]
+mod llm_recorder_tests;
+
+#[cfg(test)]
 mod llm_sanitizer_tests;
 
 #[cfg(test)]
 mod query_handlers_tests;
+
+#[cfg(test)]
+mod text_check_service_tests;
