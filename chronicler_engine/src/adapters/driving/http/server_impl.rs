@@ -2,21 +2,14 @@
 //! Server implementation
 
 use std::sync::Arc;
-use std::sync::RwLock;
 use tracing;
 
 use crate::error::{EngineError, Result};
 
 use super::app_state::{AppState, ServerConfig, ServerResources};
+use super::locks::read_lock_or_recover;
 use super::router::build_router;
 use super::port_utils::bind_with_retry;
-
-fn read_lock_or_recover<T: Clone>(lock: &RwLock<T>, name: &str) -> T {
-    lock.read().map(|g| g.clone()).unwrap_or_else(|p| {
-        tracing::warn!("Poisoned {name} read lock recovered");
-        p.into_inner().clone()
-    })
-}
 
 /// Starts the HTTP server with the given configuration and resources.
 ///
@@ -27,8 +20,6 @@ pub async fn run_server_with_config(
     let settings = read_lock_or_recover(&resources.settings, "settings");
     let text_check_service =
         Arc::new(crate::bootstrap::text_check_factory::create_text_check_service(&settings));
-    let drop_settings = resources.settings.clone();
-    let _ = drop_settings.write().map(|mut s| *s = settings);
 
     let game_service = crate::application::game_service::GameService::with_storage(
         Some(Arc::clone(&resources.storage)),

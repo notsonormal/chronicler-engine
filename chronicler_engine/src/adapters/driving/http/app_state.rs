@@ -5,7 +5,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::sync::atomic::AtomicBool;
-use std::sync::RwLockWriteGuard;
 use tokio_util::sync::CancellationToken;
 
 use crate::application::application_service::DefaultApplicationService;
@@ -13,6 +12,8 @@ use crate::application::GameService;
 use crate::application::GameServiceContext;
 use crate::application::text_check_service::TextCheckService;
 use crate::error::EngineError;
+
+use super::locks::{read_lock_or_recover, write_lock_or_recover};
 use crate::domain::model::character::NpcCard;
 use crate::domain::model::settings::AppSettings;
 
@@ -104,18 +105,4 @@ impl AppState {
     pub fn text_check_service(&self) -> &TextCheckService {
         &self.text_check_service
     }
-}
-
-fn read_lock_or_recover<T: Clone>(lock: &RwLock<T>, name: &str) -> T {
-    lock.read().map(|g| g.clone()).unwrap_or_else(|p| {
-        tracing::warn!("Poisoned {name} read lock recovered");
-        p.into_inner().clone()
-    })
-}
-
-fn write_lock_or_recover<'a, T>(lock: &'a RwLock<T>, name: &str) -> RwLockWriteGuard<'a, T> {
-    lock.write().unwrap_or_else(|p| {
-        tracing::warn!("Poisoned {name} write lock recovered");
-        p.into_inner()
-    })
 }
