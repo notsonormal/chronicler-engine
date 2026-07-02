@@ -734,6 +734,8 @@ Phase 2 is complete. Five sub-phases landed on branch `hexagon-phase2` (6 commit
 
 **Commit:** `33d8874` (Phase 2.1).
 
+**Amended 2026-07-02 (Phase 2 thermonuclear review Fix 3, commit `81b3e75`):** Deviation closed. `MockBackend.storage` field removed entirely; tests now assert via `Arc<dyn LlmMessageRepository>` usage in `mock_tests.rs` + double-save bug closed. Remaining `storage` references in `mock_tests.rs` are local `Arc<dyn LlmMessageRepository>` fixtures, not a `MockBackend` field.
+
 ### Deviation 2 — Phase 2.5 + Phase 3.4 (ADR-027) pulled forward
 
 **Original plan:** Phase 2.5 only adds `// arch-lint: storage-direct` markers and a scoped arch-lint exemption. ADR-027 is scheduled for Phase 3.4.
@@ -789,3 +791,34 @@ Phase 2 is complete. Five sub-phases landed on branch `hexagon-phase2` (6 commit
 - **Phase 2.4 (drop ActionPipelineBackend trait):** trait deleted, `ActionPipeline` constructor takes direct fields, `run_post_generation_agents` inlined as pipeline phase method. Test mocks ported to `make_test_recorder()` helper except for the 1 file whose tests exercised the trait directly (Deviation 5).
 - **Unresolved #6:** `postprocess_response_text` → moved to orchestrator (`LlmCallRecorder`); `merge_single_user_message` → stays in transport (request shaping). Per default.
 - **Branch:** `hexagon-phase2`. Build green at end: 1190 passed + 2 skipped, clippy 0 warnings, coverage 86.3%.
+
+## Phase 2 thermonuclear-review deviations (recorded 2026-07-02)
+
+External review of `hexagon-phase2` returned "Not approved" with 14 findings. Fixes landed in 11 commits (`618faf8` → `a45e0b9`) under `docs/plans/phase2-thermonuclear-review-fixes.md`. Two deviations from the original Phase 2 plan introduced + recorded:
+
+### Deviation T1 — Fix 7 (Plan 2.3 amendment): `text_check_service` stays on `AppState`, not routed through `ApplicationService`
+
+**Original plan (2.3):** Player text-check routed via `ApplicationService` (`app.text_check.check_player_input(...)` via `ApplicationService`).
+
+**Actual outcome:** `DefaultApplicationService.text_check_service` field + builder + accessor deleted entirely (Fix 7, commit `6cb53e1`). HTTP layer keeps routing text-check through `AppState.text_check_service` directly — `AppState.text_check_service` is built in `server_impl.rs:29` via `create_text_check_service(&settings)`.
+
+**Rationale for deviation:** Plan 2.3 wanted text-check routed through `ApplicationService` for hexagonal purity, but the wiring was never completed by the Phase 2 worker — `DefaultApplicationService.text_check_service` field had zero callers. Routing through `ApplicationService` adds a wrapper layer for zero substitution seam (one impl, no real port). Accept simpler surface; `AppState` directly holds `TextCheckService`.
+
+**User decision:** Option B (locked during plan review, see `phase2-thermonuclear-review-fixes.md`).
+
+### Deviation T2 — Fix 14 Path B fallback (partial): `agents/registry.rs` + `agents/quantifier/agent.rs` Storage imports deferred to T2
+
+**Original plan (Fix 14 Path A, full scope):** Close all Storage leaks in `application/` so ADR-027's "exactly 3 files" claim becomes true. Includes routing `agents/registry.rs` + `agents/quantifier/agent.rs` through `LlmCallRecorder` instead of importing `Storage` directly.
+
+**Actual outcome:** `GameStateSnapshot` moved to `domain/model/state/game_state_snapshot.rs` with full retag (~40 sites, no re-export shim) — `message_editing.rs` leak closed unconditionally (commit `a45e0b9`). `ports/llm_provider.rs` leak closed by Fix 1 (commit `618faf8`). `agents/registry.rs` + `agents/quantifier/agent.rs` Storage imports KEPT — Path B fallback trigger hit: closing them requires refactoring `bootstrap::llm_factory::get_llm_recorder_for(connection, Arc<Storage>)` signature, which cascades into T2 (`reliability-and-cancellation-plan`) in-process LLM recorder wiring territory.
+
+**Rationale for deviation:** Plan explicitly pre-locked the Path B fallback trigger for those 2 files: "if closing the `agents/registry.rs` + `agents/quantifier/agent.rs` leaks proves load-bearing (constructor signature cascade into T2 reliability plan territory...), fall back to Path B for those 2 files ONLY."
+
+**User decision:** Option B (locked during plan review, see `phase2-thermonuclear-review-fixes.md`). ADR-027 exemption list updated to 5 files; the 2 agents files marked `// arch-lint: storage-direct — deferred to T2, see ADR-027`.
+
+**Commit:** `a45e0b9` (Path A landed; Path B triggered for 2 files only).
+
+### What did NOT deviate (Phase 2 thermonuclear)
+
+- All other fixes (1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 13) landed as specified.
+- Deviation 1 above (MockBackend storage) fully closed — not a deviation anymore in practice.

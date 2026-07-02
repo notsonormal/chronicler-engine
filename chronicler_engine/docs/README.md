@@ -70,7 +70,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Spec: Agent-Ready Pipeline Restructure for Chronicler Engine](./plans/multi-agent-architecture-overarching-spec.md)
 - [Plan: Observability & Automated Forensics](./plans/observability-and-forensics-plan.md)
 - [Plan: Phase 2 Tests + Coverage Fixes](./plans/phase2-tests-coverage-fixes.md)
-- [Plan: Phase 2 Thermonuclear Review Fixes](./plans/phase2-thermonuclear-review-fixes.md)
+- [Plan: Phase 2 Thermonuclear Review Fixes](./plans/archived/phase2-thermonuclear-review-fixes.md)
 - [Plan: Reliability and Cancellation](./plans/reliability-and-cancellation-plan.md)
 - [AI Steering & Guided Generation](./plans/steering-and-guided-generation.md)
 - [Subplan B: Quantifier `destination` field split](./plans/subplan-b-quantifier-field-split.md)

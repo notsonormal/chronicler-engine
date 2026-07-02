@@ -9,11 +9,11 @@
 
 External thermonuclear review of branch `hexagon-phase2` flagged that Phase 2 deliverables lack unit tests and that the integration test folder/file structure no longer matches the post-Phase-1+2 `src/` tree. In addition, the project's own AGENTS.md §"Tests as Documentation" contract — "If you don't understand how a component works, read its tests in `tests/` before reading the source code" — is broken for every new module the refactor introduced.
 
-This plan covers **only** test coverage + test reorganization. Code-level fixes for the review findings live in the sibling plan: `phase2-thermonuclear-review-fixes.md`. The two plans are independent — either can be implemented first, but they should be sequenced so that the code-level review fixes land before (or alongside) any new tests, so the tests cover the final shape rather than the broken shape.
+This plan covers **only** test coverage + test reorganization. Code-level fixes for the review findings live in the sibling plan: `archived/phase2-thermonuclear-review-fixes.md`. The two plans are independent — either can be implemented first, but they should be sequenced so that the code-level review fixes land before (or alongside) any new tests, so the tests cover the final shape rather than the broken shape.
 
 ## Related
 
-- Sibling plan: `docs/plans/phase2-thermonuclear-review-fixes.md` (code-level review fixes)
+- Sibling plan: `docs/plans/archived/phase2-thermonuclear-review-fixes.md` (code-level review fixes)
 - Prior plan: `docs/plans/hexagonal-reorganization-plan.md` (Phase 2 complete)
 - ADR-027: `docs/adr/adr-027-hexagonal-architecture-migration.md`
 - AGENTS.md §"THE TEST-FIRST PHILOSOPHY" (line 160) — "Tests as Documentation" contract
@@ -333,7 +333,7 @@ Two valid orderings:
 
 ### Option 1 — Code fixes first, then tests (safer)
 
-1. Implement `phase2-thermonuclear-review-fixes.md` first.
+1. Implement `archived/phase2-thermonuclear-review-fixes.md` first.
 2. Then implement this plan — tests cover the FINAL shape of the code, not the broken shape.
 3. Risk: longer total time before tests catch regressions.
 
@@ -366,7 +366,7 @@ If time pressure demands parallelism: Phase A.1 (orchestrator unit tests) is mos
 
 ## What this plan does NOT cover
 
-- **Code-level fixes** for the 14 review findings (`get_llm_backend_for` deletion, sanitize relocation, MockBackend storage drop, NoopForensics dedup, etc.) — sibling plan: `phase2-thermonuclear-review-fixes.md`.
+- **Code-level fixes** for the 14 review findings (`get_llm_backend_for` deletion, sanitize relocation, MockBackend storage drop, NoopForensics dedup, etc.) — sibling plan: `archived/phase2-thermonuclear-review-fixes.md`.
 - **arch-lint rule activation** — Phase 1.7 deviation persists across both plans. Out of scope.
 - **T2 reliability plan work** — separate plan: `docs/plans/reliability-and-cancellation-plan.md`.
 - **Manual LLM smoke test + text check UI verification** — skill requires these before "done" claim; out of scope for this automation-focused plan.
