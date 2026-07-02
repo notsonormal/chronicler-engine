@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::application::action_pipeline::pipeline::{ActionOutcome, ActionPipeline};
 use crate::application::context::{GameServiceContext, load_or_fresh};
-use crate::application::llm_recorder::LlmCallRecorder;
+use crate::application::game_service::GameService;
 use crate::application::agents::registry::AgentRegistry;
 use crate::domain::model::quantifier::QuantifierResult;
 use crate::domain::model::state::game_state::GameState;
@@ -14,18 +14,8 @@ use crate::test_support::fixtures::{TestGameState, TestNpc};
 use crate::test_support::make_test_context;
 use crate::test_support::make_test_recorder;
 
-fn make_test_pipeline(
-    _ctx: &GameServiceContext,
-    narrator_recorder: Arc<LlmCallRecorder>,
-    agent_registry: AgentRegistry,
-) -> ActionPipeline {
-    let prompt_assembler = Arc::new(
-        crate::application::narrative_prompt::LayeredPromptAssembler::new(
-            crate::application::narrative_prompt::budget::MAX_CONTEXT_TOKENS,
-        ),
-    );
-    let agent_registry = Arc::new(agent_registry);
-    ActionPipeline::new(prompt_assembler, narrator_recorder, agent_registry)
+fn make_test_pipeline(service: &crate::application::game_service::GameService) -> ActionPipeline {
+    service.pipeline()
 }
 
 fn make_test_state() -> GameState {
@@ -38,7 +28,8 @@ fn test_pipeline_runs_to_completion() {
     let ctx = make_test_context(state.clone());
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     let agent_registry = AgentRegistry::default();
-    let pipeline = make_test_pipeline(&ctx, narrator_recorder, agent_registry);
+    let service = GameService::with_backends(narrator_recorder, agent_registry);
+    let pipeline = make_test_pipeline(&service);
 
     let outcome = pipeline.run_from_input(&ctx, state, "look".to_string());
 
@@ -60,7 +51,8 @@ fn test_pipeline_saves_narration_to_history() {
     let ctx = make_test_context(state.clone());
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     let agent_registry = AgentRegistry::default();
-    let pipeline = make_test_pipeline(&ctx, narrator_recorder, agent_registry);
+    let service = GameService::with_backends(narrator_recorder, agent_registry);
+    let pipeline = make_test_pipeline(&service);
 
     let _outcome = pipeline.run_from_input(&ctx, state, "look".to_string());
 
@@ -79,7 +71,8 @@ fn test_pipeline_returns_error_on_narration_failure() {
     let ctx = make_test_context(state.clone());
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default().with_fail()));
     let agent_registry = AgentRegistry::default();
-    let pipeline = make_test_pipeline(&ctx, narrator_recorder, agent_registry);
+    let service = GameService::with_backends(narrator_recorder, agent_registry);
+    let pipeline = make_test_pipeline(&service);
 
     let outcome = pipeline.run_from_input(&ctx, state, "look".to_string());
 
@@ -106,7 +99,8 @@ fn test_pipeline_returns_error_on_empty_narration_text() {
     let narrator_recorder =
         make_test_recorder(Arc::new(MockBackend::default().with_empty_response()));
     let agent_registry = AgentRegistry::default();
-    let pipeline = make_test_pipeline(&ctx, narrator_recorder, agent_registry);
+    let service = GameService::with_backends(narrator_recorder, agent_registry);
+    let pipeline = make_test_pipeline(&service);
 
     let outcome = pipeline.run_from_input(&ctx, state, "look".to_string());
 
@@ -133,7 +127,8 @@ fn test_pipeline_cancels_mid_run() {
     ctx.cancel_token.cancel();
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     let agent_registry = AgentRegistry::default();
-    let pipeline = make_test_pipeline(&ctx, narrator_recorder, agent_registry);
+    let service = GameService::with_backends(narrator_recorder, agent_registry);
+    let pipeline = make_test_pipeline(&service);
 
     let outcome = pipeline.run_from_input(&ctx, state, "look".to_string());
 
@@ -172,15 +167,10 @@ fn test_pipeline_with_custom_quantifier_result() {
     let quantifier_provider =
         mock_provider as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
     let agent = QuantifierAgent::with_provider("quantifier".to_string(), quantifier_provider);
-    let agent_registry = Arc::new(AgentRegistry::with_agent(Box::new(agent)));
-
-    let prompt_assembler = Arc::new(
-        crate::application::narrative_prompt::LayeredPromptAssembler::new(
-            crate::application::narrative_prompt::budget::MAX_CONTEXT_TOKENS,
-        ),
-    );
+    let agent_registry = AgentRegistry::with_agent(Box::new(agent));
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
-    let pipeline = ActionPipeline::new(prompt_assembler, narrator_recorder, agent_registry);
+    let service = GameService::with_backends(narrator_recorder, agent_registry);
+    let pipeline = service.pipeline();
 
     let outcome = pipeline.run_from_input(&ctx, state, "look".to_string());
 
@@ -201,7 +191,8 @@ fn test_phase_trigger_continuation_cancels_at_start() {
 
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     let agent_registry = AgentRegistry::default();
-    let pipeline = make_test_pipeline(&ctx, narrator_recorder, agent_registry);
+    let service = GameService::with_backends(narrator_recorder, agent_registry);
+    let pipeline = make_test_pipeline(&service);
 
     let trigger = crate::test_support::TestStoredTriggerContext::for_npc("npc1", "Test", "Hello");
 
@@ -238,7 +229,8 @@ fn test_trigger_continuation_save_post_trigger_error() {
     };
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     let agent_registry = AgentRegistry::default();
-    let pipeline = make_test_pipeline(&ctx, narrator_recorder, agent_registry);
+    let service = GameService::with_backends(narrator_recorder, agent_registry);
+    let pipeline = make_test_pipeline(&service);
     let trigger = crate::test_support::TestStoredTriggerContext::for_npc("npc1", "Test", "Hello");
     let result = pipeline.phase_trigger_continuation(state, &trigger, &ctx);
 
@@ -296,18 +288,12 @@ fn test_pipeline_trigger_happy_path() {
     let quantifier_provider =
         mock_provider as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
     let agent = QuantifierAgent::with_provider("quantifier".to_string(), quantifier_provider);
-    let agent_registry = Arc::new(AgentRegistry::with_agent(Box::new(agent)));
-
-    let prompt_assembler = Arc::new(
-        crate::application::narrative_prompt::LayeredPromptAssembler::new(
-            crate::application::narrative_prompt::budget::MAX_CONTEXT_TOKENS,
-        ),
-    );
-    // Provide expected trigger narration text
+    let agent_registry = AgentRegistry::with_agent(Box::new(agent));
     let narrator_recorder = make_test_recorder(Arc::new(
         MockBackend::default().with_narrations(vec!["The NPC greets you warmly.".to_string()]),
     ));
-    let pipeline = ActionPipeline::new(prompt_assembler, narrator_recorder, agent_registry);
+    let service = GameService::with_backends(narrator_recorder, agent_registry);
+    let pipeline = service.pipeline();
 
     let outcome = pipeline.run_from_input(&ctx, state, "look".to_string());
 
@@ -371,16 +357,11 @@ fn test_pipeline_trigger_empty_continuation() {
     let quantifier_provider =
         mock_provider as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
     let agent = QuantifierAgent::with_provider("quantifier".to_string(), quantifier_provider);
-    let agent_registry = Arc::new(AgentRegistry::with_agent(Box::new(agent)));
-
-    let prompt_assembler = Arc::new(
-        crate::application::narrative_prompt::LayeredPromptAssembler::new(
-            crate::application::narrative_prompt::budget::MAX_CONTEXT_TOKENS,
-        ),
-    );
+    let agent_registry = AgentRegistry::with_agent(Box::new(agent));
     let narrator_recorder =
         make_test_recorder(Arc::new(MockBackend::default().with_empty_response()));
-    let pipeline = ActionPipeline::new(prompt_assembler, narrator_recorder, agent_registry);
+    let service = GameService::with_backends(narrator_recorder, agent_registry);
+    let pipeline = service.pipeline();
 
     let outcome = pipeline.run_from_input(&ctx, state, "look".to_string());
     assert!(
@@ -441,15 +422,10 @@ fn test_pipeline_trigger_complete_failure() {
     let quantifier_provider =
         mock_provider as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
     let agent = QuantifierAgent::with_provider("quantifier".to_string(), quantifier_provider);
-    let agent_registry = Arc::new(AgentRegistry::with_agent(Box::new(agent)));
-
-    let prompt_assembler = Arc::new(
-        crate::application::narrative_prompt::LayeredPromptAssembler::new(
-            crate::application::narrative_prompt::budget::MAX_CONTEXT_TOKENS,
-        ),
-    );
+    let agent_registry = AgentRegistry::with_agent(Box::new(agent));
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default().with_fail()));
-    let pipeline = ActionPipeline::new(prompt_assembler, narrator_recorder, agent_registry);
+    let service = GameService::with_backends(narrator_recorder, agent_registry);
+    let pipeline = service.pipeline();
 
     let outcome = pipeline.run_from_input(&ctx, state, "look".to_string());
     assert!(
@@ -475,7 +451,8 @@ fn test_pipeline_saves_narration_before_quantifier() {
     let ctx = make_test_context(state.clone());
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     let agent_registry = AgentRegistry::default();
-    let pipeline = make_test_pipeline(&ctx, narrator_recorder, agent_registry);
+    let service = GameService::with_backends(narrator_recorder, agent_registry);
+    let pipeline = make_test_pipeline(&service);
 
     let _outcome = pipeline.run_from_input(&ctx, state, "look".to_string());
 
@@ -507,7 +484,8 @@ fn test_pipeline_no_duplicate_narration() {
         MockBackend::default().with_narrations(vec!["You look around.".to_string()]),
     ));
     let agent_registry = AgentRegistry::default();
-    let pipeline = make_test_pipeline(&ctx, narrator_recorder, agent_registry);
+    let service = GameService::with_backends(narrator_recorder, agent_registry);
+    let pipeline = make_test_pipeline(&service);
 
     let _outcome = pipeline.run_from_input(&ctx, state, "test input".to_string());
 
@@ -536,7 +514,8 @@ fn test_pipeline_quantifier_runs_on_saved_state() {
     let ctx = make_test_context(state.clone());
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     let agent_registry = AgentRegistry::default();
-    let pipeline = make_test_pipeline(&ctx, narrator_recorder, agent_registry);
+    let service = GameService::with_backends(narrator_recorder, agent_registry);
+    let pipeline = make_test_pipeline(&service);
 
     let _outcome = pipeline.run_from_input(&ctx, state, "look".to_string());
 
@@ -564,15 +543,10 @@ fn test_pipeline_continues_if_quantifier_save_fails() {
         mock_provider as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
     use crate::application::agents::quantifier::QuantifierAgent;
     let agent = QuantifierAgent::with_provider("quantifier".to_string(), quantifier_provider);
-    let agent_registry = Arc::new(AgentRegistry::with_agent(Box::new(agent)));
-
-    let prompt_assembler = Arc::new(
-        crate::application::narrative_prompt::LayeredPromptAssembler::new(
-            crate::application::narrative_prompt::budget::MAX_CONTEXT_TOKENS,
-        ),
-    );
+    let agent_registry = AgentRegistry::with_agent(Box::new(agent));
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
-    let pipeline = ActionPipeline::new(prompt_assembler, narrator_recorder, agent_registry);
+    let service = GameService::with_backends(narrator_recorder, agent_registry);
+    let pipeline = service.pipeline();
 
     let outcome = pipeline.run_from_input(&ctx, state, "look".to_string());
 
@@ -594,17 +568,12 @@ fn test_narration_persisted_even_if_quantifier_changes_state() {
         mock_provider as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
     use crate::application::agents::quantifier::QuantifierAgent;
     let agent = QuantifierAgent::with_provider("quantifier".to_string(), quantifier_provider);
-    let agent_registry = Arc::new(AgentRegistry::with_agent(Box::new(agent)));
-
-    let prompt_assembler = Arc::new(
-        crate::application::narrative_prompt::LayeredPromptAssembler::new(
-            crate::application::narrative_prompt::budget::MAX_CONTEXT_TOKENS,
-        ),
-    );
+    let agent_registry = AgentRegistry::with_agent(Box::new(agent));
     let narrator_recorder = make_test_recorder(Arc::new(
         MockBackend::default().with_narrations(vec!["You look around.".to_string()]),
     ));
-    let pipeline = ActionPipeline::new(prompt_assembler, narrator_recorder, agent_registry);
+    let service = GameService::with_backends(narrator_recorder, agent_registry);
+    let pipeline = service.pipeline();
 
     let _outcome = pipeline.run_from_input(&ctx, state, "look".to_string());
 

@@ -4,7 +4,7 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use chronicler_engine::application::action_pipeline::{ActionOutcome, ActionPipeline};
+use chronicler_engine::application::action_pipeline::ActionOutcome;
 use chronicler_engine::application::game_service::GameService;
 use chronicler_engine::domain::engine::action_processing::{
     FreeActionContext, apply_npc_events, execute_freeaction_impl,
@@ -153,11 +153,7 @@ fn test_inv004_cancellable_at_boundaries() {
     let mock_backend = make_test_recorder(mock_backend_raw.clone());
     let backend = GameService::with_backends(mock_backend.clone(), AgentRegistry::default());
 
-    let pipeline = ActionPipeline::new(
-        Arc::clone(&backend.prompt_assembler),
-        Arc::clone(&backend.llm_recorder),
-        Arc::clone(&backend.agent_registry),
-    );
+    let pipeline = backend.pipeline();
     let state_for_thread = latest_state(&ctx);
 
     let outcome = std::thread::scope(|s| {

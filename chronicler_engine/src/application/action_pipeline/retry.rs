@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use tracing::instrument;
-use crate::application::action_pipeline::pipeline::{ActionOutcome, ActionPipeline};
+use crate::application::action_pipeline::pipeline::ActionOutcome;
 use crate::application::context::{GameServiceContext, load_or_fresh, save_state};
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
@@ -121,11 +121,7 @@ pub(crate) fn retry_event_continuation(
         Some((_sender, text)) => text,
         None => String::new(),
     };
-    let pipeline = ActionPipeline::new(
-        Arc::clone(&service.prompt_assembler),
-        Arc::clone(&service.llm_recorder),
-        Arc::clone(&service.agent_registry),
-    );
+    let pipeline = service.pipeline();
     let mut state = match pipeline.phase_trigger_continuation(state, &trigger, ctx) {
         Ok((s, continuation_text)) => {
             if !continuation_text.is_empty() {
@@ -149,11 +145,7 @@ pub(crate) fn retry_main_narration(
     state: GameState,
     input_text: String,
 ) -> ActionOutcome {
-    let pipeline = ActionPipeline::new(
-        Arc::clone(&service.prompt_assembler),
-        Arc::clone(&service.llm_recorder),
-        Arc::clone(&service.agent_registry),
-    );
+    let pipeline = service.pipeline();
     ActionOutcome::from_pipeline_result(pipeline.run_from_input(ctx, state, input_text))
 }
 
