@@ -4,6 +4,14 @@
 
 ### Added
 
+- **Phase 2 tests + coverage fixes** — Implemented `docs/plans/archived/phase2-tests-coverage-fixes.md` per 9 locked decisions (commits `ba35ac5`, `86dc067`) on `hexagon-phase2`. Build green: 1225 tests pass; coverage 87.1% overall.
+  - 6 new `*_tests.rs` files (30 unit tests): `llm_recorder_tests`, `text_check_service_tests`, `ports/text_checker_tests`, `bootstrap/llm_factory_tests`, `bootstrap/text_check_factory_tests`, `ports/llm_message_repository_tests`.
+  - New `RecordingForensics` spy in `src/test_support/recording_forensics.rs` (sibling to `NoopForensics`).
+  - `tests/integration/application/wiring.rs` (2 integration tests) — catches silent-fallback regression (Fix 2) at integration level.
+  - `tests/integration/` reorganized to mirror `src/` paths inside the binary: `pipeline/` → `application/action_pipeline/`, 4 flat files moved into `application/` and `adapters/driven/llm/`.
+  - `AGENTS.md` §TEST MIRROR CONVENTION added (binary-by-fixture-weight, doc-only enforcement, no script guardrail).
+  - `docs/architecture/system.md` §11 test binary catalog updated.
+
 - **Phase 2 thermonuclear review fixes** — External review of `hexagon-phase2` returned "Not approved" with 14 findings (P0–P3). All 14 fixes landed in 11 commits (`618faf8` → `a45e0b9`) on `hexagon-phase2`. Build green: 1190 tests pass. Plan: `docs/plans/archived/phase2-thermonuclear-review-fixes.md`.
   - **Fix 1** (`618faf8`): Deleted dead `LlmCallResult::from_chat_result`; each provider constructs `LlmCallResult` directly. Port file `src/application/ports/llm_provider.rs` no longer imports `crate::adapters::*` — port invariant restored. `sanitize_response_text` moved to `application::llm_recorder`. Dead `get_llm_backend_for` deleted.
   - **Fix 1/11/12** (`b582aec`): Atomic `LlmCallResult` reshape — providers construct `LlmCallResult` directly; `LlmMessageBuilder` (9-method builder on a port) deleted; `system_prompt`/`user_prompt` echo fields dropped from `LlmCallResult`. 14 test call sites migrated to struct literals.
