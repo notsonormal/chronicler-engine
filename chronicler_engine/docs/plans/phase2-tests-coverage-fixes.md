@@ -1,7 +1,7 @@
 # Plan: Phase 2 Tests + Coverage Fixes
 
 **Date:** 2026-06-30
-**Status:** In Progress (implementation started 2026-07-02)
+**Status:** Implemented (2026-07-02) — see commit `ba35ac5`
 **Scope:** `chronicler_engine/`
 **Branch target:** `hexagon-phase2` (fix-up commits on current branch — no new branch)
 
