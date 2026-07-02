@@ -11,7 +11,6 @@ use serde::Serialize;
 use crate::application::action_pipeline::execute_action_impl;
 use crate::application::context::{GameServiceContext, load_or_fresh};
 use crate::application::game_service::GameService;
-use crate::application::text_check_service::TextCheckService;
 
 use crate::bootstrap::build_fresh_initial_state;
 use crate::error::EngineError;
@@ -101,28 +100,15 @@ pub struct DebugStateView {
 
 pub struct DefaultApplicationService {
     game_service: Arc<GameService>,
-    text_check_service: Option<TextCheckService>,
 }
 
 impl DefaultApplicationService {
     pub fn new(game_service: Arc<GameService>) -> Self {
-        Self {
-            game_service,
-            text_check_service: None,
-        }
-    }
-
-    pub fn with_text_check_service(mut self, text_check_service: TextCheckService) -> Self {
-        self.text_check_service = Some(text_check_service);
-        self
+        Self { game_service }
     }
 
     pub fn game_service(&self) -> &Arc<GameService> {
         &self.game_service
-    }
-
-    pub fn text_check_service(&self) -> Option<&TextCheckService> {
-        self.text_check_service.as_ref()
     }
 
     pub fn process_action(
