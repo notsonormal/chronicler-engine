@@ -1,3 +1,4 @@
+//! [DOC: docs/system/dashboard.md]
 //! Shared poison-recovering lock helpers for the HTTP layer.
 
 use std::sync::{RwLock, RwLockWriteGuard};

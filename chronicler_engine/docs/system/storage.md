@@ -81,7 +81,7 @@ Storage methods touch exactly one table. Multi-table operations are free functio
 
 ## GameStateSnapshot
 
-Serializable subset of `GameState` for persistence. Messages excluded; hydrated separately. Lives in `crate::adapters::driven::storage::snapshot_blob`.
+Serializable subset of `GameState` for persistence. Messages excluded; hydrated separately. Lives in `crate::domain::model::state::game_state_snapshot` (domain-owned DTO; storage layer serializes/deserializes it to the `game_state_snapshots` table, but the type itself lives in the domain so the application layer does not import from `adapters::driven::storage` to reference a snapshot value).
 
 ## Testing Strategy
 
