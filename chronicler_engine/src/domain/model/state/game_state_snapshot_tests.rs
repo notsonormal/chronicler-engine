@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::domain::model::state::game_state::GameStateBuilder;
 use crate::domain::model::state::generation_status::GenerationStatus;
-use crate::adapters::driven::storage::snapshot_blob::{GameStateSnapshot, NarrativeSnapshot};
+use crate::domain::model::state::game_state_snapshot::{GameStateSnapshot, NarrativeSnapshot};
 use crate::test_support::fixtures::{TestMap, TestPlayer, TestWorld};
 
 #[test]

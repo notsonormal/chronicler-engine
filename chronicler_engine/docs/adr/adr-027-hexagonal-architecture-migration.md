@@ -71,18 +71,24 @@ Example: `LlmMessageRepository` has one impl (`Storage`), but the consumer (`Llm
 
 ### Storage Direct Access Exemption
 
-Storage (`Storage` struct with `Backend` enum) is accessed directly by the application layer in exactly 3 files:
+Storage (`Storage` struct with `Backend` enum) is accessed directly by the application layer in exactly 5 files:
 
 1. `src/application/context.rs`
 2. `src/application/application_service.rs`
 3. `src/application/game_service.rs`
+4. `src/application/agents/registry.rs`
+5. `src/application/agents/quantifier/agent.rs`
 
-These files are marked with `// arch-lint: storage-direct — intentional, see ADR-027` comments. This exemption is **intentional**, not a leak:
+Files 1–3 form the **application persistence boundary** and are marked with `// arch-lint: storage-direct — intentional, see ADR-027` comments.
+
+Files 4–5 are an additional **deferred exemption** documented here. They construct an `LlmCallRecorder` via `bootstrap::llm_factory::get_llm_recorder_for(connection, Arc<Storage>)` inside `QuantifierAgent::from_config_with_storage`. Refactoring the `Arc<Storage>` argument out of that bootstrap signature cascades into the T2 reliability plan (in-process LLM recorder wiring). The cascade is T2-adjacent and is treated as a deferred follow-up, not a Phase 2 leak. Both files are marked with `// arch-lint: storage-direct — deferred to T2, see ADR-027`.
+
+This exemption is **intentional**, not a leak:
 
 - `Storage` is a concrete adapter with no port trait
 - Substitution happens via the `Backend` enum (SQLite/InMemory/Test), not trait swapping
 - Wrapping `Storage`'s ~40 methods in a `StateRepository` trait would be YAGNI (one impl, no real substitution seam)
-- The 3 exempted files form the **application persistence boundary** — no other `application/` file may import `Storage` directly
+- The 5 exempted files form the **application persistence boundary** — no other `application/` file may import `Storage` directly
 
 ### Deferred arch-lint Rules
 
@@ -98,6 +104,8 @@ exempt-files = [
   "src/application/context.rs",
   "src/application/application_service.rs",
   "src/application/game_service.rs",
+  "src/application/agents/registry.rs",
+  "src/application/agents/quantifier/agent.rs",
 ]
 rationale = "Storage direct access — see ADR-027"
 ```

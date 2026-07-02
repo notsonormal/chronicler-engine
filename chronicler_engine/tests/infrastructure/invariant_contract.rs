@@ -219,7 +219,7 @@ fn test_inv004b_no_concurrent_async_actions() {
 }
 #[test]
 fn test_inv003_snapshot_captures_state_fields() {
-    use chronicler_engine::adapters::driven::storage::snapshot_blob::GameStateSnapshot;
+    use chronicler_engine::domain::model::state::game_state_snapshot::GameStateSnapshot;
 
     let mut state = create_test_state();
     state.movement.current_room_id = "room2".to_string();

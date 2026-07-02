@@ -50,7 +50,9 @@ fn add_input_and_save(ctx: &GameServiceContext, text: &str) -> u64 {
     let player_name = state.player.sheet.name.clone();
     state.add_message(text.to_string(), Some(player_name), MessageType::Input);
     let snapshot =
-        crate::adapters::driven::storage::snapshot_blob::GameStateSnapshot::from_game_state(&state);
+        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
+            &state,
+        );
     let id = ctx.storage.save_snapshot(&snapshot).unwrap();
     if let Some(last) = state.narrative.history.last_mut() {
         last.set_snapshot_id(Some(id));
@@ -63,7 +65,9 @@ fn add_narration_and_save(ctx: &GameServiceContext, text: &str) -> u64 {
     let mut state = ctx.load_state_for_test();
     state.add_message(text.to_string(), None, MessageType::Narration);
     let snapshot =
-        crate::adapters::driven::storage::snapshot_blob::GameStateSnapshot::from_game_state(&state);
+        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
+            &state,
+        );
     let id = ctx.storage.save_snapshot(&snapshot).unwrap();
     if let Some(last) = state.narrative.history.last_mut() {
         last.set_snapshot_id(Some(id));
@@ -75,14 +79,18 @@ fn add_narration_and_save(ctx: &GameServiceContext, text: &str) -> u64 {
 fn save_pre_main(ctx: &GameServiceContext) -> u64 {
     let state = ctx.load_state_for_test();
     let snapshot =
-        crate::adapters::driven::storage::snapshot_blob::GameStateSnapshot::from_game_state(&state);
+        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
+            &state,
+        );
     ctx.storage.save_snapshot(&snapshot).unwrap()
 }
 
 fn save_pre_event(ctx: &GameServiceContext) -> u64 {
     let state = ctx.load_state_for_test();
     let snapshot =
-        crate::adapters::driven::storage::snapshot_blob::GameStateSnapshot::from_game_state(&state);
+        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
+            &state,
+        );
     ctx.storage.save_snapshot(&snapshot).unwrap()
 }
 
@@ -147,7 +155,9 @@ fn test_retry_event_with_no_pre_event_fallback_to_main() {
         .unwrap()
         .set_event_header(Some("Event".to_string()));
     let snapshot =
-        crate::adapters::driven::storage::snapshot_blob::GameStateSnapshot::from_game_state(&state);
+        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
+            &state,
+        );
     let _ = ctx.storage.save_snapshot(&snapshot);
 
     retry_last_response_impl(&service, ctx);
@@ -168,7 +178,9 @@ fn test_retry_event_with_no_pre_event_and_no_input() {
         .unwrap()
         .set_event_header(Some("Event".to_string()));
     let snapshot =
-        crate::adapters::driven::storage::snapshot_blob::GameStateSnapshot::from_game_state(&state);
+        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
+            &state,
+        );
     let _ = ctx.storage.save_snapshot(&snapshot);
 
     retry_last_response_impl(&service, ctx);
@@ -180,7 +192,9 @@ fn test_retry_event_storage_error_on_pre_event() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
     let storage = Arc::new(storage);
     let snapshot =
-        crate::adapters::driven::storage::snapshot_blob::GameStateSnapshot::from_game_state(&state);
+        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
+            &state,
+        );
     let _ = storage.save_snapshot(&snapshot);
     for msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
         if let Ok(id) = storage.insert_message(&msg) {
@@ -246,7 +260,9 @@ fn test_retry_event_missing_trigger_context() {
         .unwrap()
         .set_event_header(Some("Event".to_string()));
     let snapshot =
-        crate::adapters::driven::storage::snapshot_blob::GameStateSnapshot::from_game_state(&state);
+        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
+            &state,
+        );
     let _ = ctx.storage.save_snapshot(&snapshot);
 
     retry_last_response_impl(&service, ctx);
@@ -266,7 +282,7 @@ fn test_retry_event_continuation_cancels_before_llm() {
         Some(crate::test_support::TestStoredTriggerContext::standard());
     pre_event_state.add_message("Main narration".to_string(), None, MessageType::Narration);
     let snapshot =
-        crate::adapters::driven::storage::snapshot_blob::GameStateSnapshot::from_game_state(
+        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &pre_event_state,
         );
     let pre_event_id = ctx.storage.save_snapshot(&snapshot).unwrap();
@@ -307,7 +323,9 @@ fn test_retry_event_trigger_narration_fails() {
     let mut state = ctx.load_state_for_test();
     state.narrative.last_trigger = Some(crate::test_support::TestStoredTriggerContext::standard());
     let snapshot =
-        crate::adapters::driven::storage::snapshot_blob::GameStateSnapshot::from_game_state(&state);
+        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
+            &state,
+        );
     let _pre_event_with_trigger_id = ctx.storage.save_snapshot(&snapshot).unwrap();
 
     let mut final_state = state;
@@ -319,7 +337,7 @@ fn test_retry_event_trigger_narration_fails() {
         .unwrap()
         .set_event_header(Some("Event".to_string()));
     let final_snapshot =
-        crate::adapters::driven::storage::snapshot_blob::GameStateSnapshot::from_game_state(
+        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &final_state,
         );
     let final_id = ctx.storage.save_snapshot(&final_snapshot).unwrap();
@@ -359,7 +377,9 @@ fn test_retry_event_empty_continuation_text() {
     let mut state = ctx.load_state_for_test();
     state.narrative.last_trigger = Some(crate::test_support::TestStoredTriggerContext::standard());
     let snapshot =
-        crate::adapters::driven::storage::snapshot_blob::GameStateSnapshot::from_game_state(&state);
+        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
+            &state,
+        );
     let _pre_event_with_trigger_id = ctx.storage.save_snapshot(&snapshot).unwrap();
 
     let mut final_state = state;
@@ -371,7 +391,7 @@ fn test_retry_event_empty_continuation_text() {
         .unwrap()
         .set_event_header(Some("Event".to_string()));
     let final_snapshot =
-        crate::adapters::driven::storage::snapshot_blob::GameStateSnapshot::from_game_state(
+        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &final_state,
         );
     let _ = ctx.storage.save_snapshot(&final_snapshot);
@@ -399,7 +419,9 @@ fn test_retry_main_no_pre_main_snapshot() {
     let mut state = ctx.load_state_for_test();
     state.add_message("Narration text".to_string(), None, MessageType::Narration);
     let snapshot =
-        crate::adapters::driven::storage::snapshot_blob::GameStateSnapshot::from_game_state(&state);
+        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
+            &state,
+        );
     let _ = ctx.storage.save_snapshot(&snapshot);
     if let Some(last) = state.narrative.history.last_mut() {
         insert_message_with_swipe(&ctx, last);
@@ -432,7 +454,7 @@ fn test_retry_event_continuation_happy_path() {
         Some(crate::test_support::TestStoredTriggerContext::standard());
     pre_event_state.add_message("Main narration".to_string(), None, MessageType::Narration);
     let snapshot =
-        crate::adapters::driven::storage::snapshot_blob::GameStateSnapshot::from_game_state(
+        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &pre_event_state,
         );
     let pre_event_id = ctx.storage.save_snapshot(&snapshot).unwrap();
@@ -450,7 +472,7 @@ fn test_retry_event_continuation_happy_path() {
         .unwrap()
         .set_event_header(Some("Event".to_string()));
     let final_snapshot =
-        crate::adapters::driven::storage::snapshot_blob::GameStateSnapshot::from_game_state(
+        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &final_state,
         );
     let _ = ctx.storage.save_snapshot(&final_snapshot);
@@ -489,7 +511,9 @@ fn test_retry_main_storage_error_on_pre_main() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
     let storage = Arc::new(storage);
     let snapshot =
-        crate::adapters::driven::storage::snapshot_blob::GameStateSnapshot::from_game_state(&state);
+        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
+            &state,
+        );
     let _ = storage.save_snapshot(&snapshot);
     for msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
         if let Ok(id) = storage.insert_message(&msg) {
@@ -622,7 +646,7 @@ fn test_retry_event_empty_continuation_triggers_error() {
         Some(crate::test_support::TestStoredTriggerContext::standard());
     pre_event_state.add_message("Main narration".to_string(), None, MessageType::Narration);
     let snapshot =
-        crate::adapters::driven::storage::snapshot_blob::GameStateSnapshot::from_game_state(
+        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &pre_event_state,
         );
     let pre_event_id = ctx.storage.save_snapshot(&snapshot).unwrap();
@@ -640,7 +664,7 @@ fn test_retry_event_empty_continuation_triggers_error() {
         .unwrap()
         .set_event_header(Some("Event".to_string()));
     let final_snapshot =
-        crate::adapters::driven::storage::snapshot_blob::GameStateSnapshot::from_game_state(
+        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &final_state,
         );
     let final_id = ctx.storage.save_snapshot(&final_snapshot).unwrap();
@@ -720,7 +744,7 @@ fn test_retrigger_event_impl_cancels_cleanly() {
         Some(crate::test_support::TestStoredTriggerContext::standard());
     pre_event_state.add_message("Main narration".to_string(), None, MessageType::Narration);
     let snapshot =
-        crate::adapters::driven::storage::snapshot_blob::GameStateSnapshot::from_game_state(
+        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &pre_event_state,
         );
     let pre_event_id = ctx.storage.save_snapshot(&snapshot).unwrap();
@@ -738,7 +762,7 @@ fn test_retrigger_event_impl_cancels_cleanly() {
         .unwrap()
         .set_event_header(Some("Event".to_string()));
     let final_snapshot =
-        crate::adapters::driven::storage::snapshot_blob::GameStateSnapshot::from_game_state(
+        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &final_state,
         );
     let final_id = ctx.storage.save_snapshot(&final_snapshot).unwrap();

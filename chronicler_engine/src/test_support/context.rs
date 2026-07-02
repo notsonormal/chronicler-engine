@@ -4,7 +4,7 @@ use crate::application::GameServiceContext;
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::domain::model::settings::AppSettings;
 use crate::domain::model::state::game_state::GameState;
-use crate::adapters::driven::storage::snapshot_blob::GameStateSnapshot;
+use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::adapters::driven::storage::Storage;
 
 pub fn make_test_context(state: GameState) -> GameServiceContext {

@@ -16,7 +16,7 @@ use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageType;
 use crate::domain::model::state::trigger_context::StoredTriggerContext;
-use crate::adapters::driven::storage::snapshot_blob::GameStateSnapshot;
+use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::domain::model::world::WorldCard;
 use crate::adapters::driving::http::router::build_router;
 use crate::adapters::driving::http::AppState;

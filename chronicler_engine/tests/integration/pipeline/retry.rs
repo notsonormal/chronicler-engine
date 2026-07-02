@@ -12,7 +12,7 @@ use chronicler_engine::application::GameService;
 use chronicler_engine::domain::model::state::generation_status::GenerationStatus;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::domain::model::state::trigger_context::StoredTriggerContext;
-use chronicler_engine::adapters::driven::storage::snapshot_blob::GameStateSnapshot;
+use chronicler_engine::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::test_support::{
     make_test_context_with_sqlite, make_test_context_without_snapshot,

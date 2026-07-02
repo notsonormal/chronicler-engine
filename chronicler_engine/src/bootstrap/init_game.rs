@@ -12,7 +12,7 @@ use crate::domain::model::settings::AppSettings;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::GenerationStatus;
 use crate::domain::model::state::message_types::MessageType;
-use crate::adapters::driven::storage::snapshot_blob::GameStateSnapshot;
+use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::domain::model::world::WorldCard;
 use crate::application::narrative_prompt::{NpcContext, make_prompt_context};
 

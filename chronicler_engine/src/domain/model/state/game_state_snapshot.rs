@@ -1,5 +1,10 @@
 //! [DOC: docs/system/game_flow.md]
-//! State snapshot serialization
+//! State snapshot value types (persistable representations of game state).
+//!
+//! These are domain-owned DTOs: the storage layer serializes/deserializes
+//! them to the `game_state_snapshots` table, but the type itself lives in
+//! the domain so the application layer does not need to import from
+//! `adapters::driven::storage` to reference a snapshot value.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};

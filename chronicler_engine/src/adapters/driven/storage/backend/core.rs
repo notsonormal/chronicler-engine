@@ -15,7 +15,7 @@ use crate::domain::model::map::MapDef;
 use crate::domain::model::message::{Message, Swipe};
 use crate::domain::model::prompt_preset::PromptPreset;
 use crate::domain::model::settings::AppSettings;
-use crate::adapters::driven::storage::snapshot_blob::GameStateSnapshot;
+use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::domain::model::world::WorldCard;
 use crate::adapters::driven::storage::db::DbPool;
 #[cfg(feature = "testing")]

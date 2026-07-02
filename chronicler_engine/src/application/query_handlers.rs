@@ -23,7 +23,7 @@ pub fn reset_generating_status(ctx: GameServiceContext) -> Result<(), Applicatio
     let mut game_state = load_or_fresh(&ctx);
     game_state.narrative.input_buffer.status = GenerationStatus::Idle;
     let snapshot =
-        crate::adapters::driven::storage::snapshot_blob::GameStateSnapshot::from_game_state(
+        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &game_state,
         );
     ctx.storage.save_snapshot(&snapshot)?;

@@ -2,7 +2,7 @@
 //! Snapshot storage operations
 
 use crate::error::EngineError;
-use crate::adapters::driven::storage::snapshot_blob::GameStateSnapshot;
+use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::adapters::driven::storage::backend::{Backend, Storage};
 use crate::adapters::driven::storage::models::game_state_snapshot::DbGameStateSnapshot;
 

@@ -18,7 +18,7 @@ use crate::domain::model::game::{Game, generate_game_name};
 
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::{MessageEntry, MessageType};
-use crate::adapters::driven::storage::snapshot_blob::GameStateSnapshot;
+use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::domain::model::trigger::NpcEncounterState;
 use crate::domain::model::world::WorldCard;
 use crate::domain::model::map::MapDef;
