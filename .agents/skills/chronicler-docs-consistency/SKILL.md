@@ -1,6 +1,7 @@
 ---
 name: chronicler-docs-consistency
 description: Detect and report documentation drift, inconsistencies, and staleness in Chronicler Engine docs compared to actual codebase implementation.
+disable-model-invocation: true
 ---
 
 # Core Directives
@@ -11,7 +12,7 @@ description: Detect and report documentation drift, inconsistencies, and stalene
 
 **Cross-Reference Integrity**: All internal doc links, ADR references, and module paths must resolve.
 
-**No Build Required**: This skill updates documentation files only. Do NOT run `cargo build`, `cargo test`, `python build.py`, or any compilation/test commands — updating `.md` files does not require build verification.
+**No Build Required**: This skill is read-only — it reports inconsistencies only, does not edit files. Do NOT run `cargo build`, `cargo test`, `python build.py`, or any compilation/test commands; checking doc claims against code never requires running builds.
 # What to Check
 
 The skill validates documentation **content accuracy**:
@@ -68,6 +69,8 @@ Document types (report all that apply):
 - **ADR**: `docs/adr/*.md` references removed code
 - **REFERENCE**: `docs/reference/*.md` has wrong schemas/APIs
 - **CROSS_REF**: Broken links or stale references
+
+## Related Skills
 
 - **chronicler-comment-fixer**: Detects AI slop and missing doc anchors in Rust code comments (not docs/)
 - **code-consistency-check**: Validates code patterns match architectural conventions

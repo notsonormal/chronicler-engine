@@ -284,7 +284,7 @@ Shared test fixtures and utilities.
 
 - **`fixtures`**: Test GameState, Npc, Map helpers
 - **`context`**: Test context builders
-- **`forensics`**: `ForensicsCollector` for capturing tracing spans/events on test failure with automatic JSON serialization and sensitive field redaction
+- **`noop_forensics`** / **`recording_forensics`**: `LlmMessageRepository` spy impls for LLM recorder tests (see ADR-012 SQLite-backed LLM call logging)
 - **`test_app_builder`**: Fluent test app builder API
 
 ### 11. Test Binaries (`tests/`)

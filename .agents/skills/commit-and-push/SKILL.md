@@ -2,8 +2,6 @@
 name: commit-and-push
 description: Generate commit message, run pre-commit hooks, stage changes, commit, and push. Handles docs index regeneration automatically.
 argument-hint: "[commit message hints...]"
-user-invocable: true
-auto-trigger: true
 action-required: EXECUTES — runs actual git commands (stage, commit, push) when invoked
 ---
 # Commit and Push Skill

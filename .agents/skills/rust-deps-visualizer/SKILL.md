@@ -1,6 +1,6 @@
 ---
 name: rust-deps-visualizer
-description: "Visualize Rust project dependencies as ASCII art. Triggers on: /deps-viz, dependency graph, show dependencies, visualize deps."
+description: "Visualize Rust project dependencies as ASCII art. Use when mapping crate dependency relationships. Keywords: dependency graph, crate tree, dep diagram."
 argument-hint: "[--depth N] [--features]"
 allowed-tools: ["Bash", "Read", "Glob"]
 ---

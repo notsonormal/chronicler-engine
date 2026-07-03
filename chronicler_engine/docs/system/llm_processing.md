@@ -147,16 +147,9 @@ The engine uses [`tracing`](https://tracing.rs) for structured runtime diagnosti
 - `ActionPipeline::phase_narrate()`, `ActionPipeline::phase_post_generation()`, `ActionPipeline::phase_engine_commit()`, `ActionPipeline::phase_trigger_continuation_raw()`, `ActionPipeline::reconcile_post_trigger_npcs()`, `ActionPipeline::build_trigger_request()` — granular phase implementations (split `impl` block in `phases.rs`)
 - Pipeline checks `CancellationToken::is_cancelled()` at stage boundaries and emits `tracing::debug!` events on phase transitions (not info-level, to reduce noise)
 
-#### Forensics Collector
+#### Tracing in tests
 
-The `ForensicsCollector` (`src/test_support/forensics.rs`) is a tracing subscriber that:
-
-- Buffers spans and events during test execution
-- Automatically writes JSON on test failure to `tmp/diagnostics/`
-- Redacts sensitive fields (`api_key`, `prompt`, `raw_response`, `authorization`)
-- Truncates long strings (>10KB) to prevent oversized files
-
-#### Usage
+Tests initialize `tracing_subscriber::fmt()` with `EnvFilter` via `bootstrap/run.rs`. Use `RUST_LOG` to inspect runs:
 
 ```bash
 # See info-level traces
@@ -169,10 +162,7 @@ RUST_LOG=chronicler_engine::engine=debug cargo test
 RUST_LOG=trace cargo test
 ```
 
-#### Module Location
-
-- **Crate path**: `crate::test_support::forensics` — `ForensicsCollector`, `ForensicsLayer`
-- **Bootstrap**: `bootstrap/run.rs` initializes `tracing_subscriber::fmt()` with `EnvFilter`
+The `ForensicsCollector` tracing-layer infrastructure proposed in the original observability-and-forensics plan was removed on 2026-07-03 — it was never wired into the test harness, never produced a `tmp/diagnostics/` JSON, and the SQLite-backed `LlmMessageRepository` forensics path (ADR-012) covers the same diagnostic need with a stable interface.
 
 ### Module Location
 

@@ -53,7 +53,9 @@ impl RecordingForensics {
         self
     }
 
-    /// Number of times `save_llm_message` has completed without a configured error.
+    /// Number of times `save_llm_message` was called, including attempts that
+    /// returned a configured error. Increments on entry, before the configured
+    /// error (if any) is taken.
     pub fn save_call_count(&self) -> usize {
         self.inner.lock().save_calls
     }
@@ -67,10 +69,12 @@ impl RecordingForensics {
 impl LlmMessageRepository for RecordingForensics {
     fn save_llm_message(&self, message: &LlmMessage) -> Result<(), EngineError> {
         let mut state = self.inner.lock();
+        // Count every attempt on entry, before the configured error is taken.
+        // Callers asserting on save_call_count see attempts, not just successes.
+        state.save_calls += 1;
         if let Some(err) = state.next_save_error.take() {
             return Err(err);
         }
-        state.save_calls += 1;
         state.last_message = Some(message.clone());
         Ok(())
     }

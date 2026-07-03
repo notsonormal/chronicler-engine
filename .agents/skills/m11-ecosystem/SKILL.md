@@ -2,7 +2,6 @@
 name: m11-ecosystem
 description: "Crates and ecosystem integration (cargo dependency feature flag workspace bindgen cbindgen PyO3 wasm). Layer 2 of the rust-router dispatch."
 disable-model-invocation: true
-user-invocable: true
 ---
 
 # Ecosystem Integration

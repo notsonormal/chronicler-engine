@@ -1,7 +1,9 @@
 //! HTTP wiring tests for `server_impl.rs`.
 //!
 //! Verifies that `run_server_with_config` builds app state correctly,
-//! binds a listener, serves a basic route, and propagates bind errors.
+//! binds a listener, and propagates bind errors. The happy-path test
+//! confirms the spawned server task is cancelable; real request routing
+//! is covered by `tests/http/fragment.rs` via `TestAppBuilder`.
 
 use std::sync::{Arc, RwLock};
 
@@ -10,7 +12,7 @@ use chronicler_engine::adapters::driving::http::{ServerConfig, ServerResources};
 use chronicler_engine::adapters::driving::http::server_impl::run_server_with_config;
 use chronicler_engine::domain::model::settings::AppSettings;
 
-async fn build_test_resources() -> ServerResources {
+fn build_test_resources() -> ServerResources {
     let storage = Arc::new(Storage::new_in_memory());
     let preset_storage = Arc::new(Storage::new_in_memory());
     let settings = Arc::new(RwLock::new(AppSettings::default()));
@@ -22,23 +24,17 @@ async fn build_test_resources() -> ServerResources {
 }
 
 #[tokio::test]
-async fn run_server_serves_request_and_returns_404_for_unknown_route() {
-    let resources = build_test_resources().await;
+async fn run_server_spawns_and_can_be_cancelled() {
+    let resources = build_test_resources();
     let config = ServerConfig { port: 0 };
 
     let server_handle =
         tokio::spawn(async move { run_server_with_config(resources, config).await });
 
-    // Give the server time to bind
+    // Give the server time to bind.
     tokio::time::sleep(std::time::Duration::from_millis(200)).await;
 
-    // The server listens on port 0 (ephemeral). We don't know the actual port
-    // without inspecting the listener, so we test the bind-error path separately
-    // and just verify the server is running by hitting it via the default route.
-    // TestClient approach (via TestAppBuilder) is used in fragment.rs etc.
-    // Here we only verify the server starts without crashing.
-
-    // Cancel by aborting
+    // Cancel by aborting; assert the JoinError reflects cancellation.
     server_handle.abort();
     let result = server_handle.await;
     assert!(
@@ -51,7 +47,7 @@ async fn run_server_serves_request_and_returns_404_for_unknown_route() {
 async fn run_server_propagates_bind_error_for_privileged_port() {
     // Port 1 is privileged (< 1024) and typically unbound; on Linux binding
     // to it without CAP_NET_BIND_SERVICE returns an error.
-    let resources = build_test_resources().await;
+    let resources = build_test_resources();
     let config = ServerConfig { port: 1 };
 
     let result = run_server_with_config(resources, config).await;

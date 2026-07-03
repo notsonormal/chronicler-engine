@@ -337,3 +337,64 @@ Result: 15 tests now collected (was 0). All pass.
 Worker added 5 tests to `transport/response_tests.rs` (correctly registered, all pass). Tests target `extract_content_from_response` null-field fallbacks + `parse_chat_response` whitespace input. These functions were already mostly covered. The 28 uncovered lines (78.5% → 78.5%, unchanged) are in `handle_response`, which requires a mock `reqwest::blocking::Response` — genuinely hard to unit-test without significant test infrastructure.
 
 D7 reclassified: the 5 added tests are valid behavior tests but do not move the coverage needle on the actual gap (`handle_response`). `handle_response` is best covered via integration test (real HTTP round-trip through the LLM transport layer) which is out of scope for this plan. Marking D7 as **partial** — tests added, coverage target not met, reclassification accepted.
+
+## Post-archive fix-up (2026-07-03, second pass)
+
+Comprehensive review of the post-archive state (two independent reviewer passes — Review 1 "REQUEST CHANGES", Review 2 "Approve with required cleanup") surfaced 6 follow-on items. All resolved below.
+
+### R1 — server_impl_wiring test name lies about behavior
+
+`run_server_serves_request_and_returns_404_for_unknown_route` sent no HTTP request and asserted no 404 — polish commit `3c5215e` only added an abort-semantics check. Resolved by renaming to `run_server_spawns_and_can_be_cancelled` (honest smoke test). The real 404 wiring path would require exposing the bound listener from `run_server_with_config`, which is out of scope; HTTP routing behavior is already covered by `tests/http/fragment.rs` via `TestAppBuilder`.
+
+### R2 — duplicate `call_ollama_compiles_and_runs`
+
+Polish commit `3c5215e` deleted the `call_openrouter_with_model_compiles_and_runs` twin but kept the Ollama twin, which now asserted `result.is_err()` — identical to the surviving `call_ollama_propagates_network_error` (same code path through `call_chat_completions` → `reqwest`). Resolved by deleting the duplicate. `client_tests.rs` now has 2 tests (was 3).
+
+### P1 — orphan scout artifact at repo root
+
+`context.md` (159 lines of agent session output) was `git add`'d to the repo root by mistake. Deleted.
+
+### P2 — `text_check_factory_tests` no-op tests still assert nothing
+
+Polish commit converted tautological `assert!(x.is_some() || x.is_none())` to `let _ = ...`, which removes the assertion entirely. Plan locked decision #6 said "Delete (do not replace)". Worker deviated. Resolved by deleting both `text_check_mode_spell_from_settings` and `ignored_words_from_settings_flow_to_checker` per the original locked decision. Spell-mode routing + ignored-words wiring are already exercised by `harper_text_checker_tests.rs`.
+
+### P3 — `_tests.rs` mod-registration drift (structural guard)
+
+Three cases this branch: `fragments_tests` (orphaned, fixed by `e08ad7c`), `renderers/response_tests` (orphaned, fixed), `transport/client_tests` (correct). Fix-by-patch will recur. Added structural guard to `scripts/check_test_structure.py`: every `*_tests.rs` file (under `src/` and `tests/`) must have a matching `mod <stem>;` declaration in its module root (`mod.rs`, sibling `.rs`, or crate root `lib.rs`/`main.rs`). First run caught 2 additional pre-existing orphans:
+
+- `src/test_support/forensics_tests.rs` — never registered in `src/test_support/mod.rs`; entire `forensics` module (`src/test_support/forensics.rs`, 243 LOC of `ForensicsCollector` / `ForensicsLayer` tracing-subscriber infrastructure) was never compiled. Added in commit `208f46ae4` (2026-05-09) but the `pub mod forensics;` line was missed from day one. `tmp/diagnostics/` never populated. Grep-verified zero non-self callers. Resolved by **deleting both `forensics.rs` and `forensics_tests.rs` entirely** (option A2). The SQLite-backed `llm_messages` table via `LlmMessageRepository` (ADR-012) covers the same diagnostic need with a stable interface. Updated `docs/diagnostics/DEBUGGING.md`, `docs/architecture/system.md`, `docs/system/llm_processing.md`, `docs/plans/observability-and-forensics-plan.md`, `docs/reviews/docs-consistency-report.md` to reflect the deletion.
+- `src/adapters/driven/text_check/types_tests.rs` — `mod.rs` comment said "types_tests removed - types tests moved to port" but the file was never deleted and the `IssueKind` Display test was never moved. Resolved by moving `test_issue_kind_display` → `issue_kind_display_formats_as_lowercase_snake_case` in `src/application/ports/text_checker_tests.rs` (now actually runs) and deleting the orphan file.
+
+### P4 — `RecordingForensics::save_call_count` structural footgun (locked decision #5 overridden)
+
+Plan locked decision #5 chose the doc-comment-only fix for M3 (cheapest option). The doc-comment patch ("has completed without a configured error") was honest but exposed the real bug: the counter was not incremented on the error path, so callers asserting `save_call_count` silently undercounted when `with_next_save_error` fired. User directed option A (structural fix) over option B (keep doc fix). Resolved by incrementing `save_calls` on entry unconditionally, before taking the configured error. Doc comment updated to "Number of times `save_llm_message` was called, including attempts that returned a configured error." One test (`recording_forensics_tests::next_save_error_is_returned_once_then_cleared`) updated to expect `2` after error + successful save (was `1`). Other 4 callers unaffected — their assertions all involve successful saves only.
+
+### Optional items also addressed
+
+- **O4** `build_test_resources` was `async` with no `await` interior. Dropped `async`.
+- **O5 / P3.7** `AGENTS.md` typo `Mininmax` → `Minimax`, added missing trailing newline.
+- **O6** Plan addendum D7 count reconciled in the doc itself (4 tests added, not 5 — `3d87871` diff confirms 4: `whitespace_only`, `null+reasoning`, `null+reasoning_content`, `all-null`).
+
+### Items intentionally NOT addressed
+
+- **O1 (D2 non-hermic, real API hit)** — `call_openrouter_with_model("fake-api-key", ...)` hardcodes `https://openrouter.ai/api/v1/chat/completions`. Plan locked "Do NOT hit real APIs — use stubs/mocks", worker deviated. Proper fix = wiremock/mockito at the `reqwest::blocking` layer. Larger scope — flagged as follow-up plan, not this fix-up.
+- **O3 (StubChecker 3 Mutexes → 1)** — code correct today. Optional consolidation; left for a future cleanup pass.
+
+### Final state
+
+- Build green: `python build.py` exit 0.
+- Test count: **1255** (was 1259 → -4: −2 `text_check_factory_tests`, −1 `client_tests` dup, −2 `forensics_tests` never-ran deleted, +1 `issue_kind_display` newly-registered-and-run).
+- Overall coverage: **89.2%** (was 89.1% → +0.1; small gain from `forensics.rs` removal + `issue_kind_display` running for the first time).
+- `python scripts/check_test_structure.py` passes — zero unregistered `*_tests.rs` files in `src/` or `tests/`.
+
+### Post-archive fix-up (2026-07-03, third pass) — D2 removed
+
+On re-examination, the two surviving `client_tests.rs` tests (`call_ollama_propagates_network_error` and `call_openrouter_with_model_propagates_network_error`) only verified that `reqwest::blocking::Client` returns `Err` on a failed connection. That is `reqwest`'s contract, not Chronicler's. They asserted zero Chronicler-specific behavior — request building, payload shaping, response parsing, error mapping all unexercised.
+
+The `call_openrouter_with_model_propagates_network_error` test was additionally non-hermetic: `call_openrouter_with_model` hardcodes `https://openrouter.ai/api/v1`, so the test hit real DNS + TLS against OpenRouter's endpoint with a fake API key on every run — violating AGENTS.md's `no-internet` Docker network convention + the plan's locked decision "Do NOT hit real APIs — use stubs/mocks". The Ollama twin used `127.0.0.1:1` (hermic) but verified the same trivial reqwest behavior.
+
+Resolution: deleted both tests and removed `client_tests.rs` entirely (plus `mod client_tests;` declaration in `transport/mod.rs`). D2 status changed from "complete" to **removed**.
+
+The original D2 coverage gap (`transport/client.rs` at 40.9%) was not actually closed by these tests — they covered only the `Err(...)` construction arms, which are already covered via other tests in `transport/{request,response}_tests.rs` (overall coverage held at 89.2% after deletion). The real D2 intent (cover request building, response shaping, non-API branches) requires either HTTP-layer mocking (wiremock/mockito — deferred) or a refactor exposing the pure helpers for direct testing. Marked as a real follow-up: bring `client.rs` to ≥80% via hermic tests that assert actual Chronicler behavior.
+
+Final state: 1253 tests pass, 2 LLM skipped, 89.2% coverage. The `client.rs` 40.9% gap remains open — tracked here, not in any active plan.

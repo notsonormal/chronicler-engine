@@ -1,6 +1,6 @@
 ---
 name: rust-trait-explorer
-description: "Explore Rust trait implementations using LSP. Triggers on: /trait-impl, find implementations, who implements."
+description: "Explore Rust trait implementations using LSP. Use when finding which types implement a trait. Keywords: find implementations, trait impls, implementors, blanket impls."
 argument-hint: "<TraitName|StructName>"
 allowed-tools: ["LSP", "Read", "Glob", "Grep"]
 ---

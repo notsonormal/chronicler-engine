@@ -30,37 +30,6 @@ fn text_check_mode_disabled_from_settings() {
     assert!(result.is_none(), "should short-circuit in Disabled mode");
 }
 
-#[test]
-fn text_check_mode_spell_from_settings() {
-    let mut settings = AppSettings::default();
-    settings.text_check.mode = TextCheckMode::Spell;
-
-    let service = create_text_check_service(&settings);
-
-    // In Spell mode, routing is determined by caller, not factory.
-    // Just verify service doesn't panic.
-    let _ = service.check_player_input("Test", TextCheckMode::Spell, &[]);
-}
-
-#[test]
-fn ignored_words_from_settings_flow_to_checker() {
-    let mut settings = AppSettings::default();
-    settings.text_check.ignored_words = vec!["testword".to_string()];
-
-    let service = create_text_check_service(&settings);
-
-    // Ignored words are passed to Harper internally.
-    // Observable behavior: calling check with any mode succeeds.
-    // We cannot easily assert that "testword" is ignored without a real Harper check.
-    // This test just verifies the factory wired the settings.
-    let _ = service
-        .check_player_input(
-            "Test input",
-            TextCheckMode::Spell,
-            &["testword".to_string()],
-        )
-        .expect("check should succeed");
-}
-
 // NOTE: `HarperTextChecker::new()` is infallible (returns `Self`, not `Result`).
 // There is no construction-time error to propagate. Any errors occur at check time.
+// Spell-mode routing + ignored-words wiring are exercised by `harper_text_checker_tests.rs`.

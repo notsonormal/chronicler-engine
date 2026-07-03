@@ -1,7 +1,6 @@
 ---
 name: rust-router
 description: "Router for all Rust questions — error codes drive Layer 1 (m01-m07) dispatch, design questions Layer 2 (m09-m15), domain questions Layer 3."
-globs: ["**/Cargo.toml", "**/*.rs"]
 ---
 
 ---

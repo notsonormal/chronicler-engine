@@ -1,6 +1,6 @@
 ---
 name: rust-symbol-analyzer
-description: "Analyze Rust project structure using LSP symbols. Triggers on: /symbols, project structure, list structs, list traits, list functions."
+description: "Analyze Rust project structure using LSP symbols. Use when surveying a crate's contents. Keywords: list structs, list traits, list functions, document symbols."
 argument-hint: "[file.rs] [--type struct|trait|fn|mod]"
 allowed-tools: ["LSP", "Read", "Glob"]
 ---

@@ -1,7 +1,7 @@
 # Plan: Observability & Automated Forensics
 
 **Date:** 2026-05-09
-**Status:** Planned
+**Status:** Partially superseded — Phase 1 + 2 (tracing + LLM call logging via ADR-012) landed; Phase 2 Task 2.3 (`ForensicsCollector` tracing-layer infrastructure) abandoned 2026-07-03 after never being wired into the test harness; Phase 3 (state replay) not started.
 **Goal:** Reduce mean-time-to-diagnosis (MTTD) by making the system explain its own state on failure.
 
 ---
@@ -112,20 +112,22 @@ Add `#[instrument(skip(...), fields(...))]` spans and `tracing::info!`/`warn!` e
   - [ ] Running with `RUST_LOG=info` shows a coherent trace of a player action from input to narration
   - [ ] Each major decision point emits a structured event with relevant IDs
 
-### Task 2.3: Add Forensics Capture to Tests
-- Create `src/test_support/forensics.rs` with:
-  - `ForensicsCollector` subscriber that buffers spans/events during a test
-  - `capture_on_failure()` that serializes the buffer to `tmp/diagnostics/<test_name>_<timestamp>.json` on assertion failure or panic
-  - Redaction of sensitive fields (API keys, prompt text)
-- Integrate into `tests/test_utils.rs` so all integration tests automatically capture forensics.
-- **Files:**
-  - `src/test_support/forensics.rs` (new)
-  - `src/test_support/mod.rs`
-  - `tests/test_utils.rs`
+### Task 2.3: Forensics Capture (abandoned 2026-07-03)
+
+**Status:** Abandoned. The half-built `ForensicsCollector` / `ForensicsLayer` infrastructure at `src/test_support/forensics.rs` was deleted — it was added on 2026-05-09 (`208f46ae4`) but never wired into the test harness (the `pub mod forensics;` line was missing from `src/test_support/mod.rs`), so `tmp/diagnostics/` never populated.
+
+**Replacement path:** SQLite-backed `llm_messages` table via `LlmMessageRepository` (ADR-012). Every LLM call is persisted with full prompt + raw response + parsed result + error message. See `docs/diagnostics/DEBUGGING.md` for the query patterns. The tracing layer (Phase 1) provides span/event visibility during `RUST_LOG=trace` runs.
+
+Original (abandoned) sketch preserved for reference:
+
+- Would have created `src/test_support/forensics.rs` with a `ForensicsCollector` subscriber that buffers spans/events during a test
+- Would have serialized the buffer to `tmp/diagnostics/<test_name>_<timestamp>.json` on assertion failure or panic
+- Redaction of sensitive fields would have happened at the subscriber layer
+
 - **Acceptance criteria:**
-  - [ ] A failing test produces a JSON file in `tmp/diagnostics/`
-  - [ ] JSON contains: test name, timestamp, GameState snapshot, last 20 log entries, active span tree
-  - [ ] No API keys or raw prompts appear in the JSON
+  - [x] Tracing layer (Phase 1) emitted via `RUST_LOG=trace cargo test -- --nocapture`
+  - [x] SQLite `llm_messages` table (ADR-012) captures prompts, raw responses, parsed text, errors
+  - [abandoned] `ForensicsCollector` JSON snapshot (Task 2.3) — removed 2026-07-03
 
 ---
 

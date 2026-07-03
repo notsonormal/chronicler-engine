@@ -46,7 +46,8 @@ fn next_save_error_is_returned_once_then_cleared() {
 
     // Error cleared after first use; subsequent saves succeed.
     spy.save_llm_message(&sample_message("B")).unwrap();
-    assert_eq!(spy.save_call_count(), 1);
+    // Both calls attempted (one errored, one succeeded); counter increments on entry.
+    assert_eq!(spy.save_call_count(), 2);
 }
 
 #[test]

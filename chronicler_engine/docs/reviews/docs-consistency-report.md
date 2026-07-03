@@ -178,7 +178,7 @@ Expected:
 - **DeepSeek Backend:** Verified exists (`src/narrative/llm/deepseek.rs`) and module-exported. ADR-002 claim of "stub — not yet implemented" may be outdated.
 - **StatePatch::merge:** Verified exists in `src/model/agent.rs` with documented merge semantics ✅.
 - **PromptAssembler:** Verified exists with `assemble()` method and `LayeredPromptAssembler` implementation ✅.
-- **tmp/diagnostics:** Does not exist at rest. `ForensicsCollector` creates it on-demand during test failures.
+- **tmp/diagnostics:** Does not exist at rest. The `ForensicsCollector` infrastructure that would have created it was removed on 2026-07-03 (never wired in — see `docs/plans/observability-and-forensics-plan.md` Task 2.3). LLM call forensics live in the `llm_messages` SQLite table per ADR-012.
 - **Storage structure:** `src/storage/` contains only 4 files — no submodule pattern as described in docs.
 
 ---

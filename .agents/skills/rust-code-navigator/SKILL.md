@@ -1,6 +1,6 @@
 ---
 name: rust-code-navigator
-description: "Navigate Rust code using LSP. Triggers on: /navigate, go to definition, find references, where is defined."
+description: "Navigate Rust code using LSP. Use when tracing definitions or references. Keywords: go to definition, find references, jump to symbol, where defined."
 argument-hint: "<symbol> [in file.rs:line]"
 allowed-tools: ["LSP", "Read", "Glob"]
 ---

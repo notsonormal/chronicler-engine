@@ -1,6 +1,6 @@
 ---
 name: rust-refactor-helper
-description: "Safe Rust refactoring with LSP analysis. Triggers on: /refactor, rename symbol, move function, extract."
+description: "Safe Rust refactoring with LSP analysis. Use when restructuring code with symbol-aware tools. Keywords: rename symbol, move function, extract, inline, change signature."
 argument-hint: "<action> <target> [--dry-run]"
 allowed-tools: ["LSP", "Read", "Glob", "Grep", "Edit"]
 ---

@@ -7,7 +7,7 @@
 
 use std::sync::Arc;
 
-use crate::application::ports::text_checker::{CheckResult, TextChecker};
+use crate::application::ports::text_checker::{CheckResult, IssueKind, TextChecker};
 use crate::domain::model::settings::TextCheckMode;
 use crate::error::EngineError;
 
@@ -85,4 +85,14 @@ fn trait_dispatch_between_impls() {
     assert_eq!(result_b.as_ref().unwrap().original, "B");
 
     assert!(result_none.is_none());
+}
+
+#[test]
+fn issue_kind_display_formats_as_lowercase_snake_case() {
+    assert_eq!(format!("{}", IssueKind::Spelling), "spell");
+    assert_eq!(format!("{}", IssueKind::Grammar), "grammar");
+    assert_eq!(format!("{}", IssueKind::Capitalization), "capitalization");
+    assert_eq!(format!("{}", IssueKind::Style), "style");
+    assert_eq!(format!("{}", IssueKind::Formatting), "formatting");
+    assert_eq!(format!("{}", IssueKind::Other), "other");
 }

@@ -8,78 +8,43 @@ This guide explains how to debug test failures and runtime issues in the Chronic
 
 When a test fails:
 
-1. **Check for forensics JSON** in `chronicler_engine/tmp/diagnostics/`
+1. **Check the `llm_messages` table** (SQLite LLM call log — see ADR-012) for the most recent call payload + raw response
 2. **Run with `RUST_LOG=info`** to see structured traces
-3. **Review the forensics file** for execution state
+3. **Re-run the failing test** with `RUST_LOG=trace cargo test -- --nocapture` for full spans/events
 
-## Forensics Capture
+## LLM Call Forensics (SQLite)
 
-### Automatic Capture on Test Failure
+Per ADR-012, every `LlmCallRecorder::complete()` call persists a row to the `llm_messages` SQLite table via the `LlmMessageRepository` port. This is the authoritative forensics source for LLM-driven behavior.
 
-When a test fails, the `ForensicsCollector` automatically writes a JSON file to:
+Each row contains:
 
-```
-chronicler_engine/tmp/diagnostics/forensics_<test_name>_<timestamp>.json
-```
+- **id**: sequential row id
+- **agent_name**: which agent (narrator, quantifier, etc.) made the call
+- **backend_name** / **model_name**: provider + model used
+- **system_prompt** / **user_prompt**: exact prompts sent
+- **raw_request_json** / **raw_response_json**: wire-level payloads
+- **parsed_response**: sanitized text after `strip_thought_tags` etc.
+- **error_message**: `NULL` on success, error text on failure
+- **created_at**: ISO 8601 timestamp
 
-The forensics file contains:
+### Querying LLM Forensics
 
-- **test_name**: Name of the failing test
-- **timestamp**: When the failure occurred
-- **spans**: Hierarchical trace of function calls with fields
-- **events**: Log events with levels (info, warn, error)
-- **duration_ms**: Test execution time
+```bash
+# Find the most recent LLM calls
+sqlite3 data/chronicler.db "SELECT id, agent_name, model_name, created_at FROM llm_messages ORDER BY id DESC LIMIT 10;"
 
-### Sensitive Data Redaction
+# Pull the full payload of a specific call
+sqlite3 data/chronicler.db "SELECT system_prompt, user_prompt, raw_response_json, parsed_response FROM llm_messages WHERE id = 123;"
 
-The forensics collector automatically redacts:
-
-- `api_key` → `[REDACTED]`
-- `prompt` → `[REDACTED]`
-- `raw_response` → `[REDACTED]`
-- `authorization` → `[REDACTED]`
-
-Long strings (>10KB) are truncated to prevent oversized files.
-
-### Example Forensics File
-
-```json
-{
-  "test_name": "test_quantifier_high_confidence",
-  "timestamp": "2026-05-31T12:34:56Z",
-  "spans": [
-    {
-      "name": "determine_npcs_in_room",
-      "id": 1,
-      "fields": {
-        "confidence": "High"
-      }
-    }
-  ],
-  "events": [
-    {
-      "message": "Using dynamic NPCs",
-      "level": "info",
-      "fields": {
-        "npc_ids": ["npc_1", "npc_2"]
-      }
-    }
-  ],
-  "duration_ms": 245
-}
+# Find failed calls
+sqlite3 data/chronicler.db "SELECT id, agent_name, error_message, created_at FROM llm_messages WHERE error_message IS NOT NULL ORDER BY id DESC LIMIT 20;"
 ```
 
-### Forensics JSON Schema
+For test runs, `RecordingForensics` (a spy impl of `LlmMessageRepository` at `src/test_support/recording_forensics.rs`) captures the same data in-memory — use it to assert on what the orchestrator persisted.
 
-For tooling integration, the forensics JSON contains:
+### Sensitive Data
 
-- `test_name` (string): Test identifier
-- `timestamp` (string): ISO 8601 timestamp
-- `spans` (array): Function call traces with `{name, id, parent_id, fields}`
-- `events` (array): Log events with `{message, level, span_id, fields}`
-- `duration_ms` (number): Execution time in milliseconds
-
-Sensitive fields (`api_key`, `prompt`, `raw_response`) are auto-redacted to `[REDACTED]`. Values >10KB are truncated.
+API keys live in environment variables (see `docs/env.md`) and are **never** stored in `llm_messages`. Prompts and raw responses are stored verbatim by design — they are the diagnostic payload.
 
 ## Using Tracing
 
@@ -128,96 +93,51 @@ The following critical paths are instrumented:
 cargo test --test your_test 2>&1 | grep "FAILED"
 ```
 
-### Step 2: Review Forensics JSON
+### Step 2: Check LLM Forensics
 
-```bash
-# Find the latest forensics file
-ls -lt chronicler_engine/tmp/diagnostics/*.json | head -1
-
-# Review the file
-cat chronicler_engine/tmp/diagnostics/forensics_*.json | jq .
-```
+For LLM-driven tests, query the `llm_messages` table (above) to see the exact prompt + response involved in the failure.
 
 ### Step 3: Trace the Execution
 
-Look for:
+Re-run with full tracing:
+
+```bash
+RUST_LOG=trace cargo test test_name -- --nocapture
+```
+
+In the output look for:
 
 1. **Span hierarchy** - What functions were called?
 2. **Field values** - What were the inputs?
 3. **Events** - What decisions were made?
 4. **Error events** - Where did it fail?
 
-### Step 4: Reproduce with Enhanced Logging
-
-```bash
-# Run the specific test with full tracing
-RUST_LOG=trace cargo test test_name -- --nocapture
-```
-
-### Step 5: Fix and Verify
+### Step 4: Fix and Verify
 
 After fixing the code:
 
 ```bash
 # Ensure tests pass
 cargo test
-
-# Clean up old forensics files
-rm -rf chronicler_engine/tmp/diagnostics/*.json
 ```
-
-## Advanced Techniques
-
-### Custom Forensics Collection
-
-For manual forensics capture in tests:
-
-```rust
-use chronicler_engine::test_support::ForensicsCollector;
-
-#[test]
-fn test_with_forensics() {
-    let collector = ForensicsCollector::new();
-    collector.set_test_name("my_test");
-    
-    // ... test code ...
-    
-    // On failure, manually capture
-    collector.capture_on_failure().unwrap();
-}
-```
-
-### Replay Infrastructure
-
-The replay infrastructure (TODO: implement) allows you to:
-
-1. Load a forensics snapshot
-2. Rebuild the exact game state
-3. Re-execute the action that failed
-4. Compare results
 
 ## Common Issues
 
-### No Forensics File Generated
+### No tracing output visible
 
-**Cause:** Test panicked before the collector could flush.
+**Cause:** `RUST_LOG` not set, or test binary doesn't initialize the subscriber.
 
-**Solution:** Ensure the test framework is properly integrated with the forensics layer.
+**Solution:** Set `RUST_LOG=info` (or `=trace` for full detail). Test binaries initialize the subscriber via `bootstrap/run.rs`.
 
-### Forensics File is Empty
+### Test panics before LLM call is persisted
 
-**Cause:** No tracing spans or events were recorded.
+**Cause:** Provider-level error returned before `save_llm_message` fires — by design, the recorder saves only on provider success.
 
-**Solution:** Verify `RUST_LOG` is set and the subscriber is initialized in bootstrap.
-
-### API Keys in Forensics
-
-**Cause:** Custom field names not in the redaction list.
-
-**Solution:** Add the field name to `SENSITIVE_FIELDS` in `forensics.rs`.
+**Solution:** Check `RUST_LOG=trace` output instead of the `llm_messages` table; the in-flight prompt will appear in the tracing spans.
 
 ## Related Documentation
 
 - [Testing Guide](../reference/testing.md)
 - [System Architecture](../architecture/system.md)
 - [Error Catalog](error_catalog.md)
+- [ADR-012: LLM Call Logging and Forensics](../adr/adr-012-llm-message-logging.md)
