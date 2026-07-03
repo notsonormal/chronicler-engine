@@ -52,6 +52,38 @@ fn test_preset_card_html_active_preset() {
 }
 
 #[test]
+fn test_preset_card_html_default_and_active_preset() {
+    let preset = PromptPreset {
+        id: "default-active".into(),
+        name: "Default Active".into(),
+        instructions: Some("Default active prompt.".into()),
+        is_default: true,
+        ..Default::default()
+    };
+    let html = preset_card_html(&preset, true);
+    assert!(html.contains(r#"badge">Default</span>"#));
+    assert!(html.contains(r#"badge primary">Active</span>"#));
+    assert!(!html.contains("Set Active</button>"));
+    assert!(!html.contains("Edit</button>"));
+    assert!(!html.contains("Delete</button>"));
+    assert!(html.contains("View</button>"));
+    assert!(html.contains("Duplicate</button>"));
+    assert!(html.contains("class=\"preset-card default active\""));
+}
+
+#[test]
+fn test_preset_card_html_no_instructions_uses_empty_preview() {
+    let preset = PromptPreset {
+        id: "no-instr".into(),
+        name: "No Instructions".into(),
+        ..Default::default()
+    };
+    let html = preset_card_html(&preset, false);
+    assert!(html.contains("No Instructions"));
+    assert!(html.contains("class=\"card-details preset-preview\">"));
+}
+
+#[test]
 fn test_preset_card_html_inactive_preset() {
     let preset = PromptPreset {
         id: "inactive-1".into(),
@@ -110,6 +142,24 @@ fn test_preset_edit_form_html_renders() {
 }
 
 #[test]
+fn test_preset_edit_form_html_with_all_optional_fields_none() {
+    let preset = PromptPreset {
+        id: "edit-empty".into(),
+        name: "Empty Edit".into(),
+        ..Default::default()
+    };
+    let html = preset_edit_form_html(&preset, "narrator", true);
+    assert!(html.contains("Empty Edit"));
+    assert!(html.contains(r#"name="preset_type" value="narrator""#));
+    assert!(html.contains("<textarea id=\"edit-role-edit-empty\" name=\"role\" rows=\"4\"></textarea>"));
+    assert!(html.contains("<textarea id=\"edit-instructions-edit-empty\" name=\"instructions\" rows=\"10\"></textarea>"));
+    assert!(html.contains("<textarea id=\"edit-style-edit-empty\" name=\"writing_style\" rows=\"4\"></textarea>"));
+    assert!(html.contains("<textarea id=\"edit-output-edit-empty\" name=\"output_format\" rows=\"6\"></textarea>"));
+    assert!(html.contains("Save</button>"));
+    assert!(html.contains("Cancel</button>"));
+}
+
+#[test]
 fn test_preset_edit_form_html_escapes_special_chars() {
     let preset = PromptPreset {
         id: "<id>".into(),
@@ -149,6 +199,22 @@ fn test_preset_view_form_html_renders() {
     assert!(html.contains("Close</button>"));
     assert!(!html.contains("Save</button>"));
     assert!(html.contains(r#"hx-get="/fragment/prompt-presets/view-1""#));
+}
+
+#[test]
+fn test_preset_view_form_html_with_all_optional_fields_none() {
+    let preset = PromptPreset {
+        id: "view-empty".into(),
+        name: "Empty View".into(),
+        ..Default::default()
+    };
+    let html = preset_view_form_html(&preset);
+    assert!(html.contains("View Empty View"));
+    assert!(html.contains("<textarea rows=\"4\" disabled></textarea>"));
+    assert!(html.contains("<textarea rows=\"10\" disabled></textarea>"));
+    assert!(html.contains("<textarea rows=\"6\" disabled></textarea>"));
+    assert!(html.contains("Close</button>"));
+    assert!(!html.contains("Save</button>"));
 }
 
 #[test]
