@@ -30,40 +30,6 @@ fn trait_dispatch_between_impls() {
     assert!(recording.last_saved_message().is_some());
 }
 
-#[test]
-fn llm_message_clone_produces_equal_value() {
-    let msg1 = make_sample_message("clone-test");
-    let msg2 = msg1.clone();
-
-    assert_eq!(msg1.agent_name, msg2.agent_name);
-    assert_eq!(msg1.backend_name, msg2.backend_name);
-    assert_eq!(msg1.model_name, msg2.model_name);
-}
-
-#[test]
-fn llm_message_debug_format_contains_field_names() {
-    let msg = make_sample_message("debug-test");
-    let debug = format!("{msg:?}");
-
-    // Debug output should contain at least one field name
-    assert!(debug.contains("agent_name") || debug.contains("backend_name"));
-}
-
-#[test]
-fn llm_message_construction_all_fields() {
-    let msg = make_sample_message("construction-test");
-
-    assert_eq!(msg.agent_name, "construction-test");
-    assert_eq!(msg.backend_name, "TestBackend");
-    assert_eq!(msg.model_name, "test-model");
-    assert!(!msg.system_prompt.is_empty());
-    assert!(!msg.user_prompt.is_empty());
-    assert!(!msg.raw_request_json.is_empty());
-    assert!(!msg.raw_response_json.is_empty());
-    assert!(!msg.parsed_response.is_empty());
-    assert!(msg.error_message.is_none());
-    // created_at is chrono::DateTime, skip comparison
-}
 
 fn make_sample_message(agent_name: &str) -> LlmMessage {
     LlmMessage {

@@ -12,8 +12,6 @@
 //! For tests that just need a sink with no behavior assertions, prefer
 //! `NoopForensics`.
 
-use std::sync::Arc;
-
 use parking_lot::Mutex;
 
 use crate::application::ports::llm_message_repository::{LlmMessage, LlmMessageRepository};
@@ -55,7 +53,7 @@ impl RecordingForensics {
         self
     }
 
-    /// Number of times `save_llm_message` has been called.
+    /// Number of times `save_llm_message` has completed without a configured error.
     pub fn save_call_count(&self) -> usize {
         self.inner.lock().save_calls
     }
@@ -82,19 +80,3 @@ impl LlmMessageRepository for RecordingForensics {
     }
 }
 
-/// Test helper: wrap an `LlmProvider` in `LlmCallRecorder` with a recording
-/// forensics spy. Returns both the recorder and a handle to the spy so the
-/// caller can assert on captured messages.
-pub fn make_recording_recorder(
-    provider: Arc<dyn crate::application::ports::llm_provider::LlmProvider>,
-) -> (
-    Arc<crate::application::llm_recorder::LlmCallRecorder>,
-    Arc<RecordingForensics>,
-) {
-    let forensics = Arc::new(RecordingForensics::new());
-    let recorder = Arc::new(crate::application::llm_recorder::LlmCallRecorder::new(
-        provider,
-        forensics.clone(),
-    ));
-    (recorder, forensics)
-}

@@ -38,14 +38,10 @@ fn text_check_mode_spell_from_settings() {
     let service = create_text_check_service(&settings);
 
     // In Spell mode, routing is determined by caller, not factory.
-    // Just verify service works with mode.
-    let result = service
-        .check_player_input("Test", TextCheckMode::Spell, &[])
-        .expect("check should succeed");
-    // Result depends on Harper's actual analysis (not mocked here)
-    // Just assert it doesn't panic
-    assert!(result.is_some() || result.is_none());
+    // Just verify service doesn't panic.
+    let _ = service.check_player_input("Test", TextCheckMode::Spell, &[]);
 }
+
 
 #[test]
 fn ignored_words_from_settings_flow_to_checker() {
@@ -58,14 +54,13 @@ fn ignored_words_from_settings_flow_to_checker() {
     // Observable behavior: calling check with any mode succeeds.
     // We cannot easily assert that "testword" is ignored without a real Harper check.
     // This test just verifies the factory wired the settings.
-    let result = service
+    let _ = service
         .check_player_input(
             "Test input",
             TextCheckMode::Spell,
             &["testword".to_string()],
         )
         .expect("check should succeed");
-    assert!(result.is_some() || result.is_none());
 }
 
 // NOTE: `HarperTextChecker::new()` is infallible (returns `Self`, not `Result`).

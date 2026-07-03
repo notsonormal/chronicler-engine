@@ -87,12 +87,3 @@ fn trait_dispatch_between_impls() {
     assert!(result_none.is_none());
 }
 
-#[test]
-fn method_signature_compiles() {
-    // This test exists purely to ensure the trait method signature compiles.
-    // If the signature changes, this file will fail to compile.
-    fn _takes_checker(_checker: &dyn TextChecker) {}
-
-    let checker: Arc<dyn TextChecker> = Arc::new(StubCheckerA);
-    _takes_checker(checker.as_ref());
-}

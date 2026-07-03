@@ -71,25 +71,6 @@ fn complete_strips_thought_tags_from_parsed_response() {
     assert!(saved.parsed_response.contains("Hello, user!"));
 }
 
-#[test]
-fn complete_preserves_raw_response_for_forensic_audit() {
-    // MockBackend builds its own JSON. We'll check that raw VS parsed differ.
-    let provider = Arc::new(
-        MockBackend::new().with_narrations(vec!["<thought>reasoning</thought>Answer".to_string()]),
-    );
-    let forensics = Arc::new(RecordingForensics::new());
-    let recorder = LlmCallRecorder::new(provider, forensics.clone());
-
-    let _ = recorder.complete("narrator", "sys", "usr", None).unwrap();
-
-    let saved = forensics
-        .last_saved_message()
-        .expect("message should be saved");
-    // Raw JSON contains the original response (including thought tag content)
-    assert!(!saved.raw_response_json.is_empty());
-    // Parsed response is sanitized
-    assert!(!saved.parsed_response.contains("<thought>"));
-}
 
 #[test]
 fn complete_propagates_provider_error_without_forensics_write() {

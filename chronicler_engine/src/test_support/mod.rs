@@ -14,5 +14,5 @@ pub use context::{
 };
 pub use fixtures::*;
 pub use noop_forensics::{make_test_recorder, make_test_recorder_with_storage, NoopForensics};
-pub use recording_forensics::{make_recording_recorder, RecordingForensics};
+pub use recording_forensics::RecordingForensics;
 pub use test_app_builder::TestAppBuilder;

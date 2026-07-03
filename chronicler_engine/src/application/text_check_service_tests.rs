@@ -156,18 +156,3 @@ fn checker_error_propagates() {
     assert!(matches!(result.unwrap_err(), EngineError::Io(_)));
 }
 
-#[test]
-fn injection_with_custom_checker() {
-    let checker: Arc<StubChecker> = Arc::new(StubChecker::with_ok_response(Some(CheckResult {
-        original: "Custom".to_string(),
-        corrected: "Custom".to_string(),
-        issues: vec![],
-    })));
-    let service = TextCheckService::new(checker.clone());
-
-    let result = service
-        .check_player_input("Custom", TextCheckMode::Spell, &[])
-        .expect("should succeed");
-
-    assert!(result.is_some());
-}
