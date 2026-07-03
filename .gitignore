@@ -245,4 +245,10 @@ chronicler_engine/.pi/task
 .agents/skills/teach/GLOSSARY.md
 .agents/skills/teach/MISSION.md
 .agents/skills/teach/RESOURCES.md
-.pi/
+.pi/*
+# Extension source is tracked; rest of .pi/ stays ignored.
+!.pi/extensions/
+.pi/extensions/**/*.js
+.pi/extensions/**/*.d.ts
+.pi/extensions/**/node_modules/
+.pi/extensions/**/package-lock.json

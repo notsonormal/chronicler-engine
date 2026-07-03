@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-07-02 22:00 UTC*
+*Index last generated: 2026-07-03 19:47 UTC*
 
 ### Root files
 
@@ -69,10 +69,9 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Plan: Mapless Worlds via Freeform Location Names](./plans/mapless-worlds-plan.md)
 - [Spec: Agent-Ready Pipeline Restructure for Chronicler Engine](./plans/multi-agent-architecture-overarching-spec.md)
 - [Plan: Observability & Automated Forensics](./plans/observability-and-forensics-plan.md)
-- [Plan: Phase 2 Test Quality Cleanup + Coverage Gaps](./plans/archived/phase2-test-quality-and-coverage-gaps.md)
-- [Plan: Phase 2 Tests + Coverage Fixes](./plans/archived/phase2-tests-coverage-fixes.md)
 - [Plan: Reliability and Cancellation](./plans/reliability-and-cancellation-plan.md)
 - [AI Steering & Guided Generation](./plans/steering-and-guided-generation.md)
+- [Plan: Pi Subagent Guardrails Extension](./plans/subagent-guardrails-extension-plan.md)
 - [Subplan B: Quantifier `destination` field split](./plans/subplan-b-quantifier-field-split.md)
 - [Subplan C: Atomic mapless enablement](./plans/subplan-c-mapless-enablement.md)
 - [T1: Error Model Unification](./plans/t1-error-model-unification.md)
@@ -89,6 +88,8 @@ This folder contains all documentation for the Chronicler Engine project.
 - [ADR-026 Follow-up: Thermo-Nuclear Review Quality Fixes](./plans/archived/adr-026-followup-quality-fixes.md)
 - [Plan: Antipattern-Checker Agent Skill](./plans/archived/antipattern-checker-skill-plan.md)
 - [Fix Boot Path: Restore Auto-Create Game with `--persona` CLI Flag](./plans/archived/fix-boot-and-default-game.md)
+- [Plan: Phase 2 Test Quality Cleanup + Coverage Gap Fixes](./plans/archived/phase2-test-quality-and-coverage-gaps.md)
+- [Plan: Phase 2 Tests + Coverage Fixes](./plans/archived/phase2-tests-coverage-fixes.md)
 - [Plan: Phase 2 Thermonuclear Review Fixes](./plans/archived/phase2-thermonuclear-review-fixes.md)
 - [Pipeline Decomposition Review Fixes (Round 3)](./plans/archived/pipeline-review-fixes-round3.md)
 - [Review Fixes — Pipeline Decomposition Quality](./plans/archived/review-fixes-pipeline-quality.md)
