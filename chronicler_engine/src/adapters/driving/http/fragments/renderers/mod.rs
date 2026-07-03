@@ -9,3 +9,6 @@ pub use response::*;
 
 #[cfg(test)]
 mod renderers_tests;
+
+#[cfg(test)]
+mod response_tests;

@@ -204,3 +204,39 @@ fn test_parse_chat_response_null_message() {
     let result = parse_chat_response(json, 1);
     assert!(result.is_err());
 }
+
+#[test]
+fn test_parse_chat_response_whitespace_only_input() {
+    // JSON parser strips whitespace before parsing, so whitespace-only is
+    // a malformed-JSON path.
+    let result = parse_chat_response("   \n\t  ", 1);
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("Failed to parse"));
+}
+
+#[test]
+fn test_extract_content_handles_null_content_with_reasoning_fallback() {
+    let json = serde_json::json!({
+        "choices": [{ "message": { "content": null, "reasoning": "thinking" } }]
+    });
+    let result = extract_content_from_response(&json);
+    assert_eq!(result, Some(("thinking".to_string(), "reasoning")));
+}
+
+#[test]
+fn test_extract_content_handles_null_content_with_reasoning_content_fallback() {
+    let json = serde_json::json!({
+        "choices": [{ "message": { "content": null, "reasoning_content": "deep" } }]
+    });
+    let result = extract_content_from_response(&json);
+    assert_eq!(result, Some(("deep".to_string(), "reasoning_content")));
+}
+
+#[test]
+fn test_extract_content_returns_none_when_all_fields_null() {
+    let json = serde_json::json!({
+        "choices": [{ "message": { "content": null, "reasoning": null, "reasoning_content": null } }]
+    });
+    let result = extract_content_from_response(&json);
+    assert_eq!(result, None);
+}
