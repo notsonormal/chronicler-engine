@@ -25,3 +25,6 @@ mod request_tests;
 
 #[cfg(test)]
 mod response_tests;
+
+#[cfg(test)]
+mod client_tests;
