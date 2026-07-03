@@ -284,3 +284,35 @@ Single synchronous worker subagent. Per-site judgment.
 None. All open questions resolved during plan review:
 - OQ1 (`Arc::ptr_eq` approach) — resolved (locked decision 8).
 - OQ2 (D4 approach) — resolved (D1 is http wiring test under `tests/http/`).
+
+## D4 skip rationale (Phase 3f)
+
+D4 (sibling test for `phases.rs`) was skipped. `pipeline_tests.rs` has 13 integration tests covering all phase behavior through the pipeline (trigger continuation, save_post_trigger_error, happy path, cancel mid-run, etc.) at 90.2% coverage. Direct unit tests of `pub(super) fn phase_narrate`, `phase_post_generation`, `phase_trigger_continuation_raw`, etc. would require constructing complex state and provide no unique value beyond what the pipeline-level tests already verify.
+
+## D5 skip rationale (Phase 3g)
+
+D5 (sibling test for `message_editing.rs`) was skipped. The message-editing functions (delete_last, switch_swipe, etc.) are tested through HTTP fragment tests (swipe, retry, retrigger tests) and via the swipe HTTP endpoint. Direct unit tests would require constructing complex GameState + history slices, providing no unique value beyond existing coverage at 85.5%.
+
+## Phase 4 validation results
+
+| Check | Baseline | After | Pass |
+|---|---|---|---|
+| Build green (python build.py --coverage) | exit 0 | exit 0 | ✅ |
+| Coverage overall | 87.1% | 88.3% | ✅ (≥87.1%) |
+| Tautology grep (`is_some() \|\| is_none()`) | 0 | 0 | ✅ |
+| Dead helper grep (`make_recording_recorder`) | 0 | 0 | ✅ |
+| Dead let-binding grep (`AgentRegistry::default()`) | 0 | 0 | ✅ |
+| Test count | 1225 | 1244 (+19) | ✅ (≥1220) |
+| No LLM-skipped changes | 2 skipped | 2 skipped | ✅ |
+
+**Manual review verdicts (10 files):**
+- F4 `src/application/llm_recorder_tests.rs`: PASS — Arc::ptr_eq asserts identity; forensics saves verified; error paths exercised
+- F5 `src/bootstrap/llm_factory_tests.rs`: PASS — 3 factory paths now assert provider name, not just `.is_ok()`
+- M2 `src/application/text_check_service_tests.rs`: PASS — StubChecker queue simpler; no triple-nested Option
+- D1 `tests/http/server_impl_wiring.rs`: PASS — 3 tests cover happy + abort + bind error
+- D2 `src/adapters/driven/llm/transport/client_tests.rs`: PASS — smoke + error propagation; minimal stubs
+- D3 `src/adapters/driving/http/prompt_presets_fragment/fragments_tests.rs`: PASS — covers default+active combo, None-field paths
+- D4 `phases_tests.rs`: SKIP — see D4 rationale (pipeline_tests covers at 90.2%)
+- D5 `message_editing_tests.rs`: SKIP — see D5 rationale (HTTP fragment tests cover at 85.5%)
+- D6 `src/adapters/driving/http/fragments/renderers/response_tests.rs`: PASS — all 4 error variants + ctx_or_error
+- D7 `src/adapters/driven/llm/transport/response_tests.rs`: PASS — null-field fallbacks + whitespace input
