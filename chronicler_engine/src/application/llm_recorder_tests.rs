@@ -109,15 +109,11 @@ fn complete_propagates_forensics_error_after_provider_success() {
 
 #[test]
 fn provider_accessor_returns_injected_provider() {
-    let provider: Arc<dyn LlmProvider> = Arc::new(MockBackend::new());
+    let original: Arc<dyn LlmProvider> = Arc::new(MockBackend::new());
     let forensics = Arc::new(RecordingForensics::new());
-    let recorder = LlmCallRecorder::new(provider.clone(), forensics);
+    let recorder = LlmCallRecorder::new(original.clone(), forensics);
 
-    let returned_provider = recorder.provider();
-    assert_eq!(returned_provider.name(), "Mock");
-    assert_eq!(returned_provider.model(), "mock");
-    // Reference equality check via Arc pointer equality would require Weak or Rc,
-    // so we just assert the identity via name()+model() which is sufficient.
+    assert!(Arc::ptr_eq(&original, recorder.provider()));
 }
 
 #[test]

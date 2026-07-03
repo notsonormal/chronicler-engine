@@ -45,11 +45,10 @@ fn deepseek_path_returns_recorder() {
     };
     let storage = Arc::new(Storage::new_in_memory());
 
-    let recorder = get_llm_recorder_for(&connection, storage.clone());
+    let recorder = get_llm_recorder_for(&connection, storage.clone())
+        .expect("get_llm_recorder_for should succeed for DeepSeek backend");
 
-    // from_connection() doesn't validate at construction time - defers to call time.
-    // So this succeeds here.
-    assert!(recorder.is_ok());
+    assert_eq!(recorder.provider().name(), "DeepSeek");
 }
 
 #[test]
@@ -67,8 +66,10 @@ fn openrouter_path_returns_recorder() {
     };
     let storage = Arc::new(Storage::new_in_memory());
 
-    let recorder = get_llm_recorder_for(&connection, storage.clone());
-    assert!(recorder.is_ok());
+    let recorder = get_llm_recorder_for(&connection, storage.clone())
+        .expect("get_llm_recorder_for should succeed for OpenRouter backend");
+
+    assert_eq!(recorder.provider().name(), "OpenRouter");
 }
 
 #[test]
@@ -86,8 +87,10 @@ fn ollama_path_returns_recorder() {
     };
     let storage = Arc::new(Storage::new_in_memory());
 
-    let recorder = get_llm_recorder_for(&connection, storage.clone());
-    assert!(recorder.is_ok());
+    let recorder = get_llm_recorder_for(&connection, storage.clone())
+        .expect("get_llm_recorder_for should succeed for Ollama backend");
+
+    assert_eq!(recorder.provider().name(), "Ollama");
 }
 
 #[test]
