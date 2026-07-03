@@ -7,6 +7,7 @@ use crate::adapters::driving::http::prompt_presets_fragment::handlers::{
     update_preset_handler, view_preset_form_handler,
 };
 use crate::adapters::driven::storage::{Storage, TestOverride};
+use crate::test_support::TestPromptPreset;
 
 fn make_test_app_state_with_preset(
     preset: PromptPreset,
@@ -83,14 +84,8 @@ async fn test_preset_card_handler_not_found() {
 
 #[tokio::test]
 async fn test_view_preset_form_handler_default_preset() {
-    let preset = PromptPreset {
-        id: "default".into(),
-        name: "Default".into(),
-        instructions: Some("System prompt.".into()),
-        is_default: true,
-        preset_type: PresetType::System,
-        ..Default::default()
-    };
+    let preset =
+        TestPromptPreset::system_default_with_instructions("default", "Default", "System prompt.");
     let app_state = make_test_app_state_with_preset(preset.clone());
     let response = view_preset_form_handler(
         axum::extract::State(app_state),
@@ -167,14 +162,8 @@ async fn test_duplicate_preset_storage_error_returns_error() {
 
 #[tokio::test]
 async fn test_edit_default_preset_returns_error() {
-    let preset = PromptPreset {
-        id: "default".into(),
-        name: "Default".into(),
-        instructions: Some("System prompt.".into()),
-        is_default: true,
-        preset_type: PresetType::System,
-        ..Default::default()
-    };
+    let preset =
+        TestPromptPreset::system_default_with_instructions("default", "Default", "System prompt.");
     let app_state = make_test_app_state_with_preset(preset.clone());
     let response = edit_preset_form_handler(
         axum::extract::State(app_state),
@@ -186,14 +175,8 @@ async fn test_edit_default_preset_returns_error() {
 
 #[tokio::test]
 async fn test_update_default_preset_returns_error() {
-    let preset = PromptPreset {
-        id: "default".into(),
-        name: "Default".into(),
-        instructions: Some("System prompt.".into()),
-        is_default: true,
-        preset_type: PresetType::System,
-        ..Default::default()
-    };
+    let preset =
+        TestPromptPreset::system_default_with_instructions("default", "Default", "System prompt.");
     let app_state = make_test_app_state_with_preset(preset.clone());
     let response = update_preset_handler(
         axum::extract::State(app_state),
@@ -211,14 +194,8 @@ async fn test_update_default_preset_returns_error() {
 
 #[tokio::test]
 async fn test_delete_default_preset_returns_error() {
-    let preset = PromptPreset {
-        id: "default".into(),
-        name: "Default".into(),
-        instructions: Some("System prompt.".into()),
-        is_default: true,
-        preset_type: PresetType::System,
-        ..Default::default()
-    };
+    let preset =
+        TestPromptPreset::system_default_with_instructions("default", "Default", "System prompt.");
     let app_state = make_test_app_state_with_preset(preset.clone());
     let response = delete_preset_handler(
         axum::extract::State(app_state),

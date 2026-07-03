@@ -1,18 +1,13 @@
-use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::adapters::driving::http::prompt_presets_fragment::fragments::{
     preset_card_html, preset_edit_form_html, preset_view_form_html,
 };
+use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
+use crate::test_support::TestPromptPreset;
 
 #[test]
 fn test_preset_card_html_default_preset() {
-    let preset = PromptPreset {
-        id: "default".into(),
-        name: "Default".into(),
-        instructions: Some("System prompt.".into()),
-        is_default: true,
-        preset_type: PresetType::System,
-        ..Default::default()
-    };
+    let preset =
+        TestPromptPreset::system_default_with_instructions("default", "Default", "System prompt.");
     let html = preset_card_html(&preset, false);
     assert!(html.contains("Default"));
     assert!(html.contains(r#"badge">Default</span>"#));

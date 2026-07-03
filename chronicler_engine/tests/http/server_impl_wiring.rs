@@ -40,21 +40,11 @@ async fn run_server_serves_request_and_returns_404_for_unknown_route() {
 
     // Cancel by aborting
     server_handle.abort();
-    let _ = server_handle.await;
-}
-
-#[tokio::test]
-async fn run_server_with_zero_port_eventually_errors_when_aborted() {
-    // Smoke test: starting + aborting the server should not panic.
-    let resources = build_test_resources().await;
-    let config = ServerConfig { port: 0 };
-
-    let server_handle =
-        tokio::spawn(async move { run_server_with_config(resources, config).await });
-
-    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-    server_handle.abort();
-    let _ = server_handle.await;
+    let result = server_handle.await;
+    assert!(
+        matches!(result, Err(ref e) if e.is_cancelled()),
+        "server task should finish with cancellation after abort, got: {result:?}"
+    );
 }
 
 #[tokio::test]

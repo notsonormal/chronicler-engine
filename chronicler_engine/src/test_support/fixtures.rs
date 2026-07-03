@@ -372,6 +372,16 @@ impl TestPromptPreset {
             preset_type: PresetType::System,
         }
     }
+
+    pub fn system_default_with_instructions(
+        id: &str,
+        name: &str,
+        instructions: &str,
+    ) -> PromptPreset {
+        let mut p = Self::system_default(id, name);
+        p.instructions = Some(instructions.to_string());
+        p
+    }
 }
 
 pub struct TestWorldManifest;
