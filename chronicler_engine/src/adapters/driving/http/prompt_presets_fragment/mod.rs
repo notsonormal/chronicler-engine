@@ -13,6 +13,8 @@ pub use handlers::{
 pub use template::PromptPresetsTemplate;
 
 #[cfg(test)]
+mod fragments_tests;
+#[cfg(test)]
 mod handlers_tests;
 #[cfg(test)]
 mod template_tests;

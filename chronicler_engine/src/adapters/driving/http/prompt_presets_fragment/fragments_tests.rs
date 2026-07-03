@@ -151,10 +151,16 @@ fn test_preset_edit_form_html_with_all_optional_fields_none() {
     let html = preset_edit_form_html(&preset, "narrator", true);
     assert!(html.contains("Empty Edit"));
     assert!(html.contains(r#"name="preset_type" value="narrator""#));
-    assert!(html.contains("<textarea id=\"edit-role-edit-empty\" name=\"role\" rows=\"4\"></textarea>"));
+    assert!(
+        html.contains("<textarea id=\"edit-role-edit-empty\" name=\"role\" rows=\"4\"></textarea>")
+    );
     assert!(html.contains("<textarea id=\"edit-instructions-edit-empty\" name=\"instructions\" rows=\"10\"></textarea>"));
-    assert!(html.contains("<textarea id=\"edit-style-edit-empty\" name=\"writing_style\" rows=\"4\"></textarea>"));
-    assert!(html.contains("<textarea id=\"edit-output-edit-empty\" name=\"output_format\" rows=\"6\"></textarea>"));
+    assert!(html.contains(
+        "<textarea id=\"edit-style-edit-empty\" name=\"writing_style\" rows=\"4\"></textarea>"
+    ));
+    assert!(html.contains(
+        "<textarea id=\"edit-output-edit-empty\" name=\"output_format\" rows=\"6\"></textarea>"
+    ));
     assert!(html.contains("Save</button>"));
     assert!(html.contains("Cancel</button>"));
 }

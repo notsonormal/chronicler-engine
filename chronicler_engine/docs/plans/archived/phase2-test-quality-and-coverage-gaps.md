@@ -315,4 +315,25 @@ D5 (sibling test for `message_editing.rs`) was skipped. The message-editing func
 - D4 `phases_tests.rs`: SKIP — see D4 rationale (pipeline_tests covers at 90.2%)
 - D5 `message_editing_tests.rs`: SKIP — see D5 rationale (HTTP fragment tests cover at 85.5%)
 - D6 `src/adapters/driving/http/fragments/renderers/response_tests.rs`: PASS — all 4 error variants + ctx_or_error
-- D7 `src/adapters/driven/llm/transport/response_tests.rs`: PASS — null-field fallbacks + whitespace input
+- D7 `src/adapters/driven/llm/transport/response_tests.rs`: PARTIAL — null-field fallbacks + whitespace input tests pass; see D7 reclassification below
+
+## Post-archive addendum (2026-07-03)
+
+Primary-agent audit after worker handoff found two issues. Both resolved below.
+
+### D3 registration fix
+
+Worker added 4 new tests to `fragments_tests.rs` but the file was never registered in `prompt_presets_fragment/mod.rs`. 11 pre-existing tests in the same file were already silently orphaned (prior plan's bug). Primary added `#[cfg(test)] mod fragments_tests;` to `mod.rs`.
+
+Result: 15 tests now collected (was 0). All pass.
+
+- Test count: 1244 → **1259** (+15, the orphaned tests now run)
+- Overall coverage: 88.3% → **89.1%** (+0.8)
+- `fragments.rs` coverage: 55.8% → **≥80%** (dropped off LOW list)
+- D3 target met.
+
+### D7 reclassification
+
+Worker added 5 tests to `transport/response_tests.rs` (correctly registered, all pass). Tests target `extract_content_from_response` null-field fallbacks + `parse_chat_response` whitespace input. These functions were already mostly covered. The 28 uncovered lines (78.5% → 78.5%, unchanged) are in `handle_response`, which requires a mock `reqwest::blocking::Response` — genuinely hard to unit-test without significant test infrastructure.
+
+D7 reclassified: the 5 added tests are valid behavior tests but do not move the coverage needle on the actual gap (`handle_response`). `handle_response` is best covered via integration test (real HTTP round-trip through the LLM transport layer) which is out of scope for this plan. Marking D7 as **partial** — tests added, coverage target not met, reclassification accepted.
