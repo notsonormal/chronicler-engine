@@ -1,15 +1,16 @@
 //! Tests for `TextCheckService` orchestrator.
 
 use std::sync::{Arc, Mutex};
+use std::collections::VecDeque;
 
 use crate::application::ports::text_checker::{CheckIssue, CheckResult, TextChecker};
 use crate::application::text_check_service::TextCheckService;
 use crate::domain::model::settings::TextCheckMode;
 use crate::error::EngineError;
 
-/// Stub checker that records calls and returns a configurable result.
+/// Stub checker that records calls and returns queued responses in order.
 struct StubChecker {
-    response: Mutex<Option<Result<Option<CheckResult>, EngineError>>>,
+    responses: Mutex<VecDeque<Result<Option<CheckResult>, EngineError>>>,
     call_count: Mutex<usize>,
     last_mode: Mutex<Option<TextCheckMode>>,
 }
@@ -17,7 +18,7 @@ struct StubChecker {
 impl StubChecker {
     fn with_ok_response(check_result: Option<CheckResult>) -> Self {
         Self {
-            response: Mutex::new(Some(Ok(check_result))),
+            responses: Mutex::new(VecDeque::from([Ok(check_result)])),
             call_count: Mutex::new(0),
             last_mode: Mutex::new(None),
         }
@@ -25,7 +26,7 @@ impl StubChecker {
 
     fn with_error_response(err: EngineError) -> Self {
         Self {
-            response: Mutex::new(Some(Err(err))),
+            responses: Mutex::new(VecDeque::from([Err(err)])),
             call_count: Mutex::new(0),
             last_mode: Mutex::new(None),
         }
@@ -49,7 +50,11 @@ impl TextChecker for StubChecker {
     ) -> Result<Option<CheckResult>, EngineError> {
         *self.call_count.lock().unwrap() += 1;
         *self.last_mode.lock().unwrap() = Some(mode);
-        self.response.lock().unwrap().take().unwrap_or(Ok(None))
+        self.responses
+            .lock()
+            .unwrap()
+            .pop_front()
+            .unwrap_or(Ok(None))
     }
 }
 
