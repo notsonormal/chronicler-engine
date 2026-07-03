@@ -69,4 +69,3 @@ fn with_storage_wires_recorder_to_provider_and_storage() {
     assert_eq!(messages[0].agent_name, "wiring-test-agent");
     assert_eq!(messages[0].backend_name, "Mock");
 }
-

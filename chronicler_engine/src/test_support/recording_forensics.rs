@@ -79,4 +79,3 @@ impl LlmMessageRepository for RecordingForensics {
         Ok(self.inner.lock().list_response.clone())
     }
 }
-

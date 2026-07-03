@@ -26,9 +26,8 @@ async fn run_server_serves_request_and_returns_404_for_unknown_route() {
     let resources = build_test_resources().await;
     let config = ServerConfig { port: 0 };
 
-    let server_handle = tokio::spawn(async move {
-        run_server_with_config(resources, config).await
-    });
+    let server_handle =
+        tokio::spawn(async move { run_server_with_config(resources, config).await });
 
     // Give the server time to bind
     tokio::time::sleep(std::time::Duration::from_millis(200)).await;
@@ -50,9 +49,8 @@ async fn run_server_with_zero_port_eventually_errors_when_aborted() {
     let resources = build_test_resources().await;
     let config = ServerConfig { port: 0 };
 
-    let server_handle = tokio::spawn(async move {
-        run_server_with_config(resources, config).await
-    });
+    let server_handle =
+        tokio::spawn(async move { run_server_with_config(resources, config).await });
 
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     server_handle.abort();

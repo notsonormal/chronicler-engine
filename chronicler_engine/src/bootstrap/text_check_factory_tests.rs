@@ -42,7 +42,6 @@ fn text_check_mode_spell_from_settings() {
     let _ = service.check_player_input("Test", TextCheckMode::Spell, &[]);
 }
 
-
 #[test]
 fn ignored_words_from_settings_flow_to_checker() {
     let mut settings = AppSettings::default();

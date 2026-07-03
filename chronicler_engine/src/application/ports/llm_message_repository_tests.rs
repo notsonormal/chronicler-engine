@@ -30,7 +30,6 @@ fn trait_dispatch_between_impls() {
     assert!(recording.last_saved_message().is_some());
 }
 
-
 fn make_sample_message(agent_name: &str) -> LlmMessage {
     LlmMessage {
         id: 0,

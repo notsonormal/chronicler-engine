@@ -86,4 +86,3 @@ fn trait_dispatch_between_impls() {
 
     assert!(result_none.is_none());
 }
-

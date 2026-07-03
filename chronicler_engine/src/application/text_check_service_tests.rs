@@ -160,4 +160,3 @@ fn checker_error_propagates() {
     assert!(result.is_err());
     assert!(matches!(result.unwrap_err(), EngineError::Io(_)));
 }
-

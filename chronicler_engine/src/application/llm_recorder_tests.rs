@@ -71,7 +71,6 @@ fn complete_strips_thought_tags_from_parsed_response() {
     assert!(saved.parsed_response.contains("Hello, user!"));
 }
 
-
 #[test]
 fn complete_propagates_provider_error_without_forensics_write() {
     let provider = Arc::new(MockBackend::new().with_fail());
