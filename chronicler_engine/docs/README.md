@@ -69,6 +69,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Plan: Mapless Worlds via Freeform Location Names](./plans/mapless-worlds-plan.md)
 - [Spec: Agent-Ready Pipeline Restructure for Chronicler Engine](./plans/multi-agent-architecture-overarching-spec.md)
 - [Plan: Observability & Automated Forensics](./plans/observability-and-forensics-plan.md)
+- [Plan: Phase 2 Test Quality Cleanup + Coverage Gaps](./plans/archived/phase2-test-quality-and-coverage-gaps.md)
 - [Plan: Phase 2 Tests + Coverage Fixes](./plans/archived/phase2-tests-coverage-fixes.md)
 - [Plan: Reliability and Cancellation](./plans/reliability-and-cancellation-plan.md)
 - [AI Steering & Guided Generation](./plans/steering-and-guided-generation.md)

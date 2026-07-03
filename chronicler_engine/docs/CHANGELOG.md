@@ -4,6 +4,13 @@
 
 ### Added
 
+- **Phase 2 test quality cleanup + coverage gaps** — Implemented `docs/plans/archived/phase2-test-quality-and-coverage-gaps.md` per 14 locked decisions (commits `3b1ee5b` → `90af29b`) on `hexagon-phase2`. Build green: 1244 tests pass (+19 from baseline 1225); coverage 88.3% overall (+1.2% from baseline 87.1%).
+  - **Axis C test quality (reviewer findings F1–F6, M1–M3):** removed 7 test fns (6 trivial + 1 fake regression guard); deleted `make_recording_recorder` dead helper; removed 3 unnecessary `.clone()` calls per-site; rewrote `StubChecker` from triple-nested `Option` to `VecDeque` queue; fixed `save_call_count` doc comment; strengthened `provider_accessor_returns_injected_provider` with `Arc::ptr_eq`; added `provider().name()` assertions to 3 factory path tests.
+  - **Axis D coverage gaps:** new `tests/http/server_impl_wiring.rs` (3 tests) covering previously-untested `server_impl.rs` (0%→covered); new `client_tests.rs` (4 tests) covering transport wrappers (40.9%→covered); extended `prompt_presets_fragment/fragments_tests.rs` (4 tests) covering default+active combo and None-field paths (55.8%→covered); new `renderers/response_tests.rs` (14 tests) covering HTTP response helpers (74.6%→covered); extended `transport/response_tests.rs` (5 tests) covering null-field fallbacks and whitespace input (78.5%→covered).
+  - **Tier 2 contingencies:** D4 (phases sibling) and D5 (message_editing sibling) skipped per plan — pipeline_tests.rs covers phases at 90.2%, HTTP fragment tests cover message_editing at 85.5%; no unique value identified for additional direct tests.
+
+### Added (prior)
+
 - **Phase 2 tests + coverage fixes** — Implemented `docs/plans/archived/phase2-tests-coverage-fixes.md` per 9 locked decisions (commits `ba35ac5`, `86dc067`) on `hexagon-phase2`. Build green: 1225 tests pass; coverage 87.1% overall.
   - 6 new `*_tests.rs` files (30 unit tests): `llm_recorder_tests`, `text_check_service_tests`, `ports/text_checker_tests`, `bootstrap/llm_factory_tests`, `bootstrap/text_check_factory_tests`, `ports/llm_message_repository_tests`.
   - New `RecordingForensics` spy in `src/test_support/recording_forensics.rs` (sibling to `NoopForensics`).
