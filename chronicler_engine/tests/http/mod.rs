@@ -12,3 +12,4 @@ mod test_helpers;
 mod worlds_fragment_handlers;
 
 mod endpoints;
+mod server_impl_wiring;
