@@ -66,7 +66,7 @@ fn happy_path_issues_found() {
         }],
     })));
 
-    let service = TextCheckService::new(checker.clone());
+    let service = TextCheckService::new(checker);
     let result = service
         .check_player_input("Hello", TextCheckMode::Spell, &[])
         .expect("should succeed");
@@ -83,7 +83,7 @@ fn disabled_mode_returns_none() {
         corrected: "Hello".to_string(),
         issues: vec![],
     })));
-    let service = TextCheckService::new(checker.clone());
+    let service = TextCheckService::new(checker);
 
     let result = service
         .check_player_input("Hello", TextCheckMode::Disabled, &[])
@@ -148,7 +148,7 @@ fn empty_input_routes_to_checker() {
 fn checker_error_propagates() {
     let err = EngineError::Io("checker failed".to_string());
     let checker: Arc<StubChecker> = Arc::new(StubChecker::with_error_response(err));
-    let service = TextCheckService::new(checker.clone());
+    let service = TextCheckService::new(checker);
 
     let result = service.check_player_input("Hello", TextCheckMode::Spell, &[]);
 
