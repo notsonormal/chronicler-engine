@@ -7,13 +7,9 @@
 
 The Chronicler Engine supports an extensible agent architecture where specialized agents can inject behavior into the narrative pipeline at specific execution phases. An **agent** is any type implementing the `Agent` trait. Agents are loaded from `AppSettings` at startup and registered in the `AgentRegistry`.
 
-**Current agents** (Phase 2):
+**Current agents:**
 
 - `QuantifierAgent` — Post-generation scene analysis (NPC presence, movement)
-
-**Future agents** (out of scope for Phase 2):
-
-- Prose Guardian, Continuity Checker, Expression Engine, Custom Tracker, Lorebook Keeper
 
 ---
 
@@ -140,33 +136,4 @@ Each agent can use a different LLM connection:
 
 This enables cost optimization (cheap model for quantifier, powerful model for narration).
 
----
-
-## Key Files
-
-| File | Purpose |
-|------|---------|
-| `src/domain/model/agent.rs` | `AgentConfig`, `AgentResult`, `AgentContext`, `StatePatch`, `ExecutionPhase`, `BackendSelector`, `Confidence` |
-| `src/application/agents/mod.rs` | Module root, re-exports |
-| `src/application/agents/trait_def.rs` | `Agent` trait definition |
-| `src/application/agents/registry.rs` | `AgentRegistry` |
-| `src/application/agents/quantifier/mod.rs` | Quantifier module root |
-| `src/application/agents/quantifier/agent.rs` | `QuantifierAgent` implementing `Agent` |
-| `src/application/agents/quantifier/core.rs` | Core quantifier logic |
-| `src/application/agents/quantifier/agent.rs` | `QuantifierAgent` implementing `Agent` |
-| `src/application/agents/quantifier/parser.rs` | Quantifier response parser |
-| `src/application/agents/quantifier/prompt.rs` | Quantifier prompt builder |
-| `src/application/agents/quantifier/types.rs` | Quantifier types (`NpcEventList`, `NpcEvent`, etc.) |
-| `src/application/game_service/mod.rs` | `GameService` trait |
-| `src/application/game_service/service.rs` | `DefaultGameService` — orchestrates agent execution |
-
----
-
-## Adding a New Agent
-
-1. Create a struct implementing `Agent`
-2. Add its `agent_type` string to `AgentRegistry::from_configs`
-3. Register in `default_agent_configs()` (optional)
-4. Add tests in `src/application/agents/<name>_tests.rs`
-
-The engine works with **zero agents** — all agent execution is optional.
+The engine works with **zero agents** — all agent execution is optional. See [ADR-009](../adr/adr-009-agent-trait-registry.md) for the authoritative extension procedure.

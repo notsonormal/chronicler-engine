@@ -11,7 +11,7 @@ use crate::adapters::driving::http::AppState;
 
 use super::fragments::{render_world_edit_form, render_worlds_panel};
 use crate::adapters::driving::http::fragments::{
-    app_err_to_response, bad_request, ctx_or_error, internal_error, ok, render_error,
+    bad_request, ctx_or_error, internal_error, ok, render_error,
 };
 
 #[derive(Debug, Deserialize)]
@@ -200,7 +200,7 @@ pub async fn delete_world_handler(
 ) -> Response<axum::body::Body> {
     let ctx = match ctx_or_error(&state) {
         Ok(ctx) => ctx,
-        Err(e) => return *e,
+        Err(e) => return internal_error(e),
     };
 
     match state.application_service.delete_world(ctx, &key) {
@@ -209,6 +209,6 @@ pub async fn delete_world_handler(
             let error_html = render_error(&e.to_string());
             ok(format!(r#"<li class="world-item">{error_html}</li>"#))
         }
-        Err(e) => app_err_to_response(e),
+        Err(e) => internal_error(render_error(&e.to_string())),
     }
 }

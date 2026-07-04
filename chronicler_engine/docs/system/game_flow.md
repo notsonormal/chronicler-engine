@@ -39,12 +39,10 @@ During LLM processing, the UI displays granular status phases instead of a singl
 | `Quantifying` | "Quantifying scene..." | `quantifying` | During post-narration quantifier analysis (Phase 4.5 or 5.5) | ~13s (narration visible, metadata pending) |
 | `GeneratingEvent` | "Generating event..." | `generating-event` | During trigger continuation narration (Phase 5) | Variable (after trigger fires) |
 
-**Streaming Narration Optimization:** Narration is saved to the database immediately after Phase 4 completes, before the quantifier runs. This reduces time-to-first-narration from ~40s to ~11s (73% improvement). The quantifier metadata (NPC list, confidence scores) lags by one poll cycle (~2s), which is an acceptable trade-off for faster initial visibility.
+**Streaming Narration:** Narration is saved to the database immediately after Phase 4 completes, before the quantifier runs.
 
-**Design Principles:**
-- `GenerationStatus` (Idle/Generating/Error) remains unchanged for backward compatibility
-- `is_generating()` is the single source of truth for disabling UI elements
-- Phase is a secondary display concern only — all phases use the same `.thinking` CSS class
+- `GenerationStatus` (Idle/Generating/Error) is the single source of truth for disabling UI elements
+- Phase is a secondary display concern — all phases use the same `.thinking` CSS class
 - The frontend maps endpoint values (`narrating`, `quantifying`, `generating-event`) to human-readable text
 - An optimistic "Thinking..." is shown immediately on form submit before the first poll response
 

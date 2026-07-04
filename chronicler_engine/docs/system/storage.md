@@ -2,9 +2,7 @@
 
 **Module:** `crate::adapters::driven::storage`
 **Status:** Implemented
-**Related ADRs:** ADR-019 (deleted, superseded by ADR-020),
-[ADR-020](../adr/adr-020-storage-consolidation.md),
-[ADR-024](../adr/adr-024-game-data-migration-to-sqlite.md)
+**Related ADRs:** [ADR-020](../adr/adr-020-storage-consolidation.md), [ADR-024](../adr/adr-024-game-data-migration-to-sqlite.md)
 
 ## Overview
 
@@ -30,13 +28,12 @@ The Chronicler Engine storage layer provides unified persistence for game sessio
 **Contracts:**
 
 - Game-scoped operations use `game_id` set at construction (`Storage::new_sqlite(pool, game_id)`), not passed per-call
-- Each method touches exactly one table. Cross-table coordination happens in the application tier (`src/application/context.rs`)
+- Each method touches exactly one table. Cross-table coordination happens in the application tier
 - All queries use parameterized bindings — no SQL injection surface
-- For constructor signatures and method listings, see `src/adapters/driven/storage/backend/core.rs` and the per-table modules
 
 ## Schema
 
-Schema is defined in `src/adapters/driven/storage/db.rs` via CREATE TABLE statements in the migration function. Tables:
+Tables:
 
 **Game-scoped:** `games`, `game_state_snapshots`, `messages`, `message_swipes`
 
@@ -72,7 +69,7 @@ Two functions called from `bootstrap::run()` at startup:
 
 ## Cross-Table Coordination
 
-Storage methods touch exactly one table. Multi-table operations are free functions in `src/application/context.rs`, not methods on Storage. Examples:
+Storage methods touch exactly one table. Multi-table operations are free functions in the application tier, not methods on Storage. Examples:
 
 - `save_message_and_snapshot(ctx, state)` — saves snapshot then message
 - `load_messages_with_swipes(storage)` — loads messages then hydrates swipes
@@ -88,5 +85,3 @@ Serializable subset of `GameState` for persistence. Messages excluded; hydrated 
 - InMemory backend for fast unit tests (no SQLite I/O)
 - `with_test_failures()` returns `(Storage, TestFailureHandle)` for failure injection
 - TestFailureHandle takes `&'static str` method-name keys + `TestOverride` failure payloads
-- Test-infra types (`TestOverride`, `TestFailureHandle`) live in `src/adapters/driven/storage/backend/test_support.rs`, re-exported via `crate::adapters::driven::storage::backend::{TestFailureHandle, TestOverride}`
-- See `src/adapters/driven/storage/backend/core.rs` for `Storage` constructors

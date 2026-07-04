@@ -226,13 +226,13 @@ Mirror `validate_adrs.py` structure:
 
 **Actions:**
 
-1. Manually invoke skill on `chronicler_engine/docs/system/llm_processing.md` (known sediment-heavy file). Verify skill outputs report matching survey findings (sediment on lines 85, 87, 97, 165; code-indexer sections 10 + Module Location).
+1. Manually invoke skill on `chronicler_engine/docs/system/llm_processing.md` (known sediment-heavy file). Verify skill outputs report matching the survey's quotable-phrase anchors: the `**Fix**:` prefix in the Gemma 4 section; the Reddit forum link; the `**Validation**: Reduced completion tokens from 2048 to ~211` PR-metric line; the `ForensicsCollector … was removed on 2026-07-03` deletion-history sentence; the §10 "Instrumented Functions" and "Module Location" code-indexer sections.
 2. Run `validate_docs.py` on current `docs/`. Verify clean exit (no seeded broken links yet) OR list of any existing broken links.
 3. Sanity check: skill should NOT flag `docs/system/worlds.md` HTTP→handler→service→storage data-flow chain (legitimate data flow, not sediment). Verify skill distinguishes.
 
 **Acceptance criteria:**
 
-- [ ] Dry-run on `llm_processing.md` surfaces all 4 known sediment findings.
+- [ ] Dry-run on `llm_processing.md` surfaces all the survey's quotable-phrase sediment anchors (PR-metric line, Reddit URL, `**Fix**:` register, deletion-history sentence, code-indexer sections).
 - [ ] Dry-run on `worlds.md` does NOT flag legitimate data-flow chains.
 - [ ] Script runs clean or lists real broken links.
 - [ ] No false positives on ADR cross-references in `adr-005`, `adr-012` (exempt path).

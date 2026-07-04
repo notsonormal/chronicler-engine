@@ -22,6 +22,8 @@ mod character_tests;
 #[cfg(test)]
 mod game_tests;
 #[cfg(test)]
+mod llm_backend_tests;
+#[cfg(test)]
 mod map_tests;
 #[cfg(test)]
 mod message_history_tests;

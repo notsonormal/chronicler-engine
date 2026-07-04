@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Barrier};
 
 use crate::application::action_pipeline::execute_action_impl;
 use crate::domain::model::state::game_state::GameState;
@@ -13,6 +13,38 @@ use crate::test_support::make_test_context;
 use crate::test_support::make_test_recorder;
 use crate::adapters::driven::llm::providers::MockBackend;
 use crate::domain::model::agent::{AgentContext, AgentResult, BackendSelector, ExecutionPhase};
+
+/// Wraps `QuantifierAgent` so tests can pause execution at `entered` and resume
+/// at `release`, letting them inspect state between phases deterministically.
+struct SyncQuantifierAgent {
+    inner: QuantifierAgent,
+    entered: Arc<Barrier>,
+    release: Arc<Barrier>,
+}
+
+impl std::fmt::Debug for SyncQuantifierAgent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SyncQuantifierAgent")
+            .finish_non_exhaustive()
+    }
+}
+
+impl Agent for SyncQuantifierAgent {
+    fn name(&self) -> &str {
+        self.inner.name()
+    }
+    fn phase(&self) -> ExecutionPhase {
+        self.inner.phase()
+    }
+    fn backend_selector(&self) -> BackendSelector {
+        self.inner.backend_selector()
+    }
+    fn execute(&self, ctx: &AgentContext) -> crate::error::Result<AgentResult> {
+        self.entered.wait();
+        self.release.wait();
+        self.inner.execute(ctx)
+    }
+}
 
 fn make_test_service(
     narrator_recorder: Arc<LlmCallRecorder>,
@@ -154,50 +186,22 @@ fn test_execute_action_impl_preserves_existing_input_log() {
 #[test]
 fn test_phase_transitions_to_quantifying_during_post_generation() {
     use std::thread;
-    use std::time::Duration;
-
-    // SlowQuantifierAgent wraps QuantifierAgent and adds delay in execute()
-    struct SlowQuantifierAgent {
-        inner: QuantifierAgent,
-        delay_ms: u64,
-    }
-    impl std::fmt::Debug for SlowQuantifierAgent {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            f.debug_struct("SlowQuantifierAgent")
-                .field("delay_ms", &self.delay_ms)
-                .finish_non_exhaustive()
-        }
-    }
-    impl Agent for SlowQuantifierAgent {
-        fn name(&self) -> &str {
-            self.inner.name()
-        }
-        fn phase(&self) -> ExecutionPhase {
-            self.inner.phase()
-        }
-        fn backend_selector(&self) -> BackendSelector {
-            self.inner.backend_selector()
-        }
-        fn execute(&self, ctx: &AgentContext) -> crate::error::Result<AgentResult> {
-            thread::sleep(Duration::from_millis(self.delay_ms));
-            self.inner.execute(ctx)
-        }
-    }
 
     let state = make_test_state();
     let ctx = make_test_context(state);
-    // Fast narration backend - narration completes immediately
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
-    // Fast quantifier backend - LLM calls return immediately
     let quantifier_provider = Arc::new(MockBackend::default())
         as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
     let base_agent =
         QuantifierAgent::with_provider("quantifier".to_string(), quantifier_provider.clone());
-    let slow_agent = Box::new(SlowQuantifierAgent {
+    let entered = Arc::new(Barrier::new(2));
+    let release = Arc::new(Barrier::new(2));
+    let sync_agent = Box::new(SyncQuantifierAgent {
         inner: base_agent,
-        delay_ms: 200,
+        entered: entered.clone(),
+        release: release.clone(),
     });
-    let service = Arc::new(make_test_service_with_agent(narrator_recorder, slow_agent));
+    let service = Arc::new(make_test_service_with_agent(narrator_recorder, sync_agent));
 
     let ctx_clone = ctx.clone();
     let service_clone = service.clone();
@@ -205,7 +209,7 @@ fn test_phase_transitions_to_quantifying_during_post_generation() {
         execute_action_impl(&service_clone, ctx_clone, "look".to_string());
     });
 
-    thread::sleep(Duration::from_millis(100));
+    entered.wait();
     let mid_state = ctx.load_state_for_test();
     assert_eq!(
         mid_state.narrative.input_buffer.phase,
@@ -213,6 +217,7 @@ fn test_phase_transitions_to_quantifying_during_post_generation() {
         "Phase should be Quantifying during post-generation, not stuck on Narrating"
     );
 
+    release.wait();
     handle.join().expect("Action thread should complete");
     let final_state = ctx.load_state_for_test();
     assert_eq!(
@@ -225,50 +230,22 @@ fn test_phase_transitions_to_quantifying_during_post_generation() {
 #[test]
 fn test_narration_saved_before_quantifying_phase() {
     use std::thread;
-    use std::time::Duration;
-
-    // SlowQuantifierAgent wraps QuantifierAgent and adds delay in execute()
-    struct SlowQuantifierAgent {
-        inner: QuantifierAgent,
-        delay_ms: u64,
-    }
-    impl std::fmt::Debug for SlowQuantifierAgent {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            f.debug_struct("SlowQuantifierAgent")
-                .field("delay_ms", &self.delay_ms)
-                .finish_non_exhaustive()
-        }
-    }
-    impl Agent for SlowQuantifierAgent {
-        fn name(&self) -> &str {
-            self.inner.name()
-        }
-        fn phase(&self) -> ExecutionPhase {
-            self.inner.phase()
-        }
-        fn backend_selector(&self) -> BackendSelector {
-            self.inner.backend_selector()
-        }
-        fn execute(&self, ctx: &AgentContext) -> crate::error::Result<AgentResult> {
-            thread::sleep(Duration::from_millis(self.delay_ms));
-            self.inner.execute(ctx)
-        }
-    }
 
     let state = make_test_state();
     let ctx = make_test_context(state);
-    // Fast narration backend - narration completes immediately
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
-    // Fast quantifier backend - LLM calls return immediately
     let quantifier_provider = Arc::new(MockBackend::default())
         as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
     let base_agent =
         QuantifierAgent::with_provider("quantifier".to_string(), quantifier_provider.clone());
-    let slow_agent = Box::new(SlowQuantifierAgent {
+    let entered = Arc::new(Barrier::new(2));
+    let release = Arc::new(Barrier::new(2));
+    let sync_agent = Box::new(SyncQuantifierAgent {
         inner: base_agent,
-        delay_ms: 200,
+        entered: entered.clone(),
+        release: release.clone(),
     });
-    let service = Arc::new(make_test_service_with_agent(narrator_recorder, slow_agent));
+    let service = Arc::new(make_test_service_with_agent(narrator_recorder, sync_agent));
 
     let ctx_clone = ctx.clone();
     let service_clone = service.clone();
@@ -276,7 +253,7 @@ fn test_narration_saved_before_quantifying_phase() {
         execute_action_impl(&service_clone, ctx_clone, "test".to_string());
     });
 
-    thread::sleep(Duration::from_millis(100));
+    entered.wait();
     let messages = ctx.load_messages().unwrap();
     let narration_count = messages
         .iter()
@@ -293,5 +270,6 @@ fn test_narration_saved_before_quantifying_phase() {
         "Phase should be Quantifying while quantifier runs"
     );
 
+    release.wait();
     handle.join().expect("Action thread should complete");
 }

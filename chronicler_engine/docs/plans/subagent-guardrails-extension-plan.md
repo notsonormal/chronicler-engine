@@ -54,19 +54,16 @@ Failure modes **explicitly excluded** (no deterministic fix):
 ### Verified API surface (types in `@earendil-works/pi-coding-agent/dist/core/extensions/types.d.ts`)
 
 - `ExtensionAPI.on("before_agent_start", handler)` — handler receives
-  `BeforeAgentStartEvent { prompt, systemPrompt, systemPromptOptions }`
-  (line 505); returns `BeforeAgentStartEventResult { systemPrompt?: string }`
-  (line 774). Can inspect `event.prompt` to detect subagent context.
+  `BeforeAgentStartEvent { prompt, systemPrompt, systemPromptOptions }`; returns `BeforeAgentStartEventResult { systemPrompt?: string }`. Can inspect `event.prompt` to detect subagent context.
 - `ExtensionAPI.on("tool_call", handler)` — `ToolCallEventResult`
   (`types.d.ts:753`) has `{ block?: boolean, reason?: string }`.
-  `CustomToolCallEvent.toolName: string` (line 657) — subagent tool surfaces
+  `CustomToolCallEvent.toolName: string` — subagent tool surfaces
   as `toolName: "subagent"` with `input.task`, `input.agent`, etc. **Can veto.**
 - `ExtensionAPI.on("turn_end", handler)` — observe-only, no result type.
-  `TurnEndEvent` carries `turnIndex`, `timestamp` (line 532).
+  `TurnEndEvent` carries `turnIndex`, `timestamp`.
 - `ExtensionAPI.on("session_start", handler)` — `reason` includes `"fork"`,
   plus `previousSessionFile?`.
-- `ExtensionAPI.sendMessage(..., { deliverAs: "steer", triggerTurn: true })`
-  (line 874) — programmatic steer into the worker's next turn.
+- `ExtensionAPI.sendMessage(..., { deliverAs: "steer", triggerTurn: true })` — programmatic steer into the worker's next turn.
 - `ExtensionAPI.appendEntry(customType, data)` — non-LLM state persistence
   (used to track `startTimeMs` across turns without polluting context).
 

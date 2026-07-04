@@ -23,17 +23,6 @@ flowchart TD
     C -- Cancel --> F[Restore Action Area]
 ```
 
-## Module Structure
-
-| File | Purpose |
-|------|---------|
-| `src/adapters/driven/text_check/mod.rs` | Module root — re-exports public API |
-| `src/application/text_check_service.rs` | `TextCheckService` orchestrator — `check_player_input()` entry point |
-| `src/adapters/driven/text_check/harper_text_checker.rs` | `HarperTextChecker` adapter implementing `TextChecker` port |
-| `src/application/ports/text_checker.rs` | `TextChecker` port trait |
-| `src/adapters/driven/text_check/types.rs` | `CheckResult`, `CheckIssue`, `IssueKind` |
-| `src/bootstrap/text_check_factory.rs` | Factory wiring for text check service |
-
 ## Types
 
 ### `CheckResult`
@@ -158,7 +147,7 @@ A "Text Check" card appears in the Settings tab below Connections:
 
 ### `TextChecker` Port
 
-The `TextChecker` trait at `src/application/ports/text_checker.rs` defines the contract:
+The `TextChecker` port trait defines the contract:
 
 ```rust
 pub trait TextChecker {
@@ -168,7 +157,7 @@ pub trait TextChecker {
 
 ### `TextCheckService` Orchestrator
 
-The `TextCheckService` at `src/application/text_check_service.rs` owns the `TextChecker` adapter and exposes `check_player_input()` as its public API. Driving adapters (HTTP handlers) call through this service:
+The `TextCheckService` owns the `TextChecker` adapter and exposes `check_player_input()` as its public API. Driving adapters (HTTP handlers) call through this service:
 
 ```rust
 app.text_check_service.check_player_input(text, mode)

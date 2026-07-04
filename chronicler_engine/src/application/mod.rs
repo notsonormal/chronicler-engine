@@ -28,6 +28,8 @@ pub use query_handlers::*;
 pub(crate) use spawn::spawn_pipeline_task;
 
 #[cfg(test)]
+mod application_service_tests;
+#[cfg(test)]
 mod context_tests;
 
 #[cfg(test)]

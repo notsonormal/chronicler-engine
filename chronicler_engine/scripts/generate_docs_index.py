@@ -1,7 +1,7 @@
-"""Generate an auto-updating index for chronicler_engine/docs/README.md.
+"""Generate an auto-updating index for chronicler_engine/docs/AGENTS.md.
 
 Scans all .md files in the docs directory, extracts H1 titles, and regenerates
-the indexed section of README.md between AUTO-INDEX markers.
+the indexed section of AGENTS.md between AUTO-INDEX markers.
 """
 
 import argparse
@@ -30,7 +30,7 @@ def discover_docs(docs_dir: Path) -> dict[str, list[tuple[str, str]]]:
     """Return a dict mapping relative dir -> list of (filename, h1_title)."""
     groups: dict[str, list[tuple[str, str]]] = {}
     for md_path in sorted(docs_dir.rglob("*.md")):
-        if md_path.name.lower() == "readme.md":
+        if md_path.name.lower() == "agents.md":
             continue
         rel = md_path.relative_to(docs_dir)
         parent = str(rel.parent).replace("\\", "/")
@@ -127,7 +127,7 @@ def main() -> int:
         "--readme",
         type=Path,
         default=None,
-        help="Path to README.md (default: <docs-dir>/README.md)",
+        help="Path to AGENTS.md (default: <docs-dir>/AGENTS.md)",
     )
     parser.add_argument(
         "--check",
@@ -137,7 +137,7 @@ def main() -> int:
     args = parser.parse_args()
 
     docs_dir = args.docs_dir.resolve()
-    readme_path = (args.readme or docs_dir / "README.md").resolve()
+    readme_path = (args.readme or docs_dir / "AGENTS.md").resolve()
 
     if args.check:
         return check_only(readme_path, docs_dir)

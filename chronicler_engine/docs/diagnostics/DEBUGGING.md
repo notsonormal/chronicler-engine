@@ -85,42 +85,6 @@ The following critical paths are instrumented:
 - `retry_last_response` - retry logic
 - `retrigger_event` - event retriggering
 
-## Diagnosis Workflow
-
-### Step 1: Identify the Failure
-
-```bash
-cargo test --test your_test 2>&1 | grep "FAILED"
-```
-
-### Step 2: Check LLM Forensics
-
-For LLM-driven tests, query the `llm_messages` table (above) to see the exact prompt + response involved in the failure.
-
-### Step 3: Trace the Execution
-
-Re-run with full tracing:
-
-```bash
-RUST_LOG=trace cargo test test_name -- --nocapture
-```
-
-In the output look for:
-
-1. **Span hierarchy** - What functions were called?
-2. **Field values** - What were the inputs?
-3. **Events** - What decisions were made?
-4. **Error events** - Where did it fail?
-
-### Step 4: Fix and Verify
-
-After fixing the code:
-
-```bash
-# Ensure tests pass
-cargo test
-```
-
 ## Common Issues
 
 ### No tracing output visible

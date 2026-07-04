@@ -1,11 +1,7 @@
-//! HTTP wiring tests for `server_impl.rs`.
-//!
-//! Verifies that `run_server_with_config` builds app state correctly,
-//! binds a listener, and propagates bind errors. The happy-path test
-//! confirms the spawned server task is cancelable; real request routing
-//! is covered by `tests/http/fragment.rs` via `TestAppBuilder`.
+//! HTTP wiring tests for `server_impl.rs` (real request routing lives in `tests/http/fragment.rs`).
 
 use std::sync::{Arc, RwLock};
+use std::time::Duration;
 
 use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::adapters::driving::http::{ServerConfig, ServerResources};
@@ -24,33 +20,45 @@ fn build_test_resources() -> ServerResources {
 }
 
 #[tokio::test]
-async fn run_server_spawns_and_can_be_cancelled() {
+async fn run_server_binds_and_accepts_connections() {
     let resources = build_test_resources();
-    let config = ServerConfig { port: 0 };
+    let config = ServerConfig {
+        port: 0,
+        bind_attempts: Some(1),
+    };
 
-    let server_handle =
-        tokio::spawn(async move { run_server_with_config(resources, config).await });
+    let (addr, server_handle) = run_server_with_config(resources, config)
+        .await
+        .expect("server should bind to an OS-assigned port");
 
-    // Give the server time to bind.
-    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    tokio::time::timeout(Duration::from_secs(2), tokio::net::TcpStream::connect(addr))
+        .await
+        .expect("server should accept connections within 2s")
+        .expect("TCP connect should succeed");
 
-    // Cancel by aborting; assert the JoinError reflects cancellation.
     server_handle.abort();
-    let result = server_handle.await;
-    assert!(
-        matches!(result, Err(ref e) if e.is_cancelled()),
-        "server task should finish with cancellation after abort, got: {result:?}"
-    );
+    let _ = server_handle.await;
 }
 
 #[tokio::test]
-async fn run_server_propagates_bind_error_for_privileged_port() {
-    // Port 1 is privileged (< 1024) and typically unbound; on Linux binding
-    // to it without CAP_NET_BIND_SERVICE returns an error.
+async fn run_server_propagates_bind_error_for_occupied_port() {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("should bind a real port");
+    let port = listener.local_addr().expect("local_addr").port();
+
     let resources = build_test_resources();
-    let config = ServerConfig { port: 1 };
+    let config = ServerConfig {
+        port,
+        bind_attempts: Some(1),
+    };
 
     let result = run_server_with_config(resources, config).await;
 
-    assert!(result.is_err(), "expected bind error on privileged port");
+    assert!(
+        result.is_err(),
+        "expected bind error when port {port} is already in use"
+    );
+
+    drop(listener);
 }

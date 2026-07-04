@@ -39,7 +39,7 @@ Update `instructions` + `output_format` + `examples`:
 
 ### 2. Parser (`src/narrative/agents/quantifier/parser.rs`)
 
-- `MovementJson` struct (lines 17-28): drop `destination: Option<String>` field. Add:
+- `MovementJson` struct: drop `destination: Option<String>` field. Add:
 
   ```rust
   #[serde(default)]
@@ -73,8 +73,8 @@ Update `instructions` + `output_format` + `examples`:
   movement_destination_name: Option<String>,
   ```
 
-- `StatePatch::merge` (lines 38-55): merge both fields independently, first non-None wins per field. Update match arms to construct new variant.
-- Delete `chronicler_engine/src/model/agent.rs_temp` (stale temp file, line 111 duplicate of `agent.rs`). This deletion is a prerequisite — the `_temp` file already references the old single-`movement_destination` field and would drift further.
+- `StatePatch::merge`: merge both fields independently, first non-None wins per field. Update match arms to construct new variant.
+- Delete `chronicler_engine/src/model/agent.rs_temp` (stale temp file, duplicate of `agent.rs`). This deletion is a prerequisite — the `_temp` file already references the old single-`movement_destination` field and would drift further.
 
 ### 5. Quantifier agent (`src/narrative/agents/quantifier/agent.rs`)
 

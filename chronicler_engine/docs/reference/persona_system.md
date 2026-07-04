@@ -31,22 +31,4 @@ The engine will look for persona files in `data/personas/`.
 - **Auto-Create via CLI**: On first boot with an empty DB, `resolve_game_id` auto-creates a game for the `--world` (default `redmist_estate`) using the `--persona` CLI flag (default `julian`). If the persona key is not found in the DB, boot hard-errors with `EngineError::Config` — no silent fallback. The CLI flag is a bootstrap parameter, not a runtime default; the Games-tab form remains the primary creation path for interactive use.
 - **Portability**: Personas are standalone. The same persona can be used across different worlds.
 
-## LLM Integration Changes
 
-The Game Master system prompt must be updated to include the player's full persona context:
-
-- The `personality` and `scenario` fields of the player's persona must be injected into the `narrate_action` prompt.
-- This allows the GM to say: *"Since you are [Personality], you react with [Action]..."*.
-
-## Role of "Julian Redmist"
-
-By default, the engine uses "Julian Redmist":
-
-- **Name**: Julian Redmist
-- **Personality**: Curious, slightly overwhelmed, polite but firm.
-- **Scenario**: Julian was raised by a single mother in a distant city, unaware of their lineage until Bernard Redmist's death. Julian has now arrived at the estate as the sole heir.
-
-## Boundaries
-
-- A "Persona Switcher" UI inside the game is not covered: persona selection happens at game-creation time (Games-tab "New Game" form), not within an active playthrough.
-- Character stats (strength, agility) are deferred to a future RPG Mechanics spec.

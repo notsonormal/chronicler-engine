@@ -14,11 +14,9 @@ The engine's movement system uses quantifier-driven detection. Player types natu
 4. **Retry on Low Confidence**: If the quantifier produces an unparseable or uncertain response, it retries once before falling back to static NPCs.
 5. **Room Resolution**: The quantifier extracts a destination room name/ID. The engine does a direct lookup in the map. If not found, it creates a dynamic pseudo-room.
 
-### Example Flows
+### Example Flow
 
-- "I walk through the front gate" → narrator confirms movement → quantifier detects "entering" + "front_gates" → engine resolves to `front_gates` room
-- "I head to the kitchen" → narrator confirms movement → quantifier detects "entering" + "kitchen" → engine resolves to `kitchen` room
-- "I try to enter but Carla blocks me" → narrator describes blocking → quantifier detects **no movement**
+- "I walk through the front gate" → narrator confirms movement → quantifier detects "entering" + `<destination>` → engine resolves to the destination room (or detects **no movement** if narration describes blocking)
 
 ## Resolution Algorithm
 

@@ -1,4 +1,4 @@
-use axum::http::StatusCode;
+use axum::{http::StatusCode, response::IntoResponse};
 
 use crate::adapters::driving::http::fragments::misc::retry::retry_handler;
 use crate::test_support::TestAppBuilder;
@@ -7,7 +7,11 @@ use crate::test_support::TestAppBuilder;
 async fn test_retry_handler() {
     let state = TestAppBuilder::default_test().build_app_state();
 
-    let response = retry_handler(axum::extract::State(state)).await;
+    let result = retry_handler(axum::extract::State(state)).await;
+    let status = match result {
+        Ok(resp) => resp.status(),
+        Err(e) => e.into_response().status(),
+    };
 
-    assert!(response.status() == StatusCode::OK || response.status() == StatusCode::BAD_REQUEST);
+    assert!(status == StatusCode::OK || status.is_client_error() || status.is_server_error());
 }

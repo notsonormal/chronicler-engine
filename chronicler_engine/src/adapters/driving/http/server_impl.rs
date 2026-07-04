@@ -1,7 +1,9 @@
 //! [DOC: docs/system/dashboard.md]
 //! Server implementation
 
+use std::net::SocketAddr;
 use std::sync::Arc;
+use tokio::task::JoinHandle;
 use tracing;
 
 use crate::error::{EngineError, Result};
@@ -11,12 +13,10 @@ use super::locks::read_lock_or_recover;
 use super::router::build_router;
 use super::port_utils::bind_with_retry;
 
-/// Starts the HTTP server with the given configuration and resources.
-///
 pub async fn run_server_with_config(
     resources: ServerResources,
     config: ServerConfig,
-) -> Result<()> {
+) -> Result<(SocketAddr, JoinHandle<std::io::Result<()>>)> {
     let settings = read_lock_or_recover(&resources.settings, "settings");
     let text_check_service =
         Arc::new(crate::bootstrap::text_check_factory::create_text_check_service(&settings));
@@ -51,12 +51,18 @@ pub async fn run_server_with_config(
 
     let app = build_router(app_state);
 
-    let addr = format!("127.0.0.1:{}", config.port);
-    let listener = bind_with_retry(&addr).await.map_err(|e| {
-        EngineError::Config(format!("Failed to bind to port {}: {}", config.port, e))
-    })?;
+    let bind_addr = format!("127.0.0.1:{}", config.port);
+    let listener = bind_with_retry(&bind_addr, config.bind_attempts)
+        .await
+        .map_err(|e| {
+            EngineError::Config(format!("Failed to bind to port {}: {}", config.port, e))
+        })?;
 
-    tracing::info!("HTMX Dashboard running at http://127.0.0.1:{}", config.port);
+    let addr = listener
+        .local_addr()
+        .map_err(|e| EngineError::Config(format!("local_addr: {e}")))?;
+
+    tracing::info!("HTMX Dashboard running at http://{addr}");
 
     let shutdown_signal = async move {
         let _ = tokio::signal::ctrl_c().await;
@@ -71,8 +77,10 @@ pub async fn run_server_with_config(
         token.cancel();
     };
 
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal)
-        .await
-        .map_err(|e| EngineError::Config(e.to_string()))
+    let handle = tokio::spawn(async move {
+        axum::serve(listener, app)
+            .with_graceful_shutdown(shutdown_signal)
+            .await
+    });
+    Ok((addr, handle))
 }

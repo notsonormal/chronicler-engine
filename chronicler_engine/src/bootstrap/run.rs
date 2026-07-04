@@ -86,7 +86,10 @@ pub fn run(args: Args) -> crate::error::Result<()> {
         active_game_id,
     ));
 
-    let config = ServerConfig { port: args.port };
+    let config = ServerConfig {
+        port: args.port,
+        bind_attempts: None,
+    };
 
     let runtime = tokio::runtime::Runtime::new().map_err(|e| {
         crate::error::EngineError::Io(format!("runtime_new {}: {e}", "tokio_runtime"))
@@ -153,9 +156,12 @@ pub fn run(args: Args) -> crate::error::Result<()> {
         settings,
     };
 
-    runtime.block_on(crate::adapters::driving::http::run_server_with_config(
-        resources, config,
-    ))?;
+    let (_addr, server) = runtime.block_on(
+        crate::adapters::driving::http::run_server_with_config(resources, config),
+    )?;
+    runtime
+        .block_on(server)
+        .map_err(|e| crate::error::EngineError::Config(format!("Server stopped: {e}")))??;
 
     Ok(())
 }

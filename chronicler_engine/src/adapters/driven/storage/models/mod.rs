@@ -20,3 +20,6 @@ pub use world::{DbWorld, DbMap};
 pub use persona::DbPersona;
 pub use character::DbCharacter;
 pub use settings::DbSettings;
+
+#[cfg(test)]
+mod message_tests;

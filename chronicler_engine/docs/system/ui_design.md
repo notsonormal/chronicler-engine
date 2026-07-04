@@ -336,32 +336,6 @@ Shared gradient button classes defined in `assets/styles.css` after the design t
 
 ---
 
-## JavaScript Features
-
-### Status Polling
-- Polls `/status/generating` every 5 seconds
-- Updates button state based on response ("generating" vs "idle")
-
-### Button State Management
-- Ready: Shows "▶ Send", enabled
-- Thinking: Shows "■ Stop", disabled, green gradient
-- Uses MutationObserver to watch status changes
-
-### Error Notification System
-- Shows slide-down banner for LLM errors
-- Auto-hides after 5 seconds
-- Z-index above all content
-
-## Implementation
-
-### CSS Custom Properties
-
-The design tokens above are implemented as CSS custom properties (CSS variables) defined in a `:root` block.
-
-- **File**: `assets/styles.css`
-- **Approach**: All tokens are defined in the `:root` pseudo-class for global scope
-- **Usage**: Reference via `var(--token-name)` throughout stylesheets
-
 ### Responsive Breakpoints
 
 Media queries handle responsive behavior:
@@ -373,7 +347,3 @@ Media queries handle responsive behavior:
 
 - **Mobile-first**: Base styles target smallest screens, `@media (max-width: ...)` adds larger layouts
 - **Flexibility**: CSS variables enable theme changes without modifying component styles
-
-### Reference Implementation
-
-See `assets/styles.css` for the `:root` token definitions, button utility classes (`.btn-primary`, `.btn-cyan`, `.btn-danger`), and component styles. See `assets/worlds.css` for worlds-specific layout overrides.

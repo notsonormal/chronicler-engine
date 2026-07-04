@@ -1,4 +1,4 @@
-use axum::{http::StatusCode};
+use axum::{http::StatusCode, response::IntoResponse};
 
 use crate::adapters::driving::http::games_fragment::handlers::{
     list_games_fragment, switch_game_handler,
@@ -21,8 +21,12 @@ async fn test_switch_game_ok() {
     let _ = state.application_service.create_game(ctx.clone());
     let games = state.application_service.list_games(ctx).unwrap();
     if let Some(game) = games.first() {
-        let response =
+        let result =
             switch_game_handler(axum::extract::State(state), axum::extract::Path(game.id)).await;
-        assert_eq!(response.status(), StatusCode::OK);
+        let status = match result {
+            Ok(resp) => resp.status(),
+            Err(e) => e.into_response().status(),
+        };
+        assert_eq!(status, StatusCode::OK);
     }
 }

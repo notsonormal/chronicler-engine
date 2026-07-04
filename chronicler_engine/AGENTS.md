@@ -130,7 +130,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
   - `diagnostic_benchmark.py` — No summary
   - `extract_images.py` — Extract and process images from SillyTavern character cards (original + cropped versions).
   - `extract_sillytavern_png.py` — Extract embedded PNG images from SillyTavern character cards.
-  - `generate_docs_index.py` — Generate an auto-updating index for chronicler_engine/docs/README.md.
+  - `generate_docs_index.py` — Generate an auto-updating index for chronicler_engine/docs/AGENTS.md.
   - `generate_structure_index.py` — Generate AGENTS.md structure index from module summaries.
   - `healthcheck.py` — Chronicler Engine healthcheck dispatcher.
   - `install_git_hooks.py` — No summary
@@ -205,7 +205,7 @@ When creating or updating a plan for chronicler_engine work (via any planning sk
 2. **Test-first** — Write a failing test or update existing tests **before** implementing the fix/feature. Every task must have a verification step that includes running tests.
 3. **Guardrail compliance** — Verify the change won't violate existing guardrails (clippy lints, arch-lint rules, max file size limits). Run `cargo clippy` and `cargo nextest run <relevant_test>` during development, not just at the end.
 4. **Build validation** — Final validation with `python build.py` must pass before the task is considered complete.
-5. **Plan archive** — Move completed plans to `docs/plans/archived/` and update `CHANGELOG.md`.
+5. **Plan archive** — Move completed plans to `old-docs/archived-plans/` (engine root, not inside `docs/`) and update `CHANGELOG.md`.
 
 **Plan Adherence:** Do not change the plan partway through implementation without explicit user permission. If you encounter a problem not addressed in the current plan, stop and ask before proceeding.
 
@@ -244,7 +244,7 @@ let residents = find_npcs_in_current_location(all_npcs, current_room);
 - **Never** defend existing architecture as a reason to keep complicated code. If a simpler approach exists, propose it.
 
 ## DOCUMENTATION INDEX
-`docs/README.md` is **auto-generated**. Do not edit the file list inside the `<!-- AUTO-INDEX -->` block manually.
+`docs/AGENTS.md` is **auto-generated**. Do not edit the file list inside the `<!-- AUTO-INDEX -->` block manually.
 
 To regenerate the index after adding, removing, or renaming docs:
 ```bash

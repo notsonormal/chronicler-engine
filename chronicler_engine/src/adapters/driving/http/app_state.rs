@@ -20,11 +20,16 @@ use crate::domain::model::settings::AppSettings;
 #[derive(Clone, Debug)]
 pub struct ServerConfig {
     pub port: u16,
+    /// `None` retries forever (production); `Some(1)` fails fast on occupied ports (tests).
+    pub bind_attempts: Option<u32>,
 }
 
 impl Default for ServerConfig {
     fn default() -> Self {
-        ServerConfig { port: 3000 }
+        ServerConfig {
+            port: 3000,
+            bind_attempts: None,
+        }
     }
 }
 

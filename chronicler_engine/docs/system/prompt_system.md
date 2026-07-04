@@ -104,7 +104,7 @@ The Chronicler Engine implements an 8-layer prompt structure (layers 0–7) mapp
 - **Trigger**: Keyword matching in conversation
 - **Content**: World lore, setting facts, background information
 - **Format**: XML-wrapped (`<WorldLore>... </WorldLore>`)
-- **Implementation**: Renders `world.name` and `world.description` only. `global_rules` were previously duplicated here but have been moved exclusively to Layer 0 (System Prompt) to reduce token waste.
+- **Implementation**: Renders `world.name` and `world.description` only. `global_rules` live in Layer 0 (System Prompt) to reduce token waste.
 
 ### Layer 5: Chat History
 
@@ -219,43 +219,7 @@ Uses the same structure as SillyTavern character cards (Jailbreak format):
 
 ### Quantifier Prompt (Separate)
 
-The engine also uses a **quantifier prompt** — a separate secondary LLM call that runs *after* narration to analyze the scene. It determines which NPCs are present and whether the player moved. This is **not** part of the 8-layer narrative prompt stack.
-
-- See [`reference/quantifier_prompt.md`](../reference/quantifier_prompt.md) for the full prompt text
-- Rendered by: `QuantifierPromptBuilder` in `src/application/agents/quantifier/prompt.rs`
-- Uses a separate model connection from the main narration LLM
-- The quantifier also follows the XML-sectioned instructions + XML-wrapped data pattern
-
-## Implementation
-
-### Key Files
-
-- `src/application/narrative_prompt/assembler.rs` — `LayeredPromptAssembler` with 8-layer construction, context fitting, and budget management
-- `src/application/narrative_prompt/types.rs` — `PromptContext`, `NpcContext`, `PromptLayer`
-- `src/adapters/driven/llm/mod.rs` — LLM backend module (pure transport, no prompt assembly)
-- `src/domain/model/state.rs` — `GameState` provides context data
-- `src/domain/model/character.rs` — `NpcCard`, `PlayerCard` structures
-
-### Code Example
-
-```rust
-let assembled = assembler.assemble(&context, &preset, &global_rules, Some(response_length))?;
-// assembled.system_prompt — Layer 0 (sent as system message)
-// assembled.user_prompt   — Layers 1-7 (sent as user message)
-// assembled.max_tokens    — dynamically capped to fit context window
-```
-
-## Differences from SillyTavern
-
-| Feature | SillyTavern | Chronicler Engine |
-|---------|-------------|-------------------|
-| API | Chat Completion | OpenRouter/DeepSeek/Ollama |
-| Context | Characters + Users | Game State |
-| History | Full chat | narrative history (messages) |
-| Memory | Vector RAG | Keyword triggers only |
-| UI | Web GUI | None (server) |
-| Prompt style | XML-wrapped instructions | XML-sectioned instructions + XML data |
-| Context fitting | Manual | Automatic per connection |
+The engine also uses a **quantifier prompt** — a separate secondary LLM call that runs *after* narration to analyze the scene. It determines which NPCs are present and whether the player moved. This is **not** part of the 8-layer narrative prompt stack. See [`reference/quantifier_prompt.md`](../reference/quantifier_prompt.md) for the full prompt text.
 
 ## References
 

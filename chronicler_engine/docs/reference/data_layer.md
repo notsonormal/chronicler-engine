@@ -119,25 +119,6 @@ games (1)
 llm_messages (*)  [independent]
 ```
 
-## Code Mapping
-
-The Rust code maps to the database as follows:
-
-- **`src/adapters/driven/storage/models/`** — One DB model struct per table (`DbGame`, `DbGameStateSnapshot`, `DbMessage`, `DbSwipe`, `DbLlmMessage`). These use raw SQLite types (`String` for JSON and timestamps, `i64` for IDs).
-- **`src/adapters/driven/storage/mappers/`** — Conversion logic between DB models and domain models. Mappers handle JSON serialization, RFC 3339 parsing, and integer↔unsigned mapping.
-- **`src/adapters/driven/storage/backend/`** — Directory module. `core.rs` holds the `Storage` struct, `Backend` enum (`Sqlite`, `InMemory`), and `LayeredBackend` decorator enum (`Direct(Backend)` | `Test { base, overrides }`) for failure injection. `test_support.rs` holds `TestOverride` / `TestFailureHandle` (re-exported) plus `ErrorKind` (`pub(crate)`, internal). Table-scoped methods are split into submodule files (`games.rs`, `snapshots.rs`, `messages.rs`, `swipes.rs`, `presets.rs`, `llm_messages.rs`, `characters.rs`, `personas.rs`, `worlds.rs`, `settings.rs`). `delete_game` relies on `ON DELETE CASCADE` FKs; no manual multi-table transactions. Cross-table coordination (e.g. loading full messages with swipes) lives in `GameServiceContext` helpers.
-- **`src/domain/model/`** — Domain models (`Message`, `Game`, `LlmMessage`, `GameStateSnapshot`, `NarrativeSnapshot`) have no knowledge of `rusqlite`, JSON strategy, or timestamp formatting.
-
 ## Migration Policy
 
-All databases are created fresh and walked through the same migration blocks; incremental upgrade paths from v1-v8 have been removed. `run_migrations` checks `PRAGMA user_version` and runs: schema creation at `if version < 9` (the `games` CREATE TABLE excludes `persona_key`/`persona_name` — they are added in v13); `worlds`/`maps`/`personas`/`characters`/`settings` creation at `if version < 10` (the `worlds` CREATE TABLE includes a `player_key` column that v13 drops); the `games.world_key` backfill at `if version < 12` (guarded by `column_exists` since v12 may run on a v9-era DB where the column already exists from the forward-creation); and the v13 block at `if version < 13` which unconditionally `ALTER TABLE games ADD COLUMN persona_key`/`persona_name` and `ALTER TABLE worlds DROP COLUMN player_key` (safe because v9 CREATE omits the persona columns and v10 CREATE includes `player_key`). The v13 block has no `column_exists` guards: a partial-v13 crash state is prevented by the trailing `pragma_update`. Future migrations (v14+) follow the same pattern. This is acceptable because `build.py --cleanup` ensures no stale databases exist between builds.
-
-### v14: `starting_room_id` Relocation
-
-- **`ALTER TABLE worlds DROP COLUMN starting_room_id`** — The column is removed because `starting_room_id` now lives inside each `StartingScenario` JSON object within the `scenarios` column.
-- **BREAKING to existing saved games** — `python build.py --cleanup` is required to reset the DB and re-seed worlds with per-scenario `starting_room_id`.
-
-## Future Work
-
-- **Message versioning:** Not implemented; retry creates new messages via snapshot rollback.
-- **Snapshot pruning:** Delete old snapshots to limit database growth. With immediate persistence every message has exactly one snapshot, so the table grows linearly with turns.
+Migrations run on first access via `run_migrations`; see `src/adapters/driven/storage/db.rs`.

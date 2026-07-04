@@ -4,13 +4,23 @@
 use tokio::net::TcpListener;
 use tracing;
 
-/// Attempts to bind to the given address, retrying if the port is in use.
-/// If a process is found on the port, it attempts to kill it.
-pub async fn bind_with_retry(addr: &str) -> std::io::Result<TcpListener> {
+/// Binds to `addr`, killing any process found on the port between attempts.
+/// `max_attempts: None` retries forever; `Some(n)` fails after `n` attempts.
+pub async fn bind_with_retry(
+    addr: &str,
+    max_attempts: Option<u32>,
+) -> std::io::Result<TcpListener> {
+    let mut attempts: u32 = 0;
     loop {
         match TcpListener::bind(addr).await {
             Ok(listener) => return Ok(listener),
             Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
+                attempts += 1;
+                if let Some(limit) = max_attempts {
+                    if attempts >= limit {
+                        return Err(e);
+                    }
+                }
                 tracing::error!("Port in use, attempting to free it...");
                 if let Some(pid) = find_process_on_port(addr) {
                     tracing::error!("Found process on port, attempting to kill PID {pid}...");

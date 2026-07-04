@@ -102,13 +102,6 @@ The dashboard uses HTMX polling for live updates:
 - Button changes state during LLM processing
 - No manual refresh required
 
-## Frontend Implementation
-
-- **HTMX**: Handles partial page updates via `hx-post` and `hx-target`
-- **HTMX Polling**: `hx-trigger="load, every 2s"` for story-log; `every 5s` for status; `every 4-5s` for sidebar and LLM messages
-- **Styling**: Modern chat-app aesthetic with chat bubbles, fade animations
-- **Templates**: Uses `askama` for compile-time validated HTML fragments (pilot)
-
 ## Data Model
 
 ### MessageEntry
@@ -219,94 +212,9 @@ Multiple independent games across all worlds, each with isolated snapshots and m
 
 ## Worlds Management Tab
 
-Dedicated tab for multi-world orchestration with CRUD operations:
+Dedicated tab for multi-world orchestration with CRUD operations. See [`worlds.md`](worlds.md) for the world model, data flow, and panel interactions.
 
-### Worlds Panel
-
-- **Endpoint**: `GET /fragment/worlds`
-- **Content**: List of all worlds with game count indicators
-- **Actions per world**:
-  - Edit button — replaces worlds list with edit form inline (HTMX `hx-get` + `hx-target=".worlds-panel" hx-swap="outerHTML"`)
-  - Delete button — blocked if games reference the world (validation error)
-- **Create New World button** — replaces worlds list with empty form inline (no modal)
-
-### World Form (Inline HTMX Swap)
-
-Create/Edit uses inline HTMX swaps — no modal overlay:
-
-- **Create flow**: Button `hx-get="/fragment/worlds/new" hx-target=".worlds-panel" hx-swap="outerHTML"` — replaces panel with empty form
-- **Edit flow**: Button `hx-get="/worlds/:key/edit" hx-target=".worlds-panel" hx-swap="outerHTML"` — replaces panel with pre-populated form
-- **Submit**: Form posts to:
-  - Create: `POST /worlds` with full `WorldForm` data
-  - Update: `POST /worlds/:key` with updated world data
-- **Cancel**: Button `hx-get="/fragment/worlds" hx-target=".worlds-panel" hx-swap="outerHTML"` — returns to worlds list
-- **Fields**:
-  - **Key** — unique identifier (readonly in edit mode)
-  - **Name** — display name
-  - **Description** — world lore/description
-  - **Global Rules** — one rule per line
-  - **Starting Room ID** — initial room for new games
-  - **Default Room Image** — optional default image path
-  - **Map JSON** — room/region structure as JSON
-  - **Scenarios JSON** — starting scenarios as JSON array
-- **Refresh**: On success, handler returns re-rendered worlds panel HTML (inline HTMX swap replaces `.worlds-panel`); no full page reload
-
-### Backend Implementation
-
-- **Storage layer**: `Storage::get_world(key)` returns `Option<WorldWithMap>` with `world_id` for updates
-- **Service layer**: `ApplicationService::get_world()`, `update_world(id, world_card, map)`
-- **Validation**: Delete blocked if `games` table has rows with matching `world_key`
-- **HTMX handlers**:
-  - `new_world_form_handler` — renders create form
-  - `edit_world_form_handler` — renders edit form with pre-populated data
-  - `create_world_handler` — creates world, returns re-rendered worlds panel HTML
-  - `update_world_handler` — updates world by ID, returns re-rendered worlds panel HTML
-  - `delete_world_handler` — validates no games reference world, deletes if safe
-
-## CSS Classes
-
-- `.games-panel` — container for games tab content (in `assets/games.css`)
-- `.games-section` — section container within games panel (Active Game, New Game, Saved Games)
-- `.worlds-panel` — container for worlds list with game counts (in `assets/worlds.css`)
-- `.world-form-container` — inline form container styling (in `assets/worlds.css`)
-- `.btn-primary` — shared green button utility class (gradient, green border/text, padding 8px 20px, font-size base)
-- `.btn-cyan` — shared cyan button utility class (gradient, cyan border/text)
-- `.btn-danger` — shared red button utility class (gradient, red border/text)
-- `.btn-new-world` — "Create New World" button (uses `.btn-primary` + layout override for `hx-get` inline swap)
-- `.btn-reset-small` — small reset icon button on Active Game card (border-only red, ↺ glyph)
-- `.active-game-info` — flex wrapper for game name + badges on the Active Game card
-- `.new-game-form` — New Game form container (flex column)
-- `.new-game-form .form-row` — side-by-side select + submit button layout
-- `.form-group` — label + input wrapper
-- `.json-editor` — monospace textarea for JSON fields
-- `.location-header` - Room name in location entry, inline, green bold (#4ade80)
-- `.location-timestamp` - Timestamp for location entry, inline after room name
-- `.event-header` - Event name in trigger event entry, inline, blue/cyan bold (#38bdf8)
-- `.event-timestamp` - Timestamp for event entry, inline after event name
-- `.log-entry.narration` - AI narration, left-aligned, cyan-tinted bubble
-- `.log-entry.dialogue` - Character dialogue, left-aligned, orange-tinted
-- `.log-entry.system` - System messages, centered, yellow
-- `.log-entry.input` - User input, right-aligned, darker gray bubble
-- `.log-entry.event` - Trigger event header, inline header with no edit/retry buttons
-- `.log-entry .timestamp` - Small gray timestamp above message
-- `.log-entry .sender` - Bold name above message content
-- `.log-entry .text` - Message content
-- `.log-entry .edit-btn` - Edit pencil icon, always visible (opacity: 1)
-- `.log-entry .retrigger-btn` - Retrigger event icon, last narration when trigger available
-- `.swipe-controls` - Container for swipe navigation arrows and counter
-- `.swipe-btn` - Swipe arrow buttons (left/right)
-- `.swipe-counter` - Swipe index counter (e.g., "1 / 3")
-- `.log-entry .delete-btn` - Delete trash icon, always visible
-- `.log-entry .check-btn` - Check icon, input entries only
-- `.message-header` - Flex container for message info + actions
-- `.message-actions` - Flex container for action buttons (top-right)
-- `.action-btn` - Base style for all message action buttons
-- `.edit-textarea` - Inline edit textarea, full width, no resize
-- `.save-btn` - Save/confirm button (green on hover)
-- `.cancel-btn` - Cancel button (red on hover)
-- `@keyframes fadeIn` - Opacity 0 to 1 for new messages
-
-### 5. LLM Messages Tab
+### LLM Messages Tab
 
 Forensics panel showing the last 50 LLM calls with full request/response visibility.
 

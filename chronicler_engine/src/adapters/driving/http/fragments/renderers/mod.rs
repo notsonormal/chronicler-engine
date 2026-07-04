@@ -8,7 +8,7 @@ pub use fragment_renderers::*;
 pub use response::*;
 
 #[cfg(test)]
-mod renderers_tests;
+mod fragment_renderers_tests;
 
 #[cfg(test)]
 mod response_tests;

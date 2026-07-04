@@ -20,6 +20,9 @@ pub use app_state::{AppState, ServerConfig, ServerResources};
 pub use server_impl::run_server_with_config;
 
 #[cfg(test)]
+mod locks_tests;
+
+#[cfg(test)]
 mod debug_tests;
 #[cfg(test)]
 mod mod_tests;
