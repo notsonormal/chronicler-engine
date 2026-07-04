@@ -53,12 +53,12 @@ Port traits are owned by the core (`application/ports/`) and define contracts fo
 - **Adapters → Ports:** Adapter impls depend on port traits they implement
 - **Bootstrap → Both:** Only `bootstrap/` imports both port traits and adapter impls (composition root)
 
-**Storage Exception:** `Storage` concrete struct is accessed directly by exactly 3 application files (`context.rs`, `application_service.rs`, `game_service.rs`). Marked with `// arch-lint: storage-direct` comments. See **ADR-027** + `docs/plans/hexagonal-deferred-arch-lint-rules.md` for rationale.
+**Storage Exception:** `Storage` concrete struct is accessed directly by **5 application files**: 3 intentional persistence-boundary files (`context.rs`, `application_service.rs`, `game_service.rs`) + 2 deferred to the T2 reliability plan (`agents/registry.rs`, `agents/quantifier/agent.rs`). All marked with `// arch-lint: storage-direct` comments. See **ADR-027** + `docs/plans/hexagonal-deferred-arch-lint-rules.md` for rationale.
 
 ### Related
 
 - **ADR-027:** Hexagonal Architecture Migration (decisions, rejected ports, phantom port heuristic)
-- **Plan:** `docs/plans/hexagonal-reorganization-plan.md` (Phase 1–3 execution)
+- **Plan:** `docs/old-docs/archived-plans/hexagonal-reorganization-plan.md` (Phase 1–3 execution; Phase 3 complete)
 - **Deferred Rules:** `docs/plans/hexagonal-deferred-arch-lint-rules.md` (arch-lint limitations)
 
 ## Module Domains

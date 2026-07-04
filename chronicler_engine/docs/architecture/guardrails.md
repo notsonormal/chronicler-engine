@@ -57,11 +57,15 @@ User decision (Task 0, Option B): arch-lint 0.4.3 lacks scoped file-level exempt
 | `server` → `storage`, `narrative` | Driving adapters must not import driven adapters directly; route through application ports | Phase 2.3 closed `check_player_input` leaks (now via `TextCheckService`). `templates.rs` + `view_models.rs` import `LlmMessage` + `CheckResult` — these are port types at `application/ports/`, so imports are legal. | Verification needed — may be closed |
 | `storage` → `narrative` | Driven adapters must not depend on other driven adapters | None currently (rule would pass today, but paired with the reverse) | After Phase 2 closes the leaks |
 | `narrative` → `storage` | Driven adapters must not depend on other driven adapters | Phase 2.1 removed default impls (`LlmProvider` is transport-only). `application/agents/registry.rs` + `application/agents/quantifier/agent.rs` still import `Storage` — these are application→driven leaks, not narrative→storage. Rule may be obsolete. | Verification needed |
-| `application` → `adapters/driven` | Application layer must not import driven adapters directly; route through ports | Scoped file-level exemptions needed for `context.rs`, `application_service.rs`, `game_service.rs` (marked `// arch-lint: storage-direct — intentional, see ADR-027`). `action_pipeline/*` no longer imports driven adapters post-Phase-2. | Phase 2.5 (comment-only documentation); enforcement via PR review until then |
+| `application` → `adapters/driven` | Application layer must not import driven adapters directly; route through ports | **5 exempted files** (see ADR-027): 3 intentional persistence-boundary (`context.rs`, `application_service.rs`, `game_service.rs` — marked `// arch-lint: storage-direct — intentional, see ADR-027`) + 2 deferred to T2 reliability plan (`agents/registry.rs`, `agents/quantifier/agent.rs` — marked `// arch-lint: storage-direct — deferred to T2, see ADR-027`). `action_pipeline/*` no longer imports driven adapters post-Phase-2. | Phase 2.5 (comment-only documentation); enforcement via PR review until then |
 | `domain` → anything (explicit) | Already covered by existing `model` scope deny rules; plan repeats for emphasis | Subsumed — no action | Already enforced |
 | `application/ports` → anything | Ports must depend only on `domain` and `error` | Subsumed by `application` → `server` rule + (deferred) `application` → `adapters/driven` rule | After Phase 2 closes the leaks |
 
-See [`docs/plans/hexagonal-reorganization-plan.md`](../plans/hexagonal-reorganization-plan.md) Phase 1.7 + Phase 2 for the deferred-leak cleanup items.
+See [`docs/old-docs/archived-plans/hexagonal-reorganization-plan.md`](../old-docs/archived-plans/hexagonal-reorganization-plan.md) Phase 1.7 + Phase 2 for the deferred-leak cleanup items; Phase 3 deviations document the formal deferrals.
+
+### Phase 3.2 — `DebugPort` rejection (formalized)
+
+`src/adapters/driving/http/debug.rs` reaches into `ApplicationService` directly. This is an **intentional guardrail exemption** (no `DebugPort` trait) — single debug consumer + single debug surface = phantom port per ADR-027 §3.2. Documented here for traceability; no code change required.
 
 ### Rules
 

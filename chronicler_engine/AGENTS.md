@@ -20,7 +20,6 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - **storage/**
         - `db.rs` — SQLite database connection pool and migrations
         - `mod.rs` — Storage layer and database access
-        - `snapshot_blob.rs` — State snapshot serialization
       - **text_check/**
         - `harper_text_checker.rs` — Harper text check adapter implementing TextChecker port
         - `mod.rs` — Text checking and validation
@@ -32,6 +31,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - `app_state.rs` — Application state management
         - `debug.rs` — Debug utilities and endpoints
         - `handlers.rs` — Core HTTP request routing and handling
+        - `locks.rs` — Shared poison-recovering lock helpers for the HTTP layer.
         - `mod.rs` — HTTP server and API endpoints
         - `port_utils.rs` — Port management utilities
         - `router.rs` — Router configuration
@@ -43,6 +43,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
     - `context.rs` — Application context and state management
     - `game_service.rs` — Game service handling gameplay operations
     - `llm_recorder.rs` — LLM call orchestrator - owns forensics save + postprocessing
+    - `llm_sanitizer.rs` — LLM input/output sanitization
     - `message_editing.rs` — Message editing and modification utilities
     - `query_handlers.rs` — Read-only data access for game state and debug views
     - `spawn.rs` — Shared spawn helper for pipeline tasks
@@ -113,6 +114,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - `world.rs` — World model definitions
       - **state/**
         - `game_state.rs` — Main game state and builder
+        - `game_state_snapshot.rs` — State snapshot value types (persistable representations of game state).
         - `generation_status.rs` — Generation status enums and input buffer
         - `message_types.rs` — Message type and entry definitions
         - `mod.rs` — Game state representations (submodule declarations)
@@ -123,7 +125,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
 - **scripts/**
   - `build.py` — Full build, validate, and test for Chronicler Engine.
   - `check_python_docstrings.py` — Summary
-  - `check_test_structure.py` — No summary
+  - `check_test_structure.py` — Inline `#[cfg(test)] mod X { ... }` blocks are forbidden in src/.
   - `coverage_summary.py` — No summary
   - `diagnostic_benchmark.py` — No summary
   - `extract_images.py` — Extract and process images from SillyTavern character cards (original + cropped versions).
@@ -134,6 +136,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
   - `install_git_hooks.py` — No summary
   - `parse_coverage.py` — Parse coverage report from cargo-llvm-cov JSON output.
   - `refine_character_json.py` — No summary
+  - `validate_adrs.py` — Validate ADR files against the standard in docs/adr/README.md.
   - `validate_data.py` — No summary
 <!-- AUTO-STRUCTURE END -->
 

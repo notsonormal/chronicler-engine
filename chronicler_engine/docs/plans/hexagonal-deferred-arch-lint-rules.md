@@ -39,5 +39,5 @@ Tracks arch-lint deny-scope-dep rules intentionally NOT enforced yet, with ratio
 
 ## Source
 
-- Plan: [`hexagonal-reorganization-plan.md`](./hexagonal-reorganization-plan.md)
+- Plan: [`hexagonal-reorganization-plan.md`](../old-docs/archived-plans/hexagonal-reorganization-plan.md)
 - Guardrails doc: [`../architecture/guardrails.md`](../architecture/guardrails.md)

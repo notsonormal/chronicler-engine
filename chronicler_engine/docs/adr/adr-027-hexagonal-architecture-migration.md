@@ -112,6 +112,18 @@ rationale = "Storage direct access — see ADR-027"
 
 Deferred rules tracked separately in a live plan doc.
 
+### Phase 3.1: Keep `domain/engine/` subfolder
+
+`src/domain/engine/` (7 pure-rule files: `action.rs`, `action_processing.rs`, `logic.rs`, `parser.rs`, `state_diagnostics.rs`, `trigger_eval.rs`, `mod.rs`) stays as-is. It calls `domain/model/` only, no I/O, no port needed at the `engine` ↔ `application` boundary (application calls engine functions directly). Flattening into `domain/` root was rejected as churn for no architectural gain — the subfolder communicates "types (`model/`) vs rules (`engine`)" at zero cost.
+
+### Phase 3.2: Reject `DebugPort` (reaffirmed)
+
+`DebugPort` trait explicitly rejected. Single debug consumer (`src/adapters/driving/http/debug.rs` endpoint) + single debug surface = phantom port. The existing `http/debug.rs` reaches into `ApplicationService` directly — this is an **intentional guardrail exemption** (no port). See `docs/architecture/guardrails.md` "Deferred hexagonal arch-lint rules" subsection. Reaffirms the existing entry in the "Rejected Port Traits" table above.
+
+### Phase 3.3: Settings consolidation deferred
+
+Rename of `src/adapters/driven/storage/models/settings.rs` → `settings_row.rs` **deferred indefinitely**. Rationale: (a) layer paths already disambiguate the 4 same-basename `settings.rs` files (`src/settings.rs`, `src/domain/model/settings.rs`, `src/adapters/driven/storage/backend/settings.rs`, `src/adapters/driven/storage/models/settings.rs`); (b) `models/` directory convention is plain table-name basename + `Db*` struct name (`character.rs`/`DbCharacter`, `prompt_preset.rs`/`DbPromptPreset`, `world.rs`/`DbWorld`, `llm_message.rs`/`DbLlmMessage`, `message.rs`/`DbMessage`) — introducing a `_row` suffix for one file would break the convention; (c) Phase 1 move-only spirit honored; churn rejected for marginal grep clarity. `DbSettings` struct name preserved.
+
 ## Alternatives Considered
 
 ### Alternative A: Pure-Layered Architecture
@@ -149,7 +161,7 @@ The "one impl" heuristic is necessary but not sufficient — **location of consu
 - ✅ **Architecture visible at file-tree level.** `ls src/` shows hexagonal structure immediately.
 - ✅ **Dependency direction enforced.** Core depends on ports; adapters implement ports; `bootstrap/` wires both.
 - ✅ **LLM, TextChecker ports enforced via dependency direction.** Adapters depend on port traits, application orchestration depends on port traits.
-- ✅ **Storage exemption is intentional, documented.** 3 files only, marked with comments, forward-referenced to this ADR.
+- ✅ **Storage exemption is intentional, documented.** 5 files (3 intentional persistence boundary + 2 deferred-T2), marked with comments, forward-referenced to this ADR.
 - ✅ **"Phantom port" heuristic is explicit.** Future port decisions have clear criteria.
 
 ### Negative
@@ -174,3 +186,7 @@ The "one impl" heuristic is necessary but not sufficient — **location of consu
 - ADR-020: Unified Storage Struct (`Storage` concrete adapter)
 - ADR-022: PromptAssembler Trait Decoupling (port trait precedent)
 - ADR-026: Relocate Persona Binding from World to Game (preceding hexagon-phase2 work)
+
+## History
+
+- **2026-07-04**: Phase 3 resolutions appended (§3.1 `engine/` subfolder kept, §3.2 `DebugPort` rejected, §3.3 settings rename deferred). "Storage exemption Positive" bullet reconciled from "3 files" to "5 files (3 intentional + 2 deferred-T2)" to match the existing Storage Direct Access Exemption section.

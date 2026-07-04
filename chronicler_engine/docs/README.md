@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-07-04 00:03 UTC*
+*Index last generated: 2026-07-04 11:35 UTC*
 
 ### Root files
 
@@ -56,6 +56,10 @@ This folder contains all documentation for the Chronicler Engine project.
 - [SillyTavern Chat Window Reference](./external_applications/sillytavern_chat_window.md)
 - [SillyTavern Prompt System Reference](./external_applications/sillytavern_prompt_system.md)
 
+### `docs/old-docs/archived-plans/`
+
+- [Plan: Hexagonal Architecture Reorganization](./old-docs/archived-plans/hexagonal-reorganization-plan.md)
+
 ### `docs/plans/`
 
 - [Plan: Abstraction Anti-Pattern Prevention via Advisory Healthcheck](./plans/abstraction-antipattern-healthcheck-plan.md)
@@ -63,7 +67,6 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Plan: Diagnostic Decision Tree as Agent Infrastructure](./plans/diagnostic-decision-tree-plan.md)
 - [Plan: Documentation Hygiene Skill](./plans/docs-hygiene-skill-plan.md)
 - [Deferred arch-lint Rules — Hexagonal Reorganization](./plans/hexagonal-deferred-arch-lint-rules.md)
-- [Plan: Hexagonal Architecture Reorganization](./plans/hexagonal-reorganization-plan.md)
 - [Plan: Mapless Worlds via Freeform Location Names](./plans/mapless-worlds-plan.md)
 - [Spec: Agent-Ready Pipeline Restructure for Chronicler Engine](./plans/multi-agent-architecture-overarching-spec.md)
 - [Plan: Observability & Automated Forensics](./plans/observability-and-forensics-plan.md)
