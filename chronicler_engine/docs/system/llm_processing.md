@@ -86,38 +86,16 @@ This matches SillyTavern's `last_output_sequence` preset for Gemma 4. It pre-fil
 
 ### 9. LLM Call Logging & Forensics
 
-Every LLM call is logged to a SQLite `llm_messages` table with a strict 50-row global cap. This enables rapid diagnosis when the engine misbehaves — the full request/response JSON is preserved alongside metadata.
-
-#### Architecture
-
-- **`call_chat_completions()`** in `llm_client.rs` is the single chokepoint. It returns `ChatCompletionResult { text, system_prompt, user_prompt, raw_request_json, raw_response_json }`.
-- **`LlmProvider` trait** methods take `agent_name: &str` and return `LlmCallResult`, which wraps the `ChatCompletionResult` with `backend_name` and `model_name`. Trait is transport-only.
-- **Quantifier path** logs via `LlmCallRecorder::complete()` which delegates to `LlmProvider::complete()` (transport) then `LlmMessageRepository::save_llm_message()` (forensics).
-- **LLM logging implementation**: `LlmMessageRepository` port at `src/application/ports/llm_message_repository.rs`, implemented by `Storage` struct.
-  - SQLite backend: INSERT + auto-prune to keep last 50 rows
-  - InMemory backend: Ring buffer for tests
-- **Storage is optional**: Backends accept `Option<Arc<Storage>>`. When `None`, logging is silently skipped (useful for tests that don't care about forensics).
-
-#### Agent Names
-
-Four agent names are used consistently across the codebase:
-
-| Agent | Role |
-|-------|------|
-| `narrator` | Game Master narration |
-| `quantifier` | Scene quantification |
-| `trigger` | Trigger event continuation |
-| `dialogue` | NPC dialogue generation |
-
-#### Dashboard Integration
-
-The LLM Messages tab (`/fragment/llm-messages`) renders the last 50 calls as an expandable list, polled every 4 seconds via HTMX.
+- **WHAT**: Every LLM call logs prompt + response pairs, metadata, and timestamps to a SQLite `llm_messages` table.
+- **RETENTION**: 50 rows per game — oldest rows auto-pruned, most recent kept.
+- **VIEW**: **LLM Messages** tab in the dashboard (`/fragment/llm-messages`).
+- **REF**: Architecture, port trait, and storage layer — [ADR-012](../adr/adr-012-llm-message-logging.md).
 
 ### 10. Runtime Tracing
 
 The engine uses [`tracing`](https://tracing.rs) for structured runtime diagnostics. Critical execution paths emit spans and events automatically when `RUST_LOG` is set. See [`diagnostics/DEBUGGING.md`](../diagnostics/DEBUGGING.md) for the instrumented function list and tracing commands.
 
-## Implementation Standards
+## Conventions
 
 - Use the `LlmProvider` trait for transport implementations (OpenRouter, DeepSeek, Ollama, Mock)
 - Maintain a `MockBackend` for test environments

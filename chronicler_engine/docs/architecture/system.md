@@ -84,7 +84,7 @@ Orchestration layer that coordinates game flow, persistence, and LLM generation.
   - `context.rs`: Shared persistence helpers (`load_or_fresh`, `load_expecting_valid_state`, `save_state`, `save_message_and_snapshot`, `map_llm_error`). Cross-storage coordination helpers (`load_messages`, `update_message_text`, `load_state_for_test`, `migrate_swipes`).
   - `save_message_and_snapshot()`: Saves a snapshot and immediately persists the newest unpersisted message with the snapshot ID. Messages are persisted as they are created; there is no batching or `committed` flag.
 
-**Bootstrap arrival path** (`init_game.rs::ArrivalTaskContext::run`) routes through `save_message_and_snapshot`, closing ADR-023 §4 "Bootstrap and Reset Handler". Snapshot blob carries history for audit only; `messages` table is source of truth on reload.
+**Bootstrap arrival path** (`init_game.rs::ArrivalTaskContext::run`) routes through `save_message_and_snapshot`. Snapshot blob carries history for audit only; `messages` table is source of truth on reload.
 
 - **`message_editing.rs`**: Free fns for message editing operations - `switch_swipe`, `edit_history`, `delete_last`, `retry`, `retrigger`. `retry` and `retrigger` take `&Arc<GameService>` and spawn their pipeline task via the shared `application::spawn_pipeline_task` helper. `switch_swipe`/`edit_history`/`delete_last` take only `GameServiceContext` (no `game_service` dependency).
 - **`query_handlers.rs`**: Free fns for read-only query operations - `get_generating_status`, `reset_generating_status`, `get_current_game_name`, `list_latest_llm_messages`, `get_story_log_entries`, `get_input_status`, `get_current_room_view`, `get_npc_headshots`, `get_debug_state`.
@@ -200,14 +200,14 @@ Seed-once, load-from-DB pattern for worlds, personas, and characters. See [`syst
 
 Unified error type shared across all layers. Top-level types:
 
-- **`EngineError`**: top-level enum (LLM, narrative, internal, I/O, navigation, world/game state, config/template/loader, context overflow).
+- **`EngineError`**: top-level enum aggregating failures across all layers.
 - **`LlmFailure`**: LLM transport errors.
 - **`NarrativeFailure`**: prompt build and generation failures.
 - **`InternalError`**: invariant violations.
 
 See [`diagnostics/error_catalog.md`](../diagnostics/error_catalog.md) for the authoritative variant list, common causes, and first-check diagnostics per variant.
 
-### 8. Bootstrap Module (`crate::bootstrap`)
+### 7. Bootstrap Module (`crate::bootstrap`)
 
 World seeding, validation, and server initialization.
 
@@ -219,13 +219,13 @@ World seeding, validation, and server initialization.
 - **`init_game`**: Game state initialization — `resolve_game_id()` (auto-creates a game for the requested world using the `--persona` CLI flag when none exists), `load_game_state()`, `spawn_arrival_task_if_needed()`. Includes `ArrivalTaskContext` for background arrival narration with stored `recorder: Arc<LlmCallRecorder>` for correct LLM provider selection.
 - **`state.rs`**: Fresh game state initialization (`build_fresh_initial_state`)
 
-### 9. CLI Module (`crate::adapters::driving::cli`)
+### 8. CLI Module (`crate::adapters::driving::cli`)
 
 Command-line argument parsing via `clap`.
 
 - **`Cli`**: CLI args struct (`--world`, `--persona`, `--port`, etc.)
 
-### 10. Test Support Module (`crate::test_support`)
+### 9. Test Support Module (`crate::test_support`)
 
 Shared test fixtures and utilities.
 
@@ -234,7 +234,7 @@ Shared test fixtures and utilities.
 - **`noop_forensics`** / **`recording_forensics`**: `LlmMessageRepository` spy impls for LLM recorder tests (see ADR-012 SQLite-backed LLM call logging)
 - **`test_app_builder`**: Fluent test app builder API
 
-### 11. Test Binaries (`tests/`)
+### 10. Test Binaries (`tests/`)
 
 Each `[[test]]` in `Cargo.toml` compiles an independent test binary. Paths mirror `src/` subpaths inside each binary.
 
@@ -250,10 +250,3 @@ Each `[[test]]` in `Cargo.toml` compiles an independent test binary. Paths mirro
 
 > **Note:** `assets/` contains static web assets (`index.html`) served by the server. It is not a Rust module tier.
 
-## File Navigation
-
-For file-to-module mapping, use `cargo doc` or navigate `src/` directly. Files follow the pattern `src/<tier>/<module>.rs` with sibling `*_tests.rs` test files.
-
-## Error Strategy
-
-A unified error type (`crate::error::EngineError`) is shared across all tiers for consistent error propagation — from data loading through LLM failures to HTTP responses. See `src/error.rs` for the full variant list.

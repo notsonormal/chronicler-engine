@@ -7,7 +7,7 @@ For general engine principles, workflow, and conventions, see [`../AGENTS.md`](.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-07-04 17:01 UTC*
+*Index last generated: 2026-07-04 18:47 UTC*
 
 ### Root files
 
@@ -87,6 +87,7 @@ For general engine principles, workflow, and conventions, see [`../AGENTS.md`](.
 - [Specification: Player Persona System](./reference/persona_system.md)
 - [Reference: Quantifier Prompt](./reference/quantifier_prompt.md)
 - [Reference: System Prompt](./reference/system_prompt.md)
+- [Test Support Reference](./reference/test_support.md)
 - [Specification: Testing Strategy and Architecture](./reference/testing.md)
 
 ### `docs/system/`

@@ -31,12 +31,12 @@ Horizontal split into story context and visual context:
 
 - **Story Log (80%)**: Scrollable history of narration with chat-bubble styling
   - **Styles**:
-    - **Location headers**: Inline "Room Name - HH:MM", green color (#4ade80), bold
-    - **Event headers**: Inline "Event Name - HH:MM", blue/cyan color (#38bdf8), bold
-    - User input (right-aligned, darker gray background #2a2a2a)
-    - AI/Narration (left-aligned, dark cyan background #1a3a3a)
-    - AI/Dialogue (left-aligned, orange-tinted background #3a2a1a, italic text)
-    - System messages (center-aligned, yellow #ffff00)
+    - **Location headers**: Inline "Room Name - HH:MM", green token (chat-location), bold
+    - **Event headers**: Inline "Event Name - HH:MM", cyan token (chat-event), bold
+    - User input (right-aligned, darker gray background)
+    - AI/Narration (left-aligned, dark cyan background)
+    - AI/Dialogue (left-aligned, orange-tinted background, italic text)
+    - System messages (center-aligned, yellow)
     - Character name prominent above message (bold, larger)
     - Subtle timestamp (HH:MM format, small gray)
     - Fade-in animation for new messages
@@ -50,8 +50,8 @@ Horizontal split into story context and visual context:
       - Counter — `active + 1 / swipe_count` (e.g., "2 / 3")
       - Right arrow (▶) — next swipe if not on latest; triggers new generation if on latest swipe
 - **Visual Sidebar (20%)**:
-  - Location Image (top): Full-width location image, max-height 200px, object-fit contain
-  - NPC Portraits (bottom): Horizontal scrollable row, 80×80px square images, object-fit cover
+  - Location Image (top): Full-width location image
+  - NPC Portraits (bottom): Horizontal scrollable row of 80×80 square images
 
 #### Action Area (64px height)
 
@@ -59,12 +59,12 @@ Interactive zone for player input.
 
 - **Content**: Text input field + send button + status indicator
 - **Button States**:
-  - Ready: Green button with "Send" text and play icon (▶)
-  - Thinking: Green button with "Stop" text and square icon (■), disabled input
+  - Ready: Green button labeled "Send"
+  - Thinking: Green button labeled "Stop", input disabled
 - **Status States**:
-  - "Ready" - Green (#00ff00), awaiting input
-  - "Thinking..." - Yellow (#ffff00) with pulse animation, LLM generating response (includes narrative continuation on empty input)
-  - "Still thinking..." - Yellow (#ffff00), concurrent generation in progress
+  - "Ready" — awaiting input
+  - "Thinking..." — LLM generating response (includes narrative continuation on empty input)
+  - "Still thinking..." — concurrent generation in progress
 - **Text Check Preview**: When spell/grammar issues are detected, the action area temporarily shows:
   - Original vs corrected text comparison
   - Issue tags (spell = orange, grammar = pink)
@@ -72,7 +72,7 @@ Interactive zone for player input.
   - **Send Original** — submits original text to `/action`
   - **Cancel** — restores normal action area
 
-**Empty Input Behavior**: Pressing Send with an empty text box triggers narrative continuation via `continue_narration()` → `process_action(CONTINUE_SENTINEL)`. The LLM generates the next scene without player input, same as SillyTavern's "Continue" button. Status shows "Thinking..." (unified with normal generation). No HTML5 validation blocks empty submit.
+**Empty Input Behavior**: Pressing Send with an empty text box triggers narrative continuation. The LLM generates the next scene without player input, same as SillyTavern's "Continue" button. Status shows "Thinking..." (unified with normal generation).
 
 ### 4. Settings Tab
 
@@ -98,9 +98,6 @@ The dashboard uses HTMX polling for live updates:
 - Visual sidebar polls `/fragment/visual-sidebar` every 5 seconds
 - Status-display polls `/status/generating` every 5 seconds to update button state
 - LLM Messages polls `/fragment/llm-messages` every 4 seconds
-- New narration appears automatically with fade-in effect
-- Button changes state during LLM processing
-- No manual refresh required
 
 ## Data Model
 
@@ -140,75 +137,34 @@ pub struct MessageEntryView {
 }
 ```
 
-HTML template renders with `data-raw-text` attribute for inline editing:
-
-```html
-<div class="log-entry" data-id="{{ entry.id }}" data-raw-text="{{ entry.raw_text }}">
-    <div class="message-header">
-        <div class="message-info">
-            <span class="timestamp">HH:MM</span>
-            <span class="sender">Sender:</span>
-        </div>
-        <div class="message-actions">
-            <button class="action-btn edit-btn" title="Edit">✎</button>
-            <button class="action-btn delete-btn" title="Delete">🗑</button>
-            {% if input_entry %}
-            <button class="action-btn check-btn" title="Check">✓</button>
-            {% endif %}
-            {% if show_retrigger %}
-            <button class="action-btn retrigger-btn" title="Retrigger Event">♻</button>
-            {% endif %}
-        </div>
-    </div>
-    <span class="text">{{ entry.text }}</span>
-    {% if loop.last && swipe_count > 1 %}
-    <div class="swipe-controls">
-        <button class="action-btn swipe-btn" disabled>◀</button>
-        <span class="swipe-counter">1 / 3</span>
-        <button class="action-btn swipe-btn" onclick="submitNewSwipe()">▶</button>
-    </div>
-    {% endif %}
-</div>
-```
+HTML template renders each entry with: timestamp, sender, text body, optional location/event header, and per-entry action buttons (edit always; delete/check/retrigger conditionally per spec above). Swipe controls render on the last entry when `swipe_count > 1`.
 
 ## Edit Flow (SillyTavern Pattern)
 
-1. Click edit button → textarea replaces text span, polling pauses
-2. Textarea height matches original rendered height (+ padding/border compensation)
-3. Textarea auto-resizes on input if content grows taller
-4. Edit text in textarea (uses `data-raw-text`, not HTML textContent)
-5. Click save → textarea value sent to server, stored as raw text
-6. Click cancel → restore original text, resume polling
+1. Click edit button → enter edit mode (textarea replaces text span); polling pauses
+2. Save → raw text submitted to server
+3. Cancel → exit edit mode; polling resumes
 
 ## Delete Flow
 
 1. Click delete button → browser confirmation dialog
-2. On confirm → POST to `/history/delete`
-3. Server calls `delete_last_log()`, removing the last message
-4. A new snapshot is saved reflecting the shortened history
-5. Client refreshes story log via HTMX polling or manual trigger
+2. On confirm → server deletes last message and saves new snapshot
+3. Story log refreshes via HTMX polling
 
-## Button Logic (JavaScript)
+## Button State Transitions
 
-1. Monitor status element changes via MutationObserver or HTMX events
-2. When status contains "Thinking...":
-   - Disable the submit button
-   - Change button text from "▶ Send" to "■ Stop"
-   - Keep button green (no red)
-3. When status returns to "Ready":
-   - Re-enable the submit button
-   - Change button text back to "▶ Send"
+1. Generating state: submit button shows "Stop" and is disabled
+2. Ready state: submit button shows "Send" and is enabled
 
 ### Game Management
 
-Multiple independent games across all worlds, each with isolated snapshots and messages:
+Multiple independent games across all worlds, each with isolated snapshots and messages. The Games panel has three sections: Active Game, New Game, and Saved Games.
 
-- **List games**: `GET /fragment/games` renders the Games panel with three sections: Active Game, New Game, and Saved Games
-- **Create game**: `POST /games` accepts form data with `world_key` and `persona_key` parameters (ADR-026); creates a game under the chosen world + persona with auto-generated name (`{WorldName}_{Date}_N`). The New Game section shows an always-visible world dropdown + persona dropdown + "Start New Game" button. Empty personas list disables submit and renders `No personas available. Create a persona first.`
-- **Active Game**: Shows current game name, world badge, **persona badge**, "Current" badge, and a small reset button on the card
-- **Switch game**: `POST /games/:id/switch` loads the selected game (cross-world switching allowed) and refreshes the page
-- **Delete game**: `POST /games/:id/delete` removes the game and all its data, then removes the item from the list via `hx-swap`
-- **Reset**: `POST /reset` deletes the current game and creates a new one with a fresh auto-generated name. Triggered by the reset button on the Active Game card with `hx-confirm` dialog
+- **Create game**: New game section shows world + persona dropdowns and a "Start New Game" button. Game name auto-generated (`{WorldName}_{Date}_N`). Submit disabled when persona list is empty.
+- **Active Game**: Shows current game name, world badge, persona badge, "Current" badge, and reset button.
+- **Switch game**: Loads the selected game (cross-world switching allowed).
+- **Delete game**: Removes the game and all its data.
+- **Reset**: Deletes the current game and creates a new one with a fresh auto-generated name.
 
 ## Worlds Management Tab
 
@@ -224,12 +180,3 @@ Forensics panel showing the last 50 LLM calls with full request/response visibil
 - **Empty state**: "No LLM messages yet" when no calls have been logged
 - **Auto-pruning**: SQLite storage caps at 50 rows globally; oldest evicted on insert
 - **HTMX Polling**: `hx-get="/fragment/llm-messages" hx-trigger="load, every 4s"`
-
-#### LLM Message CSS Classes
-
-- `.llm-message-list` - Container for the message list
-- `.llm-message-item` - Individual message card
-- `.llm-message-header` - Top row with agent, backend, model, timestamp
-- `.llm-message-summary` - Collapsed view showing parsed response
-- `.llm-message-detail` - Expanded view with raw JSON (hidden by default)
-- `.llm-message-toggle` - Click target to expand/collapse details

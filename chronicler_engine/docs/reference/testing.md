@@ -40,16 +40,16 @@ mod logic_tests;
 
 Cross-module and browser-based tests live in the top-level `tests/` directory:
 
-| Test File / Directory | Purpose | Execution Model | Runtime |
-|----------------------|---------|-----------------|---------|
-| `architecture.rs` | Architecture guardrails (arch-lint, layer enforcement) | In-process | ~2s |
-| `invariant_contract_tests.rs` | Runtime invariant regression tests | In-process | ~0.1s |
-| `guardrails.rs` | Custom convention tests (imports, comments, file length) | In-process | ~2s |
-| `integration/` | Cross-module integration tests (application service, game service, lifecycle, pipeline, llm_client, storage, model) | In-process + Mock LLM | ~2s |
-| `http/` | HTTP endpoint tests — action handlers, connections, fragments, status, text check | In-process | ~7s |
-| `browser/` | UI structure, layouts, interactions, editing | Browser (Playwright) | ~37s |
-| `llm/` | LLM narrative smoke tests (real LLM, `#[ignore]` by default) | Real LLM | ~30–120s |
-| `poison_recovery.rs` | Lock poison recovery for `Mutex`/`RwLock` | In-process | ~1s |
+| Test File / Directory | Purpose | Execution Model |
+|----------------------|---------|-----------------|
+| `architecture.rs` | Architecture guardrails (arch-lint, layer enforcement) | In-process |
+| `invariant_contract_tests.rs` | Runtime invariant regression tests | In-process |
+| `guardrails.rs` | Custom convention tests (imports, comments, file length) | In-process |
+| `integration/` | Cross-module integration tests (application service, game service, lifecycle, pipeline, llm_client, storage, model) | In-process + Mock LLM |
+| `http/` | HTTP endpoint tests — action handlers, connections, fragments, status, text check | In-process |
+| `browser/` | UI structure, layouts, interactions, editing | Browser (Playwright) |
+| `llm/` | LLM narrative smoke tests (real LLM, `#[ignore]` by default) | Real LLM |
+| `poison_recovery.rs` | Lock poison recovery for `Mutex`/`RwLock` | In-process |
 
 ## Backend Selection
 
@@ -79,8 +79,8 @@ use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::application::context::GameServiceContext;
 use std::sync::Arc;
 
-// For slow-timing tests, the delay must live in the AGENT (not backend)
-// since run_post_generation_agents is now inline in ActionPipeline.
+// For slow-timing tests, delays must live in the AGENT (not the backend)
+// so that run_post_generation_agents honors them.
 let mock_backend = MockBackend::default().with_narrations(vec!["test response".to_string()]);
 let recorder = Arc::new(LlmCallRecorder::new(
     Arc::new(mock_backend),
@@ -92,7 +92,7 @@ let ctx = GameServiceContext::new(/* ... */);
 service.execute_action(ctx, "look".to_string());
 ```
 
-**Note:** The `ActionPipelineBackend` trait was deleted in Phase 2. The `ActionPipeline` struct is no longer generic — it holds direct fields (`prompt_assembler`, `llm_recorder`, `agent_registry`). The `run_post_generation_agents` method is now an inline phase method in `ActionPipeline`. See `tests/integration/pipeline/pipeline_tests.rs` for working examples.
+**Note:** `ActionPipeline` is non-generic and holds direct fields (`prompt_assembler`, `llm_recorder`, `agent_registry`). `run_post_generation_agents` is an inline phase method of `ActionPipeline`. See `tests/integration/pipeline/pipeline_tests.rs` for working examples.
 
 ### Config File (`tests/test_config.json`)
 
@@ -104,36 +104,14 @@ Browser tests write a temporary `settings.json` with Mock connections and pass i
 
 ## Test Support Utilities
 
-### TestAppBuilder
-
-The `TestAppBuilder` in `src/test_support/test_app_builder.rs` provides a fluent builder pattern for constructing test fixtures. It handles:
-
-- **World/Map/Persona Seeding**: Automatically seeds test world, map, and player persona into storage
-- **Game Creation**: Creates an initial game and sets it as active
-- **NPC Setup**: Optional NPC seeding and room assignment
-- **State Mutation**: Optional log entries, generation status/phase, trigger context
-- **Router or AppState**: Call `.build()` for `Router` or `.build_app_state()` for `AppState` directly
-
-**Usage pattern:**
-
-```rust
-// For HTTP tests (returns Router)
-let app = TestAppBuilder::default_test()
-    .is_generating(true)
-    .build();
-
-// For unit tests needing AppState directly
-let state = TestAppBuilder::default_test().build_app_state();
-```
-
-**Avoid duplication**: Never manually recreate the world-seeding + game-creation boilerplate in test files. Always use `TestAppBuilder` unless you have a specific reason to do custom setup.
+For `test_support::fixtures` and `TestAppBuilder` API, see [`test_support.md`](test_support.md).
 
 ## Running Tests
 
 ### Full Suite
 
 ```bash
-# Default: fast suite (~70 sec, LLM tests excluded)
+# Default: fast suite (LLM tests excluded)
 cargo nextest run
 python build.py
 
@@ -150,14 +128,14 @@ python build.py --llm-only
 
 Run individual test binaries directly (bypasses fmt, clippy, guardrails, and full suite):
 
-| Command | Duration | Use When |
-|---------|----------|----------|
-| `cargo nextest run --test integration` | ~2s | Integration test changes |
-| `cargo nextest run --test http` | ~7s | HTTP endpoint changes |
-| `cargo nextest run --test browser` | ~37s | UI changes |
-| `cargo nextest run --test llm` | ~30–120s | LLM smoke tests |
-| `cargo nextest run --test guardrails` | ~2s | Guardrail changes |
-| `cargo nextest run --test architecture` | ~2s | Architecture changes |
+| Command | Use When |
+|---------|----------|
+| `cargo nextest run --test integration` | Integration test changes |
+| `cargo nextest run --test http` | HTTP endpoint changes |
+| `cargo nextest run --test browser` | UI changes |
+| `cargo nextest run --test llm` | LLM smoke tests |
+| `cargo nextest run --test guardrails` | Guardrail changes |
+| `cargo nextest run --test architecture` | Architecture changes |
 
 ## UI Tests
 
@@ -184,52 +162,6 @@ cargo llvm-cov test --json --output-path coverage.json
 ```
 
 See `docs/adr/` for detailed rationale behind testing patterns.
-
-## Test Fixtures
-
-The `test_support::fixtures` module provides reusable test data builders. Prefer these over inline struct construction:
-
-| Fixture | Methods | Use For |
-|---------|---------|---------|
-| `TestWorld` | `minimal()`, `with_rule(rule)` | `WorldCard` instances |
-| `TestPlayer` | `standard()`, `named(name)` | `PlayerCard` instances |
-| `TestNpc` | `named(id, name)`, `with_times_met_trigger(...)`, `with_room_scoped_trigger(...)` | `NpcCard` instances |
-| `TestMap` | `room(id)`, `room_named(id, name)`, `single_room(id)`, `two_rooms(a, b)` | `Room` and `MapDef` instances |
-| `TestGameState` | `in_room(id)`, `with_npc(...)`, `with_npcs(...)` | `GameState` instances |
-| `TestStoredTriggerContext` | `standard()`, `for_npc(...)`, `named(...)`, `with_max_tokens(...)` | `StoredTriggerContext` instances |
-| `TestPromptPreset` | `system(id, name)`, `system_default(id, name)` | `PromptPreset` instances |
-| `TestWorldManifest` | `minimal()` | `WorldManifest` instances |
-| `TestCharacterSheet` | `hero()` | `CharacterSheet` instances |
-| `seed_default_game_row(pool, id)` | — | Insert a placeholder `games` row with the given id (FK target for `game_state_snapshots`/`messages` in sqlite-backed tests). Use after `Storage::new_sqlite(pool, n)` instead of relying on a seeded default game. |
-
-### Example
-
-```rust
-use crate::test_support::{
-    TestCharacterSheet, TestMap, TestNpc, TestPlayer,
-    TestPromptPreset, TestStoredTriggerContext, TestWorld, TestWorldManifest,
-};
-
-let preset = TestPromptPreset::system("my_preset", "My Preset");
-let trigger = TestStoredTriggerContext::standard();
-let manifest = TestWorldManifest::minimal();
-let world = TestWorld::minimal(); // Preferred for runtime-path (DB-backed) tests
-```
-
-### Integration Test Helpers
-
-The `tests/helpers/fixtures.rs` module (exposed to integration tests via `tests/integration/mod.rs`) provides shared helpers that previously were duplicated per-file:
-
-| Helper | Purpose |
-|--------|---------|
-| `create_test_world()`, `create_test_world_with_scenario()` | Canonical `WorldCard` builders (scenario variant has `StartingScenario`) |
-| `create_test_player()`, `create_test_map()`, `create_test_npcs()` | Canonical character/map builders |
-| `create_test_state()`, `create_basic_test_state()`, `create_basic_test_state_no_scenario()` | Canonical `GameState` builders |
-| `seed_test_world(storage)` | Seeds a `TestWorld::minimal()` + `TestPlayer::standard()` into storage |
-| `make_test_ctx(storage, state)` | Builds a `GameServiceContext` from storage + state |
-| `create_test_storage(id)`, `create_test_storage_arc(id)` | Builds a sqlite-backed `Storage` with the `games` row pre-seeded (FK-safe) |
-
-Prefer these over re-defining local copies in each integration test file. The `create_test_storage(id)` helper delegates to `test_support::seed_default_game_row` so sqlite-backed tests satisfy `game_state_snapshots.game_id` / `messages.game_id` FK constraints without relying on a migration-seeded default game.
 
 ## What We Keep
 

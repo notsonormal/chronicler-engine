@@ -4,26 +4,7 @@
 
 The Worlds Management Tab provides a UI for creating, editing, and managing worlds in the Chronicler Engine. Worlds define the setting, lore, global rules, and map structure for games. Multiple games can reference a single world, enabling reuse of world building across multiple playthroughs.
 
-## Location
-
-- **Server module**: `src/adapters/driving/http/worlds_fragment/`
-- **Domain model**: `src/domain/model/world.rs`
-- **Storage**: `src/adapters/driven/storage/backend/worlds.rs`
-- **CSS**: Scoped `.worlds-panel` rules under `assets/worlds.css` (extracted from `styles.css`)
-
 ## Architecture
-
-### Fragment Module Structure
-
-```
-src/adapters/driving/http/worlds_fragment/
-├── mod.rs          # Module exports
-├── fragments.rs    # HTML fragment renderers
-├── handlers.rs     # HTTP request handlers
-└── tests/          # Unit + integration tests
-    ├── fragments_tests.rs
-    └── handlers_tests.rs
-```
 
 ### Data Flow
 
@@ -70,25 +51,6 @@ Browser (Worlds Tab)
 - **One-to-Many**: One world can have multiple games referencing it
 - **Referential Integrity**: Cannot delete a world with referencing games
 - **Checked At**: Storage layer (`Storage::delete_world()`) and handler layer (returns 400 with game count)
-
-## API Endpoints
-
-### Fragment Endpoints (HTMX)
-
-| Method | Path | Handler | Description |
-|--------|------|---------|-------------|
-| GET | `/fragment/worlds` | `list_worlds_fragment()` | Render worlds list panel |
-| GET | `/fragment/worlds/new` | `new_world_form_handler()` | Render empty world creation form |
-| GET | `/worlds/:key/edit` | `edit_world_form_handler()` | Render edit form with world data pre-filled |
-
-### CRUD Handlers
-
-| Method | Path | Handler | Description |
-|--------|------|---------|-------------|
-| POST | `/worlds` | `create_world_handler()` | Create new world from form (validates JSON via `WorldForm::into_world_card()`) |
-| GET | `/worlds/:key/edit` | `edit_world_form_handler()` | Render edit form (pre-fills map/scenarios JSON) |
-| POST | `/worlds/:key` | `update_world_handler()` | Update world from form (uses path key, validates JSON) |
-| POST | `/worlds/:key/delete` | `delete_world_handler()` | Delete world (FK check at storage layer only) |
 
 ## UI Components
 
@@ -141,10 +103,3 @@ Rendered by `render_worlds_panel()`:
 2. **Returns `EngineError::WorldHasGames`** if games reference the world (typed variant, not string-matched)
 3. **Handler uses `is_user_displayable()`** for type-driven branching — displayable errors render inline; others return error status
 4. **Cascades to map**: Map deleted automatically via FK cascade
-
-## Related Documents
-
-- [`dashboard.md`](dashboard.md) - Dashboard layout and tabs
-- [`storage.md`](storage.md) - Storage backend design
-- [`../architecture/system.md`](../architecture/system.md) - Core architecture
-- [`../plans/worlds-management-tab-implementation.md`](../plans/worlds-management-tab-implementation.md) - Implementation plan

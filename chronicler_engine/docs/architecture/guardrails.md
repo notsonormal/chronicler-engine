@@ -63,7 +63,7 @@ User decision (Task 0, Option B): arch-lint 0.4.3 lacks scoped file-level exempt
 
 See [`docs/old-docs/archived-plans/hexagonal-reorganization-plan.md`](../old-docs/archived-plans/hexagonal-reorganization-plan.md) Phase 1.7 + Phase 2 for the deferred-leak cleanup items; Phase 3 deviations document the formal deferrals.
 
-### Phase 3.2 — `DebugPort` rejection (formalized)
+### `DebugPort` exemption (ADR-027 §3.2)
 
 `src/adapters/driving/http/debug.rs` reaches into `ApplicationService` directly. This is an **intentional guardrail exemption** (no `DebugPort` trait) — single debug consumer + single debug surface = phantom port per ADR-027 §3.2. Documented here for traceability; no code change required.
 

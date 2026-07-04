@@ -24,7 +24,7 @@ The quantifier analyzes the **generated narration** to:
 - This ensures dynamic NPC appearances (like Gabriella emerging from shadows) are detected
 
 ### 4. Trigger Evaluation
-`crate::domain::engine::trigger_eval::evaluate_triggers` scans **ALL NPCs** in `state.npcs`, but filters by room:
+`evaluate_triggers` scans **ALL NPCs** in `state.npcs`, but filters by room:
 - Triggers with `room_id: null` (or missing) are **global** — they fire anywhere
 - Triggers with `room_id: "some_room_id"` only fire when the player is in that room
 
@@ -163,7 +163,7 @@ Event headers:
 
 ## Mutation Order Invariant
 
-The action pipeline and `execute_freeaction_impl` in `src/domain/engine/action_processing.rs` mutate state in a strict, load-bearing order. Steps 4b and 4c happen in the application pipeline (`ActionPipeline`), not inside the engine function:
+The action pipeline and `execute_freeaction_impl` mutate state in a strict, load-bearing order. Steps 4b and 4c happen in the application pipeline (`ActionPipeline`), not inside the engine function:
 
 | Step | Operation | Why it must come here |
 |:-----|:----------|:---------------------|
@@ -174,12 +174,5 @@ The action pipeline and `execute_freeaction_impl` in `src/domain/engine/action_p
 | 4b | Trigger LLM call | Runs in `ActionPipeline::phase_trigger_continuation`, outside the state lock |
 | 4c | `commit_trigger_narration()` | Runs in `ActionPipeline`, re-acquires lock to add trigger logs and mark trigger fired |
 | 5 | `apply_npc_events()` — mutates `npc_encounter_log` | `times_met` increments AFTER trigger evaluation (see Timing section above) |
-
-**What breaks if you change the order:**
-
-- Swapping steps 3 and 4a: triggers generate continuation without seeing the current narration as context — the LLM has no story thread to continue from.
-- Swapping steps 4a and 5: `times_met` increments before trigger evaluation — `TimesMet Eq 0` would never fire on first encounter.
-- Moving step 1 after step 3: the narration gets logged against the old room, then the room changes — state is inconsistent.
-- Moving step 4b inside the lock: frontend cannot poll the main narration until the trigger LLM completes — both texts appear simultaneously.
 
 This invariant is enforced by code structure, not by runtime checks. If you refactor `execute_freeaction_impl`, preserve this order explicitly.

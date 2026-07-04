@@ -17,15 +17,15 @@ Game data is loaded from JSON seed files at startup and persisted to SQLite. Aft
 - `data/settings.json` — Application settings
 - `data/prompt_presets/{system,quantifier}/*.json` — Prompt presets
 
-### SQLite Database Schema (Migration v13)
+### SQLite Database Schema
 
-Tables for runtime persistence. The full column-level DDL lives in `src/adapters/driven/storage/db.rs::run_migrations`; column-by-column listings are intentionally not duplicated here.
+Tables for runtime persistence. The full column-level DDL lives in `src/adapters/driven/storage/db.rs`; column-by-column listings are intentionally not duplicated here.
 
 Core tables: `games`, `game_state_snapshots`, `messages`, `message_swipes`, `llm_messages`, `prompt_presets`.
 
 Game data tables: `worlds`, `maps`, `personas`, `characters`, `settings`.
 
-#### World Seeding & Loading (Phase 3)
+#### World Seeding & Loading
 
 On first startup (or if DB is empty), `bootstrap::run()` calls seeding functions:
 

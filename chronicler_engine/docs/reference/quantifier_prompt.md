@@ -1,6 +1,6 @@
 # Reference: Quantifier Prompt
 
-> **Context**: The quantifier prompt is a **separate secondary prompt** used for post-narration scene analysis. It is **not** part of the 7-layer narrative prompt system. For the main narrative prompt architecture, see [`system/prompt_system.md`](../system/prompt_system.md).
+> **Context**: The quantifier prompt is a **separate secondary prompt** used for post-narration scene analysis. It is **not** part of the 8-layer narrative prompt system. For the main narrative prompt architecture, see [`system/prompt_system.md`](../system/prompt_system.md).
 
 The quantifier prompt is rendered by `QuantifierPromptBuilder` in `src/application/agents/quantifier/prompt.rs`. It uses a separate LLM model connection to determine which NPCs are present in the current room and whether the player is moving.
 

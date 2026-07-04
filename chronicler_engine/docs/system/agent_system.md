@@ -45,7 +45,7 @@ pub enum ExecutionPhase {
 **Pipeline flow** (simplified):
 
 1. Load state from snapshot
-2. Run **PreGeneration** agents (currently empty — no registered pre-generation agents)
+2. Run **PreGeneration** agents
 3. Generate main narration via LLM
 4. Run **PostGeneration** agents (`QuantifierAgent` analyzes narration)
 5. Apply agent results → `execute_freeaction_impl` → save snapshot

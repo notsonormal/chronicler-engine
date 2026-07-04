@@ -24,7 +24,7 @@ The engine follows a **Marinara-Engine-inspired pattern**:
 
 ## The 8-Layer Prompt System
 
-> This section is the **authoritative source** for prompt layer definitions, token budget constants, and system/user separation. Other docs reference this section rather than duplicating it.
+
 
 The Chronicler Engine implements an 8-layer prompt structure (layers 0–7) mapped from SillyTavern's Prompt Manager:
 
@@ -46,7 +46,6 @@ The Chronicler Engine implements an 8-layer prompt structure (layers 0–7) mapp
 - **Role**: System
 - **Position**: Absolute (top)
 - **Content**: Assembled XML sections from the active preset — role, instructions, global_rules (from `world.json`). Writing style and output format are split out and placed after conversation history (see Post-History layer).
-- **Renders**: `build_system_prompt()` in `assembler.rs`
 - **Format**: XML-wrapped sections (see example below)
 - **Example**:
 
@@ -119,7 +118,7 @@ The Chronicler Engine implements an 8-layer prompt structure (layers 0–7) mapp
 - **Position**: After `<ConversationHistory>`, before `<PlayerInput>`
 - **Content**: `<writing_style>` and `<output_format>` sections from the active preset
 - **Why here?** LLMs exhibit strong recency bias. Placing prose constraints and structural rules at the end of the context window — after all story data but immediately before the generation point — makes them significantly more effective than burying them at the top of the prompt in the system message. This matches Marinara Engine's proven prompt architecture.
-- **Assembly**: `build_post_history_prompt()` in `assembler.rs` assembles these sections directly from the preset — no string splitting or delimiter transport is required.
+- **Assembly**: Assembled directly from the active preset — no string splitting or delimiter transport is required.
 
 ### Layer 7: User Input
 
@@ -149,7 +148,7 @@ This separation ensures that reasoning models receive clear imperative instructi
 
 ## Response Length Control
 
-Response length guidance is appended inside the `<output_format>` section by `build_post_history_prompt()` at assembly time:
+Response length guidance is appended inside the `<output_format>` section at assembly time:
 
 ```
 Response Length:
@@ -160,7 +159,7 @@ plot developments, build content (above 150 words), but allow the player to reac
 
 - **Source**: `AppSettings.response_length` (persisted in `settings.json`)
 - **Default**: Flexible scene-adaptive guidance
-- **Injection point**: Appended inside `<output_format>` section content by `build_post_history_prompt()`
+- **Injection point**: Appended inside `<output_format>` section content at assembly time
 
 ## Context Templates
 
