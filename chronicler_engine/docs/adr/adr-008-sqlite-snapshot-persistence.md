@@ -1,6 +1,7 @@
 # ADR-008: SQLite Snapshot Persistence
 
 **Date:** 2026-05-09
+**Status:** Accepted
 
 ---
 
@@ -13,7 +14,7 @@ The engine previously held all mutable game state in a single `Arc<Mutex<GameSta
 - **No regeneration safety**: Retry logic had no stable anchor point to revert to
 - **Test flakiness**: Concurrent tests shared mutable state through the same mutex
 
-The Phase 1.7 migration (see `docs/plans/multi-agent-phase1-snapshots-reset-20260509.md`) removed the mutex in favor of SQLite-backed snapshots, but introduced an application-level read-modify-write race condition because multiple concurrent requests could load the same snapshot, modify independently, and overwrite each other.
+The Phase 1.7 migration removed the mutex in favor of SQLite-backed snapshots, but introduced an application-level read-modify-write race condition because multiple concurrent requests could load the same snapshot, modify independently, and overwrite each other.
 
 ---
 
@@ -40,14 +41,7 @@ pub struct GameStateSnapshot {
 - **Migrations are code** — `run_migrations(conn)` applies `CREATE TABLE IF NOT EXISTS` at startup
 - **Reset is hard delete** — drops all snapshot rows and rebuilds initial state from `GameState::new`
 
-### Concurrency Control
-
-An `AtomicBool` in `AppState` acts as a domain-level generation gate:
-
-- `compare_exchange(false, true)` before accepting async actions
-- Rejects concurrent actions with `"Still thinking..."`
-- `GenerationGuard` (RAII) ensures the flag is cleared on task exit, even on panic
-- Client-side: HTMX `hx-sync` + button disable prevent most double-submits
+Concurrency control (generation gate, AtomicBool, RAII guard) is documented in ADR-010.
 
 ---
 
@@ -67,12 +61,12 @@ An `AtomicBool` in `AppState` acts as a domain-level generation gate:
 ### Trade-offs
 - Chose SQLite over in-memory-only or JSON files for ACID guarantees and queryability
 - Chose hard delete for reset over soft-delete for simplicity
-- Chose generation gate over mutex for domain-semantic correctness (one action at a time)
 
 ---
 
 ## Related ADRs
 
+- [ADR-010: Concurrency and Generation Gate Model](./adr-010-concurrency-generation-gate.md) — Generation gate that replaced the old mutex
 - [ADR-009: Agent Trait and Registry Architecture](./adr-009-agent-trait-registry.md) — Snapshots enable agent pipeline state anchoring
 
 ---

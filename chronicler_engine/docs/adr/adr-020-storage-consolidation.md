@@ -1,8 +1,7 @@
 # ADR-020: Unified Storage Struct
 
-## Status
-
-**Accepted**
+**Date:** 2026-05-28
+**Status:** Accepted
 
 > **Note (2026-06-27):** As of the Backend/LayeredBackend split refactor, `Backend::Test` was reorganized into `LayeredBackend::Test`. The original decision rationale stands — failure injection still uses `Arc<Mutex<HashMap<&'static str, TestOverride>>>` maps for both static setup (`with_failure`) and dynamic toggling (`TestFailureHandle::set` / `clear`). Type location changed (test-infra types moved to `storage::backend::test_support`); purpose unchanged.
 
@@ -62,18 +61,8 @@ All previous trait methods become inherent methods on `Storage`. Callers pass `A
 - **No trait-based polymorphism.** If a third backend (e.g. PostgreSQL) is added, the enum grows. This is acceptable because the project has no roadmap for additional backends.
 - **`Backend` enum size.** `InMemory` variant is large; boxing it (`Box<InMemoryData>`) keeps the enum small for the production `Sqlite` path.
 
-## Migration
+### Trade-offs
+- Chose single concrete struct over trait-based polymorphism (simplicity won; no roadmap for third backend)
+- Chose enum dispatch over dyn Trait (compiler-exhaustive matching won over open extensibility)
+- Chose dynamic failure injection over per-trait mock structs (test ergonomics won; enum size mitigated with `Box`)
 
-1. Create `Storage` struct with all methods from the six traits.
-2. Update `GameServiceContext`, `AppState`, `ServerResources` to use `Arc<Storage>`.
-3. Update bootstrap to construct one `Storage::new_sqlite()` instead of five repositories.
-4. Rewrite all test doubles to use `Backend::Test` + `TestFailureHandle`.
-5. Delete old trait files, repository structs, and in-memory implementations.
-6. Remove dead `guardrails_one_table_per_storage` guardrail (ADR-019 is superseded).
-
-## References
-
-- `src/storage/backend/mod.rs` — Unified `Storage` struct
-- `src/application/context.rs` — `GameServiceContext` and cross-storage helpers
-- ADR-019 — Previous "one table per storage module" decision (now superseded)
-- `booster-gold-damage-domino.md` — Implementation plan

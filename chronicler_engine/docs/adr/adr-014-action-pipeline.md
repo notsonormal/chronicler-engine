@@ -1,8 +1,7 @@
 # ADR-014: Action Pipeline Architecture
 
-## Status
-
-**Accepted** — Implemented during the 2026-05 refactor.
+**Date:** 2026-05-19
+**Status:** Accepted — partially superseded by ADR-027 (ActionPipelineBackend trait collapsed into direct fields; phase-based pipeline design remains in force)
 
 ## Context
 
@@ -35,3 +34,8 @@ We extracted an `ActionPipeline` module that explicitly models the game flow pha
 ### Negative
 
 - **Slight Indirection**: Understanding the pipeline requires looking at both the phase logic and the `ActionPipelineBackend` trait implementation.
+
+### Trade-offs
+
+- Chose trait extraction over monolithic function (testability won over locality)
+- Chose phase-based design over event-driven composition (simpler control flow; retry and normal paths share phases)

@@ -5,7 +5,7 @@ This folder contains all documentation for the Chronicler Engine project.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-07-03 19:47 UTC*
+*Index last generated: 2026-07-04 00:03 UTC*
 
 ### Root files
 
@@ -14,6 +14,7 @@ This folder contains all documentation for the Chronicler Engine project.
 
 ### `docs/adr/`
 
+- [ADR-NNN: Title (imperative or declarative, e.g. "Use SQLite for Game State")](./adr/adr-000-template.md)
 - [ADR-001: HTMX Web Dashboard Architecture](./adr/adr-001-htmx-web-dashboard.md)
 - [ADR-002: HTTP Polling for Real-Time Updates](./adr/adr-002-http-polling.md)
 - [ADR-003: Askama Template Engine for HTML Rendering](./adr/adr-003-askama-templates.md)
@@ -26,16 +27,12 @@ This folder contains all documentation for the Chronicler Engine project.
 - [ADR-010: Concurrency and Generation Gate Model](./adr/adr-010-concurrency-generation-gate.md)
 - [ADR-011: Text Check Integration](./adr/adr-011-text-check-integration.md)
 - [ADR-012: LLM Call Logging and Forensics](./adr/adr-012-llm-message-logging.md)
-- [ADR-013: Message Domain Model](./adr/adr-013-message-domain-model.md)
 - [ADR-014: Action Pipeline Architecture](./adr/adr-014-action-pipeline.md)
 - [ADR-015: Prompt Presets System](./adr/adr-015-prompt-presets.md)
 - [ADR-016: Multi-Game Support](./adr/adr-016-multi-game-support.md)
 - [ADR-017: Message Swipes](./adr/adr-017-message-swipes.md)
-- [ADR-019: One Table Per Storage Module](./adr/adr-019-one-table-per-storage-module.md)
 - [ADR-020: Unified Storage Struct](./adr/adr-020-storage-consolidation.md)
-- [ADR-021: State Patch Reducer for Post-Generation Agent Composition](./adr/adr-021-state-patch-reducer.md)
 - [ADR-022: PromptAssembler Trait Decoupling](./adr/adr-022-prompt-assembler.md)
-- [ADR-023: Immediate Message Persistence](./adr/adr-023-immediate-message-persistence.md)
 - [ADR-024: Migrate Game Data to SQLite with Seed Pattern](./adr/adr-024-game-data-migration-to-sqlite.md)
 - [ADR-025: Multi-World Data Foundation](./adr/adr-025-multi-world-data-foundation.md)
 - [ADR-026: Relocate Persona Binding from World to Game](./adr/adr-026-persona-relocation-to-game.md)
@@ -64,6 +61,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Plan: Abstraction Anti-Pattern Prevention via Advisory Healthcheck](./plans/abstraction-antipattern-healthcheck-plan.md)
 - [Super-Plan: Abstraction-Fixes Follow-Up](./plans/abstraction-fixes-followup-superplan.md)
 - [Plan: Diagnostic Decision Tree as Agent Infrastructure](./plans/diagnostic-decision-tree-plan.md)
+- [Plan: Documentation Hygiene Skill](./plans/docs-hygiene-skill-plan.md)
 - [Deferred arch-lint Rules — Hexagonal Reorganization](./plans/hexagonal-deferred-arch-lint-rules.md)
 - [Plan: Hexagonal Architecture Reorganization](./plans/hexagonal-reorganization-plan.md)
 - [Plan: Mapless Worlds via Freeform Location Names](./plans/mapless-worlds-plan.md)
@@ -81,25 +79,6 @@ This folder contains all documentation for the Chronicler Engine project.
 - [T6: MessageHistory Encapsulation](./plans/t6-messagehistory-encapsulation.md)
 - [T9: Doc / Migration Debt](./plans/t9-doc-and-migration-debt.md)
 
-### `docs/plans/archived/`
-
-- [Implementation Plan: Abstraction Anti-Pattern Fixes (Corrected)](./plans/archived/abstraction-fixes-implementation-plan.md)
-- [Plan: Abstraction Anti-Pattern Fixes (Tiered)](./plans/archived/abstraction-fixes-plan.md)
-- [ADR-026 Follow-up: Thermo-Nuclear Review Quality Fixes](./plans/archived/adr-026-followup-quality-fixes.md)
-- [Plan: Antipattern-Checker Agent Skill](./plans/archived/antipattern-checker-skill-plan.md)
-- [Fix Boot Path: Restore Auto-Create Game with `--persona` CLI Flag](./plans/archived/fix-boot-and-default-game.md)
-- [Plan: Phase 2 Test Quality Cleanup + Coverage Gap Fixes](./plans/archived/phase2-test-quality-and-coverage-gaps.md)
-- [Plan: Phase 2 Tests + Coverage Fixes](./plans/archived/phase2-tests-coverage-fixes.md)
-- [Plan: Phase 2 Thermonuclear Review Fixes](./plans/archived/phase2-thermonuclear-review-fixes.md)
-- [Pipeline Decomposition Review Fixes (Round 3)](./plans/archived/pipeline-review-fixes-round3.md)
-- [Review Fixes — Pipeline Decomposition Quality](./plans/archived/review-fixes-pipeline-quality.md)
-- [Subplan A: Relocate `starting_room_id` to `StartingScenario`](./plans/archived/subplan-a-relocate-starting-room.md)
-- [T10 Execution Plan: Safe Cleanup Items](./plans/archived/t10-execution-safe-cleanup-items.md)
-- [T3: Service Layer Cleanup](./plans/archived/t3-service-layer-cleanup.md)
-- [T4: MockBackend Modernization](./plans/archived/t4-mockbackend-modernization.md)
-- [T7 Sub-Plan (Archived): Split `Backend` enum into `Backend` + `LayeredBackend`](./plans/archived/t7-storage-backend-layered-split.md)
-- [Plan: Test-Police Audit Fixes — Hints Removal + Cancel Test Alignment](./plans/archived/test-police-cancel-and-hints-removal.md)
-
 ### `docs/reference/`
 
 - [Data Layer Reference](./reference/data_layer.md)
@@ -108,25 +87,6 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Reference: Quantifier Prompt](./reference/quantifier_prompt.md)
 - [Reference: System Prompt](./reference/system_prompt.md)
 - [Specification: Testing Strategy and Architecture](./reference/testing.md)
-
-### `docs/reviews/`
-
-- [Chronicler Engine — Abstraction Anti-Pattern Investigation](./reviews/abstraction-antipatterns-summary.md)
-- [Architectural Review: AI Agent Comprehension Challenges](./reviews/agent-comprehension-review.md)
-- [Documentation Consistency Report](./reviews/docs-consistency-report.md)
-- [Zone A: src/model/ — Abstraction Anti-Pattern Report](./reviews/zone-a-model.md)
-- [Zone B: application/bootstrap/engine — Abstraction Anti-Pattern Report](./reviews/zone-b-app-engine.md)
-
-### `docs/reviews/archived/`
-
-- [Agent Scalability Assessment: Chronicler vs. Marinara](./reviews/archived/agent-scalability-assessment.md)
-- [Cross-Project Architectural Comparison: Chronicler Engine vs. Marinara Engine](./reviews/archived/cross-project-architectural-comparison.md)
-- [Architectural Review: Defensive Architecture & Invariant Enforcement](./reviews/archived/defensive-architecture-review.md)
-- [Holistic Architectural Review: Chronicler Engine](./reviews/archived/holistic-architectural-review.md)
-- [Phase 1: Domain Alignment — Findings](./reviews/archived/holistic-review-phase1-domain-alignment.md)
-- [Phase 2: Structural Forces — Findings](./reviews/archived/holistic-review-phase2-structural-forces.md)
-- [Phase 3: Evolution Stress Test — Findings](./reviews/archived/holistic-review-phase3-evolution-stress.md)
-- [Phase 4: Health Metrics — Baseline](./reviews/archived/holistic-review-phase4-health-metrics.md)
 
 ### `docs/system/`
 

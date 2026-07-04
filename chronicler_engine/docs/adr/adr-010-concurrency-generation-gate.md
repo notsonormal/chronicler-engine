@@ -1,7 +1,7 @@
 # ADR-010: Concurrency and Generation Gate Model
 
 **Date:** 2026-05-10
-**Updated:** 2026-05-18 — Cooperative cancellation checkpoints added to the action pipeline
+**Status:** Accepted
 
 ---
 
@@ -59,3 +59,4 @@ An atomic flag in application state acts as a domain-level action lock:
 
 - **2026-05-05**: Initial plan to replace `std::thread::spawn` with Tokio
 - **2026-05-10**: Generation gate added to fix race condition exposed by snapshot migration
+- **2026-05-18**: Cooperative cancellation checkpoints added to the action pipeline

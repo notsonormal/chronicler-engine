@@ -111,27 +111,7 @@ self.service.complete(agent_name, &assembled.system_prompt, &assembled.user_prom
 2. **Test Migration**: Context-based backend tests move to assembler test suite
 3. **Breaking Change**: All backend implementations must be updated to remove context methods
 
-### Files Changed
-
-- `src/narrative/llm/backend.rs` — Slim trait
-- `src/narrative/llm/openrouter.rs` — Remove `narrate_from_context`, token budget fields
-- `src/narrative/llm/ollama.rs` — Remove `narrate_from_context`, token budget fields
-- `src/narrative/llm/mock.rs` — Remove context methods
-- `src/narrative/prompt/assembler.rs` — New file, `PromptAssembler` trait + `LayeredPromptAssembler` impl
-- `src/narrative/prompt/assembler_tests.rs` — New file, assembler tests
-- `src/narrative/prompt/builder.rs` — Replaced by assembler
-- `src/narrative/prompt/types.rs` — Add trait + `AssembledPrompt`, remove `PromptBuilder`
-- `src/application/action_pipeline/pipeline.rs` — Load preset, call assembler
-- `src/bootstrap/run.rs` — Load preset, call assembler for arrival narration
-
-## Compliance
-
-All new LLM backends MUST:
-- Implement only the slim `LlmBackend` trait (primitives only)
-- NOT contain prompt assembly logic
-- Receive already-assembled prompts from callers
-
-All prompt assembly MUST:
-- Go through `PromptAssembler` trait
-- NOT use delimiter hacks to split preset sections
-- Configure token budgets in assembler, not backends
+### Trade-offs
+- Chose trait decoupling over monolithic backend (clarity won; migration cost accepted as one-time)
+- Chose moving token budgets to assembler over keeping on backend (configuration ownership won)
+- Chose removing delimiter hack over backward compat (cleaner trait surface won)

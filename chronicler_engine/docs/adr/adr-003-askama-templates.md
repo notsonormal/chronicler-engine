@@ -1,6 +1,7 @@
 # ADR-003: Askama Template Engine for HTML Rendering
 
 **Date:** 2025-04-12
+**Status:** Accepted
 
 ---
 

@@ -1,6 +1,7 @@
 # ADR-011: Text Check Integration
 
 **Date:** 2026-05-09
+**Status:** Accepted
 
 > **Reference**: Full architecture, types, endpoints, settings schema, and UI integration details are in [`docs/system/text_check.md`](../system/text_check.md).
 

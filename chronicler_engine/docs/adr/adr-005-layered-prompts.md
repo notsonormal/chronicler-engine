@@ -1,10 +1,10 @@
 # ADR-005: SillyTavern-Style Layered Prompt System
 
 **Date:** 2025-04-13
+**Status:** Accepted
+**Drivers:** Narrative quality, token budget determinism, full context per action
 
 > **Reference**: Full prompt layer specs, token budgets, and implementation details are in [`docs/system/prompt_system.md`](../system/prompt_system.md).
-
----
 
 ## Context
 
@@ -16,60 +16,19 @@ Pre-layered prompt system sent isolated prompts without comprehensive context:
 
 The team wanted SillyTavern-style comprehensive prompting for better narrative quality.
 
----
-
 ## Decision
 
-**Adopt an 8-layer prompt system sending full context to the LLM on every action.**
+**Adopt a layered prompt system sending full context to the LLM on every action, with hard truncation, keyword triggers, and full history.**
 
-### Key choices and why
+### Key choices
 
-**Hard truncation over summarization** — Simpler and more reliable. Summarization requires a second LLM call, adds latency, and can hallucinate. Oldest history entries are trimmed first.
-
-**Keyword triggers over RAG** — No vector database dependency. For a game with bounded lore, string matching against history is fast and sufficient. RAG adds operational complexity with marginal benefit at this scale.
-
-**Full history over a sliding window** — The LLM needs full context for coherent long-form narrative. A fixed window risks cutting off plot-critical earlier entries arbitrarily.
-
-**Single unified OutputFormat layer** — Previously `PhiMode::Continuation` existed as a separate variant; removed 2026-05-03. Continuation-specific instructions moved to the trigger user message (Layer 6) instead. The PHI layer was later renamed to **OutputFormat** (2026-05-19) to better reflect its purpose: structural output rules (anti-recap, perspective, tense) rather than post-history steering.
-
----
-
-## OutputFormat Separation and Hardcoded Template Removal (2026-05-19)
-
-**Problem**: The system prompt and output format (formerly PHI) were tightly coupled. Writing style instructions (third-person limited, past tense, literary fiction style) were baked into the hardcoded `SYSTEM_PROMPT_TEMPLATE` in `templates.rs`. This meant:
-1. Users could not customize writing style without code changes
-2. The hardcoded template served as an invisible fallback, masking when DB preset loading failed
-3. The output format layer contained tone dictates that belonged in the customizable system prompt
-
-**Decision**:
-- **Delete `templates.rs`** — The hardcoded `SYSTEM_PROMPT_TEMPLATE` is removed entirely. System prompts are now sourced exclusively from DB-driven presets (see ADR-015).
-- **Move writing style to system prompt preset** — Tone, perspective, and tense instructions are part of the customizable `default.json` seed and user presets.
-- **OutputFormat becomes generic** — The inline `OUTPUT_FORMAT_TEMPLATE` in `builder.rs` contains only structural rules: perspective/tense reminders (generic, not stylistic), the "narrate what happens now" instruction, and an anti-recap rule ("Do not re-narrate events that already occurred in the history above").
-- **Startup gap closed** — On bootstrap, the active system preset is loaded from the DB and cached into `AppSettings.active_system_prompt` (a `#[serde(skip)]` transient field). This guarantees the system prompt is populated even though the cached text is not persisted to `settings.json`.
-
-## Sectioned Preset Refactor (2026-05-25)
-
-**Problem**: The monolithic `prompt_text` field made fine-grained customization impossible. Users had to rewrite the entire prompt to change one aspect (e.g., writing style or output format).
-
-**Decision**:
-- **Split `prompt_text` into four fields** — `role`, `instructions`, `writing_style`, `output_format`
-- **Add `assemble_prompt_text()`** — Assembles sections into XML-wrapped tags with fixed order: `role` → `instructions` → `writing_style` → `global_rules` → `output_format`
-- **Move OutputFormat into the preset** — The hardcoded `OUTPUT_FORMAT_TEMPLATE` in `builder.rs` is deleted. Its content (anti-recap, GPTisms ban, writing style guidance) now lives in the preset fields. Output format moves from the user message (Layer 7) to the system prompt (`<output_format>` section).
-- **Inject global rules and response length at assembly time** — `world.json` `global_rules` and `settings.json` `response_length` are appended dynamically by `assemble_prompt_text()`, not by the builder.
-
-### Why this separation matters
-
-| Layer | Purpose | Customizable | XML Tag |
-|-------|---------|-------------|---------|
-| **Role** | Identity and agency | Yes (via Prompt Presets) | `<role>` |
-| **Instructions** | Behavioral rules | Yes (via Prompt Presets) | `<instructions>` |
-| **Writing Style** | Prose constraints | Yes (via Prompt Presets) | `<writing_style>` |
-| **Global Rules** | World-specific rules | Yes (via `world.json`) | `<global_rules>` |
-| **Output Format** | Structural constraints | Yes (via Prompt Presets) | `<output_format>` |
-
-This aligns with the Marinara architecture pattern: system prompt sets the "who, how, and what structure," while all external context stays in the user role.
-
----
+- **Hard truncation over summarization** — Simpler and more reliable. Summarization requires a second LLM call, adds latency, can hallucinate. Oldest history entries trimmed first.
+- **Keyword triggers over RAG** — No vector database dependency. For a game with bounded lore, string matching against history is fast and sufficient. RAG adds operational complexity with marginal benefit at this scale.
+- **Full history over a sliding window** — The LLM needs full context for coherent long-form narrative. A fixed window risks cutting off plot-critical earlier entries arbitrarily.
+- **Single unified OutputFormat layer** — Previously `PhiMode::Continuation` existed as a separate variant; removed 2026-05-03. Continuation-specific instructions moved to the trigger user message instead. OutputFormat holds structural rules (anti-recap, perspective, tense), not tone dictates.
+- **System prompt is preset-driven** — Writing style, role, instructions, and output format live in DB-backed prompt presets (see ADR-015), not hardcoded templates. The hardcoded `SYSTEM_PROMPT_TEMPLATE` was removed.
+- **Post-history section placement** — `writing_style` and `output_format` moved to the post-history user message (after `<ConversationHistory>`) so style/format constraints are not drowned out by massive context data. Matches Marinara Engine's proven architecture.
+- **`PromptAssembler` trait decouples assembly from transport** — `LayeredPromptAssembler` owns the layer assembly logic; `LlmBackend` is pure transport. See ADR-022.
 
 ## Consequences
 
@@ -77,9 +36,9 @@ This aligns with the Marinara architecture pattern: system prompt sets the "who,
 - Context-rich prompts produce meaningfully better narrative quality
 - Token budget management is deterministic (no LLM-in-the-loop summarization)
 - Prompt injection sanitization via `{{variable}}` pattern filtering
-- System prompt is now fully customizable via the Prompt Presets UI
+- System prompt fully customizable via the Prompt Presets UI
 - OutputFormat is generic and stable — no risk of tone drift from hardcoded templates
-- Removing the hardcoded fallback surfaces DB loading failures immediately
+- Assembly logic is testable in isolation from LLM transport
 
 ### Negative
 - More tokens per request → higher latency and API cost
@@ -90,22 +49,19 @@ This aligns with the Marinara architecture pattern: system prompt sets the "who,
 - Chose hard truncation over summarization (simpler, no recursive LLM cost)
 - Chose keyword triggers over RAG (no vector DB to run/maintain)
 - Chose full history over sliding window (better narrative coherence)
-- Chose generic OutputFormat over customizable one (simplicity and consistency across presets)
-
----
+- Chose preset-driven over hardcoded system prompt (customizability, no invisible fallback)
+- Chose post-history placement of style/format (recency-bias avoidance)
 
 ## Related ADRs
 
 - [ADR-004: XML-Structured LLM Prompts](./adr-004-xml-prompt-format.md) — Format used within each layer
-
----
+- [ADR-015: Prompt Presets System](./adr-015-prompt-presets.md) — DB-backed prompt storage and assembly
+- [ADR-022: PromptAssembler Trait Decoupling](./adr-022-prompt-assembler.md) — Assembly decoupled from transport
 
 ## History
 
-- **2025-04-13**: Layered prompt system implemented; conversation history added to LLM calls for the first time
-- **2026-05-03**: `PhiMode::Continuation` removed; PHI unified to a single universal template
-- **2026-05-03**: System prompt and PHI converted to plain-text instructions (Marinara pattern); XML retained only for external data layers. Fixes Gemma 4 reasoning-loop bug. See ADR-004 v3 for full context.
-- **2026-05-19**: PHI renamed to OutputFormat; hardcoded `SYSTEM_PROMPT_TEMPLATE` removed; writing style moved to customizable system prompt preset; generic anti-recap rule added to OutputFormat; startup loading of active preset into `AppSettings` closes the cached-prompt gap
-- **2026-05-25**: `prompt_text` split into `role`/`instructions`/`writing_style`/`output_format`; `assemble_prompt_text()` added; `OUTPUT_FORMAT_TEMPLATE` deleted; output format moves from user message to system prompt; DB migrations v7 (add columns) and v8 (drop `prompt_text`)
-- **2026-05-26**: writing_style and output_format moved from system prompt to post-history user message. `assemble_split_text()` added with `<!--POST_HISTORY-->` delimiter transport. PromptBuilder::from_context() splits the delimiter automatically, keeping PromptContext unchanged. This avoids the recency-bias weakness of the previous arrangement: style/format constraints at the top of the prompt were drowned out by massive context data in the user message. The new ordering matches Marinara Engine's proven architecture.
-- **2026-05-26**: `PromptBuilder` deleted; replaced by `PromptAssembler` trait and `LayeredPromptAssembler`. The `LlmBackend` trait slimmed to pure transport (`complete`, `narrate_continuation` only). `narrate_action`, `narrate_arrival`, `generate_dialogue` removed from trait and all backends. The `<!--POST_HISTORY-->` delimiter hack and `assemble_split_text()` deleted — post-history sections are assembled directly by `build_post_history_prompt()` in `assembler.rs`. `DefaultGameService` owns the assembler. `ActionPipelineBackend` gains `assembler()` and loses `narrate_action()`.
+- **2025-04-13**: Layered prompt system implemented; conversation history added to LLM calls
+- **2026-05-03**: `PhiMode::Continuation` removed; PHI unified to single universal template. Plain-text instructions inside XML data layers for reasoning-model compatibility
+- **2026-05-19**: PHI renamed to OutputFormat; hardcoded `SYSTEM_PROMPT_TEMPLATE` removed; writing style moved to customizable system prompt preset; generic anti-recap rule added to OutputFormat
+- **2026-05-25**: `prompt_text` split into `role`/`instructions`/`writing_style`/`output_format`; `assemble_prompt_text()` added
+- **2026-05-26**: `writing_style` and `output_format` moved to post-history user message; `PromptBuilder` replaced by `PromptAssembler` trait and `LayeredPromptAssembler` (ADR-022)

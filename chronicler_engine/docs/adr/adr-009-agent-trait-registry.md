@@ -1,7 +1,7 @@
 # ADR-009: Agent Trait and Registry Architecture
 
 **Date:** 2026-05-10
-**Updated:** 2026-05-17 — `game_service` extracted from `engine/` to `application/game_service/`
+**Status:** Accepted
 
 ---
 
@@ -85,3 +85,4 @@ pub enum StatePatch {
 ## History
 
 - **2026-05-10**: Phase 2 implementation — `Agent` trait, `AgentRegistry`, `QuantifierAgent` migration
+- **2026-05-17**: `game_service` extracted from `engine/` to `application/game_service/`

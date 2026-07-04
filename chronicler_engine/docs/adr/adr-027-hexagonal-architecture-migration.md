@@ -110,7 +110,7 @@ exempt-files = [
 rationale = "Storage direct access — see ADR-027"
 ```
 
-Deferred rules tracked in `docs/plans/hexagonal-deferred-arch-lint-rules.md`.
+Deferred rules tracked separately in a live plan doc.
 
 ## Alternatives Considered
 
@@ -163,43 +163,14 @@ The "one impl" heuristic is necessary but not sufficient — **location of consu
   - This ADR as the authority
   - Phase 2 closes leaks; enforcement follows
 
-### Neutral
+### Trade-offs
 
 - **Folder renaming.** Phase 1 moved files to match hexagonal layout (`model/` → `domain/model/`, `server/` → `adapters/driving/http/`, `storage/` → `adapters/driven/storage/`, `narrative/` split).
 - **Port trait locations.** `LlmProvider`, `LlmMessageRepository`, `TextChecker` all in `src/application/ports/`.
 
-## Architecture Impact
+## Related ADRs
 
-### Modified Modules
-
-| Module | Change |
-|--------|--------|
-| `src/application/ports/` | New folder for driven-side port traits: `llm_provider.rs`, `llm_message_repository.rs`, `text_checker.rs` |
-| `src/adapters/driven/` | New parent folder: `llm/`, `storage/`, `text_check/` |
-| `src/adapters/driving/` | New parent folder: `http/`, `cli.rs` |
-| `src/domain/` | New parent folder: `model/`, `engine/` |
-| `src/bootstrap/` | Composition root: `llm_factory.rs`, `text_check_factory.rs` |
-| `src/application/context.rs` | Marked with `// arch-lint: storage-direct` comment |
-| `src/application/application_service.rs` | Marked with `// arch-lint: storage-direct` comment |
-| `src/application/game_service.rs` | Marked with `// arch-lint: storage-direct` comment |
-| `docs/architecture/system.md` | Updated with hexagonal section + port inventory |
-| `docs/plans/hexagonal-deferred-arch-lint-rules.md` | New file tracking deferred rules |
-
-### Verification
-
-Implementation complete in working tree; verification plan:
-
-- **Build**: `cargo build` clean; `cargo clippy` clean
-- **Tests**: `python build.py` passes (baseline: 1190 passed + 2 skipped)
-- **arch-lint**: `application → adapters/driven` rule deferred (documented in this ADR + deferred-rules doc)
-- **Comment markers**: `grep -rn "arch-lint: storage-direct" src/application/` → exactly 3 matches (context.rs, application_service.rs, game_service.rs)
-
-## Related
-
-- Plan: `docs/plans/hexagonal-reorganization-plan.md` (Phase 1 + Phase 2 + Phase 3.4)
-- Deferred rules: `docs/plans/hexagonal-deferred-arch-lint-rules.md`
 - ADR-012: LLM Call Logging and Forensics (motivation for `LlmMessageRepository`)
-- ADR-018: Application Service Layer (application orchestration layer)
 - ADR-020: Unified Storage Struct (`Storage` concrete adapter)
 - ADR-022: PromptAssembler Trait Decoupling (port trait precedent)
 - ADR-026: Relocate Persona Binding from World to Game (preceding hexagon-phase2 work)

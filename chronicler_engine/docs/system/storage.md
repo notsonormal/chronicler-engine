@@ -2,7 +2,7 @@
 
 **Module:** `crate::adapters::driven::storage`
 **Status:** Implemented
-**Related ADRs:** [ADR-019](../adr/adr-019-one-table-per-storage-module.md) (superseded),
+**Related ADRs:** ADR-019 (deleted, superseded by ADR-020),
 [ADR-020](../adr/adr-020-storage-consolidation.md),
 [ADR-024](../adr/adr-024-game-data-migration-to-sqlite.md)
 

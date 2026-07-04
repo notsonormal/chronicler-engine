@@ -1,10 +1,7 @@
 # ADR-017: Message Swipes
 
-## Status
-
-**Accepted** — Implemented 2026-05-24
-
-**Supersedes**: ADR-013 simplification (swipes reintroduced with dedicated table)
+**Date:** 2026-05-24
+**Status:** Accepted — supersedes ADR-013 simplification (swipes reintroduced with dedicated table)
 
 ## Context
 
@@ -57,6 +54,11 @@ Swiping a non-last message would require deleting all messages after it (since t
 - **Migration complexity**: SQLite cannot drop columns, so v6 recreates the `messages` table.
 - **Only last message swipeable**: Users must delete subsequent messages to swipe earlier ones.
 
+### Trade-offs
+- Chose two-table design over single-table with versioning (clearer soft-delete semantics; JOIN cost acceptable)
+- Chose per-swipe snapshot_id over shared snapshot (state-consistent swiping won over storage)
+- Chose soft-delete over hard-delete on retry (recovery safety won over storage simplicity)
+
 ## Alternatives Considered
 
 1. **Keep ADR-013 snapshot-only model**: Rejected because destructive retry loses user data and prevents comparison.
@@ -74,11 +76,3 @@ Swiping a non-last message would require deleting all messages after it (since t
 | Swipe navigation | None | Left/right arrows on last message |
 | State per swipe | Single `snapshot_id` on message | Each `Swipe` has its own `snapshot_id` |
 
-## References
-
-- `src/model/message.rs` — `Message` and `Swipe` structs
-- `src/storage/db.rs` — v6 migration (`message_swipes` table)
-- `src/storage/snapshot_storage.rs` — SQLite swipe loading and storage
-- `src/application/action_pipeline/retry.rs` — Soft-delete + swipe migration logic
-- `src/server/templates.rs` — Swipe controls and retrigger button rendering
-- `assets/index.html` — `submitNewSwipe()`, `switchSwipe()`, `submitRetrigger()`

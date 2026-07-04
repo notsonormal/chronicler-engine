@@ -1,6 +1,7 @@
 # ADR-012: LLM Call Logging and Forensics
 
 **Date:** 2026-05-09
+**Status:** Accepted
 
 ---
 
@@ -53,6 +54,12 @@ This inferential loop is slow and unreliable. We need structured forensics that 
 - **Row cap is hardcoded**: Not configurable per-deployment. If more history is needed, the cap must be changed in code.
 - **No structured query**: The flat schema supports list-by-time but not filtering by agent or model. Complex forensics may require ad-hoc SQL.
 - **Privacy consideration**: Raw prompts include player input and world lore. The table is local-only (SQLite), but backups or log shipping would need redaction.
+
+### Trade-offs
+
+- Chose hardcoded global row cap over per-deployment config (simplicity; can revisit if needed)
+- Chose flat schema over normalized/relational design (list-by-time is the primary access pattern)
+- Chose SQLite-only storage over log shipping (local-first; backups require manual redaction)
 
 ---
 

@@ -1,7 +1,7 @@
 # ADR-007: Settings System Architecture
 
 **Date:** 2026-05-01
-**Status:** Superseded (partially) — the flat settings design was replaced by the Connection Profiles system. Core principles (JSON persistence, runtime mutability, HTMX tabbed UI) remain unchanged.
+**Status:** Accepted — original flat settings design; v2 Connection Profiles supersession is an inline revision (known debt, see README)
 
 > **Reference**: Current settings schema and configuration details are in the implementation at `src/model/settings.rs`.
 

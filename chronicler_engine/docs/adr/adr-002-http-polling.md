@@ -1,6 +1,7 @@
 # ADR-002: HTTP Polling for Real-Time Updates
 
 **Date:** 2026-04-19
+**Status:** Accepted
 
 ---
 

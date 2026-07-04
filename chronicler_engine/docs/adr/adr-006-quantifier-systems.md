@@ -1,6 +1,7 @@
 # ADR-006: Quantifier-Driven Game Systems
 
 **Date:** 2026-04-17
+**Status:** Accepted
 
 ---
 

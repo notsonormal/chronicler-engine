@@ -36,7 +36,7 @@ Two independent preset collections — `System` and `Quantifier` — each with:
 
 ### Preset structure
 
-Each preset is split into four sections that are assembled into XML-wrapped tags at runtime:
+Each preset is split into four sections that are assembled into XML-wrapped tags at runtime (ADR-004 owns the XML format; ADR-005 owns the layering and post-history placement):
 
 | Field | XML Tag | Content |
 |-------|---------|---------|

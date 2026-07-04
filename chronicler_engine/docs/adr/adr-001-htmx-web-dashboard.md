@@ -1,6 +1,7 @@
 # ADR-001: HTMX Web Dashboard Architecture
 
 **Date:** 2025-04-12
+**Status:** Accepted
 
 ---
 
@@ -45,12 +46,6 @@ flowchart TD
     Server --> LLM
 ```
 
-### UI Layout
-
-- **Header** (48px): Game title + current location
-- **Main Body** (flex): 70% story log / 30% visual sidebar
-- **Action Area** (60px): Command input + status indicator
-
 ---
 
 ## Consequences
@@ -85,13 +80,3 @@ flowchart TD
 
 - **2025-04-12**: Initial HTMX migration (hx_migration.md plan)
 - **2026-04-19**: HTTP polling replaces WebSocket (see ADR-002)
-
----
-
-## References
-
-- Architecture: `docs/architecture/system.md`
-
-## Historical Note
-
-This decision replaced an earlier TUI approach using Ratatui. The HTMX migration was the pivotal moment the engine moved from terminal-based to web-based UI.

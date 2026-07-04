@@ -48,76 +48,24 @@ Refactor the data layer to load world context from the database per-request base
 - Log warning but don't crash server
 - Ensures server can start even if world data is corrupted
 
-### Implementation Pattern
-
-```rust
-// AppState construction — NO world singletons
-pub struct AppState {
-    pub storage: Arc<Storage>,
-    pub game_service: Arc<GameService>,
-    // ... other fields
-}
-
-// Handler pattern — use appropriate method based on criticality
-pub async fn action_handler(state: &AppState) -> Result<_, _> {
-    let ctx = state.as_game_service_context()?; // Critical — error if missing
-    // ... use ctx.world, ctx.map, etc.
-}
-
-pub async fn render_fragment(state: &AppState) -> Html<String> {
-    let ctx = state.as_game_service_context_or_default(); // Non-critical — degrade gracefully
-    // ... render with empty defaults if world not found
-}
-```
-
 ## Consequences
 
 ### Positive
-- ✅ **Multi-world support**: Games from different worlds can coexist in same server instance
-- ✅ **Cross-world switching**: Players can switch between games from different worlds
-- ✅ **Memory efficiency**: World data loaded per-request, not held in singleton
-- ✅ **Flexible bootstrap**: Server starts even if requested world missing
-- ✅ **Testability**: Tests can seed different worlds per context
+- Multi-world support: Games from different worlds can coexist in same server instance
+- Cross-world switching: Players can switch between games from different worlds
+- Memory efficiency: World data loaded per-request, not held in singleton
+- Flexible bootstrap: Server starts even if requested world missing
+- Testability: Tests can seed different worlds per context
 
 ### Negative
-- ⚠️ **Performance**: Additional DB queries per-request (3-4: get_game → get_world → get_persona → list_characters)
+- Performance: Additional DB queries per-request (3-4: get_game → get_world → get_persona → list_characters)
   - Mitigation: SQLite is fast for single-user local use; caching layer can be added later
-- ⚠️ **Complexity**: Handlers must handle `Result` from `as_game_service_context()`
+- Complexity: Handlers must handle `Result` from `as_game_service_context()`
   - Mitigation: `as_game_service_context_or_default()` for non-critical paths
 
-### Neutral
+### Trade-offs
 - **Migration required**: Existing databases need v12 migration (automatic on first startup)
-- **Test updates**: Unit tests need to seed worlds into storage (already done)
-
-## Architecture Impact
-
-### Modified Modules
-
-| Module | Change |
-|--------|--------|
-| `src/storage/db.rs` | Migration v12 block |
-| `src/model/game.rs` | Add `world_key` field |
-| `src/storage/models/game.rs` | Add `world_key` to DbGame |
-| `src/storage/backend/games.rs` | Update all CRUD to handle `world_key` |
-| `src/storage/backend/worlds.rs` | Add `create_world`, `update_world`, `get_world_by_id` |
-| `src/server/app_state.rs` | Remove world singletons, change `as_game_service_context()` |
-| `src/application/game_lifecycle.rs` | Remove cross-world validation, update `create_game()` |
-| `src/bootstrap/run.rs` | Add fallback for missing world, update INSERT |
-| All `src/server/fragments/*.rs` | Update callsites to handle Result or use `…_or_default()` |
-
-### Files Changed
-
-- **Core implementation**: ~36 files modified
-- **Tests**: 50+ test functions updated to seed worlds and handle Result types
-- **Documentation**: Architecture, system docs, CHANGELOG updated
-
-### Verification
-
-- **Build**: ✅ 1180 tests pass, clippy clean
-- **Coverage**: ✅ 85.9% (meets 80% threshold)
-- **Migration tested**: ✅ Migration v12 applies successfully with backfill
-- **Cross-world switch tested**: ✅ Validation removed, switching works across worlds
-- **Fallback tested**: ✅ Server starts with first world if `--world` not found
+- **Test updates**: Unit tests needed reseeding worlds into storage
 
 ## Related
 

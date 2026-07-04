@@ -8,19 +8,19 @@ When you (the AI) are tasked with building, debugging, or extending the `chronic
 
 ## Key Principles
 
-1. **Architecture is single source of truth** - Update `docs/architecture/system.md` BEFORE implementing
+1. **Architecture is single source of truth** - Update `chronicler_engine/docs/architecture/system.md` BEFORE implementing
 2. **Plans update architecture first** - Before any code, update the architecture document
-3. **Plan in `docs/plans/`** - Create implementation plans there
+3. **Plan in `chronicler_engine/docs/plans/`** - Create implementation plans there
 4. **Validate** - Run tests, format, clippy after implementation
 5. **Test-First Context** - Use tests to understand existing behavior and triage bugs BEFORE deep-diving into code
 
 ## Workflow (from docs/README.md)
 
-1. Create a **plan** in `docs/plans/` (or update existing)
-2. Update **architecture** - Modify `architecture/system.md` to reflect changes
+1. Create a **plan** in `chronicler_engine/docs/plans/` (or update existing)
+2. Update **architecture** - Modify `chronicler_engine/architecture/system.md` to reflect changes
 3. **Implement** - Write the code
 4. **Validate** - Run tests, format, clippy
-5. **Archive** - Move completed plans to `plans/archived/`
+5. **Archive** - Move completed plans to `chronicler_engine/old-docs/archived-plans`
 
 ## Layer Boundary
 

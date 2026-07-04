@@ -1,7 +1,7 @@
 # ADR-024: Migrate Game Data to SQLite with Seed Pattern
 
 **Date:** 2026-06-01  
-**Status:** Accepted (Phases 1, 2, 4 implemented; Phase 3 deferred)  
+**Status:** Accepted  
 **Drivers:** UI CRUD requirements, settings persistence
 
 ## Problem Statement
@@ -36,61 +36,31 @@ Migrate game data to SQLite database using a **seed pattern**:
 
 **JSON blobs** used for nested collections (triggers, relationships, scenarios, connections, agents) to avoid over-normalization while maintaining queryability at the entity level.
 
-### Implementation Phases
-
-1. **Phase 1: Schema + Storage CRUD** — ✅ COMPLETE
-   - Migration v10 with 5 new tables
-   - Backend CRUD modules for all entity types
-   - InMemory backend support for tests
-
-2. **Phase 2: Seed Logic** — ✅ COMPLETE
-   - `ensure_defaults()` expanded to seed all entities
-   - Idempotent seeding (skip if key exists with content)
-   - Proper FK handling
-
-3. **Phase 3: Switch Reads to DB** — ⏸️ DEFERRED
-   - Requires refactoring `bootstrap/run.rs`
-   - Deferred until UI CRUD implementation
-   - Current state: file reads still used for world loading
-
-4. **Phase 4: Settings Write-Through** — ✅ COMPLETE
-   - `AppSettings::save()` → DB write
-   - `load_settings()` → DB read
-   - All UI handlers persist automatically
+Settings write-through is complete (`AppSettings::save()` → DB write, `load_settings()` → DB read, all UI handlers persist automatically). World-loading reads remain file-based until UI CRUD implementation; refactoring `bootstrap/run.rs` is deferred.
 
 ## Consequences
 
 ### Positive
 
-- ✅ **UI CRUD enabled**: Storage layer ready for world/character management UI
-- ✅ **Settings persistence**: Changes persist across restarts automatically
-- ✅ **Change tracking**: `created_at`/`updated_at` on all rows
-- ✅ **Relational integrity**: FK constraints prevent orphan records
-- ✅ **Test support**: InMemory backend maintains test isolation
+- UI CRUD enabled: Storage layer ready for world/character management UI
+- Settings persistence: Changes persist across restarts automatically
+- Change tracking: `created_at`/`updated_at` on all rows
+- Relational integrity: FK constraints prevent orphan records
+- Test support: InMemory backend maintains test isolation
 
 ### Negative
 
-- ⚠️ **Phase 3 deferred**: World loading still file-based until bootstrap refactored
-- ⚠️ **Migration complexity**: Requires careful schema evolution for future changes
-- ⚠️ **DB file management**: Users must manage SQLite files (backups, migrations)
+- Phase 3 deferred: World loading still file-based until bootstrap refactored
+- Migration complexity: Requires careful schema evolution for future changes
+- DB file management: Users must manage SQLite files (backups, migrations)
 
-### Neutral
+### Trade-offs
 
 - JSON files remain as seed templates (backward compatible)
 - Settings still serializable to JSON for export/import
 - InMemory backend adds ~200 lines to Storage tier
 
-## Files Changed
-
-- `src/storage/db.rs` — Migration v10
-- `src/storage/models/` — New DB row structs
-- `src/storage/backend/` — New CRUD modules (worlds, personas, characters, settings)
-- `src/bootstrap/run.rs` — Seed logic in `ensure_defaults()`
-- `src/settings.rs` — DB-backed settings persistence
-- `docs/architecture/system.md` — Storage tier documentation
-- `docs/reference/data_schemas.md` — Database schema documentation
-
 ## Related
 
-- ADR 0009: Unified Storage Backend (prerequisite for this migration)
+- ADR-009: Unified Storage Backend (prerequisite for this migration)
 - Future: UI CRUD implementation for game data management
