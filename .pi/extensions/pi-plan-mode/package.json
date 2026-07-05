@@ -1,0 +1,35 @@
+{
+	"name": "@notsonormal/pi-plan-mode",
+	"version": "0.11.0-local",
+	"description": "Pi extension that adds a Codex-like read-only /plan collaboration mode.",
+	"type": "module",
+	"license": "MIT",
+	"private": true,
+	"keywords": [
+		"pi-package",
+		"pi-extension",
+		"pi",
+		"plan-mode",
+		"planning"
+	],
+	"files": [
+		"src",
+		"README.md",
+		"LICENSE"
+	],
+	"pi": {
+		"extensions": [
+			"./src/index.ts"
+		]
+	},
+	"scripts": {
+		"check": "biome check . && npm run typecheck",
+		"format": "biome check --write .",
+		"typecheck": "tsc --noEmit"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.5.2",
+		"@earendil-works/pi-coding-agent": "0.80.3",
+		"typescript": "6.0.3"
+	}
+}
