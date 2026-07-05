@@ -143,7 +143,7 @@ A "Text Check" card appears in the Settings tab below Connections:
  **Integration tests**: `tests/http/endpoints/text_check_tests.rs` — misspelling detection, clean text, disabled mode, ignored words
 - **Integration tests**: Preview endpoint returns fragment when issues exist; forwards when disabled
 
-## Architecture Components
+## Port, Service & Factory
 
 ### `TextChecker` Port
 

@@ -337,9 +337,8 @@
 - Focus: cyan border, cyan box-shadow
 
 ### Settings Buttons
-- Primary (save/add): `.btn-primary` utility class — green gradient (`--color-btn-primary-start` → `--color-btn-primary-end`), green border, green text
-- Danger (delete): `.btn-danger` utility class — red gradient (`--color-btn-danger-start` → `--color-btn-danger-end`), red border, red text
-- Default/Edit/View: `.btn-cyan` utility class — cyan gradient (`--color-btn-cyan-start` → `--color-btn-cyan-end`), cyan border, cyan text
+
+Settings buttons use the standard utility classes defined in [Button Utility Classes](#button-utility-classes) below — Primary (`.btn-primary`) for save/add actions, Danger (`.btn-danger`) for delete actions, and Cyan (`.btn-cyan`) for default/edit/view actions.
 
 ### Button Utility Classes
 - `.btn-primary` — Green gradient, green text/border (save, create, set-narrator, submit actions)

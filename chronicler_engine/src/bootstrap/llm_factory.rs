@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use crate::error::EngineError;
-use crate::domain::model::settings::Connection;
+use crate::domain::model::settings::LlmProviderConfig;
 use crate::domain::model::llm_backend::LlmBackendType;
 use crate::adapters::driven::storage::Storage;
 use crate::application::ports::llm_provider::LlmProvider;
@@ -17,7 +17,7 @@ use crate::adapters::driven::llm::providers::{
 /// Create an LlmCallRecorder for the given connection.
 /// This is the composition root for LLM providers - wires the provider impl to the orchestrator.
 pub fn get_llm_recorder_for(
-    connection: &Connection,
+    connection: &LlmProviderConfig,
     storage: Arc<Storage>,
 ) -> Result<Arc<LlmCallRecorder>, EngineError> {
     tracing::info!(
@@ -29,9 +29,9 @@ pub fn get_llm_recorder_for(
     // Create the provider (adapter)
     let provider: Arc<dyn LlmProvider> = match connection.provider {
         LlmBackendType::Mock => Arc::new(MockBackend::new()),
-        LlmBackendType::DeepSeek => Arc::new(DeepSeekBackend::from_connection(connection)),
-        LlmBackendType::OpenRouter => Arc::new(OpenRouterBackend::from_connection(connection)),
-        LlmBackendType::Ollama => Arc::new(OllamaBackend::from_connection(connection)),
+        LlmBackendType::DeepSeek => Arc::new(DeepSeekBackend::from_config(connection)),
+        LlmBackendType::OpenRouter => Arc::new(OpenRouterBackend::from_config(connection)),
+        LlmBackendType::Ollama => Arc::new(OllamaBackend::from_config(connection)),
     };
 
     // Storage implements LlmMessageRepository - use it as the forensics repository

@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use tokio_util::sync::CancellationToken;
 
-use chronicler_engine::application::game_service::GameService;
 use chronicler_engine::application::DefaultApplicationService;
 use chronicler_engine::application::text_check_service::TextCheckService;
 use chronicler_engine::application::ports::text_checker::TextChecker;
@@ -40,12 +39,12 @@ fn test_settings_recover_from_poisoned_rwlock() {
     .join();
 
     let game_service = Arc::new(
-        GameService::with_storage(
-            None,
-            None,
+        chronicler_engine::bootstrap::wiring::build_game_service_for_tests(
             Arc::new(std::sync::RwLock::new(AppSettings::default())),
+            Arc::new(Storage::new_in_memory()),
+            Arc::new(Storage::new_in_memory()),
         )
-        .expect("GameService::with_storage should succeed"),
+        .expect("build_game_service_for_tests should succeed"),
     );
     let app_state = AppState {
         storage: Arc::new(Storage::new_in_memory()),
@@ -78,12 +77,12 @@ fn test_cancel_token_recover_from_poisoned_rwlock() {
     .join();
 
     let game_service = Arc::new(
-        GameService::with_storage(
-            None,
-            None,
+        chronicler_engine::bootstrap::wiring::build_game_service_for_tests(
             Arc::new(std::sync::RwLock::new(AppSettings::default())),
+            Arc::new(Storage::new_in_memory()),
+            Arc::new(Storage::new_in_memory()),
         )
-        .expect("GameService::with_storage should succeed"),
+        .expect("build_game_service_for_tests should succeed"),
     );
     let app_state = AppState {
         storage: Arc::new(Storage::new_in_memory()),

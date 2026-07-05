@@ -12,18 +12,18 @@ flowchart TD
     Init["1. Initialize\nLoad world, set player, render UI, start polling"]
     Await["2. Await Input\nStatus: Ready"]
     Process["3. Process Action\nParse, validate, log, spawn LLM task"]
-    Narrate["4. Main Narration\nBuild prompt, LLM, Save to DB"]
-    Quantify["4.5. Quantifier\nDetect movement and NPC triggers"]
-    TriggerEval["5. Trigger Evaluation\nIf match: continuation narration"]
-    Quantify2["5.5. Post-Event Quantifier\nUpdate NPC presence"]
-    Poll["6. Polling Update\nClient refreshes via HTMX"]
+    Narrate["Main Narration\nBuild prompt, LLM, Save to DB"]
+    Quantify["Quantifier\nDetect movement and NPC triggers"]
+    TriggerEval["Trigger Evaluation\nIf match: continuation narration"]
+    Quantify2["Post-Event Quantifier\nUpdate NPC presence"]
+    Poll["Polling Update\nClient refreshes via HTMX"]
 
     Start --> Init --> Await --> Process --> Narrate --> Quantify --> TriggerEval
     TriggerEval --> Quantify2 --> Poll
     Poll -.-> Await
 ```
 
-When the engine needs LLM narration (during Phase 4), it builds a comprehensive prompt using the **8-layer system** — see [`prompt_system.md`](prompt_system.md) for layer composition and [`llm_processing.md`](llm_processing.md) for token budget management.
+Main narration builds a comprehensive prompt using the **8-layer system** — see [`prompt_system.md`](prompt_system.md) for layer composition and [`llm_processing.md`](llm_processing.md) for token budget management.
 
 ### Granular Status Phases
 
@@ -31,9 +31,9 @@ During LLM processing, the UI displays granular status phases instead of a singl
 
 | Phase | Display Text | Endpoint Value | When Active |
 |-------|-------------|----------------|-------------|
-| `Narrating` | "Generating narration..." | `narrating` | During main LLM narration (Phase 4) — narration saved to DB before quantifier runs |
-| `Quantifying` | "Quantifying scene..." | `quantifying` | During post-narration quantifier analysis (Phase 4.5 or 5.5) — narration visible, metadata pending |
-| `GeneratingEvent` | "Generating event..." | `generating-event` | During trigger continuation narration (Phase 5) — fires after trigger evaluation |
+| `Narrating` | "Generating narration..." | `narrating` | During main LLM narration — narration saved to DB before quantifier runs |
+| `Quantifying` | "Quantifying scene..." | `quantifying` | During post-narration quantifier analysis — narration visible, metadata pending |
+| `GeneratingEvent` | "Generating event..." | `generating-event` | During trigger continuation narration — fires after trigger evaluation |
 
 - `GenerationStatus` (Idle/Generating/Error) is the single source of truth for disabling UI elements
 - The frontend maps endpoint values (`narrating`, `quantifying`, `generating-event`) to human-readable text

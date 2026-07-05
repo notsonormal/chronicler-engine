@@ -60,7 +60,7 @@ async fn test_connection_status_indicator() {
         |page, _port| async move {
             assert!(
                 element_exists(&page, "#connection-status").await,
-                "Connection status indicator should exist"
+                "LlmProviderConfig status indicator should exist"
             );
         },
     )

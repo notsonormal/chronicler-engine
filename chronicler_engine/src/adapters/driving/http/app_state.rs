@@ -12,10 +12,10 @@ use crate::application::GameService;
 use crate::application::GameServiceContext;
 use crate::application::text_check_service::TextCheckService;
 use crate::error::EngineError;
-
-use super::locks::{read_lock_or_recover, write_lock_or_recover};
 use crate::domain::model::character::NpcCard;
 use crate::domain::model::settings::AppSettings;
+
+use super::locks::{read_lock_or_recover, write_lock_or_recover};
 
 #[derive(Clone, Debug)]
 pub struct ServerConfig {
@@ -38,6 +38,8 @@ pub struct ServerResources {
     pub storage: Arc<crate::adapters::driven::storage::Storage>,
     pub preset_storage: Arc<crate::adapters::driven::storage::Storage>,
     pub settings: Arc<RwLock<AppSettings>>,
+    pub game_service: Arc<GameService>,
+    pub text_check_service: Arc<TextCheckService>,
 }
 
 #[derive(Clone)]

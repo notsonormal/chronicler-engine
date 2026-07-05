@@ -136,7 +136,7 @@ The active preset is stored in `AppSettings.active_quantifier_prompt_preset_id`.
 
 Default presets (shipped as `data/prompt_presets/quantifier/default.json`) are protected and cannot be edited or deleted. To modify a default, create a copy and activate it.
 
-## Sources
+## Code references
 
 - System prompt default: `data/prompt_presets/quantifier/default.json`
 - System prompt builder: `src/application/agents/quantifier/prompt.rs:build_system_prompt()` (returns `quantifier_prompt_override` when set)

@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use crate::application::game_service::GameService;
 use crate::domain::model::settings::AppSettings;
 use crate::adapters::driving::http::ServerConfig;
+use crate::application::game_service::GameService;
 
 #[test]
 fn test_server_config_default() {
@@ -71,8 +71,12 @@ fn test_server_config_max_port() {
 fn test_app_state_struct_fields() {
     let settings = Arc::new(std::sync::RwLock::new(AppSettings::default()));
     let game_service: Arc<GameService> = Arc::new(
-        GameService::with_storage(None, None, Arc::clone(&settings))
-            .expect("GameService::with_storage should succeed"),
+        crate::bootstrap::wiring::build_game_service_for_tests(
+            Arc::clone(&settings),
+            Arc::new(crate::adapters::driven::storage::Storage::new_in_memory()),
+            Arc::new(crate::adapters::driven::storage::Storage::new_in_memory()),
+        )
+        .expect("build_game_service_for_tests should succeed"),
     );
 
     let _app_state = (game_service, settings);

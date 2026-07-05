@@ -1,5 +1,5 @@
 use crate::domain::model::llm_backend::LlmBackendType;
-use crate::domain::model::settings::Connection;
+use crate::domain::model::settings::LlmProviderConfig;
 use crate::application::ports::llm_provider::LlmProvider;
 use crate::adapters::driven::llm::providers::ollama::OllamaBackend;
 
@@ -11,7 +11,7 @@ fn test_ollama_backend_name() {
 
 #[test]
 fn test_ollama_from_connection() {
-    let conn = Connection {
+    let conn = LlmProviderConfig {
         id: "ollama-1".into(),
         name: "Local Ollama".into(),
         provider: LlmBackendType::Ollama,
@@ -23,14 +23,14 @@ fn test_ollama_from_connection() {
         max_context_tokens: Some(4096),
     };
 
-    let backend = OllamaBackend::from_connection(&conn);
+    let backend = OllamaBackend::from_config(&conn);
     assert_eq!(backend.model(), "llama3");
     assert_eq!(backend.name(), "Ollama");
 }
 
 #[test]
 fn test_ollama_model() {
-    let conn = Connection {
+    let conn = LlmProviderConfig {
         id: "test".into(),
         name: "Test".into(),
         provider: LlmBackendType::Ollama,
@@ -42,13 +42,13 @@ fn test_ollama_model() {
         max_context_tokens: None,
     };
 
-    let backend = OllamaBackend::from_connection(&conn);
+    let backend = OllamaBackend::from_config(&conn);
     assert_eq!(backend.model(), "mistral");
 }
 
 #[test]
 fn test_ollama_preprocess_gemma4_suffix() {
-    let backend = OllamaBackend::from_connection(&Connection {
+    let backend = OllamaBackend::from_config(&LlmProviderConfig {
         id: "ollama-gemma".into(),
         name: "Gemma".into(),
         provider: LlmBackendType::Ollama,
@@ -66,7 +66,7 @@ fn test_ollama_preprocess_gemma4_suffix() {
 
 #[test]
 fn test_ollama_preprocess_other_models_unchanged() {
-    let backend = OllamaBackend::from_connection(&Connection {
+    let backend = OllamaBackend::from_config(&LlmProviderConfig {
         id: "ollama-llama".into(),
         name: "Llama".into(),
         provider: LlmBackendType::Ollama,

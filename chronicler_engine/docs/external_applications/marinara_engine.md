@@ -32,9 +32,7 @@ const CHANNEL_THINKING_BLOCK_RE =
   /^(\s*)<\|channel>thought\b([\s\S]*?)<channel\|>/i;
 ```
 
-**Status in Marinara:** Implemented but **not actively used** for Ollama — the client-side streaming filter (`use-generate.ts`) has think-tag filtering disabled (`thinkState = "done"` by default). Ollama's OpenAI-compatible API separates `reasoning` at the JSON level, so inline parsing is unnecessary.
-
-**Status in chronicler_engine:** `extract_content_from_response()` in `llm_client.rs` handles the same concern at the JSON level, checking `content` → `reasoning` → `reasoning_content` fallback chain.
+Implemented but **not actively used** for Ollama — the client-side streaming filter (`use-generate.ts`) has think-tag filtering disabled (`thinkState = "done"` by default). Ollama's OpenAI-compatible API separates `reasoning` at the JSON level, so inline parsing is unnecessary.
 
 ---
 
@@ -57,8 +55,6 @@ private static extractReasoning(obj): string {
 
 Also handles **content block arrays** (`[{type: "thinking", ...}, {type: "text", ...}]`) from Anthropic-style APIs via OpenRouter.
 
-**chronicler_engine gap:** Does not handle `reasoning_details` arrays or content block formats. Currently only checks string fields.
-
 ---
 
 ### 3. Model-Specific Parameter Adaptation
@@ -73,8 +69,6 @@ Marinara maintains a registry of model quirks and adapts API calls accordingly:
 | `gpt-5*` | "developer" role; temperature only when `reasoning_effort: "none"` |
 | `claude-opus-4-7+` | All sampling params forbidden |
 | `glm*` | Boolean `thinking` toggle instead of effort-based |
-
-**chronicler_engine gap:** No model-specific parameter adaptation. All models get the same payload structure (`system` role, temperature not sent). `max_tokens` is now dynamically fitted per connection via `fit_messages_to_context()`.
 
 ---
 
@@ -128,43 +122,10 @@ Despite the sophisticated infrastructure, Marinara has **no specific handling** 
 
 The custom `gemma4-26b:latest` (i1-IQ2_XS quant) would exhibit the same empty-content behavior in Marinara as it did in chronicler_engine — burning all tokens in `reasoning` with nothing left for `content`.
 
-**However**, chronicler_engine now has a targeted fix for this (see Lessons below).
-
----
-
-## Lessons for chronicler_engine
-
-### Immediate wins (low effort)
-
-1. **~~Add `reasoning_details` array support~~** — Still relevant for OpenRouter compatibility
-   - OpenRouter is beginning to use this format
-   - Future-proofs against provider changes
-
-2. **Add model-specific role adaptation**
-   - o1/o3/o4 and GPT-5 use `"developer"` role, not `"system"`
-   - Current code sends `"system"` universally
-
-3. **~~Gemma 4 thinking-channel suffix~~** ✅ *Implemented 2026-05-03; corrected 2026-05-04*
-   - `apply_gemma4_thinking_suffix()` in `llm_client.rs` detects Gemma 4 models by name and appends the SillyTavern `last_output_sequence` to Ollama backends only: `<|turn>model\n<|channel>thought\n<channel|>`
-   - This tells the model the thinking slot is already filled, preventing the infinite reasoning loop
-   - **Not applied to OpenRouter** — native chat templates handle turn structure; injecting raw tokens into user content produces corrupted output
-   - `sanitize_llm_output()` strips leaked `<channel|>`, `<thought>`, and `<|channel>thought` artifacts from all responses
-   - Ref: [SillyTavern Reddit fix](https://old.reddit.com/r/SillyTavernAI/comments/1sbjwke/)
-
-### Medium-term improvements
-
-3. **~~Port context-fitting logic~~** ✅ *Completed 2026-05-03*
-   - `fit_messages_to_context()` in `narrative::prompt` dynamically caps `max_tokens`, reserves safety margin + minimum input budget, and trims oldest history first
-   - Per-connection `max_context_tokens` added to `Connection` (defaults: 8192 Ollama, 32768 OpenRouter/DeepSeek)
-
-4. **Add `enableThinking` / `reasoningEffort` connection options**
-   - Some providers (OpenRouter, OpenAI) allow disabling or controlling reasoning
-   - Less critical now that the Gemma 4 loop is fixed via prompt suffix
-
-### Not needed (Ollama handles this)
+**Not needed (Ollama handles this):**
 
 - Inline think-tag parsing (`<|channel>thought`) — Ollama 0.22.1+ strips these at the API level and populates the `reasoning` JSON field
-- Client-side streaming filters — chronicler_engine uses blocking calls, not SSE streams
+- Client-side streaming filters — chronicler uses blocking calls, not SSE streams
 
 ---
 
@@ -174,7 +135,7 @@ The custom `gemma4-26b:latest` (i1-IQ2_XS quant) would exhibit the same empty-co
 |-----------------|------------------------------|-------|
 | `services/llm/inline-thinking.ts` | `narrative::llm_client::extract_content_from_response()` | Marinara handles inline tags; chronicler handles JSON fields |
 | `services/llm/providers/openai.provider.ts` | `narrative::llm_client::call_chat_completions()` | Marinara has more provider formats and model quirks |
-| `services/llm/base-provider.ts` | `narrative::prompt::fit_messages_to_context()` | Context fitting implemented 2026-05-03 |
+| `services/llm/base-provider.ts` | `narrative::prompt::fit_messages_to_context()` | Both reserve a safety margin from `max_context_tokens`, cap `max_tokens` to leave room for input, and trim oldest history first |
 | `services/prompt/assembler.ts` | `narrative::prompt::PromptBuilder` | Both build structured prompts; Marinara has more assembly phases |
 | `client/src/hooks/use-generate.ts` | `server::fragments::action_handler()` | Client streaming vs server blocking |
 | `db/default-preset.json` | `data/worlds/*.json` + `prompt.rs` | Marinara: user-composable presets with variables. chronicler: compiled prompt layers + per-world global_rules |
@@ -202,8 +163,6 @@ Unlike chronicler_engine's hardcoded `PromptBuilder` layers (`render_system_laye
 
 **File:** `packages/server/src/services/prompt/assembler.ts`
 
-**chronicler_engine gap:** No equivalent preset system. Prompt layers are compiled Rust code; users cannot reorder sections or add custom markers without recompiling.
-
 ---
 
 ### Multi-Mode Chat System
@@ -218,8 +177,6 @@ Marinara supports three distinct chat modes, each with fundamentally different p
 **Key insight:** The conversation mode no-preset fallback is a completely separate prompt path, not just a preset with empty sections. It constructs a `<role>` + `<rules>` XML block dynamically based on character count (private DM vs group DM), schedule-derived status, and character commands.
 
 **File:** `packages/server/src/routes/generate.routes.ts` (lines 712–1338)
-
-**chronicler_engine gap:** Single prompt path for all interactions. No mode-specific prompt variants.
 
 ---
 
@@ -253,8 +210,6 @@ Marinara runs 20+ specialized "agents" (sidecar prompts) alongside the main gene
 
 **File:** `packages/shared/src/constants/agent-prompts.ts`
 
-**chronicler_engine gap:** No multi-agent architecture. All quality enforcement, continuity tracking, and summarization would need to be handled in the main system prompt or post-processing.
-
 ---
 
 ### Conversation Mode No-Preset Fallback
@@ -284,8 +239,6 @@ Here are some important rules for the interaction:
 - `Each character responds in their own voice and personality.`
 - `IMPORTANT: Prefix each character's line with their name, like "Alice: hey whats up".`
 
-**chronicler_engine gap:** No equivalent casual/DM mode. All interactions use the literary fiction prose style.
-
 ---
 
 ### Game Mode Prompt Architecture
@@ -303,16 +256,3 @@ Game mode uses a completely separate prompt stack:
    - Structured dialogue syntax with tags (`main`, `side`, `extra`, `action`, `thought`, `whisper:Target`)
    - Combat turn declarations
 
-**chronicler_engine gap:** No game mode or structured dialogue syntax. NPC dialogue is inline prose.
-
----
-
-## Context
-
-Originally discovered during investigation of Gemma 4 26B-A4B empty response issue (May 2026). The Marinara-Engine codebase was examined to determine if it had solved the same problem. Conclusion: Marinara has better infrastructure for managing reasoning models generically, but does not have a specific fix for the Gemma 4 custom quant reasoning loop.
-
-**Subsequently expanded** (May 2026) during extraction of Marinara's default system prompt for reference documentation. This deeper investigation revealed Marinara's sophisticated preset-based prompt architecture, multi-mode chat system (roleplay / conversation / game), 20+ agent sidecar ecosystem, and built-in conversation-mode fallback prompts — none of which have equivalents in chronicler_engine's current hardcoded `PromptBuilder` design.
-
-**Resolution for chronicler_engine**: The loop was fixed by adding `apply_gemma4_thinking_suffix()` to `llm_client.rs` (2026-05-03). This function detects Gemma 4 models and appends the native chat-template closure marker (`<turn|>\n<|turn>model\n<|channel>thought\n<channel|>`) to the user message, telling the model the thinking channel is already complete. This prevents the model from burning all completion tokens in an infinite `<|channel>thought` loop. The fix was validated via direct API testing against the `mradermacher/gemma-4-26b-a4b-it-abliterated:iq2xs` model.
-
-**Clarification on model sizes**: `gemma4:e4b` (official Ollama model) is an **8B-parameter** MoE model, not a 26B model. The 26B-class model (`mradermacher/gemma-4-26b-a4b-it-abliterated:iq2xs`, 25.2B parameters) was the one exhibiting the loop. Both models use Ollama's `{{ .Prompt }}` passthrough template — the loop is caused by the abliterated 26B quant's inability to exit its thinking channel, not by the template itself.

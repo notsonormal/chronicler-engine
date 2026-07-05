@@ -48,11 +48,9 @@ Browser (Worlds Tab)
 
 ### World-Game Relationship
 
-- **One-to-Many**: One world can have multiple games referencing it
-- **Referential Integrity**: Cannot delete a world with referencing games
-- **Checked At**: Storage layer (`Storage::delete_world()`) and handler layer (returns 400 with game count)
+- **Referential Integrity**: A world with referencing games cannot be deleted; the storage layer (`Storage::delete_world()`) and handler layer (returns 400 with game count) both enforce this.
 
-## UI Components
+## Worlds Tab UI
 
 ### Tab Structure
 

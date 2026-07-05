@@ -34,6 +34,8 @@ pub async fn debug_is_generating_handler(State(state): State<AppState>) -> Strin
 }
 
 pub async fn debug_backend_handler(State(state): State<AppState>) -> Json<DebugBackendResponse> {
+    // arch-lint: debug-direct — intentional exemption, see ADR-027 §3.2
+    // Precedent: new diagnostic endpoints must add explicit ADR exemption.
     let (name, model) = state.game_service.backend_info();
     Json(DebugBackendResponse {
         backend_name: name.to_string(),

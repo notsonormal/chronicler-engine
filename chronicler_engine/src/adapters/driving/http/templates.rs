@@ -5,7 +5,7 @@ use askama::Template;
 
 use crate::application::ports::llm_message_repository::LlmMessage;
 use crate::domain::model::state::message_types::MessageEntry;
-use crate::adapters::driven::text_check::CheckResult;
+use crate::application::ports::text_checker::CheckResult;
 use crate::adapters::driving::http::view_models::{
     ActionAreaViewModel, LlmMessageView, MessageEntryView, NpcPortraitView, PreviewIssueView,
     VisualSidebarViewModel,

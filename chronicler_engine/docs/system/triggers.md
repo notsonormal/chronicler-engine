@@ -7,7 +7,7 @@ The Auto-Trigger system allows the game world to react dynamically to the player
 ## Overview
 When a player enters a room or performs an action, the engine evaluates a set of rules (Triggers) associated with NPCs. If requirements are met, a reactive event (Narration) is triggered.
 
-## Core Flow
+## Trigger Evaluation Sequence
 
 For where these steps fit in the full game loop (including main narration and quantification), see [`game_flow.md`](game_flow.md).
 
@@ -50,7 +50,7 @@ If a trigger fired and generated continuation narration, the quantifier runs aga
 - Detect NPCs introduced by the event text
 - Update `scene.npcs_in_area` accordingly
 
-## Timing: Evaluate BEFORE Increment
+## When `times_met` Is Incremented
 
 A critical implementation detail: triggers are evaluated BEFORE `times_met` is incremented.
 
@@ -175,4 +175,4 @@ The action pipeline and `execute_freeaction_impl` mutate state in a strict, load
 | 4c | `commit_trigger_narration()` | Runs in `ActionPipeline`, re-acquires lock to add trigger logs and mark trigger fired |
 | 5 | `apply_npc_events()` — mutates `npc_encounter_log` | `times_met` increments AFTER trigger evaluation (see Timing section above) |
 
-This invariant is enforced by code structure, not by runtime checks. If you refactor `execute_freeaction_impl`, preserve this order explicitly.
+If you refactor `execute_freeaction_impl`, preserve this order explicitly.

@@ -5,13 +5,11 @@
 use std::sync::{Arc, RwLock};
 
 use crate::application::context::GameServiceContext;
-use crate::error::EngineError;
 use crate::domain::model::settings::AppSettings;
 use crate::application::agents::quantifier::QuantifierAgent;
 use crate::application::agents::registry::AgentRegistry;
 use crate::application::narrative_prompt::LayeredPromptAssembler;
 use crate::application::llm_recorder::LlmCallRecorder;
-use crate::adapters::driven::storage::Storage;
 
 pub struct GameService {
     pub llm_recorder: Arc<LlmCallRecorder>,
@@ -21,42 +19,29 @@ pub struct GameService {
 
 impl GameService {
     pub fn with_storage(
-        storage: Option<Arc<Storage>>,
-        preset_storage: Option<Arc<Storage>>,
+        llm_recorder: Arc<LlmCallRecorder>,
+        agent_registry: AgentRegistry,
         settings: Arc<RwLock<AppSettings>>,
-    ) -> Result<Self, EngineError> {
-        let (registry, connection, max_context_tokens, max_tokens, storage) = {
-            let settings_guard = settings.read().unwrap_or_else(|e| e.into_inner());
-            let registry = AgentRegistry::from_configs_with_storage(
-                &settings_guard.agents,
-                storage.clone(),
-                preset_storage,
-                Arc::clone(&settings),
-            )
-            .unwrap_or_default();
-            let conn = settings_guard.narration_connection();
-            let max_context_tokens = conn.resolve_max_context_tokens();
-            let max_tokens = conn.max_tokens;
-            // Use provided storage or fresh storage
-            let storage = storage.unwrap_or_else(|| Arc::new(Storage::new_in_memory()));
-            (registry, conn, max_context_tokens, max_tokens, storage)
+    ) -> Self {
+        let (max_context_tokens, max_tokens) = {
+            let guard = settings.read().unwrap_or_else(|e| e.into_inner());
+            let conn = guard.narration_connection();
+            (conn.resolve_max_context_tokens(), conn.max_tokens)
         };
-        let llm_recorder =
-            crate::bootstrap::llm_factory::get_llm_recorder_for(&connection, Arc::clone(&storage))?;
+        let mut assembler = LayeredPromptAssembler::new(max_context_tokens);
+        if let Some(max) = max_tokens {
+            assembler = assembler.with_max_tokens(max);
+        }
         tracing::info!(
             "GameService: backend={}, model={}",
             llm_recorder.provider().name(),
             llm_recorder.provider().model()
         );
-        let mut assembler = LayeredPromptAssembler::new(max_context_tokens);
-        if let Some(max) = max_tokens {
-            assembler = assembler.with_max_tokens(max);
-        }
-        Ok(Self {
+        Self {
             llm_recorder,
             prompt_assembler: Arc::new(assembler),
-            agent_registry: Arc::new(registry),
-        })
+            agent_registry: Arc::new(agent_registry),
+        }
     }
 
     pub fn with_backends(

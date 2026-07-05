@@ -4,7 +4,7 @@
 /// Database row for `settings` table (singleton, id=1).
 pub struct DbSettings {
     pub id: i64,
-    pub connections: String, // JSON: Vec<Connection>
+    pub connections: String, // JSON: Vec<LlmProviderConfig>
     pub narration_connection_id: String,
     pub quantifier_connection_id: String,
     pub response_length: String,

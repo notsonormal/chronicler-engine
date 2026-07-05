@@ -4,7 +4,7 @@
 use axum::{Form, extract::State, response::Html};
 
 use crate::domain::model::llm_backend::LlmBackendType;
-use crate::domain::model::settings::{Connection, TextCheckMode};
+use crate::domain::model::settings::{LlmProviderConfig, TextCheckMode};
 use crate::adapters::driving::http::AppState;
 
 use super::fragments::{connection_card_html, connection_edit_form_html};
@@ -117,7 +117,7 @@ pub async fn add_connection_handler(
     let api_key = parse_api_key(&form.conn_api_key);
     let base_url = opt_string(&form.conn_base_url);
 
-    let connection = Connection {
+    let connection = LlmProviderConfig {
         id,
         name: form.conn_name,
         provider: LlmBackendType::from(form.conn_provider.as_str()),
@@ -146,7 +146,7 @@ pub async fn connection_card_fragment(
 
     let conn = match settings.find_connection(&id) {
         Some(c) => c.clone(),
-        None => return Html("<span class='error'>Connection not found</span>".to_string()),
+        None => return Html("<span class='error'>LlmProviderConfig not found</span>".to_string()),
     };
 
     Html(connection_card_html(
@@ -164,7 +164,7 @@ pub async fn edit_connection_form(
 
     let conn = match settings.find_connection(&id) {
         Some(c) => c.clone(),
-        None => return Html("<span class='error'>Connection not found</span>".to_string()),
+        None => return Html("<span class='error'>LlmProviderConfig not found</span>".to_string()),
     };
 
     Html(connection_edit_form_html(&conn))
@@ -179,7 +179,7 @@ pub async fn edit_connection_handler(
 
     let conn = match settings.find_connection_mut(&id) {
         Some(c) => c,
-        None => return Html("<span class='error'>Connection not found</span>".to_string()),
+        None => return Html("<span class='error'>LlmProviderConfig not found</span>".to_string()),
     };
 
     conn.name = form.conn_name;
@@ -202,7 +202,9 @@ pub async fn edit_connection_handler(
             is_narrator,
             is_quantifier,
         )),
-        None => Html("<span class='error'>Connection not found after update</span>".to_string()),
+        None => {
+            Html("<span class='error'>LlmProviderConfig not found after update</span>".to_string())
+        }
     }
 }
 
@@ -213,7 +215,7 @@ pub async fn delete_connection_handler(
     let mut settings = try_lock!(app_state.settings.write());
 
     let Some(idx) = settings.connections.iter().position(|c| c.id == id) else {
-        return Html("<span class='error'>Connection not found</span>".to_string());
+        return Html("<span class='error'>LlmProviderConfig not found</span>".to_string());
     };
 
     if settings.connections.len() <= 1 {
@@ -243,7 +245,7 @@ pub async fn set_narrator_handler(
     let mut settings = try_lock!(app_state.settings.write());
 
     if settings.find_connection(&id).is_none() {
-        return Html("<span class='error'>Connection not found</span>".to_string());
+        return Html("<span class='error'>LlmProviderConfig not found</span>".to_string());
     }
 
     settings.narration_connection_id = id;
@@ -262,7 +264,7 @@ pub async fn set_quantifier_handler(
     let mut settings = try_lock!(app_state.settings.write());
 
     if settings.find_connection(&id).is_none() {
-        return Html("<span class='error'>Connection not found</span>".to_string());
+        return Html("<span class='error'>LlmProviderConfig not found</span>".to_string());
     }
 
     settings.quantifier_connection_id = id;

@@ -164,7 +164,7 @@ This project follows a **Spec-Driven Implementation** (SDI) strategy.
 This project relies on a comprehensive suite of integration tests as the ultimate source of truth for behavior.
 - **Tests as Documentation**: If you don't understand how a component works, read its tests in `tests/` before reading the source code.
 - **Test-Driven Debugging**: Before fixing a bug, find or create a failing test case. If tests pass but the bug exists, the test suite is missing a scenario.
-- **No Regression**: Every code change must pass `python build.py` before task/plan completion. *During development*, iterate with the specific tool (e.g. `cargo clippy` for lint fixes, `cargo nextest run <pattern>` for test fixes). Run `build.py` only for final verification.
+- **No Regression**: Every code change must eventually pass `python build.py` before a plan is considered complete. *During development*, iterate with the specific tool (e.g. `cargo clippy` for lint fixes, `cargo nextest run <pattern>` for test fixes). Run `build.py` only for final verification.
 
 Unit tests go in the `src/` folder beside the class they are testing (e.g. `production_class.rs` -> `production_class_test.rs`).
 
@@ -234,14 +234,13 @@ let residents = find_npcs_in_current_location(all_npcs, current_room);
 - **Validation**: Run `python build.py` before commit (fmt + clippy + tests + guardrails)
 
 ## LLM TEST POLICY
-- `python build.py` runs the fast suite only. LLM tests are `#[ignore]`d by default.
-- When modifying ANY file in `src/narrative/` or changing LLM prompt/parsing behavior,
-  you MUST also run `python build.py --llm-only` to verify real LLM integration.
+- `python build.py` runs the fast suite only. LLM tests are `#[ignore]'`d by default.
+- When modifying ANY file in `src/narrative/` or changing LLM prompt/parsing behavior, you MUST also run `python build.py --llm-only` to verify real LLM integration.
 
 ## ANTI-PATTERNS
 - **Never** skip architecture/spec update before implementing engine changes.
 - **Never** continue previous reasoning after user says stop, wait, nevermind, or asks a direct question. Halt immediately and answer directly.
-- **Never** defend existing architecture as a reason to keep complicated code. If a simpler approach exists, propose it.
+- **Never** defend existing architecture as a reason to keep complicated code. You might need to take a stepback and consider architecture or code holistically. 
 
 ## DOCUMENTATION INDEX
 `docs/AGENTS.md` is **auto-generated**. Do not edit the file list inside the `<!-- AUTO-INDEX -->` block manually.

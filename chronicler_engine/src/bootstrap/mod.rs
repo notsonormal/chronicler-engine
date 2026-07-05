@@ -7,15 +7,13 @@ pub mod llm_factory;
 mod load;
 mod logging;
 mod run;
-mod scenario;
 mod state;
 pub mod text_check_factory;
 mod validate;
+pub mod wiring;
 
-pub use init_game::test_api;
 pub use logging::init_logging;
 pub use run::run;
-pub use scenario::inject_scenario_logs;
 pub use state::build_fresh_initial_state;
 pub use validate::validate_loaded_data;
 #[cfg(test)]

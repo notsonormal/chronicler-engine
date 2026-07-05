@@ -42,7 +42,7 @@ fn default_ollama_base_url() -> String {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Connection {
+pub struct LlmProviderConfig {
     pub id: String,
     pub name: String,
     pub provider: LlmBackendType,
@@ -59,7 +59,7 @@ pub struct Connection {
     pub max_context_tokens: Option<u32>,
 }
 
-impl Connection {
+impl LlmProviderConfig {
     pub fn new(id: impl Into<String>, name: impl Into<String>, provider: LlmBackendType) -> Self {
         Self {
             id: id.into(),
@@ -125,7 +125,7 @@ pub fn default_agent_configs() -> Vec<crate::domain::model::agent::AgentConfig> 
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AppSettings {
-    pub connections: Vec<Connection>,
+    pub connections: Vec<LlmProviderConfig>,
     pub narration_connection_id: String,
     pub quantifier_connection_id: String,
     #[serde(default = "default_response_length")]
@@ -154,7 +154,7 @@ fn default_active_quantifier_prompt_preset_id() -> String {
 
 impl Default for AppSettings {
     fn default() -> Self {
-        let gpt4o = Connection {
+        let gpt4o = LlmProviderConfig {
             id: "openrouter-gpt-4o-mini".into(),
             name: "openrouter-gpt-4o-mini".into(),
             provider: LlmBackendType::OpenRouter,
@@ -165,7 +165,7 @@ impl Default for AppSettings {
             max_tokens: None,
             max_context_tokens: None,
         };
-        let euryale = Connection {
+        let euryale = LlmProviderConfig {
             id: "openrouter-euryale".into(),
             name: "openrouter-euryale".into(),
             provider: LlmBackendType::OpenRouter,
@@ -176,7 +176,7 @@ impl Default for AppSettings {
             max_tokens: None,
             max_context_tokens: None,
         };
-        let gemma = Connection {
+        let gemma = LlmProviderConfig {
             id: "ollama-gemma-4-26B".into(),
             name: "ollama-gemma-4-26B".into(),
             provider: LlmBackendType::Ollama,
@@ -201,33 +201,33 @@ impl Default for AppSettings {
 }
 
 impl AppSettings {
-    pub fn find_connection(&self, id: &str) -> Option<&Connection> {
+    pub fn find_connection(&self, id: &str) -> Option<&LlmProviderConfig> {
         self.connections.iter().find(|c| c.id == id)
     }
 
-    pub fn find_connection_mut(&mut self, id: &str) -> Option<&mut Connection> {
+    pub fn find_connection_mut(&mut self, id: &str) -> Option<&mut LlmProviderConfig> {
         self.connections.iter_mut().find(|c| c.id == id)
     }
 
-    pub fn get_narration_connection(&self) -> Option<&Connection> {
+    pub fn get_narration_connection(&self) -> Option<&LlmProviderConfig> {
         self.find_connection(&self.narration_connection_id)
     }
 
-    pub fn get_quantifier_connection(&self) -> Option<&Connection> {
+    pub fn get_quantifier_connection(&self) -> Option<&LlmProviderConfig> {
         self.find_connection(&self.quantifier_connection_id)
     }
 
     /// Resolved narration connection with Mock fallback.
-    pub fn narration_connection(&self) -> Connection {
+    pub fn narration_connection(&self) -> LlmProviderConfig {
         self.get_narration_connection()
             .cloned()
-            .unwrap_or_else(|| Connection::new("default", "Default", LlmBackendType::Mock))
+            .unwrap_or_else(|| LlmProviderConfig::new("default", "Default", LlmBackendType::Mock))
     }
 
     /// Resolved quantifier connection with Mock fallback.
-    pub fn quantifier_connection(&self) -> Connection {
+    pub fn quantifier_connection(&self) -> LlmProviderConfig {
         self.get_quantifier_connection()
             .cloned()
-            .unwrap_or_else(|| Connection::new("default", "Default", LlmBackendType::Mock))
+            .unwrap_or_else(|| LlmProviderConfig::new("default", "Default", LlmBackendType::Mock))
     }
 }

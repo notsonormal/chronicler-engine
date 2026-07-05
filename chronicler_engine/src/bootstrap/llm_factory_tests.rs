@@ -3,13 +3,13 @@
 use std::sync::Arc;
 
 use crate::adapters::driven::storage::Storage;
-use crate::domain::model::settings::Connection;
+use crate::domain::model::settings::LlmProviderConfig;
 use crate::domain::model::llm_backend::LlmBackendType;
 use crate::bootstrap::llm_factory::get_llm_recorder_for;
 
 #[test]
 fn mock_backend_path_returns_recorder_with_mock_provider() {
-    let connection = Connection {
+    let connection = LlmProviderConfig {
         id: "test-mock".to_string(),
         name: "Test Mock".to_string(),
         provider: LlmBackendType::Mock,
@@ -32,7 +32,7 @@ fn mock_backend_path_returns_recorder_with_mock_provider() {
 
 #[test]
 fn deepseek_path_returns_recorder() {
-    let connection = Connection {
+    let connection = LlmProviderConfig {
         id: "test-deepseek".to_string(),
         name: "Test DeepSeek".to_string(),
         provider: LlmBackendType::DeepSeek,
@@ -53,7 +53,7 @@ fn deepseek_path_returns_recorder() {
 
 #[test]
 fn openrouter_path_returns_recorder() {
-    let connection = Connection {
+    let connection = LlmProviderConfig {
         id: "test-openrouter".to_string(),
         name: "Test OpenRouter".to_string(),
         provider: LlmBackendType::OpenRouter,
@@ -74,7 +74,7 @@ fn openrouter_path_returns_recorder() {
 
 #[test]
 fn ollama_path_returns_recorder() {
-    let connection = Connection {
+    let connection = LlmProviderConfig {
         id: "test-ollama".to_string(),
         name: "Test Ollama".to_string(),
         provider: LlmBackendType::Ollama,
@@ -95,10 +95,10 @@ fn ollama_path_returns_recorder() {
 
 #[test]
 fn deepseek_missing_base_url_still_returns_recorder_defers_error() {
-    // from_connection() doesn't actually fail on missing fields at construction.
+    // from_config() doesn't actually fail on missing fields at construction.
     // It defers errors to call time (e.g., when complete() is called).
     // This test documents that behavior.
-    let connection = Connection {
+    let connection = LlmProviderConfig {
         id: "test-deepseek-missing".to_string(),
         name: "Test DeepSeek Missing".to_string(),
         provider: LlmBackendType::DeepSeek,

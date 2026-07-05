@@ -5,19 +5,15 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
 use crate::application::context;
+use crate::application::scenario::inject_scenario_logs;
 use crate::domain::model::character::{NpcCard, PlayerCard};
 use crate::domain::model::map::MapDef;
-use crate::domain::model::prompt_preset::PromptPreset;
 use crate::domain::model::settings::AppSettings;
 use crate::domain::model::state::game_state::GameState;
-use crate::domain::model::state::generation_status::GenerationStatus;
-use crate::domain::model::state::message_types::MessageType;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::domain::model::world::WorldCard;
-use crate::application::narrative_prompt::{NpcContext, make_prompt_context};
 
 use super::run::{PRESET_STORAGE_GAME_ID, find_latest_game_for_world, list_game_names_for_world};
-use super::inject_scenario_logs;
 
 fn with_settings<T>(settings: &Arc<RwLock<AppSettings>>, f: impl FnOnce(&AppSettings) -> T) -> T {
     let guard = settings.read().unwrap_or_else(|e| e.into_inner());
@@ -102,153 +98,6 @@ pub(crate) fn load_game_state(
     }
 }
 
-#[doc(hidden)]
-pub struct ArrivalTaskContext {
-    ctx: crate::application::context::GameServiceContext,
-    room_id: String,
-    arrival_preset: Option<PromptPreset>,
-    response_length: String,
-    max_context_tokens: u32,
-    max_tokens: Option<u32>,
-    nearby_npcs: Vec<NpcCard>,
-    all_npcs: Vec<NpcCard>,
-    recorder: Arc<crate::application::llm_recorder::LlmCallRecorder>,
-}
-
-impl ArrivalTaskContext {
-    #[doc(hidden)]
-    #[allow(clippy::too_many_arguments)]
-    pub fn new_for_test(
-        ctx: crate::application::context::GameServiceContext,
-        room_id: String,
-        nearby_npcs: Vec<NpcCard>,
-        all_npcs: Vec<NpcCard>,
-        arrival_preset: Option<PromptPreset>,
-        response_length: String,
-        max_context_tokens: u32,
-        max_tokens: Option<u32>,
-        recorder: Arc<crate::application::llm_recorder::LlmCallRecorder>,
-    ) -> Self {
-        Self {
-            ctx,
-            room_id,
-            arrival_preset,
-            response_length,
-            max_context_tokens,
-            max_tokens,
-            nearby_npcs,
-            all_npcs,
-            recorder,
-        }
-    }
-
-    #[doc(hidden)]
-    pub fn run_sync(self) {
-        self.run();
-    }
-
-    fn run(self) {
-        let mut state = match self.ctx.storage.load_latest_snapshot() {
-            Ok(Some(snap)) => GameState::from_snapshot(
-                &snap,
-                Arc::clone(&self.ctx.world),
-                Arc::clone(&self.ctx.map),
-                Arc::clone(&self.ctx.player),
-                (*self.ctx.npcs).clone(),
-            ),
-            _ => {
-                tracing::warn!("No snapshot found in spawn, starting fresh");
-                let starting_room_id = self.ctx.world.starting_room_id();
-                let mut s = GameState::new(
-                    Arc::clone(&self.ctx.world),
-                    Arc::clone(&self.ctx.map),
-                    Arc::clone(&self.ctx.player),
-                    (*self.ctx.npcs).values().cloned().collect(),
-                    starting_room_id,
-                );
-                inject_scenario_logs(&mut s, &self.ctx.world, &self.ctx.player);
-                s
-            }
-        };
-        if let Ok(msgs) = context::load_messages_with_swipes(&self.ctx.storage) {
-            state.narrative.history.replace(msgs);
-        }
-        state.narrative.input_buffer.status = GenerationStatus::Generating;
-
-        let room = match self
-            .ctx
-            .map
-            .overworld
-            .regions
-            .iter()
-            .flat_map(|r| r.rooms.iter())
-            .find(|r| r.id == self.room_id)
-        {
-            Some(r) => r,
-            None => return,
-        };
-
-        let prompt_context = make_prompt_context(
-            &self.ctx.world,
-            room,
-            NpcContext {
-                all_npcs: &self.all_npcs,
-                npcs_in_area: &self.nearby_npcs,
-            },
-            &self.ctx.player,
-            "",
-            &[],
-        );
-
-        let narration = match self.arrival_preset.as_ref() {
-            Some(preset) => {
-                let mut assembler =
-                    crate::application::narrative_prompt::LayeredPromptAssembler::new(
-                        self.max_context_tokens,
-                    );
-                if let Some(max) = self.max_tokens {
-                    assembler = assembler.with_max_tokens(max);
-                }
-                assembler
-                    .assemble(
-                        &prompt_context,
-                        preset,
-                        &self.ctx.world.global_rules,
-                        Some(&self.response_length),
-                    )
-                    .and_then(|assembled| {
-                        self.recorder.complete(
-                            crate::application::ports::llm_provider::AGENT_NARRATOR,
-                            &assembled.system_prompt,
-                            &assembled.user_prompt,
-                            Some(assembled.max_tokens),
-                        )
-                    })
-            }
-            None => Err(crate::error::EngineError::Config(
-                "No active preset found for arrival narration".into(),
-            )),
-        };
-
-        match narration {
-            Ok(result) => {
-                state.add_message(result.text, None, MessageType::Narration);
-                state.narrative.input_buffer.status = GenerationStatus::Idle;
-            }
-            Err(e) => {
-                state.narrative.input_buffer.status =
-                    GenerationStatus::Error(format!("LLM Error: {e}"));
-            }
-        }
-
-        if let Err(e) =
-            crate::application::context::save_message_and_snapshot(&self.ctx, &mut state)
-        {
-            tracing::error!("Failed to save arrival message and snapshot: {e}");
-        }
-    }
-}
-
 #[allow(clippy::too_many_arguments)]
 pub fn spawn_arrival_task_if_needed(
     runtime: &tokio::runtime::Runtime,
@@ -313,7 +162,7 @@ pub fn spawn_arrival_task_if_needed(
             }
         };
 
-    let task_ctx = ArrivalTaskContext {
+    let task_ctx = crate::application::arrival_service::ArrivalTaskContext {
         ctx: game_ctx,
         room_id: room_id.to_string(),
         arrival_preset,
@@ -328,11 +177,4 @@ pub fn spawn_arrival_task_if_needed(
     runtime.spawn_blocking(move || {
         task_ctx.run();
     });
-}
-
-/// Test-only API for integration tests.
-/// DO NOT USE outside of tests.
-#[doc(hidden)]
-pub mod test_api {
-    pub use super::ArrivalTaskContext;
 }

@@ -12,7 +12,7 @@ For background on SillyTavern's original system, see [`reference/sillytavern_pro
 
 The engine follows a **Marinara-Engine-inspired pattern**:
 
-- **Instructions are XML-sectioned** — The system prompt contains behavioral instructions (`<role>`, `<instructions>`, `<global_rules>`). Prose and structural constraints (`<writing_style>`, `<output_format>`) are appended after conversation history in the user message to maximize recency bias. Two dynamic sections (`<global_rules>`, response length) are injected at assembly time.
+- **Instructions are XML-sectioned** — The system prompt contains behavioral instructions (`<role>`, `<instructions>`, `<global_rules>`). Prose and structural constraints (`<writing_style>`, `<output_format>`) are appended after conversation history in the user message, where LLMs weight them most heavily due to recency bias. Two dynamic sections (`<global_rules>`, response length) are injected at assembly time.
 - **Data is XML-wrapped** — External context (`<GameState>`, `<KnownNpcs>`, `<ConversationHistory>`, etc.) uses XML tags because it is *data*, not instructions.
 - **Why sections?** Labeled content containers let users edit individual prompt aspects (role, rules, style, format) without rewriting the entire prompt. The imperative text inside each section remains plain.
 - **Why not self-referential tags?** Tags like `<SystemPrompt>` or `<Role>` can trigger reasoning models (e.g., Gemma 4) to enter meta-analysis mode. The section tags (`<role>`, `<instructions>`) are content labels, not objects of analysis. See ADR-004 v4 for the full evolution.

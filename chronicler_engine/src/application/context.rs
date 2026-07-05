@@ -14,6 +14,7 @@ use crate::domain::model::settings::AppSettings;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::message_types::MessageType;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
+use crate::domain::model::template::{render_template, TemplateVars};
 use crate::domain::model::world::WorldCard;
 use crate::application::narrative_prompt::assembler::assemble_prompt_text;
 use crate::adapters::driven::storage::Storage;
@@ -34,6 +35,41 @@ pub struct GameServiceContext {
 impl GameServiceContext {
     pub fn set_game_id(&self, game_id: u64) {
         self.storage.set_game_id(game_id);
+    }
+
+    /// Build a fresh `GameState` from this context's world/map/player/npcs.
+    /// Implements scenario injection: if the world has a default scenario,
+    /// its rendered text is added as the initial narration message and
+    /// scenario NPCs are initialized into the state.
+    pub fn build_fresh_initial_state(&self) -> GameState {
+        let starting_room_id = self.world.starting_room_id();
+
+        let mut initial_state = GameState::new(
+            Arc::clone(&self.world),
+            Arc::clone(&self.map),
+            Arc::clone(&self.player),
+            (*self.npcs).values().cloned().collect(),
+            starting_room_id.clone(),
+        );
+
+        if let Some(scenario) = self.world.default_scenario() {
+            let room_name = self
+                .map
+                .get_room_by_id(&starting_room_id)
+                .map(|r| r.name.clone())
+                .unwrap_or_else(|| starting_room_id.clone());
+
+            initial_state.narrative.pending_location = Some(room_name);
+
+            let text = render_template(&scenario.text, &TemplateVars::new(&self.player.sheet.name));
+            if !text.is_empty() {
+                initial_state.add_message(text, None, MessageType::Narration);
+            }
+
+            initial_state.init_scenario_npcs(scenario);
+        }
+
+        initial_state
     }
 
     pub fn load_messages(

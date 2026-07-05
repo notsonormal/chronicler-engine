@@ -14,7 +14,6 @@ use crate::application::action_pipeline::execute_action_impl;
 use crate::application::context::{GameServiceContext, load_or_fresh};
 use crate::application::game_service::GameService;
 
-use crate::bootstrap::build_fresh_initial_state;
 use crate::error::EngineError;
 use crate::domain::model::game::{Game, generate_game_name};
 
@@ -366,7 +365,7 @@ impl DefaultApplicationService {
     fn persist_initial_state_with_swipes(
         ctx: &GameServiceContext,
     ) -> Result<u64, ApplicationError> {
-        let mut initial_state = build_fresh_initial_state(ctx);
+        let mut initial_state = ctx.build_fresh_initial_state();
         let snapshot = GameStateSnapshot::from_game_state(&initial_state);
         let snapshot_id = ctx.storage.save_snapshot(&snapshot)?;
 

@@ -3,7 +3,7 @@ use axum::Form;
 use axum::extract::Path;
 
 use crate::domain::model::llm_backend::LlmBackendType;
-use crate::domain::model::settings::{AppSettings, Connection, TextCheckMode};
+use crate::domain::model::settings::{AppSettings, LlmProviderConfig, TextCheckMode};
 use crate::adapters::driving::http::settings_fragment::handlers::{
     add_connection_handler, connection_card_fragment, delete_connection_handler,
     edit_connection_form, edit_connection_handler, save_settings_handler, save_text_check_handler,
@@ -12,7 +12,6 @@ use crate::adapters::driving::http::settings_fragment::handlers::{
 };
 use crate::adapters::driving::http::AppState;
 use crate::adapters::driven::storage::Storage;
-use crate::application::game_service::GameService;
 use crate::application::application_service::DefaultApplicationService;
 use tokio_util::sync::CancellationToken;
 
@@ -20,8 +19,12 @@ fn make_test_app_state() -> AppState {
     let storage = Arc::new(Storage::new_in_memory());
     let settings = Arc::new(RwLock::new(AppSettings::default()));
     let game_service = Arc::new(
-        GameService::with_storage(Some(Arc::clone(&storage)), None, Arc::clone(&settings))
-            .expect("GameService::with_storage should succeed"),
+        crate::bootstrap::wiring::build_game_service_for_tests(
+            Arc::clone(&settings),
+            Arc::clone(&storage),
+            Arc::new(Storage::new_in_memory()),
+        )
+        .expect("build_game_service_for_tests should succeed"),
     );
     let text_check_service = Arc::new(
         crate::bootstrap::text_check_factory::create_text_check_service(&settings.read().unwrap()),
@@ -42,8 +45,12 @@ fn make_app_state_with_settings(settings: AppSettings) -> AppState {
     let storage = Arc::new(Storage::new_in_memory());
     let settings = Arc::new(RwLock::new(settings));
     let game_service = Arc::new(
-        GameService::with_storage(Some(Arc::clone(&storage)), None, Arc::clone(&settings))
-            .expect("GameService::with_storage should succeed"),
+        crate::bootstrap::wiring::build_game_service_for_tests(
+            Arc::clone(&settings),
+            Arc::clone(&storage),
+            Arc::new(Storage::new_in_memory()),
+        )
+        .expect("build_game_service_for_tests should succeed"),
     );
     let text_check_service = Arc::new(
         crate::bootstrap::text_check_factory::create_text_check_service(&settings.read().unwrap()),
@@ -158,7 +165,7 @@ async fn test_save_text_check_handler_unknown_mode_defaults_to_disabled() {
 async fn test_add_connection_handler_adds_connection() {
     let app_state = make_test_app_state();
     let form = ConnectionForm {
-        conn_name: "Test Connection".into(),
+        conn_name: "Test LlmProviderConfig".into(),
         conn_provider: "openrouter".into(),
         conn_model: "openai/gpt-4".into(),
         conn_api_key: "sk-test".into(),
@@ -174,7 +181,7 @@ async fn test_add_connection_handler_adds_connection() {
     let settings = app_state.settings.read().unwrap();
     // Check the newly added connection (last in the list)
     let new_conn = settings.connections.last().unwrap();
-    assert_eq!(new_conn.name, "Test Connection");
+    assert_eq!(new_conn.name, "Test LlmProviderConfig");
     assert_eq!(new_conn.provider, LlmBackendType::OpenRouter);
     assert_eq!(new_conn.model, "openai/gpt-4");
     assert_eq!(new_conn.api_key, Some("sk-test".into()));
@@ -226,7 +233,7 @@ async fn test_add_connection_handler_non_empty_base_url_is_some() {
 #[tokio::test]
 async fn test_connection_card_fragment_returns_card() {
     let mut settings = AppSettings::default();
-    let conn = Connection {
+    let conn = LlmProviderConfig {
         id: "test-conn".into(),
         name: "Test".into(),
         provider: LlmBackendType::OpenRouter,
@@ -254,13 +261,13 @@ async fn test_connection_card_fragment_not_found() {
     let response =
         connection_card_fragment(axum::extract::State(app_state), Path("missing".into())).await;
 
-    assert!(response.0.contains("Connection not found"));
+    assert!(response.0.contains("LlmProviderConfig not found"));
 }
 
 #[tokio::test]
 async fn test_edit_connection_form_returns_form() {
     let mut settings = AppSettings::default();
-    settings.connections.push(Connection {
+    settings.connections.push(LlmProviderConfig {
         id: "test-conn".into(),
         name: "Test".into(),
         provider: LlmBackendType::DeepSeek,
@@ -287,13 +294,13 @@ async fn test_edit_connection_form_not_found() {
     let response =
         edit_connection_form(axum::extract::State(app_state), Path("missing".into())).await;
 
-    assert!(response.0.contains("Connection not found"));
+    assert!(response.0.contains("LlmProviderConfig not found"));
 }
 
 #[tokio::test]
 async fn test_edit_connection_handler_updates_connection() {
     let mut settings = AppSettings::default();
-    settings.connections.push(Connection {
+    settings.connections.push(LlmProviderConfig {
         id: "test-conn".into(),
         name: "Old Name".into(),
         provider: LlmBackendType::OpenRouter,
@@ -345,7 +352,7 @@ async fn test_edit_connection_handler_not_found() {
     )
     .await;
 
-    assert!(response.0.contains("Connection not found"));
+    assert!(response.0.contains("LlmProviderConfig not found"));
 }
 
 #[tokio::test]
@@ -353,7 +360,7 @@ async fn test_delete_connection_handler_removes_connection() {
     let mut settings = AppSettings::default();
     // Clear default connections and add our own
     settings.connections.clear();
-    settings.connections.push(Connection {
+    settings.connections.push(LlmProviderConfig {
         id: "conn-1".into(),
         name: "First".into(),
         provider: LlmBackendType::OpenRouter,
@@ -364,7 +371,7 @@ async fn test_delete_connection_handler_removes_connection() {
         max_tokens: None,
         max_context_tokens: None,
     });
-    settings.connections.push(Connection {
+    settings.connections.push(LlmProviderConfig {
         id: "conn-2".into(),
         name: "Second".into(),
         provider: LlmBackendType::DeepSeek,
@@ -396,7 +403,7 @@ async fn test_delete_connection_handler_redirects_narrator() {
     // Clear default connections and add our own
     settings.connections.clear();
     settings.narration_connection_id = "conn-1".into();
-    settings.connections.push(Connection {
+    settings.connections.push(LlmProviderConfig {
         id: "conn-1".into(),
         name: "First".into(),
         provider: LlmBackendType::OpenRouter,
@@ -407,7 +414,7 @@ async fn test_delete_connection_handler_redirects_narrator() {
         max_tokens: None,
         max_context_tokens: None,
     });
-    settings.connections.push(Connection {
+    settings.connections.push(LlmProviderConfig {
         id: "conn-2".into(),
         name: "Second".into(),
         provider: LlmBackendType::DeepSeek,
@@ -438,7 +445,7 @@ async fn test_delete_connection_handler_not_found() {
     let response =
         delete_connection_handler(axum::extract::State(app_state), Path("missing".into())).await;
 
-    assert!(response.0.contains("Connection not found"));
+    assert!(response.0.contains("LlmProviderConfig not found"));
 }
 
 #[tokio::test]
@@ -446,7 +453,7 @@ async fn test_delete_connection_handler_cannot_delete_last() {
     let mut settings = AppSettings::default();
     // Clear default connections and add only one
     settings.connections.clear();
-    settings.connections.push(Connection {
+    settings.connections.push(LlmProviderConfig {
         id: "only-conn".into(),
         name: "Only".into(),
         provider: LlmBackendType::OpenRouter,
@@ -468,7 +475,7 @@ async fn test_delete_connection_handler_cannot_delete_last() {
 #[tokio::test]
 async fn test_set_narrator_handler_updates_id() {
     let mut settings = AppSettings::default();
-    settings.connections.push(Connection {
+    settings.connections.push(LlmProviderConfig {
         id: "conn-1".into(),
         name: "Test".into(),
         provider: LlmBackendType::OpenRouter,
@@ -501,13 +508,13 @@ async fn test_set_narrator_handler_not_found() {
     let response =
         set_narrator_handler(axum::extract::State(app_state), Path("missing".into())).await;
 
-    assert!(response.0.contains("Connection not found"));
+    assert!(response.0.contains("LlmProviderConfig not found"));
 }
 
 #[tokio::test]
 async fn test_set_quantifier_handler_updates_id() {
     let mut settings = AppSettings::default();
-    settings.connections.push(Connection {
+    settings.connections.push(LlmProviderConfig {
         id: "conn-1".into(),
         name: "Test".into(),
         provider: LlmBackendType::OpenRouter,
@@ -540,5 +547,5 @@ async fn test_set_quantifier_handler_not_found() {
     let response =
         set_quantifier_handler(axum::extract::State(app_state), Path("missing".into())).await;
 
-    assert!(response.0.contains("Connection not found"));
+    assert!(response.0.contains("LlmProviderConfig not found"));
 }

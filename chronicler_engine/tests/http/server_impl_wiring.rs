@@ -6,16 +6,28 @@ use std::time::Duration;
 use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::adapters::driving::http::{ServerConfig, ServerResources};
 use chronicler_engine::adapters::driving::http::server_impl::run_server_with_config;
+use chronicler_engine::bootstrap::wiring::{build_game_service_for_tests, build_text_check_service};
 use chronicler_engine::domain::model::settings::AppSettings;
 
 fn build_test_resources() -> ServerResources {
     let storage = Arc::new(Storage::new_in_memory());
     let preset_storage = Arc::new(Storage::new_in_memory());
     let settings = Arc::new(RwLock::new(AppSettings::default()));
+    let game_service = Arc::new(
+        build_game_service_for_tests(
+            Arc::clone(&settings),
+            Arc::clone(&storage),
+            Arc::clone(&preset_storage),
+        )
+        .expect("build_game_service_for_tests should succeed"),
+    );
+    let text_check_service = build_text_check_service(Arc::clone(&settings));
     ServerResources {
         storage,
         preset_storage,
         settings,
+        game_service,
+        text_check_service,
     }
 }
 

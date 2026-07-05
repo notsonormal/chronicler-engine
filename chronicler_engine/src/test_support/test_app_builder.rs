@@ -303,12 +303,12 @@ impl TestAppBuilder {
         let preset_storage = Arc::new(Storage::new_in_memory());
         let game_service: Arc<GameService> = self.game_service.unwrap_or_else(|| {
             Arc::new(
-                GameService::with_storage(
-                    Some(Arc::clone(&storage)),
-                    Some(Arc::clone(&preset_storage)),
+                crate::bootstrap::wiring::build_game_service_for_tests(
                     Arc::clone(&settings_arc),
+                    Arc::clone(&storage),
+                    Arc::clone(&preset_storage),
                 )
-                .expect("GameService::with_storage should succeed"),
+                .expect("build_game_service_for_tests should succeed"),
             )
         });
         let text_check_service = Arc::new(create_text_check_service(&self.settings));

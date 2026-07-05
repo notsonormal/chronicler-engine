@@ -44,7 +44,7 @@ After seeding, runtime loading is 100% database-first:
 - `game.persona_key` → `Storage::get_persona(key)` → `PlayerCard` (the persona is bound on the game row, not the world)
 - `world_with_map.world_id` → `Storage::list_characters(world_id)` → `Vec<NpcCard>`
 
-**File I/O only during seeding**; runtime has zero filesystem coupling.
+**File I/O only during seeding**; runtime reads only from the database.
 
 **Pattern Consistency**: World storage uses `DbWorld::from_row()` + `world_card_from_db()` conversion function, matching persona and character storage.
 

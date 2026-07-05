@@ -202,7 +202,7 @@ Machine-checkable statements about engine runtime behavior. Violations indicate 
 `execute_freeaction_impl` applies mutations in order: handle_movement → resolve NPCs → add_log → evaluate_triggers → apply_npc_events. Violations compile but break silently.
 - **Test:** `tests/invariant_contract_tests.rs::test_inv002_state_mutation_order`
 - **Test:** `tests/invariant_contract_tests.rs::test_inv002_mutation_order_property` (proptest)
-- **Authoritative spec:** [`system/triggers.md`](../system/triggers.md) "Mutation Order Invariant" section.
+- **Authoritative spec:** [`system/triggers.md`](../system/triggers.md) "State Mutation Order" section.
 
 ### Concurrency
 

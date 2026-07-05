@@ -1,5 +1,5 @@
 use crate::domain::model::llm_backend::LlmBackendType;
-use crate::domain::model::settings::Connection;
+use crate::domain::model::settings::LlmProviderConfig;
 use crate::application::ports::llm_provider::LlmProvider;
 use crate::adapters::driven::llm::providers::openrouter::OpenRouterBackend;
 
@@ -11,7 +11,7 @@ fn test_openrouter_backend_name() {
 
 #[test]
 fn test_openrouter_from_connection() {
-    let conn = Connection {
+    let conn = LlmProviderConfig {
         id: "or-1".into(),
         name: "OpenRouter".into(),
         provider: LlmBackendType::OpenRouter,
@@ -23,14 +23,14 @@ fn test_openrouter_from_connection() {
         max_context_tokens: Some(32768),
     };
 
-    let backend = OpenRouterBackend::from_connection(&conn);
+    let backend = OpenRouterBackend::from_config(&conn);
     assert_eq!(backend.model(), "gpt-4o");
     assert_eq!(backend.name(), "OpenRouter");
 }
 
 #[test]
 fn test_openrouter_model() {
-    let conn = Connection {
+    let conn = LlmProviderConfig {
         id: "test".into(),
         name: "Test".into(),
         provider: LlmBackendType::OpenRouter,
@@ -42,7 +42,7 @@ fn test_openrouter_model() {
         max_context_tokens: None,
     };
 
-    let backend = OpenRouterBackend::from_connection(&conn);
+    let backend = OpenRouterBackend::from_config(&conn);
     assert_eq!(backend.model(), "claude-3-opus");
 }
 

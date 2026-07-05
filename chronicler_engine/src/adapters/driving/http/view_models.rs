@@ -6,7 +6,7 @@ use std::fmt;
 use crate::application::ports::llm_message_repository::LlmMessage;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::{MessageEntry, MessageType};
-use crate::adapters::driven::text_check::CheckResult;
+use crate::application::ports::text_checker::CheckResult;
 
 #[allow(private_interfaces)]
 #[derive(Debug, Clone)]

@@ -3,7 +3,7 @@
 
 use askama::Template;
 
-use crate::domain::model::settings::{AppSettings, Connection, TextCheckMode};
+use crate::domain::model::settings::{AppSettings, LlmProviderConfig, TextCheckMode};
 
 pub fn parse_api_key(s: &str) -> Option<String> {
     if s.is_empty() {
@@ -60,7 +60,7 @@ pub(crate) fn provider_options_html(selected: &str) -> String {
     </div>
     {% endfor %}
 
-    <h3>Add Connection</h3>
+    <h3>Add LlmProviderConfig</h3>
     <form hx-post="/connections/add" hx-target=".settings-panel" hx-swap="innerHTML">
         <div class="form-group">
             <label for="conn_name">Name</label>
@@ -90,7 +90,7 @@ pub(crate) fn provider_options_html(selected: &str) -> String {
                 Single User Message (merge system + user for models that ignore system prompts)
             </label>
         </div>
-        <button type="submit" class="btn-primary">Add Connection</button>
+        <button type="submit" class="btn-primary">Add LlmProviderConfig</button>
     </form>
     <span id="settings-status"></span>
 
@@ -128,7 +128,7 @@ pub(crate) fn provider_options_html(selected: &str) -> String {
     ext = "html"
 )]
 pub struct SettingsTemplate {
-    pub connections: Vec<Connection>,
+    pub connections: Vec<LlmProviderConfig>,
     pub narration_connection_id: String,
     pub quantifier_connection_id: String,
     pub provider_options: String,

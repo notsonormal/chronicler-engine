@@ -1,7 +1,7 @@
 use askama::Template;
 
 use crate::domain::model::llm_backend::LlmBackendType;
-use crate::domain::model::settings::{AppSettings, Connection};
+use crate::domain::model::settings::{AppSettings, LlmProviderConfig};
 use crate::adapters::driving::http::settings_fragment::{SettingsTemplate, parse_api_key};
 
 #[test]
@@ -51,7 +51,7 @@ fn test_parse_api_key_non_empty_returns_some() {
 fn test_settings_template_renders_connections() {
     let settings = AppSettings {
         connections: vec![
-            Connection {
+            LlmProviderConfig {
                 id: "conn-1".into(),
                 name: "Test Narrator".into(),
                 provider: LlmBackendType::OpenRouter,
@@ -62,7 +62,7 @@ fn test_settings_template_renders_connections() {
                 max_tokens: None,
                 max_context_tokens: None,
             },
-            Connection {
+            LlmProviderConfig {
                 id: "conn-2".into(),
                 name: "Test Quantifier".into(),
                 provider: LlmBackendType::Ollama,
@@ -90,7 +90,7 @@ fn test_settings_template_renders_connections() {
 fn test_narrator_badge_renders() {
     let settings = AppSettings {
         connections: vec![
-            Connection {
+            LlmProviderConfig {
                 id: "conn-1".into(),
                 name: "Test Narrator".into(),
                 provider: LlmBackendType::OpenRouter,
@@ -101,7 +101,7 @@ fn test_narrator_badge_renders() {
                 max_tokens: None,
                 max_context_tokens: None,
             },
-            Connection {
+            LlmProviderConfig {
                 id: "conn-2".into(),
                 name: "Test Quantifier".into(),
                 provider: LlmBackendType::Ollama,
@@ -128,7 +128,7 @@ fn test_narrator_badge_renders() {
 fn test_quantifier_badge_renders() {
     let settings = AppSettings {
         connections: vec![
-            Connection {
+            LlmProviderConfig {
                 id: "conn-1".into(),
                 name: "Test Narrator".into(),
                 provider: LlmBackendType::OpenRouter,
@@ -139,7 +139,7 @@ fn test_quantifier_badge_renders() {
                 max_tokens: None,
                 max_context_tokens: None,
             },
-            Connection {
+            LlmProviderConfig {
                 id: "conn-2".into(),
                 name: "Test Quantifier".into(),
                 provider: LlmBackendType::Ollama,

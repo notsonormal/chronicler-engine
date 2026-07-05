@@ -1,6 +1,6 @@
 ---
 name: planning-and-task-breakdown
-description: Breaks work into ordered tasks. Use when you have a spec or clear requirements and need to break work into implementable tasks. Use when a task feels too large to start, when you need to estimate scope, or when parallel work is possible.
+description: Use when you have a spec or clear requirements and need to break work into implementable tasks. Use when a task feels too large to start, when you need to estimate scope, or when parallel work is possible. Breaks work into ordered tasks.
 ---
 
 # Planning and Task Breakdown
@@ -100,7 +100,7 @@ Each task follows this structure:
 - `src/path/to/file.ts`
 - `tests/path/to/test.ts`
 
-**Estimated scope:** [Small: 1-2 files | Medium: 3-5 files | Large: 5+ files]
+**Estimated scope:** [2 SP: 1-2 files | 3 SP: 3-5 files | 5 SP: 5+ files]
 ```
 
 ### Step 5: Order and Checkpoint
@@ -126,13 +126,13 @@ Add explicit checkpoints:
 
 | Size | Files | Scope | Example |
 |------|-------|-------|---------|
-| **XS** | 1 | Single function or config change | Add a validation rule |
-| **S** | 1-2 | One component or endpoint | Add a new API endpoint |
-| **M** | 3-5 | One feature slice | User registration flow |
-| **L** | 5-8 | Multi-component feature | Search with filtering and pagination |
-| **XL** | 8+ | **Too large — break it down further** | — |
+| **1 story points** | 1 | Single function or config change | Add a validation rule |
+| **2 story points** | 1-2 | One component or endpoint | Add a new API endpoint |
+| **3 story points** | 3-5 | One feature slice | User registration flow |
+| **5 story points** | 5-8 | Multi-component feature | Search with filtering and pagination |
+| **8 story points** | 8+ | **Too large — break it down further** | — |
 
-If a task is L or larger, it should be broken into smaller tasks. An agent performs best on S and M tasks.
+If a task is 8 story points or larger, it should be broken into smaller tasks. An agent performs best on 3 SP and 5 SP tasks. If needed you can break 8 SP+ tasks into subtasks (e.g. splitting task 3 into 3.1, 3.2, 3.4) if it doesn't make sense for them to be represented as full tasks.
 
 **When to break a task down further:**
 - It would take more than one focused session (roughly 2+ hours of agent work)
@@ -220,8 +220,8 @@ Before starting implementation, confirm:
 - [ ] Task dependencies are identified and ordered correctly
 - [ ] No task touches more than ~5 files
 - [ ] Checkpoints exist between major phases
-- [ ] The human has reviewed and approved the plan
+- [ ] The human has reviewed and approved the planA
 
 ## See Also
 
-Acceptance criteria are per-task and answer "did we build the right thing?". They sit on top of the project-wide Definition of Done, the standing bar every task clears before it counts as done. See `references/definition-of-done.md`.
+Acceptance criteria are per-task and answer "did we build the right thing?". They sit on top of the project-wide Definition of Done, the standing bar every task clears before it counts as done.

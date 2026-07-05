@@ -7,7 +7,7 @@
 
 The Chronicler Engine supports an extensible agent architecture where specialized agents can inject behavior into the narrative pipeline at specific execution phases. An **agent** is any type implementing the `Agent` trait. Agents are loaded from `AppSettings` at startup and registered in the `AgentRegistry`.
 
-**Current agents:**
+**Agents:**
 
 - `QuantifierAgent` — Post-generation scene analysis (NPC presence, movement)
 

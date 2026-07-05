@@ -104,7 +104,7 @@ The following XML-tagged sections are sent in the **user message**, not the syst
 6. `<ConversationHistory>` — Truncated narration history
 7. `<PlayerInput>` — Sanitized current user input
 
-The `<writing_style>` and `<output_format>` sections are placed in the **user message** after `<ConversationHistory>` (Layer 6) to maximize recency bias. The system prompt (Layer 0) contains only `<role>`, `<instructions>`, and `<global_rules>`.
+The `<writing_style>` and `<output_format>` sections are placed in the **user message** after `<ConversationHistory>` (Layer 6). LLMs exhibit strong recency bias, so placing prose and structural rules late in the context window (just before the generation point) makes them more effective than burying them in the system message. The system prompt (Layer 0) contains only `<role>`, `<instructions>`, and `<global_rules>`.
 
 ---
 
@@ -123,7 +123,7 @@ Default presets (shipped as `data/prompt_presets/system/default.json`) are prote
 
 ---
 
-## Sources
+## Code references
 
 - System preset seed: `data/prompt_presets/system/default.json`
 - Assembly logic: `src/domain/model/prompt_preset.rs` (`assemble_prompt_text()`)

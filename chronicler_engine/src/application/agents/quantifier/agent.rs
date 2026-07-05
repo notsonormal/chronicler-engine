@@ -11,6 +11,7 @@ use crate::domain::model::agent::{
 use crate::domain::model::settings::AppSettings;
 
 use crate::application::agents::Agent;
+use crate::application::llm_recorder::LlmCallRecorder;
 use crate::application::narrative_prompt::assembler::assemble_prompt_text;
 use crate::application::ports::llm_provider::LlmProvider;
 use crate::adapters::driven::storage::Storage;
@@ -33,29 +34,12 @@ impl std::fmt::Debug for QuantifierAgent {
 }
 
 impl QuantifierAgent {
-    pub fn from_config(_config: &AgentConfig) -> Result<Self, EngineError> {
-        Self::from_config_with_storage(
-            _config,
-            None,
-            None,
-            Arc::new(RwLock::new(AppSettings::default())),
-        )
-    }
-
     pub fn from_config_with_storage(
         _config: &AgentConfig,
-        storage: Option<Arc<Storage>>,
+        recorder: Arc<LlmCallRecorder>,
         preset_storage: Option<Arc<Storage>>,
         settings: Arc<RwLock<AppSettings>>,
     ) -> Result<Self, EngineError> {
-        let settings_guard = settings.read().unwrap_or_else(|e| e.into_inner());
-        let storage = storage.unwrap_or_else(|| {
-            Arc::new(crate::adapters::driven::storage::Storage::new_in_memory())
-        });
-        let recorder = crate::bootstrap::llm_factory::get_llm_recorder_for(
-            &settings_guard.quantifier_connection(),
-            Arc::clone(&storage),
-        )?;
         Ok(Self {
             name: "quantifier".to_string(),
             provider: recorder.provider().clone(),

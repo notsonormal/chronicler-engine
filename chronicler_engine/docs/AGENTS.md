@@ -4,6 +4,14 @@ This folder contains all documentation for the Chronicler Engine project.
 
 For general engine principles, workflow, and conventions, see [`../AGENTS.md`](../AGENTS.md).
 
+## Keeping Documentation Clean
+
+**Plan authoring convention:** reference doc issues by quotable phrase, never line numbers — line numbers rot. Use the exact sentence (or a quoted fragment of it) as the anchor.
+
+**Sediment:** Layers of old content that settle in the docs and are never cleared, because adding feels safe and removing feels risky — so stale and irrelevant lines accumulate and you must core down through them to find what is still live. The default fate of any documentation without a pruning discipline; the slow erosion of relevance, as opposed to duplication's repeated meaning.
+
+**Duplication:** The same meaning given more than one single source of truth. It costs maintenance (change one place, you must change the others), costs tokens, and inflates prominence — repeating a meaning weights it on the ladder past its real rank. The accidental inverse of a leading word, which raises attention on purpose by repeating a token, never the meaning.
+
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
@@ -109,5 +117,3 @@ For general engine principles, workflow, and conventions, see [`../AGENTS.md`](.
 - [Worlds Management System](./system/worlds.md)
 
 <!-- AUTO-INDEX END -->
-
-**Plan authoring convention:** reference doc issues by quotable phrase, never line numbers — line numbers rot. Use the exact sentence (or a quoted fragment of it) as the anchor.

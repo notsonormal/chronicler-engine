@@ -158,7 +158,7 @@ HTML template renders each entry with: timestamp, sender, text body, optional lo
 
 ### Game Management
 
-Multiple independent games across all worlds, each with isolated snapshots and messages. The Games panel has three sections: Active Game, New Game, and Saved Games.
+Multiple independent games across all worlds, each with isolated snapshots and messages. The Games panel sections: Active Game, New Game, and Saved Games.
 
 - **Create game**: New game section shows world + persona dropdowns and a "Start New Game" button. Game name auto-generated (`{WorldName}_{Date}_N`). Submit disabled when persona list is empty.
 - **Active Game**: Shows current game name, world badge, persona badge, "Current" badge, and reset button.

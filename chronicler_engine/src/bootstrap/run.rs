@@ -149,11 +149,22 @@ pub fn run(args: Args) -> crate::error::Result<()> {
 
     let preset_storage =
         crate::adapters::driven::storage::Storage::new_sqlite(db_pool, PRESET_STORAGE_GAME_ID);
+    let storage_arc_for_wiring = Arc::clone(&storage);
+    let preset_storage_arc = Arc::new(preset_storage);
+    let game_service = crate::bootstrap::wiring::build_game_service(
+        Arc::clone(&settings),
+        Arc::clone(&storage_arc_for_wiring),
+        Arc::clone(&preset_storage_arc),
+    )?;
+    let text_check_service =
+        crate::bootstrap::wiring::build_text_check_service(Arc::clone(&settings));
 
     let resources = crate::adapters::driving::http::ServerResources {
         storage,
-        preset_storage: Arc::new(preset_storage),
+        preset_storage: preset_storage_arc,
         settings,
+        game_service: Arc::new(game_service),
+        text_check_service,
     };
 
     let (_addr, server) = runtime.block_on(

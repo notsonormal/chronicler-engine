@@ -1,6 +1,21 @@
 # Changelog
 
-## Unreleased
+NOTE: Always date the change log records (e.g. put under `## 2025-01-10`) when you add them to the file. Do not put under a `## Unreleased` header or similar. 
+
+## 2026-07-05
+
+### Changed
+
+- **Hexagonal Architecture Gap Closure plan complete** (`docs/plans/hexagonal-architecture-gap-closure.md`, archived to `old-docs/archived-plans/`). Plan superseded the former `abstraction-fixes-followup-superplan.md`; only #11 (ArrivalTaskContext) items superseded, other T/R tracks remain independently scheduled.
+  - **Phase A** (#10, #9): CheckResult import path fixed in `templates.rs`/`view_models.rs` to use `application::ports::text_checker` not adapter path. `debug.rs` exemption formalized in ADR-027 §3.2 (accesses `state.game_service.backend_info()`, not `ApplicationService` as review claimed).
+  - **Phase B** (#4, #5): arch-lint scope split — `narrative` monolithic scope split into `ports`, `driven-llm`, `driven-text-check`, `narrative`. Added deny rules `ports → [driven-llm, driven-text-check, narrative, server, storage, storage-models, bootstrap, test-support, engine]` + `driven-llm ↔ driven-text-check`. `application` removed from ports deny-target list (ports is subset of application; denying ports→application self-references port-internal imports). Test-file exclusion (`*_tests.rs`) kept — arch-lint 0.4.3 cannot distinguish test fakes from production leaks.
+  - **Phase C** (#1, #6): Self-imposed T2 gate removed (T2 2+ weeks stale, no real merge conflict). `QuantifierAgent::from_config_with_storage` + `AgentRegistry::from_configs_with_storage` signatures changed to take `Arc<LlmCallRecorder>` instead of `Option<Arc<Storage>>` — recorder injected directly. `GameService::with_storage` takes `llm_recorder + agent_registry` params (test-only path now). New `src/bootstrap/wiring.rs` with `build_game_service` (prod composition root), `build_narration_recorder`, `build_text_check_service`, `build_game_service_for_tests`. `ServerResources` struct expanded to carry pre-built `Arc<GameService>` + `Arc<TextCheckService>`. `build_fresh_initial_state` moved from free bootstrap fn to `GameServiceContext::build_fresh_initial_state` method. Storage exemption reduced 5→3 files.
+  - **Phase E.1** (#7): `Connection` renamed to `LlmProviderConfig` across all `.rs` files; `from_connection` → `from_config` on all 4 LLM backends. Stays in `domain/model/settings.rs` per Deviation 2 (moving to ports would violate `model → application` arch-lint rule since `AppSettings` embeds `Vec<LlmProviderConfig>`).
+  - **Phase E.2** (#8): DROPPED as YAGNI. `Swipe::snapshot_id` stays on domain entity per ADR-027 Deviation 3. Reviewer's specific claim was wrong (field on `Swipe` not `Message`, `u64` not `i64`). `Message::id` is also DB-assigned; full DTO split would force duplication across message aggregate for zero architectural benefit.
+  - **Phase F.1** (#11): Self-imposed R2/N21 gate removed (T2 2+ weeks stale). `ArrivalTaskContext` struct + `run()` + `run_sync()` + `new_for_test` moved from `bootstrap/init_game.rs` to new `src/application/arrival_service.rs`. `inject_scenario_logs` moved from `bootstrap/scenario.rs` to new `src/application/scenario.rs`. `bootstrap/scenario.rs` deleted. `spawn_arrival_task_if_needed` KEPT in `bootstrap/init_game.rs` per plan deviation — it's composition root wiring. G2-G5: keep struct name (no rename), preserve state ownership shape, preserve cancellation behavior (R2 adds checks later). `architecture/system.md:87, 219` updated per G5.
+  - **Phase G** (woven through): ADR-027 rewritten — §3.1-3.4 inline update headers removed (template violation), `## Alternatives Considered` section folded into Decision body, plan-doc references removed (template forbids), `Drivers` field removed (not in template), Phase 3.3 settings.rs rename sediment removed, Storage exemption count duplication collapsed. Three new Deviation entries: Deviation 1 (`LlmBackendType`), Deviation 2 (`LlmProviderConfig`), Deviation 3 (`Swipe::snapshot_id`).
+
+## 2026-07-04
 
 ### Changed
 
