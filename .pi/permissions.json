@@ -1,0 +1,12 @@
+{
+  "rules": {
+    "git-commit": "\\bgit\\s+commit\\b",
+    "git-push": "\\bgit\\s+push\\b",
+    "git-tag": "\\bgit\\s+tag\\b",
+    "git-merge": "\\bgit\\s+merge\\b",
+    "git-rebase": "\\bgit\\s+rebase\\b",
+    "git-reset": "\\bgit\\s+reset\\b",
+    "git-pull": "\\bgit\\s+pull\\b",
+    "mnt-access": "(^|\\s)/mnt/"
+  }
+}

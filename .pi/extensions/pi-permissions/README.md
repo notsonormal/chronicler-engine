@@ -68,8 +68,17 @@ Session grants are in-memory and lost on session restart.
 
 - **PATH shim for nested scripts** — `git push` inside `npm run release` is not caught. Documented limitation, same as the regex-match-only caveat in `subagent-guardrails/commit-veto.ts`.
 - **File-tool guards** — bash only. For sensitive file protection, see `pi-secret-guard` or `pi-sensitive-guard`.
-- **Subagent-specific behavior** — applies uniformly. Forked subagents inherit the same hook.
 - **Audit log persistence** — only in-session ring buffer (last 20 blocks).
+
+## Subagent behavior
+
+Forked subagents run in their own `pi -p` (print-mode) process via `pi-subagents`, so `ctx.hasUI === false` in every worker. Consequence: **matched commands in subagents are hard-blocked with no UI path to grant.** No confirm dialog surfaces, and session grants from the parent session don't carry across the process boundary.
+
+This is intentional. Workers shouldn't mutate history or touch `/mnt/`. If a worker needs git access, it should stage changes locally and return a summary for the parent session to commit.
+
+### Hook ordering with `subagent-guardrails`
+
+Both this extension and `subagent-guardrails/commit-veto.ts` register `tool_call` handlers. pi runs them in extension load order (`fs.readdirSync` order, filesystem-dependent — not guaranteed alphabetical). The first handler to return `{ block: true }` wins; the other never executes. In practice both end up blocking the same git verbs in subagents, so the user-visible result is identical regardless of order.
 
 ## Sibling extension
 
