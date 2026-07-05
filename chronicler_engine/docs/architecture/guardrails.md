@@ -61,7 +61,7 @@ User decision (Task 0, Option B): arch-lint 0.4.3 lacks scoped file-level exempt
 | `domain` → anything (explicit) | Already covered by existing `model` scope deny rules; plan repeats for emphasis | Subsumed — no action | Already enforced |
 | `application/ports` → anything | Ports must depend only on `domain` and `error` | Subsumed by `application` → `server` rule + (deferred) `application` → `adapters/driven` rule | After Phase 2 closes the leaks |
 
-See [`docs/old-docs/archived-plans/hexagonal-reorganization-plan.md`](../old-docs/archived-plans/hexagonal-reorganization-plan.md) Phase 1.7 + Phase 2 for the deferred-leak cleanup items; Phase 3 deviations document the formal deferrals.
+The deferred-leak cleanup items were tracked in the hexagonal-reorganization work (Phase 1.7 arch-lint rule updates + Phase 2 layer-responsibility fixes). Formal Phase-3 deferrals (e.g. `DebugPort` rejected as phantom port; `StateRepository` port rejected as single-impl YAGNI) are recorded in ADR-027 + the `application` → `adapters/driven` row above.
 
 ### `DebugPort` exemption (ADR-027 §3.2)
 

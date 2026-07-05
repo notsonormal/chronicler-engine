@@ -1,11 +1,11 @@
 # ADR-017: Message Swipes
 
 **Date:** 2026-05-24
-**Status:** Accepted — supersedes ADR-013 simplification (swipes reintroduced with dedicated table)
+**Status:** Accepted — supersedes the previous snapshot-only simplification (swipes reintroduced with dedicated table)
 
 ## Context
 
-ADR-013 removed per-message swipes in favor of a simpler snapshot-rollback model. While this worked for basic retry, it had two problems:
+The earlier snapshot-rollback model (removed during ADR cleanup; superseded by this ADR) removed per-message swipes in favor of a simpler snapshot-rollback model. While this worked for basic retry, it had two problems:
 
 1. **Destructive retry**: Old generations were permanently lost. Users could not compare different narrations or return to a previous generation without regenerating.
 2. **No event independence**: Events and narrations were tightly coupled. A user could not retry a narration without also losing the event that followed it.
@@ -61,14 +61,14 @@ Swiping a non-last message would require deleting all messages after it (since t
 
 ## Alternatives Considered
 
-1. **Keep ADR-013 snapshot-only model**: Rejected because destructive retry loses user data and prevents comparison.
+1. **Keep snapshot-only model**: Rejected because destructive retry loses user data and prevents comparison.
 2. **Graph snapshots (Marinara-style)**: Rejected because it overcomplicates the engine. Per-message swipes with snapshot IDs give the same state consistency without a graph.
 3. **Turn grouping with per-turn swipes**: Rejected because it recouples narration and event. Independent message swipes keep them separate.
 
-## Key Changes from ADR-013
+## Key Changes from the Snapshot-Only Model
 
-| Area | ADR-013 | ADR-017 |
-|------|---------|---------|
+| Area | Snapshot-only model | ADR-017 |
+|------|----------------------|---------|
 | Message storage | Flat `messages` with inline text | `messages` + `message_swipes` table |
 | Retry mechanism | Snapshot rollback + replay | Snapshot rollback + swipe preservation |
 | Old generations | Lost (destructive) | Preserved as swipes |

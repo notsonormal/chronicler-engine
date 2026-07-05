@@ -10,7 +10,7 @@
 The storage layer had grown to six separate traits (`GameStorage`, `SnapshotStorage`, `MessageStorage`, `MessageSwipeStorage`, `PromptPresetStorage`, `LlmMessageStorage`) with 12 repository structs (SQLite + in-memory pairs). This produced:
 
 - **1,371 lines** across `src/storage/*_storage.rs` and `src/test_support/in_memory_storage.rs`
-- **Six `Arc<dyn Trait>` fields** on `GameServiceContext` (later five after ADR-019)
+- **Six `Arc<dyn Trait>` fields** on `GameServiceContext` (later five after the one-table-per-module refactor that ADR-020 absorbs)
 - **Six custom mock structs** for failure injection in tests (`FailingSnapshotStorage`, `FailingMessageStorage`, etc.)
 - **Trait boilerplate** for a domain that has exactly two real backends (SQLite for production, HashMap for tests)
 
@@ -43,7 +43,7 @@ All previous trait methods become inherent methods on `Storage`. Callers pass `A
 1. **Enum over trait.** Two real backends → enum is simpler, faster (no vtables), and enables exhaustive matching.
 2. **Shared `game_id` on `Storage`.** One `AtomicU64` eliminates the duplication of `set_game_id` across five repositories and prevents divergence bugs.
 3. **`Backend::Test` for failure injection.** `Arc<Mutex<HashMap<Operation, TestOverride>>>` allows static setup (`with_failure`) and dynamic toggling (`TestFailureHandle::set` / `clear`) mid-test. This replaces all custom failing mock structs.
-4. **Table-scoped methods preserved.** No `Storage` method touches more than one table; cross-table coordination stays in `GameServiceContext` helpers (`load_messages_with_swipes`, `save_message_and_snapshot`, etc.). This preserves ADR-019's intent without the module overhead.
+4. **Table-scoped methods preserved.** No `Storage` method touches more than one table; cross-table coordination stays in `GameServiceContext` helpers (`load_messages_with_swipes`, `save_message_and_snapshot`, etc.). This preserves the one-table-per-module intent without the module overhead.
 
 ## Consequences
 

@@ -6,8 +6,6 @@
 
 The Chronicler Engine uses a layered prompt construction system inspired by SillyTavern's Prompt Manager. The system builds comprehensive context for game narration by combining game state, character information, world lore, and conversation history into a structured prompt sent to the LLM.
 
-For background on SillyTavern's original system, see [`reference/sillytavern_prompt_system.md`](../reference/sillytavern_prompt_system.md).
-
 ## Prompt Architecture: XML-Sectioned Instructions + XML Data
 
 The engine follows a **Marinara-Engine-inspired pattern**:
