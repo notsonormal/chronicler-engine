@@ -7,6 +7,7 @@ pub mod application_service;
 pub mod arrival_service;
 pub mod context;
 pub mod game_service;
+pub mod generation_guard;
 pub mod llm_recorder;
 pub mod llm_sanitizer;
 pub mod message_editing;
@@ -25,6 +26,7 @@ pub use context::{
     delete_and_remove_message, map_llm_error, save_message_and_snapshot, GameServiceContext,
 };
 pub use game_service::GameService;
+pub use generation_guard::GenerationGuard;
 pub use message_editing::{delete_last, edit_history, retrigger, retry, switch_swipe};
 pub use query_handlers::*;
 pub(crate) use spawn::spawn_pipeline_task;

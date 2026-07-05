@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::Ordering;
 
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
@@ -13,6 +13,7 @@ use serde::Serialize;
 use crate::application::action_pipeline::execute_action_impl;
 use crate::application::context::{GameServiceContext, load_or_fresh};
 use crate::application::game_service::GameService;
+use crate::application::generation_guard::GenerationGuard;
 
 use crate::error::EngineError;
 use crate::domain::model::game::{Game, generate_game_name};
@@ -389,13 +390,5 @@ impl DefaultApplicationService {
         }
 
         Ok(snapshot_id)
-    }
-}
-
-struct GenerationGuard(Arc<AtomicBool>);
-
-impl Drop for GenerationGuard {
-    fn drop(&mut self) {
-        self.0.store(false, Ordering::SeqCst);
     }
 }

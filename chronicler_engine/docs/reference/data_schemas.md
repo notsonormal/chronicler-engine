@@ -120,6 +120,7 @@ Attached to an NPC. Defines a condition and the narration to inject when that co
 
 ```json
 {
+  "name": "FirstMeeting",
   "condition": { "TimesMet": ["Eq", 0] },
   "action": { "narration_prompt": "The shopkeeper looks up from behind the counter with a warm smile." },
   "repeat": false
@@ -128,6 +129,7 @@ Attached to an NPC. Defines a condition and the narration to inject when that co
 
 ### Fields
 
+- `name`: Display name for the trigger (used in logs and the `trigger_fired` map keys).
 - `condition`: The condition that must be true for this trigger to fire. Currently supports `TimesMet` with a comparison operator.
   - `TimesMet`: Array of `[operator, value]`. Operators: `Eq` (equal), `Lt` (less than), `Gte` (greater than or equal)
 - `action.narration_prompt`: The text injected into the continuation LLM prompt when this trigger fires
@@ -231,18 +233,14 @@ A single alternative generation for a message. Stored in the `message_swipes` ta
 
 ## Message Schema
 
-Core narrative unit with swipe support.
+Core narrative unit with swipe support. The persisted struct holds direct fields only; swipe-derived values are exposed via accessor methods. See [`system/message_model.md`](../system/message_model.md) for the accessor pattern.
 
 ```json
 {
   "id": 1,
   "sender": "Game Master",
-  "text": "You enter the hall.",
   "message_type": "Narration",
   "timestamp": "2026-05-24T12:00:00Z",
-  "location_header": "Entrance Hall",
-  "event_header": null,
-  "snapshot_id": 42,
   "active_swipe_index": 0,
   "is_deleted": false,
   "swipes": [
@@ -256,19 +254,19 @@ Core narrative unit with swipe support.
 }
 ```
 
-### Fields
+### Direct Fields
 
 - `id`: Auto-incrementing message ID
 - `sender`: Optional sender name (None for narration, "Player" for input)
-- `text`: Active swipe text (hydrated from `swipes[active_swipe_index]`)
 - `message_type`: `Narration`, `Dialogue`, `System`, or `Input`
 - `timestamp`: UTC timestamp
-- `location_header`: Active location header (from active swipe)
-- `event_header`: Active event header (from active swipe)
-- `snapshot_id`: Active snapshot ID (from active swipe)
 - `active_swipe_index`: Index of the currently displayed swipe
 - `is_deleted`: Soft-delete flag (true for messages temporarily hidden during retry)
 - `swipes`: Array of all swipes for this message
+
+### Accessor Methods (NOT direct fields)
+
+Swipe-derived values (`text`, `location_header`, `event_header`, `snapshot_id`) are exposed via accessor methods that read from the active swipe — they are not persisted as direct top-level fields. See [`system/message_model.md`](../system/message_model.md) for the accessor pattern and rationale.
 
 ## WorldCard Schema
 

@@ -5,6 +5,7 @@
 //! to construct `LlmCallRecorder` instances with noop forensics.
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::application::llm_recorder::LlmCallRecorder;
 use crate::application::ports::llm_message_repository::{LlmMessage, LlmMessageRepository};
@@ -38,4 +39,43 @@ pub fn make_test_recorder_with_storage(
     storage: Arc<crate::adapters::driven::storage::Storage>,
 ) -> Arc<LlmCallRecorder> {
     Arc::new(LlmCallRecorder::new(provider, storage))
+}
+
+/// Forensics spy that counts `save_llm_message` calls. Behaves as a no-op
+/// otherwise. Use to assert that production code paths route through the
+/// `LlmCallRecorder` rather than bypassing forensics.
+#[derive(Debug, Default)]
+pub struct SpyForensics {
+    save_count: AtomicUsize,
+}
+
+impl SpyForensics {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn save_count(&self) -> usize {
+        self.save_count.load(Ordering::SeqCst)
+    }
+}
+
+impl LlmMessageRepository for SpyForensics {
+    fn save_llm_message(&self, _message: &LlmMessage) -> Result<(), EngineError> {
+        self.save_count.fetch_add(1, Ordering::SeqCst);
+        Ok(())
+    }
+
+    fn list_latest_llm_messages(&self, _limit: usize) -> Result<Vec<LlmMessage>, EngineError> {
+        Ok(vec![])
+    }
+}
+
+/// Test helper: wrap an LlmProvider in LlmCallRecorder with a `SpyForensics`,
+/// returning both so the test can assert on `save_count()`.
+pub fn make_spy_recorder(
+    provider: Arc<dyn LlmProvider>,
+) -> (Arc<LlmCallRecorder>, Arc<SpyForensics>) {
+    let spy = Arc::new(SpyForensics::new());
+    let recorder = Arc::new(LlmCallRecorder::new(provider, Arc::clone(&spy)));
+    (recorder, spy)
 }

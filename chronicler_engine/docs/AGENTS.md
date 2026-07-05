@@ -8,19 +8,29 @@ For general engine principles, workflow, and conventions, see [`../AGENTS.md`](.
 
 **Plan authoring convention:** reference doc issues by quotable phrase, never line numbers — line numbers rot. Use the exact sentence (or a quoted fragment of it) as the anchor.
 
-**Sediment:** Layers of old content that settle in the docs and are never cleared, because adding feels safe and removing feels risky — so stale and irrelevant lines accumulate and you must core down through them to find what is still live. The default fate of any documentation without a pruning discipline; the slow erosion of relevance, as opposed to duplication's repeated meaning.
+### The Per-Edit Gate (for doc edits)
 
-**Duplication:** The same meaning given more than one single source of truth. It costs maintenance (change one place, you must change the others), costs tokens, and inflates prominence — repeating a meaning weights it on the ladder past its real rank. The accidental inverse of a leading word, which raises attention on purpose by repeating a token, never the meaning.
+Docs in this repo are a **Specification**, not a conversation. They state contracts — what the system guarantees — not implementations. Code references in prose are sediment unless they pass the non-removable test.
+
+Spec-Driven Implementation (SDI) means the code reflects the spec. It does **not** mean restating code in the docs. Symbols map 1-to-1 to concepts (SDI principle), so naming the concept in prose IS naming the symbol — no need to also quote the function/type/file.
+
+Before committing any edit to a `docs/system/*.md`, `docs/reference/*.md`, `docs/architecture/*.md`, or `docs/diagnostics/*.md` file, apply this test to every code reference (type, function, file, module path, line number) in your added or changed prose:
+
+> If this reference is removed, does the reader lose contract information?
+
+- **Yes** — keep it. State the contract alongside; never let a reference stand alone as the substance.
+- **No** — remove it. The code is the verification. The doc verifies the contract, not the implementation.
+
+XML/domain markups (e.g. `<ConversationHistory>`, `<PlayerInput>`) are domain tags, not code references — they don't trigger this test.
+
+Numerical anchor budgets ("max N per section") don't work — the writer is also the counter. Use the non-removable test instead.
+
+Accumulated violations in existing docs: invoke the [`chronicler-docs-hygiene`](../../.agents/skills/chronicler-docs-hygiene/SKILL.md) skill.
 
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-07-05 15:03 UTC*
-
-### Root files
-
-- [Changelog](./CHANGELOG.md)
-- [Chronicler Engine: Project Roadmap](./ROADMAP.md)
+*Index last generated: 2026-07-05 23:52 UTC*
 
 ### `docs/adr/`
 
@@ -71,6 +81,7 @@ For general engine principles, workflow, and conventions, see [`../AGENTS.md`](.
 
 - [Plan: Abstraction Anti-Pattern Prevention via Advisory Healthcheck](./plans/abstraction-antipattern-healthcheck-plan.md)
 - [Super-Plan: Abstraction-Fixes Follow-Up](./plans/abstraction-fixes-followup-superplan.md)
+- [Fix Top 3 Hexagon-Investigation Anomalies](./plans/fix-top-3-hexagon-investigation-anomalies.md)
 - [Plan: Mapless Worlds via Freeform Location Names](./plans/mapless-worlds-plan.md)
 - [Plan: pi-plan-mode Extension Overhaul](./plans/pi-plan-mode-overhaul.md)
 - [Plan: Reliability and Cancellation](./plans/reliability-and-cancellation-plan.md)
@@ -79,10 +90,10 @@ For general engine principles, workflow, and conventions, see [`../AGENTS.md`](.
 - [Subplan C: Atomic mapless enablement](./plans/subplan-c-mapless-enablement.md)
 - [T1: Error Model Unification](./plans/t1-error-model-unification.md)
 - [T10: Low-priority Cleanup Bundle](./plans/t10-low-priority-cleanup-bundle.md)
+- [T11: Documentation Hygiene Skill Hardening](./plans/t11-documentation-hygiene-skill-hardening.md)
 - [T2-ARCH: Narration Deepening](./plans/t2-arch-narration-deepening.md)
 - [T5: Type Collapses (A3 + A6)](./plans/t5-type-collapses.md)
 - [T6: MessageHistory Encapsulation](./plans/t6-messagehistory-encapsulation.md)
-- [T9: Doc / Migration Debt](./plans/t9-doc-and-migration-debt.md)
 
 ### `docs/reference/`
 
@@ -96,12 +107,14 @@ For general engine principles, workflow, and conventions, see [`../AGENTS.md`](.
 
 ### `docs/system/`
 
+- [Action Pipeline](./system/action_pipeline.md)
 - [Agent System](./system/agent_system.md)
 - [System: Character State & Persistence](./system/character_state.md)
 - [Specification: Dashboard UI](./system/dashboard.md)
 - [System: Dynamic Pseudo-Rooms](./system/dynamic_rooms.md)
 - [Specification: Game Flow](./system/game_flow.md)
 - [Specification: LLM Processing & Integration](./system/llm_processing.md)
+- [Message Model](./system/message_model.md)
 - [Specification: Game Master Narration System](./system/narration_engine.md)
 - [Specification: Semantic Navigation](./system/navigation.md)
 - [Chronicler Engine Prompt System](./system/prompt_system.md)

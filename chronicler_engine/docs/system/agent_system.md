@@ -71,7 +71,15 @@ pub struct StatePatch {
 }
 ```
 
-The `QuantifierAgent` returns `StatePatch` with the NPCs it detected in the narration and any movement destination. `DefaultGameService` translates this patch back into a `QuantifierResult` for `action_processing.rs`.
+The `QuantifierAgent` returns `StatePatch` with the NPCs it detected in the narration and any movement destination. `GameService` translates this patch back into a `QuantifierResult` for the action pipeline.
+
+### Quantifier Forensics Gap
+
+The narration LLM calls are captured by the recorder (post-call sanitize + forensic save). The quantifier's separate LLM call is **not** captured — it bypasses the recorder and goes directly through the provider. Forensic data for quantifier calls is therefore missing from the forensics log.
+
+Tests can compensate by wrapping the recorder around the quantifier, but production runs have no equivalent path.
+
+**Known limitation:** the bypass is current behavior.
 
 ---
 

@@ -23,7 +23,7 @@ flowchart TD
     Poll -.-> Await
 ```
 
-Main narration builds a comprehensive prompt using the **8-layer system** — see [`prompt_system.md`](prompt_system.md) for layer composition and [`llm_processing.md`](llm_processing.md) for token budget management.
+Main narration builds a comprehensive prompt using the [layered prompt system](prompt_system.md) — see that page for layer composition and [`llm_processing.md`](llm_processing.md) for token budget management.
 
 ### Granular Status Phases
 
@@ -35,9 +35,21 @@ During LLM processing, the UI displays granular status phases instead of a singl
 | `Quantifying` | "Quantifying scene..." | `quantifying` | During post-narration quantifier analysis — narration visible, metadata pending |
 | `GeneratingEvent` | "Generating event..." | `generating-event` | During trigger continuation narration — fires after trigger evaluation |
 
-- `GenerationStatus` (Idle/Generating/Error) is the single source of truth for disabling UI elements
+- The persisted status field (`Idle` / `Generating` / `Error`) drives UI disable state for the polled render — see **Two State Channels** below for how it relates to the spawn-side concurrency gate
 - The frontend maps endpoint values (`narrating`, `quantifying`, `generating-event`) to human-readable text
 - An optimistic "Thinking..." is shown immediately on form submit before the first poll response
+
+### Two State Channels
+
+Generation state uses two complementary signals:
+
+- **Persisted status field** — survives panics and process restarts via DB snapshots; drives UI display through the polled status fragment.
+- **Process-local atomic flag** — cleared on panic by an RAII guard; gates spawn-side concurrency to prevent double-spawn within a single process.
+
+The status field must persist across crashes so the UI can recover and show correct state. The atomic flag is a fast lock for handlers that race with in-flight generation; it has no role in UI display.
+
+Self-healing stale-state recovery (see Error Model below) only inspects the status field; the atomic flag is always `false` after a successful process exit.
+
 
 ### Retry Flow
 
@@ -53,12 +65,12 @@ flowchart TD
     MainDel["Soft-delete messages after anchor"]
     MainPreserve["Preserve old as swipe"]
     MainRestore["Restore snapshot state"]
-    ReRunMain["Phases 4 - 5 - 5.5\nFull regeneration"]
+    ReRunMain["Full Regeneration\nNarration + Quantifier + Trigger"]
     EventAnchor["Find anchor message\nLoad snapshot"]
     EventDel["Soft-delete event messages"]
     EventPreserve["Preserve old event as swipe"]
     EventRestore["Restore snapshot state"]
-    ReRunEvent["Phase 5 only\nEvent continuation"]
+    ReRunEvent["Trigger Continuation Only"]
     Update["Update UI"]
 
     Start --> Check

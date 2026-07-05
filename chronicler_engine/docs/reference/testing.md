@@ -10,18 +10,18 @@ Cross-module and end-to-end tests live in `tests/`, organised by fixture weight 
 
 ## LLM Abstraction
 
-No component outside `main.rs` hardcodes an external LLM API. Use `MockBackend` (implements `LlmProvider`) and the `make_test_recorder` / `make_test_recorder_with_storage` helpers at `tests/test_utils/mod.rs` to wrap `MockBackend` in `LlmCallRecorder` for `with_backends` / `with_mock_quantifier`.
+No component outside `main.rs` hardcodes an external LLM API. Use `MockBackend` (implements `LlmProvider`) and the `make_test_recorder` / `make_test_recorder_with_storage` helpers at [`src/test_support/noop_forensics.rs`](../../src/test_support/noop_forensics.rs) to wrap `MockBackend` in `LlmCallRecorder` for `with_backends` / `with_mock_quantifier`.
 
 ## Backend Selection
 
 ```rust
-let service = DefaultGameService::with_mock_quantifier(
-    Arc::new(MockBackend::new(None)),
-    Arc::new(MockBackend::new(None)),
+let service = GameService::with_mock_quantifier(
+    make_test_recorder(Arc::new(MockBackend::new())),
+    Arc::new(MockBackend::new()),
 );
 
 let ctx = GameServiceContext::new(/* ... */);
-service.execute_action(ctx, "look around".to_string(), "Player".to_string());
+service.execute_action(ctx, "look around".to_string());
 ```
 
 `ActionPipeline` is non-generic; `run_post_generation_agents` is an inline phase method. See `tests/integration/application/action_pipeline/pipeline.rs` for working examples.

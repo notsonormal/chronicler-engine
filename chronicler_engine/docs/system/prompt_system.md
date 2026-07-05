@@ -20,11 +20,9 @@ The engine follows a **Marinara-Engine-inspired pattern**:
 - **SillyTavern Docs**: <https://docs.sillytavern.app/usage/prompts/prompt-manager/>
 - **SillyTavern GitHub**: <https://github.com/SillyTavern/SillyTavern>
 
-## The 8-Layer Prompt System
+## The 7-Layer Prompt System (with Post-History Splice)
 
-
-
-The Chronicler Engine implements an 8-layer prompt structure (layers 0–7) mapped from SillyTavern's Prompt Manager:
+The Chronicler Engine implements a 7-layer prompt structure (layers 0–6) mapped from SillyTavern's Prompt Manager. A **post-history splice** adds `<writing_style>` and `<output_format>` between Layer 5 and Layer 6 (see Post-History Is Not a Layer Variant below for why it is not counted as an 8th layer).
 
 | Layer | Name | SillyTavern Equivalent | Purpose |
 |-------|------|----------------------|---------|
@@ -34,8 +32,13 @@ The Chronicler Engine implements an 8-layer prompt structure (layers 0–7) mapp
 | 3 | Player | Persona Description | Player persona and description |
 | 4 | World Info | World Info / Lorebook | World lore triggered by keywords |
 | 5 | History | Chat History | Full conversation history |
-| 6 | Post-History | (n/a) | writing_style + output_format — placed after history for recency bias |
-| 7 | User Input | User Message | Current player input |
+| 6 | User Input | User Message | Current player input |
+
+### Post-History Is Not a Layer Variant
+
+`<writing_style>` and `<output_format>` are rendered **after** `<ConversationHistory>` and **before** `<PlayerInput>` in the assembled user half. These post-history sections are not a layer variant; they are assembled as a separate string and spliced in between the history and user-input layers.
+
+The prompt layer enum has exactly 7 variants. Counting the post-history splice as an 8th layer would require either a phantom enum variant or non-type-safe numbering; the codebase avoids both.
 
 ## Detailed Layer Descriptions
 
@@ -43,7 +46,7 @@ The Chronicler Engine implements an 8-layer prompt structure (layers 0–7) mapp
 
 - **Role**: System
 - **Position**: Absolute (top)
-- **Content**: Assembled XML sections from the active preset — role, instructions, global_rules (from `world.json`). Writing style and output format are split out and placed after conversation history (see Post-History layer).
+- **Content**: Assembled XML sections from the active preset — role, instructions, global_rules (from `world.json`). Writing style and output format are split out and placed after conversation history (see Post-History Splice below).
 - **Format**: XML-wrapped sections (see example below)
 - **Example**:
 
@@ -110,7 +113,7 @@ The Chronicler Engine implements an 8-layer prompt structure (layers 0–7) mapp
 - **Format**: XML-wrapped (`<ConversationHistory>... </ConversationHistory>`)
 - **Note**: No summarization — all conversation retained and sent. Oldest entries are trimmed first if the context window is exceeded.
 
-### Layer 6: Post-History Instructions
+### Post-History Splice
 
 - **Role**: User (instructions)
 - **Position**: After `<ConversationHistory>`, before `<PlayerInput>`
@@ -118,7 +121,7 @@ The Chronicler Engine implements an 8-layer prompt structure (layers 0–7) mapp
 - **Why here?** LLMs exhibit strong recency bias. Placing prose constraints and structural rules at the end of the context window — after all story data but immediately before the generation point — makes them significantly more effective than burying them at the top of the prompt in the system message. This matches Marinara Engine's proven prompt architecture.
 - **Assembly**: Assembled directly from the active preset — no string splitting or delimiter transport is required.
 
-### Layer 7: User Input
+### Layer 6: User Input
 
 - **Role**: User (data)
 - **Content**: The player's current message/action
@@ -129,7 +132,7 @@ The Chronicler Engine implements an 8-layer prompt structure (layers 0–7) mapp
 The `LayeredPromptAssembler` separates instructions from data to maximize compatibility with OpenAI-compatible APIs:
 
 - **System half**: XML-sectioned instruction sections (Layer 0)
-- **User half**: XML-wrapped data (Layers 1–5) + post-history instructions (Layer 6) + player input (Layer 7)
+- **User half**: XML-wrapped data (Layers 1–5) + post-history splice + player input (Layer 6)
 
 This separation ensures that reasoning models receive clear imperative instructions in the system role, while all external context stays in the user role.
 
@@ -216,7 +219,7 @@ Uses the same structure as SillyTavern character cards (Jailbreak format):
 
 ### Quantifier Prompt (Separate)
 
-The engine also uses a **quantifier prompt** — a separate secondary LLM call that runs *after* narration to analyze the scene. It determines which NPCs are present and whether the player moved. This is **not** part of the 8-layer narrative prompt stack. See [`reference/quantifier_prompt.md`](../reference/quantifier_prompt.md) for the full prompt text.
+The engine also uses a **quantifier prompt** — a separate secondary LLM call that runs *after* narration to analyze the scene. It determines which NPCs are present and whether the player moved. This is **not** part of the 7-layer narrative prompt stack. See [`reference/quantifier_prompt.md`](../reference/quantifier_prompt.md) for the full prompt text.
 
 ## References
 

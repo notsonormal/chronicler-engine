@@ -51,7 +51,7 @@ Some models (particularly certain local/quantized models) ignore or poorly handl
 
 ### 5. Prompt Construction (Layered Prompts)
 
-The engine uses an 8-layer prompt system inspired by SillyTavern's Prompt Manager, with XML-sectioned instructions + XML-wrapped data for reasoning-model compatibility. The prompt is split into a system half (Layer 0) and a user half (Layers 1–7). For the complete layer table, per-layer examples, system/user separation rationale, and token budget constants, see [`prompt_system.md`](prompt_system.md) — that document is the authoritative source for prompt composition.
+The engine uses a [7-layer prompt system (with post-history splice)](prompt_system.md) inspired by SillyTavern's Prompt Manager, with XML-sectioned instructions + XML-wrapped data for reasoning-model compatibility. The prompt is split into a system half (Layer 0) and a user half (Layers 1–6, with post-history splice between Layer 5 and Layer 6). For the complete layer table, per-layer examples, system/user separation rationale, and token budget constants, see [`prompt_system.md`](prompt_system.md) — that document is the authoritative source for prompt composition.
 
 ### 6. Token Budget Management
 

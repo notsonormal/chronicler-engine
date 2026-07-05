@@ -2,7 +2,7 @@
 //! Quantifier orchestration
 
 use crate::domain::model::state::game_state::GameState;
-use crate::application::ports::llm_provider::LlmProvider;
+use crate::application::llm_recorder::LlmCallRecorder;
 
 use super::parser::parse_quantifier_response_with_movement;
 use super::prompt::QuantifierPromptBuilder;
@@ -14,7 +14,7 @@ use super::types::{
 pub(crate) fn quantify_room_with_llm_call(
     context: &QuantifierPromptContext,
     fallback_npc_ids: &[String],
-    backend: &dyn LlmProvider,
+    recorder: &LlmCallRecorder,
 ) -> QuantifierResult {
     let builder = QuantifierPromptBuilder::new(QuantifierPromptContext {
         room: context.room,
@@ -31,8 +31,8 @@ pub(crate) fn quantify_room_with_llm_call(
 
     tracing::info!(
         "[Quantifier] Calling backend: {} model: {} for room: {}",
-        backend.name(),
-        backend.model(),
+        recorder.provider().name(),
+        recorder.provider().model(),
         context.room.name
     );
 
@@ -46,7 +46,7 @@ pub(crate) fn quantify_room_with_llm_call(
     let mut last_error = None;
 
     for attempt in 1..=max_attempts {
-        match backend.complete("quantifier", &system_prompt, &user_prompt, None) {
+        match recorder.complete("quantifier", &system_prompt, &user_prompt, None) {
             Ok(llm_result) => {
                 let response = &llm_result.text;
                 tracing::info!("[Quantifier] Player action: {}", context.player_action);
@@ -181,7 +181,7 @@ pub fn determine_npcs_in_room(
     room_npc_ids: &[String],
     previous_room_npcs: &[crate::domain::model::character::NpcCard],
     player_action: &str,
-    backend: &dyn LlmProvider,
+    recorder: &LlmCallRecorder,
     quantifier_prompt_override: Option<String>,
 ) -> QuantifierResult {
     let all_npcs: Vec<crate::domain::model::character::NpcCard> =
@@ -221,6 +221,6 @@ pub fn determine_npcs_in_room(
         quantifier_prompt_override,
     };
 
-    let result = quantify_room_with_llm_call(&context, room_npc_ids, backend);
+    let result = quantify_room_with_llm_call(&context, room_npc_ids, recorder);
     process_quantifier_result(result, state, room_npc_ids)
 }

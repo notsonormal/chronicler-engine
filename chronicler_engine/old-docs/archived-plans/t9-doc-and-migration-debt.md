@@ -1,3 +1,5 @@
+> Superseded by [t9-doc-quickwins-supersede.md](../../docs/plans/t9-doc-quickwins-supersede.md) (2026-07-05). Original tasks 1 (CHANGELOG retroactive), 4 (re-export shield — already DONE 2026-06-28 outside this plan), and 5 (`abstraction-antipatterns-summary.md` annotation — file lives in `old-docs/reviews/outdated/`, deprecated) dropped. Tasks 2 (`action_pipeline.md`), 3 (`message_model.md`), and 6 (test_support `[DOC:]` anchors) absorbed into the new plan.
+
 # T9: Doc / Migration Debt
 
 **Parent Plan:** [abstraction-fixes-followup-superplan.md](./abstraction-fixes-followup-superplan.md)
