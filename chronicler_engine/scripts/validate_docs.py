@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Validate markdown docs under chronicler_engine/docs/.
 
 Role-aware deterministic checks. Each .md file is classified into one of three

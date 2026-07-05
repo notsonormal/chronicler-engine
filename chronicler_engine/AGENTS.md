@@ -40,12 +40,14 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - `view_models.rs` — View models decouple templates from domain types.
   - **application/**
     - `application_service.rs` — Main application service coordinating game operations
+    - `arrival_service.rs` — Arrival narration use case — generates the opening scene when a player enters a room
     - `context.rs` — Application context and state management
     - `game_service.rs` — Game service handling gameplay operations
     - `llm_recorder.rs` — LLM call orchestrator - owns forensics save + postprocessing
     - `llm_sanitizer.rs` — LLM input/output sanitization
     - `message_editing.rs` — Message editing and modification utilities
     - `query_handlers.rs` — Read-only data access for game state and debug views
+    - `scenario.rs` — Scenario log injection at game initialization
     - `spawn.rs` — Shared spawn helper for pipeline tasks
     - `text_check_service.rs` — TextCheckService orchestrator for text checking
     - **action_pipeline/**
@@ -83,10 +85,10 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
     - `load.rs` — Game data seeding and initialization routines
     - `logging.rs` — Logging setup and configuration
     - `run.rs` — Main entry point and runtime execution
-    - `scenario.rs` — Scenario injection and initialization
     - `state.rs` — Bootstrap game state from saved snapshots
     - `text_check_factory.rs` — Text check factory - wires TextChecker port to HarperTextChecker impl
     - `validate.rs` — Data validation utilities
+    - `wiring.rs` — Composition root for application orchestrators — wires port impls to
   - **domain/**
     - **engine/**
       - `action.rs` — Action enum and semantic command types
@@ -122,6 +124,8 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - `narrative_state.rs` — Narrative state with history and input buffer
         - `scene_state.rs` — Current scene NPCs and quantifier confidence
         - `trigger_context.rs` — Stored trigger snapshot context
+  - **test_support/**
+    - `recording_forensics.rs` — Recording spy for `LlmMessageRepository`
 - **scripts/**
   - `build.py` — Full build, validate, and test for Chronicler Engine.
   - `check_python_docstrings.py` — Summary
@@ -132,12 +136,14 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
   - `extract_sillytavern_png.py` — Extract embedded PNG images from SillyTavern character cards.
   - `generate_docs_index.py` — Generate an auto-updating index for chronicler_engine/docs/AGENTS.md.
   - `generate_structure_index.py` — Generate AGENTS.md structure index from module summaries.
+  - `generate_tests_structure_index.py` — Generate tests/AGENTS.md structure index from module summaries.
   - `healthcheck.py` — Chronicler Engine healthcheck dispatcher.
   - `install_git_hooks.py` — No summary
   - `parse_coverage.py` — Parse coverage report from cargo-llvm-cov JSON output.
   - `refine_character_json.py` — No summary
   - `validate_adrs.py` — Validate ADR files against the standard in docs/adr/README.md.
   - `validate_data.py` — No summary
+  - `validate_docs.py` — Validate markdown docs under chronicler_engine/docs/.
 <!-- AUTO-STRUCTURE END -->
 
 ## YOUR RESPONSIBILITY 

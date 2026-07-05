@@ -15,7 +15,7 @@ For general engine principles, workflow, and conventions, see [`../AGENTS.md`](.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-07-05 01:28 UTC*
+*Index last generated: 2026-07-05 15:03 UTC*
 
 ### Root files
 
@@ -71,15 +71,10 @@ For general engine principles, workflow, and conventions, see [`../AGENTS.md`](.
 
 - [Plan: Abstraction Anti-Pattern Prevention via Advisory Healthcheck](./plans/abstraction-antipattern-healthcheck-plan.md)
 - [Super-Plan: Abstraction-Fixes Follow-Up](./plans/abstraction-fixes-followup-superplan.md)
-- [Plan: Diagnostic Decision Tree as Agent Infrastructure](./plans/diagnostic-decision-tree-plan.md)
-- [Plan: Documentation Hygiene Skill](./plans/docs-hygiene-skill-plan.md)
-- [Deferred arch-lint Rules — Hexagonal Reorganization](./plans/hexagonal-deferred-arch-lint-rules.md)
 - [Plan: Mapless Worlds via Freeform Location Names](./plans/mapless-worlds-plan.md)
-- [Spec: Agent-Ready Pipeline Restructure for Chronicler Engine](./plans/multi-agent-architecture-overarching-spec.md)
-- [Plan: Observability & Automated Forensics](./plans/observability-and-forensics-plan.md)
+- [Plan: pi-plan-mode Extension Overhaul](./plans/pi-plan-mode-overhaul.md)
 - [Plan: Reliability and Cancellation](./plans/reliability-and-cancellation-plan.md)
 - [AI Steering & Guided Generation](./plans/steering-and-guided-generation.md)
-- [Plan: Pi Subagent Guardrails Extension](./plans/subagent-guardrails-extension-plan.md)
 - [Subplan B: Quantifier `destination` field split](./plans/subplan-b-quantifier-field-split.md)
 - [Subplan C: Atomic mapless enablement](./plans/subplan-c-mapless-enablement.md)
 - [T1: Error Model Unification](./plans/t1-error-model-unification.md)

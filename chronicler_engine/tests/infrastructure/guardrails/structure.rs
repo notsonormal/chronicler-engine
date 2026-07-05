@@ -250,9 +250,7 @@ pub fn check_test_module_header(path: &str, content: &str) -> Vec<Violation> {
         violations.push(Violation::warn(
             path,
             1,
-            format!(
-                "Test file `{path}` is empty. Add a `//! <summary>` header."
-            ),
+            format!("Test file `{path}` is empty. Add a `//! <summary>` header."),
         ));
         return violations;
     };
@@ -284,9 +282,7 @@ pub fn check_test_module_header(path: &str, content: &str) -> Vec<Violation> {
             violations.push(Violation::warn(
                 path,
                 first_idx + 2,
-                format!(
-                    "Test file `{path}` has a DOC anchor but no `//!` summary line after it."
-                ),
+                format!("Test file `{path}` has a DOC anchor but no `//!` summary line after it."),
             ));
             return violations;
         };
@@ -298,9 +294,7 @@ pub fn check_test_module_header(path: &str, content: &str) -> Vec<Violation> {
             violations.push(Violation::warn(
                 path,
                 next_non_blank + 1,
-                format!(
-                    "Test file `{path}` has a DOC anchor but no `//!` summary line after it."
-                ),
+                format!("Test file `{path}` has a DOC anchor but no `//!` summary line after it."),
             ));
             return violations;
         }

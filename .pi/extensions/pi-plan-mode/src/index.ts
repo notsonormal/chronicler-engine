@@ -664,7 +664,7 @@ export default function planMode(pi: ExtensionAPI) {
 			const selectedIndex = choices.indexOf(choice);
 			const tool = pageTools[selectedIndex];
 			if (!tool) continue;
-			if (!canSelectToolInPlanMode(tool)) {
+			if (!canSelectToolInPlanMode(tool, sessionAllowedFolders())) {
 				ctx.ui.notify(`${tool.name} is blocked in Plan mode.`, "warning");
 				continue;
 			}
@@ -678,6 +678,7 @@ export default function planMode(pi: ExtensionAPI) {
 				selectedToolNames: filterAvailableSelectedNames(
 					Array.from(nextSelectedNames),
 					tools,
+					sessionAllowedFolders(),
 				),
 			};
 			applyPlanModeTools();
@@ -704,12 +705,14 @@ export default function planMode(pi: ExtensionAPI) {
 		if (tools.length === 0)
 			return ["read", "bash", PLAN_MODE_QUESTION_TOOL_NAME];
 
+		const allowed = sessionAllowedFolders();
 		const selectedNames = planModeSelectedNames(tools);
 		return withRequiredPlanModeTools(
 			tools
 				.filter(
 					(tool) =>
-						selectedNames.has(tool.name) && canSelectToolInPlanMode(tool),
+						selectedNames.has(tool.name) &&
+						canSelectToolInPlanMode(tool, allowed),
 				)
 				.map((tool) => tool.name),
 		);
@@ -721,9 +724,14 @@ export default function planMode(pi: ExtensionAPI) {
 		if (selectedToolNames === undefined)
 			return new Set(defaultPlanModeToolNames(tools));
 
+		const allowed = sessionAllowedFolders();
 		state = {
 			...state,
-			selectedToolNames: filterAvailableSelectedNames(selectedToolNames, tools),
+			selectedToolNames: filterAvailableSelectedNames(
+				selectedToolNames,
+				tools,
+				allowed,
+			),
 			selectedToolKeys: undefined,
 		};
 		return new Set(state.selectedToolNames);
@@ -740,10 +748,14 @@ export default function planMode(pi: ExtensionAPI) {
 		const configured = config?.defaultTools;
 		if (configured && configured.length > 0) {
 			const byName = new Map(tools.map((tool) => [tool.name, tool]));
+			const allowed = [
+				...(config?.planFolder ? [config.planFolder] : []),
+				...(config?.scratchFolders ?? []),
+			];
 			return unique(
 				configured.filter((name) => {
 					const tool = byName.get(name);
-					return tool !== undefined && canSelectToolInPlanMode(tool);
+					return tool !== undefined && canSelectToolInPlanMode(tool, allowed);
 				}),
 			);
 		}
@@ -761,9 +773,15 @@ export default function planMode(pi: ExtensionAPI) {
 			.filter((name): name is string => name !== undefined);
 	}
 
-	function filterAvailableSelectedNames(names: string[], tools: ToolInfo[]) {
+	function filterAvailableSelectedNames(
+		names: string[],
+		tools: ToolInfo[],
+		allowed: string[],
+	) {
 		const availableNames = new Set(
-			tools.filter(canSelectToolInPlanMode).map((tool) => tool.name),
+			tools
+				.filter((tool) => canSelectToolInPlanMode(tool, allowed))
+				.map((tool) => tool.name),
 		);
 		return unique(names.filter((name) => availableNames.has(name)));
 	}
@@ -1023,8 +1041,16 @@ export function completePlanArguments(
 	return matches.length > 0 ? [...matches] : null;
 }
 
-export function canSelectToolInPlanMode(tool: ToolInfo) {
-	if (isBuiltinTool(tool)) return SAFE_BUILTIN_PLAN_TOOLS.has(tool.name);
+export function canSelectToolInPlanMode(
+	tool: ToolInfo,
+	allowedFolders: string[],
+) {
+	if (isBuiltinTool(tool)) {
+		if (tool.name === "write" || tool.name === "edit") {
+			return allowedFolders.length > 0;
+		}
+		return SAFE_BUILTIN_PLAN_TOOLS.has(tool.name);
+	}
 	return true;
 }
 
@@ -1277,7 +1303,11 @@ function describeAllowedFolders(
 	if (scratchFolders.length > 0) {
 		parts.push(`${scratchFolders.join(", ")} (scratch folders)`);
 	}
-	return `Writes are allowed only inside: ${parts.join(" and ")}.`;
+	return [
+		`- Write/edit tools: allowed only inside ${parts.join(" and ")}.`,
+		"- Bash: allowlisted to read-only / non-mutating commands regardless of folder (no `>`, `>>`, installs, `rm`, `mv`, etc.).",
+		"- Final plan auto-persists to the plan folder when the user exits Plan Mode from the ready menu (implement/stay/exit); the extension writes it, not the agent.",
+	].join("\n");
 }
 
 function buildPlanModePrompt(

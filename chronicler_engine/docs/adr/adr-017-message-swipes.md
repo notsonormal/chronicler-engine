@@ -1,7 +1,7 @@
 # ADR-017: Message Swipes
 
 **Date:** 2026-05-24
-**Status:** Accepted — supersedes the previous snapshot-only simplification (swipes reintroduced with dedicated table)
+**Status:** Accepted
 
 ## Context
 
@@ -22,7 +22,7 @@ Reintroduce per-message swipes as a dedicated `message_swipes` table, with each 
 2. **`Swipe.snapshot_id: Option<u64>`** — references the `GameStateSnapshot` that produced this swipe's text. Nullable because the initial message (before any snapshot was saved) has no snapshot.
 3. **`Message.active_swipe_index: usize`** — the currently displayed swipe. Active fields (`text`, `location_header`, `event_header`, `snapshot_id`) are hydrated from the active swipe at load time.
 4. **`message_swipes` table** — dedicated SQLite table with `ON DELETE CASCADE`.
-5. **Soft deletes** — during retry, messages after the anchor are soft-deleted. If the pipeline fails, they are restored. If it succeeds, they are hard-deleted.
+5. **Soft deletes** — during retry, messages after the anchor are marked soft-deleted via `Storage::soft_delete_message`. If the pipeline fails, they are restored via `Storage::restore_soft_deleted`. If it succeeds, they are hard-deleted via `Storage::purge_soft_deleted`.
 6. **No turn grouping** — messages remain independent units. Narration and event swipes are completely separate.
 
 ### Retry Behavior
@@ -39,6 +39,18 @@ When a narration swipe is restored and its snapshot contains `last_trigger`, a "
 
 Swiping a non-last message would require deleting all messages after it (since they depend on the state that the swipe changes). This is equivalent to retry, which already exists. Limiting swipes to the last message avoids history truncation complexity while preserving the core value: comparing alternate versions of the most recent generation.
 
+### Why per-message swipes over snapshot-only model
+
+The snapshot-only model performed destructive retry: old generations were permanently lost, and retrying a narration invalidated subsequent events. Per-message swipes preserve non-destructive retry and keep narration/event retry independent.
+
+### Why per-message swipes over graph snapshots (Marinara)
+
+Marinara-style graph snapshots would provide equivalent state consistency but require general-purpose graph state management. Per-message swipes with per-swipe `snapshot_id` fields give the same state-consistent swiping without that overhead.
+
+### Why per-message swipes over turn grouping
+
+Turn grouping with per-turn swipes would re-couple narration and event swipes, undoing the event independence requirement. Independent per-message swipes keep narration and event flows separate.
+
 ## Consequences
 
 ### Positive
@@ -51,7 +63,6 @@ Swiping a non-last message would require deleting all messages after it (since t
 ### Negative
 
 - **More complex storage**: Two tables (`messages` + `message_swipes`) with JOIN-like loading logic.
-- **Migration complexity**: SQLite cannot drop columns, so v6 recreates the `messages` table.
 - **Only last message swipeable**: Users must delete subsequent messages to swipe earlier ones.
 
 ### Trade-offs
@@ -59,20 +70,7 @@ Swiping a non-last message would require deleting all messages after it (since t
 - Chose per-swipe snapshot_id over shared snapshot (state-consistent swiping won over storage)
 - Chose soft-delete over hard-delete on retry (recovery safety won over storage simplicity)
 
-## Alternatives Considered
+## Related ADRs
 
-1. **Keep snapshot-only model**: Rejected because destructive retry loses user data and prevents comparison.
-2. **Graph snapshots (Marinara-style)**: Rejected because it overcomplicates the engine. Per-message swipes with snapshot IDs give the same state consistency without a graph.
-3. **Turn grouping with per-turn swipes**: Rejected because it recouples narration and event. Independent message swipes keep them separate.
-
-## Key Changes from the Snapshot-Only Model
-
-| Area | Snapshot-only model | ADR-017 |
-|------|----------------------|---------|
-| Message storage | Flat `messages` with inline text | `messages` + `message_swipes` table |
-| Retry mechanism | Snapshot rollback + replay | Snapshot rollback + swipe preservation |
-| Old generations | Lost (destructive) | Preserved as swipes |
-| Event retry | Deletes event, regenerates | Soft-deletes event, preserves as swipe |
-| Swipe navigation | None | Left/right arrows on last message |
-| State per swipe | Single `snapshot_id` on message | Each `Swipe` has its own `snapshot_id` |
+- [ADR-008: SQLite Snapshot Persistence](./adr-008-sqlite-snapshot-persistence.md) — supplies the `GameStateSnapshot` referenced by each swipe.
 

@@ -3,7 +3,9 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import type { ToolInfo } from "@earendil-works/pi-coding-agent";
 import {
+	canSelectToolInPlanMode,
 	completePlanArguments,
 	derivePlanSlug,
 	evaluateWriteEdit,
@@ -142,6 +144,81 @@ test("evaluateWriteEdit allows paths inside the allowed folders", () => {
 		const decision = evaluateWriteEdit({ path: input }, folders, "/repo");
 		assert.equal(decision.allowed, true, `expected allow for ${input}`);
 	}
+});
+
+function builtinTool(name: string): ToolInfo {
+	return {
+		name,
+		sourceInfo: {
+			path: `<builtin>/${name}`,
+			source: "builtin",
+			scope: "user",
+			origin: "top-level",
+		},
+	} as ToolInfo;
+}
+
+function extensionTool(name: string): ToolInfo {
+	return {
+		name,
+		sourceInfo: {
+			path: `extension/${name}`,
+			source: "extension",
+			scope: "project",
+			origin: "package",
+		},
+	} as ToolInfo;
+}
+
+test("canSelectToolInPlanMode blocks write with empty allowed folders", () => {
+	assert.equal(canSelectToolInPlanMode(builtinTool("write"), []), false);
+});
+
+test("canSelectToolInPlanMode allows write with at least one allowed folder", () => {
+	assert.equal(
+		canSelectToolInPlanMode(builtinTool("write"), ["docs/plans"]),
+		true,
+	);
+	assert.equal(canSelectToolInPlanMode(builtinTool("write"), ["tmp"]), true);
+});
+
+test("canSelectToolInPlanMode blocks edit with empty allowed folders", () => {
+	assert.equal(canSelectToolInPlanMode(builtinTool("edit"), []), false);
+});
+
+test("canSelectToolInPlanMode allows edit with at least one allowed folder", () => {
+	assert.equal(
+		canSelectToolInPlanMode(builtinTool("edit"), ["docs/plans"]),
+		true,
+	);
+	assert.equal(canSelectToolInPlanMode(builtinTool("edit"), ["tmp"]), true);
+});
+
+test("canSelectToolInPlanMode keeps read/bash/grep/find/ls selectable regardless of folders", () => {
+	for (const name of ["read", "bash", "grep", "find", "ls"]) {
+		const tool = builtinTool(name);
+		assert.equal(
+			canSelectToolInPlanMode(tool, []),
+			true,
+			`expected ${name} with []`,
+		);
+		assert.equal(
+			canSelectToolInPlanMode(tool, ["docs/plans"]),
+			true,
+			`expected ${name} with folders`,
+		);
+	}
+});
+
+test("canSelectToolInPlanMode preserves non-builtin tool opt-in regardless of folders", () => {
+	assert.equal(
+		canSelectToolInPlanMode(extensionTool("fetch_content"), []),
+		true,
+	);
+	assert.equal(
+		canSelectToolInPlanMode(extensionTool("fetch_content"), ["docs/plans"]),
+		true,
+	);
 });
 
 test("derivePlanSlug derives from first H1 title", () => {
