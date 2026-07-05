@@ -43,13 +43,15 @@ pi -e ./extensions/pi-plan-mode
 /plan
 /plan <prompt>
 /plan tools
+/plan grill
+/plan folder <relative-path>
 ```
 
-Use `/plan` to enter Plan mode before writing your planning prompt. Use `/plan <prompt>` to enter Plan mode and immediately submit `<prompt>` as the first Plan-mode user message. Use `/plan tools` to choose which tools are active while Plan mode is enabled; the selector is paginated at 10 tools per page.
+Use `/plan` to enter Plan mode before writing your planning prompt. Use `/plan <prompt>` to enter Plan mode and immediately submit `<prompt>` as the first Plan-mode user message. Use `/plan tools` to choose which tools are active while Plan mode is enabled; the selector is paginated at 10 tools per page. Use `/plan grill` to stress-test the current plan with the `grill-with-docs` skill (loads `/grilling` + `/domain-modeling`). Use `/plan folder <path>` to override the plan folder for this session (cwd-relative, no `..` escape).
 
 When Plan mode is active, ask the agent to design the change. The agent may inspect files and run read-only commands, but it should not edit files or execute the implementation. It should explore first, then use structured questions when your preference or a tradeoff materially changes the plan.
 
-By default, Plan mode manages only Pi's built-in tools: `read`, limited `bash`, available read-only built-ins such as `grep`, `find`, and `ls`, plus the required `plan_mode_question` tool. Built-in `edit` and `write` are blocked. Extension and custom tools are disabled by default because Pi tools do not expose standardized mutability metadata; enable them from `/plan tools` only when you accept the risk for that session. For example, you can opt into `firecrawl_scrape`, `firecrawl_search`, or `biome_lsp_diagnostics` if those extensions are loaded and you want to use them during planning.
+When Plan mode is active, the agent may inspect files and run read-only commands. Writes and edits are blocked except inside the `planFolder` and any `scratchFolders`. Bash is restricted to read-only / non-mutating commands. Extension and custom tools are disabled by default because Pi tools do not expose standardized mutability metadata; enable them from `/plan tools` only when you accept the risk for that session.
 
 ### Configuring the default tool set
 
@@ -59,9 +61,21 @@ The initial tool selection (used before any per-session `/plan tools` choice) ca
 
 ```json
 {
-  "defaultTools": ["read", "bash", "grep", "find", "ls", "describe_image"]
+  "defaultTools": [
+    "read", "bash", "grep", "find", "ls",
+    "describe_image", "fetch_content", "get_search_content",
+    "intercom", "subagent", "recall",
+    "rag_index", "rag_query", "rag_status",
+    "visual_explainer", "web_search"
+  ],
+  "planFolder": "chronicler_engine/docs/plans",
+  "scratchFolders": ["tmp"]
 }
 ```
+
+- `planFolder` (string, cwd-relative): where approved plans get written when Plan mode exits. Default: `chronicler_engine/docs/plans`.
+- `scratchFolders` (string array, cwd-relative): additional folders where `write`/`edit` are allowed during Plan mode (e.g. for draft notes). Default: `["tmp"]`.
+- Both fields reject absolute paths and `..` traversal with a warning.
 
 Names not present in the loaded tool set, or that fail Plan-mode selection rules, are silently dropped. You can also point at an arbitrary path with the `PLAN_MODE_CONFIG` env var.
 
@@ -83,6 +97,29 @@ A complete Plan mode answer should appear only after the agent has resolved disc
 ## Key Changes
 ...
 
+## Implementation
+
+Use phases when the work spans multiple distinct stages. Skip the Phase
+heading entirely for single-stage work.
+
+### Phase 1: [Stage Name]
+
+- [ ] #### Task 1.1: [Title] (N SP)
+  - [ ] ##### SubTask 1.1.1: [Title] (N SP)
+  - [ ] ##### SubTask 1.1.2: [Title] (N SP)
+- [ ] #### Task 1.2: [Title] (N SP)
+
+### Phase 2: [Stage Name]
+...
+
+### Story point rules
+
+- Sizes: 1, 3, 5, 8, 13
+- 8 SP or larger must break into subtasks
+- 5 SP = single worker session; primary agent must verify output
+- SubTasks optional for atomic tasks <=5 SP; required for tasks >5 SP
+- SP mandatory on every Task line
+
 ## Test Plan
 ...
 
@@ -90,6 +127,8 @@ A complete Plan mode answer should appear only after the agent has resolved disc
 ...
 </proposed_plan>
 ```
+
+When Plan mode exits (via implementation or direct exit), the extension writes the extracted plan content to `<planFolder>/<slug>.md`. The slug is derived from the first `# Title` line (lowercase, non-alphanumeric to `-`, max 60 chars), with `-2`, `-3`, ... suffixes on collision. Falls back to `plan-<timestamp>.md` if no title is found.
 
 After a proposed plan is detected, `/plan` lets you choose whether to implement the plan, stay in Plan mode, or exit Plan mode. Choosing implementation disables Plan mode, restores full tool access, and immediately starts an implementation turn with the proposed plan. Choosing Stay keeps the plan ready while you decide what to do next; to revise the plan, choose Stay and type your revision feedback in the normal prompt. When that next Plan-mode turn starts, the previous plan is no longer treated as the latest implementable plan unless the agent produces an updated `<proposed_plan>`. Choosing exit/off disables Plan mode and discards the proposed plan so it is not carried into later non-plan turns.
 

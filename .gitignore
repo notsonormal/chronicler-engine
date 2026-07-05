@@ -253,4 +253,6 @@ chronicler_engine/.pi/task
 .pi/extensions/**/node_modules/
 .pi/extensions/**/package-lock.json
 chronicler_engine/.pi/tasks/
+# Project-level plan-mode defaults (extension is generic; values live per-project).
+!.pi/plan-mode.json
 context.md

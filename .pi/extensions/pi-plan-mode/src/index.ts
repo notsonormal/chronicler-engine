@@ -1,6 +1,6 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, resolve, sep } from "node:path";
 import type {
 	ExtensionAPI,
 	ExtensionContext,
@@ -39,6 +39,27 @@ interface PlanModeState {
 
 interface PlanModeDefaultsConfig {
 	defaultTools?: string[];
+	planFolder?: string;
+	scratchFolders?: string[];
+}
+
+export function normalizeRelativePath(value: string): string | undefined {
+	const trimmed = value.trim();
+	if (trimmed.length === 0) return undefined;
+	if (trimmed.startsWith("/")) {
+		console.warn(
+			`Plan mode: ignoring config path "${trimmed}" (must be cwd-relative).`,
+		);
+		return undefined;
+	}
+	const segments = trimmed.split("/");
+	if (segments.includes("..")) {
+		console.warn(
+			`Plan mode: ignoring config path "${trimmed}" (must not contain ".." segment).`,
+		);
+		return undefined;
+	}
+	return trimmed;
 }
 
 type SessionEntry = {
@@ -103,6 +124,11 @@ const PLAN_COMMAND_COMPLETIONS: readonly CommandArgumentCompletion[] = [
 		value: "tools",
 		label: "tools",
 		description: "Select tools allowed in Plan mode",
+	},
+	{
+		value: "grill",
+		label: "grill",
+		description: "Stress-test the plan with /grill-with-docs",
 	},
 ];
 
@@ -211,6 +237,50 @@ export default function planMode(pi: ExtensionAPI) {
 	let previousTools: string[] | undefined;
 	let planModeDefaultsConfig: PlanModeDefaultsConfig | undefined;
 
+	function resolvedPlanFolder(): string | undefined {
+		return planModeDefaultsConfig?.planFolder;
+	}
+
+	function resolvedScratchFolders(): string[] {
+		return planModeDefaultsConfig?.scratchFolders ?? [];
+	}
+
+	function sessionAllowedFolders(): string[] {
+		const planFolder = resolvedPlanFolder();
+		return planFolder
+			? [planFolder, ...resolvedScratchFolders()]
+			: [...resolvedScratchFolders()];
+	}
+
+	type SubcommandHandler = (
+		prompt: string,
+		ctx: ExtensionContext,
+	) => void | Promise<void>;
+
+	function buildPlanSubcommands() {
+		const exitPlanSub: SubcommandHandler = (_prompt, ctx) => {
+			exitPlanMode(ctx);
+		};
+		const toolsSub: SubcommandHandler = async (_prompt, ctx) => {
+			if (!state.enabled) enterPlanMode(ctx);
+			await showToolSelector(ctx);
+		};
+		const grillSub: SubcommandHandler = (_prompt, ctx) => {
+			if (!state.enabled) {
+				ctx.ui.notify("Enter Plan mode first before grilling.", "warning");
+				return;
+			}
+			sendPlanModeUserMessage("/grill-with-docs", ctx);
+		};
+		const record: Record<string, SubcommandHandler> = {
+			exit: exitPlanSub,
+			off: exitPlanSub,
+			tools: toolsSub,
+			grill: grillSub,
+		};
+		return record;
+	}
+
 	pi.registerFlag("plan", {
 		description: "Start in Codex-like Plan mode",
 		type: "boolean",
@@ -278,14 +348,9 @@ export default function planMode(pi: ExtensionAPI) {
 		handler: async (args, ctx) => {
 			const prompt = args.trim();
 			const command = prompt.toLowerCase();
-			if (command === "exit" || command === "off") {
-				exitPlanMode(ctx);
-				ctx.ui.notify("Plan mode disabled. Proposed plan discarded.", "info");
-				return;
-			}
-			if (command === "tools") {
-				if (!state.enabled) enterPlanMode(ctx);
-				await showToolSelector(ctx);
+			const subcommand = buildPlanSubcommands()[command];
+			if (subcommand) {
+				await subcommand(prompt, ctx);
 				return;
 			}
 			if (prompt) {
@@ -321,13 +386,21 @@ export default function planMode(pi: ExtensionAPI) {
 		clearUi(ctx);
 	});
 
-	pi.on("tool_call", async (event) => {
+	pi.on("tool_call", async (event, ctx) => {
 		if (!state.enabled) return;
 		if (isBlockedBuiltinToolName(event.toolName)) {
 			return {
 				block: true,
 				reason: `Plan mode blocks built-in mutating tool '${event.toolName}'. Use /plan and choose implementation when the plan is ready.`,
 			};
+		}
+		if (event.toolName === "write" || event.toolName === "edit") {
+			const allowed = sessionAllowedFolders();
+			const decision = evaluateWriteEdit(event.input, allowed, ctx.cwd);
+			if (!decision.allowed) {
+				return { block: true, reason: decision.reason };
+			}
+			return;
 		}
 		if (event.toolName !== "bash" || !isBuiltinToolName(event.toolName)) return;
 
@@ -365,7 +438,7 @@ export default function planMode(pi: ExtensionAPI) {
 		}
 		applyPlanModeTools();
 		return {
-			systemPrompt: `${event.systemPrompt}\n\n${buildPlanModePrompt()}`,
+			systemPrompt: `${event.systemPrompt}\n\n${buildPlanModePrompt(resolvedPlanFolder(), resolvedScratchFolders())}`,
 		};
 	});
 
@@ -421,17 +494,47 @@ export default function planMode(pi: ExtensionAPI) {
 		sendPlanModeUserMessage(prompt, ctx);
 	}
 
+	function persistPlanToFile(ctx: ExtensionContext): string | undefined {
+		const plan = state.latestPlan?.trim();
+		if (!plan) return undefined;
+		const planFolder = resolvedPlanFolder();
+		if (!planFolder) {
+			ctx.ui.notify(
+				"Plan mode: no planFolder configured; skipping persistence. Set planFolder in .pi/plan-mode.json to enable.",
+				"warning",
+			);
+			return undefined;
+		}
+		try {
+			return writePlanFile(plan, ctx.cwd, planFolder, `${plan}\n`);
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			ctx.ui.notify(
+				`Plan mode: failed to persist plan to ${planFolder} (${message}).`,
+				"error",
+			);
+			return undefined;
+		}
+	}
+
 	function exitPlanMode(ctx: ExtensionContext) {
 		const wasEnabled = state.enabled;
+		if (!wasEnabled) return;
+		const persistedPath = persistPlanToFile(ctx);
 		state = {
 			...state,
 			enabled: false,
 			latestPlan: undefined,
 			awaitingAction: false,
 		};
-		if (wasEnabled) restoreTools();
+		restoreTools();
 		persistState();
 		updateUi(ctx);
+		if (persistedPath) {
+			ctx.ui.notify(`Plan written to: ${persistedPath}`, "info");
+		} else {
+			ctx.ui.notify("Plan mode disabled.", "info");
+		}
 	}
 
 	function sendPlanModeUserMessage(message: string, ctx: ExtensionContext) {
@@ -496,7 +599,6 @@ export default function planMode(pi: ExtensionAPI) {
 		}
 		if (choice === "Exit Plan mode") {
 			exitPlanMode(ctx);
-			ctx.ui.notify("Plan mode disabled. Proposed plan discarded.", "info");
 			return;
 		}
 		updateUi(ctx);
@@ -514,7 +616,6 @@ export default function planMode(pi: ExtensionAPI) {
 		}
 		if (choice === "Exit Plan mode") {
 			exitPlanMode(ctx);
-			ctx.ui.notify("Plan mode disabled. Proposed plan discarded.", "info");
 		}
 	}
 
@@ -829,36 +930,84 @@ export function loadDefaultToolsConfigFromPath(
 	configPath: string,
 ): PlanModeDefaultsConfig | undefined {
 	if (!existsSync(configPath)) return undefined;
+	let parsed: unknown;
 	try {
 		const raw = readFileSync(configPath, "utf-8");
-		const parsed: unknown = JSON.parse(raw);
-		if (!isRecord(parsed)) {
-			console.warn(
-				`Plan mode: ignoring config at ${configPath} (not an object).`,
-			);
-			return undefined;
-		}
-		const defaultTools = parsed.defaultTools;
-		if (defaultTools === undefined) return {};
-		if (
-			!Array.isArray(defaultTools) ||
-			!defaultTools.every((item) => typeof item === "string")
-		) {
-			console.warn(
-				`Plan mode: ignoring config at ${configPath} (defaultTools must be a string array).`,
-			);
-			return undefined;
-		}
-		return {
-			defaultTools: defaultTools
-				.map((name) => name.trim())
-				.filter((name) => name.length > 0),
-		};
+		parsed = JSON.parse(raw);
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
 		console.warn(`Plan mode: failed to read ${configPath} (${message}).`);
 		return undefined;
 	}
+	if (!isRecord(parsed)) {
+		console.warn(`Plan mode: ignoring config at ${configPath} (not an object).`);
+		return undefined;
+	}
+
+	type FieldVerdict =
+		| { ok: true; value: unknown }
+		| { ok: false; fatal: boolean; reason: string };
+	type FieldLoader = (raw: unknown) => FieldVerdict;
+
+	const fields: Record<keyof PlanModeDefaultsConfig, FieldLoader> = {
+		defaultTools: (raw) => {
+			if (raw === undefined) return { ok: true, value: undefined };
+			if (!Array.isArray(raw) || !raw.every((s) => typeof s === "string")) {
+				return {
+					ok: false,
+					fatal: true,
+					reason: "defaultTools must be a string array",
+				};
+			}
+			const trimmed = raw.map((s) => s.trim()).filter((s) => s.length > 0);
+			return { ok: true, value: trimmed.length > 0 ? trimmed : undefined };
+		},
+		planFolder: (raw) => {
+			if (raw === undefined) return { ok: true, value: undefined };
+			if (typeof raw !== "string") {
+				return { ok: false, fatal: false, reason: "planFolder must be a string" };
+			}
+			return { ok: true, value: normalizeRelativePath(raw) };
+		},
+		scratchFolders: (raw) => {
+			if (raw === undefined) return { ok: true, value: undefined };
+			if (!Array.isArray(raw) || !raw.every((s) => typeof s === "string")) {
+				return {
+					ok: false,
+					fatal: false,
+					reason: "scratchFolders must be a string array",
+				};
+			}
+			const normalized = raw
+				.map((s) => normalizeRelativePath(s))
+				.filter((s): s is string => s !== undefined);
+			return {
+				ok: true,
+				value: normalized.length > 0 ? normalized : undefined,
+			};
+		},
+	};
+
+	const result: PlanModeDefaultsConfig = {};
+	let fatal = false;
+	for (const key of Object.keys(fields) as (keyof PlanModeDefaultsConfig)[]) {
+		const verdict = fields[key](parsed[key]);
+		if (!verdict.ok) {
+			console.warn(
+				`Plan mode: ignoring ${key} at ${configPath} (${verdict.reason}).`,
+			);
+			if (verdict.fatal) {
+				fatal = true;
+				break;
+			}
+			continue;
+		}
+		if (verdict.value !== undefined) {
+			(result as Record<string, unknown>)[key] = verdict.value;
+		}
+	}
+	if (fatal) return undefined;
+	return result;
 }
 
 export function completePlanArguments(
@@ -1109,26 +1258,46 @@ function formatPlanModeQuestionPayload(payload: {
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null;
+	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function stringField(value: unknown) {
 	return typeof value === "string" ? value.trim() : undefined;
 }
 
-function buildPlanModePrompt() {
-	return `${PLAN_CONTEXT_MARKER}
-# Plan Mode (Conversational)
+function describeAllowedFolders(
+	planFolder: string | undefined,
+	scratchFolders: string[],
+): string {
+	if (!planFolder && scratchFolders.length === 0) {
+		return "No planFolder or scratchFolders are configured in .pi/plan-mode.json; all writes are blocked by default. Set at least planFolder to enable writes during planning.";
+	}
+	const parts: string[] = [];
+	if (planFolder) parts.push(`${planFolder} (plan folder)`);
+	if (scratchFolders.length > 0) {
+		parts.push(`${scratchFolders.join(", ")} (scratch folders)`);
+	}
+	return `Writes are allowed only inside: ${parts.join(" and ")}.`;
+}
 
-You are in Plan Mode, a Codex-like collaboration mode for producing a decision-complete implementation plan. Chat your way to the plan before finalizing it. A final plan must leave no implementation decisions unresolved.
+function buildPlanModePrompt(
+	planFolder: string | undefined,
+	scratchFolders: string[],
+) {
+	const allowedDescription = describeAllowedFolders(planFolder, scratchFolders);
+	return `${PLAN_CONTEXT_MARKER}
+# Plan Mode
+
+You are in Plan Mode. Chat your way to a decision-complete implementation plan, then emit a <proposed_plan> block.
 
 ## Mode rules
 
 - Stay in Plan Mode until a developer or extension explicitly exits it.
-- Treat requests to implement as requests to plan the implementation; do not edit files or carry out the plan.
-- Do not use update_plan/TODO tooling in Plan Mode; Plan Mode is conversational planning, not execution progress tracking.
-- Plan Mode manages built-in tool safety only. Non-built-in tools are disabled by default and may be enabled by the user at their own risk.
-- Do not perform mutating actions: no edit/write tools, no patching, no formatting that rewrites files, no dependency installation, no commits, no migrations.
+- Treat requests to implement as requests to plan the implementation.
+- Do not perform mutating actions outside the plan folder and scratch folders.
+- Do not use update_plan/TODO tooling in Plan Mode; Plan Mode is conversational planning.
+- ${allowedDescription}
+- Use /grill-me-with-docs to stress-test the plan before finalizing if the user wants grilling. Mention it; do not auto-invoke.
 
 ## Phase 1 — Ground in the environment
 
@@ -1160,6 +1329,29 @@ Only output the final plan when it is decision-complete and leaves no decisions 
 ## Key Changes
 ...
 
+## Implementation
+
+Use phases when the work spans multiple distinct stages. Skip the Phase
+heading entirely for single-stage work.
+
+### Phase 1: [Stage Name]
+
+- [ ] #### Task 1.1: [Title] (N SP)
+  - [ ] ##### SubTask 1.1.1: [Title] (N SP)
+  - [ ] ##### SubTask 1.1.2: [Title] (N SP)
+- [ ] #### Task 1.2: [Title] (N SP)
+
+### Phase 2: [Stage Name]
+...
+
+### Story point rules
+
+- Sizes: 1, 3, 5, 8, 13
+- 8 SP or larger → must break into subtasks
+- 5 SP = single worker session; primary agent must verify output
+- SubTasks optional for atomic tasks ≤5 SP; required for tasks >5 SP
+- SP mandatory on every Task line
+
 ## Test Plan
 ...
 
@@ -1183,9 +1375,135 @@ export function isSafeCommand(command: string) {
 	return SAFE_BASH_PATTERNS.some((pattern) => pattern.test(trimmed));
 }
 
+export type WriteDecision = { allowed: true } | { allowed: false; reason: string };
+
+/**
+ * Decide whether a write/edit tool call's target file falls inside one of the
+ * allowed folders. Returns `allowed: true` when the input doesn't expose a
+ * recognizable path (e.g. legacy tool form); the caller treats that as a
+ * pass-through to other handlers.
+ *
+ * Pi built-in write/edit tools pass `{ path: string }` as input.
+ * Schema source: https://github.com/earendil-works/pi (built-in tool defs).
+ */
+export function evaluateWriteEdit(
+	input: unknown,
+	allowedFolders: string[],
+	cwd: string,
+): WriteDecision {
+	const candidate = input as { path?: unknown } | undefined;
+	const filePath = typeof candidate?.path === "string" ? candidate.path : undefined;
+	if (filePath === undefined) return { allowed: true };
+	if (allowedFolders.length === 0) {
+		return {
+			allowed: false,
+			reason: `Plan mode blocks write/edit because no planFolder or scratchFolders are configured in .pi/plan-mode.json. Set at least planFolder to enable writes during planning.`,
+		};
+	}
+	const resolvedFile = resolve(cwd, filePath);
+	const inside = allowedFolders.some((folder) =>
+		isPathInsideFolder(resolvedFile, resolve(cwd, folder)),
+	);
+	if (!inside) {
+		return {
+			allowed: false,
+			reason: `Plan mode blocks writes outside the plan folder and scratch folders. Allowed (relative to ${cwd}): ${allowedFolders.join(", ")}`,
+		};
+	}
+	return { allowed: true };
+}
+
+/**
+ * True iff `filePath` resolves to a location strictly inside `folderPath`.
+ * Equal paths return false (you can't write to a path that equals a folder).
+ * Both inputs are resolved so symlinks and `.`/`..` collapse before compare.
+ */
+export function isPathInsideFolder(
+	filePath: string,
+	folderPath: string,
+): boolean {
+	const normalizedFile = resolve(filePath);
+	const normalizedFolder = resolve(folderPath);
+	if (normalizedFile === normalizedFolder) return false;
+	const prefix = normalizedFolder.endsWith(sep)
+		? normalizedFolder
+		: normalizedFolder + sep;
+	return normalizedFile.startsWith(prefix);
+}
+
 export function extractProposedPlan(text: string) {
 	const match = PROPOSED_PLAN_PATTERN.exec(text);
 	return match?.[1]?.trim();
+}
+
+export function derivePlanSlug(planContent: string): string {
+	const lines = planContent.split("\n");
+	for (const line of lines) {
+		const trimmed = line.trim();
+		if (trimmed.startsWith("# ")) {
+			const title = trimmed.slice(2).trim();
+			if (title.length === 0) break;
+			const slugified = title
+				.toLowerCase()
+				.replace(/[^a-z0-9]+/g, "-")
+				.replace(/^-+|-+$/g, "")
+				.slice(0, 60);
+			if (slugified.length > 0) return slugified;
+			break;
+		}
+	}
+	const stamp = new Date()
+		.toISOString()
+		.replace(/[-:]/g, "")
+		.replace(/T/, "-")
+		.replace(/\..*$/, "");
+	return `plan-${stamp}`;
+}
+
+/**
+ * First candidate path for a given plan slug in the configured folder.
+ * Collision resolution is handled atomically by `writePlanAtomically`
+ * (or any caller using the `wx` flag) to avoid TOCTOU races between
+ * `exists` and `write`.
+ */
+export function resolvePlanFilePath(
+	planContent: string,
+	cwd: string,
+	planFolder: string,
+): string {
+	const slug = derivePlanSlug(planContent);
+	return join(cwd, planFolder, `${slug}.md`);
+}
+
+/**
+ * Write `content` to a fresh file under `folder` derived from `planContent`.
+ * Uses `wx` flag (O_CREAT | O_EXCL) for atomic creation; on EEXIST, retries
+ * with `-2`, `-3`, ... suffix. Returns the actual path written.
+ */
+export function writePlanFile(
+	planContent: string,
+	cwd: string,
+	planFolder: string,
+	content: string,
+): string {
+	mkdirSync(join(cwd, planFolder), { recursive: true });
+	const folder = join(cwd, planFolder);
+	const baseSlug = derivePlanSlug(planContent);
+	let nextSuffix = 0;
+	while (true) {
+		const candidate =
+			nextSuffix === 0
+				? join(folder, `${baseSlug}.md`)
+				: join(folder, `${baseSlug}-${nextSuffix}.md`);
+		try {
+			writeFileSync(candidate, content, { flag: "wx", encoding: "utf-8" });
+			return candidate;
+		} catch (error) {
+			const code = (error as NodeJS.ErrnoException | undefined)?.code;
+			if (code !== "EEXIST") throw error;
+			nextSuffix = nextSuffix === 0 ? 2 : nextSuffix + 1;
+		}
+	}
 }
 
 export function latestAssistantText(messages: unknown) {

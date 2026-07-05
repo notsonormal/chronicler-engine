@@ -1,0 +1,22 @@
+{
+  "defaultTools": [
+    "read",
+    "bash",
+    "grep",
+    "find",
+    "ls",
+    "describe_image",
+    "fetch_content",
+    "get_search_content",
+    "intercom",
+    "subagent",
+    "recall",
+    "rag_index",
+    "rag_query",
+    "rag_status",
+    "visual_explainer",
+    "web_search"
+  ],
+  "planFolder": "chronicler_engine/docs/plans",
+  "scratchFolders": ["tmp"]
+}

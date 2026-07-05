@@ -25,6 +25,7 @@
 	"scripts": {
 		"check": "biome check . && npm run typecheck",
 		"format": "biome check --write .",
+		"test": "node --test --experimental-strip-types --no-warnings test/plan-mode.test.ts",
 		"typecheck": "tsc --noEmit"
 	},
 	"devDependencies": {
