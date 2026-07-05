@@ -16,7 +16,14 @@ fn test_from_config_creates_agent() {
         backend: BackendSelector::UseMain,
         phase: ExecutionPhase::PostGeneration,
     };
-    let agent = QuantifierAgent::from_config(&config);
+    let agent = QuantifierAgent::from_config_with_storage(
+        &config,
+        crate::test_support::make_test_recorder(Arc::new(MockBackend::default())),
+        None,
+        Arc::new(std::sync::RwLock::new(
+            crate::domain::model::settings::AppSettings::default(),
+        )),
+    );
     assert!(agent.is_ok());
 }
 

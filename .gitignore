@@ -252,3 +252,5 @@ chronicler_engine/.pi/task
 .pi/extensions/**/*.d.ts
 .pi/extensions/**/node_modules/
 .pi/extensions/**/package-lock.json
+chronicler_engine/.pi/tasks/
+context.md

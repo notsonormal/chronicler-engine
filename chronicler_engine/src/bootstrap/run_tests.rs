@@ -189,7 +189,7 @@ fn test_restart_with_existing_game_does_not_duplicate_scenario() {
         vec![],
         world_card.starting_room_id(),
     );
-    crate::bootstrap::inject_scenario_logs(&mut state, &world_card, &player);
+    crate::application::scenario::inject_scenario_logs(&mut state, &world_card, &player);
 
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(

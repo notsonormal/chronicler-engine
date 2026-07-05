@@ -127,7 +127,7 @@ async fn test_set_narrator_not_found() {
         .unwrap();
     let body_str = String::from_utf8_lossy(&body);
     assert!(
-        body_str.contains("Connection not found"),
+        body_str.contains("LlmProviderConfig not found"),
         "Expected error for nonexistent connection: {body_str}"
     );
 }
@@ -173,7 +173,7 @@ async fn test_delete_connection_not_found() {
         .unwrap();
     let body_str = String::from_utf8_lossy(&body);
     assert!(
-        body_str.contains("Connection not found"),
+        body_str.contains("LlmProviderConfig not found"),
         "Expected error for nonexistent connection: {body_str}"
     );
 }
@@ -231,7 +231,7 @@ async fn test_edit_connection_not_found() {
         .unwrap();
     let body_str = String::from_utf8_lossy(&body);
     assert!(
-        body_str.contains("Connection not found"),
+        body_str.contains("LlmProviderConfig not found"),
         "Expected error for nonexistent connection: {body_str}"
     );
 }
@@ -273,7 +273,7 @@ async fn test_connection_card_fragment_not_found() {
         .unwrap();
     let body_str = String::from_utf8_lossy(&body);
     assert!(
-        body_str.contains("Connection not found"),
+        body_str.contains("LlmProviderConfig not found"),
         "Expected error for nonexistent connection: {body_str}"
     );
 }
@@ -319,7 +319,7 @@ async fn test_edit_connection_form_not_found() {
         .unwrap();
     let body_str = String::from_utf8_lossy(&body);
     assert!(
-        body_str.contains("Connection not found"),
+        body_str.contains("LlmProviderConfig not found"),
         "Expected error for nonexistent connection: {body_str}"
     );
 }

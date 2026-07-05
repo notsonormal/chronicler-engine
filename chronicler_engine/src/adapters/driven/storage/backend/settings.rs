@@ -71,7 +71,7 @@ impl Storage {
 }
 
 fn settings_from_db(db: &DbSettings) -> Result<AppSettings, EngineError> {
-    let connections: Vec<crate::domain::model::settings::Connection> =
+    let connections: Vec<crate::domain::model::settings::LlmProviderConfig> =
         serde_json::from_str(&db.connections)
             .map_err(|e| EngineError::Parse(format!("Failed to deserialize connections: {e}")))?;
     let text_check: crate::domain::model::settings::TextCheckSettings =

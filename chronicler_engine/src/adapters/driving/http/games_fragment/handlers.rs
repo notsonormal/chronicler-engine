@@ -9,9 +9,10 @@ use axum::{
 
 use crate::domain::model::game::Game;
 use crate::adapters::driving::http::AppState;
+use crate::application::application_service::ApplicationError;
 
 use crate::adapters::driving::http::fragments::renderers::{
-    app_err_to_response, bad_request, ctx_or_error, internal_error, ok, ok_refresh,
+    ctx_or_error, internal_error, ok, ok_refresh,
 };
 use crate::adapters::driving::http::games_fragment::template::{
     GameRowView, GamesPanelTemplate, PersonaRowView,
@@ -29,7 +30,7 @@ fn game_to_view(g: Game) -> GameRowView {
 pub async fn list_games_fragment(State(state): State<AppState>) -> Response<axum::body::Body> {
     let ctx = match ctx_or_error(&state) {
         Ok(ctx) => ctx,
-        Err(e) => return *e,
+        Err(e) => return internal_error(e),
     };
 
     let Ok(games) = state.application_service.list_games(ctx.clone()) else {
@@ -87,45 +88,35 @@ pub struct CreateGameForm {
 pub async fn create_game_handler(
     State(state): State<AppState>,
     Form(form): Form<CreateGameForm>,
-) -> Response<axum::body::Body> {
-    match state.context_for_world(&form.world_key, &form.persona_key) {
-        Ok(ctx) => match state.application_service.create_game(ctx) {
-            Ok(_) => ok_refresh(),
-            Err(e) => app_err_to_response(e),
-        },
-        Err(e) => bad_request(format!(
-            "Failed to build context for world '{}' / persona '{}': {e}",
-            form.world_key, form.persona_key
-        )),
-    }
+) -> Result<Response, ApplicationError> {
+    let ctx = state
+        .context_for_world(&form.world_key, &form.persona_key)
+        .map_err(|e| {
+            ApplicationError::validation(format!(
+                "Failed to build context for world '{}' / persona '{}': {e}",
+                form.world_key, form.persona_key
+            ))
+        })?;
+    state.application_service.create_game(ctx)?;
+    Ok(ok_refresh())
 }
 
 pub async fn switch_game_handler(
     State(state): State<AppState>,
     Path(id): Path<u64>,
-) -> Response<axum::body::Body> {
-    let ctx = match ctx_or_error(&state) {
-        Ok(ctx) => ctx,
-        Err(e) => return *e,
-    };
-
-    match state.application_service.switch_game(ctx, id) {
-        Ok(()) => ok_refresh(),
-        Err(e) => app_err_to_response(e),
-    }
+) -> Result<Response, ApplicationError> {
+    let ctx = ctx_or_error(&state)
+        .map_err(|e| ApplicationError::Engine(crate::error::EngineError::Render(e)))?;
+    state.application_service.switch_game(ctx, id)?;
+    Ok(ok_refresh())
 }
 
 pub async fn delete_game_handler(
     State(state): State<AppState>,
     Path(id): Path<u64>,
-) -> Response<axum::body::Body> {
-    let ctx = match ctx_or_error(&state) {
-        Ok(ctx) => ctx,
-        Err(e) => return *e,
-    };
-
-    match state.application_service.delete_game(ctx, id) {
-        Ok(()) => ok(""),
-        Err(e) => app_err_to_response(e),
-    }
+) -> Result<Response, ApplicationError> {
+    let ctx = ctx_or_error(&state)
+        .map_err(|e| ApplicationError::Engine(crate::error::EngineError::Render(e)))?;
+    state.application_service.delete_game(ctx, id)?;
+    Ok(ok(""))
 }

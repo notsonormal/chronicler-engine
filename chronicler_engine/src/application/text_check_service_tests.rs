@@ -8,7 +8,7 @@ use crate::application::text_check_service::TextCheckService;
 use crate::domain::model::settings::TextCheckMode;
 use crate::error::EngineError;
 
-/// Stub checker that records calls and returns queued responses in order.
+/// Records call count and last mode; returns queued responses in order.
 struct StubChecker {
     responses: Mutex<VecDeque<Result<Option<CheckResult>, EngineError>>>,
     call_count: Mutex<usize>,
@@ -98,55 +98,31 @@ fn disabled_mode_returns_none() {
 }
 
 #[test]
-fn spell_mode_routes_to_checker() {
-    let checker: Arc<StubChecker> = Arc::new(StubChecker::with_ok_response(None));
-    let service = TextCheckService::new(checker.clone());
+fn active_modes_route_to_checker_with_expected_mode() {
+    let cases = [
+        TextCheckMode::Spell,
+        TextCheckMode::Grammar,
+        TextCheckMode::SpellGrammar,
+    ];
+    for mode in &cases {
+        let checker: Arc<StubChecker> = Arc::new(StubChecker::with_ok_response(None));
+        let service = TextCheckService::new(checker.clone());
 
-    let ignored: Vec<String> = vec!["ignored".to_string()];
-    service
-        .check_player_input("Test", TextCheckMode::Spell, &ignored)
-        .expect("should succeed");
+        service
+            .check_player_input("Test", mode.clone(), &[])
+            .expect("should succeed");
 
-    assert_eq!(checker.call_count(), 1);
-    assert_eq!(checker.last_mode(), Some(TextCheckMode::Spell));
-}
-
-#[test]
-fn grammar_mode_routes_to_checker() {
-    let checker: Arc<StubChecker> = Arc::new(StubChecker::with_ok_response(None));
-    let service = TextCheckService::new(checker.clone());
-
-    service
-        .check_player_input("Test", TextCheckMode::Grammar, &[])
-        .expect("should succeed");
-
-    assert_eq!(checker.call_count(), 1);
-    assert_eq!(checker.last_mode(), Some(TextCheckMode::Grammar));
-}
-
-#[test]
-fn spell_grammar_mode_routes_to_checker() {
-    let checker: Arc<StubChecker> = Arc::new(StubChecker::with_ok_response(None));
-    let service = TextCheckService::new(checker.clone());
-
-    service
-        .check_player_input("Test", TextCheckMode::SpellGrammar, &[])
-        .expect("should succeed");
-
-    assert_eq!(checker.call_count(), 1);
-    assert_eq!(checker.last_mode(), Some(TextCheckMode::SpellGrammar));
-}
-
-#[test]
-fn empty_input_routes_to_checker() {
-    let checker: Arc<StubChecker> = Arc::new(StubChecker::with_ok_response(None));
-    let service = TextCheckService::new(checker.clone());
-
-    service
-        .check_player_input("", TextCheckMode::Spell, &[])
-        .expect("should succeed");
-
-    assert_eq!(checker.call_count(), 1);
+        assert_eq!(
+            checker.call_count(),
+            1,
+            "mode {mode:?} should call checker once"
+        );
+        assert_eq!(
+            checker.last_mode(),
+            Some(mode.clone()),
+            "mode {mode:?} should be forwarded"
+        );
+    }
 }
 
 #[test]

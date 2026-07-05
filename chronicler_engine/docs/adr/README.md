@@ -50,7 +50,7 @@ One decision per ADR. If a decision covers multiple independent features, split 
 
 ## Indexing
 
-ADR files are auto-indexed in [`docs/README.md`](../README.md) by the doc-index generator. New ADRs appear after the next index regeneration — do not hand-edit the auto-index block.
+ADR files are auto-indexed in [`docs/AGENTS.md`](../AGENTS.md) by the doc-index generator. New ADRs appear after the next index regeneration — do not hand-edit the auto-index block.
 
 ## Existing ADRs
 

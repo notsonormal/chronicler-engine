@@ -6,39 +6,37 @@ Establish a domain-driven modular architecture for the Chronicler Engine. This s
 
 ## Hexagonal Architecture (Ports & Adapters)
 
-Chronicler Engine adopts **Ports & Adapters (Hexagonal) Architecture** as of Phase 1 (2026-06-29). The codebase is organized around explicit dependency direction:
+Chronicler Engine adopts **Ports & Adapters (Hexagonal) Architecture**. Authoritative decisions, rationale, accepted/rejected port traits, the "phantom port" heuristic, and the Storage direct-access exemption live in [ADR-027](../adr/adr-027-hexagonal-architecture-migration.md).
 
+```mermaid
+flowchart TD
+    subgraph Core["Core (domain + application)"]
+        DOM["domain/<br/>entities + pure rules"]
+        APP["application/<br/>use cases + ports"]
+    end
+    PORT_L["Port trait<br/>(driving-side)"]
+    PORT_R["Port trait<br/>(driven-side)"]
+    DRIVING["Driving adapter<br/>HTTP, CLI"]
+    DRIVEN["Driven adapter<br/>SQLite, LLM, Harper"]
+    BOOT["bootstrap/<br/>composition root"]
+
+    DRIVING -.impls.-> PORT_L
+    DOM --> PORT_L
+    APP --> PORT_R
+    DRIVEN -.impls.-> PORT_R
+    BOOT --> PORT_L
+    BOOT --> DRIVING
+    BOOT --> DRIVEN
+    BOOT --> PORT_R
 ```
-┌──────────────────────────────────────────────┐
-│ Core                                         │
-│   domain/        (entities + pure rules)     │
-│   application/   (use cases + ports)        │
-└────┬───────────────────────────────────┬─────┘
-     │ (depends on)                     │ (depends on)
-     ▼                                   ▼
-┌─────────┐                         ┌────────────┐
-│  Port   │                         │   Port     │
-│  trait  │                         │   trait    │
-└────▲────┘                         └─────▲──────┘
-     │ (impls)                            │ (impls)
-┌────┴────────────┐                ┌──────┴───────┐
-│ Driving adapter │                │ Driven       │
-│ (HTTP, CLI)     │                │ adapter      │
-└─────────────────┘                │ (SQLite,LLM) │
-                                   └──────────────┘
-```
 
-### Ports (Driven-Side Contracts)
+Dependency invariant:
 
-Port traits are owned by the core (`application/ports/`) and define contracts for external systems:
-
-| Port | Path | Impl Count | Rationale |
-|------|------|------------|------------|
-| `LlmProvider` | `application/ports/llm_provider.rs` | 4 | OpenRouter, DeepSeek, Ollama, Mock. Clear substitution seam. |
-| `LlmMessageRepository` | `application/ports/llm_message_repository.rs` | 1 | Consumer (`LlmCallRecorder`) in core; producer (`Storage`) is adapter. Port justified by consumer location. |
-| `TextChecker` | `application/ports/text_checker.rs` | 1 | Consumer (`TextCheckService`) in core; producer (`HarperTextChecker`) is adapter. |
-
-**Rejected ports:** `StateRepository` (single-impl `Storage`, substitution via `Backend` enum), `DebugPort` (phantom — single consumer + single surface). See **ADR-027** for full decision rationale and "phantom port" heuristic.
+- Core (`domain/`, `application/`) depends on port traits only.
+- Adapters implement port traits.
+- Only `bootstrap/` imports both port traits and adapter impls (composition root).
+- Driven-side port traits owned by `application/ports/`: `LlmProvider` (4 impls), `LlmMessageRepository` (1 impl), `TextChecker` (1 impl).
+- Storage is accessed directly by 5 application files (3 intentional persistence boundary + 2 deferred to T2), each marked with `// arch-lint: storage-direct` — see ADR-027.
 
 ### Adapters
 
@@ -46,20 +44,6 @@ Port traits are owned by the core (`application/ports/`) and define contracts fo
 |------|------|----------|
 | Driving (inbound) | `adapters/driving/` | HTTP server (`http/`), CLI (`cli.rs`) |
 | Driven (outbound) | `adapters/driven/` | Storage (SQLite/InMemory/Test), LLM providers, HarperTextChecker |
-
-### Dependency Invariant
-
-- **Core → Ports:** `domain/` and `application/` depend on port traits only
-- **Adapters → Ports:** Adapter impls depend on port traits they implement
-- **Bootstrap → Both:** Only `bootstrap/` imports both port traits and adapter impls (composition root)
-
-**Storage Exception:** `Storage` concrete struct is accessed directly by exactly 3 application files (`context.rs`, `application_service.rs`, `game_service.rs`). Marked with `// arch-lint: storage-direct` comments. See **ADR-027** + `docs/plans/hexagonal-deferred-arch-lint-rules.md` for rationale.
-
-### Related
-
-- **ADR-027:** Hexagonal Architecture Migration (decisions, rejected ports, phantom port heuristic)
-- **Plan:** `docs/plans/hexagonal-reorganization-plan.md` (Phase 1–3 execution)
-- **Deferred Rules:** `docs/plans/hexagonal-deferred-arch-lint-rules.md` (arch-lint limitations)
 
 ## Module Domains
 
@@ -70,7 +54,7 @@ Contains pure data structures, serialization schemas, and the "Single Source of 
 - **`world`**: Setting lore, global rules, and starting scenarios.
 - **`map`**: Room/Region hierarchy and cardinal direction definitions.
 - **`character`**: NPC attributes (name, description, personality, scenario, **profile_image**, **headshot_image**) and Player inventory. `inventory` lives on `PlayerCard`/`NpcCard`, not on the shared `CharacterSheet`.
-- **`state`**: The `GameState` aggregation, narration history logs, and TUI state. `NarrativeState` holds a `MessageHistory` which encapsulates `Vec<Message>` where each `Message` is an independent narrative unit (input, narration, dialogue, or system). Each `Message` carries a `swipes: Vec<Swipe>` set — alternate generations preserved during retry, with `active_swipe_index` selecting the currently displayed version. `LogEntry` remains the atomic rendering unit for templates and prompts, now carrying `swipe_count` and `active_swipe_index` for swipe control rendering. `StoredTriggerContext` enables replaying trigger continuations on retry or retrigger. `LogEntry` carries optional `location_header` and `event_header` metadata for visual rendering; `NarrativeState` tracks `last_trigger_id` for retrigger capability.
+- **`state`**: The `GameState` aggregation, narration history logs, and TUI state. `NarrativeState` holds a `MessageHistory` (independent narrative units with swipe metadata). `LogEntry` is the atomic rendering unit for templates and prompts, carrying `swipe_count` and `active_swipe_index`. `StoredTriggerContext` enables replaying trigger continuations on retry or retrigger. `LogEntry` carries optional `location_header` and `event_header` metadata for visual rendering; `NarrativeState` tracks `last_trigger_id` for retrigger capability.
 - **`scenario`**: Starting scenario definitions for narrative introductions. `StartingScenario` carries `starting_room_id` (default `"start"`) so each scenario declares its own entry room.
 - **`trigger`**: Trigger definitions, conditions, and NPC encounter tracking (`Trigger`, `TriggerCondition`, `TriggerEffect`, `NpcEncounterState`, `NpcEncounterLog`).
 - **`settings`**: `AppSettings`, `Connection`, and agent configuration data models.
@@ -87,8 +71,8 @@ Contains the mechanics that drive the simulation. It translates user intent and 
 - **`parser`**: Command wrapping — all input becomes `Action::FreeAction(String)`.
 - **`action`**: The `Action` enum defining all supported system intents.
 - **`logic`**: Rules for movement, fuzzy-matching, and room resolution.
-- **`trigger_eval`**: Pure function evaluation of NPC triggers based on character state and room location (`evaluate_triggers(state) -> Vec<(NpcCard, Trigger, usize)>`). Triggers with `room_id` only fire in that room.
-- **`action_processing`**: Pure functions for movement and narrative state updates. `attempt_movement` handles semantic walk with dynamic room creation on failure. `update_npc_encounters_on_room_change` updates NPC meeting state when room changes. `log_movement_completion` sets pending location. `handle_movement` composes these helpers linearly. `execute_freeaction_impl` evaluates triggers before applying NPC events and returns `TriggerMatch` data for the application tier to build continuation prompts. Enables unit testing of server-side logic.
+- **`trigger_eval`**: Pure function evaluation of NPC triggers based on character state and room location. Triggers with `room_id` only fire in that room.
+- **`action_processing`**: Pure functions for movement and narrative state updates. `handle_movement` composes `attempt_movement` (with dynamic room creation on failure), `update_npc_encounters_on_room_change`, and `log_movement_completion`. `execute_freeaction_impl` evaluates triggers before applying NPC events and returns `TriggerMatch` data for the application tier to build continuation prompts. Enables unit testing of server-side logic.
 - **`state_diagnostics`**: Runtime invariant checks (`INV-ROOM`, `INV-NPC`, `INV-CHAR`, `INV-LOG`), feature-flagged via `diagnostics` feature.
 
 ### 2.5. The Application Tier (`crate::application::*`)
@@ -100,11 +84,13 @@ Orchestration layer that coordinates game flow, persistence, and LLM generation.
   - `context.rs`: Shared persistence helpers (`load_or_fresh`, `load_expecting_valid_state`, `save_state`, `save_message_and_snapshot`, `map_llm_error`). Cross-storage coordination helpers (`load_messages`, `update_message_text`, `load_state_for_test`, `migrate_swipes`).
   - `save_message_and_snapshot()`: Saves a snapshot and immediately persists the newest unpersisted message with the snapshot ID. Messages are persisted as they are created; there is no batching or `committed` flag.
 
-**Bootstrap arrival path** (`init_game.rs::ArrivalTaskContext::run`) routes through `save_message_and_snapshot`, closing ADR-023 §4 "Bootstrap and Reset Handler". Snapshot blob carries history for audit only; `messages` table is source of truth on reload.
+**Arrival narration use case** (`application::arrival_service::ArrivalTaskContext::run`) routes through `save_message_and_snapshot`. Snapshot blob carries history for audit only; `messages` table is source of truth on reload.
 
 - **`message_editing.rs`**: Free fns for message editing operations - `switch_swipe`, `edit_history`, `delete_last`, `retry`, `retrigger`. `retry` and `retrigger` take `&Arc<GameService>` and spawn their pipeline task via the shared `application::spawn_pipeline_task` helper. `switch_swipe`/`edit_history`/`delete_last` take only `GameServiceContext` (no `game_service` dependency).
 - **`query_handlers.rs`**: Free fns for read-only query operations - `get_generating_status`, `reset_generating_status`, `get_current_game_name`, `list_latest_llm_messages`, `get_story_log_entries`, `get_input_status`, `get_current_room_view`, `get_npc_headshots`, `get_debug_state`.
 - **`spawn.rs`**: `pub(crate) fn spawn_pipeline_task(game_service, ctx, f: F)` — dedupes `Arc::clone` + `tokio::task::spawn_blocking`. Cancel-check + `GenerationGuard` lifetime stay inside each caller's closure (zero behavior change).
+- **`arrival_service.rs`**: Arrival narration use case. `ArrivalTaskContext` struct (12 fields — owns `GameServiceContext`, prompt preset, NPC lists, `LlmCallRecorder`) + `run()` method (loads snapshot → builds prompt → calls LLM narrator → persists via `save_message_and_snapshot`). Spawned via `spawn_blocking` from `bootstrap::init_game::spawn_arrival_task_if_needed`. Test-only constructor `new_for_test` + `run_sync` entrypoint.
+- **`scenario.rs`**: `inject_scenario_logs(state, world, player)` — pure application logic (renders scenario text template + adds as `MessageType::Narration`).
 - **`action_pipeline`**: Action-processing workflows and the `ActionPipeline` orchestration struct.
   - `pipeline.rs`: `ActionPipeline` struct holds direct fields (`prompt_assembler: Arc<LayeredPromptAssembler>`, `llm_recorder: Arc<LlmCallRecorder>`, `agent_registry: Arc<AgentRegistry>`); `run_post_generation_agents` is now an inline phase method. Orchestrates the full FreeAction pipeline via `run_from_input`. Checks `CancellationToken::is_cancelled()` at stage boundaries and aborts gracefully via `handle_cancellation()`. **Error model**: pipeline errors set `GenerationStatus::Error` on state and return `Ok(())`; only `Err(ActionOutcome::Cancelled)` uses the `Err` path.
   - `phases.rs`: `PipelineRun<'a>` struct borrows `(pipeline, ctx)` for the duration of `run_from_input`. Phase methods (`phase_narrate`, `phase_post_generation`, `phase_engine_commit`, `phase_trigger_continuation_raw`, `reconcile_post_trigger_npcs`, `build_trigger_request`) are methods on `PipelineRun`, dropping the `ctx: &GameServiceContext` parameter from each signature. Includes `persist()`, `persist_snapshot_failed()`, and `error_return()` helpers. `pipeline.rs` constructs `PipelineRun` once in `run_from_input` + routes calls through it. External callers (retry.rs) use `ActionPipeline::phase_trigger_continuation()` pub(crate) wrapper.
@@ -114,44 +100,9 @@ Orchestration layer that coordinates game flow, persistence, and LLM generation.
 - **`game_service`**: `GameService` struct (renamed from `DefaultGameService`) exposes `execute_action(ctx, input)` and `retry_last_response(ctx)`. No trait impl — `ActionPipelineBackend` deleted. Also exposes `pipeline()` accessor returning a fresh `ActionPipeline` (callers no longer reach into `prompt_assembler` / `llm_recorder` / `agent_registry` fields to build one). External callers use the `GameService` methods; only the `ActionPipeline` internals call the impl functions directly.
 - **`application_service`**: Thin orchestrator struct (`DefaultApplicationService`) with game lifecycle operations inlined (`create_game`, `switch_game`, `delete_game`, `list_games`, `current_game_id`, `reset`, worlds CRUD). Contains `process_action` entry point with self-healing stale-`Generating` detection and `GenerationGuard` RAII helper for `is_generating` flag cleanup. `process_action` spawns its blocking task via the shared `application::spawn_pipeline_task` helper. Read-only query and message-editing operations are NOT delegated through this struct anymore — server callers route to `application::query_handlers` and `application::message_editing` module free fns directly (T3 service-layer cleanup). `ApplicationError::is_user_displayable()` enables type-driven error branching — validation errors and `WorldHasGames` domain constraints are inline-displayable; engine errors use `app_err_to_response()`.
 
-### 3. Driven Adapters: LLM and Text-Check (`crate::adapters::driven::llm` + `crate::adapters::driven::text_check`)
+### 3. Driven Adapters: LLM and Text-Check
 
-Driven adapters implementing LLM generation (via `narrative/llm/`) and text-checking (via `narrative/text_check/`). These adapters implement application ports for external services.
-
-- **`llm`**: Directory module with trait (`LlmProvider`) and per-provider implementations (OpenRouter, DeepSeek, Ollama, Mock) for Game Master narration. The `LlmProvider` trait is transport-only: `name()`, `model()`, `complete()`. Default impls removed — orchestration lives in `LlmCallRecorder` at `application/llm_recorder.rs`. Backend-specific preprocessing (`preprocess_user_text`) and postprocessing (`postprocess_response_text`) hooks allow model-specific hacks (e.g., Gemma 4 thinking suffix, response sanitization) to live in the provider modules instead of the generic HTTP client.
-  - **`bootstrap::llm_factory::get_llm_recorder_for(connection, storage)`**: Create an `Arc<LlmCallRecorder>` for a specific `Connection` profile. No settings arg.
-  - **`GameService::with_storage(storage, preset_storage, settings)`**: Production constructor that receives pre-loaded settings.
-  - **`GameService::with_backends(llm_recorder: Arc<LlmCallRecorder>, agent_registry: AgentRegistry)`**: Constructor for dependency-injecting mock recorders and agent registry in tests. No globals, no file I/O, fully isolated.
-  - **`GameService::with_mock_quantifier(narrator_recorder, quantifier_recorder)`**: Test constructor taking two `Arc<LlmCallRecorder>` instances — one for narration, one for quantifier agent.
-- **`prompt`**: Directory module for layered prompt construction with token budget management. Uses XML-sectioned instructions + XML-wrapped data for reasoning-model compatibility. `LayeredPromptAssembler` owns prompt assembly. Includes `fit_messages_to_context()` for dynamic context-window fitting. `NpcContext<'a>` bundles `all_npcs` + `npcs_in_area` slices; `make_prompt_context()` takes 6 parameters (down from 7).
-- **`agents`**: Directory module for the agent trait, registry, and agent implementations.
-  - **`Agent` trait**: Core abstraction for pre-generation and post-generation agents
-  - **`AgentRegistry`**: Loads agents from config and iterates by execution phase
-  - **`QuantifierAgent`**: Post-generation agent for scene quantification and dynamic room presence detection
-- **`quantifier`** (under `agents/`): Quantifier implementation module.
-  - **`QuantifierAgent`**: Post-generation agent that uses `LlmProvider::complete()` via injected `Arc<LlmCallRecorder>` for scene quantification. Receives the current room via `AgentContext.current_room`.
-  - **`NpcEventList`**: NPC movement events from quantification (Entered, Left). Now lives in `model::quantifier`.
-- **`text_check`**: Directory module for spell and grammar checking of player input.
-  - **`HarperTextChecker`**: Adapter implementing `TextChecker` port at `src/adapters/driven/text_check/harper_text_checker.rs`. Wraps harper-core with curated + user dictionaries.
-  - **`TextCheckService`**: Orchestrator at `src/application/text_check_service.rs`. `check_player_input` is a method on this service. Driving adapters call `app.text_check_service.check_player_input(...)`.
-  - **`TextChecker`**: Port trait at `src/application/ports/text_checker.rs`
-  - **`bootstrap/text_check_factory.rs`**: Factory wiring for text check service.
-  - **`CheckResult`/`CheckIssue`**: Structured lint results with byte spans and suggestions
-- **`llm_client`**: Directory module (`mod.rs`, `request.rs`, `response.rs`, `client.rs`) with composable pure functions: `build_request_payload()`, `configure_request()`, `extract_content_from_response()`, `handle_response()`, and the main `call_chat_completions()` orchestration. Backend implementations live in `narrative/llm/` directory.
-
-#### NPC Event Layer
-
-Quantifier results include NPC movement events:
-
-| Event | Trigger |
-|-------|---------|
-| `Entered` | NPC transitions from NOT in area → in area |
-| `Left` | NPC transitions from in area → NOT in area |
-
-When `Entered` fires: `currently_meeting = true`  
-When `Left` fires: `currently_meeting = false`  
-
-**times_met semantics**: Only increments on `Entered` (first encounter or NPC rejoins after leaving). Not on continuous presence across turns.
+See [`system/llm_processing.md`](../system/llm_processing.md) and [`system/text_check.md`](../system/text_check.md).
 
 ### 4. The Server Tier (`crate::adapters::driving::http::*`)
 
@@ -249,36 +200,34 @@ Seed-once, load-from-DB pattern for worlds, personas, and characters. See [`syst
 
 ### 6. Error Module (`crate::error`)
 
-Unified error type shared across all layers.
+Unified error type shared across all layers. Top-level types:
 
-- **`EngineError`**: Top-level error enum (`Llm`, `Narrative`, `Internal`, `Io`, `Serde`, `Parse`, `Serialize`, `Navigation`, `RoomNotFound`, `NpcNotFound`, `WorldNotFound`, `WorldHasGames`, `Config`, `Template`, `DataLoad`, `ContextOverflow`)
-- **`LlmFailure`**: LLM-specific errors (`EmptyResponse`, `Http`, `Network`, `ParseError`, `Timeout`)
-- **`NarrativeFailure`**: Prompt build and generation failures
-- **`InternalError`**: Invariant violations
+- **`EngineError`**: top-level enum aggregating failures across all layers.
+- **`LlmFailure`**: LLM transport errors.
+- **`NarrativeFailure`**: prompt build and generation failures.
+- **`InternalError`**: invariant violations.
 
-### 7. Driven Adapter: Storage (`crate::adapters::driven::storage`)
+See [`diagnostics/error_catalog.md`](../diagnostics/error_catalog.md) for the authoritative variant list, common causes, and first-check diagnostics per variant.
 
-Driven adapter implementing storage operations. Uses `Storage` struct with `Backend` enum (`Sqlite`, `InMemory`) for real backends plus `LayeredBackend` decorator (`Direct(Backend)` | `Test { base, overrides }`) for failure injection. All table operations are methods on `Storage` — no repository structs or trait objects. Schema lives in `src/adapters/driven/storage/db.rs`; backend CRUD modules in `src/adapters/driven/storage/backend/` (one file per table); test-infra types in `src/adapters/driven/storage/backend/test_support.rs`. See [`system/storage.md`](../system/storage.md) for design decisions, seeding pattern, module boundaries, and testing strategy.
-
-### 8. Bootstrap Module (`crate::bootstrap`)
+### 7. Bootstrap Module (`crate::bootstrap`)
 
 World seeding, validation, and server initialization.
 
 - **`load`**: Game data seeding from JSON files (idempotent, file I/O only during seeding) — `ensure_presets()`, `seed_game_data()`
 - **`validate`**: World data validation (rooms, NPCs, triggers)
-- **`scenario`**: Starting scenario selection
 - **`logging`**: Structured logging setup
+- **`wiring`**: Composition root for LLM and text-check services — `build_game_service` (prod path, builds narration+quantifier recorders via `llm_factory`, builds `AgentRegistry`, calls `GameService::with_storage`), `build_narration_recorder` (for arrival task wiring), `build_text_check_service`, `build_game_service_for_tests` (testing feature only).
 - **`run`**: Server initialization and startup. Thin orchestrator that delegates to `init_game` for game state setup and arrival narration.
-- **`init_game`**: Game state initialization — `resolve_game_id()` (auto-creates a game for the requested world using the `--persona` CLI flag when none exists), `load_game_state()`, `spawn_arrival_task_if_needed()`. Includes `ArrivalTaskContext` for background arrival narration with stored `recorder: Arc<LlmCallRecorder>` for correct LLM provider selection.
+- **`init_game`**: Game state initialization — `resolve_game_id()` (auto-creates a game for the requested world using the `--persona` CLI flag when none exists), `load_game_state()`, `spawn_arrival_task_if_needed()` (composition root: wires `GameServiceContext`+`LlmCallRecorder`, spawns blocking task). The arrival narration use case itself (`ArrivalTaskContext::run`) lives in `application::arrival_service`.
 - **`state.rs`**: Fresh game state initialization (`build_fresh_initial_state`)
 
-### 9. CLI Module (`crate::adapters::driving::cli`)
+### 8. CLI Module (`crate::adapters::driving::cli`)
 
 Command-line argument parsing via `clap`.
 
 - **`Cli`**: CLI args struct (`--world`, `--persona`, `--port`, etc.)
 
-### 10. Test Support Module (`crate::test_support`)
+### 9. Test Support Module (`crate::test_support`)
 
 Shared test fixtures and utilities.
 
@@ -287,44 +236,19 @@ Shared test fixtures and utilities.
 - **`noop_forensics`** / **`recording_forensics`**: `LlmMessageRepository` spy impls for LLM recorder tests (see ADR-012 SQLite-backed LLM call logging)
 - **`test_app_builder`**: Fluent test app builder API
 
-### 11. Test Binaries (`tests/`)
+### 10. Test Binaries (`tests/`)
 
-Each `[[test]]` in `Cargo.toml` compiles an independent test binary.
+Each `[[test]]` in `Cargo.toml` compiles an independent test binary. Paths mirror `src/` subpaths inside each binary.
 
-| Binary | Path | Count | Purpose |
-|--------|------|-------|---------|
-| `integration` | `tests/integration/mod.rs` | ~221 | Cross-module integration — paths mirror `src/` subpaths inside the binary (e.g. `src/application/action_pipeline/` → `tests/integration/application/action_pipeline/`). Subdirs: `application/` (service + pipeline tests), `flow/` (arrival + retry flow), `model/` (state tests), `storage/` (persistence tests), `adapters/driven/llm/` (HTTP transport tests). Cross-cutting tests (e.g. `lifecycle.rs`) include a rationale comment.
-| `http` | `tests/http/mod.rs` | ~60 | HTTP endpoint tests (action handlers, connections, fragments, status, text check) |
-| `browser` | `tests/browser/mod.rs` | ~32 | Browser E2E tests (structure, editing, interactions, triggers) — requires Playwright |
-| `llm` | `tests/llm/mod.rs` | 2 | Real LLM smoke tests — `#[ignore]` by default, requires `OPENROUTER_API_KEY` |
-| `architecture` | `tests/architecture.rs` | 1 | Architecture guardrails |
-| `guardrails` | `tests/guardrails.rs` | 15 | Convention guardrails |
-| `invariant_contract` | `tests/invariant_contract.rs` | varies | Runtime invariant contracts |
+| Binary | Purpose |
+|--------|---------|
+| `integration` | Cross-module integration — paths mirror `src/` subpaths inside the binary (e.g. `src/application/action_pipeline/` → `tests/integration/application/action_pipeline/`). Subdirs: `application/` (service + pipeline tests), `flow/` (arrival + retry flow), `model/` (state tests), `storage/` (persistence tests), `adapters/driven/llm/` (HTTP transport tests). Cross-cutting tests (e.g. `lifecycle.rs`) include a rationale comment.
+| `http` | HTTP endpoint tests (action handlers, connections, fragments, status, text check) |
+| `browser` | Browser E2E tests (structure, editing, interactions, triggers) — requires Playwright |
+| `llm` | Real LLM smoke tests — `#[ignore]` by default, requires `OPENROUTER_API_KEY` |
+| `architecture` | Architecture guardrails |
+| `guardrails` | Convention guardrails |
+| `invariant_contract` | Runtime invariant contracts |
 
 > **Note:** `assets/` contains static web assets (`index.html`) served by the server. It is not a Rust module tier.
 
-## File Navigation
-
-For file-to-module mapping, use `cargo doc` or navigate `src/` directly. Files follow the pattern `src/<tier>/<module>.rs` with sibling `*_tests.rs` test files.
-
-## Sub-system References
-
-The following concerns are documented in dedicated `docs/system/` files. Those are the authoritative source — this file covers module structure only.
-
-||  Topic | Document |
-||-------|----------|
-||| Dashboard layout, tabs, polling, edit/retry UI | [`system/dashboard.md`](../system/dashboard.md) |
-||| Worlds management UI, CRUD operations, world-game relationships | [`system/worlds.md`](../system/worlds.md) |
-||| UI design tokens, CSS components, animations | [`system/ui_design.md`](../system/ui_design.md) |
-||| Game loop phases, retry flow, status phases | [`system/game_flow.md`](../system/game_flow.md) |
-||| Game Master role, narrative modes, GM constraints | [`system/narration_engine.md`](../system/narration_engine.md) |
-||| Auto-trigger system and mutation order invariant | [`system/triggers.md`](../system/triggers.md) |
-||| Navigation and movement resolution | [`system/navigation.md`](../system/navigation.md) |
-||| LLM infrastructure, backends, logging, tracing | [`system/llm_processing.md`](../system/llm_processing.md) |
-||| Prompt layers, token budgets, prompt composition | [`system/prompt_system.md`](../system/prompt_system.md) |
-||| Dynamic room creation, fallback behavior | [`system/dynamic_rooms.md`](../system/dynamic_rooms.md) |
-||| Storage design, seeding, backend enum | [`system/storage.md`](../system/storage.md) |
-
-## Error Strategy
-
-A unified error type (`crate::error::EngineError`) is shared across all tiers for consistent error propagation — from data loading through LLM failures to HTTP responses. See `src/error.rs` for the full variant list.

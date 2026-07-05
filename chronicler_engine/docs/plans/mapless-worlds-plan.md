@@ -73,8 +73,8 @@ struct MovementState {
 
 ### Section 4 — `NarrativeState` (`src/model/state.rs`)
 
-- Delete `pending_location: Option<String>` field (line 136).
-- Delete from `from_snapshot` reader (line 157).
+- Delete `pending_location: Option<String>` field.
+- Delete from `from_snapshot` reader.
 
 ### Section 4b — `NarrativeState` field refactor blast radius
 
@@ -178,7 +178,7 @@ pub fn current_room(&self) -> Option<&Room> {
 
 **Validator (`bootstrap/validate.rs`):**
 
-- Delete `if !valid_room_ids.contains(&world.starting_room_id)` check (lines 23-29).
+- Delete `if !valid_room_ids.contains(&world.starting_room_id)` check.
 - Delete `fn default_starting_room()` helper if still present.
 - Add scenario validator per Q6 strict matrix:
 
@@ -206,13 +206,13 @@ pub fn current_room(&self) -> Option<&Room> {
   }
   ```
 
-- Trigger `room_id` validation (lines 33-44) unchanged — authored triggers reference map rooms only.
+- Trigger `room_id` validation unchanged — authored triggers reference map rooms only.
 - Rewrite 5 `validate_tests.rs` cases:
-  - `test_validate_loaded_data_success` (line 9): map id scenario → `starting_location_id: Some("room_a")`.
-  - `test_validate_loaded_data_missing_starting_room` (line 29): rewrite as "missing scenario location_id".
-  - `test_validate_loaded_data_basic_manifest_succeeds` (line 57): add `has_map: false` + `starting_location_name: Some("...")` scenario.
-  - `test_validate_loaded_data_invalid_trigger_room` (line 79): unchanged (trigger validation same).
-  - `test_validate_loaded_data_multiple_errors` (line 125): update expected error message to `"location_id"` instead of `"starting_room_id"`.
+  - `test_validate_loaded_data_success`: map id scenario → `starting_location_id: Some("room_a")`.
+  - `test_validate_loaded_data_missing_starting_room`: rewrite as "missing scenario location_id".
+  - `test_validate_loaded_data_basic_manifest_succeeds`: add `has_map: false` + `starting_location_name: Some("...")` scenario.
+  - `test_validate_loaded_data_invalid_trigger_room`: unchanged (trigger validation same).
+  - `test_validate_loaded_data_multiple_errors`: update expected error message to `"location_id"` instead of `"starting_room_id"`.
 
 ### Section 9 — State diagnostics (`src/engine/state_diagnostics.rs`)
 
@@ -268,7 +268,7 @@ fn assert_room_exists(state: &GameState) -> Result<(), EngineError> {
 
 **Parser (`parser.rs`):**
 
-- `MovementJson` (lines 17-28): drop `destination: Option<String>` field. Add `destination_id: Option<String>` + `destination_name: Option<String>`.
+- `MovementJson`: drop `destination: Option<String>` field. Add `destination_id: Option<String>` + `destination_name: Option<String>`.
 - `parser.rs:106` extraction: read new fields directly. **No legacy fallback** (`build.py --cleanup` wipes old data).
 - `parser.rs:246` `extract_destination` helper: returns `(Option<String>, Option<String>)` instead of `Option<String>`.
 - `parser.rs:117, 133` default build sites: produce `(None, None)` instead of `destination: None`.
@@ -412,7 +412,7 @@ Per chronicler-dev-workflow skill: **Architecture First**, **Tests First**.
 2. **ADR-027** — `docs/adr/adr-027-mapless-worlds.md`.
 3. **Architecture** — `docs/architecture/system.md` updates (MovementState, StartingScenario, WorldCard sections).
 4. **Other docs** — per Section 19 list.
-5. **Delete `chronicler_engine/src/model/agent.rs_temp`** (stale temp file noticed during plan review — line 111 duplicate of `agent.rs`).
+5. **Delete `chronicler_engine/src/model/agent.rs_temp`** (stale temp file noticed during plan review — duplicate of `agent.rs`).
 6. **Model layer tests first** — write `MovementState` serde test (Option round-trip), `resolve_starting_location` test (all branches), `WorldCard`/`WorldManifest` serde test (has_map default true), `StartingScenario` validator matrix test (all 6 matrix cells).
 7. **Model layer code** — `world.rs`, `scenario.rs`, `state.rs`, `state_snapshot.rs`, `agent.rs` (`StatePatch::Scene` split), `quantifier.rs` (`MovementParseResult`).
 8. **Bootstrap tests first** — `validate_tests.rs` rewrites (5 cases), `resolve_starting_location` integration.
@@ -441,7 +441,7 @@ Per chronicler-dev-workflow skill: **Architecture First**, **Tests First**.
 6. `docs/system/startup.md` — bootstrap section: scenario resolves starting location via `resolve_starting_location` helper; both world kinds.
 7. `docs/system/worlds.md` — `WorldCard.has_map` field, `StartingScenario` optional id/name, strict validator matrix.
 8. `docs/system/triggers.md` — note: authored triggers with `room_id` never fire in mapless worlds or when mapped-world drift is active.
-9. `docs/architecture/invariants.md` — INV-ROOM description: `current_room_id=None` valid for mapless/off-map; `current_room_name` must always be `Some` after bootstrap.
+9. `docs/architecture/guardrails.md` §5 Runtime Invariants — INV-ROOM description: `current_room_id=None` valid for mapless/off-map; `current_room_name` must always be `Some` after bootstrap.
 10. `docs/reference/data_schemas.md` — world JSON schema: add `has_map`, drop top-level `starting_room_id`, add scenario `starting_location_id`/`starting_location_name`.
 11. `docs/reference/data_layer.md` — mention v14 migration + `build.py --cleanup` requirement.
 12. `docs/system/agent_system.md` — quantifier emits `destination_id` + `destination_name` split.

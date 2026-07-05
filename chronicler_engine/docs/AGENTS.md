@@ -2,10 +2,20 @@
 
 This folder contains all documentation for the Chronicler Engine project.
 
+For general engine principles, workflow, and conventions, see [`../AGENTS.md`](../AGENTS.md).
+
+## Keeping Documentation Clean
+
+**Plan authoring convention:** reference doc issues by quotable phrase, never line numbers — line numbers rot. Use the exact sentence (or a quoted fragment of it) as the anchor.
+
+**Sediment:** Layers of old content that settle in the docs and are never cleared, because adding feels safe and removing feels risky — so stale and irrelevant lines accumulate and you must core down through them to find what is still live. The default fate of any documentation without a pruning discipline; the slow erosion of relevance, as opposed to duplication's repeated meaning.
+
+**Duplication:** The same meaning given more than one single source of truth. It costs maintenance (change one place, you must change the others), costs tokens, and inflates prominence — repeating a meaning weights it on the ladder past its real rank. The accidental inverse of a leading word, which raises attention on purpose by repeating a token, never the meaning.
+
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-07-04 00:03 UTC*
+*Index last generated: 2026-07-04 18:47 UTC*
 
 ### Root files
 
@@ -37,11 +47,11 @@ This folder contains all documentation for the Chronicler Engine project.
 - [ADR-025: Multi-World Data Foundation](./adr/adr-025-multi-world-data-foundation.md)
 - [ADR-026: Relocate Persona Binding from World to Game](./adr/adr-026-persona-relocation-to-game.md)
 - [ADR-027: Hexagonal Architecture Migration](./adr/adr-027-hexagonal-architecture-migration.md)
+- [ADR Standards](./adr/README.md)
 
 ### `docs/architecture/`
 
 - [Architecture Guardrails](./architecture/guardrails.md)
-- [Runtime Invariants](./architecture/invariants.md)
 - [Specification: Core Architecture (Modular)](./architecture/system.md)
 
 ### `docs/diagnostics/`
@@ -63,7 +73,6 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Plan: Diagnostic Decision Tree as Agent Infrastructure](./plans/diagnostic-decision-tree-plan.md)
 - [Plan: Documentation Hygiene Skill](./plans/docs-hygiene-skill-plan.md)
 - [Deferred arch-lint Rules — Hexagonal Reorganization](./plans/hexagonal-deferred-arch-lint-rules.md)
-- [Plan: Hexagonal Architecture Reorganization](./plans/hexagonal-reorganization-plan.md)
 - [Plan: Mapless Worlds via Freeform Location Names](./plans/mapless-worlds-plan.md)
 - [Spec: Agent-Ready Pipeline Restructure for Chronicler Engine](./plans/multi-agent-architecture-overarching-spec.md)
 - [Plan: Observability & Automated Forensics](./plans/observability-and-forensics-plan.md)
@@ -86,6 +95,7 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Specification: Player Persona System](./reference/persona_system.md)
 - [Reference: Quantifier Prompt](./reference/quantifier_prompt.md)
 - [Reference: System Prompt](./reference/system_prompt.md)
+- [Test Support Reference](./reference/test_support.md)
 - [Specification: Testing Strategy and Architecture](./reference/testing.md)
 
 ### `docs/system/`
@@ -107,47 +117,3 @@ This folder contains all documentation for the Chronicler Engine project.
 - [Worlds Management System](./system/worlds.md)
 
 <!-- AUTO-INDEX END -->
-
----
-
-## Key Principles
-
-1. **Architecture is the single source of truth** - Any system-level change should be reflected in `architecture/system.md`
-2. **Plans update the system first** - Before implementing, update the architecture document
-3. **Domain docs explain "why"** - System docs explain subsystems, not every implementation detail
-4. **Reference docs are stable** - Data schemas and APIs don't change often
-
----
-
-## Workflow
-
-When adding a new feature:
-
-1. **Create a plan** in `docs/plans/` (or update existing)
-2. **Update architecture** - Modify `docs/architecture/system.md` to reflect changes
-3. **Update all the other docs as needed** - Read `docs/*`
-4. **Implement** - Write the code
-5. **Validate** - Run the full build and test suite:
-   ```bash
-   python build.py  # Or manually: cargo fmt && cargo clippy && cargo nextest run
-   ```
-6. **Archive** - Move completed plans to `plans/archived/`
-
----
-
-## Quick Reference
-
-| Question | Document |
-|----------|----------|
-| What modules/tiers exist? | [`architecture/system.md`](./architecture/system.md) |
-| How do I start the engine? | [`system/startup.md`](./system/startup.md) |
-| How does movement/navigation work? | [`system/navigation.md`](./system/navigation.md) |
-| How are LLM prompts built? | [`system/prompt_system.md`](./system/prompt_system.md) |
-| How does the dashboard UI work? | [`system/dashboard.md`](./system/dashboard.md) |
-| How do NPC triggers/encounters work? | [`system/triggers.md`](./system/triggers.md) |
-| How does game state persist (snapshots)? | [`system/game_flow.md`](./system/game_flow.md) + [ADR-008](./adr/adr-008-sqlite-snapshot-persistence.md) |
-| How do I configure an LLM connection? | [`system/llm_processing.md`](./system/llm_processing.md) |
-| What `data/` JSON schemas are used? | [`reference/data_schemas.md`](./reference/data_schemas.md) |
-| How do I run tests? | [`reference/testing.md`](./reference/testing.md) |
-| Why was X designed this way? | [`docs/adr/`](./adr/) |
-| What's the current roadmap? | [`ROADMAP.md`](./ROADMAP.md) |

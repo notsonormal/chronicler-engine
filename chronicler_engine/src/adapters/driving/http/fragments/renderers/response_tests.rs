@@ -1,14 +1,14 @@
-// Tests for `response.rs` HTTP response helpers. Covers response
-// builders, error→response conversion, and ctx_or_error boundary.
+//! [DOC: docs/system/dashboard.md]
+//! Tests for `response.rs` HTTP response helpers
 
 use axum::body::to_bytes;
 use axum::http::StatusCode;
 
-use crate::application::application_service::ApplicationError;
 use crate::adapters::driving::http::fragments::renderers::response::{
-    app_err_to_response, app_err_to_tuple, bad_request, ctx_or_error, internal_error, ok,
-    ok_refresh, service_unavailable, service_unavailable_generating,
+    bad_request, ctx_or_error, html_escape, internal_error, ok, ok_refresh, service_unavailable,
+    service_unavailable_generating,
 };
+use crate::adapters::driving::http::fragments::renderers::fragment_renderers::render_error;
 
 async fn body_string(resp: axum::response::Response) -> String {
     let bytes = to_bytes(resp.into_body(), 16384).await.unwrap();
@@ -57,70 +57,18 @@ async fn service_unavailable_returns_503_with_body() {
 }
 
 #[tokio::test]
-async fn service_unavailable_generating_contains_status_span() {
+async fn service_unavailable_generating_uses_error_div_wrapper() {
     let resp = service_unavailable_generating();
     assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
     let body = body_string(resp).await;
-    assert!(body.contains("status wait"));
-    assert!(body.contains("Generation in progress"));
-}
-
-#[tokio::test]
-async fn app_err_to_response_validation_returns_400() {
-    let resp = app_err_to_response(ApplicationError::Validation("bad input".into()));
-    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
-    let body = body_string(resp).await;
-    assert!(body.contains("bad input"));
-}
-
-#[tokio::test]
-async fn app_err_to_response_concurrent_generation_returns_503() {
-    let resp = app_err_to_response(ApplicationError::ConcurrentGeneration);
-    assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
-}
-
-#[tokio::test]
-async fn app_err_to_response_shutting_down_returns_503() {
-    let resp = app_err_to_response(ApplicationError::ShuttingDown);
-    assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
-    let body = body_string(resp).await;
-    assert!(body.contains("shutting down"));
-}
-
-#[tokio::test]
-async fn app_err_to_response_engine_returns_500() {
-    let resp = app_err_to_response(ApplicationError::Engine(crate::error::EngineError::Io(
-        "disk".into(),
-    )));
-    assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
-}
-
-#[test]
-fn app_err_to_tuple_validation_returns_400() {
-    let (status, body) = app_err_to_tuple(ApplicationError::Validation("bad".into()));
-    assert_eq!(status, StatusCode::BAD_REQUEST);
-    assert!(body.contains("bad"));
-}
-
-#[test]
-fn app_err_to_tuple_concurrent_generation_returns_503() {
-    let (status, _) = app_err_to_tuple(ApplicationError::ConcurrentGeneration);
-    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
-}
-
-#[test]
-fn app_err_to_tuple_shutting_down_returns_503() {
-    let (status, body) = app_err_to_tuple(ApplicationError::ShuttingDown);
-    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
-    assert!(body.contains("shutting down"));
-}
-
-#[test]
-fn app_err_to_tuple_engine_returns_500() {
-    let (status, _) = app_err_to_tuple(ApplicationError::Engine(crate::error::EngineError::Io(
-        "x".into(),
-    )));
-    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    assert!(
+        body.contains("error-message"),
+        "body should wrap in error div: {body}"
+    );
+    assert!(
+        body.contains("Generation in progress"),
+        "body should include wait text: {body}"
+    );
 }
 
 #[test]
@@ -131,4 +79,57 @@ fn ctx_or_error_returns_ok_when_app_state_provides_ctx() {
         result.is_ok(),
         "ctx_or_error should succeed against a built TestApp state"
     );
+}
+
+#[test]
+fn html_escape_table() {
+    let cases = [
+        ("<test>", "&lt;test&gt;"),
+        ("foo & bar", "foo &amp; bar"),
+        ("\"quoted\"", "&quot;quoted&quot;"),
+        (
+            "<foo & \"bar'\">",
+            "&lt;foo &amp; &quot;bar&#x27;&quot;&gt;",
+        ),
+        ("", ""),
+        ("line1\nline2", "line1\nline2"),
+        ("`code`", "`code`"),
+        ("日本語", "日本語"),
+        ("&", "&amp;"),
+        ("<", "&lt;"),
+        (">", "&gt;"),
+    ];
+    for (input, expected) in cases {
+        assert_eq!(html_escape(input), expected, "input: {input:?}");
+    }
+}
+
+#[test]
+fn html_escape_is_not_idempotent() {
+    let escaped = html_escape("<&>");
+    assert_eq!(escaped, "&lt;&amp;&gt;");
+    assert_eq!(html_escape(&escaped), "&amp;lt;&amp;amp;&amp;gt;");
+}
+
+#[test]
+fn render_error_wraps_in_error_div() {
+    let html = render_error("disk failed");
+    assert!(html.contains("error-message"));
+    assert!(html.contains("Error:"));
+    assert!(html.contains("disk failed"));
+}
+
+#[test]
+fn render_error_escapes_html_in_message() {
+    let html = render_error("<script>alert('xss')</script>");
+    assert!(!html.contains("<script>"));
+    assert!(html.contains("&lt;script&gt;"));
+}
+
+#[test]
+fn render_error_preserves_long_messages() {
+    let long_msg = "x".repeat(10_000);
+    let html = render_error(&long_msg);
+    assert!(html.len() > 10_000);
+    assert!(html.contains(&long_msg[..100]));
 }

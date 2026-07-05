@@ -36,6 +36,6 @@ Corrupt seed files are skipped with a warning — seeding is not fatal.
 
 Settings are loaded from the database once during bootstrap, wrapped in `Arc<RwLock<AppSettings>>`, and passed through the construction chain. No business logic layer reloads settings from disk. Connection changes require a server restart. Only `max_context_tokens` is read dynamically at runtime.
 
-## 4. Server Startup
+## 3. Server Startup
 
 The Axum HTTP server starts after game state synthesis. It binds to the configured `--port` and serves static files at `/assets` and `/data` routes, with `/assets` as the fallback for unmatched routes.

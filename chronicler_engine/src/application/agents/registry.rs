@@ -9,6 +9,7 @@ use crate::domain::model::agent::{AgentConfig, ExecutionPhase};
 use crate::domain::model::settings::AppSettings;
 use crate::application::agents::Agent;
 use crate::application::agents::quantifier::QuantifierAgent;
+use crate::application::llm_recorder::LlmCallRecorder;
 use crate::adapters::driven::storage::Storage;
 
 #[derive(Debug, Default)]
@@ -17,18 +18,9 @@ pub struct AgentRegistry {
 }
 
 impl AgentRegistry {
-    pub fn from_configs(configs: &[AgentConfig]) -> Result<Self, EngineError> {
-        Self::from_configs_with_storage(
-            configs,
-            None,
-            None,
-            Arc::new(RwLock::new(AppSettings::default())),
-        )
-    }
-
     pub fn from_configs_with_storage(
         configs: &[AgentConfig],
-        storage: Option<Arc<Storage>>,
+        quantifier_recorder: Arc<LlmCallRecorder>,
         preset_storage: Option<Arc<Storage>>,
         settings: Arc<RwLock<AppSettings>>,
     ) -> Result<Self, EngineError> {
@@ -51,7 +43,7 @@ impl AgentRegistry {
             let agent: Box<dyn Agent> = match config.agent_type.as_str() {
                 "quantifier" => Box::new(QuantifierAgent::from_config_with_storage(
                     config,
-                    storage.clone(),
+                    Arc::clone(&quantifier_recorder),
                     preset_storage.clone(),
                     Arc::clone(&settings),
                 )?),

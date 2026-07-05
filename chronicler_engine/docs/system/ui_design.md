@@ -32,6 +32,20 @@
 | `--color-log-system` | #3a3a1a | System message bubble background |
 | `--color-error-gradient-start` | #ff4444 | Error notification gradient top |
 | `--color-error-gradient-end` | #cc0000 | Error notification gradient bottom |
+| `--color-bg-input` | #0d0d0d | Command input background |
+| `--color-border-input` | #444 | Command input border |
+| `--color-button-send-start` | #00aa00 | Send button gradient top (idle) |
+| `--color-button-send-end` | #006600 | Send button gradient bottom (idle) |
+| `--color-button-send-hover-start` | #00cc00 | Send button gradient top (hover) |
+| `--color-button-send-hover-end` | #008800 | Send button gradient bottom (hover) |
+| `--color-button-send-active-start` | #006600 | Send button gradient top (active) |
+| `--color-button-send-active-end` | #004400 | Send button gradient bottom (active) |
+| `--color-btn-primary-start` | #2a5a2a | Primary button gradient top |
+| `--color-btn-primary-end` | #1a4a1a | Primary button gradient bottom |
+| `--color-btn-danger-start` | #5a2a2a | Danger button gradient top |
+| `--color-btn-danger-end` | #4a1a1a | Danger button gradient bottom |
+| `--color-btn-cyan-start` | #2a4a5a | Cyan button gradient top |
+| `--color-btn-cyan-end` | #1a3a4a | Cyan button gradient bottom |
 
 ### Typography
 
@@ -73,19 +87,19 @@
 
 ### Header Bar
 - Height: 48px
-- Background: #1a1a1a
-- Border-bottom: 1px solid #333
+- Background: `--color-bg-header`
+- Border-bottom: 1px solid `--color-border`
 - Contains: Game title (left), connection status (right)
 - Location is displayed in the story log, not the header
 
 ### Tab Bar
 - Display: flex, below header
-- Background: #111
-- Border-bottom: 1px solid #333
+- Background: `--color-bg-secondary`
+- Border-bottom: 1px solid `--color-border`
 - Padding: 0 16px
 - Tabs: Game | Settings
-- Active tab: green text (#00ff00), green bottom border
-- Inactive tab: muted text (#888), transparent border
+- Active tab: green text (`--color-accent-green`), green bottom border
+- Inactive tab: muted text (`--color-text-muted`), transparent border
 - Hover: muted text brightens to primary
 
 ### Tab Content
@@ -96,19 +110,19 @@
 - Settings tab contains connections panel (scrollable)
 
 ### Game Title
-- Color: #888
+- Color: `--color-text-muted`
 - Text: "Chronicler Engine"
 
 ### Location Header
-- Color: #4ade80
+- Color: `--color-accent-green-bright`
 - Weight: bold
 
 ### Connection Status
 - Font size: 11px
 - Border radius: 3px
 - States:
-  - Connected: #00ff00 text, rgba(0,255,0,0.1) background
-  - Disconnected: #ff4444 text, rgba(255,68,68,0.1) background
+  - Connected: `--color-accent-green` text, rgba(0,255,0,0.1) background
+  - Disconnected: `--color-accent-red` text, rgba(255,68,68,0.1) background
 
 ### Main Container
 - Flex: 1
@@ -116,16 +130,16 @@
 
 ### Story Log
 - Width: 80%
-- Background: #111
-- Border: 1px solid #333
+- Background: `--color-bg-secondary`
+- Border: 1px solid `--color-border`
 - Padding: 16px
 - Overflow-y: auto
 - Auto-scrolls to bottom on new content
 
 ### Visual Sidebar
 - Width: 20%
-- Background: #0f0f0f
-- Border: 1px solid #333
+- Background: `--color-bg-tertiary`
+- Border: 1px solid `--color-border`
 - Display: flex, flex-direction: column
 - Overflow: hidden
 
@@ -133,7 +147,7 @@
 - Width: 100% (full width, above sidebar)
 - Separator: 1px border bottom
 - Contains: Location image or "No Location Image" placeholder
-- No image state: center-aligned "No Location Image" text in #555
+- No image state: center-aligned "No Location Image" text in `--color-text-placeholder`
 
 ### Location Image
 - Container: full width, overflow hidden
@@ -150,38 +164,38 @@
 
 ### Action Area
 - Height: 64px
-- Background: #1a1a1a
-- Border: 1px solid #333 (top and sides only)
+- Background: `--color-bg-header`
+- Border: 1px solid `--color-border` (top and sides only)
 - Padding: 10px 16px
 - Display: flex, align-items center, gap 16px
 
 ### Command Input
-- Background: #0d0d0d
-- Border: 1px solid #444
+- Background: `--color-bg-input`
+- Border: 1px solid `--color-border-input`
 - Border radius: 4px
-- Color: #e0e0e0
+- Color: `--color-text-primary`
 - Padding: 8px 14px
 - Font: inherit, 14px
 - Height: 40px
-- Focus state: border-color #00ff00, box-shadow 0 0 8px rgba(0,255,0,0.2)
-- Placeholder color: #555
+- Focus state: border-color `--color-accent-green`, box-shadow 0 0 8px rgba(0,255,0,0.2)
+- Placeholder color: `--color-text-placeholder`
 
 ### Send Button
-- Background: linear-gradient(180deg, #00aa00 0%, #006600 100%)
-- Border: 1px solid #00ff00
+- Background: linear-gradient(180deg, `--color-button-send-start` 0%, `--color-button-send-end` 100%)
+- Border: 1px solid `--color-accent-green`
 - Border radius: 4px
-- Color: #00ff00 (green text)
+- Color: `--color-accent-green` (green text)
 - Padding: 8px 16px
 - Height: 40px, min-width: 100px
 - Font: inherit, 14px, bold
 - Box-shadow: 0 0 8px rgba(0, 255, 0, 0.3)
-- Hover: background linear-gradient(180deg, #00cc00 0%, #008800 100%), box-shadow 0 0 12px rgba(0, 255, 0, 0.5)
-- Active: background linear-gradient(180deg, #006600 0%, #004400 100%)
+- Hover: background linear-gradient(180deg, `--color-button-send-hover-start` 0%, `--color-button-send-hover-end` 100%), box-shadow 0 0 12px rgba(0, 255, 0, 0.5)
+- Active: background linear-gradient(180deg, `--color-button-send-active-start` 0%, `--color-button-send-active-end` 100%)
 - Disabled: opacity 0.5, cursor not-allowed, box-shadow none
 
 ### Action Hints
 - Font size: 12px
-- Color: #888
+- Color: `--color-text-muted`
 
 ### Game Selector Button
 - Styled as a small button next to the game name in the header
@@ -194,13 +208,13 @@
 - Min-width: 100px
 - Text-align: right
 - States:
-  - Ready: #00ff00
-  - Thinking: #ffff00
-  - Error: #ff4444
+  - Ready: `--color-accent-green`
+  - Thinking: `--color-accent-yellow`
+  - Error: `--color-accent-red`
 
 ### Error Notification
 - Position: fixed top, full width
-- Background: linear-gradient(180deg, #ff4444 0%, #cc0000 100%)
+- Background: linear-gradient(180deg, `--color-accent-red` 0%, `--color-error-gradient-end` 100%)
 - Color: white
 - Padding: 12px 20px
 - Box-shadow: 0 2px 8px rgba(0,0,0,0.5)
@@ -212,31 +226,31 @@
 ### Log Entries
 
 #### Location Header
-- Color: #4ade80
+- Color: `--color-accent-green-bright`
 - Font-size: 1.1em
 - Weight: bold
 - Display: inline with timestamp
 
 #### Narration
-- Color: #00ffff
+- Color: `--color-accent-cyan`
 
 #### Dialogue
-- Color: #ffb347
+- Color: `--color-accent-orange`
 - Font-style: italic
-- Speaker name: #ff6b6b, bold
+- Speaker name: `--color-accent-pink`, bold
 
 #### System
-- Color: #ffff00
+- Color: `--color-accent-yellow`
 
 #### Input
-- Color: #888888
+- Color: `--color-text-muted`
 
 ### Edit, Retrigger, and Swipe Controls
 
 #### Edit Button (✏️)
 - Always visible (opacity: 1)
 - Background: transparent, no border
-- Color: muted (#888), cyan on hover (#00ffff)
+- Color: muted (`--color-text-muted`), cyan on hover (`--color-accent-cyan`)
 - Font size: 18px
 - Padding: 4px 8px
 - Margin-left: 8px
@@ -258,10 +272,10 @@
 
 #### Inline Edit Textarea
 - Width: 100%, box-sizing: border-box
-- Background: #0a0a0a
-- Border: 1px solid #333
+- Background: `--color-bg-primary`
+- Border: 1px solid `--color-border`
 - Border-radius: 4px
-- Color: #e0e0e0
+- Color: `--color-text-primary`
 - Padding: 4px
 - Font: inherit, 14px
 - Resize: none
@@ -274,8 +288,8 @@
 - Font size: 14px
 - Padding: 2px 6px
 - Margin-left: 4px
-- Save: green on hover (#00ff00)
-- Cancel: red on hover (#ff4444)
+- Save: green on hover (`--color-accent-green`)
+- Cancel: red on hover (`--color-accent-red`)
 
 #### Polling Behavior
 - During edit mode, story-log polling is paused via `hx-trigger: none`
@@ -285,7 +299,7 @@
 ### Game Dropdown
 - Container: absolute positioned below the Games button, flex column, gap 8px, max-height 300px, overflow-y: auto
 - **Game item**: flex row, align-items center, gap 12px, padding 8px 12px
-  - Background: #111, border: 1px solid #333, border-radius: 4px
+  - Background: `--color-bg-secondary`, border: 1px solid `--color-border`, border-radius: 4px
   - **Name**: primary text, flex 1
   - **Meta**: muted text, "Game {id}"
   - **Switch button**: cyan border, cyan text, `hx-post="/games/{id}/switch"`, `hx-swap="none"`, triggers full page refresh
@@ -299,8 +313,8 @@
 - Overflow-y: auto (settings tab scrolling)
 
 ### Connection Cards
-- Background: #111
-- Border: 1px solid #333
+- Background: `--color-bg-secondary`
+- Border: 1px solid `--color-border`
 - Border-radius: 8px
 - Padding: 16px
 - Margin-bottom: 16px
@@ -313,54 +327,26 @@
 - Actions: flex row, gap 8px, wrap
 
 ### Connection Edit Form
-- Background: #111
-- Border: 1px solid #00ffff (cyan accent)
+- Background: `--color-bg-secondary`
+- Border: 1px solid `--color-accent-cyan` (cyan accent)
 - Border-radius: 8px
 - Padding: 16px
 - Form groups: flex column, gap 4px
 - Labels: small text, muted color
-- Inputs/selects: same styling as command input (dark background, #333 border, primary text)
+- Inputs/selects: same styling as command input (dark background, `--color-border` border, primary text)
 - Focus: cyan border, cyan box-shadow
 
 ### Settings Buttons
-- Primary (save/add): `.btn-primary` utility class — green gradient (#2a5a2a → #1a4a1a), green border, green text
-- Danger (delete): `.btn-danger` utility class — red gradient (#5a2a2a → #4a1a1a), red border, red text
-- Default/Edit/View: `.btn-cyan` utility class — cyan gradient (#2a4a5a → #1a3a4a), cyan border, cyan text
+
+Settings buttons use the standard utility classes defined in [Button Utility Classes](#button-utility-classes) below — Primary (`.btn-primary`) for save/add actions, Danger (`.btn-danger`) for delete actions, and Cyan (`.btn-cyan`) for default/edit/view actions.
 
 ### Button Utility Classes
-Shared gradient button classes defined in `assets/styles.css` after the design tokens, used across all panels:
 - `.btn-primary` — Green gradient, green text/border (save, create, set-narrator, submit actions)
 - `.btn-cyan` — Cyan gradient, cyan text/border (edit, view, switch actions)
 - `.btn-danger` — Red gradient, red text/border (delete, reset actions)
 - Context-scoped selectors (`.settings-panel button`, `.prompt-presets-panel button`, `.games-panel button`) apply layout overrides only — gradients come from utility classes
 
 ---
-
-## JavaScript Features
-
-### Status Polling
-- Polls `/status/generating` every 5 seconds
-- Updates button state based on response ("generating" vs "idle")
-
-### Button State Management
-- Ready: Shows "▶ Send", enabled
-- Thinking: Shows "■ Stop", disabled, green gradient
-- Uses MutationObserver to watch status changes
-
-### Error Notification System
-- Shows slide-down banner for LLM errors
-- Auto-hides after 5 seconds
-- Z-index above all content
-
-## Implementation
-
-### CSS Custom Properties
-
-The design tokens above are implemented as CSS custom properties (CSS variables) defined in a `:root` block.
-
-- **File**: `assets/styles.css`
-- **Approach**: All tokens are defined in the `:root` pseudo-class for global scope
-- **Usage**: Reference via `var(--token-name)` throughout stylesheets
 
 ### Responsive Breakpoints
 
@@ -370,10 +356,3 @@ Media queries handle responsive behavior:
 |-----------|-------|-------------|
 | Tablet | ≤ 768px | Stack sidebar below story log, sidebar 100% width |
 | Mobile | ≤ 480px | Wrap header elements, stack action area vertically |
-
-- **Mobile-first**: Base styles target smallest screens, `@media (max-width: ...)` adds larger layouts
-- **Flexibility**: CSS variables enable theme changes without modifying component styles
-
-### Reference Implementation
-
-See `assets/styles.css` for the `:root` token definitions, button utility classes (`.btn-primary`, `.btn-cyan`, `.btn-danger`), and component styles. See `assets/worlds.css` for worlds-specific layout overrides.

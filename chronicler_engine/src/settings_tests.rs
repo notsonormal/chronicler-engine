@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 use crate::domain::model::llm_backend::LlmBackendType;
-use crate::domain::model::settings::{AppSettings, Connection};
+use crate::domain::model::settings::{AppSettings, LlmProviderConfig};
 use crate::settings::{get_settings_path, load_settings};
 
 static SETTINGS_DB_LOCK: Mutex<()> = Mutex::new(());
@@ -34,7 +34,11 @@ fn test_load_settings_valid_file() {
         let storage = crate::adapters::driven::storage::Storage::new_sqlite(pool, 1);
 
         let custom = AppSettings {
-            connections: vec![Connection::new("test", "Test", LlmBackendType::OpenRouter)],
+            connections: vec![LlmProviderConfig::new(
+                "test",
+                "Test",
+                LlmBackendType::OpenRouter,
+            )],
             narration_connection_id: "test".into(),
             quantifier_connection_id: "test".into(),
             response_length: "flexible".into(),
@@ -55,7 +59,7 @@ fn test_save_settings_roundtrip() {
         let storage = crate::adapters::driven::storage::Storage::new_sqlite(pool, 1);
 
         let settings = AppSettings {
-            connections: vec![Connection {
+            connections: vec![LlmProviderConfig {
                 id: "conn-1".into(),
                 name: "Conn 1".into(),
                 provider: LlmBackendType::OpenRouter,
@@ -81,7 +85,7 @@ fn test_save_settings_roundtrip() {
 
 #[test]
 fn test_connection_resolve_api_key() {
-    let conn = Connection {
+    let conn = LlmProviderConfig {
         id: "test".into(),
         name: "Test".into(),
         provider: LlmBackendType::OpenRouter,
@@ -94,7 +98,7 @@ fn test_connection_resolve_api_key() {
     };
     assert_eq!(conn.resolve_api_key(), Some("direct-key".into()));
 
-    let conn_no_key = Connection {
+    let conn_no_key = LlmProviderConfig {
         api_key: None,
         ..conn
     };
@@ -110,7 +114,7 @@ fn test_connection_resolve_api_key() {
 
 #[test]
 fn test_connection_resolve_base_url() {
-    let conn = Connection {
+    let conn = LlmProviderConfig {
         id: "test".into(),
         name: "Test".into(),
         provider: LlmBackendType::Ollama,
@@ -123,7 +127,7 @@ fn test_connection_resolve_base_url() {
     };
     assert_eq!(conn.resolve_base_url(), "http://custom:11434");
 
-    let conn_default = Connection {
+    let conn_default = LlmProviderConfig {
         base_url: None,
         ..conn
     };
@@ -133,26 +137,26 @@ fn test_connection_resolve_base_url() {
 #[test]
 fn test_connection_resolve_max_context_tokens_defaults() {
     assert_eq!(
-        Connection::new("t", "T", LlmBackendType::Ollama).resolve_max_context_tokens(),
+        LlmProviderConfig::new("t", "T", LlmBackendType::Ollama).resolve_max_context_tokens(),
         8192
     );
     assert_eq!(
-        Connection::new("t", "T", LlmBackendType::OpenRouter).resolve_max_context_tokens(),
+        LlmProviderConfig::new("t", "T", LlmBackendType::OpenRouter).resolve_max_context_tokens(),
         32768
     );
     assert_eq!(
-        Connection::new("t", "T", LlmBackendType::DeepSeek).resolve_max_context_tokens(),
+        LlmProviderConfig::new("t", "T", LlmBackendType::DeepSeek).resolve_max_context_tokens(),
         32768
     );
     assert_eq!(
-        Connection::new("t", "T", LlmBackendType::Mock).resolve_max_context_tokens(),
+        LlmProviderConfig::new("t", "T", LlmBackendType::Mock).resolve_max_context_tokens(),
         4096
     );
 }
 
 #[test]
 fn test_connection_resolve_max_context_tokens_override() {
-    let mut conn = Connection::new("t", "T", LlmBackendType::Ollama);
+    let mut conn = LlmProviderConfig::new("t", "T", LlmBackendType::Ollama);
     conn.max_context_tokens = Some(16384);
     assert_eq!(conn.resolve_max_context_tokens(), 16384);
 

@@ -1,6 +1,6 @@
 use crate::domain::model::{
     agent::{AgentConfig, BackendSelector, ExecutionPhase},
-    settings::{AppSettings, Connection, TextCheckMode, TextCheckSettings},
+    settings::{AppSettings, LlmProviderConfig, TextCheckMode, TextCheckSettings},
 };
 use crate::adapters::driven::storage::backend::{Storage, TestOverride};
 use crate::adapters::driven::storage::db::DbPool;
@@ -44,7 +44,7 @@ fn test_save_then_get_settings_roundtrip() {
     let storage = Storage::new_sqlite(pool, 1);
 
     let custom = AppSettings {
-        connections: vec![Connection::new(
+        connections: vec![LlmProviderConfig::new(
             "test",
             "Test",
             crate::domain::model::llm_backend::LlmBackendType::OpenRouter,
@@ -111,7 +111,7 @@ fn test_get_settings_deserializes_connections_json() {
     let pool = DbPool::new(":memory:").unwrap();
     let storage = Storage::new_sqlite(pool, 1);
 
-    let conn = Connection {
+    let conn = LlmProviderConfig {
         id: "conn-1".into(),
         name: "Conn 1".into(),
         provider: crate::domain::model::llm_backend::LlmBackendType::Ollama,

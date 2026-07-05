@@ -12,7 +12,7 @@ For background on SillyTavern's original system, see [`reference/sillytavern_pro
 
 The engine follows a **Marinara-Engine-inspired pattern**:
 
-- **Instructions are XML-sectioned** — The system prompt contains behavioral instructions (`<role>`, `<instructions>`, `<global_rules>`). Prose and structural constraints (`<writing_style>`, `<output_format>`) are appended after conversation history in the user message to maximize recency bias. Two dynamic sections (`<global_rules>`, response length) are injected at assembly time.
+- **Instructions are XML-sectioned** — The system prompt contains behavioral instructions (`<role>`, `<instructions>`, `<global_rules>`). Prose and structural constraints (`<writing_style>`, `<output_format>`) are appended after conversation history in the user message, where LLMs weight them most heavily due to recency bias. Two dynamic sections (`<global_rules>`, response length) are injected at assembly time.
 - **Data is XML-wrapped** — External context (`<GameState>`, `<KnownNpcs>`, `<ConversationHistory>`, etc.) uses XML tags because it is *data*, not instructions.
 - **Why sections?** Labeled content containers let users edit individual prompt aspects (role, rules, style, format) without rewriting the entire prompt. The imperative text inside each section remains plain.
 - **Why not self-referential tags?** Tags like `<SystemPrompt>` or `<Role>` can trigger reasoning models (e.g., Gemma 4) to enter meta-analysis mode. The section tags (`<role>`, `<instructions>`) are content labels, not objects of analysis. See ADR-004 v4 for the full evolution.
@@ -24,7 +24,7 @@ The engine follows a **Marinara-Engine-inspired pattern**:
 
 ## The 8-Layer Prompt System
 
-> This section is the **authoritative source** for prompt layer definitions, token budget constants, and system/user separation. Other docs reference this section rather than duplicating it.
+
 
 The Chronicler Engine implements an 8-layer prompt structure (layers 0–7) mapped from SillyTavern's Prompt Manager:
 
@@ -46,7 +46,6 @@ The Chronicler Engine implements an 8-layer prompt structure (layers 0–7) mapp
 - **Role**: System
 - **Position**: Absolute (top)
 - **Content**: Assembled XML sections from the active preset — role, instructions, global_rules (from `world.json`). Writing style and output format are split out and placed after conversation history (see Post-History layer).
-- **Renders**: `build_system_prompt()` in `assembler.rs`
 - **Format**: XML-wrapped sections (see example below)
 - **Example**:
 
@@ -104,7 +103,7 @@ The Chronicler Engine implements an 8-layer prompt structure (layers 0–7) mapp
 - **Trigger**: Keyword matching in conversation
 - **Content**: World lore, setting facts, background information
 - **Format**: XML-wrapped (`<WorldLore>... </WorldLore>`)
-- **Implementation**: Renders `world.name` and `world.description` only. `global_rules` were previously duplicated here but have been moved exclusively to Layer 0 (System Prompt) to reduce token waste.
+- **Implementation**: Renders `world.name` and `world.description` only. `global_rules` live in Layer 0 (System Prompt) to reduce token waste.
 
 ### Layer 5: Chat History
 
@@ -119,7 +118,7 @@ The Chronicler Engine implements an 8-layer prompt structure (layers 0–7) mapp
 - **Position**: After `<ConversationHistory>`, before `<PlayerInput>`
 - **Content**: `<writing_style>` and `<output_format>` sections from the active preset
 - **Why here?** LLMs exhibit strong recency bias. Placing prose constraints and structural rules at the end of the context window — after all story data but immediately before the generation point — makes them significantly more effective than burying them at the top of the prompt in the system message. This matches Marinara Engine's proven prompt architecture.
-- **Assembly**: `build_post_history_prompt()` in `assembler.rs` assembles these sections directly from the preset — no string splitting or delimiter transport is required.
+- **Assembly**: Assembled directly from the active preset — no string splitting or delimiter transport is required.
 
 ### Layer 7: User Input
 
@@ -149,7 +148,7 @@ This separation ensures that reasoning models receive clear imperative instructi
 
 ## Response Length Control
 
-Response length guidance is appended inside the `<output_format>` section by `build_post_history_prompt()` at assembly time:
+Response length guidance is appended inside the `<output_format>` section at assembly time:
 
 ```
 Response Length:
@@ -160,7 +159,7 @@ plot developments, build content (above 150 words), but allow the player to reac
 
 - **Source**: `AppSettings.response_length` (persisted in `settings.json`)
 - **Default**: Flexible scene-adaptive guidance
-- **Injection point**: Appended inside `<output_format>` section content by `build_post_history_prompt()`
+- **Injection point**: Appended inside `<output_format>` section content at assembly time
 
 ## Context Templates
 
@@ -219,43 +218,7 @@ Uses the same structure as SillyTavern character cards (Jailbreak format):
 
 ### Quantifier Prompt (Separate)
 
-The engine also uses a **quantifier prompt** — a separate secondary LLM call that runs *after* narration to analyze the scene. It determines which NPCs are present and whether the player moved. This is **not** part of the 8-layer narrative prompt stack.
-
-- See [`reference/quantifier_prompt.md`](../reference/quantifier_prompt.md) for the full prompt text
-- Rendered by: `QuantifierPromptBuilder` in `src/application/agents/quantifier/prompt.rs`
-- Uses a separate model connection from the main narration LLM
-- The quantifier also follows the XML-sectioned instructions + XML-wrapped data pattern
-
-## Implementation
-
-### Key Files
-
-- `src/application/narrative_prompt/assembler.rs` — `LayeredPromptAssembler` with 8-layer construction, context fitting, and budget management
-- `src/application/narrative_prompt/types.rs` — `PromptContext`, `NpcContext`, `PromptLayer`
-- `src/adapters/driven/llm/mod.rs` — LLM backend module (pure transport, no prompt assembly)
-- `src/domain/model/state.rs` — `GameState` provides context data
-- `src/domain/model/character.rs` — `NpcCard`, `PlayerCard` structures
-
-### Code Example
-
-```rust
-let assembled = assembler.assemble(&context, &preset, &global_rules, Some(response_length))?;
-// assembled.system_prompt — Layer 0 (sent as system message)
-// assembled.user_prompt   — Layers 1-7 (sent as user message)
-// assembled.max_tokens    — dynamically capped to fit context window
-```
-
-## Differences from SillyTavern
-
-| Feature | SillyTavern | Chronicler Engine |
-|---------|-------------|-------------------|
-| API | Chat Completion | OpenRouter/DeepSeek/Ollama |
-| Context | Characters + Users | Game State |
-| History | Full chat | narrative history (messages) |
-| Memory | Vector RAG | Keyword triggers only |
-| UI | Web GUI | None (server) |
-| Prompt style | XML-wrapped instructions | XML-sectioned instructions + XML data |
-| Context fitting | Manual | Automatic per connection |
+The engine also uses a **quantifier prompt** — a separate secondary LLM call that runs *after* narration to analyze the scene. It determines which NPCs are present and whether the player moved. This is **not** part of the 8-layer narrative prompt stack. See [`reference/quantifier_prompt.md`](../reference/quantifier_prompt.md) for the full prompt text.
 
 ## References
 

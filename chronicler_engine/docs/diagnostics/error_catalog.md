@@ -11,7 +11,7 @@ LLM subsystem errors. These originate in `src/adapters/driven/llm/transport/clie
 ### `LlmFailure::EmptyResponse`
 - **First Check:** Backend logs for `[LLM][req:N] Extracted content via:` — if this line is absent, the model returned an empty content/reasoning field.
 - **Common Causes:** Model returned empty content field; prompt too long and truncated; Ollama model unloaded mid-request.
-- **Related Invariants:** See `docs/architecture/invariants.md`
+- **Related Invariants:** See `docs/architecture/guardrails.md` §5 Runtime Invariants
 
 ### `LlmFailure::Http { status, body }`
 - **First Check:** The `status` code. `401` = API key issue; `429` = rate limited; `5xx` = provider outage.
@@ -47,7 +47,7 @@ Narrative generation errors. These originate in the prompt builder and backend n
 ### `NarrativeFailure::Generation { stage, reason }`
 - **First Check:** Backend-specific logs. Mock backend uses `stage: "mock"`.
 - **Common Causes:** LLM call failed after prompt built successfully; backend misconfiguration (e.g. DeepSeek not implemented).
-- **Related Invariants:** See `docs/architecture/invariants.md`
+- **Related Invariants:** See `docs/architecture/guardrails.md` §5 Runtime Invariants
 
 ---
 
@@ -62,7 +62,7 @@ Logic invariant violated. These should never happen in normal operation.
   - `No AI response to retry` — `retry_last_response` called when there is no AI narration to replace.
   - `AI response must be after input` — history ordering invariant violated.
   - `AI response not found` — index mismatch in `replace_last_ai_response`.
-- **Related Invariants:** `docs/architecture/invariants.md` section: State Mutation Order
+- **Related Invariants:** `docs/architecture/guardrails.md` §5 Runtime Invariants (INV-002)
 
 ---
 

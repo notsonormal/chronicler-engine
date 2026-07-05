@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use chronicler_engine::bootstrap::test_api::ArrivalTaskContext;
+use chronicler_engine::application::arrival_service::ArrivalTaskContext;
 use chronicler_engine::domain::model::character::NpcCard;
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::domain::model::state::message_types::MessageType;

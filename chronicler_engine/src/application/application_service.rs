@@ -6,13 +6,14 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
 use serde::Serialize;
 
 use crate::application::action_pipeline::execute_action_impl;
 use crate::application::context::{GameServiceContext, load_or_fresh};
 use crate::application::game_service::GameService;
 
-use crate::bootstrap::build_fresh_initial_state;
 use crate::error::EngineError;
 use crate::domain::model::game::{Game, generate_game_name};
 
@@ -73,6 +74,39 @@ impl std::error::Error for ApplicationError {
 impl From<EngineError> for ApplicationError {
     fn from(e: EngineError) -> Self {
         Self::Engine(e)
+    }
+}
+
+fn html_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#x27;")
+}
+
+fn error_div(message: &str) -> String {
+    format!(
+        "<div class=\"error-message\">Error: {}</div>",
+        html_escape(message)
+    )
+}
+
+impl IntoResponse for ApplicationError {
+    fn into_response(self) -> Response {
+        let (status, body) = match &self {
+            Self::Validation(msg) => (StatusCode::BAD_REQUEST, error_div(msg)),
+            Self::ConcurrentGeneration => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                error_div("Generation in progress, please wait..."),
+            ),
+            Self::ShuttingDown => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                error_div("Server is shutting down"),
+            ),
+            Self::Engine(e) => (StatusCode::INTERNAL_SERVER_ERROR, error_div(&e.to_string())),
+        };
+        (status, body).into_response()
     }
 }
 pub enum ProcessActionResult {
@@ -331,7 +365,7 @@ impl DefaultApplicationService {
     fn persist_initial_state_with_swipes(
         ctx: &GameServiceContext,
     ) -> Result<u64, ApplicationError> {
-        let mut initial_state = build_fresh_initial_state(ctx);
+        let mut initial_state = ctx.build_fresh_initial_state();
         let snapshot = GameStateSnapshot::from_game_state(&initial_state);
         let snapshot_id = ctx.storage.save_snapshot(&snapshot)?;
 

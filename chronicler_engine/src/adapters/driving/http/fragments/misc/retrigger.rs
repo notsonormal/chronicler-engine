@@ -3,18 +3,17 @@
 
 use axum::{body::Body, extract::State, response::Response};
 
+use crate::application::application_service::ApplicationError;
 use crate::application::message_editing;
 use crate::adapters::driving::http::AppState;
+use crate::error::EngineError;
 
-use crate::adapters::driving::http::fragments::renderers::{app_err_to_response, ctx_or_error, ok};
+use crate::adapters::driving::http::fragments::renderers::{ctx_or_error, ok};
 
-pub async fn retrigger_handler(State(state): State<AppState>) -> Response<Body> {
-    let ctx = match ctx_or_error(&state) {
-        Ok(ctx) => ctx,
-        Err(e) => return *e,
-    };
-    match message_editing::retrigger(state.application_service.game_service(), ctx) {
-        Ok(()) => ok("<span class=\"status ready\">Retriggering...</span>"),
-        Err(e) => app_err_to_response(e),
-    }
+pub async fn retrigger_handler(
+    State(state): State<AppState>,
+) -> Result<Response<Body>, ApplicationError> {
+    let ctx = ctx_or_error(&state).map_err(|e| ApplicationError::Engine(EngineError::Render(e)))?;
+    message_editing::retrigger(state.application_service.game_service(), ctx)?;
+    Ok(ok("<span class=\"status ready\">Retriggering...</span>"))
 }

@@ -1,6 +1,6 @@
 # Reference: Quantifier Prompt
 
-> **Context**: The quantifier prompt is a **separate secondary prompt** used for post-narration scene analysis. It is **not** part of the 7-layer narrative prompt system. For the main narrative prompt architecture, see [`system/prompt_system.md`](../system/prompt_system.md).
+> **Context**: The quantifier prompt is a **separate secondary prompt** used for post-narration scene analysis. It is **not** part of the 8-layer narrative prompt system. For the main narrative prompt architecture, see [`system/prompt_system.md`](../system/prompt_system.md).
 
 The quantifier prompt is rendered by `QuantifierPromptBuilder` in `src/application/agents/quantifier/prompt.rs`. It uses a separate LLM model connection to determine which NPCs are present in the current room and whether the player is moving.
 
@@ -136,7 +136,7 @@ The active preset is stored in `AppSettings.active_quantifier_prompt_preset_id`.
 
 Default presets (shipped as `data/prompt_presets/quantifier/default.json`) are protected and cannot be edited or deleted. To modify a default, create a copy and activate it.
 
-## Sources
+## Code references
 
 - System prompt default: `data/prompt_presets/quantifier/default.json`
 - System prompt builder: `src/application/agents/quantifier/prompt.rs:build_system_prompt()` (returns `quantifier_prompt_override` when set)

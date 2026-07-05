@@ -1,7 +1,7 @@
 # Plan: Hexagonal Architecture Reorganization
 
 **Date:** 2026-06-28
-**Status:** Phase 1 complete (2026-06-29); Phase 2 complete (2026-06-30); Phase 3 pending
+**Status:** Phase 1 complete (2026-06-29); Phase 2 complete (2026-06-30); Phase 3 complete (2026-07-04)
 **Scope:** `chronicler_engine/`
 
 ## Related
@@ -503,7 +503,7 @@ Storage has one impl (`Storage` struct with `Backend` enum for SQLite/InMemory/T
 - `LlmBackend` trait renamed to `LlmProvider`, only transport methods remain
 - `LlmCallRecorder` orchestrator exists, owns forensics + sanitization
 - `TextCheckService` orchestrator exists, `HarperTextChecker` is the only `TextChecker` impl
-- All arch-lint temporary exemptions from Phase 1.7 either removed (2.1, 2.3, 2.4) or formalized as intentional (2.5) — **EXCEPT**: arch-lint enforcement itself stays deferred (see Deviation 4 below; rules remain in `hexagonal-deferred-arch-lint-rules.md`)
+- All arch-lint temporary exemptions from Phase 1.7 either removed (2.1, 2.3, 2.4) or formalized as intentional (2.5) — **EXCEPT**: arch-lint enforcement itself stays deferred (see Deviation 4 below; rules remain in `../../plans/hexagonal-deferred-arch-lint-rules.md`)
 - All tests green (1190 passed + 2 skipped); manual LLM smoke test + text check UI verification passes
 
 **Acceptance status (2026-06-30):** All grep criteria met. arch-lint rule enforcement deferred (Deviation 4). Test count dropped 1207 → 1190 because Phase 2.4 deleted `game_service_tests.rs` (tested deprecated `ActionPipelineBackend` API). Manual LLM smoke test + text check UI verification NOT run (deferred to integration validation).
@@ -564,7 +564,7 @@ Keep them where they are; rename for clarity:
 - Update `docs/architecture/system.md` with hexagonal section, port inventory, dependency invariant
 - Update `docs/README.md` auto-index
 - Update `chronicler_engine/AGENTS.md` STRUCTURE block + WHERE TO LOOK table
-- File plan as `docs/plans/archived/hexagonal-reorganization-plan.md` after completion; CHANGELOG entry
+- File plan as `docs/old-docs/archived-plans/hexagonal-reorganization-plan.md` after completion; CHANGELOG entry
 
 ### Phase 3 acceptance
 
@@ -766,7 +766,7 @@ Phase 2 is complete. Five sub-phases landed on branch `hexagon-phase2` (6 commit
 
 **Actual outcome:** arch-lint deny rules themselves stay deferred — same as Phase 1.7 deviation. Substituted with grep-based acceptance checks + `// arch-lint: storage-direct` markers + ADR-027.
 
-**Rationale for deviation:** arch-lint 0.4.3 still lacks TOML-level scoped file exemptions (Phase 1.7 deviation persisted — see `hexagonal-deferred-arch-lint-rules.md`). Enabling the `application → adapters/driven` rule without scoped exemptions would surface 3 intentional Storage-direct sites (`context.rs`, `application_service.rs`, `game_service.rs`) as violations. The marker comments + ADR formalize intent; the rule activation waits for arch-lint to support scoped exemptions.
+**Rationale for deviation:** arch-lint 0.4.3 still lacks TOML-level scoped file exemptions (Phase 1.7 deviation persisted — see `../../plans/hexagonal-deferred-arch-lint-rules.md`). Enabling the `application → adapters/driven` rule without scoped exemptions would surface 3 intentional Storage-direct sites (`context.rs`, `application_service.rs`, `game_service.rs`) as violations. The marker comments + ADR formalize intent; the rule activation waits for arch-lint to support scoped exemptions.
 
 **User decision:** Option B — defer enforcement, use grep-based acceptance. Same philosophy as Phase 1.7 Deviation 2.
 
@@ -794,7 +794,7 @@ Phase 2 is complete. Five sub-phases landed on branch `hexagon-phase2` (6 commit
 
 ## Phase 2 thermonuclear-review deviations (recorded 2026-07-02)
 
-External review of `hexagon-phase2` returned "Not approved" with 14 findings. Fixes landed in 11 commits (`618faf8` → `a45e0b9`) under `docs/plans/phase2-thermonuclear-review-fixes.md`. Two deviations from the original Phase 2 plan introduced + recorded:
+External review of `hexagon-phase2` returned "Not approved" with 14 findings. Fixes landed in 11 commits (`618faf8` → `a45e0b9`) under `docs/old-docs/archived-plans/phase2-thermonuclear-review-fixes.md`. Two deviations from the original Phase 2 plan introduced + recorded:
 
 ### Deviation T1 — Fix 7 (Plan 2.3 amendment): `text_check_service` stays on `AppState`, not routed through `ApplicationService`
 
@@ -822,3 +822,35 @@ External review of `hexagon-phase2` returned "Not approved" with 14 findings. Fi
 
 - All other fixes (1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 13) landed as specified.
 - Deviation 1 above (MockBackend storage) fully closed — not a deviation anymore in practice.
+
+## Phase 3 deviations (recorded 2026-07-04)
+
+Phase 3 is complete. Plan was doc-only polish + ADR finalization. Two deviations from the original Phase 3 plan:
+
+### Deviation 1 — arch-lint enforcement stays deferred
+
+**Original plan (Phase 3 acceptance criterion #2):** "arch-lint fully enforces hexagonal rules with zero undocumented exemptions (every exemption has a `rationale`)."
+
+**Actual outcome:** arch-lint deny rules themselves stay deferred — same as Phase 1.7 Deviation 2 + Phase 2 Deviation 4. arch-lint 0.4.3 lacks TOML-level scoped file exemptions; enabling the `application → adapters/driven` rule would surface the 5 intentional Storage-direct sites as violations.
+
+**Rationale for deviation:** Enabling enforcement requires either upgrading arch-lint or accepting broad file-level exempts without scoped support. Both out of Phase 3 scope. Substituted with: grep-based acceptance checks + `// arch-lint: storage-direct` markers + ADR-027 as authority.
+
+**User decision:** Option B — stay deferred, document as Phase 3 deviation. Same philosophy as Phase 1.7 Deviation 2 + Phase 2 Deviation 4.
+
+### Deviation 2 — Phase 3.3 settings consolidation formally deferred
+
+**Original plan (Phase 3.3):** Rename `src/adapters/driven/storage/models/settings.rs` → `settings_row.rs` to disambiguate from 3 other same-named `settings.rs` files.
+
+**Actual outcome:** Rename formally **deferred indefinitely**. No code change. ADR-027 §3.3 documents the deferral with rationale.
+
+**Rationale for deviation:** (a) Layer paths already disambiguate the 4 same-basename files; (b) `models/` directory convention is plain table-name basename + `Db*` struct name — a `_row` suffix for one file would break the convention; (c) Phase 1 move-only spirit honored; churn rejected for marginal grep clarity. `DbSettings` struct name preserved.
+
+**User decision:** Option B — formally defer, document in ADR-027, add to plan as Phase 3 Deviation 2.
+
+### What did NOT deviate
+
+- **Phase 3.1 (`engine/` subfolder):** kept as-is per recommended default. ADR-027 §3.1 records decision.
+- **Phase 3.2 (`DebugPort`):** rejected per recommended default. ADR-027 §3.2 records decision. `http/debug.rs` Storage-direct exemption formalized in `guardrails.md`.
+- **Phase 3.4 (ADR + final docs):** ADR-027 §3.x subsections appended (under `## Decision`) instead of new top-level sections; this preserves `validate_adrs.py` compliance. Storage exemption count reconciled to 5 across `system.md` + `guardrails.md` to match ADR-027.
+- **Plan archived:** `git mv docs/plans/hexagonal-reorganization-plan.md docs/old-docs/archived-plans/hexagonal-reorganization-plan.md`.
+- **No `src/` touches.** Build is a no-op verification.

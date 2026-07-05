@@ -37,10 +37,10 @@ After main narration, the engine evaluates NPC triggers and may generate a conti
 
 ## LLM Prompts & Guidance
 The Game Master must:
-- Narrate outcomes immersive, concisely, and in literary fiction style.
+- Narrate outcomes immersively and concisely, in literary fiction style.
 - Voice NPCs that would logically react to the player's presence or actions.
 - Never act or speak on behalf of the player.
 - **Arrival Instruction**: "The player has just entered the room. Describe their arrival and the scene. If NPCs are present, describe their initial reaction or current activity."
 
 ## Boundaries
-The Game Master is **narrative only** in this spec. It does not mutate engine state (e.g., it cannot move items into inventory or change the player's room). State mutation via LLM function calling is deferred to a future specification.
+The Game Master is **narrative only** in this spec. It does not mutate engine state (e.g., it cannot move items into inventory or change the player's room). State mutation via LLM function calling is out of scope for this specification.

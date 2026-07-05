@@ -105,6 +105,9 @@ pub enum EngineError {
     #[error("Template error: {0}")]
     Template(String),
 
+    #[error("Render error: {0}")]
+    Render(String),
+
     #[error("Internal invariant violated: {0}")]
     Internal(#[source] InternalError),
 

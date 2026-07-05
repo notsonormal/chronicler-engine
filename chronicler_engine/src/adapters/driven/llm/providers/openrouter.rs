@@ -2,7 +2,7 @@
 //! OpenRouter LLM provider
 
 use crate::error::{EngineError, LlmFailure};
-use crate::domain::model::settings::Connection;
+use crate::domain::model::settings::LlmProviderConfig;
 use crate::adapters::driven::llm::transport::call_openrouter_with_model;
 
 use crate::application::ports::llm_provider::{LlmProvider, LlmCallResult, merge_single_user_message};
@@ -15,7 +15,7 @@ pub struct OpenRouterBackend {
 }
 
 impl OpenRouterBackend {
-    pub fn from_connection(connection: &Connection) -> Self {
+    pub fn from_config(connection: &LlmProviderConfig) -> Self {
         let api_key = connection.resolve_api_key().unwrap_or_default();
         Self {
             api_key,

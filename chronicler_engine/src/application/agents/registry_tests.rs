@@ -64,7 +64,9 @@ fn test_registry_from_configs_rejects_unknown_type() {
     }];
     let result = AgentRegistry::from_configs_with_storage(
         &configs,
-        None,
+        crate::test_support::make_test_recorder(Arc::new(
+            crate::adapters::driven::llm::providers::MockBackend::new(),
+        )),
         None,
         Arc::new(RwLock::new(AppSettings::default())),
     );
@@ -75,7 +77,9 @@ fn test_registry_from_configs_rejects_unknown_type() {
 fn test_registry_from_configs_empty_uses_defaults() {
     let registry = AgentRegistry::from_configs_with_storage(
         &[],
-        None,
+        crate::test_support::make_test_recorder(Arc::new(
+            crate::adapters::driven::llm::providers::MockBackend::new(),
+        )),
         None,
         Arc::new(RwLock::new(AppSettings::default())),
     )
@@ -140,7 +144,9 @@ fn test_registry_from_configs_disabled_skipped() {
     }];
     let registry = AgentRegistry::from_configs_with_storage(
         &configs,
-        None,
+        crate::test_support::make_test_recorder(Arc::new(
+            crate::adapters::driven::llm::providers::MockBackend::new(),
+        )),
         None,
         Arc::new(RwLock::new(AppSettings::default())),
     )

@@ -14,12 +14,12 @@
 
 `model/message_history.rs` exposes 6 methods that bypass the encapsulated MAX_MESSAGES cap:
 
-- `pub fn replace(&mut self, messages: Vec<Message>)` — line 101 (bypasses MAX_MESSAGES)
-- `pub fn retain(&mut self, f)` — line 89
-- `pub fn iter_mut(&mut self)` — line 85
-- `pub fn as_slice(&self)` — line 97
-- `pub fn clear(&mut self)` — line 93
-- `pub fn from_messages(messages: Vec<Message>) -> Self` — line 23, bypasses MAX_MESSAGES cap (N15)
+- `pub fn replace(&mut self, messages: Vec<Message>)` — bypasses MAX_MESSAGES
+- `pub fn retain(&mut self, f)`
+- `pub fn iter_mut(&mut self)`
+- `pub fn as_slice(&self)`
+- `pub fn clear(&mut self)`
+- `pub fn from_messages(messages: Vec<Message>) -> Self` — bypasses MAX_MESSAGES cap (N15)
 
 The struct promises encapsulation ("Callers cannot bypass rules with direct `.push()`") but multiple bypasses remain. Only `append` enforces the 1000 cap.
 

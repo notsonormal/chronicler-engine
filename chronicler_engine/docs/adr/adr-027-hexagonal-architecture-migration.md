@@ -2,22 +2,19 @@
 
 **Date:** 2026-06-30
 **Status:** Accepted
-**Drivers:** Formalize Ports & Adapters architecture; document rejected/accepted port decisions; establish "phantom port" heuristic
 
 ## Context
 
-Prior to this decision, Chronicler Engine was **aspirationally hexagonal but only ~60% realized**:
+Chronicler Engine was aspirationally hexagonal but only ~60% realized:
 
-- LLM providers already had a proper port (`LlmBackend` trait) with 4 impls (OpenRouter, DeepSeek, Ollama, Mock).
-- Storage had **no port abstraction** — `GameServiceContext` held `Arc<Storage>` (concrete struct with `Backend` enum for SQLite/InMemory/Test).
+- LLM providers had a proper port (`LlmProvider`) with 4 impls (OpenRouter, DeepSeek, Ollama, Mock).
+- Storage had no port abstraction — `GameServiceContext` held `Arc<Storage>` (concrete struct with `Backend` enum for SQLite/InMemory/Test).
 - `narrative/` bundled 4 unrelated concerns (LLM HTTP, prompt assembly, agents, text_check).
-- `text_check/` was homeless in pure-layered taxonomy — it's an input classifier consuming an external NLP library.
+- `text_check/` was homeless in pure-layered taxonomy — input classifier consuming an external NLP library.
 - Engine↔application had no port (direct function calls).
-- `LlmBackend` trait was **half-adapter/half-application**: default impls (`save_message`, `wrap_and_save`, `postprocess_response_text`) reached into `Storage` and sanitization logic.
+- `LlmProvider` trait was half-adapter/half-application: default impls reached into `Storage` and sanitization logic.
 
-Pure-layered was rejected because the LLM port *already exists*; standardizing on pure-layered would require either dropping the trait (regression) or pretending it isn't a port (mixed architecture — what we want to avoid).
-
-Hexagonal is the natural fit. Chronicler's existing LLM port + DI constructor (`DefaultGameService::with_backends`) are already hexagonal patterns. This ADR formalizes the rest of the codebase around them.
+Hexagonal formalizes what Chronicler already does: the LLM port + DI constructor (`GameService::with_storage`) are already hexagonal patterns. This ADR formalizes the codebase around them.
 
 ## Decision
 
@@ -35,142 +32,98 @@ src/
 ```
 
 **Dependency invariant:**
-- Core (`domain/`, `application/`) depends on port traits only
-- Adapters implement port traits
-- Only `bootstrap/` imports both port traits and adapter impls
+- Core (`domain/`, `application/`) depends on port traits only.
+- Adapters implement port traits.
+- Only `bootstrap/` imports both port traits and adapter impls.
 
 ### Accepted Port Traits
 
 | Port | Rationale | Impl Count |
 |------|-----------|------------|
 | `LlmProvider` | 4 impls: OpenRouter, DeepSeek, Ollama, Mock. Clear substitution seam. | 4 |
-| `LlmMessageRepository` | Consumer (`LlmCallRecorder`) is in core; producer (`Storage`) is driven adapter. Port justified by **consumer location**, not impl count. See "Phantom Port Heuristic" below. | 1 |
+| `LlmMessageRepository` | Consumer (`LlmCallRecorder`) is in core; producer (`Storage`) is driven adapter. Justified by consumer location. | 1 |
 | `TextChecker` | Consumer (`TextCheckService`) is in core; producer (`HarperTextChecker`) is driven adapter. Single impl justified by consumer location. | 1 |
 
 ### Rejected Port Traits
 
 | Port | Rationale |
 |------|-----------|
-| `StateRepository` | Single-impl (`Storage` struct). Substitution happens via `Backend` enum, not trait swapping. YAGNI. |
-| `DebugPort` | Phantom — single debug consumer + single debug surface. |
-| `ActionPipelineBackend` | Collapsed into `ActionPipeline` direct fields (Phase 2.4). God-trait bundled LLM, agents, storage — all now owned by the pipeline directly. |
+| `StateRepository` | Single-impl `Storage` struct. Substitution happens via `Backend` enum (SQLite/InMemory/Test), not trait swapping. YAGNI. |
+| `DebugPort` | Phantom — single debug consumer (`src/adapters/driving/http/debug.rs`) + single debug surface. The existing debug endpoint reaches into `ApplicationService` directly as an intentional guardrail exemption. |
+| `ActionPipelineBackend` | Collapsed into `ActionPipeline` direct fields. God-trait bundled LLM, agents, storage — all now owned by the pipeline directly. |
 
 ### Phantom Port Heuristic
 
-**One impl alone does NOT make a port phantom.**
+**One impl alone does NOT make a port phantom.** A port is phantom (unjustified) when:
 
-A port is **phantom** (unjustified) when:
 - Single impl **AND**
-- Consumer is **not** in core **OR** producer is **not** an adapter
+- Consumer is **not** in core **OR** producer is **not** an adapter.
 
-A port is **justified** (even with single impl) when:
+A port is justified (even with one impl) when:
 - Single impl **BUT**
-- Consumer is in core **AND** producer is a driven adapter
+- Consumer is in core **AND** producer is a driven adapter.
 
-Example: `LlmMessageRepository` has one impl (`Storage`), but the consumer (`LlmCallRecorder`) is in `application/` and the producer (`Storage`) is in `adapters/driven/`. Without the port, core would import the adapter — violating the dependency invariant.
+Without the port, core would import the adapter — violating the dependency invariant.
 
 ### Storage Direct Access Exemption
 
-Storage (`Storage` struct with `Backend` enum) is accessed directly by the application layer in exactly 5 files:
+Storage (`Storage` struct with `Backend` enum) is accessed directly by the application layer in 3 files forming the **application persistence boundary**:
 
 1. `src/application/context.rs`
 2. `src/application/application_service.rs`
 3. `src/application/game_service.rs`
-4. `src/application/agents/registry.rs`
-5. `src/application/agents/quantifier/agent.rs`
 
-Files 1–3 form the **application persistence boundary** and are marked with `// arch-lint: storage-direct — intentional, see ADR-027` comments.
+All three are marked with `// arch-lint: storage-direct — intentional, see ADR-027`.
 
-Files 4–5 are an additional **deferred exemption** documented here. They construct an `LlmCallRecorder` via `bootstrap::llm_factory::get_llm_recorder_for(connection, Arc<Storage>)` inside `QuantifierAgent::from_config_with_storage`. Refactoring the `Arc<Storage>` argument out of that bootstrap signature cascades into the T2 reliability plan (in-process LLM recorder wiring). The cascade is T2-adjacent and is treated as a deferred follow-up, not a Phase 2 leak. Both files are marked with `// arch-lint: storage-direct — deferred to T2, see ADR-027`.
+This exemption is intentional, not a leak:
 
-This exemption is **intentional**, not a leak:
+- `Storage` is a concrete adapter with no port trait.
+- Substitution happens via the `Backend` enum (SQLite/InMemory/Test), not trait swapping.
+- Wrapping `Storage`'s ~40 methods in a `StateRepository` trait would be YAGNI (one impl, no real substitution seam).
+- The 3 exempted files form the application persistence boundary — no other `application/` file may import `Storage` directly.
 
-- `Storage` is a concrete adapter with no port trait
-- Substitution happens via the `Backend` enum (SQLite/InMemory/Test), not trait swapping
-- Wrapping `Storage`'s ~40 methods in a `StateRepository` trait would be YAGNI (one impl, no real substitution seam)
-- The 5 exempted files form the **application persistence boundary** — no other `application/` file may import `Storage` directly
+### `domain/engine/` Subfolder Kept
 
-### Deferred arch-lint Rules
+`src/domain/engine/` (7 pure-rule files) stays as-is. It calls `domain/model/` only, no I/O, no port needed at the `engine` ↔ `application` boundary (application calls engine functions directly). Flattening into `domain/` root was rejected as churn for no architectural gain — the subfolder communicates "types (`model/`) vs rules (`engine`)" at zero cost.
 
-`arch-lint.toml` deny rules for `application → adapters/driven` are **deferred** (arch-lint 0.4.3 lacks TOML-level scoped file exemptions). The 3 exempted files are documented via code comments instead.
+### `LlmProviderConfig` Stays in Domain
 
-Once arch-lint supports scoped file exemptions, add the rule:
+`LlmProviderConfig` (formerly `Connection`) is embedded as `Vec<LlmProviderConfig>` in `AppSettings` in `domain/model/settings.rs`. It stays in domain rather than moving to `application/ports/llm_provider.rs`: moving would force `AppSettings` to import `application::ports::` — violating the `model → application` arch-lint rule. The `api_key`, `base_url`, `provider`, and `max_context_tokens` fields ride along with the persisted `AppSettings` JSON contract. Same precedent as `LlmBackendType` staying in domain.
 
-```toml
-[[rules]]
-name = "application → adapters/driven"
-deny-scope-dep = ["application", "adapters/driven"]
-exempt-files = [
-  "src/application/context.rs",
-  "src/application/application_service.rs",
-  "src/application/game_service.rs",
-  "src/application/agents/registry.rs",
-  "src/application/agents/quantifier/agent.rs",
-]
-rationale = "Storage direct access — see ADR-027"
-```
+### `Swipe::snapshot_id` Stays in Domain
 
-Deferred rules tracked separately in a live plan doc.
-
-## Alternatives Considered
-
-### Alternative A: Pure-Layered Architecture
-
-Adopt pure-layered (Domain → Application → Infrastructure) instead of hexagonal.
-
-**Rejected because:** the LLM port (`LlmBackend`/`LlmProvider`) already exists. Pure-layered would require either:
-- Dropping the trait entirely (regression — lose DI, test isolation)
-- Pretending it isn't a port (mixed architecture — undermines architectural clarity)
-
-Hexagonal formalizes what Chronicler already does.
-
-### Alternative B: Wrap Storage in `StateRepository` Trait
-
-Create a `StateRepository` trait wrapping all ~40 `Storage` methods.
-
-**Rejected because:**
-- Single impl — trait adds ceremony without benefit
-- Substitution already works via `Backend` enum (SQLite/InMemory/Test)
-- Per-aggregate module split (`backend/characters.rs`, `backend/games.rs`, etc.) provides interface segregation at the module level
-- YAGNI — no anticipated second impl
-
-### Alternative C: Reject ALL Single-Impl Ports
-
-Adopt a strict heuristic: "one impl = phantom port, reject all."
-
-**Rejected because:** this would reject `LlmMessageRepository` and `TextChecker`, both of which are justified by **consumer location**. The consumer (`LlmCallRecorder`, `TextCheckService`) is in the core; the producer is an adapter. Without the port, core would import the adapter — violating hexagonal dependency direction.
-
-The "one impl" heuristic is necessary but not sufficient — **location of consumer matters**.
+`Swipe::snapshot_id: Option<u64>` (DB-assigned FK into the `snapshots` table) stays on the domain entity in `src/domain/model/message.rs`. The original hexagonal review flagged it as a persistence concern leaked into domain and proposed a `Message` (domain) vs `MessageRow` (adapter DTO) split. Rejected as YAGNI: `Message::id`, `Message::sender`, and `MessageType` are equally persistence-assigned, so the split would force DTO duplication across the entire message aggregate — more complexity than it solves. The hexagonal principle is about dependency direction (domain must not depend on adapter types), and `Option<u64>` is a primitive — no direction violation. Application code legitimately reads `snapshot_id` at 6 sites (`context.rs`, `message_editing.rs`, `application_service.rs`, `action_pipeline/retry.rs`); moving it to the mapper only would force N+1 `storage.fetch_snapshot_id_for_swipe()` queries for zero architectural benefit. Same precedent as Deviations 1 (`LlmBackendType`) and 2 (`LlmProviderConfig`).
 
 ## Consequences
 
 ### Positive
 
-- ✅ **Architecture visible at file-tree level.** `ls src/` shows hexagonal structure immediately.
-- ✅ **Dependency direction enforced.** Core depends on ports; adapters implement ports; `bootstrap/` wires both.
-- ✅ **LLM, TextChecker ports enforced via dependency direction.** Adapters depend on port traits, application orchestration depends on port traits.
-- ✅ **Storage exemption is intentional, documented.** 3 files only, marked with comments, forward-referenced to this ADR.
-- ✅ **"Phantom port" heuristic is explicit.** Future port decisions have clear criteria.
+- ✅ Architecture visible at file-tree level. `ls src/` shows hexagonal structure immediately.
+- ✅ Dependency direction enforced. Core depends on ports; adapters implement ports; `bootstrap/` wires both.
+- ✅ LLM, TextChecker, Storage-direct-access exemptions documented and marked in code.
+- ✅ "Phantom port" heuristic is explicit. Future port decisions have clear criteria.
 
 ### Negative
 
-- ⚠️ **Storage direct access is a documented exception.** Not a pure hexagonal implementation. Mitigated by:
-  - Exactly 3 files — no creep
-  - Comments mark the exemption explicitly
-  - ADR documents the tradeoff
-- ⚠️ **arch-lint rules are deferred.** 1–4 pre-existing layer leaks (see `hexagonal-deferred-arch-lint-rules.md`) prevent immediate enforcement. Mitigated by:
-  - Comments in exempted files
-  - This ADR as the authority
-  - Phase 2 closes leaks; enforcement follows
+- ⚠️ Storage direct access is a documented exception, not a pure hexagonal implementation. Mitigated: exactly 3 files, marked with comments, ADR documents the tradeoff.
+- ⚠️ `LlmProviderConfig` infra fields (`api_key`, `base_url`, `provider`) remain in domain — rides along with persisted `AppSettings` JSON contract.
+- ⚠️ `Swipe::snapshot_id` DB FK remains on domain entity — YAGNI; full DTO split would force duplication across message aggregate.
 
 ### Trade-offs
 
-- **Folder renaming.** Phase 1 moved files to match hexagonal layout (`model/` → `domain/model/`, `server/` → `adapters/driving/http/`, `storage/` → `adapters/driven/storage/`, `narrative/` split).
-- **Port trait locations.** `LlmProvider`, `LlmMessageRepository`, `TextChecker` all in `src/application/ports/`.
+- Chose hexagonal over pure-layered to keep the existing LLM port rather than drop it or pretend it isn't a port (mixed architecture).
+- Chose concrete `Storage` + `Backend` enum over `StateRepository` trait — substitution seam already exists without trait ceremony.
+- Chose consumer-location heuristic over strict "one-impl = phantom" to keep `LlmMessageRepository` and `TextChecker` (justified by consumer location).
+- Chose `LlmProviderConfig` rename-in-place over full split — naming win achieved without schema migration cost.
 
 ## Related ADRs
 
-- ADR-012: LLM Call Logging and Forensics (motivation for `LlmMessageRepository`)
-- ADR-020: Unified Storage Struct (`Storage` concrete adapter)
-- ADR-022: PromptAssembler Trait Decoupling (port trait precedent)
-- ADR-026: Relocate Persona Binding from World to Game (preceding hexagon-phase2 work)
+- ADR-012 — LLM Call Logging and Forensics (motivation for `LlmMessageRepository`)
+- ADR-020 — Unified Storage Struct (`Storage` concrete adapter)
+- ADR-022 — PromptAssembler Trait Decoupling (port trait precedent)
+- ADR-026 — Relocate Persona Binding from World to Game (preceding hex-phase work)
+
+## History
+
+- **2026-06-30**: Initial decision.
+- **2026-07-04**: Phase B (arch-lint scope split) landed — `model → application` and ports deny rules enforced in `arch-lint.toml`. Phase C (composition root cleanup) landed — `Bootstrap::wiring` is now the only module importing both port traits and adapter impls for LLM/agent construction. `Connection` renamed to `LlmProviderConfig` (Phase E.1). `Swipe::snapshot_id` kept on domain entity (Phase E.2 dropped as YAGNI — Deviation 3). Phase F.1 landed — `ArrivalTaskContext` extracted from `bootstrap/init_game.rs` to `application/arrival_service.rs`; `inject_scenario_logs` moved from `bootstrap/scenario.rs` to `application/scenario.rs`. Storage exemption reduced from 5 files to 3: `QuantifierAgent::from_config_with_storage` and `AgentRegistry::from_configs_with_storage` no longer take `Option<Arc<Storage>>` — recorder injected directly.

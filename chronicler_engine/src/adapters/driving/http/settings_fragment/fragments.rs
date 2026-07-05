@@ -2,13 +2,13 @@
 //! Settings fragments
 
 use crate::domain::model::llm_backend::LlmBackendType;
-use crate::domain::model::settings::Connection;
+use crate::domain::model::settings::LlmProviderConfig;
 
 use super::template::provider_options_html;
 use crate::adapters::driving::http::fragments::html_escape;
 
 pub(crate) fn connection_card_html(
-    conn: &Connection,
+    conn: &LlmProviderConfig,
     is_narrator: bool,
     is_quantifier: bool,
 ) -> String {
@@ -59,7 +59,7 @@ pub(crate) fn connection_card_html(
     )
 }
 
-pub(crate) fn connection_edit_form_html(conn: &Connection) -> String {
+pub(crate) fn connection_edit_form_html(conn: &LlmProviderConfig) -> String {
     let provider = match conn.provider {
         LlmBackendType::OpenRouter => "openrouter",
         LlmBackendType::DeepSeek => "deepseek",

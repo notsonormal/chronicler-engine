@@ -1,6 +1,6 @@
 ---
 name: frontend-design
-description: "Create distinctive frontend interfaces that avoid generic AI aesthetics. Use when user asks to build web components, pages, applications, or UI. Keywords: frontend, UI, HTML, CSS, React, Vue, web design."
+description: "Use when user asks to build web components, pages, applications, or UI. Keywords: frontend, UI, HTML, CSS, React, Vue, web design. Create distinctive frontend interfaces that avoid generic AI aesthetics"
 ---
 
 The user provides frontend requirements: a component, page, application, or interface to build. They may include context about the purpose, audience, or technical constraints.

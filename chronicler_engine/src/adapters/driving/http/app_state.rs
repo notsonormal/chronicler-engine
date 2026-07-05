@@ -12,19 +12,24 @@ use crate::application::GameService;
 use crate::application::GameServiceContext;
 use crate::application::text_check_service::TextCheckService;
 use crate::error::EngineError;
-
-use super::locks::{read_lock_or_recover, write_lock_or_recover};
 use crate::domain::model::character::NpcCard;
 use crate::domain::model::settings::AppSettings;
+
+use super::locks::{read_lock_or_recover, write_lock_or_recover};
 
 #[derive(Clone, Debug)]
 pub struct ServerConfig {
     pub port: u16,
+    /// `None` retries forever (production); `Some(1)` fails fast on occupied ports (tests).
+    pub bind_attempts: Option<u32>,
 }
 
 impl Default for ServerConfig {
     fn default() -> Self {
-        ServerConfig { port: 3000 }
+        ServerConfig {
+            port: 3000,
+            bind_attempts: None,
+        }
     }
 }
 
@@ -33,6 +38,8 @@ pub struct ServerResources {
     pub storage: Arc<crate::adapters::driven::storage::Storage>,
     pub preset_storage: Arc<crate::adapters::driven::storage::Storage>,
     pub settings: Arc<RwLock<AppSettings>>,
+    pub game_service: Arc<GameService>,
+    pub text_check_service: Arc<TextCheckService>,
 }
 
 #[derive(Clone)]

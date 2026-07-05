@@ -20,7 +20,6 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - **storage/**
         - `db.rs` — SQLite database connection pool and migrations
         - `mod.rs` — Storage layer and database access
-        - `snapshot_blob.rs` — State snapshot serialization
       - **text_check/**
         - `harper_text_checker.rs` — Harper text check adapter implementing TextChecker port
         - `mod.rs` — Text checking and validation
@@ -32,6 +31,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - `app_state.rs` — Application state management
         - `debug.rs` — Debug utilities and endpoints
         - `handlers.rs` — Core HTTP request routing and handling
+        - `locks.rs` — Shared poison-recovering lock helpers for the HTTP layer.
         - `mod.rs` — HTTP server and API endpoints
         - `port_utils.rs` — Port management utilities
         - `router.rs` — Router configuration
@@ -43,6 +43,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
     - `context.rs` — Application context and state management
     - `game_service.rs` — Game service handling gameplay operations
     - `llm_recorder.rs` — LLM call orchestrator - owns forensics save + postprocessing
+    - `llm_sanitizer.rs` — LLM input/output sanitization
     - `message_editing.rs` — Message editing and modification utilities
     - `query_handlers.rs` — Read-only data access for game state and debug views
     - `spawn.rs` — Shared spawn helper for pipeline tasks
@@ -113,6 +114,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - `world.rs` — World model definitions
       - **state/**
         - `game_state.rs` — Main game state and builder
+        - `game_state_snapshot.rs` — State snapshot value types (persistable representations of game state).
         - `generation_status.rs` — Generation status enums and input buffer
         - `message_types.rs` — Message type and entry definitions
         - `mod.rs` — Game state representations (submodule declarations)
@@ -123,17 +125,18 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
 - **scripts/**
   - `build.py` — Full build, validate, and test for Chronicler Engine.
   - `check_python_docstrings.py` — Summary
-  - `check_test_structure.py` — No summary
+  - `check_test_structure.py` — Inline `#[cfg(test)] mod X { ... }` blocks are forbidden in src/.
   - `coverage_summary.py` — No summary
   - `diagnostic_benchmark.py` — No summary
   - `extract_images.py` — Extract and process images from SillyTavern character cards (original + cropped versions).
   - `extract_sillytavern_png.py` — Extract embedded PNG images from SillyTavern character cards.
-  - `generate_docs_index.py` — Generate an auto-updating index for chronicler_engine/docs/README.md.
+  - `generate_docs_index.py` — Generate an auto-updating index for chronicler_engine/docs/AGENTS.md.
   - `generate_structure_index.py` — Generate AGENTS.md structure index from module summaries.
   - `healthcheck.py` — Chronicler Engine healthcheck dispatcher.
   - `install_git_hooks.py` — No summary
   - `parse_coverage.py` — Parse coverage report from cargo-llvm-cov JSON output.
   - `refine_character_json.py` — No summary
+  - `validate_adrs.py` — Validate ADR files against the standard in docs/adr/README.md.
   - `validate_data.py` — No summary
 <!-- AUTO-STRUCTURE END -->
 
@@ -161,7 +164,7 @@ This project follows a **Spec-Driven Implementation** (SDI) strategy.
 This project relies on a comprehensive suite of integration tests as the ultimate source of truth for behavior.
 - **Tests as Documentation**: If you don't understand how a component works, read its tests in `tests/` before reading the source code.
 - **Test-Driven Debugging**: Before fixing a bug, find or create a failing test case. If tests pass but the bug exists, the test suite is missing a scenario.
-- **No Regression**: Every code change must pass `python build.py` before task/plan completion. *During development*, iterate with the specific tool (e.g. `cargo clippy` for lint fixes, `cargo nextest run <pattern>` for test fixes). Run `build.py` only for final verification.
+- **No Regression**: Every code change must eventually pass `python build.py` before a plan is considered complete. *During development*, iterate with the specific tool (e.g. `cargo clippy` for lint fixes, `cargo nextest run <pattern>` for test fixes). Run `build.py` only for final verification.
 
 Unit tests go in the `src/` folder beside the class they are testing (e.g. `production_class.rs` -> `production_class_test.rs`).
 
@@ -202,7 +205,7 @@ When creating or updating a plan for chronicler_engine work (via any planning sk
 2. **Test-first** — Write a failing test or update existing tests **before** implementing the fix/feature. Every task must have a verification step that includes running tests.
 3. **Guardrail compliance** — Verify the change won't violate existing guardrails (clippy lints, arch-lint rules, max file size limits). Run `cargo clippy` and `cargo nextest run <relevant_test>` during development, not just at the end.
 4. **Build validation** — Final validation with `python build.py` must pass before the task is considered complete.
-5. **Plan archive** — Move completed plans to `docs/plans/archived/` and update `CHANGELOG.md`.
+5. **Plan archive** — Move completed plans to `old-docs/archived-plans/` (engine root, not inside `docs/`) and update `CHANGELOG.md`.
 
 **Plan Adherence:** Do not change the plan partway through implementation without explicit user permission. If you encounter a problem not addressed in the current plan, stop and ask before proceeding.
 
@@ -231,17 +234,16 @@ let residents = find_npcs_in_current_location(all_npcs, current_room);
 - **Validation**: Run `python build.py` before commit (fmt + clippy + tests + guardrails)
 
 ## LLM TEST POLICY
-- `python build.py` runs the fast suite only. LLM tests are `#[ignore]`d by default.
-- When modifying ANY file in `src/narrative/` or changing LLM prompt/parsing behavior,
-  you MUST also run `python build.py --llm-only` to verify real LLM integration.
+- `python build.py` runs the fast suite only. LLM tests are `#[ignore]'`d by default.
+- When modifying ANY file in `src/narrative/` or changing LLM prompt/parsing behavior, you MUST also run `python build.py --llm-only` to verify real LLM integration.
 
 ## ANTI-PATTERNS
 - **Never** skip architecture/spec update before implementing engine changes.
 - **Never** continue previous reasoning after user says stop, wait, nevermind, or asks a direct question. Halt immediately and answer directly.
-- **Never** defend existing architecture as a reason to keep complicated code. If a simpler approach exists, propose it.
+- **Never** defend existing architecture as a reason to keep complicated code. You might need to take a stepback and consider architecture or code holistically. 
 
 ## DOCUMENTATION INDEX
-`docs/README.md` is **auto-generated**. Do not edit the file list inside the `<!-- AUTO-INDEX -->` block manually.
+`docs/AGENTS.md` is **auto-generated**. Do not edit the file list inside the `<!-- AUTO-INDEX -->` block manually.
 
 To regenerate the index after adding, removing, or renaming docs:
 ```bash

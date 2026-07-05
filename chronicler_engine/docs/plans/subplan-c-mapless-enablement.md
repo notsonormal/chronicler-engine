@@ -69,8 +69,8 @@ struct MovementState {
 
 ### 4. `NarrativeState` (`src/model/state.rs`)
 
-- Delete `pending_location: Option<String>` field (line 136).
-- Delete from `from_snapshot` reader (line 157).
+- Delete `pending_location: Option<String>` field.
+- Delete from `from_snapshot` reader.
 
 ### 4b. `NarrativeState` field refactor blast radius
 
@@ -130,8 +130,8 @@ All three bootstrap sites (`bootstrap/state.rs:build_fresh_initial_state`, `boot
 
 Option (B) per parent plan: constructor takes resolved values directly.
 
-- `GameStateBuilder::new` (line 198): signature change — `starting_room: impl Into<String>` → `current_room_id: Option<String>` + `current_room_name: Option<String>`.
-- `GameState::new` (line 278): same signature change. Forwards to builder.
+- `GameStateBuilder::new`: signature change — `starting_room: impl Into<String>` → `current_room_id: Option<String>` + `current_room_name: Option<String>`.
+- `GameState::new`: same signature change. Forwards to builder.
 - Callers (27+ sites): pass `(Some("room1".to_string()), Some("Room 1".to_string()))` instead of `"room1".to_string()`. Production sites (`bootstrap/state.rs:10`, `bootstrap/init_game.rs:69,128`, `application/context.rs:143,162`) call `resolve_starting_location` first. Test sites pass explicit `Option<String>` pairs. Full caller list in parent plan Section 6.
 
 ### 7. `current_room()` method semantics (`src/model/state.rs:337`)
@@ -374,7 +374,7 @@ Updated BEFORE code per chronicler-dev-workflow:
 6. `docs/system/startup.md` — bootstrap section: scenario resolves starting location via `resolve_starting_location` helper; both world kinds.
 7. `docs/system/worlds.md` — `WorldCard.has_map` field, `StartingScenario` optional id/name, strict validator matrix.
 8. `docs/system/triggers.md` — authored triggers with `room_id` never fire in mapless worlds or when mapped-world drift is active.
-9. `docs/architecture/invariants.md` — INV-ROOM description: `current_room_id=None` valid for mapless/off-map; `current_room_name` must always be `Some` after bootstrap.
+9. `docs/architecture/guardrails.md` §5 Runtime Invariants — INV-ROOM description: `current_room_id=None` valid for mapless/off-map; `current_room_name` must always be `Some` after bootstrap.
 10. `docs/reference/data_schemas.md` — world JSON schema: add `has_map`, replace scenario `starting_room_id` with `starting_location_id`/`starting_location_name`.
 11. `docs/reference/data_layer.md` — mention v14 (Subplan A) + v15 (this subplan) migrations + `build.py --cleanup` requirement.
 12. `docs/system/agent_system.md` — quantifier consumes `destination_id`/`destination_name` (Subplan B); synthetic Room fallback when `current_room=None`.

@@ -1,5 +1,5 @@
 //! [DOC: docs/system/startup.md]
-//! Scenario injection and initialization
+//! Scenario log injection at game initialization
 
 use crate::domain::model::character::PlayerCard;
 use crate::domain::model::state::game_state::GameState;

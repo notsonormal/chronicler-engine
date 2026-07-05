@@ -15,6 +15,8 @@ exclude = [
     "**/tests/**",
     "**/*_tests.rs",
 ]
+# `*_tests.rs` excluded: arch-lint 0.4.3 cannot distinguish a test fake
+# (e.g. Storage::new_in_memory()) from a production leak.
 
 # ── Built-in rule overrides ──
 
@@ -48,13 +50,22 @@ name = "engine"
 paths = ["src/domain/engine/**"]
 
 [[scopes]]
+name = "ports"
+paths = ["src/application/ports/**"]
+
+[[scopes]]
+name = "driven-llm"
+paths = ["src/adapters/driven/llm/**"]
+
+[[scopes]]
+name = "driven-text-check"
+paths = ["src/adapters/driven/text_check/**"]
+
+[[scopes]]
 name = "narrative"
 paths = [
   "src/application/agents/**",
   "src/application/narrative_prompt/**",
-  "src/application/ports/**",
-  "src/adapters/driven/llm/**",
-  "src/adapters/driven/text_check/**",
 ]
 
 [[scopes]]
@@ -142,3 +153,23 @@ message = "Test support must not depend on storage DB models/mappers."
 from = "server"
 to = ["storage"]
 message = "Server layer must not import from storage directly; use ApplicationService instead."
+
+# Port traits must not reach into adapter impls or outer layers.
+# `ports` is a subset of `application/**`; do NOT add `application` to the
+# deny list — ports-internal imports (e.g. LlmMessage from
+# llm_message_repository used by llm_provider) false-trigger as self-deps.
+[[deny-scope-dep]]
+from = "ports"
+to = ["driven-llm", "driven-text-check", "narrative", "server", "storage", "storage-models", "bootstrap", "test-support", "engine"]
+message = "Port traits must not depend on adapter impls, application services, or outer layers."
+
+# Adapters must not depend on each other.
+[[deny-scope-dep]]
+from = "driven-llm"
+to = ["driven-text-check"]
+message = "driven-llm adapter must not depend on driven-text-check adapter."
+
+[[deny-scope-dep]]
+from = "driven-text-check"
+to = ["driven-llm"]
+message = "driven-text-check adapter must not depend on driven-llm adapter."
