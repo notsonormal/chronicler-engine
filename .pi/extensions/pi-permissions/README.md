@@ -35,7 +35,9 @@ Auto-discovered by pi (`.pi/extensions/*/index.ts`). No build step at runtime â€
 
 ## Configuration
 
-`.pi/permissions.json`:
+`.pi/permissions.json` (gitignored â€” per-user, not committed):
+
+```
 ```json
 {
   "rules": {
@@ -47,6 +49,8 @@ Auto-discovered by pi (`.pi/extensions/*/index.ts`). No build step at runtime â€
 ```
 
 Each rule is `name â†’ regex`. Names surface in the confirm dialog and `/permissions list`. Add or remove freely â€” `/permissions reload` picks up changes.
+
+> Per-user, not committed. The file lives inside `.pi/` which this repo gitignores. If you want team-shared rules, whitelist `.pi/permissions.json` in `.gitignore` after adding the `!` exception.
 
 ## Commands
 
