@@ -1,4 +1,5 @@
 //! [DOC: docs/architecture/guardrails.md]
+//! Infrastructure test binary root: shared guardrail harness (rule definitions, `Violation` type, file discovery, `check_src_files` / `check_tests_files` runners).
 
 pub mod layers;
 pub mod location;
@@ -175,6 +176,11 @@ fn guardrails_test_layer_boundaries() {
 #[test]
 fn guardrails_no_legacy_test_context() {
     check_tests_files("legacy test context", check_no_legacy_test_context);
+}
+
+#[test]
+fn guardrails_test_module_header() {
+    check_tests_files("test module header", check_test_module_header);
 }
 
 #[test]

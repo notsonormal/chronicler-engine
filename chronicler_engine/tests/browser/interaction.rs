@@ -1,3 +1,5 @@
+//! Browser tests for form submission interactions (e.g., submitting a command via the action form and observing the resulting UI state).
+
 use super::*;
 
 #[tokio::test]

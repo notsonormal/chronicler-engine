@@ -1,3 +1,5 @@
+//! HTTP-level tests for the settings fragment endpoint; verifies the settings panel renders and that settings state changes persist correctly.
+
 use axum::{body::Body, http::Request};
 use tower::util::ServiceExt;
 

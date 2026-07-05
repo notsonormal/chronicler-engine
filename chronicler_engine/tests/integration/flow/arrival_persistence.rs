@@ -1,3 +1,5 @@
+//! Integration flow tests for arrival narration persistence — confirms the arrival narration survives a state reload, exercising the `ArrivalTaskContext` end-to-end against SQLite storage.
+
 use std::sync::Arc;
 
 use chronicler_engine::application::arrival_service::ArrivalTaskContext;

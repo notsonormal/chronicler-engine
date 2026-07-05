@@ -1,3 +1,5 @@
+//! HTTP integration tests for fragment rendering: basic fragments return HTML, visual sidebar renders the room image, action area fragment renders, and the action handler accepts commands.
+
 use std::sync::Arc;
 
 use axum::{

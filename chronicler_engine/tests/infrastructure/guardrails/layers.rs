@@ -1,3 +1,5 @@
+//! Layer-boundary guardrail tests: server vs. application vs. storage separation, handler return-type enforcement, and tests-vs-messages/swipes separation.
+
 use crate::Violation;
 
 /// Guardrail: `messages.rs` must not reference the `message_swipes` table.

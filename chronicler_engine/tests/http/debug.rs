@@ -1,3 +1,5 @@
+//! HTTP integration tests for the debug endpoints: `/debug/state` returns the expected JSON shape and `/debug/is_generating` reflects the actual generation status.
+
 use axum::{body::Body, http::Request};
 use tower::util::ServiceExt;
 

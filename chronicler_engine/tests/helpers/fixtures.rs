@@ -1,3 +1,5 @@
+//! Shared fixtures for integration tests: builds storage, world, character, and game-state instances with deterministic defaults so tests can focus on the behaviour under test.
+
 #![allow(dead_code)]
 
 use std::collections::HashMap;

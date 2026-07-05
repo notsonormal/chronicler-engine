@@ -1,3 +1,5 @@
+//! Integration tests for action retry behaviour: re-running the pipeline against the last user input, no-op on empty history, recovery after a previous LLM failure, and the missing-snapshot error path.
+
 use std::sync::Arc;
 
 use crate::{

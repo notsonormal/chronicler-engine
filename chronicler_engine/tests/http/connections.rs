@@ -1,3 +1,5 @@
+//! HTTP integration tests for the connections UI: add OpenRouter/DeepSeek connections, switch the narrator, and switch the quantifier.
+
 use axum::{body::Body, http::Request};
 use tower::util::ServiceExt;
 

@@ -1,3 +1,5 @@
+//! Tests for poison-recovery behaviour: confirms that a poisoned `RwLock` inside the settings layer and `CancellationToken` machinery does not crash subsequent operations.
+
 use std::sync::Arc;
 
 use tokio_util::sync::CancellationToken;

@@ -1,3 +1,5 @@
+//! Test server helpers: spawn the real engine binary on a free port, track lifecycle via `SERVER_MANAGED`, and expose `TestServer` / `wait_for_server` / `get_config_port`.
+
 use std::collections::HashMap;
 use std::fs;
 use std::net::TcpListener;

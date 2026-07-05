@@ -1,3 +1,5 @@
+//! Structure guardrail tests: doc-anchor standards, mod.rs purity, no-std-thread, file length, and the new test module-header rule.
+
 use syn::spanned::Spanned;
 use syn::File;
 
@@ -221,6 +223,129 @@ pub fn check_file_length(path: &str, content: &str) -> Vec<Violation> {
                  Consider splitting into smaller modules."
             ),
         ));
+    }
+
+    violations
+}
+
+/// Test files must have a single-line `//!` summary on the first non-blank line.
+///
+/// Accepted shapes:
+///   - `//! <summary>` on line 1 (no DOC anchor).
+///   - `//! [DOC: <path>]` on line 1 + `//! <summary>` on line 2.
+///
+/// Multi-line summary blocks and continuation lines beyond the single summary
+/// line are rejected. See ADR-028 for the rationale.
+pub fn check_test_module_header(path: &str, content: &str) -> Vec<Violation> {
+    let mut violations = Vec::new();
+
+    if path.ends_with("_test.rs") || path.ends_with("_tests.rs") {
+        return violations;
+    }
+
+    let lines: Vec<&str> = content.lines().collect();
+
+    let first_idx = lines.iter().position(|ln| !ln.trim().is_empty());
+    let Some(first_idx) = first_idx else {
+        violations.push(Violation::warn(
+            path,
+            1,
+            format!(
+                "Test file `{path}` is empty. Add a `//! <summary>` header."
+            ),
+        ));
+        return violations;
+    };
+
+    let line1 = lines[first_idx];
+    let l1_text = line1.strip_prefix("//!").unwrap_or("").trim();
+
+    if !line1.trim_start().starts_with("//!") {
+        violations.push(Violation::warn(
+            path,
+            first_idx + 1,
+            format!(
+                "Test file `{path}` lacks a `//!` module header on line {}. \
+                 Add `//! <summary>` describing what this file tests.",
+                first_idx + 1
+            ),
+        ));
+        return violations;
+    }
+
+    let summary_line_idx = if l1_text.starts_with("[DOC:") {
+        let Some(next_non_blank) = lines
+            .iter()
+            .enumerate()
+            .skip(first_idx + 1)
+            .find(|(_, ln)| !ln.trim().is_empty())
+            .map(|(i, _)| i)
+        else {
+            violations.push(Violation::warn(
+                path,
+                first_idx + 2,
+                format!(
+                    "Test file `{path}` has a DOC anchor but no `//!` summary line after it."
+                ),
+            ));
+            return violations;
+        };
+
+        let next_line = lines[next_non_blank];
+        let next_text = next_line.strip_prefix("//!").unwrap_or("").trim();
+
+        if !next_line.trim_start().starts_with("//!") {
+            violations.push(Violation::warn(
+                path,
+                next_non_blank + 1,
+                format!(
+                    "Test file `{path}` has a DOC anchor but no `//!` summary line after it."
+                ),
+            ));
+            return violations;
+        }
+
+        if next_text.is_empty() || next_text.len() < 6 {
+            violations.push(Violation::warn(
+                path,
+                next_non_blank + 1,
+                format!(
+                    "Test file `{path}` has an empty or trivial summary. \
+                     Describe what this file tests in plain language."
+                ),
+            ));
+            return violations;
+        }
+
+        next_non_blank
+    } else {
+        if l1_text.is_empty() || l1_text.len() < 6 {
+            violations.push(Violation::warn(
+                path,
+                first_idx + 1,
+                format!(
+                    "Test file `{path}` has an empty or trivial summary. \
+                     Describe what this file tests in plain language."
+                ),
+            ));
+            return violations;
+        }
+        first_idx
+    };
+
+    let next_line = lines.get(summary_line_idx + 1);
+    if let Some(line) = next_line {
+        if !line.trim().is_empty() && line.trim_start().starts_with("//!") {
+            violations.push(Violation::warn(
+                path,
+                summary_line_idx + 2,
+                format!(
+                    "Test file `{path}` has a multi-line `//!` summary block. \
+                     Multi-line summaries are not allowed; condense to a single line. \
+                     See ADR-028."
+                ),
+            ));
+        }
     }
 
     violations

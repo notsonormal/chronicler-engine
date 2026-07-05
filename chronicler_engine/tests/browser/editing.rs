@@ -1,3 +1,5 @@
+//! Browser tests for message editing: edit and delete buttons, edit-mode activation on click, cancel-restores-original, and save-persistence through the HTTP API.
+
 use std::time::Duration;
 
 use playwright_rs::expect;

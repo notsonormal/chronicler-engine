@@ -1,3 +1,5 @@
+//! Integration tests for the action pipeline: delayed LLM completion, quantifier detection of movement and NPCs (with trigger firing), and graceful handling of empty LLM responses.
+
 use std::sync::Arc;
 
 use crate::{

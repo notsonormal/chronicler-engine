@@ -1,3 +1,5 @@
+//! Location guardrail tests: ensures `#[test]` / `#[cfg(test)]` units live in the correct directory (e.g., unit tests stay in `src/`, integration tests stay in `tests/`).
+
 use std::path::Path;
 use crate::Violation;
 

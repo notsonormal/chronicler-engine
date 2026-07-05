@@ -1,3 +1,5 @@
+//! Polling helpers: `wait_for_llm_idle`, `wait_for_status_ready`, and `wait_for_element_children` — retry-based waits used by browser and HTTP tests.
+
 use std::time::Duration;
 
 use tokio::time::sleep;

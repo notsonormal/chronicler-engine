@@ -1,3 +1,5 @@
+//! HTTP integration tests for the text-check endpoints: action-check dispatch (disabled vs. enabled), empty-command handling, and confirm-flow returning the full action area with check results.
+
 use std::sync::Arc;
 
 use axum::{

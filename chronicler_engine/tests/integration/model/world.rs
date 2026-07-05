@@ -1,3 +1,5 @@
+//! Integration tests for the world loading path: confirms the `WorldCard` and `MapDef` loaded from on-disk JSON expose expected room metadata (image paths, room ids).
+
 use chronicler_engine::domain::model::map::MapDef;
 use chronicler_engine::domain::model::world::WorldCard;
 use tower::util::ServiceExt;

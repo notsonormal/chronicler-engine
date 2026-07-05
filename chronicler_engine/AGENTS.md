@@ -170,20 +170,6 @@ Unit tests go in the `src/` folder beside the class they are testing (e.g. `prod
 
 Integration tests go in the `test/` folder.
 
-### TEST MIRROR CONVENTION (2026-07-02)
-
-Integration test structure mirrors `src/` paths **within each test binary**. The test **binary** is chosen by fixture weight (integration/http/browser/llm/infrastructure); inside each binary, file paths mirror `src/` subpaths.
-
-Examples:
-- `src/application/action_pipeline/pipeline.rs` ↔ `tests/integration/application/action_pipeline/pipeline.rs`
-- `src/application/game_service.rs` ↔ `tests/integration/application/game_service.rs`
-- `src/adapters/driving/http/fragments/actions.rs` ↔ `tests/http/fragments/actions.rs` (http test binary naturally mirrors the http subset)
-- `src/adapters/driven/llm/transport.rs` ↔ `tests/integration/adapters/driven/llm/transport.rs` (or `tests/integration/adapters/driven/llm_client.rs` for legacy reasons)
-
-**Exceptions allowed:** Cross-cutting tests (e.g., `lifecycle.rs` spans multiple `src/application/` modules) may live at a sensible location with a **rationale comment** at the top of the test file. The convention is doc-only—no script guardrail enforces it.
-
-Rationale: This convention keeps test discovery intuitive—"where is the test for X?" → "mirrored path under tests/". It also scales as src/ grows without requiring constant reorg.
-
 ### TEST FAILURE HANDLING
 
 When tests fail, you MUST:
@@ -230,6 +216,7 @@ let residents = find_npcs_in_current_location(all_npcs, current_room);
 
 ## CONVENTIONS
 - **Module-Level DOC Anchors**: Every `src/` file has `//! [DOC: ...]` on line 1 pointing to domain-specific docs. Remove function-level `/// [DOC:` and `// [DOC:` comments.
+- **Test Module Headers**: Every file under `tests/` (including `mod.rs` and `helpers/`/`test_utils/`) starts with a single-line `//! <summary>` describing what it covers. The `[DOC: ...]` anchor is **optional** for tests because they are organised by fixture weight, not domain — see ADR-028. Multi-line summary blocks are forbidden.
 - **LLM backend**: Trait-based (`LlmBackend`), mock via `MockBackend` in tests
 - **Validation**: Run `python build.py` before commit (fmt + clippy + tests + guardrails)
 
@@ -249,6 +236,8 @@ To regenerate the index after adding, removing, or renaming docs:
 ```bash
 python scripts/generate_docs_index.py
 ```
+
+`tests/AGENTS.md` is **auto-generated** from each test file's `//!` summary via `scripts/generate_tests_structure_index.py` (also wired into the pre-commit hook). Both `AGENTS.md` and `tests/AGENTS.md` are regenerated together by the pre-commit hook.
 
 To install the git pre-commit hook (regenerates index before every commit):
 ```bash

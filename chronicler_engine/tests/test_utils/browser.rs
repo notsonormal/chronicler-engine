@@ -1,3 +1,5 @@
+//! Browser test helpers: Playwright bootstrap (`TestServer`, `LaunchOptions`), page builders, and DOM helpers (`wait_for_element_children`, `wait_for_status_ready`).
+
 use std::time::Duration;
 
 use playwright_rs::LaunchOptions;

@@ -1,4 +1,5 @@
 //! [DOC: docs/reference/testing.md]
+//! LLM-driven flow tests: exercises real LLM provider flows end-to-end (ignored by default; run with `python build.py --llm-only`).
 
 #[path = "../test_utils/mod.rs"]
 mod test_utils;

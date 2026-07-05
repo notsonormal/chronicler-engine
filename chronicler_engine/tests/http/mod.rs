@@ -1,3 +1,5 @@
+//! HTTP test binary root: real-request integration tests for action handlers, fragment rendering, connections UI, debug endpoints, server wiring, and the per-endpoint text-check suite.
+
 #[path = "../test_utils/mod.rs"]
 mod test_utils;
 pub use test_utils::settings_guard::SettingsTestGuard;

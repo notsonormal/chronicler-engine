@@ -1,10 +1,4 @@
-//! Integration wiring test — exercises the prod composition path
-//! `bootstrap::wiring::build_game_service` → `llm_factory::get_llm_recorder_for`
-//! end-to-end.
-//!
-//! Catch silent-fallback regression (Fix 2 in phase2-thermonuclear-review-fixes.md):
-//! if someone reintroduces `unwrap_or_else(Mock+Noop)`, the forensics assertion
-//! fails because the recorder's forensics repo must be the real `Storage`.
+//! Integration wiring test — exercises the prod composition path (`bootstrap::wiring::build_game_service` → `llm_factory::get_llm_recorder_for`) end-to-end and catches silent-fallback regressions where the recorder falls back to a mock instead of the real `Storage`.
 
 use std::sync::{Arc, RwLock};
 

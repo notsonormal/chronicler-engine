@@ -1,8 +1,4 @@
-//! Integration tests for game lifecycle operations.
-//!
-//! RATIONALE: This file is cross-cutting over `src/application/` rather than a mirror
-//! of a single src file. Kept here for simplicity; future refactor could split
-//! into per-module tests under `application/` subdirs if it grows organically.
+//! Integration tests for game lifecycle operations — cross-cutting over `src/application/` rather than a mirror of a single src file; kept here for simplicity until the suite grows enough to split per-module.
 
 use std::sync::Arc;
 

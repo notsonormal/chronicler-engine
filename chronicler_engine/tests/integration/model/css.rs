@@ -1,3 +1,5 @@
+//! HTTP-level test for the static CSS asset endpoint; confirms the served stylesheet parses as valid CSS and contains the expected selectors.
+
 use axum::{body::Body, http::Request};
 use tower::util::ServiceExt;
 

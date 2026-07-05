@@ -1,3 +1,5 @@
+//! Style guardrail tests: import ordering, single-letter variable usage, separator comments, long comment runs, and per-file `cfg(test)` tracking.
+
 use syn::visit::Visit;
 use syn::{ItemFn, Local};
 

@@ -1,3 +1,5 @@
+//! Browser tests for trigger-driven narration: `look` command emits narration entries, subsequent quantifier passes detect NPCs in the current room, and NPCs without triggers produce no narration.
+
 use super::*;
 
 fn load_first_trigger_prompt(character_id: &str) -> String {

@@ -1,3 +1,5 @@
+//! Integration flow tests for the retry-main handler: new quantifier result on re-narration, re-running the quantifier on different text, double-retry swipe increment, and the no-extra-swipe guarantee when input is preserved.
+
 use std::sync::Arc;
 
 use chronicler_engine::application::game_service::GameService;

@@ -1,3 +1,5 @@
+//! `SettingsTestGuard` — serializes tests that mutate global settings state via a process-wide `Mutex`.
+
 use std::sync::{Mutex, MutexGuard};
 
 static SETTINGS_TEST_LOCK: Mutex<()> = Mutex::new(());

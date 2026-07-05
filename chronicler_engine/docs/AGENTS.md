@@ -15,7 +15,7 @@ For general engine principles, workflow, and conventions, see [`../AGENTS.md`](.
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-07-04 18:47 UTC*
+*Index last generated: 2026-07-05 01:28 UTC*
 
 ### Root files
 
@@ -47,6 +47,7 @@ For general engine principles, workflow, and conventions, see [`../AGENTS.md`](.
 - [ADR-025: Multi-World Data Foundation](./adr/adr-025-multi-world-data-foundation.md)
 - [ADR-026: Relocate Persona Binding from World to Game](./adr/adr-026-persona-relocation-to-game.md)
 - [ADR-027: Hexagonal Architecture Migration](./adr/adr-027-hexagonal-architecture-migration.md)
+- [ADR-028: Test Module Header Convention](./adr/adr-028-test-module-header-convention.md)
 - [ADR Standards](./adr/README.md)
 
 ### `docs/architecture/`
@@ -96,7 +97,7 @@ For general engine principles, workflow, and conventions, see [`../AGENTS.md`](.
 - [Reference: Quantifier Prompt](./reference/quantifier_prompt.md)
 - [Reference: System Prompt](./reference/system_prompt.md)
 - [Test Support Reference](./reference/test_support.md)
-- [Specification: Testing Strategy and Architecture](./reference/testing.md)
+- [Testing Policy](./reference/testing.md)
 
 ### `docs/system/`
 

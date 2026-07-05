@@ -1,3 +1,5 @@
+//! HTTP integration tests for the action and action-confirm handlers: graceful degradation when state load or message insert fails, and snapshot-save failure paths.
+
 use axum::{
     body::Body,
     http::{Method, Request, StatusCode},

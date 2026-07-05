@@ -1,3 +1,5 @@
+//! HTTP-level tests for the prompt-presets fragment: add/activate/delete system and quantifier presets and confirm the rendered panel reflects each state change.
+
 use axum::{body::Body, http::Request};
 use tower::util::ServiceExt;
 

@@ -14,8 +14,11 @@ cd "$ENGINE_ROOT"
 # Regenerate docs index
 python "scripts/generate_docs_index.py"
 
-# Regenerate structure index  
+# Regenerate structure index
 python "scripts/generate_structure_index.py"
+
+# Regenerate tests structure index
+python "scripts/generate_tests_structure_index.py"
 
 # Check if AGENTS.md was updated
 if ! git diff --quiet -- "AGENTS.md"; then
@@ -23,6 +26,17 @@ if ! git diff --quiet -- "AGENTS.md"; then
     echo "AGENTS.md was updated by the structure index generator."
     echo "Please stage the changes and commit again:"
     echo "  git add AGENTS.md"
+    echo "  git commit"
+    cd "$ORIG_DIR"
+    exit 1
+fi
+
+# Check if tests/AGENTS.md was updated
+if ! git diff --quiet -- "tests/AGENTS.md"; then
+    echo ""
+    echo "tests/AGENTS.md was updated by the tests structure index generator."
+    echo "Please stage the changes and commit again:"
+    echo "  git add tests/AGENTS.md"
     echo "  git commit"
     cd "$ORIG_DIR"
     exit 1

@@ -1,3 +1,5 @@
+//! Integration tests for the action pipeline: verifies that user actions are persisted to state, that narrations from the LLM are stored, and that error paths (room not found, LLM failure) are surfaced gracefully.
+
 use crate::{
     failing_service, fixtures::create_test_state, pipeline_helpers::latest_state, working_service,
 };

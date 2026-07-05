@@ -1,3 +1,5 @@
+//! Integration tests for LLM message persistence: save/list, error-message preservation, global-cap pruning, and pagination across a real SQLite-backed `Storage`.
+
 use chrono::Utc;
 use chronicler_engine::application::ports::llm_message_repository::LlmMessage;
 use chronicler_engine::adapters::driven::storage::Storage;

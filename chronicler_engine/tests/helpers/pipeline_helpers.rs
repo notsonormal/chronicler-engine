@@ -1,3 +1,5 @@
+//! Shared pipeline helpers used by integration tests across binaries; builds a minimal `GameState` and a few derived fixtures for action-pipeline scenarios.
+
 #![allow(dead_code)]
 
 use std::sync::Arc;

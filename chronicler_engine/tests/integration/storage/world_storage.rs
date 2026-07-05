@@ -1,3 +1,5 @@
+//! Integration tests for world persistence: create/list/delete `WorldCard`s and the referential-integrity rule that blocks world deletion when games still reference it.
+
 use chronicler_engine::domain::model::map::{MapDef, Overworld};
 use chronicler_engine::domain::model::scenario::StartingScenario;
 use chronicler_engine::domain::model::world::WorldCard;

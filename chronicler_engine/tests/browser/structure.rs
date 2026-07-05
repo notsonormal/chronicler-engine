@@ -1,3 +1,5 @@
+//! Browser tests for DOM structure on page load: header shows the game title, connection-status indicator renders, and the action area exposes the expected input affordances.
+
 use super::*;
 
 #[tokio::test]

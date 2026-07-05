@@ -1,3 +1,5 @@
+//! Integration flow tests for the retry-event handler: no extra swipe on narration retry, quantifier-result preservation on continuation, and trigger continuations re-running the quantifier to detect newly-relevant NPCs.
+
 use std::sync::Arc;
 
 use chronicler_engine::application::game_service::GameService;

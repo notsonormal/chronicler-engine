@@ -1,3 +1,5 @@
+//! Integration flow tests for action sequencing: execute→retry→execute, execute→delete→execute, async action ordering, and three-action sequence under realistic state churn.
+
 use std::sync::Arc;
 
 use chronicler_engine::application::game_service::GameService;
