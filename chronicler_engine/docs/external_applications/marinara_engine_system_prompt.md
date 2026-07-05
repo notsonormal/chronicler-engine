@@ -1,5 +1,7 @@
 # Marinara Engine — Default System Prompt
 
+> **Status:** historical/reference, not authoritative. Default preset capture; not a chronicler design source.
+
 > **Source:** `D:\John\DevContainer\Marinara-Engine\packages\server\src\db\default-preset.json`  
 > **Preset:** "Default" (`isDefault: true`)  
 > **Description:** Marinara's general-purpose roleplay preset. Serves as a good base.

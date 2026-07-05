@@ -1,3 +1,4 @@
+//! [DOC: docs/reference/test_support.md — section "Integration Test Helpers"]
 use std::sync::{Arc, RwLock};
 
 use crate::application::GameServiceContext;

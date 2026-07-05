@@ -40,6 +40,17 @@ let manifest = TestWorldManifest::minimal();
 let world = TestWorld::minimal();
 ```
 
+## Recording Forensics
+
+`LlmMessageRepository` spy impls in `src/test_support/`:
+
+| Spy | Purpose |
+|-----|---------|
+| `NoopForensics` | Discards all messages; use when test does not assert on LLM call log |
+| `RecordingForensics` | Records every `save_llm_message` call; exposes counters + last message + injectable error for failure-injection tests |
+
+Both satisfy the `LlmMessageRepository` port; recorder wraps a provider + a spy via `make_test_recorder(provider)` / `make_test_recorder_with_storage(provider, storage)`.
+
 ## Integration Test Helpers
 
 `tests/helpers/fixtures.rs` exposes shared builders to integration tests via `tests/integration/mod.rs`. Prefer these over re-defining per file:

@@ -1,5 +1,7 @@
 # Marinara-Engine Reference
 
+> **Status:** historical/reference, not authoritative. See [ADR-027](../adr/adr-027-hexagonal-architecture-migration.md) for current architecture.
+
 **Location:** `D:\John\DevContainer\Marinara-Engine`  
 **Relation:** Sister project with a TypeScript-based engine that includes similar chronicler functionality. Contains relevant LLM infrastructure patterns.
 

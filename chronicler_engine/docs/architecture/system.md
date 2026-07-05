@@ -91,7 +91,7 @@ Orchestration layer that coordinates game flow, persistence, and LLM generation.
 - **`spawn.rs`**: `pub(crate) fn spawn_pipeline_task(game_service, ctx, f: F)` — dedupes `Arc::clone` + `tokio::task::spawn_blocking`. Cancel-check + `GenerationGuard` lifetime stay inside each caller's closure (zero behavior change).
 - **`arrival_service.rs`**: Arrival narration use case. `ArrivalTaskContext` struct (12 fields — owns `GameServiceContext`, prompt preset, NPC lists, `LlmCallRecorder`) + `run()` method (loads snapshot → builds prompt → calls LLM narrator → persists via `save_message_and_snapshot`). Spawned via `spawn_blocking` from `bootstrap::init_game::spawn_arrival_task_if_needed`. Test-only constructor `new_for_test` + `run_sync` entrypoint.
 - **`scenario.rs`**: `inject_scenario_logs(state, world, player)` — pure application logic (renders scenario text template + adds as `MessageType::Narration`).
-- **`action_pipeline`**: Action-processing workflows and the `ActionPipeline` orchestration struct.
+- **`action_pipeline`**: Action-processing workflows and the `ActionPipeline` orchestration struct. See [`system/action_pipeline.md`](../system/action_pipeline.md) for full mechanics (`PipelineInputs` ownership, `PipelineRun<'a>` borrow, error model, cancellation sites).
   - `pipeline.rs`: `ActionPipeline` struct holds direct fields (`prompt_assembler: Arc<LayeredPromptAssembler>`, `llm_recorder: Arc<LlmCallRecorder>`, `agent_registry: Arc<AgentRegistry>`); `run_post_generation_agents` is now an inline phase method. Orchestrates the full FreeAction pipeline via `run_from_input`. Checks `CancellationToken::is_cancelled()` at stage boundaries and aborts gracefully via `handle_cancellation()`. **Error model**: pipeline errors set `GenerationStatus::Error` on state and return `Ok(())`; only `Err(ActionOutcome::Cancelled)` uses the `Err` path.
   - `phases.rs`: `PipelineRun<'a>` struct borrows `(pipeline, ctx)` for the duration of `run_from_input`. Phase methods (`phase_narrate`, `phase_post_generation`, `phase_engine_commit`, `phase_trigger_continuation_raw`, `reconcile_post_trigger_npcs`, `build_trigger_request`) are methods on `PipelineRun`, dropping the `ctx: &GameServiceContext` parameter from each signature. Includes `persist()`, `persist_snapshot_failed()`, and `error_return()` helpers. `pipeline.rs` constructs `PipelineRun` once in `run_from_input` + routes calls through it. External callers (retry.rs) use `ActionPipeline::phase_trigger_continuation()` pub(crate) wrapper.
   - `PipelineInputs`: Owned struct bundling pipeline input parameters (owned `Vec<NpcCard>` + `String`) passed to `run_from_input` / `build_trigger_request` / `phase_trigger_continuation_raw`. Avoids borrow-checker fights by owning data outright instead of borrowing from `GameState`.
@@ -100,11 +100,7 @@ Orchestration layer that coordinates game flow, persistence, and LLM generation.
 - **`game_service`**: `GameService` struct (renamed from `DefaultGameService`) exposes `execute_action(ctx, input)` and `retry_last_response(ctx)`. No trait impl — `ActionPipelineBackend` deleted. Also exposes `pipeline()` accessor returning a fresh `ActionPipeline` (callers no longer reach into `prompt_assembler` / `llm_recorder` / `agent_registry` fields to build one). External callers use the `GameService` methods; only the `ActionPipeline` internals call the impl functions directly.
 - **`application_service`**: Thin orchestrator struct (`DefaultApplicationService`) with game lifecycle operations inlined (`create_game`, `switch_game`, `delete_game`, `list_games`, `current_game_id`, `reset`, worlds CRUD). Contains `process_action` entry point with self-healing stale-`Generating` detection and `GenerationGuard` RAII helper for `is_generating` flag cleanup. `process_action` spawns its blocking task via the shared `application::spawn_pipeline_task` helper. Read-only query and message-editing operations are NOT delegated through this struct anymore — server callers route to `application::query_handlers` and `application::message_editing` module free fns directly (T3 service-layer cleanup). `ApplicationError::is_user_displayable()` enables type-driven error branching — validation errors and `WorldHasGames` domain constraints are inline-displayable; engine errors use `app_err_to_response()`.
 
-### 3. Driven Adapters: LLM and Text-Check
-
-See [`system/llm_processing.md`](../system/llm_processing.md) and [`system/text_check.md`](../system/text_check.md).
-
-### 4. The Server Tier (`crate::adapters::driving::http::*`)
+### 3. The Server Tier (`crate::adapters::driving::http::*`)
 
 The HTTP layer for the HTMX web dashboard with polling-based real-time updates.
 
@@ -198,18 +194,7 @@ Each `Connection` contains: `id`, `name`, `provider`, `model`, `api_key` (option
 
 Seed-once, load-from-DB pattern for worlds, personas, and characters. See [`system/storage.md`](../system/storage.md) for the full specification.
 
-### 6. Error Module (`crate::error`)
-
-Unified error type shared across all layers. Top-level types:
-
-- **`EngineError`**: top-level enum aggregating failures across all layers.
-- **`LlmFailure`**: LLM transport errors.
-- **`NarrativeFailure`**: prompt build and generation failures.
-- **`InternalError`**: invariant violations.
-
-See [`diagnostics/error_catalog.md`](../diagnostics/error_catalog.md) for the authoritative variant list, common causes, and first-check diagnostics per variant.
-
-### 7. Bootstrap Module (`crate::bootstrap`)
+### 6. Bootstrap Module (`crate::bootstrap`)
 
 World seeding, validation, and server initialization.
 
@@ -221,34 +206,22 @@ World seeding, validation, and server initialization.
 - **`init_game`**: Game state initialization — `resolve_game_id()` (auto-creates a game for the requested world using the `--persona` CLI flag when none exists), `load_game_state()`, `spawn_arrival_task_if_needed()` (composition root: wires `GameServiceContext`+`LlmCallRecorder`, spawns blocking task). The arrival narration use case itself (`ArrivalTaskContext::run`) lives in `application::arrival_service`.
 - **`state.rs`**: Fresh game state initialization (`build_fresh_initial_state`)
 
-### 8. CLI Module (`crate::adapters::driving::cli`)
+### 7. CLI Module (`crate::adapters::driving::cli`)
 
 Command-line argument parsing via `clap`.
 
 - **`Cli`**: CLI args struct (`--world`, `--persona`, `--port`, etc.)
 
-### 9. Test Support Module (`crate::test_support`)
+### 8. Test Support Module (`crate::test_support`)
 
-Shared test fixtures and utilities.
+Shared test fixtures and utilities. See [`reference/test_support.md`](../reference/test_support.md) for builder API + fixture catalogue. Module anchor `[DOC: docs/reference/test_support.md]` on each file.
 
 - **`fixtures`**: Test GameState, Npc, Map helpers
 - **`context`**: Test context builders
 - **`noop_forensics`** / **`recording_forensics`**: `LlmMessageRepository` spy impls for LLM recorder tests (see ADR-012 SQLite-backed LLM call logging)
 - **`test_app_builder`**: Fluent test app builder API
 
-### 10. Test Binaries (`tests/`)
-
-Each `[[test]]` in `Cargo.toml` compiles an independent test binary. Paths mirror `src/` subpaths inside each binary.
-
-| Binary | Purpose |
-|--------|---------|
-| `integration` | Cross-module integration — paths mirror `src/` subpaths inside the binary (e.g. `src/application/action_pipeline/` → `tests/integration/application/action_pipeline/`). Subdirs: `application/` (service + pipeline tests), `flow/` (arrival + retry flow), `model/` (state tests), `storage/` (persistence tests), `adapters/driven/llm/` (HTTP transport tests). Cross-cutting tests (e.g. `lifecycle.rs`) include a rationale comment.
-| `http` | HTTP endpoint tests (action handlers, connections, fragments, status, text check) |
-| `browser` | Browser E2E tests (structure, editing, interactions, triggers) — requires Playwright |
-| `llm` | Real LLM smoke tests — `#[ignore]` by default, requires `OPENROUTER_API_KEY` |
-| `architecture` | Architecture guardrails |
-| `guardrails` | Convention guardrails |
-| `invariant_contract` | Runtime invariant contracts |
+Test binaries: see `Cargo.toml` `[[test]]` entries. Each binary mirrors `src/` per `TEST MIRROR CONVENTION` in [`tests/AGENTS.md`](../../tests/AGENTS.md).
 
 > **Note:** `assets/` contains static web assets (`index.html`) served by the server. It is not a Rust module tier.
 

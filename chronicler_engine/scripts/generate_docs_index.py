@@ -12,6 +12,13 @@ from pathlib import Path
 MARKER_START = "<!-- AUTO-INDEX START -->"
 MARKER_END = "<!-- AUTO-INDEX END -->"
 
+# Files in docs/ excluded from the auto-index because they don't fit the
+# "documentation discoverable by type" pattern (e.g. release logs, migration
+# journals — reference material, not discovery material). Silent skip.
+EXCLUDED_FROM_NAV: set[str] = {
+    "CHANGELOG.md",
+}
+
 
 def extract_h1(md_path: Path) -> str | None:
     """Extract the first H1 heading from a markdown file."""
@@ -31,6 +38,8 @@ def discover_docs(docs_dir: Path) -> dict[str, list[tuple[str, str]]]:
     groups: dict[str, list[tuple[str, str]]] = {}
     for md_path in sorted(docs_dir.rglob("*.md")):
         if md_path.name.lower() == "agents.md":
+            continue
+        if md_path.name in EXCLUDED_FROM_NAV:
             continue
         rel = md_path.relative_to(docs_dir)
         parent = str(rel.parent).replace("\\", "/")

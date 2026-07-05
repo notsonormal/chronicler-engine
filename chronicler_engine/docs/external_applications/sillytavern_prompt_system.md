@@ -1,5 +1,7 @@
 # SillyTavern Prompt System Reference
 
+> **Status:** historical/reference, not authoritative. Comparison source for the [layered prompt system ADR-005](../adr/adr-005-layered-prompts.md); not a chronicler design source.
+
 ## Overview
 
 SillyTavern is a popular open-source frontend for LLMs, famous for its sophisticated prompt management system.

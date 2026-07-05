@@ -1,3 +1,5 @@
+//! [DOC: docs/reference/test_support.md — section "TestAppBuilder"]
+//!
 //! Test application builder for HTTP and integration tests
 #![allow(clippy::expect_used)]
 

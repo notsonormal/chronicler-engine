@@ -1,5 +1,7 @@
 # SillyTavern Chat Window Reference
 
+> **Status:** historical/reference, not authoritative. HTML structure capture for comparison; chronicler design is defined in [`docs/system/dashboard.md`](../system/dashboard.md) + [`docs/system/ui_design.md`](../system/ui_design.md).
+
 This document describes the HTML structure of the SillyTavern chat window, verified against the official source code at [SillyTavern/SillyTavern](https://github.com/SillyTavern/SillyTavern) (`release` branch).
 
 ## Source Verification

@@ -1,3 +1,5 @@
+//! [DOC: docs/reference/test_support.md — section "Fixtures"]
+//!
 //! Test fixtures shared between unit and integration tests.
 #![allow(clippy::expect_used)]
 #![allow(clippy::unwrap_used)]
