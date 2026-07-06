@@ -594,7 +594,7 @@ def main():
         json_path = cargo_target_dir / "llvm-cov" / "coverage.json"
         json_path.parent.mkdir(parents=True, exist_ok=True)
         # Exclude: server infra (integration tests), test_support, bootstrap CLI, LLM backends (mock servers)
-        ignore_regex = r"server[\\/](router|server_impl|handlers)\.rs|test_support[\\/].*\.rs|bootstrap[\\/](run|init_game)\.rs|narrative[\\/]llm[\\/](openrouter|ollama|deepseek|backend)\.rs"
+        ignore_regex = r"server[\\/](router|server_impl|handlers)\.rs|test_support[\\/].*\.rs|bootstrap[\\/]init_game\.rs|narrative[\\/]llm[\\/](openrouter|ollama|deepseek|backend)\.rs"
         run(
             f'cargo llvm-cov report --json --output-path "{json_path}" --ignore-filename-regex "{ignore_regex}"',
             check=False,

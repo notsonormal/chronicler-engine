@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::error::EngineError;
 use crate::domain::model::character::NpcCard;
 use crate::domain::model::state::game_state::GameState;
@@ -6,8 +8,6 @@ use crate::application::llm_recorder::LlmCallRecorder;
 use crate::application::ports::llm_provider::{LlmProvider, LlmCallResult};
 use crate::test_support::fixtures::{TestGameState, TestNpc};
 use crate::test_support::noop_forensics::make_test_recorder;
-
-use std::sync::Arc;
 
 use super::orchestration::{determine_npcs_in_room, quantify_room_with_llm_call, static_npc_result};
 use super::test_support::{make_npc, make_room};
@@ -231,7 +231,13 @@ fn test_determine_npcs_medium_confidence() {
 
     let backend = MediumConfidenceBackend;
     let recorder = recorder_with(backend);
-    let result = determine_npcs_with_room(&state, &["carla".to_string()], &[], "test", recorder.as_ref());
+    let result = determine_npcs_with_room(
+        &state,
+        &["carla".to_string()],
+        &[],
+        "test",
+        recorder.as_ref(),
+    );
 
     assert_eq!(result.npcs.npc_ids, vec!["carla"]);
     assert_eq!(result.npcs.confidence, QuantifierConfidence::Medium);
@@ -264,7 +270,13 @@ fn test_determine_npcs_backend_error_fallback() {
 
     let backend = ErrBackend;
     let recorder = recorder_with(backend);
-    let result = determine_npcs_with_room(&state, &["carla".to_string()], &[], "test", recorder.as_ref());
+    let result = determine_npcs_with_room(
+        &state,
+        &["carla".to_string()],
+        &[],
+        "test",
+        recorder.as_ref(),
+    );
 
     assert_eq!(result.npcs.npc_ids, vec!["carla"]);
     assert_eq!(result.npcs.confidence, QuantifierConfidence::Low);
@@ -279,7 +291,13 @@ fn test_determine_npcs_filters_unknown_backend_ids() {
         npc_ids: vec!["carla".to_string(), "unknown".to_string()],
     };
     let recorder = recorder_with(backend);
-    let result = determine_npcs_with_room(&state, &["carla".to_string()], &[], "test", recorder.as_ref());
+    let result = determine_npcs_with_room(
+        &state,
+        &["carla".to_string()],
+        &[],
+        "test",
+        recorder.as_ref(),
+    );
 
     assert_eq!(result.npcs.npc_ids, vec!["carla"]);
 }
@@ -336,6 +354,7 @@ fn test_quantifier_retry_on_llm_error() {
         ]),
     };
 
+    let recorder = recorder_with(backend);
     let result = quantify_room_with_llm_call(&context, &["carla".to_string()], recorder.as_ref());
 
     assert_eq!(result.npcs.npc_ids, vec!["carla"]);
@@ -362,7 +381,8 @@ fn test_quantifier_all_attempts_fail_fallback() {
     let backend = crate::adapters::driven::llm::providers::MockBackend::default()
         .with_trigger_narration_fail();
 
-    let result = quantify_room_with_llm_call(&context, &["carla".to_string()], &backend);
+    let recorder = recorder_with(backend);
+    let result = quantify_room_with_llm_call(&context, &["carla".to_string()], recorder.as_ref());
 
     assert_eq!(result.npcs.npc_ids, vec!["carla"]);
     assert_eq!(result.npcs.confidence, QuantifierConfidence::Low);
@@ -391,7 +411,8 @@ fn test_quantifier_low_confidence_then_error_fallback() {
         .with_prompt_responses(vec!["I am not sure what to say here.".to_string()])
         .with_trigger_narration_fail();
 
-    let result = quantify_room_with_llm_call(&context, &["carla".to_string()], &backend);
+    let recorder = recorder_with(backend);
+    let result = quantify_room_with_llm_call(&context, &["carla".to_string()], recorder.as_ref());
 
     assert_eq!(result.npcs.npc_ids, vec!["carla".to_string()]);
     assert_eq!(result.npcs.confidence, QuantifierConfidence::Low);
@@ -452,4 +473,45 @@ fn test_static_npc_result_fallback_to_scene_npcs() {
     let result = static_npc_result(&state, &[], MovementParseResult::default());
 
     assert_eq!(result.npcs.npc_ids, vec!["carla"]);
+}
+
+#[test]
+fn test_quantifier_routes_through_recorder_for_forensics() {
+    // Regression guard for anomaly 1: confirm the production code path saves
+    // forensics exactly once per LLM call. If anyone reverts the fix and
+    // bypasses the recorder (e.g. flattening to `recorder.provider().clone()`),
+    // this test fails because `SpyForensics::save_count` stays at zero.
+    use crate::test_support::noop_forensics::make_spy_recorder;
+
+    let room = make_room();
+    let carla = make_npc("carla", "Carla");
+    let all_npcs = vec![carla];
+    let previous_npcs: Vec<NpcCard> = vec![];
+    let history: Vec<MessageEntry> = vec![];
+
+    let context = QuantifierPromptContext {
+        room: &room,
+        previous_room_npcs: &previous_npcs,
+        all_known_npcs: &all_npcs,
+        all_rooms: &[],
+        player_name: "Hero",
+        recent_history: &history,
+        player_action: "I look around.",
+        quantifier_prompt_override: None,
+    };
+
+    let backend = crate::adapters::driven::llm::providers::MockBackend::default()
+        .with_prompt_responses(vec![
+            r#"{"npcs_in_room": ["carla"], "movement": {"type": null}}"#.to_string(),
+        ]);
+
+    let (recorder, spy) = make_spy_recorder(Arc::new(backend));
+    let result = quantify_room_with_llm_call(&context, &["carla".to_string()], recorder.as_ref());
+
+    assert_eq!(result.npcs.confidence, QuantifierConfidence::High);
+    assert_eq!(
+        spy.save_count(),
+        1,
+        "quantifier LLM call must route through LlmCallRecorder so forensics are saved exactly once"
+    );
 }

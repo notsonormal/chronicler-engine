@@ -1,3 +1,4 @@
+//! [DOC: docs/reference/test_support.md]
 //! Canonical NoopForensics implementation for tests.
 //!
 //! Provides a no-op `LlmMessageRepository` implementation useful for tests
@@ -76,6 +77,9 @@ pub fn make_spy_recorder(
     provider: Arc<dyn LlmProvider>,
 ) -> (Arc<LlmCallRecorder>, Arc<SpyForensics>) {
     let spy = Arc::new(SpyForensics::new());
-    let recorder = Arc::new(LlmCallRecorder::new(provider, Arc::clone(&spy)));
+    let recorder = Arc::new(LlmCallRecorder::new(
+        provider,
+        Arc::clone(&spy) as Arc<dyn LlmMessageRepository>,
+    ));
     (recorder, spy)
 }

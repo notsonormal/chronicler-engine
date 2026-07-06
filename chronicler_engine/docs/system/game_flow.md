@@ -92,14 +92,14 @@ flowchart TD
 Pipeline errors (LLM failures, empty responses, room-not-found, etc.) follow a unified pattern:
 1. Set `state.narrative.input_buffer.status = GenerationStatus::Error(message)` on the current `GameState`
 2. Persist via `save_state()` (or `save_message_and_snapshot()` if a system message was added)
-3. Return `Ok(state)` / `Ok(())` — **not** `Err(ActionOutcome::Error)`
+3. Return `Ok(state)` / `Ok(())` — phase failure is signalled via `state.narrative.input_buffer.status`, not via the `Err` path of the pipeline return type
 
 The caller checks `state.narrative.input_buffer.status.error_message()` to decide whether to continue to later phases or skip straight to `phase_finalize`. This ensures:
 - State is always persisted (never lost to an `Err` that skips `save_state`)
 - The UI shows the error via the existing `GenerationStatus::Error` polling path
 - `phase_finalize` always runs, resetting `is_generating`
 
-**Cancellation** is the only path that uses `Err(ActionOutcome::Cancelled)`. The `ActionOutcome::Error` variant is retained for exhaustiveness but never constructed in production code.
+**Cancellation** is the only path that uses `Err(ActionOutcome::Cancelled)`. `ActionOutcome` has exactly two variants — `Completed` and `Cancelled`; no `Error` variant exists.
 
 **Stale-Generating recovery**: If `is_generating` is `false` but persisted status is still `Generating` (e.g., after a panic), `process_action` resets status to `Idle` before proceeding. Panics in `spawn_blocking` propagate naturally; `GenerationGuard::Drop` clears `is_generating`.
 

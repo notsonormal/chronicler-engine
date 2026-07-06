@@ -36,8 +36,8 @@ pub trait Agent: Send + Sync + std::fmt::Debug {
 
 ```rust
 pub enum ExecutionPhase {
-    PreGeneration,   // Before main LLM call (future: prompt injection)
-    PostGeneration,  // After main LLM call (current: quantifier)
+    PreGeneration,   // Before main LLM call. No agent registered with this phase yet.
+    PostGeneration,  // After main LLM call. The `QuantifierAgent` runs here.
 }
 ```
 
@@ -55,7 +55,7 @@ pub enum ExecutionPhase {
 
 ```rust
 pub enum AgentResult {
-    PromptDirective(String),  // Inject text into prompt (for future pre-gen agents)
+    PromptDirective(String),  // Inject text into prompt. Not constructed by any registered agent.
     StatePatch(StatePatch),   // Mutate game state
     NoOp,                     // No action
 }
@@ -77,9 +77,9 @@ The `QuantifierAgent` returns `StatePatch` with the NPCs it detected in the narr
 
 The narration LLM calls are captured by the recorder (post-call sanitize + forensic save). The quantifier's separate LLM call is **not** captured — it bypasses the recorder and goes directly through the provider. Forensic data for quantifier calls is therefore missing from the forensics log.
 
-Tests can compensate by wrapping the recorder around the quantifier, but production runs have no equivalent path.
+Tests can wrap the recorder around the quantifier. The production path has no equivalent.
 
-**Known limitation:** the bypass is current behavior.
+**Known limitation:** the bypass is current behaviour.
 
 ---
 

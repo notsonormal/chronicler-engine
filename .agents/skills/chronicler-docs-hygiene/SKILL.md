@@ -98,6 +98,5 @@ Severity decision rule:
 
 ## Related Skills
 
-- **chronicler-comment-fixer** — detects AI slop in Rust `//!`/`///` and Python `#` comments. Sibling; same report-only model.
+- **chronicler-comment-fixer** — detects AI slop in Rust `//!`/`///` and Python `#` comments. Sibling; 
 - **domain-modeling** — owns `CONTEXT.md` glossary and ADR authoring triggers. Cross-reference terms; do not redefine.
-- **documentation-and-adrs** — guides creating and updating documentation and ADRs. Use when applying fixes this skill recommends.

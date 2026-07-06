@@ -28,7 +28,7 @@ The engine supports flexible model selection via connection profiles stored in t
 Backend is selected per-connection via `Connection.provider`:
 
 - `openrouter` → Uses OpenRouter API with the connection's model and API key
-- `deepseek` → Not supported. Returns error on all calls.
+- `deepseek` → Stub. `DeepSeekBackend` is wired into the `LlmProvider` port and selected by `provider = "deepseek"`; every call returns `EngineError::Config` because the transport layer is not implemented.
 - `ollama` → Uses local Ollama instance with the connection's base URL and model
 - `mock` → Uses MockBackend for testing (no API key needed)
 

@@ -2,6 +2,19 @@
 
 NOTE: Always date the change log records (e.g. put under `## 2025-01-10`) when you add them to the file. Do not put under a `## Unreleased` header or similar. 
 
+## 2026-07-06
+
+### Changed
+
+- **Hexagon Investigation Top-3 Anomalies fixed** (`old-docs/archived-plans/fix-three-top-priority-hexagon-anomalies.md`). Three concrete low-risk fixes addressing audit findings:
+  - **Quantifier routes through `LlmCallRecorder`** — `QuantifierAgent` now stores `Arc<LlmCallRecorder>` instead of `recorder.provider().clone()`. `with_provider` test-only constructor wraps bare provider in `LlmCallRecorder::new(provider, NoopForensics)` for backward compatibility. `determine_npcs_in_room` / `quantify_room_with_llm_call` signatures changed to take `&LlmCallRecorder` (LSP: same ergonomics, signature documents forensics contract). Forensics now saved once per quantifier LLM call — was silently bypassed. New regression test `test_quantifier_routes_through_recorder_for_forensics` using new `SpyForensics` mock to assert `save_count == 1`.
+  - **Duplicate `GenerationGuard` struct unified** — `struct GenerationGuard(pub Arc<AtomicBool>)` moved from `adapters/driving/http/fragments/generation_guard.rs:10` to `application/generation_guard.rs` (lowest layer both consumers can import per arch-lint). Re-export shim at original path preserves `fragments::GenerationGuard` import path. Private duplicate in `application_service.rs:395` deleted.
+  - **`bootstrap/run.rs` decomposed** — `pub fn run(args: Args)` split into 3 helpers: `prepare_data` (DB pool, seeding, world+persona+storage Arc resolution), `prepare_state` (settings load, game-state load, arrival spawn), `start_server` (preset_storage + game_service + text_check_service wiring + serve). Internal carrier structs `PreparedData` / `StateResources` carry data between helpers. Runtime ownership moved into `StateResources` (dropped on `run()` return, no separate lifetime). Behaviour-preserving — covered by 3 new integration tests in `tests/integration/bootstrap/run_branches.rs` for previously-untested startup branches (a) `--list-worlds`, (c) world-not-found fallback, (d) persona-not-found.
+
+### Added
+
+- `src/test_support/noop_forensics.rs` now exports `SpyForensics` (counts `save_llm_message` calls via `AtomicUsize`) and `make_spy_recorder(provider)` helper. Sibling to existing `NoopForensics`/`RecordingForensics`.
+
 ## 2026-07-05
 
 ### Changed
@@ -752,5 +765,3 @@ NOTE: Always date the change log records (e.g. put under `## 2025-01-10`) when y
   - Each helper has single responsibility, testable in isolation
   - No behavioral changes — all 947 tests pass; clippy clean; build.py passes
   - Updated docs/architecture/system.md to reflect new function structure
-
-## 2026-05-30

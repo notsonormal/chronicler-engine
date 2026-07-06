@@ -2,22 +2,21 @@
 
 ## Status
 
-> Status: Implemented. See [ADR-017](../adr/adr-017-message-swipes.md) for swipe rationale. Current encapsulation work tracked in T6 (MessageHistory Encapsulation); see super-plan Finding State table.
+> Status: Implemented. See [ADR-017](../adr/adr-017-message-swipes.md) for swipe rationale.
 
 ## Objective
 
-The message model defines how conversation history is structured, accessed, and mutated. Two core types: `Message` (a single narrative unit with multiple swipes) and `MessageHistory` (the ordered collection). The single load-bearing rule: **content lives in `swipes[active_swipe_index]`; use accessor methods for reads; never mirror fields onto `Message` directly**. This prevents A4-class duplication bugs (the `Message` mirrors `Swipe` anti-pattern that was "thermo-nucleared" -- deleted in `6a8531e`).
+The message model defines how conversation history is structured, accessed, and mutated. Two core types: `Message` (a single narrative unit with multiple swipes) and `MessageHistory` (the ordered collection). The single load-bearing rule: **content lives in `swipes[active_swipe_index]`; use accessor methods for reads; never mirror fields onto `Message` directly**.
 
 ## Components
 
-| Component | File | Purpose |
-|-----------|------|---------|
-| `Message` | `src/domain/model/message.rs` | Single narrative unit. Owns `Vec<Swipe>` + `active_swipe_index`. Content accessed via `text()`, `location_header()`, `event_header()`, `snapshot_id()`. |
-| `Swipe` | `src/domain/model/message.rs` | Single variant of a message: `text`, `snapshot_id`, `location_header`, `event_header`. Persisted as row in `message_swipes` table. |
-| `MessageHistory` | `src/domain/model/message_history.rs` | Ordered collection of `Message`. Encapsulates `Vec<Message>`; exposes intent-named methods (`append`, `edit`, `delete_last`, `replace`, `retain`, `iter`, `iter_mut`, `as_slice`, `clear`). |
-| `MessageType` | `src/domain/model/state/message_types.rs` | Enum: `Narration`, `Dialogue`, `System`, `Input`. |
-| `MessageEntry` | `src/domain/model/state/message_types.rs` | View-model DTO. Decouples templates + view-models from `Message`. Constructed via `From<&Message>`. |
-| `MAX_MESSAGES` | `src/domain/model/message_history.rs` | Constant `1000`. Cap enforced by `append` only. |
+The message model is split across three files:
+
+- **`Message` + `Swipe`** (`src/domain/model/message.rs`) — one `Message` owns its `Vec<Swipe>` + `active_swipe_index`; one `Swipe` holds the actual content fields (`text`, `location_header`, `event_header`, `snapshot_id`). Content reads go through `Message::text()`, `Message::location_header()`, etc. See [Message Accessor Pattern](#message-accessor-pattern) for the read contract.
+- **`MessageHistory`** (`src/domain/model/message_history.rs`) — owns `Vec<Message>`; exposes intent-named methods. The encapsulation prevents `.push()` bypass. See [MessageHistory Encapsulation](#messagehistory-encapsulation) for the public surface.
+- **`MessageType` + `MessageEntry`** (`src/domain/model/state/message_types.rs`) — `MessageType` discriminates the four message kinds (`Narration`, `Dialogue`, `System`, `Input`); `MessageEntry` is the view-model DTO that templates consume, built via `From<&Message>`.
+
+`MAX_MESSAGES = 1000` lives next to `MessageHistory`. It is the FIFO cap enforced by `append`. See [MAX_MESSAGES Cap](#max_messages-cap) for the bypass surface.
 
 ## Message Accessor Pattern
 
@@ -49,22 +48,20 @@ Accessors on `Message`:
 
 Two accessor methods are private: `active_swipe(&self) -> Option<&Swipe>` and `active_swipe_mut(&mut self) -> Option<&mut Swipe>`. These are the only direct paths to a swipe. Every public accessor goes through them, so a future change to "what counts as active" (e.g. lazy loading, soft delete filter) is a one-line edit.
 
-## Why No Mirrored Fields
+## Invariant: Swipe is Sole Holder of Content Fields
 
-The pre-A4 `Message` struct had `text`, `location_header`, `event_header`, `snapshot_id` as direct fields. These mirrored the corresponding `Swipe` fields exactly. Every code path that mutated a swipe ALSO had to mutate the mirrored field on `Message`. This is the textbook duplication trap: two sources of truth that must stay in sync.
-
-The accessor pattern eliminates the trap by removing one of the sources. `Message` has no `text` field, so it cannot disagree with `Swipe::text`. State is `Swipe::text`. Period.
+`Message` carries no `text`, `location_header`, `event_header`, or `snapshot_id` field. Any code path that mutated a swipe previously also had to mutate a mirrored field on `Message`; that two-source-of-truth coupling is what the accessor pattern eliminates. State is `Swipe`.
 
 ## MessageHistory Encapsulation
 
-`MessageHistory` owns `Vec<Message>` and exposes intent-named methods. Callers cannot bypass rules with `.push()`. The encapsulation is intentionally strict: A5 finding (`MessageHistory` encapsulation) is `active` (T6 owner); the `pub` surface is too wide, but the data structure itself is correctly owned.
+`MessageHistory` owns `Vec<Message>` and exposes intent-named methods. Callers cannot bypass rules with `.push()`. The encapsulation is intentionally strict: the `pub` surface is wide enough that some methods bypass the per-method cap (see the `MAX_MESSAGES` section).
 
 Public surface (all methods):
 
 | Method | Purpose | Cap enforced? |
 |--------|---------|---------------|
 | `new()` | Empty history | n/a |
-| `from_messages(messages)` | Bulk construct | NO (N15: bypasses MAX_MESSAGES) |
+| `from_messages(messages)` | Bulk construct | NO |
 | `append(message)` | Add to end, evict head if over cap | YES |
 | `edit(id, new_text)` | Update active swipe text by id | n/a |
 | `delete_last()` | Pop last | n/a |
@@ -76,14 +73,14 @@ Public surface (all methods):
 | `retain(f)` | Filter in place | n/a |
 | `clear()` | Empty | n/a |
 | `as_slice()` | `&[Message]` | n/a |
-| `replace(messages)` | Wholesale replace | NO (N15: bypasses MAX_MESSAGES) |
+| `replace(messages)` | Wholesale replace | NO |
 | `last_ai_response_index()` | `rposition` for Narration/Dialogue | n/a |
 | `last_input_index()` | `rposition` for Input | n/a |
 | `last_input_text()` | `(sender, text)` of last Input | n/a |
 | `is_last_ai_response_event_continuation()` | Last AI response has `event_header` | n/a |
 | `to_message_entries()` | Convert to view DTOs | n/a |
 
-`iter_mut()` is the one method that allows callers to mutate `Message` directly. This is needed for swipe navigation (`set_active_swipe`) and inline edits (`update_active_swipe_text`). A future tightening could replace `iter_mut` with explicit methods per use case.
+`iter_mut()` is the one method that allows callers to mutate `Message` directly. This is needed for swipe navigation (`set_active_swipe`) and inline edits (`update_active_swipe_text`).
 
 ## Retry and Swipe Behaviour
 
@@ -118,22 +115,13 @@ Soft deletes (`is_deleted = true`) preserve the row + swipes for retry restorati
 
 `const MAX_MESSAGES: usize = 1000;`. `append()` enforces: if `len >= MAX_MESSAGES`, evict head (`remove(0)`) before push. This is the FIFO eviction policy.
 
-**N15 finding**: `from_messages` and `replace` bypass the cap. Storage loaders use `from_messages` to hydrate from DB; if the DB ever contains > 1000 messages (e.g. from a downgrade + upgrade cycle), `from_messages` would accept all of them. Owner T6.
+**Cap bypass**: `from_messages` and `replace` do not enforce the cap. Storage loaders use `from_messages` to hydrate from DB; if the DB ever contains more than `MAX_MESSAGES` entries (for example after a downgrade + upgrade cycle), `from_messages` would accept them all.
 
 ## Cross-references
 
 - [ADR-017: Message Swipes](../adr/adr-017-message-swipes.md) -- swipe rationale, snapshot-per-swipe, event independence
-- T6: MessageHistory Encapsulation (N15 cap bypass + `from_messages_trusted` decision) -- see super-plan Finding State table
 - [architecture/system.md §1](../architecture/system.md) -- `state` tier definition
 - [system/character_state.md](./character_state.md) -- how `MessageHistory` lives on `NarrativeState`
 - [system/game_flow.md](./game_flow.md) -- `add_message` + `state.narrative.history.append(message)` call sites
 - [diagnostics/error_catalog.md](../diagnostics/error_catalog.md) -- `Message entry not found` + `History is empty` error variants
 
-## Open Findings
-
-Items from the abstraction-fixes super-plan Finding State table that affect this code:
-
-- **A5 `MessageHistory` encapsulation** -- `active`, owner T6. `replace`, `retain`, `iter_mut`, `as_slice`, `clear`, `from_messages` are all `pub`; cap bypass (N15) is the load-bearing issue. T6 will narrow the surface.
-- **A11 `MessageEntry` DTO mirroring** -- `active`, owner T10. `MessageEntry` mirrors `Message` fields via `From<&Message>`; T10 will collapse via additional `From` impls or struct-of-arrays view model.
-- **N15 `from_messages` bypasses MAX_MESSAGES cap** -- `active`, owner T6. Only `append` enforces the cap; `from_messages` and `replace` do not. T6 will add `from_messages_trusted` for storage loaders.
-- **A4 `Message` mirrors `Swipe`** -- `closed`. Accessor pattern landed; this finding is resolved. Any future re-flag of A4 is itself a stale finding (per the super-plan Re-flag Rule).

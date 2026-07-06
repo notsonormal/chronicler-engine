@@ -36,6 +36,10 @@ pub fn working_service() -> GameService {
 }
 
 mod model;
+
+#[path = "bootstrap/run_branches.rs"]
+mod bootstrap;
+
 mod storage;
 
 #[path = "application/application_service.rs"]

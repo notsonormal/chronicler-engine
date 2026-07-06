@@ -47,9 +47,10 @@ let world = TestWorld::minimal();
 | Spy | Purpose |
 |-----|---------|
 | `NoopForensics` | Discards all messages; use when test does not assert on LLM call log |
+| `SpyForensics` | Counts `save_llm_message` calls via atomic counter; use when a test must assert a code path routed through `LlmCallRecorder::complete` (regression guard for the quantifier forensics bypass) |
 | `RecordingForensics` | Records every `save_llm_message` call; exposes counters + last message + injectable error for failure-injection tests |
 
-Both satisfy the `LlmMessageRepository` port; recorder wraps a provider + a spy via `make_test_recorder(provider)` / `make_test_recorder_with_storage(provider, storage)`.
+All three satisfy the `LlmMessageRepository` port; recorder wraps a provider + a spy via `make_test_recorder(provider)` / `make_test_recorder_with_storage(provider, storage)` / `make_spy_recorder(provider)`.
 
 ## Integration Test Helpers
 

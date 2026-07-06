@@ -17,7 +17,7 @@ The LLM operates as a Game Master / Narrator for the text adventure. Its context
 - **Room Context**: The current `Room.name` and `Room.description` ground the scene.
 - **Present NPCs**: All `NpcCard`s located in the current room, including their `personality`, `scenario`, and `description`.
 - **Player Identity**: The `PlayerCard.name` and `PlayerCard.description` for reference.
-- **Conversation History**: Full narrative history (up to ~1000 entries from messages) is sent to maintain continuity.
+- **Conversation History**: Full narrative history (up to `MAX_MESSAGES` = 1000 entries) is sent to maintain continuity.
 
 ### Narrative Modes
 The Game Master responds to three primary events:

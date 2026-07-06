@@ -2,32 +2,21 @@
 
 ## Status
 
-> Status: Implemented (Phase 2+). See [ADR-014](../adr/adr-014-action-pipeline.md) for rationale. [ADR-027](../adr/adr-027-hexagonal-architecture-migration.md) superseded ADR-014's `ActionPipelineBackend` trait with direct fields on `ActionPipeline` (no behaviour change).
+> Status: Implemented. See [ADR-014](../adr/adr-014-action-pipeline.md) for rationale, [ADR-027](../adr/adr-027-hexagonal-architecture-migration.md) for the ports/traits collapse.
 
 ## Objective
 
-The action pipeline orchestrates the FreeAction lifecycle: pre-snapshot, narrate, post-generation agents, engine commit, trigger continuation, finalize. It exists to replace the 1.3k-line `execute_action_impl` monolith (B3 finding) with named phases that share borrow-checker-friendly structs, expose test seams, and unify the normal action and retry flows. Every `Arc` boundary is intentional: cheap to clone, but borrowing is preferred when lifetimes allow.
+The action pipeline orchestrates the FreeAction lifecycle: pre-snapshot, narrate, post-generation agents, engine commit, trigger continuation, finalize. Phases share borrow-checker-friendly structs, expose test seams, and unify the normal action and retry flows. Every `Arc` boundary is intentional: cheap to clone, but borrowing is preferred when lifetimes allow.
 
 ## Components
 
-| Component | File | Purpose |
-|-----------|------|---------|
-| `ActionPipeline` | `src/application/action_pipeline/pipeline.rs` | Pipeline orchestrator. Holds direct fields: `Arc<LayeredPromptAssembler>`, `Arc<LlmCallRecorder>`, `Arc<AgentRegistry>`. No trait (post-ADR-027). |
-| `PipelineInputs` | `src/application/action_pipeline/phases.rs` | Owned struct bundling pipeline input parameters (`input: String`, `Arc<WorldCard>`, `Arc<MapDef>`, `Arc<PlayerCard>`, `Vec<NpcCard>`). |
-| `PipelineRun<'a>` | `src/application/action_pipeline/phases.rs` | Borrowed `(pipeline, ctx)` pair constructed once per `run_from_input` call. Routes all phase methods without per-method `ctx` parameter. |
-| `ActionOutcome` | `src/application/action_pipeline/pipeline.rs` | `Completed` or `Cancelled`. Returned by `PipelineResult<T>`; only `Cancelled` uses the `Err` path. |
-| `spawn_pipeline_task` | `src/application/spawn.rs` | `pub(crate)` helper deduping `Arc::clone` + `tokio::task::spawn_blocking` for all blocking callers. |
-| `phase_pre_main_snapshot` | `pipeline.rs` (impl `PipelineRun`) | Sets `status = Generating`, `phase = Narrating`, persists pre-main snapshot. |
-| `phase_narrate` | `phases.rs` | Builds prompt context, calls LLM narrator, appends `MessageType::Narration`, returns `(state, text, backend, model)`. |
-| `phase_post_generation` | `phases.rs` | Sets `phase = Quantifying`, runs post-generation agents (e.g. quantifier), handles low-confidence fallback. |
-| `phase_engine_commit` | `pipeline.rs` (impl `ActionPipeline`) | Pure function: delegates to `execute_freeaction_impl` with `FreeActionContext`. Returns `TurnResult`. |
-| `phase_trigger_continuation_raw` | `phases.rs` | Sets `phase = GeneratingEvent`, calls trigger LLM, commits via `commit_trigger_narration`. |
-| `reconcile_post_trigger_npcs` | `phases.rs` | Re-runs quantifier after trigger narration, applies NPC events. |
-| `build_trigger_request` | `phases.rs` | Builds `StoredTriggerContext` if trigger matched. Returns `Option`. |
-| `run_post_generation_agents` | `pipeline.rs` | Filters `AgentRegistry` for `ExecutionPhase::PostGeneration`, merges `StatePatch`es into `QuantifierResult`. |
-| `phase_finalize` | `pipeline.rs` | Resets status to `Idle` (or leaves `Error`), clears phase, persists. |
-| `handle_cancellation` | `pipeline.rs` | Loads fresh state, sets `Idle`, persists, returns `ActionOutcome::Cancelled`. |
-| `map_cancelled` | `pipeline.rs` | Wraps phase results to convert inner `Cancelled` into outer `Cancelled` via `handle_cancellation`. |
+The pipeline is split across three modules. Each is load-bearing for one contract:
+
+- **`ActionPipeline`** (`src/application/action_pipeline/pipeline.rs`) — orchestrator. Holds the three injected services by `Arc`. Constructed once at startup; one instance per game.
+- **`PipelineInputs` + `PipelineRun<'a>`** (`src/application/action_pipeline/phases.rs`) — input snapshot and per-call borrow pair that decouples phase methods from `&GameServiceContext`. See the `PipelineRun` section below for the borrow contract.
+- **`ActionOutcome`** (`src/application/action_pipeline/pipeline.rs`) — return type of every phase. Two variants: `Completed` and `Cancelled`. The pipeline uses `Err(ActionOutcome::Cancelled)` exclusively; every other failure path returns `Ok(())` and writes the failure into `state.narrative.input_buffer.status`.
+
+Phase methods themselves are private. They are listed in the [Phase Flow](#phase-flow) mermaid and described at the section headers below; they do not belong in a registry.
 
 ## PipelineInputs
 
@@ -50,11 +39,11 @@ All `Arc<...>` fields in `PipelineInputs` are cheap to clone (refcount bump). `V
 
 ## PipelineRun<'a> Borrow Mechanics
 
-The borrow pattern is the load-bearing design choice of this module. Each phase method signature drops the `ctx: &GameServiceContext` parameter and becomes a method on `PipelineRun<'a>`. Three reasons:
+Each phase method is a method on `PipelineRun<'a>`, not a free function. This contract is enforced by every phase signature: dropping the `ctx: &GameServiceContext` parameter and routing phase calls through the `PipelineRun` borrowed pair. The borrow supports three properties:
 
-1. `ActionPipeline` fields are `Arc` (cheap to clone, but borrowing works because the pipeline outlives a single call -- `GameService` keeps one `Arc<ActionPipeline>`).
-2. `GameServiceContext` is `Clone` but expensive (DB pool, storage backend, preset storage, settings `Arc<RwLock>`). Passing it through every phase signature would either duplicate the borrow or require threading through a wrapper.
-3. `PipelineRun::new(self, ctx)` happens ONCE in `run_from_input`. The run then routes all phase calls through `self`, eliminating the `ctx: &GameServiceContext` parameter from each phase signature.
+1. `ActionPipeline` is held by `Arc`; `GameService` keeps one `Arc<ActionPipeline>` for the process lifetime, so the borrow covers every pipeline call.
+2. `GameServiceContext` is `Clone` but expensive (DB pool, storage backend, preset storage, settings `Arc<RwLock>`). Threading `ctx: &GameServiceContext` through every phase signature would either duplicate the borrow or require an explicit wrapper.
+3. `PipelineRun::new(self, ctx)` is constructed once per call. After construction, no phase signature takes `ctx` again — the run carries it for every subsequent method.
 
 ```rust
 // pipeline.rs::run_from_input
@@ -112,7 +101,7 @@ Error-return checkpoints (orange): `phase_narrate::error_return` for missing roo
 
 ## Error Model
 
-Pipeline errors set `state.narrative.input_buffer.status = GenerationStatus::Error(...)` and return `Ok(())`. ONLY `ActionOutcome::Cancelled` uses the `Err` path. This is a deliberate architectural choice (B9 finding, see CHANGELOG `8e4acf5`).
+Pipeline errors set `state.narrative.input_buffer.status = GenerationStatus::Error(...)` and return `Ok(())`. ONLY `ActionOutcome::Cancelled` uses the `Err` path.
 
 Why: UI polls on `GenerationStatus` via `get_generating_status`. The state field IS the error channel. Returning `Err` from a pipeline phase would propagate the error up to the spawn_blocking closure where it has no consumer. The pipeline owns the error UI surface via `state`.
 
@@ -181,30 +170,20 @@ On cancel: `handle_cancellation` loads fresh state via `load_or_fresh(ctx)`, set
 
 ## Retry and Trigger Continuation
 
-`retry.rs` reuses pipeline phases without duplicating logic (B7 finding marked stale; retry already delegates):
+`retry.rs` reuses pipeline phases without duplicating logic:
 
 - `retry_main_narration`: calls `pipeline.run_from_input(ctx, state, input_text)`. Same pipeline as normal action.
 - `retry_event_continuation`: calls `pipeline.phase_trigger_continuation(state, trigger, ctx)`. The `phase_trigger_continuation` wrapper on `ActionPipeline` is `pub(crate)` so retry can construct its own `PipelineRun` without going through `run_from_input`. After continuation, calls `PipelineRun::reconcile_post_trigger_npcs` to re-quantify NPC state.
 
-Anchor finding: `ctx.find_retry_anchor(&messages)` locates the message whose snapshot the retry will restore. The old target message is saved as `state.narrative.retry_target` and appended back to history after the new generation completes.
+Anchor: `ctx.find_retry_anchor(&messages)` locates the message whose snapshot the retry will restore. The old target message is saved as `state.narrative.retry_target` and appended back to history after the new generation completes.
 
 Trigger context: `state.narrative.last_trigger` carries the `StoredTriggerContext` from the original trigger continuation. Retry reuses this to re-run the trigger LLM call without rebuilding the prompt.
 
 ## Cross-references
 
-- [ADR-014: Action Pipeline Architecture](../adr/adr-014-action-pipeline.md) -- original decision, `ActionPipelineBackend` trait since deleted
+- [ADR-014: Action Pipeline Architecture](../adr/adr-014-action-pipeline.md) -- original decision
 - [ADR-027: Hexagonal Architecture Migration](../adr/adr-027-hexagonal-architecture-migration.md) -- pipeline lives in `application/`, ports/traits collapsed
 - [architecture/system.md §2.5](../architecture/system.md) -- 200-word summary of the action_pipeline bullet (this spec goes deeper)
 - [system/game_flow.md](./game_flow.md) -- phase table + status enum definitions
 - [system/llm_processing.md](./llm_processing.md) -- LLM recorder + agent registry contracts used by the pipeline
 - [diagnostics/error_catalog.md](../diagnostics/error_catalog.md) -- error variants the pipeline may surface (room-not-found, empty response, LLM transport failures)
-
-## Open Findings
-
-Items from the abstraction-fixes super-plan Finding State table that affect this code:
-
-- **B3 `run_from_input` monolith** -- `deferred`, owner T1. State-machine rewrite scoped out per Phase 6.1 Issue 9. Current phased approach is the interim solution.
-- **B9 `error_return` returns `Ok`** -- `deferred`, no owner (deliberate arch per `8e4acf5`). Documented in this spec as the canonical error-channel shape.
-- **N3 new code self-invents `status` side-channel** -- `deferred`, owner T1. Consequence of B9; T1 fixes the root cause.
-- **N5 prompt-context + LLM + persist drift between `ArrivalTaskContext` and `phase_narrate`** -- `deferred`, owner T2-ARCH. One deep Narration module split across two adapters (arrival service + action pipeline). Reframed from the original "two reimplementations" finding -- architecture-lens analysis says these are the same module split across compositions.
-- **N11/N17/N20/M7/M8 + former T8** -- `closed`, extracted to `reliability-and-cancellation-plan.md`. Cancellation plumbing (R2) is the load-bearing work for the N17 checks this code relies on.

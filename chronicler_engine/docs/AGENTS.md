@@ -30,7 +30,7 @@ Accumulated violations in existing docs: invoke the [`chronicler-docs-hygiene`](
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-07-06 00:07 UTC*
+*Index last generated: 2026-07-06 11:24 UTC*
 
 ### `docs/adr/`
 
@@ -82,7 +82,6 @@ Accumulated violations in existing docs: invoke the [`chronicler-docs-hygiene`](
 - [Plan: Abstraction Anti-Pattern Prevention via Advisory Healthcheck](./plans/abstraction-antipattern-healthcheck-plan.md)
 - [Super-Plan: Abstraction-Fixes Follow-Up](./plans/abstraction-fixes-followup-superplan.md)
 - [Extend subagent-guardrails: reliable subagent detection + block `git reset` & `git stash`](./plans/extend-subagent-guardrails-reliable-subagent-detection-block.md)
-- [Fix Top 3 Hexagon-Investigation Anomalies](./plans/fix-top-3-hexagon-investigation-anomalies.md)
 - [Plan: Mapless Worlds via Freeform Location Names](./plans/mapless-worlds-plan.md)
 - [Plan: pi-plan-mode Extension Overhaul](./plans/pi-plan-mode-overhaul.md)
 - [Plan: Reliability and Cancellation](./plans/reliability-and-cancellation-plan.md)

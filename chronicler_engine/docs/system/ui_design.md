@@ -97,7 +97,7 @@
 - Background: `--color-bg-secondary`
 - Border-bottom: 1px solid `--color-border`
 - Padding: 0 16px
-- Tabs: Game | Settings
+- Tabs: rendered from current configuration; the full tab list (Game, Settings, Prompt Presets, Worlds, Games, LLM Messages) is documented in [`system/dashboard.md`](./dashboard.md), this page specifies the styling tokens only
 - Active tab: green text (`--color-accent-green`), green bottom border
 - Inactive tab: muted text (`--color-text-muted`), transparent border
 - Hover: muted text brightens to primary

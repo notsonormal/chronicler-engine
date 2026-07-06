@@ -5,10 +5,35 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
 use crate::adapters::driving::cli::{Args, list_available_worlds, resolve_engine_data_path};
+use crate::adapters::driven::storage::Storage;
+use crate::adapters::driven::storage::db::DbPool;
+use crate::adapters::driving::http::{ServerConfig, ServerResources};
+use crate::bootstrap::wiring::{build_game_service, build_text_check_service};
+use crate::domain::model::character::{NpcCard, PlayerCard};
+use crate::domain::model::map::MapDef;
 use crate::domain::model::settings::AppSettings;
-use crate::adapters::driving::http::ServerConfig;
+use crate::domain::model::world::WorldCard;
+use crate::error::EngineError;
 
 pub(crate) const PRESET_STORAGE_GAME_ID: u64 = 1;
+
+/// Output of `prepare_data`: db pool, world + persona data, and storage Arcs
+/// (one for the active game, one shared for preset lookups).
+struct PreparedData {
+    db_pool: DbPool,
+    storage: Arc<Storage>,
+    preset_storage: Arc<Storage>,
+    world_card: WorldCard,
+    map: Arc<MapDef>,
+    player: PlayerCard,
+    npcs_map: HashMap<String, NpcCard>,
+}
+
+/// Output of `prepare_state`: tokio runtime + state handles + settings.
+struct StateResources {
+    runtime: tokio::runtime::Runtime,
+    settings: Arc<RwLock<AppSettings>>,
+}
 
 pub fn run(args: Args) -> crate::error::Result<()> {
     if args.list_worlds {
@@ -16,38 +41,42 @@ pub fn run(args: Args) -> crate::error::Result<()> {
         return Ok(());
     }
 
+    let data = prepare_data(&args)?;
+    let config = ServerConfig {
+        port: args.port,
+        bind_attempts: None,
+    };
+    let state = prepare_state(&args, &data)?;
+    start_server(data, state, config)?;
+    Ok(())
+}
+
+/// Phase B/C: resolve db path, seed presets + game data, look up world + persona,
+/// resolve active game id, and construct storage Arcs.
+fn prepare_data(args: &Args) -> crate::error::Result<PreparedData> {
     let data_dir = resolve_engine_data_path();
     let db_dir = std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(std::path::PathBuf::from))
         .unwrap_or_else(|| data_dir.clone());
     let db_path = db_dir.join(format!("chronicler_{}.db", args.port));
-    let db_pool = crate::adapters::driven::storage::db::DbPool::new(
-        db_path.to_str().unwrap_or("chronicler.db"),
-    )?;
+    let db_pool = DbPool::new(db_path.to_str().unwrap_or("chronicler.db"))?;
 
     if let Err(e) = ensure_presets(&db_pool, &data_dir) {
         tracing::warn!("Failed to seed prompt presets: {e}");
     }
 
-    let seed_storage = crate::adapters::driven::storage::Storage::new_sqlite(
-        db_pool.clone(),
-        PRESET_STORAGE_GAME_ID,
-    );
-    if let Err(e) = super::load::seed_game_data(&seed_storage, &data_dir) {
+    let preset_storage = Arc::new(Storage::new_sqlite(db_pool.clone(), PRESET_STORAGE_GAME_ID));
+    if let Err(e) = super::load::seed_game_data(&preset_storage, &data_dir) {
         tracing::warn!("Failed to seed game data: {e}");
     }
 
-    let lookup_storage = crate::adapters::driven::storage::Storage::new_sqlite(
-        db_pool.clone(),
-        PRESET_STORAGE_GAME_ID,
-    );
-    let world_with_map = match lookup_storage.get_world(&args.world)? {
+    let world_with_map = match preset_storage.get_world(&args.world)? {
         Some(w) => w,
         None => {
-            let all_worlds = lookup_storage.list_worlds()?;
+            let all_worlds = preset_storage.list_worlds()?;
             if all_worlds.is_empty() {
-                return Err(crate::error::EngineError::Config(
+                return Err(EngineError::Config(
                     "No worlds available in database".to_string(),
                 ));
             }
@@ -56,10 +85,10 @@ pub fn run(args: Args) -> crate::error::Result<()> {
                 args.world,
                 all_worlds[0].key
             );
-            match lookup_storage.get_world(&all_worlds[0].key)? {
+            match preset_storage.get_world(&all_worlds[0].key)? {
                 Some(w) => w,
                 None => {
-                    return Err(crate::error::EngineError::Config(
+                    return Err(EngineError::Config(
                         "Failed to load fallback world".to_string(),
                     ));
                 }
@@ -67,113 +96,124 @@ pub fn run(args: Args) -> crate::error::Result<()> {
         }
     };
 
-    let world_id = world_with_map.world_id;
-    let world_card = world_with_map.world_card;
-    let map = world_with_map.map;
+    let npcs: Vec<NpcCard> = preset_storage.list_characters(world_with_map.world_id)?;
+    let npcs_map: HashMap<String, NpcCard> = npcs.into_iter().map(|n| (n.id.clone(), n)).collect();
+    let world_arc = Arc::new(world_with_map.world_card.clone());
+    let map_arc = Arc::new(world_with_map.map);
 
-    let player = lookup_storage.get_persona(&args.persona)?.ok_or_else(|| {
-        crate::error::EngineError::Config(format!("Persona '{}' not found", args.persona))
-    })?;
+    let player = preset_storage
+        .get_persona(&args.persona)?
+        .ok_or_else(|| EngineError::Config(format!("Persona '{}' not found", args.persona)))?;
 
-    let active_game_id = super::init_game::resolve_game_id(
-        &db_pool,
-        &world_card,
-        &args.persona,
-        &player.sheet.name,
+    let active_game_id =
+        super::init_game::resolve_game_id(&db_pool, &world_arc, &args.persona, &player.sheet.name)?;
+    let storage = Arc::new(Storage::new_sqlite(db_pool.clone(), active_game_id));
+
+    Ok(PreparedData {
+        db_pool,
+        storage,
+        preset_storage,
+        world_card: world_with_map.world_card,
+        map: map_arc,
+        player,
+        npcs_map,
+    })
+}
+
+/// Phase D: load settings (optionally from `--settings-path`), build the tokio
+/// runtime, materialize state handles, and spawn the arrival task.
+fn prepare_state(args: &Args, data: &PreparedData) -> crate::error::Result<StateResources> {
+    let runtime = tokio::runtime::Runtime::new()
+        .map_err(|e| EngineError::Io(format!("runtime_new {}: {e}", "tokio_runtime")))?;
+
+    let world_arc = Arc::new(data.world_card.clone());
+    let player_arc = Arc::new(data.player.clone());
+
+    let state = super::init_game::load_game_state(
+        &data.storage,
+        &world_arc,
+        &data.map,
+        &player_arc,
+        &data.npcs_map,
     )?;
-    let storage = Arc::new(crate::adapters::driven::storage::Storage::new_sqlite(
-        db_pool.clone(),
-        active_game_id,
-    ));
 
-    let config = ServerConfig {
-        port: args.port,
-        bind_attempts: None,
-    };
-
-    let runtime = tokio::runtime::Runtime::new().map_err(|e| {
-        crate::error::EngineError::Io(format!("runtime_new {}: {e}", "tokio_runtime"))
-    })?;
-
-    let npcs = lookup_storage.list_characters(world_id)?;
-
-    let world_arc = Arc::new(world_card.clone());
-    let map_arc = Arc::new(map);
-    let player_arc = Arc::new(player.clone());
-    let npcs_map: HashMap<_, _> = npcs.into_iter().map(|n| (n.id.clone(), n)).collect();
-
-    let state =
-        super::init_game::load_game_state(&storage, &world_arc, &map_arc, &player_arc, &npcs_map)?;
-
-    let nearby_npcs: Vec<_> = state.scene.npcs_in_area.clone();
-    let all_npcs: Vec<_> = state.npcs.values().cloned().collect();
+    let nearby_npcs: Vec<NpcCard> = state.scene.npcs_in_area.clone();
+    let all_npcs: Vec<NpcCard> = state.npcs.values().cloned().collect();
     let room_id = state.movement.current_room_id.clone();
     let npcs_arc = Arc::new(state.npcs.clone());
 
     let settings = if let Some(path) = &args.settings_path {
         let content = std::fs::read_to_string(path).map_err(|e| {
-            crate::error::EngineError::Config(format!(
+            EngineError::Config(format!(
                 "Failed to read settings file {}: {e}",
                 path.display()
             ))
         })?;
         let imported: AppSettings = serde_json::from_str(&content).map_err(|e| {
-            crate::error::EngineError::Config(format!(
+            EngineError::Config(format!(
                 "Failed to parse settings file {}: {e}",
                 path.display()
             ))
         })?;
-        storage.save_settings(&imported).map_err(|e| {
-            crate::error::EngineError::Config(format!("Failed to save imported settings: {e}"))
-        })?;
+        data.storage
+            .save_settings(&imported)
+            .map_err(|e| EngineError::Config(format!("Failed to save imported settings: {e}")))?;
         tracing::info!("Imported settings from {}", path.display());
         imported
     } else {
-        crate::settings::load_settings(&storage).unwrap_or_else(|_| AppSettings::default())
+        crate::settings::load_settings(&data.storage).unwrap_or_else(|_| AppSettings::default())
     };
     let settings = Arc::new(RwLock::new(settings));
 
     super::init_game::spawn_arrival_task_if_needed(
         &runtime,
         &settings,
-        &storage,
+        &data.storage,
         &world_arc,
-        &map_arc,
+        &data.map,
         &player_arc,
         &npcs_arc,
         &room_id,
-        nearby_npcs,
-        all_npcs,
-        &db_pool,
+        nearby_npcs.clone(),
+        all_npcs.clone(),
+        &data.db_pool,
     );
 
-    let preset_storage =
-        crate::adapters::driven::storage::Storage::new_sqlite(db_pool, PRESET_STORAGE_GAME_ID);
-    let storage_arc_for_wiring = Arc::clone(&storage);
-    let preset_storage_arc = Arc::new(preset_storage);
-    let game_service = crate::bootstrap::wiring::build_game_service(
-        Arc::clone(&settings),
-        Arc::clone(&storage_arc_for_wiring),
-        Arc::clone(&preset_storage_arc),
-    )?;
-    let text_check_service =
-        crate::bootstrap::wiring::build_text_check_service(Arc::clone(&settings));
+    Ok(StateResources { runtime, settings })
+}
 
-    let resources = crate::adapters::driving::http::ServerResources {
-        storage,
-        preset_storage: preset_storage_arc,
-        settings,
-        game_service: Arc::new(game_service),
+/// Phase E: build preset_storage, game_service, text_check_service, ServerResources,
+/// and run the HTTP server to completion.
+fn start_server(
+    data: PreparedData,
+    state: StateResources,
+    config: ServerConfig,
+) -> crate::error::Result<()> {
+    let game_service = Arc::new(build_game_service(
+        Arc::clone(&state.settings),
+        Arc::clone(&data.storage),
+        Arc::clone(&data.preset_storage),
+    )?);
+    let text_check_service = build_text_check_service(Arc::clone(&state.settings));
+
+    let resources = ServerResources {
+        storage: data.storage,
+        preset_storage: data.preset_storage,
+        settings: state.settings,
+        game_service,
         text_check_service,
     };
 
-    let (_addr, server) = runtime.block_on(
-        crate::adapters::driving::http::run_server_with_config(resources, config),
-    )?;
-    runtime
+    let (_addr, server) =
+        state
+            .runtime
+            .block_on(crate::adapters::driving::http::run_server_with_config(
+                resources, config,
+            ))?;
+    state
+        .runtime
         .block_on(server)
-        .map_err(|e| crate::error::EngineError::Config(format!("Server stopped: {e}")))??;
-
+        .map_err(|e| EngineError::Config(format!("Server stopped: {e}")))??;
     Ok(())
 }
 
