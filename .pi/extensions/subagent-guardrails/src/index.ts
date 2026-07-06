@@ -11,17 +11,21 @@ interface SubagentInput extends Record<string, unknown> {
 	action?: unknown;
 }
 
-// Module-scoped flag: true when this extension instance is running inside a
-// forked subagent session. Set on `session_start` with reason "fork". Used by
-// Features 2, 3, and 4. Single source of truth for "am I a forked subagent."
-let isFork = false;
+// Module-scoped flag: true when running inside a subagent session spawned
+// by the pi-subagents extension. Set on `session_start` from the
+// `PI_SUBAGENT_CHILD === "1"` env var (set unconditionally in every spawned
+// child — sync, async, chain, parallel, fanout, fresh or forked context).
+// Top-level `pi` and `/fork` `/` `clone` slash commands don't spawn a child
+// and never set it. Used by Features 2, 3, 4. Feature 1 is parent-side and
+// skips when `isSubagent` is true.
+let isSubagent = false;
 
 export default function (pi: ExtensionAPI) {
 	// Feature 1 (#11): parent-side task-spec veto on `subagent` tool calls.
-	// In a forked subagent we are not the parent — skip.
+	// In a subagent we are not the parent — skip.
 	pi.on("tool_call", async (event) => {
 		if (!isToolCallEventType<"subagent", SubagentInput>("subagent", event)) return;
-		if (isFork) return;
+		if (isSubagent) return;
 		const result = checkTaskSpec({
 			task: event.input.task,
 			agent: event.input.agent,
@@ -31,32 +35,31 @@ export default function (pi: ExtensionAPI) {
 		return undefined;
 	});
 
-	// Feature 2 (#12): budget tracker. Reset state on fork session start.
-	pi.on("session_start", (event) => {
-		if (event.reason !== "fork") {
-			isFork = false;
-			return;
-		}
-		isFork = true;
+	// Feature 2 (#12): budget tracker. Reset state on subagent session start.
+	// Detection from `PI_SUBAGENT_CHILD` env var (see module header).
+	pi.on("session_start", () => {
+		isSubagent = process.env.PI_SUBAGENT_CHILD === "1";
+		if (!isSubagent) return;
 		onSessionStart();
 	});
 
 	pi.on("turn_end", () => {
-		if (!isFork) return;
+		if (!isSubagent) return;
 		onTurnEnd(pi);
 	});
 
-	// Feature 3 (#6): role anchor appended to forked subagent system prompt.
+	// Feature 3 (#6): role anchor appended to subagent system prompt.
 	pi.on("before_agent_start", async (event) => {
-		if (!isFork) return;
+		if (!isSubagent) return;
 		return { systemPrompt: event.systemPrompt + ROLE_ANCHOR };
 	});
 
-	// Feature 4 (#13): git commit/push/tag/merge/rebase veto in forked
+	// Feature 4 (#13): git commit/push/tag/merge/rebase/reset/stash veto in
 	// subagent `bash` calls only. Parent retains commit/push ownership.
+	// `git stash list` is exempt (read-only).
 	pi.on("tool_call", async (event) => {
 		if (!isToolCallEventType("bash", event)) return;
-		if (!isFork) return;
+		if (!isSubagent) return;
 		const result = checkGitVeto(event.input.command);
 		if (result.block) return result;
 		return undefined;

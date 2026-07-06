@@ -1,10 +1,12 @@
 // Feature 2 (#12): Time + turn budget.
-// Forked subagent-only. Absolute thresholds, single tier for all sessions.
-// Steers the worker when wall-time or turn-count crosses the threshold.
+// Subagent-only (any pi-subagents child run). Absolute thresholds, single
+// tier for all sessions. Steers the worker when wall-time or turn-count
+// crosses the threshold.
 //
-// State is held in a module-level closure scoped to the current forked
-// session. `session_start` with reason "fork" resets it (the extension
-// reloads on fork, so module state is fresh per child process).
+// State is held in a module-level closure scoped to the current subagent
+// session. `session_start` resets it when `PI_SUBAGENT_CHILD === "1"`
+// (the extension reloads on each session, so module state is fresh per
+// child process).
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
