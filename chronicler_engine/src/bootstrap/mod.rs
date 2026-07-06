@@ -7,14 +7,12 @@ pub mod llm_factory;
 mod load;
 mod logging;
 mod run;
-mod state;
 pub mod text_check_factory;
 mod validate;
 pub mod wiring;
 
 pub use logging::init_logging;
 pub use run::run;
-pub use state::build_fresh_initial_state;
 pub use validate::validate_loaded_data;
 #[cfg(test)]
 mod llm_factory_tests;
