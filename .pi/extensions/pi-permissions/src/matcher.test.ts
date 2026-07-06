@@ -29,17 +29,28 @@ test("matcher: returns null when no rule matches", () => {
 
 test("matcher: each default rule matches its positive case", () => {
 	const set = compile(Object.fromEntries(DEFAULT_RULES.map((r) => [r.name, r.pattern])));
-	const positives: Record<string, string> = {
-		"git-commit": "git commit -m wip",
-		"git-push": "git push origin main",
-		"git-tag": "git tag v1.0",
-		"git-merge": "git merge feature",
-		"git-rebase": "git rebase main",
-		"git-reset": "git reset --hard HEAD~1",
-		"git-pull": "git pull origin main",
-		"mnt-access": "ls /mnt/c/Users",
-	};
-	for (const [rule, cmd] of Object.entries(positives)) {
+	const positives: Array<[string, string]> = [
+		["git-commit", "git commit -m wip"],
+		["git-push", "git push origin main"],
+		["git-tag", "git tag v1.0"],
+		["git-merge", "git merge feature"],
+		["git-rebase", "git rebase main"],
+		["git-reset", "git reset --hard HEAD~1"],
+		["git-pull", "git pull origin main"],
+		["git-cherry-pick", "git cherry-pick abc123"],
+		["git-revert", "git revert HEAD"],
+		["git-stash", "git stash push -m wip"],
+		["git-branch-force", "git branch -f main feature"],
+		["git-branch-force", "git branch -D broken"],
+		["git-branch-force", "git branch --force main feature"],
+		["git-checkout-branch", "git checkout -B main feature"],
+		["git-clean-force", "git clean -f"],
+		["git-clean-force", "git clean -fd"],
+		["git-clean-force", "git clean -fdx"],
+		["git-clean-force", "git clean --force"],
+		["mnt-access", "ls /mnt/c/Users"],
+	];
+	for (const [rule, cmd] of positives) {
 		assert.equal(firstMatchingRule(set, cmd), rule, `expected ${rule} to match: ${cmd}`);
 	}
 });
@@ -51,14 +62,27 @@ test("matcher: default rules do not match benign git commands", () => {
 		"git diff",
 		"git log --oneline -20",
 		"git add -A",
-		"git stash",
+		"git stash list",
 		"git fetch origin",
 		"git branch --list",
+		"git branch -d merged-feature",
 		"git checkout feature",
+		"git clean -n",
 	];
 	for (const cmd of benign) {
 		assert.equal(firstMatchingRule(set, cmd), null, `unexpected match: ${cmd}`);
 	}
+});
+
+test("matcher: git-stash carve-out permits `git stash list` only", () => {
+	const set = compile(Object.fromEntries(DEFAULT_RULES.map((r) => [r.name, r.pattern])));
+	assert.equal(firstMatchingRule(set, "git stash list"), null);
+	assert.equal(firstMatchingRule(set, "git stash"), "git-stash");
+	assert.equal(firstMatchingRule(set, "git stash pop"), "git-stash");
+	assert.equal(firstMatchingRule(set, "git stash apply"), "git-stash");
+	assert.equal(firstMatchingRule(set, "git stash drop"), "git-stash");
+	assert.equal(firstMatchingRule(set, "git stash clear"), "git-stash");
+	assert.equal(firstMatchingRule(set, "git stash push -m wip"), "git-stash");
 });
 
 test("matcher: mnt-access matches at start and after whitespace", () => {

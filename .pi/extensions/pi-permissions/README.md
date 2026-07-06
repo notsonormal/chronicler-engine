@@ -20,6 +20,12 @@ Project-local pi extension. Intercepts dangerous bash commands and prompts for c
 | `git-rebase` | `\bgit\s+rebase\b` | History rewrite |
 | `git-reset` | `\bgit\s+reset\b` | Local history / working tree |
 | `git-pull` | `\bgit\s+pull\b` | Fetch + possible merge |
+| `git-cherry-pick` | `\bgit\s+cherry-pick\b` | Commit transplant |
+| `git-revert` | `\bgit\s+revert\b` | Creates new commits |
+| `git-stash` | `\bgit\s+stash\b(?!\s+list\b)` | Hides work; `list` exempt (read-only) |
+| `git-branch-force` | `\bgit\s+branch\s+(?:-[fD]\|--force)\b` | Force-move / force-delete branch |
+| `git-checkout-branch` | `\bgit\s+checkout\s+-B\b` | Force-create branch over existing |
+| `git-clean-force` | `\bgit\s+clean\s+(?:-f[^\s]*\|--force\b)` | Destroys untracked files |
 | `mnt-access` | `(^\|\s)/mnt/` | WSL mount — Windows filesystem from Linux session |
 
 ## Install / dev

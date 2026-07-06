@@ -7,6 +7,12 @@
     "git-rebase": "\\bgit\\s+rebase\\b",
     "git-reset": "\\bgit\\s+reset\\b",
     "git-pull": "\\bgit\\s+pull\\b",
+    "git-cherry-pick": "\\bgit\\s+cherry-pick\\b",
+    "git-revert": "\\bgit\\s+revert\\b",
+    "git-stash": "\\bgit\\s+stash\\b(?!\\s+list\\b)",
+    "git-branch-force": "\\bgit\\s+branch\\s+(?:-[fD]|--force)\\b",
+    "git-checkout-branch": "\\bgit\\s+checkout\\s+-B\\b",
+    "git-clean-force": "\\bgit\\s+clean\\s+(?:-f[^\\s]*|--force\\b)",
     "mnt-access": "(^|\\s)/mnt/"
   }
 }
