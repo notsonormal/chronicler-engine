@@ -62,7 +62,7 @@ All three satisfy the `LlmMessageRepository` port; recorder wraps a provider + a
 | `create_test_player()`, `create_test_map()`, `create_test_npcs()` | Canonical character / map builders |
 | `create_test_state()`, `create_basic_test_state()`, `create_basic_test_state_no_scenario()` | Canonical `GameState` builders |
 | `seed_test_world(storage)` | Seeds `TestWorld::minimal()` + `TestPlayer::standard()` |
-| `make_test_ctx(storage, state)` | Builds `GameServiceContext` |
+| `make_test_ctx(storage, state)` | Builds `OpContext` |
 | `create_test_storage(id)`, `create_test_storage_arc(id)` | Sqlite-backed `Storage` with `games` row pre-seeded (FK-safe) |
 
 `create_test_storage(id)` delegates to `test_support::seed_default_game_row` so sqlite-backed tests satisfy the `game_state_snapshots.game_id` / `messages.game_id` FK constraints without relying on a migration-seeded default game.

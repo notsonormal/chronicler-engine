@@ -3,7 +3,7 @@ use crate::domain::model::map::Room;
 use crate::domain::model::prompt_preset::PromptPreset;
 use crate::domain::model::state::message_types::{MessageEntry, MessageType};
 use crate::domain::model::world::WorldCard;
-use crate::application::narrative_prompt::assembler::LayeredPromptAssembler;
+use crate::application::narrative_prompt::assembler::PromptAssembler;
 use crate::application::narrative_prompt::budget;
 use crate::application::narrative_prompt::context::make_prompt_context;
 use crate::application::narrative_prompt::types::NpcContext;
@@ -123,7 +123,7 @@ fn test_assemble_includes_all_layers() {
         &history,
     );
 
-    let assembler = LayeredPromptAssembler::new(budget::MAX_CONTEXT_TOKENS);
+    let assembler = PromptAssembler::new(budget::MAX_CONTEXT_TOKENS);
     let result = assembler
         .assemble(&context, &preset, &world.global_rules, Some("Short"))
         .expect("assemble should succeed");
@@ -216,7 +216,7 @@ fn test_assemble_empty_preset_sections() {
         &[],
     );
 
-    let assembler = LayeredPromptAssembler::new(budget::MAX_CONTEXT_TOKENS);
+    let assembler = PromptAssembler::new(budget::MAX_CONTEXT_TOKENS);
     let result = assembler
         .assemble(&context, &preset, &[], None)
         .expect("assemble should succeed");
@@ -246,7 +246,7 @@ fn test_assemble_respects_max_tokens() {
         &[],
     );
 
-    let assembler = LayeredPromptAssembler::new(budget::MAX_CONTEXT_TOKENS).with_max_tokens(512);
+    let assembler = PromptAssembler::new(budget::MAX_CONTEXT_TOKENS).with_max_tokens(512);
     let result = assembler
         .assemble(&context, &preset, &[], None)
         .expect("assemble should succeed");
@@ -286,7 +286,7 @@ fn test_assemble_budget_trimming() {
         &long_history,
     );
 
-    let assembler = LayeredPromptAssembler::new(2048);
+    let assembler = PromptAssembler::new(2048);
     let result = assembler
         .assemble(&context, &preset, &[], None)
         .expect("assemble should succeed");

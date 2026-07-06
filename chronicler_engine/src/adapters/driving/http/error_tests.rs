@@ -1,4 +1,3 @@
-//! [DOC: docs/system/game_flow.md]
 //! Tests for `ApplicationError::IntoResponse` mapping.
 
 use axum::body::to_bytes;

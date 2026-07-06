@@ -18,8 +18,8 @@ use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageType;
 use crate::domain::model::world::WorldCard;
-use crate::application::narrative_prompt::{NpcContext, make_prompt_context};
-use crate::application::context::GameServiceContext;
+use crate::application::narrative_prompt::{NpcContext, build_narration_prompt, make_prompt_context};
+use crate::application::context::OpContext;
 use crate::application::ports::llm_provider::{AGENT_NARRATOR, AGENT_TRIGGER};
 
 use super::pipeline::{ActionOutcome, ActionPipeline, PipelineResult};
@@ -34,11 +34,11 @@ pub struct PipelineInputs {
 
 pub(super) struct PipelineRun<'a> {
     pub(super) pipeline: &'a ActionPipeline,
-    pub(super) ctx: &'a GameServiceContext,
+    pub(super) ctx: &'a OpContext,
 }
 
 impl<'a> PipelineRun<'a> {
-    pub(super) fn new(pipeline: &'a ActionPipeline, ctx: &'a GameServiceContext) -> Self {
+    pub(super) fn new(pipeline: &'a ActionPipeline, ctx: &'a OpContext) -> Self {
         Self { pipeline, ctx }
     }
 
@@ -97,11 +97,13 @@ impl<'a> PipelineRun<'a> {
             &history,
         );
 
-        let assembled = match self.pipeline.assembler.assemble(
+        let assembled = match build_narration_prompt(
             &context,
             &preset,
-            &self.ctx.world.global_rules,
+            &self.ctx.world_snapshot.world.global_rules,
             Some(&response_length),
+            self.pipeline.assembler.max_context_tokens,
+            self.pipeline.assembler.max_tokens,
         ) {
             Ok(a) => a,
             Err(e) => return self.error_return(state, map_llm_error(&e)),
@@ -180,7 +182,7 @@ impl<'a> PipelineRun<'a> {
         quantifier_result
     }
 
-    pub(super) fn phase_trigger_continuation_raw(
+    pub(super) fn phase_trigger_continuation_llm_call(
         &self,
         mut state: GameState,
         trigger: &StoredTriggerContext,
@@ -337,7 +339,7 @@ impl<'a> PipelineRun<'a> {
             .assemble(
                 &trigger_ctx,
                 &preset,
-                &self.ctx.world.global_rules,
+                &self.ctx.world_snapshot.world.global_rules,
                 Some(&response_length),
             )
             .ok()?;

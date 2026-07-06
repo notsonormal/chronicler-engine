@@ -3,8 +3,8 @@
 
 use std::sync::Arc;
 
-use crate::application::context::{self, GameServiceContext};
-use crate::application::narrative_prompt::{self, make_prompt_context, NpcContext};
+use crate::application::context::{self, OpContext};
+use crate::application::narrative_prompt::{build_narration_prompt, make_prompt_context, NpcContext};
 use crate::application::ports::llm_provider::AGENT_NARRATOR;
 use crate::application::scenario::inject_scenario_logs;
 use crate::domain::model::character::NpcCard;
@@ -13,12 +13,8 @@ use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::GenerationStatus;
 use crate::domain::model::state::message_types::MessageType;
 
-/// Background arrival narration task.
-///
-/// Loads latest snapshot, builds prompt, calls LLM narrator, persists result.
-/// Spawned via `spawn_blocking` from `bootstrap::init_game::spawn_arrival_task_if_needed`.
 pub struct ArrivalTaskContext {
-    pub(crate) ctx: GameServiceContext,
+    pub(crate) ctx: OpContext,
     pub(crate) room_id: String,
     pub(crate) arrival_preset: Option<PromptPreset>,
     pub(crate) response_length: String,
@@ -33,7 +29,7 @@ impl ArrivalTaskContext {
     #[doc(hidden)]
     #[allow(clippy::too_many_arguments)]
     pub fn new_for_test(
-        ctx: GameServiceContext,
+        ctx: OpContext,
         room_id: String,
         nearby_npcs: Vec<NpcCard>,
         all_npcs: Vec<NpcCard>,
@@ -65,22 +61,26 @@ impl ArrivalTaskContext {
         let mut state = match self.ctx.storage.load_latest_snapshot() {
             Ok(Some(snap)) => GameState::from_snapshot(
                 &snap,
-                Arc::clone(&self.ctx.world),
-                Arc::clone(&self.ctx.map),
-                Arc::clone(&self.ctx.player),
-                (*self.ctx.npcs).clone(),
+                Arc::clone(&self.ctx.world_snapshot.world),
+                Arc::clone(&self.ctx.world_snapshot.map),
+                Arc::clone(&self.ctx.world_snapshot.player),
+                (*self.ctx.world_snapshot.npcs).clone(),
             ),
             _ => {
                 tracing::warn!("No snapshot found in arrival task; starting fresh");
-                let starting_room_id = self.ctx.world.starting_room_id();
+                let starting_room_id = self.ctx.world_snapshot.world.starting_room_id();
                 let mut s = GameState::new(
-                    Arc::clone(&self.ctx.world),
-                    Arc::clone(&self.ctx.map),
-                    Arc::clone(&self.ctx.player),
-                    (*self.ctx.npcs).values().cloned().collect(),
+                    Arc::clone(&self.ctx.world_snapshot.world),
+                    Arc::clone(&self.ctx.world_snapshot.map),
+                    Arc::clone(&self.ctx.world_snapshot.player),
+                    (*self.ctx.world_snapshot.npcs).values().cloned().collect(),
                     starting_room_id,
                 );
-                inject_scenario_logs(&mut s, &self.ctx.world, &self.ctx.player);
+                inject_scenario_logs(
+                    &mut s,
+                    &self.ctx.world_snapshot.world,
+                    &self.ctx.world_snapshot.player,
+                );
                 s
             }
         };
@@ -91,6 +91,7 @@ impl ArrivalTaskContext {
 
         let room = match self
             .ctx
+            .world_snapshot
             .map
             .overworld
             .regions
@@ -103,40 +104,34 @@ impl ArrivalTaskContext {
         };
 
         let prompt_context = make_prompt_context(
-            &self.ctx.world,
+            &self.ctx.world_snapshot.world,
             room,
             NpcContext {
                 all_npcs: &self.all_npcs,
                 npcs_in_area: &self.nearby_npcs,
             },
-            &self.ctx.player,
+            &self.ctx.world_snapshot.player,
             "",
             &[],
         );
 
         let narration = match self.arrival_preset.as_ref() {
-            Some(preset) => {
-                let mut assembler =
-                    narrative_prompt::LayeredPromptAssembler::new(self.max_context_tokens);
-                if let Some(max) = self.max_tokens {
-                    assembler = assembler.with_max_tokens(max);
-                }
-                assembler
-                    .assemble(
-                        &prompt_context,
-                        preset,
-                        &self.ctx.world.global_rules,
-                        Some(&self.response_length),
-                    )
-                    .and_then(|assembled| {
-                        self.recorder.complete(
-                            AGENT_NARRATOR,
-                            &assembled.system_prompt,
-                            &assembled.user_prompt,
-                            Some(assembled.max_tokens),
-                        )
-                    })
-            }
+            Some(preset) => build_narration_prompt(
+                &prompt_context,
+                preset,
+                &self.ctx.world_snapshot.world.global_rules,
+                Some(&self.response_length),
+                self.max_context_tokens,
+                self.max_tokens,
+            )
+            .and_then(|assembled| {
+                self.recorder.complete(
+                    AGENT_NARRATOR,
+                    &assembled.system_prompt,
+                    &assembled.user_prompt,
+                    Some(assembled.max_tokens),
+                )
+            }),
             None => Err(crate::error::EngineError::Config(
                 "No active preset found for arrival narration".into(),
             )),

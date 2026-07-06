@@ -6,6 +6,7 @@ pub mod agents;
 pub mod application_service;
 pub mod arrival_service;
 pub mod context;
+pub mod error;
 pub mod game_service;
 pub mod generation_guard;
 pub mod llm_recorder;
@@ -23,7 +24,7 @@ pub use application_service::{
 };
 
 pub use context::{
-    delete_and_remove_message, map_llm_error, save_message_and_snapshot, GameServiceContext,
+    delete_and_remove_message, map_llm_error, save_message_and_snapshot, OpContext, WorldSnapshot,
 };
 pub use game_service::GameService;
 pub use generation_guard::GenerationGuard;
@@ -32,9 +33,13 @@ pub use query_handlers::*;
 pub(crate) use spawn::spawn_pipeline_task;
 
 #[cfg(test)]
-mod application_service_tests;
-#[cfg(test)]
 mod context_tests;
+
+#[cfg(test)]
+mod error_tests;
+
+#[cfg(test)]
+mod is_generating_invariant_tests;
 
 #[cfg(test)]
 mod llm_recorder_tests;

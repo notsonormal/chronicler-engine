@@ -20,7 +20,7 @@ let service = GameService::with_mock_quantifier(
     Arc::new(MockBackend::new()),
 );
 
-let ctx = GameServiceContext::new(/* ... */);
+let ctx = OpContext::new(/* ... */);
 service.execute_action(ctx, "look around".to_string());
 ```
 

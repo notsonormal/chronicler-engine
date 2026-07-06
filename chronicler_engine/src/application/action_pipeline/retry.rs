@@ -5,14 +5,14 @@ use std::sync::Arc;
 
 use tracing::instrument;
 use crate::application::action_pipeline::pipeline::ActionOutcome;
-use crate::application::context::{GameServiceContext, load_or_fresh, save_state};
+use crate::application::context::{OpContext, load_or_fresh, save_state};
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageType;
 use crate::application::game_service::GameService;
 
 #[instrument(skip(service, ctx))]
-pub fn retry_last_response_impl(service: &GameService, ctx: GameServiceContext) {
+pub fn retry_last_response_impl(service: &GameService, ctx: OpContext) {
     let messages = match ctx.load_messages() {
         Ok(msgs) => msgs,
         Err(e) => {
@@ -66,10 +66,10 @@ pub fn retry_last_response_impl(service: &GameService, ctx: GameServiceContext) 
 
     let mut state = GameState::from_snapshot(
         &snapshot,
-        Arc::clone(&ctx.world),
-        Arc::clone(&ctx.map),
-        Arc::clone(&ctx.player),
-        (*ctx.npcs).clone(),
+        Arc::clone(&ctx.world_snapshot.world),
+        Arc::clone(&ctx.world_snapshot.map),
+        Arc::clone(&ctx.world_snapshot.player),
+        (*ctx.world_snapshot.npcs).clone(),
     );
 
     let mut truncated = messages;
@@ -99,7 +99,7 @@ pub fn retry_last_response_impl(service: &GameService, ctx: GameServiceContext) 
     }
 }
 
-pub(crate) fn save_retry_error(ctx: &GameServiceContext, message: impl Into<String>) {
+pub(crate) fn save_retry_error(ctx: &OpContext, message: impl Into<String>) {
     let mut state = load_or_fresh(ctx);
     state.narrative.input_buffer.status = GenerationStatus::Error(message.into());
     if let Err(e) = save_state(ctx, &state) {
@@ -109,7 +109,7 @@ pub(crate) fn save_retry_error(ctx: &GameServiceContext, message: impl Into<Stri
 
 pub(crate) fn retry_event_continuation(
     service: &GameService,
-    ctx: &GameServiceContext,
+    ctx: &OpContext,
     state: GameState,
 ) -> ActionOutcome {
     let Some(trigger) = state.narrative.last_trigger.clone() else {
@@ -146,7 +146,7 @@ pub(crate) fn retry_event_continuation(
 
 pub(crate) fn retry_main_narration(
     service: &GameService,
-    ctx: &GameServiceContext,
+    ctx: &OpContext,
     state: GameState,
     input_text: String,
 ) -> ActionOutcome {
@@ -155,7 +155,7 @@ pub(crate) fn retry_main_narration(
 }
 
 #[instrument(skip(service, ctx))]
-pub fn retrigger_event_impl(service: &GameService, ctx: &GameServiceContext) {
+pub fn retrigger_event_impl(service: &GameService, ctx: &OpContext) {
     let state = load_or_fresh(ctx);
     let outcome = retry_event_continuation(service, ctx, state);
     if let ActionOutcome::Cancelled = outcome {

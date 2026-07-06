@@ -8,6 +8,7 @@ use crate::domain::model::map::MapDef;
 use crate::domain::model::scenario::StartingScenario;
 use crate::domain::model::world::WorldCard;
 use crate::adapters::driving::http::AppState;
+use crate::adapters::driving::http::op_context_loader::load_op_context_for_active_game;
 
 use super::fragments::{render_world_edit_form, render_worlds_panel};
 use crate::adapters::driving::http::fragments::{
@@ -55,7 +56,7 @@ impl WorldForm {
 }
 
 pub async fn list_worlds_fragment(State(state): State<AppState>) -> Response<axum::body::Body> {
-    let ctx = match state.as_game_service_context() {
+    let ctx = match load_op_context_for_active_game(&state) {
         Ok(c) => c,
         Err(e) => return internal_error(format!("Failed to load context: {e}")),
     };
@@ -84,7 +85,7 @@ pub async fn create_world_handler(
     State(state): State<AppState>,
     Form(form): Form<WorldForm>,
 ) -> Response<axum::body::Body> {
-    let ctx = match state.as_game_service_context() {
+    let ctx = match load_op_context_for_active_game(&state) {
         Ok(c) => c,
         Err(e) => return internal_error(format!("Failed to load context: {e}")),
     };
@@ -126,7 +127,7 @@ pub async fn edit_world_form_handler(
     State(state): State<AppState>,
     Path(key): Path<String>,
 ) -> Response<axum::body::Body> {
-    let ctx = match state.as_game_service_context() {
+    let ctx = match load_op_context_for_active_game(&state) {
         Ok(c) => c,
         Err(e) => return internal_error(format!("Failed to load context: {e}")),
     };
@@ -150,7 +151,7 @@ pub async fn update_world_handler(
     Path(key): Path<String>,
     Form(form): Form<WorldForm>,
 ) -> Response<axum::body::Body> {
-    let ctx = match state.as_game_service_context() {
+    let ctx = match load_op_context_for_active_game(&state) {
         Ok(c) => c,
         Err(e) => return internal_error(format!("Failed to load context: {e}")),
     };

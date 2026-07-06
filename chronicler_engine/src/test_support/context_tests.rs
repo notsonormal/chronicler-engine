@@ -19,7 +19,7 @@ fn test_make_test_context_roundtrip() {
     let state = minimal_state();
     let ctx = make_test_context(state);
     assert!(ctx.storage.load_latest_snapshot().unwrap().is_some());
-    assert_eq!(ctx.world.name, "Test World");
+    assert_eq!(ctx.world_snapshot.world.name, "Test World");
 }
 
 #[test]
@@ -27,5 +27,5 @@ fn test_make_test_context_with_sqlite_roundtrip() {
     let state = minimal_state();
     let ctx = make_test_context_with_sqlite(state).unwrap();
     assert!(ctx.storage.load_latest_snapshot().unwrap().is_some());
-    assert_eq!(ctx.world.name, "Test World");
+    assert_eq!(ctx.world_snapshot.world.name, "Test World");
 }

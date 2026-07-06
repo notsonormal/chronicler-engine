@@ -3,11 +3,11 @@
 
 use tracing::instrument;
 use crate::application::action_pipeline::pipeline::ActionOutcome;
-use crate::application::context::{GameServiceContext, load_or_fresh};
+use crate::application::context::{OpContext, load_or_fresh};
 use crate::application::game_service::GameService;
 
 #[instrument(skip(service, ctx), fields(input_length))]
-pub fn execute_action_impl(service: &GameService, ctx: GameServiceContext, input: String) {
+pub fn execute_action_impl(service: &GameService, ctx: OpContext, input: String) {
     let mut state = load_or_fresh(&ctx);
     state.narrative.last_trigger = None;
     let pipeline = service.pipeline();

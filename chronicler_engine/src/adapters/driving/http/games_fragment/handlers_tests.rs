@@ -3,6 +3,7 @@ use axum::{http::StatusCode, response::IntoResponse};
 use crate::adapters::driving::http::games_fragment::handlers::{
     list_games_fragment, switch_game_handler,
 };
+use crate::adapters::driving::http::op_context_loader::load_op_context_for_active_game;
 use crate::test_support::TestAppBuilder;
 
 #[tokio::test]
@@ -15,9 +16,7 @@ async fn test_list_games_empty() {
 #[tokio::test]
 async fn test_switch_game_ok() {
     let state = TestAppBuilder::default_test().build_app_state();
-    let ctx = state
-        .as_game_service_context()
-        .expect("Failed to load context");
+    let ctx = load_op_context_for_active_game(&state).expect("Failed to load context");
     let _ = state.application_service.create_game(ctx.clone());
     let games = state.application_service.list_games(ctx).unwrap();
     if let Some(game) = games.first() {

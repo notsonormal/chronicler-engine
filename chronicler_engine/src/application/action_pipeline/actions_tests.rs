@@ -1,6 +1,7 @@
 use std::sync::{Arc, Barrier};
 
 use crate::application::action_pipeline::execute_action_impl;
+use crate::application::context::load_state_for_test;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageType;
@@ -14,8 +15,6 @@ use crate::test_support::make_test_recorder;
 use crate::adapters::driven::llm::providers::MockBackend;
 use crate::domain::model::agent::{AgentContext, AgentResult, BackendSelector, ExecutionPhase};
 
-/// Wraps `QuantifierAgent` so tests can pause execution at `entered` and resume
-/// at `release`, letting them inspect state between phases deterministically.
 struct SyncQuantifierAgent {
     inner: QuantifierAgent,
     entered: Arc<Barrier>,
@@ -76,7 +75,7 @@ fn test_execute_action_impl_completes_and_persists_state() {
         as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
     let service = make_test_service(narrator_recorder, quantifier_provider);
     execute_action_impl(&service, ctx.clone(), "look".to_string());
-    let final_state = ctx.load_state_for_test();
+    let final_state = load_state_for_test(&ctx);
     assert_eq!(
         final_state.narrative.input_buffer.status,
         GenerationStatus::Idle
@@ -109,7 +108,7 @@ fn test_execute_action_impl_clears_last_trigger() {
         as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
     let service = make_test_service(narrator_recorder, quantifier_provider);
     execute_action_impl(&service, ctx.clone(), "look".to_string());
-    let final_state = ctx.load_state_for_test();
+    let final_state = load_state_for_test(&ctx);
     assert!(
         final_state.narrative.last_trigger.is_none(),
         "last_trigger should be cleared before pipeline runs"
@@ -125,7 +124,7 @@ fn test_execute_action_impl_handles_narration_error() {
         as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
     let service = make_test_service(narrator_recorder, quantifier_provider);
     execute_action_impl(&service, ctx.clone(), "look".to_string());
-    let final_state = ctx.load_state_for_test();
+    let final_state = load_state_for_test(&ctx);
     assert!(
         matches!(
             final_state.narrative.input_buffer.status,
@@ -145,7 +144,7 @@ fn test_execute_action_impl_handles_cancellation() {
         as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
     let service = make_test_service(narrator_recorder, quantifier_provider);
     execute_action_impl(&service, ctx.clone(), "look".to_string());
-    let final_state = ctx.load_state_for_test();
+    let final_state = load_state_for_test(&ctx);
     assert_eq!(
         final_state.narrative.input_buffer.status,
         GenerationStatus::Idle,
@@ -167,7 +166,7 @@ fn test_execute_action_impl_preserves_existing_input_log() {
         as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
     let service = make_test_service(narrator_recorder, quantifier_provider);
     execute_action_impl(&service, ctx.clone(), "examine room".to_string());
-    let final_state = ctx.load_state_for_test();
+    let final_state = load_state_for_test(&ctx);
     let entries: Vec<_> = final_state.narrative.history().into_iter().collect();
     let input_idx = entries
         .iter()
@@ -210,7 +209,7 @@ fn test_phase_transitions_to_quantifying_during_post_generation() {
     });
 
     entered.wait();
-    let mid_state = ctx.load_state_for_test();
+    let mid_state = load_state_for_test(&ctx);
     assert_eq!(
         mid_state.narrative.input_buffer.phase,
         GenerationPhase::Quantifying,
@@ -219,7 +218,7 @@ fn test_phase_transitions_to_quantifying_during_post_generation() {
 
     release.wait();
     handle.join().expect("Action thread should complete");
-    let final_state = ctx.load_state_for_test();
+    let final_state = load_state_for_test(&ctx);
     assert_eq!(
         final_state.narrative.input_buffer.phase,
         GenerationPhase::default(),
@@ -263,7 +262,7 @@ fn test_narration_saved_before_quantifying_phase() {
         narration_count >= 1,
         "Narration should be saved before quantifier completes"
     );
-    let mid_state = ctx.load_state_for_test();
+    let mid_state = load_state_for_test(&ctx);
     assert_eq!(
         mid_state.narrative.input_buffer.phase,
         GenerationPhase::Quantifying,

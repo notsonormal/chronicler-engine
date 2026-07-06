@@ -12,8 +12,6 @@ use crate::application::narrative_prompt::budget::truncate_to_budget;
 use crate::application::narrative_prompt::context::fit_messages_to_context;
 use crate::application::narrative_prompt::types::{NpcContext, PromptContext};
 
-/// Assembles prompt text from a PromptPreset into XML-wrapped sections.
-/// Section order: role → instructions → writing_style → global_rules → output_format
 pub fn assemble_prompt_text(
     preset: &PromptPreset,
     global_rules: &[String],
@@ -75,12 +73,12 @@ pub struct AssembledPrompt {
     pub max_tokens: u32,
 }
 
-pub struct LayeredPromptAssembler {
-    max_context_tokens: u32,
-    max_tokens: Option<u32>,
+pub struct PromptAssembler {
+    pub(crate) max_context_tokens: u32,
+    pub(crate) max_tokens: Option<u32>,
 }
 
-impl LayeredPromptAssembler {
+impl PromptAssembler {
     pub fn new(max_context_tokens: u32) -> Self {
         Self {
             max_context_tokens,
@@ -94,7 +92,7 @@ impl LayeredPromptAssembler {
     }
 }
 
-impl LayeredPromptAssembler {
+impl PromptAssembler {
     pub fn assemble(
         &self,
         context: &PromptContext,
@@ -127,6 +125,21 @@ impl LayeredPromptAssembler {
             max_tokens,
         })
     }
+}
+
+pub fn build_narration_prompt(
+    context: &PromptContext,
+    preset: &PromptPreset,
+    global_rules: &[String],
+    response_length: Option<&str>,
+    max_context_tokens: u32,
+    max_tokens: Option<u32>,
+) -> Result<AssembledPrompt, EngineError> {
+    let mut assembler = PromptAssembler::new(max_context_tokens);
+    if let Some(max) = max_tokens {
+        assembler = assembler.with_max_tokens(max);
+    }
+    assembler.assemble(context, preset, global_rules, response_length)
 }
 
 fn build_system_prompt(
@@ -408,7 +421,6 @@ impl<'a> LayerRenderer<'a> {
     }
 }
 
-/// Sanitize injection patterns (`{{...}}`) → `[FILTERED]`.
 pub(crate) fn sanitize_for_prompt(input: &str) -> String {
     let chars: Vec<char> = input.chars().collect();
     let mut result = String::with_capacity(input.len());

@@ -3,14 +3,14 @@
 
 use crate::application::ApplicationError;
 use crate::application::DebugStateView;
-use crate::application::context::{GameServiceContext, load_or_fresh};
+use crate::application::context::{OpContext, load_or_fresh};
 use crate::error::EngineError;
 use crate::application::ports::llm_message_repository::LlmMessage;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageEntry;
 
 pub fn get_generating_status(
-    ctx: GameServiceContext,
+    ctx: OpContext,
 ) -> Result<(GenerationStatus, GenerationPhase), ApplicationError> {
     let game_state = load_or_fresh(&ctx);
     Ok((
@@ -19,7 +19,7 @@ pub fn get_generating_status(
     ))
 }
 
-pub fn reset_generating_status(ctx: GameServiceContext) -> Result<(), ApplicationError> {
+pub fn reset_generating_status(ctx: OpContext) -> Result<(), ApplicationError> {
     let mut game_state = load_or_fresh(&ctx);
     game_state.narrative.input_buffer.status = GenerationStatus::Idle;
     let snapshot =
@@ -30,7 +30,7 @@ pub fn reset_generating_status(ctx: GameServiceContext) -> Result<(), Applicatio
     Ok(())
 }
 
-pub fn get_current_game_name(ctx: GameServiceContext) -> Result<String, ApplicationError> {
+pub fn get_current_game_name(ctx: OpContext) -> Result<String, ApplicationError> {
     match ctx.storage.get_game(ctx.storage.current_game_id())? {
         Some(g) => Ok(g.name),
         None => Ok("Unknown".to_string()),
@@ -38,7 +38,7 @@ pub fn get_current_game_name(ctx: GameServiceContext) -> Result<String, Applicat
 }
 
 pub fn list_latest_llm_messages(
-    ctx: GameServiceContext,
+    ctx: OpContext,
     limit: usize,
 ) -> Result<Vec<LlmMessage>, ApplicationError> {
     ctx.storage
@@ -47,7 +47,7 @@ pub fn list_latest_llm_messages(
 }
 
 pub fn get_story_log_entries(
-    ctx: GameServiceContext,
+    ctx: OpContext,
 ) -> Result<(Vec<MessageEntry>, bool), ApplicationError> {
     let game_state = load_or_fresh(&ctx);
     let entries: Vec<_> = game_state.narrative.history().to_vec();
@@ -56,14 +56,12 @@ pub fn get_story_log_entries(
 }
 
 pub fn get_input_status(
-    ctx: GameServiceContext,
+    ctx: OpContext,
 ) -> Result<(GenerationStatus, GenerationPhase), ApplicationError> {
     get_generating_status(ctx)
 }
 
-pub fn get_current_room_view(
-    ctx: GameServiceContext,
-) -> Result<(String, Option<String>), ApplicationError> {
+pub fn get_current_room_view(ctx: OpContext) -> Result<(String, Option<String>), ApplicationError> {
     let game_state = load_or_fresh(&ctx);
     let room = game_state
         .current_room()
@@ -78,7 +76,7 @@ pub fn get_current_room_view(
 }
 
 pub fn get_npc_headshots(
-    ctx: GameServiceContext,
+    ctx: OpContext,
     scene_only: bool,
 ) -> Result<Vec<(String, String)>, ApplicationError> {
     let game_state = load_or_fresh(&ctx);
@@ -107,7 +105,7 @@ pub fn get_npc_headshots(
     Ok(npc_data)
 }
 
-pub fn get_debug_state(ctx: GameServiceContext) -> Result<DebugStateView, ApplicationError> {
+pub fn get_debug_state(ctx: OpContext) -> Result<DebugStateView, ApplicationError> {
     let game_state = load_or_fresh(&ctx);
 
     let history_tail: Vec<MessageEntry> = game_state

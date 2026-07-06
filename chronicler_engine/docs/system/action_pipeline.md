@@ -13,7 +13,7 @@ The action pipeline orchestrates the FreeAction lifecycle: pre-snapshot, narrate
 The pipeline is split across three modules. Each is load-bearing for one contract:
 
 - **`ActionPipeline`** (`src/application/action_pipeline/pipeline.rs`) — orchestrator. Holds the three injected services by `Arc`. Constructed once at startup; one instance per game.
-- **`PipelineInputs` + `PipelineRun<'a>`** (`src/application/action_pipeline/phases.rs`) — input snapshot and per-call borrow pair that decouples phase methods from `&GameServiceContext`. See the `PipelineRun` section below for the borrow contract.
+- **`PipelineInputs` + `PipelineRun<'a>`** (`src/application/action_pipeline/phases.rs`) — input snapshot and per-call borrow pair that decouples phase methods from `&OpContext`. See the `PipelineRun` section below for the borrow contract.
 - **`ActionOutcome`** (`src/application/action_pipeline/pipeline.rs`) — return type of every phase. Two variants: `Completed` and `Cancelled`. The pipeline uses `Err(ActionOutcome::Cancelled)` exclusively; every other failure path returns `Ok(())` and writes the failure into `state.narrative.input_buffer.status`.
 
 Phase methods themselves are private. They are listed in the [Phase Flow](#phase-flow) mermaid and described at the section headers below; they do not belong in a registry.
@@ -27,22 +27,22 @@ Phase methods themselves are private. They are listed in the [Phase Flow](#phase
 
 ```mermaid
 flowchart LR
-    A[GameServiceContext ref] -->|borrowed for lifetime of run| R[PipelineRun]
+    A[OpContext ref] -->|borrowed for lifetime of run| R[PipelineRun]
     B[GameState owned] -->|moved in| RF[run_from_input]
     RF -->|clones Arc fields, clones Vec| PI[PipelineInputs owned]
     PI -->|passed by ref| PN[phase_narrate]
     PI -->|passed by ref| BP[build_trigger_request]
-    PI -->|passed by ref| TC[phase_trigger_continuation_raw]
+    PI -->|passed by ref| TC[phase_trigger_continuation_llm_call]
 ```
 
 All `Arc<...>` fields in `PipelineInputs` are cheap to clone (refcount bump). `Vec<NpcCard>` is owned because phase methods sometimes need to scan/filter without disturbing the state-owned NPC map.
 
 ## PipelineRun<'a> Borrow Mechanics
 
-Each phase method is a method on `PipelineRun<'a>`, not a free function. This contract is enforced by every phase signature: dropping the `ctx: &GameServiceContext` parameter and routing phase calls through the `PipelineRun` borrowed pair. The borrow supports three properties:
+Each phase method is a method on `PipelineRun<'a>`, not a free function. This contract is enforced by every phase signature: dropping the `ctx: &OpContext` parameter and routing phase calls through the `PipelineRun` borrowed pair. The borrow supports three properties:
 
 1. `ActionPipeline` is held by `Arc`; `GameService` keeps one `Arc<ActionPipeline>` for the process lifetime, so the borrow covers every pipeline call.
-2. `GameServiceContext` is `Clone` but expensive (DB pool, storage backend, preset storage, settings `Arc<RwLock>`). Threading `ctx: &GameServiceContext` through every phase signature would either duplicate the borrow or require an explicit wrapper.
+2. `OpContext` is `Clone` but expensive (DB pool, storage backend, preset storage, settings `Arc<RwLock>`). Threading `ctx: &OpContext` through every phase signature would either duplicate the borrow or require an explicit wrapper.
 3. `PipelineRun::new(self, ctx)` is constructed once per call. After construction, no phase signature takes `ctx` again — the run carries it for every subsequent method.
 
 ```rust
@@ -78,7 +78,7 @@ flowchart TD
     PostGen -->|phase=Quantifying<br/>run agents| Commit[phase_engine_commit]
     Commit -->|Err| ErrEngine[status=Error, return Ok]
     Commit -->|Ok TurnResult| TriggerReq{build_trigger_request?}
-    TriggerReq -->|Some| TriggerCont[phase_trigger_continuation_raw]
+    TriggerReq -->|Some| TriggerCont[phase_trigger_continuation_llm_call]
     TriggerReq -->|None| Finalize
     TriggerCont -->|cancel?| CC2((cancel checkpoint))
     CC2 -->|cancelled| HC2[handle_cancellation]
@@ -95,9 +95,9 @@ flowchart TD
     ErrTrigger --> End
 ```
 
-Cancel checkpoints (red diamonds): before persist in `phase_pre_main_snapshot`, after LLM call in `phase_narrate`, at start of `phase_trigger_continuation_raw`, after trigger LLM call. Each cancel returns `Err(ActionOutcome::Cancelled)`.
+Cancel checkpoints (red diamonds): before persist in `phase_pre_main_snapshot`, after LLM call in `phase_narrate`, at start of `phase_trigger_continuation_llm_call`, after trigger LLM call. Each cancel returns `Err(ActionOutcome::Cancelled)`.
 
-Error-return checkpoints (orange): `phase_narrate::error_return` for missing room / empty response / LLM error, `phase_trigger_continuation_raw` for trigger LLM error or empty response, `phase_engine_commit` for engine errors. All set `status = GenerationStatus::Error(...)` and return `Ok(())`.
+Error-return checkpoints (orange): `phase_narrate::error_return` for missing room / empty response / LLM error, `phase_trigger_continuation_llm_call` for trigger LLM error or empty response, `phase_engine_commit` for engine errors. All set `status = GenerationStatus::Error(...)` and return `Ok(())`.
 
 ## Error Model
 
@@ -123,9 +123,9 @@ Cross-link: [system/game_flow.md](./game_flow.md) for the `GenerationPhase` + `G
 ## spawn_pipeline_task
 
 ```rust
-pub(crate) fn spawn_pipeline_task<F>(game_service: &Arc<GameService>, ctx: GameServiceContext, f: F)
+pub(crate) fn spawn_pipeline_task<F>(game_service: &Arc<GameService>, ctx: OpContext, f: F)
 where
-    F: FnOnce(&GameService, GameServiceContext) + Send + 'static,
+    F: FnOnce(&GameService, OpContext) + Send + 'static,
 {
     let game_service = Arc::clone(game_service);
     tokio::task::spawn_blocking(move || {
@@ -163,8 +163,8 @@ Test paths use direct calls because they hold the spawn_blocking machinery thems
 
 1. **Pre-main** (pipeline.rs `phase_pre_main_snapshot`): before persisting pre-main snapshot.
 2. **Mid-narrate** (phases.rs `phase_narrate`): after the LLM narrator call returns, before `add_message`.
-3. **Pre-trigger** (phases.rs `phase_trigger_continuation_raw`): at function start, before persisting pre-event snapshot.
-4. **Mid-trigger** (phases.rs `phase_trigger_continuation_raw`): after the trigger LLM call returns, before commit.
+3. **Pre-trigger** (phases.rs `phase_trigger_continuation_llm_call`): at function start, before persisting pre-event snapshot.
+4. **Mid-trigger** (phases.rs `phase_trigger_continuation_llm_call`): after the trigger LLM call returns, before commit.
 
 On cancel: `handle_cancellation` loads fresh state via `load_or_fresh(ctx)`, sets `status = Idle`, clears `phase`, persists, returns `Err(ActionOutcome::Cancelled)`. The retry path (`retry.rs`) replicates this cleanup inline because it does not return through `map_cancelled`.
 

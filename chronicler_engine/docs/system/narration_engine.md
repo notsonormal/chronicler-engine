@@ -11,7 +11,7 @@ Transform the engine from a strict command parser into a hybrid free-text narrat
 All player input is treated as a **Free Action** and sent to the LLM for narration. The quantifier then detects if movement occurred. The engine must never respond with an error message for non-empty free-text input.
 
 ## Game Master Role
-The LLM operates as a Game Master / Narrator for the text adventure. Its context window is constructed using the **LayeredPromptAssembler** (see `llm_processing.md`) from the current game state:
+The LLM operates as a Game Master / Narrator for the text adventure. Its context window is constructed using the **PromptAssembler** (see `llm_processing.md`) from the current game state:
 
 - **World Lore**: The `WorldCard.global_rules` provide persistent setting and lore context, injected into the **system prompt** (Layer 0) alongside the base rules. They no longer appear in the `<WorldLore>` user data layer.
 - **Room Context**: The current `Room.name` and `Room.description` ground the scene.

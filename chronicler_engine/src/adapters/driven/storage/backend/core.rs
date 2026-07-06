@@ -23,7 +23,7 @@ use super::test_support::{TestFailureHandle, TestOverride};
 
 pub struct Storage {
     game_id: AtomicU64,
-    backend: Mutex<LayeredBackend>,
+    backend: Mutex<BackendKind>,
 }
 
 pub struct InMemoryData {
@@ -63,9 +63,9 @@ pub enum Backend {
     InMemory(Box<InMemoryData>),
 }
 
-/// Non-recursive by design: `Test.base` is `Box<Backend>`, not `Box<LayeredBackend>` —
+/// Non-recursive by design: `Test.base` is `Box<Backend>`, not `Box<BackendKind>` —
 /// enforces "at most one Test layer" (replace-not-nest invariant).
-pub enum LayeredBackend {
+pub enum BackendKind {
     Direct(Backend),
     #[cfg(feature = "testing")]
     Test {
@@ -100,14 +100,14 @@ impl Storage {
     pub fn new_sqlite(pool: DbPool, game_id: u64) -> Self {
         Self {
             game_id: AtomicU64::new(game_id),
-            backend: Mutex::new(LayeredBackend::Direct(Backend::Sqlite { pool })),
+            backend: Mutex::new(BackendKind::Direct(Backend::Sqlite { pool })),
         }
     }
 
     pub fn new_in_memory() -> Self {
         Self {
             game_id: AtomicU64::new(0), // No default game - calling code should create one explicitly
-            backend: Mutex::new(LayeredBackend::Direct(Backend::InMemory(Box::new(
+            backend: Mutex::new(BackendKind::Direct(Backend::InMemory(Box::new(
                 InMemoryData::empty(),
             )))),
         }
@@ -135,20 +135,20 @@ impl Storage {
         };
         let current = mem::replace(
             &mut *backend,
-            LayeredBackend::Direct(Backend::InMemory(Box::new(InMemoryData::empty()))),
+            BackendKind::Direct(Backend::InMemory(Box::new(InMemoryData::empty()))),
         );
         let next = match current {
-            LayeredBackend::Test { base, overrides } => {
+            BackendKind::Test { base, overrides } => {
                 overrides
                     .lock()
                     .unwrap_or_else(|e| e.into_inner())
                     .insert(method, override_);
-                LayeredBackend::Test { base, overrides }
+                BackendKind::Test { base, overrides }
             }
-            LayeredBackend::Direct(other) => {
+            BackendKind::Direct(other) => {
                 let mut overrides = HashMap::new();
                 overrides.insert(method, override_);
-                LayeredBackend::Test {
+                BackendKind::Test {
                     base: Box::new(other),
                     overrides: Arc::new(Mutex::new(overrides)),
                 }
@@ -164,8 +164,8 @@ impl Storage {
             Err(poisoned) => poisoned.into_inner(),
         };
         let base = match backend {
-            LayeredBackend::Direct(other) => Box::new(other),
-            LayeredBackend::Test { base, .. } => {
+            BackendKind::Direct(other) => Box::new(other),
+            BackendKind::Test { base, .. } => {
                 debug_assert!(
                     false,
                     "with_overrides called on Storage already in Test mode; existing overrides silently dropped"
@@ -175,7 +175,7 @@ impl Storage {
         };
         Self {
             game_id: self.game_id,
-            backend: Mutex::new(LayeredBackend::Test { base, overrides }),
+            backend: Mutex::new(BackendKind::Test { base, overrides }),
         }
     }
 
@@ -197,9 +197,9 @@ impl Storage {
             Err(poisoned) => poisoned.into_inner(),
         };
         match &mut *backend {
-            LayeredBackend::Direct(inner) => f(inner),
+            BackendKind::Direct(inner) => f(inner),
             #[cfg(feature = "testing")]
-            LayeredBackend::Test { overrides, base } => {
+            BackendKind::Test { overrides, base } => {
                 if let Some(override_) = overrides
                     .lock()
                     .unwrap_or_else(|e| e.into_inner())
@@ -222,9 +222,9 @@ impl Storage {
                 Err(poisoned) => poisoned.into_inner(),
             };
             let target = match &*backend {
-                LayeredBackend::Direct(b) => b,
+                BackendKind::Direct(b) => b,
                 #[cfg(feature = "testing")]
-                LayeredBackend::Test { base, .. } => base.as_ref(),
+                BackendKind::Test { base, .. } => base.as_ref(),
             };
             if let Backend::Sqlite { pool } = target {
                 let conn = pool.conn();
@@ -253,8 +253,8 @@ impl Storage {
     pub(crate) fn backend_layer_info(&self) -> (&'static str, &'static str) {
         let backend = self.backend.lock().unwrap_or_else(|e| e.into_inner());
         match &*backend {
-            LayeredBackend::Direct(b) => ("Direct", backend_variant_name(b)),
-            LayeredBackend::Test { base, .. } => ("Test", backend_variant_name(base.as_ref())),
+            BackendKind::Direct(b) => ("Direct", backend_variant_name(b)),
+            BackendKind::Test { base, .. } => ("Test", backend_variant_name(base.as_ref())),
         }
     }
 }

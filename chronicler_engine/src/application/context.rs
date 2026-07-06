@@ -20,40 +20,42 @@ use crate::application::narrative_prompt::assembler::assemble_prompt_text;
 use crate::adapters::driven::storage::Storage;
 
 #[derive(Clone)]
-pub struct GameServiceContext {
-    pub storage: Arc<Storage>,
+pub struct WorldSnapshot {
     pub world: Arc<WorldCard>,
     pub map: Arc<crate::domain::model::map::MapDef>,
     pub player: Arc<crate::domain::model::character::PlayerCard>,
     pub npcs: Arc<std::collections::HashMap<String, NpcCard>>,
-    pub cancel_token: CancellationToken,
-    pub is_generating: Arc<AtomicBool>,
-    pub settings: Arc<RwLock<AppSettings>>,
-    pub preset_storage: Arc<Storage>,
 }
 
-impl GameServiceContext {
+#[derive(Clone)]
+pub struct OpContext {
+    pub storage: Arc<Storage>,
+    pub preset_storage: Arc<Storage>,
+    pub settings: Arc<RwLock<AppSettings>>,
+    pub cancel_token: CancellationToken,
+    pub is_generating: Arc<AtomicBool>,
+    pub world_snapshot: WorldSnapshot,
+}
+
+impl OpContext {
     pub fn set_game_id(&self, game_id: u64) {
         self.storage.set_game_id(game_id);
     }
 
-    /// Build a fresh `GameState` from this context's world/map/player/npcs.
-    /// Implements scenario injection: if the world has a default scenario,
-    /// its rendered text is added as the initial narration message and
-    /// scenario NPCs are initialized into the state.
     pub fn build_fresh_initial_state(&self) -> GameState {
-        let starting_room_id = self.world.starting_room_id();
+        let starting_room_id = self.world_snapshot.world.starting_room_id();
 
         let mut initial_state = GameState::new(
-            Arc::clone(&self.world),
-            Arc::clone(&self.map),
-            Arc::clone(&self.player),
-            (*self.npcs).values().cloned().collect(),
+            Arc::clone(&self.world_snapshot.world),
+            Arc::clone(&self.world_snapshot.map),
+            Arc::clone(&self.world_snapshot.player),
+            (*self.world_snapshot.npcs).values().cloned().collect(),
             starting_room_id.clone(),
         );
 
-        if let Some(scenario) = self.world.default_scenario() {
+        if let Some(scenario) = self.world_snapshot.world.default_scenario() {
             let room_name = self
+                .world_snapshot
                 .map
                 .get_room_by_id(&starting_room_id)
                 .map(|r| r.name.clone())
@@ -61,7 +63,10 @@ impl GameServiceContext {
 
             initial_state.narrative.pending_location = Some(room_name);
 
-            let text = render_template(&scenario.text, &TemplateVars::new(&self.player.sheet.name));
+            let text = render_template(
+                &scenario.text,
+                &TemplateVars::new(&self.world_snapshot.player.sheet.name),
+            );
             if !text.is_empty() {
                 initial_state.add_message(text, None, MessageType::Narration);
             }
@@ -125,24 +130,24 @@ impl GameServiceContext {
         let snapshot_id = *anchor_msg.snapshot_id().as_ref()?;
         Some((anchor_idx, anchor_msg, snapshot_id))
     }
+}
 
-    #[cfg(test)]
-    pub fn load_state_for_test(&self) -> GameState {
-        let snapshot = match self.storage.load_latest_snapshot() {
-            Ok(Some(s)) => s,
-            Ok(None) => panic!("no snapshots found"),
-            Err(e) => panic!("failed to load snapshot: {e}"),
-        };
-        let mut state = GameState::from_snapshot(
-            &snapshot,
-            Arc::clone(&self.world),
-            Arc::clone(&self.map),
-            Arc::clone(&self.player),
-            (*self.npcs).clone(),
-        );
-        load_messages_into_state(self, &mut state);
-        state
-    }
+#[cfg(test)]
+pub(crate) fn load_state_for_test(ctx: &OpContext) -> GameState {
+    let snapshot = match ctx.storage.load_latest_snapshot() {
+        Ok(Some(s)) => s,
+        Ok(None) => panic!("no snapshots found"),
+        Err(e) => panic!("failed to load snapshot: {e}"),
+    };
+    let mut state = GameState::from_snapshot(
+        &snapshot,
+        Arc::clone(&ctx.world_snapshot.world),
+        Arc::clone(&ctx.world_snapshot.map),
+        Arc::clone(&ctx.world_snapshot.player),
+        (*ctx.world_snapshot.npcs).clone(),
+    );
+    load_messages_into_state(ctx, &mut state);
+    state
 }
 
 pub fn load_messages_with_swipes(
@@ -168,23 +173,23 @@ pub fn load_messages_with_swipes(
     Ok(messages)
 }
 
-pub fn load_expecting_valid_state(ctx: &GameServiceContext) -> Result<GameState, EngineError> {
+pub fn load_expecting_valid_state(ctx: &OpContext) -> Result<GameState, EngineError> {
     let snapshot = ctx.storage.load_latest_snapshot()?;
     let mut state = match snapshot {
         Some(snap) => GameState::from_snapshot(
             &snap,
-            Arc::clone(&ctx.world),
-            Arc::clone(&ctx.map),
-            Arc::clone(&ctx.player),
-            (*ctx.npcs).clone(),
+            Arc::clone(&ctx.world_snapshot.world),
+            Arc::clone(&ctx.world_snapshot.map),
+            Arc::clone(&ctx.world_snapshot.player),
+            (*ctx.world_snapshot.npcs).clone(),
         ),
         None => {
-            let starting_room_id = ctx.world.starting_room_id();
+            let starting_room_id = ctx.world_snapshot.world.starting_room_id();
             GameState::new(
-                Arc::clone(&ctx.world),
-                Arc::clone(&ctx.map),
-                Arc::clone(&ctx.player),
-                (*ctx.npcs).values().cloned().collect(),
+                Arc::clone(&ctx.world_snapshot.world),
+                Arc::clone(&ctx.world_snapshot.map),
+                Arc::clone(&ctx.world_snapshot.player),
+                (*ctx.world_snapshot.npcs).values().cloned().collect(),
                 starting_room_id,
             )
         }
@@ -193,38 +198,38 @@ pub fn load_expecting_valid_state(ctx: &GameServiceContext) -> Result<GameState,
     Ok(state)
 }
 
-pub fn load_or_fresh(ctx: &GameServiceContext) -> GameState {
+pub fn load_or_fresh(ctx: &OpContext) -> GameState {
     match load_expecting_valid_state(ctx) {
         Ok(state) => state,
         Err(e) => {
             tracing::error!(
                 "Failed to load game state ({e}), falling back to fresh state. This may indicate data corruption."
             );
-            let starting_room_id = ctx.world.starting_room_id();
+            let starting_room_id = ctx.world_snapshot.world.starting_room_id();
             GameState::new(
-                Arc::clone(&ctx.world),
-                Arc::clone(&ctx.map),
-                Arc::clone(&ctx.player),
-                (*ctx.npcs).values().cloned().collect(),
+                Arc::clone(&ctx.world_snapshot.world),
+                Arc::clone(&ctx.world_snapshot.map),
+                Arc::clone(&ctx.world_snapshot.player),
+                (*ctx.world_snapshot.npcs).values().cloned().collect(),
                 starting_room_id,
             )
         }
     }
 }
 
-pub fn load_messages_into_state(ctx: &GameServiceContext, state: &mut GameState) {
+pub fn load_messages_into_state(ctx: &OpContext, state: &mut GameState) {
     if let Ok(msgs) = ctx.load_messages() {
         state.narrative.history.replace(msgs);
     }
 }
 
-pub fn save_state(ctx: &GameServiceContext, state: &GameState) -> Result<u64, EngineError> {
+pub fn save_state(ctx: &OpContext, state: &GameState) -> Result<u64, EngineError> {
     let snapshot = GameStateSnapshot::from_game_state(state);
     ctx.storage.save_snapshot(&snapshot)
 }
 
 pub fn save_message_and_snapshot(
-    ctx: &GameServiceContext,
+    ctx: &OpContext,
     state: &mut GameState,
 ) -> Result<u64, EngineError> {
     let snapshot = GameStateSnapshot::from_game_state(state);
@@ -258,7 +263,7 @@ pub fn save_message_and_snapshot(
 }
 
 pub fn delete_and_remove_message(
-    ctx: &GameServiceContext,
+    ctx: &OpContext,
     state: &mut GameState,
     id: u64,
 ) -> Result<(), EngineError> {

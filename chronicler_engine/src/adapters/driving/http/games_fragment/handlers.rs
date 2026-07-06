@@ -9,6 +9,7 @@ use axum::{
 
 use crate::domain::model::game::Game;
 use crate::adapters::driving::http::AppState;
+use crate::adapters::driving::http::op_context_loader::load_op_context;
 use crate::application::application_service::ApplicationError;
 
 use crate::adapters::driving::http::fragments::renderers::{
@@ -89,14 +90,12 @@ pub async fn create_game_handler(
     State(state): State<AppState>,
     Form(form): Form<CreateGameForm>,
 ) -> Result<Response, ApplicationError> {
-    let ctx = state
-        .context_for_world(&form.world_key, &form.persona_key)
-        .map_err(|e| {
-            ApplicationError::validation(format!(
-                "Failed to build context for world '{}' / persona '{}': {e}",
-                form.world_key, form.persona_key
-            ))
-        })?;
+    let ctx = load_op_context(&state, &form.world_key, &form.persona_key).map_err(|e| {
+        ApplicationError::validation(format!(
+            "Failed to build context for world '{}' / persona '{}': {e}",
+            form.world_key, form.persona_key
+        ))
+    })?;
     state.application_service.create_game(ctx)?;
     Ok(ok_refresh())
 }

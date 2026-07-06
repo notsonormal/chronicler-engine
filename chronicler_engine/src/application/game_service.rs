@@ -4,16 +4,16 @@
 
 use std::sync::{Arc, RwLock};
 
-use crate::application::context::GameServiceContext;
+use crate::application::context::OpContext;
 use crate::domain::model::settings::AppSettings;
 use crate::application::agents::quantifier::QuantifierAgent;
 use crate::application::agents::registry::AgentRegistry;
-use crate::application::narrative_prompt::LayeredPromptAssembler;
+use crate::application::narrative_prompt::PromptAssembler;
 use crate::application::llm_recorder::LlmCallRecorder;
 
 pub struct GameService {
     pub llm_recorder: Arc<LlmCallRecorder>,
-    pub prompt_assembler: Arc<LayeredPromptAssembler>,
+    pub prompt_assembler: Arc<PromptAssembler>,
     pub agent_registry: Arc<AgentRegistry>,
 }
 
@@ -28,7 +28,7 @@ impl GameService {
             let conn = guard.narration_connection();
             (conn.resolve_max_context_tokens(), conn.max_tokens)
         };
-        let mut assembler = LayeredPromptAssembler::new(max_context_tokens);
+        let mut assembler = PromptAssembler::new(max_context_tokens);
         if let Some(max) = max_tokens {
             assembler = assembler.with_max_tokens(max);
         }
@@ -50,7 +50,7 @@ impl GameService {
     ) -> Self {
         Self {
             llm_recorder,
-            prompt_assembler: Arc::new(LayeredPromptAssembler::new(
+            prompt_assembler: Arc::new(PromptAssembler::new(
                 crate::application::narrative_prompt::budget::MAX_CONTEXT_TOKENS,
             )),
             agent_registry: Arc::new(agent_registry),
@@ -65,18 +65,18 @@ impl GameService {
         let registry = AgentRegistry::with_agent(Box::new(agent));
         Self {
             llm_recorder,
-            prompt_assembler: Arc::new(LayeredPromptAssembler::new(
+            prompt_assembler: Arc::new(PromptAssembler::new(
                 crate::application::narrative_prompt::budget::MAX_CONTEXT_TOKENS,
             )),
             agent_registry: Arc::new(registry),
         }
     }
 
-    pub fn execute_action(&self, ctx: GameServiceContext, input: String) {
+    pub fn execute_action(&self, ctx: OpContext, input: String) {
         crate::application::action_pipeline::execute_action_impl(self, ctx, input)
     }
 
-    pub fn retry_last_response(&self, ctx: GameServiceContext) {
+    pub fn retry_last_response(&self, ctx: OpContext) {
         crate::application::action_pipeline::retry_last_response_impl(self, ctx)
     }
 

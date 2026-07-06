@@ -6,7 +6,7 @@
 
 ## Overview
 
-The Chronicler Engine storage layer provides unified persistence for game sessions, narrative content, user configurations, and LLM call forensics. It uses a concrete `Storage` struct with a `Backend` enum (`Sqlite`, `InMemory`) for real backends plus a `LayeredBackend` decorator (`Direct(Backend)` | `Test { base, overrides }`) for failure injection, instead of trait-based repository patterns.
+The Chronicler Engine storage layer provides unified persistence for game sessions, narrative content, user configurations, and LLM call forensics. It uses a concrete `Storage` struct with a `Backend` enum (`Sqlite`, `InMemory`) for real backends plus a `BackendKind` decorator (`Direct(Backend)` | `Test { base, overrides }`) for failure injection, instead of trait-based repository patterns.
 
 **Key Design Decisions:**
 
@@ -14,16 +14,16 @@ The Chronicler Engine storage layer provides unified persistence for game sessio
 - **Backend enum abstraction** — `Sqlite` (production), `InMemory` (dev), `Test` (testing)
 - **No trait boilerplate** — No `dyn Trait`, `Arc<dyn>`, or custom mocks
 - **Single table per method** — Each storage method touches exactly one table
-- **Cross-table coordination in application tier** — `GameServiceContext` composes multi-table operations
+- **Cross-table coordination in application tier** — `OpContext` composes multi-table operations
 
 ## Backend Enum Pattern
 
-`Storage` is a concrete struct, not a trait. `Storage` holds a `Mutex<LayeredBackend>`:
+`Storage` is a concrete struct, not a trait. `Storage` holds a `Mutex<BackendKind>`:
 
 - **`Backend` enum** — real backends only: `Sqlite` (production) and `InMemory` (dev)
-- **`LayeredBackend` enum** — `Direct(Backend)` for plain use, or `Test { base: Box<Backend>, overrides }` for wrapping any real backend with failure injection
+- **`BackendKind` enum** — `Direct(Backend)` for plain use, or `Test { base: Box<Backend>, overrides }` for wrapping any real backend with failure injection
 - `Test` is a decorator, not a peer of `Sqlite`/`InMemory` — `with_backend_mut` unwraps any Test layer before dispatching to the real backend
-- Non-recursive `Box<Backend>` (not `Box<LayeredBackend>`) structurally enforces "at most one Test layer" (replace-not-nest invariant)
+- Non-recursive `Box<Backend>` (not `Box<BackendKind>`) structurally enforces "at most one Test layer" (replace-not-nest invariant)
 
 **Contracts:**
 

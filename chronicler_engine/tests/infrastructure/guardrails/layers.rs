@@ -2,6 +2,50 @@
 
 use crate::Violation;
 
+const APPLICATION_STORAGE_GRANDFATHERED: &[&str] = &[
+    "application/context.rs",
+    "application/game_service.rs",
+    "application/application_service.rs",
+    "application/agents/registry.rs",
+    "application/agents/quantifier/agent.rs",
+];
+
+/// Guardrail: `application/` files must not import `Storage` directly except for the
+/// 5 grandfathered persistence-boundary files (see ADR-027). Test files (`*_tests.rs`)
+/// are exempt — they may construct `Storage::new_in_memory()` for fixtures.
+pub fn check_application_storage_direct(file_path: &str, content: &str) -> Vec<Violation> {
+    let mut violations = Vec::new();
+
+    if !file_path.starts_with("application/") {
+        return violations;
+    }
+    if file_path.ends_with("_tests.rs") {
+        return violations;
+    }
+    if APPLICATION_STORAGE_GRANDFATHERED.contains(&file_path) {
+        return violations;
+    }
+
+    for (line_no, line) in content.lines().enumerate() {
+        let line_num = line_no + 1;
+        let trimmed = line.trim();
+
+        if trimmed.starts_with("//") || trimmed.starts_with("*") {
+            continue;
+        }
+
+        if trimmed.starts_with("use ") && trimmed.contains("adapters::driven::storage::Storage") {
+            violations.push(Violation::error(
+                file_path,
+                line_num,
+                "Application layer imports `Storage` directly — see ADR-027 for the 5 grandfathered files",
+            ));
+        }
+    }
+
+    violations
+}
+
 /// Guardrail: `messages.rs` must not reference the `message_swipes` table.
 pub fn check_messages_swipes_separation(file_path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
@@ -184,6 +228,52 @@ mod tests {
         let violations = check_handler_return_type(
             "server/mod.rs",
             "pub async fn bad_handler() -> (StatusCode, String) { }",
+        );
+        assert_eq!(violations.len(), 0);
+    }
+
+    #[test]
+    fn test_check_application_storage_direct_catches_violation() {
+        let violations = check_application_storage_direct(
+            "application/query_handlers.rs",
+            "use crate::adapters::driven::storage::Storage;\n",
+        );
+        assert_eq!(violations.len(), 1);
+        assert!(violations[0].message.contains("ADR-027"));
+    }
+
+    #[test]
+    fn test_check_application_storage_direct_allows_grandfathered() {
+        let violations = check_application_storage_direct(
+            "application/context.rs",
+            "use crate::adapters::driven::storage::Storage;\n",
+        );
+        assert_eq!(violations.len(), 0);
+    }
+
+    #[test]
+    fn test_check_application_storage_direct_skips_tests_files() {
+        let violations = check_application_storage_direct(
+            "application/query_handlers_tests.rs",
+            "use crate::adapters::driven::storage::Storage;\n",
+        );
+        assert_eq!(violations.len(), 0);
+    }
+
+    #[test]
+    fn test_check_application_storage_direct_skips_non_application() {
+        let violations = check_application_storage_direct(
+            "adapters/driven/storage/backend/core.rs",
+            "use crate::adapters::driven::storage::Storage;\n",
+        );
+        assert_eq!(violations.len(), 0);
+    }
+
+    #[test]
+    fn test_check_application_storage_direct_skips_comments() {
+        let violations = check_application_storage_direct(
+            "application/query_handlers.rs",
+            "// use crate::adapters::driven::storage::Storage;\n",
         );
         assert_eq!(violations.len(), 0);
     }

@@ -100,5 +100,5 @@ The engine uses [`tracing`](https://tracing.rs) for structured runtime diagnosti
 - Use the `LlmProvider` trait for transport implementations (OpenRouter, DeepSeek, Ollama, Mock)
 - Maintain a `MockBackend` for test environments
 - Use `LlmCallRecorder` for orchestration (forensics + postprocessing)
-- Use `LayeredPromptAssembler` for all prompt construction; `LlmProvider::complete()` for transport; `LlmCallRecorder::complete()` for orchestration
+- Use `PromptAssembler` for all prompt construction; `LlmProvider::complete()` for transport; `LlmCallRecorder::complete()` for orchestration
 - Configure `max_context_tokens` per connection to match the model's actual context window

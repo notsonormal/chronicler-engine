@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::application::action_pipeline::retry::{
     retry_event_continuation, retry_last_response_impl, retry_main_narration,
 };
-use crate::application::context::GameServiceContext;
+use crate::application::context::{OpContext, load_state_for_test};
 
 #[allow(unused_imports)]
 use crate::application::game_service::GameService;
@@ -30,10 +30,7 @@ fn make_service() -> GameService {
     )
 }
 
-fn insert_message_with_swipe(
-    ctx: &GameServiceContext,
-    msg: &crate::domain::model::message::Message,
-) {
+fn insert_message_with_swipe(ctx: &OpContext, msg: &crate::domain::model::message::Message) {
     let id = ctx.storage.insert_message(msg).unwrap();
     if let Some(swipe) = msg.swipes.first() {
         let mut swipe = swipe.clone();
@@ -45,8 +42,8 @@ fn insert_message_with_swipe(
     }
 }
 
-fn add_input_and_save(ctx: &GameServiceContext, text: &str) -> u64 {
-    let mut state = ctx.load_state_for_test();
+fn add_input_and_save(ctx: &OpContext, text: &str) -> u64 {
+    let mut state = load_state_for_test(ctx);
     let player_name = state.player.sheet.name.clone();
     state.add_message(text.to_string(), Some(player_name), MessageType::Input);
     let snapshot =
@@ -61,8 +58,8 @@ fn add_input_and_save(ctx: &GameServiceContext, text: &str) -> u64 {
     id
 }
 
-fn add_narration_and_save(ctx: &GameServiceContext, text: &str) -> u64 {
-    let mut state = ctx.load_state_for_test();
+fn add_narration_and_save(ctx: &OpContext, text: &str) -> u64 {
+    let mut state = load_state_for_test(ctx);
     state.add_message(text.to_string(), None, MessageType::Narration);
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
@@ -76,8 +73,8 @@ fn add_narration_and_save(ctx: &GameServiceContext, text: &str) -> u64 {
     id
 }
 
-fn save_pre_main(ctx: &GameServiceContext) -> u64 {
-    let state = ctx.load_state_for_test();
+fn save_pre_main(ctx: &OpContext) -> u64 {
+    let state = load_state_for_test(ctx);
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &state,
@@ -85,8 +82,8 @@ fn save_pre_main(ctx: &GameServiceContext) -> u64 {
     ctx.storage.save_snapshot(&snapshot).unwrap()
 }
 
-fn save_pre_event(ctx: &GameServiceContext) -> u64 {
-    let state = ctx.load_state_for_test();
+fn save_pre_event(ctx: &OpContext) -> u64 {
+    let state = load_state_for_test(ctx);
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &state,
@@ -101,7 +98,7 @@ fn test_retry_no_snapshot() {
     let service = make_service();
     retry_last_response_impl(&service, ctx.clone());
 
-    let state = ctx.load_state_for_test();
+    let state = load_state_for_test(&ctx);
     assert!(
         matches!(state.narrative.input_buffer.status, GenerationStatus::Error(ref msg) if msg.contains("Retry failed: no anchor message")),
         "Should record retry error when no anchor message exists, got {:?}",
@@ -121,7 +118,7 @@ fn test_retry_load_messages_error() {
         TestOverride::internal("simulated load_message_rows failure"),
     );
 
-    let ctx = GameServiceContext {
+    let ctx = OpContext {
         storage: failing,
         ..base_ctx.clone()
     };
@@ -146,7 +143,7 @@ fn test_retry_event_with_no_pre_event_fallback_to_main() {
 
     let _input_id = add_input_and_save(&ctx, "test input");
 
-    let mut state = ctx.load_state_for_test();
+    let mut state = load_state_for_test(&ctx);
     state.add_message("Event narration".to_string(), None, MessageType::Narration);
     state
         .narrative
@@ -169,7 +166,7 @@ fn test_retry_event_with_no_pre_event_and_no_input() {
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let service = make_service();
 
-    let mut state = ctx.load_state_for_test();
+    let mut state = load_state_for_test(&ctx);
     state.add_message("Event only".to_string(), None, MessageType::Narration);
     state
         .narrative
@@ -203,12 +200,14 @@ fn test_retry_event_storage_error_on_pre_event() {
             }
         }
     }
-    let base_ctx = GameServiceContext {
+    let base_ctx = OpContext {
         storage: Arc::clone(&storage),
-        world: state.world.clone(),
-        map: state.map.clone(),
-        player: state.player.clone(),
-        npcs: Arc::new(state.npcs.clone()),
+        world_snapshot: crate::application::context::WorldSnapshot {
+            world: state.world.clone(),
+            map: state.map.clone(),
+            player: state.player.clone(),
+            npcs: Arc::new(state.npcs.clone()),
+        },
         cancel_token: tokio_util::sync::CancellationToken::new(),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         settings: Arc::new(std::sync::RwLock::new(
@@ -226,13 +225,13 @@ fn test_retry_event_storage_error_on_pre_event() {
     );
 
     let service = make_service();
-    let latest = base_ctx.load_state_for_test();
+    let latest = load_state_for_test(&base_ctx);
 
     let _ = retry_event_continuation(&service, &base_ctx, latest);
 
     handle.clear("load_snapshot_by_id");
 
-    let state = base_ctx.load_state_for_test();
+    let state = load_state_for_test(&base_ctx);
     assert!(
         matches!(
             state.narrative.input_buffer.status,
@@ -251,7 +250,7 @@ fn test_retry_event_missing_trigger_context() {
     let _input_id = add_input_and_save(&ctx, "test input");
     let _pre_event_id = save_pre_event(&ctx);
 
-    let mut state = ctx.load_state_for_test();
+    let mut state = load_state_for_test(&ctx);
     state.add_message("Event narration".to_string(), None, MessageType::Narration);
     state
         .narrative
@@ -277,7 +276,7 @@ fn test_retry_event_continuation_cancels_before_llm() {
     let _input_id = add_input_and_save(&ctx, "test input");
     let _pre_main_id = save_pre_main(&ctx);
 
-    let mut pre_event_state = ctx.load_state_for_test();
+    let mut pre_event_state = load_state_for_test(&ctx);
     pre_event_state.narrative.last_trigger =
         Some(crate::test_support::TestStoredTriggerContext::standard());
     pre_event_state.add_message("Main narration".to_string(), None, MessageType::Narration);
@@ -295,7 +294,7 @@ fn test_retry_event_continuation_cancels_before_llm() {
 
     let _ = retry_event_continuation(&service, &ctx, pre_event_state);
 
-    let state = ctx.load_state_for_test();
+    let state = load_state_for_test(&ctx);
     assert!(
         matches!(state.narrative.input_buffer.status, GenerationStatus::Idle),
         "Cancelled retry should reset status to Idle, got {:?}",
@@ -320,7 +319,7 @@ fn test_retry_event_trigger_narration_fails() {
     let _input_id = add_input_and_save(&ctx, "test input");
     let _pre_event_id = save_pre_event(&ctx);
 
-    let mut state = ctx.load_state_for_test();
+    let mut state = load_state_for_test(&ctx);
     state.narrative.last_trigger = Some(crate::test_support::TestStoredTriggerContext::standard());
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
@@ -348,7 +347,7 @@ fn test_retry_event_trigger_narration_fails() {
 
     retry_last_response_impl(&service, ctx.clone());
 
-    let state = ctx.load_state_for_test();
+    let state = load_state_for_test(&ctx);
     assert!(
         matches!(
             state.narrative.input_buffer.status,
@@ -374,7 +373,7 @@ fn test_retry_event_empty_continuation_text() {
     let _input_id = add_input_and_save(&ctx, "test input");
     let _pre_event_id = save_pre_event(&ctx);
 
-    let mut state = ctx.load_state_for_test();
+    let mut state = load_state_for_test(&ctx);
     state.narrative.last_trigger = Some(crate::test_support::TestStoredTriggerContext::standard());
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
@@ -405,7 +404,7 @@ fn test_retry_main_no_pre_main_snapshot() {
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let service = make_service();
 
-    let mut state = ctx.load_state_for_test();
+    let mut state = load_state_for_test(&ctx);
     let player_name = state.player.sheet.name.clone();
     state.add_message(
         "test input".to_string(),
@@ -416,7 +415,7 @@ fn test_retry_main_no_pre_main_snapshot() {
         insert_message_with_swipe(&ctx, last);
     }
 
-    let mut state = ctx.load_state_for_test();
+    let mut state = load_state_for_test(&ctx);
     state.add_message("Narration text".to_string(), None, MessageType::Narration);
     let snapshot =
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
@@ -429,7 +428,7 @@ fn test_retry_main_no_pre_main_snapshot() {
 
     retry_last_response_impl(&service, ctx.clone());
 
-    let state = ctx.load_state_for_test();
+    let state = load_state_for_test(&ctx);
     assert!(
         matches!(
             state.narrative.input_buffer.status,
@@ -449,7 +448,7 @@ fn test_retry_event_continuation_happy_path() {
     let _input_id = add_input_and_save(&ctx, "test input");
     let _pre_main_id = save_pre_main(&ctx);
 
-    let mut pre_event_state = ctx.load_state_for_test();
+    let mut pre_event_state = load_state_for_test(&ctx);
     pre_event_state.narrative.last_trigger =
         Some(crate::test_support::TestStoredTriggerContext::standard());
     pre_event_state.add_message("Main narration".to_string(), None, MessageType::Narration);
@@ -483,7 +482,7 @@ fn test_retry_event_continuation_happy_path() {
 
     retry_last_response_impl(&service, ctx.clone());
 
-    let state = ctx.load_state_for_test();
+    let state = load_state_for_test(&ctx);
     assert!(
         matches!(state.narrative.input_buffer.status, GenerationStatus::Idle),
         "Should finish with Idle status, got {:?}",
@@ -501,7 +500,7 @@ fn test_retry_main_narration_happy_path() {
     let _final_id = add_narration_and_save(&ctx, "Narration text");
 
     let service = make_service();
-    let state = ctx.load_state_for_test();
+    let state = load_state_for_test(&ctx);
     let _ = retry_main_narration(&service, &ctx, state, "test input".to_string());
 }
 
@@ -522,12 +521,14 @@ fn test_retry_main_storage_error_on_pre_main() {
             }
         }
     }
-    let base_ctx = GameServiceContext {
+    let base_ctx = OpContext {
         storage: Arc::clone(&storage),
-        world: state.world.clone(),
-        map: state.map.clone(),
-        player: state.player.clone(),
-        npcs: Arc::new(state.npcs.clone()),
+        world_snapshot: crate::application::context::WorldSnapshot {
+            world: state.world.clone(),
+            map: state.map.clone(),
+            player: state.player.clone(),
+            npcs: Arc::new(state.npcs.clone()),
+        },
         cancel_token: tokio_util::sync::CancellationToken::new(),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         settings: Arc::new(std::sync::RwLock::new(
@@ -550,7 +551,7 @@ fn test_retry_main_storage_error_on_pre_main() {
 
     handle.clear("load_snapshot_by_id");
 
-    let state = base_ctx.load_state_for_test();
+    let state = load_state_for_test(&base_ctx);
     assert!(
         matches!(
             state.narrative.input_buffer.status,
@@ -567,7 +568,7 @@ fn test_save_retry_error() {
 
     super::retry::save_retry_error(&ctx, "test error");
 
-    let state = ctx.load_state_for_test();
+    let state = load_state_for_test(&ctx);
     assert!(
         matches!(
             state.narrative.input_buffer.status,
@@ -589,7 +590,7 @@ fn test_save_retry_error_persist_fails() {
         TestOverride::internal("simulated save failure"),
     );
 
-    let ctx = GameServiceContext {
+    let ctx = OpContext {
         storage: failing,
         ..base_ctx.clone()
     };
@@ -641,7 +642,7 @@ fn test_retry_event_empty_continuation_triggers_error() {
     let _input_id = add_input_and_save(&ctx, "test input");
     let _pre_main_id = save_pre_main(&ctx);
 
-    let mut pre_event_state = ctx.load_state_for_test();
+    let mut pre_event_state = load_state_for_test(&ctx);
     pre_event_state.narrative.last_trigger =
         Some(crate::test_support::TestStoredTriggerContext::standard());
     pre_event_state.add_message("Main narration".to_string(), None, MessageType::Narration);
@@ -673,7 +674,7 @@ fn test_retry_event_empty_continuation_triggers_error() {
         insert_message_with_swipe(&ctx, last);
     }
     retry_last_response_impl(&service, ctx.clone());
-    let state = ctx.load_state_for_test();
+    let state = load_state_for_test(&ctx);
     assert!(
         matches!(state.narrative.input_buffer.status, GenerationStatus::Error(ref msg) if msg.contains("empty response")),
         "Should set error status when continuation text is empty, got {:?}",
@@ -739,7 +740,7 @@ fn test_retrigger_event_impl_cancels_cleanly() {
     let _input_id = add_input_and_save(&ctx, "test input");
     let _pre_main_id = save_pre_main(&ctx);
 
-    let mut pre_event_state = ctx.load_state_for_test();
+    let mut pre_event_state = load_state_for_test(&ctx);
     pre_event_state.narrative.last_trigger =
         Some(crate::test_support::TestStoredTriggerContext::standard());
     pre_event_state.add_message("Main narration".to_string(), None, MessageType::Narration);
@@ -775,7 +776,7 @@ fn test_retrigger_event_impl_cancels_cleanly() {
 
     crate::application::action_pipeline::retrigger_event_impl(&service, &ctx);
 
-    let state = ctx.load_state_for_test();
+    let state = load_state_for_test(&ctx);
     assert_eq!(
         state.narrative.input_buffer.status,
         GenerationStatus::Idle,

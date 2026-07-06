@@ -437,12 +437,14 @@ fn test_retry_no_pre_main_snapshot() {
         Arc::new(ps)
     };
 
-    let ctx = chronicler_engine::application::GameServiceContext {
+    let ctx = chronicler_engine::application::OpContext {
         storage,
-        world: state.world.clone(),
-        map: state.map.clone(),
-        player: state.player.clone(),
-        npcs: Arc::new(state.npcs.clone()),
+        world_snapshot: chronicler_engine::application::context::WorldSnapshot {
+            world: state.world.clone(),
+            map: state.map.clone(),
+            player: state.player.clone(),
+            npcs: Arc::new(state.npcs.clone()),
+        },
         cancel_token: tokio_util::sync::CancellationToken::new(),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         settings: Arc::new(std::sync::RwLock::new(
@@ -466,10 +468,10 @@ fn test_retry_no_pre_main_snapshot() {
     let snap = latest_snapshot(&ctx).expect("Should have snapshot");
     let state_before_reset = GameState::from_snapshot(
         &snap,
-        ctx.world.clone(),
-        ctx.map.clone(),
-        ctx.player.clone(),
-        (*ctx.npcs).clone(),
+        ctx.world_snapshot.world.clone(),
+        ctx.world_snapshot.map.clone(),
+        ctx.world_snapshot.player.clone(),
+        (*ctx.world_snapshot.npcs).clone(),
     );
 
     {

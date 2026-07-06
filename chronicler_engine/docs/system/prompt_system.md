@@ -129,7 +129,7 @@ The prompt layer enum has exactly 7 variants. Counting the post-history splice a
 
 ## System / User Separation
 
-The `LayeredPromptAssembler` separates instructions from data to maximize compatibility with OpenAI-compatible APIs:
+The `PromptAssembler` separates instructions from data to maximize compatibility with OpenAI-compatible APIs:
 
 - **System half**: XML-sectioned instruction sections (Layer 0)
 - **User half**: XML-wrapped data (Layers 1–5) + post-history splice + player input (Layer 6)
@@ -167,7 +167,7 @@ plot developments, build content (above 150 words), but allow the player to reac
 The engine uses a variable system similar to SillyTavern's Handlebars-style templates:
 
 - Variables populated from `GameState` at render time
-- Used in prompt construction within `LayeredPromptAssembler`
+- Used in prompt construction within `PromptAssembler`
 
 ## Prompt Context Structure
 

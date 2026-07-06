@@ -5,6 +5,7 @@ use axum::{extract::State, response::Html};
 
 use crate::application::query_handlers;
 use crate::adapters::driving::http::AppState;
+use crate::adapters::driving::http::op_context_loader::load_op_context_for_active_game;
 
 use super::renderers::{
     render_action_area, render_character_headshots, render_header, render_llm_messages,
@@ -58,7 +59,7 @@ pub async fn status_ready_handler(State(_state): State<AppState>) -> Html<String
 
 pub async fn generating_status_handler(State(state): State<AppState>) -> Html<String> {
     tracing::debug!("generating_status_handler: called");
-    let ctx = match state.as_game_service_context() {
+    let ctx = match load_op_context_for_active_game(&state) {
         Ok(c) => c,
         Err(e) => {
             tracing::error!("generating_status_handler: failed to load context: {e}");
@@ -67,7 +68,6 @@ pub async fn generating_status_handler(State(state): State<AppState>) -> Html<St
             );
         }
     };
-    // Load state fresh from storage
     let game_state = crate::application::context::load_expecting_valid_state(&ctx);
     let (status, phase) = match game_state {
         Ok(gs) => {
@@ -109,7 +109,7 @@ pub async fn generating_status_handler(State(state): State<AppState>) -> Html<St
 }
 
 pub async fn reset_generating_handler(State(state): State<AppState>) -> Html<String> {
-    let ctx = match state.as_game_service_context() {
+    let ctx = match load_op_context_for_active_game(&state) {
         Ok(ctx) => ctx,
         Err(_) => return Html("failed".to_string()),
     };

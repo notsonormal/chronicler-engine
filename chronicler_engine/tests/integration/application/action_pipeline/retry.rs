@@ -169,12 +169,14 @@ fn test_retry_room_not_found() {
         }
     }
 
-    let ctx = chronicler_engine::application::GameServiceContext {
+    let ctx = chronicler_engine::application::OpContext {
         storage,
-        world: state.world.clone(),
-        map: state.map.clone(),
-        player: state.player.clone(),
-        npcs: Arc::new(state.npcs.clone()),
+        world_snapshot: chronicler_engine::application::context::WorldSnapshot {
+            world: state.world.clone(),
+            map: state.map.clone(),
+            player: state.player.clone(),
+            npcs: Arc::new(state.npcs.clone()),
+        },
         cancel_token: tokio_util::sync::CancellationToken::new(),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         settings: Arc::new(std::sync::RwLock::new(
@@ -259,12 +261,14 @@ fn test_retry_llm_error() {
         }
     }
 
-    let ctx = chronicler_engine::application::GameServiceContext {
+    let ctx = chronicler_engine::application::OpContext {
         storage,
-        world: state.world.clone(),
-        map: state.map.clone(),
-        player: state.player.clone(),
-        npcs: Arc::new(state.npcs.clone()),
+        world_snapshot: chronicler_engine::application::context::WorldSnapshot {
+            world: state.world.clone(),
+            map: state.map.clone(),
+            player: state.player.clone(),
+            npcs: Arc::new(state.npcs.clone()),
+        },
         cancel_token: tokio_util::sync::CancellationToken::new(),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         settings: Arc::new(std::sync::RwLock::new(
@@ -346,12 +350,14 @@ fn test_retry_empty_narration() {
         }
     }
 
-    let ctx = chronicler_engine::application::GameServiceContext {
+    let ctx = chronicler_engine::application::OpContext {
         storage,
-        world: state.world.clone(),
-        map: state.map.clone(),
-        player: state.player.clone(),
-        npcs: Arc::new(state.npcs.clone()),
+        world_snapshot: chronicler_engine::application::context::WorldSnapshot {
+            world: state.world.clone(),
+            map: state.map.clone(),
+            player: state.player.clone(),
+            npcs: Arc::new(state.npcs.clone()),
+        },
         cancel_token: tokio_util::sync::CancellationToken::new(),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         settings: Arc::new(std::sync::RwLock::new(
@@ -434,12 +440,14 @@ fn test_retry_main_narration_uses_pre_main_snapshot() {
         }
     }
 
-    let ctx = chronicler_engine::application::GameServiceContext {
+    let ctx = chronicler_engine::application::OpContext {
         storage,
-        world: state.world.clone(),
-        map: state.map.clone(),
-        player: state.player.clone(),
-        npcs: Arc::new(state.npcs.clone()),
+        world_snapshot: chronicler_engine::application::context::WorldSnapshot {
+            world: state.world.clone(),
+            map: state.map.clone(),
+            player: state.player.clone(),
+            npcs: Arc::new(state.npcs.clone()),
+        },
         cancel_token: tokio_util::sync::CancellationToken::new(),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         settings: Arc::new(std::sync::RwLock::new(

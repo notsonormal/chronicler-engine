@@ -7,6 +7,7 @@ use crate::adapters::driving::http::AppState;
 use crate::adapters::driving::http::fragments::renderers::{
     internal_error, ok_refresh, service_unavailable_generating,
 };
+use crate::adapters::driving::http::op_context_loader::load_op_context_for_active_game;
 
 pub async fn reset_handler(State(state): State<AppState>) -> axum::response::Response<Body> {
     if state
@@ -18,7 +19,7 @@ pub async fn reset_handler(State(state): State<AppState>) -> axum::response::Res
 
     state.current_cancel_token().cancel();
 
-    let ctx = match state.as_game_service_context() {
+    let ctx = match load_op_context_for_active_game(&state) {
         Ok(ctx) => ctx,
         Err(e) => return internal_error(format!("Failed to load context: {e}")),
     };

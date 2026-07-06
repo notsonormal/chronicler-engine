@@ -4,6 +4,7 @@
 use axum::{body::Body, http::StatusCode, response::Response};
 
 use crate::adapters::driving::http::AppState;
+use crate::adapters::driving::http::op_context_loader::load_op_context_for_active_game;
 use super::fragment_renderers::render_error;
 
 #[allow(clippy::expect_used)]
@@ -37,8 +38,8 @@ pub fn internal_error(body: impl Into<String>) -> Response<Body> {
 
 pub fn ctx_or_error(
     state: &AppState,
-) -> std::result::Result<crate::application::GameServiceContext, String> {
-    match state.as_game_service_context() {
+) -> std::result::Result<crate::application::OpContext, String> {
+    match load_op_context_for_active_game(state) {
         Ok(ctx) => Ok(ctx),
         Err(e) => Err(e.to_string()),
     }

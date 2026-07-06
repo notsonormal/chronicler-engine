@@ -1,6 +1,6 @@
 use crate::application::context::{
-    GameServiceContext, delete_and_remove_message, load_or_fresh, map_llm_error,
-    save_message_and_snapshot, save_state,
+    OpContext, delete_and_remove_message, load_or_fresh, map_llm_error, save_message_and_snapshot,
+    save_state,
 };
 use crate::error::{EngineError, LlmFailure, NarrativeFailure};
 use crate::domain::model::message::Message;
@@ -89,7 +89,7 @@ fn minimal_state() -> GameState {
     .build()
 }
 
-fn minimal_ctx() -> GameServiceContext {
+fn minimal_ctx() -> OpContext {
     let state = minimal_state();
     let storage = Arc::new(Storage::new_in_memory());
     let _ = storage.save_snapshot(
@@ -97,12 +97,14 @@ fn minimal_ctx() -> GameServiceContext {
             &state,
         ),
     );
-    GameServiceContext {
+    OpContext {
         storage,
-        world: state.world.clone(),
-        map: state.map.clone(),
-        player: state.player.clone(),
-        npcs: Arc::new(state.npcs.clone()),
+        world_snapshot: crate::application::context::WorldSnapshot {
+            world: state.world.clone(),
+            map: state.map.clone(),
+            player: state.player.clone(),
+            npcs: Arc::new(state.npcs.clone()),
+        },
         cancel_token: tokio_util::sync::CancellationToken::new(),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         settings: Arc::new(std::sync::RwLock::new(
@@ -134,12 +136,14 @@ fn test_load_or_fresh_fallback_when_empty() {
     let mut state = minimal_state();
     state.movement.current_room_id = "other".to_string();
     let storage = Arc::new(Storage::new_in_memory());
-    let ctx = GameServiceContext {
+    let ctx = OpContext {
         storage,
-        world: state.world.clone(),
-        map: state.map.clone(),
-        player: state.player.clone(),
-        npcs: Arc::new(state.npcs.clone()),
+        world_snapshot: crate::application::context::WorldSnapshot {
+            world: state.world.clone(),
+            map: state.map.clone(),
+            player: state.player.clone(),
+            npcs: Arc::new(state.npcs.clone()),
+        },
         cancel_token: tokio_util::sync::CancellationToken::new(),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         settings: Arc::new(std::sync::RwLock::new(
@@ -305,12 +309,14 @@ fn test_load_or_fresh_fallback_on_snapshot_error() {
         "load_latest_snapshot",
         TestOverride::config("test snap error"),
     );
-    let ctx = GameServiceContext {
+    let ctx = OpContext {
         storage,
-        world: state.world.clone(),
-        map: state.map.clone(),
-        player: state.player.clone(),
-        npcs: Arc::new(state.npcs.clone()),
+        world_snapshot: crate::application::context::WorldSnapshot {
+            world: state.world.clone(),
+            map: state.map.clone(),
+            player: state.player.clone(),
+            npcs: Arc::new(state.npcs.clone()),
+        },
         cancel_token: tokio_util::sync::CancellationToken::new(),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         settings: Arc::new(std::sync::RwLock::new(
@@ -332,12 +338,14 @@ fn test_save_message_and_snapshot_propagates_snapshot_error() {
     let (failing_storage, handle) = Storage::new_in_memory().with_test_failures();
     let storage = Arc::new(failing_storage);
     handle.set("save_snapshot", TestOverride::config("test snap error"));
-    let ctx = GameServiceContext {
+    let ctx = OpContext {
         storage,
-        world: state.world.clone(),
-        map: state.map.clone(),
-        player: state.player.clone(),
-        npcs: Arc::new(state.npcs.clone()),
+        world_snapshot: crate::application::context::WorldSnapshot {
+            world: state.world.clone(),
+            map: state.map.clone(),
+            player: state.player.clone(),
+            npcs: Arc::new(state.npcs.clone()),
+        },
         cancel_token: tokio_util::sync::CancellationToken::new(),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         settings: Arc::new(std::sync::RwLock::new(

@@ -140,12 +140,14 @@ pub fn spawn_arrival_task_if_needed(
         });
 
     let preset_storage_arc = Arc::new(preset_storage);
-    let game_ctx = crate::application::context::GameServiceContext {
+    let game_ctx = crate::application::context::OpContext {
         storage: Arc::clone(storage),
-        world: Arc::clone(world),
-        map: Arc::clone(map),
-        player: Arc::clone(player),
-        npcs: Arc::clone(npcs),
+        world_snapshot: crate::application::context::WorldSnapshot {
+            world: Arc::clone(world),
+            map: Arc::clone(map),
+            player: Arc::clone(player),
+            npcs: Arc::clone(npcs),
+        },
         cancel_token: tokio_util::sync::CancellationToken::new(),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         settings: Arc::clone(settings),

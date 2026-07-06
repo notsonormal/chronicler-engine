@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use chronicler_engine::application::context::GameServiceContext;
+use chronicler_engine::application::context::OpContext;
 use chronicler_engine::domain::model::character::{CharacterSheet, NpcCard, PlayerCard};
 use chronicler_engine::domain::model::map::{Direction, MapDef, Overworld, Region, Room};
 use chronicler_engine::domain::model::scenario::StartingScenario;
@@ -301,7 +301,6 @@ pub fn create_simple_test_map() -> MapDef {
     MapDef { overworld }
 }
 
-/// A `WorldCard` with a `StartingScenario` block.
 pub fn create_test_world_with_scenario() -> WorldCard {
     WorldCard {
         key: "test".to_string(),
@@ -319,8 +318,6 @@ pub fn create_test_world_with_scenario() -> WorldCard {
     }
 }
 
-/// `GameState` using `create_test_world_with_scenario()` (scenario variant for
-/// `inject_scenario_logs` coverage).
 pub fn create_basic_test_state() -> GameState {
     let world = Arc::new(create_test_world_with_scenario());
     let map = Arc::new(create_test_map());
@@ -329,7 +326,6 @@ pub fn create_basic_test_state() -> GameState {
     GameState::new(world, map, player, npcs, "room1".to_string())
 }
 
-/// `GameState` using `create_test_world()` (no scenario).
 pub fn create_basic_test_state_no_scenario() -> GameState {
     let world = Arc::new(create_test_world());
     let map = Arc::new(create_test_map());
@@ -338,7 +334,6 @@ pub fn create_basic_test_state_no_scenario() -> GameState {
     GameState::new(world, map, player, npcs, "room1".to_string())
 }
 
-/// Seed a test world + persona into the storage.
 pub fn seed_test_world(storage: &Storage) {
     use chronicler_engine::test_support::{TestMap, TestPlayer, TestWorld};
     let world = TestWorld::minimal();
@@ -350,14 +345,15 @@ pub fn seed_test_world(storage: &Storage) {
         .expect("seed persona");
 }
 
-/// Construct a `GameServiceContext` from storage + state.
-pub fn make_test_ctx(storage: Arc<Storage>, state: GameState) -> GameServiceContext {
-    GameServiceContext {
+pub fn make_test_ctx(storage: Arc<Storage>, state: GameState) -> OpContext {
+    OpContext {
         storage,
-        world: state.world,
-        map: state.map,
-        player: state.player,
-        npcs: Arc::new(state.npcs),
+        world_snapshot: chronicler_engine::application::context::WorldSnapshot {
+            world: state.world,
+            map: state.map,
+            player: state.player,
+            npcs: Arc::new(state.npcs),
+        },
         cancel_token: tokio_util::sync::CancellationToken::new(),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         settings: Arc::new(std::sync::RwLock::new(AppSettings::default())),

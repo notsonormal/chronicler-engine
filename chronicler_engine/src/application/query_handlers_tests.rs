@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use super::*;
-use crate::application::GameServiceContext;
+use crate::application::OpContext;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::GenerationStatus;
 use crate::adapters::driven::storage::Storage;
@@ -17,7 +17,7 @@ fn minimal_state() -> GameState {
     )
 }
 
-fn minimal_ctx() -> GameServiceContext {
+fn minimal_ctx() -> OpContext {
     let state = minimal_state();
     let storage = Arc::new(Storage::new_in_memory());
     let _ = storage.save_snapshot(
@@ -25,12 +25,14 @@ fn minimal_ctx() -> GameServiceContext {
             &state,
         ),
     );
-    GameServiceContext {
+    OpContext {
         storage,
-        world: state.world.clone(),
-        map: state.map.clone(),
-        player: state.player.clone(),
-        npcs: Arc::new(state.npcs.clone()),
+        world_snapshot: crate::application::context::WorldSnapshot {
+            world: state.world.clone(),
+            map: state.map.clone(),
+            player: state.player.clone(),
+            npcs: Arc::new(state.npcs.clone()),
+        },
         cancel_token: tokio_util::sync::CancellationToken::new(),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         settings: Arc::new(std::sync::RwLock::new(

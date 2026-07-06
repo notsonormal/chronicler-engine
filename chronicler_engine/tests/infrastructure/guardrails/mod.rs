@@ -170,6 +170,14 @@ fn guardrails_server_layer_boundaries() {
 }
 
 #[test]
+fn guardrails_application_storage_direct() {
+    check_src_files(
+        "application storage-direct",
+        check_application_storage_direct,
+    );
+}
+
+#[test]
 fn guardrails_test_layer_boundaries() {
     check_tests_files("test layer boundary", check_test_layer_boundaries);
 }

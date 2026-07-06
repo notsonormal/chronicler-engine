@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use crate::application::action_pipeline::phases::{PipelineInputs, PipelineRun};
-use crate::application::context::{GameServiceContext, load_or_fresh, save_message_and_snapshot};
+use crate::application::context::{OpContext, load_or_fresh, save_message_and_snapshot};
 
 use crate::domain::model::character::NpcCard;
 use crate::domain::model::quantifier::QuantifierResult;
@@ -12,13 +12,13 @@ use crate::domain::model::state::trigger_context::StoredTriggerContext;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 
-use crate::application::narrative_prompt::LayeredPromptAssembler;
+use crate::application::narrative_prompt::PromptAssembler;
 use crate::application::llm_recorder::LlmCallRecorder;
 use crate::application::agents::registry::AgentRegistry;
 use crate::domain::model::agent::{AgentContext, AgentResult, ExecutionPhase, StatePatch};
 
 pub struct ActionPipeline {
-    pub(super) assembler: Arc<LayeredPromptAssembler>,
+    pub(super) assembler: Arc<PromptAssembler>,
     pub(super) recorder: Arc<LlmCallRecorder>,
     pub(super) agents: Arc<AgentRegistry>,
 }
@@ -33,7 +33,7 @@ pub(super) type PipelineResult<T> = Result<T, ActionOutcome>;
 
 impl ActionPipeline {
     pub fn new(
-        assembler: Arc<LayeredPromptAssembler>,
+        assembler: Arc<PromptAssembler>,
         recorder: Arc<LlmCallRecorder>,
         agents: Arc<AgentRegistry>,
     ) -> Self {
@@ -46,7 +46,7 @@ impl ActionPipeline {
 
     pub fn run_from_input(
         &self,
-        ctx: &GameServiceContext,
+        ctx: &OpContext,
         mut state: GameState,
         input: String,
     ) -> PipelineResult<()> {
@@ -122,7 +122,7 @@ impl ActionPipeline {
         }
 
         if let Some(request) = trigger_request {
-            match run.phase_trigger_continuation(next_state, &request) {
+            match run.phase_trigger_continuation_with_cancel_handling(next_state, &request) {
                 Ok((updated_state, continuation_text)) => {
                     next_state = updated_state;
 
@@ -146,13 +146,12 @@ impl ActionPipeline {
         &self,
         state: GameState,
         trigger: &StoredTriggerContext,
-        ctx: &GameServiceContext,
+        ctx: &OpContext,
     ) -> PipelineResult<(GameState, String)> {
         let run = PipelineRun::new(self, ctx);
-        run.phase_trigger_continuation(state, trigger)
+        run.phase_trigger_continuation_with_cancel_handling(state, trigger)
     }
 
-    /// Run post-generation agents inline, aggregating their state patches into QuantifierResult
     pub(super) fn run_post_generation_agents(
         &self,
         state: &GameState,
@@ -211,12 +210,12 @@ impl<'a> PipelineRun<'a> {
         Ok(state)
     }
 
-    fn phase_trigger_continuation(
+    fn phase_trigger_continuation_with_cancel_handling(
         &self,
         state: GameState,
         trigger: &StoredTriggerContext,
     ) -> PipelineResult<(GameState, String)> {
-        self.map_cancelled(self.phase_trigger_continuation_raw(state, trigger))
+        self.map_cancelled(self.phase_trigger_continuation_llm_call(state, trigger))
     }
 
     pub(super) fn map_cancelled<T>(&self, result: PipelineResult<T>) -> PipelineResult<T> {

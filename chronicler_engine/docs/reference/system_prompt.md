@@ -2,7 +2,7 @@
 
 > **Context**: This document describes the **assembled system prompt** sent to the narration LLM. For the overall architecture, see [`system/prompt_system.md`](../system/prompt_system.md).
 
-The system prompt is assembled by `PromptPreset` sections and `build_system_prompt()` in `assembler.rs` from four editable sections, plus two dynamically injected blocks. It is rendered by `LayeredPromptAssembler` as a single system message.
+The system prompt is assembled by `PromptPreset` sections and `build_system_prompt()` in `assembler.rs` from four editable sections, plus two dynamically injected blocks. It is rendered by `PromptAssembler` as a single system message.
 
 > **Why XML sections?** Labeled content containers (`<role>`, `<instructions>`, etc.) give the LLM clear section boundaries without the self-referential meta-analysis risk of tags like `<SystemPrompt>`. The imperative text inside each section remains plain. See [ADR-004](../adr/adr-004-xml-prompt-format.md) for the full evolution.
 
@@ -117,7 +117,7 @@ Prompts are customized via the **Prompt Presets** tab in the dashboard:
 3. Fill the four section fields: Role, Instructions, Writing Style, Output Format
 4. Click **Set Active** to apply it
 
-The active preset is stored in `AppSettings.active_system_prompt_preset_id`. At assembly time, `LayeredPromptAssembler::assemble()` loads the preset from storage, builds the system prompt from preset sections + global rules, builds the post-history prompt from writing style + output format + response length, renders all data layers, and calls `fit_messages_to_context()` to enforce the connection's token budget. No pre-assembly caching in `AppSettings` is required — the assembler reads the preset directly.
+The active preset is stored in `AppSettings.active_system_prompt_preset_id`. At assembly time, `PromptAssembler::assemble()` loads the preset from storage, builds the system prompt from preset sections + global rules, builds the post-history prompt from writing style + output format + response length, renders all data layers, and calls `fit_messages_to_context()` to enforce the connection's token budget. No pre-assembly caching in `AppSettings` is required — the assembler reads the preset directly.
 
 Default presets (shipped as `data/prompt_presets/system/default.json`) are protected and cannot be edited or deleted. To modify a default, create a copy and activate it.
 

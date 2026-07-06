@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::application::action_pipeline::pipeline::{ActionOutcome, ActionPipeline};
-use crate::application::context::{GameServiceContext, load_or_fresh};
+use crate::application::context::{OpContext, load_or_fresh, load_state_for_test};
 use crate::application::game_service::GameService;
 use crate::application::agents::registry::AgentRegistry;
 use crate::domain::model::quantifier::QuantifierResult;
@@ -34,7 +34,7 @@ fn test_pipeline_runs_to_completion() {
     let outcome = pipeline.run_from_input(&ctx, state, "look".to_string());
 
     assert!(matches!(outcome, Ok(())));
-    let final_state = ctx.load_state_for_test();
+    let final_state = load_state_for_test(&ctx);
     assert_eq!(
         final_state.narrative.input_buffer.status,
         GenerationStatus::Idle
@@ -56,7 +56,7 @@ fn test_pipeline_saves_narration_to_history() {
 
     let _outcome = pipeline.run_from_input(&ctx, state, "look".to_string());
 
-    let final_state = ctx.load_state_for_test();
+    let final_state = load_state_for_test(&ctx);
     let has_narration = final_state
         .narrative
         .history()
@@ -80,7 +80,7 @@ fn test_pipeline_returns_error_on_narration_failure() {
         outcome.is_ok(),
         "Expected Ok(()) after error-model unification, got {outcome:?}"
     );
-    let final_state = ctx.load_state_for_test();
+    let final_state = load_state_for_test(&ctx);
     assert!(
         final_state
             .narrative
@@ -108,7 +108,7 @@ fn test_pipeline_returns_error_on_empty_narration_text() {
         outcome.is_ok(),
         "Expected Ok(()) after error-model unification, got {outcome:?}"
     );
-    let final_state = ctx.load_state_for_test();
+    let final_state = load_state_for_test(&ctx);
     assert!(
         final_state
             .narrative
@@ -136,7 +136,7 @@ fn test_pipeline_cancels_mid_run() {
         matches!(outcome, Err(ActionOutcome::Cancelled)),
         "Expected cancellation when token is cancelled, got {outcome:?}"
     );
-    let final_state = ctx.load_state_for_test();
+    let final_state = load_state_for_test(&ctx);
     assert_eq!(
         final_state.narrative.input_buffer.status,
         GenerationStatus::Idle
@@ -160,7 +160,6 @@ fn test_pipeline_with_custom_quantifier_result() {
     let state = make_test_state();
     let ctx = make_test_context(state.clone());
 
-    // Create a quantifier agent that returns custom result via prompt response
     let custom_quantifier_result = r#"{"npcs_in_room": ["npc1"], "movement": null}"#.to_string();
     let mock_provider =
         Arc::new(MockBackend::default().with_prompt_responses(vec![custom_quantifier_result]));
@@ -175,7 +174,7 @@ fn test_pipeline_with_custom_quantifier_result() {
     let outcome = pipeline.run_from_input(&ctx, state, "look".to_string());
 
     assert!(matches!(outcome, Ok(())));
-    let final_state = ctx.load_state_for_test();
+    let final_state = load_state_for_test(&ctx);
     assert_eq!(
         final_state.scene.npcs_in_area.len(),
         1,
@@ -202,7 +201,7 @@ fn test_phase_trigger_continuation_cancels_at_start() {
         matches!(result, Err(ActionOutcome::Cancelled)),
         "Expected cancellation at start of trigger continuation, got {result:?}"
     );
-    let final_state = ctx.load_state_for_test();
+    let final_state = load_state_for_test(&ctx);
     assert_eq!(
         final_state.narrative.input_buffer.status,
         GenerationStatus::Idle
@@ -223,7 +222,7 @@ fn test_trigger_continuation_save_post_trigger_error() {
         "save_snapshot",
         TestOverride::internal("simulated save failure"),
     );
-    let ctx = GameServiceContext {
+    let ctx = OpContext {
         storage: failing,
         ..base_ctx.clone()
     };
@@ -281,7 +280,6 @@ fn test_pipeline_trigger_happy_path() {
 
     let ctx = make_test_context(state.clone());
 
-    // Custom quantifier that detects npc1
     let custom_quantifier_result = r#"{"npcs_in_room": ["npc1"], "movement": null}"#.to_string();
     let mock_provider =
         Arc::new(MockBackend::default().with_prompt_responses(vec![custom_quantifier_result]));
@@ -301,7 +299,7 @@ fn test_pipeline_trigger_happy_path() {
         matches!(outcome, Ok(())),
         "Expected Completed, got {outcome:?}"
     );
-    let final_state = ctx.load_state_for_test();
+    let final_state = load_state_for_test(&ctx);
     assert!(
         final_state
             .narrative
@@ -350,7 +348,6 @@ fn test_pipeline_trigger_empty_continuation() {
 
     let ctx = make_test_context(state.clone());
 
-    // Custom quantifier
     let custom_quantifier_result = r#"{"npcs_in_room": ["npc1"], "movement": null}"#.to_string();
     let mock_provider =
         Arc::new(MockBackend::default().with_prompt_responses(vec![custom_quantifier_result]));
@@ -415,7 +412,6 @@ fn test_pipeline_trigger_complete_failure() {
 
     let ctx = make_test_context(state.clone());
 
-    // Custom quantifier
     let custom_quantifier_result = r#"{"npcs_in_room": ["npc1"], "movement": null}"#.to_string();
     let mock_provider =
         Arc::new(MockBackend::default().with_prompt_responses(vec![custom_quantifier_result]));
@@ -489,7 +485,7 @@ fn test_pipeline_no_duplicate_narration() {
 
     let _outcome = pipeline.run_from_input(&ctx, state, "test input".to_string());
 
-    let final_state = ctx.load_state_for_test();
+    let final_state = load_state_for_test(&ctx);
     let history = final_state.narrative.history();
     let narration_count = history
         .iter()

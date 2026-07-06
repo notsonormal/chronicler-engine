@@ -1,14 +1,14 @@
 //! [DOC: docs/reference/test_support.md — section "Integration Test Helpers"]
 use std::sync::{Arc, RwLock};
 
-use crate::application::GameServiceContext;
+use crate::application::OpContext;
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::domain::model::settings::AppSettings;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::adapters::driven::storage::Storage;
 
-pub fn make_test_context(state: GameState) -> GameServiceContext {
+pub fn make_test_context(state: GameState) -> OpContext {
     let snapshot = GameStateSnapshot::from_game_state(&state);
     let storage = Arc::new(Storage::new_in_memory());
     let _ = storage.save_snapshot(&snapshot);
@@ -23,7 +23,7 @@ pub fn make_test_context(state: GameState) -> GameServiceContext {
     build_test_context(state, storage)
 }
 
-pub fn make_test_context_without_snapshot(state: GameState) -> GameServiceContext {
+pub fn make_test_context_without_snapshot(state: GameState) -> OpContext {
     let storage = Arc::new(Storage::new_in_memory());
     for msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
         if let Ok(id) = storage.insert_message(&msg) {
@@ -51,13 +51,15 @@ fn default_test_preset_storage() -> Arc<Storage> {
     Arc::new(storage)
 }
 
-fn build_test_context(state: GameState, storage: Arc<Storage>) -> GameServiceContext {
-    GameServiceContext {
+fn build_test_context(state: GameState, storage: Arc<Storage>) -> OpContext {
+    OpContext {
         storage,
-        world: state.world.clone(),
-        map: state.map.clone(),
-        player: state.player.clone(),
-        npcs: Arc::new(state.npcs.clone()),
+        world_snapshot: crate::application::context::WorldSnapshot {
+            world: state.world.clone(),
+            map: state.map.clone(),
+            player: state.player.clone(),
+            npcs: Arc::new(state.npcs.clone()),
+        },
         cancel_token: tokio_util::sync::CancellationToken::new(),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         settings: Arc::new(RwLock::new(AppSettings::default())),
@@ -65,7 +67,7 @@ fn build_test_context(state: GameState, storage: Arc<Storage>) -> GameServiceCon
     }
 }
 
-pub fn make_test_context_with_sqlite(state: GameState) -> crate::error::Result<GameServiceContext> {
+pub fn make_test_context_with_sqlite(state: GameState) -> crate::error::Result<OpContext> {
     let snapshot = GameStateSnapshot::from_game_state(&state);
     let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:")?;
     crate::test_support::seed_default_game_row(&db_pool, 1)?;
@@ -79,12 +81,14 @@ pub fn make_test_context_with_sqlite(state: GameState) -> crate::error::Result<G
         }
     }
 
-    Ok(GameServiceContext {
+    Ok(OpContext {
         storage,
-        world: state.world.clone(),
-        map: state.map.clone(),
-        player: state.player.clone(),
-        npcs: Arc::new(state.npcs.clone()),
+        world_snapshot: crate::application::context::WorldSnapshot {
+            world: state.world.clone(),
+            map: state.map.clone(),
+            player: state.player.clone(),
+            npcs: Arc::new(state.npcs.clone()),
+        },
         cancel_token: tokio_util::sync::CancellationToken::new(),
         is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         settings: Arc::new(RwLock::new(AppSettings::default())),

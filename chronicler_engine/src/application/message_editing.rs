@@ -7,7 +7,7 @@ use chrono::Utc;
 
 use crate::application::action_pipeline::{retry_last_response_impl, retrigger_event_impl};
 use crate::application::ApplicationError;
-use crate::application::context::{GameServiceContext, load_or_fresh};
+use crate::application::context::{OpContext, load_or_fresh};
 use crate::application::game_service::GameService;
 use crate::error::{EngineError, internal_error};
 use crate::domain::model::state::game_state::GameState;
@@ -20,7 +20,7 @@ fn app_err_internal(msg: impl Into<String>) -> ApplicationError {
 }
 
 fn prepare_retry_state(
-    ctx: &GameServiceContext,
+    ctx: &OpContext,
     mut game_state: GameState,
     status: GenerationStatus,
     phase: GenerationPhase,
@@ -34,7 +34,7 @@ fn prepare_retry_state(
 }
 
 pub fn switch_swipe(
-    ctx: GameServiceContext,
+    ctx: OpContext,
     message_id: u64,
     swipe_index: usize,
 ) -> Result<(), ApplicationError> {
@@ -77,11 +77,7 @@ pub fn switch_swipe(
     Ok(())
 }
 
-pub fn edit_history(
-    ctx: GameServiceContext,
-    id: u64,
-    text: String,
-) -> Result<(), ApplicationError> {
+pub fn edit_history(ctx: OpContext, id: u64, text: String) -> Result<(), ApplicationError> {
     let latest = ctx.storage.load_latest_snapshot()?;
     let mut guard = load_or_fresh(&ctx);
     guard.narrative.history.edit(id, text.clone())?;
@@ -95,7 +91,7 @@ pub fn edit_history(
     Ok(())
 }
 
-pub fn delete_last(ctx: GameServiceContext) -> Result<(), ApplicationError> {
+pub fn delete_last(ctx: OpContext) -> Result<(), ApplicationError> {
     let mut guard = load_or_fresh(&ctx);
     let last_id = guard
         .narrative
@@ -114,10 +110,7 @@ pub fn delete_last(ctx: GameServiceContext) -> Result<(), ApplicationError> {
     Ok(())
 }
 
-pub fn retry(
-    game_service: &Arc<GameService>,
-    ctx: GameServiceContext,
-) -> Result<(), ApplicationError> {
+pub fn retry(game_service: &Arc<GameService>, ctx: OpContext) -> Result<(), ApplicationError> {
     let game_state = load_or_fresh(&ctx);
 
     if game_state.narrative.history.last_input_text().is_none() {
@@ -144,10 +137,7 @@ pub fn retry(
     Ok(())
 }
 
-pub fn retrigger(
-    game_service: &Arc<GameService>,
-    ctx: GameServiceContext,
-) -> Result<(), ApplicationError> {
+pub fn retrigger(game_service: &Arc<GameService>, ctx: OpContext) -> Result<(), ApplicationError> {
     let game_state = load_or_fresh(&ctx);
 
     if game_state.narrative.last_trigger.is_none() {

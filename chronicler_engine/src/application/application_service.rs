@@ -6,12 +6,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
-use axum::http::StatusCode;
-use axum::response::{IntoResponse, Response};
 use serde::Serialize;
 
 use crate::application::action_pipeline::execute_action_impl;
-use crate::application::context::{GameServiceContext, load_or_fresh};
+use crate::application::context::{OpContext, load_or_fresh};
 use crate::application::game_service::GameService;
 use crate::application::generation_guard::GenerationGuard;
 
@@ -78,38 +76,6 @@ impl From<EngineError> for ApplicationError {
     }
 }
 
-fn html_escape(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&#x27;")
-}
-
-fn error_div(message: &str) -> String {
-    format!(
-        "<div class=\"error-message\">Error: {}</div>",
-        html_escape(message)
-    )
-}
-
-impl IntoResponse for ApplicationError {
-    fn into_response(self) -> Response {
-        let (status, body) = match &self {
-            Self::Validation(msg) => (StatusCode::BAD_REQUEST, error_div(msg)),
-            Self::ConcurrentGeneration => (
-                StatusCode::SERVICE_UNAVAILABLE,
-                error_div("Generation in progress, please wait..."),
-            ),
-            Self::ShuttingDown => (
-                StatusCode::SERVICE_UNAVAILABLE,
-                error_div("Server is shutting down"),
-            ),
-            Self::Engine(e) => (StatusCode::INTERNAL_SERVER_ERROR, error_div(&e.to_string())),
-        };
-        (status, body).into_response()
-    }
-}
 pub enum ProcessActionResult {
     Started,
     ConcurrentGeneration,
@@ -148,14 +114,11 @@ impl DefaultApplicationService {
 
     pub fn process_action(
         &self,
-        ctx: GameServiceContext,
+        ctx: OpContext,
         input: String,
     ) -> Result<ProcessActionResult, EngineError> {
         let mut game_state = load_or_fresh(&ctx);
 
-        // Self-heal: if a previous generation panicked, is_generating was cleared
-        // by GenerationGuard::Drop but the persisted status may still be Generating.
-        // Reset to Idle so the new request can proceed normally.
         if !ctx.is_generating.load(Ordering::SeqCst)
             && game_state.narrative.input_buffer.status.is_generating()
         {
@@ -216,21 +179,18 @@ impl DefaultApplicationService {
         Ok(ProcessActionResult::Started)
     }
 
-    pub fn continue_narration(
-        &self,
-        ctx: GameServiceContext,
-    ) -> Result<ProcessActionResult, EngineError> {
+    pub fn continue_narration(&self, ctx: OpContext) -> Result<ProcessActionResult, EngineError> {
         self.process_action(ctx, String::new())
     }
 
-    pub fn create_game(&self, ctx: GameServiceContext) -> Result<u64, ApplicationError> {
+    pub fn create_game(&self, ctx: OpContext) -> Result<u64, ApplicationError> {
         if ctx.is_generating.load(Ordering::SeqCst) {
             return Err(ApplicationError::ConcurrentGeneration);
         }
 
         let world_with_map = ctx
             .storage
-            .get_world(&ctx.world.key)?
+            .get_world(&ctx.world_snapshot.world.key)?
             .ok_or_else(|| ApplicationError::validation("World not found"))?;
         let world_name = world_with_map.world_card.name.clone();
         let games = ctx.storage.list_games()?;
@@ -239,9 +199,9 @@ impl DefaultApplicationService {
 
         let new_id = ctx.storage.create_game(
             &world_name,
-            &ctx.world.key,
-            &ctx.player.key,
-            &ctx.player.sheet.name,
+            &ctx.world_snapshot.world.key,
+            &ctx.world_snapshot.player.key,
+            &ctx.world_snapshot.player.sheet.name,
             &name,
         )?;
         let old_id = ctx.storage.current_game_id();
@@ -258,7 +218,7 @@ impl DefaultApplicationService {
         Ok(new_id)
     }
 
-    pub fn switch_game(&self, ctx: GameServiceContext, id: u64) -> Result<(), ApplicationError> {
+    pub fn switch_game(&self, ctx: OpContext, id: u64) -> Result<(), ApplicationError> {
         if ctx.is_generating.load(Ordering::SeqCst) {
             return Err(ApplicationError::ConcurrentGeneration);
         }
@@ -271,7 +231,7 @@ impl DefaultApplicationService {
         Ok(())
     }
 
-    pub fn delete_game(&self, ctx: GameServiceContext, id: u64) -> Result<(), ApplicationError> {
+    pub fn delete_game(&self, ctx: OpContext, id: u64) -> Result<(), ApplicationError> {
         if ctx.is_generating.load(Ordering::SeqCst) {
             return Err(ApplicationError::ConcurrentGeneration);
         }
@@ -285,18 +245,18 @@ impl DefaultApplicationService {
         Ok(())
     }
 
-    pub fn list_games(&self, ctx: GameServiceContext) -> Result<Vec<Game>, ApplicationError> {
+    pub fn list_games(&self, ctx: OpContext) -> Result<Vec<Game>, ApplicationError> {
         ctx.storage.list_games().map_err(Into::into)
     }
 
-    pub fn current_game_id(&self, ctx: GameServiceContext) -> u64 {
+    pub fn current_game_id(&self, ctx: OpContext) -> u64 {
         ctx.storage.current_game_id()
     }
 
-    pub fn reset(&self, ctx: GameServiceContext) -> Result<(), ApplicationError> {
+    pub fn reset(&self, ctx: OpContext) -> Result<(), ApplicationError> {
         let current_id = ctx.storage.current_game_id();
-        let world_key = ctx.world.key.clone();
-        let world_name = ctx.world.name.clone();
+        let world_key = ctx.world_snapshot.world.key.clone();
+        let world_name = ctx.world_snapshot.world.name.clone();
 
         ctx.storage.delete_game(current_id)?;
 
@@ -312,25 +272,24 @@ impl DefaultApplicationService {
         let new_id = ctx.storage.create_game(
             &world_name,
             &world_key,
-            &ctx.player.key,
-            &ctx.player.sheet.name,
+            &ctx.world_snapshot.player.key,
+            &ctx.world_snapshot.player.sheet.name,
             &new_name,
         )?;
         ctx.set_game_id(new_id);
 
-        // snapshot already committed; message/swipe failures logged, not propagated
         let _ = Self::persist_initial_state_with_swipes(&ctx);
 
         Ok(())
     }
 
-    pub fn list_worlds(&self, ctx: GameServiceContext) -> Result<Vec<WorldCard>, ApplicationError> {
+    pub fn list_worlds(&self, ctx: OpContext) -> Result<Vec<WorldCard>, ApplicationError> {
         ctx.storage.list_worlds().map_err(Into::into)
     }
 
     pub fn get_world(
         &self,
-        ctx: GameServiceContext,
+        ctx: OpContext,
         key: &str,
     ) -> Result<Option<WorldWithMap>, ApplicationError> {
         ctx.storage.get_world(key).map_err(Into::into)
@@ -338,7 +297,7 @@ impl DefaultApplicationService {
 
     pub fn create_world(
         &self,
-        ctx: GameServiceContext,
+        ctx: OpContext,
         world_card: WorldCard,
         map: MapDef,
     ) -> Result<i64, ApplicationError> {
@@ -349,7 +308,7 @@ impl DefaultApplicationService {
 
     pub fn update_world(
         &self,
-        ctx: GameServiceContext,
+        ctx: OpContext,
         id: i64,
         world_card: WorldCard,
         map: MapDef,
@@ -359,13 +318,11 @@ impl DefaultApplicationService {
             .map_err(Into::into)
     }
 
-    pub fn delete_world(&self, ctx: GameServiceContext, key: &str) -> Result<(), ApplicationError> {
+    pub fn delete_world(&self, ctx: OpContext, key: &str) -> Result<(), ApplicationError> {
         ctx.storage.delete_world(key).map_err(Into::into)
     }
 
-    fn persist_initial_state_with_swipes(
-        ctx: &GameServiceContext,
-    ) -> Result<u64, ApplicationError> {
+    fn persist_initial_state_with_swipes(ctx: &OpContext) -> Result<u64, ApplicationError> {
         let mut initial_state = ctx.build_fresh_initial_state();
         let snapshot = GameStateSnapshot::from_game_state(&initial_state);
         let snapshot_id = ctx.storage.save_snapshot(&snapshot)?;

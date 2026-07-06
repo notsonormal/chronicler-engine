@@ -1,0 +1,89 @@
+# ADR-030: is_generating Dual-Source Invariant — AtomicBool Is Cached View of Persisted Status
+
+**Date:** 2026-07-06
+**Status:** Accepted
+
+## Context
+
+The application state holds two representations of the same fact — "is a generation in progress?":
+
+1. `app_state.rs:50-58` exposes `is_generating: Arc<AtomicBool>`, a hot-path-readable boolean used by the HTTP poll endpoint.
+2. `state.narrative.generation_status: GenerationStatus` is the persisted, durable record of the same state, written through `Storage` and read back on demand.
+
+The atomic boolean exists because the poll endpoint is the hottest read path in the application; hitting the storage layer on every poll would dominate latency and consume connection-pool budget for no semantic benefit. The persisted enum exists because the generation status must survive process restarts and be readable by recovery / debugging tooling.
+
+The holistic hexagon investigation (2026-07-05) flagged this as finding B.5: a latent race / state-divergence risk. Two writers could change the atomic boolean and the persisted status independently and let them drift. The same concern was independently raised in the B-series / C-series of the investigation.
+
+Three mitigations were considered:
+
+1. **Collapse to single source.** Make the persisted `GenerationStatus` the only source of truth. Rejected: re-introduces a storage read on every poll, breaking the latency budget that motivated the AtomicBool in the first place.
+2. **Strict single-writer enforcement via the type system.** Make the AtomicBool unreachable outside `ApplicationService` by hiding it behind a newtype whose only mutating methods are `pub(crate)` and take `&ApplicationService`. Rejected: requires wrapping every poll read site to go through `ApplicationService` rather than the state struct, churning the public surface of `app_state.rs`.
+3. **Document the invariant + enforce with a property test.** Lock the rule that only `ApplicationService` mutates both representations, in the same critical section; require a property test that asserts no drift post-mutation. Accepted.
+
+The third option is the lightest-weight mitigation that closes the divergence risk: it makes the rule machine-checkable without restructuring the poll path or rewriting every read site.
+
+## Decision
+
+`is_generating: Arc<AtomicBool>` is a cached view of the persisted `GenerationStatus` enum, not an independent source of truth. The dual source is intentional, not accidental, and the invariant governing it is part of the architectural contract.
+
+### Roles
+
+- `GenerationStatus` (persisted in `state.narrative.generation_status`) is the **source of truth**.
+- `is_generating: Arc<AtomicBool>` is a **hot-path cache** to avoid a storage read on every poll.
+
+### Single-Writer Rule
+
+- **Only** `ApplicationService` mutates both representations.
+- The mutation is performed **atomically** with respect to observers: the AtomicBool store and the persistence write happen in the same critical section, with no observable intermediate state in which the two representations disagree.
+- "Atomic with respect to observers" means: any caller reading the AtomicBool after observing a persisted write must see a value consistent with that write. In practice, the order is `store AtomicBool` → `persist GenerationStatus`, so a reader polling during the gap sees the new AtomicBool value paired with the not-yet-flushed status, which the next poll (after persistence completes) converges on.
+
+### Read-Only Elsewhere
+
+- All code paths outside `ApplicationService` treat the AtomicBool as **read-only**.
+- Mutation sites outside `ApplicationService` are forbidden. A future audit (H4 work) catalogues all mutation sites; any site found outside `ApplicationService` is a bug.
+- The read path (HTTP poll endpoint) continues to use `is_generating.load()` directly. This is the whole point of the cache.
+
+### Verification Strategy
+
+- A property test (H4 implementation) asserts that after any `ApplicationService` mutation, `AtomicBool.load() == (persisted_status == GenerationStatus::Generating)`.
+- The property test must be able to detect injected divergence (i.e. if the test artificially mutates one representation but not the other, the test fails).
+- Concurrent execution (4 threads calling `ApplicationService::narrate`) must produce no observed divergence.
+
+### Why Dual Source Over Collapse
+
+- The poll path is hot. A storage read per poll defeats the design intent of the AtomicBool cache and would dominate request latency under load.
+- The AtomicBool gives O(1) read with a single, documented writer. The cost of dual sources is paid once, at mutation time, by holding the critical section that touches both representations.
+- A property test turns the invariant from "documented convention" into "machine-checked contract". Drift between the two representations fails the test suite rather than shipping.
+- Collapsing the sources does not actually reduce total complexity — it just shifts the cost from the mutation path to the read path, where it is observed by every poll request.
+
+## Consequences
+
+### Positive
+
+- The poll path stays O(1). No storage read on every poll request. Latency budget preserved.
+- The invariant is enforceable via a property test, giving machine-checked confidence in the single-writer rule.
+- The dual-source design is documented as intentional, removing the "is this drift a bug or by design?" question that future maintainers would otherwise face.
+- The cost of dual sources is concentrated at the mutation site, not spread across the read path.
+
+### Negative
+
+- Two representations of the same fact means the invariant **must** be documented and audited. A future contributor who adds a new mutation path without reading this ADR risks introducing drift.
+- The AtomicBool and the persisted status are coupled in time, not in type. A test that catches drift must exercise both representations explicitly.
+- The "atomic with respect to observers" guarantee is weaker than a single-source-of-truth design. A reader polling during the store-then-persist window sees a transiently consistent view. Acceptable because the persisted write follows within milliseconds and the next poll converges.
+
+### Trade-offs
+
+- Chose dual source with documented invariant + property test over collapse to single source — the latency cost of collapse is paid by every poll, which is unacceptable for the hot path.
+- Chose single-writer rule enforced by documentation + audit over type-system-level enforcement (newtype + `pub(crate)` mutators) — the type-system approach would force a wider refactor of `app_state.rs` and the poll endpoint, with marginal safety benefit once the property test exists.
+- Chose store-then-persist ordering over persist-then-store — the read path observes the new AtomicBool value first, which matches the "is generating right now?" semantics a poll reader expects (better to briefly report "generating" than to briefly report "idle" while a generation is mid-flight).
+- Accepted that the property test is the binding safety mechanism. If the test is ever deleted or weakened, the invariant degrades from "machine-checked" to "convention only".
+
+## Related ADRs
+
+- ADR-010: Concurrency and Generation Gate Model — established the original `AtomicBool` generation gate. ADR-030 extends that decision by adding the persisted-source-of-truth requirement and the single-writer rule.
+- ADR-018: Application Service (planned, not yet drafted) — the `ApplicationService` is the single-writer named in this ADR. Coordination expected at H4 implementation time, when the mutation-site audit is performed.
+- ADR-027: Hexagonal Architecture Migration — parent decision on the storage direct-access exemption (`Storage` is accessed directly by the application persistence boundary). Relevant because the persisted `GenerationStatus` write goes through `Storage`, which is a documented exemption per ADR-027.
+
+## History
+
+- **2026-07-06**: Initial decision. Locks the dual-source roles, the single-writer rule, the read-only-everywhere-else rule, and the property-test verification strategy.
