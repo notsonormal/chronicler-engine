@@ -53,37 +53,39 @@ Edit the constants, `/reload` to apply.
 
 ## How detection works
 
-Single source of truth: the `isSubagent` flag, set on `session_start` from
-`process.env.PI_SUBAGENT_CHILD === "1"`. The pi-subagents extension sets this
-env var unconditionally in every spawned child process (sync, async, chain,
-parallel, fanout — see pi-subagents `runs/shared/pi-args.ts`). Fresh-context
-subagents fire `session_start` with `reason: "new"` and forked-context with
-`reason: "fork"`; both set the env var, so either kind is detected. Used by
-Features 2, 3, 4. Feature 1 is parent-side and skips when `isSubagent` is true.
-`session_start` always fires before `before_agent_start` / `turn_end` /
-`tool_call` per pi's lifecycle, so the flag is always set in time.
+Single source of truth: the `isSubagent` flag, set on `session_start` via
+layered detection (see `src/subagent-detection.ts`). Any-true wins:
 
-`/fork` and `/clone` slash commands create new sessions in the **same**
-process via `sessionManager.newSession(...)` — they do not spawn a child or
-set `PI_SUBAGENT_CHILD`. Therefore interactive manual forks remain unguarded
-by Features 2/3/4. This matches the original design intent: only pi-subagents
-extension children are workers.
+1. `process.env.PI_SUBAGENT_CHILD === "1"` env var. Set by pi-subagents at
+   child spawn. Empirically unreliable as the sole signal (env propagation
+   gaps for async workers observed 2026-07-06). Kept for forward compat.
+2. Session name starts with `subagent-` (pi-subagents names every spawned
+   child session `subagent-{role}-{runId}-{index}`).
+3. Session header has a `parentSession` field. Covers `/fork` and `/clone`
+   too.
 
-`PI_SUBAGENT_PARENT_SESSION` is also set by pi-subagents but is **not** used
-for detection — the parent-session field is written into headers by
-`/fork` `/` `clone` slash commands too, so it is a weaker signal. The
-`PI_SUBAGENT_CHILD` env var is the discriminator.
+Signals 2 and 3 are read from `ctx.sessionManager` inside the
+`session_start` handler, which fires before `before_agent_start` /
+`turn_end` / `tool_call` per pi's lifecycle.
+
+`/new` from the top-level `pi` shell (no parent session, no `subagent-`
+name, env var unset) stays unguarded by Features 2/3/4 — that's the
+interactive parent, by design.
+
+Used by Features 2, 3, 4. Feature 1 is parent-side and skips when
+`isSubagent` is true.
 
 ## Files
 
 ```
 src/
-├── index.ts          # ExtensionAPI registration, four handlers
-├── task-veto.ts      # Feature 1
-├── budget.ts         # Feature 2
-├── role-anchor.ts    # Feature 3
-├── commit-veto.ts    # Feature 4 (commit/push/tag/merge/rebase/reset/rm/stash)
-└── *.test.ts          # node:test suite
+├── index.ts                   # ExtensionAPI registration, four handlers
+├── task-veto.ts               # Feature 1
+├── budget.ts                  # Feature 2
+├── role-anchor.ts             # Feature 3
+├── commit-veto.ts             # Feature 4 (commit/push/tag/merge/rebase/reset/rm/stash)
+├── subagent-detection.ts      # Layered isSubagentSession (env / name / parentSession)
+└── *.test.ts                  # node:test suite
 ```
 
 ## Background and design rationale
