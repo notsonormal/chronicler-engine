@@ -24,4 +24,4 @@ metadata:
 9. Run the full build with the script `chronicler_engine/build.py`. **All Tests Must Pass**. Failing tests should be fixed even if they are failing for reasons that seem unrelated to the recent changes. "Seems unrelated" is a subjective opinion that is often wrong.
 
 
-_See `_shared/chronicler-shared.md` for documentation sync and visual verification steps.
+_See `.agents/skills/_shared/chronicler-shared.md` for documentation sync and visual verification steps.

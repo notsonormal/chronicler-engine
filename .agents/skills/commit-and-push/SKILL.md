@@ -14,21 +14,10 @@ action-required: EXECUTES — runs actual git commands (stage, commit, push) whe
 > 1. **Actually run** the git commands — do NOT just describe the steps
 > 2. **Do NOT ask for confirmation** — the user's invocation IS the confirmation
 > 3. **Do NOT output a tutorial** — execute the workflow immediately
+> 4. **Do NOT delete, stash, revert or change existing files** - you should not overthink
 >
 > **This is an ACTION skill, not a DOCUMENTATION skill.**
 
----
-
-## When to Use
-
-**Trigger this skill automatically when:**
-- User says "commit and push", "git commit", "push changes", "commit this"
-- Code changes are complete and ready to commit
-- Need to generate conventional commit messages
-
-**INVOCATION = PERMISSION TO EXECUTE**
-
-If the user invokes this skill, they want you to commit. Not explain how to commit. Not describe the steps. **Commit.**
 ---
 
 ## Pre-commit Hook Behavior
@@ -229,19 +218,10 @@ Before pushing:
 - [ ] Commit message follows conventional format
 - [ ] Pre-commit hooks satisfied (or README.md staged for second commit)
 - [ ] `git status` shows clean working tree (or only expected untracked files)
-- [ ] Local tests pass (if applicable)
 
 After pushing:
 - [ ] `git push` succeeded
 - [ ] Remote branch updated (verify on GitHub if needed)
-
----
-
-## Related Skills
-
-- `chronicler-comment-fixer`: Review code for AI slop before committing
-- `thermo-nuclear-code-quality-review`: Deep code quality audit pre-commit
-- `chronicler-dev-workflow`: Full development workflow including validation
 
 ---
 
@@ -253,19 +233,4 @@ After pushing:
 | Committing without reviewing diff | Accidental debug code, TODOs | Always `git diff --staged` first |
 | Using `git push --force` on shared branches | May overwrite others' work | Use force only on personal branches |
 | Ignoring merge conflicts | Push fails, remote unchanged | Resolve conflicts, complete merge commit |
-
----
-
-## Script Automation (Future Enhancement)
-
-A future enhancement could provide a wrapper script:
-
-```bash
-#!/bin/bash
-# chronicler_engine/scripts/commit.sh
-python scripts/generate_docs_index.py
-git add -A
-git commit "$@"
-```
-
-But for now, follow the manual steps above for full control.
+| Arbitrary deleting or reverting unexpected files | Valid code changes being lost | Leave files are is or ask for permission |

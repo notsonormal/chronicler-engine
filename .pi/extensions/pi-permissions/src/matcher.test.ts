@@ -39,6 +39,8 @@ test("matcher: each default rule matches its positive case", () => {
 		["git-pull", "git pull origin main"],
 		["git-cherry-pick", "git cherry-pick abc123"],
 		["git-revert", "git revert HEAD"],
+		["git-rm", "git rm path/to/file"],
+		["git-rm", "git rm --cached file.txt"],
 		["git-stash", "git stash push -m wip"],
 		["git-branch-force", "git branch -f main feature"],
 		["git-branch-force", "git branch -D broken"],

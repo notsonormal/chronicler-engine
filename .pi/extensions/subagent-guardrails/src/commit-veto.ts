@@ -1,9 +1,9 @@
 // Feature 4 (#13): Git commit/push veto.
 // Subagent-only (any pi-subagents child run). Blocks `git
-// commit|push|tag|merge|rebase|reset` and `git stash` (any subcommand except
+// commit|push|tag|merge|rebase|reset|rm` and `git stash` (any subcommand except
 // `git stash list`) in `bash` tool calls. Workers must not mutate repository
-// history, move HEAD, mutate the stash, or push; the parent session retains
-// commit-and-push ownership per AGENTS.md.
+// history, move HEAD, remove tracked files, mutate the stash, or push; the
+// parent session retains commit-and-push ownership per AGENTS.md.
 //
 // Read-only and staging ops (`add`, `status`, `diff`, `log`, `fetch`, `pull`,
 // `stash list`) remain allowed.
@@ -22,7 +22,7 @@ export interface GitVetoPass {
 
 export type GitVetoResult = GitVetoFailure | GitVetoPass;
 
-const BLOCKED_GIT = /\b(?:git|hub)\s+(commit|push|tag|merge|rebase|reset)\b/;
+const BLOCKED_GIT = /\b(?:git|hub)\s+(commit|push|tag|merge|rebase|reset|rm)\b/;
 const STASH_ANY = /\b(?:git|hub)\s+stash\b/;
 const STASH_LIST = /\b(?:git|hub)\s+stash\s+list\b/;
 

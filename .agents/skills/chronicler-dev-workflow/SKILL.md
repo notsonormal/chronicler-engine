@@ -17,7 +17,7 @@ I follow the workflow defined in `chronicler_engine/docs/README.md`:
 4. **Validate**: Run `cargo fmt`, `cargo clippy`, `cargo nextest run`.
 5. **Archive**: Move completed plan to `chronicler_engine/old-docs/archived-plans`.
 
-_See `_shared/chronicler-shared.md` for documentation sync and visual verification steps._
+_See `.agents/skills/_shared/chronicler-shared.md` for documentation sync and visual verification steps._
 
 ## Reference
 
@@ -48,7 +48,7 @@ cargo nextest run --lib
 
 **All Tests Must Pass**: The build must complete, and every single test must pass for a feature to be considered finished. This is a solo developer project, failing tests and bugs must be fixed before we can move onto the next feature. Flaky tests are never acceptable. Failing tests must be fixed, regardless of how unrelated they might seem to the feature in development.
 
-_See `_shared/chronicler-shared.md` for documentation sync and visual verification steps._
+_See `.agents/skills/_shared/chronicler-shared.md` for documentation sync and visual verification steps._
 
 ## When to use me
 

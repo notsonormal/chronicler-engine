@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { checkGitVeto } from "./commit-veto.ts";
 
-const BLOCKED = ["commit", "push", "tag", "merge", "rebase", "reset"];
+const BLOCKED = ["commit", "push", "tag", "merge", "rebase", "reset", "rm"];
 
 for (const verb of BLOCKED) {
 	test(`Feature 4: git ${verb} is blocked`, () => {
@@ -47,6 +47,23 @@ test("Feature 4: `git reset HEAD~2` is blocked", () => {
 test("Feature 4: `hub reset --hard` is blocked", () => {
 	const r = checkGitVeto("hub reset --hard");
 	assert.equal(r.block, true);
+});
+
+test("Feature 4: `git rm path/to/file` is blocked", () => {
+	const r = checkGitVeto("git rm path/to/file");
+	assert.equal(r.block, true);
+	assert.match(r.reason, /git rm blocked/);
+});
+
+test("Feature 4: `git rm --cached file` is blocked", () => {
+	const r = checkGitVeto("git rm --cached file.txt");
+	assert.equal(r.block, true);
+});
+
+test("Feature 4: `hub rm file` is blocked", () => {
+	const r = checkGitVeto("hub rm file.txt");
+	assert.equal(r.block, true);
+	assert.match(r.reason, /git rm blocked/);
 });
 
 test("Feature 4: bare `git stash` is blocked (defaults to push)", () => {
@@ -127,6 +144,12 @@ test("Feature 4: reason routes worker to commit-and-push skill", () => {
 
 test("Feature 4: stash reason also routes worker to commit-and-push skill", () => {
 	const r = checkGitVeto("git stash pop");
+	if (!r.block) throw new Error("expected block");
+	assert.match(r.reason, /commit-and-push/);
+});
+
+test("Feature 4: rm reason also routes worker to commit-and-push skill", () => {
+	const r = checkGitVeto("git rm file.txt");
 	if (!r.block) throw new Error("expected block");
 	assert.match(r.reason, /commit-and-push/);
 });

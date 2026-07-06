@@ -22,6 +22,7 @@ Project-local pi extension. Intercepts dangerous bash commands and prompts for c
 | `git-pull` | `\bgit\s+pull\b` | Fetch + possible merge |
 | `git-cherry-pick` | `\bgit\s+cherry-pick\b` | Commit transplant |
 | `git-revert` | `\bgit\s+revert\b` | Creates new commits |
+| `git-rm` | `\bgit\s+rm\b` | Removes tracked files from index/worktree |
 | `git-stash` | `\bgit\s+stash\b(?!\s+list\b)` | Hides work; `list` exempt (read-only) |
 | `git-branch-force` | `\bgit\s+branch\s+(?:-[fD]\|--force)\b` | Force-move / force-delete branch |
 | `git-checkout-branch` | `\bgit\s+checkout\s+-B\b` | Force-create branch over existing |

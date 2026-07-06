@@ -43,7 +43,7 @@ const DELEGATE_MIN_LENGTH = 200;
 Git-veto verb set and stash carve-out are the regexes in `src/commit-veto.ts`:
 
 ```ts
-const BLOCKED_GIT = /\b(?:git|hub)\s+(commit|push|tag|merge|rebase|reset)\b/;
+const BLOCKED_GIT = /\b(?:git|hub)\s+(commit|push|tag|merge|rebase|reset|rm)\b/;
 const STASH_ANY = /\b(?:git|hub)\s+stash\b/;
 const STASH_LIST = /\b(?:git|hub)\s+stash\s+list\b/;
 // stash blocks unless it matches STASH_LIST
@@ -82,7 +82,7 @@ src/
 ├── task-veto.ts      # Feature 1
 ├── budget.ts         # Feature 2
 ├── role-anchor.ts    # Feature 3
-├── commit-veto.ts    # Feature 4 (commit/push/tag/merge/rebase/reset/stash)
+├── commit-veto.ts    # Feature 4 (commit/push/tag/merge/rebase/reset/rm/stash)
 └── *.test.ts          # node:test suite
 ```
 

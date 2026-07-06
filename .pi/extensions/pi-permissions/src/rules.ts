@@ -17,6 +17,7 @@ export const DEFAULT_RULES: readonly DefaultRule[] = [
 	{ name: "git-pull", pattern: "\\bgit\\s+pull\\b" },
 	{ name: "git-cherry-pick", pattern: "\\bgit\\s+cherry-pick\\b" },
 	{ name: "git-revert", pattern: "\\bgit\\s+revert\\b" },
+	{ name: "git-rm", pattern: "\\bgit\\s+rm\\b" },
 	{ name: "git-stash", pattern: "\\bgit\\s+stash\\b(?!\\s+list\\b)" },
 	{ name: "git-branch-force", pattern: "\\bgit\\s+branch\\s+(?:-[fD]|--force)\\b" },
 	{ name: "git-checkout-branch", pattern: "\\bgit\\s+checkout\\s+-B\\b" },
