@@ -22,8 +22,8 @@ pub use misc::{
     check_text_handler, reset_handler, retrigger_handler, retry_handler, switch_swipe_handler,
 };
 pub use renderers::{
-    bad_request, ctx_or_error, html_escape, internal_error, ok, ok_refresh, render_error,
-    render_llm_messages, service_unavailable, service_unavailable_generating,
+    bad_request, html_escape, internal_error, ok, ok_refresh, render_error, render_llm_messages,
+    service_unavailable, service_unavailable_generating,
 };
 
 #[cfg(test)]

@@ -5,7 +5,7 @@ use axum::body::to_bytes;
 use axum::http::StatusCode;
 
 use crate::adapters::driving::http::fragments::renderers::response::{
-    bad_request, ctx_or_error, html_escape, internal_error, ok, ok_refresh, service_unavailable,
+    bad_request, html_escape, internal_error, ok, ok_refresh, service_unavailable,
     service_unavailable_generating,
 };
 use crate::adapters::driving::http::fragments::renderers::fragment_renderers::render_error;
@@ -68,16 +68,6 @@ async fn service_unavailable_generating_uses_error_div_wrapper() {
     assert!(
         body.contains("Generation in progress"),
         "body should include wait text: {body}"
-    );
-}
-
-#[test]
-fn ctx_or_error_returns_ok_when_app_state_provides_ctx() {
-    let state = crate::test_support::TestAppBuilder::default_test().build_app_state();
-    let result = ctx_or_error(&state);
-    assert!(
-        result.is_ok(),
-        "ctx_or_error should succeed against a built TestApp state"
     );
 }
 

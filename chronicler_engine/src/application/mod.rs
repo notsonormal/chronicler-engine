@@ -6,7 +6,6 @@ pub mod agents;
 pub mod application_service;
 pub mod arrival_service;
 pub mod context;
-pub mod error;
 pub mod game_service;
 pub mod generation_guard;
 pub mod llm_recorder;
@@ -34,9 +33,6 @@ pub(crate) use spawn::spawn_pipeline_task;
 
 #[cfg(test)]
 mod context_tests;
-
-#[cfg(test)]
-mod error_tests;
 
 #[cfg(test)]
 mod is_generating_invariant_tests;

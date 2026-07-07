@@ -713,6 +713,7 @@ dependencies = [
  "arch-lint",
  "askama",
  "async-stream",
+ "async-trait",
  "axum",
  "chrono",
  "clap",

@@ -8,12 +8,10 @@ use crate::domain::model::map::MapDef;
 use crate::domain::model::scenario::StartingScenario;
 use crate::domain::model::world::WorldCard;
 use crate::adapters::driving::http::AppState;
-use crate::adapters::driving::http::op_context_loader::load_op_context_for_active_game;
+use crate::application::context::OpContext;
 
 use super::fragments::{render_world_edit_form, render_worlds_panel};
-use crate::adapters::driving::http::fragments::{
-    bad_request, ctx_or_error, internal_error, ok, render_error,
-};
+use crate::adapters::driving::http::fragments::{bad_request, internal_error, ok, render_error};
 
 #[derive(Debug, Deserialize)]
 pub struct WorldForm {
@@ -55,12 +53,10 @@ impl WorldForm {
     }
 }
 
-pub async fn list_worlds_fragment(State(state): State<AppState>) -> Response<axum::body::Body> {
-    let ctx = match load_op_context_for_active_game(&state) {
-        Ok(c) => c,
-        Err(e) => return internal_error(format!("Failed to load context: {e}")),
-    };
-
+pub async fn list_worlds_fragment(
+    State(state): State<AppState>,
+    ctx: OpContext,
+) -> Response<axum::body::Body> {
     let worlds = match state.application_service.list_worlds(ctx.clone()) {
         Ok(w) => w,
         Err(e) => return internal_error(format!("Failed to load worlds: {e}")),
@@ -83,13 +79,9 @@ pub async fn list_worlds_fragment(State(state): State<AppState>) -> Response<axu
 
 pub async fn create_world_handler(
     State(state): State<AppState>,
+    ctx: OpContext,
     Form(form): Form<WorldForm>,
 ) -> Response<axum::body::Body> {
-    let ctx = match load_op_context_for_active_game(&state) {
-        Ok(c) => c,
-        Err(e) => return internal_error(format!("Failed to load context: {e}")),
-    };
-
     let (world_card, map) = match form.into_world_card() {
         Ok(w) => w,
         Err(e) => return bad_request(e),
@@ -126,12 +118,8 @@ pub async fn new_world_form_handler(State(_state): State<AppState>) -> Response<
 pub async fn edit_world_form_handler(
     State(state): State<AppState>,
     Path(key): Path<String>,
+    ctx: OpContext,
 ) -> Response<axum::body::Body> {
-    let ctx = match load_op_context_for_active_game(&state) {
-        Ok(c) => c,
-        Err(e) => return internal_error(format!("Failed to load context: {e}")),
-    };
-
     let world_with_map = match state.application_service.get_world(ctx.clone(), &key) {
         Ok(Some(w)) => w,
         Ok(None) => return bad_request(format!("World '{key}' not found")),
@@ -149,13 +137,9 @@ pub async fn edit_world_form_handler(
 pub async fn update_world_handler(
     State(state): State<AppState>,
     Path(key): Path<String>,
+    ctx: OpContext,
     Form(form): Form<WorldForm>,
 ) -> Response<axum::body::Body> {
-    let ctx = match load_op_context_for_active_game(&state) {
-        Ok(c) => c,
-        Err(e) => return internal_error(format!("Failed to load context: {e}")),
-    };
-
     let world_with_map = match state.application_service.get_world(ctx.clone(), &key) {
         Ok(Some(w)) => w,
         Ok(None) => return bad_request(format!("World '{key}' not found")),
@@ -198,12 +182,8 @@ pub async fn update_world_handler(
 pub async fn delete_world_handler(
     State(state): State<AppState>,
     Path(key): Path<String>,
+    ctx: OpContext,
 ) -> Response<axum::body::Body> {
-    let ctx = match ctx_or_error(&state) {
-        Ok(ctx) => ctx,
-        Err(e) => return internal_error(e),
-    };
-
     match state.application_service.delete_world(ctx, &key) {
         Ok(()) => ok(""),
         Err(e) if e.is_user_displayable() => {

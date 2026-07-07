@@ -28,7 +28,7 @@ The Game Master responds to three primary events:
 ### Arrival Logic Flow
 1. **State Transition**: The engine validates the move and updates `state.movement.current_room_id` (optional—may not change if player stays in room).
 2. **Scene Setup**: The engine prints the standard room dashboard *before* narration to provide system context.
-3. **Action Narration**: The engine loads the active preset, calls `assembler.assemble()` to build the prompt, then calls `llm_backend.complete()` with the assembled system and user prompts. The LLM generates a narrative paragraph describing the outcome.
+3. **Action Narration**: The engine loads the active preset, calls `assembler.assemble()` to build the prompt, then calls `LlmCallRecorder::complete()` with the assembled system and user prompts. The recorder routes through the configured `LlmProvider` transport, runs forensics + postprocessing, and returns a narrative paragraph describing the outcome.
 4. **Post-Processing**: The quantifier detects NPCs and movement, then triggers are evaluated — see [`game_flow.md`](game_flow.md) for the full phase pipeline and [`triggers.md`](triggers.md) for trigger evaluation rules.
 
 ## Continuation Narration (Auto-Trigger)

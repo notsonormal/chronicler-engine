@@ -11,10 +11,9 @@ use crate::domain::model::game::Game;
 use crate::adapters::driving::http::AppState;
 use crate::adapters::driving::http::op_context_loader::load_op_context;
 use crate::application::application_service::ApplicationError;
+use crate::application::context::OpContext;
 
-use crate::adapters::driving::http::fragments::renderers::{
-    ctx_or_error, internal_error, ok, ok_refresh,
-};
+use crate::adapters::driving::http::fragments::renderers::{internal_error, ok, ok_refresh};
 use crate::adapters::driving::http::games_fragment::template::{
     GameRowView, GamesPanelTemplate, PersonaRowView,
 };
@@ -28,12 +27,10 @@ fn game_to_view(g: Game) -> GameRowView {
     }
 }
 
-pub async fn list_games_fragment(State(state): State<AppState>) -> Response<axum::body::Body> {
-    let ctx = match ctx_or_error(&state) {
-        Ok(ctx) => ctx,
-        Err(e) => return internal_error(e),
-    };
-
+pub async fn list_games_fragment(
+    State(state): State<AppState>,
+    ctx: OpContext,
+) -> Response<axum::body::Body> {
     let Ok(games) = state.application_service.list_games(ctx.clone()) else {
         return internal_error("Failed to list games");
     };
@@ -103,9 +100,8 @@ pub async fn create_game_handler(
 pub async fn switch_game_handler(
     State(state): State<AppState>,
     Path(id): Path<u64>,
+    ctx: OpContext,
 ) -> Result<Response, ApplicationError> {
-    let ctx = ctx_or_error(&state)
-        .map_err(|e| ApplicationError::Engine(crate::error::EngineError::Render(e)))?;
     state.application_service.switch_game(ctx, id)?;
     Ok(ok_refresh())
 }
@@ -113,9 +109,8 @@ pub async fn switch_game_handler(
 pub async fn delete_game_handler(
     State(state): State<AppState>,
     Path(id): Path<u64>,
+    ctx: OpContext,
 ) -> Result<Response, ApplicationError> {
-    let ctx = ctx_or_error(&state)
-        .map_err(|e| ApplicationError::Engine(crate::error::EngineError::Render(e)))?;
     state.application_service.delete_game(ctx, id)?;
     Ok(ok(""))
 }

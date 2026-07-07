@@ -25,7 +25,7 @@ The engine supports flexible model selection via connection profiles stored in t
 
 ### 3. Backend Selection
 
-Backend is selected per-connection via `Connection.provider`:
+Backend is selected per-connection via `LlmProviderConfig.provider`:
 
 - `openrouter` → Uses OpenRouter API with the connection's model and API key
 - `deepseek` → Stub. `DeepSeekBackend` is wired into the `LlmProvider` port and selected by `provider = "deepseek"`; every call returns `EngineError::Config` because the transport layer is not implemented.
@@ -34,7 +34,7 @@ Backend is selected per-connection via `Connection.provider`:
 
 ### 4. Single User Message Mode
 
-Some models (particularly certain local/quantized models) ignore or poorly handle the `system` role. The `Connection` struct provides a `single_user_message` toggle for this case:
+Some models (particularly certain local/quantized models) ignore or poorly handle the `system` role. The `LlmProviderConfig` struct provides a `single_user_message` toggle for this case:
 
 - **When `false` (default)**: System prompt is sent as the `system` message, user text as the `user` message (standard behavior)
 - **When `true`**: System and user prompts are merged into a single `user` message with a `[SYSTEM]` prefix:

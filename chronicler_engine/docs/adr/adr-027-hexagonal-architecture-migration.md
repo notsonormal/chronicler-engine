@@ -67,20 +67,25 @@ Without the port, core would import the adapter — violating the dependency inv
 
 ### Storage Direct Access Exemption
 
-Storage (`Storage` struct with `Backend` enum) is accessed directly by the application layer in 3 files forming the **application persistence boundary**:
+Storage (`Storage` struct with `Backend` enum) is accessed directly by the application layer in 5 grandfathered files, split by marker variant:
+
+**Intentional (3 files)** — form the **application persistence boundary**, marked `// arch-lint: storage-direct — intentional, see ADR-027`:
 
 1. `src/application/context.rs`
 2. `src/application/application_service.rs`
 3. `src/application/game_service.rs`
 
-All three are marked with `// arch-lint: storage-direct — intentional, see ADR-027`.
+**Deferred to T2 (2 files)** — agent constructors that still take `Option<Arc<Storage>>` directly; will be replaced by recorder injection once the T2 land package lands. Marked `// arch-lint: storage-direct — deferred to T2, see ADR-027`:
 
-This exemption is intentional, not a leak:
+4. `src/application/agents/registry.rs`
+5. `src/application/agents/quantifier/agent.rs`
+
+The exemption is intentional, not a leak:
 
 - `Storage` is a concrete adapter with no port trait.
 - Substitution happens via the `Backend` enum (SQLite/InMemory/Test), not trait swapping.
 - Wrapping `Storage`'s ~40 methods in a `StateRepository` trait would be YAGNI (one impl, no real substitution seam).
-- The 3 exempted files form the application persistence boundary — no other `application/` file may import `Storage` directly.
+- The 5 grandfathered files form the application persistence boundary — any other `application/` file importing `Storage` directly is blocked by the `check_application_storage_direct` arch-lint guardrail (arch-lint 0.4.x has no per-file allowlists, so all five sites must carry a marker comment). Test files (`*_tests.rs`) are excluded from the guardrail because arch-lint cannot distinguish test fakes from production leaks.
 
 ### `domain/engine/` Subfolder Kept
 

@@ -37,9 +37,44 @@ async fn shutting_down_into_response_returns_503_with_shutdown_body() {
 }
 
 #[tokio::test]
-async fn engine_into_response_returns_500_with_engine_message() {
-    let resp = ApplicationError::Engine(EngineError::Render("disk failed".into())).into_response();
+async fn engine_displayable_into_response_returns_500_with_engine_message() {
+    let resp =
+        ApplicationError::Engine(EngineError::WorldHasGames { game_count: 1 }).into_response();
     assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
     let body = body_string(resp).await;
-    assert!(body.contains("disk failed"), "body: {body}");
+    assert!(!body.contains("Internal Server Error"), "body: {body}");
+    assert!(
+        body.contains("Cannot delete world"),
+        "body should contain engine message; got: {body}"
+    );
+    assert!(
+        body.contains("1"),
+        "body should include the game_count value; got: {body}"
+    );
+}
+
+#[tokio::test]
+async fn engine_non_displayable_into_response_returns_500_with_generic_body() {
+    let resp = ApplicationError::Engine(EngineError::Render("secret internal detail".into()))
+        .into_response();
+    assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    let body = body_string(resp).await;
+    assert!(body.contains("Internal Server Error"), "body: {body}");
+    assert!(
+        !body.contains("secret internal detail"),
+        "non-displayable engine body must not leak internal details; body: {body}"
+    );
+}
+
+#[tokio::test]
+async fn html_escape_in_body() {
+    let resp = ApplicationError::validation("<script>alert(\"x\")</script>").into_response();
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    let body = body_string(resp).await;
+    assert!(body.contains("&lt;script&gt;"), "body: {body}");
+    assert!(body.contains("&quot;"), "body: {body}");
+    assert!(
+        !body.contains("<script>"),
+        "body must escape <script>: {body}"
+    );
 }

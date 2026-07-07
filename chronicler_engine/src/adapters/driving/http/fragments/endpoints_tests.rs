@@ -3,6 +3,7 @@ use crate::adapters::driving::http::fragments::endpoints::{
     llm_messages_fragment, reset_generating_handler, status_ready_handler, story_log_fragment,
     visual_sidebar_fragment,
 };
+use crate::adapters::driving::http::op_context_loader::load_op_context_for_active_game;
 use crate::test_support::TestAppBuilder;
 
 #[tokio::test]
@@ -57,7 +58,8 @@ async fn test_status_ready_handler() {
 #[tokio::test]
 async fn test_generating_status_idle() {
     let state = TestAppBuilder::default_test().build_app_state();
-    let result = generating_status_handler(axum::extract::State(state)).await;
+    let ctx = load_op_context_for_active_game(&state).expect("failed to load context");
+    let result = generating_status_handler(ctx).await;
     assert!(result.0.contains("idle"));
 }
 
@@ -67,20 +69,23 @@ async fn test_generating_status_generating() {
     state
         .is_generating
         .store(true, std::sync::atomic::Ordering::SeqCst);
-    let result = generating_status_handler(axum::extract::State(state)).await;
+    let ctx = load_op_context_for_active_game(&state).expect("failed to load context");
+    let result = generating_status_handler(ctx).await;
     assert!(!result.0.is_empty());
 }
 
 #[tokio::test]
 async fn test_generating_status_error() {
     let state = TestAppBuilder::default_test().build_app_state();
-    let result = generating_status_handler(axum::extract::State(state)).await;
+    let ctx = load_op_context_for_active_game(&state).expect("failed to load context");
+    let result = generating_status_handler(ctx).await;
     assert!(!result.0.is_empty());
 }
 
 #[tokio::test]
 async fn test_reset_generating_ok() {
     let state = TestAppBuilder::default_test().build_app_state();
-    let result = reset_generating_handler(axum::extract::State(state)).await;
+    let ctx = load_op_context_for_active_game(&state).expect("failed to load context");
+    let result = reset_generating_handler(ctx).await;
     assert!(result.0.contains("reset") || !result.0.is_empty());
 }

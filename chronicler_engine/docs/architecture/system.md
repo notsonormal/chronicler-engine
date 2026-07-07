@@ -57,7 +57,7 @@ Contains pure data structures, serialization schemas, and the "Single Source of 
 - **`state`**: The `GameState` aggregation, narration history logs, and TUI state. `NarrativeState` holds a `MessageHistory` (independent narrative units with swipe metadata). `LogEntry` is the atomic rendering unit for templates and prompts, carrying `swipe_count` and `active_swipe_index`. `StoredTriggerContext` enables replaying trigger continuations on retry or retrigger. `LogEntry` carries optional `location_header` and `event_header` metadata for visual rendering; `NarrativeState` tracks `last_trigger_id` for retrigger capability.
 - **`scenario`**: Starting scenario definitions for narrative introductions. `StartingScenario` carries `starting_room_id` (default `"start"`) so each scenario declares its own entry room.
 - **`trigger`**: Trigger definitions, conditions, and NPC encounter tracking (`Trigger`, `TriggerCondition`, `TriggerEffect`, `NpcEncounterState`, `NpcEncounterLog`).
-- **`settings`**: `AppSettings`, `Connection`, and agent configuration data models.
+- **`settings`**: `AppSettings`, `LlmProviderConfig`, and agent configuration data models.
 - **`agent`**: `AgentConfig`, `AgentResult`, `AgentContext`, `StatePatch`, `ExecutionPhase`, `BackendSelector`, `Confidence`. `AgentContext` carries the current room for agents that need spatial awareness.
 - **`quantifier`**: `QuantifierResult`, `QuantifierParseResult`, `MovementParseResult`, `QuantifierConfidence`, `NpcEvent`, `NpcEventType`, `NpcEventList`. Mechanical result types produced by the narrative quantifier but consumed by the engine tier. Living in `model` prevents engine→narrative coupling.
 - **`llm_backend`**: `LlmBackendType` enum for backend selection.
@@ -137,7 +137,7 @@ DB-backed settings system for LLM configuration with reusable connection profile
 |-----------|---------|
 | `data/settings.json` | Seed template for default settings (DB is runtime source of truth) |
 | `AppSettings` struct | Configuration data model (connections, agents, prompt presets, text check settings) |
-| `Connection` struct | Named provider+model profile |
+| `LlmProviderConfig` struct | Named provider+model profile |
 | `AppState.settings` | Runtime access via `Arc<RwLock<AppSettings>>` |
 
 #### Settings Flow
@@ -163,7 +163,7 @@ flowchart TD
 
 | Setting | Type | Default |
 |---------|------|---------|
-| `connections` | `Vec<Connection>` | Three default connections (OpenRouter GPT-4o Mini, OpenRouter Euryale, Ollama Gemma) |
+| `connections` | `Vec<LlmProviderConfig>` | Three default connections (OpenRouter GPT-4o Mini, OpenRouter Euryale, Ollama Gemma) |
 | `narration_connection_id` | string | `"openrouter-gpt-4o-mini"` |
 | `quantifier_connection_id` | string | `"openrouter-gpt-4o-mini"` |
 | `text_check` | `TextCheckSettings` | Spell/grammar check config |
@@ -173,7 +173,7 @@ flowchart TD
 | `active_system_prompt` | `Option<String>` | Runtime override (serde-skipped) |
 | `active_quantifier_prompt` | `Option<String>` | Runtime override (serde-skipped) |
 
-#### Connection Context Windows
+#### Provider Context Windows
 
 Each connection can specify a `max_context_tokens` value. When unset, defaults are resolved by provider:
 
@@ -183,7 +183,7 @@ Each connection can specify a `max_context_tokens` value. When unset, defaults a
 | `openrouter` / `deepseek` | 32768 |
 | `mock` | 4096 |
 
-Each `Connection` contains: `id`, `name`, `provider`, `model`, `api_key` (optional), `base_url` (optional), `single_user_message` (optional, default `false`), `max_tokens` (optional), `max_context_tokens` (optional).
+Each `LlmProviderConfig` contains: `id`, `name`, `provider` (`LlmBackendType`), `model`, `api_key` (optional), `base_url` (optional), `single_user_message` (default `false`), `max_tokens` (optional), `max_context_tokens` (optional).
 
 #### Environment Fallback
 

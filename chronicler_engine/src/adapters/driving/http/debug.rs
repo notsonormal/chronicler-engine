@@ -6,7 +6,6 @@ use serde::Serialize;
 
 use crate::application::query_handlers;
 use crate::adapters::driving::http::AppState;
-use crate::adapters::driving::http::op_context_loader::load_op_context_for_active_game;
 
 #[derive(Serialize)]
 pub struct DebugBackendResponse {
@@ -15,12 +14,8 @@ pub struct DebugBackendResponse {
 }
 
 pub async fn debug_state_handler(
-    State(state): State<AppState>,
+    ctx: crate::application::OpContext,
 ) -> Result<Json<crate::application::DebugStateView>, StatusCode> {
-    let ctx = load_op_context_for_active_game(&state).map_err(|e| {
-        tracing::error!("State load failed during /debug/state request: {e}");
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
     query_handlers::get_debug_state(ctx)
         .map(Json)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)

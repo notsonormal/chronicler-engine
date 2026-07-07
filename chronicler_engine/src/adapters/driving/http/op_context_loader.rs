@@ -4,11 +4,27 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use axum::extract::FromRequestParts;
+use axum::http::request::Parts;
+
+use crate::application::application_service::ApplicationError;
 use crate::application::context::{OpContext, WorldSnapshot};
 use crate::domain::model::character::NpcCard;
 use crate::error::EngineError;
 
 use super::app_state::AppState;
+
+#[async_trait::async_trait]
+impl FromRequestParts<AppState> for OpContext {
+    type Rejection = ApplicationError;
+
+    async fn from_request_parts(
+        _parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        load_op_context_for_active_game(state).map_err(ApplicationError::Engine)
+    }
+}
 
 pub fn load_op_context(
     state: &AppState,

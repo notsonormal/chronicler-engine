@@ -3,6 +3,7 @@ use axum::{http::StatusCode, response::IntoResponse, Form};
 use crate::adapters::driving::http::fragments::history::{
     delete_history_handler, edit_history_handler, EditHistoryForm,
 };
+use crate::adapters::driving::http::op_context_loader::load_op_context_for_active_game;
 use crate::test_support::TestAppBuilder;
 
 #[test]
@@ -36,16 +37,12 @@ fn test_edit_history_form_roundtrip() {
 #[tokio::test]
 async fn test_edit_history_handler_ok() {
     let state = TestAppBuilder::default_test().build_app_state();
+    let ctx = load_op_context_for_active_game(&state).expect("failed to load context");
 
     let form = EditHistoryForm {
         text: "modified text".to_string(),
     };
-    let result = edit_history_handler(
-        axum::extract::State(state),
-        axum::extract::Path(999u64),
-        Form(form),
-    )
-    .await;
+    let result = edit_history_handler(axum::extract::Path(999u64), ctx, Form(form)).await;
     let status = match result {
         Ok(resp) => resp.status(),
         Err(e) => e.into_response().status(),
@@ -57,8 +54,9 @@ async fn test_edit_history_handler_ok() {
 #[tokio::test]
 async fn test_delete_history_handler_ok() {
     let state = TestAppBuilder::default_test().build_app_state();
+    let ctx = load_op_context_for_active_game(&state).expect("failed to load context");
 
-    let result = delete_history_handler(axum::extract::State(state)).await;
+    let result = delete_history_handler(ctx).await;
     let status = match result {
         Ok(resp) => resp.status(),
         Err(e) => e.into_response().status(),

@@ -58,7 +58,6 @@ Accumulated violations in existing docs: invoke the [`chronicler-docs-hygiene`](
 - [ADR-026: Relocate Persona Binding from World to Game](./adr/adr-026-persona-relocation-to-game.md)
 - [ADR-027: Hexagonal Architecture Migration](./adr/adr-027-hexagonal-architecture-migration.md)
 - [ADR-028: Test Module Header Convention](./adr/adr-028-test-module-header-convention.md)
-- [ADR-029: HttpError Trait Boundary — Keep Axum Out of Application Layer](./adr/adr-029-http-error-boundary.md)
 - [ADR-030: is_generating Dual-Source Invariant — AtomicBool Is Cached View of Persisted Status](./adr/adr-030-is-generating-invariant.md)
 - [ADR Standards](./adr/README.md)
 
