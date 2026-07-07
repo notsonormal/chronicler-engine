@@ -314,15 +314,24 @@ impl TestAppBuilder {
             )
         });
         let text_check_service = Arc::new(create_text_check_service(&self.settings));
+        let is_generating = Arc::new(std::sync::atomic::AtomicBool::new(self.is_generating));
+        let cancel_token = CancellationToken::new();
         AppState {
-            storage,
-            preset_storage,
+            storage: Arc::clone(&storage),
+            preset_storage: Arc::clone(&preset_storage),
             game_service: Arc::clone(&game_service),
-            application_service: Arc::new(DefaultApplicationService::new(game_service)),
+            application_service: Arc::new(DefaultApplicationService::new(
+                Arc::clone(&storage),
+                Arc::clone(&preset_storage),
+                Arc::clone(&settings_arc),
+                cancel_token.clone(),
+                Arc::clone(&is_generating),
+                game_service,
+            )),
             text_check_service,
-            settings: settings_arc,
-            cancel_token: Arc::new(RwLock::new(CancellationToken::new())),
-            is_generating: Arc::new(std::sync::atomic::AtomicBool::new(self.is_generating)),
+            settings: Arc::clone(&settings_arc),
+            cancel_token: Arc::new(RwLock::new(cancel_token)),
+            is_generating,
         }
     }
 }

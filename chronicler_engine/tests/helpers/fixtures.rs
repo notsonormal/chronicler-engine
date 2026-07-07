@@ -10,6 +10,7 @@ use chronicler_engine::domain::model::character::{CharacterSheet, NpcCard, Playe
 use chronicler_engine::domain::model::map::{Direction, MapDef, Overworld, Region, Room};
 use chronicler_engine::domain::model::scenario::StartingScenario;
 use chronicler_engine::domain::model::settings::AppSettings;
+use chronicler_engine::application::game_service::GameService;
 use chronicler_engine::domain::model::state::game_state::GameState;
 use chronicler_engine::domain::model::world::WorldCard;
 use chronicler_engine::adapters::driven::storage::Storage;
@@ -372,4 +373,22 @@ pub fn create_test_storage(game_id: u64) -> Storage {
 
 pub fn create_test_storage_arc(game_id: u64) -> Arc<Storage> {
     Arc::new(create_test_storage(game_id))
+}
+
+/// Build a `DefaultApplicationService` from an `OpContext` + `GameService`.
+/// Temporary helper during A1 (singletons moved onto AppService). Removed in A7
+/// when OpContext dies.
+pub fn make_test_app_service_from_ctx(
+    ctx: &chronicler_engine::application::OpContext,
+    game_service: Arc<GameService>,
+) -> chronicler_engine::application::application_service::DefaultApplicationService {
+    use chronicler_engine::application::application_service::DefaultApplicationService;
+    DefaultApplicationService::new(
+        ctx.storage.clone(),
+        ctx.preset_storage.clone(),
+        ctx.settings.clone(),
+        ctx.cancel_token.clone(),
+        ctx.is_generating.clone(),
+        game_service,
+    )
 }

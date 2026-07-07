@@ -6,6 +6,7 @@ use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
 use tokio::time::sleep;
+use tokio_util::sync::CancellationToken;
 
 use crate::application::application_service::DefaultApplicationService;
 use crate::application::context::OpContext;
@@ -61,10 +62,17 @@ fn make_service() -> DefaultApplicationService {
     let storage = Arc::new(Storage::new_in_memory());
     let preset_storage = Arc::new(Storage::new_in_memory());
     let game_service = Arc::new(
-        crate::bootstrap::wiring::build_game_service_for_tests(settings, storage, preset_storage)
+        crate::bootstrap::wiring::build_game_service_for_tests(settings, Arc::clone(&storage), Arc::clone(&preset_storage))
             .expect("build_game_service_for_tests should succeed"),
     );
-    DefaultApplicationService::new(game_service)
+    DefaultApplicationService::new(
+        Arc::clone(&storage),
+        Arc::clone(&preset_storage),
+        Arc::new(std::sync::RwLock::new(AppSettings::default())),
+        CancellationToken::new(),
+        Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        game_service,
+    )
 }
 
 #[tokio::test]

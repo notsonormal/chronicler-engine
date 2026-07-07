@@ -16,20 +16,27 @@ pub async fn run_server_with_config(
     resources: ServerResources,
     config: ServerConfig,
 ) -> Result<(SocketAddr, JoinHandle<std::io::Result<()>>)> {
+    let is_generating = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let cancel_token = tokio_util::sync::CancellationToken::new();
     let app_state = AppState {
         storage: Arc::clone(&resources.storage),
         preset_storage: Arc::clone(&resources.preset_storage),
-        is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        is_generating: Arc::clone(&is_generating),
         settings: Arc::clone(&resources.settings),
         game_service: Arc::clone(&resources.game_service),
         application_service: Arc::new(
-            crate::application::application_service::DefaultApplicationService::new(Arc::clone(
-                &resources.game_service,
-            )),
+            crate::application::application_service::DefaultApplicationService::new(
+                Arc::clone(&resources.storage),
+                Arc::clone(&resources.preset_storage),
+                Arc::clone(&resources.settings),
+                cancel_token.clone(),
+                Arc::clone(&is_generating),
+                Arc::clone(&resources.game_service),
+            ),
         ),
         text_check_service: Arc::clone(&resources.text_check_service),
         cancel_token: Arc::new(std::sync::RwLock::new(
-            tokio_util::sync::CancellationToken::new(),
+            cancel_token,
         )),
     };
     let cancel_token_arc = Arc::clone(&app_state.cancel_token);

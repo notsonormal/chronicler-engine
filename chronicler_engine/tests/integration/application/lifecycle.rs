@@ -16,12 +16,24 @@ use crate::fixtures::{
 };
 
 fn create_app_service() -> Arc<DefaultApplicationService> {
-    Arc::new(DefaultApplicationService::new(Arc::new(
-        GameService::with_backends(
-            crate::make_test_recorder(Arc::new(MockBackend::default())),
-            AgentRegistry::default(),
-        ),
-    )))
+    let game_service = Arc::new(GameService::with_backends(
+        crate::make_test_recorder(Arc::new(MockBackend::default())),
+        AgentRegistry::default(),
+    ));
+    let storage = Arc::new(Storage::new_in_memory());
+    let settings = std::sync::Arc::new(std::sync::RwLock::new(
+        chronicler_engine::domain::model::settings::AppSettings::default(),
+    ));
+    let is_generating = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let cancel_token = tokio_util::sync::CancellationToken::new();
+    Arc::new(DefaultApplicationService::new(
+        storage,
+        Arc::new(Storage::new_in_memory()),
+        settings,
+        cancel_token,
+        is_generating,
+        game_service,
+    ))
 }
 
 #[test]

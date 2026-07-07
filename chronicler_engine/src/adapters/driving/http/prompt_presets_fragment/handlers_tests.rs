@@ -36,14 +36,10 @@ fn make_test_app_state_with_storage(
         crate::bootstrap::text_check_factory::create_text_check_service(&settings.read().unwrap()),
     );
     crate::adapters::driving::http::AppState {
-        storage: Arc::new(Storage::new_in_memory()),
-        preset_storage: storage,
+        storage: Arc::clone(&storage),
+        preset_storage: Arc::clone(&storage),
         game_service: Arc::clone(&game_service),
-        application_service: Arc::new(
-            crate::application::application_service::DefaultApplicationService::new(Arc::clone(
-                &game_service,
-            )),
-        ),
+        application_service: Arc::new(crate::application::application_service::DefaultApplicationService::new(Arc::clone(&storage), Arc::new(Storage::new_in_memory()), Arc::clone(&settings), tokio_util::sync::CancellationToken::new(), Arc::new(std::sync::atomic::AtomicBool::new(false)), Arc::clone(&game_service))),
         text_check_service,
         settings,
         cancel_token: Arc::new(RwLock::new(tokio_util::sync::CancellationToken::new())),
@@ -295,15 +291,13 @@ fn make_test_app_state_with_failing_storage(
     let text_check_service = Arc::new(
         crate::bootstrap::text_check_factory::create_text_check_service(&settings.read().unwrap()),
     );
+    let preset_storage = Arc::new(storage);
+    let application_service = Arc::new(crate::application::application_service::DefaultApplicationService::new(Arc::new(Storage::new_in_memory()), Arc::clone(&preset_storage), Arc::clone(&settings), tokio_util::sync::CancellationToken::new(), Arc::new(std::sync::atomic::AtomicBool::new(false)), Arc::clone(&game_service)));
     crate::adapters::driving::http::AppState {
         storage: Arc::new(Storage::new_in_memory()),
-        preset_storage: Arc::new(storage),
+        preset_storage,
         game_service: Arc::clone(&game_service),
-        application_service: Arc::new(
-            crate::application::application_service::DefaultApplicationService::new(Arc::clone(
-                &game_service,
-            )),
-        ),
+        application_service,
         text_check_service,
         settings,
         cancel_token: Arc::new(RwLock::new(tokio_util::sync::CancellationToken::new())),
