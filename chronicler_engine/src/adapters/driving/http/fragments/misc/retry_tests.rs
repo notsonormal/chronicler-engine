@@ -1,13 +1,11 @@
 use axum::{http::StatusCode, response::IntoResponse};
 
 use crate::adapters::driving::http::fragments::misc::retry::retry_handler;
-use crate::adapters::driving::http::op_context_loader::load_op_context_for_active_game;
 use crate::test_support::TestAppBuilder;
 
 #[tokio::test]
 async fn test_retry_handler() {
     let state = TestAppBuilder::default_test().build_app_state();
-    
 
     let result = retry_handler(axum::extract::State(state)).await;
     let status = match result {

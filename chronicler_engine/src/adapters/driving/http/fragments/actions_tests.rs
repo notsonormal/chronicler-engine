@@ -5,7 +5,6 @@ use crate::adapters::driving::http::fragments::actions::{
     action_check_handler, action_confirm_handler, action_handler,
 };
 use crate::adapters::driving::http::fragments::ActionForm;
-use crate::adapters::driving::http::op_context_loader::load_op_context_for_active_game;
 use crate::test_support::TestAppBuilder;
 
 #[test]
@@ -55,7 +54,7 @@ async fn test_action_handler_empty_command() {
     let form = ActionForm {
         command: String::new(),
     };
-    
+
     let response = action_handler(axum::extract::State(state), Form(form)).await;
     assert_eq!(
         response.status(),
@@ -78,7 +77,7 @@ async fn test_action_handler_whitespace_command() {
     let form = ActionForm {
         command: "   ".to_string(),
     };
-    
+
     let response = action_handler(axum::extract::State(state), Form(form)).await;
     assert_eq!(response.status(), StatusCode::OK);
     let body = axum::body::to_bytes(response.into_body(), usize::MAX)
@@ -94,7 +93,7 @@ async fn test_action_handler_started() {
     let form = ActionForm {
         command: "look".to_string(),
     };
-    
+
     let response = action_handler(axum::extract::State(state), Form(form)).await;
 
     assert_eq!(response.status(), StatusCode::OK);
@@ -106,7 +105,7 @@ async fn test_action_confirm_handler_empty_command() {
     let form = ActionForm {
         command: String::new(),
     };
-    
+
     let response = action_confirm_handler(axum::extract::State(state), Form(form)).await;
     assert_eq!(
         response.status(),
@@ -121,7 +120,7 @@ async fn test_action_confirm_handler_started() {
     let form = ActionForm {
         command: "look".to_string(),
     };
-    
+
     let response = action_confirm_handler(axum::extract::State(state), Form(form)).await;
     assert_eq!(response.status(), StatusCode::OK);
 }
@@ -132,7 +131,7 @@ async fn test_action_check_handler_empty_command() {
     let form = ActionForm {
         command: String::new(),
     };
-    
+
     let response = action_check_handler(axum::extract::State(state), Form(form)).await;
     assert_eq!(response.status(), StatusCode::OK);
     let body = axum::body::to_bytes(response.into_body(), usize::MAX)
@@ -149,7 +148,7 @@ async fn test_action_check_handler_disabled_mode() {
     let form = ActionForm {
         command: "test".to_string(),
     };
-    
+
     let response = action_check_handler(axum::extract::State(state), Form(form)).await;
     assert_eq!(response.status(), StatusCode::OK);
 }
@@ -161,7 +160,7 @@ async fn test_action_check_handler_auto_check_disabled() {
     let form = ActionForm {
         command: "test".to_string(),
     };
-    
+
     let response = action_check_handler(axum::extract::State(state), Form(form)).await;
     assert_eq!(response.status(), StatusCode::OK);
 }
@@ -172,7 +171,7 @@ async fn test_action_check_handler_check_result_none() {
     let form = ActionForm {
         command: "go north".to_string(),
     };
-    
+
     let response = action_check_handler(axum::extract::State(state), Form(form)).await;
     assert_eq!(response.status(), StatusCode::OK);
 }

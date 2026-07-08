@@ -57,18 +57,8 @@ pub async fn status_ready_handler(State(_state): State<AppState>) -> Html<String
 }
 
 pub async fn generating_status_handler(State(state): State<AppState>) -> Html<String> {
-    let ctx =
-        match crate::adapters::driving::http::op_context_loader::load_op_context_for_active_game(
-            &state,
-        ) {
-            Ok(ctx) => ctx,
-            Err(e) => {
-                tracing::error!("generating_status_handler: load_op_context failed: {e}");
-                return Html("idle".to_string());
-            }
-        };
     tracing::debug!("generating_status_handler: called");
-    let game_state = crate::application::context::load_expecting_valid_state(&ctx);
+    let game_state = state.application_service.load_expecting_valid_state();
     let (status, phase) = match game_state {
         Ok(gs) => {
             tracing::debug!(
