@@ -1,6 +1,8 @@
 // Feature 1 (#11): Task-spec veto.
-// Parent-side tool_call on `subagent` tool. Blocks empty / thin / missing-header
-// task specs before any worker launches.
+// Parent-side tool_call on `subagent` tool. Blocks empty / thin task specs
+// before any worker launches. Length-only check; pi-subagents does not
+// naturally produce the `# Task for X` headers some parent templates emit,
+// so header-presence checks were removed in favor of length floors.
 
 export interface TaskSpecFailure {
 	block: true;
@@ -13,17 +15,8 @@ export interface TaskSpecPass {
 
 export type TaskSpecResult = TaskSpecFailure | TaskSpecPass;
 
-const HEADER_MARKERS = [
-	"# Task for worker",
-	"# Task for delegate",
-	"# Task for scout",
-	"# Task for Explore",
-	"# Task for reviewer",
-	"Task:",
-];
-
-const WORKER_MIN_LENGTH = 800;
-const DELEGATE_MIN_LENGTH = 200;
+const WORKER_MIN_LENGTH = 500;
+const DELEGATE_MIN_LENGTH = 80;
 
 export function checkTaskSpec(input: {
 	task?: unknown;
@@ -35,36 +28,20 @@ export function checkTaskSpec(input: {
 	// and don't carry a task spec — nothing to validate.
 	if (input.action !== undefined) return { block: false };
 
-	const task = typeof input.task === "string" ? input.task : "";
-	const trimmed = task.trim();
-
-	if (trimmed.length < DELEGATE_MIN_LENGTH) {
-		return fail(
-			`task length ${trimmed.length} chars below minimum ${DELEGATE_MIN_LENGTH}. ` +
-				"Write a full task contract per the AGENTS.md worker/delegate template before delegating.",
-		);
-	}
-
-	const hasHeader = HEADER_MARKERS.some((m) => task.includes(m));
-	if (!hasHeader) {
-		return fail(
-			"task is missing a recognized header marker. " +
-				"Start the task with one of: " +
-				HEADER_MARKERS.join(", ") +
-				" (the pi-subagents fork-preamble marker is `Task:`).",
-		);
-	}
-
+	const trimmed = (typeof input.task === "string" ? input.task : "").trim();
 	const agent =
 		typeof input.agent === "string" ? input.agent.trim().toLowerCase() : "";
 	// Worker is the most common; undefined agent defaults to worker in pi-subagents.
-	const isWorker = agent === "" || agent === "worker";
+	const workerOrDefault = agent === "" || agent === "worker";
+	const floor = workerOrDefault ? WORKER_MIN_LENGTH : DELEGATE_MIN_LENGTH;
 
-	if (isWorker && trimmed.length < WORKER_MIN_LENGTH) {
-		return fail(
-			`worker task length ${trimmed.length} chars below worker minimum ${WORKER_MIN_LENGTH}. ` +
-				"Workers need a tight, explicit contract; do not rely on forked context to carry scope.",
-		);
+	if (trimmed.length < floor) {
+		const msg = workerOrDefault
+			? `worker task length ${trimmed.length} chars below worker minimum ${WORKER_MIN_LENGTH}. ` +
+				"Workers need a tight, explicit contract; do not rely on forked context to carry scope."
+			: `task length ${trimmed.length} chars below minimum ${DELEGATE_MIN_LENGTH}. ` +
+				"Write a full task contract per the AGENTS.md worker/delegate template before delegating.";
+		return fail(msg);
 	}
 
 	return { block: false };

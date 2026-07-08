@@ -5,61 +5,47 @@ import { checkTaskSpec } from "./task-veto.ts";
 test("Feature 1: empty task is blocked", () => {
 	const r = checkTaskSpec({ task: "" });
 	assert.equal(r.block, true);
-	assert.match(r.reason, /200/);
+	assert.match(r.reason, /worker minimum 500/);
 });
 
-test("Feature 1: 100-char task without header is blocked on length", () => {
-	const r = checkTaskSpec({ task: "x".repeat(100) });
+test("Feature 1: 50-char task is blocked on delegate floor", () => {
+	const r = checkTaskSpec({ task: "x".repeat(50) });
 	assert.equal(r.block, true);
-	assert.match(r.reason, /length 100/);
+	assert.match(r.reason, /length 50/);
 });
 
-test("Feature 1: 250-char task without header marker is blocked on header", () => {
-	const r = checkTaskSpec({ task: "y".repeat(250), agent: "delegate" });
+test("Feature 1: 70-char task is blocked (just under delegate floor)", () => {
+	const r = checkTaskSpec({ task: "x".repeat(70) });
 	assert.equal(r.block, true);
-	assert.match(r.reason, /missing a recognized header/);
+	assert.match(r.reason, /length 70/);
 });
 
-test("Feature 1: worker task under 800 chars with header is blocked on worker floor", () => {
-	// 18 (header) + 1 + 600 = 619 chars: passes 200 floor, fails worker 800.
-	const r = checkTaskSpec({ task: "# Task for worker\n" + "x".repeat(600) });
+test("Feature 1: 100-char task with no header passes for delegate", () => {
+	const r = checkTaskSpec({ task: "x".repeat(100), agent: "delegate" });
+	assert.equal(r.block, false);
+});
+
+test("Feature 1: 100-char task with no header is blocked for worker", () => {
+	const r = checkTaskSpec({ task: "x".repeat(100), agent: "worker" });
 	assert.equal(r.block, true);
-	assert.match(r.reason, /worker minimum 800/);
+	assert.match(r.reason, /worker minimum 500/);
 });
 
-test("Feature 1: worker task with header + 900 chars passes", () => {
-	const r = checkTaskSpec({ task: "# Task for worker\n" + "x".repeat(900) });
+test("Feature 1: 400-char task with no header is blocked for worker", () => {
+	const r = checkTaskSpec({ task: "x".repeat(400), agent: "worker" });
+	assert.equal(r.block, true);
+	assert.match(r.reason, /worker minimum 500/);
+});
+
+test("Feature 1: 600-char task with no header passes for worker", () => {
+	const r = checkTaskSpec({ task: "x".repeat(600), agent: "worker" });
 	assert.equal(r.block, false);
 });
 
 test("Feature 1: undefined agent defaults to worker floor", () => {
-	const r = checkTaskSpec({ task: "# Task for worker\n" + "x".repeat(500) });
+	const r = checkTaskSpec({ task: "x".repeat(400) });
 	assert.equal(r.block, true);
-	assert.match(r.reason, /worker minimum 800/);
-});
-
-test("Feature 1: delegate task with header + 250 chars passes", () => {
-	const r = checkTaskSpec({
-		task: "# Task for delegate\n" + "x".repeat(250),
-		agent: "delegate",
-	});
-	assert.equal(r.block, false);
-});
-
-test("Feature 1: bare `Task:` marker is accepted", () => {
-	const r = checkTaskSpec({
-		task: "Task:\n" + "x".repeat(250),
-		agent: "delegate",
-	});
-	assert.equal(r.block, false);
-});
-
-test("Feature 1: `# Task for scout` header is accepted", () => {
-	const r = checkTaskSpec({
-		task: "# Task for scout\n" + "x".repeat(250),
-		agent: "scout",
-	});
-	assert.equal(r.block, false);
+	assert.match(r.reason, /worker minimum 500/);
 });
 
 test("Feature 1: non-string task is treated as empty and blocked", () => {
@@ -91,4 +77,39 @@ test("Feature 1: `action: 'interrupt'` bypasses even with empty task", () => {
 test("Feature 1: execution mode (no action) still validates task", () => {
 	const r = checkTaskSpec({ task: "", agent: "worker" });
 	assert.equal(r.block, true);
+});
+
+test("Feature 1: scout agent uses delegate floor (not worker floor)", () => {
+	const r = checkTaskSpec({ task: "x".repeat(100), agent: "scout" });
+	assert.equal(r.block, false);
+});
+
+test("Feature 1: agent matching is case-insensitive", () => {
+	const r = checkTaskSpec({ task: "x".repeat(100), agent: "WORKER" });
+	assert.equal(r.block, true);
+	assert.match(r.reason, /worker minimum 500/);
+});
+
+test("Feature 1: whitespace-only task is treated as empty", () => {
+	const r = checkTaskSpec({ task: "   \n  \t  " });
+	assert.equal(r.block, true);
+	assert.match(r.reason, /length 0/);
+});
+
+test("Feature 1: leading/trailing whitespace is trimmed before length check", () => {
+	const r = checkTaskSpec({
+		task: "   " + "x".repeat(100) + "\n\n",
+		agent: "delegate",
+	});
+	assert.equal(r.block, false);
+});
+
+test("Feature 1: short worker task gets worker-specific message (not delegate)", () => {
+	// 70 chars < delegate floor (80) AND < worker floor (500). Must surface
+	// the binding constraint for the agent being dispatched, not the generic
+	// delegate floor message.
+	const r = checkTaskSpec({ task: "x".repeat(70), agent: "worker" });
+	assert.equal(r.block, true);
+	assert.match(r.reason, /worker minimum 500/);
+	assert.doesNotMatch(r.reason, /below minimum 80/);
 });

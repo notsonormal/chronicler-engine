@@ -6,9 +6,9 @@ Pi extension. Adds deterministic guardrails to subagent runs in this workspace.
 
 | # | Feature | Effect |
 |---|---------|--------|
-| 1 | Task-spec veto | Parent-side. Blocks `subagent` tool calls whose `task` is empty, too short, or missing a required header before any worker launches. |
+| 1 | Task-spec veto | Parent-side. Blocks `subagent` tool calls whose `task` is empty or too short before any worker launches. Length-only check; header markers were removed (pi-subagents does not naturally produce them in the task field). |
 | 2 | Time + turn budget | Subagent sessions only. Steers the worker at 15 min / 50 turns (soft nudge) and 30 min / 100 turns (hard steer). |
-| 3 | Role anchor | Subagent sessions only. Appends two sentences to the system prompt pointing the worker at the literal `Task:\n` marker. |
+| 3 | Role anchor | Subagent sessions only. Appends three rules to the system prompt: scope-rejection marker `[SCOPE_REJECTED]`, parent-only tool boundary, no scope expansion. Anchors on the literal `Task:\n` marker. |
 | 4 | Git commit/push/reset/stash veto | Subagent sessions only. Blocks `git commit`, `push`, `tag`, `merge`, `rebase`, `reset` (any form, incl. `--hard`), and `git stash` (any subcommand except `stash list`) in `bash` calls. `hub <same>` is also blocked. Read-only and staging ops (`add`, `status`, `diff`, `log`, `stash list`, `fetch`, `pull`) remain allowed. |
 
 ## Install / dev
@@ -24,7 +24,7 @@ Auto-discovered by pi (`.pi/extensions/*/index.ts`). No build step needed at run
 
 ## Configuration
 
-None yet. All thresholds are constants in `src/budget.ts`:
+All thresholds are constants in `src/budget.ts`:
 
 ```ts
 const SOFT_MINUTES = 15;
@@ -36,8 +36,8 @@ const HARD_TURNS = 100;
 Task-spec floors are constants in `src/task-veto.ts`:
 
 ```ts
-const WORKER_MIN_LENGTH = 800;
-const DELEGATE_MIN_LENGTH = 200;
+const WORKER_MIN_LENGTH = 500;
+const DELEGATE_MIN_LENGTH = 80;
 ```
 
 Git-veto verb set and stash carve-out are the regexes in `src/commit-veto.ts`:
@@ -72,8 +72,8 @@ Signals 2 and 3 are read from `ctx.sessionManager` inside the
 name, env var unset) stays unguarded by Features 2/3/4 — that's the
 interactive parent, by design.
 
-Used by Features 2, 3, 4. Feature 1 is parent-side and skips when
-`isSubagent` is true.
+Used by Features 2, 3, 4. Feature 1 fires on the parent side only (skips
+when `isSubagent` is true).
 
 ## Files
 
@@ -102,3 +102,4 @@ Key design points:
 - **No `shouldStopAfterTurn` on `ExtensionAPI`.** The hard steer relies on the worker obeying. For models that ignore it, the parent still gets the soft nudge and can manually `subagent:rpc:stop` the run.
 - **Git veto is a regex, not a sandbox.** Obfuscated invocations (`git c""mmit`, aliases, `git -c` indirection) bypass it. Goal is to stop the common honest commit pattern, not defeat an adversarial worker.
 - **No recursive `subagent` blocking.** The tool is never registered for workers; Qwen hallucinating a non-existent tool is already rejected at dispatch time.
+- **No `[SCOPE_REJECTED]` parser.** The role-anchor instructs subagents to emit this marker on scope mismatch, but detection is on the parent's review pass, not automated.
