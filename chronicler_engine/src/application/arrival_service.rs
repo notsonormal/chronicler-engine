@@ -3,18 +3,17 @@
 
 use std::sync::Arc;
 
-use crate::application::context::{self, OpContext};
+use crate::application::application_service::DefaultApplicationService;
 use crate::application::narrative_prompt::{build_narration_prompt, make_prompt_context, NpcContext};
 use crate::application::ports::llm_provider::AGENT_NARRATOR;
 use crate::application::scenario::inject_scenario_logs;
 use crate::domain::model::character::NpcCard;
 use crate::domain::model::prompt_preset::PromptPreset;
-use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::GenerationStatus;
 use crate::domain::model::state::message_types::MessageType;
 
 pub struct ArrivalTaskContext {
-    pub(crate) ctx: OpContext,
+    pub(crate) app: Arc<DefaultApplicationService>,
     pub(crate) room_id: String,
     pub(crate) arrival_preset: Option<PromptPreset>,
     pub(crate) response_length: String,
@@ -29,7 +28,7 @@ impl ArrivalTaskContext {
     #[doc(hidden)]
     #[allow(clippy::too_many_arguments)]
     pub fn new_for_test(
-        ctx: OpContext,
+        app: Arc<DefaultApplicationService>,
         room_id: String,
         nearby_npcs: Vec<NpcCard>,
         all_npcs: Vec<NpcCard>,
@@ -40,7 +39,7 @@ impl ArrivalTaskContext {
         recorder: Arc<crate::application::llm_recorder::LlmCallRecorder>,
     ) -> Self {
         Self {
-            ctx,
+            app,
             room_id,
             arrival_preset,
             response_length,
@@ -58,40 +57,32 @@ impl ArrivalTaskContext {
     }
 
     pub(crate) fn run(self) {
-        let mut state = match self.ctx.storage.load_latest_snapshot() {
-            Ok(Some(snap)) => GameState::from_snapshot(
-                &snap,
-                Arc::clone(&self.ctx.world_snapshot.world),
-                Arc::clone(&self.ctx.world_snapshot.map),
-                Arc::clone(&self.ctx.world_snapshot.player),
-                (*self.ctx.world_snapshot.npcs).clone(),
-            ),
-            _ => {
-                tracing::warn!("No snapshot found in arrival task; starting fresh");
-                let starting_room_id = self.ctx.world_snapshot.world.starting_room_id();
-                let mut s = GameState::new(
-                    Arc::clone(&self.ctx.world_snapshot.world),
-                    Arc::clone(&self.ctx.world_snapshot.map),
-                    Arc::clone(&self.ctx.world_snapshot.player),
-                    (*self.ctx.world_snapshot.npcs).values().cloned().collect(),
-                    starting_room_id,
-                );
-                inject_scenario_logs(
-                    &mut s,
-                    &self.ctx.world_snapshot.world,
-                    &self.ctx.world_snapshot.player,
-                );
-                s
+        let was_fresh = self
+            .app
+            .storage
+            .load_latest_snapshot()
+            .ok()
+            .flatten()
+            .is_none();
+
+        let mut state = match self.app.load_or_fresh() {
+            Ok(s) => s,
+            Err(e) => {
+                tracing::error!("load_or_fresh failed in arrival task: {e}");
+                return;
             }
         };
-        if let Ok(msgs) = context::load_messages_with_swipes(&self.ctx.storage) {
-            state.narrative.history.replace(msgs);
+
+        if was_fresh {
+            let world = Arc::clone(&state.world);
+            let player = Arc::clone(&state.player);
+            inject_scenario_logs(&mut state, &world, &player);
         }
+
+        self.app.load_messages_into_state(&mut state);
         state.narrative.input_buffer.status = GenerationStatus::Generating;
 
-        let room = match self
-            .ctx
-            .world_snapshot
+        let room = match state
             .map
             .overworld
             .regions
@@ -103,23 +94,26 @@ impl ArrivalTaskContext {
             None => return,
         };
 
+        let world_ref = Arc::clone(&state.world);
+        let player_ref = Arc::clone(&state.player);
         let prompt_context = make_prompt_context(
-            &self.ctx.world_snapshot.world,
+            &world_ref,
             room,
             NpcContext {
                 all_npcs: &self.all_npcs,
                 npcs_in_area: &self.nearby_npcs,
             },
-            &self.ctx.world_snapshot.player,
+            &player_ref,
             "",
             &[],
         );
 
+        let global_rules = &state.world.global_rules;
         let narration = match self.arrival_preset.as_ref() {
             Some(preset) => build_narration_prompt(
                 &prompt_context,
                 preset,
-                &self.ctx.world_snapshot.world.global_rules,
+                global_rules,
                 Some(&self.response_length),
                 self.max_context_tokens,
                 self.max_tokens,
@@ -148,7 +142,7 @@ impl ArrivalTaskContext {
             }
         }
 
-        if let Err(e) = context::save_message_and_snapshot(&self.ctx, &mut state) {
+        if let Err(e) = self.app.save_message_and_snapshot(&mut state) {
             tracing::error!("Failed to save arrival message and snapshot: {e}");
         }
     }

@@ -33,6 +33,7 @@ struct PreparedData {
 struct StateResources {
     runtime: tokio::runtime::Runtime,
     settings: Arc<RwLock<AppSettings>>,
+    app: Arc<crate::application::application_service::DefaultApplicationService>,
 }
 
 pub fn run(args: Args) -> crate::error::Result<()> {
@@ -165,8 +166,25 @@ fn prepare_state(args: &Args, data: &PreparedData) -> crate::error::Result<State
     };
     let settings = Arc::new(RwLock::new(settings));
 
+    let game_service = Arc::new(build_game_service(
+        Arc::clone(&settings),
+        Arc::clone(&data.storage),
+        Arc::clone(&data.preset_storage),
+    )?);
+    let app = Arc::new(
+        crate::application::application_service::DefaultApplicationService::new(
+            Arc::clone(&data.storage),
+            Arc::clone(&data.preset_storage),
+            Arc::clone(&settings),
+            tokio_util::sync::CancellationToken::new(),
+            Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            Arc::clone(&game_service),
+        ),
+    );
+
     super::init_game::spawn_arrival_task_if_needed(
         &runtime,
+        &app,
         &settings,
         &data.storage,
         &world_arc,
@@ -179,7 +197,11 @@ fn prepare_state(args: &Args, data: &PreparedData) -> crate::error::Result<State
         &data.db_pool,
     );
 
-    Ok(StateResources { runtime, settings })
+    Ok(StateResources {
+        runtime,
+        settings,
+        app,
+    })
 }
 
 /// Phase E: build preset_storage, game_service, text_check_service, ServerResources,
@@ -189,11 +211,7 @@ fn start_server(
     state: StateResources,
     config: ServerConfig,
 ) -> crate::error::Result<()> {
-    let game_service = Arc::new(build_game_service(
-        Arc::clone(&state.settings),
-        Arc::clone(&data.storage),
-        Arc::clone(&data.preset_storage),
-    )?);
+    let game_service = Arc::clone(state.app.game_service());
     let text_check_service = build_text_check_service(Arc::clone(&state.settings));
 
     let resources = ServerResources {

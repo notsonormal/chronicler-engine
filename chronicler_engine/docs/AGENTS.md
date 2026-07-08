@@ -30,7 +30,7 @@ Accumulated violations in existing docs: invoke the [`chronicler-docs-hygiene`](
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-07-06 19:55 UTC*
+*Index last generated: 2026-07-08 18:07 UTC*
 
 ### `docs/adr/`
 
@@ -82,8 +82,10 @@ Accumulated violations in existing docs: invoke the [`chronicler-docs-hygiene`](
 
 - [Plan: Abstraction Anti-Pattern Prevention via Advisory Healthcheck](./plans/abstraction-antipattern-healthcheck-plan.md)
 - [Super-Plan: Abstraction-Fixes Follow-Up](./plans/abstraction-fixes-followup-superplan.md)
+- [Block `git checkout` and `git restore` (entire commands) in both extensions](./plans/block-git-checkout-and-git-restore-entire-commands-in-both-e.md)
 - [Extend subagent-guardrails: reliable subagent detection + block `git reset` & `git stash`](./plans/extend-subagent-guardrails-reliable-subagent-detection-block.md)
 - [Plan: Mapless Worlds via Freeform Location Names](./plans/mapless-worlds-plan.md)
+- [Title](./plans/opcontext-kill-plan.md)
 - [Plan: pi-plan-mode Extension Overhaul](./plans/pi-plan-mode-overhaul.md)
 - [Plan: Reliability and Cancellation](./plans/reliability-and-cancellation-plan.md)
 - [AI Steering & Guided Generation](./plans/steering-and-guided-generation.md)
@@ -95,6 +97,9 @@ Accumulated violations in existing docs: invoke the [`chronicler-docs-hygiene`](
 - [T2-ARCH: Narration Deepening](./plans/t2-arch-narration-deepening.md)
 - [T5: Type Collapses (A3 + A6)](./plans/t5-type-collapses.md)
 - [T6: MessageHistory Encapsulation](./plans/t6-messagehistory-encapsulation.md)
+- [Tier 1 + Tier 2 Fix Plan (from code-quality-review-simpler-hexagon.md + holistic-hexagon-review-2026-07-06.md)](./plans/tier-1-2-fix-plan.md)
+- [Tier 1 + Tier 2 Fix Plan (from code-quality-review-simpler-hexagon.md + holistic-hexagon-review-2026-07-06.md)](./plans/tier-1-tier-2-fix-plan-from-code-quality-review-simpler-hexa.md)
+- [Title: Delete `LlmMessageRepository` Port, Closure-Substitute Recorder Save Seam, Update ADR-027](./plans/title-delete-llmmessagerepository-port-closure-substitute-re.md)
 
 ### `docs/reference/`
 

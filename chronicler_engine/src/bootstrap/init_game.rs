@@ -101,12 +101,13 @@ pub(crate) fn load_game_state(
 #[allow(clippy::too_many_arguments)]
 pub fn spawn_arrival_task_if_needed(
     runtime: &tokio::runtime::Runtime,
+    app: &Arc<crate::application::application_service::DefaultApplicationService>,
     settings: &Arc<RwLock<AppSettings>>,
     storage: &Arc<crate::adapters::driven::storage::Storage>,
     world: &Arc<WorldCard>,
-    map: &Arc<MapDef>,
-    player: &Arc<PlayerCard>,
-    npcs: &Arc<HashMap<String, NpcCard>>,
+    _map: &Arc<MapDef>,
+    _player: &Arc<PlayerCard>,
+    _npcs: &Arc<HashMap<String, NpcCard>>,
     room_id: &str,
     nearby_npcs: Vec<NpcCard>,
     all_npcs: Vec<NpcCard>,
@@ -139,21 +140,6 @@ pub fn spawn_arrival_task_if_needed(
             )
         });
 
-    let preset_storage_arc = Arc::new(preset_storage);
-    let game_ctx = crate::application::context::OpContext {
-        storage: Arc::clone(storage),
-        world_snapshot: crate::application::context::WorldSnapshot {
-            world: Arc::clone(world),
-            map: Arc::clone(map),
-            player: Arc::clone(player),
-            npcs: Arc::clone(npcs),
-        },
-        cancel_token: tokio_util::sync::CancellationToken::new(),
-        is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
-        settings: Arc::clone(settings),
-        preset_storage: Arc::clone(&preset_storage_arc),
-    };
-
     let recorder =
         match crate::bootstrap::llm_factory::get_llm_recorder_for(&connection, Arc::clone(storage))
         {
@@ -165,7 +151,7 @@ pub fn spawn_arrival_task_if_needed(
         };
 
     let task_ctx = crate::application::arrival_service::ArrivalTaskContext {
-        ctx: game_ctx,
+        app: Arc::clone(app),
         room_id: room_id.to_string(),
         arrival_preset,
         response_length,
