@@ -3,6 +3,7 @@
 use std::sync::Arc;
 
 use chronicler_engine::application::arrival_service::ArrivalTaskContext;
+use chronicler_engine::application::game_service::GameService;
 use chronicler_engine::domain::model::character::NpcCard;
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::domain::model::state::message_types::MessageType;
@@ -31,8 +32,16 @@ fn test_arrival_narration_survives_reload() {
             as Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider>,
         Arc::clone(&ctx.storage),
     );
+    let app: Arc<chronicler_engine::application::application_service::DefaultApplicationService> =
+        Arc::new(crate::fixtures::make_test_app_service_from_ctx(
+            &ctx,
+            Arc::new(GameService::with_mock_quantifier(
+                Arc::clone(&recorder),
+                Arc::new(MockBackend::default()),
+            )),
+        ));
     let task_ctx = ArrivalTaskContext::new_for_test(
-        ctx.clone(),
+        Arc::clone(&app),
         "room1".to_string(),
         nearby_npcs,
         all_npcs,
@@ -62,7 +71,7 @@ fn test_arrival_narration_survives_reload() {
         "Narration message should have non-zero id (persisted to llm_messages table)"
     );
 
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app);
     let history_narrations: Vec<_> = guard
         .narrative
         .history()

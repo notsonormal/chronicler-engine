@@ -15,6 +15,7 @@ use crate::fixtures::{
     make_test_ctx, seed_test_world, seed_test_world_with_scenario,
 };
 
+#[allow(dead_code)]
 fn create_app_service() -> Arc<DefaultApplicationService> {
     create_app_service_with_storage(Arc::new(Storage::new_in_memory()))
 }
@@ -92,7 +93,9 @@ fn test_reset_creates_scenario_message() {
     let state = create_basic_test_state();
     let ctx = make_test_ctx(storage.clone(), state);
 
-    app_service.create_game(&ctx.world_snapshot.world.key, "hero").unwrap();
+    app_service
+        .create_game(&ctx.world_snapshot.world.key, "hero")
+        .unwrap();
 
     app_service.reset().unwrap();
 
@@ -126,10 +129,14 @@ fn test_switch_game_loads_correct_state() {
     let state = create_basic_test_state();
     let ctx = make_test_ctx(storage.clone(), state);
 
-    app_service.create_game(&ctx.world_snapshot.world.key, "hero").unwrap();
+    app_service
+        .create_game(&ctx.world_snapshot.world.key, "hero")
+        .unwrap();
     let game1_id = ctx.storage.current_game_id();
 
-    app_service.create_game(&ctx.world_snapshot.world.key, "hero").unwrap();
+    app_service
+        .create_game(&ctx.world_snapshot.world.key, "hero")
+        .unwrap();
     let game2_id = ctx.storage.current_game_id();
     assert_ne!(game1_id, game2_id, "Should have different game IDs");
 
@@ -180,7 +187,10 @@ async fn test_create_game_concurrent_generation_rejected() {
     let ctx = make_test_ctx(storage.clone(), state);
 
     // Use make_app helper instead so the test's is_generating AtomicBool is shared.
-    let app_service = Arc::new(crate::fixtures::make_test_app_service_from_ctx(&ctx, app_service.game_service().clone()));
+    let app_service = Arc::new(crate::fixtures::make_test_app_service_from_ctx(
+        &ctx,
+        app_service.game_service().clone(),
+    ));
     let arc_app = app_service.clone();
     arc_app.is_generating().store(true, Ordering::SeqCst);
 
@@ -205,7 +215,7 @@ fn test_switch_to_nonexistent_game() {
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
     let app_service = create_app_service_with_storage(storage.clone());
     let state = create_basic_test_state();
-    let ctx = make_test_ctx(storage.clone(), state);
+    let _ctx = make_test_ctx(storage.clone(), state);
 
     let result = app_service.switch_game(99999);
     assert!(
@@ -224,7 +234,9 @@ fn test_reset_without_existing_game() {
     let state = create_basic_test_state();
     let ctx = make_test_ctx(storage.clone(), state);
 
-    let _ = app_service.create_game(&ctx.world_snapshot.world.key, "hero").unwrap();
+    let _ = app_service
+        .create_game(&ctx.world_snapshot.world.key, "hero")
+        .unwrap();
 
     let result = app_service.reset();
     assert!(
@@ -308,7 +320,7 @@ fn test_switch_game_world_mismatch() {
         "room1".to_string(),
     );
 
-    let ctx_b = make_test_ctx(storage.clone(), state_b);
+    let _ctx_b = make_test_ctx(storage.clone(), state_b);
 
     let result = app_service.switch_game(game_id);
     assert!(
@@ -327,10 +339,14 @@ fn test_delete_game_removes() {
     let state = create_basic_test_state();
     let ctx = make_test_ctx(storage.clone(), state);
 
-    app_service.create_game(&ctx.world_snapshot.world.key, "hero").unwrap();
+    app_service
+        .create_game(&ctx.world_snapshot.world.key, "hero")
+        .unwrap();
     let game_id_1 = ctx.storage.current_game_id();
 
-    app_service.create_game(&ctx.world_snapshot.world.key, "hero").unwrap();
+    app_service
+        .create_game(&ctx.world_snapshot.world.key, "hero")
+        .unwrap();
     let game_id_2 = ctx.storage.current_game_id();
 
     assert_ne!(game_id_1, game_id_2, "Should have different game IDs");
@@ -360,7 +376,9 @@ fn test_delete_game_active_rejected() {
     let state = create_basic_test_state();
     let ctx = make_test_ctx(storage.clone(), state);
 
-    app_service.create_game(&ctx.world_snapshot.world.key, "hero").unwrap();
+    app_service
+        .create_game(&ctx.world_snapshot.world.key, "hero")
+        .unwrap();
     let active_game_id = ctx.storage.current_game_id();
 
     let result = app_service.delete_game(active_game_id);
@@ -384,7 +402,7 @@ fn test_delete_game_nonexistent() {
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
     let app_service = create_app_service_with_storage(storage.clone());
     let state = create_basic_test_state();
-    let ctx = make_test_ctx(storage.clone(), state);
+    let _ctx = make_test_ctx(storage.clone(), state);
 
     let result = app_service.delete_game(99999);
     assert!(

@@ -27,9 +27,8 @@ fn app_from_ctx_and_gs(
 
 fn app_from_ctx(ctx: &chronicler_engine::application::OpContext) -> DefaultApplicationService {
     use chronicler_engine::adapters::driven::llm::providers::MockBackend;
-    let narrator_recorder = chronicler_engine::test_support::make_test_recorder(
-        Arc::new(MockBackend::default()),
-    );
+    let narrator_recorder =
+        chronicler_engine::test_support::make_test_recorder(Arc::new(MockBackend::default()));
     let gs = Arc::new(GameService::with_backends(
         narrator_recorder,
         chronicler_engine::application::agents::registry::AgentRegistry::default(),
@@ -42,14 +41,16 @@ fn test_with_storage_uses_external() {
     let llm_backend = crate::make_test_recorder(Arc::new(MockBackend::default()));
     let quantifier: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
         Arc::new(MockBackend::default());
-    let service: Arc<GameService> = Arc::new(GameService::with_mock_quantifier(llm_backend, quantifier));
+    let service: Arc<GameService> =
+        Arc::new(GameService::with_mock_quantifier(llm_backend, quantifier));
 
     let state = create_test_state();
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
-    let app = app_from_ctx_and_gs(&ctx, service.clone()); chronicler_engine::application::action_pipeline::execute_action_impl(&app, "test".to_string());
+    let app = app_from_ctx_and_gs(&ctx, service.clone());
+    chronicler_engine::application::action_pipeline::execute_action_impl(&app, "test".to_string());
 
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app_from_ctx(&ctx));
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Service should complete action execution"
@@ -65,9 +66,13 @@ fn test_with_backends_no_disk_read() {
     let state = create_test_state();
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
-    let app = app_from_ctx_and_gs(&ctx, service.clone()); chronicler_engine::application::action_pipeline::execute_action_impl(&app, "test input".to_string());
+    let app = app_from_ctx_and_gs(&ctx, service.clone());
+    chronicler_engine::application::action_pipeline::execute_action_impl(
+        &app,
+        "test input".to_string(),
+    );
 
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app_from_ctx(&ctx));
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Explicit backends should complete execution"
@@ -85,9 +90,13 @@ fn test_execute_action_saves_narration() {
     let initial_history_len = state.narrative.history.len();
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
-    let app = app_from_ctx_and_gs(&ctx, service.clone()); chronicler_engine::application::action_pipeline::execute_action_impl(&app, "test action".to_string());
+    let app = app_from_ctx_and_gs(&ctx, service.clone());
+    chronicler_engine::application::action_pipeline::execute_action_impl(
+        &app,
+        "test action".to_string(),
+    );
 
-    let final_state = latest_state(&ctx);
+    let final_state = latest_state(&app_from_ctx(&ctx));
     let final_history_len = final_state.narrative.history.len();
 
     assert!(
@@ -106,9 +115,10 @@ fn test_execute_action_empty_input() {
     let state = create_test_state();
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
-    let app = app_from_ctx_and_gs(&ctx, service.clone()); chronicler_engine::application::action_pipeline::execute_action_impl(&app, "".to_string());
+    let app = app_from_ctx_and_gs(&ctx, service.clone());
+    chronicler_engine::application::action_pipeline::execute_action_impl(&app, "".to_string());
 
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app_from_ctx(&ctx));
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Empty input should not leave pipeline in generating state"
@@ -125,10 +135,18 @@ fn test_execute_action_clears_last_trigger() {
     let state = create_test_state();
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
-    let app = app_from_ctx_and_gs(&ctx, service.clone()); chronicler_engine::application::action_pipeline::execute_action_impl(&app, "first action".to_string());
-    let app = app_from_ctx_and_gs(&ctx, service.clone()); chronicler_engine::application::action_pipeline::execute_action_impl(&app, "second action".to_string());
+    let app = app_from_ctx_and_gs(&ctx, service.clone());
+    chronicler_engine::application::action_pipeline::execute_action_impl(
+        &app,
+        "first action".to_string(),
+    );
+    let app = app_from_ctx_and_gs(&ctx, service.clone());
+    chronicler_engine::application::action_pipeline::execute_action_impl(
+        &app,
+        "second action".to_string(),
+    );
 
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app_from_ctx(&ctx));
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Trigger state should be cleared between executions"
@@ -147,9 +165,10 @@ fn test_execute_action_cancellation() {
 
     ctx.cancel_token.cancel();
 
-    let app = app_from_ctx_and_gs(&ctx, service.clone()); chronicler_engine::application::action_pipeline::execute_action_impl(&app, "test".to_string());
+    let app = app_from_ctx_and_gs(&ctx, service.clone());
+    chronicler_engine::application::action_pipeline::execute_action_impl(&app, "test".to_string());
 
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app_from_ctx(&ctx));
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Cancelled execution should not remain in generating state"
@@ -165,12 +184,21 @@ fn test_retry_finds_anchor() {
 
     let state = create_test_state();
     let ctx = make_test_context_with_sqlite(state).unwrap();
+    let app: Arc<DefaultApplicationService> =
+        Arc::new(crate::fixtures::make_test_app_service_from_ctx(
+            &ctx,
+            Arc::new(GameService::with_mock_quantifier(
+                crate::make_test_recorder(Arc::new(MockBackend::new())),
+                Arc::new(MockBackend::default()),
+            )),
+        ));
 
-    add_input_and_save(&ctx, "Test input");
+    add_input_and_save(&app, "Test input");
 
-    let app = app_from_ctx_and_gs(&ctx, service.clone()); chronicler_engine::application::action_pipeline::retry_last_response_impl(&app);
+    let app = app_from_ctx_and_gs(&ctx, service.clone());
+    chronicler_engine::application::action_pipeline::retry_last_response_impl(&app);
 
-    let final_state = latest_state(&ctx);
+    let final_state = latest_state(&app_from_ctx(&ctx));
     assert!(
         !final_state.narrative.input_buffer.status.is_generating(),
         "Retry should complete without hanging"
@@ -187,9 +215,10 @@ fn test_retry_event_fallback() {
     let state = create_test_state();
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
-    let app = app_from_ctx_and_gs(&ctx, service.clone()); chronicler_engine::application::action_pipeline::retry_last_response_impl(&app);
+    let app = app_from_ctx_and_gs(&ctx, service.clone());
+    chronicler_engine::application::action_pipeline::retry_last_response_impl(&app);
 
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app_from_ctx(&ctx));
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Empty history retry should fail gracefully without hanging"
@@ -208,7 +237,8 @@ fn test_retry_empty_history() {
         AgentRegistry::default(),
     ));
 
-    let app = app_from_ctx_and_gs(&ctx, service.clone()); chronicler_engine::application::action_pipeline::retry_last_response_impl(&app);
+    let app = app_from_ctx_and_gs(&ctx, service.clone());
+    chronicler_engine::application::action_pipeline::retry_last_response_impl(&app);
 
     let messages = ctx.storage.load_message_rows().unwrap();
     assert!(
@@ -242,7 +272,7 @@ fn test_switch_swipe_out_of_bounds() {
 
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
-    let messages = ctx.load_messages().unwrap();
+    let messages = app_from_ctx(&ctx).load_messages().unwrap();
     let last_message = messages.last().unwrap();
     let message_id = last_message.id;
     let swipe_count = last_message.swipes.len();
@@ -270,14 +300,15 @@ fn test_edit_history_updates_text() {
 
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
-    let messages = ctx.load_messages().unwrap();
+    let messages = app_from_ctx(&ctx).load_messages().unwrap();
     let message_id = messages.last().unwrap().id;
     let edited_text = "Edited narration".to_string();
 
-    let result = message_editing::edit_history(&app_from_ctx(&ctx), message_id, edited_text.clone());
+    let result =
+        message_editing::edit_history(&app_from_ctx(&ctx), message_id, edited_text.clone());
     assert!(result.is_ok());
 
-    let messages = ctx.load_messages().unwrap();
+    let messages = app_from_ctx(&ctx).load_messages().unwrap();
     let stored = messages.iter().find(|m| m.id == message_id).unwrap();
     assert_eq!(stored.text(), edited_text);
 }
@@ -299,10 +330,11 @@ fn test_edit_history_no_snapshot() {
 
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
-    let messages = ctx.load_messages().unwrap();
+    let messages = app_from_ctx(&ctx).load_messages().unwrap();
     let message_id = messages.last().unwrap().id;
 
-    let result = message_editing::edit_history(&app_from_ctx(&ctx), message_id, "Edited".to_string());
+    let result =
+        message_editing::edit_history(&app_from_ctx(&ctx), message_id, "Edited".to_string());
     assert!(result.is_ok());
 }
 
@@ -366,10 +398,11 @@ fn test_edit_history_storage_failure() {
 
     let ctx = make_test_context_with_sqlite(state).unwrap();
 
-    let messages = ctx.load_messages().unwrap();
+    let messages = app_from_ctx(&ctx).load_messages().unwrap();
     let message_id = messages.last().unwrap().id;
 
-    let result = message_editing::edit_history(&app_from_ctx(&ctx), message_id, "Edited".to_string());
+    let result =
+        message_editing::edit_history(&app_from_ctx(&ctx), message_id, "Edited".to_string());
     assert!(result.is_ok() || result.is_err());
 }
 
@@ -400,7 +433,7 @@ async fn test_retrigger_happy_path() {
     ));
 
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let service: Arc<GameService> = Arc::new(GameService::with_backends(
+    let _service: Arc<GameService> = Arc::new(GameService::with_backends(
         crate::make_test_recorder(Arc::new(MockBackend::default())),
         AgentRegistry::default(),
     ));
@@ -436,7 +469,7 @@ async fn test_retrigger_storage_operations() {
     ));
 
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let service: Arc<GameService> = Arc::new(GameService::with_backends(
+    let _service: Arc<GameService> = Arc::new(GameService::with_backends(
         crate::make_test_recorder(Arc::new(MockBackend::default())),
         AgentRegistry::default(),
     ));
@@ -485,7 +518,7 @@ async fn test_retry_cancellation() {
     ));
     let ctx = make_test_context_with_sqlite(state).unwrap();
     ctx.cancel_token.cancel();
-    let service: Arc<GameService> = Arc::new(GameService::with_backends(
+    let _service: Arc<GameService> = Arc::new(GameService::with_backends(
         crate::make_test_recorder(Arc::new(MockBackend::default())),
         AgentRegistry::default(),
     ));
@@ -500,10 +533,11 @@ fn test_continue_narration_fresh_game() {
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let service: Arc<GameService> = Arc::new(crate::working_service());
 
-    let initial_history = latest_state(&ctx).narrative.history.len();
-    let app = app_from_ctx_and_gs(&ctx, service.clone()); chronicler_engine::application::action_pipeline::execute_action_impl(&app, String::new());
+    let initial_history = latest_state(&app_from_ctx(&ctx)).narrative.history.len();
+    let app = app_from_ctx_and_gs(&ctx, service.clone());
+    chronicler_engine::application::action_pipeline::execute_action_impl(&app, String::new());
 
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app_from_ctx(&ctx));
     assert!(
         guard.narrative.history.len() > initial_history,
         "Empty input should generate narration (history should grow)"
@@ -532,9 +566,10 @@ fn test_continue_narration_with_stale_is_generating_flag() {
         .store(true, std::sync::atomic::Ordering::SeqCst);
     let service: Arc<GameService> = Arc::new(crate::working_service());
 
-    let app = app_from_ctx_and_gs(&ctx, service.clone()); chronicler_engine::application::action_pipeline::execute_action_impl(&app, String::new());
+    let app = app_from_ctx_and_gs(&ctx, service.clone());
+    chronicler_engine::application::action_pipeline::execute_action_impl(&app, String::new());
 
-    let final_state = latest_state(&ctx);
+    let final_state = latest_state(&app_from_ctx(&ctx));
     assert!(
         !final_state.narrative.history.is_empty(),
         "Pipeline should run even with stale is_generating flag"
@@ -555,9 +590,13 @@ fn test_whitespace_variations() {
         state.narrative.history.clear();
         let ctx = make_test_context_with_sqlite(state).unwrap();
         let service: Arc<GameService> = Arc::new(crate::working_service());
-        let app = app_from_ctx_and_gs(&ctx, service.clone()); chronicler_engine::application::action_pipeline::execute_action_impl(&app, whitespace.to_string());
+        let app = app_from_ctx_and_gs(&ctx, service.clone());
+        chronicler_engine::application::action_pipeline::execute_action_impl(
+            &app,
+            whitespace.to_string(),
+        );
 
-        let final_state = latest_state(&ctx);
+        let final_state = latest_state(&app_from_ctx(&ctx));
         assert!(
             !final_state.narrative.history.is_empty(),
             "Whitespace input '{whitespace:?}' should produce continuation narration"

@@ -1,6 +1,5 @@
 use std::sync::{Arc, Barrier};
 
-use crate::application::action_pipeline::execute_action_impl;
 use crate::application::context::load_state_for_test;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};

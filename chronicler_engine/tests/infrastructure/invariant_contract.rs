@@ -163,7 +163,7 @@ fn test_inv004_cancellable_at_boundaries() {
         Arc::new(backend),
     );
     let pipeline = app.game_service().pipeline();
-    let state_for_thread = latest_state(&ctx);
+    let state_for_thread = latest_state(&app);
 
     let outcome = std::thread::scope(|s| {
         let handle =
@@ -190,7 +190,7 @@ fn test_inv004_cancellable_at_boundaries() {
         "INV-004: pipeline should return Cancelled when token is cancelled, got {outcome:?}"
     );
 
-    let final_state = latest_state(&ctx);
+    let final_state = latest_state(&app);
     assert_eq!(
         final_state.narrative.input_buffer.status,
         GenerationStatus::Idle,

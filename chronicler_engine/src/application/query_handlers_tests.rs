@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
 use super::*;
-use crate::application::OpContext;
+use crate::application::application_service::DefaultApplicationService;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::GenerationStatus;
-use crate::adapters::driven::storage::Storage;
 use crate::test_support::fixtures::{TestWorld, TestMap, TestPlayer};
+use crate::test_support::make_test_app;
 
 fn minimal_state() -> GameState {
     GameState::new(
@@ -17,73 +17,79 @@ fn minimal_state() -> GameState {
     )
 }
 
-fn minimal_ctx() -> OpContext {
+fn minimal_app() -> Arc<DefaultApplicationService> {
+    make_test_app(minimal_state()).expect("minimal_app: make_test_app should succeed")
+}
+
+fn minimal_app_no_game() -> Arc<DefaultApplicationService> {
+    use crate::adapters::driven::storage::Storage;
+    use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
+    use crate::test_support::make_test_recorder;
+    use crate::application::game_service::GameService;
+    use crate::application::agents::registry::AgentRegistry;
+    use crate::adapters::driven::llm::providers::MockBackend;
+
     let state = minimal_state();
     let storage = Arc::new(Storage::new_in_memory());
-    let _ = storage.save_snapshot(
-        &crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
-            &state,
-        ),
-    );
-    OpContext {
+    storage.seed_world(&state.world, &state.map).unwrap();
+    let _ = storage.save_snapshot(&GameStateSnapshot::from_game_state(&state));
+    let mock: Arc<dyn crate::application::ports::llm_provider::LlmProvider> =
+        Arc::new(MockBackend::default());
+    let backend = GameService::with_backends(make_test_recorder(mock), AgentRegistry::default());
+    Arc::new(DefaultApplicationService::new(
         storage,
-        world_snapshot: crate::application::context::WorldSnapshot {
-            world: state.world.clone(),
-            map: state.map.clone(),
-            player: state.player.clone(),
-            npcs: Arc::new(state.npcs.clone()),
-        },
-        cancel_token: tokio_util::sync::CancellationToken::new(),
-        is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
-        settings: Arc::new(std::sync::RwLock::new(
+        Arc::new(Storage::new_in_memory()),
+        Arc::new(std::sync::RwLock::new(
             crate::domain::model::settings::AppSettings::default(),
         )),
-        preset_storage: Arc::new(Storage::new_in_memory()),
-    }
+        tokio_util::sync::CancellationToken::new(),
+        Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        Arc::new(backend),
+    ))
 }
 
 #[test]
 fn test_get_generating_status_returns_current_state() {
-    let ctx = minimal_ctx();
-    let (status, _phase) = get_generating_status(ctx).unwrap();
+    let app = minimal_app();
+    let (status, _phase) = get_generating_status(&app).unwrap();
     assert_eq!(status, GenerationStatus::Idle);
 }
 
 #[test]
 fn test_get_current_game_name_unknown_when_no_game() {
-    let ctx = minimal_ctx();
-    let name = get_current_game_name(ctx).unwrap();
+    let app = minimal_app_no_game();
+    let name = get_current_game_name(&app).unwrap();
     assert_eq!(name, "Unknown"); // No default game anymore
 }
 
 #[test]
 fn test_list_latest_llm_messages_empty() {
-    let ctx = minimal_ctx();
-    let messages = list_latest_llm_messages(ctx, 10).unwrap();
+    let app = minimal_app_no_game();
+    let messages = list_latest_llm_messages(&app, 10).unwrap();
     assert!(messages.is_empty());
 }
 
 #[test]
 fn test_get_story_log_entries_empty() {
-    let ctx = minimal_ctx();
-    let (entries, has_trigger) = get_story_log_entries(ctx).unwrap();
+    let app = minimal_app_no_game();
+    let (entries, has_trigger) = get_story_log_entries(&app).unwrap();
     assert!(entries.is_empty());
     assert!(!has_trigger);
 }
 
 #[test]
 fn test_get_input_status_delegates_to_generating_status() {
-    let ctx = minimal_ctx();
-    let (status1, phase1) = get_generating_status(ctx.clone()).unwrap();
-    let (status2, phase2) = get_input_status(ctx).unwrap();
+    let app = minimal_app();
+    let (status1, phase1) = get_generating_status(&app).unwrap();
+    let (status2, phase2) = get_input_status(&app).unwrap();
     assert_eq!(status1, status2);
     assert_eq!(phase1, phase2);
 }
 
 #[test]
 fn test_get_current_room_view_succeeds_with_valid_state() {
-    let ctx = minimal_ctx();
-    let result = get_current_room_view(ctx);
+    let app = minimal_app();
+    let result = get_current_room_view(&app);
     assert!(result.is_ok());
     let (room_name, _image_path) = result.unwrap();
     assert_eq!(room_name, "Room start");
@@ -91,22 +97,22 @@ fn test_get_current_room_view_succeeds_with_valid_state() {
 
 #[test]
 fn test_get_npc_headshots_scene_only_empty() {
-    let ctx = minimal_ctx();
-    let headshots = get_npc_headshots(ctx, true).unwrap();
+    let app = minimal_app();
+    let headshots = get_npc_headshots(&app, true).unwrap();
     assert!(headshots.is_empty());
 }
 
 #[test]
 fn test_get_npc_headshots_all_empty() {
-    let ctx = minimal_ctx();
-    let headshots = get_npc_headshots(ctx, false).unwrap();
+    let app = minimal_app();
+    let headshots = get_npc_headshots(&app, false).unwrap();
     assert!(headshots.is_empty());
 }
 
 #[test]
 fn test_get_debug_state_populates_fields() {
-    let ctx = minimal_ctx();
-    let debug = get_debug_state(ctx).unwrap();
+    let app = minimal_app_no_game();
+    let debug = get_debug_state(&app).unwrap();
     assert_eq!(debug.narration_history_length, 0);
     assert!(debug.dynamic_rooms.is_empty());
     assert_eq!(debug.dynamic_room_count, 0);
@@ -115,9 +121,9 @@ fn test_get_debug_state_populates_fields() {
 
 #[test]
 fn test_reset_generating_status_sets_idle() {
-    let ctx = minimal_ctx();
-    let result = reset_generating_status(ctx.clone());
+    let app = minimal_app_no_game();
+    let result = reset_generating_status(&app);
     assert!(result.is_ok());
-    let (status, _) = get_generating_status(ctx).unwrap();
+    let (status, _) = get_generating_status(&app).unwrap();
     assert_eq!(status, GenerationStatus::Idle);
 }

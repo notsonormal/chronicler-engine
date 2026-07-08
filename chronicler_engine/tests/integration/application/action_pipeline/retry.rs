@@ -30,10 +30,17 @@ fn test_retry_finds_last_input_and_runs_pipeline() {
         MessageType::Input,
     );
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let backend = working_service();
+    let app: Arc<chronicler_engine::application::application_service::DefaultApplicationService> =
+        Arc::new(crate::fixtures::make_test_app_service_from_ctx(
+            &ctx,
+            Arc::new(working_service()),
+        ));
 
-    backend.execute_action(ctx.clone(), "look around".to_string());
-    let after_first = latest_state(&ctx);
+    chronicler_engine::application::action_pipeline::execute_action_impl(
+        &app,
+        "look around".to_string(),
+    );
+    let after_first = latest_state(&app);
     let first_narration_count = after_first
         .narrative
         .history()
@@ -42,9 +49,9 @@ fn test_retry_finds_last_input_and_runs_pipeline() {
         .count();
     assert_eq!(first_narration_count, 1);
 
-    backend.retry_last_response(ctx.clone());
+    chronicler_engine::application::action_pipeline::retry_last_response_impl(&app);
 
-    let after_retry = latest_state(&ctx);
+    let after_retry = latest_state(&app);
     let retry_narration_count = after_retry
         .narrative
         .history()
@@ -62,11 +69,15 @@ fn test_retry_with_empty_history_is_noop() {
     let mut state = create_test_state();
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let backend = working_service();
+    let app: Arc<chronicler_engine::application::application_service::DefaultApplicationService> =
+        Arc::new(crate::fixtures::make_test_app_service_from_ctx(
+            &ctx,
+            Arc::new(working_service()),
+        ));
 
-    backend.retry_last_response(ctx.clone());
+    chronicler_engine::application::action_pipeline::retry_last_response_impl(&app);
 
-    let final_state = latest_state(&ctx);
+    let final_state = latest_state(&app);
     assert!(final_state.narrative.history().is_empty());
 }
 
@@ -80,10 +91,18 @@ fn test_retry_after_llm_failure_succeeds() {
         MessageType::Input,
     );
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let failing = failing_service();
+    let failing_app: Arc<
+        chronicler_engine::application::application_service::DefaultApplicationService,
+    > = Arc::new(crate::fixtures::make_test_app_service_from_ctx(
+        &ctx,
+        Arc::new(failing_service()),
+    ));
 
-    failing.execute_action(ctx.clone(), "look".to_string());
-    let after_fail = latest_state(&ctx);
+    chronicler_engine::application::action_pipeline::execute_action_impl(
+        &failing_app,
+        "look".to_string(),
+    );
+    let after_fail = latest_state(&failing_app);
     assert!(
         after_fail
             .narrative
@@ -93,10 +112,15 @@ fn test_retry_after_llm_failure_succeeds() {
             .is_some()
     );
 
-    let working = working_service();
-    working.retry_last_response(ctx.clone());
+    let working_app: Arc<
+        chronicler_engine::application::application_service::DefaultApplicationService,
+    > = Arc::new(crate::fixtures::make_test_app_service_from_ctx(
+        &ctx,
+        Arc::new(working_service()),
+    ));
+    chronicler_engine::application::action_pipeline::retry_last_response_impl(&working_app);
 
-    let after_retry = latest_state(&ctx);
+    let after_retry = latest_state(&working_app);
     assert!(
         !after_retry.narrative.input_buffer.status.is_generating(),
         "Retry should complete: {:?}",
@@ -107,15 +131,18 @@ fn test_retry_after_llm_failure_succeeds() {
 #[test]
 fn test_retry_no_snapshot() {
     let ctx = make_test_context_without_snapshot(create_test_state());
+    let app: Arc<chronicler_engine::application::application_service::DefaultApplicationService> =
+        Arc::new(crate::fixtures::make_test_app_service_from_ctx(
+            &ctx,
+            Arc::new(GameService::with_mock_quantifier(
+                crate::make_test_recorder(Arc::new(MockBackend::default())),
+                Arc::new(MockBackend::default()),
+            )),
+        ));
 
-    let backend = GameService::with_mock_quantifier(
-        crate::make_test_recorder(Arc::new(MockBackend::default())),
-        Arc::new(MockBackend::default()),
-    );
+    chronicler_engine::application::action_pipeline::retry_last_response_impl(&app);
 
-    backend.retry_last_response(ctx.clone());
-
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app);
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Retry without snapshot should not hang in generating state"
@@ -130,14 +157,18 @@ fn test_retry_no_input_text() {
     state.add_message("You see a room.".to_string(), None, MessageType::Narration);
 
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let backend = GameService::with_mock_quantifier(
-        crate::make_test_recorder(Arc::new(MockBackend::default())),
-        Arc::new(MockBackend::default()),
-    );
+    let app: Arc<chronicler_engine::application::application_service::DefaultApplicationService> =
+        Arc::new(crate::fixtures::make_test_app_service_from_ctx(
+            &ctx,
+            Arc::new(GameService::with_mock_quantifier(
+                crate::make_test_recorder(Arc::new(MockBackend::default())),
+                Arc::new(MockBackend::default()),
+            )),
+        ));
 
-    backend.retry_last_response(ctx.clone());
+    chronicler_engine::application::action_pipeline::retry_last_response_impl(&app);
 
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app);
     assert_eq!(guard.narrative.history().len(), 2);
 }
 
@@ -222,10 +253,15 @@ fn test_retry_room_not_found() {
         crate::make_test_recorder(Arc::new(MockBackend::default())),
         Arc::new(MockBackend::default()),
     );
+    let app: Arc<chronicler_engine::application::application_service::DefaultApplicationService> =
+        Arc::new(crate::fixtures::make_test_app_service_from_ctx(
+            &ctx,
+            Arc::new(backend),
+        ));
 
-    backend.retry_last_response(ctx.clone());
+    chronicler_engine::application::action_pipeline::retry_last_response_impl(&app);
 
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app);
     assert!(
         matches!(
             guard.narrative.input_buffer.status,
@@ -312,10 +348,15 @@ fn test_retry_llm_error() {
         crate::make_test_recorder(Arc::new(MockBackend::default().with_fail())),
         Arc::new(MockBackend::default()),
     );
+    let app: Arc<chronicler_engine::application::application_service::DefaultApplicationService> =
+        Arc::new(crate::fixtures::make_test_app_service_from_ctx(
+            &ctx,
+            Arc::new(backend),
+        ));
 
-    backend.retry_last_response(ctx.clone());
+    chronicler_engine::application::action_pipeline::retry_last_response_impl(&app);
 
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app);
     assert!(
         matches!(
             guard.narrative.input_buffer.status,
@@ -402,10 +443,15 @@ fn test_retry_empty_narration() {
         crate::make_test_recorder(Arc::new(MockBackend::default().with_empty_response())),
         Arc::new(MockBackend::default()),
     );
+    let app: Arc<chronicler_engine::application::application_service::DefaultApplicationService> =
+        Arc::new(crate::fixtures::make_test_app_service_from_ctx(
+            &ctx,
+            Arc::new(backend),
+        ));
 
-    backend.retry_last_response(ctx.clone());
+    chronicler_engine::application::action_pipeline::retry_last_response_impl(&app);
 
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app);
     assert!(
         matches!(
             guard.narrative.input_buffer.status,
@@ -493,13 +539,18 @@ fn test_retry_main_narration_uses_pre_main_snapshot() {
         crate::make_test_recorder(Arc::new(MockBackend::default())),
         Arc::new(MockBackend::default()),
     );
+    let app: Arc<chronicler_engine::application::application_service::DefaultApplicationService> =
+        Arc::new(crate::fixtures::make_test_app_service_from_ctx(
+            &ctx,
+            Arc::new(backend),
+        ));
 
-    backend.retry_last_response(ctx.clone());
+    chronicler_engine::application::action_pipeline::retry_last_response_impl(&app);
 
-    let completed = wait_for_generation_complete(&ctx, 1000);
+    let completed = wait_for_generation_complete(&app, 1000);
     assert!(completed, "Retry should complete within timeout");
 
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app);
     let narrations: Vec<_> = guard
         .narrative
         .history()
@@ -563,13 +614,18 @@ fn test_retry_event_continuation_uses_pre_event_snapshot() {
         crate::make_test_recorder(Arc::new(MockBackend::default())),
         Arc::new(MockBackend::default()),
     );
+    let app: Arc<chronicler_engine::application::application_service::DefaultApplicationService> =
+        Arc::new(crate::fixtures::make_test_app_service_from_ctx(
+            &ctx,
+            Arc::new(backend),
+        ));
 
-    backend.retry_last_response(ctx.clone());
+    chronicler_engine::application::action_pipeline::retry_last_response_impl(&app);
 
-    let completed = wait_for_generation_complete(&ctx, 1000);
+    let completed = wait_for_generation_complete(&app, 1000);
     assert!(completed, "Event retry should complete within timeout");
 
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app);
     let main_narrations: Vec<_> = guard
         .narrative
         .history()

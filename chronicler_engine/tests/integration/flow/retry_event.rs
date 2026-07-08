@@ -13,6 +13,8 @@ use chronicler_engine::domain::model::world::WorldCard;
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::test_support::{make_test_context_with_sqlite, make_test_recorder};
 use crate::make_test_recorder_with_storage;
+use chronicler_engine::application::application_service::DefaultApplicationService;
+use chronicler_engine::application::action_pipeline::{execute_action_impl, retry_last_response_impl};
 
 use crate::pipeline_helpers::{
     add_input_and_save, create_test_state_with_trigger_npc, latest_state,
@@ -25,8 +27,16 @@ fn test_event_retry_does_not_create_extra_swipe_on_narration() {
     let mut state = create_test_state_with_trigger_npc();
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
+    let app: Arc<DefaultApplicationService> =
+        Arc::new(crate::fixtures::make_test_app_service_from_ctx(
+            &ctx,
+            Arc::new(GameService::with_mock_quantifier(
+                crate::make_test_recorder(Arc::new(MockBackend::new())),
+                Arc::new(MockBackend::default()),
+            )),
+        ));
 
-    add_input_and_save(&ctx, "enter shop");
+    add_input_and_save(&app, "enter shop");
 
     let quantifier: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
         Arc::new(MockBackend::default().with_prompt_responses(vec![
@@ -38,20 +48,23 @@ fn test_event_retry_does_not_create_extra_swipe_on_narration() {
         make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(&ctx.storage)),
         quantifier,
     );
+    let app: Arc<DefaultApplicationService> = Arc::new(
+        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(service)),
+    );
 
-    service.execute_action(ctx.clone(), "enter shop".to_string());
+    execute_action_impl(&app, "enter shop".to_string());
     assert!(
-        wait_for_generation_complete(&ctx, 1000),
+        wait_for_generation_complete(&app, 1000),
         "Execute should complete"
     );
 
-    service.retry_last_response(ctx.clone());
+    retry_last_response_impl(&app);
     assert!(
-        wait_for_generation_complete(&ctx, 1000),
+        wait_for_generation_complete(&app, 1000),
         "Event retry should complete"
     );
 
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app);
     let narration_msgs: Vec<_> = guard
         .narrative
         .history
@@ -74,8 +87,16 @@ fn test_retry_event_continuation_preserves_quantifier_result() {
     let mut state = create_test_state_with_trigger_npc();
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
+    let app: Arc<DefaultApplicationService> =
+        Arc::new(crate::fixtures::make_test_app_service_from_ctx(
+            &ctx,
+            Arc::new(GameService::with_mock_quantifier(
+                crate::make_test_recorder(Arc::new(MockBackend::new())),
+                Arc::new(MockBackend::default()),
+            )),
+        ));
 
-    add_input_and_save(&ctx, "enter shop");
+    add_input_and_save(&app, "enter shop");
 
     let quantifier: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
         Arc::new(MockBackend::default().with_prompt_responses(vec![
@@ -87,13 +108,16 @@ fn test_retry_event_continuation_preserves_quantifier_result() {
         make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(&ctx.storage)),
         quantifier,
     );
+    let app: Arc<DefaultApplicationService> = Arc::new(
+        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(service)),
+    );
 
-    service.execute_action(ctx.clone(), "enter shop".to_string());
+    execute_action_impl(&app, "enter shop".to_string());
     assert!(
-        wait_for_generation_complete(&ctx, 1000),
+        wait_for_generation_complete(&app, 1000),
         "Execute should complete"
     );
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app);
     assert_eq!(
         guard.movement.current_room_id, "room2",
         "Execute: player should have moved to room2"
@@ -109,12 +133,12 @@ fn test_retry_event_continuation_preserves_quantifier_result() {
         "Trigger should have fired and added an Event"
     );
 
-    service.retry_last_response(ctx.clone());
+    retry_last_response_impl(&app);
     assert!(
-        wait_for_generation_complete(&ctx, 1000),
+        wait_for_generation_complete(&app, 1000),
         "Event retry should complete"
     );
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app);
     assert_eq!(
         guard.movement.current_room_id, "room2",
         "Event retry: room should be unchanged (quantifier not rerun)"
@@ -202,8 +226,16 @@ fn test_trigger_continuation_runs_quantifier_and_detects_new_npc() {
     let mut state = GameState::new(world, map, player, npcs, "room1".to_string());
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
+    let app: Arc<DefaultApplicationService> =
+        Arc::new(crate::fixtures::make_test_app_service_from_ctx(
+            &ctx,
+            Arc::new(GameService::with_mock_quantifier(
+                crate::make_test_recorder(Arc::new(MockBackend::new())),
+                Arc::new(MockBackend::default()),
+            )),
+        ));
 
-    add_input_and_save(&ctx, "enter shop");
+    add_input_and_save(&app, "enter shop");
 
     let llm_backend = make_test_recorder(Arc::new(MockBackend::default().with_narrations(vec![
         "You step into the shop.".to_string(),
@@ -217,14 +249,17 @@ fn test_trigger_continuation_runs_quantifier_and_detects_new_npc() {
         ]));
 
     let service = GameService::with_mock_quantifier(llm_backend, quantifier);
+    let app: Arc<DefaultApplicationService> = Arc::new(
+        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(service)),
+    );
 
-    service.execute_action(ctx.clone(), "enter shop".to_string());
+    execute_action_impl(&app, "enter shop".to_string());
     assert!(
-        wait_for_generation_complete(&ctx, 1000),
+        wait_for_generation_complete(&app, 1000),
         "Execute should complete"
     );
 
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app);
 
     let event_count = guard
         .narrative

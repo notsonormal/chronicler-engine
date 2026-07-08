@@ -12,6 +12,8 @@ use crate::{
     working_service,
 };
 use chronicler_engine::application::GameService;
+use chronicler_engine::application::application_service::DefaultApplicationService;
+use chronicler_engine::application::action_pipeline::execute_action_impl;
 use chronicler_engine::domain::model::state::generation_status::GenerationPhase;
 use chronicler_engine::domain::model::state::generation_status::GenerationStatus;
 use chronicler_engine::domain::model::state::message_types::MessageType;
@@ -28,10 +30,13 @@ fn test_delayed_llm_completes_without_deadlock() {
         crate::make_test_recorder(Arc::new(MockBackend::default().with_delay(200))),
         Arc::new(MockBackend::default()),
     );
+    let app: Arc<DefaultApplicationService> = Arc::new(
+        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(backend)),
+    );
 
-    backend.execute_action(ctx.clone(), "look around".to_string());
+    execute_action_impl(&app, "look around".to_string());
 
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app);
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Status should be Idle after delayed action completes"
@@ -58,13 +63,16 @@ fn test_quantifier_detects_movement() {
         crate::make_test_recorder(Arc::new(MockBackend::default())),
         quantifier_recorder,
     );
+    let app: Arc<DefaultApplicationService> = Arc::new(
+        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(backend)),
+    );
 
-    backend.execute_action(ctx.clone(), "walk to the village square".to_string());
+    execute_action_impl(&app, "walk to the village square".to_string());
 
-    let completed = wait_for_generation_complete(&ctx, 500);
+    let completed = wait_for_generation_complete(&app, 500);
     assert!(completed, "Movement action should complete within timeout");
 
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app);
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Status should be reset after movement action"
@@ -94,10 +102,13 @@ fn test_quantifier_detects_npc_presence_and_fires_trigger() {
         crate::make_test_recorder(Arc::new(MockBackend::default())),
         quantifier_recorder,
     );
+    let app: Arc<DefaultApplicationService> = Arc::new(
+        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(backend)),
+    );
 
-    backend.execute_action(ctx.clone(), "enter the shop".to_string());
+    execute_action_impl(&app, "enter the shop".to_string());
 
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app);
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Status should be reset after trigger action"
@@ -132,10 +143,13 @@ fn test_empty_llm_response_handled_gracefully() {
         crate::make_test_recorder(Arc::new(MockBackend::default().with_empty_response())),
         Arc::new(MockBackend::default()),
     );
+    let app: Arc<DefaultApplicationService> = Arc::new(
+        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(backend)),
+    );
 
-    backend.execute_action(ctx.clone(), "examine the room".to_string());
+    execute_action_impl(&app, "examine the room".to_string());
 
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app);
     assert!(
         matches!(
             guard.narrative.input_buffer.status,
@@ -177,10 +191,13 @@ fn test_failing_trigger_narration_does_not_crash() {
         )),
         quantifier_recorder,
     );
+    let app: Arc<DefaultApplicationService> = Arc::new(
+        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(backend)),
+    );
 
-    backend.execute_action(ctx.clone(), "examine the shopkeeper".to_string());
+    execute_action_impl(&app, "examine the shopkeeper".to_string());
 
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app);
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Status should be reset after trigger narration failure"
@@ -212,10 +229,13 @@ fn test_pipeline_cancels_when_token_cancelled() {
     let ctx = make_test_context_with_sqlite(state).unwrap();
     ctx.cancel_token.cancel();
     let backend = working_service();
+    let app: Arc<DefaultApplicationService> = Arc::new(
+        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(backend)),
+    );
 
-    backend.execute_action(ctx.clone(), "look".to_string());
+    execute_action_impl(&app, "look".to_string());
 
-    let final_state = latest_state(&ctx);
+    let final_state = latest_state(&app);
     assert_eq!(
         final_state.narrative.input_buffer.status,
         GenerationStatus::Idle,
@@ -233,12 +253,15 @@ async fn test_cancellation_resets_state_to_idle() {
         crate::make_test_recorder(Arc::new(MockBackend::default().with_delay(50))),
         Arc::new(MockBackend::default()),
     );
+    let app: Arc<DefaultApplicationService> = Arc::new(
+        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(backend)),
+    );
     let token = ctx.cancel_token.clone();
 
     token.cancel();
-    backend.execute_action(ctx.clone(), "look around".to_string());
+    execute_action_impl(&app, "look around".to_string());
 
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app);
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Status should be Idle after cancellation"
@@ -261,6 +284,9 @@ async fn test_pipeline_cancels_after_main_narration() {
         mock_narrator_recorder,
         quantifier_recorder,
     ));
+    let app: Arc<DefaultApplicationService> = Arc::new(
+        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::clone(&backend)),
+    );
     let token = ctx.cancel_token.clone();
 
     let ctx_clone = ctx.clone();
@@ -286,7 +312,7 @@ async fn test_pipeline_cancels_after_main_narration() {
 
     handle.await.unwrap();
 
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app);
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Status should be Idle after cancellation at post-narration checkpoint"
@@ -315,6 +341,9 @@ async fn test_pipeline_cancels_during_trigger_continuation() {
         mock_narrator_recorder,
         quantifier_recorder,
     ));
+    let app: Arc<DefaultApplicationService> = Arc::new(
+        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::clone(&backend)),
+    );
     let token = ctx.cancel_token.clone();
 
     let ctx_clone = ctx.clone();
@@ -340,7 +369,7 @@ async fn test_pipeline_cancels_during_trigger_continuation() {
 
     handle.await.unwrap();
 
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app);
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Status should be Idle after cancellation at post-trigger checkpoint"
@@ -364,10 +393,13 @@ fn test_pre_main_snapshot_saved_before_narration() {
         crate::make_test_recorder(Arc::new(MockBackend::default())),
         Arc::new(MockBackend::default()),
     );
+    let app: Arc<DefaultApplicationService> = Arc::new(
+        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(backend)),
+    );
 
-    backend.execute_action(ctx.clone(), "examine the room".to_string());
+    execute_action_impl(&app, "examine the room".to_string());
 
-    let completed = wait_for_generation_complete(&ctx, 1000);
+    let completed = wait_for_generation_complete(&app, 1000);
     assert!(completed, "FreeAction should complete within timeout");
 
     let latest = ctx.storage.load_latest_snapshot().unwrap().unwrap();
@@ -395,10 +427,13 @@ fn test_pre_event_snapshot_saved_before_continuation() {
         crate::make_test_recorder(Arc::new(MockBackend::default())),
         quantifier_recorder,
     );
+    let app: Arc<DefaultApplicationService> = Arc::new(
+        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(backend)),
+    );
 
-    backend.execute_action(ctx.clone(), "examine the shopkeeper".to_string());
+    execute_action_impl(&app, "examine the shopkeeper".to_string());
 
-    let completed = wait_for_generation_complete(&ctx, 1000);
+    let completed = wait_for_generation_complete(&app, 1000);
     assert!(
         completed,
         "FreeAction with trigger should complete within timeout"
@@ -418,10 +453,13 @@ fn test_pipeline_with_quantifier() {
         crate::make_test_recorder(Arc::new(MockBackend::default())),
         Arc::new(MockBackend::default()),
     );
+    let app: Arc<DefaultApplicationService> = Arc::new(
+        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(backend)),
+    );
 
-    backend.execute_action(ctx.clone(), "look around".to_string());
+    execute_action_impl(&app, "look around".to_string());
 
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app);
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Should complete with quantifier backend"
@@ -451,21 +489,25 @@ fn test_streaming_narration_saved_before_quantifier_complete() {
             .with_prompt_responses(vec![r#"{"npcs_in_room": []}"#.to_string()])
             .with_delay(500),
     );
-    let backend = GameService::with_mock_quantifier(
+    let backend_arc = Arc::new(GameService::with_mock_quantifier(
         crate::make_test_recorder(Arc::new(MockBackend::default())),
         quantifier_recorder,
+    ));
+    let app: Arc<DefaultApplicationService> = Arc::new(
+        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::clone(&backend_arc)),
     );
 
     let ctx_clone = ctx.clone();
+    let backend_clone = Arc::clone(&backend_arc);
     let handle = thread::spawn(move || {
-        backend.execute_action(ctx_clone, "look around".to_string());
+        backend_clone.execute_action(ctx_clone, "look around".to_string());
     });
 
     let narration_found = wait_for_condition(
         Duration::from_millis(400),
         Duration::from_millis(50),
         || {
-            ctx.load_messages()
+            app.load_messages()
                 .map(|msgs| {
                     msgs.iter()
                         .any(|m| m.message_type == MessageType::Narration)
@@ -481,13 +523,13 @@ fn test_streaming_narration_saved_before_quantifier_complete() {
 
     handle.join().expect("Action thread should complete");
 
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app);
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Should complete after quantifier finishes"
     );
 
-    let final_messages = ctx.load_messages().unwrap();
+    let final_messages = app.load_messages().unwrap();
     let final_narration_count = final_messages
         .iter()
         .filter(|m| m.message_type == MessageType::Narration)
@@ -509,10 +551,13 @@ fn test_narration_no_duplicate_with_real_quantifier_flow() {
         crate::make_test_recorder(Arc::new(MockBackend::default())),
         Arc::new(MockBackend::default()),
     );
+    let app: Arc<DefaultApplicationService> = Arc::new(
+        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(backend)),
+    );
 
-    backend.execute_action(ctx.clone(), "test action".to_string());
+    execute_action_impl(&app, "test action".to_string());
 
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app);
 
     let history = guard.narrative.history();
     let narration_count = history
@@ -525,7 +570,7 @@ fn test_narration_no_duplicate_with_real_quantifier_flow() {
         "Should have exactly 1 narration entry (no duplicates), found {narration_count}"
     );
 
-    let messages = ctx.load_messages().unwrap();
+    let messages = app.load_messages().unwrap();
     let stored_narration_count = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Narration)
@@ -547,10 +592,13 @@ fn test_pipeline_continues_when_quantifier_save_warns() {
         crate::make_test_recorder(Arc::new(MockBackend::default())),
         Arc::new(MockBackend::default()),
     );
+    let app: Arc<DefaultApplicationService> = Arc::new(
+        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(backend)),
+    );
 
-    backend.execute_action(ctx.clone(), "look".to_string());
+    execute_action_impl(&app, "look".to_string());
 
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app);
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Pipeline should complete even if quantifier save has warnings"

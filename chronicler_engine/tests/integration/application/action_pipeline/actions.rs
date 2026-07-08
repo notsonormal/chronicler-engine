@@ -8,6 +8,9 @@ use chronicler_engine::domain::model::state::generation_status::GenerationStatus
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::domain::model::state::trigger_context::StoredTriggerContext;
 use chronicler_engine::test_support::make_test_context_with_sqlite;
+use std::sync::Arc;
+use chronicler_engine::application::application_service::DefaultApplicationService;
+use chronicler_engine::application::action_pipeline::execute_action_impl;
 
 #[test]
 fn test_pipeline_executes_and_persists_narration() {
@@ -15,10 +18,13 @@ fn test_pipeline_executes_and_persists_narration() {
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = working_service();
+    let app: Arc<DefaultApplicationService> = Arc::new(
+        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(backend)),
+    );
 
-    backend.execute_action(ctx.clone(), "look".to_string());
+    execute_action_impl(&app, "look".to_string());
 
-    let final_state = latest_state(&ctx);
+    let final_state = latest_state(&app);
     let has_narration = final_state
         .narrative
         .history()
@@ -45,10 +51,13 @@ fn test_pipeline_persists_input_before_narration() {
     );
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = working_service();
+    let app: Arc<DefaultApplicationService> = Arc::new(
+        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(backend)),
+    );
 
-    backend.execute_action(ctx.clone(), "examine the room".to_string());
+    execute_action_impl(&app, "examine the room".to_string());
 
-    let final_state = latest_state(&ctx);
+    let final_state = latest_state(&app);
     let entries: Vec<_> = final_state.narrative.history().into_iter().collect();
     let input_idx = entries
         .iter()
@@ -71,10 +80,13 @@ fn test_pipeline_handles_room_not_found() {
     state.movement.current_room_id = "non_existent_room".to_string();
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = working_service();
+    let app: Arc<DefaultApplicationService> = Arc::new(
+        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(backend)),
+    );
 
-    backend.execute_action(ctx.clone(), "look".to_string());
+    execute_action_impl(&app, "look".to_string());
 
-    let final_state = latest_state(&ctx);
+    let final_state = latest_state(&app);
     assert!(
         !final_state.narrative.input_buffer.status.is_generating(),
         "Should reset generating status when room not found"
@@ -87,10 +99,13 @@ fn test_pipeline_handles_llm_failure() {
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = failing_service();
+    let app: Arc<DefaultApplicationService> = Arc::new(
+        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(backend)),
+    );
 
-    backend.execute_action(ctx.clone(), "look".to_string());
+    execute_action_impl(&app, "look".to_string());
 
-    let final_state = latest_state(&ctx);
+    let final_state = latest_state(&app);
     assert!(
         final_state
             .narrative
@@ -118,10 +133,13 @@ fn test_pipeline_clears_last_trigger() {
     });
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = working_service();
+    let app: Arc<DefaultApplicationService> = Arc::new(
+        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(backend)),
+    );
 
-    backend.execute_action(ctx.clone(), "look".to_string());
+    execute_action_impl(&app, "look".to_string());
 
-    let final_state = latest_state(&ctx);
+    let final_state = latest_state(&app);
     assert!(
         final_state.narrative.last_trigger.is_none(),
         "last_trigger should be cleared"
@@ -135,10 +153,13 @@ fn test_pipeline_phase_transitions() {
     state.narrative.input_buffer.status = GenerationStatus::Idle;
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = working_service();
+    let app: Arc<DefaultApplicationService> = Arc::new(
+        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(backend)),
+    );
 
-    backend.execute_action(ctx.clone(), "look".to_string());
+    execute_action_impl(&app, "look".to_string());
 
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app);
     assert_eq!(
         guard.narrative.input_buffer.phase,
         GenerationPhase::default(),
@@ -153,10 +174,13 @@ fn test_pipeline_phase_stays_narrating_on_error() {
     state.narrative.input_buffer.status = GenerationStatus::Idle;
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = failing_service();
+    let app: Arc<DefaultApplicationService> = Arc::new(
+        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(backend)),
+    );
 
-    backend.execute_action(ctx.clone(), "look".to_string());
+    execute_action_impl(&app, "look".to_string());
 
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app);
     assert_eq!(
         guard.narrative.input_buffer.phase,
         GenerationPhase::Narrating,
@@ -170,10 +194,13 @@ fn test_pipeline_empty_input() {
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
     let backend = working_service();
+    let app: Arc<DefaultApplicationService> = Arc::new(
+        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(backend)),
+    );
 
-    backend.execute_action(ctx.clone(), String::new());
+    execute_action_impl(&app, String::new());
 
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app);
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Empty input should complete generation: {:?}",

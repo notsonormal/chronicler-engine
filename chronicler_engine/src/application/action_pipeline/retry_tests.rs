@@ -1,8 +1,6 @@
 use std::sync::Arc;
 
-use crate::application::action_pipeline::retry::{
-    retry_event_continuation, retry_last_response_impl, retry_main_narration,
-};
+use crate::application::action_pipeline::retry::{retry_event_continuation, retry_main_narration};
 use crate::application::context::{OpContext, load_state_for_test};
 
 #[allow(unused_imports)]

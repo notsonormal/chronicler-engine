@@ -137,6 +137,10 @@ impl DefaultApplicationService {
         &self.game_service
     }
 
+    pub fn storage(&self) -> &Arc<Storage> {
+        &self.storage
+    }
+
     pub fn is_generating(&self) -> &Arc<AtomicBool> {
         &self.is_generating
     }

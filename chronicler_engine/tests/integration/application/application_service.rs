@@ -45,17 +45,17 @@ fn test_switch_game_integration() {
 
     let app_service = make_app(&ctx, game_service);
 
-    let id1 = app_service.create_game(&ctx.world_snapshot.world.key, "hero").expect("create_game 1");
-    let id2 = app_service.create_game(&ctx.world_snapshot.world.key, "hero").expect("create_game 2");
+    let id1 = app_service
+        .create_game(&ctx.world_snapshot.world.key, "hero")
+        .expect("create_game 1");
+    let id2 = app_service
+        .create_game(&ctx.world_snapshot.world.key, "hero")
+        .expect("create_game 2");
 
-    app_service
-        .switch_game(id1)
-        .expect("switch_game");
+    app_service.switch_game(id1).expect("switch_game");
     assert_eq!(storage.current_game_id(), id1);
 
-    app_service
-        .switch_game(id2)
-        .expect("switch_game");
+    app_service.switch_game(id2).expect("switch_game");
     assert_eq!(storage.current_game_id(), id2);
 }
 
@@ -69,12 +69,14 @@ fn test_delete_game_integration() {
 
     let app_service = make_app(&ctx, game_service);
 
-    let id1 = app_service.create_game(&ctx.world_snapshot.world.key, "hero").expect("create_game 1");
-    app_service.create_game(&ctx.world_snapshot.world.key, "hero").expect("create_game 2");
-
+    let id1 = app_service
+        .create_game(&ctx.world_snapshot.world.key, "hero")
+        .expect("create_game 1");
     app_service
-        .delete_game(id1)
-        .expect("delete_game");
+        .create_game(&ctx.world_snapshot.world.key, "hero")
+        .expect("create_game 2");
+
+    app_service.delete_game(id1).expect("delete_game");
 
     let deleted = storage.get_game(id1).unwrap();
     assert!(deleted.is_none(), "Deleted game should not exist");
@@ -90,8 +92,12 @@ fn test_list_games_integration() {
 
     let app_service = make_app(&ctx, game_service);
 
-    app_service.create_game(&ctx.world_snapshot.world.key, "hero").unwrap();
-    app_service.create_game(&ctx.world_snapshot.world.key, "hero").unwrap();
+    app_service
+        .create_game(&ctx.world_snapshot.world.key, "hero")
+        .unwrap();
+    app_service
+        .create_game(&ctx.world_snapshot.world.key, "hero")
+        .unwrap();
 
     let games = app_service.list_games().unwrap();
     assert!(games.len() >= 2, "Should list all games");
@@ -102,9 +108,11 @@ fn test_get_generating_status() {
     let storage = create_storage(1);
     let state = create_basic_test_state();
     let ctx = make_test_ctx(storage.clone(), state);
+    let app_service = make_app(&ctx, create_game_service());
 
     let (status, phase) =
-        chronicler_engine::application::query_handlers::get_generating_status(ctx.clone()).unwrap();
+        chronicler_engine::application::query_handlers::get_generating_status(&app_service)
+            .unwrap();
     assert_eq!(status, GenerationStatus::Idle);
     assert_eq!(phase, GenerationPhase::default());
 }
@@ -123,10 +131,10 @@ async fn test_process_action_persists_input_message() {
         "process_action should return Started"
     );
 
-    let completed = crate::pipeline_helpers::wait_for_generation_complete(&ctx, 5000);
+    let completed = crate::pipeline_helpers::wait_for_generation_complete(&app_service, 5000);
     assert!(completed, "Timed out waiting for generation to complete");
 
-    let guard = crate::pipeline_helpers::latest_state(&ctx);
+    let guard = crate::pipeline_helpers::latest_state(&app_service);
     let entries = guard.narrative.history();
     let input_idx = entries
         .iter()
@@ -161,10 +169,10 @@ async fn test_process_action_self_heals_stale_generating_status() {
         "process_action should return Started"
     );
 
-    let completed = crate::pipeline_helpers::wait_for_generation_complete(&ctx, 5000);
+    let completed = crate::pipeline_helpers::wait_for_generation_complete(&app_service, 5000);
     assert!(completed, "Timed out waiting for generation to complete");
 
-    let guard = crate::pipeline_helpers::latest_state(&ctx);
+    let guard = crate::pipeline_helpers::latest_state(&app_service);
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Status should not be Generating after completion, got {:?}",

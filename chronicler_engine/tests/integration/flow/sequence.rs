@@ -7,6 +7,9 @@ use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::test_support::make_test_context_with_sqlite;
 
+use chronicler_engine::application::application_service::DefaultApplicationService;
+use chronicler_engine::application::action_pipeline::{execute_action_impl, retry_last_response_impl};
+
 use crate::pipeline_helpers::{
     add_input_and_save, create_test_state_with_map, latest_state, save_state,
     wait_for_generation_complete,
@@ -24,28 +27,31 @@ fn test_sequential_execute_retry_execute() {
         ),
         Arc::new(MockBackend::default()),
     );
+    let app: Arc<DefaultApplicationService> = Arc::new(
+        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(service)),
+    );
 
-    add_input_and_save(&ctx, "examine room");
-    service.execute_action(ctx.clone(), "examine room".to_string());
+    add_input_and_save(&app, "examine room");
+    execute_action_impl(&app, "examine room".to_string());
     assert!(
-        wait_for_generation_complete(&ctx, 1000),
+        wait_for_generation_complete(&app, 1000),
         "Action A should complete"
     );
 
-    service.retry_last_response(ctx.clone());
+    retry_last_response_impl(&app);
     assert!(
-        wait_for_generation_complete(&ctx, 1000),
+        wait_for_generation_complete(&app, 1000),
         "Retry A should complete"
     );
 
-    add_input_and_save(&ctx, "look around");
-    service.execute_action(ctx.clone(), "look around".to_string());
+    add_input_and_save(&app, "look around");
+    execute_action_impl(&app, "look around".to_string());
     assert!(
-        wait_for_generation_complete(&ctx, 1000),
+        wait_for_generation_complete(&app, 1000),
         "Action B should complete"
     );
 
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app);
     let inputs: Vec<_> = guard
         .narrative
         .history()
@@ -84,15 +90,18 @@ fn test_sequential_execute_delete_execute() {
         ),
         Arc::new(MockBackend::default()),
     );
+    let app: Arc<DefaultApplicationService> = Arc::new(
+        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(service)),
+    );
 
-    add_input_and_save(&ctx, "examine room");
-    service.execute_action(ctx.clone(), "examine room".to_string());
+    add_input_and_save(&app, "examine room");
+    execute_action_impl(&app, "examine room".to_string());
     assert!(
-        wait_for_generation_complete(&ctx, 1000),
+        wait_for_generation_complete(&app, 1000),
         "Action A should complete"
     );
 
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app);
     let narration_id = guard
         .narrative
         .history()
@@ -102,19 +111,19 @@ fn test_sequential_execute_delete_execute() {
         .expect("Should have a narration entry");
 
     {
-        let mut state = latest_state(&ctx);
+        let mut state = latest_state(&app);
         state.narrative.history.retain(|m| m.id != narration_id);
-        save_state(&ctx, &state);
+        save_state(&app, &state);
     }
 
-    add_input_and_save(&ctx, "look around");
-    service.execute_action(ctx.clone(), "look around".to_string());
+    add_input_and_save(&app, "look around");
+    execute_action_impl(&app, "look around".to_string());
     assert!(
-        wait_for_generation_complete(&ctx, 1000),
+        wait_for_generation_complete(&app, 1000),
         "Action B should complete"
     );
 
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app);
     let has_deleted_narration = guard
         .narrative
         .history()
@@ -139,19 +148,22 @@ fn test_async_action_sequence_then_retry() {
         ),
         Arc::new(MockBackend::default()),
     );
+    let app: Arc<DefaultApplicationService> = Arc::new(
+        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(service)),
+    );
 
-    add_input_and_save(&ctx, "hello");
-    service.execute_action(ctx.clone(), "hello".to_string());
-    assert!(wait_for_generation_complete(&ctx, 1000));
+    add_input_and_save(&app, "hello");
+    execute_action_impl(&app, "hello".to_string());
+    assert!(wait_for_generation_complete(&app, 1000));
 
-    add_input_and_save(&ctx, "examine room");
-    service.execute_action(ctx.clone(), "examine room".to_string());
-    assert!(wait_for_generation_complete(&ctx, 1000));
+    add_input_and_save(&app, "examine room");
+    execute_action_impl(&app, "examine room".to_string());
+    assert!(wait_for_generation_complete(&app, 1000));
 
-    service.retry_last_response(ctx.clone());
-    assert!(wait_for_generation_complete(&ctx, 1000));
+    retry_last_response_impl(&app);
+    assert!(wait_for_generation_complete(&app, 1000));
 
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app);
     let inputs: Vec<_> = guard
         .narrative
         .history()
@@ -174,17 +186,20 @@ fn test_three_actions_in_sequence() {
         ),
         Arc::new(MockBackend::default()),
     );
+    let app: Arc<DefaultApplicationService> = Arc::new(
+        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(service)),
+    );
 
     for action in ["examine room", "look around", "check inventory"] {
-        add_input_and_save(&ctx, action);
-        service.execute_action(ctx.clone(), action.to_string());
+        add_input_and_save(&app, action);
+        execute_action_impl(&app, action.to_string());
         assert!(
-            wait_for_generation_complete(&ctx, 1000),
+            wait_for_generation_complete(&app, 1000),
             "Action '{action}' should complete"
         );
     }
 
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app);
     let inputs: Vec<_> = guard
         .narrative
         .history()
@@ -210,8 +225,16 @@ fn test_delete_input_then_retry_fails_gracefully() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
+    let app: Arc<DefaultApplicationService> =
+        Arc::new(crate::fixtures::make_test_app_service_from_ctx(
+            &ctx,
+            Arc::new(GameService::with_mock_quantifier(
+                crate::make_test_recorder(Arc::new(MockBackend::new())),
+                Arc::new(MockBackend::default()),
+            )),
+        ));
 
-    add_input_and_save(&ctx, "examine room");
+    add_input_and_save(&app, "examine room");
 
     let service = GameService::with_mock_quantifier(
         crate::make_test_recorder_with_storage(
@@ -220,18 +243,21 @@ fn test_delete_input_then_retry_fails_gracefully() {
         ),
         Arc::new(MockBackend::default()),
     );
+    let app: Arc<DefaultApplicationService> = Arc::new(
+        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(service)),
+    );
 
-    service.execute_action(ctx.clone(), "examine room".to_string());
-    assert!(wait_for_generation_complete(&ctx, 1000));
+    execute_action_impl(&app, "examine room".to_string());
+    assert!(wait_for_generation_complete(&app, 1000));
 
     {
-        let mut state = latest_state(&ctx);
+        let mut state = latest_state(&app);
         state.narrative.history.clear();
-        save_state(&ctx, &state);
+        save_state(&app, &state);
     }
 
-    service.retry_last_response(ctx.clone());
-    let guard = latest_state(&ctx);
+    retry_last_response_impl(&app);
+    let guard = latest_state(&app);
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Retry with no input should not leave state generating"
@@ -243,8 +269,16 @@ fn test_reset_clears_history_and_state() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
+    let app: Arc<DefaultApplicationService> =
+        Arc::new(crate::fixtures::make_test_app_service_from_ctx(
+            &ctx,
+            Arc::new(GameService::with_mock_quantifier(
+                crate::make_test_recorder(Arc::new(MockBackend::new())),
+                Arc::new(MockBackend::default()),
+            )),
+        ));
 
-    add_input_and_save(&ctx, "walk to room2");
+    add_input_and_save(&app, "walk to room2");
 
     let quantifier = Arc::new(MockBackend::default().with_prompt_responses(vec![
             r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#
@@ -258,17 +292,20 @@ fn test_reset_clears_history_and_state() {
         ),
         quantifier,
     );
+    let app: Arc<DefaultApplicationService> = Arc::new(
+        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(service)),
+    );
 
-    service.execute_action(ctx.clone(), "walk to room2".to_string());
-    assert!(wait_for_generation_complete(&ctx, 1000));
-    let guard = latest_state(&ctx);
+    execute_action_impl(&app, "walk to room2".to_string());
+    assert!(wait_for_generation_complete(&app, 1000));
+    let guard = latest_state(&app);
     assert_eq!(guard.movement.current_room_id, "room2");
     assert!(!guard.narrative.history().is_empty());
 
     let fresh_state = create_test_state_with_map();
-    save_state(&ctx, &fresh_state);
+    save_state(&app, &fresh_state);
 
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app);
     assert_eq!(
         guard.movement.current_room_id, "room1",
         "After reset: back to room1"
@@ -292,22 +329,25 @@ fn test_reset_then_execute_works() {
         ),
         Arc::new(MockBackend::default()),
     );
+    let app: Arc<DefaultApplicationService> = Arc::new(
+        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(service)),
+    );
 
-    add_input_and_save(&ctx, "examine room");
-    service.execute_action(ctx.clone(), "examine room".to_string());
-    assert!(wait_for_generation_complete(&ctx, 1000));
+    add_input_and_save(&app, "examine room");
+    execute_action_impl(&app, "examine room".to_string());
+    assert!(wait_for_generation_complete(&app, 1000));
 
     let fresh_state = create_test_state_with_map();
-    save_state(&ctx, &fresh_state);
+    save_state(&app, &fresh_state);
 
-    add_input_and_save(&ctx, "look around");
-    service.execute_action(ctx.clone(), "look around".to_string());
+    add_input_and_save(&app, "look around");
+    execute_action_impl(&app, "look around".to_string());
     assert!(
-        wait_for_generation_complete(&ctx, 1000),
+        wait_for_generation_complete(&app, 1000),
         "Action after reset should complete"
     );
 
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app);
     let inputs: Vec<_> = guard
         .narrative
         .history()
@@ -334,16 +374,19 @@ fn test_delete_mid_sequence() {
         ),
         Arc::new(MockBackend::default()),
     );
+    let app: Arc<DefaultApplicationService> = Arc::new(
+        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(service)),
+    );
 
-    add_input_and_save(&ctx, "examine room");
-    service.execute_action(ctx.clone(), "examine room".to_string());
-    assert!(wait_for_generation_complete(&ctx, 1000));
+    add_input_and_save(&app, "examine room");
+    execute_action_impl(&app, "examine room".to_string());
+    assert!(wait_for_generation_complete(&app, 1000));
 
-    add_input_and_save(&ctx, "look around");
-    service.execute_action(ctx.clone(), "look around".to_string());
-    assert!(wait_for_generation_complete(&ctx, 1000));
+    add_input_and_save(&app, "look around");
+    execute_action_impl(&app, "look around".to_string());
+    assert!(wait_for_generation_complete(&app, 1000));
 
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app);
     let narration_b_id = guard
         .narrative
         .history()
@@ -354,16 +397,16 @@ fn test_delete_mid_sequence() {
         .expect("Should have narration B");
 
     {
-        let mut state = latest_state(&ctx);
+        let mut state = latest_state(&app);
         state.narrative.history.retain(|m| m.id != narration_b_id);
-        save_state(&ctx, &state);
+        save_state(&app, &state);
     }
 
-    add_input_and_save(&ctx, "check door");
-    service.execute_action(ctx.clone(), "check door".to_string());
-    assert!(wait_for_generation_complete(&ctx, 1000));
+    add_input_and_save(&app, "check door");
+    execute_action_impl(&app, "check door".to_string());
+    assert!(wait_for_generation_complete(&app, 1000));
 
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app);
     let inputs: Vec<_> = guard
         .narrative
         .history()

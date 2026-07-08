@@ -3,8 +3,8 @@
 use std::sync::Arc;
 
 use chronicler_engine::application::game_service::GameService;
+use chronicler_engine::application::application_service::DefaultApplicationService;
 use chronicler_engine::domain::model::character::{CharacterSheet, NpcCard};
-use chronicler_engine::domain::model::state::game_state::GameState;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::domain::model::trigger::{
     ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement,
@@ -16,14 +16,33 @@ use crate::pipeline_helpers::{
     add_input_and_save, create_test_state_with_map, latest_snapshot, latest_state, save_state,
     wait_for_generation_complete,
 };
+use chronicler_engine::application::action_pipeline::{execute_action_impl, retry_last_response_impl};
+
+fn build_app(
+    ctx: &chronicler_engine::application::OpContext,
+    game_service: GameService,
+) -> std::sync::Arc<DefaultApplicationService> {
+    std::sync::Arc::new(crate::fixtures::make_test_app_service_from_ctx(
+        ctx,
+        std::sync::Arc::new(game_service),
+    ))
+}
 
 #[test]
 fn test_retry_main_narration_applies_new_quantifier_result() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
+    let app: std::sync::Arc<DefaultApplicationService> =
+        std::sync::Arc::new(crate::fixtures::make_test_app_service_from_ctx(
+            &ctx,
+            std::sync::Arc::new(GameService::with_mock_quantifier(
+                crate::make_test_recorder(std::sync::Arc::new(MockBackend::new())),
+                std::sync::Arc::new(MockBackend::default()),
+            )),
+        ));
 
-    add_input_and_save(&ctx, "walk around");
+    add_input_and_save(&app, "walk around");
 
     let quantifier: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
         Arc::new(MockBackend::default().with_prompt_responses(vec![
@@ -39,23 +58,24 @@ fn test_retry_main_narration_applies_new_quantifier_result() {
         ),
         quantifier,
     );
-    service.execute_action(ctx.clone(), "walk around".to_string());
+    let app = build_app(&ctx, service);
+    execute_action_impl(&app, "walk around".to_string());
     assert!(
-        wait_for_generation_complete(&ctx, 1000),
+        wait_for_generation_complete(&app, 1000),
         "First execution should complete"
     );
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app);
     assert_eq!(
         guard.movement.current_room_id, "room1",
         "First execution: player should stay in room1"
     );
-    service.retry_last_response(ctx.clone());
+    retry_last_response_impl(&app);
 
     assert!(
-        wait_for_generation_complete(&ctx, 1000),
+        wait_for_generation_complete(&app, 1000),
         "Retry should complete"
     );
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app);
     assert_eq!(
         guard.movement.current_room_id, "room2",
         "Retry should apply NEW quantifier result and move player to room2"
@@ -73,8 +93,16 @@ fn test_retry_with_different_narration_text_reruns_quantifier() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
+    let app: std::sync::Arc<DefaultApplicationService> =
+        std::sync::Arc::new(crate::fixtures::make_test_app_service_from_ctx(
+            &ctx,
+            std::sync::Arc::new(GameService::with_mock_quantifier(
+                crate::make_test_recorder(std::sync::Arc::new(MockBackend::new())),
+                std::sync::Arc::new(MockBackend::default()),
+            )),
+        ));
 
-    add_input_and_save(&ctx, "approach the innkeeper");
+    add_input_and_save(&app, "approach the innkeeper");
 
     let llm_backend =
         crate::make_test_recorder(Arc::new(MockBackend::default().with_narrations(vec![
@@ -83,12 +111,13 @@ fn test_retry_with_different_narration_text_reruns_quantifier() {
         ])));
 
     let service = GameService::with_mock_quantifier(llm_backend, Arc::new(MockBackend::default()));
-    service.execute_action(ctx.clone(), "approach the innkeeper".to_string());
+    let app = build_app(&ctx, service);
+    execute_action_impl(&app, "approach the innkeeper".to_string());
     assert!(
-        wait_for_generation_complete(&ctx, 1000),
+        wait_for_generation_complete(&app, 1000),
         "First execution should complete"
     );
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app);
     let first_narration = guard
         .narrative
         .history()
@@ -101,12 +130,12 @@ fn test_retry_with_different_narration_text_reruns_quantifier() {
         "First narration should match per_call_narrations[0]"
     );
 
-    service.retry_last_response(ctx.clone());
+    retry_last_response_impl(&app);
     assert!(
-        wait_for_generation_complete(&ctx, 1000),
+        wait_for_generation_complete(&app, 1000),
         "Retry should complete"
     );
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app);
     let retry_narration = guard
         .narrative
         .history()
@@ -126,8 +155,16 @@ fn test_double_retry_increments_swipe_and_reruns_quantifier() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
+    let app: std::sync::Arc<DefaultApplicationService> =
+        std::sync::Arc::new(crate::fixtures::make_test_app_service_from_ctx(
+            &ctx,
+            std::sync::Arc::new(GameService::with_mock_quantifier(
+                crate::make_test_recorder(std::sync::Arc::new(MockBackend::new())),
+                std::sync::Arc::new(MockBackend::default()),
+            )),
+        ));
 
-    add_input_and_save(&ctx, "walk around");
+    add_input_and_save(&app, "walk around");
 
     let quantifier: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
         Arc::new(MockBackend::default().with_prompt_responses(vec![
@@ -144,21 +181,22 @@ fn test_double_retry_increments_swipe_and_reruns_quantifier() {
         ),
         quantifier,
     );
-    service.execute_action(ctx.clone(), "walk around".to_string());
-    assert!(wait_for_generation_complete(&ctx, 1000));
-    let _snap = latest_snapshot(&ctx).expect("Should have snapshot");
+    let app = build_app(&ctx, service);
+    execute_action_impl(&app, "walk around".to_string());
+    assert!(wait_for_generation_complete(&app, 1000));
+    let _snap = latest_snapshot(&app).expect("Should have snapshot");
 
-    service.retry_last_response(ctx.clone());
-    assert!(wait_for_generation_complete(&ctx, 1000));
-    let _snap = latest_snapshot(&ctx).expect("Should have snapshot");
-    let guard = latest_state(&ctx);
+    retry_last_response_impl(&app);
+    assert!(wait_for_generation_complete(&app, 1000));
+    let _snap = latest_snapshot(&app).expect("Should have snapshot");
+    let guard = latest_state(&app);
     assert_eq!(guard.movement.current_room_id, "room2");
 
-    service.retry_last_response(ctx.clone());
-    assert!(wait_for_generation_complete(&ctx, 1000));
-    let _snap = latest_snapshot(&ctx).expect("Should have snapshot");
+    retry_last_response_impl(&app);
+    assert!(wait_for_generation_complete(&app, 1000));
+    let _snap = latest_snapshot(&app).expect("Should have snapshot");
 
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app);
     let history = guard.narrative.history();
     assert!(
         !history.is_empty(),
@@ -171,8 +209,16 @@ fn test_retry_preserves_input_and_does_not_create_extra_swipe() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
+    let app: std::sync::Arc<DefaultApplicationService> =
+        std::sync::Arc::new(crate::fixtures::make_test_app_service_from_ctx(
+            &ctx,
+            std::sync::Arc::new(GameService::with_mock_quantifier(
+                crate::make_test_recorder(std::sync::Arc::new(MockBackend::new())),
+                std::sync::Arc::new(MockBackend::default()),
+            )),
+        ));
 
-    add_input_and_save(&ctx, "walk around");
+    add_input_and_save(&app, "walk around");
 
     let service = GameService::with_mock_quantifier(
         crate::make_test_recorder_with_storage(
@@ -181,19 +227,20 @@ fn test_retry_preserves_input_and_does_not_create_extra_swipe() {
         ),
         Arc::new(MockBackend::default()),
     );
-    service.execute_action(ctx.clone(), "walk around".to_string());
+    let app = build_app(&ctx, service);
+    execute_action_impl(&app, "walk around".to_string());
     assert!(
-        wait_for_generation_complete(&ctx, 1000),
+        wait_for_generation_complete(&app, 1000),
         "First execution should complete"
     );
 
-    service.retry_last_response(ctx.clone());
+    retry_last_response_impl(&app);
     assert!(
-        wait_for_generation_complete(&ctx, 1000),
+        wait_for_generation_complete(&app, 1000),
         "Retry should complete"
     );
 
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app);
     let input_msg = guard
         .narrative
         .history
@@ -212,8 +259,16 @@ fn test_retry_after_edited_input_uses_new_text() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
+    let app: std::sync::Arc<DefaultApplicationService> =
+        std::sync::Arc::new(crate::fixtures::make_test_app_service_from_ctx(
+            &ctx,
+            std::sync::Arc::new(GameService::with_mock_quantifier(
+                crate::make_test_recorder(std::sync::Arc::new(MockBackend::new())),
+                std::sync::Arc::new(MockBackend::default()),
+            )),
+        ));
 
-    add_input_and_save(&ctx, "walk around");
+    add_input_and_save(&app, "walk around");
 
     let service = GameService::with_mock_quantifier(
         crate::make_test_recorder_with_storage(
@@ -222,10 +277,11 @@ fn test_retry_after_edited_input_uses_new_text() {
         ),
         Arc::new(MockBackend::default()),
     );
-    service.execute_action(ctx.clone(), "walk around".to_string());
-    assert!(wait_for_generation_complete(&ctx, 1000));
+    let app = build_app(&ctx, service);
+    execute_action_impl(&app, "walk around".to_string());
+    assert!(wait_for_generation_complete(&app, 1000));
 
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app);
     let first_narration = guard
         .narrative
         .history()
@@ -239,7 +295,7 @@ fn test_retry_after_edited_input_uses_new_text() {
     );
 
     {
-        let mut state = latest_state(&ctx);
+        let mut state = latest_state(&app);
         if let Some(msg) = state
             .narrative
             .history
@@ -251,12 +307,12 @@ fn test_retry_after_edited_input_uses_new_text() {
                 swipe.text = "sprint forward".to_string();
             }
         }
-        save_state(&ctx, &state);
+        save_state(&app, &state);
     }
 
-    service.retry_last_response(ctx.clone());
-    assert!(wait_for_generation_complete(&ctx, 1000));
-    let guard = latest_state(&ctx);
+    retry_last_response_impl(&app);
+    assert!(wait_for_generation_complete(&app, 1000));
+    let guard = latest_state(&app);
     let retry_narration = guard
         .narrative
         .history()
@@ -305,7 +361,15 @@ fn test_main_retry_reevaluates_triggers() {
     state.npcs = std::collections::HashMap::from([("shopkeeper".to_string(), shopkeeper)]);
 
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    add_input_and_save(&ctx, "walk around");
+    let app: std::sync::Arc<DefaultApplicationService> =
+        std::sync::Arc::new(crate::fixtures::make_test_app_service_from_ctx(
+            &ctx,
+            std::sync::Arc::new(GameService::with_mock_quantifier(
+                crate::make_test_recorder(std::sync::Arc::new(MockBackend::new())),
+                std::sync::Arc::new(MockBackend::default()),
+            )),
+        ));
+    add_input_and_save(&app, "walk around");
 
     let quantifier: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
         Arc::new(MockBackend::default().with_prompt_responses(vec![
@@ -321,9 +385,10 @@ fn test_main_retry_reevaluates_triggers() {
         ),
         quantifier,
     );
-    service.execute_action(ctx.clone(), "walk around".to_string());
-    assert!(wait_for_generation_complete(&ctx, 1000));
-    let guard = latest_state(&ctx);
+    let app = build_app(&ctx, service);
+    execute_action_impl(&app, "walk around".to_string());
+    assert!(wait_for_generation_complete(&app, 1000));
+    let guard = latest_state(&app);
     let events_after_execute = guard
         .narrative
         .history()
@@ -335,9 +400,9 @@ fn test_main_retry_reevaluates_triggers() {
         "First execution: no trigger (not in room2)"
     );
 
-    service.retry_last_response(ctx.clone());
-    assert!(wait_for_generation_complete(&ctx, 1000));
-    let guard = latest_state(&ctx);
+    retry_last_response_impl(&app);
+    assert!(wait_for_generation_complete(&app, 1000));
+    let guard = latest_state(&app);
     let events_after_retry = guard
         .narrative
         .history()
@@ -355,8 +420,16 @@ fn test_retry_completes_when_quantifier_returns_none() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
+    let app: std::sync::Arc<DefaultApplicationService> =
+        std::sync::Arc::new(crate::fixtures::make_test_app_service_from_ctx(
+            &ctx,
+            std::sync::Arc::new(GameService::with_mock_quantifier(
+                crate::make_test_recorder(std::sync::Arc::new(MockBackend::new())),
+                std::sync::Arc::new(MockBackend::default()),
+            )),
+        ));
 
-    add_input_and_save(&ctx, "walk around");
+    add_input_and_save(&app, "walk around");
 
     let quantifier: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
         Arc::new(MockBackend::default().with_prompt_responses(vec![
@@ -371,12 +444,13 @@ fn test_retry_completes_when_quantifier_returns_none() {
         ),
         quantifier,
     );
-    service.execute_action(ctx.clone(), "walk around".to_string());
-    assert!(wait_for_generation_complete(&ctx, 1000));
+    let app = build_app(&ctx, service);
+    execute_action_impl(&app, "walk around".to_string());
+    assert!(wait_for_generation_complete(&app, 1000));
 
-    service.retry_last_response(ctx.clone());
-    assert!(wait_for_generation_complete(&ctx, 1000));
-    let guard = latest_state(&ctx);
+    retry_last_response_impl(&app);
+    assert!(wait_for_generation_complete(&app, 1000));
+    let guard = latest_state(&app);
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Retry should complete even if quantifier returns None"
@@ -452,8 +526,16 @@ fn test_retry_no_pre_main_snapshot() {
         )),
         preset_storage,
     };
+    let setup_app: std::sync::Arc<DefaultApplicationService> =
+        std::sync::Arc::new(crate::fixtures::make_test_app_service_from_ctx(
+            &ctx,
+            std::sync::Arc::new(GameService::with_mock_quantifier(
+                crate::make_test_recorder(std::sync::Arc::new(MockBackend::new())),
+                std::sync::Arc::new(MockBackend::default()),
+            )),
+        ));
 
-    add_input_and_save(&ctx, "examine room");
+    add_input_and_save(&setup_app, "examine room");
 
     let service = GameService::with_mock_quantifier(
         crate::make_test_recorder_with_storage(
@@ -462,29 +544,23 @@ fn test_retry_no_pre_main_snapshot() {
         ),
         Arc::new(MockBackend::default()),
     );
-    service.execute_action(ctx.clone(), "examine room".to_string());
-    assert!(wait_for_generation_complete(&ctx, 1000));
+    let app = build_app(&ctx, service);
+    execute_action_impl(&app, "examine room".to_string());
+    assert!(wait_for_generation_complete(&app, 1000));
 
-    let snap = latest_snapshot(&ctx).expect("Should have snapshot");
-    let state_before_reset = GameState::from_snapshot(
-        &snap,
-        ctx.world_snapshot.world.clone(),
-        ctx.world_snapshot.map.clone(),
-        ctx.world_snapshot.player.clone(),
-        (*ctx.world_snapshot.npcs).clone(),
-    );
+    let state_before_reset = latest_state(&app);
 
     {
         let conn = db_pool.conn();
         let _ = conn.execute("DELETE FROM game_state_snapshots WHERE game_id = 1", []);
     }
     {
-        save_state(&ctx, &state_before_reset);
+        save_state(&app, &state_before_reset);
     }
 
-    service.retry_last_response(ctx.clone());
+    retry_last_response_impl(&app);
 
-    let stable = wait_for_generation_complete(&ctx, 500);
+    let stable = wait_for_generation_complete(&app, 500);
     assert!(
         stable,
         "Retry with no pre-main snapshot should complete (possibly with error)"
@@ -496,8 +572,16 @@ fn test_movement_with_arrival_narration_retry() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
+    let app: std::sync::Arc<DefaultApplicationService> =
+        std::sync::Arc::new(crate::fixtures::make_test_app_service_from_ctx(
+            &ctx,
+            std::sync::Arc::new(GameService::with_mock_quantifier(
+                crate::make_test_recorder(std::sync::Arc::new(MockBackend::new())),
+                std::sync::Arc::new(MockBackend::default()),
+            )),
+        ));
 
-    add_input_and_save(&ctx, "walk to room2");
+    add_input_and_save(&app, "walk to room2");
 
     let quantifier: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
         Arc::new(MockBackend::default().with_prompt_responses(vec![
@@ -512,10 +596,11 @@ fn test_movement_with_arrival_narration_retry() {
         ),
         quantifier,
     );
-    service.execute_action(ctx.clone(), "walk to room2".to_string());
-    assert!(wait_for_generation_complete(&ctx, 1000));
+    let app = build_app(&ctx, service);
+    execute_action_impl(&app, "walk to room2".to_string());
+    assert!(wait_for_generation_complete(&app, 1000));
 
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app);
     let arrival_count_before = guard
         .narrative
         .history()
@@ -527,10 +612,10 @@ fn test_movement_with_arrival_narration_retry() {
         "Should have at least one narration persisted before retry"
     );
 
-    service.retry_last_response(ctx.clone());
-    assert!(wait_for_generation_complete(&ctx, 1000));
+    retry_last_response_impl(&app);
+    assert!(wait_for_generation_complete(&app, 1000));
 
-    let guard = latest_state(&ctx);
+    let guard = latest_state(&app);
     assert_eq!(
         guard.movement.current_room_id, "room2",
         "Retry should still end in room2"
@@ -550,8 +635,16 @@ fn test_retry_appends_swipe_to_existing_narration() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
     let ctx = make_test_context_with_sqlite(state).unwrap();
+    let app: std::sync::Arc<DefaultApplicationService> =
+        std::sync::Arc::new(crate::fixtures::make_test_app_service_from_ctx(
+            &ctx,
+            std::sync::Arc::new(GameService::with_mock_quantifier(
+                crate::make_test_recorder(std::sync::Arc::new(MockBackend::new())),
+                std::sync::Arc::new(MockBackend::default()),
+            )),
+        ));
 
-    add_input_and_save(&ctx, "examine room");
+    add_input_and_save(&app, "examine room");
 
     let llm_backend =
         crate::make_test_recorder(Arc::new(MockBackend::default().with_narrations(vec![
@@ -560,10 +653,11 @@ fn test_retry_appends_swipe_to_existing_narration() {
         ])));
 
     let service = GameService::with_mock_quantifier(llm_backend, Arc::new(MockBackend::default()));
-    service.execute_action(ctx.clone(), "examine room".to_string());
-    assert!(wait_for_generation_complete(&ctx, 1000));
+    let app = build_app(&ctx, service);
+    execute_action_impl(&app, "examine room".to_string());
+    assert!(wait_for_generation_complete(&app, 1000));
 
-    let msgs = ctx.load_messages().unwrap();
+    let msgs = app.load_messages().unwrap();
     let narration = msgs
         .iter()
         .find(|m| m.message_type == MessageType::Narration)
@@ -571,10 +665,10 @@ fn test_retry_appends_swipe_to_existing_narration() {
     let original_id = narration.id;
     assert_eq!(narration.swipes.len(), 1);
 
-    service.retry_last_response(ctx.clone());
-    assert!(wait_for_generation_complete(&ctx, 1000));
+    retry_last_response_impl(&app);
+    assert!(wait_for_generation_complete(&app, 1000));
 
-    let msgs = ctx.load_messages().unwrap();
+    let msgs = app.load_messages().unwrap();
     let narrations: Vec<_> = msgs
         .iter()
         .filter(|m| m.message_type == MessageType::Narration)

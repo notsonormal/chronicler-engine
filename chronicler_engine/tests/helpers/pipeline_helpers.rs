@@ -113,22 +113,14 @@ pub fn create_test_state_with_trigger_npc() -> GameState {
     GameState::new(world, map, player, npcs, "room1".to_string())
 }
 
-pub fn wait_for_generation_complete(
-    ctx: &chronicler_engine::application::OpContext,
-    timeout_ms: u64,
-) -> bool {
+use chronicler_engine::application::application_service::DefaultApplicationService;
+
+pub fn wait_for_generation_complete(app: &DefaultApplicationService, timeout_ms: u64) -> bool {
     let start = std::time::Instant::now();
     let timeout = std::time::Duration::from_millis(timeout_ms);
     while start.elapsed() < timeout {
-        if let Ok(Some(snap)) = ctx.storage.load_latest_snapshot() {
-            let guard = GameState::from_snapshot(
-                &snap,
-                ctx.world_snapshot.world.clone(),
-                ctx.world_snapshot.map.clone(),
-                ctx.world_snapshot.player.clone(),
-                (*ctx.world_snapshot.npcs).clone(),
-            );
-            if !guard.narrative.input_buffer.status.is_generating() {
+        if let Ok(state) = app.load_or_fresh() {
+            if !state.narrative.input_buffer.status.is_generating() {
                 return true;
             }
         }
@@ -137,30 +129,22 @@ pub fn wait_for_generation_complete(
     false
 }
 
-pub fn latest_state(ctx: &chronicler_engine::application::OpContext) -> GameState {
-    let snap = ctx.storage.load_latest_snapshot().unwrap().unwrap();
-    let mut state = GameState::from_snapshot(
-        &snap,
-        ctx.world_snapshot.world.clone(),
-        ctx.world_snapshot.map.clone(),
-        ctx.world_snapshot.player.clone(),
-        (*ctx.world_snapshot.npcs).clone(),
-    );
-    if let Ok(msgs) = ctx.load_messages() {
-        if !msgs.is_empty() {
-            state.narrative.history.replace(msgs);
-        }
-    }
+pub fn latest_state(app: &DefaultApplicationService) -> GameState {
+    let mut state = app
+        .load_or_fresh()
+        .expect("latest_state: load_or_fresh should succeed (has lossy fallback)");
+    app.load_messages_into_state(&mut state);
     state
 }
 
-pub fn save_state(ctx: &chronicler_engine::application::OpContext, state: &GameState) {
-    let snapshot =
-        chronicler_engine::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(state);
-    let snapshot_id = ctx.storage.save_snapshot(&snapshot).unwrap();
-    let existing = ctx.load_messages().unwrap_or_default();
+pub fn save_state(app: &DefaultApplicationService, state: &GameState) {
+    use chronicler_engine::domain::model::state::game_state_snapshot::GameStateSnapshot;
+    let storage = app.storage();
+    let snapshot = GameStateSnapshot::from_game_state(state);
+    let snapshot_id = storage.save_snapshot(&snapshot).unwrap();
+    let existing = app.load_messages().unwrap_or_default();
     for msg in existing {
-        let _ = ctx.storage.delete_message(msg.id);
+        let _ = storage.delete_message(msg.id);
     }
     for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
         if msg.snapshot_id().is_none() {
@@ -169,24 +153,26 @@ pub fn save_state(ctx: &chronicler_engine::application::OpContext, state: &GameS
         if let Some(swipe) = msg.swipes.first_mut() {
             swipe.snapshot_id = Some(snapshot_id);
         }
-        let id = ctx.storage.insert_message(&msg).unwrap();
+        let id = storage.insert_message(&msg).unwrap();
         for (idx, swipe) in msg.swipes.iter().enumerate() {
-            let _ = ctx.storage.insert_swipe(id, swipe, idx);
+            let _ = storage.insert_swipe(id, swipe, idx);
         }
     }
 }
 
-pub fn add_input_and_save(ctx: &chronicler_engine::application::OpContext, text: &str) {
-    let mut state = latest_state(ctx);
+pub fn add_input_and_save(app: &DefaultApplicationService, text: &str) {
+    let mut state = latest_state(app);
     let player_name = state.player.sheet.name.clone();
     state.add_message(text.to_string(), Some(player_name), MessageType::Input);
-    save_state(ctx, &state);
+    save_state(app, &state);
 }
 
 pub fn latest_snapshot(
-    ctx: &chronicler_engine::application::OpContext,
+    app: &DefaultApplicationService,
 ) -> Option<chronicler_engine::domain::model::state::game_state_snapshot::GameStateSnapshot> {
-    ctx.storage.load_latest_snapshot().unwrap_or(None)
+    app.load_or_fresh()
+        .ok()
+        .map(|state| chronicler_engine::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(&state))
 }
 
 pub fn wait_for_condition<F>(

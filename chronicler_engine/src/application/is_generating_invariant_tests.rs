@@ -6,15 +6,12 @@ use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
 use tokio::time::sleep;
-use tokio_util::sync::CancellationToken;
 
 use crate::application::application_service::DefaultApplicationService;
 use crate::application::context::OpContext;
 use crate::application::ProcessActionResult;
-use crate::domain::model::settings::AppSettings;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::GenerationStatus;
-use crate::adapters::driven::storage::Storage;
 use crate::test_support::make_test_context_with_sqlite;
 
 fn cached_flag(ctx: &OpContext) -> bool {
