@@ -10,7 +10,7 @@ use serde::Serialize;
 use tokio_util::sync::CancellationToken;
 
 use crate::application::action_pipeline::execute_action_impl;
-use crate::application::context::{OpContext, load_or_fresh};
+use crate::application::context::OpContext;
 use crate::application::game_service::GameService;
 use crate::application::generation_guard::GenerationGuard;
 
@@ -148,16 +148,27 @@ impl DefaultApplicationService {
         crate::application::context::load_state_for_test(&ctx)
     }
 
-    pub(crate) fn load_world_snapshot(&self) -> Result<crate::application::context::WorldSnapshot, EngineError> {
+    pub(crate) fn load_world_snapshot(
+        &self,
+    ) -> Result<crate::application::context::WorldSnapshot, EngineError> {
         let game_id = self.storage.current_game_id();
-        let game = self.storage.get_game(game_id)?
-            .ok_or_else(|| EngineError::Config(format!("current_game_id {} not found", game_id)))?;
-        let world_with_map = self.storage.get_world(&game.world_key)?
+        let game = self
+            .storage
+            .get_game(game_id)?
+            .ok_or_else(|| EngineError::Config(format!("current_game_id {game_id} not found")))?;
+        let world_with_map = self
+            .storage
+            .get_world(&game.world_key)?
             .ok_or_else(|| EngineError::Config(format!("world '{}' not found", game.world_key)))?;
-        let player = self.storage.get_persona(&game.persona_key)?
-            .ok_or_else(|| EngineError::Config(format!("persona '{}' not found", game.persona_key)))?;
+        let player = self
+            .storage
+            .get_persona(&game.persona_key)?
+            .ok_or_else(|| {
+                EngineError::Config(format!("persona '{}' not found", game.persona_key))
+            })?;
         let npcs_list = self.storage.list_characters(world_with_map.world_id)?;
-        let mut npcs: std::collections::HashMap<String, crate::domain::model::character::NpcCard> = std::collections::HashMap::new();
+        let mut npcs: std::collections::HashMap<String, crate::domain::model::character::NpcCard> =
+            std::collections::HashMap::new();
         for n in npcs_list {
             npcs.insert(n.id.clone(), n);
         }
@@ -203,12 +214,18 @@ impl DefaultApplicationService {
         crate::application::context::save_message_and_snapshot(&ctx, state)
     }
 
-    pub fn delete_and_remove_message(&self, state: &mut GameState, id: u64) -> Result<(), EngineError> {
+    pub fn delete_and_remove_message(
+        &self,
+        state: &mut GameState,
+        id: u64,
+    ) -> Result<(), EngineError> {
         let ctx = self.synthesize_ctx();
         crate::application::context::delete_and_remove_message(&ctx, state, id)
     }
 
-    pub fn load_messages_with_swipes(&self) -> Result<Vec<crate::domain::model::message::Message>, EngineError> {
+    pub fn load_messages_with_swipes(
+        &self,
+    ) -> Result<Vec<crate::domain::model::message::Message>, EngineError> {
         crate::application::context::load_messages_with_swipes(&self.storage)
     }
 
@@ -223,7 +240,9 @@ impl DefaultApplicationService {
         Ok(ctx.build_fresh_initial_state())
     }
 
-    pub fn load_messages(&self) -> Result<Vec<crate::domain::model::message::Message>, EngineError> {
+    pub fn load_messages(
+        &self,
+    ) -> Result<Vec<crate::domain::model::message::Message>, EngineError> {
         crate::application::context::load_messages_with_swipes(&self.storage)
     }
 
@@ -238,9 +257,17 @@ impl DefaultApplicationService {
             settings.active_quantifier_prompt_preset_id.clone()
         };
         match self.preset_storage.get_preset(&preset_id) {
-            Ok(Some(preset)) => crate::application::narrative_prompt::assembler::assemble_prompt_text(&preset, &[], None),
+            Ok(Some(preset)) => {
+                crate::application::narrative_prompt::assembler::assemble_prompt_text(
+                    &preset,
+                    &[],
+                    None,
+                )
+            }
             Ok(None) => {
-                tracing::error!("active quantifier preset '{preset_id}' not found — defaults not seeded?");
+                tracing::error!(
+                    "active quantifier preset '{preset_id}' not found — defaults not seeded?"
+                );
                 String::new()
             }
             Err(e) => {
@@ -262,10 +289,7 @@ impl DefaultApplicationService {
         self.storage.set_game_id(game_id);
     }
 
-    pub fn process_action(
-        &self,
-        input: String,
-    ) -> Result<ProcessActionResult, EngineError> {
+    pub fn process_action(&self, input: String) -> Result<ProcessActionResult, EngineError> {
         let mut game_state = self.load_or_fresh()?;
 
         if !self.is_generating.load(Ordering::SeqCst)
@@ -333,11 +357,7 @@ impl DefaultApplicationService {
         self.process_action(String::new())
     }
 
-    pub fn create_game(
-        &self,
-        world_key: &str,
-        persona_key: &str,
-    ) -> Result<u64, ApplicationError> {
+    pub fn create_game(&self, world_key: &str, persona_key: &str) -> Result<u64, ApplicationError> {
         if self.is_generating.load(Ordering::SeqCst) {
             return Err(ApplicationError::ConcurrentGeneration);
         }
@@ -459,10 +479,7 @@ impl DefaultApplicationService {
         self.storage.list_worlds().map_err(Into::into)
     }
 
-    pub fn get_world(
-        &self,
-        key: &str,
-    ) -> Result<Option<WorldWithMap>, ApplicationError> {
+    pub fn get_world(&self, key: &str) -> Result<Option<WorldWithMap>, ApplicationError> {
         self.storage.get_world(key).map_err(Into::into)
     }
 
@@ -491,7 +508,9 @@ impl DefaultApplicationService {
         self.storage.delete_world(key).map_err(Into::into)
     }
 
-    pub fn list_personas(&self) -> Result<Vec<crate::domain::model::character::PlayerCard>, ApplicationError> {
+    pub fn list_personas(
+        &self,
+    ) -> Result<Vec<crate::domain::model::character::PlayerCard>, ApplicationError> {
         self.storage.list_personas().map_err(Into::into)
     }
 

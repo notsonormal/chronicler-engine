@@ -1,8 +1,6 @@
 //! [DOC: docs/system/game_flow.md]
 //! Read-only data access for game state and debug views
 
-use std::sync::Arc;
-
 use crate::application::ApplicationError;
 use crate::application::DebugStateView;
 use crate::application::application_service::DefaultApplicationService;
@@ -129,7 +127,9 @@ pub fn get_npc_headshots(
     Ok(npc_data)
 }
 
-pub fn get_debug_state(app: &DefaultApplicationService) -> Result<DebugStateView, ApplicationError> {
+pub fn get_debug_state(
+    app: &DefaultApplicationService,
+) -> Result<DebugStateView, ApplicationError> {
     let game_state = load_state_lossy(app);
 
     let history_tail: Vec<MessageEntry> = game_state

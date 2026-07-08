@@ -145,7 +145,6 @@ async fn test_is_generating_invariant_holds_under_concurrent_load() {
     let mut handles = Vec::new();
     for i in 0..4 {
         let svc = Arc::clone(&app_service);
-        let ctx_clone = ctx.clone();
         handles.push(tokio::task::spawn_blocking(move || {
             svc.process_action(format!("input from thread {i}"))
         }));
