@@ -22,12 +22,13 @@ export interface GitVetoPass {
 
 export type GitVetoResult = GitVetoFailure | GitVetoPass;
 
-const BLOCKED_GIT = /\b(?:git|hub)\s+(commit|push|tag|merge|rebase|reset|rm)\b/;
+const BLOCKED_GIT = /\b(?:git|hub)\s+(commit|push|tag|merge|rebase|reset|rm|checkout|restore)\b/;
 const STASH_ANY = /\b(?:git|hub)\s+stash\b/;
 const STASH_LIST = /\b(?:git|hub)\s+stash\s+list\b/;
 
 const REASON_SUFFIX =
-	"blocked in subagent context. Workers must not mutate repository history or push. " +
+	"blocked in subagent context. Workers must not mutate repository history, " +
+	"change branches, restore working tree, or push. " +
 	"Return a summary of staged or local changes and let the parent session commit " +
 	"via the commit-and-push skill.";
 

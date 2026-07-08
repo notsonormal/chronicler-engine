@@ -96,3 +96,28 @@ test("Detection: 'subagent-' prefix must be exact (no false positive for 'subage
 	const sm = makeSm({ name: "subagentfoo-session", parentSession: undefined });
 	assert.equal(isSubagentSession(sm), false);
 });
+
+test("Detection: 'subagent-chat-*' interactive parent name does NOT trigger (false positive guard)", () => {
+	delete process.env.PI_SUBAGENT_CHILD;
+	// pi names interactive parents "subagent-chat-{id}" — these are primaries,
+	// not subagents, despite the prefix. Without this carve-out, primaries
+	// were misclassified and pi-agent-core returned cryptic
+	// "Tool subagent not found" when they tried to fire a subagent.
+	const sm = makeSm({ name: "subagent-chat-019f372d", parentSession: undefined });
+	assert.equal(isSubagentSession(sm), false);
+});
+
+test("Detection: 'subagent-chat-*' still triggers if parentSession IS set (e.g. /fork of a chat session)", () => {
+	delete process.env.PI_SUBAGENT_CHILD;
+	// If a chat session was forked, the parentSession signal is authoritative
+	// and overrides the name carve-out.
+	const sm = makeSm({ name: "subagent-chat-019f372d", parentSession: "/path/to/parent.jsonl" });
+	assert.equal(isSubagentSession(sm), true);
+});
+
+test("Detection: other subagent-* types (scout, planner, etc.) still trigger", () => {
+	delete process.env.PI_SUBAGENT_CHILD;
+	// Future subagent roles added by pi-subagents must keep working.
+	const sm = makeSm({ name: "subagent-scout-abc-1", parentSession: undefined });
+	assert.equal(isSubagentSession(sm), true);
+});

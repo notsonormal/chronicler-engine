@@ -20,7 +20,8 @@ export const DEFAULT_RULES: readonly DefaultRule[] = [
 	{ name: "git-rm", pattern: "\\bgit\\s+rm\\b" },
 	{ name: "git-stash", pattern: "\\bgit\\s+stash\\b(?!\\s+list\\b)" },
 	{ name: "git-branch-force", pattern: "\\bgit\\s+branch\\s+(?:-[fD]|--force)\\b" },
-	{ name: "git-checkout-branch", pattern: "\\bgit\\s+checkout\\s+-B\\b" },
+	{ name: "git-checkout", pattern: "\\bgit\\s+checkout\\b" },
+	{ name: "git-restore", pattern: "\\bgit\\s+restore\\b" },
 	{ name: "git-clean-force", pattern: "\\bgit\\s+clean\\s+(?:-f[^\\s]*|--force\\b)" },
 	{ name: "mnt-access", pattern: "(^|\\s)/mnt/" },
 ];

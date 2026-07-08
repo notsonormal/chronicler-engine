@@ -14,11 +14,22 @@ interface SubagentInput extends Record<string, unknown> {
 
 let isSubagent = false;
 
+const SUB_SUBAGENT_BLOCK_REASON =
+	"Subagents cannot spawn sub-subagents. The subagent tool is parent-only. " +
+	"Implement the task directly using your own tools, or report back to the " +
+	"parent session if you are blocked on context or scope.";
+
 export default function (pi: ExtensionAPI) {
 	// Feature 1: parent-side task-spec veto.
+	// Also enforces the role-anchor rule that subagents cannot spawn
+	// sub-subagents — with an explicit, actionable error rather than the
+	// generic "Tool subagent not found" that pi-agent-core returns when the
+	// tool is not registered.
 	pi.on("tool_call", async (event) => {
 		if (!isToolCallEventType<"subagent", SubagentInput>("subagent", event)) return;
-		if (isSubagent) return;
+		if (isSubagent) {
+			return { block: true, reason: SUB_SUBAGENT_BLOCK_REASON };
+		}
 		const result = checkTaskSpec({
 			task: event.input.task,
 			agent: event.input.agent,

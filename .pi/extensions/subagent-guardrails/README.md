@@ -9,7 +9,7 @@ Pi extension. Adds deterministic guardrails to subagent runs in this workspace.
 | 1 | Task-spec veto | Parent-side. Blocks `subagent` tool calls whose `task` is empty or too short before any worker launches. Length-only check; header markers were removed (pi-subagents does not naturally produce them in the task field). |
 | 2 | Time + turn budget | Subagent sessions only. Steers the worker at 15 min / 50 turns (soft nudge) and 30 min / 100 turns (hard steer). |
 | 3 | Role anchor | Subagent sessions only. Appends three rules to the system prompt: scope-rejection marker `[SCOPE_REJECTED]`, parent-only tool boundary, no scope expansion. Anchors on the literal `Task:\n` marker. |
-| 4 | Git commit/push/reset/stash veto | Subagent sessions only. Blocks `git commit`, `push`, `tag`, `merge`, `rebase`, `reset` (any form, incl. `--hard`), and `git stash` (any subcommand except `stash list`) in `bash` calls. `hub <same>` is also blocked. Read-only and staging ops (`add`, `status`, `diff`, `log`, `stash list`, `fetch`, `pull`) remain allowed. |
+| 4 | Git commit/push/reset/stash/checkout/restore veto | Subagent sessions only. Blocks `git commit`, `push`, `tag`, `merge`, `rebase`, `reset` (any form, incl. `--hard`), `git stash` (any subcommand except `stash list`), `git checkout` (every variant — branch switch, create, force-create, working-tree discard), and `git restore` (every variant — working tree, staged, source) in `bash` calls. `hub <same>` is also blocked. Read-only and staging ops (`add`, `status`, `diff`, `log`, `stash list`, `fetch`, `pull`) remain allowed. |
 
 ## Install / dev
 
@@ -43,7 +43,7 @@ const DELEGATE_MIN_LENGTH = 80;
 Git-veto verb set and stash carve-out are the regexes in `src/commit-veto.ts`:
 
 ```ts
-const BLOCKED_GIT = /\b(?:git|hub)\s+(commit|push|tag|merge|rebase|reset|rm)\b/;
+const BLOCKED_GIT = /\b(?:git|hub)\s+(commit|push|tag|merge|rebase|reset|rm|checkout|restore)\b/;
 const STASH_ANY = /\b(?:git|hub)\s+stash\b/;
 const STASH_LIST = /\b(?:git|hub)\s+stash\s+list\b/;
 // stash blocks unless it matches STASH_LIST
@@ -59,8 +59,12 @@ layered detection (see `src/subagent-detection.ts`). Any-true wins:
 1. `process.env.PI_SUBAGENT_CHILD === "1"` env var. Set by pi-subagents at
    child spawn. Empirically unreliable as the sole signal (env propagation
    gaps for async workers observed 2026-07-06). Kept for forward compat.
-2. Session name starts with `subagent-` (pi-subagents names every spawned
-   child session `subagent-{role}-{runId}-{index}`).
+2. Session name starts with `subagent-` but is NOT `subagent-chat-*`
+   (pi-subagents names spawned workers `subagent-{role}-{runId}-{index}`,
+   but interactive parent sessions are also named `subagent-chat-{id}` —
+   those are primaries, not subagents, so the `chat` segment is carved out
+   to avoid misclassifying them; if a chat session is forked, signal 3
+   still triggers correctly).
 3. Session header has a `parentSession` field. Covers `/fork` and `/clone`
    too.
 
@@ -101,5 +105,5 @@ Key design points:
 
 - **No `shouldStopAfterTurn` on `ExtensionAPI`.** The hard steer relies on the worker obeying. For models that ignore it, the parent still gets the soft nudge and can manually `subagent:rpc:stop` the run.
 - **Git veto is a regex, not a sandbox.** Obfuscated invocations (`git c""mmit`, aliases, `git -c` indirection) bypass it. Goal is to stop the common honest commit pattern, not defeat an adversarial worker.
-- **No recursive `subagent` blocking.** The tool is never registered for workers; Qwen hallucinating a non-existent tool is already rejected at dispatch time.
+- **Recursive `subagent` blocking is now explicit.** If a subagent session tries to call the `subagent` tool, the `tool_call` handler returns an explicit `block: true` with a clear reason ("Subagents cannot spawn sub-subagents. The subagent tool is parent-only. Implement the task directly using your own tools, or report back to the parent session if you are blocked on context or scope.") rather than letting the call fall through to pi-agent-core's generic "Tool subagent not found" error. The role-anchor already states this rule; the block is enforcement, not new policy.
 - **No `[SCOPE_REJECTED]` parser.** The role-anchor instructs subagents to emit this marker on scope mismatch, but detection is on the parent's review pass, not automated.

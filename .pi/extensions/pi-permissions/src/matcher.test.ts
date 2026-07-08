@@ -45,7 +45,14 @@ test("matcher: each default rule matches its positive case", () => {
 		["git-branch-force", "git branch -f main feature"],
 		["git-branch-force", "git branch -D broken"],
 		["git-branch-force", "git branch --force main feature"],
-		["git-checkout-branch", "git checkout -B main feature"],
+		["git-checkout", "git checkout feature"],
+		["git-checkout", "git checkout -b new-branch"],
+		["git-checkout", "git checkout -B main feature"],
+		["git-checkout", "git checkout -- file.txt"],
+		["git-checkout", "git checkout HEAD -- file.txt"],
+		["git-restore", "git restore file.txt"],
+		["git-restore", "git restore --staged file.txt"],
+		["git-restore", "git restore --source=HEAD file.txt"],
 		["git-clean-force", "git clean -f"],
 		["git-clean-force", "git clean -fd"],
 		["git-clean-force", "git clean -fdx"],
@@ -68,12 +75,28 @@ test("matcher: default rules do not match benign git commands", () => {
 		"git fetch origin",
 		"git branch --list",
 		"git branch -d merged-feature",
-		"git checkout feature",
 		"git clean -n",
 	];
 	for (const cmd of benign) {
 		assert.equal(firstMatchingRule(set, cmd), null, `unexpected match: ${cmd}`);
 	}
+});
+
+test("matcher: git-checkout blocks every variant (switch, create, force-create, discard, ref)", () => {
+	const set = compile(Object.fromEntries(DEFAULT_RULES.map((r) => [r.name, r.pattern])));
+	assert.equal(firstMatchingRule(set, "git checkout feature"), "git-checkout");
+	assert.equal(firstMatchingRule(set, "git checkout -b new-branch"), "git-checkout");
+	assert.equal(firstMatchingRule(set, "git checkout -B main feature"), "git-checkout");
+	assert.equal(firstMatchingRule(set, "git checkout -- file.txt"), "git-checkout");
+	assert.equal(firstMatchingRule(set, "git checkout HEAD -- file.txt"), "git-checkout");
+});
+
+test("matcher: git-restore blocks every variant (working tree, staged, source, dot)", () => {
+	const set = compile(Object.fromEntries(DEFAULT_RULES.map((r) => [r.name, r.pattern])));
+	assert.equal(firstMatchingRule(set, "git restore file.txt"), "git-restore");
+	assert.equal(firstMatchingRule(set, "git restore --staged file.txt"), "git-restore");
+	assert.equal(firstMatchingRule(set, "git restore --source=HEAD file.txt"), "git-restore");
+	assert.equal(firstMatchingRule(set, "git restore ."), "git-restore");
 });
 
 test("matcher: git-stash carve-out permits `git stash list` only", () => {

@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { checkGitVeto } from "./commit-veto.ts";
 
-const BLOCKED = ["commit", "push", "tag", "merge", "rebase", "reset", "rm"];
+const BLOCKED = ["commit", "push", "tag", "merge", "rebase", "reset", "rm", "checkout", "restore"];
 
 for (const verb of BLOCKED) {
 	test(`Feature 4: git ${verb} is blocked`, () => {
@@ -152,4 +152,74 @@ test("Feature 4: rm reason also routes worker to commit-and-push skill", () => {
 	const r = checkGitVeto("git rm file.txt");
 	if (!r.block) throw new Error("expected block");
 	assert.match(r.reason, /commit-and-push/);
+});
+
+// --- git checkout: every variant blocked (no carve-outs) ---
+
+test("Feature 4: `git checkout feature` (branch switch) is blocked", () => {
+	const r = checkGitVeto("git checkout feature");
+	assert.equal(r.block, true);
+	assert.match(r.reason, /git checkout blocked/);
+});
+
+test("Feature 4: `git checkout -b new-branch` (branch create) is blocked", () => {
+	const r = checkGitVeto("git checkout -b new-branch");
+	assert.equal(r.block, true);
+	assert.match(r.reason, /git checkout blocked/);
+});
+
+test("Feature 4: `git checkout -B main feature` (force-create) is blocked", () => {
+	const r = checkGitVeto("git checkout -B main feature");
+	assert.equal(r.block, true);
+	assert.match(r.reason, /git checkout blocked/);
+});
+
+test("Feature 4: `git checkout -- file.txt` (working-tree discard) is blocked", () => {
+	const r = checkGitVeto("git checkout -- file.txt");
+	assert.equal(r.block, true);
+	assert.match(r.reason, /git checkout blocked/);
+});
+
+// --- git restore: every variant blocked (no carve-outs) ---
+
+test("Feature 4: `git restore file.txt` (working-tree discard) is blocked", () => {
+	const r = checkGitVeto("git restore file.txt");
+	assert.equal(r.block, true);
+	assert.match(r.reason, /git restore blocked/);
+});
+
+test("Feature 4: `git restore --staged file.txt` is blocked (no carve-out)", () => {
+	const r = checkGitVeto("git restore --staged file.txt");
+	assert.equal(r.block, true);
+	assert.match(r.reason, /git restore blocked/);
+});
+
+test("Feature 4: `git restore --source=HEAD file.txt` (source variant) is blocked", () => {
+	const r = checkGitVeto("git restore --source=HEAD file.txt");
+	assert.equal(r.block, true);
+	assert.match(r.reason, /git restore blocked/);
+});
+
+// --- hub variants: parity with git ---
+
+test("Feature 4: `hub checkout feature` is blocked", () => {
+	const r = checkGitVeto("hub checkout feature");
+	assert.equal(r.block, true);
+	assert.match(r.reason, /git checkout blocked/);
+});
+
+test("Feature 4: `hub restore file.txt` is blocked", () => {
+	const r = checkGitVeto("hub restore file.txt");
+	assert.equal(r.block, true);
+	assert.match(r.reason, /git restore blocked/);
+});
+
+// --- reason text covers new behavior ---
+
+test("Feature 4: checkout + restore reasons mention branch change + working-tree restore", () => {
+	const checkoutReason = checkGitVeto("git checkout feature");
+	const restoreReason = checkGitVeto("git restore file.txt");
+	if (!checkoutReason.block || !restoreReason.block) throw new Error("expected block");
+	assert.match(checkoutReason.reason, /change branches/);
+	assert.match(restoreReason.reason, /restore working tree/);
 });

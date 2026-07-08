@@ -25,7 +25,8 @@ Project-local pi extension. Intercepts dangerous bash commands and prompts for c
 | `git-rm` | `\bgit\s+rm\b` | Removes tracked files from index/worktree |
 | `git-stash` | `\bgit\s+stash\b(?!\s+list\b)` | Hides work; `list` exempt (read-only) |
 | `git-branch-force` | `\bgit\s+branch\s+(?:-[fD]\|--force)\b` | Force-move / force-delete branch |
-| `git-checkout-branch` | `\bgit\s+checkout\s+-B\b` | Force-create branch over existing |
+| `git-checkout` | `\bgit\s+checkout\b` | Any checkout (branch switch, create, force-create, working-tree discard via `--`). Grant once via `/permissions grant git-checkout` for session bypass. |
+| `git-restore` | `\bgit\s+restore\b` | Any restore (working tree, staged, source). Grant once via `/permissions grant git-restore` for session bypass. |
 | `git-clean-force` | `\bgit\s+clean\s+(?:-f[^\s]*\|--force\b)` | Destroys untracked files |
 | `mnt-access` | `(^\|\s)/mnt/` | WSL mount — Windows filesystem from Linux session |
 
