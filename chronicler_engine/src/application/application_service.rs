@@ -3,9 +3,8 @@
 //! arch-lint: storage-direct — intentional, see ADR-027
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, RwLock};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::RwLock;
 
 use serde::Serialize;
 use tokio_util::sync::CancellationToken;
@@ -113,7 +112,6 @@ pub struct DefaultApplicationService {
     pub(crate) cancel_token: CancellationToken,
     pub(crate) is_generating: Arc<AtomicBool>,
     pub(crate) game_service: Arc<GameService>,
-    pub(crate) world_snapshot_override: Arc<Mutex<Option<crate::application::context::WorldSnapshot>>>,
 }
 
 impl DefaultApplicationService {

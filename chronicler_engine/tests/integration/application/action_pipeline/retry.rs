@@ -154,6 +154,7 @@ fn test_retry_room_not_found() {
 
     let pre_main = GameStateSnapshot::from_game_state(&state);
     let storage = create_test_storage_arc(1);
+    chronicler_engine::test_support::seed_test_world_into_storage(&storage, &state);
     let pre_main_id = storage.save_snapshot(&pre_main).unwrap();
 
     for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
@@ -247,6 +248,7 @@ fn test_retry_llm_error() {
 
     let pre_main = GameStateSnapshot::from_game_state(&state);
     let storage = create_test_storage_arc(1);
+    chronicler_engine::test_support::seed_test_world_into_storage(&storage, &state);
     let pre_main_id = storage.save_snapshot(&pre_main).unwrap();
     for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
         if msg.message_type == MessageType::Input {
@@ -336,6 +338,7 @@ fn test_retry_empty_narration() {
 
     let pre_main = GameStateSnapshot::from_game_state(&state);
     let storage = create_test_storage_arc(1);
+    chronicler_engine::test_support::seed_test_world_into_storage(&storage, &state);
     let pre_main_id = storage.save_snapshot(&pre_main).unwrap();
     for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
         if msg.message_type == MessageType::Input {
@@ -426,6 +429,7 @@ fn test_retry_main_narration_uses_pre_main_snapshot() {
 
     let pre_main = GameStateSnapshot::from_game_state(&state);
     let storage = create_test_storage_arc(1);
+    chronicler_engine::test_support::seed_test_world_into_storage(&storage, &state);
     let pre_main_id = storage.save_snapshot(&pre_main).unwrap();
     for mut msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
         if msg.message_type == MessageType::Input {
