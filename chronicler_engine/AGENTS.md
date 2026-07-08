@@ -335,3 +335,7 @@ Tests are already concurrency-safe: they allocate ports dynamically from the ran
 ## DOING CODE REVIEWS
 
 Do not run try to compile, build or test the code when doing code reviews. Unless the review explictly calls for it (e.g. the `test-police` review). 
+
+## RAG DOCUMENT SEARCH
+
+For questions about Chronicler Engine architecture, ADRs, system design, or existing spec docs, call the `rag_query` tool. Index covers `chronicler_engine/docs/` (ADRs, system specs, architecture, references). Treat is as a quick way to narrow down your search for relevant documentation.

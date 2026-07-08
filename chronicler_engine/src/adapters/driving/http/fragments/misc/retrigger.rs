@@ -4,7 +4,6 @@
 use axum::{body::Body, extract::State, response::Response};
 
 use crate::application::application_service::ApplicationError;
-use crate::application::context::OpContext;
 use crate::application::message_editing;
 use crate::adapters::driving::http::AppState;
 
@@ -12,8 +11,7 @@ use crate::adapters::driving::http::fragments::renderers::ok;
 
 pub async fn retrigger_handler(
     State(state): State<AppState>,
-    ctx: OpContext,
 ) -> Result<Response<Body>, ApplicationError> {
-    message_editing::retrigger(state.application_service.game_service(), ctx)?;
+    message_editing::retrigger(state.application_service.clone())?;
     Ok(ok("<span class=\"status ready\">Retriggering...</span>"))
 }

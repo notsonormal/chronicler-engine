@@ -3,7 +3,7 @@
 //! arch-lint: storage-direct — intentional, see ADR-027
 
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, RwLock};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::RwLock;
 
@@ -113,6 +113,7 @@ pub struct DefaultApplicationService {
     pub(crate) cancel_token: CancellationToken,
     pub(crate) is_generating: Arc<AtomicBool>,
     pub(crate) game_service: Arc<GameService>,
+    pub(crate) world_snapshot_override: Arc<Mutex<Option<crate::application::context::WorldSnapshot>>>,
 }
 
 impl DefaultApplicationService {
@@ -172,7 +173,8 @@ impl DefaultApplicationService {
 
     pub(crate) fn synthesize_ctx(&self) -> OpContext {
         let snapshot = self.load_world_snapshot().unwrap_or_else(|e| {
-            panic!("synthesize_ctx: failed to load world snapshot: {e}")
+            tracing::warn!("synthesize_ctx: falling back to empty world snapshot: {e}");
+            crate::application::context::WorldSnapshot::empty()
         });
         OpContext {
             storage: self.storage.clone(),
@@ -185,18 +187,7 @@ impl DefaultApplicationService {
     }
 
     pub fn load_or_fresh(&self) -> Result<GameState, EngineError> {
-        let snapshot = self.load_world_snapshot();
-        let ctx = match snapshot {
-            Ok(s) => OpContext {
-                storage: self.storage.clone(),
-                preset_storage: self.preset_storage.clone(),
-                settings: self.settings.clone(),
-                cancel_token: self.cancel_token.clone(),
-                is_generating: self.is_generating.clone(),
-                world_snapshot: s,
-            },
-            Err(e) => return Err(e),
-        };
+        let ctx = self.synthesize_ctx();
         Ok(crate::application::context::load_or_fresh(&ctx))
     }
     pub fn load_expecting_valid_state(&self) -> Result<GameState, EngineError> {
@@ -275,12 +266,11 @@ impl DefaultApplicationService {
 
     pub fn process_action(
         &self,
-        ctx: OpContext,
         input: String,
     ) -> Result<ProcessActionResult, EngineError> {
-        let mut game_state = load_or_fresh(&ctx);
+        let mut game_state = self.load_or_fresh()?;
 
-        if !ctx.is_generating.load(Ordering::SeqCst)
+        if !self.is_generating.load(Ordering::SeqCst)
             && game_state.narrative.input_buffer.status.is_generating()
         {
             tracing::warn!(
@@ -296,7 +286,7 @@ impl DefaultApplicationService {
             game_state.add_message(input.clone(), Some(player_name.clone()), MessageType::Input);
         }
 
-        if ctx
+        if self
             .is_generating
             .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
             .is_err()
@@ -307,41 +297,42 @@ impl DefaultApplicationService {
         game_state.narrative.input_buffer.status = GenerationStatus::Generating;
         game_state.narrative.input_buffer.phase = GenerationPhase::Narrating;
 
-        if let Err(e) = crate::application::save_message_and_snapshot(&ctx, &mut game_state) {
+        if let Err(e) = self.save_message_and_snapshot(&mut game_state) {
             tracing::debug!(
                 "process_action: save failed, setting is_generating=false and returning error"
             );
-            ctx.is_generating.store(false, Ordering::SeqCst);
+            self.is_generating.store(false, Ordering::SeqCst);
             return Err(e);
         }
         tracing::debug!("process_action: state saved, spawning blocking task");
 
-        if ctx.cancel_token.is_cancelled() {
-            let mut gs = load_or_fresh(&ctx);
-            gs.narrative.input_buffer.status = GenerationStatus::Idle;
-            let snapshot = GameStateSnapshot::from_game_state(&gs);
-            if let Err(e) = ctx.storage.save_snapshot(&snapshot) {
-                tracing::error!("Failed to save shutdown snapshot: {e}");
+        if self.cancel_token.is_cancelled() {
+            if let Ok(mut gs) = self.load_or_fresh() {
+                gs.narrative.input_buffer.status = GenerationStatus::Idle;
+                let snapshot = GameStateSnapshot::from_game_state(&gs);
+                if let Err(e) = self.storage.save_snapshot(&snapshot) {
+                    tracing::error!("Failed to save shutdown snapshot: {e}");
+                }
             }
             return Ok(ProcessActionResult::ShuttingDown);
         }
 
-        let is_generating = Arc::clone(&ctx.is_generating);
-        crate::application::spawn_pipeline_task(&self.game_service, ctx, move |gs, ctx| {
+        let is_generating = Arc::clone(&self.is_generating);
+        crate::application::spawn_pipeline_task(Arc::new(self.clone()), move |app| {
             tracing::debug!("spawn_blocking: task started");
             let _guard = GenerationGuard(Arc::clone(&is_generating));
-            if ctx.cancel_token.is_cancelled() {
+            if app.cancel_token.is_cancelled() {
                 tracing::debug!("spawn_blocking: cancelled before execute_action");
                 return;
             }
-            execute_action_impl(gs, ctx, input);
+            execute_action_impl(app, input);
             tracing::debug!("spawn_blocking: execute_action completed");
         });
         Ok(ProcessActionResult::Started)
     }
 
-    pub fn continue_narration(&self, ctx: OpContext) -> Result<ProcessActionResult, EngineError> {
-        self.process_action(ctx, String::new())
+    pub fn continue_narration(&self) -> Result<ProcessActionResult, EngineError> {
+        self.process_action(String::new())
     }
 
     pub fn create_game(

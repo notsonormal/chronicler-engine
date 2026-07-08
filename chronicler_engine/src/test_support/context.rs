@@ -11,6 +11,7 @@ use crate::adapters::driven::storage::Storage;
 pub fn make_test_context(state: GameState) -> OpContext {
     let snapshot = GameStateSnapshot::from_game_state(&state);
     let storage = Arc::new(Storage::new_in_memory());
+    seed_test_world_into_storage(&storage, &state);
     let _ = storage.save_snapshot(&snapshot);
     for msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
         if let Ok(id) = storage.insert_message(&msg) {
@@ -25,6 +26,7 @@ pub fn make_test_context(state: GameState) -> OpContext {
 
 pub fn make_test_context_without_snapshot(state: GameState) -> OpContext {
     let storage = Arc::new(Storage::new_in_memory());
+    seed_test_world_into_storage(&storage, &state);
     for msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
         if let Ok(id) = storage.insert_message(&msg) {
             for (idx, swipe) in msg.swipes.iter().enumerate() {
@@ -51,6 +53,24 @@ fn default_test_preset_storage() -> Arc<Storage> {
     Arc::new(storage)
 }
 
+fn seed_test_world_into_storage(storage: &Storage, state: &GameState) {
+    let world_id = storage.seed_world(&state.world, &state.map).unwrap_or(1);
+    let _ = storage.seed_persona(&state.player.key, &state.player);
+    for (_, npc) in state.npcs.iter() {
+        let _ = storage.seed_character(world_id, npc);
+    }
+    let game_id = storage
+        .create_game(
+            &state.world.name,
+            &state.world.key,
+            &state.player.key,
+            &state.player.sheet.name,
+            "Test Game",
+        )
+        .unwrap_or(1);
+    storage.set_game_id(game_id);
+}
+
 fn build_test_context(state: GameState, storage: Arc<Storage>) -> OpContext {
     OpContext {
         storage,
@@ -72,6 +92,7 @@ pub fn make_test_context_with_sqlite(state: GameState) -> crate::error::Result<O
     let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:")?;
     crate::test_support::seed_default_game_row(&db_pool, 1)?;
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
+    seed_test_world_into_storage(&storage, &state);
     let _ = storage.save_snapshot(&snapshot);
     for msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
         if let Ok(id) = storage.insert_message(&msg) {

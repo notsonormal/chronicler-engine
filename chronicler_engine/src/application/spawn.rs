@@ -3,15 +3,13 @@
 
 use std::sync::Arc;
 
-use crate::application::context::OpContext;
-use crate::application::game_service::GameService;
+use crate::application::application_service::DefaultApplicationService;
 
-pub(crate) fn spawn_pipeline_task<F>(game_service: &Arc<GameService>, ctx: OpContext, f: F)
+pub(crate) fn spawn_pipeline_task<F>(app: Arc<DefaultApplicationService>, f: F)
 where
-    F: FnOnce(&GameService, OpContext) + Send + 'static,
+    F: FnOnce(&DefaultApplicationService) + Send + 'static,
 {
-    let game_service = Arc::clone(game_service);
     tokio::task::spawn_blocking(move || {
-        f(&game_service, ctx);
+        f(&app);
     });
 }

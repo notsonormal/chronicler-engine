@@ -3,15 +3,17 @@
 
 use tracing::instrument;
 use crate::application::action_pipeline::pipeline::ActionOutcome;
-use crate::application::context::{OpContext, load_or_fresh};
-use crate::application::game_service::GameService;
+use crate::application::application_service::DefaultApplicationService;
 
-#[instrument(skip(service, ctx), fields(input_length))]
-pub fn execute_action_impl(service: &GameService, ctx: OpContext, input: String) {
-    let mut state = load_or_fresh(&ctx);
+#[instrument(skip(app), fields(input_length))]
+pub fn execute_action_impl(app: &DefaultApplicationService, input: String) {
+    let Ok(mut state) = app.load_or_fresh() else {
+        tracing::error!("execute_action: load_or_fresh failed");
+        return;
+    };
     state.narrative.last_trigger = None;
-    let pipeline = service.pipeline();
-    if let Err(ActionOutcome::Cancelled) = pipeline.run_from_input(&ctx, state, input) {
+    let pipeline = app.game_service().pipeline();
+    if let Err(ActionOutcome::Cancelled) = pipeline.run_from_input(app, state, input) {
         tracing::debug!("Pipeline cancelled");
     }
 }

@@ -7,9 +7,9 @@ use crate::test_support::TestAppBuilder;
 #[tokio::test]
 async fn test_retrigger_handler() {
     let state = TestAppBuilder::default_test().build_app_state();
-    let ctx = load_op_context_for_active_game(&state).expect("failed to load context");
+    
 
-    let result = retrigger_handler(axum::extract::State(state), ctx).await;
+    let result = retrigger_handler(axum::extract::State(state)).await;
     let status = match result {
         Ok(resp) => resp.status(),
         Err(e) => e.into_response().status(),

@@ -57,20 +57,21 @@ async fn wait_until_idle(ctx: &OpContext, timeout: Duration) -> bool {
     false
 }
 
-fn make_service() -> DefaultApplicationService {
-    let settings = Arc::new(std::sync::RwLock::new(AppSettings::default()));
-    let storage = Arc::new(Storage::new_in_memory());
-    let preset_storage = Arc::new(Storage::new_in_memory());
+fn make_service_from_ctx(ctx: &OpContext) -> DefaultApplicationService {
     let game_service = Arc::new(
-        crate::bootstrap::wiring::build_game_service_for_tests(settings, Arc::clone(&storage), Arc::clone(&preset_storage))
-            .expect("build_game_service_for_tests should succeed"),
+        crate::bootstrap::wiring::build_game_service_for_tests(
+            ctx.settings.clone(),
+            Arc::clone(&ctx.storage),
+            Arc::clone(&ctx.preset_storage),
+        )
+        .expect("build_game_service_for_tests should succeed"),
     );
     DefaultApplicationService::new(
-        Arc::clone(&storage),
-        Arc::clone(&preset_storage),
-        Arc::new(std::sync::RwLock::new(AppSettings::default())),
-        CancellationToken::new(),
-        Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        Arc::clone(&ctx.storage),
+        Arc::clone(&ctx.preset_storage),
+        ctx.settings.clone(),
+        ctx.cancel_token.clone(),
+        Arc::clone(&ctx.is_generating),
         game_service,
     )
 }
@@ -89,9 +90,9 @@ async fn test_is_generating_invariant_holds_across_lifecycle() {
         persisted_flag(&ctx)
     );
 
-    let app_service = make_service();
+    let app_service = make_service_from_ctx(&ctx);
     let result = app_service
-        .process_action(ctx.clone(), "examine the room".to_string())
+        .process_action("examine the room".to_string())
         .expect("process_action should succeed");
     assert!(
         matches!(result, ProcessActionResult::Started),
@@ -139,14 +140,14 @@ async fn test_is_generating_invariant_holds_under_concurrent_load() {
     state.narrative.input_buffer.status = GenerationStatus::Idle;
     let ctx = make_test_context_with_sqlite(state).expect("make_test_context_with_sqlite");
 
-    let app_service = Arc::new(make_service());
+    let app_service = Arc::new(make_service_from_ctx(&ctx));
 
     let mut handles = Vec::new();
     for i in 0..4 {
         let svc = Arc::clone(&app_service);
         let ctx_clone = ctx.clone();
         handles.push(tokio::task::spawn_blocking(move || {
-            svc.process_action(ctx_clone, format!("input from thread {i}"))
+            svc.process_action(format!("input from thread {i}"))
         }));
     }
 

@@ -5,15 +5,14 @@ use std::sync::Arc;
 
 use tracing::instrument;
 use crate::application::action_pipeline::pipeline::ActionOutcome;
-use crate::application::context::{OpContext, load_or_fresh, save_state};
+use crate::application::application_service::DefaultApplicationService;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::MessageType;
-use crate::application::game_service::GameService;
 
-#[instrument(skip(service, ctx))]
-pub fn retry_last_response_impl(service: &GameService, ctx: OpContext) {
-    let messages = match ctx.load_messages() {
+#[instrument(skip(app))]
+pub fn retry_last_response_impl(app: &DefaultApplicationService) {
+    let messages = match app.load_messages() {
         Ok(msgs) => msgs,
         Err(e) => {
             tracing::error!("Failed to load messages: {e}");
@@ -21,9 +20,9 @@ pub fn retry_last_response_impl(service: &GameService, ctx: OpContext) {
         }
     };
 
-    let Some((anchor_idx, _anchor_msg, snapshot_id)) = ctx.find_retry_anchor(&messages) else {
+    let Some((anchor_idx, _anchor_msg, snapshot_id)) = app.find_retry_anchor(&messages) else {
         tracing::error!("No anchor message found for retry");
-        save_retry_error(&ctx, "Retry failed: no anchor message");
+        save_retry_error(app, "Retry failed: no anchor message");
         return;
     };
 
@@ -47,30 +46,34 @@ pub fn retry_last_response_impl(service: &GameService, ctx: OpContext) {
         })
         .cloned();
 
-    let snapshot = match ctx.storage.load_snapshot_by_id(snapshot_id) {
+    let snapshot = match app.storage.load_snapshot_by_id(snapshot_id) {
         Ok(Some(s)) => s,
         Ok(None) => {
             tracing::error!("No snapshot found for id {snapshot_id}");
             save_retry_error(
-                &ctx,
+                app,
                 format!("Retry failed: no snapshot found for id {snapshot_id}"),
             );
             return;
         }
         Err(e) => {
             tracing::error!("Failed to load snapshot: {e}");
-            save_retry_error(&ctx, format!("Retry failed: {e}"));
+            save_retry_error(app, format!("Retry failed: {e}"));
             return;
         }
     };
 
-    let mut state = GameState::from_snapshot(
-        &snapshot,
-        Arc::clone(&ctx.world_snapshot.world),
-        Arc::clone(&ctx.world_snapshot.map),
-        Arc::clone(&ctx.world_snapshot.player),
-        (*ctx.world_snapshot.npcs).clone(),
-    );
+    let mut state = {
+        let world_snapshot = app.load_world_snapshot()
+            .unwrap_or_else(|_| crate::application::context::WorldSnapshot::empty());
+        GameState::from_snapshot(
+            &snapshot,
+            Arc::clone(&world_snapshot.world),
+            Arc::clone(&world_snapshot.map),
+            Arc::clone(&world_snapshot.player),
+            (*world_snapshot.npcs).clone(),
+        )
+    };
 
     let mut truncated = messages;
     truncated.truncate(anchor_idx + 1);
@@ -86,47 +89,50 @@ pub fn retry_last_response_impl(service: &GameService, ctx: OpContext) {
     };
 
     let outcome = if is_event {
-        retry_event_continuation(service, &ctx, state)
+        retry_event_continuation(app, state)
     } else {
-        retry_main_narration(service, &ctx, state, input_text)
+        retry_main_narration(app, state, input_text)
     };
 
     if let ActionOutcome::Cancelled = outcome {
-        let mut state = load_or_fresh(&ctx);
-        state.narrative.input_buffer.status = GenerationStatus::Idle;
-        state.narrative.input_buffer.phase = GenerationPhase::default();
-        let _ = save_state(&ctx, &state);
+        if let Ok(mut state) = app.load_or_fresh() {
+            state.narrative.input_buffer.status = GenerationStatus::Idle;
+            state.narrative.input_buffer.phase = GenerationPhase::default();
+            let _ = app.save_state(&state);
+        }
     }
 }
 
-pub(crate) fn save_retry_error(ctx: &OpContext, message: impl Into<String>) {
-    let mut state = load_or_fresh(ctx);
+pub(crate) fn save_retry_error(app: &DefaultApplicationService, message: impl Into<String>) {
+    let Ok(mut state) = app.load_or_fresh() else {
+        tracing::error!("save_retry_error: load_or_fresh failed");
+        return;
+    };
     state.narrative.input_buffer.status = GenerationStatus::Error(message.into());
-    if let Err(e) = save_state(ctx, &state) {
+    if let Err(e) = app.save_state(&state) {
         tracing::error!("Critical: failed to persist retry error state: {e}");
     }
 }
 
 pub(crate) fn retry_event_continuation(
-    service: &GameService,
-    ctx: &OpContext,
+    app: &DefaultApplicationService,
     state: GameState,
 ) -> ActionOutcome {
     let Some(trigger) = state.narrative.last_trigger.clone() else {
         tracing::error!("Missing trigger context for event retry");
-        save_retry_error(ctx, "Retry failed: missing trigger context");
+        save_retry_error(app, "Retry failed: missing trigger context");
         return ActionOutcome::Completed;
     };
     let input_text = match state.narrative.history.last_input_text() {
         Some((_sender, text)) => text,
         None => String::new(),
     };
-    let pipeline = service.pipeline();
-    let mut state = match pipeline.phase_trigger_continuation(state, &trigger, ctx) {
+    let pipeline = app.game_service().pipeline();
+    let mut state = match pipeline.phase_trigger_continuation(state, &trigger, app) {
         Ok((s, continuation_text)) => {
             if !continuation_text.is_empty() {
                 let run =
-                    crate::application::action_pipeline::phases::PipelineRun::new(&pipeline, ctx);
+                    crate::application::action_pipeline::phases::PipelineRun::new(&pipeline, app);
                 run.reconcile_post_trigger_npcs(s, &input_text, &continuation_text)
             } else {
                 s
@@ -138,30 +144,33 @@ pub(crate) fn retry_event_continuation(
         state.narrative.history.append(target);
     }
     {
-        let run = crate::application::action_pipeline::phases::PipelineRun::new(&pipeline, ctx);
+        let run = crate::application::action_pipeline::phases::PipelineRun::new(&pipeline, app);
         run.phase_finalize(&mut state);
     }
     ActionOutcome::Completed
 }
 
 pub(crate) fn retry_main_narration(
-    service: &GameService,
-    ctx: &OpContext,
+    app: &DefaultApplicationService,
     state: GameState,
     input_text: String,
 ) -> ActionOutcome {
-    let pipeline = service.pipeline();
-    ActionOutcome::from_pipeline_result(pipeline.run_from_input(ctx, state, input_text))
+    let pipeline = app.game_service().pipeline();
+    ActionOutcome::from_pipeline_result(pipeline.run_from_input(app, state, input_text))
 }
 
-#[instrument(skip(service, ctx))]
-pub fn retrigger_event_impl(service: &GameService, ctx: &OpContext) {
-    let state = load_or_fresh(ctx);
-    let outcome = retry_event_continuation(service, ctx, state);
+#[instrument(skip(app))]
+pub fn retrigger_event_impl(app: &DefaultApplicationService) {
+    let Ok(state) = app.load_or_fresh() else {
+        tracing::error!("retrigger_event: load_or_fresh failed");
+        return;
+    };
+    let outcome = retry_event_continuation(app, state);
     if let ActionOutcome::Cancelled = outcome {
-        let mut state = load_or_fresh(ctx);
-        state.narrative.input_buffer.status = GenerationStatus::Idle;
-        state.narrative.input_buffer.phase = GenerationPhase::default();
-        let _ = save_state(ctx, &state);
+        if let Ok(mut state) = app.load_or_fresh() {
+            state.narrative.input_buffer.status = GenerationStatus::Idle;
+            state.narrative.input_buffer.phase = GenerationPhase::default();
+            let _ = app.save_state(&state);
+        }
     }
 }

@@ -112,14 +112,6 @@ heading entirely for single-stage work.
 ### Phase 2: [Stage Name]
 ...
 
-### Story point rules
-
-- Sizes: 1, 3, 5, 8, 13
-- 8 SP or larger must break into subtasks
-- 5 SP = single worker session; primary agent must verify output
-- SubTasks optional for atomic tasks <=5 SP; required for tasks >5 SP
-- SP mandatory on every Task line
-
 ## Test Plan
 ...
 
@@ -142,6 +134,14 @@ You can also exit directly. Direct exit discards the latest proposed plan instea
 ```text
 /plan exit
 ```
+
+### Story point rules
+
+- Sizes: 1, 3, 5, 8, 13
+- 8 SP or larger must break into subtasks
+- 5 SP = single worker session; primary agent must verify output
+- SubTasks optional for atomic tasks <=5 SP; required for tasks >5 SP
+- SP mandatory on every Task line
 
 ## 🧠 Codex-like behavior
 

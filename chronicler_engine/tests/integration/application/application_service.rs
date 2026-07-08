@@ -117,7 +117,7 @@ async fn test_process_action_persists_input_message() {
     let ctx = chronicler_engine::test_support::make_test_context_with_sqlite(state).unwrap();
     let app_service = make_app(&ctx, game_service);
 
-    let result = app_service.process_action(ctx.clone(), "examine the room".to_string());
+    let result = app_service.process_action("examine the room".to_string());
     assert!(
         matches!(result, Ok(ProcessActionResult::Started)),
         "process_action should return Started"
@@ -155,7 +155,7 @@ async fn test_process_action_self_heals_stale_generating_status() {
 
     assert!(!ctx.is_generating.load(std::sync::atomic::Ordering::SeqCst));
 
-    let result = app_service.process_action(ctx.clone(), "look around".to_string());
+    let result = app_service.process_action("look around".to_string());
     assert!(
         matches!(result, Ok(ProcessActionResult::Started)),
         "process_action should return Started"

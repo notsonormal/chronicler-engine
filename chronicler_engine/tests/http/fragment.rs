@@ -1009,7 +1009,7 @@ async fn test_retry_handler_requires_context() {
 
     assert_eq!(
         response.status(),
-        StatusCode::INTERNAL_SERVER_ERROR,
+        StatusCode::BAD_REQUEST,
         "Should fail when game context is missing"
     );
 }
@@ -1033,7 +1033,7 @@ async fn test_retrigger_handler_requires_context() {
 
     assert_eq!(
         response.status(),
-        StatusCode::INTERNAL_SERVER_ERROR,
+        StatusCode::BAD_REQUEST,
         "Should fail when game context is missing"
     );
 }

@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use crate::application::action_pipeline::phases::{PipelineInputs, PipelineRun};
-use crate::application::context::{OpContext, load_or_fresh, save_message_and_snapshot};
+use crate::application::application_service::DefaultApplicationService;
 
 use crate::domain::model::character::NpcCard;
 use crate::domain::model::quantifier::QuantifierResult;
@@ -46,12 +46,12 @@ impl ActionPipeline {
 
     pub fn run_from_input(
         &self,
-        ctx: &OpContext,
+        app: &DefaultApplicationService,
         mut state: GameState,
         input: String,
     ) -> PipelineResult<()> {
         tracing::debug!("run_from_input: called");
-        let run = PipelineRun::new(self, ctx);
+        let run = PipelineRun::new(self, app);
 
         let world = Arc::clone(&state.world);
         let map = Arc::clone(&state.map);
@@ -85,7 +85,7 @@ impl ActionPipeline {
         state.narrative.last_model_name = Some(model_name);
 
         let quantifier_result = run.phase_post_generation(&mut state, &input, &narration_text);
-        if let Err(e) = save_message_and_snapshot(ctx, &mut state) {
+        if let Err(e) = run.app.save_message_and_snapshot(&mut state) {
             tracing::warn!("Failed to save post-quantifier metadata: {e}");
         }
 
@@ -146,9 +146,9 @@ impl ActionPipeline {
         &self,
         state: GameState,
         trigger: &StoredTriggerContext,
-        ctx: &OpContext,
+        app: &DefaultApplicationService,
     ) -> PipelineResult<(GameState, String)> {
-        let run = PipelineRun::new(self, ctx);
+        let run = PipelineRun::new(self, app);
         run.phase_trigger_continuation_with_cancel_handling(state, trigger)
     }
 
@@ -246,7 +246,10 @@ impl<'a> PipelineRun<'a> {
 
     pub(super) fn handle_cancellation(&self) -> ActionOutcome {
         tracing::warn!("Pipeline cancelled — aborting remaining stages");
-        let mut state = load_or_fresh(self.ctx);
+        let Ok(mut state) = self.app.load_or_fresh() else {
+            tracing::error!("handle_cancellation: load_or_fresh failed");
+            return ActionOutcome::Cancelled;
+        };
         state.narrative.input_buffer.status = GenerationStatus::Idle;
         state.narrative.input_buffer.phase = GenerationPhase::default();
         self.persist(&state);

@@ -6,9 +6,8 @@ use std::sync::Arc;
 use chrono::Utc;
 
 use crate::application::action_pipeline::{retry_last_response_impl, retrigger_event_impl};
+use crate::application::application_service::DefaultApplicationService;
 use crate::application::ApplicationError;
-use crate::application::context::{OpContext, load_or_fresh};
-use crate::application::game_service::GameService;
 use crate::error::{EngineError, internal_error};
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
@@ -20,7 +19,7 @@ fn app_err_internal(msg: impl Into<String>) -> ApplicationError {
 }
 
 fn prepare_retry_state(
-    ctx: &OpContext,
+    app: &DefaultApplicationService,
     mut game_state: GameState,
     status: GenerationStatus,
     phase: GenerationPhase,
@@ -28,21 +27,21 @@ fn prepare_retry_state(
     game_state.narrative.input_buffer.status = status;
     game_state.narrative.input_buffer.phase = phase;
     let snapshot = GameStateSnapshot::from_game_state(&game_state);
-    ctx.storage.save_snapshot(&snapshot)?;
-    let cancelled = ctx.cancel_token.is_cancelled();
+    app.storage.save_snapshot(&snapshot)?;
+    let cancelled = app.cancel_token.is_cancelled();
     Ok((game_state, cancelled))
 }
 
 pub fn switch_swipe(
-    ctx: OpContext,
+    app: &DefaultApplicationService,
     message_id: u64,
     swipe_index: usize,
 ) -> Result<(), ApplicationError> {
-    if ctx.is_generating.load(std::sync::atomic::Ordering::SeqCst) {
+    if app.is_generating.load(std::sync::atomic::Ordering::SeqCst) {
         return Err(ApplicationError::ConcurrentGeneration);
     }
 
-    let messages = ctx.load_messages()?;
+    let messages = app.load_messages()?;
     let is_last = messages.last().map(|m| m.id == message_id).unwrap_or(false);
     if !is_last {
         return Err(ApplicationError::validation(
@@ -50,7 +49,7 @@ pub fn switch_swipe(
         ));
     }
 
-    ctx.storage.update_active_swipe(message_id, swipe_index)?;
+    app.storage.update_active_swipe(message_id, swipe_index)?;
 
     let target_msg = messages
         .iter()
@@ -66,33 +65,37 @@ pub fn switch_swipe(
         .snapshot_id
         .ok_or_else(|| app_err_internal("Swipe has no associated snapshot"))?;
 
-    let mut snapshot = ctx
+    let mut snapshot = app
         .storage
         .load_snapshot_by_id(snapshot_id)?
         .ok_or_else(|| app_err_internal("Snapshot not found"))?;
 
     snapshot.created_at = Utc::now();
-    ctx.storage.save_snapshot(&snapshot)?;
+    app.storage.save_snapshot(&snapshot)?;
 
     Ok(())
 }
 
-pub fn edit_history(ctx: OpContext, id: u64, text: String) -> Result<(), ApplicationError> {
-    let latest = ctx.storage.load_latest_snapshot()?;
-    let mut guard = load_or_fresh(&ctx);
+pub fn edit_history(
+    app: &DefaultApplicationService,
+    id: u64,
+    text: String,
+) -> Result<(), ApplicationError> {
+    let latest = app.storage.load_latest_snapshot()?;
+    let mut guard = app.load_or_fresh()?;
     guard.narrative.history.edit(id, text.clone())?;
 
     if latest.is_some() {
         let snapshot = GameStateSnapshot::from_game_state(&guard);
-        ctx.storage.save_snapshot(&snapshot)?;
-        ctx.update_message_text(id, &text)?;
+        app.storage.save_snapshot(&snapshot)?;
+        app.update_message_text(id, &text)?;
     }
 
     Ok(())
 }
 
-pub fn delete_last(ctx: OpContext) -> Result<(), ApplicationError> {
-    let mut guard = load_or_fresh(&ctx);
+pub fn delete_last(app: &DefaultApplicationService) -> Result<(), ApplicationError> {
+    let mut guard = app.load_or_fresh()?;
     let last_id = guard
         .narrative
         .history
@@ -104,21 +107,21 @@ pub fn delete_last(ctx: OpContext) -> Result<(), ApplicationError> {
 
     guard.narrative.history.delete_last()?;
     let snapshot = GameStateSnapshot::from_game_state(&guard);
-    ctx.storage.save_snapshot(&snapshot)?;
-    ctx.storage.delete_message(last_id)?;
+    app.storage.save_snapshot(&snapshot)?;
+    app.storage.delete_message(last_id)?;
 
     Ok(())
 }
 
-pub fn retry(game_service: &Arc<GameService>, ctx: OpContext) -> Result<(), ApplicationError> {
-    let game_state = load_or_fresh(&ctx);
+pub fn retry(app: Arc<DefaultApplicationService>) -> Result<(), ApplicationError> {
+    let game_state = app.load_or_fresh()?;
 
     if game_state.narrative.history.last_input_text().is_none() {
         return Err(ApplicationError::validation("No input to retry"));
     }
 
     let (_, cancelled) = prepare_retry_state(
-        &ctx,
+        &app,
         game_state,
         GenerationStatus::Generating,
         GenerationPhase::Narrating,
@@ -127,24 +130,24 @@ pub fn retry(game_service: &Arc<GameService>, ctx: OpContext) -> Result<(), Appl
         return Err(ApplicationError::ShuttingDown);
     }
 
-    crate::application::spawn_pipeline_task(game_service, ctx, move |gs, ctx| {
-        if ctx.cancel_token.is_cancelled() {
+    crate::application::spawn_pipeline_task(app, move |app_inner| {
+        if app_inner.cancel_token.is_cancelled() {
             return;
         }
-        retry_last_response_impl(gs, ctx);
+        retry_last_response_impl(app_inner);
     });
 
     Ok(())
 }
 
-pub fn retrigger(game_service: &Arc<GameService>, ctx: OpContext) -> Result<(), ApplicationError> {
-    let game_state = load_or_fresh(&ctx);
+pub fn retrigger(app: Arc<DefaultApplicationService>) -> Result<(), ApplicationError> {
+    let game_state = app.load_or_fresh()?;
 
     if game_state.narrative.last_trigger.is_none() {
         return Err(ApplicationError::validation("No trigger context available"));
     }
 
-    let messages = ctx.load_messages()?;
+    let messages = app.load_messages()?;
     let Some(last_msg) = messages.last() else {
         return Err(ApplicationError::validation("No messages to retrigger"));
     };
@@ -159,7 +162,7 @@ pub fn retrigger(game_service: &Arc<GameService>, ctx: OpContext) -> Result<(), 
     }
 
     let (_, cancelled) = prepare_retry_state(
-        &ctx,
+        &app,
         game_state,
         GenerationStatus::Generating,
         GenerationPhase::Narrating,
@@ -168,11 +171,11 @@ pub fn retrigger(game_service: &Arc<GameService>, ctx: OpContext) -> Result<(), 
         return Err(ApplicationError::ShuttingDown);
     }
 
-    crate::application::spawn_pipeline_task(game_service, ctx, move |gs, ctx| {
-        if ctx.cancel_token.is_cancelled() {
+    crate::application::spawn_pipeline_task(app, move |app_inner| {
+        if app_inner.cancel_token.is_cancelled() {
             return;
         }
-        retrigger_event_impl(gs, &ctx);
+        retrigger_event_impl(app_inner);
     });
 
     Ok(())

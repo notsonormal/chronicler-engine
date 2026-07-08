@@ -19,7 +19,7 @@ use crate::domain::model::state::generation_status::{GenerationPhase, Generation
 use crate::domain::model::state::message_types::MessageType;
 use crate::domain::model::world::WorldCard;
 use crate::application::narrative_prompt::{NpcContext, build_narration_prompt, make_prompt_context};
-use crate::application::context::OpContext;
+use crate::application::application_service::DefaultApplicationService;
 use crate::application::ports::llm_provider::{AGENT_NARRATOR, AGENT_TRIGGER};
 
 use super::pipeline::{ActionOutcome, ActionPipeline, PipelineResult};
@@ -34,22 +34,22 @@ pub struct PipelineInputs {
 
 pub(super) struct PipelineRun<'a> {
     pub(super) pipeline: &'a ActionPipeline,
-    pub(super) ctx: &'a OpContext,
+    pub(super) app: &'a DefaultApplicationService,
 }
 
 impl<'a> PipelineRun<'a> {
-    pub(super) fn new(pipeline: &'a ActionPipeline, ctx: &'a OpContext) -> Self {
-        Self { pipeline, ctx }
+    pub(super) fn new(pipeline: &'a ActionPipeline, app: &'a DefaultApplicationService) -> Self {
+        Self { pipeline, app }
     }
 
     pub(super) fn persist(&self, state: &GameState) {
-        if let Err(e) = save_state(self.ctx, state) {
+        if let Err(e) = self.app.save_state(state) {
             tracing::error!("Failed to persist state: {e}");
         }
     }
 
     pub(super) fn persist_snapshot_failed(&self, state: &mut GameState, label: &str) -> bool {
-        if let Err(e) = save_message_and_snapshot(self.ctx, state) {
+        if let Err(e) = self.app.save_message_and_snapshot(state) {
             tracing::error!("Failed to save {label}: {e}");
             state.narrative.input_buffer.status =
                 GenerationStatus::Error(format!("Failed to save {label}: {e}"));
@@ -100,7 +100,7 @@ impl<'a> PipelineRun<'a> {
         let assembled = match build_narration_prompt(
             &context,
             &preset,
-            &self.ctx.world_snapshot.world.global_rules,
+            &inputs.world.global_rules,
             Some(&response_length),
             self.pipeline.assembler.max_context_tokens,
             self.pipeline.assembler.max_tokens,
@@ -122,7 +122,7 @@ impl<'a> PipelineRun<'a> {
         tracing::info!("Pipeline ✓ Narration complete");
         let narration_text = narration_result.text;
 
-        if self.ctx.cancel_token.is_cancelled() {
+        if self.app.cancel_token.is_cancelled() {
             return Err(ActionOutcome::Cancelled);
         }
 
@@ -131,7 +131,7 @@ impl<'a> PipelineRun<'a> {
         }
 
         state.add_message(narration_text.clone(), None, MessageType::Narration);
-        if let Err(e) = save_message_and_snapshot(self.ctx, &mut state) {
+        if let Err(e) = self.app.save_message_and_snapshot(&mut state) {
             tracing::warn!("Failed to save pre-quantifier narration: {e}");
         }
 
@@ -151,7 +151,7 @@ impl<'a> PipelineRun<'a> {
     ) -> QuantifierResult {
         tracing::info!("Pipeline ▶ Quantifying");
         state.narrative.input_buffer.phase = GenerationPhase::Quantifying;
-        if let Err(e) = save_message_and_snapshot(self.ctx, state) {
+        if let Err(e) = self.app.save_message_and_snapshot(state) {
             tracing::warn!("Failed to save pre-quantifier phase update: {e}");
         }
 
@@ -195,7 +195,7 @@ impl<'a> PipelineRun<'a> {
             trigger.trigger_name
         );
 
-        if self.ctx.cancel_token.is_cancelled() {
+        if self.app.cancel_token.is_cancelled() {
             return Err(ActionOutcome::Cancelled);
         }
 
@@ -220,7 +220,7 @@ impl<'a> PipelineRun<'a> {
                 );
                 state.narrative.input_buffer.status =
                     GenerationStatus::Error(format!("Error: {e}"));
-                if let Err(e2) = save_message_and_snapshot(self.ctx, &mut state) {
+                if let Err(e2) = self.app.save_message_and_snapshot(&mut state) {
                     tracing::error!("Failed to persist trigger error state: {e2}");
                 }
                 return Ok((state, String::new()));
@@ -229,7 +229,7 @@ impl<'a> PipelineRun<'a> {
         tracing::info!("Pipeline ✓ Trigger complete");
         let continuation_text = continuation_result.text;
 
-        if self.ctx.cancel_token.is_cancelled() {
+        if self.app.cancel_token.is_cancelled() {
             return Err(ActionOutcome::Cancelled);
         }
 
@@ -339,7 +339,7 @@ impl<'a> PipelineRun<'a> {
             .assemble(
                 &trigger_ctx,
                 &preset,
-                &self.ctx.world_snapshot.world.global_rules,
+                &inputs.world.global_rules,
                 Some(&response_length),
             )
             .ok()?;
@@ -357,10 +357,10 @@ impl<'a> PipelineRun<'a> {
     }
 
     pub(super) fn load_preset_and_response_length(&self) -> Result<(PromptPreset, String), String> {
-        let settings = self.ctx.settings.read().unwrap_or_else(|e| e.into_inner());
+        let settings = self.app.settings.read().unwrap_or_else(|e| e.into_inner());
         let preset_id = settings.active_system_prompt_preset_id.clone();
         let response_length = settings.response_length.clone();
-        match self.ctx.preset_storage.get_preset(&preset_id) {
+        match self.app.preset_storage.get_preset(&preset_id) {
             Ok(Some(p)) => Ok((p, response_length)),
             Ok(None) => {
                 tracing::error!(

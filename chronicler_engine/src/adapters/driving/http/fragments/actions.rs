@@ -10,7 +10,6 @@ use axum::{
 use serde::{Deserialize, Serialize};
 
 use crate::application::application_service::ProcessActionResult;
-use crate::application::context::OpContext;
 use crate::domain::model::settings::TextCheckMode;
 use crate::adapters::driving::http::AppState;
 use crate::adapters::driving::http::templates::TextCheckPreviewTemplate;
@@ -22,11 +21,11 @@ pub struct ActionForm {
     pub command: String,
 }
 
-async fn dispatch_action(state: &AppState, ctx: OpContext, command: String) -> Response<Body> {
+async fn dispatch_action(state: &AppState, command: String) -> Response<Body> {
     let action_result = if command.is_empty() {
-        state.application_service.continue_narration(ctx)
+        state.application_service.continue_narration()
     } else {
-        state.application_service.process_action(ctx, command)
+        state.application_service.process_action(command)
     };
 
     match action_result {
@@ -45,22 +44,20 @@ async fn dispatch_action(state: &AppState, ctx: OpContext, command: String) -> R
 
 pub async fn action_handler(
     State(state): State<AppState>,
-    ctx: OpContext,
     Form(form): Form<ActionForm>,
 ) -> Response<Body> {
     let command = form.command.trim().to_string();
-    dispatch_action(&state, ctx, command).await
+    dispatch_action(&state, command).await
 }
 
 #[allow(clippy::expect_used)]
 pub async fn action_confirm_handler(
     State(state): State<AppState>,
-    ctx: OpContext,
     Form(form): Form<ActionForm>,
 ) -> Response<Body> {
     let command = form.command.trim().to_string();
 
-    let action_response = dispatch_action(&state, ctx, command).await;
+    let action_response = dispatch_action(&state, command).await;
     let status = action_response.status();
 
     let action_area_html = match render_action_area(&state) {
@@ -79,7 +76,6 @@ pub async fn action_confirm_handler(
 
 pub async fn action_check_handler(
     State(state): State<AppState>,
-    ctx: OpContext,
     Form(form): Form<ActionForm>,
 ) -> Response<Body> {
     let command = form.command.trim().to_string();
@@ -88,7 +84,7 @@ pub async fn action_check_handler(
 
     if settings.text_check.mode == TextCheckMode::Disabled || !settings.text_check.enable_auto_check
     {
-        let mut response = dispatch_action(&state, ctx, command).await;
+        let mut response = dispatch_action(&state, command).await;
         add_status_swap_headers(&mut response);
         return response;
     }
@@ -101,7 +97,7 @@ pub async fn action_check_handler(
         Ok(result) => result,
         Err(e) => {
             tracing::error!("Text check failed: {e}");
-            let mut response = dispatch_action(&state, ctx, command).await;
+            let mut response = dispatch_action(&state, command).await;
             add_status_swap_headers(&mut response);
             return response;
         }
@@ -116,7 +112,7 @@ pub async fn action_check_handler(
             }
         }
         None => {
-            let mut response = dispatch_action(&state, ctx, command).await;
+            let mut response = dispatch_action(&state, command).await;
             add_status_swap_headers(&mut response);
             response
         }

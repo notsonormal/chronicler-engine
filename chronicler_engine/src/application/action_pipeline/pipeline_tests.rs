@@ -13,6 +13,18 @@ use crate::adapters::driven::llm::providers::MockBackend;
 use crate::test_support::fixtures::{TestGameState, TestNpc};
 use crate::test_support::make_test_context;
 use crate::test_support::make_test_recorder;
+use crate::application::application_service::DefaultApplicationService;
+
+fn app_for_ctx(ctx: &OpContext, service: GameService) -> DefaultApplicationService {
+    DefaultApplicationService::new(
+        ctx.storage.clone(),
+        ctx.preset_storage.clone(),
+        ctx.settings.clone(),
+        ctx.cancel_token.clone(),
+        ctx.is_generating.clone(),
+        Arc::new(service),
+    )
+}
 
 fn make_test_pipeline(service: &crate::application::game_service::GameService) -> ActionPipeline {
     service.pipeline()
@@ -30,8 +42,9 @@ fn test_pipeline_runs_to_completion() {
     let agent_registry = AgentRegistry::default();
     let service = GameService::with_backends(narrator_recorder, agent_registry);
     let pipeline = make_test_pipeline(&service);
+    let app = app_for_ctx(&ctx, service.clone());
 
-    let outcome = pipeline.run_from_input(&ctx, state, "look".to_string());
+    let outcome = pipeline.run_from_input(&app, state, "look".to_string());
 
     assert!(matches!(outcome, Ok(())));
     let final_state = load_state_for_test(&ctx);
@@ -53,8 +66,9 @@ fn test_pipeline_saves_narration_to_history() {
     let agent_registry = AgentRegistry::default();
     let service = GameService::with_backends(narrator_recorder, agent_registry);
     let pipeline = make_test_pipeline(&service);
+    let app = app_for_ctx(&ctx, service.clone());
 
-    let _outcome = pipeline.run_from_input(&ctx, state, "look".to_string());
+    let _outcome = pipeline.run_from_input(&app, state, "look".to_string());
 
     let final_state = load_state_for_test(&ctx);
     let has_narration = final_state
@@ -73,8 +87,9 @@ fn test_pipeline_returns_error_on_narration_failure() {
     let agent_registry = AgentRegistry::default();
     let service = GameService::with_backends(narrator_recorder, agent_registry);
     let pipeline = make_test_pipeline(&service);
+    let app = app_for_ctx(&ctx, service.clone());
 
-    let outcome = pipeline.run_from_input(&ctx, state, "look".to_string());
+    let outcome = pipeline.run_from_input(&app, state, "look".to_string());
 
     assert!(
         outcome.is_ok(),
@@ -101,8 +116,9 @@ fn test_pipeline_returns_error_on_empty_narration_text() {
     let agent_registry = AgentRegistry::default();
     let service = GameService::with_backends(narrator_recorder, agent_registry);
     let pipeline = make_test_pipeline(&service);
+    let app = app_for_ctx(&ctx, service.clone());
 
-    let outcome = pipeline.run_from_input(&ctx, state, "look".to_string());
+    let outcome = pipeline.run_from_input(&app, state, "look".to_string());
 
     assert!(
         outcome.is_ok(),
@@ -129,8 +145,9 @@ fn test_pipeline_cancels_mid_run() {
     let agent_registry = AgentRegistry::default();
     let service = GameService::with_backends(narrator_recorder, agent_registry);
     let pipeline = make_test_pipeline(&service);
+    let app = app_for_ctx(&ctx, service.clone());
 
-    let outcome = pipeline.run_from_input(&ctx, state, "look".to_string());
+    let outcome = pipeline.run_from_input(&app, state, "look".to_string());
 
     assert!(
         matches!(outcome, Err(ActionOutcome::Cancelled)),
@@ -170,8 +187,9 @@ fn test_pipeline_with_custom_quantifier_result() {
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     let service = GameService::with_backends(narrator_recorder, agent_registry);
     let pipeline = service.pipeline();
+    let app = app_for_ctx(&ctx, service.clone());
 
-    let outcome = pipeline.run_from_input(&ctx, state, "look".to_string());
+    let outcome = pipeline.run_from_input(&app, state, "look".to_string());
 
     assert!(matches!(outcome, Ok(())));
     let final_state = load_state_for_test(&ctx);
@@ -192,10 +210,11 @@ fn test_phase_trigger_continuation_cancels_at_start() {
     let agent_registry = AgentRegistry::default();
     let service = GameService::with_backends(narrator_recorder, agent_registry);
     let pipeline = make_test_pipeline(&service);
+    let app = app_for_ctx(&ctx, service.clone());
 
     let trigger = crate::test_support::TestStoredTriggerContext::for_npc("npc1", "Test", "Hello");
 
-    let result = pipeline.phase_trigger_continuation(state, &trigger, &ctx);
+    let result = pipeline.phase_trigger_continuation(state, &trigger, &app);
 
     assert!(
         matches!(result, Err(ActionOutcome::Cancelled)),
@@ -230,8 +249,9 @@ fn test_trigger_continuation_save_post_trigger_error() {
     let agent_registry = AgentRegistry::default();
     let service = GameService::with_backends(narrator_recorder, agent_registry);
     let pipeline = make_test_pipeline(&service);
+    let app = app_for_ctx(&ctx, service.clone());
     let trigger = crate::test_support::TestStoredTriggerContext::for_npc("npc1", "Test", "Hello");
-    let result = pipeline.phase_trigger_continuation(state, &trigger, &ctx);
+    let result = pipeline.phase_trigger_continuation(state, &trigger, &app);
 
     match result {
         Ok((_, text)) => {
@@ -292,8 +312,9 @@ fn test_pipeline_trigger_happy_path() {
     ));
     let service = GameService::with_backends(narrator_recorder, agent_registry);
     let pipeline = service.pipeline();
+    let app = app_for_ctx(&ctx, service.clone());
 
-    let outcome = pipeline.run_from_input(&ctx, state, "look".to_string());
+    let outcome = pipeline.run_from_input(&app, state, "look".to_string());
 
     assert!(
         matches!(outcome, Ok(())),
@@ -359,8 +380,9 @@ fn test_pipeline_trigger_empty_continuation() {
         make_test_recorder(Arc::new(MockBackend::default().with_empty_response()));
     let service = GameService::with_backends(narrator_recorder, agent_registry);
     let pipeline = service.pipeline();
+    let app = app_for_ctx(&ctx, service.clone());
 
-    let outcome = pipeline.run_from_input(&ctx, state, "look".to_string());
+    let outcome = pipeline.run_from_input(&app, state, "look".to_string());
     assert!(
         outcome.is_ok(),
         "Expected Ok with error status, got: {outcome:?}"
@@ -422,8 +444,9 @@ fn test_pipeline_trigger_complete_failure() {
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default().with_fail()));
     let service = GameService::with_backends(narrator_recorder, agent_registry);
     let pipeline = service.pipeline();
+    let app = app_for_ctx(&ctx, service.clone());
 
-    let outcome = pipeline.run_from_input(&ctx, state, "look".to_string());
+    let outcome = pipeline.run_from_input(&app, state, "look".to_string());
     assert!(
         outcome.is_ok(),
         "Expected Ok with error status, got: {outcome:?}"
@@ -449,8 +472,9 @@ fn test_pipeline_saves_narration_before_quantifier() {
     let agent_registry = AgentRegistry::default();
     let service = GameService::with_backends(narrator_recorder, agent_registry);
     let pipeline = make_test_pipeline(&service);
+    let app = app_for_ctx(&ctx, service.clone());
 
-    let _outcome = pipeline.run_from_input(&ctx, state, "look".to_string());
+    let _outcome = pipeline.run_from_input(&app, state, "look".to_string());
 
     let messages = ctx.load_messages().unwrap();
     let narration_msgs: Vec<_> = messages
@@ -482,8 +506,9 @@ fn test_pipeline_no_duplicate_narration() {
     let agent_registry = AgentRegistry::default();
     let service = GameService::with_backends(narrator_recorder, agent_registry);
     let pipeline = make_test_pipeline(&service);
+    let app = app_for_ctx(&ctx, service.clone());
 
-    let _outcome = pipeline.run_from_input(&ctx, state, "test input".to_string());
+    let _outcome = pipeline.run_from_input(&app, state, "test input".to_string());
 
     let final_state = load_state_for_test(&ctx);
     let history = final_state.narrative.history();
@@ -512,8 +537,9 @@ fn test_pipeline_quantifier_runs_on_saved_state() {
     let agent_registry = AgentRegistry::default();
     let service = GameService::with_backends(narrator_recorder, agent_registry);
     let pipeline = make_test_pipeline(&service);
+    let app = app_for_ctx(&ctx, service.clone());
 
-    let _outcome = pipeline.run_from_input(&ctx, state, "look".to_string());
+    let _outcome = pipeline.run_from_input(&app, state, "look".to_string());
 
     let messages = ctx.load_messages().unwrap();
     let narration = messages
@@ -543,8 +569,9 @@ fn test_pipeline_continues_if_quantifier_save_fails() {
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     let service = GameService::with_backends(narrator_recorder, agent_registry);
     let pipeline = service.pipeline();
+    let app = app_for_ctx(&ctx, service.clone());
 
-    let outcome = pipeline.run_from_input(&ctx, state, "look".to_string());
+    let outcome = pipeline.run_from_input(&app, state, "look".to_string());
 
     assert!(
         matches!(outcome, Ok(())),
@@ -570,8 +597,9 @@ fn test_narration_persisted_even_if_quantifier_changes_state() {
     ));
     let service = GameService::with_backends(narrator_recorder, agent_registry);
     let pipeline = service.pipeline();
+    let app = app_for_ctx(&ctx, service.clone());
 
-    let _outcome = pipeline.run_from_input(&ctx, state, "look".to_string());
+    let _outcome = pipeline.run_from_input(&app, state, "look".to_string());
 
     let messages = ctx.load_messages().unwrap();
     let narration_msgs: Vec<_> = messages

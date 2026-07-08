@@ -27,6 +27,17 @@ pub struct WorldSnapshot {
     pub npcs: Arc<std::collections::HashMap<String, NpcCard>>,
 }
 
+impl WorldSnapshot {
+    pub fn empty() -> Self {
+        Self {
+            world: Arc::new(WorldCard::default()),
+            map: Arc::new(crate::domain::model::map::MapDef::default()),
+            player: Arc::new(crate::domain::model::character::PlayerCard::default()),
+            npcs: Arc::new(std::collections::HashMap::new()),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct OpContext {
     pub storage: Arc<Storage>,
