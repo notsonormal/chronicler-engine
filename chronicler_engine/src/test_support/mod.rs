@@ -10,8 +10,8 @@ mod context_tests;
 mod recording_forensics_tests;
 
 pub use context::{
-    make_test_context, make_test_context_with_sqlite, make_test_context_without_snapshot,
-    seed_test_world_into_storage,
+    make_test_app, make_test_app_with_sqlite, make_test_app_without_snapshot, make_test_context,
+    make_test_context_with_sqlite, make_test_context_without_snapshot, seed_test_world_into_storage,
 };
 pub use fixtures::*;
 pub use noop_forensics::{make_test_recorder, make_test_recorder_with_storage, NoopForensics};

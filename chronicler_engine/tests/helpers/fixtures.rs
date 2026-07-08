@@ -349,7 +349,9 @@ pub fn seed_test_world(storage: &Storage) {
 pub fn seed_test_world_with_scenario(storage: &Storage) {
     let world = create_test_world_with_scenario();
     let map = create_test_map();
-    storage.seed_world(&world, &map).expect("seed world with scenario");
+    storage
+        .seed_world(&world, &map)
+        .expect("seed world with scenario");
     let player = chronicler_engine::test_support::TestPlayer::standard();
     storage
         .seed_persona(&player.key, &player)
@@ -401,4 +403,64 @@ pub fn make_test_app_service_from_ctx(
         ctx.is_generating.clone(),
         game_service,
     )
+}
+
+/// Build an `Arc<DefaultApplicationService>` with both `system_default` and
+/// `quantifier_default` PromptPresets seeded into a fresh preset_storage.
+/// Used by retry/retrigger tests that need both preset roles available.
+/// B3 fixture folded into A6 per Issue 10.
+#[doc(hidden)]
+#[allow(dead_code)]
+pub fn make_test_app_with_default_preset(
+    _world: Arc<chronicler_engine::domain::model::world::WorldCard>,
+    _player: Arc<chronicler_engine::domain::model::character::PlayerCard>,
+    storage: Arc<chronicler_engine::adapters::driven::storage::Storage>,
+) -> Arc<chronicler_engine::application::application_service::DefaultApplicationService> {
+    use chronicler_engine::application::application_service::DefaultApplicationService;
+    use chronicler_engine::domain::model::prompt_preset::{PresetType, PromptPreset};
+
+    let preset_storage = {
+        let ps = chronicler_engine::adapters::driven::storage::Storage::new_in_memory();
+        let _ = ps.save_preset(&PromptPreset {
+            id: "system_default".to_string(),
+            name: "Default System".to_string(),
+            role: Some("You are a narrator.".to_string()),
+            instructions: None,
+            writing_style: None,
+            output_format: None,
+            is_default: true,
+            preset_type: PresetType::System,
+        });
+        let _ = ps.save_preset(&PromptPreset {
+            id: "quantifier_default".to_string(),
+            name: "Default Quantifier".to_string(),
+            role: Some("You are a quantifier.".to_string()),
+            instructions: None,
+            writing_style: None,
+            output_format: None,
+            is_default: true,
+            preset_type: PresetType::Quantifier,
+        });
+        Arc::new(ps)
+    };
+
+    let settings = Arc::new(std::sync::RwLock::new(
+        chronicler_engine::domain::model::settings::AppSettings::default(),
+    ));
+
+    let game_service = chronicler_engine::bootstrap::wiring::build_game_service_for_tests(
+        Arc::clone(&settings),
+        Arc::clone(&storage),
+        Arc::clone(&preset_storage),
+    )
+    .expect("build_game_service_for_tests should succeed");
+
+    Arc::new(DefaultApplicationService::new(
+        storage,
+        preset_storage,
+        settings,
+        tokio_util::sync::CancellationToken::new(),
+        Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        Arc::new(game_service),
+    ))
 }

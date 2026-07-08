@@ -87,6 +87,33 @@ fn build_test_context(state: GameState, storage: Arc<Storage>) -> OpContext {
     }
 }
 
+fn build_test_app(
+    state: GameState,
+    storage: Arc<Storage>,
+) -> crate::error::Result<Arc<crate::application::application_service::DefaultApplicationService>> {
+    use crate::application::application_service::DefaultApplicationService;
+
+    let settings = Arc::new(RwLock::new(AppSettings::default()));
+    let preset_storage = default_test_preset_storage();
+
+    let game_service = crate::bootstrap::wiring::build_game_service_for_tests(
+        Arc::clone(&settings),
+        Arc::clone(&storage),
+        Arc::clone(&preset_storage),
+    )?;
+
+    drop(state);
+
+    Ok(Arc::new(DefaultApplicationService::new(
+        storage,
+        preset_storage,
+        settings,
+        tokio_util::sync::CancellationToken::new(),
+        Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        Arc::new(game_service),
+    )))
+}
+
 pub fn make_test_context_with_sqlite(state: GameState) -> crate::error::Result<OpContext> {
     let snapshot = GameStateSnapshot::from_game_state(&state);
     let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:")?;
@@ -115,4 +142,61 @@ pub fn make_test_context_with_sqlite(state: GameState) -> crate::error::Result<O
         settings: Arc::new(RwLock::new(AppSettings::default())),
         preset_storage: default_test_preset_storage(),
     })
+}
+
+#[allow(dead_code)]
+pub fn make_test_app(
+    state: GameState,
+) -> crate::error::Result<Arc<crate::application::application_service::DefaultApplicationService>> {
+    let snapshot = GameStateSnapshot::from_game_state(&state);
+    let storage = Arc::new(Storage::new_in_memory());
+    seed_test_world_into_storage(&storage, &state);
+    let _ = storage.save_snapshot(&snapshot);
+    for msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
+        if let Ok(id) = storage.insert_message(&msg) {
+            for (idx, swipe) in msg.swipes.iter().enumerate() {
+                let _ = storage.insert_swipe(id, swipe, idx);
+            }
+        }
+    }
+
+    build_test_app(state, storage)
+}
+
+#[allow(dead_code)]
+pub fn make_test_app_without_snapshot(
+    state: GameState,
+) -> crate::error::Result<Arc<crate::application::application_service::DefaultApplicationService>> {
+    let storage = Arc::new(Storage::new_in_memory());
+    seed_test_world_into_storage(&storage, &state);
+    for msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
+        if let Ok(id) = storage.insert_message(&msg) {
+            for (idx, swipe) in msg.swipes.iter().enumerate() {
+                let _ = storage.insert_swipe(id, swipe, idx);
+            }
+        }
+    }
+
+    build_test_app(state, storage)
+}
+
+#[allow(dead_code)]
+pub fn make_test_app_with_sqlite(
+    state: GameState,
+) -> crate::error::Result<Arc<crate::application::application_service::DefaultApplicationService>> {
+    let snapshot = GameStateSnapshot::from_game_state(&state);
+    let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:")?;
+    crate::test_support::seed_default_game_row(&db_pool, 1)?;
+    let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
+    seed_test_world_into_storage(&storage, &state);
+    let _ = storage.save_snapshot(&snapshot);
+    for msg in state.narrative.history.iter().cloned().collect::<Vec<_>>() {
+        if let Ok(id) = storage.insert_message(&msg) {
+            for (idx, swipe) in msg.swipes.iter().enumerate() {
+                let _ = storage.insert_swipe(id, swipe, idx);
+            }
+        }
+    }
+
+    build_test_app(state, storage)
 }
