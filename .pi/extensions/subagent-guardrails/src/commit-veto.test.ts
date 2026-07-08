@@ -223,3 +223,76 @@ test("Feature 4: checkout + restore reasons mention branch change + working-tree
 	assert.match(checkoutReason.reason, /change branches/);
 	assert.match(restoreReason.reason, /restore working tree/);
 });
+
+// --- bypass hardening: flag groups between git and verb ---
+
+test("Feature 4: `git --no-pager commit` is blocked (bypass hardening)", () => {
+	const r = checkGitVeto("git --no-pager commit -m x");
+	assert.equal(r.block, true);
+	assert.match(r.reason, /git commit blocked/);
+});
+
+test("Feature 4: `git --no-pager push` is blocked", () => {
+	const r = checkGitVeto("git --no-pager push");
+	assert.equal(r.block, true);
+	assert.match(r.reason, /git push blocked/);
+});
+
+test("Feature 4: `git -c core.editor=true commit` is blocked (was a known bypass)", () => {
+	const r = checkGitVeto("git -c core.editor=true commit -m x");
+	assert.equal(r.block, true);
+});
+
+test("Feature 4: `git -C /tmp/repo commit` is blocked (space-separated flag value)", () => {
+	const r = checkGitVeto("git -C /tmp/repo commit -m x");
+	assert.equal(r.block, true);
+});
+
+test("Feature 4: `git --git-dir=/path commit` is blocked (=value flag form)", () => {
+	const r = checkGitVeto("git --git-dir=/path commit");
+	assert.equal(r.block, true);
+});
+
+test("Feature 4: `git --no-pager -c core.editor=true commit` (two flags) is blocked", () => {
+	const r = checkGitVeto("git --no-pager -c core.editor=true commit -m x");
+	assert.equal(r.block, true);
+});
+
+test("Feature 4: `hub --no-pager commit` is blocked (hub parity)", () => {
+	const r = checkGitVeto("hub --no-pager commit");
+	assert.equal(r.block, true);
+});
+
+test("Feature 4: `git --no-pager stash pop` is blocked (stash bypass hardening)", () => {
+	const r = checkGitVeto("git --no-pager stash pop");
+	assert.equal(r.block, true);
+	assert.match(r.reason, /git stash blocked/);
+});
+
+test("Feature 4: `git --no-pager stash list` is NOT blocked (carve-out survives)", () => {
+	const r = checkGitVeto("git --no-pager stash list");
+	assert.equal(r.block, false);
+});
+
+// --- shell-expansion forms (word-boundary coverage) ---
+
+test("Feature 4: command substitution `$(git --no-pager commit)` is blocked", () => {
+	assert.equal(checkGitVeto("echo $(git --no-pager commit -m x)").block, true);
+});
+
+test("Feature 4: backtick `git --no-pager push` is blocked", () => {
+	assert.equal(checkGitVeto("echo `git --no-pager push`").block, true);
+});
+
+// --- non-regression: read-only commands stay unblocked with flags ---
+
+for (const cmd of [
+	"git --no-pager log --oneline -10",
+	"git --no-pager diff --stat",
+	"git -C /tmp/repo status",
+	"git -c color.ui=always log",
+]) {
+	test(`Feature 4: \`${cmd}\` is NOT blocked`, () => {
+		assert.equal(checkGitVeto(cmd).block, false);
+	});
+}
