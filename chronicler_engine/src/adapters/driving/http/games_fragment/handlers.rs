@@ -9,9 +9,7 @@ use axum::{
 
 use crate::domain::model::game::Game;
 use crate::adapters::driving::http::AppState;
-use crate::adapters::driving::http::op_context_loader::load_op_context;
 use crate::application::application_service::ApplicationError;
-use crate::application::context::OpContext;
 
 use crate::adapters::driving::http::fragments::renderers::{internal_error, ok, ok_refresh};
 use crate::adapters::driving::http::games_fragment::template::{
@@ -29,13 +27,13 @@ fn game_to_view(g: Game) -> GameRowView {
 
 pub async fn list_games_fragment(
     State(state): State<AppState>,
-    ctx: OpContext,
 ) -> Response<axum::body::Body> {
-    let Ok(games) = state.application_service.list_games(ctx.clone()) else {
+    let app = &state.application_service;
+    let Ok(games) = app.list_games() else {
         return internal_error("Failed to list games");
     };
 
-    let active_id = state.application_service.current_game_id(ctx.clone());
+    let active_id = app.current_game_id();
     let mut active_game = None;
     let saved_games: Vec<_> = games
         .into_iter()
@@ -49,11 +47,11 @@ pub async fn list_games_fragment(
         })
         .collect();
 
-    let Ok(worlds) = state.application_service.list_worlds(ctx.clone()) else {
+    let Ok(worlds) = app.list_worlds() else {
         return internal_error("Failed to list worlds");
     };
 
-    let personas: Vec<PersonaRowView> = match ctx.storage.list_personas() {
+    let personas: Vec<PersonaRowView> = match app.list_personas() {
         Ok(p) => p,
         Err(e) => {
             tracing::warn!("Failed to load personas: {e}");
@@ -87,30 +85,24 @@ pub async fn create_game_handler(
     State(state): State<AppState>,
     Form(form): Form<CreateGameForm>,
 ) -> Result<Response, ApplicationError> {
-    let ctx = load_op_context(&state, &form.world_key, &form.persona_key).map_err(|e| {
-        ApplicationError::validation(format!(
-            "Failed to build context for world '{}' / persona '{}': {e}",
-            form.world_key, form.persona_key
-        ))
-    })?;
-    state.application_service.create_game(ctx)?;
+    state
+        .application_service
+        .create_game(&form.world_key, &form.persona_key)?;
     Ok(ok_refresh())
 }
 
 pub async fn switch_game_handler(
     State(state): State<AppState>,
     Path(id): Path<u64>,
-    ctx: OpContext,
 ) -> Result<Response, ApplicationError> {
-    state.application_service.switch_game(ctx, id)?;
+    state.application_service.switch_game(id)?;
     Ok(ok_refresh())
 }
 
 pub async fn delete_game_handler(
     State(state): State<AppState>,
     Path(id): Path<u64>,
-    ctx: OpContext,
 ) -> Result<Response, ApplicationError> {
-    state.application_service.delete_game(ctx, id)?;
+    state.application_service.delete_game(id)?;
     Ok(ok(""))
 }

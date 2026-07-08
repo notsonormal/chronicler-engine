@@ -346,6 +346,16 @@ pub fn seed_test_world(storage: &Storage) {
         .expect("seed persona");
 }
 
+pub fn seed_test_world_with_scenario(storage: &Storage) {
+    let world = create_test_world_with_scenario();
+    let map = create_test_map();
+    storage.seed_world(&world, &map).expect("seed world with scenario");
+    let player = chronicler_engine::test_support::TestPlayer::standard();
+    storage
+        .seed_persona(&player.key, &player)
+        .expect("seed persona");
+}
+
 pub fn make_test_ctx(storage: Arc<Storage>, state: GameState) -> OpContext {
     OpContext {
         storage,

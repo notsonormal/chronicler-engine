@@ -138,6 +138,10 @@ impl DefaultApplicationService {
         &self.game_service
     }
 
+    pub fn is_generating(&self) -> &Arc<AtomicBool> {
+        &self.is_generating
+    }
+
     #[cfg(test)]
     #[allow(dead_code)]
     pub(crate) fn load_state_for_test(&self) -> GameState {
@@ -340,34 +344,42 @@ impl DefaultApplicationService {
         self.process_action(ctx, String::new())
     }
 
-    pub fn create_game(&self, ctx: OpContext) -> Result<u64, ApplicationError> {
-        if ctx.is_generating.load(Ordering::SeqCst) {
+    pub fn create_game(
+        &self,
+        world_key: &str,
+        persona_key: &str,
+    ) -> Result<u64, ApplicationError> {
+        if self.is_generating.load(Ordering::SeqCst) {
             return Err(ApplicationError::ConcurrentGeneration);
         }
 
-        let world_with_map = ctx
+        let world_with_map = self
             .storage
-            .get_world(&ctx.world_snapshot.world.key)?
+            .get_world(world_key)?
             .ok_or_else(|| ApplicationError::validation("World not found"))?;
         let world_name = world_with_map.world_card.name.clone();
-        let games = ctx.storage.list_games()?;
+        let player = self
+            .storage
+            .get_persona(persona_key)?
+            .ok_or_else(|| ApplicationError::validation("Persona not found"))?;
+        let games = self.storage.list_games()?;
         let existing_names: Vec<String> = games.iter().map(|g| g.name.clone()).collect();
         let name = generate_game_name(&world_name, &existing_names);
 
-        let new_id = ctx.storage.create_game(
+        let new_id = self.storage.create_game(
             &world_name,
-            &ctx.world_snapshot.world.key,
-            &ctx.world_snapshot.player.key,
-            &ctx.world_snapshot.player.sheet.name,
+            world_key,
+            persona_key,
+            &player.sheet.name,
             &name,
         )?;
-        let old_id = ctx.storage.current_game_id();
-        ctx.set_game_id(new_id);
+        let old_id = self.storage.current_game_id();
+        self.set_game_id(new_id);
 
-        match Self::persist_initial_state_with_swipes(&ctx) {
+        match self.persist_initial_state_with_swipes() {
             Ok(_) => {}
             Err(e) => {
-                ctx.set_game_id(old_id);
+                self.set_game_id(old_id);
                 return Err(e);
             }
         }
@@ -375,49 +387,63 @@ impl DefaultApplicationService {
         Ok(new_id)
     }
 
-    pub fn switch_game(&self, ctx: OpContext, id: u64) -> Result<(), ApplicationError> {
-        if ctx.is_generating.load(Ordering::SeqCst) {
+    pub fn switch_game(&self, id: u64) -> Result<(), ApplicationError> {
+        if self.is_generating.load(Ordering::SeqCst) {
             return Err(ApplicationError::ConcurrentGeneration);
         }
 
-        if ctx.storage.get_game(id)?.is_none() {
+        if self.storage.get_game(id)?.is_none() {
             return Err(ApplicationError::validation("Game not found"));
         }
 
-        ctx.set_game_id(id);
+        self.set_game_id(id);
         Ok(())
     }
 
-    pub fn delete_game(&self, ctx: OpContext, id: u64) -> Result<(), ApplicationError> {
-        if ctx.is_generating.load(Ordering::SeqCst) {
+    pub fn delete_game(&self, id: u64) -> Result<(), ApplicationError> {
+        if self.is_generating.load(Ordering::SeqCst) {
             return Err(ApplicationError::ConcurrentGeneration);
         }
 
-        if id == ctx.storage.current_game_id() {
+        if id == self.storage.current_game_id() {
             return Err(ApplicationError::validation(
                 "Cannot delete the active game",
             ));
         }
-        ctx.storage.delete_game(id)?;
+        self.storage.delete_game(id)?;
         Ok(())
     }
 
-    pub fn list_games(&self, ctx: OpContext) -> Result<Vec<Game>, ApplicationError> {
-        ctx.storage.list_games().map_err(Into::into)
+    pub fn list_games(&self) -> Result<Vec<Game>, ApplicationError> {
+        self.storage.list_games().map_err(Into::into)
     }
 
-    pub fn current_game_id(&self, ctx: OpContext) -> u64 {
-        ctx.storage.current_game_id()
+    pub fn current_game_id(&self) -> u64 {
+        self.storage.current_game_id()
     }
 
-    pub fn reset(&self, ctx: OpContext) -> Result<(), ApplicationError> {
-        let current_id = ctx.storage.current_game_id();
-        let world_key = ctx.world_snapshot.world.key.clone();
-        let world_name = ctx.world_snapshot.world.name.clone();
+    pub fn reset(&self) -> Result<(), ApplicationError> {
+        let current_id = self.storage.current_game_id();
+        let game = self
+            .storage
+            .get_game(current_id)?
+            .ok_or_else(|| ApplicationError::validation("Current game not found"))?;
+        let world_key = game.world_key.clone();
+        let persona_key = game.persona_key.clone();
 
-        ctx.storage.delete_game(current_id)?;
+        let world_with_map = self
+            .storage
+            .get_world(&world_key)?
+            .ok_or_else(|| ApplicationError::validation("World not found"))?;
+        let world_name = world_with_map.world_card.name.clone();
+        let player = self
+            .storage
+            .get_persona(&persona_key)?
+            .ok_or_else(|| ApplicationError::validation("Persona not found"))?;
 
-        let existing_names: Vec<String> = ctx
+        self.storage.delete_game(current_id)?;
+
+        let existing_names: Vec<String> = self
             .storage
             .list_games()?
             .into_iter()
@@ -426,72 +452,73 @@ impl DefaultApplicationService {
             .collect();
 
         let new_name = generate_game_name(&world_name, &existing_names);
-        let new_id = ctx.storage.create_game(
+        let new_id = self.storage.create_game(
             &world_name,
             &world_key,
-            &ctx.world_snapshot.player.key,
-            &ctx.world_snapshot.player.sheet.name,
+            &persona_key,
+            &player.sheet.name,
             &new_name,
         )?;
-        ctx.set_game_id(new_id);
+        self.set_game_id(new_id);
 
-        let _ = Self::persist_initial_state_with_swipes(&ctx);
+        let _ = self.persist_initial_state_with_swipes();
 
         Ok(())
     }
 
-    pub fn list_worlds(&self, ctx: OpContext) -> Result<Vec<WorldCard>, ApplicationError> {
-        ctx.storage.list_worlds().map_err(Into::into)
+    pub fn list_worlds(&self) -> Result<Vec<WorldCard>, ApplicationError> {
+        self.storage.list_worlds().map_err(Into::into)
     }
 
     pub fn get_world(
         &self,
-        ctx: OpContext,
         key: &str,
     ) -> Result<Option<WorldWithMap>, ApplicationError> {
-        ctx.storage.get_world(key).map_err(Into::into)
+        self.storage.get_world(key).map_err(Into::into)
     }
 
     pub fn create_world(
         &self,
-        ctx: OpContext,
         world_card: WorldCard,
         map: MapDef,
     ) -> Result<i64, ApplicationError> {
-        ctx.storage
+        self.storage
             .create_world(&world_card, &map)
             .map_err(Into::into)
     }
 
     pub fn update_world(
         &self,
-        ctx: OpContext,
         id: i64,
         world_card: WorldCard,
         map: MapDef,
     ) -> Result<(), ApplicationError> {
-        ctx.storage
+        self.storage
             .update_world(id, &world_card, &map)
             .map_err(Into::into)
     }
 
-    pub fn delete_world(&self, ctx: OpContext, key: &str) -> Result<(), ApplicationError> {
-        ctx.storage.delete_world(key).map_err(Into::into)
+    pub fn delete_world(&self, key: &str) -> Result<(), ApplicationError> {
+        self.storage.delete_world(key).map_err(Into::into)
     }
 
-    fn persist_initial_state_with_swipes(ctx: &OpContext) -> Result<u64, ApplicationError> {
-        let mut initial_state = ctx.build_fresh_initial_state();
+    pub fn list_personas(&self) -> Result<Vec<crate::domain::model::character::PlayerCard>, ApplicationError> {
+        self.storage.list_personas().map_err(Into::into)
+    }
+
+    fn persist_initial_state_with_swipes(&self) -> Result<u64, ApplicationError> {
+        let mut initial_state = self.build_fresh_initial_state()?;
         let snapshot = GameStateSnapshot::from_game_state(&initial_state);
-        let snapshot_id = ctx.storage.save_snapshot(&snapshot)?;
+        let snapshot_id = self.storage.save_snapshot(&snapshot)?;
 
         if let Some(msg) = initial_state.narrative.history.last_mut() {
             if msg.is_unpersisted() {
                 msg.set_snapshot_id(Some(snapshot_id));
-                match ctx.storage.insert_message(&*msg) {
+                match self.storage.insert_message(&*msg) {
                     Ok(id) => {
                         msg.id = id;
                         for (index, swipe) in msg.swipes.iter().enumerate() {
-                            if let Err(e) = ctx.storage.insert_swipe(id, swipe, index) {
+                            if let Err(e) = self.storage.insert_swipe(id, swipe, index) {
                                 tracing::error!("persist_initial_state: swipe {index} failed: {e}");
                             }
                         }

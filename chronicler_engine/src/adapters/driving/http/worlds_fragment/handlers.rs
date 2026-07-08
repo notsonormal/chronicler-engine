@@ -8,7 +8,6 @@ use crate::domain::model::map::MapDef;
 use crate::domain::model::scenario::StartingScenario;
 use crate::domain::model::world::WorldCard;
 use crate::adapters::driving::http::AppState;
-use crate::application::context::OpContext;
 
 use super::fragments::{render_world_edit_form, render_worlds_panel};
 use crate::adapters::driving::http::fragments::{bad_request, internal_error, ok, render_error};
@@ -18,7 +17,7 @@ pub struct WorldForm {
     pub key: String,
     pub name: String,
     pub description: String,
-    pub global_rules: String, // One rule per line
+    pub global_rules: String,
     pub default_room_image: Option<String>,
     pub map_json: String,
     pub scenarios_json: String,
@@ -53,25 +52,25 @@ impl WorldForm {
     }
 }
 
+fn games_per_world(games: &[crate::domain::model::game::Game]) -> std::collections::HashMap<String, usize> {
+    let mut map: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    for game in games {
+        *map.entry(game.world_key.clone()).or_insert(0) += 1;
+    }
+    map
+}
+
 pub async fn list_worlds_fragment(
     State(state): State<AppState>,
-    ctx: OpContext,
 ) -> Response<axum::body::Body> {
-    let worlds = match state.application_service.list_worlds(ctx.clone()) {
+    let app = &state.application_service;
+    let worlds = match app.list_worlds() {
         Ok(w) => w,
         Err(e) => return internal_error(format!("Failed to load worlds: {e}")),
     };
 
-    let games = state
-        .application_service
-        .list_games(ctx)
-        .unwrap_or_default();
-
-    let mut games_per_world: std::collections::HashMap<String, usize> =
-        std::collections::HashMap::new();
-    for game in &games {
-        *games_per_world.entry(game.world_key.clone()).or_insert(0) += 1;
-    }
+    let games = app.list_games().unwrap_or_default();
+    let games_per_world = games_per_world(&games);
 
     let html = render_worlds_panel(&worlds, &games_per_world);
     ok(html)
@@ -79,29 +78,19 @@ pub async fn list_worlds_fragment(
 
 pub async fn create_world_handler(
     State(state): State<AppState>,
-    ctx: OpContext,
     Form(form): Form<WorldForm>,
 ) -> Response<axum::body::Body> {
+    let app = &state.application_service;
     let (world_card, map) = match form.into_world_card() {
         Ok(w) => w,
         Err(e) => return bad_request(e),
     };
 
-    match state
-        .application_service
-        .create_world(ctx.clone(), world_card, map)
-    {
+    match app.create_world(world_card, map) {
         Ok(_) => {
-            let worlds = state.application_service.list_worlds(ctx.clone());
-            let games = state
-                .application_service
-                .list_games(ctx)
-                .unwrap_or_default();
-            let mut games_per_world: std::collections::HashMap<String, usize> =
-                std::collections::HashMap::new();
-            for game in &games {
-                *games_per_world.entry(game.world_key.clone()).or_insert(0) += 1;
-            }
+            let worlds = app.list_worlds();
+            let games = app.list_games().unwrap_or_default();
+            let games_per_world = games_per_world(&games);
             ok(render_worlds_panel(
                 &worlds.unwrap_or_default(),
                 &games_per_world,
@@ -118,9 +107,8 @@ pub async fn new_world_form_handler(State(_state): State<AppState>) -> Response<
 pub async fn edit_world_form_handler(
     State(state): State<AppState>,
     Path(key): Path<String>,
-    ctx: OpContext,
 ) -> Response<axum::body::Body> {
-    let world_with_map = match state.application_service.get_world(ctx.clone(), &key) {
+    let world_with_map = match state.application_service.get_world(&key) {
         Ok(Some(w)) => w,
         Ok(None) => return bad_request(format!("World '{key}' not found")),
         Err(e) => return internal_error(format!("Failed to load world: {e}")),
@@ -137,10 +125,10 @@ pub async fn edit_world_form_handler(
 pub async fn update_world_handler(
     State(state): State<AppState>,
     Path(key): Path<String>,
-    ctx: OpContext,
     Form(form): Form<WorldForm>,
 ) -> Response<axum::body::Body> {
-    let world_with_map = match state.application_service.get_world(ctx.clone(), &key) {
+    let app = &state.application_service;
+    let world_with_map = match app.get_world(&key) {
         Ok(Some(w)) => w,
         Ok(None) => return bad_request(format!("World '{key}' not found")),
         Err(e) => return internal_error(format!("Failed to load world: {e}")),
@@ -153,23 +141,11 @@ pub async fn update_world_handler(
 
     world_card.key = key;
 
-    match state.application_service.update_world(
-        ctx.clone(),
-        world_with_map.world_id,
-        world_card,
-        map,
-    ) {
+    match app.update_world(world_with_map.world_id, world_card, map) {
         Ok(()) => {
-            let worlds = state.application_service.list_worlds(ctx.clone());
-            let games = state
-                .application_service
-                .list_games(ctx)
-                .unwrap_or_default();
-            let mut games_per_world: std::collections::HashMap<String, usize> =
-                std::collections::HashMap::new();
-            for game in &games {
-                *games_per_world.entry(game.world_key.clone()).or_insert(0) += 1;
-            }
+            let worlds = app.list_worlds();
+            let games = app.list_games().unwrap_or_default();
+            let games_per_world = games_per_world(&games);
             ok(render_worlds_panel(
                 &worlds.unwrap_or_default(),
                 &games_per_world,
@@ -182,9 +158,8 @@ pub async fn update_world_handler(
 pub async fn delete_world_handler(
     State(state): State<AppState>,
     Path(key): Path<String>,
-    ctx: OpContext,
 ) -> Response<axum::body::Body> {
-    match state.application_service.delete_world(ctx, &key) {
+    match state.application_service.delete_world(&key) {
         Ok(()) => ok(""),
         Err(e) if e.is_user_displayable() => {
             let error_html = render_error(&e.to_string());

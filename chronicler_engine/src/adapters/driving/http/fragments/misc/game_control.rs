@@ -8,11 +8,9 @@ use crate::adapters::driving::http::fragments::renderers::{
     internal_error, ok_refresh, service_unavailable_generating,
 };
 use crate::application::application_service::ApplicationError;
-use crate::application::context::OpContext;
 
 pub async fn reset_handler(
     State(state): State<AppState>,
-    ctx: OpContext,
 ) -> Result<axum::response::Response<Body>, ApplicationError> {
     if state
         .is_generating
@@ -23,7 +21,7 @@ pub async fn reset_handler(
 
     state.current_cancel_token().cancel();
 
-    match state.application_service.reset(ctx) {
+    match state.application_service.reset() {
         Ok(()) => {
             state
                 .is_generating

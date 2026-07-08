@@ -27,7 +27,7 @@ fn test_create_game_integration() {
     let app_service = make_app(&ctx, game_service);
 
     let game_id = app_service
-        .create_game(ctx.clone())
+        .create_game(&ctx.world_snapshot.world.key, "hero")
         .expect("create_game should succeed");
     assert!(game_id > 0, "Game ID should be positive");
 
@@ -45,16 +45,16 @@ fn test_switch_game_integration() {
 
     let app_service = make_app(&ctx, game_service);
 
-    let id1 = app_service.create_game(ctx.clone()).expect("create_game 1");
-    let id2 = app_service.create_game(ctx.clone()).expect("create_game 2");
+    let id1 = app_service.create_game(&ctx.world_snapshot.world.key, "hero").expect("create_game 1");
+    let id2 = app_service.create_game(&ctx.world_snapshot.world.key, "hero").expect("create_game 2");
 
     app_service
-        .switch_game(ctx.clone(), id1)
+        .switch_game(id1)
         .expect("switch_game");
     assert_eq!(storage.current_game_id(), id1);
 
     app_service
-        .switch_game(ctx.clone(), id2)
+        .switch_game(id2)
         .expect("switch_game");
     assert_eq!(storage.current_game_id(), id2);
 }
@@ -69,11 +69,11 @@ fn test_delete_game_integration() {
 
     let app_service = make_app(&ctx, game_service);
 
-    let id1 = app_service.create_game(ctx.clone()).expect("create_game 1");
-    app_service.create_game(ctx.clone()).expect("create_game 2");
+    let id1 = app_service.create_game(&ctx.world_snapshot.world.key, "hero").expect("create_game 1");
+    app_service.create_game(&ctx.world_snapshot.world.key, "hero").expect("create_game 2");
 
     app_service
-        .delete_game(ctx.clone(), id1)
+        .delete_game(id1)
         .expect("delete_game");
 
     let deleted = storage.get_game(id1).unwrap();
@@ -90,10 +90,10 @@ fn test_list_games_integration() {
 
     let app_service = make_app(&ctx, game_service);
 
-    app_service.create_game(ctx.clone()).unwrap();
-    app_service.create_game(ctx.clone()).unwrap();
+    app_service.create_game(&ctx.world_snapshot.world.key, "hero").unwrap();
+    app_service.create_game(&ctx.world_snapshot.world.key, "hero").unwrap();
 
-    let games = app_service.list_games(ctx.clone()).unwrap();
+    let games = app_service.list_games().unwrap();
     assert!(games.len() >= 2, "Should list all games");
 }
 
