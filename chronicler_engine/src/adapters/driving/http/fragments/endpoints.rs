@@ -107,15 +107,11 @@ pub async fn generating_status_handler(State(state): State<AppState>) -> Html<St
 }
 
 pub async fn reset_generating_handler(State(state): State<AppState>) -> Html<String> {
-    let ctx = match crate::adapters::driving::http::op_context_loader::load_op_context_for_active_game(&state) {
-        Ok(ctx) => ctx,
-        Err(e) => {
-            tracing::error!("reset_generating_handler: load_op_context failed: {e}");
-            return Html("failed".to_string());
-        }
-    };
-    match query_handlers::reset_generating_status(ctx) {
+    match query_handlers::reset_generating_status(&state.application_service) {
         Ok(()) => Html("reset".to_string()),
-        Err(_) => Html("failed".to_string()),
+        Err(e) => {
+            tracing::error!("reset_generating_handler: {e}");
+            Html("failed".to_string())
+        }
     }
 }

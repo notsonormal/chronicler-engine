@@ -14,9 +14,9 @@ pub struct DebugBackendResponse {
 }
 
 pub async fn debug_state_handler(
-    ctx: crate::application::OpContext,
+    State(state): State<AppState>,
 ) -> Result<Json<crate::application::DebugStateView>, StatusCode> {
-    query_handlers::get_debug_state(ctx)
+    query_handlers::get_debug_state(&state.application_service)
         .map(Json)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
 }
