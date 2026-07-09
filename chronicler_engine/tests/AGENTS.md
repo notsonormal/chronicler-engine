@@ -59,6 +59,9 @@ Examples:
         - `actions.rs` — Integration tests for the action pipeline: verifies that user actions are persisted to state, that narrations from the LLM are stored, and that error paths (room not found, LLM failure) are surfaced gracefully.
         - `pipeline.rs` — Integration tests for the action pipeline: delayed LLM completion, quantifier detection of movement and NPCs (with trigger firing), and graceful handling of empty LLM responses.
         - `retry.rs` — Integration tests for action retry behaviour: re-running the pipeline against the last user input, no-op on empty history, recovery after a previous LLM failure, and the missing-snapshot error path.
+    - **bootstrap/**
+      - `mod.rs` — Bootstrap startup-branch smoke tests for `bootstrap::run()`.
+      - `run_branches.rs` — Smoke tests covering uncovered startup branches in `bootstrap::run()`.
     - **flow/**
       - `arrival_persistence.rs` — Integration flow tests for arrival narration persistence — confirms the arrival narration survives a state reload, exercising the `ArrivalTaskContext` end-to-end against SQLite storage.
       - `retry_event.rs` — Integration flow tests for the retry-event handler: no extra swipe on narration retry, quantifier-result preservation on continuation, and trigger continuations re-running the quantifier to detect newly-relevant NPCs.

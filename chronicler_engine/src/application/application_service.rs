@@ -1,54 +1,31 @@
 //! [DOC: docs/system/game_flow.md]
-//! Main application service coordinating game operations
-//! arch-lint: storage-direct — intentional, see ADR-027
+//! DefaultApplicationService — thin façade over 4 cohesive modules plus 2 collaborator fields (T2 ticket 04 — final façade shrink).
 
-use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
 
-use serde::Serialize;
 use tokio_util::sync::CancellationToken;
 
+use crate::adapters::driven::storage::worlds::WorldWithMap;
+use crate::adapters::driven::storage::{PresetStore, Storage};
+pub use crate::application::debug::DebugStateView;
+pub use crate::application::errors::{ApplicationError, ProcessActionResult};
+use crate::application::game_catalogue::GameCatalogue;
 use crate::application::game_service::GameService;
 use crate::application::generation_gate::GenerationGate;
-use crate::application::persistence_gate::PersistenceGate;
-
-use crate::error::{EngineError, LlmFailure};
-use crate::domain::model::game::{Game, generate_game_name};
+pub use crate::application::mappers::map_llm_error;
+use crate::application::persistence_gate::{PersistenceGate, WorldSnapshot};
+use crate::application::world_catalogue::WorldCatalogue;
+use crate::domain::model::character::PlayerCard;
+use crate::domain::model::game::Game;
+use crate::domain::model::map::MapDef;
 use crate::domain::model::message::Message;
 use crate::domain::model::settings::AppSettings;
-
-use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
-use crate::domain::model::state::message_types::MessageEntry;
-use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::domain::model::state::game_state::GameState;
-use crate::domain::model::trigger::NpcEncounterState;
 use crate::domain::model::world::WorldCard;
-use crate::domain::model::map::MapDef;
-use crate::application::narrative_prompt::assembler::assemble_prompt_text;
-use crate::adapters::driven::storage::{PresetStore, Storage};
-use crate::adapters::driven::storage::worlds::WorldWithMap;
-use crate::application::persistence_gate::WorldSnapshot;
+use crate::error::EngineError;
 
-pub fn map_llm_error(e: &EngineError) -> String {
-    match e {
-        EngineError::Llm(LlmFailure::Timeout) => "LLM Error: request timed out".to_string(),
-        EngineError::Llm(LlmFailure::Network { url, detail }) => {
-            format!("LLM Error: network error ({url}) \u{2014} {detail}")
-        }
-        EngineError::Llm(LlmFailure::ParseError {
-            expected_format, ..
-        }) => {
-            format!("LLM Error: unexpected response format (expected {expected_format})")
-        }
-        EngineError::Llm(LlmFailure::EmptyResponse) => "LLM Error: empty response".to_string(),
-        EngineError::Llm(LlmFailure::Http { status, body }) => {
-            format!("LLM Error: HTTP {status} \u{2014} {body}")
-        }
-        EngineError::Narrative(nf) => format!("LLM Error: {nf}"),
-        _ => format!("LLM Error: {e}"),
-    }
-}
+use crate::application::narrative_prompt::assembler::assemble_prompt_text;
 
 pub fn load_messages_with_swipes(storage: &Storage) -> Result<Vec<Message>, EngineError> {
     let mut messages = storage.load_message_rows()?;
@@ -71,89 +48,14 @@ pub fn load_messages_with_swipes(storage: &Storage) -> Result<Vec<Message>, Engi
     Ok(messages)
 }
 
-pub enum ApplicationError {
-    Validation(String),
-    Engine(EngineError),
-    ShuttingDown,
-    ConcurrentGeneration,
-}
-
-impl ApplicationError {
-    pub fn validation(msg: impl Into<String>) -> Self {
-        Self::Validation(msg.into())
-    }
-
-    pub fn is_user_displayable(&self) -> bool {
-        matches!(
-            self,
-            Self::Validation(_) | Self::Engine(EngineError::WorldHasGames { .. })
-        )
-    }
-}
-
-impl std::fmt::Display for ApplicationError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Validation(msg) => write!(f, "{msg}"),
-            Self::Engine(e) => write!(f, "{e}"),
-            Self::ShuttingDown => write!(f, "Server is shutting down"),
-            Self::ConcurrentGeneration => write!(f, "Generation in progress"),
-        }
-    }
-}
-
-impl std::fmt::Debug for ApplicationError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Display::fmt(self, f)
-    }
-}
-
-impl std::error::Error for ApplicationError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::Engine(e) => Some(e),
-            _ => None,
-        }
-    }
-}
-
-impl From<EngineError> for ApplicationError {
-    fn from(e: EngineError) -> Self {
-        Self::Engine(e)
-    }
-}
-
-pub enum ProcessActionResult {
-    Started,
-    ConcurrentGeneration,
-    ShuttingDown,
-}
-
-#[derive(Clone, Serialize)]
-pub struct DebugStateView {
-    pub current_room_id: String,
-    pub npcs_in_area: Vec<String>,
-    pub generation_status: GenerationStatus,
-    pub generation_phase: GenerationPhase,
-    pub npc_encounter_log: HashMap<String, NpcEncounterState>,
-    pub narration_history_tail: Vec<MessageEntry>,
-    pub narration_history_length: usize,
-    pub dynamic_rooms: Vec<String>,
-    pub dynamic_room_count: usize,
-    pub last_error: Option<String>,
-    pub quantifier_confidence: Option<String>,
-    pub backend_name: Option<String>,
-    pub model_name: Option<String>,
-}
-
 #[derive(Clone)]
 #[allow(dead_code)]
 pub struct DefaultApplicationService {
-    pub(crate) storage: Arc<Storage>,
-    pub(crate) preset_storage: Arc<PresetStore>,
     pub(crate) persistence_gate: Arc<PersistenceGate>,
-    pub(crate) settings: Arc<RwLock<AppSettings>>,
     pub(crate) generation_gate: GenerationGate,
+    pub(crate) game_catalogue: GameCatalogue,
+    pub(crate) world_catalogue: WorldCatalogue,
+    pub(crate) settings: Arc<RwLock<AppSettings>>,
     pub(crate) game_service: Arc<GameService>,
 }
 
@@ -166,18 +68,20 @@ impl DefaultApplicationService {
         is_generating: Arc<AtomicBool>,
         game_service: Arc<GameService>,
     ) -> Self {
-        let preset_storage = Arc::new(PresetStore::new(preset_storage));
+        let preset_store = Arc::new(PresetStore::new(preset_storage));
         let persistence_gate = Arc::new(PersistenceGate::new(
             Arc::clone(&storage),
-            Arc::clone(&preset_storage),
+            Arc::clone(&preset_store),
         ));
-        let generation_gate = GenerationGate::new(cancel_token, is_generating);
+        let generation_gate = GenerationGate::new(cancel_token, Arc::clone(&is_generating));
+        let game_catalogue = GameCatalogue::new(Arc::clone(&persistence_gate), is_generating);
+        let world_catalogue = WorldCatalogue::new(storage);
         Self {
-            storage,
-            preset_storage,
             persistence_gate,
-            settings,
             generation_gate,
+            game_catalogue,
+            world_catalogue,
+            settings,
             game_service,
         }
     }
@@ -187,7 +91,7 @@ impl DefaultApplicationService {
     }
 
     pub fn storage(&self) -> &Arc<Storage> {
-        &self.storage
+        self.persistence_gate.storage()
     }
 
     pub fn is_generating(&self) -> &Arc<AtomicBool> {
@@ -203,7 +107,7 @@ impl DefaultApplicationService {
     }
 
     pub fn preset_storage(&self) -> &Arc<PresetStore> {
-        &self.preset_storage
+        self.persistence_gate.preset_store()
     }
 
     pub(crate) fn load_world_snapshot(&self) -> Result<WorldSnapshot, EngineError> {
@@ -259,7 +163,7 @@ impl DefaultApplicationService {
             let settings = self.settings.read().unwrap_or_else(|e| e.into_inner());
             settings.active_quantifier_prompt_preset_id.clone()
         };
-        match self.preset_storage.get_preset(&preset_id) {
+        match self.preset_storage().get_preset(&preset_id) {
             Ok(Some(preset)) => assemble_prompt_text(&preset, &[], None),
             Ok(None) => {
                 tracing::error!(
@@ -313,129 +217,35 @@ impl DefaultApplicationService {
     }
 
     pub fn create_game(&self, world_key: &str, persona_key: &str) -> Result<u64, ApplicationError> {
-        if self.is_generating().load(Ordering::SeqCst) {
-            return Err(ApplicationError::ConcurrentGeneration);
-        }
-
-        let world_with_map = self
-            .storage
-            .get_world(world_key)?
-            .ok_or_else(|| ApplicationError::validation("World not found"))?;
-        let world_name = world_with_map.world_card.name.clone();
-        let player = self
-            .storage
-            .get_persona(persona_key)?
-            .ok_or_else(|| ApplicationError::validation("Persona not found"))?;
-        let games = self.storage.list_games()?;
-        let existing_names: Vec<String> = games.iter().map(|g| g.name.clone()).collect();
-        let name = generate_game_name(&world_name, &existing_names);
-
-        let new_id = self.storage.create_game(
-            &world_name,
-            world_key,
-            persona_key,
-            &player.sheet.name,
-            &name,
-        )?;
-        let old_id = self.storage.current_game_id();
-        self.set_game_id(new_id);
-
-        match self.persist_initial_state_with_swipes() {
-            Ok(_) => {}
-            Err(e) => {
-                self.set_game_id(old_id);
-                return Err(e);
-            }
-        }
-
-        Ok(new_id)
+        self.game_catalogue.create_game(world_key, persona_key)
     }
 
     pub fn switch_game(&self, id: u64) -> Result<(), ApplicationError> {
-        if self.is_generating().load(Ordering::SeqCst) {
-            return Err(ApplicationError::ConcurrentGeneration);
-        }
-
-        if self.storage.get_game(id)?.is_none() {
-            return Err(ApplicationError::validation("Game not found"));
-        }
-
-        self.set_game_id(id);
-        Ok(())
+        self.game_catalogue.switch_game(id)
     }
 
     pub fn delete_game(&self, id: u64) -> Result<(), ApplicationError> {
-        if self.is_generating().load(Ordering::SeqCst) {
-            return Err(ApplicationError::ConcurrentGeneration);
-        }
-
-        if id == self.storage.current_game_id() {
-            return Err(ApplicationError::validation(
-                "Cannot delete the active game",
-            ));
-        }
-        self.storage.delete_game(id)?;
-        Ok(())
+        self.game_catalogue.delete_game(id)
     }
 
     pub fn list_games(&self) -> Result<Vec<Game>, ApplicationError> {
-        self.storage.list_games().map_err(Into::into)
+        self.game_catalogue.list_games()
     }
 
     pub fn current_game_id(&self) -> u64 {
-        self.storage.current_game_id()
+        self.game_catalogue.current_game_id()
     }
 
     pub fn reset(&self) -> Result<(), ApplicationError> {
-        let current_id = self.storage.current_game_id();
-        let game = self
-            .storage
-            .get_game(current_id)?
-            .ok_or_else(|| ApplicationError::validation("Current game not found"))?;
-        let world_key = game.world_key.clone();
-        let persona_key = game.persona_key.clone();
-
-        let world_with_map = self
-            .storage
-            .get_world(&world_key)?
-            .ok_or_else(|| ApplicationError::validation("World not found"))?;
-        let world_name = world_with_map.world_card.name.clone();
-        let player = self
-            .storage
-            .get_persona(&persona_key)?
-            .ok_or_else(|| ApplicationError::validation("Persona not found"))?;
-
-        self.storage.delete_game(current_id)?;
-
-        let existing_names: Vec<String> = self
-            .storage
-            .list_games()?
-            .into_iter()
-            .filter(|g| g.world_key == world_key)
-            .map(|g| g.name)
-            .collect();
-
-        let new_name = generate_game_name(&world_name, &existing_names);
-        let new_id = self.storage.create_game(
-            &world_name,
-            &world_key,
-            &persona_key,
-            &player.sheet.name,
-            &new_name,
-        )?;
-        self.set_game_id(new_id);
-
-        let _ = self.persist_initial_state_with_swipes();
-
-        Ok(())
+        self.game_catalogue.reset()
     }
 
     pub fn list_worlds(&self) -> Result<Vec<WorldCard>, ApplicationError> {
-        self.storage.list_worlds().map_err(Into::into)
+        self.world_catalogue.list_worlds()
     }
 
     pub fn get_world(&self, key: &str) -> Result<Option<WorldWithMap>, ApplicationError> {
-        self.storage.get_world(key).map_err(Into::into)
+        self.world_catalogue.get_world(key)
     }
 
     pub fn create_world(
@@ -443,9 +253,7 @@ impl DefaultApplicationService {
         world_card: WorldCard,
         map: MapDef,
     ) -> Result<i64, ApplicationError> {
-        self.storage
-            .create_world(&world_card, &map)
-            .map_err(Into::into)
+        self.world_catalogue.create_world(world_card, map)
     }
 
     pub fn update_world(
@@ -454,45 +262,14 @@ impl DefaultApplicationService {
         world_card: WorldCard,
         map: MapDef,
     ) -> Result<(), ApplicationError> {
-        self.storage
-            .update_world(id, &world_card, &map)
-            .map_err(Into::into)
+        self.world_catalogue.update_world(id, world_card, map)
     }
 
     pub fn delete_world(&self, key: &str) -> Result<(), ApplicationError> {
-        self.storage.delete_world(key).map_err(Into::into)
+        self.world_catalogue.delete_world(key)
     }
 
-    pub fn list_personas(
-        &self,
-    ) -> Result<Vec<crate::domain::model::character::PlayerCard>, ApplicationError> {
-        self.storage.list_personas().map_err(Into::into)
-    }
-
-    fn persist_initial_state_with_swipes(&self) -> Result<u64, ApplicationError> {
-        let mut initial_state = self.build_fresh_initial_state()?;
-        let snapshot = GameStateSnapshot::from_game_state(&initial_state);
-        let snapshot_id = self.storage.save_snapshot(&snapshot)?;
-
-        if let Some(msg) = initial_state.narrative.history.last_mut() {
-            if msg.is_unpersisted() {
-                msg.set_snapshot_id(Some(snapshot_id));
-                match self.storage.insert_message(&*msg) {
-                    Ok(id) => {
-                        msg.id = id;
-                        for (index, swipe) in msg.swipes.iter().enumerate() {
-                            if let Err(e) = self.storage.insert_swipe(id, swipe, index) {
-                                tracing::error!("persist_initial_state: swipe {index} failed: {e}");
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        tracing::error!("persist_initial_state: message insert failed: {e}");
-                    }
-                }
-            }
-        }
-
-        Ok(snapshot_id)
+    pub fn list_personas(&self) -> Result<Vec<PlayerCard>, ApplicationError> {
+        self.world_catalogue.list_personas()
     }
 }

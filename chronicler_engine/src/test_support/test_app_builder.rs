@@ -7,9 +7,13 @@ use std::sync::{Arc, RwLock};
 use axum::Router;
 use tokio_util::sync::CancellationToken;
 
+use crate::adapters::driven::llm::providers::MockBackend;
+use crate::application::agents::registry::AgentRegistry;
 use crate::application::application_service::DefaultApplicationService;
 use crate::application::game_service::GameService;
+use crate::application::ports::llm_provider::LlmProvider;
 use crate::bootstrap::text_check_factory::create_text_check_service;
+use crate::test_support::make_test_recorder_with_storage;
 use crate::domain::model::character::{NpcCard, PlayerCard};
 use crate::domain::model::map::{MapDef, Overworld, Region, Room};
 use crate::domain::model::settings::AppSettings;
@@ -36,6 +40,7 @@ pub struct TestAppBuilder {
     settings: AppSettings,
     storage: Option<Arc<Storage>>,
     game_service: Option<Arc<GameService>>,
+    mock_delay_ms: Option<u64>,
     is_generating: bool,
 }
 
@@ -158,6 +163,7 @@ impl TestAppBuilder {
             settings: AppSettings::default(),
             storage: None,
             game_service: None,
+            mock_delay_ms: None,
             is_generating: false,
         }
     }
@@ -214,6 +220,13 @@ impl TestAppBuilder {
         self
     }
 
+    /// `MockBackend::complete()` sleeps `ms` so the `spawn_blocking` pipeline
+    /// outlives the handler's `render_action_area` re-read.
+    pub fn mock_delay(mut self, ms: u64) -> Self {
+        self.mock_delay_ms = Some(ms);
+        self
+    }
+
     pub fn is_generating(mut self, value: bool) -> Self {
         self.is_generating = value;
         self
@@ -224,7 +237,7 @@ impl TestAppBuilder {
         build_router(app_state)
     }
 
-    pub fn build_app_state(self) -> AppState {
+    pub fn build_app_state(mut self) -> AppState {
         let (storage, _created_storage) = match self.storage {
             Some(s) => (s, false),
             None => (Arc::new(Storage::new_in_memory()), true),
@@ -302,7 +315,19 @@ impl TestAppBuilder {
 
         let settings_arc = Arc::new(RwLock::new(self.settings.clone()));
         let preset_storage = Arc::new(Storage::new_in_memory());
-        let game_service: Arc<GameService> = self.game_service.unwrap_or_else(|| {
+        let game_service: Arc<GameService> = if let Some(service) = self.game_service.take() {
+            service
+        } else if let Some(delay_ms) = self.mock_delay_ms {
+            Arc::new(
+                build_game_service_with_mock_delay(
+                    Arc::clone(&settings_arc),
+                    Arc::clone(&storage),
+                    Arc::clone(&preset_storage),
+                    delay_ms,
+                )
+                .expect("build_game_service_with_mock_delay should succeed"),
+            )
+        } else {
             Arc::new(
                 crate::bootstrap::wiring::build_game_service_for_tests(
                     Arc::clone(&settings_arc),
@@ -311,7 +336,7 @@ impl TestAppBuilder {
                 )
                 .expect("build_game_service_for_tests should succeed"),
             )
-        });
+        };
         let text_check_service = Arc::new(create_text_check_service(&self.settings));
         let is_generating = Arc::new(std::sync::atomic::AtomicBool::new(self.is_generating));
         let cancel_token = CancellationToken::new();
@@ -333,4 +358,28 @@ impl TestAppBuilder {
             is_generating,
         }
     }
+}
+
+/// `GameService` whose `MockBackend::complete()` sleeps `delay_ms` on the
+/// `spawn_blocking` thread, keeping the pipeline task alive past handler
+/// render so post-`Started` assertions observe `Generating` instead of
+/// racing `phase_finalize` writing `Idle`.
+fn build_game_service_with_mock_delay(
+    settings: Arc<RwLock<AppSettings>>,
+    storage: Arc<Storage>,
+    preset_storage: Arc<Storage>,
+    delay_ms: u64,
+) -> crate::error::Result<GameService> {
+    let mock_provider: Arc<dyn LlmProvider> = Arc::new(MockBackend::default().with_delay(delay_ms));
+    let recorder =
+        make_test_recorder_with_storage(Arc::clone(&mock_provider), Arc::clone(&storage));
+    let registry = AgentRegistry::from_configs_with_storage(
+        &settings.read().unwrap_or_else(|e| e.into_inner()).agents,
+        Arc::clone(&recorder),
+        Some(Arc::clone(&preset_storage)),
+        Arc::clone(&settings),
+    )
+    .unwrap_or_default();
+    drop(mock_provider);
+    Ok(GameService::with_storage(recorder, registry, settings))
 }

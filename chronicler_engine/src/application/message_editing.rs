@@ -27,7 +27,7 @@ fn prepare_retry_state(
     game_state.narrative.input_buffer.status = status;
     game_state.narrative.input_buffer.phase = phase;
     let snapshot = GameStateSnapshot::from_game_state(&game_state);
-    app.storage.save_snapshot(&snapshot)?;
+    app.storage().save_snapshot(&snapshot)?;
     let cancelled = app.cancel_token().is_cancelled();
     Ok((game_state, cancelled))
 }
@@ -52,7 +52,7 @@ pub fn switch_swipe(
         ));
     }
 
-    app.storage.update_active_swipe(message_id, swipe_index)?;
+    app.storage().update_active_swipe(message_id, swipe_index)?;
 
     let target_msg = messages
         .iter()
@@ -69,12 +69,12 @@ pub fn switch_swipe(
         .ok_or_else(|| app_err_internal("Swipe has no associated snapshot"))?;
 
     let mut snapshot = app
-        .storage
+        .storage()
         .load_snapshot_by_id(snapshot_id)?
         .ok_or_else(|| app_err_internal("Snapshot not found"))?;
 
     snapshot.created_at = Utc::now();
-    app.storage.save_snapshot(&snapshot)?;
+    app.storage().save_snapshot(&snapshot)?;
 
     Ok(())
 }
@@ -84,13 +84,13 @@ pub fn edit_history(
     id: u64,
     text: String,
 ) -> Result<(), ApplicationError> {
-    let latest = app.storage.load_latest_snapshot()?;
+    let latest = app.storage().load_latest_snapshot()?;
     let mut guard = app.load_or_fresh()?;
     guard.narrative.history.edit(id, text.clone())?;
 
     if latest.is_some() {
         let snapshot = GameStateSnapshot::from_game_state(&guard);
-        app.storage.save_snapshot(&snapshot)?;
+        app.storage().save_snapshot(&snapshot)?;
         app.update_message_text(id, &text)?;
     }
 
@@ -110,8 +110,8 @@ pub fn delete_last(app: &DefaultApplicationService) -> Result<(), ApplicationErr
 
     guard.narrative.history.delete_last()?;
     let snapshot = GameStateSnapshot::from_game_state(&guard);
-    app.storage.save_snapshot(&snapshot)?;
-    app.storage.delete_message(last_id)?;
+    app.storage().save_snapshot(&snapshot)?;
+    app.storage().delete_message(last_id)?;
 
     Ok(())
 }

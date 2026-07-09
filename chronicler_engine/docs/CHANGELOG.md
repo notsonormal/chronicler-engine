@@ -2,6 +2,12 @@
 
 NOTE: Always date the change log records (e.g. put under `## 2025-01-10`) when you add them to the file. Do not put under a `## Unreleased` header or similar. 
 
+## 2026-07-10
+
+### Changed
+
+- **`docs/architecture/system.md` rewrite to minimal spec** (90 lines / 376 words). Reduced from ~210 lines to 7 sections covering only cross-cutting contracts: tier map (8 tiers), hex arch + verbatim mermaid, dependency invariant, port inventory, storage direct-access list, settings flow + verbatim mermaid, default settings table. Removed per-module field/type dumps, helper listings, view-model struct lists, fragment subdirectory maps, past-tense rename history. Corrected 5 errors from prior audit (ghost `context.rs`, ghost `game_catalogue`/`world_catalogue` fields, ghost `ctx_or_error`, ghost `create_app_for_testing`, wrong `LlmMessageRepository` impl count) and 8 warnings. Storage direct-access count reconciled to **3 files** (post-T2 refactor in commit `e5fa8ce`). Settings section now specifies `impl Default for AppSettings` as runtime source of truth (`data/settings.json` not consulted at startup). No `src/` changes; `//! [DOC: ...]` anchors on 5 src files remain valid. Follow-ups recorded at `.scratch/fix-architecture-system-md/followups.md` (stale `:line` refs in 4 plans, ADR-027 `context.rs` mention, `application_service.rs` marker drift).
+
 ## 2026-07-06
 
 ### Changed

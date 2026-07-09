@@ -1,8 +1,8 @@
 # Super-Plan: `simpler-hexagon` Pre-Merge Cleanup
 
 **Date:** 2026-07-09
-**Status:** Planning / Sub-plans pending
-**Scope:** `chronicler_engine/` on branch `simpler-hexagon` (HEAD `1eda563`)
+**Status:** In progress — T2 COMPLETE (tickets 00–04 resolved 2026-07-09); T1, T3–T8 pending
+**Scope:** `chronicler_engine/` on branch `simpler-hexagon` (HEAD `1eda563` at plan creation; T2 work landed post-HEAD)
 **Total estimated effort:** ~60 SP across 8 tracks
 
 ## Related
@@ -33,7 +33,7 @@ Consolidate findings from 4 prior reviews + 2 fresh antipattern passes + depth a
 | # | Track | Readiness | Priority | Practical Benefit | Certainty | Blocks | SP est |
 |---|-------|-----------|----------|-------------------|-----------|--------|--------|
 | T1 | Tier 1 blockers (4 bugs) | ready | **P0** | High | High | T2-T5 | ~8 |
-| T2 | C1 god-class split (4 modules + PresetStore) | needs grilling G1-G2 | P1 | High | Med-High | T4 | ~16 |
+| T2 | C1 god-class split (4 modules + PresetStore) | **COMPLETE** (2026-07-09, tickets 00–04) | P1 | High | Med-High | T4 | ~16 |
 | T3 | Glossary drift (5 terms + doc sweep) | ready | P1 | Med | High | none | ~5 |
 | T4 | C2 PhaseError consolidation | needs grilling G3 | P2 | Med | Med | none | ~5 |
 | T5 | C3 TestApp builder collapse | ready | P2 | Med | Med | none | ~16 |
@@ -88,69 +88,75 @@ P0 = defects / required for merge; P1 = structural / load-bearing; P2 = debt pru
 
 ## T2 — C1 God-Class Split (4 Modules + PresetStore Newtype)
 
+**Status: COMPLETE (tickets 00–04 resolved, 2026-07-09).** `python build.py` green; `application_service.rs` 723 → 275 LOC; 4 modules + 3 type extractions landed; façade-first preserved (~30 caller sites untouched). Map + per-ticket resolutions: `.scratch/t2-god-class-split/`. Follow-ups (AppState token/phantom-storage, ADR-032, ≤200 LOC stretch, full caller-site migration G1-B) live in the map's §Not-yet-specified — separate efforts, not part of T2.
+
 **Findings owned:** `antipattern-fresh-2026-07-09.md` #1, #4, #5, #6, #11, #17, #19 + `simpler-hexagon-review.md` blocker #1 + `code-simplification-pass2-simpler-hexagon-2026-07-09.md` #4 (partial) + doubt verdicts D1, D2 + depth analysis M1, M2.
 
-**Practical Benefit: HIGH** — root cause of the entire defect cluster. 49-method god-object + 2 phantom `Arc<Storage>` + leaked `AtomicBool` is the deepest problem on the branch.
+**Practical Benefit: HIGH** — root cause of the entire defect cluster. 49-method god-object + 2 phantom `Arc<Storage>` + leaked `AtomicBool` was the deepest problem on the branch.
 
-**Certainty: MED-HIGH** — the carve-out is mostly mechanical (existing method clusters become modules). One grilling decision (G1, see below) controls test migration approach.
+**Certainty: MED-HIGH** — the carve-out was mostly mechanical (existing method clusters became modules). G1 was the controlling grilling decision.
 
 ### Scope
 
 Carve `DefaultApplicationService` (723 LOC, 49 methods, 6 pub(crate) fields) into:
 
-1. **`PersistenceGate`** (`application/persistence_gate/`)
+1. **`PersistenceGate`** (`application/persistence_gate/`) — ✅ landed (ticket 02)
    - Owns `Arc<Storage>` (game) + `Arc<PresetStore>` newtype (preset)
-   - Methods: 10 persistence helpers (load/save snapshot, load/save message, load/save swipe, load/save game, etc.)
-   - The PresetStore newtype (new!) is the load-bearing fix for the phantom-Storage seam
+   - Methods: 14 persistence helpers (`load_world_snapshot`, `load_or_fresh`, `load_expecting_valid_state`, `save_state`, `save_message_and_snapshot`, `delete_and_remove_message`, `load_messages_with_swipes`, `load_messages_into_state`, `build_fresh_initial_state`, `load_messages`, `update_message_text`, `find_retry_anchor`, `set_game_id`, `world_snapshot_or_empty`)
+   - The PresetStore newtype (landed in ticket 01) is the load-bearing fix for the phantom-Storage seam
 
-2. **`GenerationGate`** (`application/generation_gate/`)
-   - Owns `cancel_token`, `is_generating`, `claim_generation_slot`, `release_generation_slot`, `heal_stale_generating`, `process_action`
-   - Drives the `PhaseError` enum from T4 if T4 lands first (else keeps current 5-style error handling)
+2. **`GenerationGate`** (`application/generation_gate/`) — ✅ landed (ticket 03)
+   - Owns `cancel_token`, `is_generating`, `start_action` (moved from `process_action` body — 47 LOC preserved verbatim), `claim_generation_slot`, `release_generation_slot`, `heal_stale_generating`
+   - Still uses current 5-style error handling — T4 PhaseError integration deferred
 
-3. **`GameCatalogue`** (`application/game_catalogue/`)
+3. **`GameCatalogue`** (`application/game_catalogue/`) — ✅ landed (ticket 04)
    - Methods: `create_game`, `switch_game`, `delete_game`, `list_games`, `current_game_id`, `reset`, `persist_initial_state_with_swipes`
-   - Pure storage orchestration; no LLM, no cancel_token
+   - Storage orchestration; reads `is_generating` (borrowed `Arc<AtomicBool>` clone, ADR-030 single-writer preserved — read-only) but does not own the token
 
-4. **`WorldCatalogue`** (`application/world_catalogue/`)
+4. **`WorldCatalogue`** (`application/world_catalogue/`) — ✅ landed (ticket 04)
    - Methods: `list_worlds`, `get_world`, `create_world`, `update_world`, `delete_world`, `list_personas`
 
-5. **`DefaultApplicationService` façade** (`application/application_service.rs` — shrink to ~150 lines)
-   - Holds 4 module-Arcs
-   - Re-exports method names so callers don't migrate (façade pattern)
-   - OR: migrate ~30 callers — pick via grilling (G1)
+5. **`DefaultApplicationService` façade** (`application/application_service.rs` — shrunk to 275 LOC, stretch target ≤200 reclassified as T7-class polish)
+   - Holds 6 fields: 4 module structs (`persistence_gate`, `generation_gate`, `game_catalogue`, `world_catalogue`) + 2 collaborators (`settings`, `game_service`) — **Decision A** (ticket 04); collaborators not storage-state, never moved
+   - All migrated methods become 1-line delegates (façade pattern, G1=A)
 
-6. **Module extraction** (free):
-   - `ApplicationError` → `application/errors.rs` (already has ADR-027 alignment)
+6. **Module extraction** (free) — ✅ landed (ticket 04, except `WorldSnapshot` which moved in ticket 02):
+   - `ApplicationError` + `ProcessActionResult` → `application/errors.rs`
    - `map_llm_error` → `application/mappers.rs`
-   - `WorldSnapshot` → `application/persistence_gate/dto.rs` (T3 will rename; just moves for now)
+   - `WorldSnapshot` → `application/persistence_gate/dto.rs`
    - `DebugStateView` → `application/debug/dto.rs`
+   - Re-exported from `application/mod.rs` + `application_service.rs` so ~14 external caller import paths stay valid (façade-first)
 
-### Grilling Decisions (deferred to sub-plan)
+### Grilling Decisions (resolved)
 
-- **G1: façade vs full migration.** Either `DefaultApplicationService` keeps method signatures as thin delegates (1-call-site migration at the `app.X()` callsites is delayed), OR migrate all 30 callers up front. Façade = ~8 SP, lower risk. Full migration = ~12 SP, higher payoff.
-- **G2: PresetStore newtype location.** Either `application/persistence_gate/preset_store.rs` (internal) or `adapters/driven/storage/preset_store.rs` (port + adapter). Latter aligns better with ADR-027.
+- **G1: façade vs full migration → A (façade-first).** `DefaultApplicationService` keeps method signatures as thin delegates; ~30 caller sites untouched. Full migration (G1-B) deferred to a follow-up PR. Decided in ticket 00.
+- **G2: PresetStore newtype location → B (port + adapter).** `adapters/driven/storage/preset_store.rs`, hexagonal ADR-027-aligned. Decided in ticket 00.
 
 ### Out of scope
 
 - Test factory consolidation (T5) — orthogonal; T5 can land before or after.
 - C2 PhaseError (T4) — adjacent; can run in parallel.
-- C4 AppState shrink (C4) — depends on T2; quick follow-up.
+- C4 AppState shrink — T2 confirms `AppState` still holds its own `Arc<Storage>` + `Arc<RwLock<CancellationToken>>` (phantom storage + dual-token concerns); separate smaller effort, sharp enough to ticket now (map §Not-yet-specified).
 
-### Blast Radius
+### Blast Radius (actual)
 
-- ~30 caller files in `src/application/`, `src/adapters/driving/http/`, `src/bootstrap/`, `tests/integration/`
+- ~30 caller files in `src/application/`, `src/adapters/driving/http/`, `src/bootstrap/`, `tests/integration/` — signatures preserved
 - 1 new type (`PresetStore`)
-- 4 new modules + 1 façade shrinkage
+- 4 new modules + 3 type extraction files + 1 façade shrinkage
+- ~10 forced field-access → accessor-call rewrites (`app.storage.X` → `app.storage().X`) in `message_editing.rs`, `query_handlers.rs`, `phases.rs`, `action_pipeline/retry.rs` — no signature changes (not caller-site migration)
+- `tests/infrastructure/guardrails/layers.rs`: `game_catalogue/gate.rs` + `world_catalogue/gate.rs` added to `APPLICATION_STORAGE_GRANDFATHERED`
+- `docs/architecture/system.md` §2.5 updated with new module + type entries
 
-### Validation
+### Validation (actual results)
 
-- `cargo build` + `cargo test` + `python build.py` after each module carve-out
-- `grep -r 'app\.\(storage\|preset_storage\)'` returns 0 (phantom seam gone)
-- `wc -l application_service.rs` ≤ 200
+- `cargo build` + `cargo test` + `python build.py` green (1241 passed, 2 LLM skipped) — one pre-existing flaky race in `fragment::test_action_confirm_empty_command` (passes in isolation + on retry; not caused by T2)
+- `grep -rn 'self.storage' src/application/application_service.rs` → 0 hits ✓ (storage routed via `self.persistence_gate.storage()`)
+- `grep -rn 'self.is_generating' src/application/application_service.rs` → 0 hits ✓ (routed via `self.generation_gate.is_generating()`)
+- `wc -l application_service.rs` = **275** (not ≤200 — Decision B in ticket 04; ≤200 would require breaking façade-first or moving ticket's "STAYS" items (`active_quantifier_prompt`, `load_messages_with_swipes` free fn); real destination (god-class gone, no phantom seam, 4 cohesive modules, façade-first) achieved)
 
-### Honest Tradeoff
+### Honest Tradeoff (post-implementation)
 
-T2 is the load-bearing fix but **needs G1 decided before implementation starts**. Recommend **façade-first** for first PR, full migration as second PR — separates risk. T2 alone will not make tests pass; T5 (test factory collapse) benefits from T2 being in place but can land in parallel.
+T2 was the load-bearing fix; façade-first (G1=A) was the right call. Real cost: LOC target slipped 200 → 275 (honest payoff — the alternative was breaking façade-first or migrating ~30 caller signatures, both out of scope this wave). `Settings`/`game_service` collaborators stayed on the façade (Decision A — they're not storage-state, no category-error module invented to hit a literal field count). AppState phantom-storage + dual-token concerns persisted as fog — graduate to separate tickets now that T2's shape is stable.
 
 ---
 
@@ -475,10 +481,10 @@ T8 is the meta-track. **Most likely to be deferred.** The benefit is real but th
 | blocker-2 | `load_or_fresh` type lie | T1 | pending |
 | blocker-3 | stale guardrail lists deleted `application/context.rs` | T1 | pending |
 | blocker-4 | `arrival_service::run` silent return | T1 | pending |
-| arch-1 | 49-method god-object + 2 phantom Arc<Storage> | T2 | pending |
-| arch-2 | ProcessActionResult + ApplicationError dual enums | T2 | pending |
-| arch-3 | AppState + ServerResources parallel-field ghost seam | T2 (C4 free follow-up) | pending |
-| arch-4 | process_action 47 lines (plan said ≤30) | T6 (gate amend) + T2 (fix) | pending |
+| arch-1 | 49-method god-object + 2 phantom Arc<Storage> | T2 | **resolved** (tickets 02–04; 4 modules carved, god-object gone, `self.storage` grep = 0, `application_service.rs` 723→275 LOC) |
+| arch-2 | ProcessActionResult + ApplicationError dual enums | T2 | **resolved** (ticket 04; both enums moved to `application/errors.rs`) |
+| arch-3 | AppState + ServerResources parallel-field ghost seam | T2 (C4 free follow-up) | **deferred** (T2 wave confirmed AppState still owns phantom `Arc<Storage>`; sharp enough to ticket — map §Not-yet-specified) |
+| arch-4 | process_action 47 lines (plan said ≤30) | T6 (gate amend) + T2 (fix) | **partial** (T2 ticket 03 moved body to `GenerationGate::start_action`, preserved verbatim at 47 LOC; T6 gate amend pending to update ≤30 → ≤50, or split into 2 functions) |
 | glossary-1 | PlayerCard → PersonaCard (~60 sites) | T3 | pending |
 | glossary-2 | WorldSnapshot → WorldContext (~12 sites) | T3 | pending |
 | glossary-3 | TurnResult → ActionResult (~6 sites) | T3 | pending |
@@ -502,9 +508,9 @@ T8 is the meta-track. **Most likely to be deferred.** The benefit is real but th
 | polish-16 | `persist_initial_state_with_swipes` inlinable | T7.9 | pending |
 | polish-17 | `BackendKind::Test` bypasses invariants in release | T7.10 | pending |
 | polish-18 | `error_return` name lies about return shape | T4 | pending |
-| polish-19 | `InMemoryData` 13 fields, no shared behavior | T2 (per-entity stores) | pending |
+| polish-19 | `InMemoryData` 13 fields, no shared behavior | T2 (per-entity stores) | pending (not touched by T2 wave — separate effort) |
 | polish-20 | `arrival_service::new_for_test` test-only constructor | T5 | pending |
-| polish-21 | `load_messages_with_swipes` defined twice | T2 (persistence consolidation) | pending |
+| polish-21 | `load_messages_with_swipes` defined twice | T2 (persistence consolidation) | **resolved** (ticket 02; free fn stays in `application_service.rs`, `PersistenceGate::load_messages_with_swipes` + `load_messages` both delegate to it — single definition, no duplication) |
 | polish-22 | `run_from_input` 5 error styles | T4 | pending |
 | polish-23 | `retry_last_response_impl` 5 early returns | T4 | pending |
 | polish-24 | `seed_messages` loop duplicated 7× | T5 (`seed_narrative_into_storage`) | pending |

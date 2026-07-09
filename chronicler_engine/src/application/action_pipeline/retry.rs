@@ -46,7 +46,7 @@ pub fn retry_last_response_impl(app: &DefaultApplicationService) {
         })
         .cloned();
 
-    let snapshot = match app.storage.load_snapshot_by_id(snapshot_id) {
+    let snapshot = match app.storage().load_snapshot_by_id(snapshot_id) {
         Ok(Some(s)) => s,
         Ok(None) => {
             tracing::error!("No snapshot found for id {snapshot_id}");

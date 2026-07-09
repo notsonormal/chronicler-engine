@@ -284,7 +284,8 @@ async fn test_delete_history_handler_empty() {
 
 #[tokio::test]
 async fn test_action_confirm_empty_command() {
-    let app = TestAppBuilder::default_app();
+    // 100ms lets the mock-backed pipeline outlive `render_action_area`.
+    let app = TestAppBuilder::default_test().mock_delay(100).build();
 
     let req = Request::builder()
         .uri("/action/confirm")

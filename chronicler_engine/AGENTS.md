@@ -20,6 +20,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - **storage/**
         - `db.rs` — SQLite database connection pool and migrations
         - `mod.rs` — Storage layer and database access
+        - `preset_store.rs` — PresetStore newtype — distinguishes preset storage from game storage
       - **text_check/**
         - `harper_text_checker.rs` — Harper text check adapter implementing TextChecker port
         - `mod.rs` — Text checking and validation
@@ -30,6 +31,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - **http/**
         - `app_state.rs` — Application state management
         - `debug.rs` — Debug utilities and endpoints
+        - `error.rs` — HTTP driving adapter — maps application `ApplicationError` to axum `Response`.
         - `handlers.rs` — Core HTTP request routing and handling
         - `locks.rs` — Shared poison-recovering lock helpers for the HTTP layer.
         - `mod.rs` — HTTP server and API endpoints
@@ -39,12 +41,14 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - `templates.rs` — Template rendering utilities
         - `view_models.rs` — View models decouple templates from domain types.
   - **application/**
-    - `application_service.rs` — Main application service coordinating game operations
+    - `application_service.rs` — DefaultApplicationService — thin façade over 4 cohesive modules plus 2 collaborator fields (T2 ticket 04 — final façade shrink).
     - `arrival_service.rs` — Arrival narration use case — generates the opening scene when a player enters a room
-    - `context.rs` — Application context and state management
+    - `errors.rs` — ApplicationError + ProcessActionResult — error envelope and action-result tri-state (T2 ticket 04 — extracted from DefaultApplicationService).
     - `game_service.rs` — Game service handling gameplay operations
+    - `generation_guard.rs` — Generation guard logic
     - `llm_recorder.rs` — LLM call orchestrator - owns forensics save + postprocessing
     - `llm_sanitizer.rs` — LLM input/output sanitization
+    - `mappers.rs` — map_llm_error — LLM failure mapper (T2 ticket 04 — extracted from DefaultApplicationService).
     - `message_editing.rs` — Message editing and modification utilities
     - `query_handlers.rs` — Read-only data access for game state and debug views
     - `scenario.rs` — Scenario log injection at game initialization
@@ -68,24 +72,39 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - `prompt.rs` — Quantifier prompt construction
         - `test_support.rs` — Quantifier test utilities
         - `types.rs` — Quantifier type definitions
+    - **debug/**
+      - `dto.rs` — DebugStateView — debug-state DTO for the HTTP debug endpoint (T2 ticket 04 — extracted from DefaultApplicationService).
+      - `mod.rs` — Debug DTOs for the HTTP `/debug/state` endpoint (T2 ticket 04 — extracted from DefaultApplicationService).
+    - **game_catalogue/**
+      - `gate.rs` — GameCatalogue — game-lifecycle storage orchestration (T2 ticket 04 — façade-first carve-out from DefaultApplicationService).
+      - `mod.rs` — GameCatalogue — game-lifecycle storage orchestration (T2 ticket 04 — façade-first carve-out).
+    - **generation_gate/**
+      - `gate.rs` — GenerationGate — owns `CancellationToken` + `is_generating: Arc<AtomicBool>`
+      - `mod.rs` — GenerationGate — owns the per-process cancellation token + `is_generating`
     - **narrative_prompt/**
       - `assembler.rs` — Multi-stage prompt builder
       - `budget.rs` — Token budget management
       - `context.rs` — Prompt context building
       - `mod.rs` — Prompt construction orchestration
       - `types.rs` — Prompt type definitions
+    - **persistence_gate/**
+      - `dto.rs` — WorldSnapshot DTO — persistence load bundle for an active game
+      - `gate.rs` — PersistenceGate — owns game `Arc<Storage>` + `Arc<PresetStore>` + persistence helpers
+      - `mod.rs` — PersistenceGate — game-storage seam + persistence helpers
     - **ports/**
       - `llm_message_repository.rs` — LLM message persistence port
       - `llm_provider.rs` — LLM provider port (transport-only)
       - `mod.rs` — Application ports: outbound interfaces (driven port traits)
       - `text_checker.rs` — TextChecker port trait and CheckResult DTO
+    - **world_catalogue/**
+      - `gate.rs` — WorldCatalogue — worlds/personas CRUD pass-through (T2 ticket 04 — façade-first carve-out from DefaultApplicationService).
+      - `mod.rs` — WorldCatalogue — worlds/personas CRUD pass-through (T2 ticket 04 — façade-first carve-out).
   - **bootstrap/**
     - `init_game.rs` — Game state initialization and arrival narration spawning
     - `llm_factory.rs` — LLM factory - wires LlmProvider port to provider impls and returns LlmCallRecorder
     - `load.rs` — Game data seeding and initialization routines
     - `logging.rs` — Logging setup and configuration
     - `run.rs` — Main entry point and runtime execution
-    - `state.rs` — Bootstrap game state from saved snapshots
     - `text_check_factory.rs` — Text check factory - wires TextChecker port to HarperTextChecker impl
     - `validate.rs` — Data validation utilities
     - `wiring.rs` — Composition root for application orchestrators — wires port impls to
@@ -117,7 +136,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - **state/**
         - `game_state.rs` — Main game state and builder
         - `game_state_snapshot.rs` — State snapshot value types (persistable representations of game state).
-        - `generation_status.rs` — Generation status enums and input buffer
+        - `generation_status.rs` — Generation status enums and input buffer — phase/status are independent axes; live state machine lives in `application/action_pipeline/pipeline.rs`.
         - `message_types.rs` — Message type and entry definitions
         - `mod.rs` — Game state representations (submodule declarations)
         - `movement.rs` — Player movement state
@@ -125,7 +144,11 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - `scene_state.rs` — Current scene NPCs and quantifier confidence
         - `trigger_context.rs` — Stored trigger snapshot context
   - **test_support/**
+    - `context.rs` — Builds `DefaultApplicationService` instances for integration tests.
+    - `fixtures.rs` — 
+    - `noop_forensics.rs` — Canonical NoopForensics implementation for tests.
     - `recording_forensics.rs` — Recording spy for `LlmMessageRepository`
+    - `test_app_builder.rs` — Test application builder for HTTP and integration tests
 - **scripts/**
   - `build.py` — Full build, validate, and test for Chronicler Engine.
   - `check_python_docstrings.py` — Summary

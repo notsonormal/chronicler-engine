@@ -46,12 +46,12 @@ pub fn reset_generating_status(app: &DefaultApplicationService) -> Result<(), Ap
         crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
             &game_state,
         );
-    app.storage.save_snapshot(&snapshot)?;
+    app.storage().save_snapshot(&snapshot)?;
     Ok(())
 }
 
 pub fn get_current_game_name(app: &DefaultApplicationService) -> Result<String, ApplicationError> {
-    match app.storage.get_game(app.storage.current_game_id())? {
+    match app.storage().get_game(app.storage().current_game_id())? {
         Some(g) => Ok(g.name),
         None => Ok("Unknown".to_string()),
     }
@@ -61,7 +61,7 @@ pub fn list_latest_llm_messages(
     app: &DefaultApplicationService,
     limit: usize,
 ) -> Result<Vec<LlmMessage>, ApplicationError> {
-    app.storage
+    app.storage()
         .list_latest_llm_messages(limit)
         .map_err(Into::into)
 }
