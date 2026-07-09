@@ -9,7 +9,6 @@ use tokio::time::sleep;
 use crate::application::application_service::DefaultApplicationService;
 use crate::application::ProcessActionResult;
 use crate::domain::model::state::generation_status::GenerationStatus;
-use crate::test_support::make_test_app_with_separate_backends;
 use crate::test_support::make_test_app_with_sqlite;
 
 fn cached_flag(app: &DefaultApplicationService) -> bool {
@@ -66,16 +65,7 @@ async fn test_is_generating_invariant_holds_across_lifecycle() {
     let mut state = crate::test_support::fixtures::TestGameState::in_room("start");
     state.narrative.history.clear();
     state.narrative.input_buffer.status = GenerationStatus::Idle;
-    // Use a slow narrator backend so the spawned pipeline task does not
-    // complete and clear the AtomicBool before this test thread can assert
-    // the mid-generation state. 250 ms comfortably exceeds the time it takes
-    // to reach the post-process_action assertions.
-    let app = make_test_app_with_separate_backends(
-        state,
-        || crate::adapters::driven::llm::providers::MockBackend::default().with_delay(250),
-        crate::adapters::driven::llm::providers::MockBackend::default,
-    )
-    .expect("make_test_app_with_separate_backends");
+    let app = make_test_app_with_sqlite(state).expect("make_test_app_with_sqlite");
 
     assert!(
         invariant_holds(&app),
@@ -131,16 +121,7 @@ async fn test_is_generating_invariant_holds_under_concurrent_load() {
     let mut state = crate::test_support::fixtures::TestGameState::in_room("start");
     state.narrative.history.clear();
     state.narrative.input_buffer.status = GenerationStatus::Idle;
-    // Slow narrator backend: 250 ms per call prevents the winning thread from
-    // completing the pipeline and clearing the AtomicBool before the other 3
-    // threads run their CAS. Without the delay, the race lets multiple threads
-    // observe `is_generating == false` and win the slot sequentially.
-    let app = make_test_app_with_separate_backends(
-        state,
-        || crate::adapters::driven::llm::providers::MockBackend::default().with_delay(250),
-        crate::adapters::driven::llm::providers::MockBackend::default,
-    )
-    .expect("make_test_app_with_separate_backends");
+    let app = make_test_app_with_sqlite(state).expect("make_test_app_with_sqlite");
 
     let mut handles = Vec::new();
     for i in 0..4 {
