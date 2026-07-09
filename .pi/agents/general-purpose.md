@@ -1,6 +1,7 @@
 ---
 description: General-purpose agent for complex, multi-step implementation tasks
 model: minimax/MiniMax-M3
+inherit_context: true
 permission:
   bash:
     "git *": deny
