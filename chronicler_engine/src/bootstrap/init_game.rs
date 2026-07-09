@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
-use crate::application::context;
+use crate::application::application_service::load_messages_with_swipes;
 use crate::application::scenario::inject_scenario_logs;
 use crate::domain::model::character::{NpcCard, PlayerCard};
 use crate::domain::model::map::MapDef;
@@ -58,7 +58,7 @@ pub(crate) fn load_game_state(
                 Arc::clone(player_arc),
                 npcs_map.clone(),
             );
-            if let Ok(msgs) = context::load_messages_with_swipes(storage) {
+            if let Ok(msgs) = load_messages_with_swipes(storage) {
                 new_state.narrative.history.replace(msgs);
             }
             Ok(new_state)
@@ -79,7 +79,7 @@ pub(crate) fn load_game_state(
             let initial_snapshot = GameStateSnapshot::from_game_state(&new_state);
             let snapshot_id = storage.save_snapshot(&initial_snapshot)?;
             // Snapshot carries history for debugging/audit; `messages` table is source of truth on load
-            // per `context::load_messages_with_swipes` replace pattern (see ADR-023).
+            // per `load_messages_with_swipes` replace pattern (see ADR-023).
             if let Some(msg) = new_state.narrative.history.last_mut() {
                 if msg.is_unpersisted() {
                     msg.set_snapshot_id(Some(snapshot_id));

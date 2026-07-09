@@ -10,23 +10,86 @@ use serde::Serialize;
 use tokio_util::sync::CancellationToken;
 
 use crate::application::action_pipeline::execute_action_impl;
-use crate::application::context::OpContext;
 use crate::application::game_service::GameService;
 use crate::application::generation_guard::GenerationGuard;
 
-use crate::error::EngineError;
+use crate::error::{EngineError, LlmFailure};
+use crate::domain::model::character::NpcCard;
 use crate::domain::model::game::{Game, generate_game_name};
+use crate::domain::model::message::Message;
 use crate::domain::model::settings::AppSettings;
 
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
 use crate::domain::model::state::message_types::{MessageEntry, MessageType};
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::domain::model::state::game_state::GameState;
+use crate::domain::model::template::{render_template, TemplateVars};
 use crate::domain::model::trigger::NpcEncounterState;
 use crate::domain::model::world::WorldCard;
 use crate::domain::model::map::MapDef;
+use crate::application::narrative_prompt::assembler::assemble_prompt_text;
 use crate::adapters::driven::storage::Storage;
 use crate::adapters::driven::storage::worlds::WorldWithMap;
+
+#[derive(Clone)]
+pub struct WorldSnapshot {
+    pub world: Arc<WorldCard>,
+    pub map: Arc<MapDef>,
+    pub player: Arc<crate::domain::model::character::PlayerCard>,
+    pub npcs: Arc<std::collections::HashMap<String, NpcCard>>,
+}
+
+impl WorldSnapshot {
+    pub fn empty() -> Self {
+        Self {
+            world: Arc::new(WorldCard::default()),
+            map: Arc::new(MapDef::default()),
+            player: Arc::new(crate::domain::model::character::PlayerCard::default()),
+            npcs: Arc::new(std::collections::HashMap::new()),
+        }
+    }
+}
+
+pub fn map_llm_error(e: &EngineError) -> String {
+    match e {
+        EngineError::Llm(LlmFailure::Timeout) => "LLM Error: request timed out".to_string(),
+        EngineError::Llm(LlmFailure::Network { url, detail }) => {
+            format!("LLM Error: network error ({url}) \u{2014} {detail}")
+        }
+        EngineError::Llm(LlmFailure::ParseError {
+            expected_format, ..
+        }) => {
+            format!("LLM Error: unexpected response format (expected {expected_format})")
+        }
+        EngineError::Llm(LlmFailure::EmptyResponse) => "LLM Error: empty response".to_string(),
+        EngineError::Llm(LlmFailure::Http { status, body }) => {
+            format!("LLM Error: HTTP {status} \u{2014} {body}")
+        }
+        EngineError::Narrative(nf) => format!("LLM Error: {nf}"),
+        _ => format!("LLM Error: {e}"),
+    }
+}
+
+pub fn load_messages_with_swipes(storage: &Storage) -> Result<Vec<Message>, EngineError> {
+    let mut messages = storage.load_message_rows()?;
+    let ids: Vec<u64> = messages.iter().map(|m| m.id).collect();
+    let swipes_map = storage.load_swipes_for_messages(&ids)?;
+    for msg in &mut messages {
+        if let Some(swipes) = swipes_map.get(&msg.id) {
+            msg.swipes = swipes.clone();
+            let fallback_applied = msg.ensure_valid_swipe_index();
+            if fallback_applied {
+                tracing::warn!(
+                    "active_swipe_index was out of bounds for message {} ({} swipes), fell back to 0",
+                    msg.id,
+                    msg.swipes.len()
+                );
+            }
+            msg.set_active_swipe(msg.active_swipe_index);
+        }
+    }
+    Ok(messages)
+}
 
 pub enum ApplicationError {
     Validation(String),
@@ -145,16 +208,7 @@ impl DefaultApplicationService {
         &self.is_generating
     }
 
-    #[cfg(test)]
-    #[allow(dead_code)]
-    pub(crate) fn load_state_for_test(&self) -> GameState {
-        let ctx = self.synthesize_ctx();
-        crate::application::context::load_state_for_test(&ctx)
-    }
-
-    pub(crate) fn load_world_snapshot(
-        &self,
-    ) -> Result<crate::application::context::WorldSnapshot, EngineError> {
+    pub(crate) fn load_world_snapshot(&self) -> Result<WorldSnapshot, EngineError> {
         let game_id = self.storage.current_game_id();
         let game = self
             .storage
@@ -176,7 +230,7 @@ impl DefaultApplicationService {
         for n in npcs_list {
             npcs.insert(n.id.clone(), n);
         }
-        Ok(crate::application::context::WorldSnapshot {
+        Ok(WorldSnapshot {
             world: Arc::new(world_with_map.world_card),
             map: Arc::new(world_with_map.map),
             player: Arc::new(player),
@@ -184,38 +238,93 @@ impl DefaultApplicationService {
         })
     }
 
-    pub(crate) fn synthesize_ctx(&self) -> OpContext {
-        let snapshot = self.load_world_snapshot().unwrap_or_else(|e| {
-            tracing::warn!("synthesize_ctx: falling back to empty world snapshot: {e}");
-            crate::application::context::WorldSnapshot::empty()
-        });
-        OpContext {
-            storage: self.storage.clone(),
-            preset_storage: self.preset_storage.clone(),
-            settings: self.settings.clone(),
-            cancel_token: self.cancel_token.clone(),
-            is_generating: self.is_generating.clone(),
-            world_snapshot: snapshot,
-        }
+    fn world_snapshot_or_empty(&self) -> WorldSnapshot {
+        self.load_world_snapshot().unwrap_or_else(|e| {
+            tracing::warn!("load_world_snapshot: falling back to empty world snapshot: {e}");
+            WorldSnapshot::empty()
+        })
     }
 
     pub fn load_or_fresh(&self) -> Result<GameState, EngineError> {
-        let ctx = self.synthesize_ctx();
-        Ok(crate::application::context::load_or_fresh(&ctx))
+        match self.load_expecting_valid_state() {
+            Ok(state) => Ok(state),
+            Err(e) => {
+                tracing::error!(
+                    "Failed to load game state ({e}), falling back to fresh state. This may indicate data corruption."
+                );
+                let snap = self.world_snapshot_or_empty();
+                let starting_room_id = snap.world.starting_room_id();
+                Ok(GameState::new(
+                    snap.world,
+                    snap.map,
+                    snap.player,
+                    (*snap.npcs).values().cloned().collect(),
+                    starting_room_id,
+                ))
+            }
+        }
     }
+
     pub fn load_expecting_valid_state(&self) -> Result<GameState, EngineError> {
-        let ctx = self.synthesize_ctx();
-        crate::application::context::load_expecting_valid_state(&ctx)
+        let snap = self.world_snapshot_or_empty();
+        let snapshot = self.storage.load_latest_snapshot()?;
+        let mut state = match snapshot {
+            Some(snap_data) => GameState::from_snapshot(
+                &snap_data,
+                Arc::clone(&snap.world),
+                Arc::clone(&snap.map),
+                Arc::clone(&snap.player),
+                (*snap.npcs).clone(),
+            ),
+            None => {
+                let starting_room_id = snap.world.starting_room_id();
+                GameState::new(
+                    Arc::clone(&snap.world),
+                    Arc::clone(&snap.map),
+                    Arc::clone(&snap.player),
+                    (*snap.npcs).values().cloned().collect(),
+                    starting_room_id,
+                )
+            }
+        };
+        self.load_messages_into_state(&mut state);
+        Ok(state)
     }
 
     pub fn save_state(&self, state: &GameState) -> Result<u64, EngineError> {
-        let ctx = self.synthesize_ctx();
-        crate::application::context::save_state(&ctx, state)
+        let snapshot = GameStateSnapshot::from_game_state(state);
+        self.storage.save_snapshot(&snapshot)
     }
 
     pub fn save_message_and_snapshot(&self, state: &mut GameState) -> Result<u64, EngineError> {
-        let ctx = self.synthesize_ctx();
-        crate::application::context::save_message_and_snapshot(&ctx, state)
+        let snapshot = GameStateSnapshot::from_game_state(state);
+        let snapshot_id = self.storage.save_snapshot(&snapshot)?;
+
+        if let Some(ref mut target) = state.narrative.retry_target {
+            let idx = target.swipes.len().saturating_sub(1);
+            if let Some(last_swipe) = target.swipes.last_mut() {
+                if last_swipe.snapshot_id.is_none() {
+                    last_swipe.snapshot_id = Some(snapshot_id);
+                    self.storage.insert_swipe(target.id, last_swipe, idx)?;
+                    self.storage.update_active_swipe(target.id, idx)?;
+                }
+            }
+        }
+
+        if let Some(msg) = state.narrative.history.last_mut() {
+            if msg.is_unpersisted() {
+                msg.set_snapshot_id(Some(snapshot_id));
+                if let Some(swipe) = msg.swipes.first_mut() {
+                    swipe.snapshot_id = Some(snapshot_id);
+                }
+                let id = self.storage.insert_message(&*msg)?;
+                for (idx, swipe) in msg.swipes.iter().enumerate() {
+                    self.storage.insert_swipe(id, swipe, idx)?;
+                }
+                msg.id = id;
+            }
+        }
+        Ok(snapshot_id)
     }
 
     pub fn delete_and_remove_message(
@@ -223,14 +332,13 @@ impl DefaultApplicationService {
         state: &mut GameState,
         id: u64,
     ) -> Result<(), EngineError> {
-        let ctx = self.synthesize_ctx();
-        crate::application::context::delete_and_remove_message(&ctx, state, id)
+        self.storage.delete_message(id)?;
+        state.narrative.history.retain(|m| m.id != id);
+        Ok(())
     }
 
-    pub fn load_messages_with_swipes(
-        &self,
-    ) -> Result<Vec<crate::domain::model::message::Message>, EngineError> {
-        crate::application::context::load_messages_with_swipes(&self.storage)
+    pub fn load_messages_with_swipes(&self) -> Result<Vec<Message>, EngineError> {
+        load_messages_with_swipes(&self.storage)
     }
 
     pub fn load_messages_into_state(&self, state: &mut GameState) {
@@ -240,14 +348,38 @@ impl DefaultApplicationService {
     }
 
     pub fn build_fresh_initial_state(&self) -> Result<GameState, EngineError> {
-        let ctx = self.synthesize_ctx();
-        Ok(ctx.build_fresh_initial_state())
+        let snap = self.world_snapshot_or_empty();
+        let starting_room_id = snap.world.starting_room_id();
+        let mut initial_state = GameState::new(
+            Arc::clone(&snap.world),
+            Arc::clone(&snap.map),
+            Arc::clone(&snap.player),
+            (*snap.npcs).values().cloned().collect(),
+            starting_room_id.clone(),
+        );
+
+        if let Some(scenario) = snap.world.default_scenario() {
+            let room_name = snap
+                .map
+                .get_room_by_id(&starting_room_id)
+                .map(|r| r.name.clone())
+                .unwrap_or_else(|| starting_room_id.clone());
+
+            initial_state.narrative.pending_location = Some(room_name);
+
+            let text = render_template(&scenario.text, &TemplateVars::new(&snap.player.sheet.name));
+            if !text.is_empty() {
+                initial_state.add_message(text, None, MessageType::Narration);
+            }
+
+            initial_state.init_scenario_npcs(scenario);
+        }
+
+        Ok(initial_state)
     }
 
-    pub fn load_messages(
-        &self,
-    ) -> Result<Vec<crate::domain::model::message::Message>, EngineError> {
-        crate::application::context::load_messages_with_swipes(&self.storage)
+    pub fn load_messages(&self) -> Result<Vec<Message>, EngineError> {
+        load_messages_with_swipes(&self.storage)
     }
 
     pub fn update_message_text(&self, id: u64, text: &str) -> Result<(), EngineError> {
@@ -261,13 +393,7 @@ impl DefaultApplicationService {
             settings.active_quantifier_prompt_preset_id.clone()
         };
         match self.preset_storage.get_preset(&preset_id) {
-            Ok(Some(preset)) => {
-                crate::application::narrative_prompt::assembler::assemble_prompt_text(
-                    &preset,
-                    &[],
-                    None,
-                )
-            }
+            Ok(Some(preset)) => assemble_prompt_text(&preset, &[], None),
             Ok(None) => {
                 tracing::error!(
                     "active quantifier preset '{preset_id}' not found — defaults not seeded?"
@@ -283,10 +409,25 @@ impl DefaultApplicationService {
 
     pub fn find_retry_anchor<'a>(
         &self,
-        messages: &'a [crate::domain::model::message::Message],
-    ) -> Option<(usize, &'a crate::domain::model::message::Message, u64)> {
-        let ctx = self.synthesize_ctx();
-        ctx.find_retry_anchor(messages)
+        messages: &'a [Message],
+    ) -> Option<(usize, &'a Message, u64)> {
+        if messages.is_empty() {
+            return None;
+        }
+        let is_event = messages
+            .last()
+            .map(|m| m.event_header().is_some())
+            .unwrap_or(false);
+        let anchor_idx = if is_event {
+            messages.iter().rposition(|m| m.event_header().is_none())?
+        } else {
+            messages
+                .iter()
+                .rposition(|m| m.message_type == MessageType::Input)?
+        };
+        let anchor_msg = &messages[anchor_idx];
+        let snapshot_id = *anchor_msg.snapshot_id().as_ref()?;
+        Some((anchor_idx, anchor_msg, snapshot_id))
     }
 
     pub fn set_game_id(&self, game_id: u64) {

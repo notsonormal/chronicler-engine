@@ -2,6 +2,8 @@
 use std::sync::{Arc, RwLock};
 
 use crate::application::OpContext;
+use crate::application::application_service::DefaultApplicationService;
+use crate::application::game_service::GameService;
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::domain::model::settings::AppSettings;
 use crate::domain::model::state::game_state::GameState;
@@ -74,7 +76,7 @@ pub fn seed_test_world_into_storage(storage: &Storage, state: &GameState) {
 fn build_test_context(state: GameState, storage: Arc<Storage>) -> OpContext {
     OpContext {
         storage,
-        world_snapshot: crate::application::context::WorldSnapshot {
+        world_snapshot: crate::application::application_service::WorldSnapshot {
             world: state.world.clone(),
             map: state.map.clone(),
             player: state.player.clone(),
@@ -131,7 +133,7 @@ pub fn make_test_context_with_sqlite(state: GameState) -> crate::error::Result<O
 
     Ok(OpContext {
         storage,
-        world_snapshot: crate::application::context::WorldSnapshot {
+        world_snapshot: crate::application::application_service::WorldSnapshot {
             world: state.world.clone(),
             map: state.map.clone(),
             player: state.player.clone(),
@@ -199,4 +201,20 @@ pub fn make_test_app_with_sqlite(
     }
 
     build_test_app(state, storage)
+}
+
+/// Build a `DefaultApplicationService` from an `OpContext` + `GameService`.
+/// Test-only transitional: clones storage/preset_storage/settings/etc handles from OpContext. lib tests.
+pub fn make_test_app_service_from_ctx(
+    ctx: &OpContext,
+    game_service: Arc<GameService>,
+) -> DefaultApplicationService {
+    DefaultApplicationService::new(
+        ctx.storage.clone(),
+        ctx.preset_storage.clone(),
+        ctx.settings.clone(),
+        ctx.cancel_token.clone(),
+        ctx.is_generating.clone(),
+        game_service,
+    )
 }

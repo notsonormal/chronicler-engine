@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
-use crate::application::action_pipeline::retry::{retry_event_continuation, retry_main_narration};
+use crate::application::action_pipeline::retry::{
+    retry_event_continuation, retry_main_narration, retry_last_response_impl,
+};
 use crate::application::context::{OpContext, load_state_for_test};
+use crate::test_support::make_test_app_service_from_ctx;
 
 #[allow(unused_imports)]
 use crate::application::game_service::GameService;
@@ -105,8 +108,11 @@ fn save_pre_event(ctx: &OpContext) -> u64 {
 fn test_retry_no_snapshot() {
     let state = make_test_state();
     let ctx = crate::test_support::make_test_context_without_snapshot(state);
-    let service = make_service();
-    service.retry_last_response(ctx.clone());
+    let app = Arc::new(make_test_app_service_from_ctx(
+        &ctx,
+        Arc::new(make_service()),
+    ));
+    retry_last_response_impl(&app);
 
     let state = load_state_for_test(&ctx);
     assert!(
@@ -133,23 +139,28 @@ fn test_retry_load_messages_error() {
         ..base_ctx.clone()
     };
 
-    let service = make_service();
-    service.retry_last_response(ctx);
+    let app = Arc::new(make_test_app_service_from_ctx(
+        &ctx,
+        Arc::new(make_service()),
+    ));
+    retry_last_response_impl(&app);
 }
 
 #[test]
 fn test_retry_no_input() {
     let state = make_test_state();
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let service = make_service();
-    service.retry_last_response(ctx);
+    let app = Arc::new(make_test_app_service_from_ctx(
+        &ctx,
+        Arc::new(make_service()),
+    ));
+    retry_last_response_impl(&app);
 }
 
 #[test]
 fn test_retry_event_with_no_pre_event_fallback_to_main() {
     let state = make_test_state();
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let service = make_service();
 
     let _input_id = add_input_and_save(&ctx, "test input");
 
@@ -167,14 +178,17 @@ fn test_retry_event_with_no_pre_event_fallback_to_main() {
         );
     let _ = ctx.storage.save_snapshot(&snapshot);
 
-    service.retry_last_response(ctx);
+    let app = Arc::new(make_test_app_service_from_ctx(
+        &ctx,
+        Arc::new(make_service()),
+    ));
+    retry_last_response_impl(&app);
 }
 
 #[test]
 fn test_retry_event_with_no_pre_event_and_no_input() {
     let state = make_test_state();
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let service = make_service();
 
     let mut state = load_state_for_test(&ctx);
     state.add_message("Event only".to_string(), None, MessageType::Narration);
@@ -190,7 +204,11 @@ fn test_retry_event_with_no_pre_event_and_no_input() {
         );
     let _ = ctx.storage.save_snapshot(&snapshot);
 
-    service.retry_last_response(ctx);
+    let app = Arc::new(make_test_app_service_from_ctx(
+        &ctx,
+        Arc::new(make_service()),
+    ));
+    retry_last_response_impl(&app);
 }
 
 #[test]
@@ -212,7 +230,7 @@ fn test_retry_event_storage_error_on_pre_event() {
     }
     let base_ctx = OpContext {
         storage: Arc::clone(&storage),
-        world_snapshot: crate::application::context::WorldSnapshot {
+        world_snapshot: crate::application::application_service::WorldSnapshot {
             world: state.world.clone(),
             map: state.map.clone(),
             player: state.player.clone(),
@@ -234,10 +252,9 @@ fn test_retry_event_storage_error_on_pre_event() {
         TestOverride::internal("simulated load_by_id failure"),
     );
 
-    let service = make_service();
     let latest = load_state_for_test(&base_ctx);
 
-    let app = app_for_ctx(&base_ctx, Arc::new(service.clone()));
+    let app = app_for_ctx(&base_ctx, Arc::new(make_service()));
     let _ = retry_event_continuation(&app, latest);
 
     handle.clear("load_snapshot_by_id");
@@ -256,7 +273,6 @@ fn test_retry_event_storage_error_on_pre_event() {
 fn test_retry_event_missing_trigger_context() {
     let state = make_test_state();
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let service = make_service();
 
     let _input_id = add_input_and_save(&ctx, "test input");
     let _pre_event_id = save_pre_event(&ctx);
@@ -275,14 +291,17 @@ fn test_retry_event_missing_trigger_context() {
         );
     let _ = ctx.storage.save_snapshot(&snapshot);
 
-    service.retry_last_response(ctx);
+    let app = Arc::new(make_test_app_service_from_ctx(
+        &ctx,
+        Arc::new(make_service()),
+    ));
+    retry_last_response_impl(&app);
 }
 
 #[test]
 fn test_retry_event_continuation_cancels_before_llm() {
     let state = make_test_state();
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let service = make_service();
 
     let _input_id = add_input_and_save(&ctx, "test input");
     let _pre_main_id = save_pre_main(&ctx);
@@ -303,7 +322,7 @@ fn test_retry_event_continuation_cancels_before_llm() {
 
     ctx.cancel_token.cancel();
 
-    let app = app_for_ctx(&ctx, Arc::new(service.clone()));
+    let app = app_for_ctx(&ctx, Arc::new(make_service()));
     let _ = retry_event_continuation(&app, pre_event_state);
 
     let state = load_state_for_test(&ctx);
@@ -357,7 +376,8 @@ fn test_retry_event_trigger_narration_fails() {
         insert_message_with_swipe(&ctx, last);
     }
 
-    service.retry_last_response(ctx.clone());
+    let app = Arc::new(make_test_app_service_from_ctx(&ctx, Arc::new(service)));
+    retry_last_response_impl(&app);
 
     let state = load_state_for_test(&ctx);
     assert!(
@@ -407,14 +427,14 @@ fn test_retry_event_empty_continuation_text() {
         );
     let _ = ctx.storage.save_snapshot(&final_snapshot);
 
-    service.retry_last_response(ctx);
+    let app = Arc::new(make_test_app_service_from_ctx(&ctx, Arc::new(service)));
+    retry_last_response_impl(&app);
 }
 
 #[test]
 fn test_retry_main_no_pre_main_snapshot() {
     let state = make_test_state();
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let service = make_service();
 
     let mut state = load_state_for_test(&ctx);
     let player_name = state.player.sheet.name.clone();
@@ -438,7 +458,11 @@ fn test_retry_main_no_pre_main_snapshot() {
         insert_message_with_swipe(&ctx, last);
     }
 
-    service.retry_last_response(ctx.clone());
+    let app = Arc::new(make_test_app_service_from_ctx(
+        &ctx,
+        Arc::new(make_service()),
+    ));
+    retry_last_response_impl(&app);
 
     let state = load_state_for_test(&ctx);
     assert!(
@@ -454,8 +478,6 @@ fn test_retry_main_no_pre_main_snapshot() {
 fn test_retry_event_continuation_happy_path() {
     let state = make_test_state();
     let ctx = make_test_context_with_sqlite(state).unwrap();
-
-    let service = make_service();
 
     let _input_id = add_input_and_save(&ctx, "test input");
     let _pre_main_id = save_pre_main(&ctx);
@@ -492,7 +514,11 @@ fn test_retry_event_continuation_happy_path() {
         insert_message_with_swipe(&ctx, last);
     }
 
-    service.retry_last_response(ctx.clone());
+    let app = Arc::new(make_test_app_service_from_ctx(
+        &ctx,
+        Arc::new(make_service()),
+    ));
+    retry_last_response_impl(&app);
 
     let state = load_state_for_test(&ctx);
     assert!(
@@ -511,9 +537,8 @@ fn test_retry_main_narration_happy_path() {
     let _pre_main_id = save_pre_main(&ctx);
     let _final_id = add_narration_and_save(&ctx, "Narration text");
 
-    let service = make_service();
     let state = load_state_for_test(&ctx);
-    let app = app_for_ctx(&ctx, Arc::new(service.clone()));
+    let app = app_for_ctx(&ctx, Arc::new(make_service()));
     let _ = retry_main_narration(&app, state, "test input".to_string());
 }
 
@@ -536,7 +561,7 @@ fn test_retry_main_storage_error_on_pre_main() {
     }
     let base_ctx = OpContext {
         storage: Arc::clone(&storage),
-        world_snapshot: crate::application::context::WorldSnapshot {
+        world_snapshot: crate::application::application_service::WorldSnapshot {
             world: state.world.clone(),
             map: state.map.clone(),
             player: state.player.clone(),
@@ -559,8 +584,11 @@ fn test_retry_main_storage_error_on_pre_main() {
         TestOverride::internal("simulated load_by_id failure"),
     );
 
-    let service = make_service();
-    service.retry_last_response(base_ctx.clone());
+    let app = Arc::new(make_test_app_service_from_ctx(
+        &base_ctx,
+        Arc::new(make_service()),
+    ));
+    retry_last_response_impl(&app);
 
     handle.clear("load_snapshot_by_id");
 
@@ -688,7 +716,8 @@ fn test_retry_event_empty_continuation_triggers_error() {
         last.set_snapshot_id(Some(final_id));
         insert_message_with_swipe(&ctx, last);
     }
-    service.retry_last_response(ctx.clone());
+    let app = Arc::new(make_test_app_service_from_ctx(&ctx, Arc::new(service)));
+    retry_last_response_impl(&app);
     let state = load_state_for_test(&ctx);
     assert!(
         matches!(state.narrative.input_buffer.status, GenerationStatus::Error(ref msg) if msg.contains("empty response")),
@@ -701,7 +730,6 @@ fn test_retry_event_empty_continuation_triggers_error() {
 fn test_retry_appends_swipe_to_same_message() {
     let state = make_test_state();
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let service = make_service();
 
     let _input_id = add_input_and_save(&ctx, "test input");
     let _pre_main_id = save_pre_main(&ctx);
@@ -723,7 +751,11 @@ fn test_retry_appends_swipe_to_same_message() {
         .insert_swipe(narration_msg.id, &extra_swipe, 1)
         .unwrap();
 
-    service.retry_last_response(ctx.clone());
+    let app = Arc::new(make_test_app_service_from_ctx(
+        &ctx,
+        Arc::new(make_service()),
+    ));
+    retry_last_response_impl(&app);
 
     let msgs = ctx.load_messages().unwrap();
     let narration = msgs
@@ -750,7 +782,6 @@ fn test_retry_appends_swipe_to_same_message() {
 fn test_retrigger_event_impl_cancels_cleanly() {
     let state = make_test_state();
     let ctx = make_test_context_with_sqlite(state).unwrap();
-    let service = make_service();
 
     let _input_id = add_input_and_save(&ctx, "test input");
     let _pre_main_id = save_pre_main(&ctx);
@@ -789,7 +820,7 @@ fn test_retrigger_event_impl_cancels_cleanly() {
 
     ctx.cancel_token.cancel();
 
-    let app = app_for_ctx(&ctx, Arc::new(service.clone()));
+    let app = app_for_ctx(&ctx, Arc::new(make_service()));
     crate::application::action_pipeline::retrigger_event_impl(&app);
 
     let state = load_state_for_test(&ctx);

@@ -291,8 +291,10 @@ async fn test_pipeline_cancels_after_main_narration() {
 
     let ctx_clone = ctx.clone();
     let backend_clone = Arc::clone(&backend);
+    let app_clone = Arc::clone(&app);
     let handle = tokio::task::spawn_blocking(move || {
-        backend_clone.execute_action(ctx_clone.clone(), "look around".to_string());
+        let _ = (ctx_clone, backend_clone);
+        execute_action_impl(&app_clone, "look around".to_string());
     });
 
     assert!(
@@ -348,8 +350,10 @@ async fn test_pipeline_cancels_during_trigger_continuation() {
 
     let ctx_clone = ctx.clone();
     let backend_clone = Arc::clone(&backend);
+    let app_clone = Arc::clone(&app);
     let handle = tokio::task::spawn_blocking(move || {
-        backend_clone.execute_action(ctx_clone.clone(), "enter the shop".to_string());
+        let _ = (ctx_clone, backend_clone);
+        execute_action_impl(&app_clone, "enter the shop".to_string());
     });
 
     assert!(
@@ -499,8 +503,10 @@ fn test_streaming_narration_saved_before_quantifier_complete() {
 
     let ctx_clone = ctx.clone();
     let backend_clone = Arc::clone(&backend_arc);
+    let app_clone = Arc::clone(&app);
     let handle = thread::spawn(move || {
-        backend_clone.execute_action(ctx_clone, "look around".to_string());
+        let _ = (ctx_clone, backend_clone);
+        execute_action_impl(&app_clone, "look around".to_string());
     });
 
     let narration_found = wait_for_condition(

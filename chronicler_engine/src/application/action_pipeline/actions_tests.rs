@@ -1,5 +1,7 @@
 use std::sync::{Arc, Barrier};
 
+use crate::application::action_pipeline::execute_action_impl;
+use crate::application::application_service::DefaultApplicationService;
 use crate::application::context::load_state_for_test;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
@@ -9,6 +11,7 @@ use crate::application::agents::registry::AgentRegistry;
 use crate::application::agents::quantifier::QuantifierAgent;
 use crate::application::agents::Agent;
 use crate::test_support::fixtures::{TestGameState, TestNpc};
+use crate::test_support::make_test_app_service_from_ctx;
 use crate::test_support::make_test_context;
 use crate::test_support::make_test_recorder;
 use crate::adapters::driven::llm::providers::MockBackend;
@@ -73,7 +76,8 @@ fn test_execute_action_impl_completes_and_persists_state() {
     let quantifier_provider = Arc::new(MockBackend::default())
         as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
     let service = make_test_service(narrator_recorder, quantifier_provider);
-    service.execute_action(ctx.clone(), "look".to_string());
+    let app = Arc::new(make_test_app_service_from_ctx(&ctx, Arc::new(service)));
+    execute_action_impl(&app, "look".to_string());
     let final_state = load_state_for_test(&ctx);
     assert_eq!(
         final_state.narrative.input_buffer.status,
@@ -106,7 +110,8 @@ fn test_execute_action_impl_clears_last_trigger() {
     let quantifier_provider = Arc::new(MockBackend::default())
         as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
     let service = make_test_service(narrator_recorder, quantifier_provider);
-    service.execute_action(ctx.clone(), "look".to_string());
+    let app = Arc::new(make_test_app_service_from_ctx(&ctx, Arc::new(service)));
+    execute_action_impl(&app, "look".to_string());
     let final_state = load_state_for_test(&ctx);
     assert!(
         final_state.narrative.last_trigger.is_none(),
@@ -122,7 +127,8 @@ fn test_execute_action_impl_handles_narration_error() {
     let quantifier_provider = Arc::new(MockBackend::default())
         as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
     let service = make_test_service(narrator_recorder, quantifier_provider);
-    service.execute_action(ctx.clone(), "look".to_string());
+    let app = Arc::new(make_test_app_service_from_ctx(&ctx, Arc::new(service)));
+    execute_action_impl(&app, "look".to_string());
     let final_state = load_state_for_test(&ctx);
     assert!(
         matches!(
@@ -142,7 +148,8 @@ fn test_execute_action_impl_handles_cancellation() {
     let quantifier_provider = Arc::new(MockBackend::default())
         as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
     let service = make_test_service(narrator_recorder, quantifier_provider);
-    service.execute_action(ctx.clone(), "look".to_string());
+    let app = Arc::new(make_test_app_service_from_ctx(&ctx, Arc::new(service)));
+    execute_action_impl(&app, "look".to_string());
     let final_state = load_state_for_test(&ctx);
     assert_eq!(
         final_state.narrative.input_buffer.status,
@@ -164,7 +171,8 @@ fn test_execute_action_impl_preserves_existing_input_log() {
     let quantifier_provider = Arc::new(MockBackend::default())
         as Arc<dyn crate::application::ports::llm_provider::LlmProvider>;
     let service = make_test_service(narrator_recorder, quantifier_provider);
-    service.execute_action(ctx.clone(), "examine room".to_string());
+    let app = Arc::new(make_test_app_service_from_ctx(&ctx, Arc::new(service)));
+    execute_action_impl(&app, "examine room".to_string());
     let final_state = load_state_for_test(&ctx);
     let entries: Vec<_> = final_state.narrative.history().into_iter().collect();
     let input_idx = entries
@@ -200,11 +208,15 @@ fn test_phase_transitions_to_quantifying_during_post_generation() {
         release: release.clone(),
     });
     let service = Arc::new(make_test_service_with_agent(narrator_recorder, sync_agent));
+    let app: Arc<DefaultApplicationService> =
+        Arc::new(make_test_app_service_from_ctx(&ctx, Arc::clone(&service)));
 
     let ctx_clone = ctx.clone();
     let service_clone = service.clone();
     let handle = thread::spawn(move || {
-        service_clone.execute_action(ctx_clone, "look".to_string());
+        let app_clone = Arc::clone(&app);
+        execute_action_impl(&app_clone, "look".to_string());
+        let _ = (ctx_clone, service_clone);
     });
 
     entered.wait();
@@ -244,11 +256,15 @@ fn test_narration_saved_before_quantifying_phase() {
         release: release.clone(),
     });
     let service = Arc::new(make_test_service_with_agent(narrator_recorder, sync_agent));
+    let app: Arc<DefaultApplicationService> =
+        Arc::new(make_test_app_service_from_ctx(&ctx, Arc::clone(&service)));
 
     let ctx_clone = ctx.clone();
     let service_clone = service.clone();
     let handle = thread::spawn(move || {
-        service_clone.execute_action(ctx_clone, "test".to_string());
+        let app_clone = Arc::clone(&app);
+        execute_action_impl(&app_clone, "test".to_string());
+        let _ = (ctx_clone, service_clone);
     });
 
     entered.wait();

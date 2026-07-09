@@ -4,42 +4,17 @@
 
 use std::sync::{Arc, RwLock};
 
-use crate::application::context::OpContext;
 use crate::domain::model::settings::AppSettings;
 use crate::application::agents::quantifier::QuantifierAgent;
 use crate::application::agents::registry::AgentRegistry;
 use crate::application::narrative_prompt::PromptAssembler;
 use crate::application::llm_recorder::LlmCallRecorder;
-use crate::application::application_service::DefaultApplicationService;
 
 #[derive(Clone)]
 pub struct GameService {
     pub llm_recorder: Arc<LlmCallRecorder>,
     pub prompt_assembler: Arc<PromptAssembler>,
     pub agent_registry: Arc<AgentRegistry>,
-}
-
-impl GameService {
-    pub fn retry_last_response(&self, ctx: OpContext) {
-        let app = self.synthesize_app(ctx);
-        crate::application::action_pipeline::retry_last_response_impl(&app);
-    }
-
-    pub fn execute_action(&self, ctx: OpContext, input: String) {
-        let app = self.synthesize_app(ctx);
-        crate::application::action_pipeline::execute_action_impl(&app, input);
-    }
-
-    fn synthesize_app(&self, ctx: OpContext) -> DefaultApplicationService {
-        DefaultApplicationService::new(
-            ctx.storage.clone(),
-            ctx.preset_storage.clone(),
-            ctx.settings.clone(),
-            ctx.cancel_token.clone(),
-            ctx.is_generating.clone(),
-            Arc::new(self.clone()),
-        )
-    }
 }
 
 impl GameService {

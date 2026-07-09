@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use crate::application::context::map_llm_error;
+use crate::application::application_service::map_llm_error;
 use crate::domain::engine::action_processing::{
     FreeActionContext, TriggerMatch, apply_npc_events, commit_trigger_narration,
     execute_freeaction_impl,

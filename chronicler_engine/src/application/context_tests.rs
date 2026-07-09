@@ -99,7 +99,7 @@ fn minimal_ctx() -> OpContext {
     );
     OpContext {
         storage,
-        world_snapshot: crate::application::context::WorldSnapshot {
+        world_snapshot: crate::application::application_service::WorldSnapshot {
             world: state.world.clone(),
             map: state.map.clone(),
             player: state.player.clone(),
@@ -138,7 +138,7 @@ fn test_load_or_fresh_fallback_when_empty() {
     let storage = Arc::new(Storage::new_in_memory());
     let ctx = OpContext {
         storage,
-        world_snapshot: crate::application::context::WorldSnapshot {
+        world_snapshot: crate::application::application_service::WorldSnapshot {
             world: state.world.clone(),
             map: state.map.clone(),
             player: state.player.clone(),
@@ -311,7 +311,7 @@ fn test_load_or_fresh_fallback_on_snapshot_error() {
     );
     let ctx = OpContext {
         storage,
-        world_snapshot: crate::application::context::WorldSnapshot {
+        world_snapshot: crate::application::application_service::WorldSnapshot {
             world: state.world.clone(),
             map: state.map.clone(),
             player: state.player.clone(),
@@ -340,7 +340,7 @@ fn test_save_message_and_snapshot_propagates_snapshot_error() {
     handle.set("save_snapshot", TestOverride::config("test snap error"));
     let ctx = OpContext {
         storage,
-        world_snapshot: crate::application::context::WorldSnapshot {
+        world_snapshot: crate::application::application_service::WorldSnapshot {
             world: state.world.clone(),
             map: state.map.clone(),
             player: state.player.clone(),

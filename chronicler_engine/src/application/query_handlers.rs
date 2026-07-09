@@ -4,7 +4,7 @@
 use crate::application::ApplicationError;
 use crate::application::DebugStateView;
 use crate::application::application_service::DefaultApplicationService;
-use crate::application::context::WorldSnapshot;
+use crate::application::application_service::WorldSnapshot;
 use crate::error::EngineError;
 use crate::application::ports::llm_message_repository::LlmMessage;
 use crate::domain::model::state::game_state::GameState;

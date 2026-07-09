@@ -8,35 +8,15 @@ use std::sync::{Arc, RwLock};
 use tokio_util::sync::CancellationToken;
 
 use crate::error::{EngineError, LlmFailure};
-use crate::domain::model::character::NpcCard;
 use crate::domain::model::message::Message;
 use crate::domain::model::settings::AppSettings;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::message_types::MessageType;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::domain::model::template::{render_template, TemplateVars};
-use crate::domain::model::world::WorldCard;
 use crate::application::narrative_prompt::assembler::assemble_prompt_text;
 use crate::adapters::driven::storage::Storage;
-
-#[derive(Clone)]
-pub struct WorldSnapshot {
-    pub world: Arc<WorldCard>,
-    pub map: Arc<crate::domain::model::map::MapDef>,
-    pub player: Arc<crate::domain::model::character::PlayerCard>,
-    pub npcs: Arc<std::collections::HashMap<String, NpcCard>>,
-}
-
-impl WorldSnapshot {
-    pub fn empty() -> Self {
-        Self {
-            world: Arc::new(WorldCard::default()),
-            map: Arc::new(crate::domain::model::map::MapDef::default()),
-            player: Arc::new(crate::domain::model::character::PlayerCard::default()),
-            npcs: Arc::new(std::collections::HashMap::new()),
-        }
-    }
-}
+use crate::application::application_service::WorldSnapshot;
 
 #[derive(Clone)]
 pub struct OpContext {
