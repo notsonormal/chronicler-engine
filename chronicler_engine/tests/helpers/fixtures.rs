@@ -361,7 +361,7 @@ pub fn seed_test_world_with_scenario(storage: &Storage) {
 pub fn make_test_ctx(storage: Arc<Storage>, state: GameState) -> OpContext {
     OpContext {
         storage,
-        world_snapshot: chronicler_engine::application::context::WorldSnapshot {
+        world_snapshot: chronicler_engine::application::application_service::WorldSnapshot {
             world: state.world,
             map: state.map,
             player: state.player,

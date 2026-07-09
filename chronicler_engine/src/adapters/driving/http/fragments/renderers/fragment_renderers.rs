@@ -37,8 +37,9 @@ pub fn render_header(state: &AppState) -> Result<String> {
 }
 
 pub fn render_story_log(state: &AppState) -> Result<String> {
-    let (entries, has_last_trigger) = query_handlers::get_story_log_entries(&state.application_service)
-        .map_err(|e| EngineError::Config(e.to_string()))?;
+    let (entries, has_last_trigger) =
+        query_handlers::get_story_log_entries(&state.application_service)
+            .map_err(|e| EngineError::Config(e.to_string()))?;
 
     let entries: Vec<_> = entries.into_iter().take(MAX_LOG_DISPLAY).collect();
     let template = StoryLogTemplate::new(&entries, has_last_trigger);
@@ -67,8 +68,8 @@ pub fn render_visual_sidebar(state: &AppState) -> Result<String> {
 }
 
 pub fn render_action_area(state: &AppState) -> Result<String> {
-    let (status, phase) =
-        query_handlers::get_input_status(&state.application_service).map_err(|e| EngineError::Config(e.to_string()))?;
+    let (status, phase) = query_handlers::get_input_status(&state.application_service)
+        .map_err(|e| EngineError::Config(e.to_string()))?;
 
     let vm = ActionAreaViewModel::new(&status, &phase);
     let template = ActionAreaTemplate::new(vm);

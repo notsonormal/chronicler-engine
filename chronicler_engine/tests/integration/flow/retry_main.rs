@@ -513,7 +513,7 @@ fn test_retry_no_pre_main_snapshot() {
 
     let ctx = chronicler_engine::application::OpContext {
         storage,
-        world_snapshot: chronicler_engine::application::context::WorldSnapshot {
+        world_snapshot: chronicler_engine::application::application_service::WorldSnapshot {
             world: state.world.clone(),
             map: state.map.clone(),
             player: state.player.clone(),

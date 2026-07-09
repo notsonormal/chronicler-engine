@@ -88,7 +88,10 @@ fn test_arrival_narration_survives_reload() {
     let history_narration_text = history_narration.text.clone();
 
     let reloaded_messages =
-        chronicler_engine::application::context::load_messages_with_swipes(&ctx.storage).unwrap();
+        chronicler_engine::application::application_service::load_messages_with_swipes(
+            &ctx.storage,
+        )
+        .unwrap();
 
     assert!(
         !reloaded_messages.is_empty(),

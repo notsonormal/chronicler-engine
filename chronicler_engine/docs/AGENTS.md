@@ -30,7 +30,7 @@ Accumulated violations in existing docs: invoke the [`chronicler-docs-hygiene`](
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-07-08 18:07 UTC*
+*Index last generated: 2026-07-09 11:38 UTC*
 
 ### `docs/adr/`
 
@@ -82,11 +82,8 @@ Accumulated violations in existing docs: invoke the [`chronicler-docs-hygiene`](
 
 - [Plan: Abstraction Anti-Pattern Prevention via Advisory Healthcheck](./plans/abstraction-antipattern-healthcheck-plan.md)
 - [Super-Plan: Abstraction-Fixes Follow-Up](./plans/abstraction-fixes-followup-superplan.md)
-- [Block `git checkout` and `git restore` (entire commands) in both extensions](./plans/block-git-checkout-and-git-restore-entire-commands-in-both-e.md)
-- [Extend subagent-guardrails: reliable subagent detection + block `git reset` & `git stash`](./plans/extend-subagent-guardrails-reliable-subagent-detection-block.md)
 - [Plan: Mapless Worlds via Freeform Location Names](./plans/mapless-worlds-plan.md)
 - [Title](./plans/opcontext-kill-plan.md)
-- [Plan: pi-plan-mode Extension Overhaul](./plans/pi-plan-mode-overhaul.md)
 - [Plan: Reliability and Cancellation](./plans/reliability-and-cancellation-plan.md)
 - [AI Steering & Guided Generation](./plans/steering-and-guided-generation.md)
 - [Subplan B: Quantifier `destination` field split](./plans/subplan-b-quantifier-field-split.md)

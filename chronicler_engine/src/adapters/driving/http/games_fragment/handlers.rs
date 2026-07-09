@@ -25,9 +25,7 @@ fn game_to_view(g: Game) -> GameRowView {
     }
 }
 
-pub async fn list_games_fragment(
-    State(state): State<AppState>,
-) -> Response<axum::body::Body> {
+pub async fn list_games_fragment(State(state): State<AppState>) -> Response<axum::body::Body> {
     let app = &state.application_service;
     let Ok(games) = app.list_games() else {
         return internal_error("Failed to list games");

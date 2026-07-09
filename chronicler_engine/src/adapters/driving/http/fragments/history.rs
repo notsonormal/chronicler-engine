@@ -26,7 +26,9 @@ pub async fn edit_history_handler(
     Ok(ok("<span class=\"status ready\">Edited</span>"))
 }
 
-pub async fn delete_history_handler(State(state): State<AppState>) -> Result<Response, ApplicationError> {
+pub async fn delete_history_handler(
+    State(state): State<AppState>,
+) -> Result<Response, ApplicationError> {
     message_editing::delete_last(&state.application_service)?;
     Ok(ok(""))
 }

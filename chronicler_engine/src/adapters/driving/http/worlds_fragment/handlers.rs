@@ -52,7 +52,9 @@ impl WorldForm {
     }
 }
 
-fn games_per_world(games: &[crate::domain::model::game::Game]) -> std::collections::HashMap<String, usize> {
+fn games_per_world(
+    games: &[crate::domain::model::game::Game],
+) -> std::collections::HashMap<String, usize> {
     let mut map: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
     for game in games {
         *map.entry(game.world_key.clone()).or_insert(0) += 1;
@@ -60,9 +62,7 @@ fn games_per_world(games: &[crate::domain::model::game::Game]) -> std::collectio
     map
 }
 
-pub async fn list_worlds_fragment(
-    State(state): State<AppState>,
-) -> Response<axum::body::Body> {
+pub async fn list_worlds_fragment(State(state): State<AppState>) -> Response<axum::body::Body> {
     let app = &state.application_service;
     let worlds = match app.list_worlds() {
         Ok(w) => w,

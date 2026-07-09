@@ -203,7 +203,7 @@ fn test_retry_room_not_found() {
 
     let ctx = chronicler_engine::application::OpContext {
         storage,
-        world_snapshot: chronicler_engine::application::context::WorldSnapshot {
+        world_snapshot: chronicler_engine::application::application_service::WorldSnapshot {
             world: state.world.clone(),
             map: state.map.clone(),
             player: state.player.clone(),
@@ -301,7 +301,7 @@ fn test_retry_llm_error() {
 
     let ctx = chronicler_engine::application::OpContext {
         storage,
-        world_snapshot: chronicler_engine::application::context::WorldSnapshot {
+        world_snapshot: chronicler_engine::application::application_service::WorldSnapshot {
             world: state.world.clone(),
             map: state.map.clone(),
             player: state.player.clone(),
@@ -396,7 +396,7 @@ fn test_retry_empty_narration() {
 
     let ctx = chronicler_engine::application::OpContext {
         storage,
-        world_snapshot: chronicler_engine::application::context::WorldSnapshot {
+        world_snapshot: chronicler_engine::application::application_service::WorldSnapshot {
             world: state.world.clone(),
             map: state.map.clone(),
             player: state.player.clone(),
@@ -492,7 +492,7 @@ fn test_retry_main_narration_uses_pre_main_snapshot() {
 
     let ctx = chronicler_engine::application::OpContext {
         storage,
-        world_snapshot: chronicler_engine::application::context::WorldSnapshot {
+        world_snapshot: chronicler_engine::application::application_service::WorldSnapshot {
             world: state.world.clone(),
             map: state.map.clone(),
             player: state.player.clone(),

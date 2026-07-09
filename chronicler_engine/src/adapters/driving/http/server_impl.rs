@@ -35,9 +35,7 @@ pub async fn run_server_with_config(
             ),
         ),
         text_check_service: Arc::clone(&resources.text_check_service),
-        cancel_token: Arc::new(std::sync::RwLock::new(
-            cancel_token,
-        )),
+        cancel_token: Arc::new(std::sync::RwLock::new(cancel_token)),
     };
     let cancel_token_arc = Arc::clone(&app_state.cancel_token);
 

@@ -19,11 +19,8 @@ async fn test_switch_game_ok() {
     let _ = app.create_game("test-world", "test-persona");
     let games = app.list_games().unwrap();
     if let Some(game) = games.first() {
-        let result = switch_game_handler(
-            axum::extract::State(state),
-            axum::extract::Path(game.id),
-        )
-        .await;
+        let result =
+            switch_game_handler(axum::extract::State(state), axum::extract::Path(game.id)).await;
         let status = match result {
             Ok(resp) => resp.status(),
             Err(e) => e.into_response().status(),
