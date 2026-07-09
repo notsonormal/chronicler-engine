@@ -7,7 +7,9 @@ use chronicler_engine::application::game_service::GameService;
 use chronicler_engine::domain::model::character::NpcCard;
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::domain::model::state::message_types::MessageType;
-use chronicler_engine::test_support::{make_test_context_with_sqlite, make_test_recorder_with_storage};
+use chronicler_engine::test_support::{
+    make_test_app_with_game_service, make_test_recorder_with_storage,
+};
 
 use crate::pipeline_helpers::{create_test_state_with_map, latest_state};
 
@@ -15,9 +17,7 @@ use crate::pipeline_helpers::{create_test_state_with_map, latest_state};
 fn test_arrival_narration_survives_reload() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
-    let ctx = make_test_context_with_sqlite(state).unwrap();
-
-    let preset_storage = ctx.preset_storage.clone();
+    let preset_storage = chronicler_engine::test_support::default_test_preset_storage();
     let arrival_preset = preset_storage
         .get_preset("system_default")
         .ok()
@@ -27,19 +27,22 @@ fn test_arrival_narration_survives_reload() {
     let nearby_npcs: Vec<NpcCard> = vec![];
     let all_npcs: Vec<NpcCard> = vec![];
 
-    let recorder = make_test_recorder_with_storage(
-        Arc::new(MockBackend::default())
-            as Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider>,
-        Arc::clone(&ctx.storage),
-    );
-    let app: Arc<chronicler_engine::application::application_service::DefaultApplicationService> =
-        Arc::new(crate::fixtures::make_test_app_service_from_ctx(
-            &ctx,
-            Arc::new(GameService::with_mock_quantifier(
-                Arc::clone(&recorder),
-                Arc::new(MockBackend::default()),
-            )),
-        ));
+    let llm: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
+        Arc::new(MockBackend::default());
+    let app = make_test_app_with_game_service(state, |storage| {
+        let recorder = make_test_recorder_with_storage(
+            Arc::clone(&llm)
+                as Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider>,
+            Arc::clone(storage),
+        );
+        Arc::new(GameService::with_mock_quantifier(
+            Arc::clone(&recorder),
+            Arc::new(MockBackend::default()),
+        ))
+    })
+    .unwrap();
+
+    let recorder = make_test_recorder_with_storage(Arc::clone(&llm), Arc::clone(app.storage()));
     let task_ctx = ArrivalTaskContext::new_for_test(
         Arc::clone(&app),
         "room1".to_string(),
@@ -54,7 +57,7 @@ fn test_arrival_narration_survives_reload() {
 
     task_ctx.run_sync();
 
-    let messages = ctx.storage.list_latest_llm_messages(50).unwrap();
+    let messages = app.storage().list_latest_llm_messages(50).unwrap();
     let narration_msgs: Vec<_> = messages
         .iter()
         .filter(|m| m.agent_name == "narrator")
@@ -89,7 +92,7 @@ fn test_arrival_narration_survives_reload() {
 
     let reloaded_messages =
         chronicler_engine::application::application_service::load_messages_with_swipes(
-            &ctx.storage,
+            app.storage(),
         )
         .unwrap();
 

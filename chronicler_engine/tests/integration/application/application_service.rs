@@ -8,8 +8,8 @@ use chronicler_engine::domain::model::state::generation_status::GenerationStatus
 use chronicler_engine::domain::model::state::message_types::MessageType;
 
 use crate::fixtures::{
-    create_basic_test_state, create_test_storage_arc as create_storage,
-    make_test_app_service_from_ctx as make_app, make_test_ctx, seed_test_world,
+    create_basic_test_state, create_test_storage_arc as create_storage, make_test_app_with_storage,
+    seed_test_world,
 };
 
 fn create_game_service() -> Arc<GameService> {
@@ -22,12 +22,11 @@ fn test_create_game_integration() {
     seed_test_world(&storage);
     let game_service = create_game_service();
     let state = create_basic_test_state();
-    let ctx = make_test_ctx(storage.clone(), state);
-
-    let app_service = make_app(&ctx, game_service);
+    let world_key = state.world.key.clone();
+    let app_service = make_test_app_with_storage(storage.clone(), state, game_service);
 
     let game_id = app_service
-        .create_game(&ctx.world_snapshot.world.key, "hero")
+        .create_game(&world_key, "hero")
         .expect("create_game should succeed");
     assert!(game_id > 0, "Game ID should be positive");
 
@@ -41,15 +40,14 @@ fn test_switch_game_integration() {
     seed_test_world(&storage);
     let game_service = create_game_service();
     let state = create_basic_test_state();
-    let ctx = make_test_ctx(storage.clone(), state);
-
-    let app_service = make_app(&ctx, game_service);
+    let world_key = state.world.key.clone();
+    let app_service = make_test_app_with_storage(storage.clone(), state, game_service);
 
     let id1 = app_service
-        .create_game(&ctx.world_snapshot.world.key, "hero")
+        .create_game(&world_key, "hero")
         .expect("create_game 1");
     let id2 = app_service
-        .create_game(&ctx.world_snapshot.world.key, "hero")
+        .create_game(&world_key, "hero")
         .expect("create_game 2");
 
     app_service.switch_game(id1).expect("switch_game");
@@ -65,15 +63,14 @@ fn test_delete_game_integration() {
     seed_test_world(&storage);
     let game_service = create_game_service();
     let state = create_basic_test_state();
-    let ctx = make_test_ctx(storage.clone(), state);
-
-    let app_service = make_app(&ctx, game_service);
+    let world_key = state.world.key.clone();
+    let app_service = make_test_app_with_storage(storage.clone(), state, game_service);
 
     let id1 = app_service
-        .create_game(&ctx.world_snapshot.world.key, "hero")
+        .create_game(&world_key, "hero")
         .expect("create_game 1");
     app_service
-        .create_game(&ctx.world_snapshot.world.key, "hero")
+        .create_game(&world_key, "hero")
         .expect("create_game 2");
 
     app_service.delete_game(id1).expect("delete_game");
@@ -88,16 +85,11 @@ fn test_list_games_integration() {
     seed_test_world(&storage);
     let game_service = create_game_service();
     let state = create_basic_test_state();
-    let ctx = make_test_ctx(storage.clone(), state);
+    let world_key = state.world.key.clone();
+    let app_service = make_test_app_with_storage(storage.clone(), state, game_service);
 
-    let app_service = make_app(&ctx, game_service);
-
-    app_service
-        .create_game(&ctx.world_snapshot.world.key, "hero")
-        .unwrap();
-    app_service
-        .create_game(&ctx.world_snapshot.world.key, "hero")
-        .unwrap();
+    app_service.create_game(&world_key, "hero").unwrap();
+    app_service.create_game(&world_key, "hero").unwrap();
 
     let games = app_service.list_games().unwrap();
     assert!(games.len() >= 2, "Should list all games");
@@ -107,8 +99,7 @@ fn test_list_games_integration() {
 fn test_get_generating_status() {
     let storage = create_storage(1);
     let state = create_basic_test_state();
-    let ctx = make_test_ctx(storage.clone(), state);
-    let app_service = make_app(&ctx, create_game_service());
+    let app_service = make_test_app_with_storage(storage, state, create_game_service());
 
     let (status, phase) =
         chronicler_engine::application::query_handlers::get_generating_status(&app_service)
@@ -122,8 +113,11 @@ async fn test_process_action_persists_input_message() {
     let game_service = create_game_service();
     let mut state = crate::fixtures::create_test_state();
     state.narrative.history.clear();
-    let ctx = chronicler_engine::test_support::make_test_context_with_sqlite(state).unwrap();
-    let app_service = make_app(&ctx, game_service);
+    let app_service =
+        chronicler_engine::test_support::make_test_app_with_game_service(state, |_storage| {
+            Arc::clone(&game_service)
+        })
+        .unwrap();
 
     let result = app_service.process_action("examine the room".to_string());
     assert!(
@@ -158,10 +152,17 @@ async fn test_process_action_self_heals_stale_generating_status() {
 
     state.narrative.input_buffer.status = GenerationStatus::Generating;
     state.narrative.input_buffer.phase = GenerationPhase::Narrating;
-    let ctx = chronicler_engine::test_support::make_test_context_with_sqlite(state).unwrap();
-    let app_service = make_app(&ctx, game_service);
+    let app_service =
+        chronicler_engine::test_support::make_test_app_with_game_service(state, |_storage| {
+            Arc::clone(&game_service)
+        })
+        .unwrap();
 
-    assert!(!ctx.is_generating.load(std::sync::atomic::Ordering::SeqCst));
+    assert!(
+        !app_service
+            .is_generating()
+            .load(std::sync::atomic::Ordering::SeqCst)
+    );
 
     let result = app_service.process_action("look around".to_string());
     assert!(

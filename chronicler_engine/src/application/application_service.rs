@@ -216,6 +216,10 @@ impl DefaultApplicationService {
         &self.settings
     }
 
+    pub fn preset_storage(&self) -> &Arc<Storage> {
+        &self.preset_storage
+    }
+
     pub(crate) fn load_world_snapshot(&self) -> Result<WorldSnapshot, EngineError> {
         let game_id = self.storage.current_game_id();
         let game = self
@@ -452,12 +456,14 @@ impl DefaultApplicationService {
             game_state.add_message(input.clone(), Some(player_name.clone()), MessageType::Input);
         }
 
-        match self.claim_generation_slot(&mut game_state, &player_name)? {
+        match self.claim_generation_slot(&mut game_state)? {
             ProcessActionResult::ConcurrentGeneration => {
                 return Ok(ProcessActionResult::ConcurrentGeneration);
             }
             ProcessActionResult::Started => {}
-            ProcessActionResult::ShuttingDown => unreachable!(),
+            ProcessActionResult::ShuttingDown => {
+                return Ok(ProcessActionResult::ShuttingDown);
+            }
         }
 
         if self.cancel_token.is_cancelled() {
@@ -498,12 +504,10 @@ impl DefaultApplicationService {
         }
     }
 
-    // On save failure after CAS wins, the AtomicBool stays true — caller MUST call
-    // `release_generation_slot` to roll back before propagating the error.
+    // On save failure after CAS wins, the AtomicBool is rolled back inside this fn.
     fn claim_generation_slot(
         &self,
         state: &mut GameState,
-        _player_name: &str,
     ) -> Result<ProcessActionResult, EngineError> {
         if self
             .is_generating
@@ -517,7 +521,8 @@ impl DefaultApplicationService {
         state.narrative.input_buffer.phase = GenerationPhase::Narrating;
 
         if let Err(e) = self.save_message_and_snapshot(state) {
-            tracing::debug!("claim_generation_slot: save failed; caller must release slot");
+            tracing::debug!("claim_generation_slot: save failed; releasing slot");
+            self.release_generation_slot();
             return Err(e);
         }
         tracing::debug!("process_action: state saved, spawning blocking task");

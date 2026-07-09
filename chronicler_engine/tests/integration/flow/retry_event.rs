@@ -11,9 +11,10 @@ use chronicler_engine::domain::model::trigger::{
 };
 use chronicler_engine::domain::model::world::WorldCard;
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
-use chronicler_engine::test_support::{make_test_context_with_sqlite, make_test_recorder};
+use chronicler_engine::test_support::{
+    make_test_app_with_game_service, make_test_app_with_mock_backend, make_test_recorder,
+};
 use crate::make_test_recorder_with_storage;
-use chronicler_engine::application::application_service::DefaultApplicationService;
 use chronicler_engine::application::action_pipeline::{execute_action_impl, retry_last_response_impl};
 
 use crate::pipeline_helpers::{
@@ -26,17 +27,9 @@ use crate::fixtures::create_test_map;
 fn test_event_retry_does_not_create_extra_swipe_on_narration() {
     let mut state = create_test_state_with_trigger_npc();
     state.narrative.history.clear();
-    let ctx = make_test_context_with_sqlite(state).unwrap();
-    let app: Arc<DefaultApplicationService> =
-        Arc::new(crate::fixtures::make_test_app_service_from_ctx(
-            &ctx,
-            Arc::new(GameService::with_mock_quantifier(
-                crate::make_test_recorder(Arc::new(MockBackend::new())),
-                Arc::new(MockBackend::default()),
-            )),
-        ));
+    let app1 = make_test_app_with_mock_backend(state.clone(), MockBackend::new).unwrap();
 
-    add_input_and_save(&app, "enter shop");
+    add_input_and_save(&app1, "enter shop");
 
     let quantifier: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
         Arc::new(MockBackend::default().with_prompt_responses(vec![
@@ -44,27 +37,27 @@ fn test_event_retry_does_not_create_extra_swipe_on_narration() {
                 .to_string(),
         ]));
 
-    let service = GameService::with_mock_quantifier(
-        make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(&ctx.storage)),
-        quantifier,
-    );
-    let app: Arc<DefaultApplicationService> = Arc::new(
-        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(service)),
-    );
+    let app2 = make_test_app_with_game_service(state, |storage| {
+        Arc::new(GameService::with_mock_quantifier(
+            make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(storage)),
+            quantifier.clone(),
+        ))
+    })
+    .unwrap();
 
-    execute_action_impl(&app, "enter shop".to_string());
+    execute_action_impl(&app2, "enter shop".to_string());
     assert!(
-        wait_for_generation_complete(&app, 1000),
+        wait_for_generation_complete(&app2, 1000),
         "Execute should complete"
     );
 
-    retry_last_response_impl(&app);
+    retry_last_response_impl(&app2);
     assert!(
-        wait_for_generation_complete(&app, 1000),
+        wait_for_generation_complete(&app2, 1000),
         "Event retry should complete"
     );
 
-    let guard = latest_state(&app);
+    let guard = latest_state(&app2);
     let narration_msgs: Vec<_> = guard
         .narrative
         .history
@@ -86,17 +79,9 @@ fn test_event_retry_does_not_create_extra_swipe_on_narration() {
 fn test_retry_event_continuation_preserves_quantifier_result() {
     let mut state = create_test_state_with_trigger_npc();
     state.narrative.history.clear();
-    let ctx = make_test_context_with_sqlite(state).unwrap();
-    let app: Arc<DefaultApplicationService> =
-        Arc::new(crate::fixtures::make_test_app_service_from_ctx(
-            &ctx,
-            Arc::new(GameService::with_mock_quantifier(
-                crate::make_test_recorder(Arc::new(MockBackend::new())),
-                Arc::new(MockBackend::default()),
-            )),
-        ));
+    let app1 = make_test_app_with_mock_backend(state.clone(), MockBackend::new).unwrap();
 
-    add_input_and_save(&app, "enter shop");
+    add_input_and_save(&app1, "enter shop");
 
     let quantifier: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
         Arc::new(MockBackend::default().with_prompt_responses(vec![
@@ -104,20 +89,20 @@ fn test_retry_event_continuation_preserves_quantifier_result() {
                 .to_string(),
         ]));
 
-    let service = GameService::with_mock_quantifier(
-        make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(&ctx.storage)),
-        quantifier,
-    );
-    let app: Arc<DefaultApplicationService> = Arc::new(
-        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(service)),
-    );
+    let app2 = make_test_app_with_game_service(state, |storage| {
+        Arc::new(GameService::with_mock_quantifier(
+            make_test_recorder_with_storage(Arc::new(MockBackend::new()), Arc::clone(storage)),
+            quantifier.clone(),
+        ))
+    })
+    .unwrap();
 
-    execute_action_impl(&app, "enter shop".to_string());
+    execute_action_impl(&app2, "enter shop".to_string());
     assert!(
-        wait_for_generation_complete(&app, 1000),
+        wait_for_generation_complete(&app2, 1000),
         "Execute should complete"
     );
-    let guard = latest_state(&app);
+    let guard = latest_state(&app2);
     assert_eq!(
         guard.movement.current_room_id, "room2",
         "Execute: player should have moved to room2"
@@ -133,18 +118,18 @@ fn test_retry_event_continuation_preserves_quantifier_result() {
         "Trigger should have fired and added an Event"
     );
 
-    retry_last_response_impl(&app);
+    retry_last_response_impl(&app2);
     assert!(
-        wait_for_generation_complete(&app, 1000),
+        wait_for_generation_complete(&app2, 1000),
         "Event retry should complete"
     );
-    let guard = latest_state(&app);
+    let guard = latest_state(&app2);
     assert_eq!(
         guard.movement.current_room_id, "room2",
         "Event retry: room should be unchanged (quantifier not rerun)"
     );
 
-    let messages = ctx.storage.list_latest_llm_messages(50).unwrap();
+    let messages = app2.storage().list_latest_llm_messages(50).unwrap();
     assert!(
         !messages.is_empty(),
         "LLM messages should be logged during gameplay"
@@ -225,22 +210,9 @@ fn test_trigger_continuation_runs_quantifier_and_detects_new_npc() {
     let npcs = vec![shopkeeper, gabriella];
     let mut state = GameState::new(world, map, player, npcs, "room1".to_string());
     state.narrative.history.clear();
-    let ctx = make_test_context_with_sqlite(state).unwrap();
-    let app: Arc<DefaultApplicationService> =
-        Arc::new(crate::fixtures::make_test_app_service_from_ctx(
-            &ctx,
-            Arc::new(GameService::with_mock_quantifier(
-                crate::make_test_recorder(Arc::new(MockBackend::new())),
-                Arc::new(MockBackend::default()),
-            )),
-        ));
+    let app1 = make_test_app_with_mock_backend(state.clone(), MockBackend::new).unwrap();
 
-    add_input_and_save(&app, "enter shop");
-
-    let llm_backend = make_test_recorder(Arc::new(MockBackend::default().with_narrations(vec![
-        "You step into the shop.".to_string(),
-        "Gabriella emerges from the shadows behind the counter.".to_string(),
-    ])));
+    add_input_and_save(&app1, "enter shop");
 
     let quantifier: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> =
         Arc::new(MockBackend::default().with_prompt_responses(vec![
@@ -248,18 +220,26 @@ fn test_trigger_continuation_runs_quantifier_and_detects_new_npc() {
             r#"{"npcs_in_room": ["gabriella"]}"#.to_string(),
         ]));
 
-    let service = GameService::with_mock_quantifier(llm_backend, quantifier);
-    let app: Arc<DefaultApplicationService> = Arc::new(
-        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(service)),
-    );
+    let llm_backend = make_test_recorder(Arc::new(MockBackend::default().with_narrations(vec![
+        "You step into the shop.".to_string(),
+        "Gabriella emerges from the shadows behind the counter.".to_string(),
+    ])));
 
-    execute_action_impl(&app, "enter shop".to_string());
+    let app2 = make_test_app_with_game_service(state, |_storage| {
+        Arc::new(GameService::with_mock_quantifier(
+            llm_backend.clone(),
+            quantifier.clone(),
+        ))
+    })
+    .unwrap();
+
+    execute_action_impl(&app2, "enter shop".to_string());
     assert!(
-        wait_for_generation_complete(&app, 1000),
+        wait_for_generation_complete(&app2, 1000),
         "Execute should complete"
     );
 
-    let guard = latest_state(&app);
+    let guard = latest_state(&app2);
 
     let event_count = guard
         .narrative

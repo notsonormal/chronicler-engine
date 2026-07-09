@@ -1,26 +1,22 @@
 //! Integration tests for the action pipeline: verifies that user actions are persisted to state, that narrations from the LLM are stored, and that error paths (room not found, LLM failure) are surfaced gracefully.
 
-use crate::{
-    failing_service, fixtures::create_test_state, pipeline_helpers::latest_state, working_service,
-};
 use chronicler_engine::domain::model::state::generation_status::GenerationPhase;
 use chronicler_engine::domain::model::state::generation_status::GenerationStatus;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::domain::model::state::trigger_context::StoredTriggerContext;
-use chronicler_engine::test_support::make_test_context_with_sqlite;
-use std::sync::Arc;
-use chronicler_engine::application::application_service::DefaultApplicationService;
+use chronicler_engine::test_support::{
+    make_test_app_with_backends, make_test_app_with_separate_backends,
+};
+
+use crate::{fixtures::create_test_state, pipeline_helpers::latest_state};
+use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::application::action_pipeline::execute_action_impl;
 
 #[test]
 fn test_pipeline_executes_and_persists_narration() {
     let mut state = create_test_state();
     state.narrative.history.clear();
-    let ctx = make_test_context_with_sqlite(state).unwrap();
-    let backend = working_service();
-    let app: Arc<DefaultApplicationService> = Arc::new(
-        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(backend)),
-    );
+    let app = make_test_app_with_backends(state, MockBackend::default).unwrap();
 
     execute_action_impl(&app, "look".to_string());
 
@@ -49,11 +45,7 @@ fn test_pipeline_persists_input_before_narration() {
         Some("Player".to_string()),
         MessageType::Input,
     );
-    let ctx = make_test_context_with_sqlite(state).unwrap();
-    let backend = working_service();
-    let app: Arc<DefaultApplicationService> = Arc::new(
-        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(backend)),
-    );
+    let app = make_test_app_with_backends(state, MockBackend::default).unwrap();
 
     execute_action_impl(&app, "examine the room".to_string());
 
@@ -78,11 +70,7 @@ fn test_pipeline_handles_room_not_found() {
     let mut state = create_test_state();
     state.narrative.history.clear();
     state.movement.current_room_id = "non_existent_room".to_string();
-    let ctx = make_test_context_with_sqlite(state).unwrap();
-    let backend = working_service();
-    let app: Arc<DefaultApplicationService> = Arc::new(
-        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(backend)),
-    );
+    let app = make_test_app_with_backends(state, MockBackend::default).unwrap();
 
     execute_action_impl(&app, "look".to_string());
 
@@ -97,11 +85,12 @@ fn test_pipeline_handles_room_not_found() {
 fn test_pipeline_handles_llm_failure() {
     let mut state = create_test_state();
     state.narrative.history.clear();
-    let ctx = make_test_context_with_sqlite(state).unwrap();
-    let backend = failing_service();
-    let app: Arc<DefaultApplicationService> = Arc::new(
-        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(backend)),
-    );
+    let app = make_test_app_with_separate_backends(
+        state,
+        || MockBackend::default().with_fail(),
+        MockBackend::default,
+    )
+    .unwrap();
 
     execute_action_impl(&app, "look".to_string());
 
@@ -131,11 +120,7 @@ fn test_pipeline_clears_last_trigger() {
         user_prompt: "user".to_string(),
         max_tokens: None,
     });
-    let ctx = make_test_context_with_sqlite(state).unwrap();
-    let backend = working_service();
-    let app: Arc<DefaultApplicationService> = Arc::new(
-        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(backend)),
-    );
+    let app = make_test_app_with_backends(state, MockBackend::default).unwrap();
 
     execute_action_impl(&app, "look".to_string());
 
@@ -151,11 +136,7 @@ fn test_pipeline_phase_transitions() {
     let mut state = create_test_state();
     state.narrative.history.clear();
     state.narrative.input_buffer.status = GenerationStatus::Idle;
-    let ctx = make_test_context_with_sqlite(state).unwrap();
-    let backend = working_service();
-    let app: Arc<DefaultApplicationService> = Arc::new(
-        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(backend)),
-    );
+    let app = make_test_app_with_backends(state, MockBackend::default).unwrap();
 
     execute_action_impl(&app, "look".to_string());
 
@@ -172,11 +153,12 @@ fn test_pipeline_phase_stays_narrating_on_error() {
     let mut state = create_test_state();
     state.narrative.history.clear();
     state.narrative.input_buffer.status = GenerationStatus::Idle;
-    let ctx = make_test_context_with_sqlite(state).unwrap();
-    let backend = failing_service();
-    let app: Arc<DefaultApplicationService> = Arc::new(
-        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(backend)),
-    );
+    let app = make_test_app_with_separate_backends(
+        state,
+        || MockBackend::default().with_fail(),
+        MockBackend::default,
+    )
+    .unwrap();
 
     execute_action_impl(&app, "look".to_string());
 
@@ -192,11 +174,7 @@ fn test_pipeline_phase_stays_narrating_on_error() {
 fn test_pipeline_empty_input() {
     let mut state = create_test_state();
     state.narrative.history.clear();
-    let ctx = make_test_context_with_sqlite(state).unwrap();
-    let backend = working_service();
-    let app: Arc<DefaultApplicationService> = Arc::new(
-        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(backend)),
-    );
+    let app = make_test_app_with_backends(state, MockBackend::default).unwrap();
 
     execute_action_impl(&app, String::new());
 

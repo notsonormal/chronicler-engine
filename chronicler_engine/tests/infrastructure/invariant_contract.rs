@@ -5,7 +5,6 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use chronicler_engine::application::action_pipeline::ActionOutcome;
-use chronicler_engine::application::application_service::DefaultApplicationService;
 use chronicler_engine::application::game_service::GameService;
 use chronicler_engine::domain::engine::action_processing::{
     FreeActionContext, apply_npc_events, execute_freeaction_impl,
@@ -20,7 +19,7 @@ use chronicler_engine::domain::model::state::game_state::GameState;
 use chronicler_engine::domain::model::state::generation_status::GenerationStatus;
 use chronicler_engine::application::agents::registry::AgentRegistry;
 use chronicler_engine::adapters::driving::http::fragments::GenerationGuard;
-use chronicler_engine::test_support::{make_test_context_with_sqlite, make_test_recorder};
+use chronicler_engine::test_support::{make_test_app_with_game_service, make_test_recorder};
 
 #[path = "../helpers/fixtures.rs"]
 mod fixtures;
@@ -148,20 +147,16 @@ fn test_inv004_cancellable_at_boundaries() {
     let mut state = create_test_state();
     state.narrative.history.clear();
 
-    let ctx = make_test_context_with_sqlite(state).unwrap();
-    let cancel_token = ctx.cancel_token.clone();
     let mock_backend_raw = Arc::new(MockBackend::default().with_delay(100));
-    let mock_backend = make_test_recorder(mock_backend_raw.clone());
-    let backend = GameService::with_backends(mock_backend.clone(), AgentRegistry::default());
-
-    let app = DefaultApplicationService::new(
-        ctx.storage.clone(),
-        ctx.preset_storage.clone(),
-        ctx.settings.clone(),
-        ctx.cancel_token.clone(),
-        ctx.is_generating.clone(),
-        Arc::new(backend),
-    );
+    let app = make_test_app_with_game_service(state, |_storage| {
+        let recorder = make_test_recorder(mock_backend_raw.clone());
+        Arc::new(GameService::with_backends(
+            recorder,
+            AgentRegistry::default(),
+        ))
+    })
+    .unwrap();
+    let cancel_token = app.cancel_token().clone();
     let pipeline = app.game_service().pipeline();
     let state_for_thread = latest_state(&app);
 

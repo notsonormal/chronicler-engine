@@ -4,15 +4,14 @@ use std::sync::Arc;
 
 use chronicler_engine::application::game_service::GameService;
 use chronicler_engine::application::DefaultApplicationService;
-use chronicler_engine::domain::model::state::game_state::GameState;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::application::agents::registry::AgentRegistry;
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::adapters::driven::storage::Storage;
 
 use crate::fixtures::{
-    create_basic_test_state, create_test_map, create_test_player, create_test_world_with_scenario,
-    make_test_ctx, seed_test_world, seed_test_world_with_scenario,
+    create_basic_test_state, create_test_world_with_scenario, make_test_app_with_storage,
+    seed_test_world, seed_test_world_with_scenario,
 };
 
 #[allow(dead_code)]
@@ -25,19 +24,7 @@ fn create_app_service_with_storage(storage: Arc<Storage>) -> Arc<DefaultApplicat
         crate::make_test_recorder(Arc::new(MockBackend::default())),
         AgentRegistry::default(),
     ));
-    let settings = std::sync::Arc::new(std::sync::RwLock::new(
-        chronicler_engine::domain::model::settings::AppSettings::default(),
-    ));
-    let is_generating = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let cancel_token = tokio_util::sync::CancellationToken::new();
-    Arc::new(DefaultApplicationService::new(
-        storage,
-        Arc::new(Storage::new_in_memory()),
-        settings,
-        cancel_token,
-        is_generating,
-        game_service,
-    ))
+    make_test_app_with_storage(storage, create_basic_test_state(), game_service)
 }
 
 #[test]
@@ -46,11 +33,18 @@ fn test_create_game_with_scenario() {
         .expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
     seed_test_world_with_scenario(&storage);
-    let app_service = create_app_service_with_storage(storage.clone());
     let state = create_basic_test_state();
-    let ctx = make_test_ctx(storage.clone(), state);
+    let world_key = state.world.key.clone();
+    let app_service = make_test_app_with_storage(
+        storage.clone(),
+        state,
+        Arc::new(GameService::with_backends(
+            crate::make_test_recorder(Arc::new(MockBackend::default())),
+            AgentRegistry::default(),
+        )),
+    );
 
-    let result = app_service.create_game(&ctx.world_snapshot.world.key, "hero");
+    let result = app_service.create_game(&world_key, "hero");
     assert!(
         result.is_ok(),
         "create_game should succeed: {:?}",
@@ -58,7 +52,7 @@ fn test_create_game_with_scenario() {
     );
     let new_id = result.unwrap();
 
-    let current_id = ctx.storage.current_game_id();
+    let current_id = app_service.storage().current_game_id();
     assert_eq!(current_id, new_id, "Should have switched to new game");
 
     let latest = storage.load_latest_snapshot().unwrap();
@@ -89,13 +83,18 @@ fn test_reset_creates_scenario_message() {
         .expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
     seed_test_world_with_scenario(&storage);
-    let app_service = create_app_service_with_storage(storage.clone());
     let state = create_basic_test_state();
-    let ctx = make_test_ctx(storage.clone(), state);
+    let world_key = state.world.key.clone();
+    let app_service = make_test_app_with_storage(
+        storage.clone(),
+        state,
+        Arc::new(GameService::with_backends(
+            crate::make_test_recorder(Arc::new(MockBackend::default())),
+            AgentRegistry::default(),
+        )),
+    );
 
-    app_service
-        .create_game(&ctx.world_snapshot.world.key, "hero")
-        .unwrap();
+    app_service.create_game(&world_key, "hero").unwrap();
 
     app_service.reset().unwrap();
 
@@ -125,19 +124,22 @@ fn test_switch_game_loads_correct_state() {
         .expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
     seed_test_world(&storage);
-    let app_service = create_app_service_with_storage(storage.clone());
     let state = create_basic_test_state();
-    let ctx = make_test_ctx(storage.clone(), state);
+    let world_key = state.world.key.clone();
+    let app_service = make_test_app_with_storage(
+        storage.clone(),
+        state,
+        Arc::new(GameService::with_backends(
+            crate::make_test_recorder(Arc::new(MockBackend::default())),
+            AgentRegistry::default(),
+        )),
+    );
 
-    app_service
-        .create_game(&ctx.world_snapshot.world.key, "hero")
-        .unwrap();
-    let game1_id = ctx.storage.current_game_id();
+    app_service.create_game(&world_key, "hero").unwrap();
+    let game1_id = app_service.storage().current_game_id();
 
-    app_service
-        .create_game(&ctx.world_snapshot.world.key, "hero")
-        .unwrap();
-    let game2_id = ctx.storage.current_game_id();
+    app_service.create_game(&world_key, "hero").unwrap();
+    let game2_id = app_service.storage().current_game_id();
     assert_ne!(game1_id, game2_id, "Should have different game IDs");
 
     let switch_result = app_service.switch_game(game1_id);
@@ -147,7 +149,7 @@ fn test_switch_game_loads_correct_state() {
         switch_result.err()
     );
     assert_eq!(
-        ctx.storage.current_game_id(),
+        app_service.storage().current_game_id(),
         game1_id,
         "Should have switched to game 1"
     );
@@ -164,7 +166,7 @@ fn test_switch_game_loads_correct_state() {
         switch_result.err()
     );
     assert_eq!(
-        ctx.storage.current_game_id(),
+        app_service.storage().current_game_id(),
         game2_id,
         "Should have switched to game 2"
     );
@@ -182,19 +184,22 @@ async fn test_create_game_concurrent_generation_rejected() {
     let db_pool = chronicler_engine::adapters::driven::storage::db::DbPool::new(":memory:")
         .expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
-    let app_service = create_app_service_with_storage(storage.clone());
+    seed_test_world(&storage);
     let state = create_basic_test_state();
-    let ctx = make_test_ctx(storage.clone(), state);
+    let world_key = state.world.key.clone();
+    let app_service = make_test_app_with_storage(
+        storage.clone(),
+        state,
+        Arc::new(GameService::with_backends(
+            crate::make_test_recorder(Arc::new(MockBackend::default())),
+            AgentRegistry::default(),
+        )),
+    );
 
-    // Use make_app helper instead so the test's is_generating AtomicBool is shared.
-    let app_service = Arc::new(crate::fixtures::make_test_app_service_from_ctx(
-        &ctx,
-        app_service.game_service().clone(),
-    ));
     let arc_app = app_service.clone();
     arc_app.is_generating().store(true, Ordering::SeqCst);
 
-    let result = arc_app.create_game(&ctx.world_snapshot.world.key, "hero");
+    let result = arc_app.create_game(&world_key, "hero");
     assert!(
         result.is_err(),
         "create_game should fail during concurrent generation"
@@ -213,9 +218,16 @@ fn test_switch_to_nonexistent_game() {
     let db_pool = chronicler_engine::adapters::driven::storage::db::DbPool::new(":memory:")
         .expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
-    let app_service = create_app_service_with_storage(storage.clone());
+    seed_test_world(&storage);
     let state = create_basic_test_state();
-    let _ctx = make_test_ctx(storage.clone(), state);
+    let app_service = make_test_app_with_storage(
+        storage.clone(),
+        state,
+        Arc::new(GameService::with_backends(
+            crate::make_test_recorder(Arc::new(MockBackend::default())),
+            AgentRegistry::default(),
+        )),
+    );
 
     let result = app_service.switch_game(99999);
     assert!(
@@ -230,13 +242,18 @@ fn test_reset_without_existing_game() {
         .expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
     seed_test_world_with_scenario(&storage);
-    let app_service = create_app_service_with_storage(storage.clone());
     let state = create_basic_test_state();
-    let ctx = make_test_ctx(storage.clone(), state);
+    let world_key = state.world.key.clone();
+    let app_service = make_test_app_with_storage(
+        storage.clone(),
+        state,
+        Arc::new(GameService::with_backends(
+            crate::make_test_recorder(Arc::new(MockBackend::default())),
+            AgentRegistry::default(),
+        )),
+    );
 
-    let _ = app_service
-        .create_game(&ctx.world_snapshot.world.key, "hero")
-        .unwrap();
+    let _ = app_service.create_game(&world_key, "hero").unwrap();
 
     let result = app_service.reset();
     assert!(
@@ -252,14 +269,21 @@ fn test_create_game_name_uniqueness() {
         .expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
     seed_test_world(&storage);
-    let app_service = create_app_service_with_storage(storage.clone());
     let state = create_basic_test_state();
-    let ctx = make_test_ctx(storage.clone(), state);
+    let world_key = state.world.key.clone();
+    let app_service = make_test_app_with_storage(
+        storage.clone(),
+        state,
+        Arc::new(GameService::with_backends(
+            crate::make_test_recorder(Arc::new(MockBackend::default())),
+            AgentRegistry::default(),
+        )),
+    );
 
-    let result1 = app_service.create_game(&ctx.world_snapshot.world.key, "hero");
+    let result1 = app_service.create_game(&world_key, "hero");
     assert!(result1.is_ok(), "First create_game should succeed");
 
-    let result2 = app_service.create_game(&ctx.world_snapshot.world.key, "hero");
+    let result2 = app_service.create_game(&world_key, "hero");
     assert!(result2.is_ok(), "Second create_game should succeed");
 
     let games = app_service.list_games().unwrap();
@@ -290,37 +314,37 @@ fn test_switch_game_world_mismatch() {
         .expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
     seed_test_world(&storage);
-    let app_service = create_app_service_with_storage(storage.clone());
+    let state = create_basic_test_state();
+    let world_key = state.world.key.clone();
+    let app_service = make_test_app_with_storage(
+        storage.clone(),
+        state,
+        Arc::new(GameService::with_backends(
+            crate::make_test_recorder(Arc::new(MockBackend::default())),
+            AgentRegistry::default(),
+        )),
+    );
 
-    let mut world_a = create_test_world_with_scenario();
-    world_a.name = "World A".to_string();
-    let world_a = Arc::new(world_a);
-    let player = Arc::new(create_test_player());
-    let map = Arc::new(create_test_map());
-    let npcs = Vec::new();
-    let state_a = GameState::new(world_a.clone(), map, player, npcs, "room1".to_string());
-
-    let ctx_a = make_test_ctx(storage.clone(), state_a);
-
-    let create_result = app_service.create_game(&ctx_a.world_snapshot.world.key, "hero");
+    let create_result = app_service.create_game(&world_key, "hero");
     assert!(create_result.is_ok(), "create_game should succeed");
-    let game_id = ctx_a.storage.current_game_id();
+    let game_id = app_service.storage().current_game_id();
 
     let mut world_b = create_test_world_with_scenario();
     world_b.name = "World B".to_string();
-    let world_b = Arc::new(world_b);
-    let player_b = Arc::new(create_test_player());
-    let map_b = Arc::new(create_test_map());
-    let npcs_b = Vec::new();
-    let state_b = GameState::new(
-        world_b.clone(),
-        map_b,
-        player_b,
-        npcs_b,
-        "room1".to_string(),
+    let _app2 = make_test_app_with_storage(
+        storage.clone(),
+        chronicler_engine::domain::model::state::game_state::GameState::new(
+            Arc::new(world_b),
+            Arc::new(crate::fixtures::create_test_map()),
+            Arc::new(crate::fixtures::create_test_player()),
+            Vec::new(),
+            "room1".to_string(),
+        ),
+        Arc::new(GameService::with_backends(
+            crate::make_test_recorder(Arc::new(MockBackend::default())),
+            AgentRegistry::default(),
+        )),
     );
-
-    let _ctx_b = make_test_ctx(storage.clone(), state_b);
 
     let result = app_service.switch_game(game_id);
     assert!(
@@ -335,19 +359,22 @@ fn test_delete_game_removes() {
         .expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
     seed_test_world(&storage);
-    let app_service = create_app_service_with_storage(storage.clone());
     let state = create_basic_test_state();
-    let ctx = make_test_ctx(storage.clone(), state);
+    let world_key = state.world.key.clone();
+    let app_service = make_test_app_with_storage(
+        storage.clone(),
+        state,
+        Arc::new(GameService::with_backends(
+            crate::make_test_recorder(Arc::new(MockBackend::default())),
+            AgentRegistry::default(),
+        )),
+    );
 
-    app_service
-        .create_game(&ctx.world_snapshot.world.key, "hero")
-        .unwrap();
-    let game_id_1 = ctx.storage.current_game_id();
+    app_service.create_game(&world_key, "hero").unwrap();
+    let game_id_1 = app_service.storage().current_game_id();
 
-    app_service
-        .create_game(&ctx.world_snapshot.world.key, "hero")
-        .unwrap();
-    let game_id_2 = ctx.storage.current_game_id();
+    app_service.create_game(&world_key, "hero").unwrap();
+    let game_id_2 = app_service.storage().current_game_id();
 
     assert_ne!(game_id_1, game_id_2, "Should have different game IDs");
 
@@ -372,14 +399,19 @@ fn test_delete_game_active_rejected() {
         .expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
     seed_test_world(&storage);
-    let app_service = create_app_service_with_storage(storage.clone());
     let state = create_basic_test_state();
-    let ctx = make_test_ctx(storage.clone(), state);
+    let world_key = state.world.key.clone();
+    let app_service = make_test_app_with_storage(
+        storage.clone(),
+        state,
+        Arc::new(GameService::with_backends(
+            crate::make_test_recorder(Arc::new(MockBackend::default())),
+            AgentRegistry::default(),
+        )),
+    );
 
-    app_service
-        .create_game(&ctx.world_snapshot.world.key, "hero")
-        .unwrap();
-    let active_game_id = ctx.storage.current_game_id();
+    app_service.create_game(&world_key, "hero").unwrap();
+    let active_game_id = app_service.storage().current_game_id();
 
     let result = app_service.delete_game(active_game_id);
     assert!(
@@ -400,9 +432,15 @@ fn test_delete_game_nonexistent() {
     let db_pool = chronicler_engine::adapters::driven::storage::db::DbPool::new(":memory:")
         .expect("DbPool creation failed");
     let storage = Arc::new(Storage::new_sqlite(db_pool, 1));
-    let app_service = create_app_service_with_storage(storage.clone());
     let state = create_basic_test_state();
-    let _ctx = make_test_ctx(storage.clone(), state);
+    let app_service = make_test_app_with_storage(
+        storage.clone(),
+        state,
+        Arc::new(GameService::with_backends(
+            crate::make_test_recorder(Arc::new(MockBackend::default())),
+            AgentRegistry::default(),
+        )),
+    );
 
     let result = app_service.delete_game(99999);
     assert!(

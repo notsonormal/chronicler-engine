@@ -5,9 +5,10 @@ use std::sync::Arc;
 use chronicler_engine::application::game_service::GameService;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
-use chronicler_engine::test_support::make_test_context_with_sqlite;
+use chronicler_engine::test_support::{
+    make_test_app_with_game_service, make_test_app_with_mock_backend,
+};
 
-use chronicler_engine::application::application_service::DefaultApplicationService;
 use chronicler_engine::application::action_pipeline::{execute_action_impl, retry_last_response_impl};
 
 use crate::pipeline_helpers::{
@@ -19,17 +20,16 @@ use crate::pipeline_helpers::{
 fn test_sequential_execute_retry_execute() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
-    let ctx = make_test_context_with_sqlite(state).unwrap();
-    let service = GameService::with_mock_quantifier(
-        crate::make_test_recorder_with_storage(
-            Arc::new(MockBackend::new()),
-            Arc::clone(&ctx.storage),
-        ),
-        Arc::new(MockBackend::default()),
-    );
-    let app: Arc<DefaultApplicationService> = Arc::new(
-        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(service)),
-    );
+    let app = make_test_app_with_game_service(state, |storage| {
+        Arc::new(GameService::with_mock_quantifier(
+            crate::make_test_recorder_with_storage(
+                Arc::new(MockBackend::new()),
+                Arc::clone(storage),
+            ),
+            Arc::new(MockBackend::default()),
+        ))
+    })
+    .unwrap();
 
     add_input_and_save(&app, "examine room");
     execute_action_impl(&app, "examine room".to_string());
@@ -71,7 +71,7 @@ fn test_sequential_execute_retry_execute() {
         "Should have narrations from both actions"
     );
 
-    let messages = ctx.storage.list_latest_llm_messages(50).unwrap();
+    let messages = app.storage().list_latest_llm_messages(50).unwrap();
     assert!(
         !messages.is_empty(),
         "LLM messages should be logged during gameplay"
@@ -82,17 +82,16 @@ fn test_sequential_execute_retry_execute() {
 fn test_sequential_execute_delete_execute() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
-    let ctx = make_test_context_with_sqlite(state).unwrap();
-    let service = GameService::with_mock_quantifier(
-        crate::make_test_recorder_with_storage(
-            Arc::new(MockBackend::new()),
-            Arc::clone(&ctx.storage),
-        ),
-        Arc::new(MockBackend::default()),
-    );
-    let app: Arc<DefaultApplicationService> = Arc::new(
-        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(service)),
-    );
+    let app = make_test_app_with_game_service(state, |storage| {
+        Arc::new(GameService::with_mock_quantifier(
+            crate::make_test_recorder_with_storage(
+                Arc::new(MockBackend::new()),
+                Arc::clone(storage),
+            ),
+            Arc::new(MockBackend::default()),
+        ))
+    })
+    .unwrap();
 
     add_input_and_save(&app, "examine room");
     execute_action_impl(&app, "examine room".to_string());
@@ -139,18 +138,16 @@ fn test_sequential_execute_delete_execute() {
 fn test_async_action_sequence_then_retry() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
-    let ctx = make_test_context_with_sqlite(state).unwrap();
-
-    let service = GameService::with_mock_quantifier(
-        crate::make_test_recorder_with_storage(
-            Arc::new(MockBackend::new()),
-            Arc::clone(&ctx.storage),
-        ),
-        Arc::new(MockBackend::default()),
-    );
-    let app: Arc<DefaultApplicationService> = Arc::new(
-        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(service)),
-    );
+    let app = make_test_app_with_game_service(state, |storage| {
+        Arc::new(GameService::with_mock_quantifier(
+            crate::make_test_recorder_with_storage(
+                Arc::new(MockBackend::new()),
+                Arc::clone(storage),
+            ),
+            Arc::new(MockBackend::default()),
+        ))
+    })
+    .unwrap();
 
     add_input_and_save(&app, "hello");
     execute_action_impl(&app, "hello".to_string());
@@ -177,18 +174,16 @@ fn test_async_action_sequence_then_retry() {
 fn test_three_actions_in_sequence() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
-    let ctx = make_test_context_with_sqlite(state).unwrap();
-
-    let service = GameService::with_mock_quantifier(
-        crate::make_test_recorder_with_storage(
-            Arc::new(MockBackend::new()),
-            Arc::clone(&ctx.storage),
-        ),
-        Arc::new(MockBackend::default()),
-    );
-    let app: Arc<DefaultApplicationService> = Arc::new(
-        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(service)),
-    );
+    let app = make_test_app_with_game_service(state, |storage| {
+        Arc::new(GameService::with_mock_quantifier(
+            crate::make_test_recorder_with_storage(
+                Arc::new(MockBackend::new()),
+                Arc::clone(storage),
+            ),
+            Arc::new(MockBackend::default()),
+        ))
+    })
+    .unwrap();
 
     for action in ["examine room", "look around", "check inventory"] {
         add_input_and_save(&app, action);
@@ -224,40 +219,32 @@ fn test_three_actions_in_sequence() {
 fn test_delete_input_then_retry_fails_gracefully() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
-    let ctx = make_test_context_with_sqlite(state).unwrap();
-    let app: Arc<DefaultApplicationService> =
-        Arc::new(crate::fixtures::make_test_app_service_from_ctx(
-            &ctx,
-            Arc::new(GameService::with_mock_quantifier(
-                crate::make_test_recorder(Arc::new(MockBackend::new())),
-                Arc::new(MockBackend::default()),
-            )),
-        ));
+    let app1 = make_test_app_with_mock_backend(state.clone(), MockBackend::new).unwrap();
 
-    add_input_and_save(&app, "examine room");
+    add_input_and_save(&app1, "examine room");
 
-    let service = GameService::with_mock_quantifier(
-        crate::make_test_recorder_with_storage(
-            Arc::new(MockBackend::new()),
-            Arc::clone(&ctx.storage),
-        ),
-        Arc::new(MockBackend::default()),
-    );
-    let app: Arc<DefaultApplicationService> = Arc::new(
-        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(service)),
-    );
+    let app2 = make_test_app_with_game_service(state, |storage| {
+        Arc::new(GameService::with_mock_quantifier(
+            crate::make_test_recorder_with_storage(
+                Arc::new(MockBackend::new()),
+                Arc::clone(storage),
+            ),
+            Arc::new(MockBackend::default()),
+        ))
+    })
+    .unwrap();
 
-    execute_action_impl(&app, "examine room".to_string());
-    assert!(wait_for_generation_complete(&app, 1000));
+    execute_action_impl(&app2, "examine room".to_string());
+    assert!(wait_for_generation_complete(&app2, 1000));
 
     {
-        let mut state = latest_state(&app);
+        let mut state = latest_state(&app2);
         state.narrative.history.clear();
-        save_state(&app, &state);
+        save_state(&app2, &state);
     }
 
-    retry_last_response_impl(&app);
-    let guard = latest_state(&app);
+    retry_last_response_impl(&app2);
+    let guard = latest_state(&app2);
     assert!(
         !guard.narrative.input_buffer.status.is_generating(),
         "Retry with no input should not leave state generating"
@@ -268,44 +255,35 @@ fn test_delete_input_then_retry_fails_gracefully() {
 fn test_reset_clears_history_and_state() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
-    let ctx = make_test_context_with_sqlite(state).unwrap();
-    let app: Arc<DefaultApplicationService> =
-        Arc::new(crate::fixtures::make_test_app_service_from_ctx(
-            &ctx,
-            Arc::new(GameService::with_mock_quantifier(
-                crate::make_test_recorder(Arc::new(MockBackend::new())),
-                Arc::new(MockBackend::default()),
-            )),
-        ));
-
-    add_input_and_save(&app, "walk to room2");
+    let app1 = make_test_app_with_mock_backend(state.clone(), MockBackend::new).unwrap();
+    add_input_and_save(&app1, "walk to room2");
 
     let quantifier = Arc::new(MockBackend::default().with_prompt_responses(vec![
-            r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#
-                .to_string(),
-        ]));
+        r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#
+            .to_string(),
+    ]));
 
-    let service = GameService::with_mock_quantifier(
-        crate::make_test_recorder_with_storage(
-            Arc::new(MockBackend::new()),
-            Arc::clone(&ctx.storage),
-        ),
-        quantifier,
-    );
-    let app: Arc<DefaultApplicationService> = Arc::new(
-        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(service)),
-    );
+    let app2 = make_test_app_with_game_service(state, |storage| {
+        Arc::new(GameService::with_mock_quantifier(
+            crate::make_test_recorder_with_storage(
+                Arc::new(MockBackend::new()),
+                Arc::clone(storage),
+            ),
+            quantifier.clone(),
+        ))
+    })
+    .unwrap();
 
-    execute_action_impl(&app, "walk to room2".to_string());
-    assert!(wait_for_generation_complete(&app, 1000));
-    let guard = latest_state(&app);
+    execute_action_impl(&app2, "walk to room2".to_string());
+    assert!(wait_for_generation_complete(&app2, 1000));
+    let guard = latest_state(&app2);
     assert_eq!(guard.movement.current_room_id, "room2");
     assert!(!guard.narrative.history().is_empty());
 
     let fresh_state = create_test_state_with_map();
-    save_state(&app, &fresh_state);
+    save_state(&app2, &fresh_state);
 
-    let guard = latest_state(&app);
+    let guard = latest_state(&app2);
     assert_eq!(
         guard.movement.current_room_id, "room1",
         "After reset: back to room1"
@@ -320,18 +298,16 @@ fn test_reset_clears_history_and_state() {
 fn test_reset_then_execute_works() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
-    let ctx = make_test_context_with_sqlite(state).unwrap();
-
-    let service = GameService::with_mock_quantifier(
-        crate::make_test_recorder_with_storage(
-            Arc::new(MockBackend::new()),
-            Arc::clone(&ctx.storage),
-        ),
-        Arc::new(MockBackend::default()),
-    );
-    let app: Arc<DefaultApplicationService> = Arc::new(
-        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(service)),
-    );
+    let app = make_test_app_with_game_service(state, |storage| {
+        Arc::new(GameService::with_mock_quantifier(
+            crate::make_test_recorder_with_storage(
+                Arc::new(MockBackend::new()),
+                Arc::clone(storage),
+            ),
+            Arc::new(MockBackend::default()),
+        ))
+    })
+    .unwrap();
 
     add_input_and_save(&app, "examine room");
     execute_action_impl(&app, "examine room".to_string());
@@ -365,18 +341,16 @@ fn test_reset_then_execute_works() {
 fn test_delete_mid_sequence() {
     let mut state = create_test_state_with_map();
     state.narrative.history.clear();
-    let ctx = make_test_context_with_sqlite(state).unwrap();
-
-    let service = GameService::with_mock_quantifier(
-        crate::make_test_recorder_with_storage(
-            Arc::new(MockBackend::new()),
-            Arc::clone(&ctx.storage),
-        ),
-        Arc::new(MockBackend::default()),
-    );
-    let app: Arc<DefaultApplicationService> = Arc::new(
-        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(service)),
-    );
+    let app = make_test_app_with_game_service(state, |storage| {
+        Arc::new(GameService::with_mock_quantifier(
+            crate::make_test_recorder_with_storage(
+                Arc::new(MockBackend::new()),
+                Arc::clone(storage),
+            ),
+            Arc::new(MockBackend::default()),
+        ))
+    })
+    .unwrap();
 
     add_input_and_save(&app, "examine room");
     execute_action_impl(&app, "examine room".to_string());

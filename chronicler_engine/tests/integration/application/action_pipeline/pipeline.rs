@@ -9,30 +9,30 @@ use crate::{
         wait_for_generation_complete,
     },
     test_utils::wait::wait_for_condition_async,
-    working_service,
 };
 use chronicler_engine::application::GameService;
-use chronicler_engine::application::application_service::DefaultApplicationService;
 use chronicler_engine::application::action_pipeline::execute_action_impl;
 use chronicler_engine::domain::model::state::generation_status::GenerationPhase;
 use chronicler_engine::domain::model::state::generation_status::GenerationStatus;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
-use chronicler_engine::test_support::make_test_context_with_sqlite;
+use chronicler_engine::test_support::{make_test_app_with_backends, make_test_app_with_mock_backend};
 
 #[test]
 fn test_delayed_llm_completes_without_deadlock() {
     let mut state = create_test_state();
     state.narrative.history.clear();
     state.narrative.input_buffer.status = GenerationStatus::Generating;
-    let ctx = make_test_context_with_sqlite(state).unwrap();
-    let backend = GameService::with_mock_quantifier(
-        crate::make_test_recorder(Arc::new(MockBackend::default().with_delay(200))),
-        Arc::new(MockBackend::default()),
-    );
-    let app: Arc<DefaultApplicationService> = Arc::new(
-        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(backend)),
-    );
+    let app = chronicler_engine::test_support::make_test_app_with_game_service(state, |storage| {
+        Arc::new(GameService::with_mock_quantifier(
+            crate::make_test_recorder_with_storage(
+                Arc::new(MockBackend::default().with_delay(200)),
+                Arc::clone(storage),
+            ),
+            Arc::new(MockBackend::default()),
+        ))
+    })
+    .unwrap();
 
     execute_action_impl(&app, "look around".to_string());
 
@@ -53,19 +53,22 @@ fn test_quantifier_detects_movement() {
     let mut state = create_test_state();
     state.narrative.history.clear();
     state.narrative.input_buffer.status = GenerationStatus::Generating;
-    let ctx = make_test_context_with_sqlite(state).unwrap();
-    let quantifier_recorder: Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider> = Arc::new(
-        MockBackend::default().with_prompt_responses(vec![
-            r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "village_square"}}"#.to_string(),
-        ]),
-    );
-    let backend = GameService::with_mock_quantifier(
-        crate::make_test_recorder(Arc::new(MockBackend::default())),
-        quantifier_recorder,
-    );
-    let app: Arc<DefaultApplicationService> = Arc::new(
-        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(backend)),
-    );
+    let app = chronicler_engine::test_support::make_test_app_with_game_service(
+        state,
+        |_storage| {
+            let quantifier_recorder: Arc<
+                dyn chronicler_engine::application::ports::llm_provider::LlmProvider,
+            > = Arc::new(MockBackend::default().with_prompt_responses(vec![
+                r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "village_square"}}"#
+                    .to_string(),
+            ]));
+            Arc::new(GameService::with_mock_quantifier(
+                crate::make_test_recorder(Arc::new(MockBackend::default())),
+                quantifier_recorder,
+            ))
+        },
+    )
+    .unwrap();
 
     execute_action_impl(&app, "walk to the village square".to_string());
 
@@ -91,20 +94,19 @@ fn test_quantifier_detects_npc_presence_and_fires_trigger() {
     if let Some(encounter) = state.npc_encounter_log.npcs.get_mut("shopkeeper") {
         encounter.times_met = 0;
     }
-    let ctx = make_test_context_with_sqlite(state).unwrap();
-    let quantifier_recorder: Arc<
-        dyn chronicler_engine::application::ports::llm_provider::LlmProvider,
-    > = Arc::new(
-        MockBackend::default()
-            .with_prompt_responses(vec![r#"{"npcs_in_room": ["shopkeeper"]}"#.to_string()]),
-    );
-    let backend = GameService::with_mock_quantifier(
-        crate::make_test_recorder(Arc::new(MockBackend::default())),
-        quantifier_recorder,
-    );
-    let app: Arc<DefaultApplicationService> = Arc::new(
-        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(backend)),
-    );
+    let app = chronicler_engine::test_support::make_test_app_with_game_service(state, |_storage| {
+        let quantifier_recorder: Arc<
+            dyn chronicler_engine::application::ports::llm_provider::LlmProvider,
+        > = Arc::new(
+            MockBackend::default()
+                .with_prompt_responses(vec![r#"{"npcs_in_room": ["shopkeeper"]}"#.to_string()]),
+        );
+        Arc::new(GameService::with_mock_quantifier(
+            crate::make_test_recorder(Arc::new(MockBackend::default())),
+            quantifier_recorder,
+        ))
+    })
+    .unwrap();
 
     execute_action_impl(&app, "enter the shop".to_string());
 
@@ -138,14 +140,16 @@ fn test_empty_llm_response_handled_gracefully() {
     let mut state = create_test_state();
     state.narrative.history.clear();
     state.narrative.input_buffer.status = GenerationStatus::Generating;
-    let ctx = make_test_context_with_sqlite(state).unwrap();
-    let backend = GameService::with_mock_quantifier(
-        crate::make_test_recorder(Arc::new(MockBackend::default().with_empty_response())),
-        Arc::new(MockBackend::default()),
-    );
-    let app: Arc<DefaultApplicationService> = Arc::new(
-        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(backend)),
-    );
+    let app = chronicler_engine::test_support::make_test_app_with_game_service(state, |storage| {
+        Arc::new(GameService::with_mock_quantifier(
+            crate::make_test_recorder_with_storage(
+                Arc::new(MockBackend::default().with_empty_response()),
+                Arc::clone(storage),
+            ),
+            Arc::new(MockBackend::default()),
+        ))
+    })
+    .unwrap();
 
     execute_action_impl(&app, "examine the room".to_string());
 
@@ -178,22 +182,22 @@ fn test_failing_trigger_narration_does_not_crash() {
     if let Some(encounter) = state.npc_encounter_log.npcs.get_mut("shopkeeper") {
         encounter.times_met = 0;
     }
-    let ctx = make_test_context_with_sqlite(state).unwrap();
-    let quantifier_recorder: Arc<
-        dyn chronicler_engine::application::ports::llm_provider::LlmProvider,
-    > = Arc::new(
-        MockBackend::default()
-            .with_prompt_responses(vec![r#"{"npcs_in_room": ["shopkeeper"]}"#.to_string()]),
-    );
-    let backend = GameService::with_mock_quantifier(
-        crate::make_test_recorder(Arc::new(
-            MockBackend::default().with_trigger_narration_fail(),
-        )),
-        quantifier_recorder,
-    );
-    let app: Arc<DefaultApplicationService> = Arc::new(
-        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(backend)),
-    );
+    let app = chronicler_engine::test_support::make_test_app_with_game_service(state, |storage| {
+        let quantifier_recorder: Arc<
+            dyn chronicler_engine::application::ports::llm_provider::LlmProvider,
+        > = Arc::new(
+            MockBackend::default()
+                .with_prompt_responses(vec![r#"{"npcs_in_room": ["shopkeeper"]}"#.to_string()]),
+        );
+        Arc::new(GameService::with_mock_quantifier(
+            crate::make_test_recorder_with_storage(
+                Arc::new(MockBackend::default().with_trigger_narration_fail()),
+                Arc::clone(storage),
+            ),
+            quantifier_recorder,
+        ))
+    })
+    .unwrap();
 
     execute_action_impl(&app, "examine the shopkeeper".to_string());
 
@@ -226,12 +230,8 @@ fn test_failing_trigger_narration_does_not_crash() {
 fn test_pipeline_cancels_when_token_cancelled() {
     let mut state = create_test_state();
     state.narrative.history.clear();
-    let ctx = make_test_context_with_sqlite(state).unwrap();
-    ctx.cancel_token.cancel();
-    let backend = working_service();
-    let app: Arc<DefaultApplicationService> = Arc::new(
-        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(backend)),
-    );
+    let app = make_test_app_with_backends(state, MockBackend::default).unwrap();
+    app.cancel_token().cancel();
 
     execute_action_impl(&app, "look".to_string());
 
@@ -248,15 +248,17 @@ async fn test_cancellation_resets_state_to_idle() {
     let mut state = create_test_state();
     state.narrative.history.clear();
     state.narrative.input_buffer.status = GenerationStatus::Generating;
-    let ctx = make_test_context_with_sqlite(state).unwrap();
-    let backend = GameService::with_mock_quantifier(
-        crate::make_test_recorder(Arc::new(MockBackend::default().with_delay(50))),
-        Arc::new(MockBackend::default()),
-    );
-    let app: Arc<DefaultApplicationService> = Arc::new(
-        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(backend)),
-    );
-    let token = ctx.cancel_token.clone();
+    let app = chronicler_engine::test_support::make_test_app_with_game_service(state, |storage| {
+        Arc::new(GameService::with_mock_quantifier(
+            crate::make_test_recorder_with_storage(
+                Arc::new(MockBackend::default().with_delay(50)),
+                Arc::clone(storage),
+            ),
+            Arc::new(MockBackend::default()),
+        ))
+    })
+    .unwrap();
+    let token = app.cancel_token().clone();
 
     token.cancel();
     execute_action_impl(&app, "look around".to_string());
@@ -273,7 +275,6 @@ async fn test_pipeline_cancels_after_main_narration() {
     let mut state = create_test_state();
     state.narrative.history.clear();
     state.narrative.input_buffer.status = GenerationStatus::Generating;
-    let ctx = make_test_context_with_sqlite(state).unwrap();
     let mock_narrator_backend = Arc::new(MockBackend::default().with_delay(50));
     let mock_narrator_recorder = crate::make_test_recorder(Arc::clone(&mock_narrator_backend)
         as Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider>);
@@ -284,16 +285,14 @@ async fn test_pipeline_cancels_after_main_narration() {
         mock_narrator_recorder,
         quantifier_recorder,
     ));
-    let app: Arc<DefaultApplicationService> = Arc::new(
-        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::clone(&backend)),
-    );
-    let token = ctx.cancel_token.clone();
+    let app = chronicler_engine::test_support::make_test_app_with_game_service(state, |_storage| {
+        Arc::clone(&backend)
+    })
+    .unwrap();
+    let token = app.cancel_token().clone();
 
-    let ctx_clone = ctx.clone();
-    let backend_clone = Arc::clone(&backend);
     let app_clone = Arc::clone(&app);
     let handle = tokio::task::spawn_blocking(move || {
-        let _ = (ctx_clone, backend_clone);
         execute_action_impl(&app_clone, "look around".to_string());
     });
 
@@ -329,7 +328,6 @@ async fn test_pipeline_cancels_during_trigger_continuation() {
     if let Some(encounter) = state.npc_encounter_log.npcs.get_mut("shopkeeper") {
         encounter.times_met = 0;
     }
-    let ctx = make_test_context_with_sqlite(state).unwrap();
     let mock_narrator_backend = Arc::new(MockBackend::default().with_trigger_delay(50));
     let mock_narrator_recorder = crate::make_test_recorder(Arc::clone(&mock_narrator_backend)
         as Arc<dyn chronicler_engine::application::ports::llm_provider::LlmProvider>);
@@ -343,16 +341,14 @@ async fn test_pipeline_cancels_during_trigger_continuation() {
         mock_narrator_recorder,
         quantifier_recorder,
     ));
-    let app: Arc<DefaultApplicationService> = Arc::new(
-        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::clone(&backend)),
-    );
-    let token = ctx.cancel_token.clone();
+    let app = chronicler_engine::test_support::make_test_app_with_game_service(state, |_storage| {
+        Arc::clone(&backend)
+    })
+    .unwrap();
+    let token = app.cancel_token().clone();
 
-    let ctx_clone = ctx.clone();
-    let backend_clone = Arc::clone(&backend);
     let app_clone = Arc::clone(&app);
     let handle = tokio::task::spawn_blocking(move || {
-        let _ = (ctx_clone, backend_clone);
         execute_action_impl(&app_clone, "enter the shop".to_string());
     });
 
@@ -392,21 +388,14 @@ fn test_pre_main_snapshot_saved_before_narration() {
     let mut state = create_test_state();
     state.narrative.history.clear();
     state.narrative.input_buffer.status = GenerationStatus::Idle;
-    let ctx = make_test_context_with_sqlite(state).unwrap();
-    let backend = GameService::with_mock_quantifier(
-        crate::make_test_recorder(Arc::new(MockBackend::default())),
-        Arc::new(MockBackend::default()),
-    );
-    let app: Arc<DefaultApplicationService> = Arc::new(
-        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(backend)),
-    );
+    let app = make_test_app_with_mock_backend(state, MockBackend::default).unwrap();
 
     execute_action_impl(&app, "examine the room".to_string());
 
     let completed = wait_for_generation_complete(&app, 1000);
     assert!(completed, "FreeAction should complete within timeout");
 
-    let latest = ctx.storage.load_latest_snapshot().unwrap().unwrap();
+    let latest = app.storage().load_latest_snapshot().unwrap().unwrap();
     assert!(latest.db_id.is_some(), "snapshot should exist");
 }
 
@@ -418,22 +407,19 @@ fn test_pre_event_snapshot_saved_before_continuation() {
     if let Some(encounter) = state.npc_encounter_log.npcs.get_mut("shopkeeper") {
         encounter.times_met = 0;
     }
-    let ctx = make_test_context_with_sqlite(state).unwrap();
-
-    let quantifier_recorder: Arc<
-        dyn chronicler_engine::application::ports::llm_provider::LlmProvider,
-    > = Arc::new(
-        MockBackend::default()
-            .with_prompt_responses(vec![r#"{"npcs_in_room": ["shopkeeper"]}"#.to_string()]),
-    );
-
-    let backend = GameService::with_mock_quantifier(
-        crate::make_test_recorder(Arc::new(MockBackend::default())),
-        quantifier_recorder,
-    );
-    let app: Arc<DefaultApplicationService> = Arc::new(
-        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(backend)),
-    );
+    let app = chronicler_engine::test_support::make_test_app_with_game_service(state, |_storage| {
+        let quantifier_recorder: Arc<
+            dyn chronicler_engine::application::ports::llm_provider::LlmProvider,
+        > = Arc::new(
+            MockBackend::default()
+                .with_prompt_responses(vec![r#"{"npcs_in_room": ["shopkeeper"]}"#.to_string()]),
+        );
+        Arc::new(GameService::with_mock_quantifier(
+            crate::make_test_recorder(Arc::new(MockBackend::default())),
+            quantifier_recorder,
+        ))
+    })
+    .unwrap();
 
     execute_action_impl(&app, "examine the shopkeeper".to_string());
 
@@ -443,7 +429,7 @@ fn test_pre_event_snapshot_saved_before_continuation() {
         "FreeAction with trigger should complete within timeout"
     );
 
-    let latest = ctx.storage.load_latest_snapshot().unwrap().unwrap();
+    let latest = app.storage().load_latest_snapshot().unwrap().unwrap();
     assert!(latest.db_id.is_some(), "snapshot should exist");
 }
 
@@ -452,14 +438,7 @@ fn test_pipeline_with_quantifier() {
     let mut state = create_test_state();
     state.narrative.history.clear();
     state.narrative.input_buffer.status = GenerationStatus::Generating;
-    let ctx = make_test_context_with_sqlite(state).unwrap();
-    let backend = GameService::with_mock_quantifier(
-        crate::make_test_recorder(Arc::new(MockBackend::default())),
-        Arc::new(MockBackend::default()),
-    );
-    let app: Arc<DefaultApplicationService> = Arc::new(
-        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(backend)),
-    );
+    let app = make_test_app_with_mock_backend(state, MockBackend::default).unwrap();
 
     execute_action_impl(&app, "look around".to_string());
 
@@ -484,7 +463,6 @@ fn test_streaming_narration_saved_before_quantifier_complete() {
     let mut state = create_test_state();
     state.narrative.history.clear();
     state.narrative.input_buffer.status = GenerationStatus::Generating;
-    let ctx = make_test_context_with_sqlite(state).unwrap();
 
     let quantifier_recorder: Arc<
         dyn chronicler_engine::application::ports::llm_provider::LlmProvider,
@@ -497,15 +475,15 @@ fn test_streaming_narration_saved_before_quantifier_complete() {
         crate::make_test_recorder(Arc::new(MockBackend::default())),
         quantifier_recorder,
     ));
-    let app: Arc<DefaultApplicationService> = Arc::new(
-        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::clone(&backend_arc)),
-    );
+    let app = chronicler_engine::test_support::make_test_app_with_game_service(state, |_storage| {
+        Arc::clone(&backend_arc)
+    })
+    .unwrap();
 
-    let ctx_clone = ctx.clone();
     let backend_clone = Arc::clone(&backend_arc);
     let app_clone = Arc::clone(&app);
     let handle = thread::spawn(move || {
-        let _ = (ctx_clone, backend_clone);
+        let _ = backend_clone;
         execute_action_impl(&app_clone, "look around".to_string());
     });
 
@@ -552,14 +530,7 @@ fn test_narration_no_duplicate_with_real_quantifier_flow() {
     let mut state = create_test_state();
     state.narrative.history.clear();
     state.narrative.input_buffer.status = GenerationStatus::Generating;
-    let ctx = make_test_context_with_sqlite(state).unwrap();
-    let backend = GameService::with_mock_quantifier(
-        crate::make_test_recorder(Arc::new(MockBackend::default())),
-        Arc::new(MockBackend::default()),
-    );
-    let app: Arc<DefaultApplicationService> = Arc::new(
-        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(backend)),
-    );
+    let app = make_test_app_with_mock_backend(state, MockBackend::default).unwrap();
 
     execute_action_impl(&app, "test action".to_string());
 
@@ -593,14 +564,7 @@ fn test_pipeline_continues_when_quantifier_save_warns() {
     let mut state = create_test_state();
     state.narrative.history.clear();
     state.narrative.input_buffer.status = GenerationStatus::Generating;
-    let ctx = make_test_context_with_sqlite(state).unwrap();
-    let backend = GameService::with_mock_quantifier(
-        crate::make_test_recorder(Arc::new(MockBackend::default())),
-        Arc::new(MockBackend::default()),
-    );
-    let app: Arc<DefaultApplicationService> = Arc::new(
-        crate::fixtures::make_test_app_service_from_ctx(&ctx, Arc::new(backend)),
-    );
+    let app = make_test_app_with_mock_backend(state, MockBackend::default).unwrap();
 
     execute_action_impl(&app, "look".to_string());
 

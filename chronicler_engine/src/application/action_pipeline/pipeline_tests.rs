@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
 use crate::application::action_pipeline::pipeline::{ActionOutcome, ActionPipeline};
-use crate::application::context::{OpContext, load_or_fresh, load_state_for_test};
+use crate::test_support::make_test_app_with_game_service;
+use crate::test_support::make_test_app_with_storage_and_service;
+use crate::test_support::make_test_recorder;
 use crate::application::game_service::GameService;
 use crate::application::agents::registry::AgentRegistry;
 use crate::domain::model::quantifier::QuantifierResult;
@@ -11,20 +13,6 @@ use crate::domain::model::state::message_types::MessageType;
 use crate::adapters::driven::storage::{Storage, TestOverride};
 use crate::adapters::driven::llm::providers::MockBackend;
 use crate::test_support::fixtures::{TestGameState, TestNpc};
-use crate::test_support::make_test_context;
-use crate::test_support::make_test_recorder;
-use crate::application::application_service::DefaultApplicationService;
-
-fn app_for_ctx(ctx: &OpContext, service: GameService) -> DefaultApplicationService {
-    DefaultApplicationService::new(
-        ctx.storage.clone(),
-        ctx.preset_storage.clone(),
-        ctx.settings.clone(),
-        ctx.cancel_token.clone(),
-        ctx.is_generating.clone(),
-        Arc::new(service),
-    )
-}
 
 fn make_test_pipeline(service: &crate::application::game_service::GameService) -> ActionPipeline {
     service.pipeline()
@@ -37,17 +25,19 @@ fn make_test_state() -> GameState {
 #[test]
 fn test_pipeline_runs_to_completion() {
     let state = make_test_state();
-    let ctx = make_test_context(state.clone());
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     let agent_registry = AgentRegistry::default();
     let service = GameService::with_backends(narrator_recorder, agent_registry);
     let pipeline = make_test_pipeline(&service);
-    let app = app_for_ctx(&ctx, service.clone());
+    let app =
+        make_test_app_with_game_service(state.clone(), |_| Arc::new(service.clone())).unwrap();
 
     let outcome = pipeline.run_from_input(&app, state, "look".to_string());
 
     assert!(matches!(outcome, Ok(())));
-    let final_state = load_state_for_test(&ctx);
+    let final_state = app
+        .load_or_fresh()
+        .expect("freshly seeded state should always load");
     assert_eq!(
         final_state.narrative.input_buffer.status,
         GenerationStatus::Idle
@@ -61,16 +51,18 @@ fn test_pipeline_runs_to_completion() {
 #[test]
 fn test_pipeline_saves_narration_to_history() {
     let state = make_test_state();
-    let ctx = make_test_context(state.clone());
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     let agent_registry = AgentRegistry::default();
     let service = GameService::with_backends(narrator_recorder, agent_registry);
     let pipeline = make_test_pipeline(&service);
-    let app = app_for_ctx(&ctx, service.clone());
+    let app =
+        make_test_app_with_game_service(state.clone(), |_| Arc::new(service.clone())).unwrap();
 
     let _outcome = pipeline.run_from_input(&app, state, "look".to_string());
 
-    let final_state = load_state_for_test(&ctx);
+    let final_state = app
+        .load_or_fresh()
+        .expect("freshly seeded state should always load");
     let has_narration = final_state
         .narrative
         .history()
@@ -82,12 +74,12 @@ fn test_pipeline_saves_narration_to_history() {
 #[test]
 fn test_pipeline_returns_error_on_narration_failure() {
     let state = make_test_state();
-    let ctx = make_test_context(state.clone());
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default().with_fail()));
     let agent_registry = AgentRegistry::default();
     let service = GameService::with_backends(narrator_recorder, agent_registry);
     let pipeline = make_test_pipeline(&service);
-    let app = app_for_ctx(&ctx, service.clone());
+    let app =
+        make_test_app_with_game_service(state.clone(), |_| Arc::new(service.clone())).unwrap();
 
     let outcome = pipeline.run_from_input(&app, state, "look".to_string());
 
@@ -95,7 +87,9 @@ fn test_pipeline_returns_error_on_narration_failure() {
         outcome.is_ok(),
         "Expected Ok(()) after error-model unification, got {outcome:?}"
     );
-    let final_state = load_state_for_test(&ctx);
+    let final_state = app
+        .load_or_fresh()
+        .expect("freshly seeded state should always load");
     assert!(
         final_state
             .narrative
@@ -110,13 +104,13 @@ fn test_pipeline_returns_error_on_narration_failure() {
 #[test]
 fn test_pipeline_returns_error_on_empty_narration_text() {
     let state = make_test_state();
-    let ctx = make_test_context(state.clone());
     let narrator_recorder =
         make_test_recorder(Arc::new(MockBackend::default().with_empty_response()));
     let agent_registry = AgentRegistry::default();
     let service = GameService::with_backends(narrator_recorder, agent_registry);
     let pipeline = make_test_pipeline(&service);
-    let app = app_for_ctx(&ctx, service.clone());
+    let app =
+        make_test_app_with_game_service(state.clone(), |_| Arc::new(service.clone())).unwrap();
 
     let outcome = pipeline.run_from_input(&app, state, "look".to_string());
 
@@ -124,7 +118,9 @@ fn test_pipeline_returns_error_on_empty_narration_text() {
         outcome.is_ok(),
         "Expected Ok(()) after error-model unification, got {outcome:?}"
     );
-    let final_state = load_state_for_test(&ctx);
+    let final_state = app
+        .load_or_fresh()
+        .expect("freshly seeded state should always load");
     assert!(
         final_state
             .narrative
@@ -139,13 +135,13 @@ fn test_pipeline_returns_error_on_empty_narration_text() {
 #[test]
 fn test_pipeline_cancels_mid_run() {
     let state = make_test_state();
-    let ctx = make_test_context(state.clone());
-    ctx.cancel_token.cancel();
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     let agent_registry = AgentRegistry::default();
     let service = GameService::with_backends(narrator_recorder, agent_registry);
     let pipeline = make_test_pipeline(&service);
-    let app = app_for_ctx(&ctx, service.clone());
+    let app =
+        make_test_app_with_game_service(state.clone(), |_| Arc::new(service.clone())).unwrap();
+    app.cancel_token().cancel();
 
     let outcome = pipeline.run_from_input(&app, state, "look".to_string());
 
@@ -153,7 +149,9 @@ fn test_pipeline_cancels_mid_run() {
         matches!(outcome, Err(ActionOutcome::Cancelled)),
         "Expected cancellation when token is cancelled, got {outcome:?}"
     );
-    let final_state = load_state_for_test(&ctx);
+    let final_state = app
+        .load_or_fresh()
+        .expect("freshly seeded state should always load");
     assert_eq!(
         final_state.narrative.input_buffer.status,
         GenerationStatus::Idle
@@ -175,7 +173,6 @@ fn test_pipeline_with_custom_quantifier_result() {
     use crate::application::agents::quantifier::QuantifierAgent;
 
     let state = make_test_state();
-    let ctx = make_test_context(state.clone());
 
     let custom_quantifier_result = r#"{"npcs_in_room": ["npc1"], "movement": null}"#.to_string();
     let mock_provider =
@@ -187,12 +184,15 @@ fn test_pipeline_with_custom_quantifier_result() {
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     let service = GameService::with_backends(narrator_recorder, agent_registry);
     let pipeline = service.pipeline();
-    let app = app_for_ctx(&ctx, service.clone());
+    let app =
+        make_test_app_with_game_service(state.clone(), |_| Arc::new(service.clone())).unwrap();
 
     let outcome = pipeline.run_from_input(&app, state, "look".to_string());
 
     assert!(matches!(outcome, Ok(())));
-    let final_state = load_state_for_test(&ctx);
+    let final_state = app
+        .load_or_fresh()
+        .expect("freshly seeded state should always load");
     assert_eq!(
         final_state.scene.npcs_in_area.len(),
         1,
@@ -203,14 +203,13 @@ fn test_pipeline_with_custom_quantifier_result() {
 #[test]
 fn test_phase_trigger_continuation_cancels_at_start() {
     let state = make_test_state();
-    let ctx = make_test_context(state.clone());
-    ctx.cancel_token.cancel();
-
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     let agent_registry = AgentRegistry::default();
     let service = GameService::with_backends(narrator_recorder, agent_registry);
     let pipeline = make_test_pipeline(&service);
-    let app = app_for_ctx(&ctx, service.clone());
+    let app =
+        make_test_app_with_game_service(state.clone(), |_| Arc::new(service.clone())).unwrap();
+    app.cancel_token().cancel();
 
     let trigger = crate::test_support::TestStoredTriggerContext::for_npc("npc1", "Test", "Hello");
 
@@ -220,7 +219,9 @@ fn test_phase_trigger_continuation_cancels_at_start() {
         matches!(result, Err(ActionOutcome::Cancelled)),
         "Expected cancellation at start of trigger continuation, got {result:?}"
     );
-    let final_state = load_state_for_test(&ctx);
+    let final_state = app
+        .load_or_fresh()
+        .expect("freshly seeded state should always load");
     assert_eq!(
         final_state.narrative.input_buffer.status,
         GenerationStatus::Idle
@@ -234,22 +235,17 @@ fn test_phase_trigger_continuation_cancels_at_start() {
 #[test]
 fn test_trigger_continuation_save_post_trigger_error() {
     let state = make_test_state();
-    let base_ctx = make_test_context(state.clone());
     let (failing_storage, handle) = Storage::new_in_memory().with_test_failures();
     let failing = Arc::new(failing_storage);
     handle.set(
         "save_snapshot",
         TestOverride::internal("simulated save failure"),
     );
-    let ctx = OpContext {
-        storage: failing,
-        ..base_ctx.clone()
-    };
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     let agent_registry = AgentRegistry::default();
     let service = GameService::with_backends(narrator_recorder, agent_registry);
     let pipeline = make_test_pipeline(&service);
-    let app = app_for_ctx(&ctx, service.clone());
+    let app = make_test_app_with_storage_and_service(failing, Arc::new(service));
     let trigger = crate::test_support::TestStoredTriggerContext::for_npc("npc1", "Test", "Hello");
     let result = pipeline.phase_trigger_continuation(state, &trigger, &app);
 
@@ -298,8 +294,6 @@ fn test_pipeline_trigger_happy_path() {
     let player = Arc::new(crate::test_support::fixtures::TestPlayer::standard());
     let state = GameState::new(world, map, player, vec![npc], "start".to_string());
 
-    let ctx = make_test_context(state.clone());
-
     let custom_quantifier_result = r#"{"npcs_in_room": ["npc1"], "movement": null}"#.to_string();
     let mock_provider =
         Arc::new(MockBackend::default().with_prompt_responses(vec![custom_quantifier_result]));
@@ -312,7 +306,8 @@ fn test_pipeline_trigger_happy_path() {
     ));
     let service = GameService::with_backends(narrator_recorder, agent_registry);
     let pipeline = service.pipeline();
-    let app = app_for_ctx(&ctx, service.clone());
+    let app =
+        make_test_app_with_game_service(state.clone(), |_| Arc::new(service.clone())).unwrap();
 
     let outcome = pipeline.run_from_input(&app, state, "look".to_string());
 
@@ -320,7 +315,9 @@ fn test_pipeline_trigger_happy_path() {
         matches!(outcome, Ok(())),
         "Expected Completed, got {outcome:?}"
     );
-    let final_state = load_state_for_test(&ctx);
+    let final_state = app
+        .load_or_fresh()
+        .expect("freshly seeded state should always load");
     assert!(
         final_state
             .narrative
@@ -367,8 +364,6 @@ fn test_pipeline_trigger_empty_continuation() {
     let player = Arc::new(crate::test_support::fixtures::TestPlayer::standard());
     let state = GameState::new(world, map, player, vec![npc], "start".to_string());
 
-    let ctx = make_test_context(state.clone());
-
     let custom_quantifier_result = r#"{"npcs_in_room": ["npc1"], "movement": null}"#.to_string();
     let mock_provider =
         Arc::new(MockBackend::default().with_prompt_responses(vec![custom_quantifier_result]));
@@ -380,14 +375,17 @@ fn test_pipeline_trigger_empty_continuation() {
         make_test_recorder(Arc::new(MockBackend::default().with_empty_response()));
     let service = GameService::with_backends(narrator_recorder, agent_registry);
     let pipeline = service.pipeline();
-    let app = app_for_ctx(&ctx, service.clone());
+    let app =
+        make_test_app_with_game_service(state.clone(), |_| Arc::new(service.clone())).unwrap();
 
     let outcome = pipeline.run_from_input(&app, state, "look".to_string());
     assert!(
         outcome.is_ok(),
         "Expected Ok with error status, got: {outcome:?}"
     );
-    let reloaded = load_or_fresh(&ctx);
+    let reloaded = app
+        .load_or_fresh()
+        .expect("freshly seeded state should always load");
     assert!(
         reloaded
             .narrative
@@ -432,8 +430,6 @@ fn test_pipeline_trigger_complete_failure() {
     let player = Arc::new(crate::test_support::fixtures::TestPlayer::standard());
     let state = GameState::new(world, map, player, vec![npc], "start".to_string());
 
-    let ctx = make_test_context(state.clone());
-
     let custom_quantifier_result = r#"{"npcs_in_room": ["npc1"], "movement": null}"#.to_string();
     let mock_provider =
         Arc::new(MockBackend::default().with_prompt_responses(vec![custom_quantifier_result]));
@@ -444,14 +440,17 @@ fn test_pipeline_trigger_complete_failure() {
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default().with_fail()));
     let service = GameService::with_backends(narrator_recorder, agent_registry);
     let pipeline = service.pipeline();
-    let app = app_for_ctx(&ctx, service.clone());
+    let app =
+        make_test_app_with_game_service(state.clone(), |_| Arc::new(service.clone())).unwrap();
 
     let outcome = pipeline.run_from_input(&app, state, "look".to_string());
     assert!(
         outcome.is_ok(),
         "Expected Ok with error status, got: {outcome:?}"
     );
-    let reloaded = load_or_fresh(&ctx);
+    let reloaded = app
+        .load_or_fresh()
+        .expect("freshly seeded state should always load");
     assert!(
         reloaded
             .narrative
@@ -467,16 +466,16 @@ fn test_pipeline_trigger_complete_failure() {
 #[test]
 fn test_pipeline_saves_narration_before_quantifier() {
     let state = make_test_state();
-    let ctx = make_test_context(state.clone());
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     let agent_registry = AgentRegistry::default();
     let service = GameService::with_backends(narrator_recorder, agent_registry);
     let pipeline = make_test_pipeline(&service);
-    let app = app_for_ctx(&ctx, service.clone());
+    let app =
+        make_test_app_with_game_service(state.clone(), |_| Arc::new(service.clone())).unwrap();
 
     let _outcome = pipeline.run_from_input(&app, state, "look".to_string());
 
-    let messages = ctx.load_messages().unwrap();
+    let messages = app.load_messages().unwrap();
     let narration_msgs: Vec<_> = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Narration)
@@ -499,18 +498,20 @@ fn test_pipeline_saves_narration_before_quantifier() {
 #[test]
 fn test_pipeline_no_duplicate_narration() {
     let state = make_test_state();
-    let ctx = make_test_context(state.clone());
     let narrator_recorder = make_test_recorder(Arc::new(
         MockBackend::default().with_narrations(vec!["You look around.".to_string()]),
     ));
     let agent_registry = AgentRegistry::default();
     let service = GameService::with_backends(narrator_recorder, agent_registry);
     let pipeline = make_test_pipeline(&service);
-    let app = app_for_ctx(&ctx, service.clone());
+    let app =
+        make_test_app_with_game_service(state.clone(), |_| Arc::new(service.clone())).unwrap();
 
     let _outcome = pipeline.run_from_input(&app, state, "test input".to_string());
 
-    let final_state = load_state_for_test(&ctx);
+    let final_state = app
+        .load_or_fresh()
+        .expect("freshly seeded state should always load");
     let history = final_state.narrative.history();
     let narration_count = history
         .iter()
@@ -532,16 +533,16 @@ fn test_pipeline_no_duplicate_narration() {
 #[test]
 fn test_pipeline_quantifier_runs_on_saved_state() {
     let state = make_test_state();
-    let ctx = make_test_context(state.clone());
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     let agent_registry = AgentRegistry::default();
     let service = GameService::with_backends(narrator_recorder, agent_registry);
     let pipeline = make_test_pipeline(&service);
-    let app = app_for_ctx(&ctx, service.clone());
+    let app =
+        make_test_app_with_game_service(state.clone(), |_| Arc::new(service.clone())).unwrap();
 
     let _outcome = pipeline.run_from_input(&app, state, "look".to_string());
 
-    let messages = ctx.load_messages().unwrap();
+    let messages = app.load_messages().unwrap();
     let narration = messages
         .iter()
         .find(|m| m.message_type == MessageType::Narration)
@@ -556,7 +557,6 @@ fn test_pipeline_quantifier_runs_on_saved_state() {
 #[test]
 fn test_pipeline_continues_if_quantifier_save_fails() {
     let state = make_test_state();
-    let ctx = make_test_context(state.clone());
 
     let custom_quantifier_result = r#"{"npcs_in_room": ["npc1"], "movement": null}"#.to_string();
     let mock_provider =
@@ -569,7 +569,8 @@ fn test_pipeline_continues_if_quantifier_save_fails() {
     let narrator_recorder = make_test_recorder(Arc::new(MockBackend::default()));
     let service = GameService::with_backends(narrator_recorder, agent_registry);
     let pipeline = service.pipeline();
-    let app = app_for_ctx(&ctx, service.clone());
+    let app =
+        make_test_app_with_game_service(state.clone(), |_| Arc::new(service.clone())).unwrap();
 
     let outcome = pipeline.run_from_input(&app, state, "look".to_string());
 
@@ -582,7 +583,6 @@ fn test_pipeline_continues_if_quantifier_save_fails() {
 #[test]
 fn test_narration_persisted_even_if_quantifier_changes_state() {
     let state = make_test_state();
-    let ctx = make_test_context(state.clone());
 
     let custom_quantifier_result = r#"{"npcs_in_room": ["npc1"], "movement": null}"#.to_string();
     let mock_provider =
@@ -597,11 +597,12 @@ fn test_narration_persisted_even_if_quantifier_changes_state() {
     ));
     let service = GameService::with_backends(narrator_recorder, agent_registry);
     let pipeline = service.pipeline();
-    let app = app_for_ctx(&ctx, service.clone());
+    let app =
+        make_test_app_with_game_service(state.clone(), |_| Arc::new(service.clone())).unwrap();
 
     let _outcome = pipeline.run_from_input(&app, state, "look".to_string());
 
-    let messages = ctx.load_messages().unwrap();
+    let messages = app.load_messages().unwrap();
     let narration_msgs: Vec<_> = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Narration)

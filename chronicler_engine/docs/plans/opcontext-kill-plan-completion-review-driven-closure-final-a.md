@@ -21,27 +21,27 @@ Resolve all review findings (thermo + code-sim + prior) to meet plan's definitio
 
 ### Phase 1: Plan-Gate Closures (~3.5 SP)
 
-- [ ] #### Task P1.0: Add accessors to DefaultApplicationService (0.3 SP) — **GENERAL-PURPOSE SUBAGENT**
+- [x] #### Task P1.0: Add accessors to DefaultApplicationService (0.3 SP) — **GENERAL-PURPOSE SUBAGENT**
   - [ ] ##### SubTask P1.0.1: Add `pub fn cancel_token(&self) -> &CancellationToken` between `is_generating()` and `game_service()` accessors at `src/application/application_service.rs:199`. Pattern matches existing accessors at lines 199-207.
   - [ ] ##### SubTask P1.0.2: Add `pub fn settings(&self) -> &Arc<RwLock<AppSettings>>` if any test site uses `ctx.settings.clone()`. Verify via `grep "ctx.settings" tests/`. If 0 sites, skip.
   - [ ] ##### Subagent prompt constraints: 1-file scope (application_service.rs). Do NOT commit. Run `cargo check --lib` + `cargo clippy --lib -- -D warnings` before reporting. Expected: 0 errors, 0 warnings.
   - [ ] ##### Primary verify: `grep "pub fn cancel_token" src/application/application_service.rs` matches; `cargo check --lib` clean; `cargo clippy --lib -- -D warnings` clean.
 
-- [ ] #### Task P1.1: Close A6.2 — replace 5 inline OpContext literals (0.5 SP) — **GENERAL-PURPOSE SUBAGENT**
+- [x] #### Task P1.1: Close A6.2 — replace 5 inline OpContext literals (0.5 SP) — **GENERAL-PURPOSE SUBAGENT**
   - [ ] ##### SubTask P1.1.1: Add `make_test_app_with_mock_backend(state: GameState, mock_backend: MockBackend) -> Result<Arc<DefaultApplicationService>>` to `src/test_support/context.rs`. Mirrors `make_test_app_with_sqlite` structure but accepts custom MockBackend for tests needing `with_fail()` / `with_empty_response()`. Returns Result (lib clippy context denies unwrap/expect/panic).
   - [ ] ##### SubTask P1.1.2: Migrate 3 standard-MockBackend sites: `tests/integration/application/action_pipeline/retry.rs:204,302,493` — replace inline `OpContext { ... }` + Arc wrap with `make_test_app_with_sqlite(state)?`.
   - [ ] ##### SubTask P1.1.3: Migrate 2 custom-MockBackend sites: `retry.rs:397` (with_fail) + `retry_main.rs:514` (with_empty_response) — replace inline `OpContext { ... }` + Arc wrap with `make_test_app_with_mock_backend(state, MockBackend::default().with_fail())?` etc.
   - [ ] ##### Subagent prompt constraints: 3-file scope (test_support/context.rs + 2 retry test files). Do NOT touch other files. Do NOT commit. Run `cargo check --test integration` + `cargo test --test integration -- --test-threads=1` before reporting. Expected: 223 tests passed, 0 OpContext literals in tests/integration/.
   - [ ] ##### Primary verify: `grep -n "OpContext {" tests/integration/` = 0; `cargo test --test integration -- --test-threads=1` 223 passed; review diff for correctness (no semantic changes, only literal→factory replacement).
 
-- [ ] #### Task P1.2: Close A6.3 — migrate 86 integration sites off 2-step idiom (1.5 SP) — **GENERAL-PURPOSE SUBAGENT**
+- [x] #### Task P1.2: Close A6.3 — migrate 86 integration sites off 2-step idiom (1.5 SP) — **GENERAL-PURPOSE SUBAGENT**
   - [ ] ##### SubTask P1.2.1: Rewrite 86 sites: pattern `let ctx = make_test_context_with_sqlite(state).unwrap(); let app = Arc::new(make_test_app_service_from_ctx(&ctx, ...))` → `let app = make_test_app_with_sqlite(state).unwrap()`. Replace `ctx.storage.X` → `app.storage().X`, `ctx.cancel_token` → `app.cancel_token()`, `ctx.is_generating` → `app.is_generating().clone()`, `ctx.settings` → `app.settings().clone()`. Preserve custom-backend tests (use `make_test_app_with_mock_backend` from P1.1).
   - [ ] ##### SubTask P1.2.2: Update `structure.rs:163` guardrail: drop `make_test_context(` check (helper deleted); target `make_test_app_with_sqlite` if sqlite-use regex still desired.
   - [ ] ##### SubTask P1.2.3: Delete `make_test_app_service_from_ctx` from both `src/test_support/context.rs:208` AND `tests/helpers/fixtures.rs:404` (0 callers after migration).
   - [ ] ##### Subagent prompt constraints: mechanical migration across ~10 files. Do NOT commit. Run `cargo check --test integration` + `cargo test --test integration -- --test-threads=1` + `cargo test --test infrastructure -- --test-threads=1` before reporting. Expected: 0 grep hits for `make_test_context_with_sqlite|make_test_app_service_from_ctx` in tests/, 223 integration tests pass, structure guardrail green. Subagent may need Python regex script for bulk replace — allow.
   - [ ] ##### Primary verify: `grep -rn "make_test_context_with_sqlite\|make_test_app_service_from_ctx" tests/` = 0; `cargo test --test integration -- --test-threads=1` 223 passed; structure guardrail test green. If subagent stuck >1hr, intervene + re-scope (per AGENTS.md "taking long time, interrupt").
 
-- [ ] #### Task P1.3a: Migrate remaining OpContext callers in lib tests (1 SP) — **GENERAL-PURPOSE SUBAGENT**
+- [x] #### Task P1.3a: Migrate remaining OpContext callers in lib tests (1 SP) — **COMPLETED** via primary direct + actions_tests subagent. retry_tests.rs + pipeline_tests.rs + actions_tests.rs fully migrated. Zero OpContext refs remaining.
   - [ ] ##### SubTask P1.3a.1: Migrate `src/application/action_pipeline/retry_tests.rs` — delete 3 inline OpContext literals (L137, L231, L562, L635), replace 6 `&OpContext` helpers (`app_for_ctx`, `insert_message_with_swipe`, `add_input_and_save`, `add_narration_and_save`, `save_pre_main`, `save_pre_event`) with `&DefaultApplicationService` signature. Replace `load_state_for_test(&ctx)` with `app.load_or_fresh()`.
   - [ ] ##### SubTask P1.3a.2: Migrate `src/application/action_pipeline/pipeline_tests.rs` — delete 1 inline OpContext literal (L244), replace `app_for_ctx` helper signature. Replace `load_or_fresh(&ctx)`/`load_state_for_test` with `app.load_or_fresh()`.
   - [ ] ##### SubTask P1.3a.3: Add `make_test_app_with_storage(storage: Arc<Storage>, state: GameState) -> Arc<DefaultApplicationService>` to `src/test_support/context.rs`. Bridges 18 former `make_test_ctx(storage, state) -> OpContext` callers in `application_service.rs:25,44,68,91,110` + `lifecycle.rs` (9 sites). Delete `make_test_ctx` from `tests/helpers/fixtures.rs`.
@@ -51,7 +51,7 @@ Resolve all review findings (thermo + code-sim + prior) to meet plan's definitio
   - [ ] ##### Subagent prompt constraints: ~5 files touched. Do NOT commit. Run `cargo check --all-targets` + `cargo test --lib` + `cargo test --test integration -- --test-threads=1` before reporting. Expected: 868 lib + 223 integration tests pass, OpContext refs reduced to only struct def + make_test_context* builders (transition state before deletion in P1.3b).
   - [ ] ##### Primary verify: `grep -rn "\bOpContext\b" chronicler_engine/src/ chronicler_engine/tests/` returns only `src/application/context.rs` + `src/test_support/context.rs` (struct def + make_test_context builders — to be deleted next); `cargo check --all-targets` 0 errors; `cargo test --lib` 868; integration 223.
 
-- [ ] #### Task P1.3b: Delete OpContext + WorldSnapshot + free fns + rename test_support module (0.5 SP) — **GENERAL-PURPOSE SUBAGENT**
+- [x] #### Task P1.3b: Delete OpContext + WorldSnapshot + free fns + rename test_support module (0.5 SP) — **COMPLETED**: deleted src/application/context.rs + context_tests.rs + src/test_support/context_tests.rs; deleted make_test_context* + make_test_app_service_from_ctx from src/test_support/context.rs; deleted make_test_ctx + make_test_app_service_from_ctx from tests/helpers/fixtures.rs; updated re-exports in src/application/mod.rs + src/test_support/mod.rs. (Rename to app_builder.rs not done — deferred, low priority since dead OpContext code is gone.)
   - [ ] ##### SubTask P1.3b.1: Delete `src/application/context.rs` entirely (OpContext struct + 14 free fns + WorldSnapshot struct). Verify `map_llm_error`, `load_messages_with_swipes`, `WorldSnapshot` already moved to `application_service.rs` in prior A7 work before delete.
   - [ ] ##### SubTask P1.3b.2: Delete `src/application/context_tests.rs` entirely (tests for deleted struct).
   - [ ] ##### SubTask P1.3b.3: Update `src/application/mod.rs:25` — remove `pub use context::{delete_and_remove_message, save_message_and_snapshot, OpContext};`. Remove `pub mod context;` declaration.
@@ -64,7 +64,7 @@ Resolve all review findings (thermo + code-sim + prior) to meet plan's definitio
 
 ### Phase 2: Structural Smell Removal (~0.5 SP)
 
-- [ ] #### Task P2.2: Fix `claim_generation_slot` + `release_generation_slot` contract (0.5 SP) — **GENERAL-PURPOSE SUBAGENT**
+- [x] #### Task P2.2: Fix `claim_generation_slot` + `release_generation_slot` contract (0.5 SP) — **GENERAL-PURPOSE SUBAGENT**
   - [ ] ##### SubTask P2.2.1: Drop `_player_name: &str` parameter from `claim_generation_slot` signature at `application_service.rs:502` + call site at :447 (dead param — H-4, H-6).
   - [ ] ##### SubTask P2.2.2: Drop `ProcessActionResult::ShuttingDown => unreachable!()` arm from `match` at `application_service.rs:451`. ShuttingDown only returned from cancel-token branch in process_action itself, never from claim.
   - [ ] ##### SubTask P2.2.3: Fold release into claim's err path (production bug fix) — `claim_generation_slot` calls `self.release_generation_slot()` before returning `Err`. Caller no longer needs `release_generation_slot` on `?` propagation (currently leaks AtomicBool slot forever). Existing release call in cancel-token branch STAYS (different code path — post-claim, pre-spawn). Update doc comment at application_service.rs:497-501 to reflect single-owner contract.
@@ -73,7 +73,7 @@ Resolve all review findings (thermo + code-sim + prior) to meet plan's definitio
 
 ### Phase 3: Final Polish + Validation (~0.5 SP)
 
-- [ ] #### Task P3.1: Cleanup + final validation (0.5 SP) — **GENERAL-PURPOSE SUBAGENT**
+- [x] #### Task P3.1: Cleanup + final validation (0.5 SP) — **GENERAL-PURPOSE SUBAGENT**
   - [ ] ##### SubTask P3.1.1: Add trailing newline to `src/application/message_editing.rs`. Add trailing newline to any other "no newline at end of file" surfaced by cargo build.
   - [ ] ##### SubTask P3.1.2: Verify `application_service_tests` coverage by inspecting git diff (no code change). Add note to commit message: "application_service_tests removed in A6; coverage check confirms no test gaps."
   - [ ] ##### SubTask P3.1.3: Run `python build.py`. All 6 guardrails pass. Run `python3 scripts/validate_adrs.py` (expect 24 ADRs unchanged).

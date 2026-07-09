@@ -164,7 +164,7 @@ pub fn check_no_legacy_test_context(path: &str, content: &str) -> Vec<Violation>
             violations.push(Violation::error(
                 path,
                 line_num + 1,
-                "Integration tests must use make_test_context_with_sqlite() for consistent SQLite testing.".to_string(),
+                "Integration tests must use make_test_app_with_sqlite() for consistent SQLite testing.".to_string(),
             ));
         }
     }

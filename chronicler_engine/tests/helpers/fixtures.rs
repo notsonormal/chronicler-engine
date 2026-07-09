@@ -5,12 +5,11 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use chronicler_engine::application::context::OpContext;
+use chronicler_engine::application::game_service::GameService;
 use chronicler_engine::domain::model::character::{CharacterSheet, NpcCard, PlayerCard};
 use chronicler_engine::domain::model::map::{Direction, MapDef, Overworld, Region, Room};
 use chronicler_engine::domain::model::scenario::StartingScenario;
 use chronicler_engine::domain::model::settings::AppSettings;
-use chronicler_engine::application::game_service::GameService;
 use chronicler_engine::domain::model::state::game_state::GameState;
 use chronicler_engine::domain::model::world::WorldCard;
 use chronicler_engine::adapters::driven::storage::Storage;
@@ -358,22 +357,6 @@ pub fn seed_test_world_with_scenario(storage: &Storage) {
         .expect("seed persona");
 }
 
-pub fn make_test_ctx(storage: Arc<Storage>, state: GameState) -> OpContext {
-    OpContext {
-        storage,
-        world_snapshot: chronicler_engine::application::application_service::WorldSnapshot {
-            world: state.world,
-            map: state.map,
-            player: state.player,
-            npcs: Arc::new(state.npcs),
-        },
-        cancel_token: tokio_util::sync::CancellationToken::new(),
-        is_generating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
-        settings: Arc::new(std::sync::RwLock::new(AppSettings::default())),
-        preset_storage: Arc::new(Storage::new_in_memory()),
-    }
-}
-
 // Pre-seeds the games row so `game_state_snapshots.game_id` / `messages.game_id` FKs hold.
 pub fn create_test_storage(game_id: u64) -> Storage {
     let pool = DbPool::new(":memory:").expect("in-memory db should open");
@@ -385,20 +368,57 @@ pub fn create_test_storage_arc(game_id: u64) -> Arc<Storage> {
     Arc::new(create_test_storage(game_id))
 }
 
-// A1 transitional helper; removed in A7 when OpContext dies.
-pub fn make_test_app_service_from_ctx(
-    ctx: &chronicler_engine::application::OpContext,
+// Build a DefaultApplicationService backed by the given storage (with the
+/// supplied `state` world/player pre-loaded into the snapshot) and a custom
+/// `game_service`. Replaces the old `make_test_ctx` + `make_test_app_service_from_ctx`
+/// idiom for tests that need shared storage.
+#[allow(dead_code)]
+pub fn make_test_app_with_storage(
+    storage: Arc<Storage>,
+    state: GameState,
     game_service: Arc<GameService>,
-) -> chronicler_engine::application::application_service::DefaultApplicationService {
+) -> Arc<chronicler_engine::application::application_service::DefaultApplicationService> {
     use chronicler_engine::application::application_service::DefaultApplicationService;
-    DefaultApplicationService::new(
-        ctx.storage.clone(),
-        ctx.preset_storage.clone(),
-        ctx.settings.clone(),
-        ctx.cancel_token.clone(),
-        ctx.is_generating.clone(),
+    let world_snapshot = chronicler_engine::application::application_service::WorldSnapshot {
+        world: state.world.clone(),
+        map: state.map.clone(),
+        player: state.player.clone(),
+        npcs: std::sync::Arc::new(state.npcs.clone()),
+    };
+    // Best-effort: persist snapshot to storage so app.load_or_fresh() can read it back.
+    let _ = storage.save_snapshot(
+        &chronicler_engine::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
+            &state,
+        ),
+    );
+    let _ = world_snapshot; // suppress unused if save_snapshot path diverges
+    Arc::new(DefaultApplicationService::new(
+        storage,
+        Arc::new(Storage::new_in_memory()),
+        Arc::new(std::sync::RwLock::new(AppSettings::default())),
+        tokio_util::sync::CancellationToken::new(),
+        Arc::new(std::sync::atomic::AtomicBool::new(false)),
         game_service,
-    )
+    ))
+}
+
+/// Build a sibling app that shares storage/settings/token/state-flags with
+/// `base` but installs a different `GameService`. Used by tests that need
+/// to seed an app, then build a second app with a storage-sharing recorder.
+#[allow(dead_code)]
+pub fn app_with_storage_from(
+    base: &chronicler_engine::application::application_service::DefaultApplicationService,
+    game_service: Arc<GameService>,
+) -> Arc<chronicler_engine::application::application_service::DefaultApplicationService> {
+    use chronicler_engine::application::application_service::DefaultApplicationService;
+    Arc::new(DefaultApplicationService::new(
+        Arc::clone(base.storage()),
+        Arc::clone(base.preset_storage()),
+        Arc::clone(base.settings()),
+        base.cancel_token().clone(),
+        Arc::clone(base.is_generating()),
+        game_service,
+    ))
 }
 
 // B3 fixture folded into A6 per Issue 10: seeds system_default + quantifier_default presets.
