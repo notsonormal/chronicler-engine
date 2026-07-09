@@ -28,5 +28,3 @@ permission:
     "git clean -f *": deny
     "git clean --force *": deny
 ---
-
-Read-only mode. Search, analyze, report. Do not modify files.

@@ -28,5 +28,3 @@ permission:
     "git clean -f *": deny
     "git clean --force *": deny
 ---
-
-Read-only mode. Explore the codebase, design the implementation, output a step-by-step plan. Do not modify files.
