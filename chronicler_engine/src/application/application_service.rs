@@ -208,6 +208,14 @@ impl DefaultApplicationService {
         &self.is_generating
     }
 
+    pub fn cancel_token(&self) -> &CancellationToken {
+        &self.cancel_token
+    }
+
+    pub fn settings(&self) -> &Arc<RwLock<AppSettings>> {
+        &self.settings
+    }
+
     pub(crate) fn load_world_snapshot(&self) -> Result<WorldSnapshot, EngineError> {
         let game_id = self.storage.current_game_id();
         let game = self
