@@ -437,41 +437,20 @@ impl DefaultApplicationService {
     pub fn process_action(&self, input: String) -> Result<ProcessActionResult, EngineError> {
         let mut game_state = self.load_or_fresh()?;
 
-        if !self.is_generating.load(Ordering::SeqCst)
-            && game_state.narrative.input_buffer.status.is_generating()
-        {
-            tracing::warn!(
-                "Found stale Generating status without active generation, resetting to Idle"
-            );
-            game_state.narrative.input_buffer.status = GenerationStatus::Idle;
-            game_state.narrative.input_buffer.phase = GenerationPhase::default();
-        }
+        self.heal_stale_generating(&mut game_state);
 
         let player_name = game_state.player.sheet.name.clone();
-
         if !input.is_empty() {
             game_state.add_message(input.clone(), Some(player_name.clone()), MessageType::Input);
         }
 
-        if self
-            .is_generating
-            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-            .is_err()
-        {
-            return Ok(ProcessActionResult::ConcurrentGeneration);
+        match self.claim_generation_slot(&mut game_state, &player_name)? {
+            ProcessActionResult::ConcurrentGeneration => {
+                return Ok(ProcessActionResult::ConcurrentGeneration);
+            }
+            ProcessActionResult::Started => {}
+            ProcessActionResult::ShuttingDown => unreachable!(),
         }
-
-        game_state.narrative.input_buffer.status = GenerationStatus::Generating;
-        game_state.narrative.input_buffer.phase = GenerationPhase::Narrating;
-
-        if let Err(e) = self.save_message_and_snapshot(&mut game_state) {
-            tracing::debug!(
-                "process_action: save failed, setting is_generating=false and returning error"
-            );
-            self.is_generating.store(false, Ordering::SeqCst);
-            return Err(e);
-        }
-        tracing::debug!("process_action: state saved, spawning blocking task");
 
         if self.cancel_token.is_cancelled() {
             if let Ok(mut gs) = self.load_or_fresh() {
@@ -481,6 +460,7 @@ impl DefaultApplicationService {
                     tracing::error!("Failed to save shutdown snapshot: {e}");
                 }
             }
+            self.release_generation_slot();
             return Ok(ProcessActionResult::ShuttingDown);
         }
 
@@ -496,6 +476,57 @@ impl DefaultApplicationService {
             tracing::debug!("spawn_blocking: execute_action completed");
         });
         Ok(ProcessActionResult::Started)
+    }
+
+    /// Heal stale Generating status when no active generation is running.
+    /// If `is_generating` AtomicBool is false but persisted status reports
+    /// `Generating`, reset status+phase to Idle.
+    fn heal_stale_generating(&self, state: &mut GameState) {
+        if !self.is_generating.load(Ordering::SeqCst)
+            && state.narrative.input_buffer.status.is_generating()
+        {
+            tracing::warn!(
+                "Found stale Generating status without active generation, resetting to Idle"
+            );
+            state.narrative.input_buffer.status = GenerationStatus::Idle;
+            state.narrative.input_buffer.phase = GenerationPhase::default();
+        }
+    }
+
+    /// Try to claim the generation slot via CAS on the AtomicBool, then persist
+    /// the Generating status. Outcomes:
+    /// - `(Ok Started)` CAS won and save succeeded; AtomicBool=true, status=Generating.
+    /// - `(Ok ConcurrentGeneration)` CAS lost; caller should return without rollback.
+    /// - `(Err ...)` CAS won but save failed; AtomicBool still true — caller MUST call
+    ///   `release_generation_slot` to roll back, then propagate the error.
+    fn claim_generation_slot(
+        &self,
+        state: &mut GameState,
+        _player_name: &str,
+    ) -> Result<ProcessActionResult, EngineError> {
+        if self
+            .is_generating
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .is_err()
+        {
+            return Ok(ProcessActionResult::ConcurrentGeneration);
+        }
+
+        state.narrative.input_buffer.status = GenerationStatus::Generating;
+        state.narrative.input_buffer.phase = GenerationPhase::Narrating;
+
+        if let Err(e) = self.save_message_and_snapshot(state) {
+            tracing::debug!("claim_generation_slot: save failed; caller must release slot");
+            return Err(e);
+        }
+        tracing::debug!("process_action: state saved, spawning blocking task");
+        Ok(ProcessActionResult::Started)
+    }
+
+    /// Release the generation slot by clearing the AtomicBool. Caller must invoke
+    /// this on any error path after CAS succeeded.
+    fn release_generation_slot(&self) {
+        self.is_generating.store(false, Ordering::SeqCst);
     }
 
     pub fn continue_narration(&self) -> Result<ProcessActionResult, EngineError> {
