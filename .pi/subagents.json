@@ -1,0 +1,4 @@
+{
+  "defaultMaxTurns": 100,
+  "graceTurns": 5
+}
