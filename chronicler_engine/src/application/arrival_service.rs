@@ -57,29 +57,19 @@ impl ArrivalTaskContext {
     }
 
     pub(crate) fn run(self) {
-        let was_fresh = self
-            .app
-            .storage
-            .load_latest_snapshot()
-            .ok()
-            .flatten()
-            .is_none();
-
-        let mut state = match self.app.load_or_fresh() {
+        let mut state = match self.app.load_expecting_valid_state() {
             Ok(s) => s,
             Err(e) => {
-                tracing::error!("load_or_fresh failed in arrival task: {e}");
+                tracing::error!("load_expecting_valid_state failed in arrival task: {e}");
                 return;
             }
         };
 
-        if was_fresh {
+        if state.narrative.history.is_empty() {
             let world = Arc::clone(&state.world);
             let player = Arc::clone(&state.player);
             inject_scenario_logs(&mut state, &world, &player);
         }
-
-        self.app.load_messages_into_state(&mut state);
         state.narrative.input_buffer.status = GenerationStatus::Generating;
 
         let room = match state
