@@ -122,7 +122,7 @@ impl<'a> PipelineRun<'a> {
         tracing::info!("Pipeline ✓ Narration complete");
         let narration_text = narration_result.text;
 
-        if self.app.cancel_token.is_cancelled() {
+        if self.app.cancel_token().is_cancelled() {
             return Err(ActionOutcome::Cancelled);
         }
 
@@ -195,7 +195,7 @@ impl<'a> PipelineRun<'a> {
             trigger.trigger_name
         );
 
-        if self.app.cancel_token.is_cancelled() {
+        if self.app.cancel_token().is_cancelled() {
             return Err(ActionOutcome::Cancelled);
         }
 
@@ -229,7 +229,7 @@ impl<'a> PipelineRun<'a> {
         tracing::info!("Pipeline ✓ Trigger complete");
         let continuation_text = continuation_result.text;
 
-        if self.app.cancel_token.is_cancelled() {
+        if self.app.cancel_token().is_cancelled() {
             return Err(ActionOutcome::Cancelled);
         }
 

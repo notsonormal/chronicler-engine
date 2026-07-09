@@ -18,5 +18,5 @@
     "web_search"
   ],
   "planFolder": "chronicler_engine/docs/plans",
-  "scratchFolders": ["tmp"]
+  "scratchFolders": ["tmp", ".scratch"]
 }

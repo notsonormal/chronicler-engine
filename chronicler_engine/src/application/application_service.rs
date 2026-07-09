@@ -3,52 +3,32 @@
 //! arch-lint: storage-direct — intentional, see ADR-027
 
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, RwLock};
 
 use serde::Serialize;
 use tokio_util::sync::CancellationToken;
 
-use crate::application::action_pipeline::execute_action_impl;
 use crate::application::game_service::GameService;
-use crate::application::generation_guard::GenerationGuard;
+use crate::application::generation_gate::GenerationGate;
+use crate::application::persistence_gate::PersistenceGate;
 
 use crate::error::{EngineError, LlmFailure};
-use crate::domain::model::character::NpcCard;
 use crate::domain::model::game::{Game, generate_game_name};
 use crate::domain::model::message::Message;
 use crate::domain::model::settings::AppSettings;
 
 use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
-use crate::domain::model::state::message_types::{MessageEntry, MessageType};
+use crate::domain::model::state::message_types::MessageEntry;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::domain::model::state::game_state::GameState;
-use crate::domain::model::template::{render_template, TemplateVars};
 use crate::domain::model::trigger::NpcEncounterState;
 use crate::domain::model::world::WorldCard;
 use crate::domain::model::map::MapDef;
 use crate::application::narrative_prompt::assembler::assemble_prompt_text;
-use crate::adapters::driven::storage::Storage;
+use crate::adapters::driven::storage::{PresetStore, Storage};
 use crate::adapters::driven::storage::worlds::WorldWithMap;
-
-#[derive(Clone)]
-pub struct WorldSnapshot {
-    pub world: Arc<WorldCard>,
-    pub map: Arc<MapDef>,
-    pub player: Arc<crate::domain::model::character::PlayerCard>,
-    pub npcs: Arc<std::collections::HashMap<String, NpcCard>>,
-}
-
-impl WorldSnapshot {
-    pub fn empty() -> Self {
-        Self {
-            world: Arc::new(WorldCard::default()),
-            map: Arc::new(MapDef::default()),
-            player: Arc::new(crate::domain::model::character::PlayerCard::default()),
-            npcs: Arc::new(std::collections::HashMap::new()),
-        }
-    }
-}
+use crate::application::persistence_gate::WorldSnapshot;
 
 pub fn map_llm_error(e: &EngineError) -> String {
     match e {
@@ -170,10 +150,10 @@ pub struct DebugStateView {
 #[allow(dead_code)]
 pub struct DefaultApplicationService {
     pub(crate) storage: Arc<Storage>,
-    pub(crate) preset_storage: Arc<Storage>,
+    pub(crate) preset_storage: Arc<PresetStore>,
+    pub(crate) persistence_gate: Arc<PersistenceGate>,
     pub(crate) settings: Arc<RwLock<AppSettings>>,
-    pub(crate) cancel_token: CancellationToken,
-    pub(crate) is_generating: Arc<AtomicBool>,
+    pub(crate) generation_gate: GenerationGate,
     pub(crate) game_service: Arc<GameService>,
 }
 
@@ -186,12 +166,18 @@ impl DefaultApplicationService {
         is_generating: Arc<AtomicBool>,
         game_service: Arc<GameService>,
     ) -> Self {
+        let preset_storage = Arc::new(PresetStore::new(preset_storage));
+        let persistence_gate = Arc::new(PersistenceGate::new(
+            Arc::clone(&storage),
+            Arc::clone(&preset_storage),
+        ));
+        let generation_gate = GenerationGate::new(cancel_token, is_generating);
         Self {
             storage,
             preset_storage,
+            persistence_gate,
             settings,
-            cancel_token,
-            is_generating,
+            generation_gate,
             game_service,
         }
     }
@@ -205,138 +191,39 @@ impl DefaultApplicationService {
     }
 
     pub fn is_generating(&self) -> &Arc<AtomicBool> {
-        &self.is_generating
+        self.generation_gate.is_generating()
     }
 
     pub fn cancel_token(&self) -> &CancellationToken {
-        &self.cancel_token
+        self.generation_gate.cancel_token()
     }
 
     pub fn settings(&self) -> &Arc<RwLock<AppSettings>> {
         &self.settings
     }
 
-    pub fn preset_storage(&self) -> &Arc<Storage> {
+    pub fn preset_storage(&self) -> &Arc<PresetStore> {
         &self.preset_storage
     }
 
     pub(crate) fn load_world_snapshot(&self) -> Result<WorldSnapshot, EngineError> {
-        let game_id = self.storage.current_game_id();
-        let game = self
-            .storage
-            .get_game(game_id)?
-            .ok_or_else(|| EngineError::Config(format!("current_game_id {game_id} not found")))?;
-        let world_with_map = self
-            .storage
-            .get_world(&game.world_key)?
-            .ok_or_else(|| EngineError::Config(format!("world '{}' not found", game.world_key)))?;
-        let player = self
-            .storage
-            .get_persona(&game.persona_key)?
-            .ok_or_else(|| {
-                EngineError::Config(format!("persona '{}' not found", game.persona_key))
-            })?;
-        let npcs_list = self.storage.list_characters(world_with_map.world_id)?;
-        let mut npcs: std::collections::HashMap<String, crate::domain::model::character::NpcCard> =
-            std::collections::HashMap::new();
-        for n in npcs_list {
-            npcs.insert(n.id.clone(), n);
-        }
-        Ok(WorldSnapshot {
-            world: Arc::new(world_with_map.world_card),
-            map: Arc::new(world_with_map.map),
-            player: Arc::new(player),
-            npcs: Arc::new(npcs),
-        })
-    }
-
-    fn world_snapshot_or_empty(&self) -> WorldSnapshot {
-        self.load_world_snapshot().unwrap_or_else(|e| {
-            tracing::warn!("load_world_snapshot: falling back to empty world snapshot: {e}");
-            WorldSnapshot::empty()
-        })
+        self.persistence_gate.load_world_snapshot()
     }
 
     pub fn load_or_fresh(&self) -> Result<GameState, EngineError> {
-        match self.load_expecting_valid_state() {
-            Ok(state) => Ok(state),
-            Err(e) => {
-                tracing::error!(
-                    "Failed to load game state ({e}), falling back to fresh state. This may indicate data corruption."
-                );
-                let snap = self.world_snapshot_or_empty();
-                let starting_room_id = snap.world.starting_room_id();
-                Ok(GameState::new(
-                    snap.world,
-                    snap.map,
-                    snap.player,
-                    (*snap.npcs).values().cloned().collect(),
-                    starting_room_id,
-                ))
-            }
-        }
+        self.persistence_gate.load_or_fresh()
     }
 
     pub fn load_expecting_valid_state(&self) -> Result<GameState, EngineError> {
-        let snap = self.world_snapshot_or_empty();
-        let snapshot = self.storage.load_latest_snapshot()?;
-        let mut state = match snapshot {
-            Some(snap_data) => GameState::from_snapshot(
-                &snap_data,
-                Arc::clone(&snap.world),
-                Arc::clone(&snap.map),
-                Arc::clone(&snap.player),
-                (*snap.npcs).clone(),
-            ),
-            None => {
-                let starting_room_id = snap.world.starting_room_id();
-                GameState::new(
-                    Arc::clone(&snap.world),
-                    Arc::clone(&snap.map),
-                    Arc::clone(&snap.player),
-                    (*snap.npcs).values().cloned().collect(),
-                    starting_room_id,
-                )
-            }
-        };
-        self.load_messages_into_state(&mut state);
-        Ok(state)
+        self.persistence_gate.load_expecting_valid_state()
     }
 
     pub fn save_state(&self, state: &GameState) -> Result<u64, EngineError> {
-        let snapshot = GameStateSnapshot::from_game_state(state);
-        self.storage.save_snapshot(&snapshot)
+        self.persistence_gate.save_state(state)
     }
 
     pub fn save_message_and_snapshot(&self, state: &mut GameState) -> Result<u64, EngineError> {
-        let snapshot = GameStateSnapshot::from_game_state(state);
-        let snapshot_id = self.storage.save_snapshot(&snapshot)?;
-
-        if let Some(ref mut target) = state.narrative.retry_target {
-            let idx = target.swipes.len().saturating_sub(1);
-            if let Some(last_swipe) = target.swipes.last_mut() {
-                if last_swipe.snapshot_id.is_none() {
-                    last_swipe.snapshot_id = Some(snapshot_id);
-                    self.storage.insert_swipe(target.id, last_swipe, idx)?;
-                    self.storage.update_active_swipe(target.id, idx)?;
-                }
-            }
-        }
-
-        if let Some(msg) = state.narrative.history.last_mut() {
-            if msg.is_unpersisted() {
-                msg.set_snapshot_id(Some(snapshot_id));
-                if let Some(swipe) = msg.swipes.first_mut() {
-                    swipe.snapshot_id = Some(snapshot_id);
-                }
-                let id = self.storage.insert_message(&*msg)?;
-                for (idx, swipe) in msg.swipes.iter().enumerate() {
-                    self.storage.insert_swipe(id, swipe, idx)?;
-                }
-                msg.id = id;
-            }
-        }
-        Ok(snapshot_id)
+        self.persistence_gate.save_message_and_snapshot(state)
     }
 
     pub fn delete_and_remove_message(
@@ -344,59 +231,27 @@ impl DefaultApplicationService {
         state: &mut GameState,
         id: u64,
     ) -> Result<(), EngineError> {
-        self.storage.delete_message(id)?;
-        state.narrative.history.retain(|m| m.id != id);
-        Ok(())
+        self.persistence_gate.delete_and_remove_message(state, id)
     }
 
     pub fn load_messages_with_swipes(&self) -> Result<Vec<Message>, EngineError> {
-        load_messages_with_swipes(&self.storage)
+        self.persistence_gate.load_messages_with_swipes()
     }
 
     pub fn load_messages_into_state(&self, state: &mut GameState) {
-        if let Ok(msgs) = self.load_messages() {
-            state.narrative.history.replace(msgs);
-        }
+        self.persistence_gate.load_messages_into_state(state)
     }
 
     pub fn build_fresh_initial_state(&self) -> Result<GameState, EngineError> {
-        let snap = self.world_snapshot_or_empty();
-        let starting_room_id = snap.world.starting_room_id();
-        let mut initial_state = GameState::new(
-            Arc::clone(&snap.world),
-            Arc::clone(&snap.map),
-            Arc::clone(&snap.player),
-            (*snap.npcs).values().cloned().collect(),
-            starting_room_id.clone(),
-        );
-
-        if let Some(scenario) = snap.world.default_scenario() {
-            let room_name = snap
-                .map
-                .get_room_by_id(&starting_room_id)
-                .map(|r| r.name.clone())
-                .unwrap_or_else(|| starting_room_id.clone());
-
-            initial_state.narrative.pending_location = Some(room_name);
-
-            let text = render_template(&scenario.text, &TemplateVars::new(&snap.player.sheet.name));
-            if !text.is_empty() {
-                initial_state.add_message(text, None, MessageType::Narration);
-            }
-
-            initial_state.init_scenario_npcs(scenario);
-        }
-
-        Ok(initial_state)
+        self.persistence_gate.build_fresh_initial_state()
     }
 
     pub fn load_messages(&self) -> Result<Vec<Message>, EngineError> {
-        load_messages_with_swipes(&self.storage)
+        self.persistence_gate.load_messages()
     }
 
     pub fn update_message_text(&self, id: u64, text: &str) -> Result<(), EngineError> {
-        let index = self.storage.get_active_swipe_index(id)?;
-        self.storage.update_swipe_text(id, index, text)
+        self.persistence_gate.update_message_text(id, text)
     }
 
     pub fn active_quantifier_prompt(&self) -> String {
@@ -423,114 +278,34 @@ impl DefaultApplicationService {
         &self,
         messages: &'a [Message],
     ) -> Option<(usize, &'a Message, u64)> {
-        if messages.is_empty() {
-            return None;
-        }
-        let is_event = messages
-            .last()
-            .map(|m| m.event_header().is_some())
-            .unwrap_or(false);
-        let anchor_idx = if is_event {
-            messages.iter().rposition(|m| m.event_header().is_none())?
-        } else {
-            messages
-                .iter()
-                .rposition(|m| m.message_type == MessageType::Input)?
-        };
-        let anchor_msg = &messages[anchor_idx];
-        let snapshot_id = *anchor_msg.snapshot_id().as_ref()?;
-        Some((anchor_idx, anchor_msg, snapshot_id))
+        self.persistence_gate.find_retry_anchor(messages)
     }
 
     pub fn set_game_id(&self, game_id: u64) {
-        self.storage.set_game_id(game_id);
+        self.persistence_gate.set_game_id(game_id);
     }
 
     pub fn process_action(&self, input: String) -> Result<ProcessActionResult, EngineError> {
-        let mut game_state = self.load_or_fresh()?;
-
-        self.heal_stale_generating(&mut game_state);
-
-        let player_name = game_state.player.sheet.name.clone();
-        if !input.is_empty() {
-            game_state.add_message(input.clone(), Some(player_name.clone()), MessageType::Input);
-        }
-
-        match self.claim_generation_slot(&mut game_state)? {
-            ProcessActionResult::ConcurrentGeneration => {
-                return Ok(ProcessActionResult::ConcurrentGeneration);
-            }
-            ProcessActionResult::Started => {}
-            ProcessActionResult::ShuttingDown => {
-                return Ok(ProcessActionResult::ShuttingDown);
-            }
-        }
-
-        if self.cancel_token.is_cancelled() {
-            if let Ok(mut gs) = self.load_or_fresh() {
-                gs.narrative.input_buffer.status = GenerationStatus::Idle;
-                let snapshot = GameStateSnapshot::from_game_state(&gs);
-                if let Err(e) = self.storage.save_snapshot(&snapshot) {
-                    tracing::error!("Failed to save shutdown snapshot: {e}");
-                }
-            }
-            self.release_generation_slot();
-            return Ok(ProcessActionResult::ShuttingDown);
-        }
-
-        let is_generating = Arc::clone(&self.is_generating);
-        crate::application::spawn_pipeline_task(Arc::new(self.clone()), move |app| {
-            tracing::debug!("spawn_blocking: task started");
-            let _guard = GenerationGuard(Arc::clone(&is_generating));
-            if app.cancel_token.is_cancelled() {
-                tracing::debug!("spawn_blocking: cancelled before execute_action");
-                return;
-            }
-            execute_action_impl(app, input);
-            tracing::debug!("spawn_blocking: execute_action completed");
-        });
-        Ok(ProcessActionResult::Started)
+        self.generation_gate.start_action(self, input)
     }
 
-    fn heal_stale_generating(&self, state: &mut GameState) {
-        if !self.is_generating.load(Ordering::SeqCst)
-            && state.narrative.input_buffer.status.is_generating()
-        {
-            tracing::warn!(
-                "Found stale Generating status without active generation, resetting to Idle"
-            );
-            state.narrative.input_buffer.status = GenerationStatus::Idle;
-            state.narrative.input_buffer.phase = GenerationPhase::default();
-        }
+    #[allow(dead_code)]
+    pub(crate) fn heal_stale_generating(&self, state: &mut GameState) {
+        self.generation_gate.heal_stale_generating(self, state)
     }
 
-    // On save failure after CAS wins, the AtomicBool is rolled back inside this fn.
-    fn claim_generation_slot(
+    // On save failure after CAS wins, the AtomicBool is rolled back inside the gate.
+    #[allow(dead_code)]
+    pub(crate) fn claim_generation_slot(
         &self,
         state: &mut GameState,
     ) -> Result<ProcessActionResult, EngineError> {
-        if self
-            .is_generating
-            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-            .is_err()
-        {
-            return Ok(ProcessActionResult::ConcurrentGeneration);
-        }
-
-        state.narrative.input_buffer.status = GenerationStatus::Generating;
-        state.narrative.input_buffer.phase = GenerationPhase::Narrating;
-
-        if let Err(e) = self.save_message_and_snapshot(state) {
-            tracing::debug!("claim_generation_slot: save failed; releasing slot");
-            self.release_generation_slot();
-            return Err(e);
-        }
-        tracing::debug!("process_action: state saved, spawning blocking task");
-        Ok(ProcessActionResult::Started)
+        self.generation_gate.claim_generation_slot(self, state)
     }
 
-    fn release_generation_slot(&self) {
-        self.is_generating.store(false, Ordering::SeqCst);
+    #[allow(dead_code)]
+    pub(crate) fn release_generation_slot(&self) {
+        self.generation_gate.release_generation_slot()
     }
 
     pub fn continue_narration(&self) -> Result<ProcessActionResult, EngineError> {
@@ -538,7 +313,7 @@ impl DefaultApplicationService {
     }
 
     pub fn create_game(&self, world_key: &str, persona_key: &str) -> Result<u64, ApplicationError> {
-        if self.is_generating.load(Ordering::SeqCst) {
+        if self.is_generating().load(Ordering::SeqCst) {
             return Err(ApplicationError::ConcurrentGeneration);
         }
 
@@ -577,7 +352,7 @@ impl DefaultApplicationService {
     }
 
     pub fn switch_game(&self, id: u64) -> Result<(), ApplicationError> {
-        if self.is_generating.load(Ordering::SeqCst) {
+        if self.is_generating().load(Ordering::SeqCst) {
             return Err(ApplicationError::ConcurrentGeneration);
         }
 
@@ -590,7 +365,7 @@ impl DefaultApplicationService {
     }
 
     pub fn delete_game(&self, id: u64) -> Result<(), ApplicationError> {
-        if self.is_generating.load(Ordering::SeqCst) {
+        if self.is_generating().load(Ordering::SeqCst) {
             return Err(ApplicationError::ConcurrentGeneration);
         }
 

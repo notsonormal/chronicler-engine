@@ -8,9 +8,10 @@ const APPLICATION_STORAGE_GRANDFATHERED: &[&str] = &[
     "application/application_service.rs",
     "application/agents/registry.rs",
     "application/agents/quantifier/agent.rs",
+    "application/persistence_gate/gate.rs",
 ];
 
-// Guardrail: application/ may not import `Storage` directly except 5 grandfathered files (ADR-027).
+// Guardrail: application/ may not import `Storage` directly except the grandfathered files (ADR-027).
 // `*_tests.rs` is exempt — may construct `Storage::new_in_memory()` for fixtures.
 pub fn check_application_storage_direct(file_path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();

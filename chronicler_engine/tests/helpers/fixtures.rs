@@ -379,7 +379,7 @@ pub fn make_test_app_with_storage(
     game_service: Arc<GameService>,
 ) -> Arc<chronicler_engine::application::application_service::DefaultApplicationService> {
     use chronicler_engine::application::application_service::DefaultApplicationService;
-    let world_snapshot = chronicler_engine::application::application_service::WorldSnapshot {
+    let world_snapshot = chronicler_engine::application::persistence_gate::WorldSnapshot {
         world: state.world.clone(),
         map: state.map.clone(),
         player: state.player.clone(),
@@ -413,7 +413,7 @@ pub fn app_with_storage_from(
     use chronicler_engine::application::application_service::DefaultApplicationService;
     Arc::new(DefaultApplicationService::new(
         Arc::clone(base.storage()),
-        Arc::clone(base.preset_storage()),
+        Arc::clone(base.preset_storage().inner()),
         Arc::clone(base.settings()),
         base.cancel_token().clone(),
         Arc::clone(base.is_generating()),

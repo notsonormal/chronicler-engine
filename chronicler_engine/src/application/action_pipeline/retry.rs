@@ -66,7 +66,7 @@ pub fn retry_last_response_impl(app: &DefaultApplicationService) {
     let mut state = {
         let world_snapshot = app
             .load_world_snapshot()
-            .unwrap_or_else(|_| crate::application::application_service::WorldSnapshot::empty());
+            .unwrap_or_else(|_| crate::application::persistence_gate::WorldSnapshot::empty());
         GameState::from_snapshot(
             &snapshot,
             Arc::clone(&world_snapshot.world),

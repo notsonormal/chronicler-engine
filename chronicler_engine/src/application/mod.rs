@@ -6,11 +6,13 @@ pub mod agents;
 pub mod application_service;
 pub mod arrival_service;
 pub mod game_service;
+pub mod generation_gate;
 pub mod generation_guard;
 pub mod llm_recorder;
 pub mod llm_sanitizer;
 pub mod message_editing;
 pub mod narrative_prompt;
+pub mod persistence_gate;
 pub mod ports;
 pub mod query_handlers;
 pub(crate) mod scenario;
@@ -19,8 +21,10 @@ pub mod text_check_service;
 
 pub use application_service::{
     ApplicationError, DebugStateView, DefaultApplicationService, ProcessActionResult,
-    WorldSnapshot, load_messages_with_swipes, map_llm_error,
+    load_messages_with_swipes, map_llm_error,
 };
+pub use generation_gate::GenerationGate;
+pub use persistence_gate::WorldSnapshot;
 pub use game_service::GameService;
 pub use generation_guard::GenerationGuard;
 pub use message_editing::{delete_last, edit_history, retrigger, retry, switch_swipe};

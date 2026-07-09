@@ -28,7 +28,7 @@ fn prepare_retry_state(
     game_state.narrative.input_buffer.phase = phase;
     let snapshot = GameStateSnapshot::from_game_state(&game_state);
     app.storage.save_snapshot(&snapshot)?;
-    let cancelled = app.cancel_token.is_cancelled();
+    let cancelled = app.cancel_token().is_cancelled();
     Ok((game_state, cancelled))
 }
 
@@ -37,7 +37,10 @@ pub fn switch_swipe(
     message_id: u64,
     swipe_index: usize,
 ) -> Result<(), ApplicationError> {
-    if app.is_generating.load(std::sync::atomic::Ordering::SeqCst) {
+    if app
+        .is_generating()
+        .load(std::sync::atomic::Ordering::SeqCst)
+    {
         return Err(ApplicationError::ConcurrentGeneration);
     }
 
@@ -131,7 +134,7 @@ pub fn retry(app: Arc<DefaultApplicationService>) -> Result<(), ApplicationError
     }
 
     crate::application::spawn_pipeline_task(app, move |app_inner| {
-        if app_inner.cancel_token.is_cancelled() {
+        if app_inner.cancel_token().is_cancelled() {
             return;
         }
         retry_last_response_impl(app_inner);
@@ -172,7 +175,7 @@ pub fn retrigger(app: Arc<DefaultApplicationService>) -> Result<(), ApplicationE
     }
 
     crate::application::spawn_pipeline_task(app, move |app_inner| {
-        if app_inner.cancel_token.is_cancelled() {
+        if app_inner.cancel_token().is_cancelled() {
             return;
         }
         retrigger_event_impl(app_inner);
