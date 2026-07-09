@@ -49,10 +49,7 @@ pub fn seed_test_world_into_storage(storage: &Storage, state: &GameState) {
     storage.set_game_id(game_id);
 }
 
-fn build_test_app(
-    state: GameState,
-    storage: Arc<Storage>,
-) -> Result<Arc<DefaultApplicationService>> {
+fn build_test_app(storage: Arc<Storage>) -> Result<Arc<DefaultApplicationService>> {
     let settings = Arc::new(RwLock::new(AppSettings::default()));
     let preset_storage = default_test_preset_storage();
 
@@ -61,8 +58,6 @@ fn build_test_app(
         Arc::clone(&storage),
         Arc::clone(&preset_storage),
     )?;
-
-    drop(state);
 
     Ok(Arc::new(DefaultApplicationService::new(
         storage,
@@ -74,7 +69,6 @@ fn build_test_app(
     )))
 }
 
-#[allow(dead_code)]
 pub fn make_test_app(state: GameState) -> Result<Arc<DefaultApplicationService>> {
     let snapshot = GameStateSnapshot::from_game_state(&state);
     let storage = Arc::new(Storage::new_in_memory());
@@ -87,10 +81,9 @@ pub fn make_test_app(state: GameState) -> Result<Arc<DefaultApplicationService>>
             }
         }
     }
-    build_test_app(state, storage)
+    build_test_app(storage)
 }
 
-#[allow(dead_code)]
 pub fn make_test_app_without_snapshot(state: GameState) -> Result<Arc<DefaultApplicationService>> {
     let storage = Arc::new(Storage::new_in_memory());
     seed_test_world_into_storage(&storage, &state);
@@ -101,10 +94,9 @@ pub fn make_test_app_without_snapshot(state: GameState) -> Result<Arc<DefaultApp
             }
         }
     }
-    build_test_app(state, storage)
+    build_test_app(storage)
 }
 
-#[allow(dead_code)]
 pub fn make_test_app_with_sqlite(state: GameState) -> Result<Arc<DefaultApplicationService>> {
     let snapshot = GameStateSnapshot::from_game_state(&state);
     let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:")?;
@@ -119,10 +111,9 @@ pub fn make_test_app_with_sqlite(state: GameState) -> Result<Arc<DefaultApplicat
             }
         }
     }
-    build_test_app(state, storage)
+    build_test_app(storage)
 }
 
-#[allow(dead_code)]
 pub fn make_test_app_with_mock_backend<F>(
     state: GameState,
     make_mock_backend: F,
@@ -140,7 +131,6 @@ where
 
 /// Build an app backed by `GameService::with_backends` (no quantifier agent).
 /// Mirrors `tests/integration/mod.rs::working_service()`.
-#[allow(dead_code)]
 pub fn make_test_app_with_backends<F>(
     state: GameState,
     make_narrator: F,
@@ -158,7 +148,6 @@ where
 
 /// Build an app backed by `GameService::with_mock_quantifier` with separate
 /// narrator and quantifier factories. Mirrors `tests/integration/mod.rs::failing_service()`.
-#[allow(dead_code)]
 pub fn make_test_app_with_separate_backends<N, Q>(
     state: GameState,
     make_narrator: N,
@@ -178,7 +167,6 @@ where
 
 /// Most flexible factory: caller supplies a closure that builds the entire
 /// `GameService` given the seeded `Storage`.
-#[allow(dead_code)]
 pub fn make_test_app_with_game_service<F>(
     state: GameState,
     build: F,
@@ -193,7 +181,6 @@ where
 
 /// Rebuild an app over an EXISTING storage with a new GameService. No state
 /// seeding — storage contents are preserved.
-#[allow(dead_code)]
 pub fn make_test_app_with_storage_and_service(
     storage: Arc<Storage>,
     game_service: Arc<GameService>,

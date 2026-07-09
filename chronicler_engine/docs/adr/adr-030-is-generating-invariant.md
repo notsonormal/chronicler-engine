@@ -7,7 +7,7 @@
 
 The application state holds two representations of the same fact — "is a generation in progress?":
 
-1. `src/application/context.rs` exposes `is_generating: Arc<AtomicBool>` on `OpContext`, a hot-path-readable boolean used by the HTTP poll endpoint.
+1. `src/application/application_service.rs` (`DefaultApplicationService`) holds `is_generating: Arc<AtomicBool>` and exposes it via `pub fn is_generating(&self) -> &Arc<AtomicBool>` (per-instance, process-scoped). The atomic boolean is a hot-path-readable boolean used by the HTTP poll endpoint — accessed without the application-tier API churn that op-context lookups previously required.
 2. `state.narrative.input_buffer.status: GenerationStatus` is the persisted, durable record of the same state, written through `Storage` and read back on demand.
 
 The atomic boolean exists because the poll endpoint is the hottest read path in the application; hitting the storage layer on every poll would dominate latency and consume connection-pool budget for no semantic benefit. The persisted enum exists because the generation status must survive process restarts and be readable by recovery / debugging tooling.
@@ -17,7 +17,7 @@ The dual-source design is a latent race / state-divergence risk: two writers cou
 Three mitigations were considered:
 
 1. **Collapse to single source.** Make the persisted `GenerationStatus` the only source of truth. Rejected: re-introduces a storage read on every poll, breaking the latency budget that motivated the AtomicBool in the first place.
-2. **Strict single-writer enforcement via the type system.** Make the AtomicBool unreachable outside `ApplicationService` by hiding it behind a newtype whose only mutating methods are `pub(crate)` and take `&ApplicationService`. Rejected: requires wrapping every poll read site to go through `ApplicationService` rather than the state struct, churning the public surface of `src/application/context.rs`.
+2. **Strict single-writer enforcement via the type system.** Make the AtomicBool unreachable outside `ApplicationService` by hiding it behind a newtype whose only mutating methods are `pub(crate)` and take `&ApplicationService`. Rejected: requires wrapping every poll read site to go through `ApplicationService` rather than the per-instance accessor, churning the public surface of `src/application/application_service.rs`.
 3. **Document the invariant + enforce with a property test.** Lock the rule that only `ApplicationService` mutates both representations, in the same critical section; require a property test that asserts no drift post-mutation. Accepted.
 
 The third option is the lightest-weight mitigation that closes the divergence risk: it makes the rule machine-checkable without restructuring the poll path or rewriting every read site.
@@ -76,7 +76,7 @@ The third option is the lightest-weight mitigation that closes the divergence ri
 ### Trade-offs
 
 - Chose dual source with documented invariant + property test over collapse to single source — the latency cost of collapse is paid by every poll, which is unacceptable for the hot path.
-- Chose single-writer rule enforced by documentation + audit over type-system-level enforcement (newtype + `pub(crate)` mutators) — the type-system approach would force a wider refactor of `src/application/context.rs` and the poll endpoint, with marginal safety benefit once the property test exists.
+- Chose single-writer rule enforced by documentation + audit over type-system-level enforcement (newtype + `pub(crate)` mutators) — the type-system approach would force a wider refactor of `src/application/application_service.rs` and the poll endpoint, with marginal safety benefit once the property test exists.
 - Chose store-then-persist ordering over persist-then-store — the read path observes the new AtomicBool value first, which matches the "is generating right now?" semantics a poll reader expects (better to briefly report "generating" than to briefly report "idle" while a generation is mid-flight).
 - Accepted that the property test is the binding safety mechanism. If the test is ever deleted or weakened, the invariant degrades from "machine-checked" to "convention only".
 

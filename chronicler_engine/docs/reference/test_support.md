@@ -62,7 +62,24 @@ All three satisfy the `LlmMessageRepository` port; recorder wraps a provider + a
 | `create_test_player()`, `create_test_map()`, `create_test_npcs()` | Canonical character / map builders |
 | `create_test_state()`, `create_basic_test_state()`, `create_basic_test_state_no_scenario()` | Canonical `GameState` builders |
 | `seed_test_world(storage)` | Seeds `TestWorld::minimal()` + `TestPlayer::standard()` |
-| `make_test_ctx(storage, state)` | Builds `OpContext` |
+| `make_test_app(state)` | Builds `Arc<DefaultApplicationService>` (in-memory storage + mock backend); returns `Result` due to lib clippy context |
 | `create_test_storage(id)`, `create_test_storage_arc(id)` | Sqlite-backed `Storage` with `games` row pre-seeded (FK-safe) |
 
 `create_test_storage(id)` delegates to `test_support::seed_default_game_row` so sqlite-backed tests satisfy the `game_state_snapshots.game_id` / `messages.game_id` FK constraints without relying on a migration-seeded default game.
+
+### Test App Factories (`test_support::context`)
+
+`src/test_support/context.rs` exposes factories that build `Arc<DefaultApplicationService>` (replacement for the deleted `OpContext` test factories). All factories seed world / player / NPCs and pre-populate the snapshot + messages table when applicable. Most return `Result<Arc<DefaultApplicationService>>` because the lib clippy context denies `unwrap` / `expect` / `panic` — propagate the error with `?` or `unwrap_or_else(|e| panic!(...))` at the call site:
+
+| Factory | Returns | Use For |
+|---------|---------|---------|
+| `make_test_app(state)` | `Result<Arc<DefaultApplicationService>>` | Default fixture: in-memory storage + mock backend, full snapshot seeded |
+| `make_test_app_without_snapshot(state)` | `Result<Arc<DefaultApplicationService>>` | In-memory storage + mock backend, snapshot NOT seeded (forces fresh-state path) |
+| `make_test_app_with_sqlite(state)` | `Result<Arc<DefaultApplicationService>>` | Sqlite-backed storage + mock backend, full snapshot seeded |
+| `make_test_app_with_mock_backend(state, F)` | `Result<Arc<DefaultApplicationService>>` | Sqlite-backed storage + caller-supplied `Fn() -> MockBackend` |
+| `make_test_app_with_backends(state, narrator)` | `Result<Arc<DefaultApplicationService>>` | Sqlite + `GameService::with_backends` (no quantifier agent) |
+| `make_test_app_with_separate_backends(state, n, q)` | `Result<Arc<DefaultApplicationService>>` | Sqlite + `with_mock_quantifier` with separate narrator / quantifier factories |
+| `make_test_app_with_game_service(state, build)` | `Result<Arc<DefaultApplicationService>>` | Most flexible: caller builds the whole `GameService` given the seeded `Arc<Storage>` |
+| `make_test_app_with_storage_and_service(storage, game_service)` | `Arc<DefaultApplicationService>` | Rebuild an app over EXISTING storage with a new `GameService`; preserves storage contents |
+
+`DefaultApplicationService` accessors used by tests: `app.storage()`, `app.preset_storage()`, `app.settings()`, `app.cancel_token()`, `app.is_generating()`, `app.game_service()`. Domain-bound methods: `app.load_or_fresh()`, `app.load_expecting_valid_state()`, `app.save_message_and_snapshot(&mut state)`, `app.delete_and_remove_message(...)`, `app.load_messages_into_state(&mut state)`, `app.load_messages()`, `app.process_action(input)`.

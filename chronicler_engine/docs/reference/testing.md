@@ -20,9 +20,11 @@ let service = GameService::with_mock_quantifier(
     Arc::new(MockBackend::new()),
 );
 
-let ctx = OpContext::new(/* ... */);
-service.execute_action(ctx, "look around".to_string());
+let app = make_test_app_with_storage_and_service(storage, Arc::new(service))?;
+app.process_action("look around".to_string());
 ```
+
+Factory selection: `make_test_app(state)` (default in-memory + mock backend), `make_test_app_with_sqlite(state)`, `make_test_app_with_mock_backend(state, factory)`, `make_test_app_with_backends(state, narrator)`, `make_test_app_with_separate_backends(state, n, q)`, `make_test_app_with_game_service(state, |storage| { ... })`, `make_test_app_with_storage_and_service(storage, gs)`. All `Result`-returning factories must be `?`'d (lib clippy denies unwrap/expect/panic). For tests that need to invoke pipeline phases through a `GameService`, build the `DefaultApplicationService` via `make_test_app_with_storage_and_service` and call `app.process_action(input)` (the `DefaultApplicationService::process_action` entry point).
 
 `ActionPipeline` is non-generic; `run_post_generation_agents` is an inline phase method. See `tests/integration/application/action_pipeline/pipeline.rs` for working examples.
 

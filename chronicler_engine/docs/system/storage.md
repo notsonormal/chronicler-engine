@@ -14,7 +14,7 @@ The Chronicler Engine storage layer provides unified persistence for game sessio
 - **Backend enum abstraction** — `Sqlite` (production), `InMemory` (dev), `Test` (testing)
 - **No trait boilerplate** — No `dyn Trait`, `Arc<dyn>`, or custom mocks
 - **Single table per method** — Each storage method touches exactly one table
-- **Cross-table coordination in application tier** — `OpContext` composes multi-table operations
+- **Cross-table coordination in application tier** — `DefaultApplicationService` (the `application::application_service::DefaultApplicationService` orchestrator) composes multi-table operations
 
 ## Backend Enum Pattern
 
@@ -71,8 +71,8 @@ Two functions called from `bootstrap::run()` at startup:
 
 Storage methods touch exactly one table. Multi-table operations are free functions in the application tier, not methods on Storage. Examples:
 
-- `save_message_and_snapshot(ctx, state)` — saves snapshot then message
-- `load_messages_with_swipes(storage)` — loads messages then hydrates swipes
+- `app.save_message_and_snapshot(&mut state)` — saves snapshot then message (method on `DefaultApplicationService`)
+- `app.load_messages_with_swipes()` — loads messages then hydrates swipes (method on `DefaultApplicationService`)
 
 **Atomicity:** Sequential SQLite statements on a single connection. Tiny crash window; acceptable for non-critical data.
 
