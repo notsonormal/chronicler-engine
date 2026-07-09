@@ -19,6 +19,5 @@ async fn test_debug_state_handler_has_current_room() {
     assert!(result.is_ok());
     let response = result.unwrap();
 
-    // With in-memory storage and no game loaded, current_room_id may be empty or "start"
     assert!(!response.current_room_id.is_empty() || response.current_room_id.is_empty());
 }

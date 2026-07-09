@@ -193,7 +193,6 @@ async fn test_add_connection_handler_adds_connection() {
     assert!(response.0.contains("<div class=\"settings-panel\">"));
 
     let settings = app_state.settings.read().unwrap();
-    // Check the newly added connection (last in the list)
     let new_conn = settings.connections.last().unwrap();
     assert_eq!(new_conn.name, "Test LlmProviderConfig");
     assert_eq!(new_conn.provider, LlmBackendType::OpenRouter);
@@ -218,7 +217,6 @@ async fn test_add_connection_handler_empty_base_url_is_none() {
         add_connection_handler(axum::extract::State(app_state.clone()), Form(form)).await;
 
     let settings = app_state.settings.read().unwrap();
-    // Check the last added connection
     let new_conn = settings.connections.last().unwrap();
     assert_eq!(new_conn.base_url, None);
 }
@@ -239,7 +237,6 @@ async fn test_add_connection_handler_non_empty_base_url_is_some() {
         add_connection_handler(axum::extract::State(app_state.clone()), Form(form)).await;
 
     let settings = app_state.settings.read().unwrap();
-    // Check the last added connection
     let new_conn = settings.connections.last().unwrap();
     assert_eq!(new_conn.base_url, Some("http://localhost:11434".into()));
 }
@@ -372,7 +369,6 @@ async fn test_edit_connection_handler_not_found() {
 #[tokio::test]
 async fn test_delete_connection_handler_removes_connection() {
     let mut settings = AppSettings::default();
-    // Clear default connections and add our own
     settings.connections.clear();
     settings.connections.push(LlmProviderConfig {
         id: "conn-1".into(),
@@ -414,7 +410,6 @@ async fn test_delete_connection_handler_removes_connection() {
 #[tokio::test]
 async fn test_delete_connection_handler_redirects_narrator() {
     let mut settings = AppSettings::default();
-    // Clear default connections and add our own
     settings.connections.clear();
     settings.narration_connection_id = "conn-1".into();
     settings.connections.push(LlmProviderConfig {
@@ -448,7 +443,6 @@ async fn test_delete_connection_handler_redirects_narrator() {
     .await;
 
     let settings = app_state.settings.read().unwrap();
-    // After deleting conn-1, narration_connection_id should point to the first remaining connection (conn-2)
     assert_eq!(settings.narration_connection_id, "conn-2");
 }
 
@@ -465,7 +459,6 @@ async fn test_delete_connection_handler_not_found() {
 #[tokio::test]
 async fn test_delete_connection_handler_cannot_delete_last() {
     let mut settings = AppSettings::default();
-    // Clear default connections and add only one
     settings.connections.clear();
     settings.connections.push(LlmProviderConfig {
         id: "only-conn".into(),

@@ -63,8 +63,7 @@ pub enum Backend {
     InMemory(Box<InMemoryData>),
 }
 
-/// Non-recursive by design: `Test.base` is `Box<Backend>`, not `Box<BackendKind>` —
-/// enforces "at most one Test layer" (replace-not-nest invariant).
+// `Test.base: Box<Backend>` (not `Box<BackendKind>`) pins the replace-not-nest invariant.
 pub enum BackendKind {
     Direct(Backend),
     #[cfg(feature = "testing")]
@@ -75,8 +74,7 @@ pub enum BackendKind {
 }
 
 impl InMemoryData {
-    /// Empty placeholder used by constructors that need a throwaway backend
-    /// for `mem::replace` borrow-checker workaround.
+    // Throwaway backend for `mem::replace` borrow-checker workaround.
     pub(crate) fn empty() -> Self {
         Self {
             snapshots: HashMap::new(),
@@ -248,8 +246,7 @@ impl Storage {
 
 #[cfg(test)]
 impl Storage {
-    /// Pins non-recursive replace-not-nest invariant:
-    /// `with_failure`/`add_failure` must produce at most one `Test` layer with a `Direct` base.
+    // Pins the replace-not-nest invariant: at most one `Test` layer with a `Direct` base.
     pub(crate) fn backend_layer_info(&self) -> (&'static str, &'static str) {
         let backend = self.backend.lock().unwrap_or_else(|e| e.into_inner());
         match &*backend {

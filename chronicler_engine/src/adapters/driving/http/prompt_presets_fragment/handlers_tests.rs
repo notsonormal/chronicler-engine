@@ -262,7 +262,6 @@ async fn test_panel_handler_with_poisoned_settings_lock() {
     let app_state =
         make_test_app_state_with_preset(crate::test_support::TestPromptPreset::system("x", "X"));
 
-    // [DOC: docs/reference/testing.md#poisoned-lock-testing]
     let settings_clone = Arc::clone(&app_state.settings);
     let handle = tokio::task::spawn_blocking(move || {
         let _guard = settings_clone.write().unwrap();

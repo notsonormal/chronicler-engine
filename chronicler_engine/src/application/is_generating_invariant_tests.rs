@@ -38,8 +38,6 @@ async fn wait_until_idle(app: &DefaultApplicationService, timeout: Duration) -> 
         let cached = cached_flag(app);
         let persisted = persisted_flag(app);
 
-        // Forbidden at any poll: AtomicBool=false but persisted=Generating — would
-        // mean the caller forgot to either release the slot or persist the new state.
         if !cached && persisted {
             panic!(
                 "invariant violation during wait_until_idle: cached=false persisted=true. \
@@ -47,20 +45,16 @@ async fn wait_until_idle(app: &DefaultApplicationService, timeout: Duration) -> 
             );
         }
 
-        // Allowed transient: (cached=true, persisted=Idle) — generation in flight but
-        // no snapshot yet (early phase of save_message_and_snapshot pipeline).
         if cached && !persisted {
             sleep(Duration::from_millis(50)).await;
             continue;
         }
 
-        // Both idle — generation complete.
         if !cached && !persisted {
             assert!(invariant_holds(app), "both idle but invariant violated");
             return true;
         }
 
-        // (cached=true, persisted=true) — generation persisted + AtomicBool still up.
         sleep(Duration::from_millis(50)).await;
     }
     false
@@ -209,32 +203,23 @@ fn test_is_generating_invariant_helper_detects_divergence() {
     );
 }
 
-/// New test per plan B4.1: inject `(cached=false, persisted=Generating)` during
-/// flight by manually clearing AtomicBool while generation in progress. wait_until_idle
-/// must fail-fast (panic) within 1-2 poll cycles, not silently wait for timeout.
 #[tokio::test(flavor = "current_thread")]
 #[should_panic(expected = "invariant violation during wait_until_idle")]
 async fn test_wait_until_idle_fails_fast_on_cached_false_persisted_generating() {
     let mut state = crate::test_support::fixtures::TestGameState::in_room("start");
     state.narrative.history.clear();
     state.narrative.input_buffer.status = GenerationStatus::Idle;
-    let app = std::sync::Arc::new(
-        make_test_app_with_sqlite(state).expect("make_test_app_with_sqlite"),
-    );
+    let app =
+        std::sync::Arc::new(make_test_app_with_sqlite(state).expect("make_test_app_with_sqlite"));
 
-    // Simulate the dangerous state directly: cached=false, persisted status=Generating.
-    // (We bypass process_action because the production CAS would forbid cached=false
-    // when status=Generating at the same point.)
+    // Bypass process_action: production CAS would forbid cached=false with status=Generating.
     let mut gs = app.load_or_fresh().expect("load_or_fresh");
     gs.narrative.input_buffer.status = GenerationStatus::Generating;
     let snapshot_id = app
         .save_state(&gs)
         .expect("save_state should persist Generating");
-    // Ensure AtomicBool stays false to simulate the bug.
     app.is_generating().store(false, Ordering::SeqCst);
     let _ = snapshot_id;
 
-    // wait_until_idle must panic on the forbidden (cached=false, persisted=true)
-    // state per the B4.1 fail-fast contract.
     let _ = wait_until_idle(&app, Duration::from_secs(2)).await;
 }

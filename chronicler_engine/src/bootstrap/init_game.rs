@@ -78,8 +78,7 @@ pub(crate) fn load_game_state(
             }
             let initial_snapshot = GameStateSnapshot::from_game_state(&new_state);
             let snapshot_id = storage.save_snapshot(&initial_snapshot)?;
-            // Snapshot carries history for debugging/audit; `messages` table is source of truth on load
-            // per `load_messages_with_swipes` replace pattern (see ADR-023).
+            // Snapshot is debug/audit only; `messages` table is source of truth on load (ADR-023).
             if let Some(msg) = new_state.narrative.history.last_mut() {
                 if msg.is_unpersisted() {
                     msg.set_snapshot_id(Some(snapshot_id));

@@ -1,8 +1,6 @@
 //! [DOC: docs/system/llm_processing.md]
 //! LLM client interface
 
-// Allow unused imports: these are intentional re-exports for the public API
-// They appear unused locally but are consumed by external modules (ollama.rs, openrouter.rs, backend.rs)
 #![allow(unused_imports)]
 
 mod client;
@@ -12,10 +10,8 @@ mod response;
 pub use response::{extract_content_from_response, handle_response, parse_chat_response};
 pub use client::{call_chat_completions, call_openrouter_with_model, call_ollama};
 
-// Re-export for tests
 pub use request::ChatCompletionResult;
 
-// Re-export next_request_id for tests
 pub(crate) use request::next_request_id;
 
 #[cfg(test)]

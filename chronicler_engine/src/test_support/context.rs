@@ -1,4 +1,5 @@
 //! [DOC: docs/reference/test_support.md — section "Integration Test Helpers"]
+//! Builds `OpContext` instances for integration tests with in-memory storage.
 use std::sync::{Arc, RwLock};
 
 use crate::application::OpContext;
@@ -203,8 +204,6 @@ pub fn make_test_app_with_sqlite(
     build_test_app(state, storage)
 }
 
-/// Build a `DefaultApplicationService` from an `OpContext` + `GameService`.
-/// Test-only transitional: clones storage/preset_storage/settings/etc handles from OpContext. lib tests.
 pub fn make_test_app_service_from_ctx(
     ctx: &OpContext,
     game_service: Arc<GameService>,

@@ -374,9 +374,7 @@ pub fn make_test_ctx(storage: Arc<Storage>, state: GameState) -> OpContext {
     }
 }
 
-/// Build a sqlite-backed `Storage` with the games row for `game_id` pre-seeded.
-/// Use this instead of `Storage::new_sqlite(DbPool::new(":memory:").unwrap(), 1)`
-/// to satisfy `game_state_snapshots.game_id` / `messages.game_id` FK constraints.
+// Pre-seeds the games row so `game_state_snapshots.game_id` / `messages.game_id` FKs hold.
 pub fn create_test_storage(game_id: u64) -> Storage {
     let pool = DbPool::new(":memory:").expect("in-memory db should open");
     chronicler_engine::test_support::seed_default_game_row(&pool, game_id).unwrap();
@@ -387,9 +385,7 @@ pub fn create_test_storage_arc(game_id: u64) -> Arc<Storage> {
     Arc::new(create_test_storage(game_id))
 }
 
-/// Build a `DefaultApplicationService` from an `OpContext` + `GameService`.
-/// Temporary helper during A1 (singletons moved onto AppService). Removed in A7
-/// when OpContext dies.
+// A1 transitional helper; removed in A7 when OpContext dies.
 pub fn make_test_app_service_from_ctx(
     ctx: &chronicler_engine::application::OpContext,
     game_service: Arc<GameService>,
@@ -405,10 +401,7 @@ pub fn make_test_app_service_from_ctx(
     )
 }
 
-/// Build an `Arc<DefaultApplicationService>` with both `system_default` and
-/// `quantifier_default` PromptPresets seeded into a fresh preset_storage.
-/// Used by retry/retrigger tests that need both preset roles available.
-/// B3 fixture folded into A6 per Issue 10.
+// B3 fixture folded into A6 per Issue 10: seeds system_default + quantifier_default presets.
 #[doc(hidden)]
 #[allow(dead_code)]
 pub fn make_test_app_with_default_preset(

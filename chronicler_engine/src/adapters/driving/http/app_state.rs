@@ -16,7 +16,6 @@ use super::locks::{read_lock_or_recover, write_lock_or_recover};
 #[derive(Clone, Debug)]
 pub struct ServerConfig {
     pub port: u16,
-    /// `None` retries forever (production); `Some(1)` fails fast on occupied ports (tests).
     pub bind_attempts: Option<u32>,
 }
 

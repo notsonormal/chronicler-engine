@@ -1,7 +1,5 @@
 //! [DOC: docs/system/game_flow.md]
-//! Generation status enums and input buffer
-//!
-//! Phase and Status are independent axes; for the live state machine see `application/action_pipeline/pipeline.rs`.
+//! Generation status enums and input buffer — phase/status are independent axes; live state machine lives in `application/action_pipeline/pipeline.rs`.
 
 use serde::{Deserialize, Serialize};
 

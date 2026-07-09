@@ -32,9 +32,6 @@ fn first_available_world_key() -> Option<String> {
 
 #[test]
 fn test_list_available_worlds_lists_seeded_worlds() {
-    // Branch (a) exercises the `list_available_worlds()` path directly:
-    // succeeds regardless of seed state and either prints "Available worlds"
-    // or "No worlds found".
     let result = list_available_worlds();
     assert!(
         result.is_ok(),
@@ -45,10 +42,6 @@ fn test_list_available_worlds_lists_seeded_worlds() {
 
 #[test]
 fn test_run_world_not_found_falls_back_or_errors() {
-    // Branch (c): `--world __nonexistent__` enters the None arm of
-    // `get_world`. The function then either returns Err (no worlds in db)
-    // or falls back to `all_worlds[0]` and proceeds to persona lookup.
-    // In the latter case, with a bogus persona it then hits branch (d).
     let port =
         get_available_port(3010, 3050).expect("port allocation failed for run_branches test");
     cleanup_db_for_port(port);
@@ -83,8 +76,6 @@ fn test_run_world_not_found_falls_back_or_errors() {
 
 #[test]
 fn test_run_persona_not_found_errors_cleanly() {
-    // Branch (d): valid world + bogus persona returns Err with
-    // "Persona '...' not found".
     let world_key = match first_available_world_key() {
         Some(k) => k,
         None => {

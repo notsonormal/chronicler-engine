@@ -10,9 +10,8 @@ const APPLICATION_STORAGE_GRANDFATHERED: &[&str] = &[
     "application/agents/quantifier/agent.rs",
 ];
 
-/// Guardrail: `application/` files must not import `Storage` directly except for the
-/// 5 grandfathered persistence-boundary files (see ADR-027). Test files (`*_tests.rs`)
-/// are exempt — they may construct `Storage::new_in_memory()` for fixtures.
+// Guardrail: application/ may not import `Storage` directly except 5 grandfathered files (ADR-027).
+// `*_tests.rs` is exempt — may construct `Storage::new_in_memory()` for fixtures.
 pub fn check_application_storage_direct(file_path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
 
@@ -46,7 +45,7 @@ pub fn check_application_storage_direct(file_path: &str, content: &str) -> Vec<V
     violations
 }
 
-/// Guardrail: `messages.rs` must not reference the `message_swipes` table.
+// Guardrail: `messages.rs` must not reference the `message_swipes` table.
 pub fn check_messages_swipes_separation(file_path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
 

@@ -17,8 +17,6 @@ use crate::error::EngineError;
 
 pub(crate) const PRESET_STORAGE_GAME_ID: u64 = 1;
 
-/// Output of `prepare_data`: db pool, world + persona data, and storage Arcs
-/// (one for the active game, one shared for preset lookups).
 struct PreparedData {
     db_pool: DbPool,
     storage: Arc<Storage>,
@@ -29,7 +27,6 @@ struct PreparedData {
     npcs_map: HashMap<String, NpcCard>,
 }
 
-/// Output of `prepare_state`: tokio runtime + state handles + settings.
 struct StateResources {
     runtime: tokio::runtime::Runtime,
     settings: Arc<RwLock<AppSettings>>,
@@ -52,8 +49,6 @@ pub fn run(args: Args) -> crate::error::Result<()> {
     Ok(())
 }
 
-/// Phase B/C: resolve db path, seed presets + game data, look up world + persona,
-/// resolve active game id, and construct storage Arcs.
 fn prepare_data(args: &Args) -> crate::error::Result<PreparedData> {
     let data_dir = resolve_engine_data_path();
     let db_dir = std::env::current_exe()
@@ -121,8 +116,6 @@ fn prepare_data(args: &Args) -> crate::error::Result<PreparedData> {
     })
 }
 
-/// Phase D: load settings (optionally from `--settings-path`), build the tokio
-/// runtime, materialize state handles, and spawn the arrival task.
 fn prepare_state(args: &Args, data: &PreparedData) -> crate::error::Result<StateResources> {
     let runtime = tokio::runtime::Runtime::new()
         .map_err(|e| EngineError::Io(format!("runtime_new {}: {e}", "tokio_runtime")))?;
@@ -204,8 +197,6 @@ fn prepare_state(args: &Args, data: &PreparedData) -> crate::error::Result<State
     })
 }
 
-/// Phase E: build preset_storage, game_service, text_check_service, ServerResources,
-/// and run the HTTP server to completion.
 fn start_server(
     data: PreparedData,
     state: StateResources,

@@ -478,9 +478,6 @@ impl DefaultApplicationService {
         Ok(ProcessActionResult::Started)
     }
 
-    /// Heal stale Generating status when no active generation is running.
-    /// If `is_generating` AtomicBool is false but persisted status reports
-    /// `Generating`, reset status+phase to Idle.
     fn heal_stale_generating(&self, state: &mut GameState) {
         if !self.is_generating.load(Ordering::SeqCst)
             && state.narrative.input_buffer.status.is_generating()
@@ -493,12 +490,8 @@ impl DefaultApplicationService {
         }
     }
 
-    /// Try to claim the generation slot via CAS on the AtomicBool, then persist
-    /// the Generating status. Outcomes:
-    /// - `(Ok Started)` CAS won and save succeeded; AtomicBool=true, status=Generating.
-    /// - `(Ok ConcurrentGeneration)` CAS lost; caller should return without rollback.
-    /// - `(Err ...)` CAS won but save failed; AtomicBool still true — caller MUST call
-    ///   `release_generation_slot` to roll back, then propagate the error.
+    // On save failure after CAS wins, the AtomicBool stays true — caller MUST call
+    // `release_generation_slot` to roll back before propagating the error.
     fn claim_generation_slot(
         &self,
         state: &mut GameState,
@@ -523,8 +516,6 @@ impl DefaultApplicationService {
         Ok(ProcessActionResult::Started)
     }
 
-    /// Release the generation slot by clearing the AtomicBool. Caller must invoke
-    /// this on any error path after CAS succeeded.
     fn release_generation_slot(&self) {
         self.is_generating.store(false, Ordering::SeqCst);
     }
